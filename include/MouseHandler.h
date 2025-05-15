@@ -7,6 +7,8 @@
 #include "PropertyPanel.h"
 #include "NavigationStyle.h"
 #include "Command.h"
+#include <Inventor/SbVec3f.h>
+#include <ctime>
 
 class MouseHandler
 {
@@ -30,6 +32,10 @@ public:
 
     NavigationStyle* getNavigationStyle() { return m_navStyle; }
     void setNavigationStyle(NavigationStyle* navStyle) { m_navStyle = navStyle; }
+
+    const std::string& getCreationGeometryType() const { return m_creationGeometryType; }
+
+    void createGeometryAtPosition(const SbVec3f& position);
 
 private:
     void selectObject(const wxPoint& position);

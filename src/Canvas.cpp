@@ -5,6 +5,10 @@
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoEnvironment.h>
 #include <Inventor/nodes/SoCube.h>
+#include <Inventor/nodes/SoSphere.h>
+#include <Inventor/nodes/SoCylinder.h>
+#include <Inventor/nodes/SoCone.h>
+#include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
 #include <Inventor/events/SoMouseButtonEvent.h>
@@ -18,17 +22,19 @@
 #include <Inventor/nodes/SoLineSet.h>
 #include <Inventor/nodes/SoRotation.h>
 #include <Inventor/nodes/SoTransform.h>
-#include "MouseHandler.h"
+#include <Inventor/nodes/SoText2.h>
 #include <Inventor/actions/SoGLRenderAction.h>
+#include "MouseHandler.h"
 #include "NavigationStyle.h"
+#include "PositionDialog.h"
 #include <GL/gl.h>
 #include <memory>
 
 // Define static constants
 const int Canvas::RENDER_INTERVAL = 16; // ~60 FPS (milliseconds)
 const int Canvas::MOTION_INTERVAL = 10; // Mouse motion throttling (milliseconds)
-const float Canvas::COORD_PLANE_SIZE = 2.0f; // Configurable coordinate plane size
-const float Canvas::COORD_PLANE_TRANSPARENCY = 0.95f; // Reduced for better visibility
+const float Canvas::COORD_PLANE_SIZE = 4.0f; // Configurable coordinate plane size
+const float Canvas::COORD_PLANE_TRANSPARENCY = 1.0f; // Reduced for better visibility
 
 // Define static canvas attributes
 const int Canvas::s_canvasAttribs[] = {
@@ -63,8 +69,13 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
     , m_isRendering(false)
     , m_lastRenderTime(0)
     , m_isPerspectiveCamera(true)
+    , m_pickingAidSeparator(nullptr)
+    , m_pickingAidTransform(nullptr)
+    , m_pickingAidVisible(false)
 {
     LOG_INF("Canvas initializing with specified attributes");
+
+    SetName("Canvas");
 
     // Ensure minimum size
     wxSize clientSize = GetClientSize();
@@ -131,7 +142,7 @@ bool Canvas::initScene()
             return false;
         }
         m_camera->ref();
-        m_camera->position.setValue(0.0f, 0.0f, 5.0f);
+        m_camera->position.setValue(0.0f, 0.0f, 100.0f);
         m_camera->nearDistance.setValue(0.1f);
         m_camera->farDistance.setValue(100.0f);
         m_camera->focalDistance.setValue(5.0f);
@@ -146,26 +157,21 @@ bool Canvas::initScene()
         // Add environment node
         SoEnvironment* env = new SoEnvironment;
         env->ambientColor.setValue(1.0f, 1.0f, 1.0f);
-        env->ambientIntensity.setValue(0.5f);
+        env->ambientIntensity.setValue(0.8f); // Increased for side face brightness
         m_sceneRoot->addChild(env);
 
         // Create directional light
-        SoSeparator* lightSep = new SoSeparator;
-        SoTransform* lightTransform = new SoTransform;
-        lightSep->addChild(lightTransform);
-
         m_light = new SoDirectionalLight;
         if (!m_light) {
             LOG_ERR("Failed to create light");
             return false;
         }
         m_light->ref();
-        m_light->direction.setValue(-1.0f, -1.0f, -1.0f);
+        m_light->direction.setValue(0.5f, 0.5f, -1.0f); // Adjusted for side face illumination
         m_light->intensity.setValue(1.0f);
         m_light->color.setValue(1.0f, 1.0f, 1.0f);
         m_light->on.setValue(true);
-        lightSep->addChild(m_light);
-        m_sceneRoot->addChild(lightSep);
+        m_sceneRoot->addChild(m_light);
 
         // Create object root
         m_objectRoot = new SoSeparator;
@@ -176,11 +182,18 @@ bool Canvas::initScene()
         m_objectRoot->ref();
         m_sceneRoot->addChild(m_objectRoot);
 
+        createPickingAidLines();
+
         // Set up OpenGL state
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_LIGHTING);
         glEnable(GL_LIGHT0);
         glEnable(GL_COLOR_MATERIAL);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glShadeModel(GL_SMOOTH);
         glClearColor(0.8f, 0.8f, 0.9f, 1.0f);
 
         createCoordinateSystem();
@@ -191,6 +204,8 @@ bool Canvas::initScene()
             glViewport(0, 0, clientSize.GetWidth(), clientSize.GetHeight());
             render();
         }
+
+        AddTestCube();
 
         return true;
     }
@@ -268,11 +283,9 @@ void Canvas::resetView()
         return;
     }
 
-    m_camera->position.setValue(7.0f, 5.0f, 7.0f);
-    SbRotation xRot(SbVec3f(1.0f, 0.0f, 0.0f), M_PI * 30.0f / 180.0f);
-    SbRotation yRot(SbVec3f(0.0f, 1.0f, 0.0f), M_PI / 4.0f);
-    m_camera->orientation.setValue(yRot * xRot); // Fixed x10f to xRot
-    m_camera->focalDistance.setValue(10.0f);
+    m_camera->position.setValue(0.0f, 0.0f, 5.0f);
+    m_camera->orientation.setValue(SbVec3f(0, 0, -1), 0);
+    m_camera->focalDistance.setValue(5.0f);
 
     SbViewportRegion viewport(GetClientSize().x, GetClientSize().y);
     m_camera->viewAll(m_sceneRoot, viewport);
@@ -325,8 +338,7 @@ void Canvas::toggleCameraMode()
     Update();
 }
 
-void Canvas::cleanup()
-{
+void Canvas::cleanup() {
     if (m_sceneRoot) {
         m_sceneRoot->unref();
         m_sceneRoot = nullptr;
@@ -342,6 +354,11 @@ void Canvas::cleanup()
     if (m_objectRoot) {
         m_objectRoot->unref();
         m_objectRoot = nullptr;
+    }
+    if (m_pickingAidSeparator)
+    {
+        m_pickingAidSeparator->unref();
+        m_pickingAidSeparator = nullptr;
     }
 }
 
@@ -424,14 +441,42 @@ void Canvas::onEraseBackground(wxEraseEvent& event)
     // Do nothing to prevent flickering
 }
 
-void Canvas::onMouseButton(wxMouseEvent& event)
-{
+void Canvas::onMouseButton(wxMouseEvent& event) {
     if (!m_mouseHandler || !m_glContext || !SetCurrent(*m_glContext)) {
         LOG_WAR("Mouse button event skipped: Invalid handler or context");
         event.Skip();
         return;
     }
+    if (g_isPickingPosition && event.LeftDown()) {
+        LOG_INF("Picking position with mouse click");
+        SbVec3f worldPos;
+        if (screenToWorld(event.GetPosition(), worldPos)) {
+            LOG_INF("Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
 
+            wxWindow* dialog = wxWindow::FindWindowByName("PositionDialog");
+            if (dialog) {
+                PositionDialog* posDialog = dynamic_cast<PositionDialog*>(dialog);
+                if (posDialog) {
+                    posDialog->SetPosition(worldPos);
+
+                    posDialog->Show(true);
+                    LOG_INF("Position dialog updated and shown");
+
+                    g_isPickingPosition = false;
+                }
+                else {
+                    LOG_ERR("Failed to cast dialog to PositionDialog");
+                }
+            }
+            else {
+                LOG_ERR("PositionDialog not found");
+            }
+        }
+        else {
+            LOG_WAR("Failed to convert screen position to world coordinates");
+        }
+
+    }
     m_mouseHandler->handleMouseButton(event);
     event.Skip();
 }
@@ -688,4 +733,331 @@ void Canvas::createCoordinateSystem()
     coordSystemSep->addChild(zAxisSep);
 
     m_objectRoot->addChild(coordSystemSep);
+}
+
+void Canvas::AddTestCube()
+{
+    LOG_INF("Adding test cube to canvas");
+    SoSeparator* cubeSeparator = new SoSeparator;
+
+    // Shape hints for correct normals
+    SoShapeHints* hints = new SoShapeHints;
+    hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
+    hints->shapeType = SoShapeHints::SOLID;
+    cubeSeparator->addChild(hints);
+
+    // Filled cube (red)
+    SoSeparator* fillSep = new SoSeparator;
+    SoMaterial* cubeMaterial = new SoMaterial;
+    cubeMaterial->diffuseColor.setValue(1.0f, 0.0f, 0.0f); // Red
+    cubeMaterial->transparency.setValue(0.0f);
+    fillSep->addChild(cubeMaterial);
+    SoDrawStyle* fillStyle = new SoDrawStyle;
+    fillStyle->style = SoDrawStyle::FILLED;
+    fillSep->addChild(fillStyle);
+    SoCube* cube = new SoCube;
+    cube->width.setValue(0.5f);
+    cube->height.setValue(0.5f);
+    cube->depth.setValue(0.5f);
+    fillSep->addChild(cube);
+    cubeSeparator->addChild(fillSep);
+
+    // Wireframe cube (blue)
+    SoSeparator* wireSep = new SoSeparator;
+    SoMaterial* wireframeMaterial = new SoMaterial;
+    wireframeMaterial->diffuseColor.setValue(0.5f, 0.8f, 1.0f); // Blue
+    wireframeMaterial->transparency.setValue(0.0f);
+    wireSep->addChild(wireframeMaterial);
+    SoDrawStyle* wireframeStyle = new SoDrawStyle;
+    wireframeStyle->style = SoDrawStyle::LINES;
+    wireframeStyle->lineWidth = 1.0f;
+    wireSep->addChild(wireframeStyle);
+    SoCube* wireCube = new SoCube;
+    wireCube->width.setValue(0.5f);
+    wireCube->height.setValue(0.5f);
+    wireCube->depth.setValue(0.5f);
+    wireSep->addChild(wireCube);
+    cubeSeparator->addChild(wireSep);
+
+    m_objectRoot->addChild(cubeSeparator);
+    Refresh(true);
+    Update();
+}
+
+bool Canvas::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos)
+{
+    if (!m_camera || !m_glContext || !SetCurrent(*m_glContext)) {
+        LOG_ERR("Cannot convert screen to world: Invalid camera or context");
+        return false;
+    }
+
+    wxSize size = GetClientSize();
+    float x = static_cast<float>(screenPos.x) / size.GetWidth();
+    float y = 1.0f - static_cast<float>(screenPos.y) / size.GetHeight();
+
+    SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
+    SbVec2f normalizedPos(x, y);
+    SbLine line;
+    SbViewVolume viewVolume = m_camera->getViewVolume();
+    viewVolume.projectPointToLine(normalizedPos, line);
+    worldPos = line.getPosition();
+    return true;
+}
+
+enum GeometryType {
+    CUBE,
+    SPHERE,
+    CYLINDER
+};
+
+GeometryType g_selectedGeometryType = CUBE;
+
+void Canvas::CreateGeometryAtPosition(const SbVec3f& position) {
+    LOG_INF("Creating geometry at position: " + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]));
+    SoSeparator* geometrySeparator = new SoSeparator;
+    SoTransform* transform = new SoTransform;
+    transform->translation.setValue(position);
+    geometrySeparator->addChild(transform);
+    SoMaterial* material = new SoMaterial;
+    material->diffuseColor.setValue(0.0, 1.0, 0.0);
+    geometrySeparator->addChild(material);
+    SoNode* geometry = nullptr;
+    std::string geometryType = getCreationGeometryType();
+    LOG_INF("Creating geometry of type: " + geometryType);
+    if (geometryType == "Box") {
+        SoCube* cube = new SoCube;
+        cube->width.setValue(0.3);
+        cube->height.setValue(0.3);
+        cube->depth.setValue(0.3);
+        geometry = cube;
+    }
+    else if (geometryType == "Sphere") {
+        SoSphere* sphere = new SoSphere;
+        sphere->radius.setValue(0.15);
+        geometry = sphere;
+    }
+    else if (geometryType == "Cylinder") {
+        SoCylinder* cylinder = new SoCylinder;
+        cylinder->radius.setValue(0.15);
+        cylinder->height.setValue(0.3);
+        geometry = cylinder;
+    }
+    else if (geometryType == "Cone") {
+        SoCone* cone = new SoCone;
+        cone->bottomRadius.setValue(0.15);
+        cone->height.setValue(0.3); 
+        geometry = cone;
+    }
+    else {
+        LOG_WAR("Unknown geometry type: " + geometryType + ", using Box as fallback");
+        SoCube* cube = new SoCube;
+        cube->width.setValue(0.3);
+        cube->height.setValue(0.3);
+        cube->depth.setValue(0.3);
+        geometry = cube;
+    }
+    if (geometry) { geometrySeparator->addChild(geometry); }
+    m_objectRoot->addChild(geometrySeparator);
+    LOG_INF("Geometry added to scene graph");
+    if (m_mouseHandler) {
+        LOG_INF("Resetting operation mode to NAVIGATE after geometry creation");
+        m_mouseHandler->setOperationMode(MouseHandler::NAVIGATE);
+        m_mouseHandler->setCreationGeometryType("");
+    }
+    else {
+        LOG_WAR("Unable to reset operation mode: MouseHandler is null");
+    }        Refresh(true);
+    Update();
+}
+
+std::string Canvas::getCreationGeometryType() const {
+    if (m_mouseHandler) {
+        return m_mouseHandler->getCreationGeometryType();
+    }    return "Box";
+}
+
+void Canvas::createPickingAidLines() {
+    m_pickingAidSeparator = new SoSeparator;
+    m_pickingAidSeparator->ref();
+
+    m_pickingAidTransform = new SoTransform;
+    m_pickingAidSeparator->addChild(m_pickingAidTransform);
+    SoDrawStyle* lineStyle = new SoDrawStyle;
+    lineStyle->lineWidth.setValue(1.0f);
+    lineStyle->linePattern.setValue(0xFFFF);
+    m_pickingAidSeparator->addChild(lineStyle);
+    SoSeparator* xLineSep = new SoSeparator;
+    SoMaterial* xMaterial = new SoMaterial;
+    xMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f);
+    xLineSep->addChild(xMaterial);
+
+    SoCoordinate3* xCoords = new SoCoordinate3;
+    xCoords->point.set1Value(0, SbVec3f(-1000.0f, 0.0f, 0.0f));
+    xCoords->point.set1Value(1, SbVec3f(1000.0f, 0.0f, 0.0f));
+    xLineSep->addChild(xCoords);
+    SoLineSet* xLine = new SoLineSet;
+    xLine->numVertices.setValue(2);
+    xLineSep->addChild(xLine);
+    m_pickingAidSeparator->addChild(xLineSep);
+    SoSeparator* yLineSep = new SoSeparator;
+    SoMaterial* yMaterial = new SoMaterial;
+    yMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f);
+    yLineSep->addChild(yMaterial);
+    SoCoordinate3* yCoords = new SoCoordinate3;
+    yCoords->point.set1Value(0, SbVec3f(0.0f, -1000.0f, 0.0f));
+    yCoords->point.set1Value(1, SbVec3f(0.0f, 1000.0f, 0.0f));
+    yLineSep->addChild(yCoords);
+    SoLineSet* yLine = new SoLineSet;
+    yLine->numVertices.setValue(2);
+    yLineSep->addChild(yLine);
+    m_pickingAidSeparator->addChild(yLineSep);
+    SoSeparator* zLineSep = new SoSeparator;
+    SoMaterial* zMaterial = new SoMaterial;
+    zMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f);
+    zLineSep->addChild(zMaterial);
+    SoCoordinate3* zCoords = new SoCoordinate3;
+    zCoords->point.set1Value(0, SbVec3f(0.0f, 0.0f, -1000.0f));
+    zCoords->point.set1Value(1, SbVec3f(0.0f, 0.0f, 1000.0f));
+    zLineSep->addChild(zCoords);
+    SoLineSet* zLine = new SoLineSet;
+
+    zLine->numVertices.setValue(2);
+    zLineSep->addChild(zLine);
+    m_pickingAidSeparator->addChild(zLineSep);
+    SoSeparator* centerSep = new SoSeparator;
+    SoMaterial* centerMaterial = new SoMaterial;
+    centerMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    centerSep->addChild(centerMaterial);
+    SoDrawStyle* pointStyle = new SoDrawStyle;
+    pointStyle->pointSize.setValue(5.0f);
+    centerSep->addChild(pointStyle);
+    SoCoordinate3* centerCoord = new SoCoordinate3;
+    centerCoord->point.set1Value(0,SbVec3f(0.0f, 0.0f, 0.0f));
+    centerSep->addChild(centerCoord);
+    SoPointSet* centerPoint = new SoPointSet;
+    centerSep->addChild(centerPoint); 
+    m_pickingAidSeparator->addChild(centerSep);
+    m_pickingAidVisible = false;
+}
+
+void Canvas::showPickingAidLines(const SbVec3f& position) {
+    if (!m_pickingAidSeparator) {
+        m_pickingAidSeparator = new SoSeparator;
+        m_pickingAidSeparator->ref();
+        SoTransform* transform = new SoTransform;
+        transform->translation.setValue(position);
+        m_pickingAidSeparator->addChild(transform);
+        SoSeparator* xLineSep = new SoSeparator;
+        SoMaterial* xMaterial = new SoMaterial;
+        xMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f); 
+        xLineSep->addChild(xMaterial);
+        SoDrawStyle* xDrawStyle = new SoDrawStyle;
+        xDrawStyle->lineWidth.setValue(1.0f);
+        xLineSep->addChild(xDrawStyle);
+        SoCoordinate3* xCoords = new SoCoordinate3;
+        xCoords->point.set1Value(0, -1000.0f, 0.0f, 0.0f);
+        xCoords->point.set1Value(1, 1000.0f, 0.0f, 0.0f);
+        xLineSep->addChild(xCoords);
+        SoLineSet* xLineSet = new SoLineSet;
+        xLineSet->numVertices.setValue(2);
+        xLineSep->addChild(xLineSet);
+        m_pickingAidSeparator->addChild(xLineSep);
+        SoSeparator* yLineSep = new SoSeparator;
+        SoMaterial* yMaterial = new SoMaterial;
+        yMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f);
+        yLineSep->addChild(yMaterial);
+        SoDrawStyle* yDrawStyle = new SoDrawStyle;
+        yDrawStyle->lineWidth.setValue(1.0f);
+        yLineSep->addChild(yDrawStyle);
+        SoCoordinate3* yCoords = new SoCoordinate3;
+        yCoords->point.set1Value(0, 0.0f, -1000.0f, 0.0f); 
+        yCoords->point.set1Value(1, 0.0f, 1000.0f, 0.0f);
+        yLineSep->addChild(yCoords);
+        SoLineSet* yLineSet = new SoLineSet;
+        yLineSet->numVertices.setValue(2);
+        yLineSep->addChild(yLineSet);
+        m_pickingAidSeparator->addChild(yLineSep);
+        SoSeparator* zLineSep = new SoSeparator;
+        SoMaterial* zMaterial = new SoMaterial;
+        zMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f); 
+        zLineSep->addChild(zMaterial);
+        SoDrawStyle* zDrawStyle = new SoDrawStyle;
+        zDrawStyle->lineWidth.setValue(1.0f);
+        zLineSep->addChild(zDrawStyle);
+        SoCoordinate3* zCoords = new SoCoordinate3;
+        zCoords->point.set1Value(0, 0.0f, 0.0f, -1000.0f); 
+        zCoords->point.set1Value(1, 0.0f, 0.0f, 1000.0f);
+        zLineSep->addChild(zCoords);
+        SoLineSet* zLineSet = new SoLineSet;
+        zLineSet->numVertices.setValue(2);
+        zLineSep->addChild(zLineSet);
+        m_pickingAidSeparator->addChild(zLineSep);
+        SoSeparator* textSep = new SoSeparator;
+        SoMaterial* textMaterial = new SoMaterial;
+        textMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f); 
+        textSep->addChild(textMaterial);
+        SoTransform* textTransform = new SoTransform;
+        textTransform->translation.setValue(0.1f, 0.1f, 0.1f); 
+        textSep->addChild(textTransform);
+        SoText2* coordText = new SoText2;
+        char coordStr[64];
+        snprintf(coordStr, sizeof(coordStr), "(%.2f, %.2f, %.2f)", position[0], position[1], position[2]);
+        coordText->string.setValue(coordStr);
+        textSep->addChild(coordText);
+        m_pickingAidSeparator->addChild(textSep);
+        m_sceneRoot->addChild(m_pickingAidSeparator);
+        m_pickingAidVisible = true;
+    } else {
+        SoTransform* transform = dynamic_cast<SoTransform*>(m_pickingAidSeparator->getChild(0));
+        if (transform) {
+            transform->translation.setValue(position);
+        }
+        SoSeparator* textSep = nullptr;
+        int lastChildIndex = m_pickingAidSeparator->getNumChildren() - 1;
+        if (lastChildIndex >= 0) {
+            textSep = dynamic_cast<SoSeparator*>(m_pickingAidSeparator->getChild(lastChildIndex));
+            if (!textSep || textSep->getNumChildren() == 0 || !dynamic_cast<SoText2*>(textSep->getChild(textSep->getNumChildren() - 1))) {
+                textSep = new SoSeparator;
+                SoMaterial* textMaterial = new SoMaterial;
+                textMaterial->diffuseColor.setValue(0.0f, 1.0f, 0.0f); 
+                textSep->addChild(textMaterial);
+                SoTransform* textTransform = new SoTransform;
+                textTransform->translation.setValue(0.1f, 0.1f, 0.1f);
+                textSep->addChild(textTransform);
+                SoText2* coordText = new SoText2;
+                textSep->addChild(coordText);
+                m_pickingAidSeparator->addChild(textSep);
+            }
+            SoText2* coordText = dynamic_cast<SoText2*>(textSep->getChild(textSep->getNumChildren() - 1));
+            if (coordText) {
+                char coordStr[64];
+                snprintf(coordStr, sizeof(coordStr), "(%.2f, %.2f, %.2f)", position[0], position[1], position[2]);
+                coordText->string.setValue(coordStr);
+            }
+        }
+        if (!m_pickingAidVisible) {
+            m_sceneRoot->addChild(m_pickingAidSeparator);
+            m_pickingAidVisible = true;
+        }
+    }
+    setPickingCursor(true);
+    Refresh(true);
+    Update();
+}
+
+void Canvas::hidePickingAidLines() {
+    if (!m_pickingAidSeparator || !m_pickingAidVisible) { return; }
+    m_sceneRoot->removeChild(m_pickingAidSeparator);
+    m_pickingAidVisible = false;
+    setPickingCursor(false);
+    Refresh(true);
+}
+
+void Canvas::setPickingCursor(bool enable) {
+    if (enable) {
+        SetCursor(wxCursor(wxCURSOR_CROSS));
+    }
+    else {
+        SetCursor(wxCursor(wxCURSOR_DEFAULT));
+    }
 }

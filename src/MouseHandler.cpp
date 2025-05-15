@@ -5,10 +5,14 @@
 #include "GeometryObject.h"
 #include "CreateCommand.h"
 #include "Logger.h"
+#include "PositionDialog.h"
 #include <Inventor/events/SoMouseButtonEvent.h>
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/SbLinear.h>
 #include <wx/event.h>
+
+
+static PositionDialog* s_positionDialog = nullptr;
 
 MouseHandler::MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel, CommandManager* commandManager)
     : m_canvas(canvas)
@@ -40,14 +44,14 @@ void MouseHandler::setOperationMode(OperationMode mode)
 
 void MouseHandler::setCreationGeometryType(const std::string& type) {
     LOG_INF("Setting creation geometry type: " + type);
-    
+
     m_creationGeometryType = type;
     if (m_previewObject) {
         m_canvas->getObjectRoot()->removeChild(m_previewObject->getRoot());
         delete m_previewObject;
         m_previewObject = nullptr;
     }
-    
+
     if (!type.empty()) {
         if (type == "Box") m_previewObject = new Box(1.0f, 1.0f, 1.0f);
         else if (type == "Sphere") m_previewObject = new Sphere(0.5f);
@@ -59,57 +63,80 @@ void MouseHandler::setCreationGeometryType(const std::string& type) {
             m_previewObject->setPosition(worldPos);
             m_canvas->getObjectRoot()->addChild(m_previewObject->getRoot());
             m_canvas->render();
+
+            // Create position dialog
+            if (s_positionDialog != nullptr) {
+                delete s_positionDialog;
+                s_positionDialog = nullptr;
+            }
+
+            s_positionDialog = new PositionDialog(m_canvas->GetParent(), "Set " + wxString(type) + " Position");
+            s_positionDialog->SetPosition(worldPos);
+            s_positionDialog->Show(true);
         }
     }
 }
 
-void MouseHandler::handleMouseButton(const wxMouseEvent& event)
-{
+void MouseHandler::handleMouseButton(const wxMouseEvent& event) {
     LOG_INF("Handling mouse button event, mode: " + std::to_string(m_opMode));
-    switch (m_opMode)
-    {
+    switch (m_opMode) {
     case NAVIGATE:
         if (m_navStyle) {
             m_navStyle->handleMouseButton(event);
         }
-        break;
+        else {
+            LOG_WAR("Navigation style is null in NAVIGATE mode");
+        }        break;
     case SELECT:
         if (event.LeftDown())
         {
             LOG_INF("Selecting object at position: (" + std::to_string(event.GetX()) + ", " + std::to_string(event.GetY()) + ")");
             selectObject(wxPoint(event.GetX(), event.GetY()));
-        }
-        break;
+        }        break;
     case CREATE:
-        if (event.LeftDown())
+        if (event.LeftDown() && g_isPickingPosition && s_positionDialog)
         {
-            wxPoint pos = event.GetPosition();
-            LOG_INF("try to create: " + std::to_string(pos.x) + "," + std::to_string(pos.y));
-            createObject(pos);
-        }
-        break;
-    }
-    m_canvas->Refresh();
-}
+            LOG_INF("Processing pick position in CREATE mode");
 
-void MouseHandler::handleMouseMotion(const wxMouseEvent& event)
-{
-    if (m_opMode == NAVIGATE && m_navStyle) {
-        m_navStyle->handleMouseMotion(event);
-    }
-    else if (m_opMode == CREATE && m_previewObject) {
-        SbVec3f worldPos;
-        if (screenToWorld(event.GetPosition(), worldPos)) {
-            // Check if mouse is within the geometry bounds
-            // Since we don't have direct access to dimensions, use a reasonable default radius
-            float radius = 1.0f; // Default value for all geometries
-            
-            float distance = sqrt(pow(worldPos[0], 2) + pow(worldPos[1], 2));
-            if (distance <= radius * 1.5f) { // Allow some margin
-                m_previewObject->setPosition(worldPos);
-                m_canvas->render();
+            SbVec3f worldPos;
+            if (screenToWorld(event.GetPosition(), worldPos)) {
+                LOG_INF("Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
+
+                s_positionDialog->SetPosition(worldPos);
+                s_positionDialog->Show(true);
+                LOG_INF("Dialog shown with updated position");
+                if (m_previewObject) {
+                    m_previewObject->setPosition(worldPos);
+                    m_canvas->render();
+                }
+
+                g_isPickingPosition = false;
+
+                wxButton* pickButton = (wxButton*)s_positionDialog->FindWindow(wxID_HIGHEST + 1000);
+                if (pickButton) {
+                    pickButton->SetLabel("Pick Coordinates");
+                    pickButton->Enable(true);
+                }
+            }
+            else {
+                LOG_WAR("Failed to convert screen position to world coordinates");
             }
         }
+        else if (!g_isPickingPosition && event.LeftDown()) {
+            LOG_INF("Left click in CREATE mode, but not in picking mode");
+        }        break;
+    }    m_canvas->Refresh();
+}
+
+void MouseHandler::handleMouseMotion(const wxMouseEvent& event) { 
+    if ((m_opMode == NAVIGATE || !g_isPickingPosition) && m_navStyle) {    
+        m_navStyle->handleMouseMotion(event);    }  
+    else if (m_opMode == CREATE && g_isPickingPosition) { 
+        SbVec3f worldPos;   
+        if (screenToWorld(event.GetPosition(), worldPos)) {   
+            m_canvas->showPickingAidLines(worldPos);    
+            m_canvas->render();   
+        }  
     }
 }
 
@@ -152,6 +179,10 @@ void MouseHandler::createObject(const wxPoint& position) {
     }
     m_canvas->render();
 
+    createGeometryAtPosition(worldPos);
+}
+
+void MouseHandler::createGeometryAtPosition(const SbVec3f& position) {
     GeometryObject* object = nullptr;
     std::string objectName = m_creationGeometryType + "_" + std::to_string(std::time(nullptr));
 
@@ -182,8 +213,8 @@ void MouseHandler::createObject(const wxPoint& position) {
         return;
     }
 
-    object->setPosition(worldPos);
-    LOG_INF("Created object: " + objectName + " at position: (" + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
+    object->setPosition(position);
+    LOG_INF("Created object: " + objectName + " at position: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
 
     auto command = std::make_shared<CreateCommand>(object, m_canvas->getObjectRoot(), m_objectTree, m_propertyPanel);
     m_commandManager->executeCommand(command);
@@ -195,8 +226,6 @@ void MouseHandler::createObject(const wxPoint& position) {
 
 bool MouseHandler::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos)
 {
-    LOG_DBG("Converting screen position: (" + std::to_string(screenPos.x) + ", " + std::to_string(screenPos.y) + ")");
-    
     wxSize size = m_canvas->GetClientSize();
     if (size.x <= 0 || size.y <= 0) {
         LOG_ERR("Invalid viewport size");
@@ -212,18 +241,18 @@ bool MouseHandler::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos)
     // Calculate normalized device coordinates (range -1 to 1)
     float normX = (2.0f * screenPos.x) / size.x - 1.0f;
     float normY = 1.0f - (2.0f * screenPos.y) / size.y;
-    
+
     // Get view volume
     SbViewVolume viewVolume = camera->getViewVolume();
-    
+
     // Create ray from screen coordinates
     SbLine line;
     viewVolume.projectPointToLine(SbVec2f(normX, normY), line);
-    
+
     // Get ray origin and direction
     SbVec3f linePos = line.getPosition();
     SbVec3f lineDir = line.getDirection();
-    
+
     // Calculate intersection with Z=0 plane
     if (std::abs(lineDir[2]) < 1e-6) {
         // Ray almost parallel to XY plane, use origin as default point
@@ -231,22 +260,14 @@ bool MouseHandler::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos)
         LOG_WAR("Ray almost parallel to XY plane, using origin");
         return true;
     }
-    
+
     float t = -linePos[2] / lineDir[2];
-    
+
     // Calculate intersection point
     worldPos = linePos + lineDir * t;
-    
-    // Use very small radius limit to make objects follow mouse closely
-    float maxRadius = 1.0f; // 进一步减小值以确保对象更紧密地跟随鼠标
-    float currRadius = sqrt(worldPos[0]*worldPos[0] + worldPos[1]*worldPos[1]);
-    
-    if (currRadius > maxRadius && currRadius > 0) {
-        float scale = maxRadius / currRadius;
-        worldPos[0] *= scale;
-        worldPos[1] *= scale;
-    }
-    
+
+    // Removed maxRadius clamping to allow free movement based on mouse projection
+
     // If intersection point is behind viewpoint or too far, adjust to reasonable position
     if (t < 0 || t > 100.0f) {
         // Use point in front of camera
@@ -254,19 +275,13 @@ bool MouseHandler::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos)
         SbVec3f forward;
         camera->orientation.getValue().multVec(SbVec3f(0, 0, -1), forward);
         forward.normalize();
-        
+
         // Place at reasonable distance in front of camera
         worldPos = cameraPos + forward * 2.0f;
         worldPos[2] = 0.0f; // Force on XY plane
     }
-    
+
     // Ensure Z value is 0
     worldPos[2] = 0.0f;
-    
-    LOG_DBG("Converted to world position: (" + 
-        std::to_string(worldPos[0]) + ", " + 
-        std::to_string(worldPos[1]) + ", " + 
-        std::to_string(worldPos[2]) + ")");
-    
     return true;
 }

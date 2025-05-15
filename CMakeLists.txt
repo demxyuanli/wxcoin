@@ -1,3 +1,5 @@
+#cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake" -DwxWidgets_ROOT_DIR="D:/repos/vcpkg/installed/x64-windows"
+
 cmake_minimum_required(VERSION 3.20)
 project(FreeCADNavigation)
 
@@ -19,6 +21,11 @@ include(${wxWidgets_USE_FILE})
 set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/Application.cpp
     ${CMAKE_SOURCE_DIR}/src/Canvas.cpp
+    #${CMAKE_SOURCE_DIR}/src/CanvasGeometry.cpp
+    #${CMAKE_SOURCE_DIR}/src/CanvasInput.cpp
+    #${CMAKE_SOURCE_DIR}/src/CanvasPicking.cpp
+    #${CMAKE_SOURCE_DIR}/src/CanvasRendering.cpp
+    #${CMAKE_SOURCE_DIR}/src/CanvasScene.cpp
     ${CMAKE_SOURCE_DIR}/src/Command.cpp
     ${CMAKE_SOURCE_DIR}/src/GeometryObject.cpp
     ${CMAKE_SOURCE_DIR}/src/MainFrame.cpp
@@ -28,6 +35,7 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/PropertyPanel.cpp
     ${CMAKE_SOURCE_DIR}/src/CreateCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/Logger.cpp
+    ${CMAKE_SOURCE_DIR}/src/PositionDialog.cpp
 )
 
 # 创建可执行文件
