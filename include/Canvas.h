@@ -2,6 +2,7 @@
 
 #include <wx/glcanvas.h>
 #include <memory>
+#include <stdexcept>
 #include <Inventor/nodes/SoCamera.h>
 #include "NavigationCube.h"
 
@@ -28,21 +29,31 @@ public:
 
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
-    void SetNavigationCubeRect(int x, int y, int size) {
-        m_cubeX = x;
-        m_cubeY = y;
-        m_cubeSize = size;
-        Refresh(true);
-    }
+    void SetNavigationCubeRect(int x, int y, int size);
 
     SoCamera* getCamera() const;
     void resetView();
 
 private:
+    // Navigation cube layout management
+    struct NavigationCubeLayout {
+        int x{ 10 }, y{ 10 }, size{ 120 };
+        void update(int newX, int newY, int newSize, const wxSize& windowSize, float dpiScale) {
+            // Restrict size, considering DPI scaling
+            size = std::max(50, std::min(newSize, windowSize.x / 2));
+            size = static_cast<int>(size * dpiScale);
+            // Ensure position is within window bounds
+            x = std::max(0, std::min(newX, static_cast<int>((windowSize.x - size) / dpiScale)));
+            y = std::max(0, std::min(newY, static_cast<int>((windowSize.y - size) / dpiScale)));
+        }
+    } m_cubeLayout;
+
     void onPaint(wxPaintEvent& event);
     void onSize(wxSizeEvent& event);
     void onEraseBackground(wxEraseEvent& event);
     void onMouseEvent(wxMouseEvent& event);
+
+    void showErrorDialog(const std::string& message) const;
 
     static const int s_canvasAttribs[];
     wxGLContext* m_glContext;
@@ -52,9 +63,9 @@ private:
     ObjectTreePanel* m_objectTreePanel;
     CommandManager* m_commandManager;
     bool m_isRendering;
+    bool m_isInitialized;
     wxLongLong m_lastRenderTime;
-
-    int m_cubeX{ 10 }, m_cubeY{ 10 }, m_cubeSize{ 150 };
+    float m_dpiScale; // Store DPI scale for consistent use
 
     DECLARE_EVENT_TABLE()
 };

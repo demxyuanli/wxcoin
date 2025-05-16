@@ -9,10 +9,11 @@
 #include <string>
 #include <functional>
 #include <Inventor/SbLinear.h>
+#include <memory>
 
 class NavigationCube {
 public:
-    NavigationCube(std::function<void(const std::string&)> viewChangeCallback);
+    NavigationCube(std::function<void(const std::string&)> viewChangeCallback, float dpiScale);
     ~NavigationCube();
 
     void initialize();
@@ -26,12 +27,21 @@ private:
     void setupGeometry();
     std::string pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize);
     void updateCameraRotation();
-    void generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height);
+    bool generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height);
+
+    // Texture cache entry
+    struct TextureData {
+        unsigned char* data;
+        int width, height;
+        TextureData(unsigned char* d, int w, int h) : data(d), width(w), height(h) {}
+        ~TextureData() { delete[] data; }
+    };
 
     SoSeparator* m_root;
     SoCamera* m_orthoCamera;
     SoTransform* m_cameraTransform;
     bool m_enabled;
+    float m_dpiScale;
     std::map<std::string, std::string> m_faceToView;
     std::function<void(const std::string&)> m_viewChangeCallback;
     bool m_isDragging;
@@ -39,4 +49,7 @@ private:
     float m_rotationX;
     float m_rotationY;
     wxLongLong m_lastDragTime;
+
+    // Static texture cache
+    static std::map<std::string, std::shared_ptr<TextureData>> s_textureCache;
 };
