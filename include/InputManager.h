@@ -14,8 +14,8 @@ public:
 
     void setMouseHandler(MouseHandler* handler);
     void setNavigationController(NavigationController* controller);
-    MouseHandler* getMouseHandler() const { return m_mouseHandler; } // Added
-    NavigationController* getNavigationController() const { return m_navigationController; } // Added
+    MouseHandler* getMouseHandler() const { return m_mouseHandler; }
+    NavigationController* getNavigationController() const { return m_navigationController; }
 
     void onMouseButton(wxMouseEvent& event);
     void onMouseMotion(wxMouseEvent& event);

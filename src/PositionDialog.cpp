@@ -12,9 +12,6 @@
 #include <wx/stattext.h>
 #include <wx/button.h>
 
-// Global variable implementation
-bool g_isPickingPosition = false;
-
 // Custom event ID
 enum {
     ID_PICK_BUTTON = wxID_HIGHEST + 1000

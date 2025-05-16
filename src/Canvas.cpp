@@ -1,6 +1,7 @@
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "InputManager.h"
+#include "NavigationCube.h"
 #include "ObjectTreePanel.h"
 #include "Logger.h"
 #include <wx/dcclient.h>
@@ -53,6 +54,7 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 
     m_sceneManager = std::make_unique<SceneManager>(this);
     m_inputManager = std::make_unique<InputManager>(this);
+    m_navigationCube = std::make_unique<NavigationCube>(this);
 
     const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
     LOG_INF("GL Context created. OpenGL version: " + std::string(glVersion ? glVersion : "unknown"));
@@ -105,7 +107,7 @@ void Canvas::render(bool fastMode) {
         }
 
         glViewport(0, 0, size.x, size.y);
-        glClearColor(0.6f, 0.8f, 1.0f, 1.0f);  
+        glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         m_sceneManager->render(size, fastMode);
@@ -178,9 +180,9 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
         return;
     }
 
-    if (event.GetEventType() == wxEVT_LEFT_DOWN || 
-        event.GetEventType() == wxEVT_LEFT_UP || 
-        event.GetEventType() == wxEVT_RIGHT_DOWN || 
+    if (event.GetEventType() == wxEVT_LEFT_DOWN ||
+        event.GetEventType() == wxEVT_LEFT_UP ||
+        event.GetEventType() == wxEVT_RIGHT_DOWN ||
         event.GetEventType() == wxEVT_RIGHT_UP) {
         m_inputManager->onMouseButton(event);
     }
@@ -192,5 +194,12 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
     }
     else {
         event.Skip();
+    }
+}
+
+void Canvas::setNavigationCubeEnabled(bool enabled) {
+    if (m_navigationCube) {
+        m_navigationCube->setEnabled(enabled);
+        Refresh();
     }
 }

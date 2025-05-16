@@ -145,9 +145,8 @@ void NavigationController::viewTop() {
         LOG_ERR("Cannot set top view: Invalid camera");
         return;
     }
-    camera->position.setValue(0, 0, 5);
-    camera->orientation.setValue(SbVec3f(0, 0, -1), 0);
-    m_canvas->Refresh();
+    
+    m_sceneManager->setView("Top");
 }
 
 void NavigationController::viewFront() {
@@ -156,9 +155,8 @@ void NavigationController::viewFront() {
         LOG_ERR("Cannot set front view: Invalid camera");
         return;
     }
-    camera->position.setValue(0, -5, 0);
-    camera->orientation.setValue(SbVec3f(0, 0, -1), M_PI / 2);
-    m_canvas->Refresh();
+    
+    m_sceneManager->setView("Front");
 }
 
 void NavigationController::viewRight() {
@@ -167,9 +165,8 @@ void NavigationController::viewRight() {
         LOG_ERR("Cannot set right view: Invalid camera");
         return;
     }
-    camera->position.setValue(5, 0, 0);
-    camera->orientation.setValue(SbVec3f(0, 0, -1), M_PI);
-    m_canvas->Refresh();
+    
+    m_sceneManager->setView("Right");
 }
 
 void NavigationController::viewIsometric() {
@@ -178,9 +175,6 @@ void NavigationController::viewIsometric() {
         LOG_ERR("Cannot set isometric view: Invalid camera");
         return;
     }
-    camera->position.setValue(5, -5, 5);
-    SbRotation rotX(SbVec3f(1, 0, 0), M_PI / 4);
-    SbRotation rotY(SbVec3f(0, 1, 0), M_PI / 4);
-    camera->orientation.setValue(rotX * rotY);
-    m_canvas->Refresh();
+    
+    m_sceneManager->setView("Isometric");
 }

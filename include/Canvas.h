@@ -8,6 +8,7 @@ class SceneManager;
 class InputManager;
 class ObjectTreePanel;
 class CommandManager;
+class NavigationCube;
 
 class Canvas : public wxGLCanvas {
 public:
@@ -22,9 +23,11 @@ public:
     InputManager* getInputManager() const { return m_inputManager.get(); }
     ObjectTreePanel* getObjectTreePanel() const { return m_objectTreePanel; }
     CommandManager* getCommandManager() const { return m_commandManager; }
+    NavigationCube* getNavigationCube() const { return m_navigationCube.get(); }
 
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
+    void setNavigationCubeEnabled(bool enabled);
 
     SoCamera* getCamera() const;
     void resetView();
@@ -39,6 +42,7 @@ private:
     wxGLContext* m_glContext;
     std::unique_ptr<SceneManager> m_sceneManager;
     std::unique_ptr<InputManager> m_inputManager;
+    std::unique_ptr<NavigationCube> m_navigationCube;
     ObjectTreePanel* m_objectTreePanel;
     CommandManager* m_commandManager;
     bool m_isRendering;

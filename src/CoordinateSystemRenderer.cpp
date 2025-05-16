@@ -11,7 +11,7 @@
 #include <Inventor/nodes/SoTransform.h>
 
 const float CoordinateSystemRenderer::COORD_PLANE_SIZE = 4.0f;
-const float CoordinateSystemRenderer::COORD_PLANE_TRANSPARENCY = 1.0f;
+const float CoordinateSystemRenderer::COORD_PLANE_TRANSPARENCY = 0.95f;
 
 CoordinateSystemRenderer::CoordinateSystemRenderer(SoSeparator* objectRoot)
     : m_objectRoot(objectRoot)
@@ -43,10 +43,9 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     globalStyle->pointSize = 1.0f;
     coordSystemSep->addChild(globalStyle);
 
-    // X plane (YZ plane)
     SoSeparator* xPlaneSep = new SoSeparator;
     SoMaterial* xMaterial = new SoMaterial;
-    xMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    xMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f); 
     xMaterial->transparency.setValue(COORD_PLANE_TRANSPARENCY);
     xPlaneSep->addChild(xMaterial);
 
@@ -67,7 +66,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
     SoSeparator* xLineSep = new SoSeparator;
     SoMaterial* xLineMaterial = new SoMaterial;
-    xLineMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    xLineMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f); 
     xLineMaterial->transparency.setValue(0.0f);
     xLineSep->addChild(xLineMaterial);
 
@@ -88,7 +87,6 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     xPlaneSep->addChild(xLineSep);
     coordSystemSep->addChild(xPlaneSep);
 
-    // Y plane (XZ plane)
     SoSeparator* yPlaneSep = new SoSeparator;
     SoMaterial* yMaterial = new SoMaterial;
     yMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
@@ -132,7 +130,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     yPlaneSep->addChild(yLineSep);
     coordSystemSep->addChild(yPlaneSep);
 
-    // Z plane (XY plane)
+    // Z plane (XY plane) - 使用蓝色
     SoSeparator* zPlaneSep = new SoSeparator;
     SoMaterial* zMaterial = new SoMaterial;
     zMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
@@ -176,7 +174,6 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     zPlaneSep->addChild(zLineSep);
     coordSystemSep->addChild(zPlaneSep);
 
-    // X axis
     SoSeparator* xAxisSep = new SoSeparator;
     SoMaterial* xAxisMaterial = new SoMaterial;
     xAxisMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
@@ -184,7 +181,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     xAxisSep->addChild(xAxisMaterial);
 
     SoDrawStyle* xAxisStyle = new SoDrawStyle;
-    xAxisStyle->lineWidth = 1.0f;
+    xAxisStyle->lineWidth = 1.0f; 
     xAxisSep->addChild(xAxisStyle);
 
     SoCoordinate3* xAxisCoords = new SoCoordinate3;
@@ -197,7 +194,6 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     xAxisSep->addChild(xAxisLine);
     coordSystemSep->addChild(xAxisSep);
 
-    // Y axis
     SoSeparator* yAxisSep = new SoSeparator;
     SoMaterial* yAxisMaterial = new SoMaterial;
     yAxisMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
@@ -205,7 +201,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     yAxisSep->addChild(yAxisMaterial);
 
     SoDrawStyle* yAxisStyle = new SoDrawStyle;
-    yAxisStyle->lineWidth = 1.0f;
+    yAxisStyle->lineWidth = 1.0f; 
     yAxisSep->addChild(yAxisStyle);
 
     SoCoordinate3* yAxisCoords = new SoCoordinate3;
@@ -218,7 +214,6 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     yAxisSep->addChild(yAxisLine);
     coordSystemSep->addChild(yAxisSep);
 
-    // Z axis
     SoSeparator* zAxisSep = new SoSeparator;
     SoMaterial* zAxisMaterial = new SoMaterial;
     zAxisMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
@@ -226,7 +221,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     zAxisSep->addChild(zAxisMaterial);
 
     SoDrawStyle* zAxisStyle = new SoDrawStyle;
-    zAxisStyle->lineWidth = 1.0f;
+    zAxisStyle->lineWidth = 1.0f; 
     zAxisSep->addChild(zAxisStyle);
 
     SoCoordinate3* zAxisCoords = new SoCoordinate3;

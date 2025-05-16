@@ -9,6 +9,7 @@
 class Canvas;
 class CoordinateSystemRenderer;
 class PickingAidManager;
+class NavigationCube;
 
 class SceneManager {
 public:
@@ -19,6 +20,7 @@ public:
     void cleanup();
     void resetView();
     void toggleCameraMode();
+    void setView(const std::string& viewName); // New method for view switching
     void render(const wxSize& size, bool fastMode);
     void updateAspectRatio(const wxSize& size);
     bool screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos);

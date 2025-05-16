@@ -1,6 +1,7 @@
 #include "InputManager.h"
 #include "Canvas.h"
 #include "SceneManager.h"
+#include "NavigationCube.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
 #include "Logger.h"
@@ -36,6 +37,11 @@ void InputManager::onMouseButton(wxMouseEvent& event) {
         LOG_WAR("Mouse button event skipped: Invalid handler");
         event.Skip();
         return;
+    }
+
+    // Check if clicking on navigation cube
+    if (event.LeftDown() && m_canvas->getNavigationCube() && m_canvas->getNavigationCube()->isEnabled()) {
+        m_canvas->getNavigationCube()->handleMouseClick(event, m_canvas->GetClientSize());
     }
 
     if (g_isPickingPosition && event.LeftDown()) {

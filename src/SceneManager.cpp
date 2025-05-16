@@ -2,11 +2,13 @@
 #include "Canvas.h"
 #include "CoordinateSystemRenderer.h"
 #include "PickingAidManager.h"
+#include "NavigationCube.h"
 #include "Logger.h"
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/nodes/SoEnvironment.h>
 #include <Inventor/actions/SoGLRenderAction.h>
+#include <Inventor/actions/SoGetBoundingBoxAction.h>
 #include <Inventor/SbLinear.h>
 #include <GL/gl.h>
 
@@ -31,18 +33,18 @@ bool SceneManager::initScene() {
         m_sceneRoot = new SoSeparator;
         m_sceneRoot->ref();
 
-        m_camera = new SoPerspectiveCamera;  
-        m_camera->ref();   
-        m_camera->position.setValue(5.0f, -5.0f, 5.0f); 
-        m_camera->nearDistance.setValue(0.001f);   
-        m_camera->farDistance.setValue(10000.0f); 
-        m_camera->focalDistance.setValue(8.66f);   
-        
-        SbVec3f s_viewDir(-5.0f, 5.0f, -5.0f);   
-        s_viewDir.normalize();           
-        SbVec3f s_defaultDir(0, 0, -1);   
-        SbRotation s_rotation(s_defaultDir, s_viewDir);  
-        m_camera->orientation.setValue(s_rotation);   
+        m_camera = new SoPerspectiveCamera;
+        m_camera->ref();
+        m_camera->position.setValue(5.0f, -5.0f, 5.0f);
+        m_camera->nearDistance.setValue(0.001f);
+        m_camera->farDistance.setValue(10000.0f);
+        m_camera->focalDistance.setValue(8.66f);
+
+        SbVec3f s_viewDir(-5.0f, 5.0f, -5.0f);
+        s_viewDir.normalize();
+        SbVec3f s_defaultDir(0, 0, -1);
+        SbRotation s_rotation(s_defaultDir, s_viewDir);
+        m_camera->orientation.setValue(s_rotation);
         m_sceneRoot->addChild(m_camera);
 
         SoEnvironment* env = new SoEnvironment;
@@ -68,6 +70,12 @@ bool SceneManager::initScene() {
         m_objectRoot = new SoSeparator;
         m_objectRoot->ref();
         m_sceneRoot->addChild(m_objectRoot);
+
+        // Add navigation cube
+        NavigationCube* navCube = m_canvas->getNavigationCube();
+        if (navCube) {
+            m_sceneRoot->addChild(navCube->getRoot());
+        }
 
         m_coordSystemRenderer = std::make_unique<CoordinateSystemRenderer>(m_objectRoot);
         m_pickingAidManager = std::make_unique<PickingAidManager>(this, m_canvas);
@@ -107,6 +115,7 @@ void SceneManager::resetView() {
         return;
     }
 
+    // 设置默认的等距视图位置
     m_camera->position.setValue(5.0f, -5.0f, 5.0f);
     SbVec3f r_position = m_camera->position.getValue();
     SbVec3f r_viewDir(-r_position[0], -r_position[1], -r_position[2]);
@@ -114,11 +123,15 @@ void SceneManager::resetView() {
     SbVec3f r_defaultDir(0, 0, -1);
     SbRotation r_rotation(r_defaultDir, r_viewDir);
     m_camera->orientation.setValue(r_rotation);
-    m_camera->focalDistance.setValue(8.66f); 
+    m_camera->focalDistance.setValue(8.66f);
 
+    // 获取整个场景的边界框
     SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
-    m_camera->viewAll(m_sceneRoot, viewport);
+    
+    // 确保能看到整个场景
+    m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
 
+    // 设置合理的近平面和远平面
     m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
@@ -141,7 +154,8 @@ void SceneManager::toggleCameraMode() {
     m_isPerspectiveCamera = !m_isPerspectiveCamera;
     if (m_isPerspectiveCamera) {
         m_camera = new SoPerspectiveCamera;
-    } else {
+    }
+    else {
         m_camera = new SoOrthographicCamera;
     }
     m_camera->ref();
@@ -149,22 +163,84 @@ void SceneManager::toggleCameraMode() {
     m_camera->position.setValue(oldPosition);
     m_camera->orientation.setValue(oldOrientation);
     m_camera->focalDistance.setValue(oldFocalDistance);
-    
+
     wxSize size = m_canvas->GetClientSize();
     if (size.x > 0 && size.y > 0) {
         m_camera->aspectRatio.setValue(static_cast<float>(size.x) / static_cast<float>(size.y));
     }
 
     m_sceneRoot->insertChild(m_camera, 0);
-    
+
     SbViewportRegion viewportToggle(size.x, size.y);
     m_camera->viewAll(m_sceneRoot, viewportToggle);
 
-    m_camera->nearDistance.setValue(0.001f); 
+    m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
     m_canvas->Refresh(true);
     LOG_INF(m_isPerspectiveCamera ? "Switched to Perspective Camera" : "Switched to Orthographic Camera");
+}
+
+void SceneManager::setView(const std::string& viewName) {
+    if (!m_camera || !m_sceneRoot) {
+        LOG_ERR("Failed to set view: Invalid camera or scene");
+        return;
+    }
+
+    // Define view directions (direction, up vector)
+    std::map<std::string, std::pair<SbVec3f, SbVec3f>> viewDirections = {
+        { "Top", { SbVec3f(0, 0, -1), SbVec3f(0, 1, 0) } },
+        { "Bottom", { SbVec3f(0, 0, 1), SbVec3f(0, 1, 0) } },
+        { "Front", { SbVec3f(0, -1, 0), SbVec3f(0, 0, 1) } },
+        { "Back", { SbVec3f(0, 1, 0), SbVec3f(0, 0, 1) } },
+        { "Left", { SbVec3f(-1, 0, 0), SbVec3f(0, 0, 1) } },
+        { "Right", { SbVec3f(1, 0, 0), SbVec3f(0, 0, 1) } },
+        { "Isometric", { SbVec3f(1, 1, 1), SbVec3f(0, 0, 1) } }
+    };
+
+    auto it = viewDirections.find(viewName);
+    if (it == viewDirections.end()) {
+        LOG_WAR("Invalid view name: " + viewName);
+        return;
+    }
+
+    const auto& [direction, up] = it->second;
+
+    // Set camera orientation
+    SbRotation rotation(SbVec3f(0, 0, -1), direction);
+    m_camera->orientation.setValue(rotation);
+
+    // Always ensure we have a reasonable default position regardless of scene content
+    float defaultDistance = 10.0f;
+    m_camera->position.setValue(direction * defaultDistance);
+    m_camera->focalDistance.setValue(defaultDistance);
+
+    // Get scene bounding box from the entire scene root, not just object root
+    SoGetBoundingBoxAction bboxAction(SbViewportRegion(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y));
+    bboxAction.apply(m_sceneRoot);
+    SbBox3f bbox = bboxAction.getBoundingBox();
+
+    if (!bbox.isEmpty()) {
+        SbVec3f center = bbox.getCenter();
+        float radius = (bbox.getMax() - bbox.getMin()).length() / 2.0f;
+        
+        // Ensure minimum radius for consistency
+        if (radius < 2.0f) radius = 2.0f;
+        
+        m_camera->position.setValue(center + direction * (radius * 2.0f));
+        m_camera->focalDistance.setValue(radius * 2.0f);
+    }
+
+    // View the entire scene root, not just object root
+    SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
+    m_camera->viewAll(m_sceneRoot, viewport, 1.1f); // 1.1 factor to add some margin
+
+    // Ensure reasonable near/far planes
+    m_camera->nearDistance.setValue(0.001f);
+    m_camera->farDistance.setValue(10000.0f);
+
+    LOG_INF("Switched to view: " + viewName);
+    m_canvas->Refresh(true);
 }
 
 void SceneManager::render(const wxSize& size, bool fastMode) {
@@ -206,16 +282,17 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
 
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     SbVec2f normalizedPos(x, y);
-    SbLine lineFromCamera; 
+    SbLine lineFromCamera;
     m_camera->getViewVolume().projectPointToLine(normalizedPos, lineFromCamera);
 
-    SbPlane targetPlane(SbVec3f(0,0,1), 0.0f);
+    SbPlane targetPlane(SbVec3f(0, 0, 1), 0.0f);
 
     if (targetPlane.intersect(lineFromCamera, worldPos)) {
         return true;
-    } else {
+    }
+    else {
         LOG_WAR("Ray did not intersect the target plane.");
         worldPos = lineFromCamera.getPosition() + lineFromCamera.getDirection() * m_camera->focalDistance.getValue();
-        return false; 
+        return false;
     }
 }
