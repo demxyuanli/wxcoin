@@ -2,33 +2,41 @@
 
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoTransform.h>
 #include <wx/event.h>
 #include <wx/gdicmn.h>
 #include <map>
 #include <string>
-
-class Canvas;
+#include <functional>
+#include <Inventor/SbLinear.h>
 
 class NavigationCube {
 public:
-    NavigationCube(Canvas* canvas);
+    NavigationCube(std::function<void(const std::string&)> viewChangeCallback);
     ~NavigationCube();
 
     void initialize();
     SoSeparator* getRoot() const { return m_root; }
     void setEnabled(bool enabled);
     bool isEnabled() const { return m_enabled; }
-    void handleMouseClick(const wxMouseEvent& event, const wxSize& viewportSize);
+    void handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize);
+    void render(const wxSize& size);
 
 private:
     void setupGeometry();
-    void setupInteraction();
-    void switchToView(const std::string& region);
     std::string pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize);
+    void updateCameraRotation();
+    void generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height);
 
-    Canvas* m_canvas;
     SoSeparator* m_root;
     SoCamera* m_orthoCamera;
+    SoTransform* m_cameraTransform;
     bool m_enabled;
-    std::map<std::string, std::pair<SbVec3f, SbVec3f>> m_viewDirections; // region -> (direction, up)
+    std::map<std::string, std::string> m_faceToView;
+    std::function<void(const std::string&)> m_viewChangeCallback;
+    bool m_isDragging;
+    SbVec2s m_lastMousePos;
+    float m_rotationX;
+    float m_rotationY;
+    wxLongLong m_lastDragTime;
 };

@@ -11,7 +11,7 @@
 #include <Inventor/nodes/SoTransform.h>
 
 const float CoordinateSystemRenderer::COORD_PLANE_SIZE = 4.0f;
-const float CoordinateSystemRenderer::COORD_PLANE_TRANSPARENCY = 0.95f;
+const float CoordinateSystemRenderer::COORD_PLANE_TRANSPARENCY = 1.0f;
 
 CoordinateSystemRenderer::CoordinateSystemRenderer(SoSeparator* objectRoot)
     : m_objectRoot(objectRoot)

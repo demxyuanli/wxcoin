@@ -1,0 +1,10 @@
+{
+    "configurations": [
+        {
+            "name": "Win32-CMake",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ],
+    "version": 4
+} 

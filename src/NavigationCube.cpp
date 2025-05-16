@@ -1,21 +1,35 @@
 #include "NavigationCube.h"
-#include "Canvas.h"
-#include "SceneManager.h"
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTranslation.h>
-#include <Inventor/nodes/SoText2.h>
+#include <Inventor/nodes/SoTexture2.h>
+#include <Inventor/nodes/SoTextureCoordinate2.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/nodes/SoTransform.h>
+#include <Inventor/nodes/SoDirectionalLight.h>
+#include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/actions/SoRayPickAction.h>
-#include <Inventor/events/SoMouseButtonEvent.h>
+#include <Inventor/actions/SoGLRenderAction.h>
+#include <Inventor/SoPickedPoint.h>
+#include <Inventor/SbLinear.h>
+#include <wx/bitmap.h>
+#include <wx/dcmemory.h>
+#include <wx/font.h>
+#include <wx/time.h>
+#include <cmath>
 #include "Logger.h"
 
-NavigationCube::NavigationCube(Canvas* canvas)
-    : m_canvas(canvas)
-    , m_root(new SoSeparator)
+NavigationCube::NavigationCube(std::function<void(const std::string&)> viewChangeCallback)
+    : m_root(new SoSeparator)
     , m_orthoCamera(new SoOrthographicCamera)
+    , m_cameraTransform(new SoTransform)
     , m_enabled(true)
+    , m_viewChangeCallback(viewChangeCallback)
+    , m_isDragging(false)
+    , m_lastMousePos(0, 0)
+    , m_rotationX(0.0f)
+    , m_rotationY(0.0f)
+    , m_lastDragTime(0)
 {
     m_root->ref();
     initialize();
@@ -27,109 +41,209 @@ NavigationCube::~NavigationCube() {
 
 void NavigationCube::initialize() {
     setupGeometry();
-    setupInteraction();
 
-    // Define standard view directions (direction, up vector)
-    m_viewDirections["Top"] = { SbVec3f(0, 0, -1), SbVec3f(0, 1, 0) };
-    m_viewDirections["Bottom"] = { SbVec3f(0, 0, 1), SbVec3f(0, 1, 0) };
-    m_viewDirections["Front"] = { SbVec3f(0, -1, 0), SbVec3f(0, 0, 1) };
-    m_viewDirections["Back"] = { SbVec3f(0, 1, 0), SbVec3f(0, 0, 1) };
-    m_viewDirections["Left"] = { SbVec3f(-1, 0, 0), SbVec3f(0, 0, 1) };
-    m_viewDirections["Right"] = { SbVec3f(1, 0, 0), SbVec3f(0, 0, 1) };
-    m_viewDirections["Iso1"] = { SbVec3f(1, 1, 1), SbVec3f(0, 0, 1) }; // Isometric view
+    // Map face names (texture labels) to view names
+    m_faceToView = {
+        { "F", "Front" },
+        { "B", "Back" },
+        { "L", "Left" },
+        { "R", "Right" },
+        { "T", "Top" },
+        { "D", "Bottom" }
+    };
+}
+
+void NavigationCube::generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height) {
+    wxBitmap bitmap(width, height, 32);
+    wxMemoryDC dc(bitmap);
+    dc.SetBackground(wxColour(255, 255, 255, 0));
+    dc.Clear();
+
+    wxFont font(16, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+    dc.SetFont(font);
+    dc.SetTextForeground(*wxBLACK);
+
+    wxSize textSize = dc.GetTextExtent(text);
+    int x = (width - textSize.GetWidth()) / 2;
+    int y = (height - textSize.GetHeight()) / 2;
+    dc.DrawText(text, x, y);
+
+    wxImage image = bitmap.ConvertToImage();
+    unsigned char* src = image.GetData();
+    bool hasAlpha = image.HasAlpha();
+    unsigned char* alpha = hasAlpha ? image.GetAlpha() : nullptr;
+
+    for (int i = 0, j = 0; i < width * height * 4; i += 4, j += 3) {
+        imageData[i] = src[j];
+        imageData[i + 1] = src[j + 1];
+        imageData[i + 2] = src[j + 2];
+        imageData[i + 3] = hasAlpha ? alpha[j / 3] : 255;
+    }
 }
 
 void NavigationCube::setupGeometry() {
-    // Orthographic camera for 2D overlay
     m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
-    m_orthoCamera->position.setValue(0, 0, 5);
     m_orthoCamera->nearDistance = 0.1f;
     m_orthoCamera->farDistance = 10.0f;
     m_root->addChild(m_orthoCamera);
 
-    // Position cube in top-right corner (normalized viewport coordinates)
-    SoTransform* transform = new SoTransform;
-    transform->translation.setValue(0.8f, 0.8f, 0); // Adjust for top-right
-    m_root->addChild(transform);
+    m_root->addChild(m_cameraTransform);
+    updateCameraRotation();
 
-    // Cube geometry
+    SoDirectionalLight* light = new SoDirectionalLight;
+    light->direction.setValue(0, 0, -1);
+    light->intensity.setValue(0.8f);
+    light->color.setValue(1.0f, 1.0f, 1.0f);
+    m_root->addChild(light);
+
+    SoSeparator* cubeSep = new SoSeparator;
     SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f); // Light gray
-    material->transparency.setValue(0.4f);
-    m_root->addChild(material);
+    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    material->transparency.setValue(0.2f);
+    cubeSep->addChild(material);
+
+    SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
+    texCoords->point.setValues(0, 4, new SbVec2f[4]{
+        SbVec2f(0, 0), SbVec2f(1, 0), SbVec2f(1, 1), SbVec2f(0, 1)
+        });
+    cubeSep->addChild(texCoords);
+
+    const char* faceNames[] = { "F", "B", "L", "R", "T", "D" };
+    for (const auto& name : faceNames) {
+        SoTexture2* texture = new SoTexture2;
+        const int texSize = 64;
+        unsigned char* imageData = new unsigned char[texSize * texSize * 4];
+        generateFaceTexture(name, imageData, texSize, texSize);
+        texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
+        texture->setName(name);
+        cubeSep->addChild(texture);
+        delete[] imageData; // Free memory to prevent leak
+    }
 
     SoCube* cube = new SoCube;
-    cube->width = 0.2f;
-    cube->height = 0.2f;
-    cube->depth = 0.2f;
-    m_root->addChild(cube);
+    cube->width = 1.0f;
+    cube->height = 1.0f;
+    cube->depth = 1.0f;
+    cube->setName("NavCube");
+    cubeSep->addChild(cube);
+    m_root->addChild(cubeSep);
 
-    // Labels for faces
-    const char* labels[] = { "Top", "Front", "Right" };
-    SbVec3f labelPositions[] = { SbVec3f(0, 0, 0.15f), SbVec3f(0, -0.15f, 0), SbVec3f(0.15f, 0, 0) };
-    for (int i = 0; i < 3; ++i) {
-        SoSeparator* labelSep = new SoSeparator;
-        SoTranslation* trans = new SoTranslation;
-        trans->translation = labelPositions[i];
-        SoText2* text = new SoText2;
-        text->string = labels[i];
-        labelSep->addChild(trans);
-        labelSep->addChild(text);
-        m_root->addChild(labelSep);
-    }
+    SoSeparator* edgeSep = new SoSeparator;
+    SoDrawStyle* drawStyle = new SoDrawStyle;
+    drawStyle->style = SoDrawStyle::LINES;
+    drawStyle->lineWidth = 1.0f;
+    edgeSep->addChild(drawStyle);
+
+    SoMaterial* edgeMaterial = new SoMaterial;
+    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+    edgeSep->addChild(edgeMaterial);
+
+    SoCube* edgeCube = new SoCube;
+    edgeCube->width = 1.0f;
+    edgeCube->height = 1.0f;
+    edgeCube->depth = 1.0f;
+    edgeCube->setName("NavCubeEdges");
+    edgeSep->addChild(edgeCube);
+    m_root->addChild(edgeSep);
 }
 
-void NavigationCube::setupInteraction() {
-    // Interaction handled via InputManager
-}
+void NavigationCube::updateCameraRotation() {
+    float distance = 5.0f;
+    float radX = m_rotationX * M_PI / 180.0f;
+    float radY = m_rotationY * M_PI / 180.0f;
 
-void NavigationCube::handleMouseClick(const wxMouseEvent& event, const wxSize& viewportSize) {
-    if (!this->m_enabled || event.GetEventType() != wxEVT_LEFT_DOWN) return;
+    float x = distance * sin(radY) * cos(radX);
+    float y = distance * sin(radX);
+    float z = distance * cos(radY) * cos(radX);
 
-    std::string region = this->pickRegion(SbVec2s(event.GetX(), viewportSize.y - event.GetY()), viewportSize);
-    if (!region.empty()) {
-        this->switchToView(region);
-        m_canvas->Refresh(true);
-    }
+    m_orthoCamera->position.setValue(x, y, z);
+    m_orthoCamera->pointAt(SbVec3f(0, 0, 0));
 }
 
 std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize) {
     SoRayPickAction pickAction(SbViewportRegion(viewportSize.x, viewportSize.y));
     pickAction.setPoint(mousePos);
-    pickAction.apply(this->m_root);
+    pickAction.apply(m_root);
 
     SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
     if (!pickedPoint) return "";
 
-    // Simplified: Map picked geometry to region (extend with face detection logic)
-    return "Top"; // TODO: Implement proper face/edge/corner mapping
-}
-
-void NavigationCube::switchToView(const std::string& region) {
-    auto it = m_viewDirections.find(region);
-    if (it == m_viewDirections.end()) return;
-
-    SoCamera* camera = m_canvas->getCamera();
-    if (!camera) {
-        LOG_ERR("No camera available for view switch");
-        return;
+    SoNode* pickedNode = pickedPoint->getPath()->getTail();
+    if (pickedNode && pickedNode->getName().getLength() > 0) {
+        std::string name = pickedNode->getName().getString();
+        if (m_faceToView.find(name) != m_faceToView.end()) {
+            LOG_INF("Picked node: " + name);
+            return m_faceToView[name];
+        }
     }
 
-    const auto& [direction, up] = it->second;
-    SbVec3f currentPos = camera->position.getValue();
-    float focalDistance = camera->focalDistance.getValue();
+    if (pickedNode && (pickedNode->getName() == "NavCube" || pickedNode->getName() == "NavCubeEdges")) {
+        SbVec3f normal = pickedPoint->getNormal();
+        if (std::abs(normal[2] - 1.0f) < 0.1f) return m_faceToView["T"];    // Top
+        if (std::abs(normal[2] + 1.0f) < 0.1f) return m_faceToView["D"];    // Bottom
+        if (std::abs(normal[1] - 1.0f) < 0.1f) return m_faceToView["F"];    // Front
+        if (std::abs(normal[1] + 1.0f) < 0.1f) return m_faceToView["B"];    // Back
+        if (std::abs(normal[0] - 1.0f) < 0.1f) return m_faceToView["R"];    // Right
+        if (std::abs(normal[0] + 1.0f) < 0.1f) return m_faceToView["L"];    // Left
+    }
 
-    // Set orientation to align with direction and up vector
-    SbRotation rotation(SbVec3f(0, 0, -1), direction);
-    camera->orientation.setValue(rotation);
-    camera->position.setValue(currentPos + direction * focalDistance);
-    camera->focalDistance.setValue(focalDistance);
+    return "";
+}
 
-    LOG_INF("Switched to view: " + region);
+void NavigationCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
+    if (!m_enabled) return;
+
+    static float dragThreshold = 5.0f;
+    static SbVec2s dragStartPos(0, 0);
+
+    if (event.GetEventType() == wxEVT_LEFT_DOWN) {
+        m_isDragging = true;
+        m_lastMousePos = SbVec2s(event.GetX(), viewportSize.y - event.GetY());
+        dragStartPos = m_lastMousePos;
+        LOG_INF("Navigation cube drag started");
+    }
+    else if (event.GetEventType() == wxEVT_LEFT_UP && m_isDragging) {
+        m_isDragging = false;
+        SbVec2s currentPos(event.GetX(), viewportSize.y - event.GetY());
+        SbVec2s delta = currentPos - dragStartPos;
+        float distance = std::sqrt(delta[0] * delta[0] + delta[1] * delta[1]);
+        if (distance < dragThreshold) {
+            std::string region = pickRegion(currentPos, viewportSize);
+            if (!region.empty() && m_viewChangeCallback) {
+                m_viewChangeCallback(region);
+                LOG_INF("Navigation cube switched to view: " + region);
+            }
+        }
+        LOG_INF("Navigation cube drag ended");
+    }
+    else if (event.GetEventType() == wxEVT_MOTION && m_isDragging) {
+        wxLongLong currentTime = wxGetLocalTimeMillis();
+        if (currentTime - m_lastDragTime < 16) return;
+        m_lastDragTime = currentTime;
+
+        SbVec2s currentPos(event.GetX(), viewportSize.y - event.GetY());
+        SbVec2s delta = currentPos - m_lastMousePos;
+
+        m_rotationY += delta[0] * 0.5f;
+        m_rotationX += delta[1] * 0.5f;
+        m_rotationX = std::max(-89.0f, std::min(89.0f, m_rotationX));
+
+        updateCameraRotation();
+        m_lastMousePos = currentPos;
+        LOG_DBG("Navigation cube rotated: X=" + std::to_string(m_rotationX) + ", Y=" + std::to_string(m_rotationY));
+    }
+}
+
+void NavigationCube::render(const wxSize& size) {
+    SbViewportRegion viewport(size.x, size.y);
+    SoGLRenderAction renderAction(viewport);
+    renderAction.setSmoothing(true);
+    renderAction.setNumPasses(1);
+    renderAction.setTransparencyType(SoGLRenderAction::BLEND);
+    renderAction.apply(m_root);
 }
 
 void NavigationCube::setEnabled(bool enabled) {
-    this->m_enabled = enabled;
-    this->m_root->enableNotify(enabled);
-    m_canvas->Refresh(true);
+    m_enabled = enabled;
+    m_root->enableNotify(enabled);
 }

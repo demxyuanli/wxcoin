@@ -3,12 +3,12 @@
 #include <wx/glcanvas.h>
 #include <memory>
 #include <Inventor/nodes/SoCamera.h>
+#include "NavigationCube.h"
 
 class SceneManager;
 class InputManager;
 class ObjectTreePanel;
 class CommandManager;
-class NavigationCube;
 
 class Canvas : public wxGLCanvas {
 public:
@@ -23,11 +23,17 @@ public:
     InputManager* getInputManager() const { return m_inputManager.get(); }
     ObjectTreePanel* getObjectTreePanel() const { return m_objectTreePanel; }
     CommandManager* getCommandManager() const { return m_commandManager; }
-    NavigationCube* getNavigationCube() const { return m_navigationCube.get(); }
+    void setNavigationCubeEnabled(bool enabled);
+    bool isNavigationCubeEnabled() const;
 
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
-    void setNavigationCubeEnabled(bool enabled);
+    void SetNavigationCubeRect(int x, int y, int size) {
+        m_cubeX = x;
+        m_cubeY = y;
+        m_cubeSize = size;
+        Refresh(true);
+    }
 
     SoCamera* getCamera() const;
     void resetView();
@@ -42,11 +48,13 @@ private:
     wxGLContext* m_glContext;
     std::unique_ptr<SceneManager> m_sceneManager;
     std::unique_ptr<InputManager> m_inputManager;
-    std::unique_ptr<NavigationCube> m_navigationCube;
+    std::unique_ptr<NavigationCube> m_navCube;
     ObjectTreePanel* m_objectTreePanel;
     CommandManager* m_commandManager;
     bool m_isRendering;
     wxLongLong m_lastRenderTime;
+
+    int m_cubeX{ 10 }, m_cubeY{ 10 }, m_cubeSize{ 150 };
 
     DECLARE_EVENT_TABLE()
 };

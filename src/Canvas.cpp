@@ -5,7 +5,6 @@
 #include "ObjectTreePanel.h"
 #include "Logger.h"
 #include <wx/dcclient.h>
-#include <GL/gl.h>
 
 const int Canvas::RENDER_INTERVAL = 16; // ~60 FPS (milliseconds)
 const int Canvas::s_canvasAttribs[] = {
@@ -35,6 +34,9 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
     , m_lastRenderTime(0)
     , m_objectTreePanel(nullptr)
     , m_commandManager(nullptr)
+    , m_cubeSize(120)
+    , m_cubeX(0)
+    , m_cubeY(0)
 {
     LOG_INF("Canvas initializing");
 
@@ -54,7 +56,20 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 
     m_sceneManager = std::make_unique<SceneManager>(this);
     m_inputManager = std::make_unique<InputManager>(this);
-    m_navigationCube = std::make_unique<NavigationCube>(this);
+
+    // Initialize navigation cube
+    auto callback = [this](const std::string& view) {
+        m_sceneManager->setView(view);
+        Refresh(true);
+    };
+    m_navCube = std::make_unique<NavigationCube>(callback);
+
+    // Initialize navigation cube position (bottom-right)
+    if (clientSize.x > 0 && clientSize.y > 0) {
+        m_cubeX = clientSize.x - m_cubeSize - 10; // 10 pixels from right edge
+        m_cubeY = clientSize.y - m_cubeSize - 10; // 10 pixels from bottom edge
+        LOG_INF("Initialized navigation cube position: bottom-right x=" + std::to_string(m_cubeX) + ", y=" + std::to_string(m_cubeY));
+    }
 
     const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
     LOG_INF("GL Context created. OpenGL version: " + std::string(glVersion ? glVersion : "unknown"));
@@ -106,11 +121,22 @@ void Canvas::render(bool fastMode) {
             return;
         }
 
-        glViewport(0, 0, size.x, size.y);
         glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // Render main scene
+        glViewport(0, 0, size.x, size.y);
         m_sceneManager->render(size, fastMode);
+
+        // Render navigation cube
+        if (m_navCube && m_navCube->isEnabled()) {
+            m_cubeX = size.x - m_cubeSize - 10; // Update X position
+            m_cubeY = size.y - m_cubeSize - 10; // Update Y position for bottom-right
+            glViewport(m_cubeX, m_cubeY, m_cubeSize, m_cubeSize); // Set viewport for bottom-right
+            m_navCube->render(wxSize(m_cubeSize, m_cubeSize));
+            LOG_DBG("Rendering navigation cube: x=" + std::to_string(m_cubeX) + ", y=" + std::to_string(m_cubeY));
+        }
+
         SwapBuffers();
     }
     catch (const std::exception& e) {
@@ -149,6 +175,8 @@ void Canvas::onSize(wxSizeEvent& event) {
     LOG_INF("Handling size event: " + std::to_string(size.x) + "x" + std::to_string(size.y));
 
     if (size.x > 0 && size.y > 0 && m_glContext && SetCurrent(*m_glContext)) {
+        m_cubeX = size.x - m_cubeSize - 10; // 10 pixels from right edge
+        m_cubeY = size.y - m_cubeSize - 10; // 10 pixels from bottom edge
         m_sceneManager->updateAspectRatio(size);
         Refresh();
     }
@@ -162,24 +190,35 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
     // Do nothing to prevent flickering
 }
 
-void Canvas::setPickingCursor(bool enable) {
-    SetCursor(enable ? wxCursor(wxCURSOR_CROSS) : wxCursor(wxCURSOR_DEFAULT));
-}
-
-SoCamera* Canvas::getCamera() const {
-    return m_sceneManager->getCamera();
-}
-
-void Canvas::resetView() {
-    m_sceneManager->resetView();
-}
-
 void Canvas::onMouseEvent(wxMouseEvent& event) {
     if (!m_inputManager) {
         event.Skip();
         return;
     }
 
+    // Check if event is within navigation cube region
+    if (m_navCube && m_navCube->isEnabled()) {
+        wxSize clientSize = GetClientSize();
+        m_cubeX = clientSize.x - m_cubeSize - 10;
+        m_cubeY = clientSize.y - m_cubeSize - 10;
+        int x = event.GetX();
+        int y = event.GetY();
+        if (x >= m_cubeX && x < m_cubeX + m_cubeSize && y >= m_cubeY && y < m_cubeY + m_cubeSize) {
+            wxMouseEvent cubeEvent(event);
+            cubeEvent.m_x = x - m_cubeX;
+            cubeEvent.m_y = y - m_cubeY;
+            if (event.GetEventType() == wxEVT_LEFT_DOWN ||
+                event.GetEventType() == wxEVT_LEFT_UP ||
+                event.GetEventType() == wxEVT_MOTION) {
+                m_navCube->handleMouseEvent(cubeEvent, wxSize(m_cubeSize, m_cubeSize));
+                Refresh(true);
+                event.Skip();
+                return;
+            }
+        }
+    }
+
+    // Forward other events to InputManager
     if (event.GetEventType() == wxEVT_LEFT_DOWN ||
         event.GetEventType() == wxEVT_LEFT_UP ||
         event.GetEventType() == wxEVT_RIGHT_DOWN ||
@@ -197,9 +236,25 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
     }
 }
 
+void Canvas::setPickingCursor(bool enable) {
+    SetCursor(enable ? wxCursor(wxCURSOR_CROSS) : wxCursor(wxCURSOR_DEFAULT));
+}
+
+SoCamera* Canvas::getCamera() const {
+    return m_sceneManager->getCamera();
+}
+
+void Canvas::resetView() {
+    m_sceneManager->resetView();
+}
+
 void Canvas::setNavigationCubeEnabled(bool enabled) {
-    if (m_navigationCube) {
-        m_navigationCube->setEnabled(enabled);
-        Refresh();
+    if (m_navCube) {
+        m_navCube->setEnabled(enabled);
+        Refresh(true);
     }
+}
+
+bool Canvas::isNavigationCubeEnabled() const {
+    return m_navCube && m_navCube->isEnabled();
 }

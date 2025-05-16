@@ -39,11 +39,6 @@ void InputManager::onMouseButton(wxMouseEvent& event) {
         return;
     }
 
-    // Check if clicking on navigation cube
-    if (event.LeftDown() && m_canvas->getNavigationCube() && m_canvas->getNavigationCube()->isEnabled()) {
-        m_canvas->getNavigationCube()->handleMouseClick(event, m_canvas->GetClientSize());
-    }
-
     if (g_isPickingPosition && event.LeftDown()) {
         LOG_INF("Picking position with mouse click");
         SbVec3f worldPos;

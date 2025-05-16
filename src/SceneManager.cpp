@@ -2,7 +2,6 @@
 #include "Canvas.h"
 #include "CoordinateSystemRenderer.h"
 #include "PickingAidManager.h"
-#include "NavigationCube.h"
 #include "Logger.h"
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
@@ -71,12 +70,6 @@ bool SceneManager::initScene() {
         m_objectRoot->ref();
         m_sceneRoot->addChild(m_objectRoot);
 
-        // Add navigation cube
-        NavigationCube* navCube = m_canvas->getNavigationCube();
-        if (navCube) {
-            m_sceneRoot->addChild(navCube->getRoot());
-        }
-
         m_coordSystemRenderer = std::make_unique<CoordinateSystemRenderer>(m_objectRoot);
         m_pickingAidManager = std::make_unique<PickingAidManager>(this, m_canvas);
 
@@ -115,7 +108,6 @@ void SceneManager::resetView() {
         return;
     }
 
-    // 设置默认的等距视图位置
     m_camera->position.setValue(5.0f, -5.0f, 5.0f);
     SbVec3f r_position = m_camera->position.getValue();
     SbVec3f r_viewDir(-r_position[0], -r_position[1], -r_position[2]);
@@ -125,13 +117,10 @@ void SceneManager::resetView() {
     m_camera->orientation.setValue(r_rotation);
     m_camera->focalDistance.setValue(8.66f);
 
-    // 获取整个场景的边界框
     SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
     
-    // 确保能看到整个场景
     m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
 
-    // 设置合理的近平面和远平面
     m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
