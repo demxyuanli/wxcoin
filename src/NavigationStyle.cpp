@@ -9,6 +9,7 @@
 #include <Inventor/SbVec3f.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoCamera.h>
 #include <cmath>
 #include <wx/wx.h>
 

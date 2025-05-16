@@ -17,7 +17,7 @@ public:
     void removeObject(GeometryObject* object);
     void updateObjectName(GeometryObject* object);
     void setPropertyPanel(PropertyPanel* panel);
-
+    PropertyPanel* getPropertyPanel() const { return m_propertyPanel; }
 private:
     void onSelectionChanged(wxTreeEvent& event);
 

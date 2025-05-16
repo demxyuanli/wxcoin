@@ -1,7 +1,16 @@
 #include "PositionDialog.h"
 #include "Canvas.h"
-#include "Logger.h"
+#include "SceneManager.h"
+#include "PickingAidManager.h"
+#include "GeometryFactory.h"
 #include "MouseHandler.h"
+#include "InputManager.h"
+#include "PropertyPanel.h"
+#include "ObjectTreePanel.h"
+#include "Logger.h"
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/button.h>
 
 // Global variable implementation
 bool g_isPickingPosition = false;
@@ -85,15 +94,25 @@ void PositionDialog::OnPickButton(wxCommandEvent& event) {
     g_isPickingPosition = true;
     m_pickButton->SetLabel("Picking...");
     m_pickButton->Enable(false);
+
     wxWindow* parentWindow = GetParent();
     if (parentWindow) {
         wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", parentWindow);
         if (canvasWindow) {
             Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
             if (canvas) {
-                canvas->showPickingAidLines(GetPosition());
+                canvas->getSceneManager()->getPickingAidManager()->showPickingAidLines(GetPosition());
+            }
+            else {
+                LOG_ERR("Canvas cast failed");
             }
         }
+        else {
+            LOG_ERR("Canvas window not found");
+        }
+    }
+    else {
+        LOG_ERR("Parent window not found");
     }
 
     this->Hide();
@@ -102,25 +121,33 @@ void PositionDialog::OnPickButton(wxCommandEvent& event) {
 
 void PositionDialog::OnOkButton(wxCommandEvent& event) {
     LOG_INF("Position confirmed: " + std::to_string(GetPosition()[0]) + ", " + std::to_string(GetPosition()[1]) + ", " + std::to_string(GetPosition()[2]));
-    g_isPickingPosition = false;        wxWindow* parentWindow = GetParent();
-    if (parentWindow) {
-        wxWindow* mainFrame = parentWindow;
-        wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", mainFrame);
-        if (canvasWindow) {
+    g_isPickingPosition = false;
 
+    wxWindow* parentWindow = GetParent();
+    if (parentWindow) {
+        wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", parentWindow);
+        if (canvasWindow) {
             Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
             if (canvas) {
-                canvas->hidePickingAidLines();
+                canvas->getSceneManager()->getPickingAidManager()->hidePickingAidLines();
                 SbVec3f finalPos = GetPosition();
-                canvas->CreateGeometryAtPosition(finalPos);
-                LOG_INF("Creating geometry at position from dialog");
-                if (canvas->GetMouseHandler()) {
-                    canvas->GetMouseHandler()->setOperationMode(MouseHandler::NAVIGATE);
-                    canvas->GetMouseHandler()->setCreationGeometryType("");
-                    LOG_INF("Reset operation mode to NAVIGATE");
+                MouseHandler* mouseHandler = canvas->getInputManager()->getMouseHandler();
+                if (mouseHandler) {
+                    std::string geometryType = mouseHandler->getCreationGeometryType();
+                    GeometryFactory factory(canvas->getSceneManager()->getObjectRoot(), canvas->getObjectTreePanel(), canvas->getObjectTreePanel()->getPropertyPanel(), canvas->getCommandManager());
+                    factory.createGeometry(geometryType, finalPos);
+                    LOG_INF("Creating geometry at position from dialog");
+                    mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
+                    mouseHandler->setCreationGeometryType("");
+                    LOG_INF("Reset operation mode to VIEW");
+                }
+                else {
+                    LOG_ERR("MouseHandler not found");
                 }
             }
-            else { LOG_ERR("Canvas cast failed"); }
+            else {
+                LOG_ERR("Canvas cast failed");
+            }
         }
         else {
             LOG_ERR("Canvas window not found");
@@ -128,28 +155,42 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
     }
     else {
         LOG_ERR("Parent window not found");
-    }    Hide();
+    }
+
+    Hide();
     event.Skip();
 }
 
-
 void PositionDialog::OnCancelButton(wxCommandEvent& event) {
     LOG_INF("Position input cancelled");
-    g_isPickingPosition = false;    wxWindow* parentWindow = GetParent();
+    g_isPickingPosition = false;
+
+    wxWindow* parentWindow = GetParent();
     if (parentWindow) {
         wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", parentWindow);
         if (canvasWindow) {
             Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
             if (canvas) {
-                canvas->hidePickingAidLines();
-                if (canvas->GetMouseHandler()) {
-                    canvas->GetMouseHandler()->setOperationMode(MouseHandler::NAVIGATE);
-                    canvas->GetMouseHandler()->setCreationGeometryType("");
-                    LOG_INF("Reset operation mode to NAVIGATE on cancel");
+                canvas->getSceneManager()->getPickingAidManager()->hidePickingAidLines();
+                MouseHandler* mouseHandler = canvas->getInputManager()->getMouseHandler();
+                if (mouseHandler) {
+                    mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
+                    mouseHandler->setCreationGeometryType("");
+                    LOG_INF("Reset operation mode to VIEW on cancel");
                 }
             }
+            else {
+                LOG_ERR("Canvas cast failed");
+            }
+        }
+        else {
+            LOG_ERR("Canvas window not found");
         }
     }
+    else {
+        LOG_ERR("Parent window not found");
+    }
+
     Hide();
     event.Skip();
 }

@@ -1,4 +1,6 @@
-#include "../include/Command.h"
+#include "Command.h"
+#include <iostream>
+#include <memory>
 
 CommandManager::CommandManager()
     : m_maxStackSize(100)

@@ -1,5 +1,8 @@
 #include "Application.h"
+#include "MainFrame.h"
 #include "Logger.h"
+#include <Inventor/SoDB.h>
+
 
 wxIMPLEMENT_APP(Application);
 

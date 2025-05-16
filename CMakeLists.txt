@@ -21,11 +21,13 @@ include(${wxWidgets_USE_FILE})
 set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/Application.cpp
     ${CMAKE_SOURCE_DIR}/src/Canvas.cpp
-    #${CMAKE_SOURCE_DIR}/src/CanvasGeometry.cpp
-    #${CMAKE_SOURCE_DIR}/src/CanvasInput.cpp
-    #${CMAKE_SOURCE_DIR}/src/CanvasPicking.cpp
-    #${CMAKE_SOURCE_DIR}/src/CanvasRendering.cpp
-    #${CMAKE_SOURCE_DIR}/src/CanvasScene.cpp
+    ${CMAKE_SOURCE_DIR}/src/PickingAidManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/GeometryFactory.cpp
+    ${CMAKE_SOURCE_DIR}/src/NavigationController.cpp
+    ${CMAKE_SOURCE_DIR}/src/InputManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/SceneManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/Command.cpp
     ${CMAKE_SOURCE_DIR}/src/GeometryObject.cpp
     ${CMAKE_SOURCE_DIR}/src/MainFrame.cpp
