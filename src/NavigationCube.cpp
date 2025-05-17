@@ -415,7 +415,7 @@ void NavigationCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& v
 
         SbVec2s delta = currentPos - m_lastMousePos;
 
-        float sensitivity = 0.5f;
+        float sensitivity = 1.0f;
         m_rotationY += delta[0] * sensitivity;
         m_rotationX -= delta[1] * sensitivity;
 

@@ -81,8 +81,8 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
         // Initialize layout positions (set navigation cube to top-right)
         if (clientSize.x > 0 && clientSize.y > 0) {
             m_cubeLayout.size = 120; // Default cube size
-            m_cubeLayout.update(clientSize.x - m_cubeLayout.size - 10, // Right edge - size - margin
-                                clientSize.y - m_cubeLayout.size - 10, // Top edge - margin 
+            m_cubeLayout.update(clientSize.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
+                                clientSize.y - m_cubeLayout.size - m_marginy, // Top edge - margin 
                 m_cubeLayout.size, clientSize, m_dpiScale);
             LOG_INF("Canvas::Canvas: Initialized navigation cube position: x=" + std::to_string(m_cubeLayout.x) +
                 ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size));
@@ -220,8 +220,8 @@ void Canvas::onSize(wxSizeEvent& event) {
     if (size.x > 0 && size.y > 0 && m_glContext && SetCurrent(*m_glContext)) {
         m_dpiScale = GetContentScaleFactor();
         // Update cube layout to maintain top-right position
-        m_cubeLayout.update(size.x - m_cubeLayout.size - 10, // Right edge - size - margin
-                            size.y - m_cubeLayout.size - 10, // Top edge - margin
+        m_cubeLayout.update(size.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
+                            size.y - m_cubeLayout.size - m_marginx, // Top edge - margin
             m_cubeLayout.size, size, m_dpiScale);
         m_sceneManager->updateAspectRatio(size);
         if (m_navCube) {
@@ -422,7 +422,9 @@ void Canvas::SyncNavigationCubeCamera() {
 
         // Calculate the view vector of the main camera in world space.
         // Open Inventor cameras typically look down their local -Z axis.
-        SbVec3f mainCamViewVector = mainOrient * SbVec3f(0, 0, -1);
+        SbVec3f srcVec(0, 0, -1);
+        SbVec3f mainCamViewVector;
+        mainOrient.multVec(srcVec, mainCamViewVector);
 
         // Position the NavCube's camera opposite to the main camera's view direction,
         // at the standard navigation distance, so it looks towards the origin.
@@ -443,18 +445,65 @@ void Canvas::SyncMainCameraToNavigationCube() {
         return;
     }
 
-    SoCamera* navCamera = m_navCube->getCamera();
-    if (navCamera) {
-        SbVec3f navPos = navCamera->position.getValue();
-        SbRotation navOrient = navCamera->orientation.getValue();
+    SoCamera* navCamera = m_navCube->getCamera(); // Assuming NavigationCube has getCamera() returning its SoOrthographicCamera
+    if (!navCamera) {
+        LOG_WAR("Canvas::SyncMainCameraToNavigationCube: Navigation cube camera is null.");
+        return;
+    }
 
-        SoCamera* mainCamera = m_sceneManager->getCamera();
-        if (mainCamera) {
-            // 只同步旋转角度，不改变主相机位置
-            mainCamera->orientation.setValue(navOrient);
-            LOG_DBG("Canvas::SyncMainCameraToNavigationCube: Synced main camera orientation with navigation cube camera");
+    SoCamera* mainCamera = m_sceneManager->getCamera();
+    if (!mainCamera) {
+        LOG_WAR("Canvas::SyncMainCameraToNavigationCube: Main scene camera is null.");
+        return;
+    }
+
+    // Get current distance of the main camera from the origin
+    SbVec3f mainCamCurrentPos = mainCamera->position.getValue();
+    float mainCamDistanceToOrigin = mainCamCurrentPos.length();
+
+    // If distance is zero (camera is at origin), we can't preserve direction.
+    // In this case, perhaps default to nav cube's distance or a fixed distance.
+    if (mainCamDistanceToOrigin < 1e-3) { // Avoid division by zero or very small numbers
+        mainCamDistanceToOrigin = 10.0f; // Default distance if camera is at origin
+        LOG_DBG("Canvas::SyncMainCameraToNavigationCube: Main camera at origin, using default distance for orbit.");
+    }
+
+    // Get the navigation cube camera's position. This position already orbits the origin.
+    SbVec3f navCamPos = navCamera->position.getValue();
+    SbRotation navCamOrient = navCamera->orientation.getValue();
+
+    // Calculate the direction from the origin to the navCamPos
+    SbVec3f newMainCamDir = navCamPos;
+    float originalLength = newMainCamDir.length(); // Get length before normalization
+    newMainCamDir.normalize(); // Normalize modifies the vector in place
+
+    // Check if the original vector was (close to) zero.
+    // If navCamPos was (0,0,0), normalize() would keep it as (0,0,0) and return 0.
+    // A more robust check for near-zero length:
+    if (originalLength < 1e-6) { 
+        LOG_WAR("Canvas::SyncMainCameraToNavigationCube: NavCam position is origin, cannot determine direction.");
+        // Fallback: use navCamOrient to determine a forward vector if navCamPos is (0,0,0)
+        SbVec3f forwardVec;
+        navCamOrient.multVec(SbVec3f(0,0,-1), forwardVec); // Assuming camera looks down -Z
+        newMainCamDir = -forwardVec; // We want the camera position, so opposite of view direction
+        if (newMainCamDir.normalize() == 0.0f) { // Check if even this resulted in zero vector
+             LOG_ERR("Canvas::SyncMainCameraToNavigationCube: Fallback direction also resulted in zero vector. Cannot sync.");
+             return; // Or handle error appropriately
         }
     }
+
+
+    // Set the main camera's new position: same direction as navCam, but at mainCam's original distance
+    SbVec3f newMainCamPos = newMainCamDir * mainCamDistanceToOrigin;
+    mainCamera->position.setValue(newMainCamPos);
+
+    // Set the main camera's orientation to match the navCam's orientation
+    // This ensures it looks towards the origin with the correct "up" vector.
+    mainCamera->orientation.setValue(navCamOrient);
+
+    LOG_DBG("Canvas::SyncMainCameraToNavigationCube: Synced main camera to orbit origin, pos: (" +
+        std::to_string(newMainCamPos[0]) + ", " + std::to_string(newMainCamPos[1]) + ", " + std::to_string(newMainCamPos[2]) +
+        "), dist: " + std::to_string(mainCamDistanceToOrigin));
 }
 
 void Canvas::ShowNavigationCubeConfigDialog() {

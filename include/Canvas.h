@@ -82,6 +82,8 @@ private:
     wxLongLong m_lastRenderTime;
     float m_dpiScale;
     bool m_enableNavCube; // Initial enable state for navigation cube
+    float m_marginx = 20.0f;
+    float m_marginy = 20.0f;
 
     DECLARE_EVENT_TABLE()
 };
