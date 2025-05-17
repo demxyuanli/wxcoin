@@ -28,7 +28,8 @@ enum
     ID_ViewRight,
     ID_ViewIsometric,
     ID_Undo,
-    ID_Redo
+    ID_Redo,
+    ID_NavigationCubeConfig
 };
 
 BEGIN_EVENT_TABLE(MainFrame, wxFrame)
@@ -47,6 +48,7 @@ EVT_MENU(ID_ViewRight, MainFrame::onViewRight)
 EVT_MENU(ID_ViewIsometric, MainFrame::onViewIsometric)
 EVT_MENU(ID_Undo, MainFrame::onUndo)
 EVT_MENU(ID_Redo, MainFrame::onRedo)
+EVT_MENU(ID_NavigationCubeConfig, MainFrame::onNavigationCubeConfig)
 EVT_MENU(wxID_ABOUT, MainFrame::onAbout)
 EVT_CLOSE(MainFrame::onClose)
 END_EVENT_TABLE()
@@ -99,6 +101,8 @@ void MainFrame::createMenu()
     viewMenu->Append(ID_ViewFront, "&Front", "Set front view");
     viewMenu->Append(ID_ViewRight, "&Right", "Set right view");
     viewMenu->Append(ID_ViewIsometric, "&Isometric", "Set isometric view");
+    viewMenu->AppendSeparator();
+    viewMenu->Append(ID_NavigationCubeConfig, "&Navigation Cube Config...", "Configure navigation cube settings");
     menuBar->Append(viewMenu, "&View");
 
     wxMenu* editMenu = new wxMenu;
@@ -133,6 +137,8 @@ void MainFrame::createToolbar()
     toolbar->AddSeparator();
     toolbar->AddTool(ID_Undo, "Undo", wxArtProvider::GetBitmap(wxART_UNDO), "Undo the last action");
     toolbar->AddTool(ID_Redo, "Redo", wxArtProvider::GetBitmap(wxART_REDO), "Redo the last undone action");
+    toolbar->AddSeparator();
+    toolbar->AddTool(ID_NavigationCubeConfig, "Nav Cube Config", wxArtProvider::GetBitmap(wxART_HELP_SIDE_PANEL), "Configure navigation cube");
     toolbar->Realize();
 }
 
@@ -344,6 +350,18 @@ void MainFrame::onViewIsometric(wxCommandEvent& event)
     LOG_INF("Setting isometric view");
     m_canvas->getInputManager()->getNavigationController()->viewIsometric();
     SetStatusText("View: Isometric", 0);
+}
+
+void MainFrame::onNavigationCubeConfig(wxCommandEvent& event)
+{
+    if (!m_canvas) {
+        LOG_ERR("Canvas is null in onNavigationCubeConfig");
+        SetStatusText("Error: Cannot configure navigation cube", 0);
+        return;
+    }
+    LOG_INF("Opening navigation cube configuration dialog");
+    m_canvas->ShowNavigationCubeConfigDialog();
+    SetStatusText("Navigation Cube Configuration", 0);
 }
 
 void MainFrame::onUndo(wxCommandEvent& event)

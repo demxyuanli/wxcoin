@@ -30,6 +30,11 @@ public:
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
     void SetNavigationCubeRect(int x, int y, int size);
+    void SetNavigationCubeColor(const wxColour& color);
+    void SetNavigationCubeViewportSize(int size);
+    void ShowNavigationCubeConfigDialog();
+    void SyncNavigationCubeCamera();
+    void SyncMainCameraToNavigationCube();
 
     SoCamera* getCamera() const;
     void resetView();
@@ -37,14 +42,26 @@ public:
 private:
     // Layout management for navigation cube and mini scene
     struct Layout {
-        int x{ 10 }, y{ 10 }, size{ 200 }; // Default size 200 for mini scene
-        void update(int newX, int newY, int newSize, const wxSize& windowSize, float dpiScale) {
-            size = std::max(50, std::min(newSize, windowSize.x / 2));
-            size = static_cast<int>(size * dpiScale);
-            x = std::max(0, std::min(newX, static_cast<int>((windowSize.x - size) / dpiScale)));
-            y = std::max(0, std::min(newY, static_cast<int>((windowSize.y - size) / dpiScale)));
+        int x{ 10 }, y{ 10 }, size{ 200 }; // These will be kept as logical coordinates and size
+
+        // Parameters:
+        // newX_logical, newY_logical: Desired logical top-left position
+        // newSize_logical: Desired logical size (e.g., width/height)
+        // windowSize_logical: Current logical size of the parent window
+        // dpiScale: Current DPI scale factor (passed but not stored if members are purely logical)
+        void update(int newX_logical, int newY_logical, int newSize_logical,
+                    const wxSize& windowSize_logical, float dpiScale)
+        {
+            // Determine and store logical size for this layout object
+            size = std::max(100, std::min(newSize_logical, windowSize_logical.x / 2));
+            size = std::max(100, std::min(size, windowSize_logical.y / 2)); // Ensure it also fits height-wise if square
+
+            // Determine and store logical top-left position
+            // Ensure the cube/scene does not go out of bounds
+            x = std::max(0, std::min(newX_logical, windowSize_logical.x - size));
+            y = std::max(0, std::min(newY_logical, windowSize_logical.y - size));
         }
-    } m_cubeLayout, m_miniSceneLayout;
+    } m_cubeLayout;
 
     void onPaint(wxPaintEvent& event);
     void onSize(wxSizeEvent& event);

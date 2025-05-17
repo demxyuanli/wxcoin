@@ -42,6 +42,7 @@ private:
     void onViewFront(wxCommandEvent& event);
     void onViewRight(wxCommandEvent& event);
     void onViewIsometric(wxCommandEvent& event);
+    void onNavigationCubeConfig(wxCommandEvent& event);
     void onAbout(wxCommandEvent& event);
     void onClose(wxCloseEvent& event);
 

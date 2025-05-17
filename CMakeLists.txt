@@ -33,6 +33,7 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/NavigationCube.cpp
     ${CMAKE_SOURCE_DIR}/src/GeometryObject.cpp
     ${CMAKE_SOURCE_DIR}/src/MainFrame.cpp
+    ${CMAKE_SOURCE_DIR}/src/NavigationCubeConfigDialog.cpp
     ${CMAKE_SOURCE_DIR}/src/MouseHandler.cpp
     ${CMAKE_SOURCE_DIR}/src/NavigationStyle.cpp
     ${CMAKE_SOURCE_DIR}/src/ObjectTreePanel.cpp

@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
+#include "NavigationCubeConfigDialog.h"
 
 const int Canvas::RENDER_INTERVAL = 16; // ~60 FPS (milliseconds)
 const int Canvas::s_canvasAttribs[] = {
@@ -69,15 +70,19 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
                 m_sceneManager->setView(view);
                 Refresh(true);
                 };
-            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale);
+            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale, clientSize.x, clientSize.y);
+            m_navCube->setRotationChangedCallback([this]() {
+                SyncMainCameraToNavigationCube();
+                Refresh(true);
+            });
             LOG_INF("Canvas::Canvas: Navigation cube initialized");
         }
 
-        // Initialize layout positions (even if not initialized, for consistency)
+        // Initialize layout positions (set navigation cube to top-right)
         if (clientSize.x > 0 && clientSize.y > 0) {
-            m_cubeLayout.size = 120; // Override default for navigation cube
-            m_cubeLayout.update(clientSize.x - m_cubeLayout.size - 10,
-                clientSize.y - m_cubeLayout.size - 220, // Above mini scene (200 + 10 margin)
+            m_cubeLayout.size = 120; // Default cube size
+            m_cubeLayout.update(clientSize.x - m_cubeLayout.size - 10, // Right edge - size - margin
+                                clientSize.y - m_cubeLayout.size - 10, // Top edge - margin 
                 m_cubeLayout.size, clientSize, m_dpiScale);
             LOG_INF("Canvas::Canvas: Initialized navigation cube position: x=" + std::to_string(m_cubeLayout.x) +
                 ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size));
@@ -159,13 +164,13 @@ void Canvas::render(bool fastMode) {
         glViewport(0, 0, static_cast<int>(size.x * m_dpiScale), static_cast<int>(size.y * m_dpiScale));
         m_sceneManager->render(size, fastMode);
 
+        SyncNavigationCubeCamera();
+
         // Render navigation cube
         if (m_navCube && m_navCube->isEnabled()) {
-            glViewport(static_cast<int>(m_cubeLayout.x * m_dpiScale),
-                static_cast<int>(m_cubeLayout.y * m_dpiScale),
-                static_cast<int>(m_cubeLayout.size * m_dpiScale),
-                static_cast<int>(m_cubeLayout.size * m_dpiScale));
-            m_navCube->render(wxSize(m_cubeLayout.size, m_cubeLayout.size));
+            int cubeX = static_cast<int>(m_cubeLayout.x * m_dpiScale);
+            int cubeY = static_cast<int>(m_cubeLayout.y * m_dpiScale);
+            m_navCube->render(cubeX, cubeY, wxSize(m_cubeLayout.size, m_cubeLayout.size));
             LOG_DBG("Canvas::render: Rendering navigation cube: x=" + std::to_string(m_cubeLayout.x) +
                 ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size) +
                 ", dpiScale=" + std::to_string(m_dpiScale));
@@ -214,9 +219,14 @@ void Canvas::onSize(wxSizeEvent& event) {
 
     if (size.x > 0 && size.y > 0 && m_glContext && SetCurrent(*m_glContext)) {
         m_dpiScale = GetContentScaleFactor();
-        m_cubeLayout.update(m_cubeLayout.x, m_cubeLayout.y, m_cubeLayout.size, size, m_dpiScale);
-        m_miniSceneLayout.update(m_miniSceneLayout.x, m_miniSceneLayout.y, m_miniSceneLayout.size, size, m_dpiScale);
+        // Update cube layout to maintain top-right position
+        m_cubeLayout.update(size.x - m_cubeLayout.size - 10, // Right edge - size - margin
+                            size.y - m_cubeLayout.size - 10, // Top edge - margin
+            m_cubeLayout.size, size, m_dpiScale);
         m_sceneManager->updateAspectRatio(size);
+        if (m_navCube) {
+            m_navCube->setWindowSize(size.x, size.y);
+        }
         Refresh();
     }
     else {
@@ -237,22 +247,36 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
     }
 
     // Adjust mouse coordinates for DPI scaling
-    int x = static_cast<int>(event.GetX() / m_dpiScale);
-    int y = static_cast<int>(event.GetY() / m_dpiScale);
+    float x = event.GetX() / m_dpiScale;
+    float y = event.GetY() / m_dpiScale;
+    wxSize clientSize = GetClientSize();
+    float cubeY = (clientSize.y / m_dpiScale) - y;
 
-    // Check if event is within navigation cube region
+    // Log mouse coordinates for debugging
+    LOG_DBG("Canvas::onMouseEvent: Mouse event at x=" + std::to_string(x) + ", y=" + std::to_string(y) +
+        " (canvas), cubeY=" + std::to_string(cubeY) +
+        ", cube region: x=[" + std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.x + m_cubeLayout.size) +
+        "], y=[" + std::to_string(m_cubeLayout.y) + "," + std::to_string(m_cubeLayout.y + m_cubeLayout.size) + "]");
+
+    // Check if event is within navigation cube region (right-top corner)
     if (m_navCube && m_navCube->isEnabled()) {
-        if (x >= m_cubeLayout.x && x < m_cubeLayout.x + m_cubeLayout.size &&
-            y >= m_cubeLayout.y && y < m_cubeLayout.y + m_cubeLayout.size) {
+        if (x >= m_cubeLayout.x && x < (m_cubeLayout.x + m_cubeLayout.size) &&
+            cubeY >= m_cubeLayout.y && cubeY < (m_cubeLayout.y + m_cubeLayout.size)) {
+            
             wxMouseEvent cubeEvent(event);
+            // Calculate mouse position relative to the cube's top-left corner, then scale by DPI
             cubeEvent.m_x = static_cast<int>((x - m_cubeLayout.x) * m_dpiScale);
-            cubeEvent.m_y = static_cast<int>((y - m_cubeLayout.y) * m_dpiScale);
+            cubeEvent.m_y = static_cast<int>(((m_cubeLayout.y + m_cubeLayout.size) - cubeY) * m_dpiScale);
+
+            // Calculate the DPI-scaled size of the navigation cube's viewport
+            int scaled_cube_dimension = static_cast<int>(m_cubeLayout.size * m_dpiScale);
+            wxSize cube_viewport_scaled_size(scaled_cube_dimension, scaled_cube_dimension);
+
             if (event.GetEventType() == wxEVT_LEFT_DOWN ||
                 event.GetEventType() == wxEVT_LEFT_UP ||
                 event.GetEventType() == wxEVT_MOTION) {
-                m_navCube->handleMouseEvent(cubeEvent, wxSize(m_cubeLayout.size, m_cubeLayout.size));
+                m_navCube->handleMouseEvent(cubeEvent, cube_viewport_scaled_size); // Pass scaled size
                 Refresh(true);
-                event.Skip();
                 return;
             }
         }
@@ -311,8 +335,20 @@ void Canvas::setNavigationCubeEnabled(bool enabled) {
                 m_sceneManager->setView(view);
                 Refresh(true);
                 };
-            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale);
-            LOG_INF("Canvas::setNavigationCubeEnabled: Navigation cube initialized");
+            wxSize clientSize = GetClientSize();
+            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale, clientSize.x, clientSize.y);
+            m_navCube->setRotationChangedCallback([this]() {
+                SyncMainCameraToNavigationCube();
+                Refresh(true);
+            });
+            
+            m_cubeLayout.size = 120; 
+            m_cubeLayout.update(clientSize.x - m_cubeLayout.size - 10, 
+                                clientSize.y - m_cubeLayout.size - 10, 
+                m_cubeLayout.size, clientSize, m_dpiScale);
+            
+            LOG_INF("Canvas::setNavigationCubeEnabled: Navigation cube initialized and positioned at: x=" + 
+                    std::to_string(m_cubeLayout.x) + ", y=" + std::to_string(m_cubeLayout.y));
         }
         catch (const std::exception& e) {
             LOG_ERR("Canvas::setNavigationCubeEnabled: Failed to initialize navigation cube: " + std::string(e.what()));
@@ -347,4 +383,102 @@ void Canvas::SetNavigationCubeRect(int x, int y, int size) {
     LOG_INF("Canvas::SetNavigationCubeRect: Set navigation cube rect: x=" + std::to_string(m_cubeLayout.x) +
         ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size) +
         ", dpiScale=" + std::to_string(m_dpiScale));
+}
+
+void Canvas::SetNavigationCubeColor(const wxColour& color) {
+    if (!m_isInitialized || !m_navCube) {
+        LOG_WAR("Canvas::SetNavigationCubeColor: Skipped: Canvas not initialized or nav cube not created");
+        return;
+    }
+    LOG_INF("Canvas::SetNavigationCubeColor: Set navigation cube color to R=" + std::to_string(color.GetRed()) +
+        ", G=" + std::to_string(color.GetGreen()) + ", B=" + std::to_string(color.GetBlue()));
+    Refresh(true);
+}
+
+void Canvas::SetNavigationCubeViewportSize(int size) {
+    if (!m_isInitialized || !m_navCube) {
+        LOG_WAR("Canvas::SetNavigationCubeViewportSize: Skipped: Canvas not initialized or nav cube not created");
+        return;
+    }
+    if (size < 50) {
+        LOG_WAR("Canvas::SetNavigationCubeViewportSize: Invalid size: " + std::to_string(size));
+        return;
+    }
+    LOG_INF("Canvas::SetNavigationCubeViewportSize: Set navigation cube viewport size to " + std::to_string(size));
+    Refresh(true);
+}
+
+void Canvas::SyncNavigationCubeCamera() {
+    if (!m_isInitialized || !m_navCube || !m_sceneManager) {
+        LOG_WAR("Canvas::SyncNavigationCubeCamera: Skipped: Canvas not initialized or components missing");
+        return;
+    }
+
+    SoCamera* mainCamera = m_sceneManager->getCamera();
+    if (mainCamera) {
+        SbVec3f mainPos = mainCamera->position.getValue();
+        SbRotation mainOrient = mainCamera->orientation.getValue();
+
+        float distance = mainPos.length();
+        float angleX = atan2(mainPos[1], sqrt(mainPos[0]*mainPos[0] + mainPos[2]*mainPos[2])) * 180.0f / M_PI;
+        float angleY = atan2(mainPos[0], mainPos[2]) * 180.0f / M_PI;
+
+        float navDistance = 5.0f; 
+        float radX = angleX * M_PI / 180.0f;
+        float radY = angleY * M_PI / 180.0f;
+        float x = navDistance * sin(radY) * cos(radX);
+        float y = navDistance * sin(radX);
+        float z = navDistance * cos(radY) * cos(radX);
+        m_navCube->setCameraPosition(SbVec3f(x, y, z));
+        m_navCube->setCameraOrientation(mainOrient);
+
+        LOG_DBG("Canvas::SyncNavigationCubeCamera: Synced navigation cube camera angle with main camera - AngleX: " + std::to_string(angleX) + ", AngleY: " + std::to_string(angleY));
+    }
+}
+
+void Canvas::SyncMainCameraToNavigationCube() {
+    if (!m_isInitialized || !m_navCube || !m_sceneManager) {
+        LOG_WAR("Canvas::SyncMainCameraToNavigationCube: Skipped: Canvas not initialized or components missing");
+        return;
+    }
+
+    SoCamera* navCamera = m_navCube->getCamera();
+    if (navCamera) {
+        SbVec3f navPos = navCamera->position.getValue();
+        SbRotation navOrient = navCamera->orientation.getValue();
+
+        SoCamera* mainCamera = m_sceneManager->getCamera();
+        if (mainCamera) {
+            // 只同步旋转角度，不改变主相机位置
+            mainCamera->orientation.setValue(navOrient);
+            LOG_DBG("Canvas::SyncMainCameraToNavigationCube: Synced main camera orientation with navigation cube camera");
+        }
+    }
+}
+
+void Canvas::ShowNavigationCubeConfigDialog() {
+    if (!m_isInitialized) {
+        LOG_WAR("Canvas::ShowNavigationCubeConfigDialog: Skipped: Canvas not initialized");
+        return;
+    }
+
+    wxSize clientSize = GetClientSize();
+    int maxX = static_cast<int>(clientSize.x / m_dpiScale);
+    int maxY = static_cast<int>(clientSize.y / m_dpiScale);
+   
+    NavigationCubeConfigDialog dialog(this, m_cubeLayout.x, m_cubeLayout.y, m_cubeLayout.size, m_cubeLayout.size, wxColour(255, 255, 255), maxX, maxY);
+    if (dialog.ShowModal() == wxID_OK) {
+        int newX = dialog.GetX();
+        int newY = dialog.GetY();
+        int newSize = dialog.GetSize();
+        int newViewportSize = dialog.GetViewportSize();
+        wxColour newColor = dialog.GetColor();
+        
+        SetNavigationCubeRect(newX, newY, newSize);
+        SetNavigationCubeViewportSize(newViewportSize);
+        SetNavigationCubeColor(newColor);
+        LOG_INF("Canvas::ShowNavigationCubeConfigDialog: Applied new navigation cube settings: x=" + 
+                std::to_string(newX) + ", y=" + std::to_string(newY) + ", size=" + std::to_string(newSize) +
+                ", viewportSize=" + std::to_string(newViewportSize));
+    }
 }
