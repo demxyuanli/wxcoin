@@ -100,6 +100,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
 }
 
 void NavigationCube::setupGeometry() {
+
     m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
     m_orthoCamera->nearDistance = 0.1f;
     m_orthoCamera->farDistance = 10.0f;
@@ -110,14 +111,15 @@ void NavigationCube::setupGeometry() {
 
     SoDirectionalLight* light = new SoDirectionalLight;
     light->direction.setValue(0, 0, -1);
-    light->intensity.setValue(0.8f);
+    light->intensity.setValue(1.0f);
     light->color.setValue(1.0f, 1.0f, 1.0f);
     m_root->addChild(light);
 
     SoSeparator* cubeSep = new SoSeparator;
     SoMaterial* material = new SoMaterial;
+    material->ambientColor.setValue(0.5f, 0.5f, 0.5f);
     material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
-    material->transparency.setValue(0.2f);
+    material->emissiveColor.setValue(0.5f, 0.5f, 0.5f);
     cubeSep->addChild(material);
 
     SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
@@ -170,11 +172,11 @@ void NavigationCube::setupGeometry() {
     SoSeparator* edgeSep = new SoSeparator;
     SoDrawStyle* drawStyle = new SoDrawStyle;
     drawStyle->style = SoDrawStyle::LINES;
-    drawStyle->lineWidth = 1.0f;
+    drawStyle->lineWidth = 2.0f;
     edgeSep->addChild(drawStyle);
 
     SoMaterial* edgeMaterial = new SoMaterial;
-    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 1.0f);
     edgeSep->addChild(edgeMaterial);
 
     SoCube* edgeCube = new SoCube;

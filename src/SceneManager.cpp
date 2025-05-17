@@ -245,7 +245,14 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
         fastMode ? SoGLRenderAction::BLEND : SoGLRenderAction::SORTED_OBJECT_BLEND
     );
 
+    // Explicitly enable blending for line smoothing
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
     renderAction.apply(m_sceneRoot);
+
+    glDisable(GL_BLEND); // Disable blending afterwards
 }
 
 void SceneManager::updateAspectRatio(const wxSize& size) {

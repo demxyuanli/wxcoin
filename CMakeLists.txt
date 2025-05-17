@@ -31,7 +31,6 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/Command.cpp
     ${CMAKE_SOURCE_DIR}/src/Globals.cpp
     ${CMAKE_SOURCE_DIR}/src/NavigationCube.cpp
-    #${CMAKE_SOURCE_DIR}/src/ViewCommands.cpp
     ${CMAKE_SOURCE_DIR}/src/GeometryObject.cpp
     ${CMAKE_SOURCE_DIR}/src/MainFrame.cpp
     ${CMAKE_SOURCE_DIR}/src/MouseHandler.cpp

@@ -35,18 +35,16 @@ public:
     void resetView();
 
 private:
-    // Navigation cube layout management
-    struct NavigationCubeLayout {
-        int x{ 10 }, y{ 10 }, size{ 120 };
+    // Layout management for navigation cube and mini scene
+    struct Layout {
+        int x{ 10 }, y{ 10 }, size{ 200 }; // Default size 200 for mini scene
         void update(int newX, int newY, int newSize, const wxSize& windowSize, float dpiScale) {
-            // Restrict size, considering DPI scaling
             size = std::max(50, std::min(newSize, windowSize.x / 2));
             size = static_cast<int>(size * dpiScale);
-            // Ensure position is within window bounds
             x = std::max(0, std::min(newX, static_cast<int>((windowSize.x - size) / dpiScale)));
             y = std::max(0, std::min(newY, static_cast<int>((windowSize.y - size) / dpiScale)));
         }
-    } m_cubeLayout;
+    } m_cubeLayout, m_miniSceneLayout;
 
     void onPaint(wxPaintEvent& event);
     void onSize(wxSizeEvent& event);
@@ -65,7 +63,8 @@ private:
     bool m_isRendering;
     bool m_isInitialized;
     wxLongLong m_lastRenderTime;
-    float m_dpiScale; // Store DPI scale for consistent use
+    float m_dpiScale;
+    bool m_enableNavCube; // Initial enable state for navigation cube
 
     DECLARE_EVENT_TABLE()
 };

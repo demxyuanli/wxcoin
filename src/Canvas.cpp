@@ -37,6 +37,7 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
     , m_objectTreePanel(nullptr)
     , m_commandManager(nullptr)
     , m_dpiScale(1.0f)
+    , m_enableNavCube(true) // Default: enable navigation cube
 {
     LOG_INF("Canvas::Canvas: Initializing");
 
@@ -62,17 +63,21 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
         m_sceneManager = std::make_unique<SceneManager>(this);
         m_inputManager = std::make_unique<InputManager>(this);
 
-        // Initialize navigation cube
-        auto callback = [this](const std::string& view) {
-            m_sceneManager->setView(view);
-            Refresh(true);
-            };
-        m_navCube = std::make_unique<NavigationCube>(callback, m_dpiScale);
+        // Initialize navigation cube only if enabled
+        if (m_enableNavCube) {
+            auto cubeCallback = [this](const std::string& view) {
+                m_sceneManager->setView(view);
+                Refresh(true);
+                };
+            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale);
+            LOG_INF("Canvas::Canvas: Navigation cube initialized");
+        }
 
-        // Initialize navigation cube position (bottom-right)
+        // Initialize layout positions (even if not initialized, for consistency)
         if (clientSize.x > 0 && clientSize.y > 0) {
+            m_cubeLayout.size = 120; // Override default for navigation cube
             m_cubeLayout.update(clientSize.x - m_cubeLayout.size - 10,
-                clientSize.y - m_cubeLayout.size - 10,
+                clientSize.y - m_cubeLayout.size - 220, // Above mini scene (200 + 10 margin)
                 m_cubeLayout.size, clientSize, m_dpiScale);
             LOG_INF("Canvas::Canvas: Initialized navigation cube position: x=" + std::to_string(m_cubeLayout.x) +
                 ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size));
@@ -82,7 +87,7 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
         LOG_INF("Canvas::Canvas: GL Context created. OpenGL version: " + std::string(glVersion ? glVersion : "unknown"));
 
         if (m_sceneManager && !m_sceneManager->initScene()) {
-            LOG_ERR("Canvas::Canvas: Failed to initialize scene");
+            LOG_ERR("Canvas::Canvas: Failed to initialize main scene");
             showErrorDialog("Failed to initialize 3D scene. The application may not function correctly.");
             throw std::runtime_error("Scene initialization failed");
         }
@@ -150,7 +155,7 @@ void Canvas::render(bool fastMode) {
         glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // Render main scene with DPI scaling
+        // Render main scene
         glViewport(0, 0, static_cast<int>(size.x * m_dpiScale), static_cast<int>(size.y * m_dpiScale));
         m_sceneManager->render(size, fastMode);
 
@@ -210,6 +215,7 @@ void Canvas::onSize(wxSizeEvent& event) {
     if (size.x > 0 && size.y > 0 && m_glContext && SetCurrent(*m_glContext)) {
         m_dpiScale = GetContentScaleFactor();
         m_cubeLayout.update(m_cubeLayout.x, m_cubeLayout.y, m_cubeLayout.size, size, m_dpiScale);
+        m_miniSceneLayout.update(m_miniSceneLayout.x, m_miniSceneLayout.y, m_miniSceneLayout.size, size, m_dpiScale);
         m_sceneManager->updateAspectRatio(size);
         Refresh();
     }
@@ -251,7 +257,6 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
             }
         }
     }
-
     // Forward other events to InputManager
     if (event.GetEventType() == wxEVT_LEFT_DOWN ||
         event.GetEventType() == wxEVT_LEFT_UP ||
@@ -295,16 +300,35 @@ void Canvas::resetView() {
 }
 
 void Canvas::setNavigationCubeEnabled(bool enabled) {
-    if (!m_isInitialized || !m_navCube) {
-        LOG_WAR("Canvas::setNavigationCubeEnabled: Invalid state or NavigationCube");
+    if (!m_isInitialized) {
+        LOG_WAR("Canvas::setNavigationCubeEnabled: Skipped: Canvas not initialized");
         return;
     }
-    m_navCube->setEnabled(enabled);
+    m_enableNavCube = enabled;
+    if (enabled && !m_navCube) {
+        try {
+            auto cubeCallback = [this](const std::string& view) {
+                m_sceneManager->setView(view);
+                Refresh(true);
+                };
+            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale);
+            LOG_INF("Canvas::setNavigationCubeEnabled: Navigation cube initialized");
+        }
+        catch (const std::exception& e) {
+            LOG_ERR("Canvas::setNavigationCubeEnabled: Failed to initialize navigation cube: " + std::string(e.what()));
+            showErrorDialog("Failed to initialize navigation cube.");
+            m_navCube.reset();
+            m_enableNavCube = false;
+        }
+    }
+    if (m_navCube) {
+        m_navCube->setEnabled(enabled);
+    }
     Refresh(true);
 }
 
 bool Canvas::isNavigationCubeEnabled() const {
-    return m_isInitialized && m_navCube && m_navCube->isEnabled();
+    return m_isInitialized && m_enableNavCube && m_navCube && m_navCube->isEnabled();
 }
 
 void Canvas::SetNavigationCubeRect(int x, int y, int size) {

@@ -5,6 +5,7 @@
 #include <Inventor/nodes/SoCylinder.h>
 #include <Inventor/nodes/SoCone.h>
 #include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoDrawStyle.h>
 
 GeometryObject::GeometryObject(const std::string& name)
     : m_name(name), m_visible(true), m_selected(false)
@@ -57,10 +58,31 @@ Box::Box(float width, float height, float depth)
     cube->depth.setValue(depth);
 
     SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    material->ambientColor.setValue(0.4f, 0.7f, 0.4f); // Light green ambient
+    material->diffuseColor.setValue(0.6f, 0.9f, 0.6f); // Light green diffuse
+    material->emissiveColor.setValue(0.5f, 0.5f, 0.5f);
 
     m_root->addChild(material);
     m_root->addChild(cube);
+
+    // Add blue outline
+    SoSeparator* edgeSep = new SoSeparator;
+    SoDrawStyle* drawStyle = new SoDrawStyle;
+    drawStyle->style = SoDrawStyle::LINES;
+    drawStyle->lineWidth = 1.0f;
+    edgeSep->addChild(drawStyle);
+
+    SoMaterial* edgeMaterial = new SoMaterial;
+    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.6f); // Blue color
+    edgeSep->addChild(edgeMaterial);
+
+    SoCube* edgeCube = new SoCube; // Create a new cube for the outline
+    edgeCube->width.setValue(width);
+    edgeCube->height.setValue(height);
+    edgeCube->depth.setValue(depth);
+    edgeSep->addChild(edgeCube);
+
+    m_root->addChild(edgeSep);
 }
 
 Sphere::Sphere(float radius)
@@ -71,10 +93,29 @@ Sphere::Sphere(float radius)
     sphere->radius.setValue(radius);
 
     SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    material->ambientColor.setValue(0.4f, 0.7f, 0.4f); // Light green ambient
+    material->diffuseColor.setValue(0.6f, 0.9f, 0.6f); // Light green diffuse
+    material->emissiveColor.setValue(0.5f, 0.5f, 0.5f);
 
     m_root->addChild(material);
     m_root->addChild(sphere);
+
+    // Add blue outline
+    SoSeparator* edgeSep = new SoSeparator;
+    SoDrawStyle* drawStyle = new SoDrawStyle;
+    drawStyle->style = SoDrawStyle::LINES;
+    drawStyle->lineWidth = 1.0f;
+    edgeSep->addChild(drawStyle);
+
+    SoMaterial* edgeMaterial = new SoMaterial;
+    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.6f); // Blue color
+    edgeSep->addChild(edgeMaterial);
+
+    SoSphere* edgeSphere = new SoSphere; // Create a new sphere for the outline
+    edgeSphere->radius.setValue(radius);
+    edgeSep->addChild(edgeSphere);
+
+    m_root->addChild(edgeSep);
 }
 
 Cylinder::Cylinder(float radius, float height)
@@ -86,10 +127,30 @@ Cylinder::Cylinder(float radius, float height)
     cylinder->height.setValue(height);
 
     SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    material->ambientColor.setValue(0.4f, 0.7f, 0.4f); // Light green ambient
+    material->diffuseColor.setValue(0.6f, 0.9f, 0.6f); // Light green diffuse
+    material->emissiveColor.setValue(0.5f, 0.5f, 0.5f);
 
     m_root->addChild(material);
     m_root->addChild(cylinder);
+
+    // Add blue outline
+    SoSeparator* edgeSep = new SoSeparator;
+    SoDrawStyle* drawStyle = new SoDrawStyle;
+    drawStyle->style = SoDrawStyle::LINES;
+    drawStyle->lineWidth = 1.0f;
+    edgeSep->addChild(drawStyle);
+
+    SoMaterial* edgeMaterial = new SoMaterial;
+    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.6f); // Blue color
+    edgeSep->addChild(edgeMaterial);
+
+    SoCylinder* edgeCylinder = new SoCylinder; // Create a new cylinder for the outline
+    edgeCylinder->radius.setValue(radius);
+    edgeCylinder->height.setValue(height);
+    edgeSep->addChild(edgeCylinder);
+
+    m_root->addChild(edgeSep);
 }
 
 Cone::Cone(float bottomRadius, float height)
@@ -101,8 +162,28 @@ Cone::Cone(float bottomRadius, float height)
     cone->height.setValue(height);
 
     SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+    material->ambientColor.setValue(0.4f, 0.7f, 0.4f); // Light green ambient
+    material->diffuseColor.setValue(0.6f, 0.9f, 0.6f); // Light green diffuse
+    material->emissiveColor.setValue(0.5f, 0.5f, 0.5f);
 
     m_root->addChild(material);
     m_root->addChild(cone);
+
+    // Add blue outline
+    SoSeparator* edgeSep = new SoSeparator;
+    SoDrawStyle* drawStyle = new SoDrawStyle;
+    drawStyle->style = SoDrawStyle::LINES;
+    drawStyle->lineWidth = 1.0f;
+    edgeSep->addChild(drawStyle);
+
+    SoMaterial* edgeMaterial = new SoMaterial;
+    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.6f); // Blue color
+    edgeSep->addChild(edgeMaterial);
+
+    SoCone* edgeCone = new SoCone; // Create a new cone for the outline
+    edgeCone->bottomRadius.setValue(bottomRadius);
+    edgeCone->height.setValue(height);
+    edgeSep->addChild(edgeCone);
+
+    m_root->addChild(edgeSep);
 }
