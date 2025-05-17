@@ -246,9 +246,31 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     );
 
     // Explicitly enable blending for line smoothing
+    glEnable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glEnable(GL_COLOR_MATERIAL);
+    //glEnable(GL_TEXTURE_2D);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); // Combine texture with material
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    GLint lightingEnabled = 0;
+    glGetIntegerv(GL_LIGHTING, &lightingEnabled);
+    LOG_INF("NavigationCube::render: Lighting enabled: " + std::to_string(lightingEnabled));
+
+    GLint textureEnabled = 0;
+    glGetIntegerv(GL_TEXTURE_2D, &textureEnabled);
+    LOG_INF("NavigationCube::render: Texture 2D enabled: " + std::to_string(textureEnabled));
+
+    GLint texEnvMode = 0;
+    glGetIntegerv(GL_TEXTURE_ENV_MODE, &texEnvMode);
+    LOG_INF("NavigationCube::render: Texture env mode: " + std::to_string(texEnvMode) + " (GL_MODULATE=" + std::to_string(GL_MODULATE) + ")");
+
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        LOG_ERR("NavigationCube::render: OpenGL error: " + std::to_string(err));
+    }
 
     renderAction.apply(m_sceneRoot);
 

@@ -1,4 +1,10 @@
+#define NOMINMAX
 #include "NavigationCube.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#include <GL/gl.h>
+#include <algorithm>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTranslation.h>
@@ -61,43 +67,104 @@ void NavigationCube::initialize() {
 bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height) {
     wxBitmap bitmap(width, height, 32);
     wxMemoryDC dc;
+    dc.SelectObject(bitmap); // Explicitly select bitmap
     if (!dc.IsOk()) {
         LOG_ERR("NavigationCube::generateFaceTexture: Failed to create wxMemoryDC for texture: " + text);
-        return false;
+        // Fallback: Fill with white
+        for (int i = 0; i < width * height * 4; i += 4) {
+            imageData[i] = 255; // R
+            imageData[i + 1] = 255; // G
+            imageData[i + 2] = 255; // B
+            imageData[i + 3] = 255; // A
+        }
+        LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
+        return true;
     }
 
-    dc.SetBackground(wxColour(255, 255, 255, 0));
+    dc.SetBackground(wxColour(255, 255, 255, 255)); // Opaque white background
     dc.Clear();
 
     int fontSize = static_cast<int>(16 * m_dpiScale);
     wxFont font(fontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
     dc.SetFont(font);
-    dc.SetTextForeground(*wxBLACK);
+    dc.SetTextForeground(wxColour(255, 0, 0)); // Red text
 
     wxSize textSize = dc.GetTextExtent(text);
     int x = (width - textSize.GetWidth()) / 2;
     int y = (height - textSize.GetHeight()) / 2;
     dc.DrawText(text, x, y);
 
+    // Validate bitmap content
     wxImage image = bitmap.ConvertToImage();
     if (!image.IsOk()) {
         LOG_ERR("NavigationCube::generateFaceTexture: Failed to convert bitmap to image for texture: " + text);
-        return false;
+        // Fallback: Fill with white
+        for (int i = 0; i < width * height * 4; i += 4) {
+            imageData[i] = 255; // R
+            imageData[i + 1] = 255; // G
+            imageData[i + 2] = 255; // B
+            imageData[i + 3] = 255; // A
+        }
+        LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
+        return true;
     }
-    image.InitAlpha();
-    LOG_INF("NavigationCube::generateFaceTexture: Alpha channel enabled for " + text + ": " + std::to_string(image.HasAlpha()));
 
-    unsigned char* src = image.GetData();
-    bool hasAlpha = image.HasAlpha();
-    unsigned char* alpha = hasAlpha ? image.GetAlpha() : nullptr;
+    image.InitAlpha(); // Ensure alpha channel
+    unsigned char* rgb = image.GetData();
+    unsigned char* alpha = image.GetAlpha();
 
+    // Set alpha to 255 for all pixels (opaque texture)
+    for (int i = 0; i < width * height; ++i) {
+        alpha[i] = 255;
+    }
+
+    // Copy to imageData (RGBA) and validate
+    bool hasValidPixels = false;
     for (int i = 0, j = 0; i < width * height * 4; i += 4, j += 3) {
-        imageData[i] = src[j];
-        imageData[i + 1] = src[j + 1];
-        imageData[i + 2] = src[j + 2];
-        imageData[i + 3] = hasAlpha ? alpha[j / 3] : 255;
+        imageData[i] = rgb[j];     // R
+        imageData[i + 1] = rgb[j + 1]; // G
+        imageData[i + 2] = rgb[j + 2]; // B
+        imageData[i + 3] = alpha[j / 3]; // A
+        if (imageData[i] != 0 || imageData[i + 1] != 0 || imageData[i + 2] != 0) {
+            hasValidPixels = true;
+        }
     }
 
+    // Debug: Log sample pixels
+    LOG_INF("NavigationCube::generateFaceTexture: Background pixel (0,0) RGBA=" +
+        std::to_string(imageData[0]) + "," +
+        std::to_string(imageData[1]) + "," +
+        std::to_string(imageData[2]) + "," +
+        std::to_string(imageData[3]));
+    int textPixelIdx = (width * height / 2) * 4; // Middle of texture for text
+    LOG_INF("NavigationCube::generateFaceTexture: Text pixel (center) RGBA=" +
+        std::to_string(imageData[textPixelIdx]) + "," +
+        std::to_string(imageData[textPixelIdx + 1]) + "," +
+        std::to_string(imageData[textPixelIdx + 2]) + "," +
+        std::to_string(imageData[textPixelIdx + 3]));
+    // Log additional pixels
+    for (int i = 0; i < 20; i += 4) {
+        LOG_INF("NavigationCube::generateFaceTexture: Debug pixel " + std::to_string(i / 4) + " RGBA=" +
+            std::to_string(imageData[i]) + "," +
+            std::to_string(imageData[i + 1]) + "," +
+            std::to_string(imageData[i + 2]) + "," +
+            std::to_string(imageData[i + 3]));
+    }
+
+    if (!hasValidPixels) {
+        LOG_WAR("NavigationCube::generateFaceTexture: All pixels are black for texture: " + text);
+        // Fallback: Fill with white
+        for (int i = 0; i < width * height * 4; i += 4) {
+            imageData[i] = 255; // R
+            imageData[i + 1] = 255; // G
+            imageData[i + 2] = 255; // B
+            imageData[i + 3] = 255; // A
+        }
+        LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
+    }
+
+    LOG_INF("NavigationCube::generateFaceTexture: Texture generated for " + text +
+        ", size=" + std::to_string(width) + "x" + std::to_string(height));
     return true;
 }
 
@@ -138,8 +205,7 @@ void NavigationCube::setupGeometry() {
     SoSeparator* cubeSep = new SoSeparator;
     SoMaterial* material = new SoMaterial;
     material->ambientColor.setValue(0.4f, 0.4f, 0.4f);
-    // Debug: Use bright material to test rendering
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f); // Temporary white for debugging
+    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f); // Debug: White for visibility
     // material->diffuseColor.setValue(0.8f, 0.8f, 0.8f); // Original
     material->specularColor.setValue(0.6f, 0.6f, 0.6f);
     material->shininess.setValue(0.5f);
@@ -157,6 +223,7 @@ void NavigationCube::setupGeometry() {
     LOG_INF("NavigationCube::setupGeometry: Using texture size: " + std::to_string(texSize) + "x" + std::to_string(texSize));
 
     const char* faceNames[] = { "F", "B", "L", "R", "T", "D" };
+    bool applyTextures = true; // Debug: Set to false to disable textures
     for (const auto& name : faceNames) {
         SoTexture2* texture = new SoTexture2;
         std::string cacheKey = std::string(name) + "_" + std::to_string(texSize);
@@ -184,8 +251,11 @@ void NavigationCube::setupGeometry() {
         }
 
         texture->setName(name);
-        // Debug: Comment out to disable textures and test material
-        // cubeSep->addChild(texture);
+        texture->model = SoTexture2::MODULATE; // Combine texture with material
+        if (applyTextures) {
+            cubeSep->addChild(texture);
+            LOG_INF("NavigationCube::setupGeometry: Applied texture for: " + std::string(name));
+        }
     }
 
     SoCube* cube = new SoCube;
@@ -265,7 +335,7 @@ std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& vi
         if (std::abs(normal[0] + 1.0f) < 0.1f) return m_faceToView["L"];
     }
 
-    LOG_DBG("NavigationCube::pickRegion: No valid **valid face picked");
+    LOG_DBG("NavigationCube::pickRegion: No valid face picked");
     return "";
 }
 
