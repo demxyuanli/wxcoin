@@ -416,23 +416,24 @@ void Canvas::SyncNavigationCubeCamera() {
 
     SoCamera* mainCamera = m_sceneManager->getCamera();
     if (mainCamera) {
-        SbVec3f mainPos = mainCamera->position.getValue();
         SbRotation mainOrient = mainCamera->orientation.getValue();
 
-        float distance = mainPos.length();
-        float angleX = atan2(mainPos[1], sqrt(mainPos[0]*mainPos[0] + mainPos[2]*mainPos[2])) * 180.0f / M_PI;
-        float angleY = atan2(mainPos[0], mainPos[2]) * 180.0f / M_PI;
+        float navDistance = 5.0f; // Standard distance for NavCube camera
 
-        float navDistance = 5.0f; 
-        float radX = angleX * M_PI / 180.0f;
-        float radY = angleY * M_PI / 180.0f;
-        float x = navDistance * sin(radY) * cos(radX);
-        float y = navDistance * sin(radX);
-        float z = navDistance * cos(radY) * cos(radX);
-        m_navCube->setCameraPosition(SbVec3f(x, y, z));
+        // Calculate the view vector of the main camera in world space.
+        // Open Inventor cameras typically look down their local -Z axis.
+        SbVec3f mainCamViewVector = mainOrient * SbVec3f(0, 0, -1);
+
+        // Position the NavCube's camera opposite to the main camera's view direction,
+        // at the standard navigation distance, so it looks towards the origin.
+        SbVec3f navCubeCamPos = -mainCamViewVector * navDistance;
+
+        m_navCube->setCameraPosition(navCubeCamPos);
+        // Also, align the NavCube camera's orientation with the main camera's orientation.
+        // This ensures that the "up" direction and general orientation match.
         m_navCube->setCameraOrientation(mainOrient);
 
-        LOG_DBG("Canvas::SyncNavigationCubeCamera: Synced navigation cube camera angle with main camera - AngleX: " + std::to_string(angleX) + ", AngleY: " + std::to_string(angleY));
+        LOG_DBG("Canvas::SyncNavigationCubeCamera: Synced navigation cube camera based on main camera orientation.");
     }
 }
 

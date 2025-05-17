@@ -1,9 +1,4 @@
-#define NOMINMAX
 #include "NavigationCube.h"
-#ifdef _WIN32
-#include <windows.h>
-#endif
-#include <GL/gl.h>
 #include <algorithm>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoMaterial.h>
@@ -15,6 +10,8 @@
 #include <Inventor/nodes/SoDirectionalLight.h>
 #include <Inventor/nodes/SoEnvironment.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/actions/SoRayPickAction.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/SoPickedPoint.h>
@@ -24,6 +21,7 @@
 #include <wx/font.h>
 #include <wx/time.h>
 #include <cmath>
+#include <vector>
 #include "Logger.h"
 
 std::map<std::string, std::shared_ptr<NavigationCube::TextureData>> NavigationCube::s_textureCache;
@@ -85,7 +83,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
     dc.Clear();
 
     int fontSize = static_cast<int>(16 * m_dpiScale);
-    wxFont font(fontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD);
+    wxFont font(wxFontInfo(fontSize).FaceName("Arial").Bold());
     dc.SetFont(font);
     dc.SetTextForeground(wxColour(255, 0, 0)); // Red text
 
@@ -202,71 +200,91 @@ void NavigationCube::setupGeometry() {
     m_root->addChild(fillLight);
     LOG_INF("NavigationCube::setupGeometry: Added fill directional light from (-0.3, -0.3, -0.5)");
 
-    SoSeparator* cubeSep = new SoSeparator;
+    SoSeparator* cubeAssembly = new SoSeparator; // Parent for all faces
+
     SoMaterial* material = new SoMaterial;
     material->ambientColor.setValue(0.4f, 0.4f, 0.4f);
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f); // Debug: White for visibility
-    // material->diffuseColor.setValue(0.8f, 0.8f, 0.8f); // Original
+    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
     material->specularColor.setValue(0.6f, 0.6f, 0.6f);
     material->shininess.setValue(0.5f);
     material->emissiveColor.setValue(0.1f, 0.1f, 0.1f);
-    cubeSep->addChild(material);
-    LOG_INF("NavigationCube::setupGeometry: Added cube material");
+    cubeAssembly->addChild(material);
+    LOG_INF("NavigationCube::setupGeometry: Added cube material to assembly");
 
     SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
     texCoords->point.setValues(0, 4, new SbVec2f[4]{
-        SbVec2f(0, 0), SbVec2f(1, 0), SbVec2f(1, 1), SbVec2f(0, 1)
-        });
-    cubeSep->addChild(texCoords);
+        SbVec2f(0, 1), SbVec2f(1, 1), SbVec2f(1, 0), SbVec2f(0, 0)
+    });
+    cubeAssembly->addChild(texCoords); // Global texture coordinates for faces
 
     int texSize = m_dpiScale > 1.5f ? 128 : 64;
     LOG_INF("NavigationCube::setupGeometry: Using texture size: " + std::to_string(texSize) + "x" + std::to_string(texSize));
 
-    const char* faceNames[] = { "F", "B", "L", "R", "T", "D" };
-    bool applyTextures = true; // Debug: Set to false to disable textures
-    for (const auto& name : faceNames) {
-        SoTexture2* texture = new SoTexture2;
-        std::string cacheKey = std::string(name) + "_" + std::to_string(texSize);
+    struct FaceDef {
+        std::string description; // e.g., "Front Face"
+        SbVec3f vertices[4];
+        std::string textureKey;  // "F", "B", "T", "D", "L", "R"
+    };
 
+    float s = 0.5f; // half size of the cube
+
+    std::vector<FaceDef> facesData = {
+        {"Front Face (+Z)", {SbVec3f(-s, -s, s), SbVec3f(s, -s, s), SbVec3f(s, s, s), SbVec3f(-s, s, s)}, "F"},
+        {"Back Face (-Z)",  {SbVec3f(s, -s, -s), SbVec3f(-s, -s, -s), SbVec3f(-s, s, -s), SbVec3f(s, s, -s)}, "B"},
+        {"Left Face (-X)",  {SbVec3f(-s, -s, -s), SbVec3f(-s, -s, s), SbVec3f(-s, s, s), SbVec3f(-s, s, -s)}, "L"},
+        {"Right Face (+X)", {SbVec3f(s, -s, s), SbVec3f(s, -s, -s), SbVec3f(s, s, -s), SbVec3f(s, s, s)}, "R"},
+        {"Top Face (+Y)",   {SbVec3f(-s, s, s), SbVec3f(s, s, s), SbVec3f(s, s, -s), SbVec3f(-s, s, -s)}, "T"},
+        {"Bottom Face (-Y)",{SbVec3f(-s, -s, -s), SbVec3f(s, -s, -s), SbVec3f(s, -s, s), SbVec3f(-s, -s, s)}, "D"}
+    };
+    
+    bool applyTextures = true; 
+
+    for (const auto& faceDef : facesData) {
+        SoSeparator* faceSep = new SoSeparator;
+        faceSep->setName(SbName(faceDef.textureKey.c_str())); // Name separator for picking, e.g., "F"
+
+        SoTexture2* texture = new SoTexture2;
+        std::string cacheKey = faceDef.textureKey + "_" + std::to_string(texSize);
+        
         std::shared_ptr<TextureData> cachedTexture;
         auto it = s_textureCache.find(cacheKey);
         if (it != s_textureCache.end()) {
             cachedTexture = it->second;
             texture->image.setValue(SbVec2s(cachedTexture->width, cachedTexture->height), 4, cachedTexture->data);
-            LOG_DBG("NavigationCube::setupGeometry: Using cached texture for: " + std::string(name));
-        }
-        else {
+            LOG_DBG("NavigationCube::setupGeometry: Using cached texture for face: " + faceDef.textureKey);
+        } else {
             unsigned char* imageData = new unsigned char[texSize * texSize * 4];
-            if (!generateFaceTexture(name, imageData, texSize, texSize)) {
-                LOG_ERR("NavigationCube::setupGeometry: Failed to generate texture for: " + std::string(name));
-                memset(imageData, 0, texSize * texSize * 4);
-                texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
-                LOG_INF("NavigationCube::setupGeometry: Applied default transparent texture for: " + std::string(name));
+            if (!generateFaceTexture(faceDef.textureKey, imageData, texSize, texSize)) {
+                LOG_ERR("NavigationCube::setupGeometry: Failed to generate texture for face: " + faceDef.textureKey);
+                memset(imageData, 0, texSize * texSize * 4); // Fallback to transparent black
             }
-            else {
-                texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
-                s_textureCache[cacheKey] = std::make_shared<TextureData>(imageData, texSize, texSize);
-                LOG_INF("NavigationCube::setupGeometry: Generated and cached texture for: " + std::string(name));
-            }
+            texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
+            s_textureCache[cacheKey] = std::make_shared<TextureData>(imageData, texSize, texSize);
+            LOG_INF("NavigationCube::setupGeometry: Generated and cached texture for face: " + faceDef.textureKey);
         }
-
-        texture->setName(name);
-        texture->model = SoTexture2::MODULATE; // Combine texture with material
+        // texture->setName(faceDef.textureKey.c_str()); // Texture node itself can also be named if needed
+        texture->model = SoTexture2::MODULATE;
         if (applyTextures) {
-            cubeSep->addChild(texture);
-            LOG_INF("NavigationCube::setupGeometry: Applied texture for: " + std::string(name));
+            faceSep->addChild(texture);
         }
+
+        SoCoordinate3* coords = new SoCoordinate3;
+        coords->point.setValues(0, 4, faceDef.vertices);
+        faceSep->addChild(coords);
+
+        SoFaceSet* faceSet = new SoFaceSet;
+        faceSet->numVertices.setValue(4); // Single quad
+        faceSep->addChild(faceSet);
+        
+        cubeAssembly->addChild(faceSep);
+        LOG_INF("NavigationCube::setupGeometry: Added " + faceDef.description + " with texture: " + faceDef.textureKey);
     }
+    
+    m_root->addChild(cubeAssembly);
+    LOG_INF("NavigationCube::setupGeometry: Added cube face assembly to root");
 
-    SoCube* cube = new SoCube;
-    cube->width.setValue(1.0f);
-    cube->height.setValue(1.0f);
-    cube->depth.setValue(1.0f);
-    cube->setName("NavCube");
-    cubeSep->addChild(cube);
-    m_root->addChild(cubeSep);
-    LOG_INF("NavigationCube::setupGeometry: Added cube geometry");
 
+    // Edges (remain as before, as a separate SoCube with LINES draw style)
     SoSeparator* edgeSep = new SoSeparator;
     SoDrawStyle* drawStyle = new SoDrawStyle;
     drawStyle->style = SoDrawStyle::LINES;
@@ -274,19 +292,19 @@ void NavigationCube::setupGeometry() {
     edgeSep->addChild(drawStyle);
 
     SoMaterial* edgeMaterial = new SoMaterial;
-    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.8f);
+    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.8f); // Blue edges
     edgeMaterial->specularColor.setValue(0.5f, 0.5f, 1.0f);
     edgeMaterial->shininess.setValue(0.7f);
     edgeSep->addChild(edgeMaterial);
     LOG_INF("NavigationCube::setupGeometry: Added edge material");
 
-    SoCube* edgeCube = new SoCube;
+    SoCube* edgeCube = new SoCube; // This cube is for edges only
     edgeCube->width.setValue(1.0f);
     edgeCube->height.setValue(1.0f);
     edgeCube->depth.setValue(1.0f);
     edgeCube->setName("NavCubeEdges");
     edgeSep->addChild(edgeCube);
-    m_root->addChild(edgeSep);
+    m_root->addChild(edgeSep); // Add edges to the main root
     LOG_INF("NavigationCube::setupGeometry: Added edge geometry");
 }
 
@@ -307,6 +325,7 @@ void NavigationCube::updateCameraRotation() {
 std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize) {
     SoRayPickAction pickAction(SbViewportRegion(viewportSize.x, viewportSize.y));
     pickAction.setPoint(mousePos);
+    // pickAction.setRadius(1.0f); // Optional: Small radius for easier picking of edges/corners
     pickAction.apply(m_root);
 
     SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
@@ -316,26 +335,36 @@ std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& vi
         return "";
     }
 
-    SoNode* pickedNode = pickedPoint->getPath()->getTail();
-    if (pickedNode && pickedNode->getName().getLength() > 0) {
-        std::string name = pickedNode->getName().getString();
-        if (m_faceToView.find(name) != m_faceToView.end()) {
-            LOG_INF("NavigationCube::pickRegion: Picked node: " + name);
-            return m_faceToView[name];
+    SoPath* pickedPath = pickedPoint->getPath();
+    if (!pickedPath || pickedPath->getLength() == 0) {
+        LOG_DBG("NavigationCube::pickRegion: Picked point has no valid path.");
+        return "";
+    }
+
+    // Iterate from the picked primitive up the path to find a named SoSeparator ("F", "B", "L", "R", "T", "D")
+    for (int i = pickedPath->getLength() - 1; i >= 0; --i) {
+        SoNode* currentNode = pickedPath->getNode(i);
+        // Check if the node is an SoSeparator and has a name
+        if (currentNode && currentNode->isOfType(SoSeparator::getClassTypeId()) && currentNode->getName().getLength() > 0) {
+            std::string nameStr = currentNode->getName().getString();
+            auto it = m_faceToView.find(nameStr); // m_faceToView maps "F" to "Front", etc.
+            if (it != m_faceToView.end()) {
+                LOG_INF("NavigationCube::pickRegion: Picked face separator: " + nameStr + ", maps to view: " + it->second);
+                return it->second; // Return "Front", "Back", etc.
+            }
         }
     }
-
-    if (pickedNode && (pickedNode->getName() == "NavCube" || pickedNode->getName() == "NavCubeEdges")) {
-        SbVec3f normal = pickedPoint->getNormal();
-        if (std::abs(normal[2] - 1.0f) < 0.1f) return m_faceToView["T"];
-        if (std::abs(normal[2] + 1.0f) < 0.1f) return m_faceToView["D"];
-        if (std::abs(normal[1] - 1.0f) < 0.1f) return m_faceToView["F"];
-        if (std::abs(normal[1] + 1.0f) < 0.1f) return m_faceToView["B"];
-        if (std::abs(normal[0] - 1.0f) < 0.1f) return m_faceToView["R"];
-        if (std::abs(normal[0] + 1.0f) < 0.1f) return m_faceToView["L"];
+    
+    // Fallback or specific handling for edges if NavCubeEdges is picked
+    SoNode* pickedPrimitive = pickedPath->getTail();
+    if (pickedPrimitive && pickedPrimitive->getName() == "NavCubeEdges") {
+        LOG_INF("NavigationCube::pickRegion: Picked NavCubeEdges.");
+        // Here you could add logic to determine which edge or corner was hit,
+        // possibly using pickedPoint->getNormal(), though it might be complex.
+        // For now, clicking an edge won't trigger a view change via this path.
     }
 
-    LOG_DBG("NavigationCube::pickRegion: No valid face picked");
+    LOG_DBG("NavigationCube::pickRegion: No specific face region (F,B,L,R,T,D) identified by named separator.");
     return "";
 }
 
