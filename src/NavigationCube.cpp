@@ -180,7 +180,7 @@ void NavigationCube::setupGeometry() {
 
     SoEnvironment* env = new SoEnvironment;
     env->ambientColor.setValue(1.0f, 1.0f, 1.0f);
-    env->ambientIntensity.setValue(0.3f);
+    env->ambientIntensity.setValue(1.0f);
     m_root->addChild(env);
     LOG_INF("NavigationCube::setupGeometry: Added environment light with intensity 0.3");
 
@@ -194,7 +194,7 @@ void NavigationCube::setupGeometry() {
 
     SoDirectionalLight* fillLight = new SoDirectionalLight;
     fillLight->direction.setValue(-0.3f, -0.3f, -0.5f);
-    fillLight->intensity.setValue(0.4f);
+    fillLight->intensity.setValue(0.8f);
     fillLight->color.setValue(0.9f, 0.9f, 1.0f);
     fillLight->on.setValue(true);
     m_root->addChild(fillLight);
@@ -229,12 +229,12 @@ void NavigationCube::setupGeometry() {
     float s = 0.5f; // half size of the cube
 
     std::vector<FaceDef> facesData = {
-        {"Front Face (+Z)", {SbVec3f(-s, -s, s), SbVec3f(s, -s, s), SbVec3f(s, s, s), SbVec3f(-s, s, s)}, "F"},
-        {"Back Face (-Z)",  {SbVec3f(s, -s, -s), SbVec3f(-s, -s, -s), SbVec3f(-s, s, -s), SbVec3f(s, s, -s)}, "B"},
-        {"Left Face (-X)",  {SbVec3f(-s, -s, -s), SbVec3f(-s, -s, s), SbVec3f(-s, s, s), SbVec3f(-s, s, -s)}, "L"},
-        {"Right Face (+X)", {SbVec3f(s, -s, s), SbVec3f(s, -s, -s), SbVec3f(s, s, -s), SbVec3f(s, s, s)}, "R"},
-        {"Top Face (+Y)",   {SbVec3f(-s, s, s), SbVec3f(s, s, s), SbVec3f(s, s, -s), SbVec3f(-s, s, -s)}, "T"},
-        {"Bottom Face (-Y)",{SbVec3f(-s, -s, -s), SbVec3f(s, -s, -s), SbVec3f(s, -s, s), SbVec3f(-s, -s, s)}, "D"}
+        {"Top Face (+Z)", {SbVec3f(-s, -s, s), SbVec3f(s, -s, s), SbVec3f(s, s, s), SbVec3f(-s, s, s)}, "T"},
+        {"Bottom Face (-Z)",  {SbVec3f(s, -s, -s), SbVec3f(-s, -s, -s), SbVec3f(-s, s, -s), SbVec3f(s, s, -s)}, "D"},
+        {"Right Face (-X)",  {SbVec3f(-s, -s, -s), SbVec3f(-s, -s, s), SbVec3f(-s, s, s), SbVec3f(-s, s, -s)}, "R"},
+        {"Left Face (+X)", {SbVec3f(s, -s, s), SbVec3f(s, -s, -s), SbVec3f(s, s, -s), SbVec3f(s, s, s)}, "L"},
+        {"Front Face (+Y)",   {SbVec3f(-s, s, s), SbVec3f(s, s, s), SbVec3f(s, s, -s), SbVec3f(-s, s, -s)}, "F"},
+        {"Back Face (-Y)",{SbVec3f(-s, -s, -s), SbVec3f(s, -s, -s), SbVec3f(s, -s, s), SbVec3f(-s, -s, s)}, "B"}
     };
     
     bool applyTextures = true; 
@@ -288,13 +288,13 @@ void NavigationCube::setupGeometry() {
     SoSeparator* edgeSep = new SoSeparator;
     SoDrawStyle* drawStyle = new SoDrawStyle;
     drawStyle->style = SoDrawStyle::LINES;
-    drawStyle->lineWidth = 1.0f;
+    drawStyle->lineWidth = 2.0f;
     edgeSep->addChild(drawStyle);
 
     SoMaterial* edgeMaterial = new SoMaterial;
-    edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.8f); // Blue edges
-    edgeMaterial->specularColor.setValue(0.5f, 0.5f, 1.0f);
-    edgeMaterial->shininess.setValue(0.7f);
+    edgeMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f); 
+    edgeMaterial->specularColor.setValue(1.0f, 1.0f, 1.0f);
+    edgeMaterial->shininess.setValue(0.2f);
     edgeSep->addChild(edgeMaterial);
     LOG_INF("NavigationCube::setupGeometry: Added edge material");
 
