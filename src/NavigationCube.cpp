@@ -1,4 +1,6 @@
 #include "NavigationCube.h"
+#include "DPIManager.h"
+#include "DPIAwareRendering.h"
 #include <algorithm>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoMaterial.h>
@@ -82,8 +84,9 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
     dc.SetBackground(wxColour(255, 255, 255, 255)); // Opaque white background
     dc.Clear();
 
-    int fontSize = static_cast<int>(16 * m_dpiScale);
-    wxFont font(wxFontInfo(fontSize).FaceName("Arial").Bold());
+    // Use DPI manager for high-quality font rendering
+    auto& dpiManager = DPIManager::getInstance();
+    wxFont font = dpiManager.getScaledFont(16, "Arial", true, false);
     dc.SetFont(font);
     dc.SetTextForeground(wxColour(255, 0, 0)); // Red text
 
@@ -217,8 +220,10 @@ void NavigationCube::setupGeometry() {
     });
     cubeAssembly->addChild(texCoords); // Global texture coordinates for faces
 
-    int texSize = m_dpiScale > 1.5f ? 128 : 64;
-    LOG_INF("NavigationCube::setupGeometry: Using texture size: " + std::to_string(texSize) + "x" + std::to_string(texSize));
+    // Use DPI manager for optimal texture size
+    auto& dpiManager = DPIManager::getInstance();
+    int texSize = dpiManager.getScaledTextureSize(128);
+    LOG_INF("NavigationCube::setupGeometry: Using DPI-aware texture size: " + std::to_string(texSize) + "x" + std::to_string(texSize));
 
     struct FaceDef {
         std::string description; // e.g., "Front Face"
@@ -244,23 +249,24 @@ void NavigationCube::setupGeometry() {
         faceSep->setName(SbName(faceDef.textureKey.c_str())); // Name separator for picking, e.g., "F"
 
         SoTexture2* texture = new SoTexture2;
-        std::string cacheKey = faceDef.textureKey + "_" + std::to_string(texSize);
         
-        std::shared_ptr<TextureData> cachedTexture;
-        auto it = s_textureCache.find(cacheKey);
-        if (it != s_textureCache.end()) {
-            cachedTexture = it->second;
-            texture->image.setValue(SbVec2s(cachedTexture->width, cachedTexture->height), 4, cachedTexture->data);
-            LOG_DBG("NavigationCube::setupGeometry: Using cached texture for face: " + faceDef.textureKey);
-        } else {
-            unsigned char* imageData = new unsigned char[texSize * texSize * 4];
-            if (!generateFaceTexture(faceDef.textureKey, imageData, texSize, texSize)) {
-                LOG_ERR("NavigationCube::setupGeometry: Failed to generate texture for face: " + faceDef.textureKey);
-                memset(imageData, 0, texSize * texSize * 4); // Fallback to transparent black
+        // Use DPI manager for high-quality texture generation and caching
+        auto textureInfo = dpiManager.getOrCreateScaledTexture(
+            faceDef.textureKey, 
+            128, // base texture size
+            [&](unsigned char* data, int w, int h) -> bool {
+                return generateFaceTexture(faceDef.textureKey, data, w, h);
             }
-            texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
-            s_textureCache[cacheKey] = std::make_shared<TextureData>(imageData, texSize, texSize);
-            LOG_INF("NavigationCube::setupGeometry: Generated and cached texture for face: " + faceDef.textureKey);
+        );
+        
+        if (textureInfo) {
+            texture->image.setValue(SbVec2s(textureInfo->width, textureInfo->height), 
+                                  textureInfo->channels, textureInfo->data.get());
+            LOG_DBG("NavigationCube::setupGeometry: Using DPI-aware texture for face: " + faceDef.textureKey +
+                   " (" + std::to_string(textureInfo->width) + "x" + std::to_string(textureInfo->height) + ")");
+        } else {
+            LOG_ERR("NavigationCube::setupGeometry: Failed to generate DPI-aware texture for face: " + faceDef.textureKey);
+            continue;
         }
         // texture->setName(faceDef.textureKey.c_str()); // Texture node itself can also be named if needed
         texture->model = SoTexture2::MODULATE;
@@ -286,9 +292,8 @@ void NavigationCube::setupGeometry() {
 
     // Edges (remain as before, as a separate SoCube with LINES draw style)
     SoSeparator* edgeSep = new SoSeparator;
-    SoDrawStyle* drawStyle = new SoDrawStyle;
+    SoDrawStyle* drawStyle = DPIAwareRendering::createDPIAwareGeometryStyle(2.0f, false);
     drawStyle->style = SoDrawStyle::LINES;
-    drawStyle->lineWidth = 2.0f;
     edgeSep->addChild(drawStyle);
 
     SoMaterial* edgeMaterial = new SoMaterial;

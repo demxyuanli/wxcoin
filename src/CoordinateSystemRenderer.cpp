@@ -1,4 +1,5 @@
 #include "CoordinateSystemRenderer.h"
+#include "DPIAwareRendering.h"
 #include "Logger.h"
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoDrawStyle.h>
@@ -37,10 +38,8 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     hints->shapeType = SoShapeHints::SOLID;
     coordSystemSep->addChild(hints);
 
-    SoDrawStyle* globalStyle = new SoDrawStyle;
+    SoDrawStyle* globalStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f);
     globalStyle->linePattern = 0xFFFF;
-    globalStyle->lineWidth = 1.0f;
-    globalStyle->pointSize = 1.0f;
     coordSystemSep->addChild(globalStyle);
 
     SoSeparator* xPlaneSep = new SoSeparator;
@@ -70,9 +69,8 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     xLineMaterial->transparency.setValue(0.0f);
     xLineSep->addChild(xLineMaterial);
 
-    SoDrawStyle* xLineStyle = new SoDrawStyle;
-    xLineStyle->style = SoDrawStyle::LINES;
-    xLineStyle->lineWidth = 1.0f;
+            SoDrawStyle* xLineStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f);
+        xLineStyle->style = SoDrawStyle::LINES;
     xLineSep->addChild(xLineStyle);
 
     SoIndexedLineSet* xLines = new SoIndexedLineSet;
@@ -113,9 +111,8 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     yLineMaterial->transparency.setValue(0.0f);
     yLineSep->addChild(yLineMaterial);
 
-    SoDrawStyle* yLineStyle = new SoDrawStyle;
-    yLineStyle->style = SoDrawStyle::LINES;
-    yLineStyle->lineWidth = 1.0f;
+            SoDrawStyle* yLineStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f);
+        yLineStyle->style = SoDrawStyle::LINES;
     yLineSep->addChild(yLineStyle);
 
     SoIndexedLineSet* yLines = new SoIndexedLineSet;
@@ -157,9 +154,8 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     zLineMaterial->transparency.setValue(0.0f);
     zLineSep->addChild(zLineMaterial);
 
-    SoDrawStyle* zLineStyle = new SoDrawStyle;
-    zLineStyle->style = SoDrawStyle::LINES;
-    zLineStyle->lineWidth = 1.0f;
+            SoDrawStyle* zLineStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f);
+        zLineStyle->style = SoDrawStyle::LINES;
     zLineSep->addChild(zLineStyle);
 
     SoIndexedLineSet* zLines = new SoIndexedLineSet;
@@ -180,8 +176,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     xAxisMaterial->transparency.setValue(0.0f);
     xAxisSep->addChild(xAxisMaterial);
 
-    SoDrawStyle* xAxisStyle = new SoDrawStyle;
-    xAxisStyle->lineWidth = 1.0f; 
+    SoDrawStyle* xAxisStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f); 
     xAxisSep->addChild(xAxisStyle);
 
     SoCoordinate3* xAxisCoords = new SoCoordinate3;
@@ -200,8 +195,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     yAxisMaterial->transparency.setValue(0.0f);
     yAxisSep->addChild(yAxisMaterial);
 
-    SoDrawStyle* yAxisStyle = new SoDrawStyle;
-    yAxisStyle->lineWidth = 1.0f; 
+    SoDrawStyle* yAxisStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f); 
     yAxisSep->addChild(yAxisStyle);
 
     SoCoordinate3* yAxisCoords = new SoCoordinate3;
@@ -220,8 +214,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     zAxisMaterial->transparency.setValue(0.0f);
     zAxisSep->addChild(zAxisMaterial);
 
-    SoDrawStyle* zAxisStyle = new SoDrawStyle;
-    zAxisStyle->lineWidth = 1.0f; 
+    SoDrawStyle* zAxisStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f); 
     zAxisSep->addChild(zAxisStyle);
 
     SoCoordinate3* zAxisCoords = new SoCoordinate3;

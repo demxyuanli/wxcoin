@@ -1,4 +1,5 @@
 #include "GeometryObject.h"
+#include "DPIAwareRendering.h"
 #include "Logger.h"
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoSphere.h>
@@ -102,9 +103,8 @@ Sphere::Sphere(float radius)
 
     // Add blue outline
     SoSeparator* edgeSep = new SoSeparator;
-    SoDrawStyle* drawStyle = new SoDrawStyle;
+    SoDrawStyle* drawStyle = DPIAwareRendering::createDPIAwareGeometryStyle(1.0f, false);
     drawStyle->style = SoDrawStyle::LINES;
-    drawStyle->lineWidth = 1.0f;
     edgeSep->addChild(drawStyle);
 
     SoMaterial* edgeMaterial = new SoMaterial;
@@ -136,9 +136,8 @@ Cylinder::Cylinder(float radius, float height)
 
     // Add blue outline
     SoSeparator* edgeSep = new SoSeparator;
-    SoDrawStyle* drawStyle = new SoDrawStyle;
+    SoDrawStyle* drawStyle = DPIAwareRendering::createDPIAwareGeometryStyle(1.0f, false);
     drawStyle->style = SoDrawStyle::LINES;
-    drawStyle->lineWidth = 1.0f;
     edgeSep->addChild(drawStyle);
 
     SoMaterial* edgeMaterial = new SoMaterial;
@@ -171,9 +170,8 @@ Cone::Cone(float bottomRadius, float height)
 
     // Add blue outline
     SoSeparator* edgeSep = new SoSeparator;
-    SoDrawStyle* drawStyle = new SoDrawStyle;
+    SoDrawStyle* drawStyle = DPIAwareRendering::createDPIAwareGeometryStyle(1.0f, false);
     drawStyle->style = SoDrawStyle::LINES;
-    drawStyle->lineWidth = 1.0f;
     edgeSep->addChild(drawStyle);
 
     SoMaterial* edgeMaterial = new SoMaterial;

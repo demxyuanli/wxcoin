@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <Inventor/nodes/SoCamera.h>
 #include "NavigationCube.h"
+#include "DPIManager.h"
 
 class SceneManager;
 class InputManager;
@@ -38,11 +39,16 @@ public:
 
     SoCamera* getCamera() const;
     void resetView();
+    
+    // High-DPI support methods
+    void updateDPISettings();
+    float getDPIScale() const { return m_dpiScale; }
+    void applyDPIScalingToUI();
 
 private:
     // Layout management for navigation cube and mini scene
     struct Layout {
-        int x{ 10 }, y{ 10 }, size{ 200 }; // These will be kept as logical coordinates and size
+        int x{ 20 }, y{ 20 }, size{ 200 }; // These will be kept as logical coordinates and size
 
         // Parameters:
         // newX_logical, newY_logical: Desired logical top-left position

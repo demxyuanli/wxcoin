@@ -1,6 +1,7 @@
 #include "PickingAidManager.h"
 #include "SceneManager.h"
 #include "Canvas.h"
+#include "DPIAwareRendering.h"
 #include "Logger.h"
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDrawStyle.h>
@@ -35,8 +36,7 @@ void PickingAidManager::createPickingAidLines() {
     m_pickingAidTransform = new SoTransform;
     m_pickingAidSeparator->addChild(m_pickingAidTransform);
 
-    SoDrawStyle* lineStyle = new SoDrawStyle;
-    lineStyle->lineWidth.setValue(1.0f);
+    SoDrawStyle* lineStyle = DPIAwareRendering::createDPIAwareGeometryStyle(1.0f, false);
     lineStyle->linePattern.setValue(0xFFFF);
     m_pickingAidSeparator->addChild(lineStyle);
 

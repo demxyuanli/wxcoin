@@ -41,6 +41,8 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/CreateCommand.cpp
     ${CMAKE_SOURCE_DIR}/src/Logger.cpp
     ${CMAKE_SOURCE_DIR}/src/PositionDialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/DPIManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/DPIAwareRendering.cpp
 )
 
 # 创建可执行文件

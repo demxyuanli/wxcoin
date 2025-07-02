@@ -3,6 +3,7 @@
 #include "InputManager.h"
 #include "NavigationCube.h"
 #include "ObjectTreePanel.h"
+#include "DPIManager.h"
 #include "Logger.h"
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
@@ -60,6 +61,9 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 
         m_dpiScale = GetContentScaleFactor();
         LOG_INF("Canvas::Canvas: DPI scale factor: " + std::to_string(m_dpiScale));
+        
+        // Initialize DPI manager with current scale
+        DPIManager::getInstance().updateDPIScale(m_dpiScale);
 
         m_sceneManager = std::make_unique<SceneManager>(this);
         m_inputManager = std::make_unique<InputManager>(this);
@@ -80,7 +84,7 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 
         // Initialize layout positions (set navigation cube to top-right)
         if (clientSize.x > 0 && clientSize.y > 0) {
-            m_cubeLayout.size = 120; // Default cube size
+            m_cubeLayout.size = 200; // Default cube size
             m_cubeLayout.update(clientSize.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
                                 clientSize.y - m_cubeLayout.size - m_marginy, // Top edge - margin 
                 m_cubeLayout.size, clientSize, m_dpiScale);
@@ -218,7 +222,7 @@ void Canvas::onSize(wxSizeEvent& event) {
     LOG_INF("Canvas::onSize: Handling size event: " + std::to_string(size.x) + "x" + std::to_string(size.y));
 
     if (size.x > 0 && size.y > 0 && m_glContext && SetCurrent(*m_glContext)) {
-        m_dpiScale = GetContentScaleFactor();
+        updateDPISettings();
         // Update cube layout to maintain top-right position
         m_cubeLayout.update(size.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
                             size.y - m_cubeLayout.size - m_marginx, // Top edge - margin
@@ -531,4 +535,44 @@ void Canvas::ShowNavigationCubeConfigDialog() {
                 std::to_string(newX) + ", y=" + std::to_string(newY) + ", size=" + std::to_string(newSize) +
                 ", viewportSize=" + std::to_string(newViewportSize));
     }
+}
+
+void Canvas::updateDPISettings() {
+    float newDpiScale = GetContentScaleFactor();
+    if (std::abs(m_dpiScale - newDpiScale) > 0.01f) {
+        LOG_INF("Canvas::updateDPISettings: DPI scale changed from " + 
+                std::to_string(m_dpiScale) + " to " + std::to_string(newDpiScale));
+        
+        m_dpiScale = newDpiScale;
+        DPIManager::getInstance().updateDPIScale(m_dpiScale);
+        
+        // Apply DPI scaling to UI elements
+        applyDPIScalingToUI();
+    }
+}
+
+void Canvas::applyDPIScalingToUI() {
+    auto& dpiManager = DPIManager::getInstance();
+    
+    // Update canvas font
+    wxFont currentFont = GetFont();
+    if (currentFont.IsOk()) {
+        wxFont scaledFont = dpiManager.getScaledFont(currentFont);
+        SetFont(scaledFont);
+        LOG_DBG("Canvas::applyDPIScalingToUI: Updated canvas font size to " + 
+                std::to_string(scaledFont.GetPointSize()) + " points");
+    }
+    
+    // Update margin values with DPI scaling
+    m_marginx = dpiManager.getScaledSize(20);
+    m_marginy = dpiManager.getScaledSize(20);
+    
+    // Force refresh of navigation cube if present
+    if (m_navCube) {
+        // The navigation cube will automatically use the DPI manager for texture generation
+        LOG_DBG("Canvas::applyDPIScalingToUI: Navigation cube will regenerate textures at new DPI");
+    }
+    
+    LOG_INF("Canvas::applyDPIScalingToUI: Applied DPI scaling with factor " + 
+            std::to_string(m_dpiScale));
 }
