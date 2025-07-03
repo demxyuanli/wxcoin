@@ -1,82 +1,108 @@
-#cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake" -DwxWidgets_ROOT_DIR="D:/repos/vcpkg/installed/x64-windows"
+# wxCoin 3D Application - Modular CMake Build System
+# Main CMakeLists.txt for modular project structure
 
 cmake_minimum_required(VERSION 3.20)
 project(FreeCADNavigation)
 
-# 设置 C++ 标准
+# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 设置 Vcpkg 工具链文件
+# Set Vcpkg toolchain file
 set(CMAKE_TOOLCHAIN_FILE "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
 
-# 查找依赖
+# Include module utilities
+include(cmake/ModuleUtils.cmake)
+
+# Find required dependencies
 find_package(wxWidgets REQUIRED COMPONENTS core base gl aui propgrid)
 find_package(Coin REQUIRED)
 
-# 包含 wxWidgets
+# Include wxWidgets
 include(${wxWidgets_USE_FILE})
 
-# 源文件
-set(SOURCES
-    ${CMAKE_SOURCE_DIR}/src/Application.cpp
-    ${CMAKE_SOURCE_DIR}/src/Canvas.cpp
-    ${CMAKE_SOURCE_DIR}/src/PickingAidManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/GeometryFactory.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationController.cpp
-    ${CMAKE_SOURCE_DIR}/src/InputManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/SceneManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/Command.cpp
-    ${CMAKE_SOURCE_DIR}/src/Globals.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationCube.cpp
-    ${CMAKE_SOURCE_DIR}/src/GeometryObject.cpp
-    ${CMAKE_SOURCE_DIR}/src/MainFrame.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationCubeConfigDialog.cpp
-    ${CMAKE_SOURCE_DIR}/src/MouseHandler.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationStyle.cpp
-    ${CMAKE_SOURCE_DIR}/src/ObjectTreePanel.cpp
-    ${CMAKE_SOURCE_DIR}/src/PropertyPanel.cpp
-    ${CMAKE_SOURCE_DIR}/src/CreateCommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/Logger.cpp
-    ${CMAKE_SOURCE_DIR}/src/PositionDialog.cpp
-    ${CMAKE_SOURCE_DIR}/src/DPIManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/DPIAwareRendering.cpp
+# Validate build configuration
+validate_build_config()
+
+# Build configuration options
+option(ENABLE_HIGH_DPI "Enable high DPI support" ON)
+option(ENABLE_DEBUG_LOGS "Enable debug logging" ON)
+
+# Set output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# Add module subdirectories in dependency order
+message(STATUS "")
+message(STATUS "=== Building Modules ===")
+
+# Core module (no dependencies)
+add_subdirectory(modules/core)
+
+# Rendering module (depends on core)
+add_subdirectory(modules/rendering)
+
+# Geometry module (depends on core, rendering)
+add_subdirectory(modules/geometry)
+
+# Input module (depends on core, rendering)
+add_subdirectory(modules/input)
+
+# Navigation module (depends on core, rendering, input)
+add_subdirectory(modules/navigation)
+
+# Commands module (depends on core, geometry)
+add_subdirectory(modules/commands)
+
+# UI module (depends on all other modules)
+add_subdirectory(modules/ui)
+
+message(STATUS "=== Modules Built ===")
+message(STATUS "")
+
+# Verify all modules were built correctly
+verify_module_dependencies()
+
+# Generate dependency graph
+generate_dependency_graph()
+
+# Main executable
+add_executable(${PROJECT_NAME} WIN32 main.cpp)
+
+# Set target properties
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    OUTPUT_NAME "wxcoin"
+    DEBUG_POSTFIX "_d"
 )
 
-# 创建可执行文件
-add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
-
-# 设置头文件目录
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_SOURCE_DIR}/include
-    ${wxWidgets_INCLUDE_DIRS}
-    ${Coin3D_INCLUDE_DIRS}
-    Coin::Coin
-)
-
-# 添加明确的库路径
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    link_directories("D:/repos/vcpkg/installed/x64-windows/debug/lib")
-else()
-    link_directories("D:/repos/vcpkg/installed/x64-windows/lib")
-endif()
-
-# 链接库
+# Link all modules to the main executable
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    wxcoin_ui                 # UI module includes all other dependencies
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )
 
-# Windows 下启用 Unicode 支持
+# Include directories for main executable
+target_include_directories(${PROJECT_NAME} PRIVATE
+    modules/core/include
+    modules/rendering/include
+    modules/geometry/include
+    modules/input/include
+    modules/navigation/include
+    modules/commands/include
+    modules/ui/include
+    ${wxWidgets_INCLUDE_DIRS}
+    ${Coin3D_INCLUDE_DIRS}
+)
+
+# Windows-specific settings
 if(WIN32)
-    add_definitions(-DUNICODE -D_UNICODE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
 endif()
 
-# MSVC 特定设置
+# MSVC-specific settings
 if(MSVC)
-    # 强制在 Debug 模式下使用 /ZI 支持"编辑并继续"
     target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:/ZI /Od>)
     target_compile_options(${PROJECT_NAME} PRIVATE /std:c++17)
     set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -84,5 +110,14 @@ if(MSVC)
     )
 endif()
 
-# 调试依赖路径
-message(STATUS "Project include dir: ${CMAKE_SOURCE_DIR}/include")
+# Build summary
+message(STATUS "")
+message(STATUS "=== Build Configuration Summary ===")
+message(STATUS "Project: ${PROJECT_NAME}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "High DPI Support: ${ENABLE_HIGH_DPI}")
+message(STATUS "Debug Logs: ${ENABLE_DEBUG_LOGS}")
+message(STATUS "Output Directory: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+message(STATUS "=====================================")
+message(STATUS "") 
