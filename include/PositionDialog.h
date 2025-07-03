@@ -5,6 +5,7 @@
 #include <wx/button.h>
 #include <wx/stattext.h>
 #include <wx/sizer.h>
+#include <wx/checkbox.h>
 #include <Inventor/SbVec3f.h>
 
 class PositionDialog : public wxDialog
@@ -20,6 +21,8 @@ private:
     wxTextCtrl* m_xTextCtrl;
     wxTextCtrl* m_yTextCtrl;
     wxTextCtrl* m_zTextCtrl;
+    wxTextCtrl* m_referenceZTextCtrl;
+    wxCheckBox* m_showGridCheckBox;
     wxButton* m_pickButton;
     wxButton* m_okButton;
     wxButton* m_cancelButton;
@@ -27,6 +30,8 @@ private:
     void OnPickButton(wxCommandEvent& event);
     void OnOkButton(wxCommandEvent& event);
     void OnCancelButton(wxCommandEvent& event);
+    void OnReferenceZChanged(wxCommandEvent& event);
+    void OnShowGridChanged(wxCommandEvent& event);
 
     DECLARE_EVENT_TABLE()
 };

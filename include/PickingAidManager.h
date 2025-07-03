@@ -15,6 +15,12 @@ public:
     void createPickingAidLines();
     void showPickingAidLines(const SbVec3f& position);
     void hidePickingAidLines();
+    
+    // Enhanced picking methods
+    void setReferenceZ(float z) { m_referenceZ = z; }
+    float getReferenceZ() const { return m_referenceZ; }
+    void showReferenceGrid(bool show);
+    void updatePickingAidColor(const SbVec3f& color);
 
 private:
     SceneManager* m_sceneManager;
@@ -22,4 +28,11 @@ private:
     SoSeparator* m_pickingAidSeparator;
     SoTransform* m_pickingAidTransform;
     bool m_pickingAidVisible;
+    
+    // Enhanced picking support
+    float m_referenceZ;
+    SoSeparator* m_referenceGridSeparator;
+    bool m_referenceGridVisible;
+    
+    void createReferenceGrid();
 };

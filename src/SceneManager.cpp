@@ -8,6 +8,8 @@
 #include <Inventor/nodes/SoEnvironment.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
+#include <Inventor/actions/SoRayPickAction.h>
+#include <Inventor/SoPickedPoint.h>
 #include <Inventor/SbLinear.h>
 #include <GL/gl.h>
 
@@ -295,22 +297,68 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
         return false;
     }
 
+    // Convert screen coordinates to normalized device coordinates
     float x = static_cast<float>(screenPos.x) / size.GetWidth();
     float y = 1.0f - static_cast<float>(screenPos.y) / size.GetHeight();
+
+    // For SoRayPickAction, we need to use the original screen coordinates
+    // but with Y-axis flipped to match OpenGL/OpenInventor coordinate system
+    int pickY = size.GetHeight() - screenPos.y;
 
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     SbVec2f normalizedPos(x, y);
     SbLine lineFromCamera;
     m_camera->getViewVolume().projectPointToLine(normalizedPos, lineFromCamera);
 
-    SbPlane targetPlane(SbVec3f(0, 0, 1), 0.0f);
+    // First, try to pick objects in the scene using SoRayPickAction
+    SoRayPickAction pickAction(viewport);
+    pickAction.setPoint(SbVec2s(screenPos.x, pickY));  // Use flipped Y coordinate
+    pickAction.setRadius(2); // Small radius for picking
+    pickAction.apply(m_sceneRoot);
 
-    if (targetPlane.intersect(lineFromCamera, worldPos)) {
+    SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
+    if (pickedPoint) {
+        worldPos = pickedPoint->getPoint();
+        LOG_INF("Successfully picked 3D point from scene geometry");
         return true;
     }
-    else {
-        LOG_WAR("Ray did not intersect the target plane.");
-        worldPos = lineFromCamera.getPosition() + lineFromCamera.getDirection() * m_camera->focalDistance.getValue();
-        return false;
+
+    // If no geometry was picked, try intersecting with the current reference plane
+    float referenceZ = m_pickingAidManager ? m_pickingAidManager->getReferenceZ() : 0.0f;
+    SbPlane referencePlane(SbVec3f(0, 0, 1), referenceZ);
+    if (referencePlane.intersect(lineFromCamera, worldPos)) {
+        LOG_INF("Ray intersected reference plane at Z=" + std::to_string(referenceZ));
+        return true;
     }
+
+    // If reference plane intersection fails, try other common planes
+    // XY plane at different Z levels
+    float zLevels[] = { 0.0f, 1.0f, -1.0f, 2.0f, -2.0f, 5.0f, -5.0f };
+    for (float z : zLevels) {
+        if (z == referenceZ) continue; // Skip already tested reference plane
+        SbPlane plane(SbVec3f(0, 0, 1), z);
+        if (plane.intersect(lineFromCamera, worldPos)) {
+            LOG_INF("Ray intersected plane at Z=" + std::to_string(z));
+            return true;
+        }
+    }
+
+    // XZ plane (Y=0)
+    SbPlane xzPlane(SbVec3f(0, 1, 0), 0.0f);
+    if (xzPlane.intersect(lineFromCamera, worldPos)) {
+        LOG_INF("Ray intersected XZ plane (Y=0)");
+        return true;
+    }
+
+    // YZ plane (X=0)
+    SbPlane yzPlane(SbVec3f(1, 0, 0), 0.0f);
+    if (yzPlane.intersect(lineFromCamera, worldPos)) {
+        LOG_INF("Ray intersected YZ plane (X=0)");
+        return true;
+    }
+
+    // As a last resort, project to a point at the focal distance
+    LOG_WAR("No plane intersection found, using focal distance projection");
+    worldPos = lineFromCamera.getPosition() + lineFromCamera.getDirection() * m_camera->focalDistance.getValue();
+    return true;
 }

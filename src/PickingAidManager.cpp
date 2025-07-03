@@ -3,6 +3,7 @@
 #include "Canvas.h"
 #include "DPIAwareRendering.h"
 #include "Logger.h"
+#include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoCoordinate3.h>
@@ -10,6 +11,7 @@
 #include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoText2.h>
+#include <cstdio>
 
 PickingAidManager::PickingAidManager(SceneManager* sceneManager, Canvas* canvas)
     : m_sceneManager(sceneManager)
@@ -17,14 +19,21 @@ PickingAidManager::PickingAidManager(SceneManager* sceneManager, Canvas* canvas)
     , m_pickingAidSeparator(nullptr)
     , m_pickingAidTransform(nullptr)
     , m_pickingAidVisible(false)
+    , m_referenceZ(0.0f)
+    , m_referenceGridSeparator(nullptr)
+    , m_referenceGridVisible(false)
 {
     LOG_INF("PickingAidManager initializing");
     createPickingAidLines();
+    createReferenceGrid();
 }
 
 PickingAidManager::~PickingAidManager() {
     if (m_pickingAidSeparator) {
         m_pickingAidSeparator->unref();
+    }
+    if (m_referenceGridSeparator) {
+        m_referenceGridSeparator->unref();
     }
     LOG_INF("PickingAidManager destroying");
 }
@@ -137,5 +146,133 @@ void PickingAidManager::hidePickingAidLines() {
     if (!m_pickingAidSeparator || !m_pickingAidVisible) return;
     m_sceneManager->getObjectRoot()->removeChild(m_pickingAidSeparator);
     m_pickingAidVisible = false;
+    m_canvas->Refresh(true);
+}
+
+void PickingAidManager::createReferenceGrid() {
+    m_referenceGridSeparator = new SoSeparator;
+    m_referenceGridSeparator->ref();
+    
+    // Create grid lines with more visible styling
+    SoDrawStyle* gridStyle = DPIAwareRendering::createDPIAwareGeometryStyle(2.0f, false);  // Increased line width
+    gridStyle->linePattern.setValue(0xFFFF); // Solid line pattern instead of dashed
+    m_referenceGridSeparator->addChild(gridStyle);
+    
+    SoMaterial* gridMaterial = new SoMaterial;
+    gridMaterial->diffuseColor.setValue(0.2f, 0.8f, 1.0f);  // Bright cyan color
+    gridMaterial->transparency.setValue(0.3f);  // Less transparent for better visibility
+    gridMaterial->emissiveColor.setValue(0.1f, 0.4f, 0.5f);  // Add slight glow
+    m_referenceGridSeparator->addChild(gridMaterial);
+    
+    // Create grid coordinates with finer spacing for better detail
+    SoCoordinate3* gridCoords = new SoCoordinate3;
+    int coordIndex = 0;
+    
+    // Create major grid lines in X direction (every 5 units)
+    for (float y = -10.0f; y <= 10.0f; y += 5.0f) {
+        gridCoords->point.set1Value(coordIndex++, SbVec3f(-10.0f, y, 0.0f));
+        gridCoords->point.set1Value(coordIndex++, SbVec3f(10.0f, y, 0.0f));
+    }
+    
+    // Create major grid lines in Y direction (every 5 units)
+    for (float x = -10.0f; x <= 10.0f; x += 5.0f) {
+        gridCoords->point.set1Value(coordIndex++, SbVec3f(x, -10.0f, 0.0f));
+        gridCoords->point.set1Value(coordIndex++, SbVec3f(x, 10.0f, 0.0f));
+    }
+    
+    m_referenceGridSeparator->addChild(gridCoords);
+    
+    // Create line set for the major grid
+    SoLineSet* gridLines = new SoLineSet;
+    int majorLines = 10; // 5 lines in X + 5 lines in Y
+    for (int i = 0; i < majorLines; i++) {
+        gridLines->numVertices.set1Value(i, 2);
+    }
+    m_referenceGridSeparator->addChild(gridLines);
+    
+    // Add minor grid lines with different styling
+    SoSeparator* minorGridSep = new SoSeparator;
+    
+    SoDrawStyle* minorGridStyle = DPIAwareRendering::createDPIAwareGeometryStyle(1.0f, false);
+    minorGridStyle->linePattern.setValue(0xCCCC); // Dotted pattern for minor lines
+    minorGridSep->addChild(minorGridStyle);
+    
+    SoMaterial* minorGridMaterial = new SoMaterial;
+    minorGridMaterial->diffuseColor.setValue(0.1f, 0.6f, 0.8f);  // Slightly darker cyan
+    minorGridMaterial->transparency.setValue(0.5f);  // More transparent for minor lines
+    minorGridSep->addChild(minorGridMaterial);
+    
+    // Create minor grid coordinates (every 1 unit)
+    SoCoordinate3* minorGridCoords = new SoCoordinate3;
+    int minorCoordIndex = 0;
+    
+    // Minor lines in X direction
+    for (float y = -10.0f; y <= 10.0f; y += 1.0f) {
+        // Skip major grid positions
+        if (static_cast<int>(y) % 5 != 0) {
+            minorGridCoords->point.set1Value(minorCoordIndex++, SbVec3f(-10.0f, y, 0.0f));
+            minorGridCoords->point.set1Value(minorCoordIndex++, SbVec3f(10.0f, y, 0.0f));
+        }
+    }
+    
+    // Minor lines in Y direction
+    for (float x = -10.0f; x <= 10.0f; x += 1.0f) {
+        // Skip major grid positions
+        if (static_cast<int>(x) % 5 != 0) {
+            minorGridCoords->point.set1Value(minorCoordIndex++, SbVec3f(x, -10.0f, 0.0f));
+            minorGridCoords->point.set1Value(minorCoordIndex++, SbVec3f(x, 10.0f, 0.0f));
+        }
+    }
+    
+    minorGridSep->addChild(minorGridCoords);
+    
+    // Create line set for minor grid
+    SoLineSet* minorGridLines = new SoLineSet;
+    int minorLineCount = minorCoordIndex / 2;
+    for (int i = 0; i < minorLineCount; i++) {
+        minorGridLines->numVertices.set1Value(i, 2);
+    }
+    minorGridSep->addChild(minorGridLines);
+    
+    m_referenceGridSeparator->addChild(minorGridSep);
+}
+
+void PickingAidManager::showReferenceGrid(bool show) {
+    if (!m_referenceGridSeparator) return;
+    
+    if (show && !m_referenceGridVisible) {
+        // Update grid Z position
+        SoTransform* gridTransform = new SoTransform;
+        gridTransform->translation.setValue(0.0f, 0.0f, m_referenceZ);
+        m_referenceGridSeparator->insertChild(gridTransform, 0);
+        
+        m_sceneManager->getObjectRoot()->addChild(m_referenceGridSeparator);
+        m_referenceGridVisible = true;
+        LOG_INF("Reference grid shown at Z=" + std::to_string(m_referenceZ));
+    } else if (!show && m_referenceGridVisible) {
+        m_sceneManager->getObjectRoot()->removeChild(m_referenceGridSeparator);
+        m_referenceGridVisible = false;
+        LOG_INF("Reference grid hidden");
+    }
+    
+    m_canvas->Refresh(true);
+}
+
+void PickingAidManager::updatePickingAidColor(const SbVec3f& color) {
+    if (!m_pickingAidSeparator) return;
+    
+    // Update material colors for all line separators
+    for (int i = 0; i < m_pickingAidSeparator->getNumChildren(); i++) {
+        SoSeparator* lineSep = dynamic_cast<SoSeparator*>(m_pickingAidSeparator->getChild(i));
+        if (lineSep) {
+            for (int j = 0; j < lineSep->getNumChildren(); j++) {
+                SoMaterial* material = dynamic_cast<SoMaterial*>(lineSep->getChild(j));
+                if (material) {
+                    material->diffuseColor.setValue(color);
+                }
+            }
+        }
+    }
+    
     m_canvas->Refresh(true);
 }

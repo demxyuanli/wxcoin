@@ -12,3 +12,5 @@ _deps
 CMakeUserPresets.json
 /build
 /include/final_review_gate.py
+/final_review_gate.py
+/include.code-workspace

@@ -14,13 +14,17 @@
 
 // Custom event ID
 enum {
-    ID_PICK_BUTTON = wxID_HIGHEST + 1000
+    ID_PICK_BUTTON = wxID_HIGHEST + 1000,
+    ID_REFERENCE_Z_TEXT,
+    ID_SHOW_GRID_CHECK
 };
 
 BEGIN_EVENT_TABLE(PositionDialog, wxDialog)
 EVT_BUTTON(ID_PICK_BUTTON, PositionDialog::OnPickButton)
 EVT_BUTTON(wxID_OK, PositionDialog::OnOkButton)
 EVT_BUTTON(wxID_CANCEL, PositionDialog::OnCancelButton)
+EVT_TEXT(ID_REFERENCE_Z_TEXT, PositionDialog::OnReferenceZChanged)
+EVT_CHECKBOX(ID_SHOW_GRID_CHECK, PositionDialog::OnShowGridChanged)
 END_EVENT_TABLE()
 
 PositionDialog::PositionDialog(wxWindow* parent, const wxString& title)
@@ -32,7 +36,7 @@ PositionDialog::PositionDialog(wxWindow* parent, const wxString& title)
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
     // Create coordinate input area
-    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(3, 2, 5, 10);
+    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(4, 2, 5, 10);
 
     // X coordinate
     gridSizer->Add(new wxStaticText(this, wxID_ANY, "X:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
@@ -49,7 +53,18 @@ PositionDialog::PositionDialog(wxWindow* parent, const wxString& title)
     m_zTextCtrl = new wxTextCtrl(this, wxID_ANY, "0.0");
     gridSizer->Add(m_zTextCtrl, 0, wxEXPAND);
 
+    // Reference Z coordinate for picking
+    gridSizer->Add(new wxStaticText(this, wxID_ANY, "Reference Z:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+    m_referenceZTextCtrl = new wxTextCtrl(this, ID_REFERENCE_Z_TEXT, "0.0");
+    m_referenceZTextCtrl->SetToolTip("Z coordinate plane for mouse picking");
+    gridSizer->Add(m_referenceZTextCtrl, 0, wxEXPAND);
+
     mainSizer->Add(gridSizer, 0, wxEXPAND | wxALL, 10);
+
+    // Grid display checkbox
+    m_showGridCheckBox = new wxCheckBox(this, ID_SHOW_GRID_CHECK, "Show Reference Grid");
+    m_showGridCheckBox->SetToolTip("Display reference grid at the specified Z coordinate");
+    mainSizer->Add(m_showGridCheckBox, 0, wxALIGN_CENTER | wxALL, 5);
 
     // Coordinate pick button
     m_pickButton = new wxButton(this, ID_PICK_BUTTON, "Pick Coordinates");
@@ -189,5 +204,43 @@ void PositionDialog::OnCancelButton(wxCommandEvent& event) {
     }
 
     Hide();
+    event.Skip();
+}
+
+void PositionDialog::OnReferenceZChanged(wxCommandEvent& event) {
+    double referenceZ;
+    if (m_referenceZTextCtrl->GetValue().ToDouble(&referenceZ)) {
+        wxWindow* parentWindow = GetParent();
+        if (parentWindow) {
+            wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", parentWindow);
+            if (canvasWindow) {
+                Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
+                if (canvas) {
+                    canvas->getSceneManager()->getPickingAidManager()->setReferenceZ(static_cast<float>(referenceZ));
+                    LOG_INF("Reference Z set to: " + std::to_string(referenceZ));
+                }
+            }
+        }
+    }
+    event.Skip();
+}
+
+void PositionDialog::OnShowGridChanged(wxCommandEvent& event) {
+    bool showGrid = m_showGridCheckBox->GetValue();
+    
+    // Update reference Z first
+    OnReferenceZChanged(event);
+    
+    wxWindow* parentWindow = GetParent();
+    if (parentWindow) {
+        wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", parentWindow);
+        if (canvasWindow) {
+            Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
+            if (canvas) {
+                canvas->getSceneManager()->getPickingAidManager()->showReferenceGrid(showGrid);
+                LOG_INF("Reference grid display: " + std::string(showGrid ? "enabled" : "disabled"));
+            }
+        }
+    }
     event.Skip();
 }
