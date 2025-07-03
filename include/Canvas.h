@@ -4,7 +4,7 @@
 #include <memory>
 #include <stdexcept>
 #include <Inventor/nodes/SoCamera.h>
-#include "NavigationCube.h"
+#include "CuteNavCube.h"
 #include "DPIManager.h"
 
 class SceneManager;
@@ -25,16 +25,17 @@ public:
     InputManager* getInputManager() const { return m_inputManager.get(); }
     ObjectTreePanel* getObjectTreePanel() const { return m_objectTreePanel; }
     CommandManager* getCommandManager() const { return m_commandManager; }
+    // Navigation cube methods (now using CuteNavCube)
     void setNavigationCubeEnabled(bool enabled);
     bool isNavigationCubeEnabled() const;
+    void SetNavigationCubeRect(int x, int y, int size);
+    void SyncNavigationCubeCamera();
 
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
-    void SetNavigationCubeRect(int x, int y, int size);
     void SetNavigationCubeColor(const wxColour& color);
     void SetNavigationCubeViewportSize(int size);
     void ShowNavigationCubeConfigDialog();
-    void SyncNavigationCubeCamera();
     void SyncMainCameraToNavigationCube();
 
     SoCamera* getCamera() const;
@@ -80,7 +81,7 @@ private:
     wxGLContext* m_glContext;
     std::unique_ptr<SceneManager> m_sceneManager;
     std::unique_ptr<InputManager> m_inputManager;
-    std::unique_ptr<NavigationCube> m_navCube;
+    std::unique_ptr<CuteNavCube> m_navCube;
     ObjectTreePanel* m_objectTreePanel;
     CommandManager* m_commandManager;
     bool m_isRendering;

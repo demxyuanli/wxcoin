@@ -1,7 +1,6 @@
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "InputManager.h"
-#include "NavigationCube.h"
 #include "ObjectTreePanel.h"
 #include "DPIManager.h"
 #include "Logger.h"
@@ -68,25 +67,25 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
         m_sceneManager = std::make_unique<SceneManager>(this);
         m_inputManager = std::make_unique<InputManager>(this);
 
-        // Initialize navigation cube only if enabled
+        // Initialize navigation cube (now using CuteNavCube) only if enabled
         if (m_enableNavCube) {
             auto cubeCallback = [this](const std::string& view) {
                 m_sceneManager->setView(view);
                 Refresh(true);
                 };
-            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale, clientSize.x, clientSize.y);
+            m_navCube = std::make_unique<CuteNavCube>(cubeCallback, m_dpiScale, clientSize.x, clientSize.y);
             m_navCube->setRotationChangedCallback([this]() {
                 SyncMainCameraToNavigationCube();
                 Refresh(true);
             });
-            LOG_INF("Canvas::Canvas: Navigation cube initialized");
+            LOG_INF("Canvas::Canvas: Navigation cube (CuteNavCube) initialized");
         }
 
-        // Initialize layout positions (set navigation cube to top-right)
+        // Initialize layout positions (set navigation cube to bottom-left)
         if (clientSize.x > 0 && clientSize.y > 0) {
-            m_cubeLayout.size = 200; // Default cube size
-            m_cubeLayout.update(clientSize.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
-                                clientSize.y - m_cubeLayout.size - m_marginy, // Top edge - margin 
+            m_cubeLayout.size = 150; // Default cube size for CuteNavCube
+            m_cubeLayout.update(m_marginx, // Left edge + margin
+                               clientSize.y - m_cubeLayout.size - m_marginy, // Bottom edge - size - margin
                 m_cubeLayout.size, clientSize, m_dpiScale);
             LOG_INF("Canvas::Canvas: Initialized navigation cube position: x=" + std::to_string(m_cubeLayout.x) +
                 ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size));
@@ -170,7 +169,7 @@ void Canvas::render(bool fastMode) {
 
         SyncNavigationCubeCamera();
 
-        // Render navigation cube
+        // Render navigation cube (now using CuteNavCube)
         if (m_navCube && m_navCube->isEnabled()) {
             int cubeX = static_cast<int>(m_cubeLayout.x * m_dpiScale);
             int cubeY = static_cast<int>(m_cubeLayout.y * m_dpiScale);
@@ -223,10 +222,11 @@ void Canvas::onSize(wxSizeEvent& event) {
 
     if (size.x > 0 && size.y > 0 && m_glContext && SetCurrent(*m_glContext)) {
         updateDPISettings();
-        // Update cube layout to maintain top-right position
-        m_cubeLayout.update(size.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
-                            size.y - m_cubeLayout.size - m_marginx, // Top edge - margin
+        // Update cube layout to maintain bottom-left position
+        m_cubeLayout.update(m_marginx, // Left edge + margin
+                            size.y - m_cubeLayout.size - m_marginy, // Bottom edge - size - margin
             m_cubeLayout.size, size, m_dpiScale);
+        
         m_sceneManager->updateAspectRatio(size);
         if (m_navCube) {
             m_navCube->setWindowSize(size.x, size.y);
@@ -262,7 +262,7 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
         ", cube region: x=[" + std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.x + m_cubeLayout.size) +
         "], y=[" + std::to_string(m_cubeLayout.y) + "," + std::to_string(m_cubeLayout.y + m_cubeLayout.size) + "]");
 
-    // Check if event is within navigation cube region (right-top corner)
+    // Check if event is within navigation cube region (bottom-left corner)
     if (m_navCube && m_navCube->isEnabled()) {
         if (x >= m_cubeLayout.x && x < (m_cubeLayout.x + m_cubeLayout.size) &&
             cubeY >= m_cubeLayout.y && cubeY < (m_cubeLayout.y + m_cubeLayout.size)) {
@@ -340,7 +340,7 @@ void Canvas::setNavigationCubeEnabled(bool enabled) {
                 Refresh(true);
                 };
             wxSize clientSize = GetClientSize();
-            m_navCube = std::make_unique<NavigationCube>(cubeCallback, m_dpiScale, clientSize.x, clientSize.y);
+            m_navCube = std::make_unique<CuteNavCube>(cubeCallback, m_dpiScale, clientSize.x, clientSize.y);
             m_navCube->setRotationChangedCallback([this]() {
                 SyncMainCameraToNavigationCube();
                 Refresh(true);
@@ -576,3 +576,4 @@ void Canvas::applyDPIScalingToUI() {
     LOG_INF("Canvas::applyDPIScalingToUI: Applied DPI scaling with factor " + 
             std::to_string(m_dpiScale));
 }
+

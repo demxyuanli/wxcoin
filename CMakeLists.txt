@@ -43,6 +43,7 @@ set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/PositionDialog.cpp
     ${CMAKE_SOURCE_DIR}/src/DPIManager.cpp
     ${CMAKE_SOURCE_DIR}/src/DPIAwareRendering.cpp
+    ${CMAKE_SOURCE_DIR}/src/CuteNavCube.cpp
 )
 
 # 创建可执行文件

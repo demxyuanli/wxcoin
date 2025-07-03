@@ -1,7 +1,6 @@
 #include "InputManager.h"
 #include "Canvas.h"
 #include "SceneManager.h"
-#include "NavigationCube.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
 #include "Logger.h"
