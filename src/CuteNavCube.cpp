@@ -20,6 +20,7 @@
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoNormal.h>
 #include <Inventor/nodes/SoNormalBinding.h>
+#include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoText2.h>
 #include <Inventor/nodes/SoCylinder.h>
 #include <Inventor/nodes/SoCone.h>
@@ -66,12 +67,12 @@ void CuteNavCube::initialize() {
     setupGeometry();
 
     m_faceToView = {
-        { "F", "Front" },
-        { "B", "Back" },
-        { "L", "Left" },
-        { "R", "Right" },
-        { "T", "Top" },
-        { "D", "Bottom" }
+        { "Front", "Front" },
+        { "Back", "Back" },
+        { "Left", "Left" },
+        { "Right", "Right" },
+        { "Top", "Top" },
+        { "Bottom", "Bottom" }
     };
 }
 
@@ -92,14 +93,14 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
         return true;
     }
 
-    dc.SetBackground(wxColour(255, 255, 255, 255)); // Opaque white background
+    dc.SetBackground(wxBrush(wxColour(211, 211, 211, 160))); // Semi-transparent light grey background
     dc.Clear();
 
     // Use DPI manager for high-quality font rendering
     auto& dpiManager = DPIManager::getInstance();
-    wxFont font = dpiManager.getScaledFont(14, "Arial", true, false); // Smaller font for cute version
+    wxFont font = dpiManager.getScaledFont(32, "Arial", true, false); // Increased font size for cute version
     dc.SetFont(font);
-    dc.SetTextForeground(wxColour(0, 100, 200)); // Blue text for cute version
+    dc.SetTextForeground(wxColour(0, 0, 0)); // Black text
 
     wxSize textSize = dc.GetTextExtent(text);
     int x = (width - textSize.GetWidth()) / 2;
@@ -124,11 +125,6 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
     image.InitAlpha(); // Ensure alpha channel
     unsigned char* rgb = image.GetData();
     unsigned char* alpha = image.GetAlpha();
-
-    // Set alpha to 255 for all pixels (opaque texture)
-    for (int i = 0; i < width * height; ++i) {
-        alpha[i] = 255;
-    }
 
     // Copy to imageData (RGBA) and validate
     bool hasValidPixels = false;
@@ -163,179 +159,153 @@ void CuteNavCube::setupGeometry() {
     m_root->removeAllChildren(); // Clear previous geometry
 
     m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
-    m_orthoCamera->nearDistance = 0.1f;
-    m_orthoCamera->farDistance = 10.0f;
+    m_orthoCamera->nearDistance = 0.05f; // Reduced to ensure all faces are visible
+    m_orthoCamera->farDistance = 15.0f;  // Increased to include all geometry
     m_orthoCamera->orientation.setValue(SbRotation::identity());
     m_root->addChild(m_orthoCamera);
 
     // --- Lighting Setup ---
-    // Lights are added to the root, but their direction will be updated
-    // in `updateCameraRotation` to follow the camera.
     SoEnvironment* env = new SoEnvironment;
-    env->ambientColor.setValue(1.0f, 1.0f, 1.0f);
-    env->ambientIntensity.setValue(0.6f);
+    env->ambientColor.setValue(0.8f, 0.8f, 0.85f); // Brighter and more neutral ambient color
+    env->ambientIntensity.setValue(1.0f);         // Max ambient intensity
     m_root->addChild(env);
 
-    // Main light from front-right-top relative to the camera
     m_mainLight = new SoDirectionalLight;
-    m_mainLight->direction.setValue(0.3f, 0.3f, -1.0f);
-    m_mainLight->intensity.setValue(1.0f);
+    m_mainLight->direction.setValue(0.5f, 0.5f, -0.5f); // Main light from top-right-front
+    m_mainLight->intensity.setValue(0.4f); // Reduced from 0.6
     m_mainLight->color.setValue(1.0f, 1.0f, 1.0f);
     m_root->addChild(m_mainLight);
 
-    // Fill light from back-left-bottom relative to the camera
     m_fillLight = new SoDirectionalLight;
-    m_fillLight->direction.setValue(-0.5f, -0.5f, 0.5f);
-    m_fillLight->intensity.setValue(0.7f);
-    m_fillLight->color.setValue(0.95f, 0.95f, 1.0f);
+    m_fillLight->direction.setValue(-0.5f, -0.5f, 0.5f); // Fill light from bottom-left-back
+    m_fillLight->intensity.setValue(0.4f); // Reduced from 0.6
+    m_fillLight->color.setValue(0.95f, 0.95f, 1.0f); // Slightly cool
     m_root->addChild(m_fillLight);
 
-    // Additional side light for better coverage
     m_sideLight = new SoDirectionalLight;
-    m_sideLight->direction.setValue(-1.0f, 0.0f, 0.0f);
-    m_sideLight->intensity.setValue(0.5f);
-    m_sideLight->color.setValue(1.0f, 1.0f, 0.95f);
+    m_sideLight->direction.setValue(-0.8f, 0.2f, -0.3f); // Side light from left
+    m_sideLight->intensity.setValue(0.3f); // Reduced from 0.4
+    m_sideLight->color.setValue(1.0f, 1.0f, 0.95f); // Slightly warm
     m_root->addChild(m_sideLight);
-    
-    // Set initial camera position AND light directions now that lights are created
-    updateCameraRotation(); 
 
-    SoSeparator* cubeAssembly = new SoSeparator; // Parent for all faces
+    // --- Add more lights for better coverage ---
+    SoDirectionalLight* backLight = new SoDirectionalLight;
+    backLight->direction.setValue(0.0f, 0.0f, 1.0f); // Directly from back
+    backLight->intensity.setValue(0.3f); // Reduced from 0.5
+    backLight->color.setValue(0.9f, 0.9f, 1.0f);
+    m_root->addChild(backLight);
+
+    SoDirectionalLight* bottomLight = new SoDirectionalLight;
+    bottomLight->direction.setValue(0.4f, -0.8f, 0.2f); // From bottom-right
+    bottomLight->intensity.setValue(0.2f); // Reduced from 0.4
+    bottomLight->color.setValue(1.0f, 0.95f, 0.95f);
+    m_root->addChild(bottomLight);
+
+    SoDirectionalLight* topSideLight = new SoDirectionalLight;
+    topSideLight->direction.setValue(0.8f, 0.3f, 0.3f); // From top-left
+    topSideLight->intensity.setValue(0.2f); // Reduced from 0.4
+    topSideLight->color.setValue(0.95f, 1.0f, 0.95f);
+    m_root->addChild(topSideLight);
+
+    updateCameraRotation();
+
+    SoSeparator* cubeAssembly = new SoSeparator;
 
     // --- Manual Chamfered Cube Definition with Correct Normals ---
     const float s = 0.5f;    // Main size
     const float c = 0.18f;   // Chamfer size
-    
-    // Define 24 vertices for chamfered cube (3 vertices per corner)
+
     SbVec3f vertices[24] = {
         // Corner 0 (+ + +): Front-Top-Right
-        SbVec3f( s,  s-c,  s-c),  // v0
-        SbVec3f( s-c,  s,  s-c),  // v1  
-        SbVec3f( s-c,  s-c,  s),  // v2
-        
+        SbVec3f(s,  s - c,  s - c),  // v0
+        SbVec3f(s - c,  s,  s - c),  // v1  
+        SbVec3f(s - c,  s - c,  s),  // v2
+
         // Corner 1 (- + +): Front-Top-Left
-        SbVec3f(-s,  s-c,  s-c),  // v3
-        SbVec3f(-s+c,  s,  s-c),  // v4
-        SbVec3f(-s+c,  s-c,  s),  // v5
-        
+        SbVec3f(-s,  s - c,  s - c),  // v3
+        SbVec3f(-s + c,  s,  s - c),  // v4
+        SbVec3f(-s + c,  s - c,  s),  // v5
+
         // Corner 2 (- - +): Front-Bottom-Left
-        SbVec3f(-s, -s+c,  s-c),  // v6
-        SbVec3f(-s+c, -s,  s-c),  // v7
-        SbVec3f(-s+c, -s+c,  s),  // v8
-        
+        SbVec3f(-s, -s + c,  s - c),  // v6
+        SbVec3f(-s + c, -s,  s - c),  // v7
+        SbVec3f(-s + c, -s + c,  s),  // v8
+
         // Corner 3 (+ - +): Front-Bottom-Right
-        SbVec3f( s, -s+c,  s-c),  // v9
-        SbVec3f( s-c, -s,  s-c),  // v10
-        SbVec3f( s-c, -s+c,  s),  // v11
-        
+        SbVec3f(s, -s + c,  s - c),  // v9
+        SbVec3f(s - c, -s,  s - c),  // v10
+        SbVec3f(s - c, -s + c,  s),  // v11
+
         // Corner 4 (+ + -): Back-Top-Right
-        SbVec3f( s,  s-c, -s+c),  // v12
-        SbVec3f( s-c,  s, -s+c),  // v13
-        SbVec3f( s-c,  s-c, -s),  // v14
-        
+        SbVec3f(s,  s - c, -s + c),  // v12
+        SbVec3f(s - c,  s, -s + c),  // v13
+        SbVec3f(s - c,  s - c, -s),  // v14
+
         // Corner 5 (- + -): Back-Top-Left
-        SbVec3f(-s,  s-c, -s+c),  // v15
-        SbVec3f(-s+c,  s, -s+c),  // v16
-        SbVec3f(-s+c,  s-c, -s),  // v17
-        
+        SbVec3f(-s,  s - c, -s + c),  // v15
+        SbVec3f(-s + c,  s, -s + c),  // v16
+        SbVec3f(-s + c,  s - c, -s),  // v17
+
         // Corner 6 (- - -): Back-Bottom-Left
-        SbVec3f(-s, -s+c, -s+c),  // v18
-        SbVec3f(-s+c, -s, -s+c),  // v19
-        SbVec3f(-s+c, -s+c, -s),  // v20
-        
+        SbVec3f(-s, -s + c, -s + c),  // v18
+        SbVec3f(-s + c, -s, -s + c),  // v19
+        SbVec3f(-s + c, -s + c, -s),  // v20
+
         // Corner 7 (+ - -): Back-Bottom-Right
-        SbVec3f( s, -s+c, -s+c),  // v21
-        SbVec3f( s-c, -s, -s+c),  // v22
-        SbVec3f( s-c, -s+c, -s)   // v23
+        SbVec3f(s, -s + c, -s + c),  // v21
+        SbVec3f(s - c, -s, -s + c),  // v22
+        SbVec3f(s - c, -s + c, -s)   // v23
     };
-    
-    // Define all 26 faces with correct winding order (counter-clockwise when viewed from outside)
+
     struct FaceDefinition {
         std::string name;
         std::vector<int> indices;
         std::string textureKey;
         int materialType; // 0=main face, 1=edge, 2=corner
     };
-    
+
     std::vector<FaceDefinition> faces = {
         // 6 Main faces
-        {"Top",    {1, 4, 16, 13}, "T", 0},       // Face 0: Top (Y+)
-        {"Bottom", {19, 22, 10, 7}, "D", 0},      // Face 1: Bottom (Y-)
-        {"Front",  {2, 5, 8, 11}, "F", 0},        // Face 2: Front (Z+)
-        {"Back",   {17, 20, 23, 14}, "B", 0},     // Face 3: Back (Z-)
-        {"Right",  {0, 12, 21, 9}, "R", 0},       // Face 4: Right (X+)
-        {"Left",   {6, 18, 15, 3}, "L", 0},       // Face 5: Left (X-)
-        
+        {"Top",    {13, 16, 4, 1}, "Top", 0},
+        {"Bottom", {19, 22, 10, 7}, "Bottom", 0},
+        {"Front",  {2, 5, 8, 11}, "Front", 0},
+        {"Back",   {14, 23, 20, 17}, "Back", 0},
+        {"Right",  {9, 21, 12, 0}, "Right", 0},
+        {"Left",   {3, 15, 18, 6}, "Left", 0},
+
         // 8 Corner faces (triangular)
-        {"Corner0", {0, 1, 2}, "", 2},            // Face 6: Corner 0
-        {"Corner1", {3, 5, 4}, "", 2},            // Face 7: Corner 1  
-        {"Corner2", {6, 7, 8}, "", 2},            // Face 8: Corner 2
-        {"Corner3", {9, 11, 10}, "", 2},          // Face 9: Corner 3
-        {"Corner4", {12, 14, 13}, "", 2},         // Face 10: Corner 4
-        {"Corner5", {15, 16, 17}, "", 2},         // Face 11: Corner 5
-        {"Corner6", {18, 19, 20}, "", 2},         // Face 12: Corner 6
-        {"Corner7", {21, 23, 22}, "", 2},         // Face 13: Corner 7
-        
+        {"Corner0", {0, 1, 2}, "", 2},            // Face 6
+        {"Corner1", {3, 5, 4}, "", 2},            // Face 7
+        {"Corner2", {6, 7, 8}, "", 2},            // Face 8
+        {"Corner3", {9, 11, 10}, "", 2},          // Face 9
+        {"Corner4", {12, 14, 13}, "", 2},         // Face 10
+        {"Corner5", {15, 16, 17}, "", 2},         // Face 11
+        {"Corner6", {20, 19, 18}, "", 2},         // Face 12
+        {"Corner7", {22, 23, 21}, "", 2},         // Face 13
+
         // 12 Edge faces (rectangular)
-        {"EdgeTF", {1, 0, 9, 10, 7, 6, 3, 4}, "", 1},      // Face 14: Top-Front edge (bad - 8 vertices)
-        {"EdgeTR", {13, 1, 0, 12}, "", 1},        // Face 15: Top-Right edge  
-        {"EdgeTB", {16, 13, 12, 15}, "", 1},      // Face 16: Top-Back edge
+        {"EdgeTF", {1, 4, 5, 2}, "", 1},          // Face 14: Top-Front edge
+        {"EdgeTR", {13, 1, 0, 12}, "", 1},        // Face 15: Top-Right edge
+        {"EdgeTB", {16, 13, 14, 17}, "", 1},      // Face 16: Top-Back edge
         {"EdgeTL", {4, 16, 15, 3}, "", 1},        // Face 17: Top-Left edge
         {"EdgeBF", {7, 10, 11, 8}, "", 1},        // Face 18: Bottom-Front edge
-        {"EdgeBR", {22, 9, 0, 21}, "", 1},        // Face 19: Bottom-Right edge (bad order)
-        {"EdgeBB", {19, 22, 23, 20}, "", 1},      // Face 20: Bottom-Back edge
-        {"EdgeBL", {18, 6, 7, 19}, "", 1},        // Face 21: Bottom-Left edge (bad order)
-        {"EdgeFR", {2, 0, 9, 11}, "", 1},         // Face 22: Front-Right edge (bad order)
-        {"EdgeFL", {5, 2, 8, 6}, "", 1},          // Face 23: Front-Left edge (bad order)
-        {"EdgeBL2", {17, 15, 18, 20}, "", 1},     // Face 24: Back-Left edge
-        {"EdgeBR2", {14, 17, 20, 23}, "", 1}      // Face 25: Back-Right edge (bad order)
+        {"EdgeBR", {10, 22, 21, 9}, "", 1},       // Face 19: Bottom-Right edge
+        {"EdgeBB", {20, 23, 22, 19}, "", 1},      // Face 20: Bottom-Back edge
+        {"EdgeBL", {6, 18, 19, 7}, "", 1},        // Face 21: Bottom-Left edge
+        {"EdgeFR", {2, 11, 9, 0}, "", 1},         // Face 22: Front-Right edge
+        {"EdgeFL", {3, 6, 8, 5}, "", 1},          // Face 23: Front-Left edge
+        {"EdgeBL2", {17, 20, 18, 15}, "", 1},     // Face 24: Back-Left edge
+        {"EdgeBR2", {12, 21, 23, 14}, "", 1}      // Face 25: Back-Right edge
     };
-    
-    // Manually corrected face definitions with verified normals
-    faces = {
-        // 6 Main faces
-        {"Top",    {13, 16, 4, 1}, "T", 0},       // Face 0: Top (Y+) - FIXED: reversed winding
-        {"Bottom", {19, 22, 10, 7}, "D", 0},      // Face 1: Bottom (Y-) - OK
-        {"Front",  {2, 5, 8, 11}, "F", 0},        // Face 2: Front (Z+) - OK
-        {"Back",   {14, 23, 20, 17}, "B", 0},     // Face 3: Back (Z-) - FIXED: reversed winding
-        {"Right",  {9, 21, 12, 0}, "R", 0},       // Face 4: Right (X+) - FIXED: reversed winding
-        {"Left",   {3, 15, 18, 6}, "L", 0},       // Face 5: Left (X-) - FIXED: reversed winding
-        
-        // 8 Corner faces (triangular)
-        {"Corner0", {0, 1, 2}, "", 2},            // Face 6 - OK
-        {"Corner1", {3, 5, 4}, "", 2},            // Face 7 - OK
-        {"Corner2", {6, 7, 8}, "", 2},            // Face 8 - OK
-        {"Corner3", {9, 11, 10}, "", 2},          // Face 9 - OK
-        {"Corner4", {12, 14, 13}, "", 2},         // Face 10 - OK
-        {"Corner5", {15, 16, 17}, "", 2},         // Face 11 - OK
-        {"Corner6", {20, 19, 18}, "", 2},         // Face 12 - FIXED: reversed winding
-        {"Corner7", {22, 23, 21}, "", 2},         // Face 13 - FIXED: reversed winding
-        
-        // 12 Edge faces (rectangular) - carefully corrected with verified normals
-        {"EdgeTF", {1, 4, 5, 2}, "", 1},          // Face 14: Top-Front edge - OK
-        {"EdgeTR", {13, 1, 0, 12}, "", 1},        // Face 15: Top-Right edge - OK
-        {"EdgeTB", {16, 13, 14, 17}, "", 1},      // Face 16: Top-Back edge - OK
-        {"EdgeTL", {4, 16, 15, 3}, "", 1},        // Face 17: Top-Left edge - OK
-        {"EdgeBF", {7, 10, 11, 8}, "", 1},        // Face 18: Bottom-Front edge - FIXED: reversed winding
-        {"EdgeBR", {10, 22, 21, 9}, "", 1},       // Face 19: Bottom-Right edge - FIXED: reversed winding
-        {"EdgeBB", {20, 23, 22, 19}, "", 1},      // Face 20: Bottom-Back edge - OK
-        {"EdgeBL", {6, 18, 19, 7}, "", 1},        // Face 21: Bottom-Left edge - OK
-        {"EdgeFR", {2, 11, 9, 0}, "", 1},         // Face 22: Front-Right edge - FIXED: reversed winding
-        {"EdgeFL", {3, 6, 8, 5}, "", 1},          // Face 23: Front-Left edge - FIXED: reversed winding
-        {"EdgeBL2", {17, 20, 18, 15}, "", 1},     // Face 24: Back-Left edge - FIXED: reversed winding
-        {"EdgeBR2", {12, 21, 23, 14}, "", 1}      // Face 25: Back-Right edge - OK
-    };
-    
+
     auto& dpiManager = DPIManager::getInstance();
-    
-    // Shared texture coordinates for main faces
+
     SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
     texCoords->point.setValues(0, 4, new SbVec2f[4]{
         SbVec2f(0, 0), SbVec2f(1, 0), SbVec2f(1, 1), SbVec2f(0, 1)
-    });
+        });
     cubeAssembly->addChild(texCoords);
 
-    // Create all vertices
     SoCoordinate3* coords = new SoCoordinate3;
     coords->point.setNum(24);
     for (int i = 0; i < 24; i++) {
@@ -345,54 +315,123 @@ void CuteNavCube::setupGeometry() {
 
     LOG_INF("=== Manual Face Definition Analysis ===");
     int faceIndex = 0;
-    
-    // Create a unified, light blue, opaque material for all faces
-    SoMaterial* lightBlueMaterial = new SoMaterial;
-    lightBlueMaterial->ambientColor.setValue(0.2f, 0.3f, 0.4f);
-    lightBlueMaterial->diffuseColor.setValue(0.7f, 0.8f, 0.95f); // Light Blue
-    lightBlueMaterial->specularColor.setValue(0.5f, 0.5f, 0.5f);
-    lightBlueMaterial->shininess.setValue(0.2f);
-    lightBlueMaterial->transparency.setValue(0.0f); // Opaque
-    
+
+    SoMaterial* mainFaceMaterial = new SoMaterial;
+    mainFaceMaterial->ambientColor.setValue(0.5f, 0.6f, 0.7f);
+    mainFaceMaterial->diffuseColor.setValue(0.8f, 0.85f, 1.0f);
+    mainFaceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
+    mainFaceMaterial->shininess.setValue(0.5f);
+    mainFaceMaterial->transparency.setValue(0.0f);
+
+    SoMaterial* edgeAndCornerMaterial = new SoMaterial;
+    const float grey = 211.0f / 255.0f;
+    edgeAndCornerMaterial->diffuseColor.setValue(grey, grey, grey);
+    edgeAndCornerMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
+    edgeAndCornerMaterial->shininess.setValue(0.5f);
+    edgeAndCornerMaterial->transparency.setValue(1.0f - (160.0f / 255.0f));
+
     LOG_INF("--- Logging Face Properties ---");
     for (const auto& faceDef : faces) {
-        // Log the properties of the current face
         std::string indices_str;
-        for(int idx : faceDef.indices) { indices_str += std::to_string(idx) + " "; }
-        LOG_INF("Face " + std::to_string(faceIndex) + ": Name='" + faceDef.name + 
-                "', Type=" + std::to_string(faceDef.materialType) + 
-                ", TextureKey='" + faceDef.textureKey + 
-                "', Indices: " + indices_str);
+        for (int idx : faceDef.indices) { indices_str += std::to_string(idx) + " "; }
+        LOG_INF("Face " + std::to_string(faceIndex) + ": Name='" + faceDef.name +
+            "', Type=" + std::to_string(faceDef.materialType) +
+            "', TextureKey='" + faceDef.textureKey +
+            "', Indices: " + indices_str);
 
         SoSeparator* faceSep = new SoSeparator;
         faceSep->setName(SbName(faceDef.name.c_str()));
-        
-        // Apply the unified light blue material to all faces
-        faceSep->addChild(lightBlueMaterial);
-        
-        // Note: Textures are disabled.
 
-        // Create face
+        // Add texture and material for main faces
+        if (!faceDef.textureKey.empty()) {
+            faceSep->addChild(mainFaceMaterial);
+
+            const int texWidth = 128;
+            const int texHeight = 128;
+            std::vector<unsigned char> imageData(texWidth * texHeight * 4);
+
+            if (generateFaceTexture(faceDef.textureKey, imageData.data(), texWidth, texHeight)) {
+                SoTexture2* texture = new SoTexture2;
+                texture->image.setValue(SbVec2s(texWidth, texHeight), 4, imageData.data());
+                texture->model = SoTexture2::DECAL;
+                faceSep->addChild(texture);
+            }
+        } else {
+            // Apply a different material for edges and corners
+            faceSep->addChild(edgeAndCornerMaterial);
+        }
+
         SoIndexedFaceSet* face = new SoIndexedFaceSet;
         for (size_t i = 0; i < faceDef.indices.size(); i++) {
             face->coordIndex.set1Value(i, faceDef.indices[i]);
         }
         face->coordIndex.set1Value(faceDef.indices.size(), -1); // End marker
+
+        if (!faceDef.textureKey.empty()) {
+            // The texture coordinates were causing horizontal flipping (e.g., "Left" appeared mirrored).
+            // By swapping the U-coordinates in the mapping, we can correct this.
+            // The original mapping was 0,1,2,3 which maps to (0,0),(1,0),(1,1),(0,1).
+            // The new mapping 1,0,3,2 maps to (1,0),(0,0),(0,1),(1,1), effectively flipping the texture horizontally.
+            face->textureCoordIndex.set1Value(0, 1);
+            face->textureCoordIndex.set1Value(1, 0);
+            face->textureCoordIndex.set1Value(2, 3);
+            face->textureCoordIndex.set1Value(3, 2);
+            face->textureCoordIndex.set1Value(4, -1);
+        }
+        
         faceSep->addChild(face);
-        
+
         cubeAssembly->addChild(faceSep);
-        
+
         faceIndex++;
     }
-    
+
     m_root->addChild(cubeAssembly);
 
     LOG_INF("CuteNavCube::setupGeometry: Total faces analyzed: " + std::to_string(faceIndex));
     LOG_INF("CuteNavCube::setupGeometry: Manual geometry definition with verified normals.");
+
+    // --- Add black outlines to all faces ---
+    SoSeparator* outlineSep = new SoSeparator;
+    
+    // Enable line smoothing for anti-aliasing
+    SoShapeHints* hints = new SoShapeHints;
+    hints->shapeType = SoShapeHints::SOLID;
+    hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
+    outlineSep->addChild(hints);
+
+    // Define the style for the outlines
+    SoDrawStyle* drawStyle = new SoDrawStyle;
+    drawStyle->style = SoDrawStyle::LINES;
+    drawStyle->lineWidth = 1.0f;
+    outlineSep->addChild(drawStyle);
+
+    // Define the material for the outlines
+    SoMaterial* outlineMaterial = new SoMaterial;
+    outlineMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f); // Black
+    outlineSep->addChild(outlineMaterial);
+    
+    // Re-use the same coordinates but re-draw all faces as lines
+    outlineSep->addChild(coords); // Re-use the same SoCoordinate3 node
+    
+    SoIndexedFaceSet* outlineFaceSet = new SoIndexedFaceSet;
+    std::vector<int32_t> all_indices;
+    for (const auto& faceDef : faces) {
+        for(int index : faceDef.indices) {
+            all_indices.push_back(index);
+        }
+        all_indices.push_back(-1); // Separator for each face
+    }
+    outlineFaceSet->coordIndex.setValues(0, all_indices.size(), all_indices.data());
+    outlineSep->addChild(outlineFaceSet);
+
+    m_root->addChild(outlineSep);
+
+    LOG_INF("CuteNavCube::setupGeometry: Final rebuild of cube geometry with definitive winding order and outlines.");
 }
 
 void CuteNavCube::updateCameraRotation() {
-    // Rotates camera around the cube, from NavigationCube
+    // Rotates camera around the cube
     float distance = 5.0f; // Keep a fixed distance
     float radX = m_rotationX * M_PI / 180.0f;
     float radY = m_rotationY * M_PI / 180.0f;
@@ -405,30 +444,8 @@ void CuteNavCube::updateCameraRotation() {
     m_orthoCamera->position.setValue(x, y, z);
     m_orthoCamera->pointAt(SbVec3f(0, 0, 0)); // Always look at the origin
 
-    // Update light directions to follow the camera
-    if (m_mainLight && m_fillLight && m_sideLight) {
-        // Get the camera's orientation
-        SbRotation cam_orientation = m_orthoCamera->orientation.getValue();
-
-        // Define base light directions (as if camera is at default orientation)
-        SbVec3f base_main_dir(0.3f, 0.3f, -1.0f);
-        SbVec3f base_fill_dir(-0.5f, -0.5f, 0.5f);
-        SbVec3f base_side_dir(-1.0f, 0.0f, 0.0f);
-        
-        // Rotate the base directions by the camera's current orientation
-        SbVec3f new_main_dir, new_fill_dir, new_side_dir;
-        cam_orientation.multVec(base_main_dir, new_main_dir);
-        cam_orientation.multVec(base_fill_dir, new_fill_dir);
-        cam_orientation.multVec(base_side_dir, new_side_dir);
-
-        // Set the new, rotated directions on the light nodes
-        m_mainLight->direction.setValue(new_main_dir);
-        m_fillLight->direction.setValue(new_fill_dir);
-        m_sideLight->direction.setValue(new_side_dir);
-    }
-
-    LOG_DBG("CuteNavCube::updateCameraRotation: Camera position x=" + std::to_string(x) + 
-            ", y=" + std::to_string(y) + ", z=" + std::to_string(z));
+    LOG_DBG("CuteNavCube::updateCameraRotation: Camera position x=" + std::to_string(x) +
+        ", y=" + std::to_string(y) + ", z=" + std::to_string(z));
 }
 
 std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize) {
@@ -460,7 +477,7 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
             }
         }
     }
-    
+
     LOG_DBG("CuteNavCube::pickRegion: No specific face region identified.");
     return "";
 }
@@ -486,7 +503,7 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
             m_isDragging = false;
             SbVec2s delta = currentPos - dragStartPos;
             float distance = std::sqrt(delta[0] * delta[0] + delta[1] * delta[1]);
-            
+
             if (distance < dragThreshold) { // It's a click
                 // Y-coordinate needs to be inverted for picking
                 SbVec2s pickPos(currentPos[0], static_cast<short>(viewportSize.y - currentPos[1]));
@@ -527,6 +544,8 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 
     SbViewportRegion viewport(size.x, size.y);
     SoGLRenderAction renderAction(viewport);
+    renderAction.setSmoothing(true);
+    renderAction.setNumPasses(4); // Use multiple passes for better anti-aliasing
     renderAction.apply(m_root);
 }
 
@@ -539,7 +558,8 @@ void CuteNavCube::setCameraPosition(const SbVec3f& position) {
         m_orthoCamera->position.setValue(position);
         LOG_DBG("CuteNavCube::setCameraPosition: Set camera position to x=" + std::to_string(position[0]) +
             ", y=" + std::to_string(position[1]) + ", z=" + std::to_string(position[2]));
-    } else {
+    }
+    else {
         LOG_WAR("CuteNavCube::setCameraPosition: Camera not initialized");
     }
 }
@@ -548,7 +568,8 @@ void CuteNavCube::setCameraOrientation(const SbRotation& orientation) {
     if (m_orthoCamera) {
         m_orthoCamera->orientation.setValue(orientation);
         LOG_DBG("CuteNavCube::setCameraOrientation: Set camera orientation");
-    } else {
+    }
+    else {
         LOG_WAR("CuteNavCube::setCameraOrientation: Camera not initialized");
     }
-} 
+}
