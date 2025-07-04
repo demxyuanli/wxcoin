@@ -49,7 +49,7 @@ void CommandManager::undo()
     m_undoStack.pop_back();
     
 
-    command->undo();
+    command->unexecute();
     
 
     m_redoStack.push_back(command);
@@ -70,7 +70,7 @@ void CommandManager::redo()
     m_redoStack.pop_back();
     
 
-    command->redo();
+    command->execute();
     
 
     m_undoStack.push_back(command);

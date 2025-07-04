@@ -180,6 +180,9 @@ void MainFrame::createPanels()
     m_canvas->getInputManager()->setNavigationController(navController);
     m_mouseHandler->setNavigationController(navController);
 
+    // Now that all handlers are set, initialize the input manager's states
+    m_canvas->getInputManager()->initializeStates();
+
     m_canvas->setObjectTreePanel(objectTreePanel);
     m_canvas->setCommandManager(m_commandManager);
 

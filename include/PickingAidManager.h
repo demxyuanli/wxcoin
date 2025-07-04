@@ -6,11 +6,21 @@
 
 class Canvas;
 class SceneManager;
+class InputManager;
 
 class PickingAidManager {
 public:
-    PickingAidManager(SceneManager* sceneManager, Canvas* canvas);
+    PickingAidManager(SceneManager* sceneManager, Canvas* canvas, InputManager* inputManager);
     ~PickingAidManager();
+
+    void update();
+    void show();
+    void hide();
+    void clear();
+
+    void startPicking();
+    void stopPicking();
+    bool isPicking() const;
 
     void createPickingAidLines();
     void showPickingAidLines(const SbVec3f& position);
@@ -23,8 +33,14 @@ public:
     void updatePickingAidColor(const SbVec3f& color);
 
 private:
+    void createPickingAids();
+    void updatePickingAids();
+
     SceneManager* m_sceneManager;
     Canvas* m_canvas;
+    InputManager* m_inputManager;
+    SoSeparator* m_aidsRoot;
+    bool m_isPickingPosition;
     SoSeparator* m_pickingAidSeparator;
     SoTransform* m_pickingAidTransform;
     bool m_pickingAidVisible;

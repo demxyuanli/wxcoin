@@ -3,44 +3,9 @@
 #include "ObjectTreePanel.h"
 #include "PropertyPanel.h"
 #include "Command.h"
+#include "CreateCommand.h"
 #include "Logger.h"
 #include <memory>
-
-class CreateGeometryCommand : public Command {
-public:
-    CreateGeometryCommand(GeometryObject* obj, SoSeparator* root, ObjectTreePanel* treePanel, PropertyPanel* propPanel)
-        : m_object(obj), m_root(root), m_treePanel(treePanel), m_propPanel(propPanel) {
-    }
-
-    void execute() override {
-        m_root->addChild(m_object->getRoot());
-        m_treePanel->addObject(m_object);
-        m_propPanel->updateProperties(m_object);
-        LOG_INF("Executed CreateGeometryCommand: " + m_object->getName());
-    }
-
-    void undo() override {
-        m_root->removeChild(m_object->getRoot());
-        m_treePanel->removeObject(m_object);
-        m_propPanel->clearProperties();
-        LOG_INF("Undid CreateGeometryCommand: " + m_object->getName());
-    }
-
-    void redo() override {
-        execute();
-        LOG_INF("Redid CreateGeometryCommand: " + m_object->getName());
-    }
-
-    std::string getDescription() const override {
-        return "Create " + m_object->getName();
-    }
-
-private:
-    GeometryObject* m_object;
-    SoSeparator* m_root;
-    ObjectTreePanel* m_treePanel;
-    PropertyPanel* m_propPanel;
-};
 
 GeometryFactory::GeometryFactory(SoSeparator* root, ObjectTreePanel* treePanel, PropertyPanel* propPanel, CommandManager* cmdManager)
     : m_root(root)
@@ -56,18 +21,18 @@ GeometryFactory::~GeometryFactory() {
 }
 
 void GeometryFactory::createGeometry(const std::string& type, const SbVec3f& position) {
-    GeometryObject* object = nullptr;
+    std::unique_ptr<GeometryObject> object = nullptr;
     if (type == "Box") {
-        object = createBox(position);
+        object = std::unique_ptr<GeometryObject>(createBox(position));
     }
     else if (type == "Sphere") {
-        object = createSphere(position);
+        object = std::unique_ptr<GeometryObject>(createSphere(position));
     }
     else if (type == "Cylinder") {
-        object = createCylinder(position);
+        object = std::unique_ptr<GeometryObject>(createCylinder(position));
     }
     else if (type == "Cone") {
-        object = createCone(position);
+        object = std::unique_ptr<GeometryObject>(createCone(position));
     }
     else {
         LOG_ERR("Unknown geometry type: " + type);
@@ -75,7 +40,7 @@ void GeometryFactory::createGeometry(const std::string& type, const SbVec3f& pos
     }
 
     if (object) {
-        auto command = std::make_shared<CreateGeometryCommand>(object, m_root, m_treePanel, m_propPanel);
+        auto command = std::make_shared<CreateCommand>(std::move(object), m_root, m_treePanel, m_propPanel);
         m_cmdManager->executeCommand(command);
     }
 }

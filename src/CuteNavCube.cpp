@@ -379,10 +379,10 @@ void CuteNavCube::setupGeometry() {
             
             if (faceDef.textureKey == "Back") {
                 // Special UV mapping for the 'Back' face to correct its orientation
-                face->textureCoordIndex.set1Value(0, 2);
-                face->textureCoordIndex.set1Value(1, 3);
-                face->textureCoordIndex.set1Value(2, 0);
-                face->textureCoordIndex.set1Value(3, 1);
+                face->textureCoordIndex.set1Value(0, 0);
+                face->textureCoordIndex.set1Value(1, 1);
+                face->textureCoordIndex.set1Value(2, 2);
+                face->textureCoordIndex.set1Value(3, 3);
             } else {
                 // Default UV mapping for other main faces
                 face->textureCoordIndex.set1Value(0, 1);

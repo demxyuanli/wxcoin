@@ -40,8 +40,9 @@ void MouseHandler::setCreationGeometryType(const std::string& type) {
     LOG_INF("Creation geometry type set to: " + type);
 
     if (!type.empty()) {
-        // Create position dialog
-        PositionDialog* posDialog = new PositionDialog(m_canvas->GetParent(), "Set " + wxString(type) + " Position");
+        // Create position dialog and pass the PickingAidManager
+        PickingAidManager* pickingAidManager = m_canvas->getSceneManager()->getPickingAidManager();
+        PositionDialog* posDialog = new PositionDialog(m_canvas->GetParent(), "Set " + wxString(type) + " Position", pickingAidManager);
         posDialog->SetPosition(SbVec3f(0.0f, 0.0f, 0.0f));
         posDialog->Show(true);
     }
@@ -53,54 +54,21 @@ void MouseHandler::setNavigationController(NavigationController* controller) {
 }
 
 void MouseHandler::handleMouseButton(wxMouseEvent& event) {
-    if (m_operationMode == OperationMode::CREATE && event.LeftDown() && g_isPickingPosition) {
-        SbVec3f worldPos;
-        if (m_canvas->getSceneManager()->screenToWorld(event.GetPosition(), worldPos)) {
-            LOG_INF("Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
-            wxWindow* dialog = wxWindow::FindWindowByName("PositionDialog");
-            if (dialog) {
-                PositionDialog* posDialog = dynamic_cast<PositionDialog*>(dialog);
-                if (posDialog) {
-                    posDialog->SetPosition(worldPos);
-                    posDialog->Show(true);
-                    g_isPickingPosition = false;
-                    wxButton* pickButton = dynamic_cast<wxButton*>(posDialog->FindWindow(wxID_HIGHEST + 1000));
-                    if (pickButton) {
-                        pickButton->SetLabel("Pick Coordinates");
-                        pickButton->Enable(true);
-                    }
-                }
-                else {
-                    LOG_ERR("Failed to cast dialog to PositionDialog");
-                }
-            }
-            else {
-                LOG_ERR("PositionDialog not found");
-            }
-        }
-        else {
-            LOG_WAR("Failed to convert screen position to world coordinates");
-        }
-    }
-    else if (m_operationMode == OperationMode::VIEW && m_navigationController) {
+    if (m_operationMode == OperationMode::VIEW && m_navigationController) {
         m_navigationController->handleMouseButton(event);
     }
     else if (m_operationMode == OperationMode::SELECT && event.LeftDown()) {
         // Implement selection logic if needed
         LOG_INF("Selection at position: (" + std::to_string(event.GetX()) + ", " + std::to_string(event.GetY()) + ")");
+    } else {
+        event.Skip();
     }
-    event.Skip();
 }
 
 void MouseHandler::handleMouseMotion(wxMouseEvent& event) {
-    if (m_operationMode == OperationMode::CREATE && g_isPickingPosition) {
-        SbVec3f worldPos;
-        if (m_canvas->getSceneManager()->screenToWorld(event.GetPosition(), worldPos)) {
-            m_canvas->getSceneManager()->getPickingAidManager()->showPickingAidLines(worldPos);
-        }
-    }
-    else if (m_operationMode == OperationMode::VIEW && m_navigationController) {
+    if (m_operationMode == OperationMode::VIEW && m_navigationController) {
         m_navigationController->handleMouseMotion(event);
+    } else {
+        event.Skip();
     }
-    event.Skip();
 }

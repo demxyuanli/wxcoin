@@ -3,6 +3,7 @@
 #include "CoordinateSystemRenderer.h"
 #include "PickingAidManager.h"
 #include "Logger.h"
+#include <map>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/nodes/SoEnvironment.h>
@@ -73,7 +74,7 @@ bool SceneManager::initScene() {
         m_sceneRoot->addChild(m_objectRoot);
 
         m_coordSystemRenderer = std::make_unique<CoordinateSystemRenderer>(m_objectRoot);
-        m_pickingAidManager = std::make_unique<PickingAidManager>(this, m_canvas);
+        m_pickingAidManager = std::make_unique<PickingAidManager>(this, m_canvas, m_canvas->getInputManager());
 
         resetView();
         return true;

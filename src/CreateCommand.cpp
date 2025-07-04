@@ -3,33 +3,38 @@
 #include "PropertyPanel.h"
 #include "Logger.h"
 
-CreateCommand::CreateCommand(GeometryObject* object, SoSeparator* objectRoot, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel)
-    : m_object(object), m_objectRoot(objectRoot), m_objectTree(objectTree), m_propertyPanel(propertyPanel)
+CreateCommand::CreateCommand(std::unique_ptr<GeometryObject> object, SoSeparator* objectRoot, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel)
+    : m_object(std::move(object)), m_objectRoot(objectRoot), m_objectTree(objectTree), m_propertyPanel(propertyPanel)
 {
 }
 
 CreateCommand::~CreateCommand()
 {
-    delete m_object; // Ensure proper cleanup if needed
+    // unique_ptr handles memory management
 }
 
 void CreateCommand::execute()
 {
+    if (!m_object) return;
     LOG_INF("Executing CreateCommand for object: " + m_object->getName());
     m_objectRoot->addChild(m_object->getRoot());
-    m_objectTree->addObject(m_object);
-    m_propertyPanel->updateProperties(m_object);
+    m_objectTree->addObject(m_object.get());
+    m_propertyPanel->updateProperties(m_object.get());
     m_objectRoot->touch();
 }
 
-void CreateCommand::undo()
+void CreateCommand::unexecute()
 {
+    if (!m_object) return;
     m_objectRoot->removeChild(m_object->getRoot());
-    m_objectTree->removeObject(m_object);
+    m_objectTree->removeObject(m_object.get());
     m_propertyPanel->clearProperties();
 }
 
-void CreateCommand::redo()
+std::string CreateCommand::getDescription() const
 {
-    execute();
+    if (m_object) {
+        return "Create " + m_object->getName();
+    }
+    return "Create Object";
 }

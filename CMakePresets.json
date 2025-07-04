@@ -1,0 +1,61 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "windows-vcpkg-x64",
+            "displayName": "Windows x64 with vcpkg",
+            "description": "Windows x64 build using vcpkg for dependencies",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "wxWidgets_ROOT_DIR": "D:/repos/vcpkg/installed/x64-windows",
+                "CMAKE_BUILD_TYPE": "Debug"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/repos/vcpkg"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": ["Windows"]
+                }
+            }
+        },
+        {
+            "name": "windows-vcpkg-x64-release",
+            "displayName": "Windows x64 Release with vcpkg",
+            "description": "Windows x64 Release build using vcpkg for dependencies",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "wxWidgets_ROOT_DIR": "D:/repos/vcpkg/installed/x64-windows",
+                "CMAKE_BUILD_TYPE": "Release"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/repos/vcpkg"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": ["Windows"]
+                }
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "windows-vcpkg-x64-debug",
+            "displayName": "Debug Build",
+            "configurePreset": "windows-vcpkg-x64",
+            "configuration": "Debug"
+        },
+        {
+            "name": "windows-vcpkg-x64-release-build",
+            "displayName": "Release Build", 
+            "configurePreset": "windows-vcpkg-x64-release",
+            "configuration": "Release"
+        }
+    ]
+} 

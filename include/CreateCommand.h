@@ -9,16 +9,15 @@
 class CreateCommand : public Command
 {
 public:
-    CreateCommand(GeometryObject* object, SoSeparator* objectRoot, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel);
+    CreateCommand(std::unique_ptr<GeometryObject> object, SoSeparator* objectRoot, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel);
     ~CreateCommand();
 
     void execute() override;
-    void undo() override;
-    void redo() override;
-    std::string getDescription() const override { return "Create " + m_object->getName(); }
+    void unexecute() override;
+    std::string getDescription() const override;
 
 private:
-    GeometryObject* m_object;
+    std::unique_ptr<GeometryObject> m_object;
     SoSeparator* m_objectRoot;
     ObjectTreePanel* m_objectTree;
     PropertyPanel* m_propertyPanel;

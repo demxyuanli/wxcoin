@@ -1,5 +1,3 @@
-#cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake" -DwxWidgets_ROOT_DIR="D:/repos/vcpkg/installed/x64-windows"
-
 cmake_minimum_required(VERSION 3.20)
 project(FreeCADNavigation)
 
@@ -7,8 +5,22 @@ project(FreeCADNavigation)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 设置 Vcpkg 工具链文件
-set(CMAKE_TOOLCHAIN_FILE "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+# 设置默认构建类型
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build" FORCE)
+endif()
+
+# 检查是否通过预设或环境变量设置了工具链文件
+if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+endif()
+
+# 输出配置信息
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Toolchain file: ${CMAKE_TOOLCHAIN_FILE}")
+if(DEFINED wxWidgets_ROOT_DIR)
+    message(STATUS "wxWidgets root: ${wxWidgets_ROOT_DIR}")
+endif()
 
 # 查找依赖
 find_package(wxWidgets REQUIRED COMPONENTS core base gl aui propgrid)
@@ -21,15 +33,20 @@ include(${wxWidgets_USE_FILE})
 set(SOURCES
     ${CMAKE_SOURCE_DIR}/src/Application.cpp
     ${CMAKE_SOURCE_DIR}/src/Canvas.cpp
+    ${CMAKE_SOURCE_DIR}/src/RenderingEngine.cpp
+    ${CMAKE_SOURCE_DIR}/src/ViewportManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/EventCoordinator.cpp
+    ${CMAKE_SOURCE_DIR}/src/NavigationCubeManager.cpp
     ${CMAKE_SOURCE_DIR}/src/PickingAidManager.cpp
     ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/GeometryFactory.cpp
     ${CMAKE_SOURCE_DIR}/src/NavigationController.cpp
     ${CMAKE_SOURCE_DIR}/src/InputManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/DefaultInputState.cpp
+    ${CMAKE_SOURCE_DIR}/src/PickingInputState.cpp
     ${CMAKE_SOURCE_DIR}/src/SceneManager.cpp
     ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/Command.cpp
-    ${CMAKE_SOURCE_DIR}/src/Globals.cpp
     ${CMAKE_SOURCE_DIR}/src/NavigationCube.cpp
     ${CMAKE_SOURCE_DIR}/src/GeometryObject.cpp
     ${CMAKE_SOURCE_DIR}/src/MainFrame.cpp
@@ -57,11 +74,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     Coin::Coin
 )
 
-# 添加明确的库路径
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    link_directories("D:/repos/vcpkg/installed/x64-windows/debug/lib")
-else()
-    link_directories("D:/repos/vcpkg/installed/x64-windows/lib")
+# 添加明确的库路径（如果使用vcpkg）
+if(CMAKE_TOOLCHAIN_FILE AND wxWidgets_ROOT_DIR)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        link_directories("${wxWidgets_ROOT_DIR}/debug/lib")
+    else()
+        link_directories("${wxWidgets_ROOT_DIR}/lib")
+    endif()
 endif()
 
 # 链接库

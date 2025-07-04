@@ -14,3 +14,5 @@ CMakeUserPresets.json
 /include/final_review_gate.py
 /final_review_gate.py
 /include.code-workspace
+/include/.trae/.ignore
+/.gitignore

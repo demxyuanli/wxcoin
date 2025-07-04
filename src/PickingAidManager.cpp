@@ -3,6 +3,7 @@
 #include "Canvas.h"
 #include "DPIAwareRendering.h"
 #include "Logger.h"
+#include "InputManager.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDrawStyle.h>
@@ -13,12 +14,14 @@
 #include <Inventor/nodes/SoText2.h>
 #include <cstdio>
 
-PickingAidManager::PickingAidManager(SceneManager* sceneManager, Canvas* canvas)
+PickingAidManager::PickingAidManager(SceneManager* sceneManager, Canvas* canvas, InputManager* inputManager)
     : m_sceneManager(sceneManager)
     , m_canvas(canvas)
+    , m_inputManager(inputManager)
     , m_pickingAidSeparator(nullptr)
     , m_pickingAidTransform(nullptr)
     , m_pickingAidVisible(false)
+    , m_isPickingPosition(false)
     , m_referenceZ(0.0f)
     , m_referenceGridSeparator(nullptr)
     , m_referenceGridVisible(false)
@@ -275,4 +278,27 @@ void PickingAidManager::updatePickingAidColor(const SbVec3f& color) {
     }
     
     m_canvas->Refresh(true);
+}
+
+void PickingAidManager::startPicking() {
+    m_isPickingPosition = true;
+    m_canvas->setPickingCursor(true);
+    if (m_inputManager) {
+        m_inputManager->enterPickingState();
+    }
+    LOG_INF("PickingAidManager: Started position picking mode.");
+}
+
+void PickingAidManager::stopPicking() {
+    m_isPickingPosition = false;
+    m_canvas->setPickingCursor(false);
+    hidePickingAidLines();
+    if (m_inputManager) {
+        m_inputManager->enterDefaultState();
+    }
+    LOG_INF("PickingAidManager: Stopped position picking mode.");
+}
+
+bool PickingAidManager::isPicking() const {
+    return m_isPickingPosition;
 }

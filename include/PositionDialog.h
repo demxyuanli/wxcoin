@@ -8,10 +8,15 @@
 #include <wx/checkbox.h>
 #include <Inventor/SbVec3f.h>
 
+class wxTextCtrl;
+class wxButton;
+class wxCheckBox;
+class PickingAidManager; // Forward declaration
+
 class PositionDialog : public wxDialog
 {
 public:
-    PositionDialog(wxWindow* parent, const wxString& title);
+    PositionDialog(wxWindow* parent, const wxString& title, PickingAidManager* pickingAidManager);
     ~PositionDialog() {}
 
     void SetPosition(const SbVec3f& position);
@@ -27,14 +32,14 @@ private:
     wxButton* m_okButton;
     wxButton* m_cancelButton;
 
+    PickingAidManager* m_pickingAidManager; // Member variable
+
     void OnPickButton(wxCommandEvent& event);
     void OnOkButton(wxCommandEvent& event);
     void OnCancelButton(wxCommandEvent& event);
     void OnReferenceZChanged(wxCommandEvent& event);
     void OnShowGridChanged(wxCommandEvent& event);
+    void OnClose(wxCloseEvent& event);
 
     DECLARE_EVENT_TABLE()
 };
-
-// Define a global variable indicating if we're in coordinate picking mode
-extern bool g_isPickingPosition; 

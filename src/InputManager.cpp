@@ -5,6 +5,9 @@
 #include "NavigationController.h"
 #include "Logger.h"
 #include "PositionDialog.h"
+#include "PickingAidManager.h"
+#include "DefaultInputState.h"
+#include "PickingInputState.h"
 
 const int InputManager::MOTION_INTERVAL = 10; // Mouse motion throttling (milliseconds)
 
@@ -12,6 +15,7 @@ InputManager::InputManager(Canvas* canvas)
     : m_canvas(canvas)
     , m_mouseHandler(nullptr)
     , m_navigationController(nullptr)
+    , m_currentState(nullptr)
     , m_lastMotionTime(0)
 {
     LOG_INF("InputManager initializing");
@@ -31,74 +35,65 @@ void InputManager::setNavigationController(NavigationController* controller) {
     LOG_INF("NavigationController set for InputManager");
 }
 
+void InputManager::initializeStates() {
+    m_defaultState = std::make_unique<DefaultInputState>(m_mouseHandler, m_navigationController);
+    m_pickingState = std::make_unique<PickingInputState>(m_canvas);
+    m_currentState = m_defaultState.get();
+    LOG_INF("InputManager states initialized");
+}
+
+void InputManager::enterDefaultState() {
+    if (m_currentState != m_defaultState.get()) {
+        m_currentState = m_defaultState.get();
+        LOG_INF("InputManager entered DefaultState");
+    }
+}
+
+void InputManager::enterPickingState() {
+    if (m_currentState != m_pickingState.get()) {
+        m_currentState = m_pickingState.get();
+        LOG_INF("InputManager entered PickingState");
+    }
+}
+
 void InputManager::onMouseButton(wxMouseEvent& event) {
-    if (!m_mouseHandler) {
-        LOG_WAR("Mouse button event skipped: Invalid handler");
+    if (m_currentState) {
+        m_currentState->onMouseButton(event);
+    } else {
+        LOG_WAR("InputManager: No active state to handle mouse button event");
         event.Skip();
-        return;
     }
-
-    if (g_isPickingPosition && event.LeftDown()) {
-        LOG_INF("Picking position with mouse click");
-        SbVec3f worldPos;
-        if (m_canvas->getSceneManager()->screenToWorld(event.GetPosition(), worldPos)) {
-            LOG_INF("Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
-
-            wxWindow* dialog = wxWindow::FindWindowByName("PositionDialog");
-            if (dialog) {
-                PositionDialog* posDialog = dynamic_cast<PositionDialog*>(dialog);
-                if (posDialog) {
-                    posDialog->SetPosition(worldPos);
-                    posDialog->Show(true);
-                    LOG_INF("Position dialog updated and shown");
-                    g_isPickingPosition = false;
-                }
-                else {
-                    LOG_ERR("Failed to cast dialog to PositionDialog");
-                }
-            }
-            else {
-                LOG_ERR("PositionDialog not found");
-            }
-        }
-        else {
-            LOG_WAR("Failed to convert screen position to world coordinates");
-        }
-    }
-    else {
-        m_mouseHandler->handleMouseButton(event);
-    }
-    event.Skip();
 }
 
 void InputManager::onMouseMotion(wxMouseEvent& event) {
-    if (!m_mouseHandler || !m_navigationController) {
-        LOG_WAR("Mouse motion event skipped: Invalid handler or controller");
+    if (!m_currentState) {
+        LOG_WAR("Mouse motion event skipped: No active state");
         event.Skip();
         return;
     }
 
     wxLongLong currentTime = wxGetLocalTimeMillis();
     if (currentTime - m_lastMotionTime >= MOTION_INTERVAL) {
-        m_mouseHandler->handleMouseMotion(event);
+        m_currentState->onMouseMotion(event);
         m_lastMotionTime = currentTime;
+    } else {
+        event.Skip();
     }
-    event.Skip();
 }
 
 void InputManager::onMouseWheel(wxMouseEvent& event) {
-    if (!m_navigationController) {
-        LOG_WAR("Mouse wheel event skipped: Invalid controller");
+    if (m_currentState) {
+        m_currentState->onMouseWheel(event);
+    } else {
+        LOG_WAR("Mouse wheel event skipped: No active state");
         event.Skip();
-        return;
     }
+}
 
-    static float accumulatedDelta = 0.0f;
-    accumulatedDelta += event.GetWheelRotation();
+MouseHandler* InputManager::getMouseHandler() const {
+    return m_mouseHandler;
+}
 
-    if (std::abs(accumulatedDelta) >= event.GetWheelDelta()) {
-        m_navigationController->handleMouseWheel(event);
-        accumulatedDelta -= std::copysign(event.GetWheelDelta(), accumulatedDelta);
-    }
-    event.Skip();
+NavigationController* InputManager::getNavigationController() const {
+    return m_navigationController;
 }

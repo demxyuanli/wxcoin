@@ -25,10 +25,12 @@ EVT_BUTTON(wxID_OK, PositionDialog::OnOkButton)
 EVT_BUTTON(wxID_CANCEL, PositionDialog::OnCancelButton)
 EVT_TEXT(ID_REFERENCE_Z_TEXT, PositionDialog::OnReferenceZChanged)
 EVT_CHECKBOX(ID_SHOW_GRID_CHECK, PositionDialog::OnShowGridChanged)
+EVT_CLOSE(PositionDialog::OnClose)
 END_EVENT_TABLE()
 
-PositionDialog::PositionDialog(wxWindow* parent, const wxString& title)
+PositionDialog::PositionDialog(wxWindow* parent, const wxString& title, PickingAidManager* pickingAidManager)
     : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
+    , m_pickingAidManager(pickingAidManager)
 {
     LOG_INF("Creating position dialog");
     SetName("PositionDialog");
@@ -103,37 +105,23 @@ SbVec3f PositionDialog::GetPosition() const
 
 void PositionDialog::OnPickButton(wxCommandEvent& event) {
     LOG_INF("Pick button clicked - entering picking mode");
-    g_isPickingPosition = true;
+    if (m_pickingAidManager) {
+        m_pickingAidManager->startPicking();
+        m_pickingAidManager->showPickingAidLines(GetPosition());
+    }
     m_pickButton->SetLabel("Picking...");
     m_pickButton->Enable(false);
-
-    wxWindow* parentWindow = GetParent();
-    if (parentWindow) {
-        wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", parentWindow);
-        if (canvasWindow) {
-            Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
-            if (canvas) {
-                canvas->getSceneManager()->getPickingAidManager()->showPickingAidLines(GetPosition());
-            }
-            else {
-                LOG_ERR("Canvas cast failed");
-            }
-        }
-        else {
-            LOG_ERR("Canvas window not found");
-        }
-    }
-    else {
-        LOG_ERR("Parent window not found");
-    }
-
     this->Hide();
-    LOG_INF("Dialog hidden, picking mode active: " + std::to_string(g_isPickingPosition));
+    if (m_pickingAidManager) {
+        LOG_INF("Dialog hidden, picking mode active: " + std::to_string(m_pickingAidManager->isPicking()));
+    }
 }
 
 void PositionDialog::OnOkButton(wxCommandEvent& event) {
     LOG_INF("Position confirmed: " + std::to_string(GetPosition()[0]) + ", " + std::to_string(GetPosition()[1]) + ", " + std::to_string(GetPosition()[2]));
-    g_isPickingPosition = false;
+    if (m_pickingAidManager) {
+        m_pickingAidManager->stopPicking();
+    }
 
     wxWindow* parentWindow = GetParent();
     if (parentWindow) {
@@ -175,7 +163,9 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
 
 void PositionDialog::OnCancelButton(wxCommandEvent& event) {
     LOG_INF("Position input cancelled");
-    g_isPickingPosition = false;
+    if (m_pickingAidManager) {
+        m_pickingAidManager->stopPicking();
+    }
 
     wxWindow* parentWindow = GetParent();
     if (parentWindow) {
@@ -243,4 +233,13 @@ void PositionDialog::OnShowGridChanged(wxCommandEvent& event) {
         }
     }
     event.Skip();
+}
+
+void PositionDialog::OnClose(wxCloseEvent& event)
+{
+    LOG_INF("Position dialog closed, ensuring picking mode is off.");
+    if (m_pickingAidManager) {
+        m_pickingAidManager->stopPicking();
+    }
+    Destroy();
 }
