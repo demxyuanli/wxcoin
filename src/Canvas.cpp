@@ -83,9 +83,9 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 
         // Initialize layout positions (set navigation cube to bottom-left)
         if (clientSize.x > 0 && clientSize.y > 0) {
-            m_cubeLayout.size = 150; // Default cube size for CuteNavCube
-            m_cubeLayout.update(m_marginx, // Left edge + margin
-                               clientSize.y - m_cubeLayout.size - m_marginy, // Bottom edge - size - margin
+            m_cubeLayout.size = 200; // Default cube size for CuteNavCube
+            m_cubeLayout.update(clientSize.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
+                               m_marginy, // Top edge + margin
                 m_cubeLayout.size, clientSize, m_dpiScale);
             LOG_INF("Canvas::Canvas: Initialized navigation cube position: x=" + std::to_string(m_cubeLayout.x) +
                 ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size));
@@ -222,9 +222,9 @@ void Canvas::onSize(wxSizeEvent& event) {
 
     if (size.x > 0 && size.y > 0 && m_glContext && SetCurrent(*m_glContext)) {
         updateDPISettings();
-        // Update cube layout to maintain bottom-left position
-        m_cubeLayout.update(m_marginx, // Left edge + margin
-                            size.y - m_cubeLayout.size - m_marginy, // Bottom edge - size - margin
+        // Update cube layout to maintain top-right position
+        m_cubeLayout.update(size.x - m_cubeLayout.size - m_marginx, // Right edge - size - margin
+                            m_marginy, // Top edge + margin
             m_cubeLayout.size, size, m_dpiScale);
         
         m_sceneManager->updateAspectRatio(size);
@@ -254,23 +254,22 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
     float x = event.GetX() / m_dpiScale;
     float y = event.GetY() / m_dpiScale;
     wxSize clientSize = GetClientSize();
-    float cubeY = (clientSize.y / m_dpiScale) - y;
+    //float cubeY = (clientSize.y / m_dpiScale) - y; // Old bottom-up Y coordinate
 
     // Log mouse coordinates for debugging
-    LOG_DBG("Canvas::onMouseEvent: Mouse event at x=" + std::to_string(x) + ", y=" + std::to_string(y) +
-        " (canvas), cubeY=" + std::to_string(cubeY) +
-        ", cube region: x=[" + std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.x + m_cubeLayout.size) +
-        "], y=[" + std::to_string(m_cubeLayout.y) + "," + std::to_string(m_cubeLayout.y + m_cubeLayout.size) + "]");
+    //LOG_DBG("Canvas::onMouseEvent: Mouse event at x=" + std::to_string(x) + ", y=" + std::to_string(y) +
+    //    " (canvas), cube region: x=[" + std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.x + m_cubeLayout.size) +
+    //    "], y=[" + std::to_string(m_cubeLayout.y) + "," + std::to_string(m_cubeLayout.y + m_cubeLayout.size) + "]");
 
-    // Check if event is within navigation cube region (bottom-left corner)
+    // Check if event is within navigation cube region (top-right corner)
     if (m_navCube && m_navCube->isEnabled()) {
         if (x >= m_cubeLayout.x && x < (m_cubeLayout.x + m_cubeLayout.size) &&
-            cubeY >= m_cubeLayout.y && cubeY < (m_cubeLayout.y + m_cubeLayout.size)) {
+            y >= m_cubeLayout.y && y < (m_cubeLayout.y + m_cubeLayout.size)) {
             
             wxMouseEvent cubeEvent(event);
             // Calculate mouse position relative to the cube's top-left corner, then scale by DPI
             cubeEvent.m_x = static_cast<int>((x - m_cubeLayout.x) * m_dpiScale);
-            cubeEvent.m_y = static_cast<int>(((m_cubeLayout.y + m_cubeLayout.size) - cubeY) * m_dpiScale);
+            cubeEvent.m_y = static_cast<int>((y - m_cubeLayout.y) * m_dpiScale);
 
             // Calculate the DPI-scaled size of the navigation cube's viewport
             int scaled_cube_dimension = static_cast<int>(m_cubeLayout.size * m_dpiScale);

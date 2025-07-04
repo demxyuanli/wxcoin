@@ -67,16 +67,16 @@ void CuteNavCube::initialize() {
     setupGeometry();
 
     m_faceToView = {
-        { "Front", "Front" },
-        { "Back", "Back" },
-        { "Left", "Left" },
-        { "Right", "Right" },
-        { "Top", "Top" },
-        { "Bottom", "Bottom" }
+        { "Front",  "Top" },
+        { "Back",   "Bottom" },
+        { "Left",   "Right" },
+        { "Right",  "Left" },
+        { "Top",    "Front" },
+        { "Bottom", "Back" }
     };
 }
 
-bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height) {
+bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height, const wxColour& bgColor) {
     wxBitmap bitmap(width, height, 32);
     wxMemoryDC dc;
     dc.SelectObject(bitmap);
@@ -93,7 +93,7 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
         return true;
     }
 
-    dc.SetBackground(wxBrush(wxColour(211, 211, 211, 160))); // Semi-transparent light grey background
+    dc.SetBackground(wxBrush(bgColor));
     dc.Clear();
 
     // Use DPI manager for high-quality font rendering
@@ -161,7 +161,7 @@ void CuteNavCube::setupGeometry() {
     m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
     m_orthoCamera->nearDistance = 0.05f; // Reduced to ensure all faces are visible
     m_orthoCamera->farDistance = 15.0f;  // Increased to include all geometry
-    m_orthoCamera->orientation.setValue(SbRotation::identity());
+    m_orthoCamera->orientation.setValue(SbRotation(SbVec3f(1, 0, 0), -M_PI / 2)); // Rotate to make Z up
     m_root->addChild(m_orthoCamera);
 
     // --- Lighting Setup ---
@@ -266,12 +266,12 @@ void CuteNavCube::setupGeometry() {
 
     std::vector<FaceDefinition> faces = {
         // 6 Main faces
-        {"Top",    {13, 16, 4, 1}, "Top", 0},
-        {"Bottom", {19, 22, 10, 7}, "Bottom", 0},
-        {"Front",  {2, 5, 8, 11}, "Front", 0},
-        {"Back",   {14, 23, 20, 17}, "Back", 0},
-        {"Right",  {9, 21, 12, 0}, "Right", 0},
-        {"Left",   {3, 15, 18, 6}, "Left", 0},
+        {"Top",    {13, 16, 4, 1}, "Front", 0},
+        {"Bottom", {19, 22, 10, 7}, "Back", 0},
+        {"Front",  {2, 5, 8, 11}, "Top", 0},
+        {"Back",   {14, 23, 20, 17}, "Bottom", 0},
+        {"Right",  {9, 21, 12, 0}, "Left", 0},
+        {"Left",   {3, 15, 18, 6}, "Right", 0},
 
         // 8 Corner faces (triangular)
         {"Corner0", {0, 1, 2}, "", 2},            // Face 6
@@ -324,11 +324,30 @@ void CuteNavCube::setupGeometry() {
     mainFaceMaterial->transparency.setValue(0.0f);
 
     SoMaterial* edgeAndCornerMaterial = new SoMaterial;
-    const float grey = 211.0f / 255.0f;
-    edgeAndCornerMaterial->diffuseColor.setValue(grey, grey, grey);
+    edgeAndCornerMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f); // Use white so it doesn't tint texture
     edgeAndCornerMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
     edgeAndCornerMaterial->shininess.setValue(0.5f);
-    edgeAndCornerMaterial->transparency.setValue(1.0f - (160.0f / 255.0f));
+    edgeAndCornerMaterial->transparency.setValue(0.0f); // Transparency will come from texture alpha
+
+    // --- Pre-generate textures for edges and corners ---
+    const int texWidth = 128;
+    const int texHeight = 128;
+    
+    SoTexture2* whiteTexture = nullptr;
+    std::vector<unsigned char> whiteImageData(texWidth * texHeight * 4);
+    if (generateFaceTexture("", whiteImageData.data(), texWidth, texHeight, wxColour(255, 255, 255, 160))) {
+        whiteTexture = new SoTexture2;
+        whiteTexture->image.setValue(SbVec2s(texWidth, texHeight), 4, whiteImageData.data());
+        whiteTexture->model = SoTexture2::DECAL;
+    }
+
+    SoTexture2* greyTexture = nullptr;
+    std::vector<unsigned char> greyImageData(texWidth * texHeight * 4);
+    if (generateFaceTexture("", greyImageData.data(), texWidth, texHeight, wxColour(180, 180, 180, 160))) {
+        greyTexture = new SoTexture2;
+        greyTexture->image.setValue(SbVec2s(texWidth, texHeight), 4, greyImageData.data());
+        greyTexture->model = SoTexture2::DECAL;
+    }
 
     LOG_INF("--- Logging Face Properties ---");
     for (const auto& faceDef : faces) {
@@ -342,41 +361,57 @@ void CuteNavCube::setupGeometry() {
         SoSeparator* faceSep = new SoSeparator;
         faceSep->setName(SbName(faceDef.name.c_str()));
 
-        // Add texture and material for main faces
-        if (!faceDef.textureKey.empty()) {
-            faceSep->addChild(mainFaceMaterial);
-
-            const int texWidth = 128;
-            const int texHeight = 128;
-            std::vector<unsigned char> imageData(texWidth * texHeight * 4);
-
-            if (generateFaceTexture(faceDef.textureKey, imageData.data(), texWidth, texHeight)) {
-                SoTexture2* texture = new SoTexture2;
-                texture->image.setValue(SbVec2s(texWidth, texHeight), 4, imageData.data());
-                texture->model = SoTexture2::DECAL;
-                faceSep->addChild(texture);
-            }
-        } else {
-            // Apply a different material for edges and corners
-            faceSep->addChild(edgeAndCornerMaterial);
-        }
-
         SoIndexedFaceSet* face = new SoIndexedFaceSet;
         for (size_t i = 0; i < faceDef.indices.size(); i++) {
             face->coordIndex.set1Value(i, faceDef.indices[i]);
         }
         face->coordIndex.set1Value(faceDef.indices.size(), -1); // End marker
 
-        if (!faceDef.textureKey.empty()) {
-            // The texture coordinates were causing horizontal flipping (e.g., "Left" appeared mirrored).
-            // By swapping the U-coordinates in the mapping, we can correct this.
-            // The original mapping was 0,1,2,3 which maps to (0,0),(1,0),(1,1),(0,1).
-            // The new mapping 1,0,3,2 maps to (1,0),(0,0),(0,1),(1,1), effectively flipping the texture horizontally.
-            face->textureCoordIndex.set1Value(0, 1);
-            face->textureCoordIndex.set1Value(1, 0);
-            face->textureCoordIndex.set1Value(2, 3);
-            face->textureCoordIndex.set1Value(3, 2);
+        if (faceDef.materialType == 0) { // Main face
+            faceSep->addChild(mainFaceMaterial);
+            std::vector<unsigned char> imageData(texWidth * texHeight * 4);
+            if (generateFaceTexture(faceDef.textureKey, imageData.data(), texWidth, texHeight, wxColour(255, 255, 255, 160))) {
+                SoTexture2* texture = new SoTexture2;
+                texture->image.setValue(SbVec2s(texWidth, texHeight), 4, imageData.data());
+                texture->model = SoTexture2::DECAL;
+                faceSep->addChild(texture);
+            }
+            
+            if (faceDef.textureKey == "Back") {
+                // Special UV mapping for the 'Back' face to correct its orientation
+                face->textureCoordIndex.set1Value(0, 2);
+                face->textureCoordIndex.set1Value(1, 3);
+                face->textureCoordIndex.set1Value(2, 0);
+                face->textureCoordIndex.set1Value(3, 1);
+            } else {
+                // Default UV mapping for other main faces
+                face->textureCoordIndex.set1Value(0, 1);
+                face->textureCoordIndex.set1Value(1, 0);
+                face->textureCoordIndex.set1Value(2, 3);
+                face->textureCoordIndex.set1Value(3, 2);
+            }
             face->textureCoordIndex.set1Value(4, -1);
+
+        } else { // Edges and Corners
+            faceSep->addChild(edgeAndCornerMaterial);
+            if (faceDef.materialType == 1) { // Edge
+                if (greyTexture) faceSep->addChild(greyTexture);
+            } else { // Corner (materialType == 2)
+                if (whiteTexture) faceSep->addChild(whiteTexture);
+            }
+
+            if (faceDef.indices.size() == 4) { // Edge faces (quads)
+                face->textureCoordIndex.set1Value(0, 0);
+                face->textureCoordIndex.set1Value(1, 1);
+                face->textureCoordIndex.set1Value(2, 2);
+                face->textureCoordIndex.set1Value(3, 3);
+                face->textureCoordIndex.set1Value(4, -1);
+            } else if (faceDef.indices.size() == 3) { // Corner faces (triangles)
+                face->textureCoordIndex.set1Value(0, 0);
+                face->textureCoordIndex.set1Value(1, 1);
+                face->textureCoordIndex.set1Value(2, 3);
+                face->textureCoordIndex.set1Value(3, -1);
+            }
         }
         
         faceSep->addChild(face);
@@ -485,46 +520,55 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
     if (!m_enabled) return;
 
-    static float dragThreshold = 5.0f;
     static SbVec2s dragStartPos(0, 0);
 
-    float x = static_cast<float>(event.GetX());
-    float y = static_cast<float>(event.GetY());
-    SbVec2s currentPos(static_cast<short>(x), static_cast<short>(y));
+    SbVec2s currentPos(
+        static_cast<short>(event.GetX()),
+        static_cast<short>(event.GetY())
+    );
 
     if (event.LeftDown()) {
         m_isDragging = true;
         m_lastMousePos = currentPos;
-        dragStartPos = m_lastMousePos;
-        LOG_INF("CuteNavCube::handleMouseEvent: Drag started.");
+        dragStartPos = currentPos; // Capture position at the start of a potential drag/click
+        LOG_DBG("CuteNavCube::handleMouseEvent: LeftDown at (" + std::to_string(currentPos[0]) + ", " + std::to_string(currentPos[1]) + ")");
     }
     else if (event.LeftUp()) {
         if (m_isDragging) {
             m_isDragging = false;
+            
+            // Calculate distance between mouse down and mouse up to distinguish a click from a drag
             SbVec2s delta = currentPos - dragStartPos;
-            float distance = std::sqrt(delta[0] * delta[0] + delta[1] * delta[1]);
+            float distance = std::sqrt(static_cast<float>(delta[0] * delta[0] + delta[1] * delta[1]));
+            static const float clickThreshold = 5.0f; // Max distance for a click
 
-            if (distance < dragThreshold) { // It's a click
-                // Y-coordinate needs to be inverted for picking
+            if (distance < clickThreshold) {
+                // It's a click.
+                // Invert Y-coordinate for picking, as OpenGL's origin is bottom-left.
                 SbVec2s pickPos(currentPos[0], static_cast<short>(viewportSize.y - currentPos[1]));
+                
+                LOG_DBG("CuteNavCube::handleMouseEvent: Click detected. Picking at (" + std::to_string(pickPos[0]) + ", " + std::to_string(pickPos[1]) + ")");
+
                 std::string region = pickRegion(pickPos, viewportSize);
                 if (!region.empty() && m_viewChangeCallback) {
                     m_viewChangeCallback(region);
                     LOG_INF("CuteNavCube::handleMouseEvent: Clicked, switched to view: " + region);
+                } else {
+                    LOG_DBG("CuteNavCube::handleMouseEvent: Click did not hit a main face.");
                 }
+            } else {
+                LOG_DBG("CuteNavCube::handleMouseEvent: Drag gesture ended, distance: " + std::to_string(distance));
             }
-            LOG_INF("CuteNavCube::handleMouseEvent: Drag ended.");
         }
     }
     else if (event.Dragging() && m_isDragging) {
         SbVec2s delta = currentPos - m_lastMousePos;
+        if (delta[0] == 0 && delta[1] == 0) return; // Ignore no-movement events
 
-        // Use logic from NavigationCube for more intuitive rotation
         float sensitivity = 1.0f;
         m_rotationY += delta[0] * sensitivity;
         m_rotationX -= delta[1] * sensitivity; // Inverted Y-axis for natural feel
 
-        // Clamp rotation to prevent flipping
         m_rotationX = std::max(-89.0f, std::min(89.0f, m_rotationX));
 
         updateCameraRotation();
@@ -542,10 +586,22 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 void CuteNavCube::render(int x, int y, const wxSize& size) {
     if (!m_enabled || !m_root) return;
 
-    SbViewportRegion viewport(size.x, size.y);
+    // Setup viewport for navigation cube at specified position and size
+    SbViewportRegion viewport;
+    // Use full window dimensions for correct coordinate mapping
+    viewport.setWindowSize(SbVec2s(static_cast<short>(m_windowWidth), static_cast<short>(m_windowHeight)));
+    // Calculate physical pixel dimensions for the cube viewport
+    int widthPx = static_cast<int>(size.x * m_dpiScale);
+    int heightPx = static_cast<int>(size.y * m_dpiScale);
+    // Convert top-left origin (x,y) to bottom-left origin for viewport
+    int windowHeightPx = static_cast<int>(m_windowHeight * m_dpiScale);
+    int yBottomPx = windowHeightPx - y - heightPx;
+    // Set the viewport rectangle where the cube will be rendered (origin bottom-left)
+    viewport.setViewportPixels(x, yBottomPx, widthPx, heightPx);
+
     SoGLRenderAction renderAction(viewport);
     renderAction.setSmoothing(true);
-    renderAction.setNumPasses(4); // Use multiple passes for better anti-aliasing
+    renderAction.setNumPasses(4); // Multiple passes for better anti-aliasing
     renderAction.apply(m_root);
 }
 

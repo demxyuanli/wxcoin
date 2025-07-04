@@ -42,7 +42,7 @@ private:
     void setupGeometry();
     std::string pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize);
     void updateCameraRotation();
-    bool generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height);
+    bool generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height, const wxColour& bgColor);
 
     // Texture cache entry
     struct TextureData {
