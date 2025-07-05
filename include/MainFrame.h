@@ -10,6 +10,7 @@ class MouseHandler;
 class GeometryFactory;
 class CommandManager;
 class NavigationController;
+class OCCViewer;
 
 class MainFrame : public wxFrame {
 public:
@@ -44,6 +45,8 @@ private:
     void onViewRight(wxCommandEvent& event);
     void onViewIsometric(wxCommandEvent& event);
     void onNavigationCubeConfig(wxCommandEvent& event);
+    void onShowNormals(wxCommandEvent& event);
+    void onFixNormals(wxCommandEvent& event);
     void onAbout(wxCommandEvent& event);
     void onClose(wxCloseEvent& event);
 
@@ -52,6 +55,7 @@ private:
     MouseHandler* m_mouseHandler;
     GeometryFactory* m_geometryFactory;
     CommandManager* m_commandManager;
+    OCCViewer* m_occViewer;
 
     DECLARE_EVENT_TABLE()
 };

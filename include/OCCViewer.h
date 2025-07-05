@@ -63,10 +63,18 @@ public:
     void setShowEdges(bool showEdges);
     void setAntiAliasing(bool enabled);
     
+    // Normal display settings
+    void setShowNormals(bool showNormals);
+    void setNormalLength(double length);
+    void setNormalColor(const Quantity_Color& correctColor, const Quantity_Color& incorrectColor);
+    void fixNormals();  // Fix incorrect face normals
+    
     bool isWireframeMode() const { return m_wireframeMode; }
     bool isShadingMode() const { return m_shadingMode; }
     bool isShowEdges() const { return m_showEdges; }
     bool isAntiAliasingEnabled() const { return m_antiAliasing; }
+    bool isShowNormals() const { return m_showNormals; }
+    double getNormalLength() const { return m_normalLength; }
     
     // Update and refresh
     void updateAll();
@@ -80,9 +88,12 @@ private:
     void initializeViewer();
     void updateSceneGraph();
     void updateGeometryNode(std::shared_ptr<OCCGeometry> geometry);
+    void updateNormalDisplay();
+    void createNormalNodes();
     
     SceneManager* m_sceneManager;
     SoSeparator* m_occRoot;  // Root node for OCC geometry
+    SoSeparator* m_normalRoot; // Root node for normal display
     
     std::vector<std::shared_ptr<OCCGeometry>> m_geometries;
     std::vector<std::shared_ptr<OCCGeometry>> m_selectedGeometries;
@@ -92,6 +103,12 @@ private:
     bool m_shadingMode;
     bool m_showEdges;
     bool m_antiAliasing;
+    
+    // Normal display settings
+    bool m_showNormals;
+    double m_normalLength;
+    Quantity_Color m_correctNormalColor;   // Red for correct normals
+    Quantity_Color m_incorrectNormalColor; // Green for incorrect normals
     
     // Default settings
     Quantity_Color m_defaultColor;

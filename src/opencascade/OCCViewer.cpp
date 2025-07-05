@@ -1,19 +1,29 @@
 #include "OCCViewer.h"
 #include "OCCGeometry.h"
+#include "OCCMeshConverter.h"
 #include "SceneManager.h"
 #include "Logger.h"
 #include "Canvas.h"
 
 #include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoDrawStyle.h>
 #include <algorithm>
 
 OCCViewer::OCCViewer(SceneManager* sceneManager)
     : m_sceneManager(sceneManager)
     , m_occRoot(nullptr)
+    , m_normalRoot(nullptr)
     , m_wireframeMode(false)
     , m_shadingMode(true)
     , m_showEdges(false)
     , m_antiAliasing(true)
+    , m_showNormals(false)
+    , m_normalLength(0.5)
+    , m_correctNormalColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)    // Red for correct normals
+    , m_incorrectNormalColor(0.0, 1.0, 0.0, Quantity_TOC_RGB)  // Green for incorrect normals
     , m_defaultColor(0.7, 0.7, 0.7, Quantity_TOC_RGB)
     , m_defaultTransparency(0.0)
     , m_meshDeflection(0.1)
@@ -27,6 +37,9 @@ OCCViewer::~OCCViewer()
     if (m_occRoot) {
         m_occRoot->unref();
     }
+    if (m_normalRoot) {
+        m_normalRoot->unref();
+    }
 }
 
 void OCCViewer::initializeViewer()
@@ -34,8 +47,12 @@ void OCCViewer::initializeViewer()
     m_occRoot = new SoSeparator;
     m_occRoot->ref();
     
+    m_normalRoot = new SoSeparator;
+    m_normalRoot->ref();
+    
     if (m_sceneManager) {
         m_sceneManager->getObjectRoot()->addChild(m_occRoot);
+        m_sceneManager->getObjectRoot()->addChild(m_normalRoot);
     }
     
     LOG_INF("OCC Viewer initialized");
@@ -315,4 +332,293 @@ void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
 void OCCViewer::onSelectionChanged()
 {
     LOG_INF("Selection changed: " + std::to_string(m_selectedGeometries.size()) + " objects selected");
+}
+
+void OCCViewer::setShowNormals(bool showNormals)
+{
+    m_showNormals = showNormals;
+    updateNormalDisplay();
+}
+
+void OCCViewer::setNormalLength(double length)
+{
+    m_normalLength = length;
+    if (m_showNormals) {
+        updateNormalDisplay();
+    }
+}
+
+void OCCViewer::setNormalColor(const Quantity_Color& correctColor, const Quantity_Color& incorrectColor)
+{
+    m_correctNormalColor = correctColor;
+    m_incorrectNormalColor = incorrectColor;
+    if (m_showNormals) {
+        updateNormalDisplay();
+    }
+}
+
+void OCCViewer::updateNormalDisplay()
+{
+    if (!m_normalRoot) {
+        return;
+    }
+    
+    // Clear existing normal display
+    m_normalRoot->removeAllChildren();
+    
+    if (!m_showNormals) {
+        return;
+    }
+    
+    createNormalNodes();
+    
+    // Trigger refresh
+    if (m_sceneManager) {
+        m_sceneManager->getCanvas()->Refresh();
+    }
+}
+
+void OCCViewer::createNormalNodes()
+{
+    if (!m_normalRoot) {
+        return;
+    }
+    
+    for (auto& geometry : m_geometries) {
+        if (!geometry || !geometry->isVisible()) {
+            continue;
+        }
+        
+        TopoDS_Shape shape = geometry->getShape();
+        if (shape.IsNull()) {
+            continue;
+        }
+        
+        // Convert shape to mesh to get normals
+        OCCMeshConverter::TriangleMesh mesh = OCCMeshConverter::convertToMesh(shape, m_meshDeflection);
+        
+        if (mesh.isEmpty()) {
+            continue;
+        }
+        
+        // Create separator for this geometry's normals
+        SoSeparator* normalSep = new SoSeparator;
+        
+        // Create coordinates for normal lines
+        SoCoordinate3* coords = new SoCoordinate3;
+        SoIndexedLineSet* lineSet = new SoIndexedLineSet;
+        
+        std::vector<SbVec3f> normalCoords;
+        std::vector<int32_t> lineIndices;
+        
+        // Calculate face normals and create normal lines
+        for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+            int i0 = mesh.triangles[i];
+            int i1 = mesh.triangles[i + 1];
+            int i2 = mesh.triangles[i + 2];
+            
+            if (i0 >= 0 && i0 < static_cast<int>(mesh.vertices.size()) &&
+                i1 >= 0 && i1 < static_cast<int>(mesh.vertices.size()) &&
+                i2 >= 0 && i2 < static_cast<int>(mesh.vertices.size())) {
+                
+                const gp_Pnt& v0 = mesh.vertices[i0];
+                const gp_Pnt& v1 = mesh.vertices[i1];
+                const gp_Pnt& v2 = mesh.vertices[i2];
+                
+                // Calculate triangle center
+                gp_Pnt center(
+                    (v0.X() + v1.X() + v2.X()) / 3.0,
+                    (v0.Y() + v1.Y() + v2.Y()) / 3.0,
+                    (v0.Z() + v1.Z() + v2.Z()) / 3.0
+                );
+                
+                // Calculate face normal
+                gp_Vec edge1(v0, v1);
+                gp_Vec edge2(v0, v2);
+                gp_Vec normal = edge1.Crossed(edge2);
+                
+                if (normal.Magnitude() > 1e-6) {
+                    normal.Normalize();
+                    
+                    // Better normal orientation check
+                    // Check if normal points outward from the centroid of the entire shape
+                    gp_Pnt shapeCentroid(0, 0, 0);
+                    int vertexCount = 0;
+                    for (const auto& vertex : mesh.vertices) {
+                        shapeCentroid.SetX(shapeCentroid.X() + vertex.X());
+                        shapeCentroid.SetY(shapeCentroid.Y() + vertex.Y());
+                        shapeCentroid.SetZ(shapeCentroid.Z() + vertex.Z());
+                        vertexCount++;
+                    }
+                    if (vertexCount > 0) {
+                        shapeCentroid.SetX(shapeCentroid.X() / vertexCount);
+                        shapeCentroid.SetY(shapeCentroid.Y() / vertexCount);
+                        shapeCentroid.SetZ(shapeCentroid.Z() / vertexCount);
+                    }
+                    
+                    // Vector from shape centroid to triangle center
+                    gp_Vec outwardVec(shapeCentroid, center);
+                    
+                    // If normal and outward vector have positive dot product, normal is pointing outward (correct)
+                    bool isCorrectOrientation = (normal.Dot(outwardVec) > 0);
+                    
+                    // Create normal line
+                    SbVec3f startPoint(center.X(), center.Y(), center.Z());
+                    SbVec3f endPoint(
+                        center.X() + normal.X() * m_normalLength,
+                        center.Y() + normal.Y() * m_normalLength,
+                        center.Z() + normal.Z() * m_normalLength
+                    );
+                    
+                    int startIndex = normalCoords.size();
+                    normalCoords.push_back(startPoint);
+                    normalCoords.push_back(endPoint);
+                    
+                    // Add line indices
+                    lineIndices.push_back(startIndex);
+                    lineIndices.push_back(startIndex + 1);
+                    lineIndices.push_back(-1); // End of line
+                    
+                    // Create material for this normal based on orientation
+                    SoMaterial* material = new SoMaterial;
+                    if (isCorrectOrientation) {
+                        // Red for correct normals
+                        material->diffuseColor.setValue(
+                            m_correctNormalColor.Red(),
+                            m_correctNormalColor.Green(),
+                            m_correctNormalColor.Blue()
+                        );
+                    } else {
+                        // Green for incorrect normals
+                        material->diffuseColor.setValue(
+                            m_incorrectNormalColor.Red(),
+                            m_incorrectNormalColor.Green(),
+                            m_incorrectNormalColor.Blue()
+                        );
+                    }
+                    
+                    // Create separate line set for each normal to have different colors
+                    SoSeparator* singleNormalSep = new SoSeparator;
+                    singleNormalSep->addChild(material);
+                    
+                    SoDrawStyle* drawStyle = new SoDrawStyle;
+                    drawStyle->lineWidth.setValue(2.0f);
+                    singleNormalSep->addChild(drawStyle);
+                    
+                    SoCoordinate3* singleCoords = new SoCoordinate3;
+                    singleCoords->point.setValues(0, 2, &normalCoords[startIndex]);
+                    singleNormalSep->addChild(singleCoords);
+                    
+                    SoIndexedLineSet* singleLineSet = new SoIndexedLineSet;
+                    int32_t singleIndices[] = {0, 1, -1};
+                    singleLineSet->coordIndex.setValues(0, 3, singleIndices);
+                    singleNormalSep->addChild(singleLineSet);
+                    
+                    normalSep->addChild(singleNormalSep);
+                }
+            }
+        }
+        
+        if (normalSep->getNumChildren() > 0) {
+            m_normalRoot->addChild(normalSep);
+        }
+    }
+    
+    LOG_INF("Created normal display for " + std::to_string(m_geometries.size()) + " geometries");
+}
+
+void OCCViewer::fixNormals()
+{
+    for (auto& geometry : m_geometries) {
+        if (!geometry || !geometry->isVisible()) {
+            continue;
+        }
+        
+        TopoDS_Shape shape = geometry->getShape();
+        if (shape.IsNull()) {
+            continue;
+        }
+        
+        // Convert shape to mesh
+        OCCMeshConverter::TriangleMesh mesh = OCCMeshConverter::convertToMesh(shape, m_meshDeflection);
+        
+        if (mesh.isEmpty()) {
+            continue;
+        }
+        
+        // Calculate shape centroid
+        gp_Pnt shapeCentroid(0, 0, 0);
+        for (const auto& vertex : mesh.vertices) {
+            shapeCentroid.SetX(shapeCentroid.X() + vertex.X());
+            shapeCentroid.SetY(shapeCentroid.Y() + vertex.Y());
+            shapeCentroid.SetZ(shapeCentroid.Z() + vertex.Z());
+        }
+        if (!mesh.vertices.empty()) {
+            shapeCentroid.SetX(shapeCentroid.X() / mesh.vertices.size());
+            shapeCentroid.SetY(shapeCentroid.Y() / mesh.vertices.size());
+            shapeCentroid.SetZ(shapeCentroid.Z() / mesh.vertices.size());
+        }
+        
+        // Count incorrect normals
+        int incorrectCount = 0;
+        int totalCount = 0;
+        
+        for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+            int i0 = mesh.triangles[i];
+            int i1 = mesh.triangles[i + 1];
+            int i2 = mesh.triangles[i + 2];
+            
+            if (i0 >= 0 && i0 < static_cast<int>(mesh.vertices.size()) &&
+                i1 >= 0 && i1 < static_cast<int>(mesh.vertices.size()) &&
+                i2 >= 0 && i2 < static_cast<int>(mesh.vertices.size())) {
+                
+                const gp_Pnt& v0 = mesh.vertices[i0];
+                const gp_Pnt& v1 = mesh.vertices[i1];
+                const gp_Pnt& v2 = mesh.vertices[i2];
+                
+                // Calculate triangle center
+                gp_Pnt center(
+                    (v0.X() + v1.X() + v2.X()) / 3.0,
+                    (v0.Y() + v1.Y() + v2.Y()) / 3.0,
+                    (v0.Z() + v1.Z() + v2.Z()) / 3.0
+                );
+                
+                // Calculate face normal
+                gp_Vec edge1(v0, v1);
+                gp_Vec edge2(v0, v2);
+                gp_Vec normal = edge1.Crossed(edge2);
+                
+                if (normal.Magnitude() > 1e-6) {
+                    normal.Normalize();
+                    
+                    // Vector from shape centroid to triangle center
+                    gp_Vec outwardVec(shapeCentroid, center);
+                    
+                    // Check if normal points outward
+                    bool isCorrectOrientation = (normal.Dot(outwardVec) > 0);
+                    
+                    totalCount++;
+                    if (!isCorrectOrientation) {
+                        incorrectCount++;
+                    }
+                }
+            }
+        }
+        
+        // If more than 50% of normals are incorrect, flip all normals
+        if (totalCount > 0 && incorrectCount > totalCount / 2) {
+            LOG_INF("Flipping normals for geometry: " + geometry->getName() + 
+                   " (" + std::to_string(incorrectCount) + "/" + std::to_string(totalCount) + " incorrect)");
+            
+            OCCMeshConverter::flipNormals(mesh);
+            
+            // Update the geometry's representation
+            geometry->updateCoinRepresentation();
+        }
+    }
+    
+    // Update normal display if it's currently shown
+    if (m_showNormals) {
+        updateNormalDisplay();
+    }
 } 

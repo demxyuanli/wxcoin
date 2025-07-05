@@ -30,6 +30,8 @@ enum
     ID_ViewFront,
     ID_ViewRight,
     ID_ViewIsometric,
+    ID_ShowNormals,
+    ID_FixNormals,
     ID_Undo,
     ID_Redo,
     ID_NavigationCubeConfig
@@ -50,6 +52,8 @@ EVT_MENU(ID_ViewTop, MainFrame::onViewTop)
 EVT_MENU(ID_ViewFront, MainFrame::onViewFront)
 EVT_MENU(ID_ViewRight, MainFrame::onViewRight)
 EVT_MENU(ID_ViewIsometric, MainFrame::onViewIsometric)
+EVT_MENU(ID_ShowNormals, MainFrame::onShowNormals)
+EVT_MENU(ID_FixNormals, MainFrame::onFixNormals)
 EVT_MENU(ID_Undo, MainFrame::onUndo)
 EVT_MENU(ID_Redo, MainFrame::onRedo)
 EVT_MENU(ID_NavigationCubeConfig, MainFrame::onNavigationCubeConfig)
@@ -63,6 +67,7 @@ MainFrame::MainFrame(const wxString& title)
     , m_mouseHandler(nullptr)
     , m_geometryFactory(nullptr)
     , m_commandManager(new CommandManager())
+    , m_occViewer(nullptr)
     , m_auiManager(this)
 {
     LOG_INF("MainFrame initializing");
@@ -107,6 +112,9 @@ void MainFrame::createMenu()
     viewMenu->Append(ID_ViewRight, "&Right", "Set right view");
     viewMenu->Append(ID_ViewIsometric, "&Isometric", "Set isometric view");
     viewMenu->AppendSeparator();
+    viewMenu->AppendCheckItem(ID_ShowNormals, "Show &Normals", "Show/hide face normals");
+    viewMenu->Append(ID_FixNormals, "&Fix Normals", "Automatically fix incorrect face normals");
+    viewMenu->AppendSeparator();
     viewMenu->Append(ID_NavigationCubeConfig, "&Navigation Cube Config...", "Configure navigation cube settings");
     menuBar->Append(viewMenu, "&View");
 
@@ -140,6 +148,8 @@ void MainFrame::createToolbar()
     toolbar->AddTool(ID_ViewFront, "Front", wxArtProvider::GetBitmap(wxART_GO_FORWARD), "Set front view");
     toolbar->AddTool(ID_ViewRight, "Right", wxArtProvider::GetBitmap(wxART_GO_TO_PARENT), "Set right view");
     toolbar->AddTool(ID_ViewIsometric, "Isometric", wxArtProvider::GetBitmap(wxART_HELP_SETTINGS), "Set isometric view");
+    toolbar->AddSeparator();
+    toolbar->AddCheckTool(ID_ShowNormals, "Show Normals", wxArtProvider::GetBitmap(wxART_LIST_VIEW), wxNullBitmap, "Show/hide face normals");
     toolbar->AddSeparator();
     toolbar->AddTool(ID_Undo, "Undo", wxArtProvider::GetBitmap(wxART_UNDO), "Undo the last action");
     toolbar->AddTool(ID_Redo, "Redo", wxArtProvider::GetBitmap(wxART_REDO), "Redo the last undone action");
@@ -186,7 +196,7 @@ void MainFrame::createPanels()
     m_canvas->getInputManager()->setNavigationController(navController);
     m_mouseHandler->setNavigationController(navController);
 
-    OCCViewer* occViewer = new OCCViewer(m_canvas->getSceneManager());
+    m_occViewer = new OCCViewer(m_canvas->getSceneManager());
 
     // Now that all handlers are set, initialize the input manager's states
     m_canvas->getInputManager()->initializeStates();
@@ -199,7 +209,7 @@ void MainFrame::createPanels()
         objectTreePanel,
         propertyPanel,
         m_commandManager,
-        occViewer
+        m_occViewer
     );
     if (!m_geometryFactory) {
         LOG_ERR("Failed to create GeometryFactory");
@@ -373,6 +383,40 @@ void MainFrame::onViewIsometric(wxCommandEvent& event)
     LOG_INF("Setting isometric view");
     m_canvas->getInputManager()->getNavigationController()->viewIsometric();
     SetStatusText("View: Isometric", 0);
+}
+
+void MainFrame::onShowNormals(wxCommandEvent& event)
+{
+    if (!m_occViewer) {
+        LOG_ERR("OCCViewer is null in onShowNormals");
+        SetStatusText("Error: Cannot toggle normals", 0);
+        return;
+    }
+    
+    bool showNormals = !m_occViewer->isShowNormals();
+    m_occViewer->setShowNormals(showNormals);
+    
+    // Update menu item check state
+    wxMenuBar* menuBar = GetMenuBar();
+    if (menuBar) {
+        menuBar->Check(ID_ShowNormals, showNormals);
+    }
+    
+    LOG_INF(showNormals ? "Showing face normals" : "Hiding face normals");
+    SetStatusText(showNormals ? "Normals: ON" : "Normals: OFF", 0);
+}
+
+void MainFrame::onFixNormals(wxCommandEvent& event)
+{
+    if (!m_occViewer) {
+        LOG_ERR("OCCViewer is null in onFixNormals");
+        SetStatusText("Error: Cannot fix normals", 0);
+        return;
+    }
+    
+    LOG_INF("Fixing face normals");
+    m_occViewer->fixNormals();
+    SetStatusText("Fixed face normals", 0);
 }
 
 void MainFrame::onNavigationCubeConfig(wxCommandEvent& event)

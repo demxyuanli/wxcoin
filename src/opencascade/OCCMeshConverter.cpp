@@ -204,13 +204,13 @@ void OCCMeshConverter::calculateNormals(TriangleMesh& mesh)
         }
     }
     
-    // Normalize the accumulated normals
+    // Normalize accumulated normals
     for (auto& normal : mesh.normals) {
-        double length = std::sqrt(normal.X() * normal.X() + 
-                                 normal.Y() * normal.Y() + 
-                                 normal.Z() * normal.Z());
-        if (length > Precision::Confusion()) {
-            normal = gp_Pnt(normal.X() / length, normal.Y() / length, normal.Z() / length);
+        double length = sqrt(normal.X() * normal.X() + normal.Y() * normal.Y() + normal.Z() * normal.Z());
+        if (length > 1e-6) {
+            normal.SetX(normal.X() / length);
+            normal.SetY(normal.Y() / length);
+            normal.SetZ(normal.Z() / length);
         }
     }
 }
@@ -441,4 +441,28 @@ bool OCCMeshConverter::exportToSTL(const TriangleMesh& mesh, const std::string& 
         LOG_ERR("Exception while exporting STL: " + std::string(e.what()));
         return false;
     }
+}
+
+void OCCMeshConverter::flipNormals(TriangleMesh& mesh)
+{
+    if (mesh.isEmpty()) {
+        return;
+    }
+    
+    // Flip triangle winding order (reverse vertex order for each triangle)
+    for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+        if (i + 2 < mesh.triangles.size()) {
+            // Swap second and third vertices to flip the triangle
+            std::swap(mesh.triangles[i + 1], mesh.triangles[i + 2]);
+        }
+    }
+    
+    // Flip normals if they exist
+    for (auto& normal : mesh.normals) {
+        normal.SetX(-normal.X());
+        normal.SetY(-normal.Y());
+        normal.SetZ(-normal.Z());
+    }
+    
+    LOG_INF("Flipped normals for mesh with " + std::to_string(mesh.getTriangleCount()) + " triangles");
 }

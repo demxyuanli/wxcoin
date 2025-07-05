@@ -157,27 +157,141 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& posit
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& position) {
     static int wrenchCounter = 0;
     std::string name = "OCCWrench_" + std::to_string(++wrenchCounter);
-    // Parameters for wrench
-    double length = 10.0;
-    double width = 2.0;
-    double thickness = 1.0;
-    double holeRadius = 0.4;
-    double holeSpacing = 3.0;
-    double filletRadius = 0.2;
-    // Create handle box
-    TopoDS_Shape bar = OCCShapeBuilder::createBox(length, width, thickness);
-    // Create cylindrical holes
-    TopoDS_Shape hole1 = OCCShapeBuilder::createCylinder(holeRadius, thickness * 2,
-        gp_Pnt(holeSpacing, width / 2.0, thickness / 2.0), gp_Dir(0, 0, 1));
-    TopoDS_Shape hole2 = OCCShapeBuilder::createCylinder(holeRadius, thickness * 2,
-        gp_Pnt(length - holeSpacing, width / 2.0, thickness / 2.0), gp_Dir(0, 0, 1));
-    // Subtract holes from bar
-    TopoDS_Shape cut1 = OCCShapeBuilder::booleanDifference(bar, hole1);
-    TopoDS_Shape cut2 = OCCShapeBuilder::booleanDifference(cut1, hole2);
-    // Wrap in OCCGeometry
-    auto geometry = std::make_shared<OCCGeometry>(name);
-    geometry->setShape(cut2);
-    // Position the wrench
-    geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
-    return geometry;
+    
+    try {
+
+        double totalLength = 12.0;
+        double handleLength = 8.0;
+        double handleWidth = 1.5;
+        double handleThickness = 0.8;
+        
+
+        double headWidth = 3.0;
+        double headThickness = 0.8;
+        double jawOpening = 1.0; 
+        
+
+        TopoDS_Shape handle = OCCShapeBuilder::createBox(
+            handleLength, 
+            handleWidth, 
+            handleThickness,
+            gp_Pnt(-handleLength/2.0, -handleWidth/2.0, -handleThickness/2.0)
+        );
+        
+        if (handle.IsNull()) {
+            LOG_ERR("Failed to create wrench handle");
+            return nullptr;
+        }
+        
+        TopoDS_Shape leftJawOuter = OCCShapeBuilder::createBox(
+            1.5, 
+            headWidth, 
+            headThickness,
+            gp_Pnt(-handleLength/2.0 - 1.5, -headWidth/2.0, -headThickness/2.0)
+        );
+        
+        if (leftJawOuter.IsNull()) {
+            LOG_ERR("Failed to create left jaw outer");
+            return nullptr;
+        }
+        
+        TopoDS_Shape rightJawOuter = OCCShapeBuilder::createBox(
+            1.5, 
+            headWidth, 
+            headThickness,
+            gp_Pnt(handleLength/2.0, -headWidth/2.0, -headThickness/2.0)
+        );
+        
+        if (rightJawOuter.IsNull()) {
+            LOG_ERR("Failed to create right jaw outer");
+            return nullptr;
+        }
+        
+        TopoDS_Shape wrenchBody = OCCShapeBuilder::booleanUnion(handle, leftJawOuter);
+        if (wrenchBody.IsNull()) {
+            LOG_ERR("Failed to union handle with left jaw");
+            return nullptr;
+        }
+        
+        wrenchBody = OCCShapeBuilder::booleanUnion(wrenchBody, rightJawOuter);
+        if (wrenchBody.IsNull()) {
+            LOG_ERR("Failed to union with right jaw");
+            return nullptr;
+        }
+        
+        double slotDepth = headWidth * 0.6; 
+        TopoDS_Shape leftSlot = OCCShapeBuilder::createBox(
+            jawOpening,
+            slotDepth,
+            headThickness * 1.2,
+            gp_Pnt(-handleLength/2.0 - 1.5 + 0.25, -slotDepth/2.0, -headThickness*1.2/2.0)
+        );
+        
+        if (!leftSlot.IsNull()) {
+            TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, leftSlot);
+            if (!tempResult.IsNull()) {
+                wrenchBody = tempResult;
+                LOG_INF("Created left jaw opening");
+            } else {
+                LOG_WRN("Failed to create left jaw opening, continuing without it");
+            }
+        }
+        
+
+        TopoDS_Shape rightSlot = OCCShapeBuilder::createBox(
+            jawOpening * 0.8,  
+            slotDepth * 0.8,
+            headThickness * 1.2,
+            gp_Pnt(handleLength/2.0 + 1.5 - 0.25 - jawOpening*0.8, -slotDepth*0.8/2.0, -headThickness*1.2/2.0)
+        );
+        
+        if (!rightSlot.IsNull() && !wrenchBody.IsNull()) {
+            TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, rightSlot);
+            if (!tempResult.IsNull()) {
+                wrenchBody = tempResult;
+                LOG_INF("Created right jaw opening");
+            } else {
+                LOG_WRN("Failed to create right jaw opening, continuing without it");
+            }
+        }
+        
+        for (int i = 0; i < 2; i++) {
+            double grooveX = -handleLength/4.0 + i * handleLength/2.0;
+            TopoDS_Shape groove = OCCShapeBuilder::createBox(
+                0.3,
+                handleWidth * 0.8,
+                0.2,
+                gp_Pnt(grooveX - 0.15, -handleWidth*0.8/2.0, handleThickness/2.0 - 0.1)
+            );
+            
+            if (!groove.IsNull() && !wrenchBody.IsNull()) {
+                TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, groove);
+                if (!tempResult.IsNull()) {
+                    wrenchBody = tempResult;
+                }
+            }
+        }
+        
+        if (wrenchBody.IsNull()) {
+            LOG_ERR("Final wrench shape is null");
+            return nullptr;
+        }
+        
+        if (!OCCShapeBuilder::isValid(wrenchBody)) {
+            LOG_WRN("Wrench shape validation failed, but proceeding anyway");
+        } else {
+            LOG_INF("Wrench shape is valid");
+        }
+        
+        auto geometry = std::make_shared<OCCGeometry>(name);
+        geometry->setShape(wrenchBody);
+        geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
+        
+        LOG_INF("Created improved wrench model: " + name);
+        return geometry;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR("Exception creating wrench: " + std::string(e.what()));
+        return nullptr;
+    }
 } 
