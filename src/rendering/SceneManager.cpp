@@ -192,7 +192,7 @@ void SceneManager::setView(const std::string& viewName) {
 
     auto it = viewDirections.find(viewName);
     if (it == viewDirections.end()) {
-        LOG_WAR("Invalid view name: " + viewName);
+        LOG_WRN("Invalid view name: " + viewName);
         return;
     }
 
@@ -258,24 +258,31 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); // Combine texture with material
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // Reset OpenGL errors before rendering
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        LOG_ERR("Pre-render: OpenGL error: " + std::to_string(err));
+    }
+
     GLint lightingEnabled = 0;
     glGetIntegerv(GL_LIGHTING, &lightingEnabled);
-    LOG_INF("NavigationCube::render: Lighting enabled: " + std::to_string(lightingEnabled));
+    //LOG_INF("NavigationCube::render: Lighting enabled: " + std::to_string(lightingEnabled));
 
     GLint textureEnabled = 0;
     glGetIntegerv(GL_TEXTURE_2D, &textureEnabled);
-    LOG_INF("NavigationCube::render: Texture 2D enabled: " + std::to_string(textureEnabled));
+    //LOG_INF("NavigationCube::render: Texture 2D enabled: " + std::to_string(textureEnabled));
 
     GLint texEnvMode = 0;
     glGetIntegerv(GL_TEXTURE_ENV_MODE, &texEnvMode);
-    LOG_INF("NavigationCube::render: Texture env mode: " + std::to_string(texEnvMode) + " (GL_MODULATE=" + std::to_string(GL_MODULATE) + ")");
+    //LOG_INF("NavigationCube::render: Texture env mode: " + std::to_string(texEnvMode) + " (GL_MODULATE=" + std::to_string(GL_MODULATE) + ")");
 
-    GLenum err;
-    while ((err = glGetError()) != GL_NO_ERROR) {
-        LOG_ERR("NavigationCube::render: OpenGL error: " + std::to_string(err));
-    }
-
+    // Render the scene
     renderAction.apply(m_sceneRoot);
+
+    // Check for OpenGL errors after rendering
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        LOG_ERR("Post-render: OpenGL error: " + std::to_string(err));
+    }
 
     glDisable(GL_BLEND); // Disable blending afterwards
 }
@@ -359,7 +366,7 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     }
 
     // As a last resort, project to a point at the focal distance
-    LOG_WAR("No plane intersection found, using focal distance projection");
+    LOG_WRN("No plane intersection found, using focal distance projection");
     worldPos = lineFromCamera.getPosition() + lineFromCamera.getDirection() * m_camera->focalDistance.getValue();
     return true;
 }

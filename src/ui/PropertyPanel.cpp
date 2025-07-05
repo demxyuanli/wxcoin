@@ -25,7 +25,7 @@ PropertyPanel::~PropertyPanel()
 void PropertyPanel::updateProperties(GeometryObject* object)
 {
     if (!object) {
-        LOG_WAR("Attempted to update properties for null object");
+        LOG_WRN("Attempted to update properties for null object");
         m_propGrid->Clear();
         m_currentObject = nullptr;
         return;
@@ -47,7 +47,7 @@ void PropertyPanel::updateProperties(GeometryObject* object)
         m_propGrid->Append(new wxFloatProperty("Position Z", "PosZ", translation[2]));
     }
     else {
-        LOG_WAR("No transform available for object: " + object->getName());
+        LOG_WRN("No transform available for object: " + object->getName());
     }
 
     m_propGrid->Append(new wxBoolProperty("Visible", "Visible", object->isVisible()));
@@ -57,7 +57,7 @@ void PropertyPanel::updateProperties(GeometryObject* object)
 void PropertyPanel::onPropertyChanged(wxPropertyGridEvent& event)
 {
     if (!m_currentObject) {
-        LOG_WAR("Property changed but no object selected");
+        LOG_WRN("Property changed but no object selected");
         return;
     }
 
@@ -91,7 +91,7 @@ void PropertyPanel::onPropertyChanged(wxPropertyGridEvent& event)
             m_currentObject->setPosition(translation);
         }
         else {
-            LOG_WAR("No transform available for property update: " + m_currentObject->getName());
+            LOG_WRN("No transform available for property update: " + m_currentObject->getName());
         }
     }
     else if (property->GetName() == "Visible") {

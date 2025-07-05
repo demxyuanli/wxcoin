@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(FreeCADNavigation)
+project(CADNav)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
@@ -25,53 +25,27 @@ endif()
 # 查找依赖
 find_package(wxWidgets REQUIRED COMPONENTS core base gl aui propgrid)
 find_package(Coin REQUIRED)
+find_package(OpenCASCADE REQUIRED)
 
 # 包含 wxWidgets
 include(${wxWidgets_USE_FILE})
 
-# 源文件
-set(SOURCES
-    ${CMAKE_SOURCE_DIR}/src/Application.cpp
-    ${CMAKE_SOURCE_DIR}/src/Canvas.cpp
-    ${CMAKE_SOURCE_DIR}/src/RenderingEngine.cpp
-    ${CMAKE_SOURCE_DIR}/src/ViewportManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/EventCoordinator.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationCubeManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/PickingAidManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/GeometryFactory.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationController.cpp
-    ${CMAKE_SOURCE_DIR}/src/InputManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/DefaultInputState.cpp
-    ${CMAKE_SOURCE_DIR}/src/PickingInputState.cpp
-    ${CMAKE_SOURCE_DIR}/src/SceneManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/CoordinateSystemRenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/Command.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationCube.cpp
-    ${CMAKE_SOURCE_DIR}/src/GeometryObject.cpp
-    ${CMAKE_SOURCE_DIR}/src/MainFrame.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationCubeConfigDialog.cpp
-    ${CMAKE_SOURCE_DIR}/src/MouseHandler.cpp
-    ${CMAKE_SOURCE_DIR}/src/NavigationStyle.cpp
-    ${CMAKE_SOURCE_DIR}/src/ObjectTreePanel.cpp
-    ${CMAKE_SOURCE_DIR}/src/PropertyPanel.cpp
-    ${CMAKE_SOURCE_DIR}/src/CreateCommand.cpp
-    ${CMAKE_SOURCE_DIR}/src/Logger.cpp
-    ${CMAKE_SOURCE_DIR}/src/PositionDialog.cpp
-    ${CMAKE_SOURCE_DIR}/src/DPIManager.cpp
-    ${CMAKE_SOURCE_DIR}/src/DPIAwareRendering.cpp
-    ${CMAKE_SOURCE_DIR}/src/CuteNavCube.cpp
+# 添加源代码目录
+add_subdirectory(src)
+
+# 主程序源文件
+set(MAIN_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/main.cpp
 )
 
 # 创建可执行文件
-add_executable(${PROJECT_NAME} WIN32 ${SOURCES})
+add_executable(${PROJECT_NAME} WIN32 ${MAIN_SOURCES})
 
 # 设置头文件目录
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${wxWidgets_INCLUDE_DIRS}
     ${Coin3D_INCLUDE_DIRS}
-    Coin::Coin
 )
 
 # 添加明确的库路径（如果使用vcpkg）
@@ -83,16 +57,20 @@ if(CMAKE_TOOLCHAIN_FILE AND wxWidgets_ROOT_DIR)
     endif()
 endif()
 
-# 链接库
+# 链接所有模块库
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    CADUI          # UI模块（包含所有其他模块的依赖）
     ${wxWidgets_LIBRARIES}
     Coin::Coin
+    ${OpenCASCADE_LIBRARIES}
 )
 
 # Windows 下启用 Unicode 支持
 if(WIN32)
     add_definitions(-DUNICODE -D_UNICODE)
 endif()
+
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CADNav)
 
 # MSVC 特定设置
 if(MSVC)

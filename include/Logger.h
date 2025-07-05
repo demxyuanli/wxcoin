@@ -33,5 +33,5 @@ private:
 // Convenience macros for logging
 #define LOG_INF(message) Logger::getInstance().log(Logger::LogLevel::INF, message, __FILE__, __LINE__)
 #define LOG_DBG(message) Logger::getInstance().log(Logger::LogLevel::DBG, message, __FILE__, __LINE__)
-#define LOG_WAR(message) Logger::getInstance().log(Logger::LogLevel::WAR, message, __FILE__, __LINE__)
+#define LOG_WRN(message) Logger::getInstance().log(Logger::LogLevel::WAR, message, __FILE__, __LINE__)
 #define LOG_ERR(message) Logger::getInstance().log(Logger::LogLevel::ERR, message, __FILE__, __LINE__)

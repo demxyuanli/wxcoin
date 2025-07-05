@@ -69,7 +69,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
     wxMemoryDC dc;
     dc.SelectObject(bitmap); // Explicitly select bitmap
     if (!dc.IsOk()) {
-        LOG_ERR("NavigationCube::generateFaceTexture: Failed to create wxMemoryDC for texture: " + text);
+        //LOG_ERR("NavigationCube::generateFaceTexture: Failed to create wxMemoryDC for texture: " + text);
         // Fallback: Fill with white
         for (int i = 0; i < width * height * 4; i += 4) {
             imageData[i] = 255; // R
@@ -77,7 +77,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
             imageData[i + 2] = 255; // B
             imageData[i + 3] = 255; // A
         }
-        LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
+        //LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
         return true;
     }
 
@@ -153,7 +153,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
     }
 
     if (!hasValidPixels) {
-        LOG_WAR("NavigationCube::generateFaceTexture: All pixels are black for texture: " + text);
+        LOG_WRN("NavigationCube::generateFaceTexture: All pixels are black for texture: " + text);
         // Fallback: Fill with white
         for (int i = 0; i < width * height * 4; i += 4) {
             imageData[i] = 255; // R
@@ -462,7 +462,7 @@ void NavigationCube::setCameraPosition(const SbVec3f& position) {
             ", y=" + std::to_string(position[1]) + ", z=" + std::to_string(position[2]));
     }
     else {
-        LOG_WAR("NavigationCube::setCameraPosition: Camera not initialized");
+        LOG_WRN("NavigationCube::setCameraPosition: Camera not initialized");
     }
 }
 
@@ -472,6 +472,6 @@ void NavigationCube::setCameraOrientation(const SbRotation& orientation) {
         LOG_DBG("NavigationCube::setCameraOrientation: Set camera orientation");
     }
     else {
-        LOG_WAR("NavigationCube::setCameraOrientation: Camera not initialized");
+        LOG_WRN("NavigationCube::setCameraOrientation: Camera not initialized");
     }
 }

@@ -16,7 +16,7 @@ EventCoordinator::~EventCoordinator() {
 
 bool EventCoordinator::handleMouseEvent(wxMouseEvent& event) {
     if (!m_inputManager) {
-        LOG_WAR("EventCoordinator::handleMouseEvent: InputManager is null");
+        LOG_WRN("EventCoordinator::handleMouseEvent: InputManager is null");
         return false;
     }
 
@@ -48,11 +48,11 @@ bool EventCoordinator::handleMouseEvent(wxMouseEvent& event) {
 void EventCoordinator::handleSizeEvent(wxSizeEvent& event) {
     // Size events are handled by ViewportManager
     // This method is here for potential future coordination needs
-    LOG_DBG("EventCoordinator::handleSizeEvent: Size event coordinated");
+    //LOG_DBG("EventCoordinator::handleSizeEvent: Size event coordinated");
 }
 
 void EventCoordinator::handlePaintEvent(wxPaintEvent& event) {
     // Paint events are handled by RenderingEngine
     // This method is here for potential future coordination needs
-    LOG_DBG("EventCoordinator::handlePaintEvent: Paint event coordinated");
+    //LOG_DBG("EventCoordinator::handlePaintEvent: Paint event coordinated");
 } 

@@ -153,7 +153,7 @@ void Canvas::setPickingCursor(bool enable) {
 
 SoCamera* Canvas::getCamera() const {
     if (!m_sceneManager) {
-        LOG_WAR("Canvas::getCamera: SceneManager is null");
+        LOG_WRN("Canvas::getCamera: SceneManager is null");
         return nullptr;
     }
     return m_sceneManager->getCamera();
@@ -161,7 +161,7 @@ SoCamera* Canvas::getCamera() const {
 
 void Canvas::resetView() {
     if (!m_sceneManager) {
-        LOG_WAR("Canvas::resetView: SceneManager is null");
+        LOG_WRN("Canvas::resetView: SceneManager is null");
         return;
     }
     m_sceneManager->resetView();

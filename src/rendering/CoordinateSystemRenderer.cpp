@@ -127,7 +127,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     yPlaneSep->addChild(yLineSep);
     coordSystemSep->addChild(yPlaneSep);
 
-    // Z plane (XY plane) - 使用蓝色
+    // Z plane (XY plane) - use blue color
     SoSeparator* zPlaneSep = new SoSeparator;
     SoMaterial* zMaterial = new SoMaterial;
     zMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);

@@ -60,14 +60,14 @@ void InputManager::onMouseButton(wxMouseEvent& event) {
     if (m_currentState) {
         m_currentState->onMouseButton(event);
     } else {
-        LOG_WAR("InputManager: No active state to handle mouse button event");
+        LOG_WRN("InputManager: No active state to handle mouse button event");
         event.Skip();
     }
 }
 
 void InputManager::onMouseMotion(wxMouseEvent& event) {
     if (!m_currentState) {
-        LOG_WAR("Mouse motion event skipped: No active state");
+        LOG_WRN("Mouse motion event skipped: No active state");
         event.Skip();
         return;
     }
@@ -85,7 +85,7 @@ void InputManager::onMouseWheel(wxMouseEvent& event) {
     if (m_currentState) {
         m_currentState->onMouseWheel(event);
     } else {
-        LOG_WAR("Mouse wheel event skipped: No active state");
+        LOG_WRN("Mouse wheel event skipped: No active state");
         event.Skip();
     }
 }

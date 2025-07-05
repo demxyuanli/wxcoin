@@ -33,7 +33,7 @@ void ObjectTreePanel::addObject(GeometryObject* object)
         return;
     }
     if (m_objectMap.find(object) != m_objectMap.end()) {
-        LOG_WAR("Object already exists in tree: " + object->getName());
+        LOG_WRN("Object already exists in tree: " + object->getName());
         return;
     }
 
@@ -52,7 +52,7 @@ void ObjectTreePanel::removeObject(GeometryObject* object)
 
     auto it = m_objectMap.find(object);
     if (it == m_objectMap.end()) {
-        LOG_WAR("Object not found in tree: " + object->getName());
+        LOG_WRN("Object not found in tree: " + object->getName());
         return;
     }
 
@@ -70,7 +70,7 @@ void ObjectTreePanel::updateObjectName(GeometryObject* object)
 
     auto it = m_objectMap.find(object);
     if (it == m_objectMap.end()) {
-        LOG_WAR("Object not found in tree for name update: " + object->getName());
+        LOG_WRN("Object not found in tree for name update: " + object->getName());
         return;
     }
 
@@ -88,7 +88,7 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
 {
     wxTreeItemId itemId = event.GetItem();
     if (!itemId.IsOk()) {
-        LOG_WAR("Invalid tree item selected");
+        LOG_WRN("Invalid tree item selected");
         return;
     }
 

@@ -35,7 +35,7 @@ void PickingInputState::onMouseButton(wxMouseEvent& event) {
             LOG_ERR("PositionDialog not found");
         }
     } else {
-        LOG_WAR("Failed to convert screen position to world coordinates");
+        LOG_WRN("Failed to convert screen position to world coordinates");
     }
 }
 

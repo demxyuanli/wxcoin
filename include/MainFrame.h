@@ -35,6 +35,7 @@ private:
     void onCreateSphere(wxCommandEvent& event);
     void onCreateCylinder(wxCommandEvent& event);
     void onCreateCone(wxCommandEvent& event);
+    void onCreateWrench(wxCommandEvent& event);
     void onViewMode(wxCommandEvent& event);
     void onSelectMode(wxCommandEvent& event);
     void onViewAll(wxCommandEvent& event);

@@ -139,7 +139,7 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
     }
 
     if (!hasValidPixels) {
-        LOG_WAR("CuteNavCube::generateFaceTexture: All pixels are black for texture: " + text);
+        LOG_WRN("CuteNavCube::generateFaceTexture: All pixels are black for texture: " + text);
         // Fallback: Fill with white
         for (int i = 0; i < width * height * 4; i += 4) {
             imageData[i] = 255; // R
@@ -479,8 +479,8 @@ void CuteNavCube::updateCameraRotation() {
     m_orthoCamera->position.setValue(x, y, z);
     m_orthoCamera->pointAt(SbVec3f(0, 0, 0)); // Always look at the origin
 
-    LOG_DBG("CuteNavCube::updateCameraRotation: Camera position x=" + std::to_string(x) +
-        ", y=" + std::to_string(y) + ", z=" + std::to_string(z));
+    //LOG_DBG("CuteNavCube::updateCameraRotation: Camera position x=" + std::to_string(x) +
+    //    ", y=" + std::to_string(y) + ", z=" + std::to_string(z));
 }
 
 std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize) {
@@ -578,8 +578,8 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
             m_rotationChangedCallback();
         }
 
-        LOG_DBG("CuteNavCube::handleMouseEvent: Rotated: X=" + std::to_string(m_rotationX) +
-            ", Y=" + std::to_string(m_rotationY));
+        //LOG_DBG("CuteNavCube::handleMouseEvent: Rotated: X=" + std::to_string(m_rotationX) +
+        //    ", Y=" + std::to_string(m_rotationY));
     }
 }
 
@@ -612,20 +612,20 @@ void CuteNavCube::setEnabled(bool enabled) {
 void CuteNavCube::setCameraPosition(const SbVec3f& position) {
     if (m_orthoCamera) {
         m_orthoCamera->position.setValue(position);
-        LOG_DBG("CuteNavCube::setCameraPosition: Set camera position to x=" + std::to_string(position[0]) +
-            ", y=" + std::to_string(position[1]) + ", z=" + std::to_string(position[2]));
+        //LOG_DBG("CuteNavCube::setCameraPosition: Set camera position to x=" + std::to_string(position[0]) + 
+        // ", y=" + std::to_string(position[1]) + ", z=" + std::to_string(position[2]));
     }
     else {
-        LOG_WAR("CuteNavCube::setCameraPosition: Camera not initialized");
+        LOG_WRN("CuteNavCube::setCameraPosition: Camera not initialized");
     }
 }
 
 void CuteNavCube::setCameraOrientation(const SbRotation& orientation) {
     if (m_orthoCamera) {
         m_orthoCamera->orientation.setValue(orientation);
-        LOG_DBG("CuteNavCube::setCameraOrientation: Set camera orientation");
+        //LOG_DBG("CuteNavCube::setCameraOrientation: Set camera orientation");
     }
     else {
-        LOG_WAR("CuteNavCube::setCameraOrientation: Camera not initialized");
+        LOG_WRN("CuteNavCube::setCameraOrientation: Camera not initialized");
     }
 }

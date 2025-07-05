@@ -26,7 +26,7 @@ RenderingEngine::~RenderingEngine() {
 
 bool RenderingEngine::initialize() {
     if (m_isInitialized) {
-        LOG_WAR("RenderingEngine::initialize: Already initialized");
+        LOG_WRN("RenderingEngine::initialize: Already initialized");
         return true;
     }
 
@@ -59,17 +59,17 @@ void RenderingEngine::setupGLContext() {
 
 void RenderingEngine::render(bool fastMode) {
     if (!m_isInitialized) {
-        LOG_WAR("RenderingEngine::render: Skipped: Not initialized");
+        LOG_WRN("RenderingEngine::render: Skipped: Not initialized");
         return;
     }
 
     if (!m_canvas->IsShown() || !m_glContext || !m_sceneManager) {
-        LOG_WAR("RenderingEngine::render: Skipped: Canvas not shown or context/scene invalid");
+        LOG_WRN("RenderingEngine::render: Skipped: Canvas not shown or context/scene invalid");
         return;
     }
 
     if (m_isRendering) {
-        LOG_WAR("RenderingEngine::render: Skipped: Already rendering");
+        LOG_WRN("RenderingEngine::render: Skipped: Already rendering");
         return;
     }
 
@@ -90,7 +90,7 @@ void RenderingEngine::render(bool fastMode) {
 
         wxSize size = m_canvas->GetClientSize();
         if (size.x <= 0 || size.y <= 0) {
-            LOG_WAR("RenderingEngine::render: Invalid viewport size: " + 
+            LOG_WRN("RenderingEngine::render: Invalid viewport size: " + 
                    std::to_string(size.x) + "x" + std::to_string(size.y));
             m_isRendering = false;
             return;
@@ -138,7 +138,7 @@ void RenderingEngine::presentFrame() {
 
 void RenderingEngine::handleResize(const wxSize& size) {
     if (!m_isInitialized || !m_glContext) {
-        LOG_WAR("RenderingEngine::handleResize: Not initialized or invalid context");
+        LOG_WRN("RenderingEngine::handleResize: Not initialized or invalid context");
         return;
     }
 
@@ -153,7 +153,7 @@ void RenderingEngine::handleResize(const wxSize& size) {
         
         m_canvas->Refresh();
     } else {
-        LOG_WAR("RenderingEngine::handleResize: Skipped: Invalid size or context");
+        LOG_WRN("RenderingEngine::handleResize: Skipped: Invalid size or context");
     }
 }
 

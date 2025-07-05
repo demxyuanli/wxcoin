@@ -15,7 +15,7 @@ class SceneManager {
 public:
     SceneManager(Canvas* canvas);
     ~SceneManager();
-
+    Canvas* getCanvas() const { return m_canvas; }
     bool initScene();
     void cleanup();
     void resetView();

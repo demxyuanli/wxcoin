@@ -43,7 +43,7 @@ void ViewportManager::handleSizeChange(const wxSize& size) {
             m_renderingEngine->handleResize(size);
         }
     } else {
-        LOG_WAR("ViewportManager::handleSizeChange: Skipped: Invalid size");
+        LOG_WRN("ViewportManager::handleSizeChange: Skipped: Invalid size");
     }
 }
 

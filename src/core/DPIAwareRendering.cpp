@@ -23,7 +23,7 @@ void DPIAwareRendering::configureDPIAwareDrawStyle(SoDrawStyle* drawStyle,
                                                   float baseLineWidth,
                                                   float basePointSize) {
     if (!drawStyle) {
-        LOG_WAR("DPIAwareRendering::configureDPIAwareDrawStyle: Null drawStyle");
+        LOG_WRN("DPIAwareRendering::configureDPIAwareDrawStyle: Null drawStyle");
         return;
     }
     
@@ -44,7 +44,7 @@ void DPIAwareRendering::updateDrawStyleDPI(SoDrawStyle* drawStyle,
                                           float originalLineWidth,
                                           float originalPointSize) {
     if (!drawStyle) {
-        LOG_WAR("DPIAwareRendering::updateDrawStyleDPI: Null drawStyle");
+        LOG_WRN("DPIAwareRendering::updateDrawStyleDPI: Null drawStyle");
         return;
     }
     

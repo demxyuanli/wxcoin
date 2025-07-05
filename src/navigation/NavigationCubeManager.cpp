@@ -75,9 +75,9 @@ void NavigationCubeManager::render() {
         int cubeX = static_cast<int>(m_cubeLayout.x * dpiScale);
         int cubeY = static_cast<int>(m_cubeLayout.y * dpiScale);
         m_navCube->render(cubeX, cubeY, wxSize(m_cubeLayout.size, m_cubeLayout.size));
-        LOG_DBG("NavigationCubeManager: Rendering navigation cube: x=" + std::to_string(m_cubeLayout.x) +
-            ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size) +
-            ", dpiScale=" + std::to_string(dpiScale));
+        //LOG_DBG("NavigationCubeManager: Rendering navigation cube: x=" + std::to_string(m_cubeLayout.x) +
+        //    ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size) +
+        //    ", dpiScale=" + std::to_string(dpiScale));
     }
 }
 
@@ -153,7 +153,7 @@ bool NavigationCubeManager::isEnabled() const {
 
 void NavigationCubeManager::setRect(int x, int y, int size) {
     if (size < 50 || x < 0 || y < 0) {
-        LOG_WAR("NavigationCubeManager::setRect: Invalid parameters: x=" + std::to_string(x) +
+        LOG_WRN("NavigationCubeManager::setRect: Invalid parameters: x=" + std::to_string(x) +
             ", y=" + std::to_string(y) + ", size=" + std::to_string(size));
         return;
     }
@@ -168,7 +168,7 @@ void NavigationCubeManager::setRect(int x, int y, int size) {
 
 void NavigationCubeManager::setColor(const wxColour& color) {
     if (!m_navCube) {
-        LOG_WAR("NavigationCubeManager::setColor: Skipped: nav cube not created");
+        LOG_WRN("NavigationCubeManager::setColor: Skipped: nav cube not created");
         return;
     }
     LOG_INF("NavigationCubeManager::setColor: Set navigation cube color to R=" + std::to_string(color.GetRed()) +
@@ -178,20 +178,20 @@ void NavigationCubeManager::setColor(const wxColour& color) {
 
 void NavigationCubeManager::setViewportSize(int size) {
     if (!m_navCube) {
-        LOG_WAR("NavigationCubeManager::setViewportSize: Skipped: nav cube not created");
+        LOG_WRN("NavigationCubeManager::setViewportSize: Skipped: nav cube not created");
         return;
     }
     if (size < 50) {
-        LOG_WAR("NavigationCubeManager::setViewportSize: Invalid size: " + std::to_string(size));
+        LOG_WRN("NavigationCubeManager::setViewportSize: Invalid size: " + std::to_string(size));
         return;
     }
-    LOG_INF("NavigationCubeManager::setViewportSize: Set navigation cube viewport size to " + std::to_string(size));
+    //LOG_INF("NavigationCubeManager::setViewportSize: Set navigation cube viewport size to " + std::to_string(size));
     m_canvas->Refresh(true);
 }
 
 void NavigationCubeManager::syncCubeCameraToMain() {
     if (!m_navCube || !m_sceneManager) {
-        LOG_WAR("NavigationCubeManager::syncCubeCameraToMain: Skipped: components missing");
+        LOG_WRN("NavigationCubeManager::syncCubeCameraToMain: Skipped: components missing");
         return;
     }
 
@@ -207,25 +207,25 @@ void NavigationCubeManager::syncCubeCameraToMain() {
         m_navCube->setCameraPosition(navCubeCamPos);
         m_navCube->setCameraOrientation(mainOrient);
 
-        LOG_DBG("NavigationCubeManager::syncCubeCameraToMain: Synced navigation cube camera based on main camera orientation.");
+        //LOG_DBG("NavigationCubeManager::syncCubeCameraToMain: Synced navigation cube camera based on main camera orientation.");
     }
 }
 
 void NavigationCubeManager::syncMainCameraToCube() {
     if (!m_navCube || !m_sceneManager) {
-        LOG_WAR("NavigationCubeManager::syncMainCameraToCube: Skipped: components missing");
+        LOG_WRN("NavigationCubeManager::syncMainCameraToCube: Skipped: components missing");
         return;
     }
 
     SoCamera* navCamera = m_navCube->getCamera();
     if (!navCamera) {
-        LOG_WAR("NavigationCubeManager::syncMainCameraToCube: Navigation cube camera is null.");
+        LOG_WRN("NavigationCubeManager::syncMainCameraToCube: Navigation cube camera is null.");
         return;
     }
 
     SoCamera* mainCamera = m_sceneManager->getCamera();
     if (!mainCamera) {
-        LOG_WAR("NavigationCubeManager::syncMainCameraToCube: Main scene camera is null.");
+        LOG_WRN("NavigationCubeManager::syncMainCameraToCube: Main scene camera is null.");
         return;
     }
 
@@ -242,7 +242,7 @@ void NavigationCubeManager::syncMainCameraToCube() {
 
     SbVec3f newMainCamDir = navCamPos;
     if (newMainCamDir.normalize() == 0.0f) {
-         LOG_WAR("NavigationCubeManager::syncMainCameraToCube: NavCam position is origin, cannot determine direction.");
+         LOG_WRN("NavigationCubeManager::syncMainCameraToCube: NavCam position is origin, cannot determine direction.");
         return;
     }
     
@@ -250,9 +250,9 @@ void NavigationCubeManager::syncMainCameraToCube() {
     mainCamera->position.setValue(newMainCamPos);
     mainCamera->orientation.setValue(navCamOrient);
 
-    LOG_DBG("NavigationCubeManager::syncMainCameraToCube: Synced main camera to orbit origin, pos: (" +
-        std::to_string(newMainCamPos[0]) + ", " + std::to_string(newMainCamPos[1]) + ", " + std::to_string(newMainCamPos[2]) +
-        "), dist: " + std::to_string(mainCamDistanceToOrigin));
+    //LOG_DBG("NavigationCubeManager::syncMainCameraToCube: Synced main camera to orbit origin, pos: (" +
+    //    std::to_string(newMainCamPos[0]) + ", " + std::to_string(newMainCamPos[1]) + ", " + std::to_string(newMainCamPos[2]) +
+    //    "), dist: " + std::to_string(mainCamDistanceToOrigin));
 }
 
 void NavigationCubeManager::showConfigDialog() {

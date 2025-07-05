@@ -15,6 +15,8 @@
 #include <wx/filedlg.h>
 #include <wx/aui/aui.h>
 #include <wx/toolbar.h>
+#include <Inventor/SbVec3f.h>
+#include "OCCViewer.h"
 
 enum
 {
@@ -22,6 +24,7 @@ enum
     ID_CreateSphere,
     ID_CreateCylinder,
     ID_CreateCone,
+    ID_CreateWrench,
     ID_ViewAll,
     ID_ViewTop,
     ID_ViewFront,
@@ -41,6 +44,7 @@ EVT_MENU(ID_CreateBox, MainFrame::onCreateBox)
 EVT_MENU(ID_CreateSphere, MainFrame::onCreateSphere)
 EVT_MENU(ID_CreateCylinder, MainFrame::onCreateCylinder)
 EVT_MENU(ID_CreateCone, MainFrame::onCreateCone)
+EVT_MENU(ID_CreateWrench, MainFrame::onCreateWrench)
 EVT_MENU(ID_ViewAll, MainFrame::onViewAll)
 EVT_MENU(ID_ViewTop, MainFrame::onViewTop)
 EVT_MENU(ID_ViewFront, MainFrame::onViewFront)
@@ -93,6 +97,7 @@ void MainFrame::createMenu()
     createMenu->Append(ID_CreateSphere, "&Sphere", "Create a sphere");
     createMenu->Append(ID_CreateCylinder, "&Cylinder", "Create a cylinder");
     createMenu->Append(ID_CreateCone, "&Cone", "Create a cone");
+    createMenu->Append(ID_CreateWrench, "&Wrench", "Create a wrench");
     menuBar->Append(createMenu, "&Create");
 
     wxMenu* viewMenu = new wxMenu;
@@ -128,6 +133,7 @@ void MainFrame::createToolbar()
     toolbar->AddTool(ID_CreateSphere, "Sphere", wxArtProvider::GetBitmap(wxART_HELP_PAGE), "Create a sphere");
     toolbar->AddTool(ID_CreateCylinder, "Cylinder", wxArtProvider::GetBitmap(wxART_TIP), "Create a cylinder");
     toolbar->AddTool(ID_CreateCone, "Cone", wxArtProvider::GetBitmap(wxART_INFORMATION), "Create a cone");
+    toolbar->AddTool(ID_CreateWrench, "Wrench", wxArtProvider::GetBitmap(wxART_PLUS), "Create a wrench");
     toolbar->AddSeparator();
     toolbar->AddTool(ID_ViewAll, "Fit All", wxArtProvider::GetBitmap(wxART_FULL_SCREEN), "Fit all objects in view");
     toolbar->AddTool(ID_ViewTop, "Top", wxArtProvider::GetBitmap(wxART_GO_UP), "Set top view");
@@ -180,13 +186,21 @@ void MainFrame::createPanels()
     m_canvas->getInputManager()->setNavigationController(navController);
     m_mouseHandler->setNavigationController(navController);
 
+    OCCViewer* occViewer = new OCCViewer(m_canvas->getSceneManager());
+
     // Now that all handlers are set, initialize the input manager's states
     m_canvas->getInputManager()->initializeStates();
 
     m_canvas->setObjectTreePanel(objectTreePanel);
     m_canvas->setCommandManager(m_commandManager);
 
-    m_geometryFactory = new GeometryFactory(m_canvas->getSceneManager()->getObjectRoot(), objectTreePanel, propertyPanel, m_commandManager);
+    m_geometryFactory = new GeometryFactory(
+        m_canvas->getSceneManager()->getObjectRoot(),
+        objectTreePanel,
+        propertyPanel,
+        m_commandManager,
+        occViewer
+    );
     if (!m_geometryFactory) {
         LOG_ERR("Failed to create GeometryFactory");
         return;
@@ -293,6 +307,12 @@ void MainFrame::onCreateCone(wxCommandEvent& event)
     m_mouseHandler->setOperationMode(MouseHandler::OperationMode::CREATE);
     m_mouseHandler->setCreationGeometryType("Cone");
     SetStatusText("Creating: Cone", 0);
+}
+
+void MainFrame::onCreateWrench(wxCommandEvent& event)
+{
+    // Create an OpenCASCADE wrench at the origin
+    m_geometryFactory->createGeometry("Wrench", SbVec3f(0.0f, 0.0f, 0.0f), GeometryType::OPENCASCADE);
 }
 
 void MainFrame::onViewAll(wxCommandEvent& event)

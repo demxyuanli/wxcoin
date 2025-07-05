@@ -100,4 +100,4 @@ std::string CommandManager::getRedoCommandDescription() const
     if (canRedo())
         return m_redoStack.back()->getDescription();
     return "";
-}
+} 

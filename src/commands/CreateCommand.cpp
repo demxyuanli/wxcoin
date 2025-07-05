@@ -37,4 +37,4 @@ std::string CreateCommand::getDescription() const
         return "Create " + m_object->getName();
     }
     return "Create Object";
-}
+} 
