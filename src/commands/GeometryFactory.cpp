@@ -159,18 +159,20 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
     std::string name = "OCCWrench_" + std::to_string(++wrenchCounter);
     
     try {
-
+        // Improved wrench dimensions
         double totalLength = 12.0;
         double handleLength = 8.0;
         double handleWidth = 1.5;
         double handleThickness = 0.8;
         
-
+        double headLength = 4.0;  // Total head length
         double headWidth = 3.0;
         double headThickness = 0.8;
         double jawOpening = 1.0; 
         
+        LOG_INF("Creating improved wrench with better closure...");
 
+        // Create handle as a centered box
         TopoDS_Shape handle = OCCShapeBuilder::createBox(
             handleLength, 
             handleWidth, 
@@ -183,11 +185,13 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
+        // Create left jaw head (fixed jaw)
+        double leftJawLength = headLength * 0.6;
         TopoDS_Shape leftJawOuter = OCCShapeBuilder::createBox(
-            1.5, 
+            leftJawLength, 
             headWidth, 
             headThickness,
-            gp_Pnt(-handleLength/2.0 - 1.5, -headWidth/2.0, -headThickness/2.0)
+            gp_Pnt(-handleLength/2.0 - leftJawLength, -headWidth/2.0, -headThickness/2.0)
         );
         
         if (leftJawOuter.IsNull()) {
@@ -195,8 +199,10 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
+        // Create right jaw head (adjustable jaw)
+        double rightJawLength = headLength * 0.4;
         TopoDS_Shape rightJawOuter = OCCShapeBuilder::createBox(
-            1.5, 
+            rightJawLength, 
             headWidth, 
             headThickness,
             gp_Pnt(handleLength/2.0, -headWidth/2.0, -headThickness/2.0)
@@ -207,6 +213,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
+        // Union all main parts first
         TopoDS_Shape wrenchBody = OCCShapeBuilder::booleanUnion(handle, leftJawOuter);
         if (wrenchBody.IsNull()) {
             LOG_ERR("Failed to union handle with left jaw");
@@ -219,12 +226,20 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
-        double slotDepth = headWidth * 0.6; 
+        LOG_INF("Basic wrench body created, now adding openings...");
+        
+        // Create left jaw opening (smaller and more centered)
+        double leftSlotWidth = jawOpening * 0.8;
+        double leftSlotDepth = headWidth * 0.7;
+        double leftSlotHeight = headThickness * 0.9;  // Slightly smaller than head thickness
+        
         TopoDS_Shape leftSlot = OCCShapeBuilder::createBox(
-            jawOpening,
-            slotDepth,
-            headThickness * 1.2,
-            gp_Pnt(-handleLength/2.0 - 1.5 + 0.25, -slotDepth/2.0, -headThickness*1.2/2.0)
+            leftSlotWidth,
+            leftSlotDepth,
+            leftSlotHeight,
+            gp_Pnt(-handleLength/2.0 - leftJawLength + leftSlotWidth/2.0, 
+                   -leftSlotDepth/2.0, 
+                   -leftSlotHeight/2.0)
         );
         
         if (!leftSlot.IsNull()) {
@@ -237,12 +252,18 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             }
         }
         
+        // Create right jaw opening (smaller and more centered)
+        double rightSlotWidth = jawOpening * 0.6;
+        double rightSlotDepth = headWidth * 0.6;
+        double rightSlotHeight = headThickness * 0.9;
 
         TopoDS_Shape rightSlot = OCCShapeBuilder::createBox(
-            jawOpening * 0.8,  
-            slotDepth * 0.8,
-            headThickness * 1.2,
-            gp_Pnt(handleLength/2.0 + 1.5 - 0.25 - jawOpening*0.8, -slotDepth*0.8/2.0, -headThickness*1.2/2.0)
+            rightSlotWidth,
+            rightSlotDepth,
+            rightSlotHeight,
+            gp_Pnt(handleLength/2.0 + rightJawLength - rightSlotWidth - 0.2, 
+                   -rightSlotDepth/2.0, 
+                   -rightSlotHeight/2.0)
         );
         
         if (!rightSlot.IsNull() && !wrenchBody.IsNull()) {
@@ -255,13 +276,20 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             }
         }
         
-        for (int i = 0; i < 2; i++) {
-            double grooveX = -handleLength/4.0 + i * handleLength/2.0;
+        // Add grip texture (smaller grooves)
+        for (int i = 0; i < 3; i++) {
+            double grooveX = -handleLength/3.0 + i * handleLength/3.0;
+            double grooveWidth = 0.2;
+            double grooveDepth = handleWidth * 0.6;
+            double grooveHeight = 0.15;
+            
             TopoDS_Shape groove = OCCShapeBuilder::createBox(
-                0.3,
-                handleWidth * 0.8,
-                0.2,
-                gp_Pnt(grooveX - 0.15, -handleWidth*0.8/2.0, handleThickness/2.0 - 0.1)
+                grooveWidth,
+                grooveDepth,
+                grooveHeight,
+                gp_Pnt(grooveX - grooveWidth/2.0, 
+                       -grooveDepth/2.0, 
+                       handleThickness/2.0 - grooveHeight/2.0)
             );
             
             if (!groove.IsNull() && !wrenchBody.IsNull()) {
@@ -277,11 +305,17 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
+        // Validate the final shape
         if (!OCCShapeBuilder::isValid(wrenchBody)) {
             LOG_WRN("Wrench shape validation failed, but proceeding anyway");
         } else {
             LOG_INF("Wrench shape is valid");
         }
+        
+        // Debug: Analyze the wrench shape in detail
+        OCCShapeBuilder::analyzeShapeTopology(wrenchBody, name);
+        OCCShapeBuilder::outputFaceNormalsAndIndices(wrenchBody, name);
+        OCCShapeBuilder::analyzeShapeProperties(wrenchBody, name);
         
         auto geometry = std::make_shared<OCCGeometry>(name);
         geometry->setShape(wrenchBody);

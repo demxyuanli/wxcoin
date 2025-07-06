@@ -29,6 +29,7 @@ private:
     void onOpen(wxCommandEvent& event);
     void onSave(wxCommandEvent& event);
     void onSaveAs(wxCommandEvent& event);
+    void onImportSTEP(wxCommandEvent& event);
     void onExit(wxCommandEvent& event);
     void onUndo(wxCommandEvent& event);
     void onRedo(wxCommandEvent& event);

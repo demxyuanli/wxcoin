@@ -66,6 +66,13 @@ public:
     static void getBoundingBox(const TopoDS_Shape& shape, 
                                gp_Pnt& minPoint, gp_Pnt& maxPoint);
 
+    // Debug and analysis methods
+    static void analyzeShapeTopology(const TopoDS_Shape& shape, const std::string& shapeName = "");
+    static void outputFaceNormalsAndIndices(const TopoDS_Shape& shape, const std::string& shapeName = "");
+    static bool checkShapeClosure(const TopoDS_Shape& shape, const std::string& shapeName = "");
+    static void analyzeShapeProperties(const TopoDS_Shape& shape, const std::string& shapeName = "");
+
+
 private:
     OCCShapeBuilder() = delete; // Pure static class
 }; 

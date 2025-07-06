@@ -9,12 +9,14 @@
 #include "SceneManager.h"
 #include "Command.h"
 #include "Logger.h"
+#include "STEPReader.h"
 #include <wx/splitter.h>
 #include <wx/artprov.h>
 #include <wx/aboutdlg.h>
 #include <wx/filedlg.h>
 #include <wx/aui/aui.h>
 #include <wx/toolbar.h>
+#include <wx/msgdlg.h>
 #include <Inventor/SbVec3f.h>
 #include "OCCViewer.h"
 
@@ -25,6 +27,7 @@ enum
     ID_CreateCylinder,
     ID_CreateCone,
     ID_CreateWrench,
+    ID_ImportSTEP,
     ID_ViewAll,
     ID_ViewTop,
     ID_ViewFront,
@@ -41,6 +44,7 @@ BEGIN_EVENT_TABLE(MainFrame, wxFrame)
 EVT_MENU(wxID_NEW, MainFrame::onNew)
 EVT_MENU(wxID_OPEN, MainFrame::onOpen)
 EVT_MENU(wxID_SAVE, MainFrame::onSave)
+EVT_MENU(ID_ImportSTEP, MainFrame::onImportSTEP)
 EVT_MENU(wxID_EXIT, MainFrame::onExit)
 EVT_MENU(ID_CreateBox, MainFrame::onCreateBox)
 EVT_MENU(ID_CreateSphere, MainFrame::onCreateSphere)
@@ -94,6 +98,8 @@ void MainFrame::createMenu()
     fileMenu->Append(wxID_OPEN, "&Open...\tCtrl+O", "Open an existing project");
     fileMenu->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current project");
     fileMenu->AppendSeparator();
+    fileMenu->Append(ID_ImportSTEP, "&Import STEP...\tCtrl+I", "Import STEP/STP CAD file");
+    fileMenu->AppendSeparator();
     fileMenu->Append(wxID_EXIT, "E&xit\tAlt+F4", "Exit the application");
     menuBar->Append(fileMenu, "&File");
 
@@ -136,6 +142,7 @@ void MainFrame::createToolbar()
     toolbar->AddTool(wxID_NEW, "New", wxArtProvider::GetBitmap(wxART_NEW), "Create a new project");
     toolbar->AddTool(wxID_OPEN, "Open", wxArtProvider::GetBitmap(wxART_FILE_OPEN), "Open an existing project");
     toolbar->AddTool(wxID_SAVE, "Save", wxArtProvider::GetBitmap(wxART_FILE_SAVE), "Save the current project");
+    toolbar->AddTool(ID_ImportSTEP, "Import STEP", wxArtProvider::GetBitmap(wxART_FOLDER_OPEN), "Import STEP/STP CAD file");
     toolbar->AddSeparator();
     toolbar->AddTool(ID_CreateBox, "Box", wxArtProvider::GetBitmap(wxART_HELP_BOOK), "Create a box");
     toolbar->AddTool(ID_CreateSphere, "Sphere", wxArtProvider::GetBitmap(wxART_HELP_PAGE), "Create a sphere");
@@ -259,6 +266,67 @@ void MainFrame::onSave(wxCommandEvent& event)
 
     LOG_INF("Saving project: " + saveFileDialog.GetPath().ToStdString());
     SetStatusText("Saved: " + saveFileDialog.GetFilename(), 0);
+}
+
+void MainFrame::onImportSTEP(wxCommandEvent& event)
+{
+    if (!m_occViewer) {
+        LOG_ERR("OCCViewer is null in onImportSTEP");
+        SetStatusText("Error: Cannot import STEP file", 0);
+        return;
+    }
+    
+    // Create file dialog for STEP files
+    wxString wildcard = "STEP files (*.step;*.stp)|*.step;*.stp|All files (*.*)|*.*";
+    wxFileDialog openFileDialog(this, "Import STEP File", "", "", wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    
+    if (openFileDialog.ShowModal() == wxID_CANCEL) {
+        LOG_INF("STEP import dialog cancelled");
+        return;
+    }
+    
+    std::string filePath = openFileDialog.GetPath().ToStdString();
+    LOG_INF("Importing STEP file: " + filePath);
+    SetStatusText("Importing STEP file...", 0);
+    
+    // Read the STEP file
+    STEPReader::ReadResult result = STEPReader::readSTEPFile(filePath);
+    
+    if (!result.success) {
+        wxString errorMsg = "Failed to import STEP file:\n" + result.errorMessage;
+        wxMessageBox(errorMsg, "Import Error", wxOK | wxICON_ERROR, this);
+        LOG_ERR("STEP import failed: " + result.errorMessage);
+        SetStatusText("STEP import failed", 0);
+        return;
+    }
+    
+    // Add geometries to the viewer
+    int importedCount = 0;
+    for (const auto& geometry : result.geometries) {
+        if (geometry) {
+            m_occViewer->addGeometry(geometry);
+            importedCount++;
+        }
+    }
+    
+    if (importedCount > 0) {
+        // Fit all objects in view
+        if (m_canvas && m_canvas->getInputManager()->getNavigationController()) {
+            m_canvas->getInputManager()->getNavigationController()->viewAll();
+        }
+        
+        wxString successMsg = wxString::Format("Successfully imported %d geometry objects from STEP file", importedCount);
+        LOG_INF(successMsg.ToStdString());
+        SetStatusText(successMsg, 0);
+        
+        // Show success message
+        wxMessageBox(successMsg, "Import Successful", wxOK | wxICON_INFORMATION, this);
+    } else {
+        wxString errorMsg = "No geometry objects could be imported from the STEP file";
+        wxMessageBox(errorMsg, "Import Warning", wxOK | wxICON_WARNING, this);
+        LOG_WRN(errorMsg.ToStdString());
+        SetStatusText("No geometries imported", 0);
+    }
 }
 
 void MainFrame::onExit(wxCommandEvent& event)
