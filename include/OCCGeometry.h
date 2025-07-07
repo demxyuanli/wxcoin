@@ -51,6 +51,9 @@ public:
     virtual SoSeparator* getCoinNode();
     virtual void updateCoinRepresentation();
 
+    /** Force the Coin3D representation (including edges) to rebuild */
+    void forceRefresh();
+
 protected:
     virtual void buildCoinRepresentation();
     virtual void updateMesh();

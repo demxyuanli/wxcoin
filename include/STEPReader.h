@@ -64,6 +64,17 @@ public:
         const std::string& baseName = "ImportedGeometry"
     );
     
+    /**
+     * @brief Scale imported geometry to reasonable size
+     * @param geometries Vector of geometry objects to scale
+     * @param targetSize Target maximum dimension (0 = auto-detect)
+     * @return Scaling factor applied
+     */
+    static double scaleGeometriesToReasonableSize(
+        std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+        double targetSize = 0.0
+    );
+    
 private:
     STEPReader() = delete; // Pure static class
     

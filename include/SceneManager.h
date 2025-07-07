@@ -17,10 +17,11 @@ public:
     ~SceneManager();
     Canvas* getCanvas() const { return m_canvas; }
     bool initScene();
+    void initializeScene();  // Add missing method declaration
     void cleanup();
     void resetView();
     void toggleCameraMode();
-    void setView(const std::string& viewName); // New method for view switching
+    void setView(const std::string& viewName);
     void render(const wxSize& size, bool fastMode);
     void updateAspectRatio(const wxSize& size);
     bool screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos);
@@ -29,11 +30,17 @@ public:
     SoCamera* getCamera() const { return m_camera; }
     PickingAidManager* getPickingAidManager() const { return m_pickingAidManager.get(); }
 
+    // Scene bounds and coordinate system management
+    void updateSceneBounds();
+    float getSceneBoundingBoxSize() const;
+    void updateCoordinateSystemScale();
+
 private:
     Canvas* m_canvas;
     SoSeparator* m_sceneRoot;
     SoCamera* m_camera;
     SoDirectionalLight* m_light;
+    SoSeparator* m_lightRoot;  // Add missing member variable
     SoSeparator* m_objectRoot;
     std::unique_ptr<CoordinateSystemRenderer> m_coordSystemRenderer;
     std::unique_ptr<PickingAidManager> m_pickingAidManager;

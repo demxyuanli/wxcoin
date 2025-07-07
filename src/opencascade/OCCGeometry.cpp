@@ -15,6 +15,8 @@
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoShapeHints.h>
+#include <Inventor/nodes/SoTexture2.h>
 
 // OCCGeometry base class implementation
 OCCGeometry::OCCGeometry(const std::string& name)
@@ -157,7 +159,14 @@ void OCCGeometry::buildCoinRepresentation()
         static_cast<float>(m_scale)
     );
     
-    // Create material
+    // Add shape hints for better rendering of imported models
+    SoShapeHints* hints = new SoShapeHints;
+    hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
+    hints->shapeType = SoShapeHints::SOLID;
+    hints->faceType = SoShapeHints::CONVEX;
+    m_coinNode->addChild(hints);
+    
+    // Create material with improved lighting
     SoMaterial* material = new SoMaterial;
     material->diffuseColor.setValue(
         static_cast<float>(m_color.Red()),
@@ -166,8 +175,26 @@ void OCCGeometry::buildCoinRepresentation()
     );
     material->transparency.setValue(static_cast<float>(m_transparency));
     
+    // Enhanced lighting settings for brighter and softer appearance
+    material->ambientColor.setValue(0.6f, 0.6f, 0.6f);   // Brighter ambient component
+    material->specularColor.setValue(0.3f, 0.3f, 0.3f);  // Lower specular to avoid washed highlights
+    material->shininess.setValue(0.4f);                  // Moderate shininess
+    material->emissiveColor.setValue(0.2f, 0.2f, 0.2f);  // Add emission to ensure baseline brightness
+    
     m_coinNode->addChild(m_coinTransform);
     m_coinNode->addChild(material);
+
+    // Attach a light-blue texture (2×2 pixels) for visual testing
+    static const unsigned char texData[16] = {
+        173, 216, 230, 255,   173, 216, 230, 255,
+        173, 216, 230, 255,   173, 216, 230, 255
+    }; // RGBA light-blue 2x2
+    SoTexture2* texture = new SoTexture2;
+    texture->wrapS = SoTexture2::REPEAT;
+    texture->wrapT = SoTexture2::REPEAT;
+    texture->model = SoTexture2::REPLACE;
+    texture->image.setValue(SbVec2s(2, 2), 4, texData);
+    m_coinNode->addChild(texture);
     
     // Convert OCC shape to Coin3D mesh
     if (!m_shape.IsNull()) {
@@ -317,4 +344,13 @@ void OCCCone::buildShape()
     } catch (const std::exception& e) {
         LOG_ERR("Failed to create cone: " + std::string(e.what()));
     }
-} 
+}
+
+/** Force a rebuild of the Coin3D node */
+void OCCGeometry::forceRefresh()
+{
+    if (m_coinNode) {
+        m_coinNode->unref();
+        m_coinNode = nullptr;
+    }
+}

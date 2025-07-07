@@ -10,12 +10,15 @@
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoLineSet.h>
 #include <Inventor/nodes/SoTransform.h>
+#include <algorithm>
 
-const float CoordinateSystemRenderer::COORD_PLANE_SIZE = 4.0f;
+const float CoordinateSystemRenderer::DEFAULT_COORD_PLANE_SIZE = 4.0f;
 const float CoordinateSystemRenderer::COORD_PLANE_TRANSPARENCY = 1.0f;
 
 CoordinateSystemRenderer::CoordinateSystemRenderer(SoSeparator* objectRoot)
     : m_objectRoot(objectRoot)
+    , m_coordSystemSeparator(nullptr)
+    , m_currentPlaneSize(DEFAULT_COORD_PLANE_SIZE)
 {
     LOG_INF("CoordinateSystemRenderer initializing");
     createCoordinateSystem();
@@ -25,23 +28,60 @@ CoordinateSystemRenderer::~CoordinateSystemRenderer() {
     LOG_INF("CoordinateSystemRenderer destroying");
 }
 
+void CoordinateSystemRenderer::updateCoordinateSystemSize(float sceneSize)
+{
+    // Calculate appropriate coordinate system size based on scene size
+    // Make coordinate system about 1/4 to 1/2 of the scene size, with reasonable bounds
+    float newSize = std::max(1.0f, std::min(sceneSize * 0.3f, sceneSize * 2.0f));
+    
+    if (std::abs(newSize - m_currentPlaneSize) > 0.1f) {
+        m_currentPlaneSize = newSize;
+        LOG_INF("Updating coordinate system size to: " + std::to_string(m_currentPlaneSize));
+        rebuildCoordinateSystem();
+    }
+}
+
+void CoordinateSystemRenderer::setCoordinateSystemScale(float scale)
+{
+    m_currentPlaneSize = DEFAULT_COORD_PLANE_SIZE * scale;
+    LOG_INF("Setting coordinate system scale to: " + std::to_string(scale) + 
+           " (size: " + std::to_string(m_currentPlaneSize) + ")");
+    rebuildCoordinateSystem();
+}
+
+void CoordinateSystemRenderer::rebuildCoordinateSystem()
+{
+    // Remove existing coordinate system if it exists
+    if (m_coordSystemSeparator && m_objectRoot) {
+        m_objectRoot->removeChild(m_coordSystemSeparator);
+        m_coordSystemSeparator = nullptr;
+    }
+    
+    // Create new coordinate system with current size
+    createCoordinateSystem();
+}
+
 void CoordinateSystemRenderer::createCoordinateSystem() {
-    SoSeparator* coordSystemSep = new SoSeparator;
+    m_coordSystemSeparator = new SoSeparator;
     SoTransform* originTransform = new SoTransform;
     originTransform->translation.setValue(0.0f, 0.0f, 0.0f);
     originTransform->rotation.setValue(SbRotation::identity());
     originTransform->scaleFactor.setValue(1.0f, 1.0f, 1.0f);
-    coordSystemSep->addChild(originTransform);
+    m_coordSystemSeparator->addChild(originTransform);
 
     SoShapeHints* hints = new SoShapeHints;
     hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
     hints->shapeType = SoShapeHints::SOLID;
-    coordSystemSep->addChild(hints);
+    m_coordSystemSeparator->addChild(hints);
 
     SoDrawStyle* globalStyle = DPIAwareRendering::createDPIAwareCoordinateLineStyle(1.0f);
     globalStyle->linePattern = 0xFFFF;
-    coordSystemSep->addChild(globalStyle);
+    m_coordSystemSeparator->addChild(globalStyle);
 
+    // Use current plane size instead of constant
+    float s = m_currentPlaneSize / 2.0f;
+
+    // X plane (YZ plane) - use red color
     SoSeparator* xPlaneSep = new SoSeparator;
     SoMaterial* xMaterial = new SoMaterial;
     xMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f); 
@@ -54,7 +94,6 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
     SoFaceSet* xFaceSet = new SoFaceSet;
     SoVertexProperty* xVertices = new SoVertexProperty;
-    float s = COORD_PLANE_SIZE / 2.0f;
     xVertices->vertex.set1Value(0, SbVec3f(0.0f, -s, -s));
     xVertices->vertex.set1Value(1, SbVec3f(0.0f, s, -s));
     xVertices->vertex.set1Value(2, SbVec3f(0.0f, s, s));
@@ -83,8 +122,9 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     xLines->coordIndex.set1Value(5, -1);
     xLineSep->addChild(xLines);
     xPlaneSep->addChild(xLineSep);
-    coordSystemSep->addChild(xPlaneSep);
+    m_coordSystemSeparator->addChild(xPlaneSep);
 
+    // Y plane (XZ plane) - use green color
     SoSeparator* yPlaneSep = new SoSeparator;
     SoMaterial* yMaterial = new SoMaterial;
     yMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
@@ -125,7 +165,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     yLines->coordIndex.set1Value(5, -1);
     yLineSep->addChild(yLines);
     yPlaneSep->addChild(yLineSep);
-    coordSystemSep->addChild(yPlaneSep);
+    m_coordSystemSeparator->addChild(yPlaneSep);
 
     // Z plane (XY plane) - use blue color
     SoSeparator* zPlaneSep = new SoSeparator;
@@ -168,7 +208,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     zLines->coordIndex.set1Value(5, -1);
     zLineSep->addChild(zLines);
     zPlaneSep->addChild(zLineSep);
-    coordSystemSep->addChild(zPlaneSep);
+    m_coordSystemSeparator->addChild(zPlaneSep);
 
     SoSeparator* xAxisSep = new SoSeparator;
     SoMaterial* xAxisMaterial = new SoMaterial;
@@ -187,7 +227,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     SoLineSet* xAxisLine = new SoLineSet;
     xAxisLine->numVertices.setValue(2);
     xAxisSep->addChild(xAxisLine);
-    coordSystemSep->addChild(xAxisSep);
+    m_coordSystemSeparator->addChild(xAxisSep);
 
     SoSeparator* yAxisSep = new SoSeparator;
     SoMaterial* yAxisMaterial = new SoMaterial;
@@ -206,7 +246,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     SoLineSet* yAxisLine = new SoLineSet;
     yAxisLine->numVertices.setValue(2);
     yAxisSep->addChild(yAxisLine);
-    coordSystemSep->addChild(yAxisSep);
+    m_coordSystemSeparator->addChild(yAxisSep);
 
     SoSeparator* zAxisSep = new SoSeparator;
     SoMaterial* zAxisMaterial = new SoMaterial;
@@ -225,7 +265,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     SoLineSet* zAxisLine = new SoLineSet;
     zAxisLine->numVertices.setValue(2);
     zAxisSep->addChild(zAxisLine);
-    coordSystemSep->addChild(zAxisSep);
+    m_coordSystemSeparator->addChild(zAxisSep);
 
-    m_objectRoot->addChild(coordSystemSep);
+    m_objectRoot->addChild(m_coordSystemSeparator);
 }

@@ -114,11 +114,15 @@ public:
     static void printMeshInfo(const TriangleMesh& mesh);
     static std::string getMeshStatistics(const TriangleMesh& mesh);
 
+    // Control whether edge lines are generated
+    static void setShowEdges(bool show);
+
 private:
+    static bool s_showEdges;
     static void meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, const MeshParameters& params);
     static void extractTriangulation(const Handle(Poly_Triangulation)& triangulation, 
                                      const TopLoc_Location& location, 
-                                     TriangleMesh& mesh);
+                                     TriangleMesh& mesh, TopAbs_Orientation orientation = TopAbs_FORWARD);
     static void addTriangleToMesh(TriangleMesh& mesh, const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
     static gp_Pnt calculateTriangleNormal(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
     static bool isValidTriangle(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3, double tolerance = 1e-6);

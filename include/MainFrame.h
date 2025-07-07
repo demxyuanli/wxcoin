@@ -12,7 +12,49 @@ class CommandManager;
 class NavigationController;
 class OCCViewer;
 
-class MainFrame : public wxFrame {
+
+enum
+{
+    // File menu IDs
+    ID_NEW = wxID_HIGHEST + 1,
+    ID_OPEN,
+    ID_SAVE,
+    ID_SAVE_AS,
+    ID_IMPORT_STEP,
+    ID_EXIT,
+
+    // Edit menu IDs
+    ID_UNDO,
+    ID_REDO,
+
+    // Create menu IDs
+    ID_CREATE_BOX,
+    ID_CREATE_SPHERE,
+    ID_CREATE_CYLINDER,
+    ID_CREATE_CONE,
+    ID_CREATE_WRENCH,
+
+    // View menu IDs
+    ID_VIEW_MODE,
+    ID_SELECT_MODE,
+    ID_VIEW_ALL,        // Add missing ID
+    ID_VIEW_TOP,        // Add missing ID
+    ID_VIEW_FRONT,      // Add missing ID
+    ID_VIEW_RIGHT,      // Add missing ID
+    ID_VIEW_ISOMETRIC,  // Add missing ID
+
+    // Display options
+    ID_SHOW_NORMALS,
+    ID_SHOW_EDGES,
+    ID_FIX_NORMALS,
+    ID_NAVIGATION_CUBE_CONFIG,
+
+    // Help menu IDs
+    ID_ABOUT
+};
+
+class MainFrame : public wxFrame
+{
 public:
     MainFrame(const wxString& title);
     virtual ~MainFrame();
@@ -47,6 +89,7 @@ private:
     void onViewIsometric(wxCommandEvent& event);
     void onNavigationCubeConfig(wxCommandEvent& event);
     void onShowNormals(wxCommandEvent& event);
+    void onShowEdges(wxCommandEvent& event);  // Add edge display event handler declaration
     void onFixNormals(wxCommandEvent& event);
     void onAbout(wxCommandEvent& event);
     void onClose(wxCloseEvent& event);
@@ -60,3 +103,4 @@ private:
 
     DECLARE_EVENT_TABLE()
 };
+

@@ -19,11 +19,26 @@
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/nodes/SoNormal.h>
 #include <Inventor/nodes/SoShapeHints.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoTexture2.h>
 
 // STL includes
 #include <fstream>
 #include <iostream>
 #include <cmath>
+#include <set>
+#include <vector>
+
+// Forward declaration
+static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh& mesh);
+
+bool OCCMeshConverter::s_showEdges = true;
+
+void OCCMeshConverter::setShowEdges(bool show)
+{
+    s_showEdges = show;
+}
 
 OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape, 
                                                               const MeshParameters& params)
@@ -85,10 +100,12 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
     SoSeparator* root = new SoSeparator;
     root->ref();
     
-    // Add shape hints for better rendering
+    // Add shape hints for better rendering of imported models
     SoShapeHints* hints = new SoShapeHints;
     hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
     hints->shapeType = SoShapeHints::SOLID;
+    hints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
+    hints->creaseAngle = 0.8f;  // Increase crease angle from 0.5 to 0.8 for smoother shading
     root->addChild(hints);
     
     // Create coordinate node
@@ -109,6 +126,28 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
     SoIndexedFaceSet* faceSet = createFaceSetNode(mesh);
     if (faceSet) {
         root->addChild(faceSet);
+    }
+    
+    // Create edge set if showEdges is true
+    if (s_showEdges) {
+        SoSeparator* edgeGroup = new SoSeparator;
+
+        // Disable texture for this subgraph so edges are not textured
+        SoTexture2* disableTexture = new SoTexture2;
+        edgeGroup->addChild(disableTexture);
+
+        // Set a black material for the edges
+        SoMaterial* edgeMaterial = new SoMaterial;
+        edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+        edgeGroup->addChild(edgeMaterial);
+
+        // Create and add the line geometry
+        SoIndexedLineSet* edgeSet = createEdgeSetNode(mesh);
+        if (edgeSet) {
+            edgeGroup->addChild(edgeSet);
+        }
+
+        root->addChild(edgeGroup);
     }
     
     root->unrefNoDelete();
@@ -154,6 +193,28 @@ void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TriangleMesh& mes
     SoIndexedFaceSet* faceSet = createFaceSetNode(mesh);
     if (faceSet) {
         node->addChild(faceSet);
+    }
+    
+    // Create edge set if showEdges is true
+    if (s_showEdges) {
+        SoSeparator* edgeGroup = new SoSeparator;
+
+        // Disable texture for this subgraph so edges are not textured
+        SoTexture2* disableTexture = new SoTexture2;
+        edgeGroup->addChild(disableTexture);
+
+        // Set a black material for the edges
+        SoMaterial* edgeMaterial = new SoMaterial;
+        edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+        edgeGroup->addChild(edgeMaterial);
+
+        // Create and add the line geometry
+        SoIndexedLineSet* edgeSet = createEdgeSetNode(mesh);
+        if (edgeSet) {
+            edgeGroup->addChild(edgeSet);
+        }
+
+        node->addChild(edgeGroup);
     }
 }
 
@@ -227,20 +288,20 @@ void OCCMeshConverter::meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, co
     
     // If triangulation exists, extract it
     if (!triangulation.IsNull()) {
-        extractTriangulation(triangulation, location, mesh);
+        extractTriangulation(triangulation, location, mesh, topoFace.Orientation());
     } else {
         // If no triangulation exists, create one
         BRepMesh_IncrementalMesh mesher(topoFace, params.deflection, params.relative, params.angularDeflection);
         triangulation = BRep_Tool::Triangulation(topoFace, location);
         if (!triangulation.IsNull()) {
-            extractTriangulation(triangulation, location, mesh);
+            extractTriangulation(triangulation, location, mesh, topoFace.Orientation());
         }
     }
 }
 
 void OCCMeshConverter::extractTriangulation(const Handle(Poly_Triangulation)& triangulation, 
                                             const TopLoc_Location& location, 
-                                            TriangleMesh& mesh)
+                                            TriangleMesh& mesh, TopAbs_Orientation orientation)
 {
     if (triangulation.IsNull()) {
         return;
@@ -258,16 +319,27 @@ void OCCMeshConverter::extractTriangulation(const Handle(Poly_Triangulation)& tr
         mesh.vertices.push_back(point);
     }
     
-    // Extract triangles
+    // Extract triangles with proper orientation handling
     const Poly_Array1OfTriangle triangles = triangulation->Triangles();
     for (int i = triangles.Lower(); i <= triangles.Upper(); i++) {
         int n1, n2, n3;
         triangles(i).Get(n1, n2, n3);
         
         // Adjust indices to be 0-based and add vertex offset
-        mesh.triangles.push_back(vertexOffset + n1 - 1);
-        mesh.triangles.push_back(vertexOffset + n2 - 1);
-        mesh.triangles.push_back(vertexOffset + n3 - 1);
+        int idx1 = vertexOffset + n1 - 1;
+        int idx2 = vertexOffset + n2 - 1;
+        int idx3 = vertexOffset + n3 - 1;
+        
+        // Handle face orientation - reverse triangle winding if face is reversed
+        if (orientation == TopAbs_REVERSED) {
+            mesh.triangles.push_back(idx1);
+            mesh.triangles.push_back(idx3);  // Swap n2 and n3 to reverse winding
+            mesh.triangles.push_back(idx2);
+        } else {
+            mesh.triangles.push_back(idx1);
+            mesh.triangles.push_back(idx2);
+            mesh.triangles.push_back(idx3);
+        }
     }
 }
 
@@ -356,6 +428,39 @@ SoNormal* OCCMeshConverter::createNormalNode(const TriangleMesh& mesh)
     normals->vector.finishEditing();
     
     return normals;
+}
+
+static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh& mesh)
+{
+    if (mesh.triangles.empty()) return nullptr;
+
+    std::set<std::pair<int,int>> uniqueEdges;
+    for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+        int a = mesh.triangles[i];
+        int b = mesh.triangles[i+1];
+        int c = mesh.triangles[i+2];
+        auto addEdge=[&](int v1,int v2){
+            if(v1>v2) std::swap(v1,v2);
+            uniqueEdges.insert({v1,v2});
+        };
+        addEdge(a,b);
+        addEdge(b,c);
+        addEdge(c,a);
+    }
+
+    if(uniqueEdges.empty()) return nullptr;
+
+    std::vector<int32_t> indices;
+    indices.reserve(uniqueEdges.size()*3);
+    for(auto& e: uniqueEdges){
+        indices.push_back(e.first);
+        indices.push_back(e.second);
+        indices.push_back(SO_END_LINE_INDEX);
+    }
+
+    SoIndexedLineSet* lineSet = new SoIndexedLineSet;
+    lineSet->coordIndex.setValues(0, indices.size(), indices.data());
+    return lineSet;
 }
 
 bool OCCMeshConverter::exportToSTL(const TriangleMesh& mesh, const std::string& filename, bool binary)

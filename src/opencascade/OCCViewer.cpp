@@ -29,6 +29,8 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
     , m_meshDeflection(0.1)
 {
     initializeViewer();
+    // Enable edges display by default
+    setShowEdges(true);
 }
 
 OCCViewer::~OCCViewer()
@@ -298,7 +300,22 @@ void OCCViewer::setShadingMode(bool shaded)
 void OCCViewer::setShowEdges(bool showEdges)
 {
     m_showEdges = showEdges;
-    updateAll();
+    OCCMeshConverter::setShowEdges(showEdges);
+    // Force each geometry to rebuild its Coin3D node
+    if (m_occRoot) {
+        m_occRoot->removeAllChildren();
+        for (auto& geom : m_geometries) {
+            geom->forceRefresh();
+            SoSeparator* node = geom->getCoinNode();
+            if (node) {
+                m_occRoot->addChild(node);
+            }
+        }
+    }
+    // Trigger redraw
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        m_sceneManager->getCanvas()->Refresh(true);
+    }
 }
 
 void OCCViewer::setAntiAliasing(bool enabled)

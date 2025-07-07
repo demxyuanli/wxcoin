@@ -26,6 +26,8 @@
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
+#include <climits>
+#include <cfloat>
 
 // Add include at top
 #include <XCAFApp_Application.hxx>
@@ -173,6 +175,14 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
         std::string baseName = std::filesystem::path(filePath).stem().string();
         result.geometries = shapeToGeometries(result.rootShape, baseName);
         
+        // Apply automatic scaling to make geometries reasonable size
+        if (!result.geometries.empty()) {
+            double scaleFactor = scaleGeometriesToReasonableSize(result.geometries);
+            if (scaleFactor != 1.0) {
+                LOG_INF("Applied automatic scaling factor: " + std::to_string(scaleFactor));
+            }
+        }
+        
         // Analyze the imported shape
         OCCShapeBuilder::analyzeShapeTopology(result.rootShape, baseName);
         
@@ -234,6 +244,14 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
                 std::string name = baseName + "_" + std::to_string(shapeIndex++);
                 auto geometry = std::make_shared<OCCGeometry>(name);
                 geometry->setShape(individualShape);
+                
+                // Set better default color for imported STEP models
+                // Use a neutral light gray color that is bright and clear
+                Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+                geometry->setColor(defaultColor);
+                
+                // Remove transparency for a solid appearance
+                geometry->setTransparency(0.0);
                 
                 // Analyze each shape
                 OCCShapeBuilder::analyzeShapeTopology(individualShape, name);
@@ -310,5 +328,99 @@ void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_
     } else {
         // It's a single shape
         shapes.push_back(compound);
+    }
+}
+
+double STEPReader::scaleGeometriesToReasonableSize(
+    std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+    double targetSize)
+{
+    if (geometries.empty()) {
+        return 1.0;
+    }
+    
+    try {
+        // Calculate overall bounding box
+        gp_Pnt overallMin(DBL_MAX, DBL_MAX, DBL_MAX);
+        gp_Pnt overallMax(-DBL_MAX, -DBL_MAX, -DBL_MAX);
+        bool hasValidBounds = false;
+        
+        for (const auto& geometry : geometries) {
+            if (!geometry || geometry->getShape().IsNull()) {
+                continue;
+            }
+            
+            gp_Pnt minPt, maxPt;
+            OCCShapeBuilder::getBoundingBox(geometry->getShape(), minPt, maxPt);
+            
+            if (minPt.X() < overallMin.X()) overallMin.SetX(minPt.X());
+            if (minPt.Y() < overallMin.Y()) overallMin.SetY(minPt.Y());
+            if (minPt.Z() < overallMin.Z()) overallMin.SetZ(minPt.Z());
+            
+            if (maxPt.X() > overallMax.X()) overallMax.SetX(maxPt.X());
+            if (maxPt.Y() > overallMax.Y()) overallMax.SetY(maxPt.Y());
+            if (maxPt.Z() > overallMax.Z()) overallMax.SetZ(maxPt.Z());
+            
+            hasValidBounds = true;
+        }
+        
+        if (!hasValidBounds) {
+            LOG_WRN("No valid bounds found for scaling");
+            return 1.0;
+        }
+        
+        // Calculate current size
+        double currentSizeX = overallMax.X() - overallMin.X();
+        double currentSizeY = overallMax.Y() - overallMin.Y();
+        double currentSizeZ = overallMax.Z() - overallMin.Z();
+        double currentMaxSize = std::max({currentSizeX, currentSizeY, currentSizeZ});
+        
+        LOG_INF("Current geometry size: " + std::to_string(currentMaxSize));
+        
+        // Determine target size
+        if (targetSize <= 0.0) {
+            // Auto-detect reasonable size (10-50 units)
+            if (currentMaxSize > 100.0) {
+                targetSize = 20.0;  // Scale large models down
+            } else if (currentMaxSize < 0.1) {
+                targetSize = 10.0;  // Scale tiny models up
+            } else {
+                // Size is already reasonable
+                return 1.0;
+            }
+        }
+        
+        double scaleFactor = targetSize / currentMaxSize;
+        
+        if (std::abs(scaleFactor - 1.0) < 0.01) {
+            // No significant scaling needed
+            return 1.0;
+        }
+        
+        LOG_INF("Applying scale factor: " + std::to_string(scaleFactor));
+        
+        // Apply scaling to all geometries
+        for (auto& geometry : geometries) {
+            if (!geometry || geometry->getShape().IsNull()) {
+                continue;
+            }
+            
+            // Scale the shape
+            TopoDS_Shape scaledShape = OCCShapeBuilder::scale(
+                geometry->getShape(), 
+                gp_Pnt(0, 0, 0), 
+                scaleFactor
+            );
+            
+            if (!scaledShape.IsNull()) {
+                geometry->setShape(scaledShape);
+            }
+        }
+        
+        return scaleFactor;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR("Exception scaling geometries: " + std::string(e.what()));
+        return 1.0;
     }
 } 

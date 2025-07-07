@@ -13,12 +13,17 @@
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/SbLinear.h>
 #include <GL/gl.h>
+#include <Inventor/nodes/SoTransform.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoShapeHints.h>
+#include <Inventor/nodes/SoLightModel.h>
 
 SceneManager::SceneManager(Canvas* canvas)
     : m_canvas(canvas)
     , m_sceneRoot(nullptr)
     , m_camera(nullptr)
     , m_light(nullptr)
+    , m_lightRoot(nullptr)  // Add initialization for m_lightRoot
     , m_objectRoot(nullptr)
     , m_isPerspectiveCamera(true)
 {
@@ -32,7 +37,12 @@ SceneManager::~SceneManager() {
 
 bool SceneManager::initScene() {
     try {
+        // Create light root separator first
+        m_lightRoot = new SoSeparator;
+        m_lightRoot->ref();
+        
         m_sceneRoot = new SoSeparator;
+        m_sceneRoot->addChild(m_lightRoot);  // Now m_lightRoot is not NULL
         m_sceneRoot->ref();
 
         m_camera = new SoPerspectiveCamera;
@@ -54,20 +64,41 @@ bool SceneManager::initScene() {
         env->ambientIntensity.setValue(0.3f);
         m_sceneRoot->addChild(env);
 
+        // Set a light model to enable separate two-sided lighting
+        SoLightModel* lightModel = new SoLightModel;
+        lightModel->model.setValue(SoLightModel::PHONG);
+        m_lightRoot->addChild(lightModel);
+
+        // Add an environment node for ambient light for overall brightness
+        SoEnvironment* environment = new SoEnvironment;
+        environment->ambientColor.setValue(0.4f, 0.4f, 0.4f); // Moderate ambient light
+        environment->ambientIntensity.setValue(1.0f);
+        m_lightRoot->addChild(environment);
+
+        // Main directional light, made stronger
         m_light = new SoDirectionalLight;
         m_light->ref();
         m_light->direction.setValue(0.5f, 0.5f, -1.0f);
-        m_light->intensity.setValue(0.8f);
+        m_light->intensity.setValue(1.0f); // Increased from 0.8
         m_light->color.setValue(1.0f, 1.0f, 1.0f);
         m_light->on.setValue(true);
-        m_sceneRoot->addChild(m_light);
+        m_lightRoot->addChild(m_light);
 
+        // Fill light, made stronger
         SoDirectionalLight* fillLight = new SoDirectionalLight;
         fillLight->direction.setValue(-0.3f, -0.3f, -0.5f);
-        fillLight->intensity.setValue(0.4f);
+        fillLight->intensity.setValue(0.6f); // Increased from 0.4
         fillLight->color.setValue(0.9f, 0.9f, 1.0f);
         fillLight->on.setValue(true);
-        m_sceneRoot->addChild(fillLight);
+        m_lightRoot->addChild(fillLight);
+
+        // Back light, made stronger
+        SoDirectionalLight* backLight = new SoDirectionalLight;
+        backLight->direction.setValue(0.2f, 0.2f, 0.8f);
+        backLight->intensity.setValue(0.5f); // Increased from 0.3
+        backLight->color.setValue(1.0f, 1.0f, 0.9f);
+        backLight->on.setValue(true);
+        m_lightRoot->addChild(backLight);
 
         m_objectRoot = new SoSeparator;
         m_objectRoot->ref();
@@ -98,6 +129,10 @@ void SceneManager::cleanup() {
     if (m_light) {
         m_light->unref();
         m_light = nullptr;
+    }
+    if (m_lightRoot) {
+        m_lightRoot->unref();
+        m_lightRoot = nullptr;
     }
     if (m_objectRoot) {
         m_objectRoot->unref();
@@ -369,4 +404,58 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     LOG_WRN("No plane intersection found, using focal distance projection");
     worldPos = lineFromCamera.getPosition() + lineFromCamera.getDirection() * m_camera->focalDistance.getValue();
     return true;
+}
+
+void SceneManager::updateSceneBounds()
+{
+    if (!m_objectRoot || !m_coordSystemRenderer) {
+        return;
+    }
+    
+    float sceneSize = getSceneBoundingBoxSize();
+    if (sceneSize > 0.1f) {  // Only update if we have meaningful content
+        m_coordSystemRenderer->updateCoordinateSystemSize(sceneSize);
+        LOG_INF("Updated coordinate system for scene size: " + std::to_string(sceneSize));
+    }
+}
+
+float SceneManager::getSceneBoundingBoxSize() const
+{
+    if (!m_objectRoot) {
+        return 0.0f;
+    }
+    
+    try {
+        SoGetBoundingBoxAction bboxAction(SbViewportRegion(640, 480));
+        bboxAction.apply(m_objectRoot);
+        
+        SbBox3f bbox = bboxAction.getBoundingBox();
+        if (bbox.isEmpty()) {
+            return 0.0f;
+        }
+        
+        SbVec3f min, max;
+        bbox.getBounds(min, max);
+        
+        // Calculate the diagonal length of the bounding box
+        SbVec3f diagonal = max - min;
+        float size = diagonal.length();
+        
+        LOG_INF("Scene bounding box size: " + std::to_string(size));
+        return size;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR("Exception calculating scene bounds: " + std::string(e.what()));
+        return 0.0f;
+    }
+}
+
+void SceneManager::updateCoordinateSystemScale()
+{
+    updateSceneBounds();
+}
+
+void SceneManager::initializeScene()
+{
+    // Deprecated: initialization logic now resides in initScene()
 }

@@ -111,14 +111,17 @@ void MainFrame::createMenu()
     createMenu->Append(ID_CreateWrench, "&Wrench", "Create a wrench");
     menuBar->Append(createMenu, "&Create");
 
+    // View menu
     wxMenu* viewMenu = new wxMenu;
-    viewMenu->Append(ID_ViewAll, "&Fit All", "Fit all objects in view");
-    viewMenu->Append(ID_ViewTop, "&Top", "Set top view");
-    viewMenu->Append(ID_ViewFront, "&Front", "Set front view");
-    viewMenu->Append(ID_ViewRight, "&Right", "Set right view");
-    viewMenu->Append(ID_ViewIsometric, "&Isometric", "Set isometric view");
+    viewMenu->Append(ID_VIEW_ALL, _("Fit &All\tCtrl+A"), _("Fit all objects in view"));
     viewMenu->AppendSeparator();
-    viewMenu->AppendCheckItem(ID_ShowNormals, "Show &Normals", "Show/hide face normals");
+    viewMenu->Append(ID_VIEW_TOP, _("&Top\tCtrl+1"), _("Top view"));
+    viewMenu->Append(ID_VIEW_FRONT, _("&Front\tCtrl+2"), _("Front view"));
+    viewMenu->Append(ID_VIEW_RIGHT, _("&Right\tCtrl+3"), _("Right view"));
+    viewMenu->Append(ID_VIEW_ISOMETRIC, _("&Isometric\tCtrl+4"), _("Isometric view"));
+    viewMenu->AppendSeparator();
+    viewMenu->AppendCheckItem(ID_SHOW_NORMALS, _("Show &Normals"), _("Show/hide surface normals"));
+    viewMenu->AppendCheckItem(ID_SHOW_EDGES, _("Show &Edges"), _("Show/hide object edges")); // Add edge display option
     viewMenu->Append(ID_FixNormals, "&Fix Normals", "Automatically fix incorrect face normals");
     viewMenu->AppendSeparator();
     viewMenu->Append(ID_NavigationCubeConfig, "&Navigation Cube Config...", "Configure navigation cube settings");
@@ -313,6 +316,11 @@ void MainFrame::onImportSTEP(wxCommandEvent& event)
         // Fit all objects in view
         if (m_canvas && m_canvas->getInputManager()->getNavigationController()) {
             m_canvas->getInputManager()->getNavigationController()->viewAll();
+        }
+        
+        // Update coordinate system scale based on imported content
+        if (m_canvas && m_canvas->getSceneManager()) {
+            m_canvas->getSceneManager()->updateCoordinateSystemScale();
         }
         
         wxString successMsg = wxString::Format("Successfully imported %d geometry objects from STEP file", importedCount);
@@ -540,4 +548,14 @@ void MainFrame::onClose(wxCloseEvent& event)
 {
     LOG_INF("Closing application");
     Destroy();
+}
+
+// Add edge display event handler
+void MainFrame::onShowEdges(wxCommandEvent& event)
+{
+    bool showEdges = event.IsChecked();
+    if (m_occViewer) {
+        m_occViewer->setShowEdges(showEdges);
+        LOG_INF(showEdges ? "Edges shown" : "Edges hidden");
+    }
 }
