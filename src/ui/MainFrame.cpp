@@ -44,6 +44,33 @@
 #include "NavCubeConfigListener.h"
 #include "ZoomSpeedListener.h"
 #include "FileExitListener.h"
+#include "CommandListenerManager.h"
+
+static const std::unordered_map<int, cmd::CommandType> kEventTable = {
+    {wxID_NEW, cmd::CommandType::FileNew},
+    {wxID_OPEN, cmd::CommandType::FileOpen},
+    {wxID_SAVE, cmd::CommandType::FileSave},
+    {ID_IMPORT_STEP, cmd::CommandType::ImportSTEP},
+    {wxID_EXIT, cmd::CommandType::FileExit},
+    {ID_CREATE_BOX, cmd::CommandType::CreateBox},
+    {ID_CREATE_SPHERE, cmd::CommandType::CreateSphere},
+    {ID_CREATE_CYLINDER, cmd::CommandType::CreateCylinder},
+    {ID_CREATE_CONE, cmd::CommandType::CreateCone},
+    {ID_CREATE_WRENCH, cmd::CommandType::CreateWrench},
+    {ID_VIEW_ALL, cmd::CommandType::ViewAll},
+    {ID_VIEW_TOP, cmd::CommandType::ViewTop},
+    {ID_VIEW_FRONT, cmd::CommandType::ViewFront},
+    {ID_VIEW_RIGHT, cmd::CommandType::ViewRight},
+    {ID_VIEW_ISOMETRIC, cmd::CommandType::ViewIsometric},
+    {ID_SHOW_NORMALS, cmd::CommandType::ShowNormals},
+    {ID_FIX_NORMALS, cmd::CommandType::FixNormals},
+    {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
+    {ID_UNDO, cmd::CommandType::Undo},
+    {ID_REDO, cmd::CommandType::Redo},
+    {ID_NAVIGATION_CUBE_CONFIG, cmd::CommandType::NavCubeConfig},
+    {ID_ZOOM_SPEED, cmd::CommandType::ZoomSpeed},
+    {wxID_ABOUT, cmd::CommandType::HelpAbout},
+};
 
 BEGIN_EVENT_TABLE(MainFrame, wxFrame)
 EVT_MENU(wxID_NEW, MainFrame::onCommand)
@@ -115,11 +142,12 @@ void MainFrame::setupCommandSystem()
     auto createWrenchListener = std::make_shared<CreateWrenchListener>(m_geometryFactory);
     
     // Register geometry command listeners
-    m_commandDispatcher->registerListener(cmd::CommandType::CreateBox, createBoxListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::CreateSphere, createSphereListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::CreateCylinder, createCylinderListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::CreateCone, createConeListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::CreateWrench, createWrenchListener);
+    m_listenerManager = std::make_unique<CommandListenerManager>();
+    m_listenerManager->registerListener(cmd::CommandType::CreateBox, createBoxListener);
+    m_listenerManager->registerListener(cmd::CommandType::CreateSphere, createSphereListener);
+    m_listenerManager->registerListener(cmd::CommandType::CreateCylinder, createCylinderListener);
+    m_listenerManager->registerListener(cmd::CommandType::CreateCone, createConeListener);
+    m_listenerManager->registerListener(cmd::CommandType::CreateWrench, createWrenchListener);
     
     // View listeners
     auto viewAllListener = std::make_shared<ViewAllListener>(m_canvas->getInputManager()->getNavigationController());
@@ -132,36 +160,36 @@ void MainFrame::setupCommandSystem()
     auto showEdgesListener = std::make_shared<ShowEdgesListener>(m_occViewer);
     
     // Register view command listeners
-    m_commandDispatcher->registerListener(cmd::CommandType::ViewAll, viewAllListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ViewTop, viewTopListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ViewFront, viewFrontListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ViewRight, viewRightListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ViewIsometric, viewIsoListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ShowNormals, showNormalsListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ShowEdges, showEdgesListener);
+    m_listenerManager->registerListener(cmd::CommandType::ViewAll, viewAllListener);
+    m_listenerManager->registerListener(cmd::CommandType::ViewTop, viewTopListener);
+    m_listenerManager->registerListener(cmd::CommandType::ViewFront, viewFrontListener);
+    m_listenerManager->registerListener(cmd::CommandType::ViewRight, viewRightListener);
+    m_listenerManager->registerListener(cmd::CommandType::ViewIsometric, viewIsoListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowNormals, showNormalsListener);
+    m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowEdges, showEdgesListener);
     
     // Register file command listeners
     auto fileNewListener = std::make_shared<FileNewListener>(m_canvas, m_commandManager);
     auto fileOpenListener = std::make_shared<FileOpenListener>(this);
     auto fileSaveListener = std::make_shared<FileSaveListener>(this);
     auto importStepListener = std::make_shared<ImportStepListener>(this, m_canvas, m_occViewer);
-    m_commandDispatcher->registerListener(cmd::CommandType::FileNew, fileNewListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::FileOpen, fileOpenListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::FileSave, fileSaveListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ImportSTEP, importStepListener);
+    m_listenerManager->registerListener(cmd::CommandType::FileNew, fileNewListener);
+    m_listenerManager->registerListener(cmd::CommandType::FileOpen, fileOpenListener);
+    m_listenerManager->registerListener(cmd::CommandType::FileSave, fileSaveListener);
+    m_listenerManager->registerListener(cmd::CommandType::ImportSTEP, importStepListener);
     auto undoListener = std::make_shared<UndoListener>(m_commandManager, m_canvas);
     auto redoListener = std::make_shared<RedoListener>(m_commandManager, m_canvas);
     auto helpAboutListener = std::make_shared<HelpAboutListener>(this);
     auto navCubeConfigListener = std::make_shared<NavCubeConfigListener>(m_canvas);
     auto zoomSpeedListener = std::make_shared<ZoomSpeedListener>(this, m_canvas);
     auto fileExitListener = std::make_shared<FileExitListener>(this);
-    m_commandDispatcher->registerListener(cmd::CommandType::Undo, undoListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::Redo, redoListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::HelpAbout, helpAboutListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::NavCubeConfig, navCubeConfigListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::ZoomSpeed, zoomSpeedListener);
-    m_commandDispatcher->registerListener(cmd::CommandType::FileExit, fileExitListener);
+    m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
+    m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
+    m_listenerManager->registerListener(cmd::CommandType::HelpAbout, helpAboutListener);
+    m_listenerManager->registerListener(cmd::CommandType::NavCubeConfig, navCubeConfigListener);
+    m_listenerManager->registerListener(cmd::CommandType::ZoomSpeed, zoomSpeedListener);
+    m_listenerManager->registerListener(cmd::CommandType::FileExit, fileExitListener);
     
     // Set UI feedback handler
     m_commandDispatcher->setUIFeedbackHandler(
@@ -175,26 +203,22 @@ void MainFrame::setupCommandSystem()
 
 void MainFrame::onCommand(wxCommandEvent& event)
 {
-    cmd::CommandType commandType = mapEventIdToCommandType(event.GetId());
-    if (commandType == cmd::CommandType::Unknown) {
+    auto it = kEventTable.find(event.GetId());
+    if (it == kEventTable.end()) {
         LOG_WRN("Unknown command ID: " + std::to_string(event.GetId()));
         return;
     }
-
-    // Prepare command parameters if needed
+    cmd::CommandType commandType = it->second;
     std::unordered_map<std::string, std::string> parameters;
-
-    // For toggle commands, pass current state
     if (commandType == cmd::CommandType::ShowNormals || commandType == cmd::CommandType::ShowEdges) {
         parameters["toggle"] = "true";
     }
-
-    // Dispatch command through the command system
-    if (m_commandDispatcher) {
-        m_commandDispatcher->dispatchCommand(commandType, parameters);
+    if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
+        CommandResult result = m_listenerManager->dispatch(commandType, parameters);
+        onCommandFeedback(result);
     } else {
-        LOG_ERR("Command dispatcher not available");
-        SetStatusText("Error: Command system not initialized", 0);
+        LOG_ERR("No listener registered for command");
+        SetStatusText("Error: No listener registered", 0);
     }
 }
 
@@ -227,48 +251,6 @@ void MainFrame::onCommandFeedback(const CommandResult& result)
                      result.commandId.find("SHOW_") == 0 ||
                      result.commandId == "FIX_NORMALS")) {
         m_canvas->Refresh();
-    }
-}
-
-cmd::CommandType MainFrame::mapEventIdToCommandType(int eventId) const
-{
-    switch (eventId) {
-        // File commands
-        case wxID_NEW: return cmd::CommandType::FileNew;
-        case wxID_OPEN: return cmd::CommandType::FileOpen;
-        case wxID_SAVE: return cmd::CommandType::FileSave;
-        case ID_IMPORT_STEP: return cmd::CommandType::ImportSTEP;
-        case wxID_EXIT: return cmd::CommandType::FileExit;
-        
-        // Geometry creation commands
-        case ID_CREATE_BOX: return cmd::CommandType::CreateBox;
-        case ID_CREATE_SPHERE: return cmd::CommandType::CreateSphere;
-        case ID_CREATE_CYLINDER: return cmd::CommandType::CreateCylinder;
-        case ID_CREATE_CONE: return cmd::CommandType::CreateCone;
-        case ID_CREATE_WRENCH: return cmd::CommandType::CreateWrench;
-        
-        // View commands
-        case ID_VIEW_ALL: return cmd::CommandType::ViewAll;
-        case ID_VIEW_TOP: return cmd::CommandType::ViewTop;
-        case ID_VIEW_FRONT: return cmd::CommandType::ViewFront;
-        case ID_VIEW_RIGHT: return cmd::CommandType::ViewRight;
-        case ID_VIEW_ISOMETRIC: return cmd::CommandType::ViewIsometric;
-        case ID_SHOW_NORMALS: return cmd::CommandType::ShowNormals;
-        case ID_FIX_NORMALS: return cmd::CommandType::FixNormals;
-        case ID_VIEW_SHOWEDGES: return cmd::CommandType::ShowEdges;
-        
-        // Edit commands
-        case ID_UNDO: return cmd::CommandType::Undo;
-        case ID_REDO: return cmd::CommandType::Redo;
-        
-        // Navigation commands
-        case ID_NAVIGATION_CUBE_CONFIG: return cmd::CommandType::NavCubeConfig;
-        case ID_ZOOM_SPEED: return cmd::CommandType::ZoomSpeed;
-        
-        // Help commands
-        case wxID_ABOUT: return cmd::CommandType::HelpAbout;
-        
-        default: return cmd::CommandType::Unknown;
     }
 }
 

@@ -14,6 +14,7 @@ class CommandManager;
 class NavigationController;
 class OCCViewer;
 class CommandDispatcher;
+class CommandListenerManager;
 
 struct CommandResult;
 
@@ -101,13 +102,6 @@ private:
     // Window event handlers
     void onClose(wxCloseEvent& event);
     void onActivate(wxActivateEvent& event);
-    
-    /**
-     * @brief Map wxWidgets event ID to command type string
-     * @param eventId wxWidgets event ID
-     * @return Command type string
-     */
-    cmd::CommandType mapEventIdToCommandType(int eventId) const;
 
 private:
     // UI components
@@ -121,6 +115,7 @@ private:
     
     // Command system components
     std::unique_ptr<CommandDispatcher> m_commandDispatcher;
+    std::unique_ptr<CommandListenerManager> m_listenerManager;
 
     DECLARE_EVENT_TABLE()
 };

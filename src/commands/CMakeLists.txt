@@ -27,6 +27,7 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/NavCubeConfigListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ZoomSpeedListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FileExitListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CommandListenerManager.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -58,6 +59,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/NavCubeConfigListener.h
     ${CMAKE_SOURCE_DIR}/include/ZoomSpeedListener.h
     ${CMAKE_SOURCE_DIR}/include/FileExitListener.h
+    ${CMAKE_SOURCE_DIR}/include/CommandListenerManager.h
 )
 
 # Create command static library
