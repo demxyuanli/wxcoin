@@ -42,6 +42,9 @@ enum
     ID_VIEW_FRONT,      // Add missing ID
     ID_VIEW_RIGHT,      // Add missing ID
     ID_VIEW_ISOMETRIC,  // Add missing ID
+    ID_VIEW_SHOWEDGES,
+    ID_VIEW_RESET,
+    ID_VIEW_TOGGLE_CAMERA,
 
     // Display options
     ID_SHOW_NORMALS,
@@ -89,10 +92,15 @@ private:
     void onViewIsometric(wxCommandEvent& event);
     void onNavigationCubeConfig(wxCommandEvent& event);
     void onShowNormals(wxCommandEvent& event);
-    void onShowEdges(wxCommandEvent& event);  // Add edge display event handler declaration
+    void onShowEdges(wxCommandEvent& event);
     void onFixNormals(wxCommandEvent& event);
     void onAbout(wxCommandEvent& event);
     void onClose(wxCloseEvent& event);
+    void onResetView(wxCommandEvent& event);
+    void onToggleCamera(wxCommandEvent& event);
+    void onSetView(wxCommandEvent& event);
+
+    void onActivate(wxActivateEvent& event);
 
     wxAuiManager m_auiManager;
     Canvas* m_canvas;
@@ -100,6 +108,9 @@ private:
     GeometryFactory* m_geometryFactory;
     CommandManager* m_commandManager;
     OCCViewer* m_occViewer;
+    PropertyPanel* m_propertyPanel;
+    ObjectTreePanel* m_objectTreePanel;
+    bool m_isFirstActivate = true;
 
     DECLARE_EVENT_TABLE()
 };

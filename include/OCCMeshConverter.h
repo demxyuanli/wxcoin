@@ -116,6 +116,12 @@ public:
 
     // Control whether edge lines are generated
     static void setShowEdges(bool show);
+    static void setFeatureEdgeAngle(double angleDegrees);
+
+    // Feature edge filtering angle threshold (degrees)
+    static double s_featureEdgeAngle;
+    // Calculate triangle face normal
+    static gp_Pnt calculateTriangleNormal(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
 
 private:
     static bool s_showEdges;
@@ -124,7 +130,6 @@ private:
                                      const TopLoc_Location& location, 
                                      TriangleMesh& mesh, TopAbs_Orientation orientation = TopAbs_FORWARD);
     static void addTriangleToMesh(TriangleMesh& mesh, const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
-    static gp_Pnt calculateTriangleNormal(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
     static bool isValidTriangle(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3, double tolerance = 1e-6);
     
     static SoCoordinate3* createCoordinateNode(const TriangleMesh& mesh);

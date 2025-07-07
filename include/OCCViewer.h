@@ -75,6 +75,7 @@ public:
     bool isAntiAliasingEnabled() const { return m_antiAliasing; }
     bool isShowNormals() const { return m_showNormals; }
     double getNormalLength() const { return m_normalLength; }
+    bool isShowingEdges() const;
     
     // Update and refresh
     void updateAll();

@@ -29,15 +29,22 @@
 #include <cmath>
 #include <set>
 #include <vector>
+#include <map>
 
 // Forward declaration
 static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh& mesh);
 
 bool OCCMeshConverter::s_showEdges = true;
+double OCCMeshConverter::s_featureEdgeAngle = 30.0;
 
 void OCCMeshConverter::setShowEdges(bool show)
 {
     s_showEdges = show;
+}
+
+void OCCMeshConverter::setFeatureEdgeAngle(double angleDegrees)
+{
+    s_featureEdgeAngle = angleDegrees;
 }
 
 OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape, 
@@ -434,32 +441,53 @@ static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh&
 {
     if (mesh.triangles.empty()) return nullptr;
 
-    std::set<std::pair<int,int>> uniqueEdges;
-    for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
-        int a = mesh.triangles[i];
-        int b = mesh.triangles[i+1];
-        int c = mesh.triangles[i+2];
-        auto addEdge=[&](int v1,int v2){
-            if(v1>v2) std::swap(v1,v2);
-            uniqueEdges.insert({v1,v2});
+    std::map<std::pair<int,int>, std::vector<int>> edgeFaces;
+    for (size_t i = 0; i + 2 < mesh.triangles.size(); i += 3) {
+        int verts[3] = { mesh.triangles[i], mesh.triangles[i+1], mesh.triangles[i+2] };
+        auto processEdge = [&](int v1, int v2) {
+            if (v1 > v2) std::swap(v1, v2);
+            edgeFaces[{v1, v2}].push_back(static_cast<int>(i));
         };
-        addEdge(a,b);
-        addEdge(b,c);
-        addEdge(c,a);
+        processEdge(verts[0], verts[1]);
+        processEdge(verts[1], verts[2]);
+        processEdge(verts[2], verts[0]);
     }
-
-    if(uniqueEdges.empty()) return nullptr;
 
     std::vector<int32_t> indices;
-    indices.reserve(uniqueEdges.size()*3);
-    for(auto& e: uniqueEdges){
-        indices.push_back(e.first);
-        indices.push_back(e.second);
-        indices.push_back(SO_END_LINE_INDEX);
+    double threshold = OCCMeshConverter::s_featureEdgeAngle;
+    for (auto& kv : edgeFaces) {
+        const auto& edge = kv.first;
+        const auto& faces = kv.second;
+        bool includeEdge = false;
+        if (threshold <= 0.0) {
+            includeEdge = true;
+        } else if (faces.size() == 1) {
+            includeEdge = true;
+        } else if (faces.size() == 2) {
+            int f0 = faces[0], f1 = faces[1];
+            int a0 = mesh.triangles[f0], b0 = mesh.triangles[f0+1], c0 = mesh.triangles[f0+2];
+            int a1 = mesh.triangles[f1], b1 = mesh.triangles[f1+1], c1 = mesh.triangles[f1+2];
+            gp_Pnt n0p = OCCMeshConverter::calculateTriangleNormal(mesh.vertices[a0], mesh.vertices[b0], mesh.vertices[c0]);
+            gp_Pnt n1p = OCCMeshConverter::calculateTriangleNormal(mesh.vertices[a1], mesh.vertices[b1], mesh.vertices[c1]);
+            gp_Vec n0(n0p.X(), n0p.Y(), n0p.Z());
+            gp_Vec n1(n1p.X(), n1p.Y(), n1p.Z());
+            double angle = n0.Angle(n1) * 180.0 / acos(-1.0);
+            if (angle >= threshold) {
+                includeEdge = true;
+            }
+        } else {
+            includeEdge = true;
+        }
+        if (includeEdge) {
+            indices.push_back(edge.first);
+            indices.push_back(edge.second);
+            indices.push_back(SO_END_LINE_INDEX);
+        }
     }
 
+    if (indices.empty()) return nullptr;
     SoIndexedLineSet* lineSet = new SoIndexedLineSet;
-    lineSet->coordIndex.setValues(0, indices.size(), indices.data());
+    lineSet->coordIndex.setValues(0, static_cast<int>(indices.size()), indices.data());
     return lineSet;
 }
 

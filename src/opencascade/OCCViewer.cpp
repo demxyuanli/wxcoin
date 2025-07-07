@@ -318,6 +318,11 @@ void OCCViewer::setShowEdges(bool showEdges)
     }
 }
 
+bool OCCViewer::isShowingEdges() const
+{
+    return m_showEdges;
+}
+
 void OCCViewer::setAntiAliasing(bool enabled)
 {
     m_antiAliasing = enabled;

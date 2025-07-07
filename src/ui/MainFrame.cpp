@@ -20,49 +20,31 @@
 #include <Inventor/SbVec3f.h>
 #include "OCCViewer.h"
 
-enum
-{
-    ID_CreateBox = wxID_HIGHEST + 100,
-    ID_CreateSphere,
-    ID_CreateCylinder,
-    ID_CreateCone,
-    ID_CreateWrench,
-    ID_ImportSTEP,
-    ID_ViewAll,
-    ID_ViewTop,
-    ID_ViewFront,
-    ID_ViewRight,
-    ID_ViewIsometric,
-    ID_ShowNormals,
-    ID_FixNormals,
-    ID_Undo,
-    ID_Redo,
-    ID_NavigationCubeConfig
-};
-
 BEGIN_EVENT_TABLE(MainFrame, wxFrame)
 EVT_MENU(wxID_NEW, MainFrame::onNew)
 EVT_MENU(wxID_OPEN, MainFrame::onOpen)
 EVT_MENU(wxID_SAVE, MainFrame::onSave)
-EVT_MENU(ID_ImportSTEP, MainFrame::onImportSTEP)
+EVT_MENU(ID_IMPORT_STEP, MainFrame::onImportSTEP)
 EVT_MENU(wxID_EXIT, MainFrame::onExit)
-EVT_MENU(ID_CreateBox, MainFrame::onCreateBox)
-EVT_MENU(ID_CreateSphere, MainFrame::onCreateSphere)
-EVT_MENU(ID_CreateCylinder, MainFrame::onCreateCylinder)
-EVT_MENU(ID_CreateCone, MainFrame::onCreateCone)
-EVT_MENU(ID_CreateWrench, MainFrame::onCreateWrench)
-EVT_MENU(ID_ViewAll, MainFrame::onViewAll)
-EVT_MENU(ID_ViewTop, MainFrame::onViewTop)
-EVT_MENU(ID_ViewFront, MainFrame::onViewFront)
-EVT_MENU(ID_ViewRight, MainFrame::onViewRight)
-EVT_MENU(ID_ViewIsometric, MainFrame::onViewIsometric)
-EVT_MENU(ID_ShowNormals, MainFrame::onShowNormals)
-EVT_MENU(ID_FixNormals, MainFrame::onFixNormals)
-EVT_MENU(ID_Undo, MainFrame::onUndo)
-EVT_MENU(ID_Redo, MainFrame::onRedo)
-EVT_MENU(ID_NavigationCubeConfig, MainFrame::onNavigationCubeConfig)
+EVT_MENU(ID_CREATE_BOX, MainFrame::onCreateBox)
+EVT_MENU(ID_CREATE_SPHERE, MainFrame::onCreateSphere)
+EVT_MENU(ID_CREATE_CYLINDER, MainFrame::onCreateCylinder)
+EVT_MENU(ID_CREATE_CONE, MainFrame::onCreateCone)
+EVT_MENU(ID_CREATE_WRENCH, MainFrame::onCreateWrench)
+EVT_MENU(ID_VIEW_ALL, MainFrame::onViewAll)
+EVT_MENU(ID_VIEW_TOP, MainFrame::onViewTop)
+EVT_MENU(ID_VIEW_FRONT, MainFrame::onViewFront)
+EVT_MENU(ID_VIEW_RIGHT, MainFrame::onViewRight)
+EVT_MENU(ID_VIEW_ISOMETRIC, MainFrame::onViewIsometric)
+EVT_MENU(ID_SHOW_NORMALS, MainFrame::onShowNormals)
+EVT_MENU(ID_FIX_NORMALS, MainFrame::onFixNormals)
+EVT_MENU(ID_UNDO, MainFrame::onUndo)
+EVT_MENU(ID_REDO, MainFrame::onRedo)
+EVT_MENU(ID_NAVIGATION_CUBE_CONFIG, MainFrame::onNavigationCubeConfig)
 EVT_MENU(wxID_ABOUT, MainFrame::onAbout)
 EVT_CLOSE(MainFrame::onClose)
+EVT_MENU(ID_VIEW_SHOWEDGES, MainFrame::onShowEdges)
+EVT_ACTIVATE(MainFrame::onActivate)
 END_EVENT_TABLE()
 
 MainFrame::MainFrame(const wxString& title)
@@ -73,11 +55,14 @@ MainFrame::MainFrame(const wxString& title)
     , m_commandManager(new CommandManager())
     , m_occViewer(nullptr)
     , m_auiManager(this)
+    , m_isFirstActivate(true)
 {
     LOG_INF("MainFrame initializing");
     createMenu();
     createToolbar();
     createPanels();
+
+    // Create the status bar
     CreateStatusBar();
     SetStatusText("Ready", 0);
 }
@@ -98,17 +83,17 @@ void MainFrame::createMenu()
     fileMenu->Append(wxID_OPEN, "&Open...\tCtrl+O", "Open an existing project");
     fileMenu->Append(wxID_SAVE, "&Save\tCtrl+S", "Save the current project");
     fileMenu->AppendSeparator();
-    fileMenu->Append(ID_ImportSTEP, "&Import STEP...\tCtrl+I", "Import STEP/STP CAD file");
+    fileMenu->Append(ID_IMPORT_STEP, "&Import STEP...\tCtrl+I", "Import STEP/STP CAD file");
     fileMenu->AppendSeparator();
     fileMenu->Append(wxID_EXIT, "E&xit\tAlt+F4", "Exit the application");
     menuBar->Append(fileMenu, "&File");
 
     wxMenu* createMenu = new wxMenu;
-    createMenu->Append(ID_CreateBox, "&Box", "Create a box");
-    createMenu->Append(ID_CreateSphere, "&Sphere", "Create a sphere");
-    createMenu->Append(ID_CreateCylinder, "&Cylinder", "Create a cylinder");
-    createMenu->Append(ID_CreateCone, "&Cone", "Create a cone");
-    createMenu->Append(ID_CreateWrench, "&Wrench", "Create a wrench");
+    createMenu->Append(ID_CREATE_BOX, "&Box", "Create a box");
+    createMenu->Append(ID_CREATE_SPHERE, "&Sphere", "Create a sphere");
+    createMenu->Append(ID_CREATE_CYLINDER, "&Cylinder", "Create a cylinder");
+    createMenu->Append(ID_CREATE_CONE, "&Cone", "Create a cone");
+    createMenu->Append(ID_CREATE_WRENCH, "&Wrench", "Create a wrench");
     menuBar->Append(createMenu, "&Create");
 
     // View menu
@@ -121,15 +106,15 @@ void MainFrame::createMenu()
     viewMenu->Append(ID_VIEW_ISOMETRIC, _("&Isometric\tCtrl+4"), _("Isometric view"));
     viewMenu->AppendSeparator();
     viewMenu->AppendCheckItem(ID_SHOW_NORMALS, _("Show &Normals"), _("Show/hide surface normals"));
-    viewMenu->AppendCheckItem(ID_SHOW_EDGES, _("Show &Edges"), _("Show/hide object edges")); // Add edge display option
-    viewMenu->Append(ID_FixNormals, "&Fix Normals", "Automatically fix incorrect face normals");
+    viewMenu->AppendCheckItem(ID_VIEW_SHOWEDGES, _("Show &Edges"), _("Show/hide object edges"));
+    viewMenu->Append(ID_FIX_NORMALS, "&Fix Normals", "Automatically fix incorrect face normals");
     viewMenu->AppendSeparator();
-    viewMenu->Append(ID_NavigationCubeConfig, "&Navigation Cube Config...", "Configure navigation cube settings");
+    viewMenu->Append(ID_NAVIGATION_CUBE_CONFIG, "&Navigation Cube Config...", "Configure navigation cube settings");
     menuBar->Append(viewMenu, "&View");
 
     wxMenu* editMenu = new wxMenu;
-    editMenu->Append(ID_Undo, "&Undo\tCtrl+Z", "Undo the last action");
-    editMenu->Append(ID_Redo, "&Redo\tCtrl+Y", "Redo the last undone action");
+    editMenu->Append(ID_UNDO, "&Undo\tCtrl+Z", "Undo the last action");
+    editMenu->Append(ID_REDO, "&Redo\tCtrl+Y", "Redo the last undone action");
     menuBar->Append(editMenu, "&Edit");
 
     wxMenu* helpMenu = new wxMenu;
@@ -145,26 +130,26 @@ void MainFrame::createToolbar()
     toolbar->AddTool(wxID_NEW, "New", wxArtProvider::GetBitmap(wxART_NEW), "Create a new project");
     toolbar->AddTool(wxID_OPEN, "Open", wxArtProvider::GetBitmap(wxART_FILE_OPEN), "Open an existing project");
     toolbar->AddTool(wxID_SAVE, "Save", wxArtProvider::GetBitmap(wxART_FILE_SAVE), "Save the current project");
-    toolbar->AddTool(ID_ImportSTEP, "Import STEP", wxArtProvider::GetBitmap(wxART_FOLDER_OPEN), "Import STEP/STP CAD file");
+    toolbar->AddTool(ID_IMPORT_STEP, "Import STEP", wxArtProvider::GetBitmap(wxART_FOLDER_OPEN), "Import STEP/STP CAD file");
     toolbar->AddSeparator();
-    toolbar->AddTool(ID_CreateBox, "Box", wxArtProvider::GetBitmap(wxART_HELP_BOOK), "Create a box");
-    toolbar->AddTool(ID_CreateSphere, "Sphere", wxArtProvider::GetBitmap(wxART_HELP_PAGE), "Create a sphere");
-    toolbar->AddTool(ID_CreateCylinder, "Cylinder", wxArtProvider::GetBitmap(wxART_TIP), "Create a cylinder");
-    toolbar->AddTool(ID_CreateCone, "Cone", wxArtProvider::GetBitmap(wxART_INFORMATION), "Create a cone");
-    toolbar->AddTool(ID_CreateWrench, "Wrench", wxArtProvider::GetBitmap(wxART_PLUS), "Create a wrench");
+    toolbar->AddTool(ID_CREATE_BOX, "Box", wxArtProvider::GetBitmap(wxART_HELP_BOOK), "Create a box");
+    toolbar->AddTool(ID_CREATE_SPHERE, "Sphere", wxArtProvider::GetBitmap(wxART_HELP_PAGE), "Create a sphere");
+    toolbar->AddTool(ID_CREATE_CYLINDER, "Cylinder", wxArtProvider::GetBitmap(wxART_TIP), "Create a cylinder");
+    toolbar->AddTool(ID_CREATE_CONE, "Cone", wxArtProvider::GetBitmap(wxART_INFORMATION), "Create a cone");
+    toolbar->AddTool(ID_CREATE_WRENCH, "Wrench", wxArtProvider::GetBitmap(wxART_PLUS), "Create a wrench");
     toolbar->AddSeparator();
-    toolbar->AddTool(ID_ViewAll, "Fit All", wxArtProvider::GetBitmap(wxART_FULL_SCREEN), "Fit all objects in view");
-    toolbar->AddTool(ID_ViewTop, "Top", wxArtProvider::GetBitmap(wxART_GO_UP), "Set top view");
-    toolbar->AddTool(ID_ViewFront, "Front", wxArtProvider::GetBitmap(wxART_GO_FORWARD), "Set front view");
-    toolbar->AddTool(ID_ViewRight, "Right", wxArtProvider::GetBitmap(wxART_GO_TO_PARENT), "Set right view");
-    toolbar->AddTool(ID_ViewIsometric, "Isometric", wxArtProvider::GetBitmap(wxART_HELP_SETTINGS), "Set isometric view");
+    toolbar->AddTool(ID_VIEW_ALL, "Fit All", wxArtProvider::GetBitmap(wxART_FULL_SCREEN), "Fit all objects in view");
+    toolbar->AddTool(ID_VIEW_TOP, "Top", wxArtProvider::GetBitmap(wxART_GO_UP), "Set top view");
+    toolbar->AddTool(ID_VIEW_FRONT, "Front", wxArtProvider::GetBitmap(wxART_GO_FORWARD), "Set front view");
+    toolbar->AddTool(ID_VIEW_RIGHT, "Right", wxArtProvider::GetBitmap(wxART_GO_TO_PARENT), "Set right view");
+    toolbar->AddTool(ID_VIEW_ISOMETRIC, "Isometric", wxArtProvider::GetBitmap(wxART_HELP_SETTINGS), "Set isometric view");
     toolbar->AddSeparator();
-    toolbar->AddCheckTool(ID_ShowNormals, "Show Normals", wxArtProvider::GetBitmap(wxART_LIST_VIEW), wxNullBitmap, "Show/hide face normals");
+    toolbar->AddCheckTool(ID_SHOW_NORMALS, "Show Normals", wxArtProvider::GetBitmap(wxART_LIST_VIEW), wxNullBitmap, "Show/hide face normals");
     toolbar->AddSeparator();
-    toolbar->AddTool(ID_Undo, "Undo", wxArtProvider::GetBitmap(wxART_UNDO), "Undo the last action");
-    toolbar->AddTool(ID_Redo, "Redo", wxArtProvider::GetBitmap(wxART_REDO), "Redo the last undone action");
+    toolbar->AddTool(ID_UNDO, "Undo", wxArtProvider::GetBitmap(wxART_UNDO), "Undo the last action");
+    toolbar->AddTool(ID_REDO, "Redo", wxArtProvider::GetBitmap(wxART_REDO), "Redo the last undone action");
     toolbar->AddSeparator();
-    toolbar->AddTool(ID_NavigationCubeConfig, "Nav Cube Config", wxArtProvider::GetBitmap(wxART_HELP_SIDE_PANEL), "Configure navigation cube");
+    toolbar->AddTool(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube Config", wxArtProvider::GetBitmap(wxART_HELP_SIDE_PANEL), "Configure navigation cube");
     toolbar->Realize();
 }
 
@@ -475,7 +460,7 @@ void MainFrame::onShowNormals(wxCommandEvent& event)
     // Update menu item check state
     wxMenuBar* menuBar = GetMenuBar();
     if (menuBar) {
-        menuBar->Check(ID_ShowNormals, showNormals);
+        menuBar->Check(ID_SHOW_NORMALS, showNormals);
     }
     
     LOG_INF(showNormals ? "Showing face normals" : "Hiding face normals");
@@ -550,7 +535,6 @@ void MainFrame::onClose(wxCloseEvent& event)
     Destroy();
 }
 
-// Add edge display event handler
 void MainFrame::onShowEdges(wxCommandEvent& event)
 {
     bool showEdges = event.IsChecked();
@@ -558,4 +542,14 @@ void MainFrame::onShowEdges(wxCommandEvent& event)
         m_occViewer->setShowEdges(showEdges);
         LOG_INF(showEdges ? "Edges shown" : "Edges hidden");
     }
+}
+
+void MainFrame::onActivate(wxActivateEvent& event)
+{
+    if (event.GetActive() && m_isFirstActivate) {
+        m_isFirstActivate = false;
+        // Synchronize UI state now that the window is active and ready
+        GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowingEdges());
+    }
+    event.Skip();
 }

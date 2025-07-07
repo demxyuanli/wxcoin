@@ -56,120 +56,43 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
         // Initialize STEP reader
         initialize();
         
-        // Try CAF (Color and Assembly) reader first for better support
-        STEPCAFControl_Reader cafReader;
-        
-        // Set precision
+        // Use basic STEP reader for faster import
+        STEPControl_Reader reader;
         Interface_Static::SetIVal("read.precision.mode", 1);
         Interface_Static::SetRVal("read.precision.val", 0.01);
-        
-        // Read the file
-        IFSelect_ReturnStatus status = cafReader.ReadFile(filePath.c_str());
-        
+        IFSelect_ReturnStatus status = reader.ReadFile(filePath.c_str());
         if (status != IFSelect_RetDone) {
-            // Fall back to basic STEP reader
-            LOG_WRN("CAF reader failed, trying basic STEP reader");
-            
-            STEPControl_Reader basicReader;
-            status = basicReader.ReadFile(filePath.c_str());
-            
-            if (status != IFSelect_RetDone) {
-                result.errorMessage = "Failed to read STEP file: " + filePath;
-                LOG_ERR(result.errorMessage);
-                return result;
-            }
-            
-            // Transfer shapes
-            Standard_Integer nbRoots = basicReader.NbRootsForTransfer();
-            LOG_INF("Found " + std::to_string(nbRoots) + " root entities");
-            
-            if (nbRoots == 0) {
-                result.errorMessage = "No transferable entities found in STEP file";
-                LOG_ERR(result.errorMessage);
-                return result;
-            }
-            
-            basicReader.TransferRoots();
-            Standard_Integer nbShapes = basicReader.NbShapes();
-            LOG_INF("Transferred " + std::to_string(nbShapes) + " shapes");
-            
-            if (nbShapes == 0) {
-                result.errorMessage = "No shapes could be transferred from STEP file";
-                LOG_ERR(result.errorMessage);
-                return result;
-            }
-            
-            // Create compound shape containing all shapes
-            TopoDS_Compound compound;
-            BRep_Builder builder;
-            builder.MakeCompound(compound);
-            
-            for (Standard_Integer i = 1; i <= nbShapes; i++) {
-                TopoDS_Shape shape = basicReader.Shape(i);
-                if (!shape.IsNull()) {
-                    builder.Add(compound, shape);
-                }
-            }
-            
-            result.rootShape = compound;
-            
-        } else {
-            // CAF reader succeeded
-            LOG_INF("CAF reader succeeded");
-            
-            // Create new XCAF document for transfer
-            Handle(XCAFApp_Application) app = XCAFApp_Application::GetApplication();
-            Handle(TDocStd_Document) doc;
-            app->NewDocument("MDTV-XCAF", doc);
-            if (doc.IsNull()) {
-                result.errorMessage = "Failed to create XCAF document";
-                LOG_ERR(result.errorMessage);
-                return result;
-            }
-            
-            // Transfer data
-            if (!cafReader.Transfer(doc)) {
-                result.errorMessage = "Failed to transfer data from CAF reader";
-                LOG_ERR(result.errorMessage);
-                return result;
-            }
-            
-            // Get shape tool
-            Handle(XCAFDoc_ShapeTool) shapeTool = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
-            
-            if (shapeTool.IsNull()) {
-                result.errorMessage = "Failed to get shape tool from document";
-                LOG_ERR(result.errorMessage);
-                return result;
-            }
-            
-            // Get free shapes (top-level shapes)
-            TDF_LabelSequence freeShapes;
-            shapeTool->GetFreeShapes(freeShapes);
-            
-            LOG_INF("Found " + std::to_string(freeShapes.Length()) + " free shapes");
-            
-            if (freeShapes.Length() == 0) {
-                result.errorMessage = "No free shapes found in STEP file";
-                LOG_ERR(result.errorMessage);
-                return result;
-            }
-            
-            // Create compound shape
-            TopoDS_Compound compound;
-            BRep_Builder builder;
-            builder.MakeCompound(compound);
-            
-            for (Standard_Integer i = 1; i <= freeShapes.Length(); i++) {
-                TDF_Label label = freeShapes.Value(i);
-                TopoDS_Shape shape;
-                if (shapeTool->GetShape(label, shape) && !shape.IsNull()) {
-                    builder.Add(compound, shape);
-                }
-            }
-            
-            result.rootShape = compound;
+            result.errorMessage = "Failed to read STEP file: " + filePath;
+            LOG_ERR(result.errorMessage);
+            return result;
         }
+        // Transfer shapes
+        Standard_Integer nbRoots = reader.NbRootsForTransfer();
+        LOG_INF("Found " + std::to_string(nbRoots) + " root entities");
+        if (nbRoots == 0) {
+            result.errorMessage = "No transferable entities found in STEP file";
+            LOG_ERR(result.errorMessage);
+            return result;
+        }
+        reader.TransferRoots();
+        Standard_Integer nbShapes = reader.NbShapes();
+        LOG_INF("Transferred " + std::to_string(nbShapes) + " shapes");
+        if (nbShapes == 0) {
+            result.errorMessage = "No shapes could be transferred from STEP file";
+            LOG_ERR(result.errorMessage);
+            return result;
+        }
+        // Create compound shape containing all shapes
+        TopoDS_Compound compound;
+        BRep_Builder builder;
+        builder.MakeCompound(compound);
+        for (Standard_Integer i = 1; i <= nbShapes; i++) {
+            TopoDS_Shape shape = reader.Shape(i);
+            if (!shape.IsNull()) {
+                builder.Add(compound, shape);
+            }
+        }
+        result.rootShape = compound;
         
         // Convert to geometry objects
         std::string baseName = std::filesystem::path(filePath).stem().string();
