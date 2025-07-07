@@ -244,8 +244,15 @@ void PickingAidManager::showReferenceGrid(bool show) {
     if (!m_referenceGridSeparator) return;
     
     if (show && !m_referenceGridVisible) {
-        // Update grid Z position
+        // Calculate dynamic scale factor based on scene bounding box size
+        float sceneSize = 0.0f;
+        if (m_sceneManager) {
+            sceneSize = m_sceneManager->getSceneBoundingBoxSize();
+        }
+        float halfExtent = sceneSize * 0.5f;
+        float scaleFactor = (halfExtent > 0.0f) ? (halfExtent / 10.0f) : 1.0f;
         SoTransform* gridTransform = new SoTransform;
+        gridTransform->scaleFactor.setValue(scaleFactor, scaleFactor, 1.0f);
         gridTransform->translation.setValue(0.0f, 0.0f, m_referenceZ);
         m_referenceGridSeparator->insertChild(gridTransform, 0);
         

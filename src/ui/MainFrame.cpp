@@ -17,6 +17,7 @@
 #include <wx/aui/aui.h>
 #include <wx/toolbar.h>
 #include <wx/msgdlg.h>
+#include <wx/textdlg.h>
 #include <Inventor/SbVec3f.h>
 #include "OCCViewer.h"
 
@@ -41,6 +42,7 @@ EVT_MENU(ID_FIX_NORMALS, MainFrame::onFixNormals)
 EVT_MENU(ID_UNDO, MainFrame::onUndo)
 EVT_MENU(ID_REDO, MainFrame::onRedo)
 EVT_MENU(ID_NAVIGATION_CUBE_CONFIG, MainFrame::onNavigationCubeConfig)
+EVT_MENU(ID_ZOOM_SPEED, MainFrame::onSetZoomSpeed)
 EVT_MENU(wxID_ABOUT, MainFrame::onAbout)
 EVT_CLOSE(MainFrame::onClose)
 EVT_MENU(ID_VIEW_SHOWEDGES, MainFrame::onShowEdges)
@@ -110,6 +112,8 @@ void MainFrame::createMenu()
     viewMenu->Append(ID_FIX_NORMALS, "&Fix Normals", "Automatically fix incorrect face normals");
     viewMenu->AppendSeparator();
     viewMenu->Append(ID_NAVIGATION_CUBE_CONFIG, "&Navigation Cube Config...", "Configure navigation cube settings");
+    viewMenu->AppendSeparator();
+    viewMenu->Append(ID_ZOOM_SPEED, _("Zoom &Speed...\tCtrl+Shift+Z"), _("Set mouse scroll zoom speed"));
     menuBar->Append(viewMenu, "&View");
 
     wxMenu* editMenu = new wxMenu;
@@ -490,6 +494,22 @@ void MainFrame::onNavigationCubeConfig(wxCommandEvent& event)
     LOG_INF("Opening navigation cube configuration dialog");
     m_canvas->ShowNavigationCubeConfigDialog();
     SetStatusText("Navigation Cube Configuration", 0);
+}
+
+void MainFrame::onSetZoomSpeed(wxCommandEvent& WXUNUSED(event))
+{
+    auto nav = m_canvas->getInputManager()->getNavigationController();
+    if (!nav) return;
+    float currentSpeed = nav->getZoomSpeedFactor();
+    wxTextEntryDialog dlg(this, "Enter zoom speed multiplier:", "Zoom Speed", wxString::Format("%f", currentSpeed));
+    if (dlg.ShowModal() == wxID_OK) {
+        double value;
+        if (dlg.GetValue().ToDouble(&value) && value > 0) {
+            nav->setZoomSpeedFactor(static_cast<float>(value));
+        } else {
+            wxMessageBox("Invalid speed value", "Error", wxOK | wxICON_ERROR);
+        }
+    }
 }
 
 void MainFrame::onUndo(wxCommandEvent& event)

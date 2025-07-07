@@ -51,6 +51,7 @@ enum
     ID_SHOW_EDGES,
     ID_FIX_NORMALS,
     ID_NAVIGATION_CUBE_CONFIG,
+    ID_ZOOM_SPEED,  // New menu item for zoom speed adjustment
 
     // Help menu IDs
     ID_ABOUT
@@ -91,6 +92,7 @@ private:
     void onViewRight(wxCommandEvent& event);
     void onViewIsometric(wxCommandEvent& event);
     void onNavigationCubeConfig(wxCommandEvent& event);
+    void onSetZoomSpeed(wxCommandEvent& event);  // Handler for zoom speed setting
     void onShowNormals(wxCommandEvent& event);
     void onShowEdges(wxCommandEvent& event);
     void onFixNormals(wxCommandEvent& event);

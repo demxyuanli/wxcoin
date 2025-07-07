@@ -11,6 +11,7 @@ NavigationController::NavigationController(Canvas* canvas, SceneManager* sceneMa
     , m_sceneManager(sceneManager)
     , m_isDragging(false)
     , m_dragMode(DragMode::NONE)
+    , m_zoomSpeedFactor(1.0f)
 {
     LOG_INF("NavigationController initializing");
 }
@@ -131,7 +132,12 @@ void NavigationController::zoomCamera(float delta) {
     SbVec3f position = camera->position.getValue();
     SbVec3f forward;
     camera->orientation.getValue().multVec(SbVec3f(0, 0, -1), forward);
-    position += forward * delta * 0.1f;
+    // Adaptive zoom scale based on viewport size and user-defined speed factor
+    wxSize size = m_canvas ? m_canvas->GetClientSize() : wxSize(0, 0);
+    int maxDim = wxMax(size.x, size.y);
+    float sizeFactor = (maxDim > 0) ? (static_cast<float>(maxDim) / 500.0f) : 1.0f;
+    float baseStep = 0.1f;
+    position += forward * delta * baseStep * sizeFactor * m_zoomSpeedFactor;
     camera->position.setValue(position);
 }
 
@@ -177,4 +183,13 @@ void NavigationController::viewIsometric() {
     }
     
     m_sceneManager->setView("Isometric");
+}
+
+// Zoom speed setter/getter
+void NavigationController::setZoomSpeedFactor(float factor) {
+    m_zoomSpeedFactor = factor;
+}
+
+float NavigationController::getZoomSpeedFactor() const {
+    return m_zoomSpeedFactor;
 }

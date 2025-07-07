@@ -21,6 +21,10 @@ public:
     void viewRight();
     void viewIsometric();
 
+    // Zoom speed adjustment
+    void setZoomSpeedFactor(float factor);
+    float getZoomSpeedFactor() const;
+
 private:
     void rotateCamera(const wxPoint& currentPos, const wxPoint& lastPos);
     void panCamera(const wxPoint& currentPos, const wxPoint& lastPos);
@@ -32,4 +36,5 @@ private:
     wxPoint m_lastMousePos;
     enum class DragMode { NONE, ROTATE, PAN, ZOOM };
     DragMode m_dragMode;
+    float m_zoomSpeedFactor;  // Multiplier for mouse wheel zoom speed
 };
