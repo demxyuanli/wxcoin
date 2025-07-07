@@ -20,32 +20,36 @@
 #include <wx/textdlg.h>
 #include <Inventor/SbVec3f.h>
 #include "OCCViewer.h"
+#include "CommandDispatcher.h"
+#include "GeometryCommandListener.h"
+#include "ViewCommandListener.h"
+#include "FileCommandListener.h"
 
 BEGIN_EVENT_TABLE(MainFrame, wxFrame)
-EVT_MENU(wxID_NEW, MainFrame::onNew)
-EVT_MENU(wxID_OPEN, MainFrame::onOpen)
-EVT_MENU(wxID_SAVE, MainFrame::onSave)
-EVT_MENU(ID_IMPORT_STEP, MainFrame::onImportSTEP)
-EVT_MENU(wxID_EXIT, MainFrame::onExit)
-EVT_MENU(ID_CREATE_BOX, MainFrame::onCreateBox)
-EVT_MENU(ID_CREATE_SPHERE, MainFrame::onCreateSphere)
-EVT_MENU(ID_CREATE_CYLINDER, MainFrame::onCreateCylinder)
-EVT_MENU(ID_CREATE_CONE, MainFrame::onCreateCone)
-EVT_MENU(ID_CREATE_WRENCH, MainFrame::onCreateWrench)
-EVT_MENU(ID_VIEW_ALL, MainFrame::onViewAll)
-EVT_MENU(ID_VIEW_TOP, MainFrame::onViewTop)
-EVT_MENU(ID_VIEW_FRONT, MainFrame::onViewFront)
-EVT_MENU(ID_VIEW_RIGHT, MainFrame::onViewRight)
-EVT_MENU(ID_VIEW_ISOMETRIC, MainFrame::onViewIsometric)
-EVT_MENU(ID_SHOW_NORMALS, MainFrame::onShowNormals)
-EVT_MENU(ID_FIX_NORMALS, MainFrame::onFixNormals)
-EVT_MENU(ID_UNDO, MainFrame::onUndo)
-EVT_MENU(ID_REDO, MainFrame::onRedo)
-EVT_MENU(ID_NAVIGATION_CUBE_CONFIG, MainFrame::onNavigationCubeConfig)
-EVT_MENU(ID_ZOOM_SPEED, MainFrame::onSetZoomSpeed)
-EVT_MENU(wxID_ABOUT, MainFrame::onAbout)
+EVT_MENU(wxID_NEW, MainFrame::onCommand)
+EVT_MENU(wxID_OPEN, MainFrame::onCommand)
+EVT_MENU(wxID_SAVE, MainFrame::onCommand)
+EVT_MENU(ID_IMPORT_STEP, MainFrame::onCommand)
+EVT_MENU(wxID_EXIT, MainFrame::onCommand)
+EVT_MENU(ID_CREATE_BOX, MainFrame::onCommand)
+EVT_MENU(ID_CREATE_SPHERE, MainFrame::onCommand)
+EVT_MENU(ID_CREATE_CYLINDER, MainFrame::onCommand)
+EVT_MENU(ID_CREATE_CONE, MainFrame::onCommand)
+EVT_MENU(ID_CREATE_WRENCH, MainFrame::onCommand)
+EVT_MENU(ID_VIEW_ALL, MainFrame::onCommand)
+EVT_MENU(ID_VIEW_TOP, MainFrame::onCommand)
+EVT_MENU(ID_VIEW_FRONT, MainFrame::onCommand)
+EVT_MENU(ID_VIEW_RIGHT, MainFrame::onCommand)
+EVT_MENU(ID_VIEW_ISOMETRIC, MainFrame::onCommand)
+EVT_MENU(ID_SHOW_NORMALS, MainFrame::onCommand)
+EVT_MENU(ID_FIX_NORMALS, MainFrame::onCommand)
+EVT_MENU(ID_UNDO, MainFrame::onCommand)
+EVT_MENU(ID_REDO, MainFrame::onCommand)
+EVT_MENU(ID_NAVIGATION_CUBE_CONFIG, MainFrame::onCommand)
+EVT_MENU(ID_ZOOM_SPEED, MainFrame::onCommand)
+EVT_MENU(wxID_ABOUT, MainFrame::onCommand)
 EVT_CLOSE(MainFrame::onClose)
-EVT_MENU(ID_VIEW_SHOWEDGES, MainFrame::onShowEdges)
+EVT_MENU(ID_VIEW_SHOWEDGES, MainFrame::onCommand)
 EVT_ACTIVATE(MainFrame::onActivate)
 END_EVENT_TABLE()
 
@@ -59,14 +63,14 @@ MainFrame::MainFrame(const wxString& title)
     , m_auiManager(this)
     , m_isFirstActivate(true)
 {
-    LOG_INF("MainFrame initializing");
+    LOG_INF("MainFrame initializing with command pattern");
     createMenu();
     createToolbar();
     createPanels();
+    setupCommandSystem();  // Setup command system after panels are created
 
-    // Create the status bar
     CreateStatusBar();
-    SetStatusText("Ready", 0);
+    SetStatusText("Ready - Command system initialized", 0);
 }
 
 MainFrame::~MainFrame()
@@ -74,6 +78,153 @@ MainFrame::~MainFrame()
     m_auiManager.UnInit();
     delete m_commandManager;
     LOG_INF("MainFrame destroyed");
+}
+
+void MainFrame::setupCommandSystem()
+{
+    LOG_INF("Setting up command system");
+    
+    // Create command dispatcher
+    m_commandDispatcher = std::make_unique<CommandDispatcher>();
+    
+    // Create command listeners
+    m_geometryListener = std::make_shared<GeometryCommandListener>(m_geometryFactory, m_mouseHandler);
+    m_viewListener = std::make_shared<ViewCommandListener>(
+        m_canvas->getInputManager()->getNavigationController(), m_occViewer);
+    m_fileListener = std::make_shared<FileCommandListener>(this, m_canvas, m_commandManager);
+    
+    // Register geometry command listeners
+    m_commandDispatcher->registerListener("CREATE_BOX", m_geometryListener);
+    m_commandDispatcher->registerListener("CREATE_SPHERE", m_geometryListener);
+    m_commandDispatcher->registerListener("CREATE_CYLINDER", m_geometryListener);
+    m_commandDispatcher->registerListener("CREATE_CONE", m_geometryListener);
+    m_commandDispatcher->registerListener("CREATE_WRENCH", m_geometryListener);
+    
+    // Register view command listeners
+    m_commandDispatcher->registerListener("VIEW_ALL", m_viewListener);
+    m_commandDispatcher->registerListener("VIEW_TOP", m_viewListener);
+    m_commandDispatcher->registerListener("VIEW_FRONT", m_viewListener);
+    m_commandDispatcher->registerListener("VIEW_RIGHT", m_viewListener);
+    m_commandDispatcher->registerListener("VIEW_ISOMETRIC", m_viewListener);
+    m_commandDispatcher->registerListener("SHOW_NORMALS", m_viewListener);
+    m_commandDispatcher->registerListener("FIX_NORMALS", m_viewListener);
+    m_commandDispatcher->registerListener("SHOW_EDGES", m_viewListener);
+    
+    // Register file command listeners
+    m_commandDispatcher->registerListener("FILE_NEW", m_fileListener);
+    m_commandDispatcher->registerListener("FILE_OPEN", m_fileListener);
+    m_commandDispatcher->registerListener("FILE_SAVE", m_fileListener);
+    m_commandDispatcher->registerListener("IMPORT_STEP", m_fileListener);
+    m_commandDispatcher->registerListener("UNDO", m_fileListener);
+    m_commandDispatcher->registerListener("REDO", m_fileListener);
+    
+    // Set UI feedback handler
+    m_commandDispatcher->setUIFeedbackHandler(
+        [this](const CommandResult& result) {
+            this->onCommandFeedback(result);
+        }
+    );
+    
+    LOG_INF("Command system setup completed");
+}
+
+void MainFrame::onCommand(wxCommandEvent& event)
+{
+    std::string commandType = mapEventIdToCommandType(event.GetId());
+    if (commandType.empty()) {
+        LOG_WRN("Unknown command ID: " + std::to_string(event.GetId()));
+        return;
+    }
+    
+    // Prepare command parameters if needed
+    std::unordered_map<std::string, std::string> parameters;
+    
+    // For toggle commands, pass current state
+    if (commandType == "SHOW_NORMALS" || commandType == "SHOW_EDGES") {
+        parameters["toggle"] = "true";
+    }
+    
+    // Dispatch command through the command system
+    if (m_commandDispatcher) {
+        m_commandDispatcher->dispatchCommand(commandType, parameters);
+    } else {
+        LOG_ERR("Command dispatcher not available");
+        SetStatusText("Error: Command system not initialized", 0);
+    }
+}
+
+void MainFrame::onCommandFeedback(const CommandResult& result)
+{
+    // Update UI based on command execution result
+    if (result.success) {
+        SetStatusText(result.message.empty() ? "Command executed successfully" : result.message, 0);
+        LOG_INF("Command executed: " + result.commandId);
+    } else {
+        SetStatusText("Error: " + result.message, 0);
+        LOG_ERR("Command failed: " + result.commandId + " - " + result.message);
+        
+        // Show error dialog for critical failures
+        if (!result.message.empty() && result.commandId != "UNKNOWN") {
+            wxMessageBox(result.message, "Command Error", wxOK | wxICON_ERROR, this);
+        }
+    }
+    
+    // Update menu/toolbar states for toggle commands
+    if (result.commandId == "SHOW_NORMALS" && result.success && m_occViewer) {
+        GetMenuBar()->Check(ID_SHOW_NORMALS, m_occViewer->isShowNormals());
+    }
+    else if (result.commandId == "SHOW_EDGES" && result.success && m_occViewer) {
+        GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowingEdges());
+    }
+    
+    // Refresh canvas if needed
+    if (m_canvas && (result.commandId.find("VIEW_") == 0 || 
+                     result.commandId.find("SHOW_") == 0 ||
+                     result.commandId == "FIX_NORMALS")) {
+        m_canvas->Refresh();
+    }
+}
+
+std::string MainFrame::mapEventIdToCommandType(int eventId) const
+{
+    switch (eventId) {
+        // File commands
+        case wxID_NEW: return "FILE_NEW";
+        case wxID_OPEN: return "FILE_OPEN";
+        case wxID_SAVE: return "FILE_SAVE";
+        case ID_IMPORT_STEP: return "IMPORT_STEP";
+        case wxID_EXIT: return "FILE_EXIT";
+        
+        // Geometry creation commands
+        case ID_CREATE_BOX: return "CREATE_BOX";
+        case ID_CREATE_SPHERE: return "CREATE_SPHERE";
+        case ID_CREATE_CYLINDER: return "CREATE_CYLINDER";
+        case ID_CREATE_CONE: return "CREATE_CONE";
+        case ID_CREATE_WRENCH: return "CREATE_WRENCH";
+        
+        // View commands
+        case ID_VIEW_ALL: return "VIEW_ALL";
+        case ID_VIEW_TOP: return "VIEW_TOP";
+        case ID_VIEW_FRONT: return "VIEW_FRONT";
+        case ID_VIEW_RIGHT: return "VIEW_RIGHT";
+        case ID_VIEW_ISOMETRIC: return "VIEW_ISOMETRIC";
+        case ID_SHOW_NORMALS: return "SHOW_NORMALS";
+        case ID_FIX_NORMALS: return "FIX_NORMALS";
+        case ID_VIEW_SHOWEDGES: return "SHOW_EDGES";
+        
+        // Edit commands
+        case ID_UNDO: return "UNDO";
+        case ID_REDO: return "REDO";
+        
+        // Navigation commands
+        case ID_NAVIGATION_CUBE_CONFIG: return "NAV_CUBE_CONFIG";
+        case ID_ZOOM_SPEED: return "ZOOM_SPEED";
+        
+        // Help commands
+        case wxID_ABOUT: return "HELP_ABOUT";
+        
+        default: return "";
+    }
 }
 
 void MainFrame::createMenu()
@@ -227,341 +378,10 @@ void MainFrame::createPanels()
     }
 }
 
-void MainFrame::onNew(wxCommandEvent& event)
-{
-    LOG_INF("Creating new project");
-    m_canvas->getSceneManager()->cleanup();
-    m_canvas->getSceneManager()->initScene();
-    m_commandManager->clearHistory();
-    SetStatusText("New project created", 0);
-}
-
-void MainFrame::onOpen(wxCommandEvent& event)
-{
-    wxFileDialog openFileDialog(this, "Open Project", "", "", "Project files (*.proj)|*.proj", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-    if (openFileDialog.ShowModal() == wxID_CANCEL) {
-        LOG_INF("Open file dialog cancelled");
-        return;
-    }
-
-    LOG_INF("Opening project: " + openFileDialog.GetPath().ToStdString());
-    SetStatusText("Opened: " + openFileDialog.GetFilename(), 0);
-}
-
-void MainFrame::onSave(wxCommandEvent& event)
-{
-    wxFileDialog saveFileDialog(this, "Save Project", "", "", "Project files (*.proj)|*.proj", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-    if (saveFileDialog.ShowModal() == wxID_CANCEL) {
-        LOG_INF("Save file dialog cancelled");
-        return;
-    }
-
-    LOG_INF("Saving project: " + saveFileDialog.GetPath().ToStdString());
-    SetStatusText("Saved: " + saveFileDialog.GetFilename(), 0);
-}
-
-void MainFrame::onImportSTEP(wxCommandEvent& event)
-{
-    if (!m_occViewer) {
-        LOG_ERR("OCCViewer is null in onImportSTEP");
-        SetStatusText("Error: Cannot import STEP file", 0);
-        return;
-    }
-    
-    // Create file dialog for STEP files
-    wxString wildcard = "STEP files (*.step;*.stp)|*.step;*.stp|All files (*.*)|*.*";
-    wxFileDialog openFileDialog(this, "Import STEP File", "", "", wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-    
-    if (openFileDialog.ShowModal() == wxID_CANCEL) {
-        LOG_INF("STEP import dialog cancelled");
-        return;
-    }
-    
-    std::string filePath = openFileDialog.GetPath().ToStdString();
-    LOG_INF("Importing STEP file: " + filePath);
-    SetStatusText("Importing STEP file...", 0);
-    
-    // Read the STEP file
-    STEPReader::ReadResult result = STEPReader::readSTEPFile(filePath);
-    
-    if (!result.success) {
-        wxString errorMsg = "Failed to import STEP file:\n" + result.errorMessage;
-        wxMessageBox(errorMsg, "Import Error", wxOK | wxICON_ERROR, this);
-        LOG_ERR("STEP import failed: " + result.errorMessage);
-        SetStatusText("STEP import failed", 0);
-        return;
-    }
-    
-    // Add geometries to the viewer
-    int importedCount = 0;
-    for (const auto& geometry : result.geometries) {
-        if (geometry) {
-            m_occViewer->addGeometry(geometry);
-            importedCount++;
-        }
-    }
-    
-    if (importedCount > 0) {
-        // Fit all objects in view
-        if (m_canvas && m_canvas->getInputManager()->getNavigationController()) {
-            m_canvas->getInputManager()->getNavigationController()->viewAll();
-        }
-        
-        // Update coordinate system scale based on imported content
-        if (m_canvas && m_canvas->getSceneManager()) {
-            m_canvas->getSceneManager()->updateCoordinateSystemScale();
-        }
-        
-        wxString successMsg = wxString::Format("Successfully imported %d geometry objects from STEP file", importedCount);
-        LOG_INF(successMsg.ToStdString());
-        SetStatusText(successMsg, 0);
-        
-        // Show success message
-        wxMessageBox(successMsg, "Import Successful", wxOK | wxICON_INFORMATION, this);
-    } else {
-        wxString errorMsg = "No geometry objects could be imported from the STEP file";
-        wxMessageBox(errorMsg, "Import Warning", wxOK | wxICON_WARNING, this);
-        LOG_WRN(errorMsg.ToStdString());
-        SetStatusText("No geometries imported", 0);
-    }
-}
-
-void MainFrame::onExit(wxCommandEvent& event)
-{
-    LOG_INF("Application exit requested");
-    Close(true);
-}
-
-void MainFrame::onCreateBox(wxCommandEvent& event)
-{
-    if (!m_mouseHandler) {
-        LOG_ERR("MouseHandler is null in onCreateBox");
-        SetStatusText("Error: Cannot create box", 0);
-        return;
-    }
-    LOG_INF("Initiating box creation");
-    m_mouseHandler->setOperationMode(MouseHandler::OperationMode::CREATE);
-    m_mouseHandler->setCreationGeometryType("Box");
-    SetStatusText("Creating: Box", 0);
-}
-
-void MainFrame::onCreateSphere(wxCommandEvent& event)
-{
-    if (!m_mouseHandler) {
-        LOG_ERR("MouseHandler is null in onCreateSphere");
-        SetStatusText("Error: Cannot create sphere", 0);
-        return;
-    }
-    LOG_INF("Initiating sphere creation");
-    m_mouseHandler->setOperationMode(MouseHandler::OperationMode::CREATE);
-    m_mouseHandler->setCreationGeometryType("Sphere");
-    SetStatusText("Creating: Sphere", 0);
-}
-
-void MainFrame::onCreateCylinder(wxCommandEvent& event)
-{
-    if (!m_mouseHandler) {
-        LOG_ERR("MouseHandler is null in onCreateCylinder");
-        SetStatusText("Error: Cannot create cylinder", 0);
-        return;
-    }
-    LOG_INF("Initiating cylinder creation");
-    m_mouseHandler->setOperationMode(MouseHandler::OperationMode::CREATE);
-    m_mouseHandler->setCreationGeometryType("Cylinder");
-    SetStatusText("Creating: Cylinder", 0);
-}
-
-void MainFrame::onCreateCone(wxCommandEvent& event)
-{
-    if (!m_mouseHandler) {
-        LOG_ERR("MouseHandler is null in onCreateCone");
-        SetStatusText("Error: Cannot create cone", 0);
-        return;
-    }
-    LOG_INF("Initiating cone creation");
-    m_mouseHandler->setOperationMode(MouseHandler::OperationMode::CREATE);
-    m_mouseHandler->setCreationGeometryType("Cone");
-    SetStatusText("Creating: Cone", 0);
-}
-
-void MainFrame::onCreateWrench(wxCommandEvent& event)
-{
-    // Create an OpenCASCADE wrench at the origin
-    m_geometryFactory->createGeometry("Wrench", SbVec3f(0.0f, 0.0f, 0.0f), GeometryType::OPENCASCADE);
-}
-
-void MainFrame::onViewAll(wxCommandEvent& event)
-{
-    if (!m_canvas || !m_canvas->getInputManager()->getNavigationController()) {
-        LOG_ERR("Canvas or NavigationController is null in onViewAll");
-        SetStatusText("Error: Cannot fit all", 0);
-        return;
-    }
-    LOG_INF("Fitting all objects in view");
-    m_canvas->getInputManager()->getNavigationController()->viewAll();
-    SetStatusText("View: Fit All", 0);
-}
-
-void MainFrame::onViewTop(wxCommandEvent& event)
-{
-    if (!m_canvas || !m_canvas->getInputManager()->getNavigationController()) {
-        LOG_ERR("Canvas or NavigationController is null in onViewTop");
-        SetStatusText("Error: Cannot set top view", 0);
-        return;
-    }
-    LOG_INF("Setting top view");
-    m_canvas->getInputManager()->getNavigationController()->viewTop();
-    SetStatusText("View: Top", 0);
-}
-
-void MainFrame::onViewFront(wxCommandEvent& event)
-{
-    if (!m_canvas || !m_canvas->getInputManager()->getNavigationController()) {
-        LOG_ERR("Canvas or NavigationController is null in onViewFront");
-        SetStatusText("Error: Cannot set front view", 0);
-        return;
-    }
-    LOG_INF("Setting front view");
-    m_canvas->getInputManager()->getNavigationController()->viewFront();
-    SetStatusText("View: Front", 0);
-}
-
-void MainFrame::onViewRight(wxCommandEvent& event)
-{
-    if (!m_canvas || !m_canvas->getInputManager()->getNavigationController()) {
-        LOG_ERR("Canvas or NavigationController is null in onViewRight");
-        SetStatusText("Error: Cannot set right view", 0);
-        return;
-    }
-    LOG_INF("Setting right view");
-    m_canvas->getInputManager()->getNavigationController()->viewRight();
-    SetStatusText("View: Right", 0);
-}
-
-void MainFrame::onViewIsometric(wxCommandEvent& event)
-{
-    if (!m_canvas || !m_canvas->getInputManager()->getNavigationController()) {
-        LOG_ERR("Canvas or NavigationController is null in onViewIsometric");
-        SetStatusText("Error: Cannot set isometric view", 0);
-        return;
-    }
-    LOG_INF("Setting isometric view");
-    m_canvas->getInputManager()->getNavigationController()->viewIsometric();
-    SetStatusText("View: Isometric", 0);
-}
-
-void MainFrame::onShowNormals(wxCommandEvent& event)
-{
-    if (!m_occViewer) {
-        LOG_ERR("OCCViewer is null in onShowNormals");
-        SetStatusText("Error: Cannot toggle normals", 0);
-        return;
-    }
-    
-    bool showNormals = !m_occViewer->isShowNormals();
-    m_occViewer->setShowNormals(showNormals);
-    
-    // Update menu item check state
-    wxMenuBar* menuBar = GetMenuBar();
-    if (menuBar) {
-        menuBar->Check(ID_SHOW_NORMALS, showNormals);
-    }
-    
-    LOG_INF(showNormals ? "Showing face normals" : "Hiding face normals");
-    SetStatusText(showNormals ? "Normals: ON" : "Normals: OFF", 0);
-}
-
-void MainFrame::onFixNormals(wxCommandEvent& event)
-{
-    if (!m_occViewer) {
-        LOG_ERR("OCCViewer is null in onFixNormals");
-        SetStatusText("Error: Cannot fix normals", 0);
-        return;
-    }
-    
-    LOG_INF("Fixing face normals");
-    m_occViewer->fixNormals();
-    SetStatusText("Fixed face normals", 0);
-}
-
-void MainFrame::onNavigationCubeConfig(wxCommandEvent& event)
-{
-    if (!m_canvas) {
-        LOG_ERR("Canvas is null in onNavigationCubeConfig");
-        SetStatusText("Error: Cannot configure navigation cube", 0);
-        return;
-    }
-    LOG_INF("Opening navigation cube configuration dialog");
-    m_canvas->ShowNavigationCubeConfigDialog();
-    SetStatusText("Navigation Cube Configuration", 0);
-}
-
-void MainFrame::onSetZoomSpeed(wxCommandEvent& WXUNUSED(event))
-{
-    auto nav = m_canvas->getInputManager()->getNavigationController();
-    if (!nav) return;
-    float currentSpeed = nav->getZoomSpeedFactor();
-    wxTextEntryDialog dlg(this, "Enter zoom speed multiplier:", "Zoom Speed", wxString::Format("%f", currentSpeed));
-    if (dlg.ShowModal() == wxID_OK) {
-        double value;
-        if (dlg.GetValue().ToDouble(&value) && value > 0) {
-            nav->setZoomSpeedFactor(static_cast<float>(value));
-        } else {
-            wxMessageBox("Invalid speed value", "Error", wxOK | wxICON_ERROR);
-        }
-    }
-}
-
-void MainFrame::onUndo(wxCommandEvent& event)
-{
-    if (!m_commandManager) {
-        LOG_ERR("CommandManager is null in onUndo");
-        SetStatusText("Error: Cannot undo", 0);
-        return;
-    }
-    LOG_INF("Undoing last command");
-    m_commandManager->undo();
-    m_canvas->Refresh();
-    SetStatusText("Undo", 0);
-}
-
-void MainFrame::onRedo(wxCommandEvent& event)
-{
-    if (!m_commandManager) {
-        LOG_ERR("CommandManager is null in onRedo");
-        SetStatusText("Error: Cannot redo", 0);
-        return;
-    }
-    LOG_INF("Redoing last undone command");
-    m_commandManager->redo();
-    m_canvas->Refresh();
-    SetStatusText("Redo", 0);
-}
-
-void MainFrame::onAbout(wxCommandEvent& event)
-{
-    wxAboutDialogInfo aboutInfo;
-    aboutInfo.SetName("FreeCAD Navigation");
-    aboutInfo.SetVersion("1.0");
-    aboutInfo.SetDescription("A 3D CAD application with navigation and geometry creation");
-    aboutInfo.SetCopyright("(C) 2025 Your Name");
-    wxAboutBox(aboutInfo);
-    LOG_INF("About dialog shown");
-}
-
 void MainFrame::onClose(wxCloseEvent& event)
 {
     LOG_INF("Closing application");
     Destroy();
-}
-
-void MainFrame::onShowEdges(wxCommandEvent& event)
-{
-    bool showEdges = event.IsChecked();
-    if (m_occViewer) {
-        m_occViewer->setShowEdges(showEdges);
-        LOG_INF(showEdges ? "Edges shown" : "Edges hidden");
-    }
 }
 
 void MainFrame::onActivate(wxActivateEvent& event)
@@ -569,7 +389,10 @@ void MainFrame::onActivate(wxActivateEvent& event)
     if (event.GetActive() && m_isFirstActivate) {
         m_isFirstActivate = false;
         // Synchronize UI state now that the window is active and ready
-        GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowingEdges());
+        if (m_occViewer) {
+            GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowingEdges());
+        }
     }
     event.Skip();
 }
+

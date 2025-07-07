@@ -3,14 +3,24 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Command.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryFactory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CommandDispatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GeometryCommandListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewCommandListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FileCommandListener.cpp
 )
 
 set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/Command.h
     ${CMAKE_SOURCE_DIR}/include/CreateCommand.h
     ${CMAKE_SOURCE_DIR}/include/GeometryFactory.h
+    ${CMAKE_SOURCE_DIR}/include/CommandDispatcher.h
+    ${CMAKE_SOURCE_DIR}/include/CommandListener.h
+    ${CMAKE_SOURCE_DIR}/include/GeometryCommandListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewCommandListener.h
+    ${CMAKE_SOURCE_DIR}/include/FileCommandListener.h
 )
 
+# Create command static library
 add_library(CADCommands STATIC ${COMMANDS_SOURCES} ${COMMANDS_HEADERS})
 
 target_include_directories(CADCommands PUBLIC

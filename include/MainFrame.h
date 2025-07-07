@@ -2,6 +2,7 @@
 
 #include <wx/frame.h>
 #include <wx/aui/aui.h>
+#include <memory>
 
 class Canvas;
 class PropertyPanel;
@@ -11,7 +12,12 @@ class GeometryFactory;
 class CommandManager;
 class NavigationController;
 class OCCViewer;
+class CommandDispatcher;
+class GeometryCommandListener;
+class ViewCommandListener;
+class FileCommandListener;
 
+struct CommandResult;
 
 enum
 {
@@ -21,42 +27,36 @@ enum
     ID_SAVE,
     ID_SAVE_AS,
     ID_IMPORT_STEP,
-    ID_EXIT,
-
-    // Edit menu IDs
-    ID_UNDO,
-    ID_REDO,
-
+    
     // Create menu IDs
     ID_CREATE_BOX,
     ID_CREATE_SPHERE,
     ID_CREATE_CYLINDER,
     ID_CREATE_CONE,
     ID_CREATE_WRENCH,
-
+    
     // View menu IDs
-    ID_VIEW_MODE,
-    ID_SELECT_MODE,
-    ID_VIEW_ALL,        // Add missing ID
-    ID_VIEW_TOP,        // Add missing ID
-    ID_VIEW_FRONT,      // Add missing ID
-    ID_VIEW_RIGHT,      // Add missing ID
-    ID_VIEW_ISOMETRIC,  // Add missing ID
-    ID_VIEW_SHOWEDGES,
-    ID_VIEW_RESET,
-    ID_VIEW_TOGGLE_CAMERA,
-
-    // Display options
+    ID_VIEW_ALL,
+    ID_VIEW_TOP,
+    ID_VIEW_FRONT,
+    ID_VIEW_RIGHT,
+    ID_VIEW_ISOMETRIC,
     ID_SHOW_NORMALS,
-    ID_SHOW_EDGES,
     ID_FIX_NORMALS,
+    ID_VIEW_SHOWEDGES,
+    
+    // Edit menu IDs
+    ID_UNDO,
+    ID_REDO,
+    
+    // Navigation IDs
     ID_NAVIGATION_CUBE_CONFIG,
-    ID_ZOOM_SPEED,  // New menu item for zoom speed adjustment
-
-    // Help menu IDs
-    ID_ABOUT
+    ID_ZOOM_SPEED
 };
 
+/**
+ * @brief Main application frame with command-pattern based menu and toolbar
+ */
 class MainFrame : public wxFrame
 {
 public:
@@ -64,56 +64,68 @@ public:
     virtual ~MainFrame();
 
 private:
+    /**
+     * @brief Create status bar
+     */
     void createStatusBar();
+    
+    /**
+     * @brief Create UI panels
+     */
     void createPanels();
+    
+    /**
+     * @brief Create menu bar
+     */
     void createMenu();
+    
+    /**
+     * @brief Create toolbar
+     */
     void createToolbar();
+    
+    /**
+     * @brief Setup command system with dispatcher and listeners
+     */
+    void setupCommandSystem();
+    
+    /**
+     * @brief Update UI state
+     */
     void updateUI();
 
-    // Event handlers
-    void onNew(wxCommandEvent& event);
-    void onOpen(wxCommandEvent& event);
-    void onSave(wxCommandEvent& event);
-    void onSaveAs(wxCommandEvent& event);
-    void onImportSTEP(wxCommandEvent& event);
-    void onExit(wxCommandEvent& event);
-    void onUndo(wxCommandEvent& event);
-    void onRedo(wxCommandEvent& event);
-    void onCreateBox(wxCommandEvent& event);
-    void onCreateSphere(wxCommandEvent& event);
-    void onCreateCylinder(wxCommandEvent& event);
-    void onCreateCone(wxCommandEvent& event);
-    void onCreateWrench(wxCommandEvent& event);
-    void onViewMode(wxCommandEvent& event);
-    void onSelectMode(wxCommandEvent& event);
-    void onViewAll(wxCommandEvent& event);
-    void onViewTop(wxCommandEvent& event);
-    void onViewFront(wxCommandEvent& event);
-    void onViewRight(wxCommandEvent& event);
-    void onViewIsometric(wxCommandEvent& event);
-    void onNavigationCubeConfig(wxCommandEvent& event);
-    void onSetZoomSpeed(wxCommandEvent& event);  // Handler for zoom speed setting
-    void onShowNormals(wxCommandEvent& event);
-    void onShowEdges(wxCommandEvent& event);
-    void onFixNormals(wxCommandEvent& event);
-    void onAbout(wxCommandEvent& event);
+    // Unified command handler for all menu and toolbar events
+    void onCommand(wxCommandEvent& event);
+    
+    // UI feedback handler for command results
+    void onCommandFeedback(const CommandResult& result);
+    
+    // Window event handlers
     void onClose(wxCloseEvent& event);
-    void onResetView(wxCommandEvent& event);
-    void onToggleCamera(wxCommandEvent& event);
-    void onSetView(wxCommandEvent& event);
-
     void onActivate(wxActivateEvent& event);
+    
+    /**
+     * @brief Map wxWidgets event ID to command type string
+     * @param eventId wxWidgets event ID
+     * @return Command type string
+     */
+    std::string mapEventIdToCommandType(int eventId) const;
 
-    wxAuiManager m_auiManager;
+private:
+    // UI components
     Canvas* m_canvas;
     MouseHandler* m_mouseHandler;
     GeometryFactory* m_geometryFactory;
     CommandManager* m_commandManager;
     OCCViewer* m_occViewer;
-    PropertyPanel* m_propertyPanel;
-    ObjectTreePanel* m_objectTreePanel;
-    bool m_isFirstActivate = true;
+    wxAuiManager m_auiManager;
+    bool m_isFirstActivate;
+    
+    // Command system components
+    std::unique_ptr<CommandDispatcher> m_commandDispatcher;
+    std::shared_ptr<GeometryCommandListener> m_geometryListener;
+    std::shared_ptr<ViewCommandListener> m_viewListener;
+    std::shared_ptr<FileCommandListener> m_fileListener;
 
     DECLARE_EVENT_TABLE()
 };
-
