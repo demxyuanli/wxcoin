@@ -4,9 +4,29 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateCommand.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryFactory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CommandDispatcher.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/GeometryCommandListener.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ViewCommandListener.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/FileCommandListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewAllListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewTopListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewFrontListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewRightListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewIsometricListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShowNormalsListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FixNormalsListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShowEdgesListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FileNewListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ImportStepListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FileOpenListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FileSaveListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CreateBoxListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CreateSphereListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CreateCylinderListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CreateConeListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CreateWrenchListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/UndoListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/RedoListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/HelpAboutListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/NavCubeConfigListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ZoomSpeedListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FileExitListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -15,9 +35,29 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/GeometryFactory.h
     ${CMAKE_SOURCE_DIR}/include/CommandDispatcher.h
     ${CMAKE_SOURCE_DIR}/include/CommandListener.h
-    ${CMAKE_SOURCE_DIR}/include/GeometryCommandListener.h
-    ${CMAKE_SOURCE_DIR}/include/ViewCommandListener.h
-    ${CMAKE_SOURCE_DIR}/include/FileCommandListener.h
+    ${CMAKE_SOURCE_DIR}/include/FileNewListener.h
+    ${CMAKE_SOURCE_DIR}/include/ImportStepListener.h
+    ${CMAKE_SOURCE_DIR}/include/FileOpenListener.h
+    ${CMAKE_SOURCE_DIR}/include/FileSaveListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateBoxListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateSphereListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateCylinderListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateConeListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateWrenchListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewAllListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewTopListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewFrontListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewRightListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewIsometricListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowNormalsListener.h
+    ${CMAKE_SOURCE_DIR}/include/FixNormalsListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowEdgesListener.h
+    ${CMAKE_SOURCE_DIR}/include/UndoListener.h
+    ${CMAKE_SOURCE_DIR}/include/RedoListener.h
+    ${CMAKE_SOURCE_DIR}/include/HelpAboutListener.h
+    ${CMAKE_SOURCE_DIR}/include/NavCubeConfigListener.h
+    ${CMAKE_SOURCE_DIR}/include/ZoomSpeedListener.h
+    ${CMAKE_SOURCE_DIR}/include/FileExitListener.h
 )
 
 # Create command static library

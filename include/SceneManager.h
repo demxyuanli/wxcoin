@@ -45,4 +45,5 @@ private:
     std::unique_ptr<CoordinateSystemRenderer> m_coordSystemRenderer;
     std::unique_ptr<PickingAidManager> m_pickingAidManager;
     bool m_isPerspectiveCamera;
+    SbBox3f m_sceneBoundingBox;
 };

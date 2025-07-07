@@ -132,12 +132,12 @@ void NavigationController::zoomCamera(float delta) {
     SbVec3f position = camera->position.getValue();
     SbVec3f forward;
     camera->orientation.getValue().multVec(SbVec3f(0, 0, -1), forward);
-    // Adaptive zoom scale based on viewport size and user-defined speed factor
-    wxSize size = m_canvas ? m_canvas->GetClientSize() : wxSize(0, 0);
-    int maxDim = wxMax(size.x, size.y);
-    float sizeFactor = (maxDim > 0) ? (static_cast<float>(maxDim) / 500.0f) : 1.0f;
-    float baseStep = 0.1f;
-    position += forward * delta * baseStep * sizeFactor * m_zoomSpeedFactor;
+    
+    // Adaptive zoom based on scene size
+    float sceneSize = m_sceneManager->getSceneBoundingBoxSize();
+    float zoomFactor = sceneSize / 100.0f; // Scale zoom speed with scene size
+    
+    position += forward * delta * zoomFactor * m_zoomSpeedFactor;
     camera->position.setValue(position);
 }
 

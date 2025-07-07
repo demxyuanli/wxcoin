@@ -6,6 +6,7 @@
 #include <functional>
 #include <unordered_map>
 #include <mutex>
+#include "CommandType.h"
 
 class Command;
 class CommandListener;
@@ -39,11 +40,25 @@ public:
     void registerListener(const std::string& commandType, std::shared_ptr<CommandListener> listener);
     
     /**
+     * @brief Register a command listener for specific command types
+     * @param commandType Type of command to listen for
+     * @param listener Shared pointer to the listener
+     */
+    void registerListener(cmd::CommandType commandType, std::shared_ptr<CommandListener> listener);
+    
+    /**
      * @brief Unregister a command listener
      * @param commandType Type of command
      * @param listener Listener to remove
      */
     void unregisterListener(const std::string& commandType, std::shared_ptr<CommandListener> listener);
+    
+    /**
+     * @brief Unregister a command listener
+     * @param commandType Type of command
+     * @param listener Listener to remove
+     */
+    void unregisterListener(cmd::CommandType commandType, std::shared_ptr<CommandListener> listener);
     
     /**
      * @brief Dispatch command to registered listeners
@@ -53,6 +68,15 @@ public:
      */
     CommandResult dispatchCommand(const std::string& commandType, 
                                 const std::unordered_map<std::string, std::string>& parameters = {});
+    
+    /**
+     * @brief Dispatch command to registered listeners
+     * @param commandType Type of command to execute
+     * @param parameters Command parameters
+     * @return CommandResult with execution status
+     */
+    CommandResult dispatchCommand(cmd::CommandType commandType,
+                                 const std::unordered_map<std::string, std::string>& parameters = {});
     
     /**
      * @brief Register UI feedback handler for command results
@@ -66,6 +90,13 @@ public:
      * @return True if handler exists
      */
     bool hasHandler(const std::string& commandType) const;
+    
+    /**
+     * @brief Check if any listener can handle the command type
+     * @param commandType Command type to check
+     * @return True if handler exists
+     */
+    bool hasHandler(cmd::CommandType commandType) const;
     
 private:
     std::unordered_map<std::string, std::vector<std::shared_ptr<CommandListener>>> m_listeners;

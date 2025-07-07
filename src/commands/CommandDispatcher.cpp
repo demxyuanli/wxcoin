@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include <algorithm>
 #include <mutex>
+#include "CommandType.h"
 
 CommandDispatcher::CommandDispatcher()
 {
@@ -121,4 +122,25 @@ bool CommandDispatcher::hasHandler(const std::string& commandType) const
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_listeners.find(commandType);
     return it != m_listeners.end() && !it->second.empty();
+}
+
+void CommandDispatcher::registerListener(cmd::CommandType commandType, std::shared_ptr<CommandListener> listener)
+{
+    registerListener(cmd::to_string(commandType), listener);
+}
+
+void CommandDispatcher::unregisterListener(cmd::CommandType commandType, std::shared_ptr<CommandListener> listener)
+{
+    unregisterListener(cmd::to_string(commandType), listener);
+}
+
+CommandResult CommandDispatcher::dispatchCommand(cmd::CommandType commandType,
+                                                  const std::unordered_map<std::string, std::string>& parameters)
+{
+    return dispatchCommand(cmd::to_string(commandType), parameters);
+}
+
+bool CommandDispatcher::hasHandler(cmd::CommandType commandType) const
+{
+    return hasHandler(cmd::to_string(commandType));
 }

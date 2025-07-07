@@ -162,6 +162,8 @@ void SceneManager::resetView() {
     m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
+    updateSceneBounds(); // Update bounds after view reset
+
     m_canvas->Refresh(true);
 }
 
@@ -406,56 +408,43 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     return true;
 }
 
-void SceneManager::updateSceneBounds()
-{
-    if (!m_objectRoot || !m_coordSystemRenderer) {
+void SceneManager::updateSceneBounds() {
+    if (!m_objectRoot || m_objectRoot->getNumChildren() == 0) {
+        m_sceneBoundingBox.makeEmpty();
         return;
     }
-    
-    float sceneSize = getSceneBoundingBoxSize();
-    if (sceneSize > 0.1f) {  // Only update if we have meaningful content
-        m_coordSystemRenderer->updateCoordinateSystemSize(sceneSize);
-        LOG_INF("Updated coordinate system for scene size: " + std::to_string(sceneSize));
-    }
-}
 
-float SceneManager::getSceneBoundingBoxSize() const
-{
-    if (!m_objectRoot) {
-        return 0.0f;
-    }
-    
-    try {
-        SoGetBoundingBoxAction bboxAction(SbViewportRegion(640, 480));
-        bboxAction.apply(m_objectRoot);
-        
-        SbBox3f bbox = bboxAction.getBoundingBox();
-        if (bbox.isEmpty()) {
-            return 0.0f;
+    SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
+    SoGetBoundingBoxAction bboxAction(viewport);
+    bboxAction.apply(m_objectRoot);
+    m_sceneBoundingBox = bboxAction.getBoundingBox();
+
+    if (!m_sceneBoundingBox.isEmpty()) {
+        LOG_INF("Scene bounds updated.");
+        if (m_coordSystemRenderer) {
+            m_coordSystemRenderer->updateCoordinateSystemSize(getSceneBoundingBoxSize());
         }
-        
-        SbVec3f min, max;
-        bbox.getBounds(min, max);
-        
-        // Calculate the diagonal length of the bounding box
-        SbVec3f diagonal = max - min;
-        float size = diagonal.length();
-        
-        LOG_INF("Scene bounding box size: " + std::to_string(size));
-        return size;
-        
-    } catch (const std::exception& e) {
-        LOG_ERR("Exception calculating scene bounds: " + std::string(e.what()));
-        return 0.0f;
     }
 }
 
-void SceneManager::updateCoordinateSystemScale()
-{
-    updateSceneBounds();
+float SceneManager::getSceneBoundingBoxSize() const {
+    if (m_sceneBoundingBox.isEmpty()) {
+        return 10.0f; // Return a default size if scene is empty
+    }
+    SbVec3f min, max;
+    m_sceneBoundingBox.getBounds(min, max);
+    return (max - min).length();
 }
 
-void SceneManager::initializeScene()
-{
-    // Deprecated: initialization logic now resides in initScene()
+void SceneManager::updateCoordinateSystemScale() {
+    if (m_coordSystemRenderer) {
+        // Implementation to be added
+    }
+}
+
+void SceneManager::initializeScene() {
+    // This method was declared but not defined.
+    // Providing a basic implementation.
+    LOG_INF("SceneManager::initializeScene called.");
+    // If there's specific initialization logic needed, it should go here.
 }

@@ -3,6 +3,7 @@
 #include <wx/frame.h>
 #include <wx/aui/aui.h>
 #include <memory>
+#include "CommandType.h"
 
 class Canvas;
 class PropertyPanel;
@@ -13,9 +14,6 @@ class CommandManager;
 class NavigationController;
 class OCCViewer;
 class CommandDispatcher;
-class GeometryCommandListener;
-class ViewCommandListener;
-class FileCommandListener;
 
 struct CommandResult;
 
@@ -109,7 +107,7 @@ private:
      * @param eventId wxWidgets event ID
      * @return Command type string
      */
-    std::string mapEventIdToCommandType(int eventId) const;
+    cmd::CommandType mapEventIdToCommandType(int eventId) const;
 
 private:
     // UI components
@@ -123,9 +121,6 @@ private:
     
     // Command system components
     std::unique_ptr<CommandDispatcher> m_commandDispatcher;
-    std::shared_ptr<GeometryCommandListener> m_geometryListener;
-    std::shared_ptr<ViewCommandListener> m_viewListener;
-    std::shared_ptr<FileCommandListener> m_fileListener;
 
     DECLARE_EVENT_TABLE()
 };
