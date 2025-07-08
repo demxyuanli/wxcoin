@@ -14,6 +14,9 @@
 #include <Inventor/nodes/SoLineSet.h>
 #include <Inventor/nodes/SoText2.h>
 #include <Inventor/actions/SoGLRenderAction.h>  // Add this include
+#include <Inventor/nodes/SoEventCallback.h>
+#include <Inventor/events/SoMouseButtonEvent.h>
+#include <Inventor/events/SoLocation2Event.h>
 
 class Canvas;
 class SceneManager;
@@ -81,6 +84,12 @@ private:
     void createCurvedArrow(int dir, float scale);
     void createSideTriangle(int dir);
     void createEquilateralTriangle(float x, float y, float angleRad);
+    
+    // Event handling methods
+    static void onMouseEvent(void* userData, SoEventCallback* node);
+    void handleShapeClick(const std::string& shapeName);
+    void handleShapeHover(const std::string& shapeName, bool isHovering);
+    void addEventCallbackToShape(SoSeparator* shapeRoot, const std::string& shapeName);
     
     Canvas* m_canvas;
     SceneManager* m_sceneManager;

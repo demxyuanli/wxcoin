@@ -4,16 +4,36 @@
 #include "NavigationCubeManager.h"
 #include "DPIManager.h"
 #include "Logger.h"
+#include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
-#include <Inventor/nodes/SoFaceSet.h>
-#include <Inventor/nodes/SoIndexedLineSet.h>
-#include <Inventor/nodes/SoIndexedFaceSet.h>  
-#include <Inventor/nodes/SoFont.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoTranslation.h>
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoFaceSet.h>
+#include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoLineSet.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoSphere.h>
+#include <Inventor/nodes/SoText2.h>
+#include <Inventor/actions/SoGLRenderAction.h>
+#include <Inventor/actions/SoRayPickAction.h>
+#include <Inventor/nodes/SoEventCallback.h>
+#include <Inventor/nodes/SoNode.h>
+#include <Inventor/events/SoMouseButtonEvent.h>
+#include <Inventor/events/SoLocation2Event.h>
+#include <Inventor/events/SoButtonEvent.h>
+#include <Inventor/SbViewportRegion.h>
+#include <Inventor/SbRotation.h>
+#include <Inventor/SbVec3f.h>
+#include <Inventor/SbVec2f.h>
+#include <Inventor/SbVec2s.h>
 #include <GL/gl.h>
-#include <cmath>  
+#include <cmath>
+#include <vector>
 
 MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneManager)
     : m_canvas(canvas)
@@ -32,13 +52,26 @@ MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneMa
 }
 
 MultiViewportManager::~MultiViewportManager() {
+    LOG_INF("MultiViewportManager: Destroyed");
+    
     if (m_cubeOutlineRoot) {
+        // Clean up user data from event callbacks
+        for (int i = 0; i < m_cubeOutlineRoot->getNumChildren(); ++i) {
+            SoNode* child = m_cubeOutlineRoot->getChild(i);
+            if (child->isOfType(SoEventCallback::getClassTypeId())) {
+                SoEventCallback* callback = static_cast<SoEventCallback*>(child);
+                std::string* userData = static_cast<std::string*>(callback->getUserData());
+                if (userData) {
+                    delete userData;
+                }
+            }
+        }
         m_cubeOutlineRoot->unref();
     }
+    
     if (m_coordinateSystemRoot) {
         m_coordinateSystemRoot->unref();
     }
-    LOG_INF("MultiViewportManager: Destroyed");
 }
 
 void MultiViewportManager::initializeViewports() {
@@ -77,6 +110,10 @@ void MultiViewportManager::createEquilateralTriangle(float x, float y, float ang
     SoFaceSet* faceSet = new SoFaceSet;
     faceSet->numVertices.setValue(3);
     triSep->addChild(faceSet);
+
+    // Add event callback for mouse interaction
+    std::string shapeName = "triangle_" + std::to_string(static_cast<int>(x)) + "_" + std::to_string(static_cast<int>(y));
+    addEventCallbackToShape(triSep, shapeName);
 
     m_cubeOutlineRoot->addChild(triSep);
 }
@@ -365,6 +402,11 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
     headSep->addChild(headFace);
     arrowSep->addChild(headSep);
     }
+    
+    // Add event callback for mouse interaction
+    std::string shapeName = "curved_arrow_" + std::to_string(dir);
+    addEventCallbackToShape(arrowSep, shapeName);
+    
     m_cubeOutlineRoot->addChild(arrowSep);
 }
 
@@ -380,6 +422,10 @@ void MultiViewportManager::createTopRightCircle(float scale) {
     SoSphere* sphere = new SoSphere;
     sphere->radius = 1.0f * scale;
     sphereSep->addChild(sphere);
+    
+    // Add event callback for mouse interaction
+    addEventCallbackToShape(sphereSep, "sphere");
+    
     m_cubeOutlineRoot->addChild(sphereSep);
 }
 
@@ -429,6 +475,9 @@ void MultiViewportManager::createSmallCube(float scale) {
     };
     edgeLines->coordIndex.setValues(0, 25, edgeIdx);
     cubeSep->addChild(edgeLines);
+
+    // Add event callback for mouse interaction
+    addEventCallbackToShape(cubeSep, "cube");
 
     m_cubeOutlineRoot->addChild(cubeSep);
 }
@@ -714,6 +763,30 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
         }
     }
     
+    // Check cube outline viewport
+    if (m_viewports[VIEWPORT_CUBE_OUTLINE].enabled && m_cubeOutlineRoot) {
+        ViewportInfo& viewport = m_viewports[VIEWPORT_CUBE_OUTLINE];
+        if (x >= viewport.x && x < (viewport.x + viewport.width) &&
+            y >= viewport.y && y < (viewport.y + viewport.height)) {
+            // Convert wx coordinates to Open Inventor coordinates
+            wxSize canvasSize = m_canvas->GetClientSize();
+            int yBottom = canvasSize.y - viewport.y - viewport.height;
+            
+            SbViewportRegion viewportRegion;
+            viewportRegion.setWindowSize(SbVec2s(canvasSize.x, canvasSize.y));
+            viewportRegion.setViewportPixels(viewport.x, yBottom, viewport.width, viewport.height);
+            
+            // Create a pick action to handle mouse events
+            SoRayPickAction pickAction(viewportRegion);
+            SbVec2s mousePos(static_cast<short>(x), static_cast<short>(y));
+            pickAction.setPoint(mousePos);
+            pickAction.apply(m_cubeOutlineRoot);
+            
+            // The actual event handling is done by the SoEventCallback nodes
+            return true;
+        }
+    }
+    
     // Add handling for other viewports if needed
     
     return false;
@@ -763,4 +836,58 @@ void MultiViewportManager::syncCoordinateSystemCameraToMain() {
         m_coordinateSystemCamera->position.setValue(camPos);
         m_coordinateSystemCamera->orientation.setValue(mainOrient);
     }
+}
+
+void MultiViewportManager::onMouseEvent(void* userData, SoEventCallback* node) {
+    MultiViewportManager* manager = static_cast<MultiViewportManager*>(userData);
+    const SoEvent* event = node->getEvent();
+    
+    if (!event) return;
+    
+    // Get shape name from user data
+    std::string* shapeNamePtr = static_cast<std::string*>(node->getUserData());
+    if (!shapeNamePtr) return;
+    
+    std::string shapeName = *shapeNamePtr;
+    
+    if (event->isOfType(SoMouseButtonEvent::getClassTypeId())) {
+        const SoMouseButtonEvent* mouseEvent = static_cast<const SoMouseButtonEvent*>(event);
+        
+        if (mouseEvent->getButton() == SoMouseButtonEvent::BUTTON1 && 
+            mouseEvent->getState() == SoButtonEvent::DOWN) {
+            // Left button click
+            manager->handleShapeClick(shapeName);
+            node->setHandled();
+        }
+    }
+    else if (event->isOfType(SoLocation2Event::getClassTypeId())) {
+        // Mouse movement (hover)
+        manager->handleShapeHover(shapeName, true);
+    }
+}
+
+void MultiViewportManager::handleShapeClick(const std::string& shapeName) {
+    LOG_INF("CubeOutline shape clicked: " + shapeName);
+}
+
+void MultiViewportManager::handleShapeHover(const std::string& shapeName, bool isHovering) {
+    if (isHovering) {
+        LOG_DBG("CubeOutline shape hover: " + shapeName);
+    }
+}
+
+void MultiViewportManager::addEventCallbackToShape(SoSeparator* shapeRoot, const std::string& shapeName) {
+    if (!shapeRoot) return;
+    
+    // Create event callback node
+    SoEventCallback* eventCallback = new SoEventCallback;
+    eventCallback->addEventCallback(SoMouseButtonEvent::getClassTypeId(), onMouseEvent, this);
+    eventCallback->addEventCallback(SoLocation2Event::getClassTypeId(), onMouseEvent, this);
+    
+    // Store shape name as user data
+    std::string* shapeNamePtr = new std::string(shapeName);
+    eventCallback->setUserData(shapeNamePtr);
+    
+    // Add event callback to the shape
+    shapeRoot->addChild(eventCallback);
 }

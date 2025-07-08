@@ -16,3 +16,4 @@ CMakeUserPresets.json
 /include.code-workspace
 /include/.trae/.ignore
 /.gitignore
+/vcpkg.json
