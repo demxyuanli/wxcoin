@@ -9,6 +9,7 @@
 #include "ViewportManager.h"
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
+#include "MultiViewportManager.h"
 const int Canvas::s_canvasAttribs[] = {
     WX_GL_RGBA,
     WX_GL_DOUBLEBUFFER,
@@ -75,16 +76,20 @@ void Canvas::initializeSubsystems() {
     m_renderingEngine = std::make_unique<RenderingEngine>(this);
     m_viewportManager = std::make_unique<ViewportManager>(this);
     m_eventCoordinator = std::make_unique<EventCoordinator>();
-    
+
     m_sceneManager = std::make_unique<SceneManager>(this);
     m_inputManager = std::make_unique<InputManager>(this);
     m_navigationCubeManager = std::make_unique<NavigationCubeManager>(this, m_sceneManager.get());
 
-    // Initialize rendering engine
+    // Initialize rendering engine FIRST
     if (!m_renderingEngine->initialize()) {
         showErrorDialog("Failed to initialize OpenGL context. Please check your graphics drivers.");
         throw std::runtime_error("RenderingEngine initialization failed");
     }
+
+    // Create multi-viewport manager AFTER OpenGL context is ready
+    // Do NOT create it here - delay until first render
+    m_multiViewportEnabled = true;
 }
 
 void Canvas::connectSubsystems() {
@@ -101,6 +106,11 @@ void Canvas::connectSubsystems() {
     // Connect event coordinator
     m_eventCoordinator->setNavigationCubeManager(m_navigationCubeManager.get());
     m_eventCoordinator->setInputManager(m_inputManager.get());
+    
+    // Connect multi-viewport manager
+    if (m_multiViewportManager) {
+        m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
+    }
 }
 
 void Canvas::showErrorDialog(const std::string& message) const {
@@ -110,7 +120,29 @@ void Canvas::showErrorDialog(const std::string& message) const {
 
 void Canvas::render(bool fastMode) {
     if (m_renderingEngine) {
-        m_renderingEngine->render(fastMode);
+        // Create MultiViewportManager on first render when GL context is active
+        if (m_multiViewportEnabled && !m_multiViewportManager) {
+            try {
+                m_multiViewportManager = std::make_unique<MultiViewportManager>(this, m_sceneManager.get());
+                m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
+                m_multiViewportManager->handleSizeChange(GetClientSize());
+                LOG_INF("Canvas::render: MultiViewportManager created successfully");
+            } catch (const std::exception& e) {
+                LOG_ERR("Canvas::render: Failed to create MultiViewportManager: " + std::string(e.what()));
+                m_multiViewportEnabled = false;
+            }
+        }
+        
+        // Render main scene first (without swapping buffers)
+        m_renderingEngine->renderWithoutSwap(fastMode);
+        
+        // Render additional viewports on top of main scene
+        if (m_multiViewportEnabled && m_multiViewportManager) {
+            m_multiViewportManager->render();
+        }
+        
+        // Finally swap buffers to display everything
+        m_renderingEngine->swapBuffers();
     }
 }
 
@@ -128,6 +160,9 @@ void Canvas::onSize(wxSizeEvent& event) {
     if (m_viewportManager) {
         m_viewportManager->handleSizeChange(size);
     }
+    if (m_multiViewportManager) {
+        m_multiViewportManager->handleSizeChange(size);
+    }
     if (m_eventCoordinator) {
         m_eventCoordinator->handleSizeEvent(event);
     }
@@ -139,12 +174,28 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
+    // Check multi-viewport first
+    if (m_multiViewportEnabled && m_multiViewportManager) {
+        if (m_multiViewportManager->handleMouseEvent(event)) {
+            return; // Event was handled
+        }
+    }
+    
     if (m_eventCoordinator) {
         if (m_eventCoordinator->handleMouseEvent(event)) {
             return; // Event was handled
         }
     }
     event.Skip();
+}
+
+void Canvas::setMultiViewportEnabled(bool enabled) {
+    m_multiViewportEnabled = enabled;
+    Refresh();
+}
+
+bool Canvas::isMultiViewportEnabled() const {
+    return m_multiViewportEnabled;
 }
 
 void Canvas::setPickingCursor(bool enable) {

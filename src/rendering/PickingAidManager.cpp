@@ -309,3 +309,26 @@ void PickingAidManager::stopPicking() {
 bool PickingAidManager::isPicking() const {
     return m_isPickingPosition;
 }
+
+void PickingAidManager::updateReferenceGrid() {
+    if (!m_referenceGridSeparator || !m_referenceGridVisible) {
+        return;
+    }
+    
+    // Remove the current grid from the scene
+    if (m_sceneManager && m_referenceGridVisible) {
+        m_sceneManager->getObjectRoot()->removeChild(m_referenceGridSeparator);
+        m_referenceGridVisible = false;
+    }
+    
+    // Recreate the grid with updated parameters
+    if (m_referenceGridSeparator) {
+        m_referenceGridSeparator->unref();
+    }
+    createReferenceGrid();
+    
+    // Add the updated grid back to the scene
+    showReferenceGrid(true);
+    
+    LOG_INF("PickingAidManager: Reference grid updated");
+}

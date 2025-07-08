@@ -34,6 +34,7 @@ public:
     void updateSceneBounds();
     float getSceneBoundingBoxSize() const;
     void updateCoordinateSystemScale();
+    void getSceneBoundingBoxMinMax(SbVec3f& min, SbVec3f& max) const;
 
 private:
     Canvas* m_canvas;

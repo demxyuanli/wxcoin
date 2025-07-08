@@ -17,6 +17,8 @@ public:
 
     bool initialize();
     void render(bool fastMode = false);
+    void renderWithoutSwap(bool fastMode = false);
+    void swapBuffers();
     void handleResize(const wxSize& size);
     void updateViewport(const wxSize& size, float dpiScale);
     

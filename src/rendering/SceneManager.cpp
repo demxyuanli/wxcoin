@@ -268,6 +268,11 @@ void SceneManager::setView(const std::string& viewName) {
     m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
+    // 自动刷新reference grid
+    if (m_pickingAidManager) {
+        m_pickingAidManager->showReferenceGrid(true);
+    }
+
     LOG_INF("Switched to view: " + viewName);
     m_canvas->Refresh(true);
 }
@@ -424,6 +429,10 @@ void SceneManager::updateSceneBounds() {
         if (m_coordSystemRenderer) {
             m_coordSystemRenderer->updateCoordinateSystemSize(getSceneBoundingBoxSize());
         }
+        // Add this line to update reference grid
+        if (m_pickingAidManager) {
+            m_pickingAidManager->updateReferenceGrid();
+        }
     }
 }
 
@@ -447,4 +456,13 @@ void SceneManager::initializeScene() {
     // Providing a basic implementation.
     LOG_INF("SceneManager::initializeScene called.");
     // If there's specific initialization logic needed, it should go here.
+}
+
+void SceneManager::getSceneBoundingBoxMinMax(SbVec3f& min, SbVec3f& max) const {
+    if (m_sceneBoundingBox.isEmpty()) {
+        min = SbVec3f(-10.0f, -10.0f, 0.0f);
+        max = SbVec3f(10.0f, 10.0f, 0.0f);
+    } else {
+        m_sceneBoundingBox.getBounds(min, max);
+    }
 }

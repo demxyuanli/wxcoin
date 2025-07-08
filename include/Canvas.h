@@ -13,6 +13,7 @@ class NavigationCubeManager;
 class RenderingEngine;
 class EventCoordinator;
 class ViewportManager;
+class MultiViewportManager;
 
 class Canvas : public wxGLCanvas {
 public:
@@ -21,7 +22,7 @@ public:
 
     // Core rendering interface
     void render(bool fastMode = false);
-    
+
     // UI state management
     void setPickingCursor(bool enable);
     void showErrorDialog(const std::string& message) const;
@@ -53,7 +54,7 @@ public:
 private:
     void initializeSubsystems();
     void connectSubsystems();
-    
+
     // Event handlers
     void onPaint(wxPaintEvent& event);
     void onSize(wxSizeEvent& event);
@@ -61,7 +62,7 @@ private:
     void onMouseEvent(wxMouseEvent& event);
 
     static const int s_canvasAttribs[];
-    
+
     // Core subsystems
     std::unique_ptr<SceneManager> m_sceneManager;
     std::unique_ptr<InputManager> m_inputManager;
@@ -74,5 +75,15 @@ private:
     ObjectTreePanel* m_objectTreePanel;
     CommandManager* m_commandManager;
 
+    // Multi-viewport methods
+    void setMultiViewportEnabled(bool enabled);
+    bool isMultiViewportEnabled() const;
+    MultiViewportManager* getMultiViewportManager() const { return m_multiViewportManager.get(); }
+
+private:
+    std::unique_ptr<MultiViewportManager> m_multiViewportManager;
+    bool m_multiViewportEnabled;
+
     DECLARE_EVENT_TABLE()
+
 };

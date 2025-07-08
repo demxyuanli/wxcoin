@@ -5,6 +5,7 @@ set(RENDERING_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/SceneManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoordinateSystemRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PickingAidManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/MultiViewportManager.cpp
 )
 
 set(RENDERING_HEADERS
@@ -13,6 +14,7 @@ set(RENDERING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/SceneManager.h
     ${CMAKE_SOURCE_DIR}/include/CoordinateSystemRenderer.h
     ${CMAKE_SOURCE_DIR}/include/PickingAidManager.h
+    ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
 )
 
 # Create rendering static library

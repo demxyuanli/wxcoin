@@ -58,18 +58,23 @@ void RenderingEngine::setupGLContext() {
 }
 
 void RenderingEngine::render(bool fastMode) {
+    renderWithoutSwap(fastMode);
+    presentFrame();
+}
+
+void RenderingEngine::renderWithoutSwap(bool fastMode) {
     if (!m_isInitialized) {
-        LOG_WRN("RenderingEngine::render: Skipped: Not initialized");
+        LOG_WRN("RenderingEngine::renderWithoutSwap: Skipped: Not initialized");
         return;
     }
 
     if (!m_canvas->IsShown() || !m_glContext || !m_sceneManager) {
-        LOG_WRN("RenderingEngine::render: Skipped: Canvas not shown or context/scene invalid");
+        LOG_WRN("RenderingEngine::renderWithoutSwap: Skipped: Canvas not shown or context/scene invalid");
         return;
     }
 
     if (m_isRendering) {
-        LOG_WRN("RenderingEngine::render: Skipped: Already rendering");
+        LOG_WRN("RenderingEngine::renderWithoutSwap: Skipped: Already rendering");
         return;
     }
 
@@ -83,14 +88,14 @@ void RenderingEngine::render(bool fastMode) {
 
     try {
         if (!m_canvas->SetCurrent(*m_glContext)) {
-            LOG_ERR("RenderingEngine::render: Failed to set GL context");
+            LOG_ERR("RenderingEngine::renderWithoutSwap: Failed to set GL context");
             m_isRendering = false;
             return;
         }
 
         wxSize size = m_canvas->GetClientSize();
         if (size.x <= 0 || size.y <= 0) {
-            LOG_WRN("RenderingEngine::render: Invalid viewport size: " + 
+            LOG_WRN("RenderingEngine::renderWithoutSwap: Invalid viewport size: " + 
                    std::to_string(size.x) + "x" + std::to_string(size.y));
             m_isRendering = false;
             return;
@@ -109,11 +114,9 @@ void RenderingEngine::render(bool fastMode) {
         if (m_navigationCubeManager) {
             m_navigationCubeManager->render();
         }
-
-        presentFrame();
     }
     catch (const std::exception& e) {
-        LOG_ERR("RenderingEngine::render: Exception during render: " + std::string(e.what()));
+        LOG_ERR("RenderingEngine::renderWithoutSwap: Exception during render: " + std::string(e.what()));
         clearBuffers();
         m_isRendering = false;
         
@@ -125,6 +128,10 @@ void RenderingEngine::render(bool fastMode) {
     }
 
     m_isRendering = false;
+}
+
+void RenderingEngine::swapBuffers() {
+    presentFrame();
 }
 
 void RenderingEngine::clearBuffers() {

@@ -31,6 +31,7 @@ public:
     float getReferenceZ() const { return m_referenceZ; }
     void showReferenceGrid(bool show);
     void updatePickingAidColor(const SbVec3f& color);
+    void updateReferenceGrid();
 
 private:
     void createPickingAids();
