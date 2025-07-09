@@ -45,6 +45,8 @@
 #include "ZoomSpeedListener.h"
 #include "FileExitListener.h"
 #include "CommandListenerManager.h"
+#include "MeshQualityDialog.h"
+#include "MeshQualityDialogListener.h"
 
 static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {wxID_NEW, cmd::CommandType::FileNew},
@@ -69,6 +71,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_REDO, cmd::CommandType::Redo},
     {ID_NAVIGATION_CUBE_CONFIG, cmd::CommandType::NavCubeConfig},
     {ID_ZOOM_SPEED, cmd::CommandType::ZoomSpeed},
+    {ID_MESH_QUALITY_DIALOG, cmd::CommandType::MeshQualityDialog},
     {wxID_ABOUT, cmd::CommandType::HelpAbout},
 };
 
@@ -94,6 +97,7 @@ EVT_MENU(ID_UNDO, MainFrame::onCommand)
 EVT_MENU(ID_REDO, MainFrame::onCommand)
 EVT_MENU(ID_NAVIGATION_CUBE_CONFIG, MainFrame::onCommand)
 EVT_MENU(ID_ZOOM_SPEED, MainFrame::onCommand)
+EVT_MENU(ID_MESH_QUALITY_DIALOG, MainFrame::onCommand)
 EVT_MENU(wxID_ABOUT, MainFrame::onCommand)
 EVT_CLOSE(MainFrame::onClose)
 EVT_MENU(ID_VIEW_SHOWEDGES, MainFrame::onCommand)
@@ -184,12 +188,14 @@ void MainFrame::setupCommandSystem()
     auto navCubeConfigListener = std::make_shared<NavCubeConfigListener>(m_canvas);
     auto zoomSpeedListener = std::make_shared<ZoomSpeedListener>(this, m_canvas);
     auto fileExitListener = std::make_shared<FileExitListener>(this);
+    auto meshQualityDialogListener = std::make_shared<MeshQualityDialogListener>(this, m_occViewer);
     m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
     m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
     m_listenerManager->registerListener(cmd::CommandType::HelpAbout, helpAboutListener);
     m_listenerManager->registerListener(cmd::CommandType::NavCubeConfig, navCubeConfigListener);
     m_listenerManager->registerListener(cmd::CommandType::ZoomSpeed, zoomSpeedListener);
     m_listenerManager->registerListener(cmd::CommandType::FileExit, fileExitListener);
+    m_listenerManager->registerListener(cmd::CommandType::MeshQualityDialog, meshQualityDialogListener);
     
     // Set UI feedback handler
     m_commandDispatcher->setUIFeedbackHandler(
@@ -239,11 +245,11 @@ void MainFrame::onCommandFeedback(const CommandResult& result)
     }
     
     // Update menu/toolbar states for toggle commands
-    if (result.commandId == "SHOW_NORMALS" && result.success && m_occViewer) {
+    if (result.commandId == cmd::to_string(cmd::CommandType::ShowNormals) && result.success && m_occViewer) {
         GetMenuBar()->Check(ID_SHOW_NORMALS, m_occViewer->isShowNormals());
     }
-    else if (result.commandId == "SHOW_EDGES" && result.success && m_occViewer) {
-        GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowingEdges());
+    else if (result.commandId == cmd::to_string(cmd::CommandType::ShowEdges) && result.success && m_occViewer) {
+        GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowEdges());
     }
     
     // Refresh canvas if needed
@@ -288,6 +294,8 @@ void MainFrame::createMenu()
     viewMenu->AppendCheckItem(ID_SHOW_NORMALS, _("Show &Normals"), _("Show/hide surface normals"));
     viewMenu->AppendCheckItem(ID_VIEW_SHOWEDGES, _("Show &Edges"), _("Show/hide object edges"));
     viewMenu->Append(ID_FIX_NORMALS, "&Fix Normals", "Automatically fix incorrect face normals");
+    viewMenu->AppendSeparator();
+    viewMenu->Append(ID_MESH_QUALITY_DIALOG, "&Mesh Quality Control...", "Control mesh precision and LOD settings");
     viewMenu->AppendSeparator();
     viewMenu->Append(ID_NAVIGATION_CUBE_CONFIG, "&Navigation Cube Config...", "Configure navigation cube settings");
     viewMenu->AppendSeparator();
@@ -375,6 +383,9 @@ void MainFrame::createPanels()
 
     m_occViewer = new OCCViewer(m_canvas->getSceneManager());
 
+    // Set OCCViewer reference in Canvas for LOD interaction detection
+    m_canvas->setOCCViewer(m_occViewer);
+
     // Now that all handlers are set, initialize the input manager's states
     m_canvas->getInputManager()->initializeStates();
 
@@ -417,7 +428,7 @@ void MainFrame::onActivate(wxActivateEvent& event)
         m_isFirstActivate = false;
         // Synchronize UI state now that the window is active and ready
         if (m_occViewer) {
-            GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowingEdges());
+            GetMenuBar()->Check(ID_VIEW_SHOWEDGES, m_occViewer->isShowEdges());
         }
     }
     event.Skip();

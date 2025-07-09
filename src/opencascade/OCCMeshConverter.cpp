@@ -161,9 +161,9 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
     return root;
 }
 
-SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, double deflection)
+SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params)
 {
-    TriangleMesh mesh = convertToMesh(shape, deflection);
+    TriangleMesh mesh = convertToMesh(shape, params);
     return createCoinNode(mesh);
 }
 
@@ -223,6 +223,15 @@ void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TriangleMesh& mes
 
         node->addChild(edgeGroup);
     }
+}
+
+void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TopoDS_Shape& shape, const MeshParameters& params)
+{
+    if (!node) {
+        return;
+    }
+    TriangleMesh mesh = convertToMesh(shape, params);
+    updateCoinNode(node, mesh);
 }
 
 void OCCMeshConverter::calculateNormals(TriangleMesh& mesh)

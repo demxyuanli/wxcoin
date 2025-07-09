@@ -300,12 +300,16 @@ std::vector<TopoDS_Shape> OCCBrepConverter::loadMultipleFromSTEP(const std::stri
 
 SoSeparator* OCCBrepConverter::convertToCoin3D(const TopoDS_Shape& shape, double deflection)
 {
-    return OCCMeshConverter::createCoinNode(shape, deflection);
+    OCCMeshConverter::MeshParameters params;
+    params.deflection = deflection;
+    return OCCMeshConverter::createCoinNode(shape, params);
 }
 
 void OCCBrepConverter::updateCoin3DNode(const TopoDS_Shape& shape, SoSeparator* node, double deflection)
 {
-    OCCMeshConverter::updateCoinNode(node, shape, deflection);
+    OCCMeshConverter::MeshParameters params;
+    params.deflection = deflection;
+    OCCMeshConverter::updateCoinNode(node, shape, params);
 }
 
 OCCBrepConverter::MeshData OCCBrepConverter::convertToMesh(const TopoDS_Shape& shape, double deflection)

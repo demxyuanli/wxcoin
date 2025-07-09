@@ -44,6 +44,7 @@ enum class CommandType {
     // Navigation / settings
     NavCubeConfig,
     ZoomSpeed,
+    MeshQualityDialog,
 
     // Help
     HelpAbout,
@@ -83,6 +84,7 @@ inline const std::string& to_string(CommandType type) {
 
         {CommandType::NavCubeConfig, "NAV_CUBE_CONFIG"},
         {CommandType::ZoomSpeed, "ZOOM_SPEED"},
+        {CommandType::MeshQualityDialog, "MESH_QUALITY_DIALOG"},
 
         {CommandType::HelpAbout, "HELP_ABOUT"},
 
@@ -122,6 +124,7 @@ inline CommandType from_string(const std::string& str) {
 
         {"NAV_CUBE_CONFIG", CommandType::NavCubeConfig},
         {"ZOOM_SPEED", CommandType::ZoomSpeed},
+        {"MESH_QUALITY_DIALOG", CommandType::MeshQualityDialog},
 
         {"HELP_ABOUT", CommandType::HelpAbout}
     };

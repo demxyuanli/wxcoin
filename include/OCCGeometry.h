@@ -1,5 +1,6 @@
 #pragma once
 
+#include "OCCMeshConverter.h"
 #include <string>
 #include <memory>
 #include <vector>
@@ -11,53 +12,52 @@
 // Forward declarations
 class SoSeparator;
 class SoTransform;
+class OCCMeshConverter;
 
 /**
- * @brief OpenCASCADE geometry object base class
- * 
- * Encapsulates OpenCASCADE TopoDS_Shape and provides integration with existing Coin3D system
+ * @brief Base class for OpenCASCADE geometry objects
  */
 class OCCGeometry {
 public:
     OCCGeometry(const std::string& name);
     virtual ~OCCGeometry();
 
-    // Basic properties
+    // Property accessors
     const std::string& getName() const { return m_name; }
     void setName(const std::string& name) { m_name = name; }
 
-    // Geometry operations
-    virtual TopoDS_Shape getShape() const { return m_shape; }
+    const TopoDS_Shape& getShape() const { return m_shape; }
     virtual void setShape(const TopoDS_Shape& shape);
-    
-    // Transform operations
-    virtual void setPosition(const gp_Pnt& position);
-    virtual void setRotation(const gp_Vec& axis, double angle);
-    virtual void setScale(double scale);
-    
-    // Display properties
-    virtual void setVisible(bool visible);
-    virtual void setSelected(bool selected);
-    virtual void setColor(const Quantity_Color& color);
-    virtual void setTransparency(double transparency);
-    
-    // State queries
-    bool isVisible() const { return m_visible; }
-    bool isSelected() const { return m_selected; }
-    const Quantity_Color& getColor() const { return m_color; }
-    double getTransparency() const { return m_transparency; }
-    
-    // Coin3D integration
-    virtual SoSeparator* getCoinNode();
-    virtual void updateCoinRepresentation();
 
-    /** Force the Coin3D representation (including edges) to rebuild */
-    void forceRefresh();
+    gp_Pnt getPosition() const { return m_position; }
+    virtual void setPosition(const gp_Pnt& position);
+
+    void getRotation(gp_Vec& axis, double& angle) const { axis = m_rotationAxis; angle = m_rotationAngle; }
+    virtual void setRotation(const gp_Vec& axis, double angle);
+
+    double getScale() const { return m_scale; }
+    virtual void setScale(double scale);
+
+    bool isVisible() const { return m_visible; }
+    virtual void setVisible(bool visible);
+
+    bool isSelected() const { return m_selected; }
+    virtual void setSelected(bool selected);
+
+    Quantity_Color getColor() const { return m_color; }
+    virtual void setColor(const Quantity_Color& color);
+
+    double getTransparency() const { return m_transparency; }
+    virtual void setTransparency(double transparency);
+
+    // Coin3D integration
+    SoSeparator* getCoinNode();
+    void regenerateMesh(const OCCMeshConverter::MeshParameters& params);
+
+private:
+    void buildCoinRepresentation(const OCCMeshConverter::MeshParameters& params = OCCMeshConverter::MeshParameters());
 
 protected:
-    virtual void buildCoinRepresentation();
-    virtual void updateMesh();
-
     std::string m_name;
     TopoDS_Shape m_shape;
     

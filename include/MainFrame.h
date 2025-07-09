@@ -50,7 +50,12 @@ enum
     
     // Navigation IDs
     ID_NAVIGATION_CUBE_CONFIG,
-    ID_ZOOM_SPEED
+    ID_ZOOM_SPEED,
+    
+    // Mesh quality control IDs
+    ID_MESH_QUALITY_DIALOG,
+    ID_LOD_ENABLE,
+    ID_LOD_CONFIG
 };
 
 /**
@@ -82,6 +87,11 @@ private:
      * @brief Create toolbar
      */
     void createToolbar();
+    
+    /**
+     * @brief Create mesh quality control dialog
+     */
+    void createMeshQualityDialog();
     
     /**
      * @brief Setup command system with dispatcher and listeners

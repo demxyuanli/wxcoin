@@ -5,6 +5,7 @@
 #include <Inventor/nodes/SoCamera.h>
 
 // Forward declarations
+class OCCViewer;
 class SceneManager;
 class InputManager;
 class ObjectTreePanel;
@@ -43,6 +44,7 @@ public:
     // External dependencies
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
+    void setOCCViewer(class OCCViewer* occViewer) { m_occViewer = occViewer; }
 
     // Scene access shortcuts
     SoCamera* getCamera() const;
@@ -74,6 +76,7 @@ private:
     // External dependencies
     ObjectTreePanel* m_objectTreePanel;
     CommandManager* m_commandManager;
+    class OCCViewer* m_occViewer;
 
     // Multi-viewport methods
     void setMultiViewportEnabled(bool enabled);

@@ -1,3 +1,8 @@
+#ifdef _WIN32
+#define _WINSOCKAPI_
+#include <windows.h>
+#endif
+
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "InputManager.h"
@@ -7,6 +12,7 @@
 #include "RenderingEngine.h"
 #include "EventCoordinator.h"
 #include "ViewportManager.h"
+#include "OCCViewer.h"
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
 #include "MultiViewportManager.h"
@@ -34,6 +40,7 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
     : wxGLCanvas(parent, id, s_canvasAttribs, pos, size, wxFULL_REPAINT_ON_RESIZE | wxWANTS_CHARS | wxBORDER_NONE)
     , m_objectTreePanel(nullptr)
     , m_commandManager(nullptr)
+    , m_occViewer(nullptr)
 {
     LOG_INF("Canvas::Canvas: Initializing");
 
@@ -174,6 +181,20 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
+    // Check if this is an interaction event that should trigger LOD
+    bool isInteractionEvent = false;
+    if (event.GetEventType() == wxEVT_LEFT_DOWN || 
+        event.GetEventType() == wxEVT_RIGHT_DOWN ||
+        event.GetEventType() == wxEVT_MOTION ||
+        event.GetEventType() == wxEVT_MOUSEWHEEL) {
+        isInteractionEvent = true;
+    }
+    
+    // Trigger LOD interaction if enabled
+    if (isInteractionEvent && m_occViewer) {
+        m_occViewer->startLODInteraction();
+    }
+    
     // Check multi-viewport first - this should have higher priority
     if (m_multiViewportEnabled && m_multiViewportManager) {
         if (m_multiViewportManager->handleMouseEvent(event)) {

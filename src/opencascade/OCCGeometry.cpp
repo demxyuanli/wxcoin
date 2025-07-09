@@ -48,55 +48,79 @@ void OCCGeometry::setShape(const TopoDS_Shape& shape)
 {
     m_shape = shape;
     m_coinNeedsUpdate = true;
-    updateCoinRepresentation();
 }
 
 void OCCGeometry::setPosition(const gp_Pnt& position)
 {
     m_position = position;
-    m_coinNeedsUpdate = true;
-    updateCoinRepresentation();
+    if (m_coinTransform) {
+        m_coinTransform->translation.setValue(
+            static_cast<float>(m_position.X()),
+            static_cast<float>(m_position.Y()),
+            static_cast<float>(m_position.Z())
+        );
+    } else {
+        m_coinNeedsUpdate = true;
+    }
 }
 
 void OCCGeometry::setRotation(const gp_Vec& axis, double angle)
 {
     m_rotationAxis = axis;
     m_rotationAngle = angle;
-    m_coinNeedsUpdate = true;
-    updateCoinRepresentation();
+    if (m_coinTransform) {
+        SbVec3f rot_axis(
+            static_cast<float>(m_rotationAxis.X()),
+            static_cast<float>(m_rotationAxis.Y()),
+            static_cast<float>(m_rotationAxis.Z())
+        );
+        m_coinTransform->rotation.setValue(rot_axis, static_cast<float>(m_rotationAngle));
+    } else {
+        m_coinNeedsUpdate = true;
+    }
 }
 
 void OCCGeometry::setScale(double scale)
 {
     m_scale = scale;
-    m_coinNeedsUpdate = true;
-    updateCoinRepresentation();
+    if (m_coinTransform) {
+        m_coinTransform->scaleFactor.setValue(
+            static_cast<float>(m_scale),
+            static_cast<float>(m_scale),
+            static_cast<float>(m_scale)
+        );
+    } else {
+        m_coinNeedsUpdate = true;
+    }
 }
 
 void OCCGeometry::setVisible(bool visible)
 {
     m_visible = visible;
-    if (m_coinNode) {
-        // Update Coin3D visibility
-        // This would typically be handled by the viewer
-    }
 }
 
 void OCCGeometry::setSelected(bool selected)
 {
     m_selected = selected;
-    if (m_coinNode) {
-        // Update Coin3D selection appearance
-        // This would typically be handled by the viewer
-    }
 }
 
 void OCCGeometry::setColor(const Quantity_Color& color)
 {
     m_color = color;
     if (m_coinNode) {
-        // Update Coin3D material
-        updateCoinRepresentation();
+        // Find the material node and update it. It might not be at a fixed index.
+        for (int i = 0; i < m_coinNode->getNumChildren(); ++i) {
+            SoNode* child = m_coinNode->getChild(i);
+            if (child && child->isOfType(SoMaterial::getClassTypeId())) {
+                SoMaterial* material = static_cast<SoMaterial*>(child);
+                material->diffuseColor.setValue(
+                    static_cast<float>(m_color.Red()),
+                    static_cast<float>(m_color.Green()),
+                    static_cast<float>(m_color.Blue())
+                );
+                break; 
+            }
+        }
     }
 }
 
@@ -104,37 +128,40 @@ void OCCGeometry::setTransparency(double transparency)
 {
     m_transparency = transparency;
     if (m_coinNode) {
-        // Update Coin3D material
-        updateCoinRepresentation();
+        // Find the material node and update it.
+        for (int i = 0; i < m_coinNode->getNumChildren(); ++i) {
+            SoNode* child = m_coinNode->getChild(i);
+            if (child && child->isOfType(SoMaterial::getClassTypeId())) {
+                SoMaterial* material = static_cast<SoMaterial*>(child);
+                material->transparency.setValue(static_cast<float>(m_transparency));
+                break;
+            }
+        }
     }
 }
 
 SoSeparator* OCCGeometry::getCoinNode()
 {
-    if (!m_coinNode) {
+    if (!m_coinNode || m_coinNeedsUpdate) {
         buildCoinRepresentation();
     }
     return m_coinNode;
 }
 
-void OCCGeometry::updateCoinRepresentation()
+void OCCGeometry::regenerateMesh(const OCCMeshConverter::MeshParameters& params)
 {
-    if (m_coinNeedsUpdate && m_coinNode) {
-        buildCoinRepresentation();
-        m_coinNeedsUpdate = false;
-    }
+    buildCoinRepresentation(params);
 }
 
-void OCCGeometry::buildCoinRepresentation()
+void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters& params)
 {
     if (m_coinNode) {
-        m_coinNode->unref();
+        m_coinNode->removeAllChildren();
+    } else {
+        m_coinNode = new SoSeparator;
+        m_coinNode->ref();
     }
     
-    m_coinNode = new SoSeparator;
-    m_coinNode->ref();
-    
-    // Create transform node
     m_coinTransform = new SoTransform;
     m_coinTransform->translation.setValue(
         static_cast<float>(m_position.X()),
@@ -142,7 +169,6 @@ void OCCGeometry::buildCoinRepresentation()
         static_cast<float>(m_position.Z())
     );
     
-    // Set rotation
     if (m_rotationAngle != 0.0) {
         SbVec3f axis(
             static_cast<float>(m_rotationAxis.X()),
@@ -152,21 +178,19 @@ void OCCGeometry::buildCoinRepresentation()
         m_coinTransform->rotation.setValue(axis, static_cast<float>(m_rotationAngle));
     }
     
-    // Set scale
     m_coinTransform->scaleFactor.setValue(
         static_cast<float>(m_scale),
         static_cast<float>(m_scale),
         static_cast<float>(m_scale)
     );
+    m_coinNode->addChild(m_coinTransform);
     
-    // Add shape hints for better rendering of imported models
     SoShapeHints* hints = new SoShapeHints;
     hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
     hints->shapeType = SoShapeHints::SOLID;
     hints->faceType = SoShapeHints::CONVEX;
     m_coinNode->addChild(hints);
     
-    // Create material with improved lighting
     SoMaterial* material = new SoMaterial;
     material->diffuseColor.setValue(
         static_cast<float>(m_color.Red()),
@@ -174,21 +198,16 @@ void OCCGeometry::buildCoinRepresentation()
         static_cast<float>(m_color.Blue())
     );
     material->transparency.setValue(static_cast<float>(m_transparency));
-    
-    // Enhanced lighting settings for brighter and softer appearance
-    material->ambientColor.setValue(0.6f, 0.6f, 0.6f);   // Brighter ambient component
-    material->specularColor.setValue(0.3f, 0.3f, 0.3f);  // Lower specular to avoid washed highlights
-    material->shininess.setValue(0.4f);                  // Moderate shininess
-    material->emissiveColor.setValue(0.2f, 0.2f, 0.2f);  // Add emission to ensure baseline brightness
-    
-    m_coinNode->addChild(m_coinTransform);
+    material->ambientColor.setValue(0.6f, 0.6f, 0.6f);
+    material->specularColor.setValue(0.3f, 0.3f, 0.3f);
+    material->shininess.setValue(0.4f);
+    material->emissiveColor.setValue(0.2f, 0.2f, 0.2f);
     m_coinNode->addChild(material);
 
-    // Attach a light-blue texture (2×2 pixels) for visual testing
     static const unsigned char texData[16] = {
         173, 216, 230, 255,   173, 216, 230, 255,
         173, 216, 230, 255,   173, 216, 230, 255
-    }; // RGBA light-blue 2x2
+    }; 
     SoTexture2* texture = new SoTexture2;
     texture->wrapS = SoTexture2::REPEAT;
     texture->wrapT = SoTexture2::REPEAT;
@@ -196,21 +215,19 @@ void OCCGeometry::buildCoinRepresentation()
     texture->image.setValue(SbVec2s(2, 2), 4, texData);
     m_coinNode->addChild(texture);
     
-    // Convert OCC shape to Coin3D mesh
     if (!m_shape.IsNull()) {
-        SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape);
+        SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape, params);
         if (meshNode) {
             m_coinNode->addChild(meshNode);
         }
     }
+
+    m_coinNeedsUpdate = false;
 }
 
-void OCCGeometry::updateMesh()
-{
-    if (!m_shape.IsNull() && m_coinNode) {
-        buildCoinRepresentation();
-    }
-}
+// All primitive classes (OCCBox, OCCCylinder, etc.) call setShape(),
+// which sets the m_coinNeedsUpdate flag. The representation will be
+// built on the next call to getCoinNode().
 
 // OCCBox implementation
 OCCBox::OCCBox(const std::string& name, double width, double height, double depth)
@@ -343,14 +360,5 @@ void OCCCone::buildShape()
         }
     } catch (const std::exception& e) {
         LOG_ERR("Failed to create cone: " + std::string(e.what()));
-    }
-}
-
-/** Force a rebuild of the Coin3D node */
-void OCCGeometry::forceRefresh()
-{
-    if (m_coinNode) {
-        m_coinNode->unref();
-        m_coinNode = nullptr;
     }
 }

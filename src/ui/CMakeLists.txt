@@ -5,6 +5,7 @@ set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ObjectTreePanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PropertyPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PositionDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
 )
 
 set(UI_HEADERS
@@ -13,6 +14,7 @@ set(UI_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ObjectTreePanel.h
     ${CMAKE_SOURCE_DIR}/include/PropertyPanel.h
     ${CMAKE_SOURCE_DIR}/include/PositionDialog.h
+    ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
 )
 
 # Create UI static library

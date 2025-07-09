@@ -294,9 +294,11 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     glEnable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_COLOR_MATERIAL);
-    //glEnable(GL_TEXTURE_2D);
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Disabling GL_COLOR_MATERIAL as it might conflict with the PHONG lighting model used by Coin3D's SoMaterial nodes.
+    // This is a likely source of GL_INVALID_ENUM when a complex lighting model is active.
+    // glEnable(GL_COLOR_MATERIAL); 
+    glEnable(GL_TEXTURE_2D);
     // Removed glTexEnvf to fix OpenGL error 1280 (GL_INVALID_ENUM)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -308,8 +310,8 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     
     // Reset OpenGL state to prevent errors
     glDisable(GL_TEXTURE_2D);
-    glDisable(GL_TEXTURE_1D);
-    // Note: GL_TEXTURE_3D and GL_TEXTURE_CUBE_MAP may not be available in all OpenGL versions
+    // Note: GL_TEXTURE_1D, GL_TEXTURE_3D and GL_TEXTURE_CUBE_MAP may not be available in all OpenGL versions
+    // Only disable texture targets that are guaranteed to be available
 
     GLint lightingEnabled = 0;
     glGetIntegerv(GL_LIGHTING, &lightingEnabled);
@@ -334,7 +336,7 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
                 ", GL_INVALID_OPERATION=" + std::to_string(GL_INVALID_OPERATION) + ")");
     }
 
-    glDisable(GL_BLEND); // Disable blending afterwards
+    // glDisable(GL_BLEND); // Disable blending afterwards
 }
 
 void SceneManager::updateAspectRatio(const wxSize& size) {

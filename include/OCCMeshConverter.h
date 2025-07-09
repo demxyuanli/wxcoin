@@ -78,11 +78,11 @@ public:
 
     // Coin3D node creation
     static SoSeparator* createCoinNode(const TriangleMesh& mesh);
-    static SoSeparator* createCoinNode(const TopoDS_Shape& shape, double deflection = 0.1);
+    static SoSeparator* createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
     
     // Update existing Coin3D nodes
     static void updateCoinNode(SoSeparator* node, const TriangleMesh& mesh);
-    static void updateCoinNode(SoSeparator* node, const TopoDS_Shape& shape, double deflection = 0.1);
+    static void updateCoinNode(SoSeparator* node, const TopoDS_Shape& shape, const MeshParameters& params);
 
     // Mesh export
     static bool exportToSTL(const TriangleMesh& mesh, const std::string& filename, bool binary = true);
