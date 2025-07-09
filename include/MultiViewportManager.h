@@ -2,24 +2,29 @@
 
 #include <wx/glcanvas.h>
 #include <wx/gdicmn.h>
-
-
+#include <memory>
+#include <map>
 #include <Inventor/nodes/SoSeparator.h>
-
-
+#include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoMaterial.h>
-
-
-
-
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoLineSet.h>
+#include <Inventor/nodes/SoText2.h>
+#include <Inventor/actions/SoGLRenderAction.h>  // Add this include
+#include <Inventor/nodes/SoEventCallback.h>
+#include <Inventor/events/SoMouseButtonEvent.h>
+#include <Inventor/events/SoLocation2Event.h>
 #include <Inventor/actions/SoRayPickAction.h>
-
+#include <Inventor/nodes/SoShape.h>
 #include <Inventor/nodes/SoSphere.h>
-
-
+#include <Inventor/nodes/SoCone.h>
+#include <Inventor/nodes/SoCylinder.h>
+#include <Inventor/nodes/SoIndexedFaceSet.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/SbName.h>
 
 // Forward declarations
@@ -78,16 +83,26 @@ private:
     void renderCubeOutline();
     void renderCoordinateSystem();
     
+    void setViewport(const ViewportInfo& viewport);
+    void syncCameraWithMain(SoCamera* targetCamera);
 
-
-
-    // Shape creation methods
+    // Navigation shapes creation methods
+    void createNavigationShapes();
+    void createTopArrow();
+    void createSideArrows();
+    void createBottomTriangle();
     void createTopRightCircle(float scale);
+    void createLeftRightTriangles(float scale);
     void createSmallCube(float scale);
     void createCurvedArrow(int dir, float scale);
+    void createSideTriangle(int dir);
     void createEquilateralTriangle(float x, float y, float angleRad);
     
     // Event handling methods
+    static void onMouseEvent(void* userData, SoEventCallback* node);
+    void handleShapeClick(const std::string& shapeName);
+    void handleShapeHover(const std::string& shapeName, bool isHovering);
+    void addEventCallbackToShape(SoSeparator* shapeRoot, const std::string& shapeName);
     std::string findShapeNameFromPath(SoPath* path);
     
     Canvas* m_canvas;
@@ -109,10 +124,14 @@ private:
     float m_dpiScale;
     bool m_initialized;  // Add this flag
     
+    // Shape name mapping for click detection
+    std::map<std::string, std::string> m_shapeNames; // position -> shape name
+    
     // Composite shape management
     struct CompositeShape {
         SoSeparator* rootNode;
         std::string shapeName;
+        std::vector<SoNode*> childNodes;
         
         CompositeShape(SoSeparator* root, const std::string& name) 
             : rootNode(root), shapeName(name) {}

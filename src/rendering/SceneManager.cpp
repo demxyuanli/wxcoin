@@ -297,7 +297,7 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_COLOR_MATERIAL);
     //glEnable(GL_TEXTURE_2D);
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); // Combine texture with material
+    // Removed glTexEnvf to fix OpenGL error 1280 (GL_INVALID_ENUM)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Reset OpenGL errors before rendering
@@ -305,6 +305,11 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     while ((err = glGetError()) != GL_NO_ERROR) {
         LOG_ERR("Pre-render: OpenGL error: " + std::to_string(err));
     }
+    
+    // Reset OpenGL state to prevent errors
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_TEXTURE_1D);
+    // Note: GL_TEXTURE_3D and GL_TEXTURE_CUBE_MAP may not be available in all OpenGL versions
 
     GLint lightingEnabled = 0;
     glGetIntegerv(GL_LIGHTING, &lightingEnabled);
@@ -323,7 +328,10 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 
     // Check for OpenGL errors after rendering
     while ((err = glGetError()) != GL_NO_ERROR) {
-        LOG_ERR("Post-render: OpenGL error: " + std::to_string(err));
+        LOG_ERR("Post-render: OpenGL error: " + std::to_string(err) + 
+                " (GL_INVALID_ENUM=" + std::to_string(GL_INVALID_ENUM) + 
+                ", GL_INVALID_VALUE=" + std::to_string(GL_INVALID_VALUE) + 
+                ", GL_INVALID_OPERATION=" + std::to_string(GL_INVALID_OPERATION) + ")");
     }
 
     glDisable(GL_BLEND); // Disable blending afterwards

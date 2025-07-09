@@ -77,8 +77,8 @@ void MultiViewportManager::initializeViewports() {
     m_margin = dpiManager.getScaledSize(20);
     
     // Initialize viewport layouts (will be updated in handleSizeChange)
-    m_viewports[VIEWPORT_NAVIGATION_CUBE] = ViewportInfo(0, 0, 120, 120, true);
-    m_viewports[VIEWPORT_CUBE_OUTLINE] = ViewportInfo(0, 0, 200, 200, true);
+    m_viewports[VIEWPORT_NAVIGATION_CUBE] = ViewportInfo(0, 0, 100, 100, true);
+    m_viewports[VIEWPORT_CUBE_OUTLINE] = ViewportInfo(0, 0, 300, 300, true);
     m_viewports[VIEWPORT_COORDINATE_SYSTEM] = ViewportInfo(0, 0, 100, 100, true);
 }
 
@@ -564,7 +564,6 @@ void MultiViewportManager::createCoordinateSystemScene() {
 }
 
 void MultiViewportManager::render() {
-    LOG_DBG("MultiViewportManager::render - Starting render");
     
     if (!m_canvas || !m_sceneManager) {
         LOG_WRN("MultiViewportManager::render - Canvas or SceneManager is null");
@@ -577,50 +576,42 @@ void MultiViewportManager::render() {
             createCubeOutlineScene();
             createCoordinateSystemScene();
             m_initialized = true;
-            LOG_INF("MultiViewportManager: Scene graphs initialized successfully");
         } catch (const std::exception& e) {
             LOG_ERR("MultiViewportManager: Failed to initialize scene graphs: " + std::string(e.what()));
             return;
         }
     }
     
-    // Log viewport status for debugging
-    LOG_DBG("MultiViewportManager: render() called - Canvas size: " + 
-            std::to_string(m_canvas->GetClientSize().x) + "x" + 
-            std::to_string(m_canvas->GetClientSize().y));
+
     
     if (m_viewports[VIEWPORT_CUBE_OUTLINE].enabled) {
-        LOG_DBG("MultiViewportManager: Cube outline viewport - x:" + 
-                std::to_string(m_viewports[VIEWPORT_CUBE_OUTLINE].x) + 
-                " y:" + std::to_string(m_viewports[VIEWPORT_CUBE_OUTLINE].y) + 
-                " w:" + std::to_string(m_viewports[VIEWPORT_CUBE_OUTLINE].width) + 
-                " h:" + std::to_string(m_viewports[VIEWPORT_CUBE_OUTLINE].height));
         renderCubeOutline();
     }
 
     if (m_viewports[VIEWPORT_COORDINATE_SYSTEM].enabled) {
-        LOG_DBG("MultiViewportManager: Coordinate system viewport - x:" + 
-                std::to_string(m_viewports[VIEWPORT_COORDINATE_SYSTEM].x) + 
-                " y:" + std::to_string(m_viewports[VIEWPORT_COORDINATE_SYSTEM].y) + 
-                " w:" + std::to_string(m_viewports[VIEWPORT_COORDINATE_SYSTEM].width) + 
-                " h:" + std::to_string(m_viewports[VIEWPORT_COORDINATE_SYSTEM].height));
         renderCoordinateSystem();
     }
 
     if (m_viewports[VIEWPORT_NAVIGATION_CUBE].enabled && m_navigationCubeManager) {
-        LOG_DBG("MultiViewportManager: Rendering navigation cube");
         renderNavigationCube();
     }
 }
 
 void MultiViewportManager::renderNavigationCube() {
     if (m_navigationCubeManager) {
+        // Render navigation cube first - it has its own positioning logic
         m_navigationCubeManager->render();
+        
+        // Note: The green border is temporarily disabled because NavigationCubeManager
+        // has its own independent layout system that doesn't use MultiViewportManager's viewport.
+        // The actual CuteNavCube position is controlled by NavigationCubeManager::m_cubeLayout,
+        // not by m_viewports[VIEWPORT_NAVIGATION_CUBE].
+        
+        // TODO: Sync the two positioning systems if border visualization is needed
     }
 }
 
 void MultiViewportManager::renderCubeOutline() {
-    LOG_DBG("MultiViewportManager: Rendering cube outline viewport");
 
     if (!m_cubeOutlineRoot || !m_cubeOutlineCamera) {
         LOG_WRN("MultiViewportManager: Cube outline scene not initialized");
@@ -654,7 +645,6 @@ void MultiViewportManager::renderCubeOutline() {
 }
 
 void MultiViewportManager::renderCoordinateSystem() {
-    LOG_DBG("MultiViewportManager: Rendering coordinate system viewport");
 
     if (!m_coordinateSystemRoot || !m_coordinateSystemCamera) {
         LOG_WRN("MultiViewportManager: Coordinate system scene not initialized");
@@ -699,7 +689,7 @@ void MultiViewportManager::updateViewportLayouts(const wxSize& canvasSize) {
     int margin = static_cast<int>(m_margin * m_dpiScale);
     
     // Navigation cube (top-right)
-    int cubeSize = static_cast<int>(100 * m_dpiScale);
+    int cubeSize = static_cast<int>(80 * m_dpiScale);
     m_viewports[VIEWPORT_NAVIGATION_CUBE] = ViewportInfo(
         canvasSize.x - cubeSize - margin,
         canvasSize.y - cubeSize - margin,
@@ -707,7 +697,7 @@ void MultiViewportManager::updateViewportLayouts(const wxSize& canvasSize) {
         cubeSize
     );
     
-    int outlineSize = static_cast<int>(100 * m_dpiScale);
+    int outlineSize = static_cast<int>(120 * m_dpiScale);
     m_viewports[VIEWPORT_CUBE_OUTLINE] = ViewportInfo(
         canvasSize.x - outlineSize - margin, 
         margin,                             
@@ -732,33 +722,42 @@ void MultiViewportManager::handleDPIChange() {
 }
 
 bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
-    // Check if mouse is in any viewport and handle accordingly
+    wxSize canvasSize = m_canvas->GetClientSize();
     float x = event.GetX();
-    float y = event.GetY();
+    float y_wx = event.GetY();
+    float y = canvasSize.y - y_wx; 
+
     
-    // Check navigation cube viewport
-    if (m_viewports[VIEWPORT_NAVIGATION_CUBE].enabled && m_navigationCubeManager) {
-        ViewportInfo& viewport = m_viewports[VIEWPORT_NAVIGATION_CUBE];
-        if (x >= viewport.x && x < (viewport.x + viewport.width) &&
-            y >= viewport.y && y < (viewport.y + viewport.height)) {
-            return m_navigationCubeManager->handleMouseEvent(event);
-        }
-    }
-    
-    // Check cube outline viewport
+    // Priority 1: Check navigation cube viewport first
+    // Note: NavigationCubeManager uses wxWidgets coordinate system (top-left origin)
+    if (m_navigationCubeManager) {
+        bool handled = m_navigationCubeManager->handleMouseEvent(event);
+        if (handled) {
+            return true; // NavigationCubeManager handled the event
+        } 
+    } 
+
+    // Priority 2: Check cube outline viewport only if mouse is NOT in navigation cube viewport
     if (m_viewports[VIEWPORT_CUBE_OUTLINE].enabled && m_cubeOutlineRoot) {
-        ViewportInfo& viewport = m_viewports[VIEWPORT_CUBE_OUTLINE];
+        ViewportInfo& outlineViewport = m_viewports[VIEWPORT_CUBE_OUTLINE];
         
-        if (x >= viewport.x && x <= (viewport.x + viewport.width) &&
-            y >= viewport.y && y <= (viewport.y + viewport.height)) {
-            
-            // Convert wx coordinates to Open Inventor viewport-local coordinates (left-bottom origin)
-            int localX = static_cast<int>(x) - viewport.x;
-            int localY = static_cast<int>(y) - viewport.y;
-            int pickY = viewport.height - 1 - localY;
+        // Calculate the actual rendering position (convert to OpenGL coordinates)
+        int actualYBottom = canvasSize.y - outlineViewport.y - outlineViewport.height;
+        int actualYTop = actualYBottom + outlineViewport.height;
+        
+        
+        bool xInRange = (x >= outlineViewport.x && x < (outlineViewport.x + outlineViewport.width));
+        bool yInRange = (y >= actualYBottom && y < actualYTop);
+        
+        if (xInRange && yInRange) {
+
+            // Convert gl coordinates to Open Inventor viewport-local coordinates (left-bottom origin)
+            int localX = static_cast<int>(x) - outlineViewport.x;
+            int localY = static_cast<int>(y) - actualYBottom;
+            int pickY = localY;  // y is already in bottom-up coordinate system
 
             // Use viewport region matching the cube outline viewport only
-            SbViewportRegion viewportRegion(viewport.width, viewport.height);
+            SbViewportRegion viewportRegion(outlineViewport.width, outlineViewport.height);
             SbVec2s pickPoint(localX, pickY);
 
             if (event.LeftDown()) {
@@ -774,11 +773,8 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
                     if (path) {
                         std::string clickedShape = findShapeNameFromPath(path);
                         LOG_INF(clickedShape + " clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
-                    } else {
-                        LOG_INF("Unknown geometry clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
                     }
-                } else {
-                    LOG_INF("No geometry picked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+
                 }
 
                 return true;
@@ -795,8 +791,17 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
         }
     }
     
-    // Add handling for other viewports if needed
+    // Priority 3: Check coordinate system viewport if needed
+    if (m_viewports[VIEWPORT_COORDINATE_SYSTEM].enabled) {
+        ViewportInfo& coordViewport = m_viewports[VIEWPORT_COORDINATE_SYSTEM];
+        if (x >= coordViewport.x && x < (coordViewport.x + coordViewport.width) &&
+            y >= coordViewport.y && y < (coordViewport.y + coordViewport.height)) {
+            // Handle coordinate system viewport events here if needed
+            return true;
+        }
+    }
     
+    // Mouse is not in any viewport
     return false;
 }
 

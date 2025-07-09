@@ -45,6 +45,6 @@ private:
 
     std::unique_ptr<CuteNavCube> m_navCube;
     bool m_isEnabled;
-    float m_marginx = 20.0f;
-    float m_marginy = 20.0f;
+    float m_marginx = 40.0f;
+    float m_marginy = 40.0f;
 }; 
