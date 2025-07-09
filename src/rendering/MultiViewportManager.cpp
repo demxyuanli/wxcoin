@@ -19,18 +19,18 @@
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoText2.h>
+#include <Inventor/nodes/SoPickStyle.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoRayPickAction.h>
-#include <Inventor/nodes/SoEventCallback.h>
+
 #include <Inventor/nodes/SoNode.h>
-#include <Inventor/events/SoMouseButtonEvent.h>
-#include <Inventor/events/SoLocation2Event.h>
-#include <Inventor/events/SoButtonEvent.h>
 #include <Inventor/SbViewportRegion.h>
 #include <Inventor/SbRotation.h>
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbVec2f.h>
 #include <Inventor/SbVec2s.h>
+#include <Inventor/lists/SoPickedPointList.h>
+#include <Inventor/SoPickedPoint.h>
 #include <GL/gl.h>
 #include <cmath>
 #include <vector>
@@ -40,32 +40,29 @@ MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneMa
     , m_sceneManager(sceneManager)
     , m_navigationCubeManager(nullptr)
     , m_cubeOutlineRoot(nullptr)
-    , m_coordinateSystemRoot(nullptr)
     , m_cubeOutlineCamera(nullptr)
+    , m_coordinateSystemRoot(nullptr)
     , m_coordinateSystemCamera(nullptr)
-    , m_margin(10)
+    , m_margin(20)
     , m_dpiScale(1.0f)
-    , m_initialized(false) 
-{
+    , m_initialized(false) {
     LOG_INF("MultiViewportManager: Initializing");
+    
+    if (!m_canvas) {
+        LOG_ERR("MultiViewportManager: Canvas is null");
+    }
+    if (!m_sceneManager) {
+        LOG_ERR("MultiViewportManager: SceneManager is null");
+    }
+    
     initializeViewports();
+    LOG_INF("MultiViewportManager: Initialization completed");
 }
 
 MultiViewportManager::~MultiViewportManager() {
     LOG_INF("MultiViewportManager: Destroyed");
     
     if (m_cubeOutlineRoot) {
-        // Clean up user data from event callbacks
-        for (int i = 0; i < m_cubeOutlineRoot->getNumChildren(); ++i) {
-            SoNode* child = m_cubeOutlineRoot->getChild(i);
-            if (child->isOfType(SoEventCallback::getClassTypeId())) {
-                SoEventCallback* callback = static_cast<SoEventCallback*>(child);
-                std::string* userData = static_cast<std::string*>(callback->getUserData());
-                if (userData) {
-                    delete userData;
-                }
-            }
-        }
         m_cubeOutlineRoot->unref();
     }
     
@@ -87,6 +84,12 @@ void MultiViewportManager::initializeViewports() {
 
 void MultiViewportManager::createEquilateralTriangle(float x, float y, float angleRad) {
     SoSeparator* triSep = new SoSeparator;
+    
+    // Enable picking for this shape
+    SoPickStyle* pickStyle = new SoPickStyle;
+    pickStyle->style.setValue(SoPickStyle::SHAPE);
+    triSep->addChild(pickStyle);
+    
     SoMaterial* material = new SoMaterial;
     material->diffuseColor.setValue(0.8f, 0.8f, 0.8f);
     triSep->addChild(material);
@@ -109,11 +112,27 @@ void MultiViewportManager::createEquilateralTriangle(float x, float y, float ang
 
     SoFaceSet* faceSet = new SoFaceSet;
     faceSet->numVertices.setValue(3);
+    
+    // Determine triangle name based on position
+    std::string triangleName;
+    if (y > 0) {
+        triangleName = "Top Triangle";
+    } else if (y < 0) {
+        triangleName = "Bottom Triangle";
+    } else if (x < 0) {
+        triangleName = "Left Triangle";
+    } else {
+        triangleName = "Right Triangle";
+    }
+    
+    // Set the name on the root separator for easier identification
+    triSep->setName(triangleName.c_str());
+    
     triSep->addChild(faceSet);
-
-    // Add event callback for mouse interaction
-    std::string shapeName = "triangle_" + std::to_string(static_cast<int>(x)) + "_" + std::to_string(static_cast<int>(y));
-    addEventCallbackToShape(triSep, shapeName);
+    
+    // Store as composite shape
+    CompositeShape compositeShape(triSep, triangleName);
+    m_compositeShapes.push_back(compositeShape);
 
     m_cubeOutlineRoot->addChild(triSep);
 }
@@ -140,93 +159,36 @@ void MultiViewportManager::createCubeOutlineScene() {
     createCurvedArrow(2, scale); 
     createTopRightCircle(scale);
     createSmallCube(scale);
-}
-
-void MultiViewportManager::createNavigationShapes() {
-}
-
-
-void addOutline(SoSeparator* parent, const std::vector<SbVec3f>& points, bool closed = true) {
-    SoMaterial* lineMat = new SoMaterial;
-    lineMat->diffuseColor.setValue(0, 0, 0);
-    parent->addChild(lineMat);
-    SoDrawStyle* style = new SoDrawStyle;
-    style->lineWidth = 2;
-    parent->addChild(style);
-    SoCoordinate3* coords = new SoCoordinate3;
-    coords->point.setValues(0, points.size(), points.data());
-    parent->addChild(coords);
-    SoLineSet* line = new SoLineSet;
-    if (closed) line->numVertices.setValue(points.size());
-    else line->numVertices.setValue(points.size());
-    parent->addChild(line);
-}
-
-void MultiViewportManager::createTopArrow() {
-    SoSeparator* arrowSep = new SoSeparator;
-    SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(0.8f, 0.8f, 0.8f);
-    arrowSep->addChild(material);
-    SoTransform* transform = new SoTransform;
-    transform->translation.setValue(0, 2.7f, 0);
-    arrowSep->addChild(transform);
-    SbVec3f pts[3] = {
-        SbVec3f(-0.5f, -0.3f, 0), SbVec3f(0.5f, -0.3f, 0), SbVec3f(0.0f, 0.5f, 0)
-    };
-    SoCoordinate3* coords = new SoCoordinate3;
-    coords->point.setValues(0, 3, pts);
-    arrowSep->addChild(coords);
-    SoFaceSet* faceSet = new SoFaceSet;
-    faceSet->numVertices.setValue(3);
-    arrowSep->addChild(faceSet);
-    m_cubeOutlineRoot->addChild(arrowSep);
-}
-
-void MultiViewportManager::createBottomTriangle() {
-    SoSeparator* triangleSep = new SoSeparator;
-    SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(0.8f, 0.8f, 0.8f);
-    triangleSep->addChild(material);
-    SoTransform* transform = new SoTransform;
-    transform->translation.setValue(0, -2.7f, 0);
-    triangleSep->addChild(transform);
-    SbVec3f pts[3] = {
-        SbVec3f(-0.5f, 0.3f, 0), SbVec3f(0.5f, 0.3f, 0), SbVec3f(0.0f, -0.5f, 0)
-    };
-    SoCoordinate3* coords = new SoCoordinate3;
-    coords->point.setValues(0, 3, pts);
-    triangleSep->addChild(coords);
-    SoFaceSet* faceSet = new SoFaceSet;
-    faceSet->numVertices.setValue(3);
-    triangleSep->addChild(faceSet);
-    m_cubeOutlineRoot->addChild(triangleSep);
-}
-
-void MultiViewportManager::createSideTriangle(int dir) {
-    SoSeparator* triSep = new SoSeparator;
-    SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(0.8f, 0.8f, 0.8f);
-    triSep->addChild(material);
-    SoTransform* transform = new SoTransform;
-    transform->translation.setValue(2.8f * dir, 0, 0);
-    triSep->addChild(transform);
-    SbVec3f pts[3];
-    if (dir < 0) {
-        pts[0] = SbVec3f(0.3f, -0.4f, 0); pts[1] = SbVec3f(0.3f, 0.4f, 0); pts[2] = SbVec3f(-0.3f, 0.0f, 0);
-    } else {
-        pts[0] = SbVec3f(-0.3f, -0.4f, 0); pts[1] = SbVec3f(-0.3f, 0.4f, 0); pts[2] = SbVec3f(0.3f, 0.0f, 0);
+    
+    // Debug: Print all composite shapes
+    LOG_INF("Created composite shapes:");
+    for (const auto& compositeShape : m_compositeShapes) {
+        LOG_INF("  " + compositeShape.shapeName);
     }
-    SoCoordinate3* coords = new SoCoordinate3;
-    coords->point.setValues(0, 3, pts);
-    triSep->addChild(coords);
-    SoFaceSet* faceSet = new SoFaceSet;
-    faceSet->numVertices.setValue(3);
-    triSep->addChild(faceSet);
-    m_cubeOutlineRoot->addChild(triSep);
 }
+
+
 
 void MultiViewportManager::createCurvedArrow(int dir, float scale) {
     SoSeparator* arrowSep = new SoSeparator;
+    
+    // Enable picking for this shape
+    SoPickStyle* pickStyle = new SoPickStyle;
+    pickStyle->style.setValue(SoPickStyle::SHAPE);
+    arrowSep->addChild(pickStyle);
+    
+    // Determine arrow name based on direction
+    std::string arrowName;
+    switch (dir) {
+        case -1: arrowName = "Top Left Arrow"; break;
+        case 1: arrowName = "Top Right Arrow"; break;
+        case -2: arrowName = "Bottom Left Arrow"; break;
+        case 2: arrowName = "Bottom Right Arrow"; break;
+        default: arrowName = "Unknown Arrow"; break;
+    }
+    
+    // Set the name on the root separator for easier identification
+    arrowSep->setName(arrowName.c_str());
     if (dir == -1) {
         float radius = 2.7f * scale;
         float startAngle = 110.0f * M_PI / 180.0f; 
@@ -268,6 +230,7 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
         headSep->addChild(headCoords);
         SoFaceSet* headFace = new SoFaceSet;
         headFace->numVertices.setValue(3);
+        headFace->setName("Top Arrow Head");
         headSep->addChild(headFace);
         arrowSep->addChild(headSep);
     } else if (dir == 1) {
@@ -289,6 +252,7 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
         arrowSep->addChild(arcStyle);
         SoLineSet* arcLine = new SoLineSet;
         arcLine->numVertices.setValue(arcPoints.size());
+        arcLine->setName("Bottom Arrow Line");
         arrowSep->addChild(arcLine);
         float ex = radius * cos(endAngle);
         float ey = radius * sin(endAngle);
@@ -311,6 +275,7 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
         headSep->addChild(headCoords);
         SoFaceSet* headFace = new SoFaceSet;
         headFace->numVertices.setValue(3);
+        headFace->setName("Bottom Arrow Head");
         headSep->addChild(headFace);
         arrowSep->addChild(headSep);
     }
@@ -333,6 +298,7 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
         arrowSep->addChild(arcStyle);
         SoLineSet* arcLine = new SoLineSet;
         arcLine->numVertices.setValue(arcPoints.size());
+        arcLine->setName("Left Arrow Line");
         arrowSep->addChild(arcLine);
         float ex = radius * cos(endAngle);
         float ey = radius * sin(endAngle);
@@ -355,6 +321,7 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
         headSep->addChild(headCoords);
         SoFaceSet* headFace = new SoFaceSet;
         headFace->numVertices.setValue(3);
+        headFace->setName("Left Arrow Head");
         headSep->addChild(headFace);
         arrowSep->addChild(headSep);
     }
@@ -377,6 +344,7 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
         arrowSep->addChild(arcStyle);
         SoLineSet* arcLine = new SoLineSet;
         arcLine->numVertices.setValue(arcPoints.size());
+        arcLine->setName("Right Arrow Line");
         arrowSep->addChild(arcLine);
         float ex = radius * cos(endAngle);
         float ey = radius * sin(endAngle);
@@ -399,19 +367,26 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
     headSep->addChild(headCoords);
     SoFaceSet* headFace = new SoFaceSet;
     headFace->numVertices.setValue(3);
+    headFace->setName("Right Arrow Head");
     headSep->addChild(headFace);
     arrowSep->addChild(headSep);
     }
     
-    // Add event callback for mouse interaction
-    std::string shapeName = "curved_arrow_" + std::to_string(dir);
-    addEventCallbackToShape(arrowSep, shapeName);
+    // Store as composite shape
+    CompositeShape compositeShape(arrowSep, arrowName);
+    m_compositeShapes.push_back(compositeShape);
     
     m_cubeOutlineRoot->addChild(arrowSep);
 }
 
 void MultiViewportManager::createTopRightCircle(float scale) {
     SoSeparator* sphereSep = new SoSeparator;
+    
+    // Enable picking for this shape
+    SoPickStyle* pickStyle = new SoPickStyle;
+    pickStyle->style.setValue(SoPickStyle::SHAPE);
+    sphereSep->addChild(pickStyle);
+    
     SoMaterial* mat = new SoMaterial;
     mat->diffuseColor.setValue(0.8f, 1.0f, 0.8f);
     sphereSep->addChild(mat);
@@ -423,14 +398,23 @@ void MultiViewportManager::createTopRightCircle(float scale) {
     sphere->radius = 1.0f * scale;
     sphereSep->addChild(sphere);
     
-    // Add event callback for mouse interaction
-    addEventCallbackToShape(sphereSep, "sphere");
+    // Set the name on the root separator for easier identification
+    sphereSep->setName("Sphere");
+    
+    // Store as composite shape
+    CompositeShape compositeShape(sphereSep, "Sphere");
+    m_compositeShapes.push_back(compositeShape);
     
     m_cubeOutlineRoot->addChild(sphereSep);
 }
 
 void MultiViewportManager::createSmallCube(float scale) {
     SoSeparator* cubeSep = new SoSeparator;
+
+    // Enable picking for this shape
+    SoPickStyle* pickStyle = new SoPickStyle;
+    pickStyle->style.setValue(SoPickStyle::SHAPE);
+    cubeSep->addChild(pickStyle);
 
     SoMaterial* mat = new SoMaterial;
     mat->diffuseColor.setValue(0.8f, 1.0f, 0.8f);
@@ -476,8 +460,12 @@ void MultiViewportManager::createSmallCube(float scale) {
     edgeLines->coordIndex.setValues(0, 25, edgeIdx);
     cubeSep->addChild(edgeLines);
 
-    // Add event callback for mouse interaction
-    addEventCallbackToShape(cubeSep, "cube");
+    // Set the name on the root separator for easier identification
+    cubeSep->setName("Cube");
+
+    // Store as composite shape
+    CompositeShape compositeShape(cubeSep, "Cube");
+    m_compositeShapes.push_back(compositeShape);
 
     m_cubeOutlineRoot->addChild(cubeSep);
 }
@@ -576,7 +564,10 @@ void MultiViewportManager::createCoordinateSystemScene() {
 }
 
 void MultiViewportManager::render() {
+    LOG_DBG("MultiViewportManager::render - Starting render");
+    
     if (!m_canvas || !m_sceneManager) {
+        LOG_WRN("MultiViewportManager::render - Canvas or SceneManager is null");
         return;
     }
     
@@ -698,16 +689,7 @@ void MultiViewportManager::renderCoordinateSystem() {
     glPopAttrib();
 }
 
-void MultiViewportManager::syncCameraWithMain(SoCamera* targetCamera) {
-    if (!targetCamera || !m_sceneManager) {
-        return;
-    }
-    
-    SoCamera* mainCamera = m_sceneManager->getCamera();
-    if (mainCamera) {
-        targetCamera->orientation.setValue(mainCamera->orientation.getValue());
-    }
-}
+
 
 void MultiViewportManager::handleSizeChange(const wxSize& canvasSize) {
     updateViewportLayouts(canvasSize);
@@ -766,24 +748,50 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
     // Check cube outline viewport
     if (m_viewports[VIEWPORT_CUBE_OUTLINE].enabled && m_cubeOutlineRoot) {
         ViewportInfo& viewport = m_viewports[VIEWPORT_CUBE_OUTLINE];
-        if (x >= viewport.x && x < (viewport.x + viewport.width) &&
-            y >= viewport.y && y < (viewport.y + viewport.height)) {
-            // Convert wx coordinates to Open Inventor coordinates
-            wxSize canvasSize = m_canvas->GetClientSize();
-            int yBottom = canvasSize.y - viewport.y - viewport.height;
+        
+        if (x >= viewport.x && x <= (viewport.x + viewport.width) &&
+            y >= viewport.y && y <= (viewport.y + viewport.height)) {
             
-            SbViewportRegion viewportRegion;
-            viewportRegion.setWindowSize(SbVec2s(canvasSize.x, canvasSize.y));
-            viewportRegion.setViewportPixels(viewport.x, yBottom, viewport.width, viewport.height);
-            
-            // Create a pick action to handle mouse events
-            SoRayPickAction pickAction(viewportRegion);
-            SbVec2s mousePos(static_cast<short>(x), static_cast<short>(y));
-            pickAction.setPoint(mousePos);
-            pickAction.apply(m_cubeOutlineRoot);
-            
-            // The actual event handling is done by the SoEventCallback nodes
-            return true;
+            // Convert wx coordinates to Open Inventor viewport-local coordinates (left-bottom origin)
+            int localX = static_cast<int>(x) - viewport.x;
+            int localY = static_cast<int>(y) - viewport.y;
+            int pickY = viewport.height - 1 - localY;
+
+            // Use viewport region matching the cube outline viewport only
+            SbViewportRegion viewportRegion(viewport.width, viewport.height);
+            SbVec2s pickPoint(localX, pickY);
+
+            if (event.LeftDown()) {
+                LOG_INF("Mouse left down in cube outline viewport at (" + std::to_string(x) + ", " + std::to_string(y) + ") [local: (" + std::to_string(localX) + ", " + std::to_string(localY) + ", pick: (" + std::to_string(pickPoint[0]) + ", " + std::to_string(pickPoint[1]) + ")]");
+
+                SoRayPickAction pickAction(viewportRegion);
+                pickAction.setPoint(pickPoint);
+                pickAction.apply(m_cubeOutlineRoot);
+
+                SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
+                if (pickedPoint) {
+                    SoPath* path = pickedPoint->getPath();
+                    if (path) {
+                        std::string clickedShape = findShapeNameFromPath(path);
+                        LOG_INF(clickedShape + " clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+                    } else {
+                        LOG_INF("Unknown geometry clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+                    }
+                } else {
+                    LOG_INF("No geometry picked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+                }
+
+                return true;
+            }
+            else if (event.LeftUp()) {
+                return true;
+            }
+            else if (event.Moving()) {
+                return true;
+            }
+            else {
+                return true;
+            }
         }
     }
     
@@ -838,56 +846,53 @@ void MultiViewportManager::syncCoordinateSystemCameraToMain() {
     }
 }
 
-void MultiViewportManager::onMouseEvent(void* userData, SoEventCallback* node) {
-    MultiViewportManager* manager = static_cast<MultiViewportManager*>(userData);
-    const SoEvent* event = node->getEvent();
+
+
+std::string MultiViewportManager::findShapeNameFromPath(SoPath* path) {
+    if (!path) return "Unknown";
     
-    if (!event) return;
-    
-    // Get shape name from user data
-    std::string* shapeNamePtr = static_cast<std::string*>(node->getUserData());
-    if (!shapeNamePtr) return;
-    
-    std::string shapeName = *shapeNamePtr;
-    
-    if (event->isOfType(SoMouseButtonEvent::getClassTypeId())) {
-        const SoMouseButtonEvent* mouseEvent = static_cast<const SoMouseButtonEvent*>(event);
-        
-        if (mouseEvent->getButton() == SoMouseButtonEvent::BUTTON1 && 
-            mouseEvent->getState() == SoButtonEvent::DOWN) {
-            // Left button click
-            manager->handleShapeClick(shapeName);
-            node->setHandled();
+    // First, try to find a named separator in the path
+    for (int i = 0; i < path->getLength(); i++) {
+        SoNode* node = path->getNode(i);
+        if (node && node->isOfType(SoSeparator::getClassTypeId())) {
+            SbName name = node->getName();
+            if (name != "") {
+                return std::string(name.getString());
+            }
         }
     }
-    else if (event->isOfType(SoLocation2Event::getClassTypeId())) {
-        // Mouse movement (hover)
-        manager->handleShapeHover(shapeName, true);
+    
+    // If no named separator found, try to identify by composite shape
+    for (const auto& compositeShape : m_compositeShapes) {
+        // Check if any node in the path is the root node of this composite shape
+        for (int i = 0; i < path->getLength(); i++) {
+            SoNode* pathNode = path->getNode(i);
+            if (pathNode == compositeShape.rootNode) {
+                return compositeShape.shapeName;
+            }
+        }
     }
-}
-
-void MultiViewportManager::handleShapeClick(const std::string& shapeName) {
-    LOG_INF("CubeOutline shape clicked: " + shapeName);
-}
-
-void MultiViewportManager::handleShapeHover(const std::string& shapeName, bool isHovering) {
-    if (isHovering) {
-        LOG_DBG("CubeOutline shape hover: " + shapeName);
+    
+    // Fallback: try to identify by shape type
+    for (int i = 0; i < path->getLength(); i++) {
+        SoNode* node = path->getNode(i);
+        if (node) {
+            if (node->isOfType(SoSphere::getClassTypeId())) {
+                return "Sphere";
+            } else if (node->isOfType(SoCube::getClassTypeId())) {
+                return "Cube";
+            }
+        }
     }
-}
-
-void MultiViewportManager::addEventCallbackToShape(SoSeparator* shapeRoot, const std::string& shapeName) {
-    if (!shapeRoot) return;
     
-    // Create event callback node
-    SoEventCallback* eventCallback = new SoEventCallback;
-    eventCallback->addEventCallback(SoMouseButtonEvent::getClassTypeId(), onMouseEvent, this);
-    eventCallback->addEventCallback(SoLocation2Event::getClassTypeId(), onMouseEvent, this);
+    // If we can't identify the shape, try to get more information
+    LOG_DBG("Could not identify shape from path, path length: " + std::to_string(path->getLength()));
+    for (int i = 0; i < path->getLength(); i++) {
+        SoNode* node = path->getNode(i);
+        if (node) {
+            LOG_DBG("  Node " + std::to_string(i) + ": " + node->getTypeId().getName().getString());
+        }
+    }
     
-    // Store shape name as user data
-    std::string* shapeNamePtr = new std::string(shapeName);
-    eventCallback->setUserData(shapeNamePtr);
-    
-    // Add event callback to the shape
-    shapeRoot->addChild(eventCallback);
+    return "Unknown";
 }

@@ -174,13 +174,14 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
-    // Check multi-viewport first
+    // Check multi-viewport first - this should have higher priority
     if (m_multiViewportEnabled && m_multiViewportManager) {
         if (m_multiViewportManager->handleMouseEvent(event)) {
             return; // Event was handled
         }
     }
     
+    // Only pass to EventCoordinator if MultiViewportManager didn't handle it
     if (m_eventCoordinator) {
         if (m_eventCoordinator->handleMouseEvent(event)) {
             return; // Event was handled
