@@ -1,7 +1,7 @@
 #include "CreateCommand.h"
 #include "ObjectTreePanel.h"
 #include "PropertyPanel.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 CreateCommand::CreateCommand(std::unique_ptr<GeometryObject> object, SoSeparator* objectRoot, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel)
     : m_object(std::move(object)), m_objectRoot(objectRoot), m_objectTree(objectTree), m_propertyPanel(propertyPanel)
@@ -16,7 +16,7 @@ CreateCommand::~CreateCommand()
 void CreateCommand::execute()
 {
     if (!m_object) return;
-    LOG_INF("Executing CreateCommand for object: " + m_object->getName());
+    LOG_INF_S("Executing CreateCommand for object: " + m_object->getName());
     m_objectRoot->addChild(m_object->getRoot());
     m_objectTree->addObject(m_object.get());
     m_propertyPanel->updateProperties(m_object.get());

@@ -30,6 +30,7 @@ target_include_directories(NavCubeLib PUBLIC
 # Link dependencies
 target_link_libraries(NavCubeLib PUBLIC
     CADCore
+    CADLogger
     CADRendering
     CADOCC
     ${wxWidgets_LIBRARIES}

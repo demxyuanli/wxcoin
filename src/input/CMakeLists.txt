@@ -29,6 +29,7 @@ target_include_directories(CADInput PUBLIC
 # Link dependencies
 target_link_libraries(CADInput PUBLIC
     CADCore
+    CADLogger
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )

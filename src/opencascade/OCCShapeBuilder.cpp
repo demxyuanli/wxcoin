@@ -1,5 +1,5 @@
 #include "OCCShapeBuilder.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 // OpenCASCADE includes
 #include <TopoDS_Shape.hxx>
@@ -44,7 +44,7 @@ TopoDS_Shape OCCShapeBuilder::createBox(double width, double height, double dept
         BRepPrimAPI_MakeBox boxMaker(width, height, depth);
         boxMaker.Build();
         if (!boxMaker.IsDone()) {
-            LOG_ERR("Failed to create box: algorithm is not done.");
+            LOG_ERR_S("Failed to create box: algorithm is not done.");
             return TopoDS_Shape();
         }
         
@@ -56,7 +56,7 @@ TopoDS_Shape OCCShapeBuilder::createBox(double width, double height, double dept
             transform.SetTranslation(gp_Vec(position.XYZ()));
             BRepBuilderAPI_Transform transformMaker(box, transform);
             if (!transformMaker.IsDone()) {
-                LOG_ERR("Failed to translate box.");
+                LOG_ERR_S("Failed to translate box.");
                 return TopoDS_Shape();
             }
             box = transformMaker.Shape();
@@ -65,11 +65,11 @@ TopoDS_Shape OCCShapeBuilder::createBox(double width, double height, double dept
         return box;
     }
     catch (const Standard_Failure& e) {
-        LOG_ERR("OCC exception creating box: " + std::string(e.GetMessageString()));
+        LOG_ERR_S("OCC exception creating box: " + std::string(e.GetMessageString()));
         return TopoDS_Shape();
     }
     catch (const std::exception& e) {
-        LOG_ERR("Std exception creating box: " + std::string(e.what()));
+        LOG_ERR_S("Std exception creating box: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -79,7 +79,7 @@ TopoDS_Shape OCCShapeBuilder::createSphere(double radius, const gp_Pnt& center)
     try {
         BRepPrimAPI_MakeSphere sphereMaker(radius);
         if (!sphereMaker.IsDone()) {
-            LOG_ERR("Failed to create sphere");
+            LOG_ERR_S("Failed to create sphere");
             return TopoDS_Shape();
         }
         
@@ -94,7 +94,7 @@ TopoDS_Shape OCCShapeBuilder::createSphere(double radius, const gp_Pnt& center)
         
         return sphere;
     } catch (const std::exception& e) {
-        LOG_ERR("Exception creating sphere: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating sphere: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -107,18 +107,18 @@ TopoDS_Shape OCCShapeBuilder::createCylinder(double radius, double height,
         BRepPrimAPI_MakeCylinder cylinderMaker(axis, radius, height);
         cylinderMaker.Build();
         if (!cylinderMaker.IsDone()) {
-            LOG_ERR("Failed to create cylinder: algorithm is not done.");
+            LOG_ERR_S("Failed to create cylinder: algorithm is not done.");
             return TopoDS_Shape();
         }
         
         return cylinderMaker.Shape();
     }
     catch (const Standard_Failure& e) {
-        LOG_ERR("OCC exception creating cylinder: " + std::string(e.GetMessageString()));
+        LOG_ERR_S("OCC exception creating cylinder: " + std::string(e.GetMessageString()));
         return TopoDS_Shape();
     }
     catch (const std::exception& e) {
-        LOG_ERR("Std exception creating cylinder: " + std::string(e.what()));
+        LOG_ERR_S("Std exception creating cylinder: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -130,13 +130,13 @@ TopoDS_Shape OCCShapeBuilder::createCone(double bottomRadius, double topRadius, 
         gp_Ax2 axis(position, direction);
         BRepPrimAPI_MakeCone coneMaker(axis, bottomRadius, topRadius, height);
         if (!coneMaker.IsDone()) {
-            LOG_ERR("Failed to create cone");
+            LOG_ERR_S("Failed to create cone");
             return TopoDS_Shape();
         }
         
         return coneMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception creating cone: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating cone: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -148,13 +148,13 @@ TopoDS_Shape OCCShapeBuilder::createTorus(double majorRadius, double minorRadius
         gp_Ax2 axis(center, direction);
         BRepPrimAPI_MakeTorus torusMaker(axis, majorRadius, minorRadius);
         if (!torusMaker.IsDone()) {
-            LOG_ERR("Failed to create torus");
+            LOG_ERR_S("Failed to create torus");
             return TopoDS_Shape();
         }
         
         return torusMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception creating torus: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating torus: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -163,19 +163,19 @@ TopoDS_Shape OCCShapeBuilder::booleanUnion(const TopoDS_Shape& shape1, const Top
 {
     try {
         if (shape1.IsNull() || shape2.IsNull()) {
-            LOG_ERR("Cannot perform boolean union on null shapes");
+            LOG_ERR_S("Cannot perform boolean union on null shapes");
             return TopoDS_Shape();
         }
         
         BRepAlgoAPI_Fuse fuseMaker(shape1, shape2);
         if (!fuseMaker.IsDone()) {
-            LOG_ERR("Boolean union failed");
+            LOG_ERR_S("Boolean union failed");
             return TopoDS_Shape();
         }
         
         return fuseMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in boolean union: " + std::string(e.what()));
+        LOG_ERR_S("Exception in boolean union: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -184,19 +184,19 @@ TopoDS_Shape OCCShapeBuilder::booleanIntersection(const TopoDS_Shape& shape1, co
 {
     try {
         if (shape1.IsNull() || shape2.IsNull()) {
-            LOG_ERR("Cannot perform boolean intersection on null shapes");
+            LOG_ERR_S("Cannot perform boolean intersection on null shapes");
             return TopoDS_Shape();
         }
         
         BRepAlgoAPI_Common commonMaker(shape1, shape2);
         if (!commonMaker.IsDone()) {
-            LOG_ERR("Boolean intersection failed");
+            LOG_ERR_S("Boolean intersection failed");
             return TopoDS_Shape();
         }
         
         return commonMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in boolean intersection: " + std::string(e.what()));
+        LOG_ERR_S("Exception in boolean intersection: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -205,19 +205,19 @@ TopoDS_Shape OCCShapeBuilder::booleanDifference(const TopoDS_Shape& shape1, cons
 {
     try {
         if (shape1.IsNull() || shape2.IsNull()) {
-            LOG_ERR("Cannot perform boolean difference on null shapes");
+            LOG_ERR_S("Cannot perform boolean difference on null shapes");
             return TopoDS_Shape();
         }
         
         BRepAlgoAPI_Cut cutMaker(shape1, shape2);
         if (!cutMaker.IsDone()) {
-            LOG_ERR("Boolean difference failed");
+            LOG_ERR_S("Boolean difference failed");
             return TopoDS_Shape();
         }
         
         return cutMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in boolean difference: " + std::string(e.what()));
+        LOG_ERR_S("Exception in boolean difference: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -234,13 +234,13 @@ TopoDS_Shape OCCShapeBuilder::translate(const TopoDS_Shape& shape, const gp_Vec&
         
         BRepBuilderAPI_Transform transformMaker(shape, transform);
         if (!transformMaker.IsDone()) {
-            LOG_ERR("Translation failed");
+            LOG_ERR_S("Translation failed");
             return TopoDS_Shape();
         }
         
         return transformMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in translation: " + std::string(e.what()));
+        LOG_ERR_S("Exception in translation: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -259,13 +259,13 @@ TopoDS_Shape OCCShapeBuilder::rotate(const TopoDS_Shape& shape, const gp_Pnt& ce
         
         BRepBuilderAPI_Transform transformMaker(shape, transform);
         if (!transformMaker.IsDone()) {
-            LOG_ERR("Rotation failed");
+            LOG_ERR_S("Rotation failed");
             return TopoDS_Shape();
         }
         
         return transformMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in rotation: " + std::string(e.what()));
+        LOG_ERR_S("Exception in rotation: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -282,13 +282,13 @@ TopoDS_Shape OCCShapeBuilder::scale(const TopoDS_Shape& shape, const gp_Pnt& cen
         
         BRepBuilderAPI_Transform transformMaker(shape, transform);
         if (!transformMaker.IsDone()) {
-            LOG_ERR("Scaling failed");
+            LOG_ERR_S("Scaling failed");
             return TopoDS_Shape();
         }
         
         return transformMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in scaling: " + std::string(e.what()));
+        LOG_ERR_S("Exception in scaling: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -303,7 +303,7 @@ bool OCCShapeBuilder::isValid(const TopoDS_Shape& shape)
         BRepCheck_Analyzer analyzer(shape);
         return analyzer.IsValid();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in shape validation: " + std::string(e.what()));
+        LOG_ERR_S("Exception in shape validation: " + std::string(e.what()));
         return false;
     }
 }
@@ -319,7 +319,7 @@ double OCCShapeBuilder::getVolume(const TopoDS_Shape& shape)
         BRepGProp::VolumeProperties(shape, props);
         return props.Mass();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception calculating volume: " + std::string(e.what()));
+        LOG_ERR_S("Exception calculating volume: " + std::string(e.what()));
         return 0.0;
     }
 }
@@ -335,7 +335,7 @@ double OCCShapeBuilder::getSurfaceArea(const TopoDS_Shape& shape)
         BRepGProp::SurfaceProperties(shape, props);
         return props.Mass();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception calculating surface area: " + std::string(e.what()));
+        LOG_ERR_S("Exception calculating surface area: " + std::string(e.what()));
         return 0.0;
     }
 }
@@ -362,7 +362,7 @@ void OCCShapeBuilder::getBoundingBox(const TopoDS_Shape& shape, gp_Pnt& minPoint
             maxPoint = gp_Pnt(0, 0, 0);
         }
     } catch (const std::exception& e) {
-        LOG_ERR("Exception calculating bounding box: " + std::string(e.what()));
+        LOG_ERR_S("Exception calculating bounding box: " + std::string(e.what()));
         minPoint = gp_Pnt(0, 0, 0);
         maxPoint = gp_Pnt(0, 0, 0);
     }
@@ -380,12 +380,12 @@ TopoDS_Shape OCCShapeBuilder::createFillet(const TopoDS_Shape& shape, double rad
             filletMaker.Add(radius, TopoDS::Edge(ex.Current()));
         }
         if (!filletMaker.IsDone()) {
-            LOG_ERR("Fillet creation failed");
+            LOG_ERR_S("Fillet creation failed");
             return TopoDS_Shape();
         }
         return filletMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception creating fillet: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating fillet: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -401,12 +401,12 @@ TopoDS_Shape OCCShapeBuilder::createChamfer(const TopoDS_Shape& shape, double di
             chamferMaker.Add(distance, TopoDS::Edge(ex.Current()));
         }
         if (!chamferMaker.IsDone()) {
-            LOG_ERR("Chamfer creation failed");
+            LOG_ERR_S("Chamfer creation failed");
             return TopoDS_Shape();
         }
         return chamferMaker.Shape();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception creating chamfer: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating chamfer: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -415,12 +415,12 @@ TopoDS_Shape OCCShapeBuilder::createChamfer(const TopoDS_Shape& shape, double di
 void OCCShapeBuilder::analyzeShapeTopology(const TopoDS_Shape& shape, const std::string& shapeName)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot analyze null shape: " + shapeName);
+        LOG_ERR_S("Cannot analyze null shape: " + shapeName);
         return;
     }
     
     std::string name = shapeName.empty() ? "Unknown" : shapeName;
-    LOG_INF("=== Shape Topology Analysis: " + name + " ===");
+    LOG_INF_S("=== Shape Topology Analysis: " + name + " ===");
     
     // Count different types of topological entities
     int solidCount = 0, shellCount = 0, faceCount = 0, wireCount = 0, edgeCount = 0, vertexCount = 0;
@@ -444,33 +444,33 @@ void OCCShapeBuilder::analyzeShapeTopology(const TopoDS_Shape& shape, const std:
         vertexCount++;
     }
     
-    LOG_INF("Solids: " + std::to_string(solidCount));
-    LOG_INF("Shells: " + std::to_string(shellCount));
-    LOG_INF("Faces: " + std::to_string(faceCount));
-    LOG_INF("Wires: " + std::to_string(wireCount));
-    LOG_INF("Edges: " + std::to_string(edgeCount));
-    LOG_INF("Vertices: " + std::to_string(vertexCount));
+    LOG_INF_S("Solids: " + std::to_string(solidCount));
+    LOG_INF_S("Shells: " + std::to_string(shellCount));
+    LOG_INF_S("Faces: " + std::to_string(faceCount));
+    LOG_INF_S("Wires: " + std::to_string(wireCount));
+    LOG_INF_S("Edges: " + std::to_string(edgeCount));
+    LOG_INF_S("Vertices: " + std::to_string(vertexCount));
     
     // Check shape validity
     bool isValidShape = isValid(shape);
-    LOG_INF("Shape validity: " + std::string(isValidShape ? "VALID" : "INVALID"));
+    LOG_INF_S("Shape validity: " + std::string(isValidShape ? "VALID" : "INVALID"));
     
     // Check closure
     bool isClosed = checkShapeClosure(shape, name);
-    LOG_INF("Shape closure: " + std::string(isClosed ? "CLOSED" : "OPEN"));
+    LOG_INF_S("Shape closure: " + std::string(isClosed ? "CLOSED" : "OPEN"));
     
-    LOG_INF("=== End Topology Analysis ===");
+    LOG_INF_S("=== End Topology Analysis ===");
 }
 
 void OCCShapeBuilder::outputFaceNormalsAndIndices(const TopoDS_Shape& shape, const std::string& shapeName)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot output face normals for null shape: " + shapeName);
+        LOG_ERR_S("Cannot output face normals for null shape: " + shapeName);
         return;
     }
     
     std::string name = shapeName.empty() ? "Unknown" : shapeName;
-    LOG_INF("=== Face Normals and Indices: " + name + " ===");
+    LOG_INF_S("=== Face Normals and Indices: " + name + " ===");
     
     try {
         int faceIndex = 0;
@@ -480,7 +480,7 @@ void OCCShapeBuilder::outputFaceNormalsAndIndices(const TopoDS_Shape& shape, con
             // Get face surface
             Handle(Geom_Surface) surface = BRep_Tool::Surface(face);
             if (surface.IsNull()) {
-                LOG_WRN("Face " + std::to_string(faceIndex) + ": No surface found");
+                LOG_WRN_S("Face " + std::to_string(faceIndex) + ": No surface found");
                 faceIndex++;
                 continue;
             }
@@ -507,42 +507,42 @@ void OCCShapeBuilder::outputFaceNormalsAndIndices(const TopoDS_Shape& shape, con
                     normalVec.Reverse();
                 }
                 
-                LOG_INF("Face " + std::to_string(faceIndex) + ":");
-                LOG_INF("  Center: (" + std::to_string(point.X()) + ", " + 
+                LOG_INF_S("Face " + std::to_string(faceIndex) + ":");
+                LOG_INF_S("  Center: (" + std::to_string(point.X()) + ", " + 
                        std::to_string(point.Y()) + ", " + std::to_string(point.Z()) + ")");
-                LOG_INF("  Normal: (" + std::to_string(normalVec.X()) + ", " + 
+                LOG_INF_S("  Normal: (" + std::to_string(normalVec.X()) + ", " + 
                        std::to_string(normalVec.Y()) + ", " + std::to_string(normalVec.Z()) + ")");
-                LOG_INF("  Orientation: " + std::string(face.Orientation() == TopAbs_FORWARD ? "FORWARD" : 
+                LOG_INF_S("  Orientation: " + std::string(face.Orientation() == TopAbs_FORWARD ? "FORWARD" : 
                        face.Orientation() == TopAbs_REVERSED ? "REVERSED" : "OTHER"));
             } else {
-                LOG_WRN("Face " + std::to_string(faceIndex) + ": Normal not defined");
+                LOG_WRN_S("Face " + std::to_string(faceIndex) + ": Normal not defined");
             }
             
             faceIndex++;
         }
     } catch (const std::exception& e) {
-        LOG_ERR("Exception outputting face normals: " + std::string(e.what()));
+        LOG_ERR_S("Exception outputting face normals: " + std::string(e.what()));
     }
     
-    LOG_INF("=== End Face Normals Output ===");
+    LOG_INF_S("=== End Face Normals Output ===");
 }
 
 bool OCCShapeBuilder::checkShapeClosure(const TopoDS_Shape& shape, const std::string& shapeName)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot check closure of null shape: " + shapeName);
+        LOG_ERR_S("Cannot check closure of null shape: " + shapeName);
         return false;
     }
     
     std::string name = shapeName.empty() ? "Unknown" : shapeName;
-    LOG_INF("=== Checking Shape Closure: " + name + " ===");
+    LOG_INF_S("=== Checking Shape Closure: " + name + " ===");
     
     try {
         bool isClosed = true;
         
         // Check if shape is a solid
         TopAbs_ShapeEnum shapeType = shape.ShapeType();
-        LOG_INF("Shape type: " + std::string(
+        LOG_INF_S("Shape type: " + std::string(
             shapeType == TopAbs_SOLID ? "SOLID" :
             shapeType == TopAbs_SHELL ? "SHELL" :
             shapeType == TopAbs_FACE ? "FACE" :
@@ -556,7 +556,7 @@ bool OCCShapeBuilder::checkShapeClosure(const TopoDS_Shape& shape, const std::st
             for (TopExp_Explorer ex(shape, TopAbs_SHELL); ex.More(); ex.Next()) {
                 TopoDS_Shell shell = TopoDS::Shell(ex.Current());
                 if (!BRep_Tool::IsClosed(shell)) {
-                    LOG_WRN("Found open shell in solid");
+                    LOG_WRN_S("Found open shell in solid");
                     isClosed = false;
                 }
             }
@@ -565,7 +565,7 @@ bool OCCShapeBuilder::checkShapeClosure(const TopoDS_Shape& shape, const std::st
         else if (shapeType == TopAbs_SHELL) {
             TopoDS_Shell shell = TopoDS::Shell(shape);
             if (!BRep_Tool::IsClosed(shell)) {
-                LOG_WRN("Shell is not closed");
+                LOG_WRN_S("Shell is not closed");
                 isClosed = false;
             }
         }
@@ -587,14 +587,14 @@ bool OCCShapeBuilder::checkShapeClosure(const TopoDS_Shape& shape, const std::st
                 gp_Pnt p1 = BRep_Tool::Pnt(v1);
                 gp_Pnt p2 = BRep_Tool::Pnt(v2);
                 
-                LOG_WRN("Free edge found: (" + std::to_string(p1.X()) + "," + 
+                LOG_WRN_S("Free edge found: (" + std::to_string(p1.X()) + "," + 
                        std::to_string(p1.Y()) + "," + std::to_string(p1.Z()) + ") to (" +
                        std::to_string(p2.X()) + "," + std::to_string(p2.Y()) + "," + 
                        std::to_string(p2.Z()) + ")");
             }
         }
         
-        LOG_INF("Free edges count: " + std::to_string(freeEdgeCount));
+        LOG_INF_S("Free edges count: " + std::to_string(freeEdgeCount));
         
         if (freeEdgeCount > 0) {
             isClosed = false;
@@ -603,17 +603,17 @@ bool OCCShapeBuilder::checkShapeClosure(const TopoDS_Shape& shape, const std::st
         // Additional checks using BRepCheck_Analyzer
         BRepCheck_Analyzer analyzer(shape);
         if (!analyzer.IsValid()) {
-            LOG_WRN("Shape failed BRepCheck_Analyzer validation");
+            LOG_WRN_S("Shape failed BRepCheck_Analyzer validation");
             isClosed = false;
         }
         
-        LOG_INF("Final closure result: " + std::string(isClosed ? "CLOSED" : "OPEN"));
-        LOG_INF("=== End Closure Check ===");
+        LOG_INF_S("Final closure result: " + std::string(isClosed ? "CLOSED" : "OPEN"));
+        LOG_INF_S("=== End Closure Check ===");
         
         return isClosed;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception checking shape closure: " + std::string(e.what()));
+        LOG_ERR_S("Exception checking shape closure: " + std::string(e.what()));
         return false;
     }
 }
@@ -621,28 +621,28 @@ bool OCCShapeBuilder::checkShapeClosure(const TopoDS_Shape& shape, const std::st
 void OCCShapeBuilder::analyzeShapeProperties(const TopoDS_Shape& shape, const std::string& shapeName)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot analyze properties of null shape: " + shapeName);
+        LOG_ERR_S("Cannot analyze properties of null shape: " + shapeName);
         return;
     }
     
     std::string name = shapeName.empty() ? "Unknown" : shapeName;
-    LOG_INF("=== Shape Properties Analysis: " + name + " ===");
+    LOG_INF_S("=== Shape Properties Analysis: " + name + " ===");
     
     try {
         // Basic properties
         double volume = getVolume(shape);
         double surfaceArea = getSurfaceArea(shape);
         
-        LOG_INF("Volume: " + std::to_string(volume));
-        LOG_INF("Surface Area: " + std::to_string(surfaceArea));
+        LOG_INF_S("Volume: " + std::to_string(volume));
+        LOG_INF_S("Surface Area: " + std::to_string(surfaceArea));
         
         // Bounding box
         gp_Pnt minPt, maxPt;
         getBoundingBox(shape, minPt, maxPt);
-        LOG_INF("Bounding Box:");
-        LOG_INF("  Min: (" + std::to_string(minPt.X()) + ", " + 
+        LOG_INF_S("Bounding Box:");
+        LOG_INF_S("  Min: (" + std::to_string(minPt.X()) + ", " + 
                std::to_string(minPt.Y()) + ", " + std::to_string(minPt.Z()) + ")");
-        LOG_INF("  Max: (" + std::to_string(maxPt.X()) + ", " + 
+        LOG_INF_S("  Max: (" + std::to_string(maxPt.X()) + ", " + 
                std::to_string(maxPt.Y()) + ", " + std::to_string(maxPt.Z()) + ")");
         
         // Center of mass
@@ -650,13 +650,13 @@ void OCCShapeBuilder::analyzeShapeProperties(const TopoDS_Shape& shape, const st
         BRepGProp::VolumeProperties(shape, props);
         if (props.Mass() > 0) {
             gp_Pnt centerOfMass = props.CentreOfMass();
-            LOG_INF("Center of Mass: (" + std::to_string(centerOfMass.X()) + ", " + 
+            LOG_INF_S("Center of Mass: (" + std::to_string(centerOfMass.X()) + ", " + 
                    std::to_string(centerOfMass.Y()) + ", " + std::to_string(centerOfMass.Z()) + ")");
         }
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception analyzing shape properties: " + std::string(e.what()));
+        LOG_ERR_S("Exception analyzing shape properties: " + std::string(e.what()));
     }
     
-    LOG_INF("=== End Properties Analysis ===");
+    LOG_INF_S("=== End Properties Analysis ===");
 } 

@@ -30,6 +30,7 @@ target_include_directories(CADRendering PUBLIC
 # Link dependencies
 target_link_libraries(CADRendering PUBLIC
     CADCore
+    CADLogger
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )

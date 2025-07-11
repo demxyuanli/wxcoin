@@ -3,7 +3,7 @@
 #include "SceneManager.h"
 #include "NavigationCubeManager.h"
 #include "DPIManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
@@ -46,21 +46,21 @@ MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneMa
     , m_margin(20)
     , m_dpiScale(1.0f)
     , m_initialized(false) {
-    LOG_INF("MultiViewportManager: Initializing");
+    LOG_INF_S("MultiViewportManager: Initializing");
     
     if (!m_canvas) {
-        LOG_ERR("MultiViewportManager: Canvas is null");
+        LOG_ERR_S("MultiViewportManager: Canvas is null");
     }
     if (!m_sceneManager) {
-        LOG_ERR("MultiViewportManager: SceneManager is null");
+        LOG_ERR_S("MultiViewportManager: SceneManager is null");
     }
     
     initializeViewports();
-    LOG_INF("MultiViewportManager: Initialization completed");
+    LOG_INF_S("MultiViewportManager: Initialization completed");
 }
 
 MultiViewportManager::~MultiViewportManager() {
-    LOG_INF("MultiViewportManager: Destroyed");
+    LOG_INF_S("MultiViewportManager: Destroyed");
     
     if (m_cubeOutlineRoot) {
         m_cubeOutlineRoot->unref();
@@ -161,9 +161,9 @@ void MultiViewportManager::createCubeOutlineScene() {
     createSmallCube(scale);
     
     // Debug: Print all composite shapes
-    LOG_INF("Created composite shapes:");
+    LOG_INF_S("Created composite shapes:");
     for (const auto& compositeShape : m_compositeShapes) {
-        LOG_INF("  " + compositeShape.shapeName);
+        LOG_INF_S("  " + compositeShape.shapeName);
     }
 }
 
@@ -566,7 +566,7 @@ void MultiViewportManager::createCoordinateSystemScene() {
 void MultiViewportManager::render() {
     
     if (!m_canvas || !m_sceneManager) {
-        LOG_WRN("MultiViewportManager::render - Canvas or SceneManager is null");
+        LOG_WRN_S("MultiViewportManager::render - Canvas or SceneManager is null");
         return;
     }
     
@@ -577,7 +577,7 @@ void MultiViewportManager::render() {
             createCoordinateSystemScene();
             m_initialized = true;
         } catch (const std::exception& e) {
-            LOG_ERR("MultiViewportManager: Failed to initialize scene graphs: " + std::string(e.what()));
+            LOG_ERR_S("MultiViewportManager: Failed to initialize scene graphs: " + std::string(e.what()));
             return;
         }
     }
@@ -614,7 +614,7 @@ void MultiViewportManager::renderNavigationCube() {
 void MultiViewportManager::renderCubeOutline() {
 
     if (!m_cubeOutlineRoot || !m_cubeOutlineCamera) {
-        LOG_WRN("MultiViewportManager: Cube outline scene not initialized");
+        LOG_WRN_S("MultiViewportManager: Cube outline scene not initialized");
         return;
     }
     
@@ -647,7 +647,7 @@ void MultiViewportManager::renderCubeOutline() {
 void MultiViewportManager::renderCoordinateSystem() {
 
     if (!m_coordinateSystemRoot || !m_coordinateSystemCamera) {
-        LOG_WRN("MultiViewportManager: Coordinate system scene not initialized");
+        LOG_WRN_S("MultiViewportManager: Coordinate system scene not initialized");
         return;
     }
 
@@ -761,7 +761,7 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
             SbVec2s pickPoint(localX, pickY);
 
             if (event.LeftDown()) {
-                LOG_INF("Mouse left down in cube outline viewport at (" + std::to_string(x) + ", " + std::to_string(y) + ") [local: (" + std::to_string(localX) + ", " + std::to_string(localY) + ", pick: (" + std::to_string(pickPoint[0]) + ", " + std::to_string(pickPoint[1]) + ")]");
+                LOG_INF_S("Mouse left down in cube outline viewport at (" + std::to_string(x) + ", " + std::to_string(y) + ") [local: (" + std::to_string(localX) + ", " + std::to_string(localY) + ", pick: (" + std::to_string(pickPoint[0]) + ", " + std::to_string(pickPoint[1]) + ")]");
 
                 SoRayPickAction pickAction(viewportRegion);
                 pickAction.setPoint(pickPoint);
@@ -772,7 +772,7 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
                     SoPath* path = pickedPoint->getPath();
                     if (path) {
                         std::string clickedShape = findShapeNameFromPath(path);
-                        LOG_INF(clickedShape + " clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
+                        LOG_INF_S(clickedShape + " clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
                     }
 
                 }
@@ -891,11 +891,11 @@ std::string MultiViewportManager::findShapeNameFromPath(SoPath* path) {
     }
     
     // If we can't identify the shape, try to get more information
-    LOG_DBG("Could not identify shape from path, path length: " + std::to_string(path->getLength()));
+    LOG_DBG_S("Could not identify shape from path, path length: " + std::to_string(path->getLength()));
     for (int i = 0; i < path->getLength(); i++) {
         SoNode* node = path->getNode(i);
         if (node) {
-            LOG_DBG("  Node " + std::to_string(i) + ": " + node->getTypeId().getName().getString());
+            LOG_DBG_S("  Node " + std::to_string(i) + ": " + node->getTypeId().getName().getString());
         }
     }
     

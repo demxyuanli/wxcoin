@@ -1,6 +1,6 @@
 #include "MeshQualityDialog.h"
 #include "OCCViewer.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <wx/statbox.h>
 
 MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
@@ -17,7 +17,7 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
     , m_lodTransitionTimeSpinCtrl(nullptr)
 {
     if (!m_occViewer) {
-        LOG_ERR("OCCViewer is null in MeshQualityDialog");
+        LOG_ERR_S("OCCViewer is null in MeshQualityDialog");
         return;
     }
     
@@ -222,7 +222,7 @@ void MeshQualityDialog::onLODTransitionTimeSpinCtrl(wxSpinEvent& event)
 void MeshQualityDialog::onApply(wxCommandEvent& event)
 {
     if (!m_occViewer) {
-        LOG_ERR("OCCViewer is null, cannot apply settings");
+        LOG_ERR("OCCViewer is null, cannot apply settings","MeshQualityDialog");
         return;
     }
     
@@ -233,7 +233,7 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
     m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
     m_occViewer->setLODTransitionTime(m_currentLODTransitionTime);
     
-    LOG_INF("Mesh quality settings applied");
+    LOG_INF_S("Mesh quality settings applied");
 }
 
 void MeshQualityDialog::onCancel(wxCommandEvent& event)

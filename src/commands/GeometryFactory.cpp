@@ -4,7 +4,7 @@
 #include "PropertyPanel.h"
 #include "Command.h"
 #include "CreateCommand.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
 #include "OCCShapeBuilder.h"
@@ -21,11 +21,11 @@ GeometryFactory::GeometryFactory(SoSeparator* root, ObjectTreePanel* treePanel, 
     , m_occViewer(occViewer)
     , m_defaultGeometryType(GeometryType::COIN3D)
 {
-    LOG_INF("GeometryFactory initializing with OCC support");
+    LOG_INF_S("GeometryFactory initializing with OCC support");
 }
 
 GeometryFactory::~GeometryFactory() {
-    LOG_INF("GeometryFactory destroying");
+    LOG_INF_S("GeometryFactory destroying");
 }
 
 void GeometryFactory::createGeometry(const std::string& type, const SbVec3f& position, GeometryType geomType) {
@@ -49,7 +49,7 @@ void GeometryFactory::createGeometry(const std::string& type, const SbVec3f& pos
         object = std::unique_ptr<GeometryObject>(createCone(position));
     }
     else {
-        LOG_ERR("Unknown geometry type: " + type);
+        LOG_ERR_S("Unknown geometry type: " + type);
         return;
     }
 
@@ -61,7 +61,7 @@ void GeometryFactory::createGeometry(const std::string& type, const SbVec3f& pos
 
 void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& position) {
     if (!m_occViewer) {
-        LOG_ERR("OCC Viewer not available for creating OpenCASCADE geometry");
+        LOG_ERR_S("OCC Viewer not available for creating OpenCASCADE geometry");
         return;
     }
     
@@ -83,13 +83,13 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
         geometry = createOCCWrench(position);
     }
     else {
-        LOG_ERR("Unknown OCC geometry type: " + type);
+        LOG_ERR_S("Unknown OCC geometry type: " + type);
         return;
     }
     
     if (geometry) {
         m_occViewer->addGeometry(geometry);
-        LOG_INF("Created OCC geometry: " + geometry->getName());
+        LOG_INF_S("Created OCC geometry: " + geometry->getName());
     }
 }
 
@@ -170,7 +170,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         double headThickness = 0.8;
         double jawOpening = 1.0; 
         
-        LOG_INF("Creating improved wrench with better closure...");
+        LOG_INF_S("Creating improved wrench with better closure...");
 
         // Create handle as a centered box
         TopoDS_Shape handle = OCCShapeBuilder::createBox(
@@ -181,7 +181,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         );
         
         if (handle.IsNull()) {
-            LOG_ERR("Failed to create wrench handle");
+            LOG_ERR_S("Failed to create wrench handle");
             return nullptr;
         }
         
@@ -195,7 +195,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         );
         
         if (leftJawOuter.IsNull()) {
-            LOG_ERR("Failed to create left jaw outer");
+            LOG_ERR_S("Failed to create left jaw outer");
             return nullptr;
         }
         
@@ -209,24 +209,24 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         );
         
         if (rightJawOuter.IsNull()) {
-            LOG_ERR("Failed to create right jaw outer");
+            LOG_ERR_S("Failed to create right jaw outer");
             return nullptr;
         }
         
         // Union all main parts first
         TopoDS_Shape wrenchBody = OCCShapeBuilder::booleanUnion(handle, leftJawOuter);
         if (wrenchBody.IsNull()) {
-            LOG_ERR("Failed to union handle with left jaw");
+            LOG_ERR_S("Failed to union handle with left jaw");
             return nullptr;
         }
         
         wrenchBody = OCCShapeBuilder::booleanUnion(wrenchBody, rightJawOuter);
         if (wrenchBody.IsNull()) {
-            LOG_ERR("Failed to union with right jaw");
+            LOG_ERR_S("Failed to union with right jaw");
             return nullptr;
         }
         
-        LOG_INF("Basic wrench body created, now adding openings...");
+        LOG_INF_S("Basic wrench body created, now adding openings...");
         
         // Create left jaw opening (smaller and more centered)
         double leftSlotWidth = jawOpening * 0.8;
@@ -246,9 +246,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, leftSlot);
             if (!tempResult.IsNull()) {
                 wrenchBody = tempResult;
-                LOG_INF("Created left jaw opening");
+                LOG_INF_S("Created left jaw opening");
             } else {
-                LOG_WRN("Failed to create left jaw opening, continuing without it");
+                LOG_WRN_S("Failed to create left jaw opening, continuing without it");
             }
         }
         
@@ -270,9 +270,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, rightSlot);
             if (!tempResult.IsNull()) {
                 wrenchBody = tempResult;
-                LOG_INF("Created right jaw opening");
+                LOG_INF_S("Created right jaw opening");
             } else {
-                LOG_WRN("Failed to create right jaw opening, continuing without it");
+                LOG_WRN_S("Failed to create right jaw opening, continuing without it");
             }
         }
         
@@ -301,15 +301,15 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         }
         
         if (wrenchBody.IsNull()) {
-            LOG_ERR("Final wrench shape is null");
+            LOG_ERR_S("Final wrench shape is null");
             return nullptr;
         }
         
         // Validate the final shape
         if (!OCCShapeBuilder::isValid(wrenchBody)) {
-            LOG_WRN("Wrench shape validation failed, but proceeding anyway");
+            LOG_WRN_S("Wrench shape validation failed, but proceeding anyway");
         } else {
-            LOG_INF("Wrench shape is valid");
+            LOG_INF_S("Wrench shape is valid");
         }
         
         // Debug: Analyze the wrench shape in detail
@@ -321,11 +321,11 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         geometry->setShape(wrenchBody);
         geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
         
-        LOG_INF("Created improved wrench model: " + name);
+        LOG_INF_S("Created improved wrench model: " + name);
         return geometry;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception creating wrench: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating wrench: " + std::string(e.what()));
         return nullptr;
     }
 } 

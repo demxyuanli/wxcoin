@@ -5,7 +5,7 @@
 #include "NavigationController.h"
 #include "GeometryFactory.h"
 #include "PositionDialog.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <Inventor/nodes/SoSelection.h>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/SoPickedPoint.h>
@@ -19,25 +19,25 @@ MouseHandler::MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, Property
     , m_operationMode(OperationMode::VIEW)
     , m_isDragging(false)
 {
-    LOG_INF("MouseHandler initializing");
-    if (!m_canvas) LOG_ERR("MouseHandler: Canvas is null");
-    if (!m_objectTree) LOG_ERR("MouseHandler: ObjectTree is null");
-    if (!m_propertyPanel) LOG_ERR("MouseHandler: PropertyPanel is null");
-    if (!m_commandManager) LOG_ERR("MouseHandler: CommandManager is null");
+    LOG_INF_S("MouseHandler initializing");
+    if (!m_canvas) LOG_ERR_S("MouseHandler: Canvas is null");
+    if (!m_objectTree) LOG_ERR_S("MouseHandler: ObjectTree is null");
+    if (!m_propertyPanel) LOG_ERR_S("MouseHandler: PropertyPanel is null");
+    if (!m_commandManager) LOG_ERR_S("MouseHandler: CommandManager is null");
 }
 
 MouseHandler::~MouseHandler() {
-    LOG_INF("MouseHandler destroying");
+    LOG_INF_S("MouseHandler destroying");
 }
 
 void MouseHandler::setOperationMode(OperationMode mode) {
     m_operationMode = mode;
-    LOG_INF("Operation mode set to: " + std::to_string(static_cast<int>(mode)));
+    LOG_INF_S("Operation mode set to: " + std::to_string(static_cast<int>(mode)));
 }
 
 void MouseHandler::setCreationGeometryType(const std::string& type) {
     m_creationGeometryType = type;
-    LOG_INF("Creation geometry type set to: " + type);
+    LOG_INF_S("Creation geometry type set to: " + type);
 
     if (!type.empty()) {
         // Create position dialog and pass the PickingAidManager
@@ -50,7 +50,7 @@ void MouseHandler::setCreationGeometryType(const std::string& type) {
 
 void MouseHandler::setNavigationController(NavigationController* controller) {
     m_navigationController = controller;
-    LOG_INF("NavigationController set for MouseHandler");
+    LOG_INF_S("NavigationController set for MouseHandler");
 }
 
 void MouseHandler::handleMouseButton(wxMouseEvent& event) {
@@ -59,7 +59,7 @@ void MouseHandler::handleMouseButton(wxMouseEvent& event) {
     }
     else if (m_operationMode == OperationMode::SELECT && event.LeftDown()) {
         // Implement selection logic if needed
-        LOG_INF("Selection at position: (" + std::to_string(event.GetX()) + ", " + std::to_string(event.GetY()) + ")");
+        LOG_INF_S("Selection at position: (" + std::to_string(event.GetX()) + ", " + std::to_string(event.GetY()) + ")");
     } else {
         event.Skip();
     }

@@ -7,7 +7,7 @@
 #include "OCCGeometry.h"
 #include "OCCMeshConverter.h"
 #include "SceneManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "Canvas.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
@@ -70,7 +70,7 @@ void OCCViewer::initializeViewer()
         m_sceneManager->getObjectRoot()->addChild(m_normalRoot);
     }
     
-    LOG_INF("OCC Viewer initialized");
+    LOG_INF_S("OCC Viewer initialized");
 }
 
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
@@ -85,7 +85,7 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
         });
     
     if (it != m_geometries.end()) {
-        LOG_WRN("Geometry with name '" + geometry->getName() + "' already exists");
+        LOG_WRN_S("Geometry with name '" + geometry->getName() + "' already exists");
         return;
     }
     
@@ -97,7 +97,7 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
         m_occRoot->addChild(coinNode);
     }
     
-    LOG_INF("Added OCC geometry: " + geometry->getName());
+    LOG_INF_S("Added OCC geometry: " + geometry->getName());
     
     if (m_sceneManager) {
         m_sceneManager->getCanvas()->Refresh();
@@ -120,7 +120,7 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
         }
         
         m_geometries.erase(it);
-        LOG_INF("Removed OCC geometry: " + geometry->getName());
+        LOG_INF_S("Removed OCC geometry: " + geometry->getName());
     }
 }
 
@@ -141,7 +141,7 @@ void OCCViewer::clearAll()
         m_occRoot->removeAllChildren();
     }
     
-    LOG_INF("Cleared all OCC geometries");
+    LOG_INF_S("Cleared all OCC geometries");
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::findGeometry(const std::string& name)
@@ -225,12 +225,12 @@ void OCCViewer::setAllColor(const Quantity_Color& color)
 
 void OCCViewer::fitAll()
 {
-    LOG_INF("Fit all OCC geometries");
+    LOG_INF_S("Fit all OCC geometries");
 }
 
 void OCCViewer::fitGeometry(const std::string& name)
 {
-        LOG_INF("Fit geometry: " + name);
+        LOG_INF_S("Fit geometry: " + name);
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
@@ -297,7 +297,7 @@ double OCCViewer::getMeshDeflection() const
 
 void OCCViewer::onSelectionChanged()
 {
-    LOG_INF("Selection changed");
+    LOG_INF_S("Selection changed");
 }
 
 void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
@@ -343,7 +343,7 @@ void OCCViewer::remeshAllGeometries()
     if (m_sceneManager) {
         m_sceneManager->getCanvas()->Refresh();
     }
-    LOG_INF("Remeshed all geometries with deflection: " + std::to_string(m_meshParams.deflection));
+    LOG_INF_S("Remeshed all geometries with deflection: " + std::to_string(m_meshParams.deflection));
 }
 
 // LOD (Level of Detail) methods
@@ -356,7 +356,7 @@ void OCCViewer::setLODEnabled(bool enabled)
             // Switch back to fine mode when disabling LOD
             setLODMode(false);
         }
-        LOG_INF("LOD " + std::string(enabled ? "enabled" : "disabled"));
+        LOG_INF_S("LOD " + std::string(enabled ? "enabled" : "disabled"));
     }
 }
 
@@ -369,7 +369,7 @@ void OCCViewer::setLODRoughDeflection(double deflection)
 {
     if (m_lodRoughDeflection != deflection) {
         m_lodRoughDeflection = deflection;
-        LOG_INF("LOD rough deflection set to: " + std::to_string(deflection));
+        LOG_INF_S("LOD rough deflection set to: " + std::to_string(deflection));
     }
 }
 
@@ -382,7 +382,7 @@ void OCCViewer::setLODFineDeflection(double deflection)
 {
     if (m_lodFineDeflection != deflection) {
         m_lodFineDeflection = deflection;
-        LOG_INF("LOD fine deflection set to: " + std::to_string(deflection));
+        LOG_INF_S("LOD fine deflection set to: " + std::to_string(deflection));
     }
 }
 
@@ -395,7 +395,7 @@ void OCCViewer::setLODTransitionTime(int milliseconds)
 {
     if (m_lodTransitionTime != milliseconds) {
         m_lodTransitionTime = milliseconds;
-        LOG_INF("LOD transition time set to: " + std::to_string(milliseconds) + "ms");
+        LOG_INF_S("LOD transition time set to: " + std::to_string(milliseconds) + "ms");
     }
 }
 
@@ -413,7 +413,7 @@ void OCCViewer::setLODMode(bool roughMode)
         double targetDeflection = roughMode ? m_lodRoughDeflection : m_lodFineDeflection;
         setMeshDeflection(targetDeflection, true);
         
-        LOG_INF("LOD mode switched to " + std::string(roughMode ? "rough" : "fine") + 
+        LOG_INF_S("LOD mode switched to " + std::string(roughMode ? "rough" : "fine") + 
                 " (deflection: " + std::to_string(targetDeflection) + ")");
     }
 }

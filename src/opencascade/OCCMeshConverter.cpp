@@ -1,5 +1,5 @@
 #include "OCCMeshConverter.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 // OpenCASCADE includes
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -53,7 +53,7 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
     TriangleMesh mesh;
     
     if (shape.IsNull()) {
-        LOG_WRN("Cannot convert null shape to mesh");
+        LOG_WRN_S("Cannot convert null shape to mesh");
         return mesh;
     }
     
@@ -63,7 +63,7 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
                                          params.angularDeflection, params.inParallel);
         
         if (!meshGen.IsDone()) {
-            LOG_ERR("Failed to generate mesh for shape");
+            LOG_ERR_S("Failed to generate mesh for shape");
             return mesh;
         }
         
@@ -79,11 +79,11 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
             calculateNormals(mesh);
         }
         
-        LOG_INF("Generated mesh with " + std::to_string(mesh.getVertexCount()) + 
+        LOG_INF_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) + 
                 " vertices and " + std::to_string(mesh.getTriangleCount()) + " triangles");
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception in mesh conversion: " + std::string(e.what()));
+        LOG_ERR_S("Exception in mesh conversion: " + std::string(e.what()));
         mesh.clear();
     }
     
@@ -100,7 +100,7 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
 SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
 {
     if (mesh.isEmpty()) {
-        LOG_WRN("Cannot create Coin3D node from empty mesh");
+        LOG_WRN_S("Cannot create Coin3D node from empty mesh");
         return nullptr;
     }
     
@@ -503,14 +503,14 @@ static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh&
 bool OCCMeshConverter::exportToSTL(const TriangleMesh& mesh, const std::string& filename, bool binary)
 {
     if (mesh.isEmpty()) {
-        LOG_ERR("Cannot export empty mesh to STL");
+        LOG_ERR_S("Cannot export empty mesh to STL");
         return false;
     }
     
     try {
         std::ofstream file(filename, binary ? std::ios::binary : std::ios::out);
         if (!file.is_open()) {
-            LOG_ERR("Cannot open file for writing: " + filename);
+            LOG_ERR_S("Cannot open file for writing: " + filename);
             return false;
         }
         
@@ -576,11 +576,11 @@ bool OCCMeshConverter::exportToSTL(const TriangleMesh& mesh, const std::string& 
         }
         
         file.close();
-        LOG_INF("Successfully exported mesh to STL: " + filename);
+        LOG_INF_S("Successfully exported mesh to STL: " + filename);
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception while exporting STL: " + std::string(e.what()));
+        LOG_ERR_S("Exception while exporting STL: " + std::string(e.what()));
         return false;
     }
 }
@@ -606,5 +606,5 @@ void OCCMeshConverter::flipNormals(TriangleMesh& mesh)
         normal.SetZ(-normal.Z());
     }
     
-    LOG_INF("Flipped normals for mesh with " + std::to_string(mesh.getTriangleCount()) + " triangles");
+    LOG_INF_S("Flipped normals for mesh with " + std::to_string(mesh.getTriangleCount()) + " triangles");
 }

@@ -15,6 +15,11 @@ if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
     set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
 endif()
 
+# 设置 wxWidgets 根目录（如果使用 vcpkg）
+if(CMAKE_TOOLCHAIN_FILE AND NOT wxWidgets_ROOT_DIR)
+    set(wxWidgets_ROOT_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows" CACHE STRING "wxWidgets root directory")
+endif()
+
 # 输出配置信息
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Toolchain file: ${CMAKE_TOOLCHAIN_FILE}")
@@ -23,19 +28,16 @@ if(DEFINED wxWidgets_ROOT_DIR)
 endif()
 
 # 查找依赖
-find_package(wxWidgets REQUIRED COMPONENTS core base gl aui propgrid)
-find_package(Coin REQUIRED)
-find_package(OpenCASCADE REQUIRED)
-
-# 包含 wxWidgets
-include(${wxWidgets_USE_FILE})
+find_package(wxWidgets CONFIG REQUIRED)
+find_package(Coin CONFIG REQUIRED)
+find_package(OpenCASCADE CONFIG REQUIRED)
 
 # 添加源代码目录
 add_subdirectory(src)
 
 # 主程序源文件
 set(MAIN_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/main.cpp
+    ${CMAKE_SOURCE_DIR}/src/MainApplication.cpp
 )
 
 # 创建可执行文件
@@ -44,25 +46,17 @@ add_executable(${PROJECT_NAME} WIN32 ${MAIN_SOURCES})
 # 设置头文件目录
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
-    ${wxWidgets_INCLUDE_DIRS}
-    ${Coin3D_INCLUDE_DIRS}
 )
 
-# 添加明确的库路径（如果使用vcpkg）
-if(CMAKE_TOOLCHAIN_FILE AND wxWidgets_ROOT_DIR)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        link_directories("${wxWidgets_ROOT_DIR}/debug/lib")
-    else()
-        link_directories("${wxWidgets_ROOT_DIR}/lib")
-    endif()
-endif()
+
 
 # 链接所有模块库
 target_link_libraries(${PROJECT_NAME} PRIVATE
     CADUI          # UI模块（包含所有其他模块的依赖）
-    ${wxWidgets_LIBRARIES}
+    wx::core
+    wx::base
     Coin::Coin
-    ${OpenCASCADE_LIBRARIES}
+    TKBO TKDE TKBin TKCAF
 )
 
 # Windows 下启用 Unicode 支持
@@ -79,6 +73,18 @@ if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /std:c++17)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         LINK_FLAGS "/SUBSYSTEM:WINDOWS"
+    )
+        # 复制 config 目录及其所有子目录和文件到目标目录
+    set(CONFIG_SOURCE_DIR "${CMAKE_SOURCE_DIR}/config")
+    set(TARGET_DIR $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+    
+    # 使用 copy_directory 命令复制整个目录
+    add_custom_command(
+        TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CONFIG_SOURCE_DIR}"
+                "${TARGET_DIR}/config"
+        COMMENT "Copying config directory and all subdirectories to ${TARGET_DIR}/config"
     )
 endif()
 

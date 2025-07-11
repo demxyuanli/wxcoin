@@ -1,56 +1,55 @@
 #include "ImportStepListener.h"
-#include "MainFrame.h"
-#include "Canvas.h"
-#include "OCCViewer.h"
+#include "CommandDispatcher.h"
 #include "STEPReader.h"
-#include "SceneManager.h"
+#include "OCCViewer.h"
 #include <wx/filedlg.h>
-#include "Logger.h"
+#include "logger/Logger.h"
 
-ImportStepListener::ImportStepListener(MainFrame* mainFrame, Canvas* canvas, OCCViewer* viewer)
-    : m_mainFrame(mainFrame), m_canvas(canvas), m_viewer(viewer) {}
+ImportStepListener::ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
+    : m_frame(frame), m_canvas(canvas), m_occViewer(occViewer)
+{
+    if (!m_frame) {
+        LOG_ERR_S("ImportStepListener: frame pointer is null");
+    }
+}
 
 CommandResult ImportStepListener::executeCommand(const std::string& commandType,
-                                                 const std::unordered_map<std::string, std::string>& /*parameters*/) {
-    if (!m_mainFrame || !m_canvas) {
-        return CommandResult(false, "Main frame or canvas not available", commandType);
+                                                const std::unordered_map<std::string, std::string>&) {
+    wxFileDialog openFileDialog(m_frame, "Import STEP File", "", "",
+                               "STEP files (*.step;*.stp)|*.step;*.stp|All files (*.*)|*.*",
+                               wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    
+    if (openFileDialog.ShowModal() == wxID_CANCEL)
+        return CommandResult(false, "STEP import cancelled", commandType);
+    
+    wxString filePath = openFileDialog.GetPath();
+    LOG_INF_S("Importing STEP file: " + filePath.ToStdString());
+    
+    try {
+        // Use the static method from STEPReader
+        auto result = STEPReader::readSTEPFile(filePath.ToStdString());
+        
+        if (result.success && !result.geometries.empty() && m_occViewer) {
+            // Add geometries to the OCC viewer
+            for (const auto& geometry : result.geometries) {
+                m_occViewer->addGeometry(geometry);
+            }
+            
+            // Note: Canvas refresh will be handled by the viewer or elsewhere
+            // to avoid OpenGL header conflicts in this compilation unit
+            
+            LOG_INF_S("Successfully imported " + std::to_string(result.geometries.size()) + " geometries from STEP file");
+            return CommandResult(true, "STEP file imported successfully", commandType);
+        } else if (!result.success) {
+            LOG_ERR_S("Failed to read STEP file: " + result.errorMessage);
+            return CommandResult(false, "Failed to read STEP file: " + result.errorMessage, commandType);
+        } else {
+            return CommandResult(false, "No valid geometries found in STEP file", commandType);
+        }
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception during STEP import: " + std::string(e.what()));
+        return CommandResult(false, "Error importing STEP file: " + std::string(e.what()), commandType);
     }
-
-    wxString wildcard = "STEP files (*.step;*.stp)|*.step;*.stp|All files (*.*)|*.*";
-    wxFileDialog dlg(m_mainFrame, "Import STEP File", "", "", wildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
-    if (dlg.ShowModal() == wxID_CANCEL) {
-        LOG_INF("STEP import dialog cancelled");
-        return CommandResult(false, "Import operation cancelled", commandType);
-    }
-
-    std::string filePath = dlg.GetPath().ToStdString();
-    LOG_INF("Reading STEP file: " + filePath);
-
-    auto res = STEPReader::readSTEPFile(filePath);
-    if (!res.success) {
-        LOG_ERR("STEP import failed: " + res.errorMessage);
-        m_canvas->showErrorDialog(res.errorMessage);
-        return CommandResult(false, res.errorMessage, commandType);
-    }
-
-    if (!m_viewer) {
-        std::string err = "OCCViewer not available";
-        LOG_ERR(err);
-        m_canvas->showErrorDialog(err);
-        return CommandResult(false, err, commandType);
-    }
-    for (auto& geom : res.geometries) {
-        m_viewer->addGeometry(geom);
-    }
-    m_canvas->Refresh();
-
-    if (m_canvas && m_canvas->getSceneManager()) {
-        m_canvas->getSceneManager()->updateSceneBounds();
-        m_canvas->getSceneManager()->resetView();
-    }
-
-    std::string msg = "Imported " + std::to_string(res.geometries.size()) + " objects";
-    return CommandResult(true, msg, commandType);
 }
 
 bool ImportStepListener::canHandleCommand(const std::string& commandType) const {

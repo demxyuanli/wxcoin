@@ -1,24 +1,21 @@
 #pragma once
 
 #include "CommandListener.h"
-#include <memory>
+#include <wx/frame.h>
 
 class OCCViewer;
-class wxWindow;
 
-class MeshQualityDialogListener : public CommandListener
-{
+class MeshQualityDialogListener : public CommandListener {
 public:
-    MeshQualityDialogListener(wxWindow* parent, OCCViewer* occViewer);
-    virtual ~MeshQualityDialogListener() = default;
+    MeshQualityDialogListener(wxFrame* frame, OCCViewer* occViewer);
+    ~MeshQualityDialogListener() override = default;
 
-    CommandResult executeCommand(const std::string& commandType, const std::unordered_map<std::string, std::string>& parameters) override;
+    CommandResult executeCommand(const std::string& commandType,
+                                 const std::unordered_map<std::string, std::string>& parameters) override;
     bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override;
-
-    CommandResult execute(const std::unordered_map<std::string, std::string>& parameters);
+    std::string getListenerName() const override { return "MeshQualityDialogListener"; }
 
 private:
-    wxWindow* m_parent;
+    wxFrame* m_frame;
     OCCViewer* m_occViewer;
 }; 

@@ -1,6 +1,6 @@
 #include "ObjectTreePanel.h"
 #include "GeometryObject.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "PropertyPanel.h"
 #include <wx/treectrl.h>
 #include <wx/sizer.h>
@@ -9,7 +9,7 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
     : wxPanel(parent, wxID_ANY)
     , m_propertyPanel(nullptr)
 {
-    LOG_INF("ObjectTreePanel initializing");
+    LOG_INF_S("ObjectTreePanel initializing");
     m_treeCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_SINGLE);
 
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -23,21 +23,21 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 
 ObjectTreePanel::~ObjectTreePanel()
 {
-    LOG_INF("ObjectTreePanel destroying");
+    LOG_INF_S("ObjectTreePanel destroying");
 }
 
 void ObjectTreePanel::addObject(GeometryObject* object)
 {
     if (!object) {
-        LOG_ERR("Attempted to add null object to tree");
+        LOG_ERR_S("Attempted to add null object to tree");
         return;
     }
     if (m_objectMap.find(object) != m_objectMap.end()) {
-        LOG_WRN("Object already exists in tree: " + object->getName());
+        LOG_WRN_S("Object already exists in tree: " + object->getName());
         return;
     }
 
-    LOG_INF("Adding object to tree: " + object->getName());
+    LOG_INF_S("Adding object to tree: " + object->getName());
     wxTreeItemId itemId = m_treeCtrl->AppendItem(m_rootId, object->getName());
     m_objectMap[object] = itemId;
     m_treeCtrl->Expand(m_rootId);
@@ -46,17 +46,17 @@ void ObjectTreePanel::addObject(GeometryObject* object)
 void ObjectTreePanel::removeObject(GeometryObject* object)
 {
     if (!object) {
-        LOG_ERR("Attempted to remove null object from tree");
+        LOG_ERR_S("Attempted to remove null object from tree");
         return;
     }
 
     auto it = m_objectMap.find(object);
     if (it == m_objectMap.end()) {
-        LOG_WRN("Object not found in tree: " + object->getName());
+        LOG_WRN_S("Object not found in tree: " + object->getName());
         return;
     }
 
-    LOG_INF("Removing object from tree: " + object->getName());
+    LOG_INF_S("Removing object from tree: " + object->getName());
     m_treeCtrl->Delete(it->second);
     m_objectMap.erase(it);
 }
@@ -64,36 +64,36 @@ void ObjectTreePanel::removeObject(GeometryObject* object)
 void ObjectTreePanel::updateObjectName(GeometryObject* object)
 {
     if (!object) {
-        LOG_ERR("Attempted to update name of null object");
+        LOG_ERR_S("Attempted to update name of null object");
         return;
     }
 
     auto it = m_objectMap.find(object);
     if (it == m_objectMap.end()) {
-        LOG_WRN("Object not found in tree for name update: " + object->getName());
+        LOG_WRN_S("Object not found in tree for name update: " + object->getName());
         return;
     }
 
-    LOG_INF("Updating object name in tree: " + object->getName());
+    LOG_INF_S("Updating object name in tree: " + object->getName());
     m_treeCtrl->SetItemText(it->second, object->getName());
 }
 
 void ObjectTreePanel::setPropertyPanel(PropertyPanel* panel)
 {
     m_propertyPanel = panel;
-    LOG_INF("PropertyPanel set for ObjectTreePanel");
+    LOG_INF_S("PropertyPanel set for ObjectTreePanel");
 }
 
 void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
 {
     wxTreeItemId itemId = event.GetItem();
     if (!itemId.IsOk()) {
-        LOG_WRN("Invalid tree item selected");
+        LOG_WRN_S("Invalid tree item selected");
         return;
     }
 
     if (itemId == m_rootId) {
-        LOG_INF("Root item selected");
+        LOG_INF_S("Root item selected");
         if (m_propertyPanel) {
             m_propertyPanel->clearProperties();
         }
@@ -109,7 +109,7 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
     }
 
     if (selectedObject) {
-        LOG_INF("Selected object in tree: " + selectedObject->getName());
+        LOG_INF_S("Selected object in tree: " + selectedObject->getName());
         selectedObject->setSelected(true);
         if (m_propertyPanel) {
             m_propertyPanel->updateProperties(selectedObject);

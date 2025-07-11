@@ -1,7 +1,7 @@
 #include "NavigationController.h"
 #include "Canvas.h"
 #include "SceneManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/SbRotation.h>
 #include <cmath>
@@ -13,11 +13,11 @@ NavigationController::NavigationController(Canvas* canvas, SceneManager* sceneMa
     , m_dragMode(DragMode::NONE)
     , m_zoomSpeedFactor(1.0f)
 {
-    LOG_INF("NavigationController initializing");
+    LOG_INF_S("NavigationController initializing");
 }
 
 NavigationController::~NavigationController() {
-    LOG_INF("NavigationController destroying");
+    LOG_INF_S("NavigationController destroying");
 }
 
 void NavigationController::handleMouseButton(wxMouseEvent& event) {
@@ -66,7 +66,7 @@ void NavigationController::handleMouseWheel(wxMouseEvent& event) {
 void NavigationController::rotateCamera(const wxPoint& currentPos, const wxPoint& lastPos) {
     SoCamera* camera = m_sceneManager->getCamera();
     if (!camera) {
-        LOG_ERR("Cannot rotate: Invalid camera");
+        LOG_ERR_S("Cannot rotate: Invalid camera");
         return;
     }
 
@@ -107,7 +107,7 @@ void NavigationController::rotateCamera(const wxPoint& currentPos, const wxPoint
 void NavigationController::panCamera(const wxPoint& currentPos, const wxPoint& lastPos) {
     SoCamera* camera = m_sceneManager->getCamera();
     if (!camera) {
-        LOG_ERR("Cannot pan: Invalid camera");
+        LOG_ERR_S("Cannot pan: Invalid camera");
         return;
     }
 
@@ -125,7 +125,7 @@ void NavigationController::panCamera(const wxPoint& currentPos, const wxPoint& l
 void NavigationController::zoomCamera(float delta) {
     SoCamera* camera = m_sceneManager->getCamera();
     if (!camera) {
-        LOG_ERR("Cannot zoom: Invalid camera");
+        LOG_ERR_S("Cannot zoom: Invalid camera");
         return;
     }
 
@@ -148,7 +148,7 @@ void NavigationController::viewAll() {
 void NavigationController::viewTop() {
     SoCamera* camera = m_sceneManager->getCamera();
     if (!camera) {
-        LOG_ERR("Cannot set top view: Invalid camera");
+        LOG_ERR_S("Cannot set top view: Invalid camera");
         return;
     }
     
@@ -158,7 +158,7 @@ void NavigationController::viewTop() {
 void NavigationController::viewFront() {
     SoCamera* camera = m_sceneManager->getCamera();
     if (!camera) {
-        LOG_ERR("Cannot set front view: Invalid camera");
+        LOG_ERR_S("Cannot set front view: Invalid camera");
         return;
     }
     
@@ -168,7 +168,7 @@ void NavigationController::viewFront() {
 void NavigationController::viewRight() {
     SoCamera* camera = m_sceneManager->getCamera();
     if (!camera) {
-        LOG_ERR("Cannot set right view: Invalid camera");
+        LOG_ERR_S("Cannot set right view: Invalid camera");
         return;
     }
     
@@ -178,7 +178,7 @@ void NavigationController::viewRight() {
 void NavigationController::viewIsometric() {
     SoCamera* camera = m_sceneManager->getCamera();
     if (!camera) {
-        LOG_ERR("Cannot set isometric view: Invalid camera");
+        LOG_ERR_S("Cannot set isometric view: Invalid camera");
         return;
     }
     

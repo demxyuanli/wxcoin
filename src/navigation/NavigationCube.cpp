@@ -24,7 +24,7 @@
 #include <wx/time.h>
 #include <cmath>
 #include <vector>
-#include "Logger.h"
+#include "logger/Logger.h"
 
 std::map<std::string, std::shared_ptr<NavigationCube::TextureData>> NavigationCube::s_textureCache;
 
@@ -69,7 +69,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
     wxMemoryDC dc;
     dc.SelectObject(bitmap); // Explicitly select bitmap
     if (!dc.IsOk()) {
-        //LOG_ERR("NavigationCube::generateFaceTexture: Failed to create wxMemoryDC for texture: " + text);
+        //LOG_ERR_S("NavigationCube::generateFaceTexture: Failed to create wxMemoryDC for texture: " + text);
         // Fallback: Fill with white
         for (int i = 0; i < width * height * 4; i += 4) {
             imageData[i] = 255; // R
@@ -77,7 +77,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
             imageData[i + 2] = 255; // B
             imageData[i + 3] = 255; // A
         }
-        //LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
+        //LOG_INF_S("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
         return true;
     }
 
@@ -98,7 +98,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
     // Validate bitmap content
     wxImage image = bitmap.ConvertToImage();
     if (!image.IsOk()) {
-        LOG_ERR("NavigationCube::generateFaceTexture: Failed to convert bitmap to image for texture: " + text);
+        LOG_ERR_S("NavigationCube::generateFaceTexture: Failed to convert bitmap to image for texture: " + text);
         // Fallback: Fill with white
         for (int i = 0; i < width * height * 4; i += 4) {
             imageData[i] = 255; // R
@@ -106,7 +106,7 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
             imageData[i + 2] = 255; // B
             imageData[i + 3] = 255; // A
         }
-        LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
+        LOG_INF_S("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
         return true;
     }
 
@@ -136,24 +136,23 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
         std::to_string(imageData[0]) + "," +
         std::to_string(imageData[1]) + "," +
         std::to_string(imageData[2]) + "," +
-        std::to_string(imageData[3]));
+        std::to_string(imageData[3]), "NavigationCube");
     int textPixelIdx = (width * height / 2) * 4; // Middle of texture for text
     LOG_INF("NavigationCube::generateFaceTexture: Text pixel (center) RGBA=" +
         std::to_string(imageData[textPixelIdx]) + "," +
         std::to_string(imageData[textPixelIdx + 1]) + "," +
         std::to_string(imageData[textPixelIdx + 2]) + "," +
-        std::to_string(imageData[textPixelIdx + 3]));
+        std::to_string(imageData[textPixelIdx + 3]),"NavigationCube");
     // Log additional pixels
     for (int i = 0; i < 20; i += 4) {
         LOG_INF("NavigationCube::generateFaceTexture: Debug pixel " + std::to_string(i / 4) + " RGBA=" +
             std::to_string(imageData[i]) + "," +
             std::to_string(imageData[i + 1]) + "," +
             std::to_string(imageData[i + 2]) + "," +
-            std::to_string(imageData[i + 3]));
+            std::to_string(imageData[i + 3]), "NavigationCube");
     }
 
     if (!hasValidPixels) {
-        LOG_WRN("NavigationCube::generateFaceTexture: All pixels are black for texture: " + text);
         // Fallback: Fill with white
         for (int i = 0; i < width * height * 4; i += 4) {
             imageData[i] = 255; // R
@@ -161,11 +160,8 @@ bool NavigationCube::generateFaceTexture(const std::string& text, unsigned char*
             imageData[i + 2] = 255; // B
             imageData[i + 3] = 255; // A
         }
-        LOG_INF("NavigationCube::generateFaceTexture: Fallback to white texture for: " + text);
     }
 
-    LOG_INF("NavigationCube::generateFaceTexture: Texture generated for " + text +
-        ", size=" + std::to_string(width) + "x" + std::to_string(height));
     return true;
 }
 
@@ -176,7 +172,6 @@ void NavigationCube::setupGeometry() {
     m_orthoCamera->position.setValue(0.0f, 0.0f, 5.0f);
     m_orthoCamera->orientation.setValue(SbRotation::identity());
     m_root->addChild(m_orthoCamera);
-    LOG_INF("NavigationCube::setupGeometry: Added orthographic camera");
 
     m_root->addChild(m_cameraTransform);
     updateCameraRotation();
@@ -185,7 +180,6 @@ void NavigationCube::setupGeometry() {
     env->ambientColor.setValue(1.0f, 1.0f, 1.0f);
     env->ambientIntensity.setValue(1.0f);
     m_root->addChild(env);
-    LOG_INF("NavigationCube::setupGeometry: Added environment light with intensity 0.3");
 
     SoDirectionalLight* mainLight = new SoDirectionalLight;
     mainLight->direction.setValue(0.5f, 0.5f, -1.0f);
@@ -193,7 +187,6 @@ void NavigationCube::setupGeometry() {
     mainLight->color.setValue(1.0f, 1.0f, 1.0f);
     mainLight->on.setValue(true);
     m_root->addChild(mainLight);
-    LOG_INF("NavigationCube::setupGeometry: Added main directional light from (0.5, 0.5, -1.0)");
 
     SoDirectionalLight* fillLight = new SoDirectionalLight;
     fillLight->direction.setValue(-0.3f, -0.3f, -0.5f);
@@ -201,7 +194,6 @@ void NavigationCube::setupGeometry() {
     fillLight->color.setValue(0.9f, 0.9f, 1.0f);
     fillLight->on.setValue(true);
     m_root->addChild(fillLight);
-    LOG_INF("NavigationCube::setupGeometry: Added fill directional light from (-0.3, -0.3, -0.5)");
 
     SoSeparator* cubeAssembly = new SoSeparator; // Parent for all faces
 
@@ -212,7 +204,6 @@ void NavigationCube::setupGeometry() {
     material->shininess.setValue(0.5f);
     material->emissiveColor.setValue(0.1f, 0.1f, 0.1f);
     cubeAssembly->addChild(material);
-    LOG_INF("NavigationCube::setupGeometry: Added cube material to assembly");
 
     SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
     texCoords->point.setValues(0, 4, new SbVec2f[4]{
@@ -223,7 +214,6 @@ void NavigationCube::setupGeometry() {
     // Use DPI manager for optimal texture size
     auto& dpiManager = DPIManager::getInstance();
     int texSize = dpiManager.getScaledTextureSize(128);
-    LOG_INF("NavigationCube::setupGeometry: Using DPI-aware texture size: " + std::to_string(texSize) + "x" + std::to_string(texSize));
 
     struct FaceDef {
         std::string description; // e.g., "Front Face"
@@ -262,10 +252,7 @@ void NavigationCube::setupGeometry() {
         if (textureInfo) {
             texture->image.setValue(SbVec2s(textureInfo->width, textureInfo->height), 
                                   textureInfo->channels, textureInfo->data.get());
-            LOG_DBG("NavigationCube::setupGeometry: Using DPI-aware texture for face: " + faceDef.textureKey +
-                   " (" + std::to_string(textureInfo->width) + "x" + std::to_string(textureInfo->height) + ")");
         } else {
-            LOG_ERR("NavigationCube::setupGeometry: Failed to generate DPI-aware texture for face: " + faceDef.textureKey);
             continue;
         }
         // texture->setName(faceDef.textureKey.c_str()); // Texture node itself can also be named if needed
@@ -283,11 +270,9 @@ void NavigationCube::setupGeometry() {
         faceSep->addChild(faceSet);
         
         cubeAssembly->addChild(faceSep);
-        LOG_INF("NavigationCube::setupGeometry: Added " + faceDef.description + " with texture: " + faceDef.textureKey);
     }
     
     m_root->addChild(cubeAssembly);
-    LOG_INF("NavigationCube::setupGeometry: Added cube face assembly to root");
 
 
     // Edges (remain as before, as a separate SoCube with LINES draw style)
@@ -301,7 +286,6 @@ void NavigationCube::setupGeometry() {
     edgeMaterial->specularColor.setValue(1.0f, 1.0f, 1.0f);
     edgeMaterial->shininess.setValue(0.2f);
     edgeSep->addChild(edgeMaterial);
-    LOG_INF("NavigationCube::setupGeometry: Added edge material");
 
     SoCube* edgeCube = new SoCube; // This cube is for edges only
     edgeCube->width.setValue(1.0f);
@@ -310,7 +294,6 @@ void NavigationCube::setupGeometry() {
     edgeCube->setName("NavCubeEdges");
     edgeSep->addChild(edgeCube);
     m_root->addChild(edgeSep); // Add edges to the main root
-    LOG_INF("NavigationCube::setupGeometry: Added edge geometry");
 }
 
 void NavigationCube::updateCameraRotation() {
@@ -324,7 +307,6 @@ void NavigationCube::updateCameraRotation() {
 
     m_orthoCamera->position.setValue(x, y, z);
     m_orthoCamera->pointAt(SbVec3f(0, 0, 0));
-    LOG_DBG("NavigationCube::updateCameraRotation: Camera position x=" + std::to_string(x) + ", y=" + std::to_string(y) + ", z=" + std::to_string(z));
 }
 
 std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize) {
@@ -335,14 +317,11 @@ std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& vi
 
     SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
     if (!pickedPoint) {
-        LOG_DBG("NavigationCube::pickRegion: No point picked at position (" +
-            std::to_string(mousePos[0]) + ", " + std::to_string(mousePos[1]) + ")");
         return "";
     }
 
     SoPath* pickedPath = pickedPoint->getPath();
     if (!pickedPath || pickedPath->getLength() == 0) {
-        LOG_DBG("NavigationCube::pickRegion: Picked point has no valid path.");
         return "";
     }
 
@@ -354,7 +333,6 @@ std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& vi
             std::string nameStr = currentNode->getName().getString();
             auto it = m_faceToView.find(nameStr); // m_faceToView maps "F" to "Front", etc.
             if (it != m_faceToView.end()) {
-                LOG_INF("NavigationCube::pickRegion: Picked face separator: " + nameStr + ", maps to view: " + it->second);
                 return it->second; // Return "Front", "Back", etc.
             }
         }
@@ -363,13 +341,11 @@ std::string NavigationCube::pickRegion(const SbVec2s& mousePos, const wxSize& vi
     // Fallback or specific handling for edges if NavCubeEdges is picked
     SoNode* pickedPrimitive = pickedPath->getTail();
     if (pickedPrimitive && pickedPrimitive->getName() == "NavCubeEdges") {
-        LOG_INF("NavigationCube::pickRegion: Picked NavCubeEdges.");
         // Here you could add logic to determine which edge or corner was hit,
         // possibly using pickedPoint->getNormal(), though it might be complex.
         // For now, clicking an edge won't trigger a view change via this path.
     }
 
-    LOG_DBG("NavigationCube::pickRegion: No specific face region (F,B,L,R,T,D) identified by named separator.");
     return "";
 }
 
@@ -383,7 +359,6 @@ void NavigationCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& v
     float y = static_cast<float>(event.GetY());
     SbVec2s currentPos(static_cast<short>(x), static_cast<short>(y));
 
-    LOG_DBG("NavigationCube::handleMouseEvent: Mouse at x=" + std::to_string(x) + ", y=" + std::to_string(y));
 
     if (event.GetEventType() == wxEVT_LEFT_DOWN) {
         m_isDragging = true;
@@ -395,9 +370,6 @@ void NavigationCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& v
         m_rotationX = asinf(camPos[1] / distance) * 180.0f / M_PI;
         m_rotationY = atan2f(camPos[0], camPos[2]) * 180.0f / M_PI;
 
-        LOG_INF("NavigationCube::handleMouseEvent: Drag started at x=" + std::to_string(m_lastMousePos[0]) +
-            ", y=" + std::to_string(m_lastMousePos[1]) + ", rotationX=" + std::to_string(m_rotationX) +
-            ", rotationY=" + std::to_string(m_rotationY));
     }
     else if (event.GetEventType() == wxEVT_LEFT_UP && m_isDragging) {
         m_isDragging = false;
@@ -408,10 +380,8 @@ void NavigationCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& v
             std::string region = pickRegion(pickPos, viewportSize);
             if (!region.empty() && m_viewChangeCallback) {
                 m_viewChangeCallback(region);
-                LOG_INF("NavigationCube::handleMouseEvent: Switched to view: " + region);
             }
         }
-        LOG_INF("NavigationCube::handleMouseEvent: Drag ended");
     }
     else if (event.GetEventType() == wxEVT_MOTION && m_isDragging) {
         wxLongLong currentTime = wxGetLocalTimeMillis();
@@ -429,9 +399,6 @@ void NavigationCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& v
         updateCameraRotation();
         m_lastMousePos = currentPos;
 
-        LOG_DBG("NavigationCube::handleMouseEvent: Rotated: X=" + std::to_string(m_rotationX) +
-            ", Y=" + std::to_string(m_rotationY) + ", deltaX=" + std::to_string(delta[0]) +
-            ", deltaY=" + std::to_string(delta[1]));
 
         if (m_rotationChangedCallback) {
             m_rotationChangedCallback();
@@ -458,20 +425,11 @@ void NavigationCube::setEnabled(bool enabled) {
 void NavigationCube::setCameraPosition(const SbVec3f& position) {
     if (m_orthoCamera) {
         m_orthoCamera->position.setValue(position);
-        LOG_DBG("NavigationCube::setCameraPosition: Set camera position to x=" + std::to_string(position[0]) +
-            ", y=" + std::to_string(position[1]) + ", z=" + std::to_string(position[2]));
-    }
-    else {
-        LOG_WRN("NavigationCube::setCameraPosition: Camera not initialized");
     }
 }
 
 void NavigationCube::setCameraOrientation(const SbRotation& orientation) {
     if (m_orthoCamera) {
         m_orthoCamera->orientation.setValue(orientation);
-        LOG_DBG("NavigationCube::setCameraOrientation: Set camera orientation");
-    }
-    else {
-        LOG_WRN("NavigationCube::setCameraOrientation: Camera not initialized");
     }
 }

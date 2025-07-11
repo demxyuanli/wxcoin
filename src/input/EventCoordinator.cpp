@@ -1,22 +1,22 @@
 #include "EventCoordinator.h"
 #include "NavigationCubeManager.h"
 #include "InputManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 EventCoordinator::EventCoordinator()
     : m_navigationCubeManager(nullptr)
     , m_inputManager(nullptr)
 {
-    LOG_INF("EventCoordinator::EventCoordinator: Initializing");
+    LOG_INF_S("EventCoordinator::EventCoordinator: Initializing");
 }
 
 EventCoordinator::~EventCoordinator() {
-    LOG_INF("EventCoordinator::~EventCoordinator: Destroying");
+    LOG_INF_S("EventCoordinator::~EventCoordinator: Destroying");
 }
 
 bool EventCoordinator::handleMouseEvent(wxMouseEvent& event) {
     if (!m_inputManager) {
-        LOG_WRN("EventCoordinator::handleMouseEvent: InputManager is null");
+        LOG_WRN_S("EventCoordinator::handleMouseEvent: InputManager is null");
         return false;
     }
 

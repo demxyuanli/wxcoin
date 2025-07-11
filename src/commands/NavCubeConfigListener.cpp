@@ -1,6 +1,6 @@
 #include "NavCubeConfigListener.h"
 #include "Canvas.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 NavCubeConfigListener::NavCubeConfigListener(Canvas* canvas) : m_canvas(canvas) {}
 

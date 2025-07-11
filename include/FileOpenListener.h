@@ -3,13 +3,13 @@
 #include "CommandListener.h"
 #include "CommandType.h"
 #include <memory>
+#include <wx/frame.h>
 
-class MainFrame;
 class Canvas;
 
 class FileOpenListener : public CommandListener {
 public:
-    FileOpenListener(MainFrame* mainFrame);
+    FileOpenListener(wxFrame* frame);
     ~FileOpenListener() override = default;
 
     CommandResult executeCommand(const std::string& commandType,
@@ -18,5 +18,5 @@ public:
     std::string getListenerName() const override { return "FileOpenListener"; }
 
 private:
-    MainFrame* m_mainFrame;
+    wxFrame* m_frame;
 }; 

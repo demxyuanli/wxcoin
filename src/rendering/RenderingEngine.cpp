@@ -1,7 +1,7 @@
 #include "RenderingEngine.h"
 #include "SceneManager.h"
 #include "NavigationCubeManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <wx/msgdlg.h>
 #include <stdexcept>
 #include <GL/gl.h>
@@ -17,16 +17,16 @@ RenderingEngine::RenderingEngine(wxGLCanvas* canvas)
     , m_isRendering(false)
     , m_lastRenderTime(0)
 {
-    LOG_INF("RenderingEngine::RenderingEngine: Initializing");
+    LOG_INF_S("RenderingEngine::RenderingEngine: Initializing");
 }
 
 RenderingEngine::~RenderingEngine() {
-    LOG_INF("RenderingEngine::~RenderingEngine: Destroying");
+    LOG_INF_S("RenderingEngine::~RenderingEngine: Destroying");
 }
 
 bool RenderingEngine::initialize() {
     if (m_isInitialized) {
-        LOG_WRN("RenderingEngine::initialize: Already initialized");
+        LOG_WRN_S("RenderingEngine::initialize: Already initialized");
         return true;
     }
 
@@ -35,13 +35,13 @@ bool RenderingEngine::initialize() {
         m_isInitialized = true;
         
         const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-        LOG_INF("RenderingEngine::initialize: GL Context created. OpenGL version: " + 
+        LOG_INF_S("RenderingEngine::initialize: GL Context created. OpenGL version: " + 
                 std::string(glVersion ? glVersion : "unknown"));
         
         return true;
     }
     catch (const std::exception& e) {
-        LOG_ERR("RenderingEngine::initialize: Failed: " + std::string(e.what()));
+        LOG_ERR_S("RenderingEngine::initialize: Failed: " + std::string(e.what()));
         return false;
     }
 }
@@ -64,17 +64,17 @@ void RenderingEngine::render(bool fastMode) {
 
 void RenderingEngine::renderWithoutSwap(bool fastMode) {
     if (!m_isInitialized) {
-        LOG_WRN("RenderingEngine::renderWithoutSwap: Skipped: Not initialized");
+        LOG_WRN_S("RenderingEngine::renderWithoutSwap: Skipped: Not initialized");
         return;
     }
 
     if (!m_canvas->IsShown() || !m_glContext || !m_sceneManager) {
-        LOG_WRN("RenderingEngine::renderWithoutSwap: Skipped: Canvas not shown or context/scene invalid");
+        LOG_WRN_S("RenderingEngine::renderWithoutSwap: Skipped: Canvas not shown or context/scene invalid");
         return;
     }
 
     if (m_isRendering) {
-        LOG_WRN("RenderingEngine::renderWithoutSwap: Skipped: Already rendering");
+        LOG_WRN_S("RenderingEngine::renderWithoutSwap: Skipped: Already rendering");
         return;
     }
 
@@ -88,14 +88,14 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
 
     try {
         if (!m_canvas->SetCurrent(*m_glContext)) {
-            LOG_ERR("RenderingEngine::renderWithoutSwap: Failed to set GL context");
+            LOG_ERR_S("RenderingEngine::renderWithoutSwap: Failed to set GL context");
             m_isRendering = false;
             return;
         }
 
         wxSize size = m_canvas->GetClientSize();
         if (size.x <= 0 || size.y <= 0) {
-            LOG_WRN("RenderingEngine::renderWithoutSwap: Invalid viewport size: " + 
+            LOG_WRN_S("RenderingEngine::renderWithoutSwap: Invalid viewport size: " + 
                    std::to_string(size.x) + "x" + std::to_string(size.y));
             m_isRendering = false;
             return;
@@ -116,7 +116,7 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
         }
     }
     catch (const std::exception& e) {
-        LOG_ERR("RenderingEngine::renderWithoutSwap: Exception during render: " + std::string(e.what()));
+        LOG_ERR_S("RenderingEngine::renderWithoutSwap: Exception during render: " + std::string(e.what()));
         clearBuffers();
         m_isRendering = false;
         
@@ -145,7 +145,7 @@ void RenderingEngine::presentFrame() {
 
 void RenderingEngine::handleResize(const wxSize& size) {
     if (!m_isInitialized || !m_glContext) {
-        LOG_WRN("RenderingEngine::handleResize: Not initialized or invalid context");
+        LOG_WRN_S("RenderingEngine::handleResize: Not initialized or invalid context");
         return;
     }
 
@@ -160,7 +160,7 @@ void RenderingEngine::handleResize(const wxSize& size) {
         
         m_canvas->Refresh();
     } else {
-        LOG_WRN("RenderingEngine::handleResize: Skipped: Invalid size or context");
+        LOG_WRN_S("RenderingEngine::handleResize: Skipped: Invalid size or context");
     }
 }
 

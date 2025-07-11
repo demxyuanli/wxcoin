@@ -7,7 +7,7 @@
 #include "InputManager.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/button.h>
@@ -32,7 +32,7 @@ PositionDialog::PositionDialog(wxWindow* parent, const wxString& title, PickingA
     : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE)
     , m_pickingAidManager(pickingAidManager)
 {
-    LOG_INF("Creating position dialog");
+    LOG_INF_S("Creating position dialog");
     SetName("PositionDialog");
 
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
@@ -104,7 +104,7 @@ SbVec3f PositionDialog::GetPosition() const
 }
 
 void PositionDialog::OnPickButton(wxCommandEvent& event) {
-    LOG_INF("Pick button clicked - entering picking mode");
+    LOG_INF_S("Pick button clicked - entering picking mode");
     if (m_pickingAidManager) {
         m_pickingAidManager->startPicking();
         m_pickingAidManager->showPickingAidLines(GetPosition());
@@ -113,12 +113,12 @@ void PositionDialog::OnPickButton(wxCommandEvent& event) {
     m_pickButton->Enable(false);
     this->Hide();
     if (m_pickingAidManager) {
-        LOG_INF("Dialog hidden, picking mode active: " + std::to_string(m_pickingAidManager->isPicking()));
+        LOG_INF("Dialog hidden, picking mode active: " + std::to_string(m_pickingAidManager->isPicking()),"PositionDialog");
     }
 }
 
 void PositionDialog::OnOkButton(wxCommandEvent& event) {
-    LOG_INF("Position confirmed: " + std::to_string(GetPosition()[0]) + ", " + std::to_string(GetPosition()[1]) + ", " + std::to_string(GetPosition()[2]));
+    LOG_INF_S("Position confirmed: " + std::to_string(GetPosition()[0]) + ", " + std::to_string(GetPosition()[1]) + ", " + std::to_string(GetPosition()[2]));
     if (m_pickingAidManager) {
         m_pickingAidManager->stopPicking();
     }
@@ -136,25 +136,25 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                     std::string geometryType = mouseHandler->getCreationGeometryType();
                     GeometryFactory factory(canvas->getSceneManager()->getObjectRoot(), canvas->getObjectTreePanel(), canvas->getObjectTreePanel()->getPropertyPanel(), canvas->getCommandManager());
                     factory.createGeometry(geometryType, finalPos);
-                    LOG_INF("Creating geometry at position from dialog");
+                    LOG_INF_S("Creating geometry at position from dialog");
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");
-                    LOG_INF("Reset operation mode to VIEW");
+                    LOG_INF_S("Reset operation mode to VIEW");
                 }
                 else {
-                    LOG_ERR("MouseHandler not found");
+                    LOG_ERR_S("MouseHandler not found");
                 }
             }
             else {
-                LOG_ERR("Canvas cast failed");
+                LOG_ERR_S("Canvas cast failed");
             }
         }
         else {
-            LOG_ERR("Canvas window not found");
+            LOG_ERR_S("Canvas window not found");
         }
     }
     else {
-        LOG_ERR("Parent window not found");
+        LOG_ERR_S("Parent window not found");
     }
 
     Hide();
@@ -162,7 +162,7 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
 }
 
 void PositionDialog::OnCancelButton(wxCommandEvent& event) {
-    LOG_INF("Position input cancelled");
+    LOG_INF_S("Position input cancelled");
     if (m_pickingAidManager) {
         m_pickingAidManager->stopPicking();
     }
@@ -178,19 +178,19 @@ void PositionDialog::OnCancelButton(wxCommandEvent& event) {
                 if (mouseHandler) {
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");
-                    LOG_INF("Reset operation mode to VIEW on cancel");
+                    LOG_INF_S("Reset operation mode to VIEW on cancel");
                 }
             }
             else {
-                LOG_ERR("Canvas cast failed");
+                LOG_ERR_S("Canvas cast failed");
             }
         }
         else {
-            LOG_ERR("Canvas window not found");
+            LOG_ERR_S("Canvas window not found");
         }
     }
     else {
-        LOG_ERR("Parent window not found");
+        LOG_ERR_S("Parent window not found");
     }
 
     Hide();
@@ -207,7 +207,7 @@ void PositionDialog::OnReferenceZChanged(wxCommandEvent& event) {
                 Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
                 if (canvas) {
                     canvas->getSceneManager()->getPickingAidManager()->setReferenceZ(static_cast<float>(referenceZ));
-                    LOG_INF("Reference Z set to: " + std::to_string(referenceZ));
+                    LOG_INF_S("Reference Z set to: " + std::to_string(referenceZ));
                 }
             }
         }
@@ -228,7 +228,7 @@ void PositionDialog::OnShowGridChanged(wxCommandEvent& event) {
             Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
             if (canvas) {
                 canvas->getSceneManager()->getPickingAidManager()->showReferenceGrid(showGrid);
-                LOG_INF("Reference grid display: " + std::string(showGrid ? "enabled" : "disabled"));
+                LOG_INF("Reference grid display: " + std::string(showGrid ? "enabled" : "disabled"),"PositionDialog");
             }
         }
     }
@@ -237,7 +237,7 @@ void PositionDialog::OnShowGridChanged(wxCommandEvent& event) {
 
 void PositionDialog::OnClose(wxCloseEvent& event)
 {
-    LOG_INF("Position dialog closed, ensuring picking mode is off.");
+    LOG_INF("Position dialog closed, ensuring picking mode is off.","PositionDialog");
     if (m_pickingAidManager) {
         m_pickingAidManager->stopPicking();
     }

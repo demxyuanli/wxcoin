@@ -1,5 +1,5 @@
 #include "STEPReader.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "OCCShapeBuilder.h"
 
 // OpenCASCADE STEP import includes
@@ -37,19 +37,19 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
     ReadResult result;
     
     try {
-        LOG_INF("Reading STEP file: " + filePath);
+        LOG_INF_S("Reading STEP file: " + filePath);
         
         // Check if file exists
         if (!std::filesystem::exists(filePath)) {
             result.errorMessage = "File does not exist: " + filePath;
-            LOG_ERR(result.errorMessage);
+            LOG_ERR_S(result.errorMessage);
             return result;
         }
         
         // Check file extension
         if (!isSTEPFile(filePath)) {
             result.errorMessage = "File is not a STEP file: " + filePath;
-            LOG_ERR(result.errorMessage);
+            LOG_ERR_S(result.errorMessage);
             return result;
         }
         
@@ -63,23 +63,23 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
         IFSelect_ReturnStatus status = reader.ReadFile(filePath.c_str());
         if (status != IFSelect_RetDone) {
             result.errorMessage = "Failed to read STEP file: " + filePath;
-            LOG_ERR(result.errorMessage);
+            LOG_ERR_S(result.errorMessage);
             return result;
         }
         // Transfer shapes
         Standard_Integer nbRoots = reader.NbRootsForTransfer();
-        LOG_INF("Found " + std::to_string(nbRoots) + " root entities");
+        LOG_INF_S("Found " + std::to_string(nbRoots) + " root entities");
         if (nbRoots == 0) {
             result.errorMessage = "No transferable entities found in STEP file";
-            LOG_ERR(result.errorMessage);
+            LOG_ERR_S(result.errorMessage);
             return result;
         }
         reader.TransferRoots();
         Standard_Integer nbShapes = reader.NbShapes();
-        LOG_INF("Transferred " + std::to_string(nbShapes) + " shapes");
+        LOG_INF_S("Transferred " + std::to_string(nbShapes) + " shapes");
         if (nbShapes == 0) {
             result.errorMessage = "No shapes could be transferred from STEP file";
-            LOG_ERR(result.errorMessage);
+            LOG_ERR_S(result.errorMessage);
             return result;
         }
         // Create compound shape containing all shapes
@@ -102,7 +102,7 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
         if (!result.geometries.empty()) {
             double scaleFactor = scaleGeometriesToReasonableSize(result.geometries);
             if (scaleFactor != 1.0) {
-                LOG_INF("Applied automatic scaling factor: " + std::to_string(scaleFactor));
+                LOG_INF_S("Applied automatic scaling factor: " + std::to_string(scaleFactor));
             }
         }
         
@@ -110,14 +110,14 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
         OCCShapeBuilder::analyzeShapeTopology(result.rootShape, baseName);
         
         result.success = true;
-        LOG_INF("Successfully imported STEP file with " + std::to_string(result.geometries.size()) + " geometry objects");
+        LOG_INF_S("Successfully imported STEP file with " + std::to_string(result.geometries.size()) + " geometry objects");
         
     } catch (const Standard_Failure& e) {
         result.errorMessage = "OpenCASCADE exception: " + std::string(e.GetMessageString());
-        LOG_ERR(result.errorMessage);
+        LOG_ERR_S(result.errorMessage);
     } catch (const std::exception& e) {
         result.errorMessage = "Exception reading STEP file: " + std::string(e.what());
-        LOG_ERR(result.errorMessage);
+        LOG_ERR_S(result.errorMessage);
     }
     
     return result;
@@ -149,7 +149,7 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
     std::vector<std::shared_ptr<OCCGeometry>> geometries;
     
     if (shape.IsNull()) {
-        LOG_WRN("Cannot convert null shape to geometries");
+        LOG_WRN_S("Cannot convert null shape to geometries");
         return geometries;
     }
     
@@ -158,7 +158,7 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
         std::vector<TopoDS_Shape> shapes;
         extractShapes(shape, shapes);
         
-        LOG_INF("Extracted " + std::to_string(shapes.size()) + " individual shapes");
+        LOG_INF_S("Extracted " + std::to_string(shapes.size()) + " individual shapes");
         
         // Create geometry objects
         int shapeIndex = 0;
@@ -191,7 +191,7 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
         }
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception converting shape to geometries: " + std::string(e.what()));
+        LOG_ERR_S("Exception converting shape to geometries: " + std::string(e.what()));
     }
     
     return geometries;
@@ -211,7 +211,7 @@ void STEPReader::initialize()
     Interface_Static::SetRVal("read.precision.val", 0.01);
     Interface_Static::SetIVal("read.precision.mode", 1);
     
-    LOG_INF("STEP reader initialized");
+    LOG_INF_S("STEP reader initialized");
 }
 
 void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_Shape>& shapes)
@@ -288,7 +288,7 @@ double STEPReader::scaleGeometriesToReasonableSize(
         }
         
         if (!hasValidBounds) {
-            LOG_WRN("No valid bounds found for scaling");
+            LOG_WRN_S("No valid bounds found for scaling");
             return 1.0;
         }
         
@@ -298,7 +298,7 @@ double STEPReader::scaleGeometriesToReasonableSize(
         double currentSizeZ = overallMax.Z() - overallMin.Z();
         double currentMaxSize = std::max({currentSizeX, currentSizeY, currentSizeZ});
         
-        LOG_INF("Current geometry size: " + std::to_string(currentMaxSize));
+        LOG_INF_S("Current geometry size: " + std::to_string(currentMaxSize));
         
         // Determine target size
         if (targetSize <= 0.0) {
@@ -320,7 +320,7 @@ double STEPReader::scaleGeometriesToReasonableSize(
             return 1.0;
         }
         
-        LOG_INF("Applying scale factor: " + std::to_string(scaleFactor));
+        LOG_INF_S("Applying scale factor: " + std::to_string(scaleFactor));
         
         // Apply scaling to all geometries
         for (auto& geometry : geometries) {
@@ -343,7 +343,7 @@ double STEPReader::scaleGeometriesToReasonableSize(
         return scaleFactor;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception scaling geometries: " + std::string(e.what()));
+        LOG_ERR_S("Exception scaling geometries: " + std::string(e.what()));
         return 1.0;
     }
 } 

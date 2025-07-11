@@ -3,14 +3,14 @@
 #include "CommandListener.h"
 #include "CommandType.h"
 #include <memory>
+#include <wx/frame.h>
 
-class MainFrame;
 class Canvas;
 class OCCViewer;
 
 class ImportStepListener : public CommandListener {
 public:
-    ImportStepListener(MainFrame* mainFrame, Canvas* canvas, OCCViewer* viewer);
+    ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer);
     ~ImportStepListener() override = default;
 
     CommandResult executeCommand(const std::string& commandType,
@@ -19,7 +19,7 @@ public:
     std::string getListenerName() const override { return "ImportStepListener"; }
 
 private:
-    MainFrame* m_mainFrame;
+    wxFrame* m_frame;
     Canvas* m_canvas;
-    OCCViewer* m_viewer;
+    OCCViewer* m_occViewer;
 }; 

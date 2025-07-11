@@ -1,6 +1,5 @@
 # Core module - basic functionality and command system
 set(CORE_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Logger.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryObject.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DPIManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DPIAwareRendering.cpp
@@ -8,7 +7,6 @@ set(CORE_SOURCES
 
 set(CORE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/Application.h
-    ${CMAKE_SOURCE_DIR}/include/Logger.h
     ${CMAKE_SOURCE_DIR}/include/GeometryObject.h
     ${CMAKE_SOURCE_DIR}/include/DPIManager.h
     ${CMAKE_SOURCE_DIR}/include/DPIAwareRendering.h

@@ -2,7 +2,7 @@
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "Command.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 FileNewListener::FileNewListener(Canvas* canvas, CommandManager* cmdMgr)
     : m_canvas(canvas), m_cmdMgr(cmdMgr) {}
@@ -25,7 +25,7 @@ CommandResult FileNewListener::executeCommand(const std::string& commandType,
         m_cmdMgr->clearHistory();
     }
 
-    LOG_INF("New project created");
+    LOG_INF_S("New project created");
     return CommandResult(true, "New project created", commandType);
 }
 

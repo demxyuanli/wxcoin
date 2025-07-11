@@ -7,7 +7,7 @@
 #include "SceneManager.h"
 #include "InputManager.h"
 #include "ObjectTreePanel.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "NavigationCubeManager.h"
 #include "RenderingEngine.h"
 #include "EventCoordinator.h"
@@ -42,7 +42,7 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
     , m_commandManager(nullptr)
     , m_occViewer(nullptr)
 {
-    LOG_INF("Canvas::Canvas: Initializing");
+    LOG_INF_S("Canvas::Canvas: Initializing");
 
     SetName("Canvas");
     wxSize clientSize = GetClientSize();
@@ -57,27 +57,27 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
         connectSubsystems();
         
         if (m_sceneManager && !m_sceneManager->initScene()) {
-            LOG_ERR("Canvas::Canvas: Failed to initialize main scene");
+            LOG_ERR_S("Canvas::Canvas: Failed to initialize main scene");
             showErrorDialog("Failed to initialize 3D scene. The application may not function correctly.");
             throw std::runtime_error("Scene initialization failed");
         }
 
         Refresh(true);
         Update();
-        LOG_INF("Canvas::Canvas: Initialized successfully");
+        LOG_INF_S("Canvas::Canvas: Initialized successfully");
     }
     catch (const std::exception& e) {
-        LOG_ERR("Canvas::Canvas: Initialization failed: " + std::string(e.what()));
+        LOG_ERR_S("Canvas::Canvas: Initialization failed: " + std::string(e.what()));
         throw;
     }
 }
 
 Canvas::~Canvas() {
-    LOG_INF("Canvas::Canvas: Destroying");
+    LOG_INF_S("Canvas::Canvas: Destroying");
 }
 
 void Canvas::initializeSubsystems() {
-    LOG_INF("Canvas::initializeSubsystems: Creating subsystems");
+    LOG_INF_S("Canvas::initializeSubsystems: Creating subsystems");
 
     // Create core subsystems
     m_renderingEngine = std::make_unique<RenderingEngine>(this);
@@ -100,7 +100,7 @@ void Canvas::initializeSubsystems() {
 }
 
 void Canvas::connectSubsystems() {
-    LOG_INF("Canvas::connectSubsystems: Connecting subsystems");
+    LOG_INF_S("Canvas::connectSubsystems: Connecting subsystems");
 
     // Connect rendering engine
     m_renderingEngine->setSceneManager(m_sceneManager.get());
@@ -133,9 +133,9 @@ void Canvas::render(bool fastMode) {
                 m_multiViewportManager = std::make_unique<MultiViewportManager>(this, m_sceneManager.get());
                 m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
                 m_multiViewportManager->handleSizeChange(GetClientSize());
-                LOG_INF("Canvas::render: MultiViewportManager created successfully");
+                LOG_INF_S("Canvas::render: MultiViewportManager created successfully");
             } catch (const std::exception& e) {
-                LOG_ERR("Canvas::render: Failed to create MultiViewportManager: " + std::string(e.what()));
+                LOG_ERR_S("Canvas::render: Failed to create MultiViewportManager: " + std::string(e.what()));
                 m_multiViewportEnabled = false;
             }
         }
@@ -226,7 +226,7 @@ void Canvas::setPickingCursor(bool enable) {
 
 SoCamera* Canvas::getCamera() const {
     if (!m_sceneManager) {
-        LOG_WRN("Canvas::getCamera: SceneManager is null");
+        LOG_WRN_S("Canvas::getCamera: SceneManager is null");
         return nullptr;
     }
     return m_sceneManager->getCamera();
@@ -234,7 +234,7 @@ SoCamera* Canvas::getCamera() const {
 
 void Canvas::resetView() {
     if (!m_sceneManager) {
-        LOG_WRN("Canvas::resetView: SceneManager is null");
+        LOG_WRN_S("Canvas::resetView: SceneManager is null");
         return;
     }
     m_sceneManager->resetView();

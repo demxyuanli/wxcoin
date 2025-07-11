@@ -2,7 +2,7 @@
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "DPIAwareRendering.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "InputManager.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
@@ -26,7 +26,7 @@ PickingAidManager::PickingAidManager(SceneManager* sceneManager, Canvas* canvas,
     , m_referenceGridSeparator(nullptr)
     , m_referenceGridVisible(false)
 {
-    LOG_INF("PickingAidManager initializing");
+    LOG_INF_S("PickingAidManager initializing");
     createPickingAidLines();
     createReferenceGrid();
 }
@@ -38,7 +38,7 @@ PickingAidManager::~PickingAidManager() {
     if (m_referenceGridSeparator) {
         m_referenceGridSeparator->unref();
     }
-    LOG_INF("PickingAidManager destroying");
+    LOG_INF_S("PickingAidManager destroying");
 }
 
 void PickingAidManager::createPickingAidLines() {
@@ -258,11 +258,11 @@ void PickingAidManager::showReferenceGrid(bool show) {
         
         m_sceneManager->getObjectRoot()->addChild(m_referenceGridSeparator);
         m_referenceGridVisible = true;
-        LOG_INF("Reference grid shown at Z=" + std::to_string(m_referenceZ));
+        LOG_INF_S("Reference grid shown at Z=" + std::to_string(m_referenceZ));
     } else if (!show && m_referenceGridVisible) {
         m_sceneManager->getObjectRoot()->removeChild(m_referenceGridSeparator);
         m_referenceGridVisible = false;
-        LOG_INF("Reference grid hidden");
+        LOG_INF_S("Reference grid hidden");
     }
     
     m_canvas->Refresh(true);
@@ -293,7 +293,7 @@ void PickingAidManager::startPicking() {
     if (m_inputManager) {
         m_inputManager->enterPickingState();
     }
-    LOG_INF("PickingAidManager: Started position picking mode.");
+    LOG_INF_S("PickingAidManager: Started position picking mode.");
 }
 
 void PickingAidManager::stopPicking() {
@@ -303,7 +303,7 @@ void PickingAidManager::stopPicking() {
     if (m_inputManager) {
         m_inputManager->enterDefaultState();
     }
-    LOG_INF("PickingAidManager: Stopped position picking mode.");
+    LOG_INF_S("PickingAidManager: Stopped position picking mode.");
 }
 
 bool PickingAidManager::isPicking() const {
@@ -330,5 +330,5 @@ void PickingAidManager::updateReferenceGrid() {
     // Add the updated grid back to the scene
     showReferenceGrid(true);
     
-    LOG_INF("PickingAidManager: Reference grid updated");
+    LOG_INF_S("PickingAidManager: Reference grid updated");
 }

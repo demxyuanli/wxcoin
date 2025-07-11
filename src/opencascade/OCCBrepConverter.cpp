@@ -1,6 +1,6 @@
 #include "OCCBrepConverter.h"
 #include "OCCMeshConverter.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 // OpenCASCADE includes
 #include <STEPControl_Reader.hxx>
@@ -34,7 +34,7 @@
 bool OCCBrepConverter::saveToSTEP(const TopoDS_Shape& shape, const std::string& filename)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot save null shape to STEP file");
+        LOG_ERR_S("Cannot save null shape to STEP file");
         return false;
     }
     
@@ -48,22 +48,22 @@ bool OCCBrepConverter::saveToSTEP(const TopoDS_Shape& shape, const std::string& 
         // Transfer shape
         IFSelect_ReturnStatus status = writer.Transfer(shape, STEPControl_AsIs);
         if (status != IFSelect_RetDone) {
-            LOG_ERR("Failed to transfer shape to STEP writer");
+            LOG_ERR_S("Failed to transfer shape to STEP writer");
             return false;
         }
         
         // Write file
         status = writer.Write(filename.c_str());
         if (status != IFSelect_RetDone) {
-            LOG_ERR("Failed to write STEP file: " + filename);
+            LOG_ERR_S("Failed to write STEP file: " + filename);
             return false;
         }
         
-        LOG_INF("Successfully saved shape to STEP file: " + filename);
+        LOG_INF_S("Successfully saved shape to STEP file: " + filename);
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception saving STEP file: " + std::string(e.what()));
+        LOG_ERR_S("Exception saving STEP file: " + std::string(e.what()));
         return false;
     }
 }
@@ -71,7 +71,7 @@ bool OCCBrepConverter::saveToSTEP(const TopoDS_Shape& shape, const std::string& 
 bool OCCBrepConverter::saveToIGES(const TopoDS_Shape& shape, const std::string& filename)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot save null shape to IGES file");
+        LOG_ERR_S("Cannot save null shape to IGES file");
         return false;
     }
     
@@ -84,22 +84,22 @@ bool OCCBrepConverter::saveToIGES(const TopoDS_Shape& shape, const std::string& 
         // Transfer shape
         bool success = writer.AddShape(shape);
         if (!success) {
-            LOG_ERR("Failed to add shape to IGES writer");
+            LOG_ERR_S("Failed to add shape to IGES writer");
             return false;
         }
         
         // Write file
         success = writer.Write(filename.c_str());
         if (!success) {
-            LOG_ERR("Failed to write IGES file: " + filename);
+            LOG_ERR_S("Failed to write IGES file: " + filename);
             return false;
         }
         
-        LOG_INF("Successfully saved shape to IGES file: " + filename);
+        LOG_INF_S("Successfully saved shape to IGES file: " + filename);
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception saving IGES file: " + std::string(e.what()));
+        LOG_ERR_S("Exception saving IGES file: " + std::string(e.what()));
         return false;
     }
 }
@@ -107,25 +107,25 @@ bool OCCBrepConverter::saveToIGES(const TopoDS_Shape& shape, const std::string& 
 bool OCCBrepConverter::saveToBREP(const TopoDS_Shape& shape, const std::string& filename)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot save null shape to BREP file");
+        LOG_ERR_S("Cannot save null shape to BREP file");
         return false;
     }
     
     try {
         std::ofstream file(filename);
         if (!file.is_open()) {
-            LOG_ERR("Cannot open BREP file for writing: " + filename);
+            LOG_ERR_S("Cannot open BREP file for writing: " + filename);
             return false;
         }
         
         BRepTools::Write(shape, file);
         file.close();
         
-        LOG_INF("Successfully saved shape to BREP file: " + filename);
+        LOG_INF_S("Successfully saved shape to BREP file: " + filename);
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception saving BREP file: " + std::string(e.what()));
+        LOG_ERR_S("Exception saving BREP file: " + std::string(e.what()));
         return false;
     }
 }
@@ -133,7 +133,7 @@ bool OCCBrepConverter::saveToBREP(const TopoDS_Shape& shape, const std::string& 
 bool OCCBrepConverter::saveToSTL(const TopoDS_Shape& shape, const std::string& filename, bool asciiMode)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot save null shape to STL");
+        LOG_ERR_S("Cannot save null shape to STL");
         return false;
     }
 
@@ -143,7 +143,7 @@ bool OCCBrepConverter::saveToSTL(const TopoDS_Shape& shape, const std::string& f
         // Remove the third parameter - new API only takes shape and filename
         return writer.Write(shape, filename.c_str());
     } catch (const std::exception& e) {
-        LOG_ERR("Exception saving to STL: " + std::string(e.what()));
+        LOG_ERR_S("Exception saving to STL: " + std::string(e.what()));
         return false;
     }
 }
@@ -156,7 +156,7 @@ TopoDS_Shape OCCBrepConverter::loadFromSTEP(const std::string& filename)
         // Read file
         IFSelect_ReturnStatus status = reader.ReadFile(filename.c_str());
         if (status != IFSelect_RetDone) {
-            LOG_ERR("Failed to read STEP file: " + filename);
+            LOG_ERR_S("Failed to read STEP file: " + filename);
             return TopoDS_Shape();
         }
         
@@ -164,7 +164,7 @@ TopoDS_Shape OCCBrepConverter::loadFromSTEP(const std::string& filename)
         reader.PrintCheckLoad(false, IFSelect_ItemsByEntity);
         int numRoots = reader.NbRootsForTransfer();
         if (numRoots == 0) {
-            LOG_ERR("No transferable roots found in STEP file: " + filename);
+            LOG_ERR_S("No transferable roots found in STEP file: " + filename);
             return TopoDS_Shape();
         }
         
@@ -173,16 +173,16 @@ TopoDS_Shape OCCBrepConverter::loadFromSTEP(const std::string& filename)
         
         int numShapes = reader.NbShapes();
         if (numShapes == 0) {
-            LOG_ERR("No shapes found in STEP file: " + filename);
+            LOG_ERR_S("No shapes found in STEP file: " + filename);
             return TopoDS_Shape();
         }
         
         TopoDS_Shape shape = reader.OneShape();
-        LOG_INF("Successfully loaded shape from STEP file: " + filename);
+        LOG_INF_S("Successfully loaded shape from STEP file: " + filename);
         return shape;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception loading STEP file: " + std::string(e.what()));
+        LOG_ERR_S("Exception loading STEP file: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -195,7 +195,7 @@ TopoDS_Shape OCCBrepConverter::loadFromIGES(const std::string& filename)
         // Read file
         int status = reader.ReadFile(filename.c_str());
         if (status != IFSelect_RetDone) {
-            LOG_ERR("Failed to read IGES file: " + filename);
+            LOG_ERR_S("Failed to read IGES file: " + filename);
             return TopoDS_Shape();
         }
         
@@ -203,7 +203,7 @@ TopoDS_Shape OCCBrepConverter::loadFromIGES(const std::string& filename)
         reader.PrintCheckLoad(false, IFSelect_ItemsByEntity);
         int numRoots = reader.NbRootsForTransfer();
         if (numRoots == 0) {
-            LOG_ERR("No transferable roots found in IGES file: " + filename);
+            LOG_ERR_S("No transferable roots found in IGES file: " + filename);
             return TopoDS_Shape();
         }
         
@@ -212,16 +212,16 @@ TopoDS_Shape OCCBrepConverter::loadFromIGES(const std::string& filename)
         
         int numShapes = reader.NbShapes();
         if (numShapes == 0) {
-            LOG_ERR("No shapes found in IGES file: " + filename);
+            LOG_ERR_S("No shapes found in IGES file: " + filename);
             return TopoDS_Shape();
         }
         
         TopoDS_Shape shape = reader.OneShape();
-        LOG_INF("Successfully loaded shape from IGES file: " + filename);
+        LOG_INF_S("Successfully loaded shape from IGES file: " + filename);
         return shape;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception loading IGES file: " + std::string(e.what()));
+        LOG_ERR_S("Exception loading IGES file: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -231,7 +231,7 @@ TopoDS_Shape OCCBrepConverter::loadFromBREP(const std::string& filename)
     try {
         std::ifstream file(filename);
         if (!file.is_open()) {
-            LOG_ERR("Cannot open BREP file for reading: " + filename);
+            LOG_ERR_S("Cannot open BREP file for reading: " + filename);
             return TopoDS_Shape();
         }
         
@@ -242,15 +242,15 @@ TopoDS_Shape OCCBrepConverter::loadFromBREP(const std::string& filename)
         file.close();
         
         if (shape.IsNull()) {
-            LOG_ERR("Failed to load shape from BREP file: " + filename);
+            LOG_ERR_S("Failed to load shape from BREP file: " + filename);
             return TopoDS_Shape();
         }
         
-        LOG_INF("Successfully loaded shape from BREP file: " + filename);
+        LOG_INF_S("Successfully loaded shape from BREP file: " + filename);
         return shape;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception loading BREP file: " + std::string(e.what()));
+        LOG_ERR_S("Exception loading BREP file: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -265,7 +265,7 @@ std::vector<TopoDS_Shape> OCCBrepConverter::loadMultipleFromSTEP(const std::stri
         // Read file
         IFSelect_ReturnStatus status = reader.ReadFile(filename.c_str());
         if (status != IFSelect_RetDone) {
-            LOG_ERR("Failed to read STEP file: " + filename);
+            LOG_ERR_S("Failed to read STEP file: " + filename);
             return shapes;
         }
         
@@ -273,7 +273,7 @@ std::vector<TopoDS_Shape> OCCBrepConverter::loadMultipleFromSTEP(const std::stri
         reader.PrintCheckLoad(false, IFSelect_ItemsByEntity);
         int numRoots = reader.NbRootsForTransfer();
         if (numRoots == 0) {
-            LOG_ERR("No transferable roots found in STEP file: " + filename);
+            LOG_ERR_S("No transferable roots found in STEP file: " + filename);
             return shapes;
         }
         
@@ -288,10 +288,10 @@ std::vector<TopoDS_Shape> OCCBrepConverter::loadMultipleFromSTEP(const std::stri
             }
         }
         
-        LOG_INF("Successfully loaded " + std::to_string(shapes.size()) + " shapes from STEP file: " + filename);
+        LOG_INF_S("Successfully loaded " + std::to_string(shapes.size()) + " shapes from STEP file: " + filename);
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception loading multiple shapes from STEP file: " + std::string(e.what()));
+        LOG_ERR_S("Exception loading multiple shapes from STEP file: " + std::string(e.what()));
         shapes.clear();
     }
     
@@ -343,7 +343,7 @@ OCCBrepConverter::MeshData OCCBrepConverter::convertToMesh(const TopoDS_Shape& s
         }
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception converting shape to mesh: " + std::string(e.what()));
+        LOG_ERR_S("Exception converting shape to mesh: " + std::string(e.what()));
         meshData.vertices.clear();
         meshData.indices.clear();
         meshData.normals.clear();
@@ -355,14 +355,14 @@ OCCBrepConverter::MeshData OCCBrepConverter::convertToMesh(const TopoDS_Shape& s
 bool OCCBrepConverter::exportMeshToOBJ(const MeshData& mesh, const std::string& filename)
 {
     if (mesh.vertices.empty() || mesh.indices.empty()) {
-        LOG_ERR("Cannot export empty mesh to OBJ file");
+        LOG_ERR_S("Cannot export empty mesh to OBJ file");
         return false;
     }
     
     try {
         std::ofstream file(filename);
         if (!file.is_open()) {
-            LOG_ERR("Cannot open OBJ file for writing: " + filename);
+            LOG_ERR_S("Cannot open OBJ file for writing: " + filename);
             return false;
         }
         
@@ -397,11 +397,11 @@ bool OCCBrepConverter::exportMeshToOBJ(const MeshData& mesh, const std::string& 
         }
         
         file.close();
-        LOG_INF("Successfully exported mesh to OBJ file: " + filename);
+        LOG_INF_S("Successfully exported mesh to OBJ file: " + filename);
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception exporting OBJ file: " + std::string(e.what()));
+        LOG_ERR_S("Exception exporting OBJ file: " + std::string(e.what()));
         return false;
     }
 }
@@ -417,7 +417,7 @@ double OCCBrepConverter::calculateVolume(const TopoDS_Shape& shape)
         BRepGProp::VolumeProperties(shape, props);
         return props.Mass();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception calculating volume: " + std::string(e.what()));
+        LOG_ERR_S("Exception calculating volume: " + std::string(e.what()));
         return 0.0;
     }
 }
@@ -433,7 +433,7 @@ double OCCBrepConverter::calculateSurfaceArea(const TopoDS_Shape& shape)
         BRepGProp::SurfaceProperties(shape, props);
         return props.Mass();
     } catch (const std::exception& e) {
-        LOG_ERR("Exception calculating surface area: " + std::string(e.what()));
+        LOG_ERR_S("Exception calculating surface area: " + std::string(e.what()));
         return 0.0;
     }
 }
@@ -441,7 +441,7 @@ double OCCBrepConverter::calculateSurfaceArea(const TopoDS_Shape& shape)
 bool OCCBrepConverter::saveToVRML(const TopoDS_Shape& shape, const std::string& filename)
 {
     if (shape.IsNull()) {
-        LOG_ERR("Cannot save null shape to VRML file");
+        LOG_ERR_S("Cannot save null shape to VRML file");
         return false;
     }
     
@@ -452,15 +452,15 @@ bool OCCBrepConverter::saveToVRML(const TopoDS_Shape& shape, const std::string& 
         Standard_Boolean result = writer.Write(shape, filename.c_str());
         
         if (result) {
-            LOG_INF("Successfully saved shape to VRML file: " + filename);
+            LOG_INF_S("Successfully saved shape to VRML file: " + filename);
             return true;
         } else {
-            LOG_ERR("Failed to write VRML file: " + filename);
+            LOG_ERR_S("Failed to write VRML file: " + filename);
             return false;
         }
         
     } catch (const std::exception& e) {
-        LOG_ERR("Exception saving VRML file: " + std::string(e.what()));
+        LOG_ERR_S("Exception saving VRML file: " + std::string(e.what()));
         return false;
     }
 }

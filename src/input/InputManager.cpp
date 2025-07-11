@@ -3,7 +3,7 @@
 #include "SceneManager.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "PositionDialog.h"
 #include "PickingAidManager.h"
 #include "DefaultInputState.h"
@@ -18,41 +18,41 @@ InputManager::InputManager(Canvas* canvas)
     , m_currentState(nullptr)
     , m_lastMotionTime(0)
 {
-    LOG_INF("InputManager initializing");
+    LOG_INF_S("InputManager initializing");
 }
 
 InputManager::~InputManager() {
-    LOG_INF("InputManager destroying");
+    LOG_INF_S("InputManager destroying");
 }
 
 void InputManager::setMouseHandler(MouseHandler* handler) {
     m_mouseHandler = handler;
-    LOG_INF("MouseHandler set for InputManager");
+    LOG_INF_S("MouseHandler set for InputManager");
 }
 
 void InputManager::setNavigationController(NavigationController* controller) {
     m_navigationController = controller;
-    LOG_INF("NavigationController set for InputManager");
+    LOG_INF_S("NavigationController set for InputManager");
 }
 
 void InputManager::initializeStates() {
     m_defaultState = std::make_unique<DefaultInputState>(m_mouseHandler, m_navigationController);
     m_pickingState = std::make_unique<PickingInputState>(m_canvas);
     m_currentState = m_defaultState.get();
-    LOG_INF("InputManager states initialized");
+    LOG_INF_S("InputManager states initialized");
 }
 
 void InputManager::enterDefaultState() {
     if (m_currentState != m_defaultState.get()) {
         m_currentState = m_defaultState.get();
-        LOG_INF("InputManager entered DefaultState");
+        LOG_INF_S("InputManager entered DefaultState");
     }
 }
 
 void InputManager::enterPickingState() {
     if (m_currentState != m_pickingState.get()) {
         m_currentState = m_pickingState.get();
-        LOG_INF("InputManager entered PickingState");
+        LOG_INF_S("InputManager entered PickingState");
     }
 }
 
@@ -60,14 +60,14 @@ void InputManager::onMouseButton(wxMouseEvent& event) {
     if (m_currentState) {
         m_currentState->onMouseButton(event);
     } else {
-        LOG_WRN("InputManager: No active state to handle mouse button event");
+        LOG_WRN_S("InputManager: No active state to handle mouse button event");
         event.Skip();
     }
 }
 
 void InputManager::onMouseMotion(wxMouseEvent& event) {
     if (!m_currentState) {
-        LOG_WRN("Mouse motion event skipped: No active state");
+        LOG_WRN_S("Mouse motion event skipped: No active state");
         event.Skip();
         return;
     }
@@ -85,7 +85,7 @@ void InputManager::onMouseWheel(wxMouseEvent& event) {
     if (m_currentState) {
         m_currentState->onMouseWheel(event);
     } else {
-        LOG_WRN("Mouse wheel event skipped: No active state");
+        LOG_WRN_S("Mouse wheel event skipped: No active state");
         event.Skip();
     }
 }

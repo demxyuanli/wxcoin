@@ -8,7 +8,7 @@
 #include "InputManager.h"
 #include "SceneManager.h"
 #include "Command.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include "STEPReader.h"
 #include <wx/splitter.h>
 #include <wx/artprov.h>
@@ -114,7 +114,7 @@ MainFrame::MainFrame(const wxString& title)
     , m_auiManager(this)
     , m_isFirstActivate(true)
 {
-    LOG_INF("MainFrame initializing with command pattern");
+    LOG_INF_S("MainFrame initializing with command pattern");
     createMenu();
     createToolbar();
     createPanels();
@@ -128,12 +128,12 @@ MainFrame::~MainFrame()
 {
     m_auiManager.UnInit();
     delete m_commandManager;
-    LOG_INF("MainFrame destroyed");
+    LOG_INF_S("MainFrame destroyed");
 }
 
 void MainFrame::setupCommandSystem()
 {
-    LOG_INF("Setting up command system");
+    LOG_INF_S("Setting up command system");
     
     // Create command dispatcher
     m_commandDispatcher = std::make_unique<CommandDispatcher>();
@@ -204,14 +204,14 @@ void MainFrame::setupCommandSystem()
         }
     );
     
-    LOG_INF("Command system setup completed");
+    LOG_INF_S("Command system setup completed");
 }
 
 void MainFrame::onCommand(wxCommandEvent& event)
 {
     auto it = kEventTable.find(event.GetId());
     if (it == kEventTable.end()) {
-        LOG_WRN("Unknown command ID: " + std::to_string(event.GetId()));
+        LOG_WRN_S("Unknown command ID: " + std::to_string(event.GetId()));
         return;
     }
     cmd::CommandType commandType = it->second;
@@ -223,7 +223,7 @@ void MainFrame::onCommand(wxCommandEvent& event)
         CommandResult result = m_listenerManager->dispatch(commandType, parameters);
         onCommandFeedback(result);
     } else {
-        LOG_ERR("No listener registered for command");
+        LOG_ERR_S("No listener registered for command");
         SetStatusText("Error: No listener registered", 0);
     }
 }
@@ -233,10 +233,10 @@ void MainFrame::onCommandFeedback(const CommandResult& result)
     // Update UI based on command execution result
     if (result.success) {
         SetStatusText(result.message.empty() ? "Command executed successfully" : result.message, 0);
-        LOG_INF("Command executed: " + result.commandId);
+        LOG_INF_S("Command executed: " + result.commandId);
     } else {
         SetStatusText("Error: " + result.message, 0);
-        LOG_ERR("Command failed: " + result.commandId + " - " + result.message);
+        LOG_ERR_S("Command failed: " + result.commandId + " - " + result.message);
         
         // Show error dialog for critical failures
         if (!result.message.empty() && result.commandId != "UNKNOWN") {
@@ -347,19 +347,19 @@ void MainFrame::createPanels()
 {
     m_canvas = new Canvas(this);
     if (!m_canvas) {
-        LOG_ERR("Failed to create Canvas");
+        LOG_ERR_S("Failed to create Canvas");
         return;
     }
 
     PropertyPanel* propertyPanel = new PropertyPanel(this);
     if (!propertyPanel) {
-        LOG_ERR("Failed to create PropertyPanel");
+        LOG_ERR_S("Failed to create PropertyPanel");
         return;
     }
 
     ObjectTreePanel* objectTreePanel = new ObjectTreePanel(this);
     if (!objectTreePanel) {
-        LOG_ERR("Failed to create ObjectTreePanel");
+        LOG_ERR_S("Failed to create ObjectTreePanel");
         return;
     }
 
@@ -367,7 +367,7 @@ void MainFrame::createPanels()
 
     m_mouseHandler = new MouseHandler(m_canvas, objectTreePanel, propertyPanel, m_commandManager);
     if (!m_mouseHandler) {
-        LOG_ERR("Failed to create MouseHandler");
+        LOG_ERR_S("Failed to create MouseHandler");
         return;
     }
 
@@ -375,7 +375,7 @@ void MainFrame::createPanels()
 
     NavigationController* navController = new NavigationController(m_canvas, m_canvas->getSceneManager());
     if (!navController) {
-        LOG_ERR("Failed to create NavigationController");
+        LOG_ERR_S("Failed to create NavigationController");
         return;
     }
     m_canvas->getInputManager()->setNavigationController(navController);
@@ -400,7 +400,7 @@ void MainFrame::createPanels()
         m_occViewer
     );
     if (!m_geometryFactory) {
-        LOG_ERR("Failed to create GeometryFactory");
+        LOG_ERR_S("Failed to create GeometryFactory");
         return;
     }
 
@@ -412,13 +412,13 @@ void MainFrame::createPanels()
     
     if (m_canvas && m_canvas->getSceneManager()) {
         m_canvas->getSceneManager()->resetView(); 
-        LOG_INF("Initial view set to isometric and fit to scene");
+        LOG_INF_S("Initial view set to isometric and fit to scene");
     }
 }
 
 void MainFrame::onClose(wxCloseEvent& event)
 {
-    LOG_INF("Closing application");
+    LOG_INF_S("Closing application");
     Destroy();
 }
 

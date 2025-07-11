@@ -1,5 +1,5 @@
 #include "DPIManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <algorithm>
 #include <cmath>
 
@@ -11,7 +11,7 @@ DPIManager& DPIManager::getInstance() {
 void DPIManager::updateDPIScale(float dpiScale) {
     float newScale = clampScale(dpiScale);
     if (std::abs(m_dpiScale - newScale) > 0.01f) {
-        LOG_INF("DPIManager: Updating DPI scale from " + std::to_string(m_dpiScale) + 
+        LOG_INF_S("DPIManager: Updating DPI scale from " + std::to_string(m_dpiScale) + 
                 " to " + std::to_string(newScale));
         m_dpiScale = newScale;
         
@@ -26,7 +26,7 @@ wxFont DPIManager::getScaledFont(const wxFont& baseFont) const {
     wxFont scaledFont = baseFont;
     scaledFont.SetPointSize(scaledSize);
     
-    LOG_DBG("DPIManager: Scaled font from " + std::to_string(baseFont.GetPointSize()) + 
+    LOG_DBG_S("DPIManager: Scaled font from " + std::to_string(baseFont.GetPointSize()) + 
             " to " + std::to_string(scaledSize) + " points");
     
     return scaledFont;
@@ -77,7 +77,7 @@ int DPIManager::getScaledTextureSize(int baseSize) const {
     // Clamp to reasonable limits (32 to 2048)
     powerOf2 = std::max(32, std::min(2048, powerOf2));
     
-    LOG_DBG("DPIManager: Scaled texture size from " + std::to_string(baseSize) + 
+    LOG_DBG_S("DPIManager: Scaled texture size from " + std::to_string(baseSize) + 
             " to " + std::to_string(powerOf2) + " (scale: " + std::to_string(m_dpiScale) + ")");
     
     return powerOf2;
@@ -111,7 +111,7 @@ std::shared_ptr<DPIManager::TextureInfo> DPIManager::getOrCreateScaledTexture(
     
     auto it = m_textureCache.find(cacheKey);
     if (it != m_textureCache.end()) {
-        LOG_DBG("DPIManager: Using cached texture: " + cacheKey);
+        LOG_DBG_S("DPIManager: Using cached texture: " + cacheKey);
         return it->second;
     }
     
@@ -125,20 +125,20 @@ std::shared_ptr<DPIManager::TextureInfo> DPIManager::getOrCreateScaledTexture(
         );
         
         m_textureCache[cacheKey] = textureInfo;
-        LOG_INF("DPIManager: Generated and cached high-DPI texture: " + cacheKey + 
+        LOG_INF_S("DPIManager: Generated and cached high-DPI texture: " + cacheKey + 
                 " (" + std::to_string(scaledSize) + "x" + std::to_string(scaledSize) + ")");
         
         return textureInfo;
     }
     
-    LOG_ERR("DPIManager: Failed to generate texture: " + cacheKey);
+    LOG_ERR_S("DPIManager: Failed to generate texture: " + cacheKey);
     return nullptr;
 }
 
 void DPIManager::clearTextureCache() {
     size_t cacheSize = m_textureCache.size();
     m_textureCache.clear();
-    LOG_INF("DPIManager: Cleared texture cache (" + std::to_string(cacheSize) + " textures)");
+    LOG_INF_S("DPIManager: Cleared texture cache (" + std::to_string(cacheSize) + " textures)");
 }
 
 float DPIManager::clampScale(float scale) const {

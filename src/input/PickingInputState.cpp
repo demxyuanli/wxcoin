@@ -3,7 +3,7 @@
 #include "SceneManager.h"
 #include "PickingAidManager.h"
 #include "PositionDialog.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <wx/wx.h>
 
 PickingInputState::PickingInputState(Canvas* canvas)
@@ -15,10 +15,10 @@ void PickingInputState::onMouseButton(wxMouseEvent& event) {
         return;
     }
 
-    LOG_INF("Picking position with mouse click (PickingInputState)");
+    LOG_INF_S("Picking position with mouse click (PickingInputState)");
     SbVec3f worldPos;
     if (m_canvas->getSceneManager()->screenToWorld(event.GetPosition(), worldPos)) {
-        LOG_INF("Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
+        LOG_INF_S("Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
 
         wxWindow* dialog = wxWindow::FindWindowByName("PositionDialog");
         if (dialog) {
@@ -26,16 +26,16 @@ void PickingInputState::onMouseButton(wxMouseEvent& event) {
             if (posDialog) {
                 posDialog->SetPosition(worldPos);
                 posDialog->Show(true);
-                LOG_INF("Position dialog updated and shown");
+                LOG_INF_S("Position dialog updated and shown");
                 // The dialog itself will call stopPicking, which will trigger the state change
             } else {
-                LOG_ERR("Failed to cast dialog to PositionDialog");
+                LOG_ERR_S("Failed to cast dialog to PositionDialog");
             }
         } else {
-            LOG_ERR("PositionDialog not found");
+            LOG_ERR_S("PositionDialog not found");
         }
     } else {
-        LOG_WRN("Failed to convert screen position to world coordinates");
+        LOG_WRN_S("Failed to convert screen position to world coordinates");
     }
 }
 

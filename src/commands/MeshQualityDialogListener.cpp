@@ -1,46 +1,32 @@
 #include "MeshQualityDialogListener.h"
+#include "CommandDispatcher.h"
 #include "MeshQualityDialog.h"
 #include "OCCViewer.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
-MeshQualityDialogListener::MeshQualityDialogListener(wxWindow* parent, OCCViewer* occViewer)
-    : m_parent(parent)
-    , m_occViewer(occViewer)
+MeshQualityDialogListener::MeshQualityDialogListener(wxFrame* frame, OCCViewer* occViewer)
+    : m_frame(frame), m_occViewer(occViewer)
 {
+    if (!m_frame) {
+        LOG_ERR_S("MeshQualityDialogListener: frame pointer is null");
+    }
 }
 
-CommandResult MeshQualityDialogListener::execute(const std::unordered_map<std::string, std::string>& parameters)
-{
-    if (!m_parent || !m_occViewer) {
-        return CommandResult(false, "MESH_QUALITY_DIALOG", "Parent window or OCCViewer is null");
+CommandResult MeshQualityDialogListener::executeCommand(const std::string& commandType,
+                                                       const std::unordered_map<std::string, std::string>&) {
+    if (!m_frame || !m_occViewer) {
+        return CommandResult(false, "Frame or OCCViewer not available", commandType);
     }
     
-    try {
-        MeshQualityDialog dialog(m_parent, m_occViewer);
-        int result = dialog.ShowModal();
-        
-        if (result == wxID_OK || result == wxID_APPLY) {
-            return CommandResult(true, "MESH_QUALITY_DIALOG", "Mesh quality settings applied successfully");
-        } else {
-            return CommandResult(true, "MESH_QUALITY_DIALOG", "Mesh quality dialog cancelled");
-        }
-    } catch (const std::exception& e) {
-        LOG_ERR("Exception in mesh quality dialog: " + std::string(e.what()));
-        return CommandResult(false, "MESH_QUALITY_DIALOG", "Exception: " + std::string(e.what()));
+    MeshQualityDialog dialog(m_frame, m_occViewer);
+    if (dialog.ShowModal() == wxID_OK) {
+        LOG_INF_S("Mesh quality settings applied");
+        return CommandResult(true, "Mesh quality settings updated", commandType);
     }
+    
+    return CommandResult(false, "Mesh quality dialog cancelled", commandType);
 }
 
-CommandResult MeshQualityDialogListener::executeCommand(const std::string& commandType, const std::unordered_map<std::string, std::string>& parameters)
-{
-    return execute(parameters);
-}
-
-bool MeshQualityDialogListener::canHandleCommand(const std::string& commandType) const
-{
+bool MeshQualityDialogListener::canHandleCommand(const std::string& commandType) const {
     return commandType == "MESH_QUALITY_DIALOG";
-}
-
-std::string MeshQualityDialogListener::getListenerName() const
-{
-    return "MeshQualityDialogListener";
 } 

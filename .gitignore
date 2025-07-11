@@ -17,3 +17,4 @@ CMakeUserPresets.json
 /include/.trae/.ignore
 /.gitignore
 /vcpkg.json
+/config/.cursor/rules/nochinesecomments.mdc

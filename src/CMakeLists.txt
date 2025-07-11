@@ -4,29 +4,41 @@
 # 1. Core module (no dependencies)
 add_subdirectory(core)
 
-# 2. OpenCASCADE module (depends on core module)
+# 2. Logger module (no dependencies)
+add_subdirectory(logger)
+
+# 3. Config module (depends on core and logger modules)
+add_subdirectory(config)
+
+# 4. OpenCASCADE module (depends on core module)
 add_subdirectory(opencascade)
 
-# 3. Commands module (depends on core and occ)
+# 5. Commands module (depends on core and occ)
 add_subdirectory(commands)
 
-# 4. Rendering module (depends on core module)
+# 6. Rendering module (depends on core module)
 add_subdirectory(rendering)
 
-# 5. Input module (depends on core module)
+# 7. Input module (depends on core module)
 add_subdirectory(input)
 
-# 6. Navigation module (depends on core and rendering modules)
+# 8. Navigation module (depends on core and rendering modules)
 add_subdirectory(navigation)
 
-# 7. UI module (depends on all other modules)
+# 9. FlatUI module (depends on core and config modules)
+add_subdirectory(flatui)
+
+# 10. UI module (depends on all other modules)
 add_subdirectory(ui)
 
 # Set module folder structure (for IDE organization)
 set_target_properties(CADCore PROPERTIES FOLDER "Modules")
+set_target_properties(CADLogger PROPERTIES FOLDER "Modules")
+set_target_properties(CADConfig PROPERTIES FOLDER "Modules")
 set_target_properties(CADOCC PROPERTIES FOLDER "Modules")
 set_target_properties(CADCommands PROPERTIES FOLDER "Modules")
 set_target_properties(CADRendering PROPERTIES FOLDER "Modules")
 set_target_properties(CADInput PROPERTIES FOLDER "Modules")
 set_target_properties(NavCubeLib PROPERTIES FOLDER "Modules")
+set_target_properties(CADFlatUI PROPERTIES FOLDER "Modules")
 set_target_properties(CADUI PROPERTIES FOLDER "Modules") 

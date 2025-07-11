@@ -76,6 +76,7 @@ target_include_directories(CADCommands PUBLIC
 
 target_link_libraries(CADCommands PUBLIC
     CADCore
+    CADLogger
     CADOCC
     ${wxWidgets_LIBRARIES}
     Coin::Coin

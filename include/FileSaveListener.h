@@ -3,12 +3,11 @@
 #include "CommandListener.h"
 #include "CommandType.h"
 #include <memory>
-
-class MainFrame;
+#include <wx/frame.h>
 
 class FileSaveListener : public CommandListener {
 public:
-    explicit FileSaveListener(MainFrame* mainFrame);
+    explicit FileSaveListener(wxFrame* frame);
     ~FileSaveListener() override = default;
 
     CommandResult executeCommand(const std::string& commandType,
@@ -17,5 +16,5 @@ public:
     std::string getListenerName() const override { return "FileSaveListener"; }
 
 private:
-    MainFrame* m_mainFrame;
+    wxFrame* m_frame;
 }; 

@@ -1,6 +1,6 @@
 #include "CoordinateSystemRenderer.h"
 #include "DPIAwareRendering.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoMaterial.h>
@@ -20,12 +20,12 @@ CoordinateSystemRenderer::CoordinateSystemRenderer(SoSeparator* objectRoot)
     , m_coordSystemSeparator(nullptr)
     , m_currentPlaneSize(DEFAULT_COORD_PLANE_SIZE)
 {
-    LOG_INF("CoordinateSystemRenderer initializing");
+    LOG_INF_S("CoordinateSystemRenderer initializing");
     createCoordinateSystem();
 }
 
 CoordinateSystemRenderer::~CoordinateSystemRenderer() {
-    LOG_INF("CoordinateSystemRenderer destroying");
+    LOG_INF_S("CoordinateSystemRenderer destroying");
 }
 
 void CoordinateSystemRenderer::updateCoordinateSystemSize(float sceneSize)
@@ -36,7 +36,7 @@ void CoordinateSystemRenderer::updateCoordinateSystemSize(float sceneSize)
     
     if (std::abs(newSize - m_currentPlaneSize) > 0.1f) {
         m_currentPlaneSize = newSize;
-        LOG_INF("Updating coordinate system size to: " + std::to_string(m_currentPlaneSize));
+        LOG_INF_S("Updating coordinate system size to: " + std::to_string(m_currentPlaneSize));
         rebuildCoordinateSystem();
     }
 }
@@ -44,7 +44,7 @@ void CoordinateSystemRenderer::updateCoordinateSystemSize(float sceneSize)
 void CoordinateSystemRenderer::setCoordinateSystemScale(float scale)
 {
     m_currentPlaneSize = DEFAULT_COORD_PLANE_SIZE * scale;
-    LOG_INF("Setting coordinate system scale to: " + std::to_string(scale) + 
+    LOG_INF_S("Setting coordinate system scale to: " + std::to_string(scale) + 
            " (size: " + std::to_string(m_currentPlaneSize) + ")");
     rebuildCoordinateSystem();
 }

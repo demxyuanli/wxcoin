@@ -1,6 +1,6 @@
 #include "CreateWrenchListener.h"
 #include "GeometryFactory.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 CreateWrenchListener::CreateWrenchListener(GeometryFactory* factory) : m_factory(factory) {}
 

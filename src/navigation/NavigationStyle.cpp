@@ -1,6 +1,6 @@
 #include "NavigationStyle.h"
 #include "Canvas.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>

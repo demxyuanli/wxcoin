@@ -1,6 +1,6 @@
 #include "CreateBoxListener.h"
 #include "MouseHandler.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 CreateBoxListener::CreateBoxListener(MouseHandler* mouseHandler)
     : m_mouseHandler(mouseHandler) {}

@@ -6,6 +6,7 @@ set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/PropertyPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PositionDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../FlatFrame.cpp
 )
 
 set(UI_HEADERS
@@ -15,6 +16,7 @@ set(UI_HEADERS
     ${CMAKE_SOURCE_DIR}/include/PropertyPanel.h
     ${CMAKE_SOURCE_DIR}/include/PositionDialog.h
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
+    ${CMAKE_SOURCE_DIR}/include/FlatFrame.h
 )
 
 # Create UI static library
@@ -30,11 +32,14 @@ target_include_directories(CADUI PUBLIC
 # Link dependencies
 target_link_libraries(CADUI PUBLIC
     CADCore
+    CADConfig
+    CADLogger
     CADRendering
     CADInput
     NavCubeLib
     CADOCC
     CADCommands
+    CADFlatUI
     ${wxWidgets_LIBRARIES}
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}

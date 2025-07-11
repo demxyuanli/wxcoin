@@ -1,6 +1,6 @@
 #include "OCCGeometry.h"
 #include "OCCMeshConverter.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 
 // OpenCASCADE includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -33,7 +33,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , m_coinTransform(nullptr)
     , m_coinNeedsUpdate(true)
 {
-    LOG_INF("Creating OCC geometry: " + name);
+    LOG_INF_S("Creating OCC geometry: " + name);
 }
 
 OCCGeometry::~OCCGeometry()
@@ -41,7 +41,7 @@ OCCGeometry::~OCCGeometry()
     if (m_coinNode) {
         m_coinNode->unref();
     }
-    LOG_INF("Destroyed OCC geometry: " + m_name);
+    LOG_INF_S("Destroyed OCC geometry: " + m_name);
 }
 
 void OCCGeometry::setShape(const TopoDS_Shape& shape)
@@ -262,7 +262,7 @@ void OCCBox::buildShape()
             setShape(boxMaker.Shape());
         }
     } catch (const std::exception& e) {
-        LOG_ERR("Failed to create box: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create box: " + std::string(e.what()));
     }
 }
 
@@ -296,7 +296,7 @@ void OCCCylinder::buildShape()
             setShape(cylinderMaker.Shape());
         }
     } catch (const std::exception& e) {
-        LOG_ERR("Failed to create cylinder: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create cylinder: " + std::string(e.what()));
     }
 }
 
@@ -322,7 +322,7 @@ void OCCSphere::buildShape()
             setShape(sphereMaker.Shape());
         }
     } catch (const std::exception& e) {
-        LOG_ERR("Failed to create sphere: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create sphere: " + std::string(e.what()));
     }
 }
 
@@ -359,6 +359,6 @@ void OCCCone::buildShape()
             setShape(coneMaker.Shape());
         }
     } catch (const std::exception& e) {
-        LOG_ERR("Failed to create cone: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create cone: " + std::string(e.what()));
     }
 }

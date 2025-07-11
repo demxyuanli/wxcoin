@@ -1,32 +1,32 @@
 #include "CommandDispatcher.h"
 #include "CommandListener.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <algorithm>
 #include <mutex>
 #include "CommandType.h"
 
 CommandDispatcher::CommandDispatcher()
 {
-    LOG_INF("CommandDispatcher initialized");
+    LOG_INF_S("CommandDispatcher initialized");
 }
 
 CommandDispatcher::~CommandDispatcher()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_listeners.clear();
-    LOG_INF("CommandDispatcher destroyed");
+    LOG_INF_S("CommandDispatcher destroyed");
 }
 
 void CommandDispatcher::registerListener(const std::string& commandType, std::shared_ptr<CommandListener> listener)
 {
     if (!listener) {
-        LOG_ERR("Attempted to register null listener for command: " + commandType);
+        LOG_ERR_S("Attempted to register null listener for command: " + commandType);
         return;
     }
     
     std::lock_guard<std::mutex> lock(m_mutex);
     m_listeners[commandType].push_back(listener);
-    LOG_INF("Registered listener '" + listener->getListenerName() + "' for command: " + commandType);
+    LOG_INF_S("Registered listener '" + listener->getListenerName() + "' for command: " + commandType);
 }
 
 void CommandDispatcher::unregisterListener(const std::string& commandType, std::shared_ptr<CommandListener> listener)
@@ -45,20 +45,20 @@ void CommandDispatcher::unregisterListener(const std::string& commandType, std::
             m_listeners.erase(it);
         }
         
-        LOG_INF("Unregistered listener '" + listener->getListenerName() + "' for command: " + commandType);
+        LOG_INF_S("Unregistered listener '" + listener->getListenerName() + "' for command: " + commandType);
     }
 }
 
 CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType, 
                                                const std::unordered_map<std::string, std::string>& parameters)
 {
-    LOG_INF("Dispatching command: " + commandType);
+    LOG_INF_S("Dispatching command: " + commandType);
     
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_listeners.find(commandType);
     if (it == m_listeners.end() || it->second.empty()) {
         std::string errorMsg = "No listeners registered for command: " + commandType;
-        LOG_ERR(errorMsg);
+        LOG_ERR_S(errorMsg);
         CommandResult result(false, errorMsg, commandType);
         
         if (m_uiFeedbackHandler) {
@@ -77,7 +77,7 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
                 CommandResult result = listener->executeCommand(commandType, parameters);
                 result.commandId = commandType;
                 
-                LOG_INF("Command '" + commandType + "' executed by '" + listener->getListenerName() + 
+                LOG_INF_S("Command '" + commandType + "' executed by '" + listener->getListenerName() + 
                        "' with result: " + (result.success ? "SUCCESS" : "FAILURE"));
                 
                 if (m_uiFeedbackHandler) {
@@ -88,7 +88,7 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
             }
             catch (const std::exception& e) {
                 std::string errorMsg = "Exception in command execution: " + std::string(e.what());
-                LOG_ERR(errorMsg);
+                LOG_ERR_S(errorMsg);
                 CommandResult result(false, errorMsg, commandType);
                 
                 if (m_uiFeedbackHandler) {
@@ -101,7 +101,7 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
     }
     
     std::string errorMsg = "No capable listener found for command: " + commandType;
-    LOG_ERR(errorMsg);
+    LOG_ERR_S(errorMsg);
     CommandResult result(false, errorMsg, commandType);
     
     if (m_uiFeedbackHandler) {
@@ -114,7 +114,7 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
 void CommandDispatcher::setUIFeedbackHandler(std::function<void(const CommandResult&)> handler)
 {
     m_uiFeedbackHandler = handler;
-    LOG_INF("UI feedback handler registered");
+    LOG_INF_S("UI feedback handler registered");
 }
 
 bool CommandDispatcher::hasHandler(const std::string& commandType) const

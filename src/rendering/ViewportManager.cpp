@@ -2,7 +2,7 @@
 #include "RenderingEngine.h"
 #include "NavigationCubeManager.h"
 #include "DPIManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <cmath>
 
 ViewportManager::ViewportManager(wxGLCanvas* canvas)
@@ -13,11 +13,11 @@ ViewportManager::ViewportManager(wxGLCanvas* canvas)
     , m_lastSize(-1, -1)
     , m_lastEventTime(0)
 {
-    LOG_INF("ViewportManager::ViewportManager: Initializing");
+    LOG_INF_S("ViewportManager::ViewportManager: Initializing");
     
     if (m_canvas) {
         m_dpiScale = m_canvas->GetContentScaleFactor();
-        LOG_INF("ViewportManager::ViewportManager: Initial DPI scale factor: " + std::to_string(m_dpiScale));
+        LOG_INF_S("ViewportManager::ViewportManager: Initial DPI scale factor: " + std::to_string(m_dpiScale));
         
         // Initialize DPI manager with current scale
         DPIManager::getInstance().updateDPIScale(m_dpiScale);
@@ -25,7 +25,7 @@ ViewportManager::ViewportManager(wxGLCanvas* canvas)
 }
 
 ViewportManager::~ViewportManager() {
-    LOG_INF("ViewportManager::~ViewportManager: Destroying");
+    LOG_INF_S("ViewportManager::~ViewportManager: Destroying");
 }
 
 void ViewportManager::handleSizeChange(const wxSize& size) {
@@ -33,7 +33,7 @@ void ViewportManager::handleSizeChange(const wxSize& size) {
         return;
     }
 
-    LOG_INF("ViewportManager::handleSizeChange: Handling size event: " + 
+    LOG_INF_S("ViewportManager::handleSizeChange: Handling size event: " + 
            std::to_string(size.x) + "x" + std::to_string(size.y));
 
     if (size.x > 0 && size.y > 0) {
@@ -43,7 +43,7 @@ void ViewportManager::handleSizeChange(const wxSize& size) {
             m_renderingEngine->handleResize(size);
         }
     } else {
-        LOG_WRN("ViewportManager::handleSizeChange: Skipped: Invalid size");
+        LOG_WRN_S("ViewportManager::handleSizeChange: Skipped: Invalid size");
     }
 }
 
@@ -51,7 +51,7 @@ bool ViewportManager::shouldProcessSizeEvent(const wxSize& size) {
     wxLongLong currentTime = wxGetLocalTimeMillis();
     
     if (size == m_lastSize && (currentTime - m_lastEventTime) < 100) {
-        LOG_DBG("ViewportManager::shouldProcessSizeEvent: Redundant size event ignored: " + 
+        LOG_DBG_S("ViewportManager::shouldProcessSizeEvent: Redundant size event ignored: " + 
                std::to_string(size.x) + "x" + std::to_string(size.y));
         return false;
     }
@@ -68,7 +68,7 @@ void ViewportManager::updateDPISettings() {
 
     float newDpiScale = m_canvas->GetContentScaleFactor();
     if (std::abs(m_dpiScale - newDpiScale) > 0.01f) {
-        LOG_INF("ViewportManager::updateDPISettings: DPI scale changed from " +
+        LOG_INF_S("ViewportManager::updateDPISettings: DPI scale changed from " +
                std::to_string(m_dpiScale) + " to " + std::to_string(newDpiScale));
 
         m_dpiScale = newDpiScale;
@@ -91,7 +91,7 @@ void ViewportManager::applyDPIScalingToUI() {
     if (currentFont.IsOk()) {
         wxFont scaledFont = dpiManager.getScaledFont(currentFont);
         m_canvas->SetFont(scaledFont);
-        LOG_DBG("ViewportManager::applyDPIScalingToUI: Updated canvas font size to " +
+        LOG_DBG_S("ViewportManager::applyDPIScalingToUI: Updated canvas font size to " +
                std::to_string(scaledFont.GetPointSize()) + " points");
     }
 
@@ -100,6 +100,6 @@ void ViewportManager::applyDPIScalingToUI() {
         m_navigationCubeManager->handleDPIChange();
     }
 
-    LOG_INF("ViewportManager::applyDPIScalingToUI: Applied DPI scaling with factor " +
+    LOG_INF_S("ViewportManager::applyDPIScalingToUI: Applied DPI scaling with factor " +
            std::to_string(m_dpiScale));
 } 

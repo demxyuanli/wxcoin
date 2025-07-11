@@ -1,13 +1,13 @@
 #include "PropertyPanel.h"
 #include "GeometryObject.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <wx/propgrid/propgrid.h>
 #include <wx/sizer.h>
 
 PropertyPanel::PropertyPanel(wxWindow* parent)
     : wxPanel(parent, wxID_ANY)
 {
-    LOG_INF("PropertyPanel initializing");
+    LOG_INF_S("PropertyPanel initializing");
     m_propGrid = new wxPropertyGrid(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxPG_DEFAULT_STYLE | wxPG_SPLITTER_AUTO_CENTER);
 
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -19,19 +19,19 @@ PropertyPanel::PropertyPanel(wxWindow* parent)
 
 PropertyPanel::~PropertyPanel()
 {
-    LOG_INF("PropertyPanel destroying");
+    LOG_INF_S("PropertyPanel destroying");
 }
 
 void PropertyPanel::updateProperties(GeometryObject* object)
 {
     if (!object) {
-        LOG_WRN("Attempted to update properties for null object");
+        LOG_WRN_S("Attempted to update properties for null object");
         m_propGrid->Clear();
         m_currentObject = nullptr;
         return;
     }
 
-    LOG_INF("Updating properties for object: " + object->getName());
+    LOG_INF_S("Updating properties for object: " + object->getName());
     m_currentObject = object;
     m_propGrid->Clear();
 
@@ -47,7 +47,7 @@ void PropertyPanel::updateProperties(GeometryObject* object)
         m_propGrid->Append(new wxFloatProperty("Position Z", "PosZ", translation[2]));
     }
     else {
-        LOG_WRN("No transform available for object: " + object->getName());
+        LOG_WRN_S("No transform available for object: " + object->getName());
     }
 
     m_propGrid->Append(new wxBoolProperty("Visible", "Visible", object->isVisible()));
@@ -57,17 +57,17 @@ void PropertyPanel::updateProperties(GeometryObject* object)
 void PropertyPanel::onPropertyChanged(wxPropertyGridEvent& event)
 {
     if (!m_currentObject) {
-        LOG_WRN("Property changed but no object selected");
+        LOG_WRN_S("Property changed but no object selected");
         return;
     }
 
     wxPGProperty* property = event.GetProperty();
     if (!property) {
-        LOG_ERR("Invalid property in onPropertyChanged");
+        LOG_ERR_S("Invalid property in onPropertyChanged");
         return;
     }
 
-    LOG_INF("Property changed: " + property->GetName().ToStdString() + " to " + property->GetValueAsString().ToStdString());
+    LOG_INF_S("Property changed: " + property->GetName().ToStdString() + " to " + property->GetValueAsString().ToStdString());
 
     if (property->GetName() == "Name") {
         m_currentObject->setName(property->GetValueAsString().ToStdString());
@@ -91,7 +91,7 @@ void PropertyPanel::onPropertyChanged(wxPropertyGridEvent& event)
             m_currentObject->setPosition(translation);
         }
         else {
-            LOG_WRN("No transform available for property update: " + m_currentObject->getName());
+            LOG_WRN_S("No transform available for property update: " + m_currentObject->getName());
         }
     }
     else if (property->GetName() == "Visible") {

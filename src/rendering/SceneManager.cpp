@@ -2,7 +2,7 @@
 #include "Canvas.h"
 #include "CoordinateSystemRenderer.h"
 #include "PickingAidManager.h"
-#include "Logger.h"
+#include "logger/Logger.h"
 #include <map>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
@@ -27,12 +27,12 @@ SceneManager::SceneManager(Canvas* canvas)
     , m_objectRoot(nullptr)
     , m_isPerspectiveCamera(true)
 {
-    LOG_INF("SceneManager initializing");
+    LOG_INF_S("SceneManager initializing");
 }
 
 SceneManager::~SceneManager() {
     cleanup();
-    LOG_INF("SceneManager destroyed");
+    LOG_INF_S("SceneManager destroyed");
 }
 
 bool SceneManager::initScene() {
@@ -111,7 +111,7 @@ bool SceneManager::initScene() {
         return true;
     }
     catch (const std::exception& e) {
-        LOG_ERR("Exception during scene initialization: " + std::string(e.what()));
+        LOG_ERR_S("Exception during scene initialization: " + std::string(e.what()));
         cleanup();
         return false;
     }
@@ -142,7 +142,7 @@ void SceneManager::cleanup() {
 
 void SceneManager::resetView() {
     if (!m_camera || !m_sceneRoot) {
-        LOG_ERR("Failed to reset view: Invalid camera or scene");
+        LOG_ERR_S("Failed to reset view: Invalid camera or scene");
         return;
     }
 
@@ -169,7 +169,7 @@ void SceneManager::resetView() {
 
 void SceneManager::toggleCameraMode() {
     if (!m_sceneRoot || !m_camera) {
-        LOG_ERR("Failed to toggle camera mode: Invalid context or scene");
+        LOG_ERR_S("Failed to toggle camera mode: Invalid context or scene");
         return;
     }
 
@@ -207,12 +207,12 @@ void SceneManager::toggleCameraMode() {
     m_camera->farDistance.setValue(10000.0f);
 
     m_canvas->Refresh(true);
-    LOG_INF(m_isPerspectiveCamera ? "Switched to Perspective Camera" : "Switched to Orthographic Camera");
+    LOG_INF_S(m_isPerspectiveCamera ? "Switched to Perspective Camera" : "Switched to Orthographic Camera");
 }
 
 void SceneManager::setView(const std::string& viewName) {
     if (!m_camera || !m_sceneRoot) {
-        LOG_ERR("Failed to set view: Invalid camera or scene");
+        LOG_ERR_S("Failed to set view: Invalid camera or scene");
         return;
     }
 
@@ -229,7 +229,7 @@ void SceneManager::setView(const std::string& viewName) {
 
     auto it = viewDirections.find(viewName);
     if (it == viewDirections.end()) {
-        LOG_WRN("Invalid view name: " + viewName);
+        LOG_WRN_S("Invalid view name: " + viewName);
         return;
     }
 
@@ -273,7 +273,7 @@ void SceneManager::setView(const std::string& viewName) {
         m_pickingAidManager->showReferenceGrid(true);
     }
 
-    LOG_INF("Switched to view: " + viewName);
+    LOG_INF_S("Switched to view: " + viewName);
     m_canvas->Refresh(true);
 }
 
@@ -305,7 +305,7 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     // Reset OpenGL errors before rendering
     GLenum err;
     while ((err = glGetError()) != GL_NO_ERROR) {
-        LOG_ERR("Pre-render: OpenGL error: " + std::to_string(err));
+        LOG_ERR_S("Pre-render: OpenGL error: " + std::to_string(err));
     }
     
     // Reset OpenGL state to prevent errors
@@ -315,22 +315,22 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 
     GLint lightingEnabled = 0;
     glGetIntegerv(GL_LIGHTING, &lightingEnabled);
-    //LOG_INF("NavigationCube::render: Lighting enabled: " + std::to_string(lightingEnabled));
+    //LOG_INF_S("NavigationCube::render: Lighting enabled: " + std::to_string(lightingEnabled));
 
     GLint textureEnabled = 0;
     glGetIntegerv(GL_TEXTURE_2D, &textureEnabled);
-    //LOG_INF("NavigationCube::render: Texture 2D enabled: " + std::to_string(textureEnabled));
+    //LOG_INF_S("NavigationCube::render: Texture 2D enabled: " + std::to_string(textureEnabled));
 
     GLint texEnvMode = 0;
     glGetIntegerv(GL_TEXTURE_ENV_MODE, &texEnvMode);
-    //LOG_INF("NavigationCube::render: Texture env mode: " + std::to_string(texEnvMode) + " (GL_MODULATE=" + std::to_string(GL_MODULATE) + ")");
+    //LOG_INF_S("NavigationCube::render: Texture env mode: " + std::to_string(texEnvMode) + " (GL_MODULATE=" + std::to_string(GL_MODULATE) + ")");
 
     // Render the scene
     renderAction.apply(m_sceneRoot);
 
     // Check for OpenGL errors after rendering
     while ((err = glGetError()) != GL_NO_ERROR) {
-        LOG_ERR("Post-render: OpenGL error: " + std::to_string(err) + 
+        LOG_ERR_S("Post-render: OpenGL error: " + std::to_string(err) + 
                 " (GL_INVALID_ENUM=" + std::to_string(GL_INVALID_ENUM) + 
                 ", GL_INVALID_VALUE=" + std::to_string(GL_INVALID_VALUE) + 
                 ", GL_INVALID_OPERATION=" + std::to_string(GL_INVALID_OPERATION) + ")");
@@ -347,13 +347,13 @@ void SceneManager::updateAspectRatio(const wxSize& size) {
 
 bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     if (!m_camera) {
-        LOG_ERR("Cannot convert screen to world: Invalid camera");
+        LOG_ERR_S("Cannot convert screen to world: Invalid camera");
         return false;
     }
 
     wxSize size = m_canvas->GetClientSize();
     if (size.x <= 0 || size.y <= 0) {
-        LOG_ERR("Invalid viewport size");
+        LOG_ERR_S("Invalid viewport size");
         return false;
     }
 
@@ -379,7 +379,7 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
     if (pickedPoint) {
         worldPos = pickedPoint->getPoint();
-        LOG_INF("Successfully picked 3D point from scene geometry");
+        LOG_INF_S("Successfully picked 3D point from scene geometry");
         return true;
     }
 
@@ -387,7 +387,7 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     float referenceZ = m_pickingAidManager ? m_pickingAidManager->getReferenceZ() : 0.0f;
     SbPlane referencePlane(SbVec3f(0, 0, 1), referenceZ);
     if (referencePlane.intersect(lineFromCamera, worldPos)) {
-        LOG_INF("Ray intersected reference plane at Z=" + std::to_string(referenceZ));
+        LOG_INF_S("Ray intersected reference plane at Z=" + std::to_string(referenceZ));
         return true;
     }
 
@@ -398,7 +398,7 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
         if (z == referenceZ) continue; // Skip already tested reference plane
         SbPlane plane(SbVec3f(0, 0, 1), z);
         if (plane.intersect(lineFromCamera, worldPos)) {
-            LOG_INF("Ray intersected plane at Z=" + std::to_string(z));
+            LOG_INF_S("Ray intersected plane at Z=" + std::to_string(z));
             return true;
         }
     }
@@ -406,19 +406,19 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     // XZ plane (Y=0)
     SbPlane xzPlane(SbVec3f(0, 1, 0), 0.0f);
     if (xzPlane.intersect(lineFromCamera, worldPos)) {
-        LOG_INF("Ray intersected XZ plane (Y=0)");
+        LOG_INF_S("Ray intersected XZ plane (Y=0)");
         return true;
     }
 
     // YZ plane (X=0)
     SbPlane yzPlane(SbVec3f(1, 0, 0), 0.0f);
     if (yzPlane.intersect(lineFromCamera, worldPos)) {
-        LOG_INF("Ray intersected YZ plane (X=0)");
+        LOG_INF_S("Ray intersected YZ plane (X=0)");
         return true;
     }
 
     // As a last resort, project to a point at the focal distance
-    LOG_WRN("No plane intersection found, using focal distance projection");
+    LOG_WRN_S("No plane intersection found, using focal distance projection");
     worldPos = lineFromCamera.getPosition() + lineFromCamera.getDirection() * m_camera->focalDistance.getValue();
     return true;
 }
@@ -435,7 +435,7 @@ void SceneManager::updateSceneBounds() {
     m_sceneBoundingBox = bboxAction.getBoundingBox();
 
     if (!m_sceneBoundingBox.isEmpty()) {
-        LOG_INF("Scene bounds updated.");
+        LOG_INF_S("Scene bounds updated.");
         if (m_coordSystemRenderer) {
             m_coordSystemRenderer->updateCoordinateSystemSize(getSceneBoundingBoxSize());
         }
@@ -464,7 +464,7 @@ void SceneManager::updateCoordinateSystemScale() {
 void SceneManager::initializeScene() {
     // This method was declared but not defined.
     // Providing a basic implementation.
-    LOG_INF("SceneManager::initializeScene called.");
+    LOG_INF_S("SceneManager::initializeScene called.");
     // If there's specific initialization logic needed, it should go here.
 }
 
