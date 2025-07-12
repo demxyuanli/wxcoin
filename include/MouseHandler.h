@@ -3,12 +3,15 @@
 #include <wx/event.h>
 #include <Inventor/SbLinear.h>
 #include <string>
+#include <memory>
 
 class Canvas;
 class ObjectTreePanel;
 class PropertyPanel;
 class CommandManager;
 class NavigationController;
+class OCCViewer;
+class OCCGeometry;
 
 class MouseHandler {
 public:
@@ -27,6 +30,8 @@ public:
     std::string getCreationGeometryType() const { return m_creationGeometryType; }
 
 private:
+    void handleGeometrySelection(wxMouseEvent& event);
+    
     Canvas* m_canvas;
     ObjectTreePanel* m_objectTree;
     PropertyPanel* m_propertyPanel;

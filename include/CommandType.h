@@ -37,6 +37,10 @@ enum class CommandType {
     ShowNormals,
     FixNormals,
     ShowEdges,
+    SetTransparency,
+
+    // Selection
+    Select,
 
     // Edit
     Undo,
@@ -80,6 +84,9 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ShowNormals, "SHOW_NORMALS"},
         {CommandType::FixNormals, "FIX_NORMALS"},
         {CommandType::ShowEdges, "SHOW_EDGES"},
+        {CommandType::SetTransparency, "SET_TRANSPARENCY"},
+
+        {CommandType::Select, "SELECT"},
 
         {CommandType::Undo, "UNDO"},
         {CommandType::Redo, "REDO"},
@@ -121,6 +128,9 @@ inline CommandType from_string(const std::string& str) {
         {"SHOW_NORMALS", CommandType::ShowNormals},
         {"FIX_NORMALS", CommandType::FixNormals},
         {"SHOW_EDGES", CommandType::ShowEdges},
+        {"SET_TRANSPARENCY", CommandType::SetTransparency},
+
+        {"SELECT", CommandType::Select},
 
         {"UNDO", CommandType::Undo},
         {"REDO", CommandType::Redo},

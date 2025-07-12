@@ -72,11 +72,7 @@ public:
     // Navigation cube integration
     void setNavigationCubeManager(NavigationCubeManager* manager);
 
-    void setTransparentBackground(bool transparent) { m_transparentBackground = transparent; }
-    bool isTransparentBackground() const { return m_transparentBackground; }
-
 private:
-
     void syncCoordinateSystemCameraToMain();
     void initializeViewports();
     void createCubeOutlineScene();
@@ -112,8 +108,7 @@ private:
     Canvas* m_canvas;
     SceneManager* m_sceneManager;
     NavigationCubeManager* m_navigationCubeManager;
-    bool m_transparentBackground = false;  
-
+    
     ViewportInfo m_viewports[VIEWPORT_COUNT];
     
     // Scene graphs for additional viewports

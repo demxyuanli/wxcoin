@@ -69,6 +69,6 @@ private:
     
     // Helper functions
     float clampScale(float scale) const;
-    int clampFontSize(int size) const;
+    float clampFontSize(float size) const;
     float clampLineWidth(float width) const;
 }; 

@@ -296,7 +296,7 @@ double STEPReader::scaleGeometriesToReasonableSize(
         double currentSizeX = overallMax.X() - overallMin.X();
         double currentSizeY = overallMax.Y() - overallMin.Y();
         double currentSizeZ = overallMax.Z() - overallMin.Z();
-        double currentMaxSize = std::max({currentSizeX, currentSizeY, currentSizeZ});
+        double currentMaxSize = (std::max)({currentSizeX, currentSizeY, currentSizeZ});
         
         LOG_INF_S("Current geometry size: " + std::to_string(currentMaxSize));
         

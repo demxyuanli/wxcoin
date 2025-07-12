@@ -3,8 +3,8 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <TopoDS_Shape.hxx>
-#include <TopoDS_Compound.hxx>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/TopoDS_Compound.hxx>
 #include "OCCGeometry.h"
 
 /**

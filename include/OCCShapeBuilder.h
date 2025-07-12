@@ -2,10 +2,10 @@
 
 #include <memory>
 #include <string>
-#include <TopoDS_Shape.hxx>
-#include <gp_Pnt.hxx>
-#include <gp_Vec.hxx>
-#include <gp_Dir.hxx>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/gp_Vec.hxx>
+#include <OpenCASCADE/gp_Dir.hxx>
 
 /**
  * @brief OpenCASCADE shape builder

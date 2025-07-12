@@ -1,6 +1,9 @@
 #include "OCCGeometry.h"
 #include "OCCMeshConverter.h"
 #include "logger/Logger.h"
+#include <limits>
+#include <cmath>
+#include <wx/gdicmn.h>
 
 // OpenCASCADE includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -17,6 +20,7 @@
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoTexture2.h>
+#include <Inventor/nodes/SoNode.h>
 
 // OCCGeometry base class implementation
 OCCGeometry::OCCGeometry(const std::string& name)
@@ -102,6 +106,39 @@ void OCCGeometry::setVisible(bool visible)
 void OCCGeometry::setSelected(bool selected)
 {
     m_selected = selected;
+    
+    // Update visual representation for selection state
+    if (m_coinNode) {
+        // Find and update material for selection highlighting
+        for (int i = 0; i < m_coinNode->getNumChildren(); ++i) {
+            SoNode* child = m_coinNode->getChild(i);
+            if (child && child->isOfType(SoMaterial::getClassTypeId())) {
+                SoMaterial* material = static_cast<SoMaterial*>(child);
+                
+                if (selected) {
+                    // Highlight selected geometry with blue tint
+                    material->emissiveColor.setValue(0.2f, 0.2f, 0.4f);
+                    material->diffuseColor.setValue(
+                        static_cast<float>(m_color.Red() * 0.8 + 0.2),
+                        static_cast<float>(m_color.Green() * 0.8 + 0.2),
+                        static_cast<float>(m_color.Blue() * 0.8 + 0.4)
+                    );
+                } else {
+                    // Reset to normal appearance
+                    material->emissiveColor.setValue(0.2f, 0.2f, 0.2f);
+                    material->diffuseColor.setValue(
+                        static_cast<float>(m_color.Red()),
+                        static_cast<float>(m_color.Green()),
+                        static_cast<float>(m_color.Blue())
+                    );
+                }
+                break;
+            }
+        }
+        
+        // Force refresh of the scene
+        m_coinNeedsUpdate = true;
+    }
 }
 
 void OCCGeometry::setColor(const Quantity_Color& color)

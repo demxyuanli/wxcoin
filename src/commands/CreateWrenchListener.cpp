@@ -1,16 +1,19 @@
 #include "CreateWrenchListener.h"
 #include "GeometryFactory.h"
 #include "logger/Logger.h"
+#include "MouseHandler.h"
 
-CreateWrenchListener::CreateWrenchListener(GeometryFactory* factory) : m_factory(factory) {}
+CreateWrenchListener::CreateWrenchListener(MouseHandler* mouseHandler, GeometryFactory* factory)
+    : m_mouseHandler(mouseHandler), m_factory(factory) {}
 
 CommandResult CreateWrenchListener::executeCommand(const std::string& commandType,
                                                    const std::unordered_map<std::string, std::string>& /*parameters*/) {
-    if (!m_factory) {
-        return CommandResult(false, "Geometry factory not available", commandType);
+    if (!m_mouseHandler) {
+        return CommandResult(false, "Mouse handler not available", commandType);
     }
-    m_factory->createGeometry("Wrench", SbVec3f(0.0f, 0.0f, 0.0f), GeometryType::OPENCASCADE);
-    return CommandResult(true, "Wrench created successfully", commandType);
+    m_mouseHandler->setOperationMode(MouseHandler::OperationMode::CREATE);
+    m_mouseHandler->setCreationGeometryType("Wrench");
+    return CommandResult(true, "Wrench creation mode activated", commandType);
 }
 
 bool CreateWrenchListener::canHandleCommand(const std::string& commandType) const {

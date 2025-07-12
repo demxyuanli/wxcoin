@@ -243,7 +243,7 @@ void OCCMeshConverter::calculateNormals(TriangleMesh& mesh)
     // Initialize normals array
     mesh.normals.resize(mesh.vertices.size());
     for (auto& normal : mesh.normals) {
-        normal = gp_Pnt(0, 0, 0);
+        normal = gp_Vec(0, 0, 0);  // 改为 gp_Vec
     }
     
     // Calculate face normals and accumulate at vertices
@@ -260,34 +260,20 @@ void OCCMeshConverter::calculateNormals(TriangleMesh& mesh)
             const gp_Pnt& v1 = mesh.vertices[i1];
             const gp_Pnt& v2 = mesh.vertices[i2];
             
-            gp_Pnt normal = calculateTriangleNormal(v0, v1, v2);
+            gp_Vec normal = calculateTriangleNormalVec(v0, v1, v2);  
             
             // Accumulate normal at each vertex
-            mesh.normals[i0] = gp_Pnt(
-                mesh.normals[i0].X() + normal.X(),
-                mesh.normals[i0].Y() + normal.Y(),
-                mesh.normals[i0].Z() + normal.Z()
-            );
-            mesh.normals[i1] = gp_Pnt(
-                mesh.normals[i1].X() + normal.X(),
-                mesh.normals[i1].Y() + normal.Y(),
-                mesh.normals[i1].Z() + normal.Z()
-            );
-            mesh.normals[i2] = gp_Pnt(
-                mesh.normals[i2].X() + normal.X(),
-                mesh.normals[i2].Y() + normal.Y(),
-                mesh.normals[i2].Z() + normal.Z()
-            );
+            mesh.normals[i0] += normal;
+            mesh.normals[i1] += normal;
+            mesh.normals[i2] += normal;
         }
     }
     
     // Normalize accumulated normals
     for (auto& normal : mesh.normals) {
-        double length = sqrt(normal.X() * normal.X() + normal.Y() * normal.Y() + normal.Z() * normal.Z());
+        double length = normal.Magnitude();
         if (length > 1e-6) {
-            normal.SetX(normal.X() / length);
-            normal.SetY(normal.Y() / length);
-            normal.SetZ(normal.Z() / length);
+            normal = normal / length;
         }
     }
 }
@@ -434,7 +420,7 @@ SoNormal* OCCMeshConverter::createNormalNode(const TriangleMesh& mesh)
     
     SbVec3f* normalVecs = normals->vector.startEditing();
     for (size_t i = 0; i < mesh.normals.size(); i++) {
-        const gp_Pnt& normal = mesh.normals[i];
+        const gp_Vec& normal = mesh.normals[i];  
         normalVecs[i].setValue(
             static_cast<float>(normal.X()),
             static_cast<float>(normal.Y()),
@@ -444,6 +430,20 @@ SoNormal* OCCMeshConverter::createNormalNode(const TriangleMesh& mesh)
     normals->vector.finishEditing();
     
     return normals;
+}
+
+gp_Vec OCCMeshConverter::calculateTriangleNormalVec(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3)
+{
+    gp_Vec v1(p1, p2);
+    gp_Vec v2(p1, p3);
+    gp_Vec normal = v1.Crossed(v2);
+    
+    double length = normal.Magnitude();
+    if (length > Precision::Confusion()) {
+        normal = normal / length;
+    }
+    
+    return normal;
 }
 
 static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh& mesh)

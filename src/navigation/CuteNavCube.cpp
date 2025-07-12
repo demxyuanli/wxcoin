@@ -569,7 +569,7 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
         m_rotationY += delta[0] * sensitivity;
         m_rotationX -= delta[1] * sensitivity; // Inverted Y-axis for natural feel
 
-        m_rotationX = std::max(-89.0f, std::min(89.0f, m_rotationX));
+        m_rotationX = (std::max)(-89.0f, (std::min)(89.0f, m_rotationX));
 
         updateCameraRotation();
         m_lastMousePos = currentPos;

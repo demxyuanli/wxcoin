@@ -7,9 +7,9 @@
 #include <memory>
 #include <wx/wx.h>
 #include <wx/timer.h>
-#include <TopoDS_Shape.hxx>
-#include <gp_Pnt.hxx>
-#include <Quantity_Color.hxx>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/Quantity_Color.hxx>
 
 // Forward declarations
 class OCCGeometry;
@@ -34,6 +34,7 @@ public:
     void clearAll();
     std::shared_ptr<OCCGeometry> findGeometry(const std::string& name);
     std::vector<std::shared_ptr<OCCGeometry>> getAllGeometry() const;
+    std::vector<std::shared_ptr<OCCGeometry>> getSelectedGeometries() const;
 
     // View manipulation
     void setGeometryVisible(const std::string& name, bool visible);

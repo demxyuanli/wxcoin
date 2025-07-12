@@ -1,4 +1,5 @@
 #ifdef _WIN32
+#define NOMINMAX
 #define _WINSOCKAPI_
 #include <windows.h>
 #endif
@@ -9,12 +10,17 @@
 #include "SceneManager.h"
 #include "logger/Logger.h"
 #include "Canvas.h"
+#include "ObjectTreePanel.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoTransform.h>
 #include <algorithm>
+#include <limits>
+#include <cmath>
+#include <wx/gdicmn.h>
 
 OCCViewer::OCCViewer(SceneManager* sceneManager)
     : m_sceneManager(sceneManager),
@@ -99,11 +105,25 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     
     LOG_INF_S("Added OCC geometry: " + geometry->getName());
     
+    // Add geometry to ObjectTree if available
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        if (canvas && canvas->getObjectTreePanel()) {
+            canvas->getObjectTreePanel()->addOCCGeometry(geometry);
+        }
+    }
+    
     // Auto-update scene bounds and view when geometry is added
     if (m_sceneManager) {
         m_sceneManager->updateSceneBounds();
         m_sceneManager->resetView();
-        m_sceneManager->getCanvas()->Refresh();
+        
+        Canvas* canvas = m_sceneManager->getCanvas();
+        if (canvas && canvas->getRefreshManager()) {
+            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+        }
+        
+        canvas->Refresh();
         LOG_INF_S("Auto-updated scene bounds and view after adding geometry");
     }
 }
@@ -121,6 +141,14 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
         auto selectedIt = std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
         if (selectedIt != m_selectedGeometries.end()) {
             m_selectedGeometries.erase(selectedIt);
+        }
+        
+        // Remove geometry from ObjectTree if available
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas && canvas->getObjectTreePanel()) {
+                canvas->getObjectTreePanel()->removeOCCGeometry(geometry);
+            }
         }
         
         m_geometries.erase(it);
@@ -161,6 +189,11 @@ std::shared_ptr<OCCGeometry> OCCViewer::findGeometry(const std::string& name)
 std::vector<std::shared_ptr<OCCGeometry>> OCCViewer::getAllGeometry() const
 {
     return m_geometries;
+}
+
+std::vector<std::shared_ptr<OCCGeometry>> OCCViewer::getSelectedGeometries() const
+{
+    return m_selectedGeometries;
 }
 
 void OCCViewer::setGeometryVisible(const std::string& name, bool visible)
@@ -239,7 +272,45 @@ void OCCViewer::fitGeometry(const std::string& name)
 
 std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
 {
-    return nullptr;
+    if (!m_sceneManager) {
+        return nullptr;
+    }
+    
+    // Convert screen coordinates to world coordinates
+    SbVec3f worldPos;
+    if (!m_sceneManager->screenToWorld(wxPoint(x, y), worldPos)) {
+        LOG_WRN_S("Failed to convert screen coordinates to world coordinates");
+        return nullptr;
+    }
+    
+    // Find the closest geometry to the picked point
+    std::shared_ptr<OCCGeometry> closestGeometry = nullptr;
+    double minDistance = std::numeric_limits<double>::max();
+    
+    for (auto& geometry : m_geometries) {
+        if (!geometry->isVisible()) continue;
+        
+        // Get geometry position
+        gp_Pnt geometryPos = geometry->getPosition();
+        
+        // Calculate distance to geometry center
+        double distance = std::sqrt(
+            std::pow(worldPos[0] - geometryPos.X(), 2) +
+            std::pow(worldPos[1] - geometryPos.Y(), 2) +
+            std::pow(worldPos[2] - geometryPos.Z(), 2)
+        );
+        
+        // For now, use a simple distance-based picking
+        // In a more sophisticated implementation, you would use ray-casting
+        // to check if the ray intersects with the geometry's bounding box or mesh
+        
+        if (distance < minDistance && distance < 5.0) { // 5.0 unit picking radius
+            minDistance = distance;
+            closestGeometry = geometry;
+        }
+    }
+    
+    return closestGeometry;
 }
 
 void OCCViewer::setWireframeMode(bool wireframe)
@@ -310,6 +381,14 @@ double OCCViewer::getMeshDeflection() const
 void OCCViewer::onSelectionChanged()
 {
     LOG_INF_S("Selection changed");
+    
+    // Update ObjectTree selection if available
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        if (canvas && canvas->getObjectTreePanel()) {
+            canvas->getObjectTreePanel()->updateTreeSelectionFromViewer();
+        }
+    }
 }
 
 void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
@@ -385,26 +464,29 @@ void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
     
     SoSeparator* normalGroup = new SoSeparator;
     
+    // Get the geometry's position to apply to normal positions
+    gp_Pnt geometryPosition = geometry->getPosition();
+    
     // Create coordinate points for normal lines
     std::vector<SbVec3f> linePoints;
     std::vector<int32_t> lineIndices;
     
     for (size_t i = 0; i < mesh.vertices.size(); ++i) {
         const gp_Pnt& vertex = mesh.vertices[i];
-        const gp_Pnt& normal = mesh.normals[i];
+        const gp_Vec& normal = mesh.normals[i];  
         
-        // Start point (vertex position)
+        // Start point (vertex position with geometry offset)
         SbVec3f startPoint(
-            static_cast<float>(vertex.X()),
-            static_cast<float>(vertex.Y()),
-            static_cast<float>(vertex.Z())
+            static_cast<float>(vertex.X() + geometryPosition.X()),
+            static_cast<float>(vertex.Y() + geometryPosition.Y()),
+            static_cast<float>(vertex.Z() + geometryPosition.Z())
         );
         
-        // End point (vertex + normal * length)
+        // End point (vertex position + normal vector with geometry offset)
         SbVec3f endPoint(
-            static_cast<float>(vertex.X() + normal.X() * m_normalLength),
-            static_cast<float>(vertex.Y() + normal.Y() * m_normalLength),
-            static_cast<float>(vertex.Z() + normal.Z() * m_normalLength)
+            static_cast<float>(vertex.X() + geometryPosition.X() + normal.X() * m_normalLength),
+            static_cast<float>(vertex.Y() + geometryPosition.Y() + normal.Y() * m_normalLength),
+            static_cast<float>(vertex.Z() + geometryPosition.Z() + normal.Z() * m_normalLength)
         );
         
         linePoints.push_back(startPoint);

@@ -4,14 +4,15 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <TopoDS_Shape.hxx>
-#include <gp_Pnt.hxx>
-#include <gp_Vec.hxx>
-#include <Quantity_Color.hxx>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/gp_Vec.hxx>
+#include <OpenCASCADE/Quantity_Color.hxx>
 
 // Forward declarations
 class SoSeparator;
 class SoTransform;
+class SoMaterial;
 class OCCMeshConverter;
 
 /**

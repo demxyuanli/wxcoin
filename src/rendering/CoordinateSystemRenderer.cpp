@@ -32,7 +32,7 @@ void CoordinateSystemRenderer::updateCoordinateSystemSize(float sceneSize)
 {
     // Calculate appropriate coordinate system size based on scene size
     // Make coordinate system occupy about 60% of the scene size, with reasonable bounds
-    float newSize = std::max(1.0f, std::min(sceneSize * 0.6f, sceneSize * 2.0f));
+    float newSize = (std::max)(1.0f, (std::min)(sceneSize * 0.6f, sceneSize * 2.0f));
     
     if (std::abs(newSize - m_currentPlaneSize) > 0.1f) {
         m_currentPlaneSize = newSize;

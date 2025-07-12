@@ -67,6 +67,8 @@
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
 #include "ShowEdgesListener.h"
+#include "SetTransparencyListener.h"
+#include "SelectListener.h"
 #include "UndoListener.h"
 #include "RedoListener.h"
 #include "HelpAboutListener.h"
@@ -75,6 +77,7 @@
 #include "FileExitListener.h"
 
 #ifdef __WXMSW__
+#define NOMINMAX
 #include <windows.h>
 #endif
 // Note: Theme change events are now defined in FlatUIFrame
@@ -111,6 +114,8 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_VIEW_ISOMETRIC, FlatFrame::onCommand)
     EVT_BUTTON(ID_SHOW_NORMALS, FlatFrame::onCommand)
     EVT_BUTTON(ID_FIX_NORMALS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SET_TRANSPARENCY, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SELECT, FlatFrame::onCommand)
     EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_NAVIGATION_CUBE_CONFIG, FlatFrame::onCommand)
@@ -143,6 +148,8 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_VIEW_ISOMETRIC, cmd::CommandType::ViewIsometric},
     {ID_SHOW_NORMALS, cmd::CommandType::ShowNormals},
     {ID_FIX_NORMALS, cmd::CommandType::FixNormals},
+    {ID_SET_TRANSPARENCY, cmd::CommandType::SetTransparency},
+    {ID_SELECT, cmd::CommandType::Select},
     {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
     {ID_UNDO, cmd::CommandType::Undo},
     {ID_REDO, cmd::CommandType::Redo},
@@ -154,23 +161,23 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 
 FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
     : FlatUIFrame(NULL, wxID_ANY, title, pos, size, wxBORDER_NONE),
-      m_ribbon(nullptr),
-      m_messageOutput(nullptr),
-      m_searchCtrl(nullptr),
-      m_homeMenu(nullptr),
-      m_searchPanel(nullptr),
-      m_profilePanel(nullptr),
-      m_canvas(nullptr),
-      m_propertyPanel(nullptr),
-      m_objectTreePanel(nullptr),
-      m_mouseHandler(nullptr),
-      m_geometryFactory(nullptr),
-      m_commandManager(new CommandManager()),
-          m_occViewer(nullptr),
+    m_ribbon(nullptr),
+    m_messageOutput(nullptr),
+    m_searchCtrl(nullptr),
+    m_homeMenu(nullptr),
+    m_searchPanel(nullptr),
+    m_profilePanel(nullptr),
+    m_canvas(nullptr),
+    m_propertyPanel(nullptr),
+    m_objectTreePanel(nullptr),
+    m_mouseHandler(nullptr),
+    m_geometryFactory(nullptr),
+    m_occViewer(nullptr),
     m_isFirstActivate(true),
     m_mainSplitter(nullptr),
     m_leftSplitter(nullptr),
-    m_statusBar(nullptr)
+    m_statusBar(nullptr),
+    m_commandManager(new CommandManager())
 {
     wxInitAllImageHandlers();
     // PlatUIFrame::InitFrameStyle() is called by base constructor.
@@ -322,12 +329,11 @@ void FlatFrame::InitializeUI(const wxSize& size)
     filePanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* fileButtonBar = new FlatUIButtonBar(filePanel);
     fileButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    fileButtonBar->AddButton(wxID_NEW, "New", SVG_ICON("new", wxSize(16, 16)));
-    fileButtonBar->AddButton(wxID_OPEN, "Open", SVG_ICON("open", wxSize(16, 16)));
-    fileButtonBar->AddButton(wxID_SAVE, "Save", SVG_ICON("save", wxSize(16, 16)));
-    fileButtonBar->AddButton(ID_SAVE_AS, "Save As", SVG_ICON("save", wxSize(16, 16)));
-    fileButtonBar->AddButton(ID_IMPORT_STEP, "Import STEP", SVG_ICON("folder", wxSize(16, 16)));
-    fileButtonBar->AddButton(wxID_EXIT, "Exit", SVG_ICON("exit", wxSize(16, 16)));
+    fileButtonBar->AddButton(wxID_NEW, "New", SVG_ICON("new", wxSize(16, 16)), nullptr, "Create a new project");
+    fileButtonBar->AddButton(wxID_OPEN, "Open", SVG_ICON("open", wxSize(16, 16)), nullptr, "Open an existing project");
+    fileButtonBar->AddButton(wxID_SAVE, "Save", SVG_ICON("save", wxSize(16, 16)), nullptr, "Save current project");
+    fileButtonBar->AddButton(ID_SAVE_AS, "Save As", SVG_ICON("saveas", wxSize(16, 16)), nullptr, "Save project with a new name");
+    fileButtonBar->AddButton(ID_IMPORT_STEP, "Import STEP", SVG_ICON("import", wxSize(16, 16)), nullptr, "Import STEP file");
     filePanel->AddButtonBar(fileButtonBar, 0, wxEXPAND | wxALL, 5);
     page1->AddPanel(filePanel);
 
@@ -341,11 +347,11 @@ void FlatFrame::InitializeUI(const wxSize& size)
     createPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* createButtonBar = new FlatUIButtonBar(createPanel);
     createButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    createButtonBar->AddButton(ID_CREATE_BOX, "Box", SVG_ICON("cube", wxSize(16, 16)));
-    createButtonBar->AddButton(ID_CREATE_SPHERE, "Sphere", SVG_ICON("circle", wxSize(16, 16)));
-    createButtonBar->AddButton(ID_CREATE_CYLINDER, "Cylinder", SVG_ICON("circle", wxSize(16, 16)));
-    createButtonBar->AddButton(ID_CREATE_CONE, "Cone", SVG_ICON("triangle", wxSize(16, 16)));
-    createButtonBar->AddButton(ID_CREATE_WRENCH, "Wrench", SVG_ICON("drafting", wxSize(16, 16)));
+    createButtonBar->AddButton(ID_CREATE_BOX, "Box", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Create a box geometry");
+    createButtonBar->AddButton(ID_CREATE_SPHERE, "Sphere", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Create a sphere geometry");
+    createButtonBar->AddButton(ID_CREATE_CYLINDER, "Cylinder", SVG_ICON("cylinder", wxSize(16, 16)), nullptr, "Create a cylinder geometry");
+    createButtonBar->AddButton(ID_CREATE_CONE, "Cone", SVG_ICON("cone", wxSize(16, 16)), nullptr, "Create a cone geometry");
+    createButtonBar->AddButton(ID_CREATE_WRENCH, "Wrench", SVG_ICON("wrench", wxSize(16, 16)), nullptr, "Create a wrench geometry");
     createPanel->AddButtonBar(createButtonBar, 0, wxEXPAND | wxALL, 5);
     page1->AddPanel(createPanel);
     m_ribbon->AddPage(page1);
@@ -361,8 +367,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
     editPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* editButtonBar = new FlatUIButtonBar(editPanel);
     editButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    editButtonBar->AddButton(ID_UNDO, "Undo", SVG_ICON("undo", wxSize(16, 16)));
-    editButtonBar->AddButton(ID_REDO, "Redo", SVG_ICON("undo", wxSize(16, 16))); // Could use a redo icon
+    editButtonBar->AddButton(ID_UNDO, "Undo", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Undo last operation");
+    editButtonBar->AddButton(ID_REDO, "Redo", SVG_ICON("redo", wxSize(16, 16)), nullptr, "Redo last undone operation");
     editPanel->AddButtonBar(editButtonBar, 0, wxEXPAND | wxALL, 5);
     page2->AddPanel(editPanel);
     m_ribbon->AddPage(page2);
@@ -380,16 +386,16 @@ void FlatFrame::InitializeUI(const wxSize& size)
     viewPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* viewButtonBar = new FlatUIButtonBar(viewPanel);
     viewButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    viewButtonBar->AddButton(ID_VIEW_ALL, "Fit All", SVG_ICON("expand", wxSize(16, 16)));
-    viewButtonBar->AddButton(ID_VIEW_TOP, "Top", SVG_ICON("up", wxSize(16, 16)));
-    viewButtonBar->AddButton(ID_VIEW_FRONT, "Front", SVG_ICON("enter", wxSize(16, 16)));
-    viewButtonBar->AddButton(ID_VIEW_RIGHT, "Right", SVG_ICON("enter", wxSize(16, 16)));
-    viewButtonBar->AddButton(ID_VIEW_ISOMETRIC, "Isometric", SVG_ICON("cube", wxSize(16, 16)));
+    viewButtonBar->AddButton(ID_VIEW_ALL, "Fit All", SVG_ICON("fitview", wxSize(16, 16)), nullptr, "Fit all objects in view");
+    viewButtonBar->AddButton(ID_VIEW_TOP, "Top", SVG_ICON("topview", wxSize(16, 16)), nullptr, "Switch to top view");
+    viewButtonBar->AddButton(ID_VIEW_FRONT, "Front", SVG_ICON("frontview", wxSize(16, 16)), nullptr, "Switch to front view");
+    viewButtonBar->AddButton(ID_VIEW_RIGHT, "Right", SVG_ICON("rightview", wxSize(16, 16)), nullptr, "Switch to right view");
+    viewButtonBar->AddButton(ID_VIEW_ISOMETRIC, "Isometric", SVG_ICON("isoview", wxSize(16, 16)), nullptr, "Switch to isometric view");
     viewPanel->AddButtonBar(viewButtonBar, 0, wxEXPAND | wxALL, 5);
     page3->AddPanel(viewPanel);
 
     // Display Options Panel
-    FlatUIPanel* displayPanel = new FlatUIPanel(page3, "Display", wxHORIZONTAL);
+    FlatUIPanel* displayPanel = new FlatUIPanel(page3, "Display", wxHORIZONTAL); 
     displayPanel->SetFont(CFG_DEFAULTFONT());
     displayPanel->SetPanelBorderWidths(0, 0, 0, 1);
     displayPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
@@ -398,9 +404,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
     displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    displayButtonBar->AddButton(ID_VIEW_SHOWEDGES, "Show Edges", SVG_ICON("layout", wxSize(16, 16)));
-    displayButtonBar->AddButton(ID_SHOW_NORMALS, "Show Normals", SVG_ICON("marker", wxSize(16, 16)));
-    displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("magic", wxSize(16, 16)));
+    displayButtonBar->AddButton(ID_VIEW_SHOWEDGES, "Show Edges", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Toggle edge display");
+    displayButtonBar->AddButton(ID_SHOW_NORMALS, "Show Normals", SVG_ICON("normals", wxSize(16, 16)), nullptr, "Toggle normal vectors display");
+    displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
+    displayButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");
     displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
     page3->AddPanel(displayPanel);
     m_ribbon->AddPage(page3);
@@ -416,9 +423,9 @@ void FlatFrame::InitializeUI(const wxSize& size)
     toolsPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* toolsButtonBar = new FlatUIButtonBar(toolsPanel);
     toolsButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("settings", wxSize(16, 16)));
-    toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)));
-    toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("settings", wxSize(16, 16)));
+    toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open mesh quality dialog");
+    toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
+    toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
     toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
     page4->AddPanel(toolsPanel);
     m_ribbon->AddPage(page4);
@@ -434,15 +441,15 @@ void FlatFrame::InitializeUI(const wxSize& size)
     helpPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* helpButtonBar = new FlatUIButtonBar(helpPanel);
     helpButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    helpButtonBar->AddButton(wxID_ABOUT, "About", SVG_ICON("about", wxSize(16, 16)));
-    helpButtonBar->AddButton(ID_ShowUIHierarchy, "UI Debug", SVG_ICON("tree", wxSize(16, 16)));
+    helpButtonBar->AddButton(wxID_ABOUT, "About", SVG_ICON("about", wxSize(16, 16)), nullptr, "Show application information");
+    helpButtonBar->AddButton(ID_ShowUIHierarchy, "UI Debug", SVG_ICON("tree", wxSize(16, 16)), nullptr, "Show UI hierarchy debugger");
     helpPanel->AddButtonBar(helpButtonBar, 0, wxEXPAND | wxALL, 5);
     
     // Toggle buttons for UI spaces
     FlatUIButtonBar* toggleBar = new FlatUIButtonBar(helpPanel);
     toggleBar->SetDisplayStyle(ButtonDisplayStyle::TEXT_ONLY);
-    toggleBar->AddButton(ID_ToggleFunctionSpace, "ToggleFunc");
-    toggleBar->AddButton(ID_ToggleProfileSpace, "ToggleProf");
+    toggleBar->AddButton(ID_ToggleFunctionSpace, "ToggleFunc", wxNullBitmap, nullptr, "Toggle function space visibility");
+    toggleBar->AddButton(ID_ToggleProfileSpace, "ToggleProf", wxNullBitmap, nullptr, "Toggle profile space visibility");
     helpPanel->AddButtonBar(toggleBar, 0, wxEXPAND | wxALL, 5);
     
     page5->AddPanel(helpPanel); 
@@ -563,7 +570,7 @@ void FlatFrame::setupCommandSystem() {
     auto createSphereListener = std::make_shared<CreateSphereListener>(m_mouseHandler);
     auto createCylinderListener = std::make_shared<CreateCylinderListener>(m_mouseHandler);
     auto createConeListener = std::make_shared<CreateConeListener>(m_mouseHandler);
-    auto createWrenchListener = std::make_shared<CreateWrenchListener>(m_geometryFactory);
+    auto createWrenchListener = std::make_shared<CreateWrenchListener>(m_mouseHandler, m_geometryFactory);
     
     // Register geometry command listeners
     m_listenerManager = std::make_unique<CommandListenerManager>();
@@ -582,6 +589,8 @@ void FlatFrame::setupCommandSystem() {
     auto showNormalsListener = std::make_shared<ShowNormalsListener>(m_occViewer);
     auto fixNormalsListener = std::make_shared<FixNormalsListener>(m_occViewer);
     auto showEdgesListener = std::make_shared<ShowEdgesListener>(m_occViewer);
+    auto setTransparencyListener = std::make_shared<SetTransparencyListener>(m_occViewer);
+    auto selectListener = std::make_shared<SelectListener>(m_mouseHandler);
     
     // Register view command listeners
     m_listenerManager->registerListener(cmd::CommandType::ViewAll, viewAllListener);
@@ -592,6 +601,8 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::ShowNormals, showNormalsListener);
     m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowEdges, showEdgesListener);
+    m_listenerManager->registerListener(cmd::CommandType::SetTransparency, setTransparencyListener);
+    m_listenerManager->registerListener(cmd::CommandType::Select, selectListener);
     
     // Register file command listeners
     auto fileNewListener = std::make_shared<FileNewListener>(m_canvas, m_commandManager);
@@ -1057,9 +1068,12 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
     }
     
     // Refresh canvas if needed - ensure all view and display commands trigger refresh
-    if (m_canvas && (result.commandId.find("VIEW_") == 0 || 
-                     result.commandId.find("SHOW_") == 0 ||
-                     result.commandId == "FIX_NORMALS")) {
+    if (m_canvas && (
+            result.commandId.find("VIEW_") == 0 ||
+            result.commandId.find("SHOW_") == 0 ||
+            result.commandId == "FIX_NORMALS" ||
+            result.commandId.find("CREATE_") == 0
+        )) {
         m_canvas->Refresh();
         LOG_INF_S("Canvas refreshed for command: " + result.commandId);
     }

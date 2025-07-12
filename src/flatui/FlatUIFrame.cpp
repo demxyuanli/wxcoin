@@ -8,6 +8,7 @@
 #include "logger/Logger.h"
 
 #ifdef __WXMSW__
+#define NOMINMAX
 #include <windows.h>     // For Windows specific GDI calls for rubber band
 #endif
 

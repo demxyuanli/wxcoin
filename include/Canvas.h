@@ -46,6 +46,7 @@ public:
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
     void setOCCViewer(class OCCViewer* occViewer) { m_occViewer = occViewer; }
+    OCCViewer* getOCCViewer() const { return m_occViewer; }
 
     // Scene access shortcuts
     SoCamera* getCamera() const;

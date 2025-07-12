@@ -2,7 +2,7 @@
 
 #include <string>
 #include <vector>
-#include <TopoDS_Shape.hxx>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
 
 // Forward declarations
 class SoSeparator;

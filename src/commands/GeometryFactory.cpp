@@ -172,12 +172,12 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         
         LOG_INF_S("Creating improved wrench with better closure...");
 
-        // Create handle as a centered box
+        // Create handle as a centered box - now positioned at the specified location
         TopoDS_Shape handle = OCCShapeBuilder::createBox(
             handleLength, 
             handleWidth, 
             handleThickness,
-            gp_Pnt(-handleLength/2.0, -handleWidth/2.0, -handleThickness/2.0)
+            gp_Pnt(position[0] - handleLength/2.0, position[1] - handleWidth/2.0, position[2] - handleThickness/2.0)
         );
         
         if (handle.IsNull()) {
@@ -185,13 +185,13 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
-        // Create left jaw head (fixed jaw)
+        // Create left jaw head (fixed jaw) - positioned relative to the specified location
         double leftJawLength = headLength * 0.6;
         TopoDS_Shape leftJawOuter = OCCShapeBuilder::createBox(
             leftJawLength, 
             headWidth, 
             headThickness,
-            gp_Pnt(-handleLength/2.0 - leftJawLength, -headWidth/2.0, -headThickness/2.0)
+            gp_Pnt(position[0] - handleLength/2.0 - leftJawLength, position[1] - headWidth/2.0, position[2] - headThickness/2.0)
         );
         
         if (leftJawOuter.IsNull()) {
@@ -199,13 +199,13 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
-        // Create right jaw head (adjustable jaw)
+        // Create right jaw head (adjustable jaw) - positioned relative to the specified location
         double rightJawLength = headLength * 0.4;
         TopoDS_Shape rightJawOuter = OCCShapeBuilder::createBox(
             rightJawLength, 
             headWidth, 
             headThickness,
-            gp_Pnt(handleLength/2.0, -headWidth/2.0, -headThickness/2.0)
+            gp_Pnt(position[0] + handleLength/2.0, position[1] - headWidth/2.0, position[2] - headThickness/2.0)
         );
         
         if (rightJawOuter.IsNull()) {
@@ -228,7 +228,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         
         LOG_INF_S("Basic wrench body created, now adding openings...");
         
-        // Create left jaw opening (smaller and more centered)
+        // Create left jaw opening (smaller and more centered) - positioned relative to the specified location
         double leftSlotWidth = jawOpening * 0.8;
         double leftSlotDepth = headWidth * 0.7;
         double leftSlotHeight = headThickness * 0.9;  // Slightly smaller than head thickness
@@ -237,9 +237,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             leftSlotWidth,
             leftSlotDepth,
             leftSlotHeight,
-            gp_Pnt(-handleLength/2.0 - leftJawLength + leftSlotWidth/2.0, 
-                   -leftSlotDepth/2.0, 
-                   -leftSlotHeight/2.0)
+            gp_Pnt(position[0] - handleLength/2.0 - leftJawLength + leftSlotWidth/2.0, 
+                   position[1] - leftSlotDepth/2.0, 
+                   position[2] - leftSlotHeight/2.0)
         );
         
         if (!leftSlot.IsNull()) {
@@ -252,7 +252,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             }
         }
         
-        // Create right jaw opening (smaller and more centered)
+        // Create right jaw opening (smaller and more centered) - positioned relative to the specified location
         double rightSlotWidth = jawOpening * 0.6;
         double rightSlotDepth = headWidth * 0.6;
         double rightSlotHeight = headThickness * 0.9;
@@ -261,9 +261,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             rightSlotWidth,
             rightSlotDepth,
             rightSlotHeight,
-            gp_Pnt(handleLength/2.0 + rightJawLength - rightSlotWidth - 0.2, 
-                   -rightSlotDepth/2.0, 
-                   -rightSlotHeight/2.0)
+            gp_Pnt(position[0] + handleLength/2.0 + rightJawLength - rightSlotWidth - 0.2, 
+                   position[1] - rightSlotDepth/2.0, 
+                   position[2] - rightSlotHeight/2.0)
         );
         
         if (!rightSlot.IsNull() && !wrenchBody.IsNull()) {
@@ -276,9 +276,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             }
         }
         
-        // Add grip texture (smaller grooves)
+        // Add grip texture (smaller grooves) - positioned relative to the specified location
         for (int i = 0; i < 3; i++) {
-            double grooveX = -handleLength/3.0 + i * handleLength/3.0;
+            double grooveX = position[0] - handleLength/3.0 + i * handleLength/3.0;
             double grooveWidth = 0.2;
             double grooveDepth = handleWidth * 0.6;
             double grooveHeight = 0.15;
@@ -288,8 +288,8 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
                 grooveDepth,
                 grooveHeight,
                 gp_Pnt(grooveX - grooveWidth/2.0, 
-                       -grooveDepth/2.0, 
-                       handleThickness/2.0 - grooveHeight/2.0)
+                       position[1] - grooveDepth/2.0, 
+                       position[2] + handleThickness/2.0 - grooveHeight/2.0)
             );
             
             if (!groove.IsNull() && !wrenchBody.IsNull()) {
@@ -319,6 +319,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         
         auto geometry = std::make_shared<OCCGeometry>(name);
         geometry->setShape(wrenchBody);
+        // Set position to the specified location - this ensures the geometry is properly positioned
         geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
         
         LOG_INF_S("Created improved wrench model: " + name);

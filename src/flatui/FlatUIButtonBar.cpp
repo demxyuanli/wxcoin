@@ -74,7 +74,7 @@ FlatUIButtonBar::FlatUIButtonBar(FlatUIPanel* parent)
 
 FlatUIButtonBar::~FlatUIButtonBar() = default;
 
-void FlatUIButtonBar::AddButton(int id, const wxString& label, const wxBitmap& bitmap, wxMenu* menu)
+void FlatUIButtonBar::AddButton(int id, const wxString& label, const wxBitmap& bitmap, wxMenu* menu, const wxString& tooltip)
 {
     Freeze();
     ButtonInfo button;
@@ -84,6 +84,7 @@ void FlatUIButtonBar::AddButton(int id, const wxString& label, const wxBitmap& b
     button.icon = bitmap;
     button.menu = menu;
     button.isDropDown = (menu != nullptr);
+    button.tooltip = tooltip; // Set tooltip
 
     wxClientDC dc(this);
     dc.SetFont(CFG_DEFAULTFONT());
@@ -94,6 +95,56 @@ void FlatUIButtonBar::AddButton(int id, const wxString& label, const wxBitmap& b
 
     Thaw();
     Refresh();
+}
+
+void FlatUIButtonBar::SetButtonTooltip(int id, const wxString& tooltip)
+{
+    for (auto& button : m_buttons) {
+        if (button.id == id) {
+            button.tooltip = tooltip;
+            break;
+        }
+    }
+}
+
+void FlatUIButtonBar::OnMouseMove(wxMouseEvent& evt)
+{
+    if (!m_hoverEffectsEnabled) return;
+
+    int oldHoveredIndex = m_hoveredButtonIndex;
+    m_hoveredButtonIndex = -1;
+    wxPoint pos = evt.GetPosition();
+
+    for (size_t i = 0; i < m_buttons.size(); ++i) {
+        if (m_buttons[i].rect.Contains(pos)) {
+            m_hoveredButtonIndex = i;
+            // Set tooltip for hovered button
+            if (!m_buttons[i].tooltip.IsEmpty()) {
+                SetToolTip(m_buttons[i].tooltip);
+            } else {
+                UnsetToolTip();
+            }
+            break;
+        }
+    }
+
+    // Clear tooltip if not hovering over any button
+    if (m_hoveredButtonIndex == -1) {
+        UnsetToolTip();
+    }
+
+    if (oldHoveredIndex != m_hoveredButtonIndex) {
+        Refresh();
+    }
+}
+
+void FlatUIButtonBar::OnMouseLeave(wxMouseEvent& evt)
+{
+    if (m_hoveredButtonIndex != -1) {
+        m_hoveredButtonIndex = -1;
+        UnsetToolTip(); // Clear tooltip when mouse leaves
+        Refresh();
+    }
 }
 
 int FlatUIButtonBar::CalculateButtonWidth(const ButtonInfo& button, wxDC& dc) const
@@ -436,35 +487,8 @@ void FlatUIButtonBar::DrawButtonBorder(wxDC& dc, const wxRect& rect, bool isHove
     }
 }
 
-void FlatUIButtonBar::OnMouseMove(wxMouseEvent& evt)
-{
-    if (!m_hoverEffectsEnabled) return;
 
-    int oldHoveredIndex = m_hoveredButtonIndex;
-    m_hoveredButtonIndex = -1;
-    wxPoint pos = evt.GetPosition();
-
-    for (size_t i = 0; i < m_buttons.size(); ++i) {
-        if (m_buttons[i].rect.Contains(pos)) {
-            m_hoveredButtonIndex = i;
-            break;
-        }
-    }
-
-    if (oldHoveredIndex != m_hoveredButtonIndex) {
-        Refresh();
-    }
-}
-
-void FlatUIButtonBar::OnMouseLeave(wxMouseEvent& evt)
-{
-    if (m_hoveredButtonIndex != -1) {
-        m_hoveredButtonIndex = -1;
-        Refresh();
-    }
-}
-
-void FlatUIButtonBar::OnMouseDown(wxMouseEvent& evt)
+void FlatUIButtonBar::OnMouseDown(wxMouseEvent& evt) 
 {
     wxPoint pos = evt.GetPosition();
 
@@ -481,7 +505,7 @@ void FlatUIButtonBar::OnMouseDown(wxMouseEvent& evt)
             else {
                 wxCommandEvent event(wxEVT_BUTTON, button.id);
                 event.SetEventObject(this);
-                GetParent()->ProcessWindowEvent(event);
+                GetParent()->ProcessWindowEvent(event); 
             }
             break;
         }

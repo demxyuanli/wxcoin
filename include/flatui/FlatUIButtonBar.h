@@ -36,10 +36,27 @@ public:
         ROUNDED
     };
 
+    struct ButtonInfo {
+        int id;
+        wxString label;
+        wxBitmap icon;
+        wxRect rect;
+        wxMenu* menu = nullptr;
+        bool isDropDown = false;
+        bool hovered = false;
+        bool pressed = false;
+        wxSize textSize; // Cached text extent
+        wxString tooltip; // Add tooltip field
+    };
+
     FlatUIButtonBar(FlatUIPanel* parent);
     virtual ~FlatUIButtonBar();
 
-    void AddButton(int id, const wxString& label, const wxBitmap& bitmap = wxNullBitmap, wxMenu* menu = nullptr);
+    void AddButton(int id, const wxString& label, const wxBitmap& bitmap = wxNullBitmap, wxMenu* menu = nullptr, const wxString& tooltip = wxEmptyString);
+    
+    // Add method to set tooltip for existing button
+    void SetButtonTooltip(int id, const wxString& tooltip);
+
     size_t GetButtonCount() const { return m_buttons.size(); }
 
     void SetDisplayStyle(ButtonDisplayStyle style);
@@ -97,17 +114,6 @@ protected:
     wxSize DoGetBestSize() const override;
 
 private:
-    struct ButtonInfo {
-        int id;
-        wxString label;
-        wxBitmap icon;
-        wxRect rect;
-        wxMenu* menu = nullptr;
-        bool isDropDown = false;
-        bool hovered = false;
-        bool pressed = false;
-        wxSize textSize; // Cached text extent
-    };
     wxVector<ButtonInfo> m_buttons;
     ButtonDisplayStyle m_displayStyle;
     ButtonStyle m_buttonStyle;

@@ -21,7 +21,7 @@ void DPIManager::updateDPIScale(float dpiScale) {
 }
 
 wxFont DPIManager::getScaledFont(const wxFont& baseFont) const {
-    int scaledSize = clampFontSize(static_cast<int>(baseFont.GetPointSize() * m_dpiScale));
+    int scaledSize = static_cast<int>(clampFontSize(static_cast<float>(baseFont.GetPointSize() * m_dpiScale)));
     
     wxFont scaledFont = baseFont;
     scaledFont.SetPointSize(scaledSize);
@@ -51,7 +51,7 @@ wxFont DPIManager::getScaledFont(int baseSizePoints, const wxString& faceName,
 }
 
 int DPIManager::getScaledFontSize(int baseSizePoints) const {
-    return clampFontSize(static_cast<int>(baseSizePoints * m_dpiScale));
+    return static_cast<int>(clampFontSize(static_cast<float>(baseSizePoints * m_dpiScale)));
 }
 
 float DPIManager::getScaledLineWidth(float baseWidth) const {
@@ -60,7 +60,7 @@ float DPIManager::getScaledLineWidth(float baseWidth) const {
 }
 
 float DPIManager::getScaledPointSize(float baseSize) const {
-    return std::max(0.5f, baseSize * m_dpiScale);
+    return (std::max)(0.5f, baseSize * m_dpiScale);
 }
 
 int DPIManager::getScaledTextureSize(int baseSize) const {
@@ -75,7 +75,7 @@ int DPIManager::getScaledTextureSize(int baseSize) const {
     }
     
     // Clamp to reasonable limits (32 to 2048)
-    powerOf2 = std::max(32, std::min(2048, powerOf2));
+    powerOf2 = (std::max)(32, (std::min)(2048, powerOf2));
     
     LOG_DBG_S("DPIManager: Scaled texture size from " + std::to_string(baseSize) + 
             " to " + std::to_string(powerOf2) + " (scale: " + std::to_string(m_dpiScale) + ")");
@@ -142,13 +142,13 @@ void DPIManager::clearTextureCache() {
 }
 
 float DPIManager::clampScale(float scale) const {
-    return std::max(MIN_DPI_SCALE, std::min(MAX_DPI_SCALE, scale));
+    return (std::max)(static_cast<float>(MIN_DPI_SCALE), (std::min)(static_cast<float>(MAX_DPI_SCALE), scale));
 }
 
-int DPIManager::clampFontSize(int size) const {
-    return std::max(MIN_FONT_SIZE, std::min(MAX_FONT_SIZE, size));
+float DPIManager::clampFontSize(float size) const {
+    return (std::max)(static_cast<float>(MIN_FONT_SIZE), (std::min)(static_cast<float>(MAX_FONT_SIZE), size));
 }
 
 float DPIManager::clampLineWidth(float width) const {
-    return std::max(MIN_LINE_WIDTH, std::min(MAX_LINE_WIDTH, width));
+    return (std::max)(static_cast<float>(MIN_LINE_WIDTH), (std::min)(static_cast<float>(MAX_LINE_WIDTH), width));
 } 

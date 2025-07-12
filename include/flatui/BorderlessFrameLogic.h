@@ -1,6 +1,7 @@
 #ifndef BORDERLESSFRAMELOGIC_H
 #define BORDERLESSFRAMELOGIC_H
 
+#define NOMINMAX
 #include <wx/wx.h>
 #ifdef __WXMSW__
 #include <windows.h>

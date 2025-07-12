@@ -13,10 +13,10 @@
 void NavigationCubeManager::Layout::update(int newX_logical, int newY_logical, int newSize_logical,
     const wxSize& windowSize_logical, float dpiScale)
 {
-    size = std::max(80, std::min(newSize_logical, windowSize_logical.x / 2));
-    size = std::max(80, std::min(size, windowSize_logical.y / 2));
-    x = std::max(0, std::min(newX_logical, windowSize_logical.x - size));
-    y = std::max(0, std::min(newY_logical, windowSize_logical.y - size));
+    size = (std::max)(80, (std::min)(newSize_logical, windowSize_logical.x / 2));
+    size = (std::max)(80, (std::min)(size, windowSize_logical.y / 2));
+    x = (std::max)(0, (std::min)(newX_logical, windowSize_logical.x - size));
+    y = (std::max)(0, (std::min)(newY_logical, windowSize_logical.y - size));
 }
 
 NavigationCubeManager::NavigationCubeManager(Canvas* canvas, SceneManager* sceneManager)

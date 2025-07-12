@@ -12,6 +12,8 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ShowNormalsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FixNormalsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ShowEdgesListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SetTransparencyListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SelectListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FileNewListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ImportStepListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FileOpenListener.cpp
@@ -56,6 +58,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ShowNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/FixNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowEdgesListener.h
+    ${CMAKE_SOURCE_DIR}/include/SetTransparencyListener.h
+    ${CMAKE_SOURCE_DIR}/include/SelectListener.h
     ${CMAKE_SOURCE_DIR}/include/UndoListener.h
     ${CMAKE_SOURCE_DIR}/include/RedoListener.h
     ${CMAKE_SOURCE_DIR}/include/HelpAboutListener.h

@@ -2,8 +2,8 @@
 
 #include <vector>
 #include <string>
-#include <TopoDS_Shape.hxx>
-#include <gp_Pnt.hxx>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/gp_Pnt.hxx>
 
 // Forward declarations
 class SoSeparator;
@@ -26,7 +26,7 @@ public:
     struct TriangleMesh {
         std::vector<gp_Pnt> vertices;       // vertex coordinates
         std::vector<int> triangles;         // triangle indices (3 per triangle)
-        std::vector<gp_Pnt> normals;        // vertex normals
+        std::vector<gp_Vec> normals;        
         std::vector<std::pair<double, double>> uvCoords; // UV texture coordinates
         
         // Statistics
@@ -122,6 +122,7 @@ public:
     static double s_featureEdgeAngle;
     // Calculate triangle face normal
     static gp_Pnt calculateTriangleNormal(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
+	static gp_Vec calculateTriangleNormalVec(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
 
 private:
     static bool s_showEdges;
@@ -135,4 +136,4 @@ private:
     static SoCoordinate3* createCoordinateNode(const TriangleMesh& mesh);
     static SoIndexedFaceSet* createFaceSetNode(const TriangleMesh& mesh);
     static SoNormal* createNormalNode(const TriangleMesh& mesh);
-}; 
+};

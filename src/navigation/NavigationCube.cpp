@@ -394,7 +394,7 @@ void NavigationCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& v
         m_rotationY += delta[0] * sensitivity;
         m_rotationX -= delta[1] * sensitivity;
 
-        m_rotationX = std::max(-89.0f, std::min(89.0f, m_rotationX));
+        m_rotationX = (std::max)(-89.0f, (std::min)(89.0f, m_rotationX));
 
         updateCameraRotation();
         m_lastMousePos = currentPos;

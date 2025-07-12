@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #ifdef __WXMSW__
+#define NOMINMAX
 #include <windows.h>
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
@@ -390,7 +391,7 @@ void FlatUIBarPerformanceManager::LogPerformanceStats() const
         
         for (double time : stat.second) {
             total += time;
-            max_time = std::max(max_time, time);
+            max_time = (std::max)(max_time, time);
             min_time = std::min(min_time, time);
         }
         

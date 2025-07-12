@@ -1,13 +1,20 @@
 #include "ObjectTreePanel.h"
 #include "GeometryObject.h"
+#include "OCCGeometry.h"
+#include "OCCViewer.h"
+#include "Canvas.h"
 #include "logger/Logger.h"
 #include "PropertyPanel.h"
 #include <wx/treectrl.h>
 #include <wx/sizer.h>
+#include <vector>
+#include <algorithm>
 
 ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
     : wxPanel(parent, wxID_ANY)
     , m_propertyPanel(nullptr)
+    , m_occViewer(nullptr)
+    , m_isUpdatingSelection(false)
 {
     LOG_INF_S("ObjectTreePanel initializing");
     m_treeCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_SINGLE);
@@ -19,6 +26,7 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
     m_rootId = m_treeCtrl->AddRoot("Scene");
 
     m_treeCtrl->Bind(wxEVT_TREE_SEL_CHANGED, &ObjectTreePanel::onSelectionChanged, this);
+    m_treeCtrl->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ObjectTreePanel::onTreeItemActivated, this);
 }
 
 ObjectTreePanel::~ObjectTreePanel()
@@ -78,14 +86,104 @@ void ObjectTreePanel::updateObjectName(GeometryObject* object)
     m_treeCtrl->SetItemText(it->second, object->getName());
 }
 
+void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
+{
+    if (!geometry) {
+        LOG_ERR_S("Attempted to add null OCCGeometry to tree");
+        return;
+    }
+    if (m_occGeometryMap.find(geometry) != m_occGeometryMap.end()) {
+        LOG_WRN_S("OCCGeometry already exists in tree: " + geometry->getName());
+        return;
+    }
+
+    LOG_INF_S("Adding OCCGeometry to tree: " + geometry->getName());
+    wxTreeItemId itemId = m_treeCtrl->AppendItem(m_rootId, geometry->getName());
+    m_occGeometryMap[geometry] = itemId;
+    m_treeItemToOCCGeometry[itemId] = geometry;
+    m_treeCtrl->Expand(m_rootId);
+}
+
+void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
+{
+    if (!geometry) {
+        LOG_ERR_S("Attempted to remove null OCCGeometry from tree");
+        return;
+    }
+
+    auto it = m_occGeometryMap.find(geometry);
+    if (it == m_occGeometryMap.end()) {
+        LOG_WRN_S("OCCGeometry not found in tree: " + geometry->getName());
+        return;
+    }
+
+    LOG_INF_S("Removing OCCGeometry from tree: " + geometry->getName());
+    wxTreeItemId itemId = it->second;
+    m_treeCtrl->Delete(itemId);
+    m_occGeometryMap.erase(it);
+    m_treeItemToOCCGeometry.erase(itemId);
+}
+
+void ObjectTreePanel::updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometry)
+{
+    if (!geometry) {
+        LOG_ERR_S("Attempted to update name of null OCCGeometry");
+        return;
+    }
+
+    auto it = m_occGeometryMap.find(geometry);
+    if (it == m_occGeometryMap.end()) {
+        LOG_WRN_S("OCCGeometry not found in tree for name update: " + geometry->getName());
+        return;
+    }
+
+    LOG_INF_S("Updating OCCGeometry name in tree: " + geometry->getName());
+    m_treeCtrl->SetItemText(it->second, geometry->getName());
+}
+
+void ObjectTreePanel::selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
+{
+    if (!geometry) return;
+    
+    auto it = m_occGeometryMap.find(geometry);
+    if (it == m_occGeometryMap.end()) return;
+    
+    m_isUpdatingSelection = true;
+    m_treeCtrl->SelectItem(it->second);
+    m_isUpdatingSelection = false;
+}
+
+void ObjectTreePanel::deselectOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
+{
+    if (!geometry) return;
+    
+    auto it = m_occGeometryMap.find(geometry);
+    if (it == m_occGeometryMap.end()) return;
+    
+    wxTreeItemId currentSelection = m_treeCtrl->GetSelection();
+    if (currentSelection == it->second) {
+        m_isUpdatingSelection = true;
+        m_treeCtrl->Unselect();
+        m_isUpdatingSelection = false;
+    }
+}
+
 void ObjectTreePanel::setPropertyPanel(PropertyPanel* panel)
 {
     m_propertyPanel = panel;
     LOG_INF_S("PropertyPanel set for ObjectTreePanel");
 }
 
+void ObjectTreePanel::setOCCViewer(OCCViewer* viewer)
+{
+    m_occViewer = viewer;
+    LOG_INF_S("OCCViewer set for ObjectTreePanel");
+}
+
 void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
 {
+    if (m_isUpdatingSelection) return;
+    
     wxTreeItemId itemId = event.GetItem();
     if (!itemId.IsOk()) {
         LOG_WRN_S("Invalid tree item selected");
@@ -97,9 +195,34 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
         if (m_propertyPanel) {
             m_propertyPanel->clearProperties();
         }
+        // Deselect all geometries
+        if (m_occViewer) {
+            m_occViewer->deselectAll();
+        }
         return;
     }
 
+    // Check if it's an OCCGeometry
+    auto occIt = m_treeItemToOCCGeometry.find(itemId);
+    if (occIt != m_treeItemToOCCGeometry.end()) {
+        std::shared_ptr<OCCGeometry> geometry = occIt->second;
+        LOG_INF_S("Selected OCCGeometry in tree: " + geometry->getName());
+        
+        // Update viewer selection
+        if (m_occViewer) {
+            m_occViewer->deselectAll();
+            m_occViewer->setGeometrySelected(geometry->getName(), true);
+        }
+        
+        // Update property panel
+        if (m_propertyPanel) {
+            // TODO: Add OCCGeometry property support
+            // m_propertyPanel->updateProperties(geometry);
+        }
+        return;
+    }
+
+    // Legacy GeometryObject handling
     GeometryObject* selectedObject = nullptr;
     for (const auto& pair : m_objectMap) {
         if (pair.second == itemId) {
@@ -115,4 +238,33 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
             m_propertyPanel->updateProperties(selectedObject);
         }
     }
+}
+
+void ObjectTreePanel::onTreeItemActivated(wxTreeEvent& event)
+{
+    // Handle double-click or activation
+    onSelectionChanged(event);
+}
+
+void ObjectTreePanel::updateTreeSelectionFromViewer()
+{
+    if (!m_occViewer) return;
+    
+    m_isUpdatingSelection = true;
+    
+    // Clear current selection
+    m_treeCtrl->Unselect();
+    
+    // Select geometries that are selected in viewer
+    auto selectedGeometries = m_occViewer->getSelectedGeometries();
+    if (!selectedGeometries.empty()) {
+        // Select the first one (single selection mode)
+        auto geometry = selectedGeometries[0];
+        auto it = m_occGeometryMap.find(geometry);
+        if (it != m_occGeometryMap.end()) {
+            m_treeCtrl->SelectItem(it->second);
+        }
+    }
+    
+    m_isUpdatingSelection = false;
 }
