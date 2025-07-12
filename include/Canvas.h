@@ -15,6 +15,7 @@ class RenderingEngine;
 class EventCoordinator;
 class ViewportManager;
 class MultiViewportManager;
+class ViewRefreshManager;
 
 class Canvas : public wxGLCanvas {
 public:
@@ -53,6 +54,8 @@ public:
     // DPI access shortcuts
     float getDPIScale() const;
 
+    // Refresh management
+    ViewRefreshManager* getRefreshManager() const { return m_refreshManager.get(); }
 private:
     void initializeSubsystems();
     void connectSubsystems();
@@ -86,6 +89,7 @@ private:
 private:
     std::unique_ptr<MultiViewportManager> m_multiViewportManager;
     bool m_multiViewportEnabled;
+    std::unique_ptr<ViewRefreshManager> m_refreshManager;
 
     DECLARE_EVENT_TABLE()
 

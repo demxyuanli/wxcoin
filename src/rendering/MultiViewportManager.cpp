@@ -43,6 +43,7 @@ MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneMa
     , m_cubeOutlineCamera(nullptr)
     , m_coordinateSystemRoot(nullptr)
     , m_coordinateSystemCamera(nullptr)
+    , m_transparentBackground(true)
     , m_margin(20)
     , m_dpiScale(1.0f)
     , m_initialized(false) {
@@ -627,7 +628,11 @@ void MultiViewportManager::renderCubeOutline() {
 
     glEnable(GL_SCISSOR_TEST);
     glScissor(viewport.x, yBottom, viewport.width, viewport.height);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (!m_transparentBackground) {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    } else {
+        glClear(GL_DEPTH_BUFFER_BIT);  
+    }
     glDisable(GL_SCISSOR_TEST);
 
     SbViewportRegion viewportRegion;
@@ -662,7 +667,11 @@ void MultiViewportManager::renderCoordinateSystem() {
 
     glEnable(GL_SCISSOR_TEST);
     glScissor(viewport.x, yBottom, viewport.width, viewport.height);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (!m_transparentBackground) {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    } else {
+        glClear(GL_DEPTH_BUFFER_BIT);  
+    }
     glDisable(GL_SCISSOR_TEST);
 
     SbViewportRegion viewportRegion;

@@ -1,17 +1,13 @@
 # UI module - interface components and dialogs
 set(UI_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/MainFrame.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Canvas.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ObjectTreePanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PropertyPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PositionDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../FlatFrame.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrame.cpp
 )
 
 set(UI_HEADERS
-    ${CMAKE_SOURCE_DIR}/include/MainFrame.h
-    ${CMAKE_SOURCE_DIR}/include/Canvas.h
     ${CMAKE_SOURCE_DIR}/include/ObjectTreePanel.h
     ${CMAKE_SOURCE_DIR}/include/PropertyPanel.h
     ${CMAKE_SOURCE_DIR}/include/PositionDialog.h

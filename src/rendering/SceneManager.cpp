@@ -2,6 +2,7 @@
 #include "Canvas.h"
 #include "CoordinateSystemRenderer.h"
 #include "PickingAidManager.h"
+#include "ViewRefreshManager.h"
 #include "logger/Logger.h"
 #include <map>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
@@ -164,7 +165,11 @@ void SceneManager::resetView() {
 
     updateSceneBounds(); // Update bounds after view reset
 
-    m_canvas->Refresh(true);
+    if (m_canvas->getRefreshManager()) {
+        m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
+    } else {
+        m_canvas->Refresh(true);
+    }
 }
 
 void SceneManager::toggleCameraMode() {
@@ -206,7 +211,11 @@ void SceneManager::toggleCameraMode() {
     m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
-    m_canvas->Refresh(true);
+    if (m_canvas->getRefreshManager()) {
+        m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
+    } else {
+        m_canvas->Refresh(true);
+    }
     LOG_INF_S(m_isPerspectiveCamera ? "Switched to Perspective Camera" : "Switched to Orthographic Camera");
 }
 
@@ -268,13 +277,17 @@ void SceneManager::setView(const std::string& viewName) {
     m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
-    // 自动刷新reference grid
     if (m_pickingAidManager) {
         m_pickingAidManager->showReferenceGrid(true);
     }
 
     LOG_INF_S("Switched to view: " + viewName);
-    m_canvas->Refresh(true);
+    
+    if (m_canvas->getRefreshManager()) {
+        m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
+    } else {
+        m_canvas->Refresh(true);
+    }
 }
 
 void SceneManager::render(const wxSize& size, bool fastMode) {

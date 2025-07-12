@@ -15,6 +15,7 @@ enum class CommandType {
     FileNew,
     FileOpen,
     FileSave,
+    FileSaveAs,
     ImportSTEP,
     FileExit,
 
@@ -60,6 +61,7 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::FileNew, "FILE_NEW"},
         {CommandType::FileOpen, "FILE_OPEN"},
         {CommandType::FileSave, "FILE_SAVE"},
+        {CommandType::FileSaveAs, "FILE_SAVE_AS"},
         {CommandType::ImportSTEP, "IMPORT_STEP"},
         {CommandType::FileExit, "FILE_EXIT"},
 
@@ -100,6 +102,7 @@ inline CommandType from_string(const std::string& str) {
         {"FILE_NEW", CommandType::FileNew},
         {"FILE_OPEN", CommandType::FileOpen},
         {"FILE_SAVE", CommandType::FileSave},
+        {"FILE_SAVE_AS", CommandType::FileSaveAs},
         {"IMPORT_STEP", CommandType::ImportSTEP},
         {"FILE_EXIT", CommandType::FileExit},
 

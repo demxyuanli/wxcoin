@@ -122,7 +122,7 @@ void FlatUITabDropdown::OnDropdownSelection(wxCommandEvent& event)
             parent->Refresh();
         }
         
-        LOG_INF_S("Selected hidden tab: " + selectedPage->GetLabel().ToStdString(), "TabDropdown");
+        LOG_INF("Selected hidden tab: " + selectedPage->GetLabel().ToStdString(), "TabDropdown");
     }
 }
 

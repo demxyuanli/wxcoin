@@ -1,20 +1,24 @@
 # Rendering module - rendering engine and scene management
 set(RENDERING_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/Canvas.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingEngine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewportManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SceneManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoordinateSystemRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PickingAidManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MultiViewportManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewRefreshManager.cpp
 )
 
 set(RENDERING_HEADERS
+    ${CMAKE_SOURCE_DIR}/include/Canvas.h
     ${CMAKE_SOURCE_DIR}/include/RenderingEngine.h
     ${CMAKE_SOURCE_DIR}/include/ViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/SceneManager.h
     ${CMAKE_SOURCE_DIR}/include/CoordinateSystemRenderer.h
     ${CMAKE_SOURCE_DIR}/include/PickingAidManager.h
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
+    ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
 )
 
 # Create rendering static library
@@ -30,6 +34,7 @@ target_include_directories(CADRendering PUBLIC
 # Link dependencies
 target_link_libraries(CADRendering PUBLIC
     CADCore
+    CADOCC
     CADLogger
     ${wxWidgets_LIBRARIES}
     Coin::Coin

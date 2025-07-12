@@ -52,6 +52,7 @@
 #include "FileNewListener.h"
 #include "FileOpenListener.h"
 #include "FileSaveListener.h"
+#include "FileSaveAsListener.h"
 #include "ImportStepListener.h"
 #include "CreateBoxListener.h"
 #include "CreateSphereListener.h"
@@ -92,30 +93,31 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     // unless explicitly overridden and bound here with a different handler.
     // If FlatFrame::OnLeftDown (etc.) are meant to override, they are called virtually by FlatUIFrame's handler.
     // If they are completely different handlers for FlatFrame only, then they would need new EVT_LEFT_DOWN(FlatFrame::SpecificHandler)
-    EVT_MENU(wxID_NEW, FlatFrame::onCommand)
-    EVT_MENU(wxID_OPEN, FlatFrame::onCommand)
-    EVT_MENU(wxID_SAVE, FlatFrame::onCommand)
-    EVT_MENU(ID_IMPORT_STEP, FlatFrame::onCommand)
-    EVT_MENU(wxID_EXIT, FlatFrame::onCommand)
-    EVT_MENU(ID_CREATE_BOX, FlatFrame::onCommand)
-    EVT_MENU(ID_CREATE_SPHERE, FlatFrame::onCommand)
-    EVT_MENU(ID_CREATE_CYLINDER, FlatFrame::onCommand)
-    EVT_MENU(ID_CREATE_CONE, FlatFrame::onCommand)
-    EVT_MENU(ID_CREATE_WRENCH, FlatFrame::onCommand)
-    EVT_MENU(ID_VIEW_ALL, FlatFrame::onCommand)
-    EVT_MENU(ID_VIEW_TOP, FlatFrame::onCommand)
-    EVT_MENU(ID_VIEW_FRONT, FlatFrame::onCommand)
-    EVT_MENU(ID_VIEW_RIGHT, FlatFrame::onCommand)
-    EVT_MENU(ID_VIEW_ISOMETRIC, FlatFrame::onCommand)
-    EVT_MENU(ID_SHOW_NORMALS, FlatFrame::onCommand)
-    EVT_MENU(ID_FIX_NORMALS, FlatFrame::onCommand)
-    EVT_MENU(ID_UNDO, FlatFrame::onCommand)
-    EVT_MENU(ID_REDO, FlatFrame::onCommand)
-    EVT_MENU(ID_NAVIGATION_CUBE_CONFIG, FlatFrame::onCommand)
-    EVT_MENU(ID_ZOOM_SPEED, FlatFrame::onCommand)
-    EVT_MENU(ID_MESH_QUALITY_DIALOG, FlatFrame::onCommand)
-    EVT_MENU(wxID_ABOUT, FlatFrame::onCommand)
-    EVT_MENU(ID_VIEW_SHOWEDGES, FlatFrame::onCommand)
+    EVT_BUTTON(wxID_NEW, FlatFrame::onCommand)
+    EVT_BUTTON(wxID_OPEN, FlatFrame::onCommand)
+    EVT_BUTTON(wxID_SAVE, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SAVE_AS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_IMPORT_STEP, FlatFrame::onCommand)
+    EVT_BUTTON(wxID_EXIT, FlatFrame::onCommand)
+    EVT_BUTTON(ID_CREATE_BOX, FlatFrame::onCommand)
+    EVT_BUTTON(ID_CREATE_SPHERE, FlatFrame::onCommand)
+    EVT_BUTTON(ID_CREATE_CYLINDER, FlatFrame::onCommand)
+    EVT_BUTTON(ID_CREATE_CONE, FlatFrame::onCommand)
+    EVT_BUTTON(ID_CREATE_WRENCH, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_ALL, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_TOP, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_FRONT, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_RIGHT, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_ISOMETRIC, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SHOW_NORMALS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_FIX_NORMALS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
+    EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
+    EVT_BUTTON(ID_NAVIGATION_CUBE_CONFIG, FlatFrame::onCommand)
+    EVT_BUTTON(ID_ZOOM_SPEED, FlatFrame::onCommand)
+    EVT_BUTTON(ID_MESH_QUALITY_DIALOG, FlatFrame::onCommand)
+    EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_SHOWEDGES, FlatFrame::onCommand)
     EVT_CLOSE(FlatFrame::onClose)
     EVT_ACTIVATE(FlatFrame::onActivate)
     EVT_SIZE(FlatFrame::onSize)
@@ -126,6 +128,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {wxID_NEW, cmd::CommandType::FileNew},
     {wxID_OPEN, cmd::CommandType::FileOpen},
     {wxID_SAVE, cmd::CommandType::FileSave},
+    {ID_SAVE_AS, cmd::CommandType::FileSaveAs},
     {ID_IMPORT_STEP, cmd::CommandType::ImportSTEP},
     {wxID_EXIT, cmd::CommandType::FileExit},
     {ID_CREATE_BOX, cmd::CommandType::CreateBox},
@@ -166,7 +169,8 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
           m_occViewer(nullptr),
     m_isFirstActivate(true),
     m_mainSplitter(nullptr),
-    m_leftSplitter(nullptr)
+    m_leftSplitter(nullptr),
+    m_statusBar(nullptr)
 {
     wxInitAllImageHandlers();
     // PlatUIFrame::InitFrameStyle() is called by base constructor.
@@ -306,7 +310,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     // Store reference to profile panel  
     m_profilePanel = profilePanel;
 
-    FlatUIPage* page1 = new FlatUIPage(m_ribbon, "Home");
+    FlatUIPage* page1 = new FlatUIPage(m_ribbon, "Project");
     
     // File Operations Panel
     FlatUIPanel* filePanel = new FlatUIPanel(page1, "File", wxHORIZONTAL);
@@ -321,7 +325,9 @@ void FlatFrame::InitializeUI(const wxSize& size)
     fileButtonBar->AddButton(wxID_NEW, "New", SVG_ICON("new", wxSize(16, 16)));
     fileButtonBar->AddButton(wxID_OPEN, "Open", SVG_ICON("open", wxSize(16, 16)));
     fileButtonBar->AddButton(wxID_SAVE, "Save", SVG_ICON("save", wxSize(16, 16)));
+    fileButtonBar->AddButton(ID_SAVE_AS, "Save As", SVG_ICON("save", wxSize(16, 16)));
     fileButtonBar->AddButton(ID_IMPORT_STEP, "Import STEP", SVG_ICON("folder", wxSize(16, 16)));
+    fileButtonBar->AddButton(wxID_EXIT, "Exit", SVG_ICON("exit", wxSize(16, 16)));
     filePanel->AddButtonBar(fileButtonBar, 0, wxEXPAND | wxALL, 5);
     page1->AddPanel(filePanel);
 
@@ -339,6 +345,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     createButtonBar->AddButton(ID_CREATE_SPHERE, "Sphere", SVG_ICON("circle", wxSize(16, 16)));
     createButtonBar->AddButton(ID_CREATE_CYLINDER, "Cylinder", SVG_ICON("circle", wxSize(16, 16)));
     createButtonBar->AddButton(ID_CREATE_CONE, "Cone", SVG_ICON("triangle", wxSize(16, 16)));
+    createButtonBar->AddButton(ID_CREATE_WRENCH, "Wrench", SVG_ICON("drafting", wxSize(16, 16)));
     createPanel->AddButtonBar(createButtonBar, 0, wxEXPAND | wxALL, 5);
     page1->AddPanel(createPanel);
     m_ribbon->AddPage(page1);
@@ -393,6 +400,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
     displayButtonBar->AddButton(ID_VIEW_SHOWEDGES, "Show Edges", SVG_ICON("layout", wxSize(16, 16)));
     displayButtonBar->AddButton(ID_SHOW_NORMALS, "Show Normals", SVG_ICON("marker", wxSize(16, 16)));
+    displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("magic", wxSize(16, 16)));
     displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
     page3->AddPanel(displayPanel);
     m_ribbon->AddPage(page3);
@@ -448,9 +456,14 @@ void FlatFrame::InitializeUI(const wxSize& size)
 
     setupCommandSystem();
 
-    // Create status bar at the bottom
-    CreateStatusBar();
-    SetStatusText("Ready - Command system initialized", 0);
+    // Create status bar manually and add to main sizer
+    m_statusBar = new wxStatusBar(this, wxID_ANY);
+    m_statusBar->SetStatusText("Ready - Command system initialized", 0);
+    
+    // Add status bar to main sizer
+    if (GetSizer()) {
+        GetSizer()->Add(m_statusBar, 0, wxEXPAND | wxALL, 0);
+    }
 
     SetClientSize(size); // Default size
     Layout();
@@ -584,10 +597,12 @@ void FlatFrame::setupCommandSystem() {
     auto fileNewListener = std::make_shared<FileNewListener>(m_canvas, m_commandManager);
     auto fileOpenListener = std::make_shared<FileOpenListener>(this);
     auto fileSaveListener = std::make_shared<FileSaveListener>(this);
+    auto fileSaveAsListener = std::make_shared<FileSaveAsListener>(this);
     auto importStepListener = std::make_shared<ImportStepListener>(this, m_canvas, m_occViewer);
     m_listenerManager->registerListener(cmd::CommandType::FileNew, fileNewListener);
     m_listenerManager->registerListener(cmd::CommandType::FileOpen, fileOpenListener);
     m_listenerManager->registerListener(cmd::CommandType::FileSave, fileSaveListener);
+    m_listenerManager->registerListener(cmd::CommandType::FileSaveAs, fileSaveAsListener);
     m_listenerManager->registerListener(cmd::CommandType::ImportSTEP, importStepListener);
     
     auto undoListener = std::make_shared<UndoListener>(m_commandManager, m_canvas);
@@ -1019,19 +1034,35 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 
 void FlatFrame::onCommandFeedback(const CommandResult& result) {
     if (result.success) {
-        SetStatusText(result.message.empty() ? "Command executed successfully" : result.message, 0);
+        if (m_statusBar) {
+            m_statusBar->SetStatusText(result.message.empty() ? "Command executed successfully" : result.message, 0);
+        }
         LOG_INF_S("Command executed: " + result.commandId);
     } else {
-        SetStatusText("Error: " + result.message, 0);
+        if (m_statusBar) {
+            m_statusBar->SetStatusText("Error: " + result.message, 0);
+        }
         LOG_ERR_S("Command failed: " + result.commandId + " - " + result.message);
         if (!result.message.empty() && result.commandId != "UNKNOWN") { wxMessageBox(result.message, "Command Error", wxOK | wxICON_ERROR, this); }
     }
-    // Update checks for show normals/edges
+    
+    // Update UI state for toggle commands (since no menu bar in FlatFrame)
     if (result.commandId == cmd::to_string(cmd::CommandType::ShowNormals) && result.success && m_occViewer) {
-        // Since no menu bar, perhaps update buttons or something
+        // Could update button states here if needed
+        LOG_INF_S("Show normals state updated: " + std::string(m_occViewer->isShowNormals() ? "shown" : "hidden"));
     }
-    // Similar for edges
-    if (m_canvas && (result.commandId.find("VIEW_") == 0 || result.commandId.find("SHOW_") == 0 || result.commandId == "FIX_NORMALS")) { m_canvas->Refresh(); }
+    else if (result.commandId == cmd::to_string(cmd::CommandType::ShowEdges) && result.success && m_occViewer) {
+        // Could update button states here if needed
+        LOG_INF_S("Show edges state updated: " + std::string(m_occViewer->isShowEdges() ? "shown" : "hidden"));
+    }
+    
+    // Refresh canvas if needed - ensure all view and display commands trigger refresh
+    if (m_canvas && (result.commandId.find("VIEW_") == 0 || 
+                     result.commandId.find("SHOW_") == 0 ||
+                     result.commandId == "FIX_NORMALS")) {
+        m_canvas->Refresh();
+        LOG_INF_S("Canvas refreshed for command: " + result.commandId);
+    }
 }
 
 void FlatFrame::onClose(wxCloseEvent& event) {

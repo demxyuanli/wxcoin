@@ -50,7 +50,10 @@ enum {
     ID_REDO,
     ID_NAVIGATION_CUBE_CONFIG,
     ID_ZOOM_SPEED,
-    ID_MESH_QUALITY_DIALOG
+    ID_MESH_QUALITY_DIALOG,
+    ID_SAVE_AS,
+    ID_LOD_ENABLE,
+    ID_LOD_CONFIG
 };
 
 class FlatFrame : public FlatUIFrame
@@ -74,6 +77,7 @@ private:
     FlatUIHomeMenu* m_homeMenu;
     wxPanel* m_searchPanel;
     wxPanel* m_profilePanel;
+    wxStatusBar* m_statusBar;
 
     wxAuiManager m_auiManager;
 

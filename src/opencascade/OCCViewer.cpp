@@ -99,8 +99,12 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     
     LOG_INF_S("Added OCC geometry: " + geometry->getName());
     
+    // Auto-update scene bounds and view when geometry is added
     if (m_sceneManager) {
+        m_sceneManager->updateSceneBounds();
+        m_sceneManager->resetView();
         m_sceneManager->getCanvas()->Refresh();
+        LOG_INF_S("Auto-updated scene bounds and view after adding geometry");
     }
 }
 
@@ -253,6 +257,14 @@ void OCCViewer::setShowEdges(bool showEdges)
     m_showEdges = showEdges;
     OCCMeshConverter::setShowEdges(showEdges);
     remeshAllGeometries();
+    
+    // Use refresh manager instead of direct refresh
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
+        if (refreshManager) {
+            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
+        }
+    }
 }
 
 void OCCViewer::setAntiAliasing(bool enabled)
@@ -330,9 +342,109 @@ void OCCViewer::updateNormalsDisplay()
 {
     if (!m_normalRoot) return;
     m_normalRoot->removeAllChildren();
-    if (m_sceneManager) {
-        m_sceneManager->getCanvas()->Refresh();
+    
+    if (!m_showNormals) {
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
+            if (refreshManager) {
+                refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::NORMALS_TOGGLED, true);
+            }
+        }
+        return;
     }
+    
+    // Create normals for all visible geometries
+    for (auto& geometry : m_geometries) {
+        if (!geometry->isVisible()) continue;
+        
+        // Get mesh data from geometry
+        SoSeparator* geomNode = geometry->getCoinNode();
+        if (!geomNode) continue;
+        
+        // Extract mesh data and create normal visualization
+        createNormalVisualization(geometry);
+    }
+    
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
+        if (refreshManager) {
+            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::NORMALS_TOGGLED, true);
+        }
+    }
+}
+
+void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
+{
+    // Convert OCC shape to mesh to get normals
+    OCCMeshConverter::TriangleMesh mesh = OCCMeshConverter::convertToMesh(
+        geometry->getShape(), m_meshParams);
+    
+    if (mesh.vertices.empty() || mesh.normals.empty()) {
+        return;
+    }
+    
+    SoSeparator* normalGroup = new SoSeparator;
+    
+    // Create coordinate points for normal lines
+    std::vector<SbVec3f> linePoints;
+    std::vector<int32_t> lineIndices;
+    
+    for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+        const gp_Pnt& vertex = mesh.vertices[i];
+        const gp_Pnt& normal = mesh.normals[i];
+        
+        // Start point (vertex position)
+        SbVec3f startPoint(
+            static_cast<float>(vertex.X()),
+            static_cast<float>(vertex.Y()),
+            static_cast<float>(vertex.Z())
+        );
+        
+        // End point (vertex + normal * length)
+        SbVec3f endPoint(
+            static_cast<float>(vertex.X() + normal.X() * m_normalLength),
+            static_cast<float>(vertex.Y() + normal.Y() * m_normalLength),
+            static_cast<float>(vertex.Z() + normal.Z() * m_normalLength)
+        );
+        
+        linePoints.push_back(startPoint);
+        linePoints.push_back(endPoint);
+        
+        // Line indices
+        int baseIndex = static_cast<int>(linePoints.size()) - 2;
+        lineIndices.push_back(baseIndex);
+        lineIndices.push_back(baseIndex + 1);
+        lineIndices.push_back(SO_END_LINE_INDEX);
+    }
+    
+    // Create coordinate node
+    SoCoordinate3* coords = new SoCoordinate3;
+    coords->point.setNum(static_cast<int>(linePoints.size()));
+    SbVec3f* points = coords->point.startEditing();
+    for (size_t i = 0; i < linePoints.size(); ++i) {
+        points[i] = linePoints[i];
+    }
+    coords->point.finishEditing();
+    normalGroup->addChild(coords);
+    
+    // Create material for normals
+    SoMaterial* normalMaterial = new SoMaterial;
+    // Use correct normal color (green for correct, red for incorrect)
+    // For now, assume all normals are correct
+    normalMaterial->diffuseColor.setValue(
+        static_cast<float>(m_correctNormalColor.Red()),
+        static_cast<float>(m_correctNormalColor.Green()),
+        static_cast<float>(m_correctNormalColor.Blue())
+    );
+    normalGroup->addChild(normalMaterial);
+    
+    // Create line set
+    SoIndexedLineSet* lineSet = new SoIndexedLineSet;
+    lineSet->coordIndex.setValues(0, static_cast<int>(lineIndices.size()), 
+                                  lineIndices.data());
+    normalGroup->addChild(lineSet);
+    
+    m_normalRoot->addChild(normalGroup);
 }
 
 void OCCViewer::remeshAllGeometries()
@@ -340,9 +452,14 @@ void OCCViewer::remeshAllGeometries()
     for (auto& geometry : m_geometries) {
         geometry->regenerateMesh(m_meshParams);
     }
-    if (m_sceneManager) {
-        m_sceneManager->getCanvas()->Refresh();
+    
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
+        if (refreshManager) {
+            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED);
+        }
     }
+    
     LOG_INF_S("Remeshed all geometries with deflection: " + std::to_string(m_meshParams.deflection));
 }
 
@@ -439,4 +556,4 @@ void OCCViewer::startLODInteraction()
         // Start timer to switch back to fine mode
         m_lodTimer.Start(m_lodTransitionTime, wxTIMER_ONE_SHOT);
     }
-} 
+}

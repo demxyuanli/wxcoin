@@ -2,6 +2,7 @@
 
 #include "OCCGeometry.h"
 #include "OCCMeshConverter.h"
+#include "ViewRefreshManager.h"
 #include <vector>
 #include <memory>
 #include <wx/wx.h>
@@ -91,6 +92,7 @@ private:
     void initializeViewer();
     void remeshAllGeometries();
     void onLODTimer();
+    void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
 
     SceneManager* m_sceneManager;
     SoSeparator* m_occRoot;
@@ -122,4 +124,4 @@ private:
 
     Quantity_Color m_defaultColor;
     double m_defaultTransparency;
-}; 
+};

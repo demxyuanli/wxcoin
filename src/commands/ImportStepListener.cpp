@@ -30,13 +30,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
         auto result = STEPReader::readSTEPFile(filePath.ToStdString());
         
         if (result.success && !result.geometries.empty() && m_occViewer) {
-            // Add geometries to the OCC viewer
+            // Add geometries to the OCC viewer (auto-updates scene bounds and view)
             for (const auto& geometry : result.geometries) {
                 m_occViewer->addGeometry(geometry);
             }
-            
-            // Note: Canvas refresh will be handled by the viewer or elsewhere
-            // to avoid OpenGL header conflicts in this compilation unit
             
             LOG_INF_S("Successfully imported " + std::to_string(result.geometries.size()) + " geometries from STEP file");
             return CommandResult(true, "STEP file imported successfully", commandType);

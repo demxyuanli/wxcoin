@@ -16,6 +16,7 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ImportStepListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FileOpenListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FileSaveListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FileSaveAsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateBoxListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateSphereListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateCylinderListener.cpp
@@ -41,6 +42,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ImportStepListener.h
     ${CMAKE_SOURCE_DIR}/include/FileOpenListener.h
     ${CMAKE_SOURCE_DIR}/include/FileSaveListener.h
+    ${CMAKE_SOURCE_DIR}/include/FileSaveAsListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateBoxListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateSphereListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateCylinderListener.h

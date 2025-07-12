@@ -9,6 +9,7 @@
 #include "ObjectTreePanel.h"
 #include "logger/Logger.h"
 #include "NavigationCubeManager.h"
+#include "ViewRefreshManager.h"
 #include "RenderingEngine.h"
 #include "EventCoordinator.h"
 #include "ViewportManager.h"
@@ -80,6 +81,7 @@ void Canvas::initializeSubsystems() {
     LOG_INF_S("Canvas::initializeSubsystems: Creating subsystems");
 
     // Create core subsystems
+    m_refreshManager = std::make_unique<ViewRefreshManager>(this);
     m_renderingEngine = std::make_unique<RenderingEngine>(this);
     m_viewportManager = std::make_unique<ViewportManager>(this);
     m_eventCoordinator = std::make_unique<EventCoordinator>();
