@@ -82,6 +82,7 @@ void OCCViewer::initializeViewer()
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
     if (!geometry) {
+        LOG_ERR_S("Attempted to add null geometry to OCCViewer");
         return;
     }
     
@@ -95,12 +96,24 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
         return;
     }
     
+    LOG_INF_S("Adding geometry to OCCViewer: " + geometry->getName());
+    
     geometry->regenerateMesh(m_meshParams);
     m_geometries.push_back(geometry);
     
     SoSeparator* coinNode = geometry->getCoinNode();
+    LOG_INF_S("Got Coin3D node for geometry: " + geometry->getName() + " - Node: " + (coinNode ? "valid" : "null"));
+    
     if (coinNode && m_occRoot) {
         m_occRoot->addChild(coinNode);
+        LOG_INF_S("Added Coin3D node to OCC root for geometry: " + geometry->getName());
+    } else {
+        if (!coinNode) {
+            LOG_ERR_S("Coin3D node is null for geometry: " + geometry->getName());
+        }
+        if (!m_occRoot) {
+            LOG_ERR_S("OCC root is null, cannot add geometry: " + geometry->getName());
+        }
     }
     
     LOG_INF_S("Added OCC geometry: " + geometry->getName());

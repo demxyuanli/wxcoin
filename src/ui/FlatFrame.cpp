@@ -58,6 +58,8 @@
 #include "CreateSphereListener.h"
 #include "CreateCylinderListener.h"
 #include "CreateConeListener.h"
+#include "CreateTorusListener.h"
+#include "CreateTruncatedCylinderListener.h"
 #include "CreateWrenchListener.h"
 #include "ViewAllListener.h"
 #include "ViewTopListener.h"
@@ -68,7 +70,7 @@
 #include "FixNormalsListener.h"
 #include "ShowEdgesListener.h"
 #include "SetTransparencyListener.h"
-#include "SelectListener.h"
+
 #include "UndoListener.h"
 #include "RedoListener.h"
 #include "HelpAboutListener.h"
@@ -106,6 +108,8 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_CREATE_SPHERE, FlatFrame::onCommand)
     EVT_BUTTON(ID_CREATE_CYLINDER, FlatFrame::onCommand)
     EVT_BUTTON(ID_CREATE_CONE, FlatFrame::onCommand)
+    EVT_BUTTON(ID_CREATE_TORUS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_CREATE_TRUNCATED_CYLINDER, FlatFrame::onCommand)
     EVT_BUTTON(ID_CREATE_WRENCH, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_ALL, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_TOP, FlatFrame::onCommand)
@@ -115,7 +119,7 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_SHOW_NORMALS, FlatFrame::onCommand)
     EVT_BUTTON(ID_FIX_NORMALS, FlatFrame::onCommand)
     EVT_BUTTON(ID_SET_TRANSPARENCY, FlatFrame::onCommand)
-    EVT_BUTTON(ID_SELECT, FlatFrame::onCommand)
+
     EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_NAVIGATION_CUBE_CONFIG, FlatFrame::onCommand)
@@ -140,6 +144,8 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_CREATE_SPHERE, cmd::CommandType::CreateSphere},
     {ID_CREATE_CYLINDER, cmd::CommandType::CreateCylinder},
     {ID_CREATE_CONE, cmd::CommandType::CreateCone},
+    {ID_CREATE_TORUS, cmd::CommandType::CreateTorus},
+    {ID_CREATE_TRUNCATED_CYLINDER, cmd::CommandType::CreateTruncatedCylinder},
     {ID_CREATE_WRENCH, cmd::CommandType::CreateWrench},
     {ID_VIEW_ALL, cmd::CommandType::ViewAll},
     {ID_VIEW_TOP, cmd::CommandType::ViewTop},
@@ -149,7 +155,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_SHOW_NORMALS, cmd::CommandType::ShowNormals},
     {ID_FIX_NORMALS, cmd::CommandType::FixNormals},
     {ID_SET_TRANSPARENCY, cmd::CommandType::SetTransparency},
-    {ID_SELECT, cmd::CommandType::Select},
+
     {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
     {ID_UNDO, cmd::CommandType::Undo},
     {ID_REDO, cmd::CommandType::Redo},
@@ -194,8 +200,7 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_COPY);
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_PASTE);
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_FIND);
-    // Note: wxID_SELECTALL is not used for our custom select functionality
-    // The select button uses ID_SELECT which is handled by onCommand method
+
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_ABOUT);
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_STOP);
 
@@ -352,6 +357,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
     createButtonBar->AddButton(ID_CREATE_SPHERE, "Sphere", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Create a sphere geometry");
     createButtonBar->AddButton(ID_CREATE_CYLINDER, "Cylinder", SVG_ICON("cylinder", wxSize(16, 16)), nullptr, "Create a cylinder geometry");
     createButtonBar->AddButton(ID_CREATE_CONE, "Cone", SVG_ICON("cone", wxSize(16, 16)), nullptr, "Create a cone geometry");
+    createButtonBar->AddButton(ID_CREATE_TORUS, "Torus", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Create a torus geometry");
+    createButtonBar->AddButton(ID_CREATE_TRUNCATED_CYLINDER, "Truncated Cylinder", SVG_ICON("cylinder", wxSize(16, 16)), nullptr, "Create a truncated cylinder geometry");
     createButtonBar->AddButton(ID_CREATE_WRENCH, "Wrench", SVG_ICON("wrench", wxSize(16, 16)), nullptr, "Create a wrench geometry");
     createPanel->AddButtonBar(createButtonBar, 0, wxEXPAND | wxALL, 5);
     page1->AddPanel(createPanel);
@@ -368,7 +375,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     editPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* editButtonBar = new FlatUIButtonBar(editPanel);
     editButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    editButtonBar->AddButton(ID_SELECT, "Select", SVG_ICON("select", wxSize(16, 16)), nullptr, "Select objects");
+
     editButtonBar->AddButton(ID_UNDO, "Undo", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Undo last operation");
     editButtonBar->AddButton(ID_REDO, "Redo", SVG_ICON("redo", wxSize(16, 16)), nullptr, "Redo last undone operation");
     editPanel->AddButtonBar(editButtonBar, 0, wxEXPAND | wxALL, 5);
@@ -575,6 +582,8 @@ void FlatFrame::setupCommandSystem() {
     auto createSphereListener = std::make_shared<CreateSphereListener>(m_mouseHandler);
     auto createCylinderListener = std::make_shared<CreateCylinderListener>(m_mouseHandler);
     auto createConeListener = std::make_shared<CreateConeListener>(m_mouseHandler);
+    auto createTorusListener = std::make_shared<CreateTorusListener>(m_mouseHandler);
+    auto createTruncatedCylinderListener = std::make_shared<CreateTruncatedCylinderListener>(m_mouseHandler);
     auto createWrenchListener = std::make_shared<CreateWrenchListener>(m_mouseHandler, m_geometryFactory);
     
     // Register geometry command listeners
@@ -583,6 +592,8 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::CreateSphere, createSphereListener);
     m_listenerManager->registerListener(cmd::CommandType::CreateCylinder, createCylinderListener);
     m_listenerManager->registerListener(cmd::CommandType::CreateCone, createConeListener);
+    m_listenerManager->registerListener(cmd::CommandType::CreateTorus, createTorusListener);
+    m_listenerManager->registerListener(cmd::CommandType::CreateTruncatedCylinder, createTruncatedCylinderListener);
     m_listenerManager->registerListener(cmd::CommandType::CreateWrench, createWrenchListener);
     
     // View listeners
@@ -595,7 +606,7 @@ void FlatFrame::setupCommandSystem() {
     auto fixNormalsListener = std::make_shared<FixNormalsListener>(m_occViewer);
     auto showEdgesListener = std::make_shared<ShowEdgesListener>(m_occViewer);
     auto setTransparencyListener = std::make_shared<SetTransparencyListener>(m_occViewer);
-    auto selectListener = std::make_shared<SelectListener>(m_mouseHandler);
+
     
     // Register view command listeners
     m_listenerManager->registerListener(cmd::CommandType::ViewAll, viewAllListener);
@@ -607,7 +618,7 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowEdges, showEdgesListener);
     m_listenerManager->registerListener(cmd::CommandType::SetTransparency, setTransparencyListener);
-    m_listenerManager->registerListener(cmd::CommandType::Select, selectListener);
+
     
     // Register file command listeners
     auto fileNewListener = std::make_shared<FileNewListener>(m_canvas, m_commandManager);

@@ -11,6 +11,8 @@
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <gp_Trsf.hxx>
+#include <gp_Ax2.hxx>
+#include <gp_Dir.hxx>
 #include <TopLoc_Location.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 
@@ -164,9 +166,14 @@ void OCCGeometry::setTransparency(double transparency)
 
 SoSeparator* OCCGeometry::getCoinNode()
 {
+    LOG_INF_S("Getting Coin3D node for geometry: " + m_name + " - Node exists: " + (m_coinNode ? "yes" : "no") + " - Needs update: " + (m_coinNeedsUpdate ? "yes" : "no"));
+    
     if (!m_coinNode || m_coinNeedsUpdate) {
+        LOG_INF_S("Building Coin3D representation for geometry: " + m_name);
         buildCoinRepresentation();
     }
+    
+    LOG_INF_S("Returning Coin3D node for geometry: " + m_name + " - Node: " + (m_coinNode ? "valid" : "null"));
     return m_coinNode;
 }
 
@@ -177,6 +184,8 @@ void OCCGeometry::regenerateMesh(const OCCMeshConverter::MeshParameters& params)
 
 void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters& params)
 {
+    LOG_INF_S("Building Coin3D representation for geometry: " + m_name);
+    
     if (m_coinNode) {
         m_coinNode->removeAllChildren();
     } else {
@@ -241,14 +250,23 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
     texture->image.setValue(SbVec2s(2, 2), 4, texData);
     m_coinNode->addChild(texture);
     
+    LOG_INF_S("Shape is null: " + std::string(m_shape.IsNull() ? "yes" : "no") + " for geometry: " + m_name);
+    
     if (!m_shape.IsNull()) {
+        LOG_INF_S("Creating mesh node for geometry: " + m_name);
         SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape, params, m_selected);
         if (meshNode) {
             m_coinNode->addChild(meshNode);
+            LOG_INF_S("Successfully added mesh node to Coin3D representation for: " + m_name);
+        } else {
+            LOG_ERR_S("Failed to create mesh node for geometry: " + m_name);
         }
+    } else {
+        LOG_ERR_S("Shape is null, cannot create mesh node for geometry: " + m_name);
     }
 
     m_coinNeedsUpdate = false;
+    LOG_INF_S("Finished building Coin3D representation for geometry: " + m_name);
 }
 
 // All primitive classes (OCCBox, OCCCylinder, etc.) call setShape(),
@@ -282,13 +300,23 @@ void OCCBox::getSize(double& width, double& height, double& depth) const
 
 void OCCBox::buildShape()
 {
+    LOG_INF_S("Building OCCBox shape with dimensions: " + std::to_string(m_width) + " x " + std::to_string(m_height) + " x " + std::to_string(m_depth));
+    
     try {
+        // Use the simplest constructor that takes dimensions only
         BRepPrimAPI_MakeBox boxMaker(m_width, m_height, m_depth);
+        boxMaker.Build();  
+        LOG_INF_S("BRepPrimAPI_MakeBox created for OCCBox: " + m_name);
+        
         if (boxMaker.IsDone()) {
-            setShape(boxMaker.Shape());
+            TopoDS_Shape shape = boxMaker.Shape();
+            LOG_INF_S("Box shape created successfully for OCCBox: " + m_name + " - Shape is null: " + (shape.IsNull() ? "yes" : "no"));
+            setShape(shape);
+        } else {
+            LOG_ERR_S("BRepPrimAPI_MakeBox failed for OCCBox: " + m_name);
         }
     } catch (const std::exception& e) {
-        LOG_ERR_S("Failed to create box: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create box: " + std::string(e.what()) + " for OCCBox: " + m_name);
     }
 }
 
@@ -316,13 +344,22 @@ void OCCCylinder::getSize(double& radius, double& height) const
 
 void OCCCylinder::buildShape()
 {
+    LOG_INF_S("Building OCCCylinder shape with radius: " + std::to_string(m_radius) + " height: " + std::to_string(m_height));
+    
     try {
+        // Use the simplest constructor that takes radius and height
         BRepPrimAPI_MakeCylinder cylinderMaker(m_radius, m_height);
+        LOG_INF_S("BRepPrimAPI_MakeCylinder created for OCCCylinder: " + m_name);
+        cylinderMaker.Build();
         if (cylinderMaker.IsDone()) {
-            setShape(cylinderMaker.Shape());
+            TopoDS_Shape shape = cylinderMaker.Shape();
+            LOG_INF_S("Cylinder shape created successfully for OCCCylinder: " + m_name + " - Shape is null: " + (shape.IsNull() ? "yes" : "no"));
+            setShape(shape);
+        } else {
+            LOG_ERR_S("BRepPrimAPI_MakeCylinder failed for OCCCylinder: " + m_name);
         }
     } catch (const std::exception& e) {
-        LOG_ERR_S("Failed to create cylinder: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create cylinder: " + std::string(e.what()) + " for OCCCylinder: " + m_name);
     }
 }
 
@@ -342,13 +379,50 @@ void OCCSphere::setRadius(double radius)
 
 void OCCSphere::buildShape()
 {
+    LOG_INF_S("Building OCCSphere shape with radius: " + std::to_string(m_radius));
+    
     try {
-        BRepPrimAPI_MakeSphere sphereMaker(m_radius);
+        // Validate radius parameter
+        if (m_radius <= 0.0) {
+            LOG_ERR_S("Invalid radius for OCCSphere: " + m_name + " - radius: " + std::to_string(m_radius));
+            return;
+        }
+        
+        // Use axis-based constructor for more reliable sphere creation
+        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        BRepPrimAPI_MakeSphere sphereMaker(axis, m_radius);
+        LOG_INF_S("BRepPrimAPI_MakeSphere created for OCCSphere: " + m_name);
+        
+        // Check if sphere creation was successful
         if (sphereMaker.IsDone()) {
-            setShape(sphereMaker.Shape());
+            TopoDS_Shape shape = sphereMaker.Shape();
+            if (!shape.IsNull()) {
+                LOG_INF_S("Sphere shape created successfully for OCCSphere: " + m_name + " - Shape is null: no");
+                setShape(shape);
+            } else {
+                LOG_ERR_S("BRepPrimAPI_MakeSphere returned null shape for OCCSphere: " + m_name);
+                
+                // Fallback: try simple constructor
+                LOG_INF_S("Attempting fallback with simple constructor for OCCSphere: " + m_name);
+                BRepPrimAPI_MakeSphere fallbackMaker(m_radius);
+                fallbackMaker.Build();  // Add this line to build the fallback sphere
+                if (fallbackMaker.IsDone()) {
+                    TopoDS_Shape fallbackShape = fallbackMaker.Shape();
+                    if (!fallbackShape.IsNull()) {
+                        LOG_INF_S("Fallback sphere creation successful for: " + m_name);
+                        setShape(fallbackShape);
+                    } else {
+                        LOG_ERR_S("Fallback sphere creation also returned null shape for: " + m_name);
+                    }
+                } else {
+                    LOG_ERR_S("Fallback BRepPrimAPI_MakeSphere also failed for: " + m_name);
+                }
+            }
+        } else {
+            LOG_ERR_S("BRepPrimAPI_MakeSphere failed (IsDone = false) for OCCSphere: " + m_name);
         }
     } catch (const std::exception& e) {
-        LOG_ERR_S("Failed to create sphere: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create sphere: " + std::string(e.what()) + " for OCCSphere: " + m_name);
     }
 }
 
@@ -379,12 +453,61 @@ void OCCCone::getSize(double& bottomRadius, double& topRadius, double& height) c
 
 void OCCCone::buildShape()
 {
+    LOG_INF_S("Building OCCCone shape with bottomRadius: " + std::to_string(m_bottomRadius) + " topRadius: " + std::to_string(m_topRadius) + " height: " + std::to_string(m_height));
+    
     try {
-        BRepPrimAPI_MakeCone coneMaker(m_bottomRadius, m_topRadius, m_height);
+        // Following OpenCASCADE examples: use gp_Ax2 for proper cone orientation
+        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        
+        // Enhanced parameter validation and fallback mechanism
+        double actualTopRadius = m_topRadius;
+        
+        // Log which constructor approach we're using
+        if (actualTopRadius <= 0.001) {
+            LOG_INF_S("Creating perfect cone (topRadius ~= 0) for: " + m_name);
+        } else {
+            LOG_INF_S("Creating truncated cone for: " + m_name);
+        }
+        
+        // Always use axis-based constructor with proper parameter validation
+        BRepPrimAPI_MakeCone coneMaker(axis, m_bottomRadius, actualTopRadius, m_height);
+        coneMaker.Build();  // Add this line to build the cone
+        LOG_INF_S("BRepPrimAPI_MakeCone created for OCCCone: " + m_name + 
+                  " with params - bottomRadius: " + std::to_string(m_bottomRadius) + 
+                  ", topRadius: " + std::to_string(actualTopRadius) + 
+                  ", height: " + std::to_string(m_height));
+        
         if (coneMaker.IsDone()) {
-            setShape(coneMaker.Shape());
+            TopoDS_Shape shape = coneMaker.Shape();
+            if (!shape.IsNull()) {
+                LOG_INF_S("Cone shape created successfully for OCCCone: " + m_name);
+                setShape(shape);
+            } else {
+                LOG_ERR_S("BRepPrimAPI_MakeCone returned null shape for OCCCone: " + m_name);
+                
+                // Fallback: try with small non-zero topRadius if it was exactly 0
+                if (m_topRadius == 0.0 && actualTopRadius == 0.0) {
+                    LOG_INF_S("Attempting fallback with small topRadius for perfect cone: " + m_name);
+                    actualTopRadius = 0.001;
+                    BRepPrimAPI_MakeCone fallbackMaker(axis, m_bottomRadius, actualTopRadius, m_height);
+                    fallbackMaker.Build();  // Add this line to build the fallback cone
+                    if (fallbackMaker.IsDone()) {
+                        TopoDS_Shape fallbackShape = fallbackMaker.Shape();
+                        if (!fallbackShape.IsNull()) {
+                            LOG_INF_S("Fallback cone creation successful for: " + m_name);
+                            setShape(fallbackShape);
+                        } else {
+                            LOG_ERR_S("Fallback cone creation also failed for: " + m_name);
+                        }
+                    } else {
+                        LOG_ERR_S("Fallback BRepPrimAPI_MakeCone also failed for: " + m_name);
+                    }
+                }
+            }
+        } else {
+            LOG_ERR_S("BRepPrimAPI_MakeCone failed (IsDone = false) for OCCCone: " + m_name);
         }
     } catch (const std::exception& e) {
-        LOG_ERR_S("Failed to create cone: " + std::string(e.what()));
+        LOG_ERR_S("Failed to create cone: " + std::string(e.what()) + " for OCCCone: " + m_name);
     }
 }

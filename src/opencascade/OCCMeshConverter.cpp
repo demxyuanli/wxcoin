@@ -7,10 +7,13 @@
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopAbs_Orientation.hxx>
+#include <TopAbs_ShapeEnum.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Poly_Array1OfTriangle.hxx>
 #include <TColgp_Array1OfPnt.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Vec.hxx>
 #include <Precision.hxx>
 
 // Coin3D includes
@@ -160,7 +163,7 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh, bool sel
             LOG_INF_S("Created red edges for selected geometry");
         } else {
             // Black edges for unselected geometry
-            edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+        edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
             edgeMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
             LOG_INF_S("Created black edges for unselected geometry");
         }
@@ -320,7 +323,8 @@ void OCCMeshConverter::meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, co
         extractTriangulation(triangulation, location, mesh, topoFace.Orientation());
     } else {
         // If no triangulation exists, create one
-        BRepMesh_IncrementalMesh mesher(topoFace, params.deflection, params.relative, params.angularDeflection);
+        BRepMesh_IncrementalMesh mesher(topoFace, params.deflection, params.relative, params.angularDeflection, 
+                                       params.inParallel);
         triangulation = BRep_Tool::Triangulation(topoFace, location);
         if (!triangulation.IsNull()) {
             extractTriangulation(triangulation, location, mesh, topoFace.Orientation());
@@ -339,7 +343,7 @@ void OCCMeshConverter::extractTriangulation(const Handle(Poly_Triangulation)& tr
     // Get transformation
     gp_Trsf transform = location.Transformation();
     
-    // Extract vertices - use new API
+    // Extract vertices
     int vertexOffset = static_cast<int>(mesh.vertices.size());
     
     for (int i = 1; i <= triangulation->NbNodes(); i++) {
@@ -349,10 +353,10 @@ void OCCMeshConverter::extractTriangulation(const Handle(Poly_Triangulation)& tr
     }
     
     // Extract triangles with proper orientation handling
-    const Poly_Array1OfTriangle triangles = triangulation->Triangles();
+    const Poly_Array1OfTriangle& triangles = triangulation->Triangles();
     for (int i = triangles.Lower(); i <= triangles.Upper(); i++) {
         int n1, n2, n3;
-        triangles(i).Get(n1, n2, n3);
+        triangles.Value(i).Get(n1, n2, n3);
         
         // Adjust indices to be 0-based and add vertex offset
         int idx1 = vertexOffset + n1 - 1;

@@ -15,7 +15,7 @@ class OCCGeometry;
 
 class MouseHandler {
 public:
-    enum class OperationMode { VIEW, SELECT, CREATE };
+    enum class OperationMode { VIEW, CREATE };
 
     MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel, CommandManager* commandManager);
     ~MouseHandler();
@@ -31,7 +31,7 @@ public:
     OperationMode getOperationMode() const { return m_operationMode; }
 
 private:
-    void handleGeometrySelection(wxMouseEvent& event);
+
     
     Canvas* m_canvas;
     ObjectTreePanel* m_objectTree;

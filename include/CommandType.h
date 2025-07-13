@@ -24,6 +24,8 @@ enum class CommandType {
     CreateSphere,
     CreateCylinder,
     CreateCone,
+    CreateTorus,
+    CreateTruncatedCylinder,
     CreateWrench,
 
     // View
@@ -39,8 +41,7 @@ enum class CommandType {
     ShowEdges,
     SetTransparency,
 
-    // Selection
-    Select,
+
 
     // Edit
     Undo,
@@ -73,6 +74,8 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::CreateSphere, "CREATE_SPHERE"},
         {CommandType::CreateCylinder, "CREATE_CYLINDER"},
         {CommandType::CreateCone, "CREATE_CONE"},
+        {CommandType::CreateTorus, "CREATE_TORUS"},
+        {CommandType::CreateTruncatedCylinder, "CREATE_TRUNCATED_CYLINDER"},
         {CommandType::CreateWrench, "CREATE_WRENCH"},
 
         {CommandType::ViewAll, "VIEW_ALL"},
@@ -86,7 +89,7 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ShowEdges, "SHOW_EDGES"},
         {CommandType::SetTransparency, "SET_TRANSPARENCY"},
 
-        {CommandType::Select, "SELECT"},
+
 
         {CommandType::Undo, "UNDO"},
         {CommandType::Redo, "REDO"},
@@ -117,6 +120,8 @@ inline CommandType from_string(const std::string& str) {
         {"CREATE_SPHERE", CommandType::CreateSphere},
         {"CREATE_CYLINDER", CommandType::CreateCylinder},
         {"CREATE_CONE", CommandType::CreateCone},
+        {"CREATE_TORUS", CommandType::CreateTorus},
+        {"CREATE_TRUNCATED_CYLINDER", CommandType::CreateTruncatedCylinder},
         {"CREATE_WRENCH", CommandType::CreateWrench},
 
         {"VIEW_ALL", CommandType::ViewAll},
@@ -130,7 +135,7 @@ inline CommandType from_string(const std::string& str) {
         {"SHOW_EDGES", CommandType::ShowEdges},
         {"SET_TRANSPARENCY", CommandType::SetTransparency},
 
-        {"SELECT", CommandType::Select},
+
 
         {"UNDO", CommandType::Undo},
         {"REDO", CommandType::Redo},

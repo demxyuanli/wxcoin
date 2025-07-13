@@ -4,6 +4,9 @@
 #include <string>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/gp_Vec.hxx>
+#include <OpenCASCADE/TopAbs_Orientation.hxx>
+#include <OpenCASCADE/TopAbs_ShapeEnum.hxx>
 
 // Forward declarations
 class SoSeparator;

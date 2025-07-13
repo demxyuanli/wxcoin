@@ -141,11 +141,8 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                         canvas->getCommandManager(),
                         canvas->getOCCViewer() 
                     );
-                    if (geometryType == "Wrench") {
-                        factory.createGeometry(geometryType, finalPos, GeometryType::OPENCASCADE);
-                    } else {
-                        factory.createGeometry(geometryType, finalPos);
-                    }
+                    // Use OCC modeling for all geometry types
+                    factory.createGeometry(geometryType, finalPos, GeometryType::OPENCASCADE);
                     LOG_INF_S("Creating geometry at position from dialog");
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");

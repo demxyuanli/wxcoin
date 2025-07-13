@@ -13,7 +13,7 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FixNormalsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ShowEdgesListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SetTransparencyListener.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/SelectListener.cpp
+
     ${CMAKE_CURRENT_SOURCE_DIR}/FileNewListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ImportStepListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FileOpenListener.cpp
@@ -23,6 +23,8 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateSphereListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateCylinderListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateConeListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CreateTorusListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CreateTruncatedCylinderListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateWrenchListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/UndoListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RedoListener.cpp
@@ -49,6 +51,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/CreateSphereListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateCylinderListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateConeListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateTorusListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateTruncatedCylinderListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateWrenchListener.h
     ${CMAKE_SOURCE_DIR}/include/ViewAllListener.h
     ${CMAKE_SOURCE_DIR}/include/ViewTopListener.h
@@ -59,7 +63,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FixNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowEdgesListener.h
     ${CMAKE_SOURCE_DIR}/include/SetTransparencyListener.h
-    ${CMAKE_SOURCE_DIR}/include/SelectListener.h
+
     ${CMAKE_SOURCE_DIR}/include/UndoListener.h
     ${CMAKE_SOURCE_DIR}/include/RedoListener.h
     ${CMAKE_SOURCE_DIR}/include/HelpAboutListener.h

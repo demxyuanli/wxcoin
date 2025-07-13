@@ -34,17 +34,14 @@ public:
     GeometryType getDefaultGeometryType() const { return m_defaultGeometryType; }
 
 private:
-    // Coin3D geometry creation
-    GeometryObject* createBox(const SbVec3f& position);
-    GeometryObject* createSphere(const SbVec3f& position);
-    GeometryObject* createCylinder(const SbVec3f& position);
-    GeometryObject* createCone(const SbVec3f& position);
     
     // OpenCASCADE geometry creation
     std::shared_ptr<OCCGeometry> createOCCBox(const SbVec3f& position);
     std::shared_ptr<OCCGeometry> createOCCSphere(const SbVec3f& position);
     std::shared_ptr<OCCGeometry> createOCCCylinder(const SbVec3f& position);
     std::shared_ptr<OCCGeometry> createOCCCone(const SbVec3f& position);
+    std::shared_ptr<OCCGeometry> createOCCTorus(const SbVec3f& position);
+    std::shared_ptr<OCCGeometry> createOCCTruncatedCylinder(const SbVec3f& position);
     std::shared_ptr<OCCGeometry> createOCCWrench(const SbVec3f& position);
 
     SoSeparator* m_root;

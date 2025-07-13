@@ -62,71 +62,12 @@ void MouseHandler::handleMouseButton(wxMouseEvent& event) {
     
     if (m_operationMode == OperationMode::VIEW && m_navigationController) {
         m_navigationController->handleMouseButton(event);
-    }
-    else if (m_operationMode == OperationMode::SELECT && event.LeftDown()) {
-        // Handle geometry selection
-        handleGeometrySelection(event);
     } else {
         event.Skip();
     }
 }
 
-void MouseHandler::handleGeometrySelection(wxMouseEvent& event) {
-    if (!m_canvas) {
-        event.Skip();
-        return;
-    }
-    
-    OCCViewer* viewer = m_canvas->getOCCViewer();
-    
-    if (!viewer) {
-        event.Skip();
-        return;
-    }
-    
-    // Get mouse position
-    int x = event.GetX();
-    int y = event.GetY();
-    
-    LOG_INF_S("Attempting to select geometry at position: (" + std::to_string(x) + ", " + std::to_string(y) + ")");
-    
-    // Try to pick geometry at mouse position
-    std::shared_ptr<OCCGeometry> pickedGeometry = viewer->pickGeometry(x, y);
-    
-    if (pickedGeometry) {
-        LOG_INF_S("Selected geometry: " + pickedGeometry->getName());
-        
-        // Deselect all geometries first
-        viewer->deselectAll();
-        
-        // Select the picked geometry
-        viewer->setGeometrySelected(pickedGeometry->getName(), true);
-        
-        // Update ObjectTree selection
-        if (m_objectTree) {
-            m_objectTree->selectOCCGeometry(pickedGeometry);
-            LOG_INF_S("Updated ObjectTree selection for: " + pickedGeometry->getName());
-        } else {
-            LOG_WRN_S("ObjectTree is null in MouseHandler");
-        }
-    } else {
-        LOG_INF_S("No geometry picked at position");
-        
-        // Deselect all if clicking on empty space
-        viewer->deselectAll();
-        
-        // Clear ObjectTree selection
-        if (m_objectTree) {
-            m_objectTree->updateTreeSelectionFromViewer();
-            LOG_INF_S("Cleared ObjectTree selection");
-        } else {
-            LOG_WRN_S("ObjectTree is null in MouseHandler");
-        }
-        // Exit select mode
-        setOperationMode(OperationMode::VIEW);
-        LOG_INF_S("Exited select mode due to empty click");
-    }
-}
+
 
 void MouseHandler::handleMouseMotion(wxMouseEvent& event) {
     if (m_operationMode == OperationMode::VIEW && m_navigationController) {

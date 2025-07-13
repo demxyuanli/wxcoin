@@ -30,27 +30,3 @@ protected:
     bool m_visible;
     bool m_selected;
 };
-
-class Box : public GeometryObject
-{
-public:
-    Box(float width, float height, float depth);
-};
-
-class Sphere : public GeometryObject
-{
-public:
-    Sphere(float radius);
-};
-
-class Cylinder : public GeometryObject
-{
-public:
-    Cylinder(float radius, float height);
-};
-
-class Cone : public GeometryObject
-{
-public:
-    Cone(float bottomRadius, float height);
-};

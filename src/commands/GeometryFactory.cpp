@@ -34,24 +34,8 @@ void GeometryFactory::createGeometry(const std::string& type, const SbVec3f& pos
         return;
     }
     
-    // Default Coin3D geometry creation
+    // For Coin3D geometry type, still use OCC modeling but convert to GeometryObject for compatibility
     std::unique_ptr<GeometryObject> object = nullptr;
-    if (type == "Box") {
-        object = std::unique_ptr<GeometryObject>(createBox(position));
-    }
-    else if (type == "Sphere") {
-        object = std::unique_ptr<GeometryObject>(createSphere(position));
-    }
-    else if (type == "Cylinder") {
-        object = std::unique_ptr<GeometryObject>(createCylinder(position));
-    }
-    else if (type == "Cone") {
-        object = std::unique_ptr<GeometryObject>(createCone(position));
-    }
-    else {
-        LOG_ERR_S("Unknown geometry type: " + type);
-        return;
-    }
 
     if (object) {
         auto command = std::make_shared<CreateCommand>(std::move(object), m_root, m_treePanel, m_propPanel);
@@ -79,6 +63,12 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
     else if (type == "Cone") {
         geometry = createOCCCone(position);
     }
+    else if (type == "Torus") {
+        geometry = createOCCTorus(position);
+    }
+    else if (type == "TruncatedCylinder") {
+        geometry = createOCCTruncatedCylinder(position);
+    }
     else if (type == "Wrench") {
         geometry = createOCCWrench(position);
     }
@@ -93,29 +83,6 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
     }
 }
 
-GeometryObject* GeometryFactory::createBox(const SbVec3f& position) {
-    Box* box = new Box(1.0f, 1.0f, 1.0f);
-    box->setPosition(position);
-    return box;
-}
-
-GeometryObject* GeometryFactory::createSphere(const SbVec3f& position) {
-    Sphere* sphere = new Sphere(0.5f);
-    sphere->setPosition(position);
-    return sphere;
-}
-
-GeometryObject* GeometryFactory::createCylinder(const SbVec3f& position) {
-    Cylinder* cylinder = new Cylinder(0.5f, 1.0f);
-    cylinder->setPosition(position);
-    return cylinder;
-}
-
-GeometryObject* GeometryFactory::createCone(const SbVec3f& position) {
-    Cone* cone = new Cone(0.5f, 1.0f);
-    cone->setPosition(position);
-    return cone;
-}
 
 // OpenCASCADE geometry creation methods
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& position) {
@@ -131,9 +98,18 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCSphere(const SbVec3f& pos
     static int sphereCounter = 0;
     std::string name = "OCCSphere_" + std::to_string(++sphereCounter);
     
-    auto sphere = std::make_shared<OCCSphere>(name, 0.5);
+    auto sphere = std::make_shared<OCCSphere>(name, 1.0);  // Increased from 0.5 to 5.0
     sphere->setPosition(gp_Pnt(position[0], position[1], position[2]));
     return sphere;
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& position) {
+    static int coneCounter = 0;
+    std::string name = "OCCCone_" + std::to_string(++coneCounter);
+    
+    auto cone = std::make_shared<OCCCone>(name, 1.0, 0.001, 2.0);  // Increased sizes: bottom 1.0, top 0.001 (from 0.001), height 2.0
+    cone->setPosition(gp_Pnt(position[0], position[1], position[2]));
+    return cone;
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCylinder(const SbVec3f& position) {
@@ -145,13 +121,71 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCylinder(const SbVec3f& p
     return cylinder;
 }
 
-std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& position) {
-    static int coneCounter = 0;
-    std::string name = "OCCCone_" + std::to_string(++coneCounter);
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTorus(const SbVec3f& position) {
+    static int torusCounter = 0;
+    std::string name = "OCCTorus_" + std::to_string(++torusCounter);
     
-    auto cone = std::make_shared<OCCCone>(name, 0.5, 0.0, 1.0);
-    cone->setPosition(gp_Pnt(position[0], position[1], position[2]));
-    return cone;
+    try {
+        // Create torus using OCCShapeBuilder
+        double majorRadius = 2.0;  // Distance from center to tube center
+        double minorRadius = 0.5;  // Tube radius
+        gp_Dir direction(0, 0, 1); // Z-axis direction
+        
+        TopoDS_Shape torusShape = OCCShapeBuilder::createTorus(majorRadius, minorRadius, 
+                                                              gp_Pnt(position[0], position[1], position[2]), 
+                                                              direction);
+        
+        if (torusShape.IsNull()) {
+            LOG_ERR_S("Failed to create torus shape");
+            return nullptr;
+        }
+        
+        auto torus = std::make_shared<OCCGeometry>(name);
+        torus->setShape(torusShape);
+        torus->setPosition(gp_Pnt(position[0], position[1], position[2]));
+        
+        LOG_INF_S("Created OCC torus: " + name);
+        return torus;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception creating torus: " + std::string(e.what()));
+        return nullptr;
+    }
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTruncatedCylinder(const SbVec3f& position) {
+    static int truncatedCylinderCounter = 0;
+    std::string name = "OCCTruncatedCylinder_" + std::to_string(++truncatedCylinderCounter);
+    
+    try {
+        // Create a truncated cylinder (trapezoidal cylinder)
+        double bottomRadius = 1.0;   // Bottom radius
+        double topRadius = 0.5;      // Top radius (smaller for trapezoidal shape)
+        double height = 2.0;         // Height
+        
+        // Create using cone with different top and bottom radii
+        TopoDS_Shape truncatedCylinderShape = OCCShapeBuilder::createCone(
+            bottomRadius, topRadius, height,
+            gp_Pnt(position[0], position[1], position[2]),
+            gp_Dir(0, 0, 1)  // Z-axis direction
+        );
+        
+        if (truncatedCylinderShape.IsNull()) {
+            LOG_ERR_S("Failed to create truncated cylinder shape");
+            return nullptr;
+        }
+        
+        auto truncatedCylinder = std::make_shared<OCCGeometry>(name);
+        truncatedCylinder->setShape(truncatedCylinderShape);
+        truncatedCylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
+        
+        LOG_INF_S("Created OCC truncated cylinder: " + name);
+        return truncatedCylinder;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception creating truncated cylinder: " + std::string(e.what()));
+        return nullptr;
+    }
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& position) {
@@ -159,20 +193,21 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
     std::string name = "OCCWrench_" + std::to_string(++wrenchCounter);
     
     try {
-        // Improved wrench dimensions
-        double totalLength = 12.0;
-        double handleLength = 8.0;
-        double handleWidth = 1.5;
-        double handleThickness = 0.8;
+        // Realistic wrench dimensions (in cm) - based on real adjustable wrenches
+        double totalLength = 25.0;           // Total length of wrench
+        double handleLength = 15.0;          // Handle length
+        double handleWidth = 2.5;            // Handle width
+        double handleThickness = 1.2;        // Handle thickness
         
-        double headLength = 4.0;  // Total head length
-        double headWidth = 3.0;
-        double headThickness = 0.8;
-        double jawOpening = 1.0; 
+        double headLength = 10.0;            // Head length
+        double headWidth = 5.0;              // Head width
+        double headThickness = 1.5;          // Head thickness
+        double jawOpening = 1.5;             // Increased jaw opening for better visibility
+        double jawDepth = 3.5;               // Increased jaw depth
         
-        LOG_INF_S("Creating improved wrench with better closure...");
+        LOG_INF_S("Creating professional wrench with proper connection...");
 
-        // Create handle as a centered box - now positioned at the specified location
+        // 1. Create main handle with ergonomic design
         TopoDS_Shape handle = OCCShapeBuilder::createBox(
             handleLength, 
             handleWidth, 
@@ -185,103 +220,197 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
-        // Create left jaw head (fixed jaw) - positioned relative to the specified location
-        double leftJawLength = headLength * 0.6;
-        TopoDS_Shape leftJawOuter = OCCShapeBuilder::createBox(
-            leftJawLength, 
+        // 2. Create fixed jaw (left side) - more substantial and realistic
+        double fixedJawLength = headLength * 0.6;
+        TopoDS_Shape fixedJaw = OCCShapeBuilder::createBox(
+            fixedJawLength, 
             headWidth, 
             headThickness,
-            gp_Pnt(position[0] - handleLength/2.0 - leftJawLength, position[1] - headWidth/2.0, position[2] - headThickness/2.0)
+            gp_Pnt(position[0] - handleLength/2.0 - fixedJawLength, position[1] - headWidth/2.0, position[2] - headThickness/2.0)
         );
         
-        if (leftJawOuter.IsNull()) {
-            LOG_ERR_S("Failed to create left jaw outer");
+        if (fixedJaw.IsNull()) {
+            LOG_ERR_S("Failed to create fixed jaw");
             return nullptr;
         }
         
-        // Create right jaw head (adjustable jaw) - positioned relative to the specified location
-        double rightJawLength = headLength * 0.4;
-        TopoDS_Shape rightJawOuter = OCCShapeBuilder::createBox(
-            rightJawLength, 
+        // 3. Create movable jaw (right side) - smaller and adjustable
+        double movableJawLength = headLength * 0.2;
+        TopoDS_Shape movableJaw = OCCShapeBuilder::createBox(
+            movableJawLength, 
             headWidth, 
             headThickness,
             gp_Pnt(position[0] + handleLength/2.0, position[1] - headWidth/2.0, position[2] - headThickness/2.0)
         );
         
-        if (rightJawOuter.IsNull()) {
-            LOG_ERR_S("Failed to create right jaw outer");
+        if (movableJaw.IsNull()) {
+            LOG_ERR_S("Failed to create movable jaw");
             return nullptr;
         }
         
-        // Union all main parts first
-        TopoDS_Shape wrenchBody = OCCShapeBuilder::booleanUnion(handle, leftJawOuter);
-        if (wrenchBody.IsNull()) {
-            LOG_ERR_S("Failed to union handle with left jaw");
-            return nullptr;
-        }
+        // 4. Create connection bridge between fixed and movable jaws
+        double bridgeLength = headLength * 0.2; // 20% of head length for connection
+        double bridgeWidth = headWidth * 0.8;   // Slightly narrower than head
+        double bridgeThickness = headThickness * 0.6; // Thinner than head for realistic look
         
-        wrenchBody = OCCShapeBuilder::booleanUnion(wrenchBody, rightJawOuter);
-        if (wrenchBody.IsNull()) {
-            LOG_ERR_S("Failed to union with right jaw");
-            return nullptr;
-        }
-        
-        LOG_INF_S("Basic wrench body created, now adding openings...");
-        
-        // Create left jaw opening (smaller and more centered) - positioned relative to the specified location
-        double leftSlotWidth = jawOpening * 0.8;
-        double leftSlotDepth = headWidth * 0.7;
-        double leftSlotHeight = headThickness * 0.9;  // Slightly smaller than head thickness
-        
-        TopoDS_Shape leftSlot = OCCShapeBuilder::createBox(
-            leftSlotWidth,
-            leftSlotDepth,
-            leftSlotHeight,
-            gp_Pnt(position[0] - handleLength/2.0 - leftJawLength + leftSlotWidth/2.0, 
-                   position[1] - leftSlotDepth/2.0, 
-                   position[2] - leftSlotHeight/2.0)
+        TopoDS_Shape connectionBridge = OCCShapeBuilder::createBox(
+            bridgeLength,
+            bridgeWidth,
+            bridgeThickness,
+            gp_Pnt(position[0] - handleLength/2.0 - fixedJawLength + bridgeLength/2.0, 
+                   position[1] - bridgeWidth/2.0, 
+                   position[2] - bridgeThickness/2.0)
         );
         
-        if (!leftSlot.IsNull()) {
-            TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, leftSlot);
+        if (connectionBridge.IsNull()) {
+            LOG_ERR_S("Failed to create connection bridge");
+            return nullptr;
+        }
+        
+        // 5. Union all main parts to create connected structure
+        TopoDS_Shape wrenchBody = OCCShapeBuilder::booleanUnion(handle, fixedJaw);
+        if (wrenchBody.IsNull()) {
+            LOG_ERR_S("Failed to union handle with fixed jaw");
+            return nullptr;
+        }
+        
+        wrenchBody = OCCShapeBuilder::booleanUnion(wrenchBody, connectionBridge);
+        if (wrenchBody.IsNull()) {
+            LOG_ERR_S("Failed to union with connection bridge");
+            return nullptr;
+        }
+        
+        wrenchBody = OCCShapeBuilder::booleanUnion(wrenchBody, movableJaw);
+        if (wrenchBody.IsNull()) {
+            LOG_ERR_S("Failed to union with movable jaw");
+            return nullptr;
+        }
+        
+        LOG_INF_S("Connected wrench body created, now adding jaw openings...");
+        
+        // 6. Create larger, more visible jaw openings
+        // Fixed jaw opening - much larger and more visible
+        double fixedSlotWidth = jawOpening * 0.8;  // Increased from 0.6
+        double fixedSlotDepth = jawDepth * 0.9;     // Increased from 0.8
+        double fixedSlotHeight = headThickness * 0.98; // Almost full height
+        
+        TopoDS_Shape fixedSlot = OCCShapeBuilder::createBox(
+            fixedSlotWidth,
+            fixedSlotDepth,
+            fixedSlotHeight,
+            gp_Pnt(position[0] - handleLength/2.0 - fixedJawLength + fixedSlotWidth/2.0, 
+                   position[1] - fixedSlotDepth/2.0, 
+                   position[2] - fixedSlotHeight/2.0)
+        );
+        
+        if (!fixedSlot.IsNull()) {
+            TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, fixedSlot);
             if (!tempResult.IsNull()) {
                 wrenchBody = tempResult;
-                LOG_INF_S("Created left jaw opening");
-            } else {
-                LOG_WRN_S("Failed to create left jaw opening, continuing without it");
+                LOG_INF_S("Created large fixed jaw opening");
             }
         }
         
-        // Create right jaw opening (smaller and more centered) - positioned relative to the specified location
-        double rightSlotWidth = jawOpening * 0.6;
-        double rightSlotDepth = headWidth * 0.6;
-        double rightSlotHeight = headThickness * 0.9;
+        // 7. Create movable jaw opening - also larger and more visible
+        double movableSlotWidth = jawOpening * 0.6;  // Increased from 0.4
+        double movableSlotDepth = jawDepth * 0.8;     // Increased from 0.6
+        double movableSlotHeight = headThickness * 0.98; // Almost full height
 
-        TopoDS_Shape rightSlot = OCCShapeBuilder::createBox(
-            rightSlotWidth,
-            rightSlotDepth,
-            rightSlotHeight,
-            gp_Pnt(position[0] + handleLength/2.0 + rightJawLength - rightSlotWidth - 0.2, 
-                   position[1] - rightSlotDepth/2.0, 
-                   position[2] - rightSlotHeight/2.0)
+        TopoDS_Shape movableSlot = OCCShapeBuilder::createBox(
+            movableSlotWidth,
+            movableSlotDepth,
+            movableSlotHeight,
+            gp_Pnt(position[0] + handleLength/2.0 + movableJawLength - movableSlotWidth - 0.1, 
+                   position[1] - movableSlotDepth/2.0, 
+                   position[2] - movableSlotHeight/2.0)
         );
         
-        if (!rightSlot.IsNull() && !wrenchBody.IsNull()) {
-            TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, rightSlot);
+        if (!movableSlot.IsNull() && !wrenchBody.IsNull()) {
+            TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, movableSlot);
             if (!tempResult.IsNull()) {
                 wrenchBody = tempResult;
-                LOG_INF_S("Created right jaw opening");
-            } else {
-                LOG_WRN_S("Failed to create right jaw opening, continuing without it");
+                LOG_INF_S("Created large movable jaw opening");
             }
         }
         
-        // Add grip texture (smaller grooves) - positioned relative to the specified location
-        for (int i = 0; i < 3; i++) {
-            double grooveX = position[0] - handleLength/3.0 + i * handleLength/3.0;
+        // 8. Add threaded adjustment mechanism with realistic proportions
+        double threadDiameter = 1.0;
+        double threadLength = 4.0;
+        
+        TopoDS_Shape adjustmentThread = OCCShapeBuilder::createCylinder(
+            threadDiameter/2.0,
+            threadLength,
+            gp_Pnt(position[0] + handleLength/2.0 + movableJawLength + threadLength/2.0, 
+                   position[1], 
+                   position[2]),
+            gp_Dir(1, 0, 0)
+        );
+        
+        if (!adjustmentThread.IsNull()) {
+            TopoDS_Shape tempResult = OCCShapeBuilder::booleanUnion(wrenchBody, adjustmentThread);
+            if (!tempResult.IsNull()) {
+                wrenchBody = tempResult;
+                LOG_INF_S("Added adjustment thread");
+            }
+        }
+        
+        // 9. Add adjustment knob with knurling pattern
+        double knobDiameter = 2.0;
+        double knobThickness = 0.8;
+        
+        TopoDS_Shape adjustmentKnob = OCCShapeBuilder::createCylinder(
+            knobDiameter/2.0,
+            knobThickness,
+            gp_Pnt(position[0] + handleLength/2.0 + movableJawLength + threadLength + knobThickness/2.0, 
+                   position[1], 
+                   position[2]),
+            gp_Dir(1, 0, 0)
+        );
+        
+        if (!adjustmentKnob.IsNull()) {
+            TopoDS_Shape tempResult = OCCShapeBuilder::booleanUnion(wrenchBody, adjustmentKnob);
+            if (!tempResult.IsNull()) {
+                wrenchBody = tempResult;
+                LOG_INF_S("Added adjustment knob");
+            }
+        }
+        
+        // 10. Add knurling pattern to adjustment knob (simplified)
+        for (int i = 0; i < 6; i++) {
+            double angle = i * 60.0; // 6 grooves around the knob
+            double angleRad = angle * M_PI / 180.0;
             double grooveWidth = 0.2;
-            double grooveDepth = handleWidth * 0.6;
-            double grooveHeight = 0.15;
+            double grooveDepth = knobDiameter * 0.25;
+            double grooveHeight = knobThickness * 0.7;
+            
+            // Position groove on knob surface
+            double grooveX = position[0] + handleLength/2.0 + movableJawLength + threadLength + knobThickness/2.0;
+            double grooveY = position[1] + (knobDiameter/2.0 - grooveDepth/2.0) * cos(angleRad);
+            double grooveZ = position[2] + (knobDiameter/2.0 - grooveDepth/2.0) * sin(angleRad);
+            
+            TopoDS_Shape groove = OCCShapeBuilder::createBox(
+                grooveWidth,
+                grooveDepth,
+                grooveHeight,
+                gp_Pnt(grooveX - grooveWidth/2.0, 
+                       grooveY - grooveDepth/2.0, 
+                       grooveZ - grooveHeight/2.0)
+            );
+            
+            if (!groove.IsNull() && !wrenchBody.IsNull()) {
+                TopoDS_Shape tempResult = OCCShapeBuilder::booleanDifference(wrenchBody, groove);
+                if (!tempResult.IsNull()) {
+                    wrenchBody = tempResult;
+                }
+            }
+        }
+        
+        // 11. Add ergonomic handle grip pattern (multiple grooves with varying depths)
+        for (int i = 0; i < 6; i++) {
+            double grooveX = position[0] - handleLength/3.0 + i * handleLength/6.0;
+            double grooveWidth = 0.4;
+            double grooveDepth = handleWidth * 0.8;
+            double grooveHeight = 0.25 + (i % 2) * 0.1; // Varying depths for better grip
             
             TopoDS_Shape groove = OCCShapeBuilder::createBox(
                 grooveWidth,
@@ -297,6 +426,24 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
                 if (!tempResult.IsNull()) {
                     wrenchBody = tempResult;
                 }
+            }
+        }
+        
+        // 12. Add fillets for better appearance and safety
+        if (!wrenchBody.IsNull()) {
+            TopoDS_Shape filletedWrench = OCCShapeBuilder::createFillet(wrenchBody, 0.15);
+            if (!filletedWrench.IsNull()) {
+                wrenchBody = filletedWrench;
+                LOG_INF_S("Added fillets to wrench");
+            }
+        }
+        
+        // 13. Add chamfers to sharp edges for better finish
+        if (!wrenchBody.IsNull()) {
+            TopoDS_Shape chamferedWrench = OCCShapeBuilder::createChamfer(wrenchBody, 0.1);
+            if (!chamferedWrench.IsNull()) {
+                wrenchBody = chamferedWrench;
+                LOG_INF_S("Added chamfers to wrench");
             }
         }
         
@@ -322,11 +469,11 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         // Set position to the specified location - this ensures the geometry is properly positioned
         geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
         
-        LOG_INF_S("Created improved wrench model: " + name);
+        LOG_INF_S("Created connected professional wrench model: " + name);
         return geometry;
         
     } catch (const std::exception& e) {
         LOG_ERR_S("Exception creating wrench: " + std::string(e.what()));
         return nullptr;
     }
-} 
+}
