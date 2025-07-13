@@ -178,6 +178,11 @@ void ObjectTreePanel::setOCCViewer(OCCViewer* viewer)
 {
     m_occViewer = viewer;
     LOG_INF_S("OCCViewer set for ObjectTreePanel");
+    
+    // Update tree selection from viewer if viewer has selected geometries
+    if (m_occViewer) {
+        updateTreeSelectionFromViewer();
+    }
 }
 
 void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
@@ -212,12 +217,17 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
         if (m_occViewer) {
             m_occViewer->deselectAll();
             m_occViewer->setGeometrySelected(geometry->getName(), true);
+            LOG_INF_S("Updated OCCViewer selection for: " + geometry->getName());
+        } else {
+            LOG_WRN_S("OCCViewer is null in ObjectTreePanel");
         }
         
         // Update property panel
         if (m_propertyPanel) {
-            // TODO: Add OCCGeometry property support
-            // m_propertyPanel->updateProperties(geometry);
+            m_propertyPanel->updateProperties(geometry);
+            LOG_INF_S("Updated PropertyPanel for OCCGeometry: " + geometry->getName());
+        } else {
+            LOG_WRN_S("PropertyPanel is null in ObjectTreePanel");
         }
         return;
     }
@@ -248,7 +258,10 @@ void ObjectTreePanel::onTreeItemActivated(wxTreeEvent& event)
 
 void ObjectTreePanel::updateTreeSelectionFromViewer()
 {
-    if (!m_occViewer) return;
+    if (!m_occViewer) {
+        LOG_WRN_S("OCCViewer is null in updateTreeSelectionFromViewer");
+        return;
+    }
     
     m_isUpdatingSelection = true;
     
@@ -257,13 +270,20 @@ void ObjectTreePanel::updateTreeSelectionFromViewer()
     
     // Select geometries that are selected in viewer
     auto selectedGeometries = m_occViewer->getSelectedGeometries();
+    LOG_INF_S("Updating tree selection from viewer - selected geometries: " + std::to_string(selectedGeometries.size()));
+    
     if (!selectedGeometries.empty()) {
         // Select the first one (single selection mode)
         auto geometry = selectedGeometries[0];
         auto it = m_occGeometryMap.find(geometry);
         if (it != m_occGeometryMap.end()) {
             m_treeCtrl->SelectItem(it->second);
+            LOG_INF_S("Selected tree item for geometry: " + geometry->getName());
+        } else {
+            LOG_WRN_S("Geometry not found in tree map: " + geometry->getName());
         }
+    } else {
+        LOG_INF_S("No geometries selected in viewer");
     }
     
     m_isUpdatingSelection = false;

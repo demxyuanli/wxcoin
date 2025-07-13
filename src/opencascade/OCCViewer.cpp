@@ -204,17 +204,27 @@ void OCCViewer::setGeometryVisible(const std::string& name, bool visible)
 void OCCViewer::setGeometrySelected(const std::string& name, bool selected)
 {
     auto geometry = findGeometry(name);
-    if (!geometry) return;
+    if (!geometry) {
+        LOG_WRN_S("Geometry not found for selection: " + name);
+        return;
+    }
 
+    LOG_INF_S("Setting geometry selection: " + name + " -> " + (selected ? "true" : "false"));
         geometry->setSelected(selected);
         
         if (selected) {
         if (std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry) == m_selectedGeometries.end()) {
                 m_selectedGeometries.push_back(geometry);
+            LOG_INF_S("Added geometry to selected list: " + name);
             }
         } else {
-        m_selectedGeometries.erase(std::remove(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry), m_selectedGeometries.end());
+        auto it = std::remove(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
+        if (it != m_selectedGeometries.end()) {
+            m_selectedGeometries.erase(it, m_selectedGeometries.end());
+            LOG_INF_S("Removed geometry from selected list: " + name);
+        }
     }
+    
     onSelectionChanged();
 }
 
@@ -250,7 +260,11 @@ void OCCViewer::selectAll()
 
 void OCCViewer::deselectAll()
 {
-    for (auto& g : m_selectedGeometries) g->setSelected(false);
+    LOG_INF_S("Deselecting all geometries - count: " + std::to_string(m_selectedGeometries.size()));
+    
+    for (auto& g : m_selectedGeometries) {
+        g->setSelected(false);
+    }
     m_selectedGeometries.clear();
     onSelectionChanged();
 }
@@ -280,8 +294,11 @@ std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
     SbVec3f worldPos;
     if (!m_sceneManager->screenToWorld(wxPoint(x, y), worldPos)) {
         LOG_WRN_S("Failed to convert screen coordinates to world coordinates");
-        return nullptr;
+    return nullptr;
     }
+    
+    LOG_INF_S("Picking at world position: (" + std::to_string(worldPos[0]) + ", " + 
+              std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
     
     // Find the closest geometry to the picked point
     std::shared_ptr<OCCGeometry> closestGeometry = nullptr;
@@ -300,14 +317,21 @@ std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
             std::pow(worldPos[2] - geometryPos.Z(), 2)
         );
         
-        // For now, use a simple distance-based picking
-        // In a more sophisticated implementation, you would use ray-casting
-        // to check if the ray intersects with the geometry's bounding box or mesh
+        LOG_INF_S("Geometry '" + geometry->getName() + "' at distance: " + std::to_string(distance));
         
-        if (distance < minDistance && distance < 5.0) { // 5.0 unit picking radius
+        // Use a much larger picking radius for complex geometries like wrench
+        double pickingRadius = 15.0; // Increased from 10.0 to 15.0
+        
+        if (distance < minDistance && distance < pickingRadius) {
             minDistance = distance;
             closestGeometry = geometry;
         }
+    }
+    
+    if (closestGeometry) {
+        LOG_INF_S("Picked geometry: " + closestGeometry->getName() + " at distance: " + std::to_string(minDistance));
+    } else {
+        LOG_INF_S("No geometry picked");
     }
     
     return closestGeometry;
@@ -380,14 +404,25 @@ double OCCViewer::getMeshDeflection() const
 
 void OCCViewer::onSelectionChanged()
 {
-    LOG_INF_S("Selection changed");
+    LOG_INF_S("Selection changed - selected geometries: " + std::to_string(m_selectedGeometries.size()));
     
     // Update ObjectTree selection if available
     if (m_sceneManager && m_sceneManager->getCanvas()) {
         Canvas* canvas = m_sceneManager->getCanvas();
         if (canvas && canvas->getObjectTreePanel()) {
             canvas->getObjectTreePanel()->updateTreeSelectionFromViewer();
+            LOG_INF_S("Updated ObjectTreePanel selection");
+        } else {
+            LOG_WRN_S("Canvas or ObjectTreePanel is null in OCCViewer");
         }
+        
+        // Force a scene refresh to show selection changes
+        if (canvas && canvas->getRefreshManager()) {
+            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SELECTION_CHANGED, true);
+            LOG_INF_S("Requested scene refresh for selection change");
+        }
+    } else {
+        LOG_WRN_S("SceneManager or Canvas is null in OCCViewer");
     }
 }
 

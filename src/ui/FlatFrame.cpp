@@ -194,7 +194,8 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_COPY);
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_PASTE);
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_FIND);
-    eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_SELECTALL);
+    // Note: wxID_SELECTALL is not used for our custom select functionality
+    // The select button uses ID_SELECT which is handled by onCommand method
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_ABOUT);
     eventManager.bindButtonEvent(this, &FlatFrame::OnButtonClick, wxID_STOP);
 
@@ -367,6 +368,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     editPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* editButtonBar = new FlatUIButtonBar(editPanel);
     editButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    editButtonBar->AddButton(ID_SELECT, "Select", SVG_ICON("select", wxSize(16, 16)), nullptr, "Select objects");
     editButtonBar->AddButton(ID_UNDO, "Undo", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Undo last operation");
     editButtonBar->AddButton(ID_REDO, "Redo", SVG_ICON("redo", wxSize(16, 16)), nullptr, "Redo last undone operation");
     editPanel->AddButtonBar(editButtonBar, 0, wxEXPAND | wxALL, 5);
@@ -543,6 +545,9 @@ void FlatFrame::createPanels() {
     m_canvas->getInputManager()->initializeStates();
     m_canvas->setObjectTreePanel(m_objectTreePanel);
     m_canvas->setCommandManager(m_commandManager);
+    
+    // Set up bidirectional connections
+    m_objectTreePanel->setOCCViewer(m_occViewer);
     m_geometryFactory = new GeometryFactory(
         m_canvas->getSceneManager()->getObjectRoot(),
         m_objectTreePanel,

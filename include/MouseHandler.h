@@ -28,6 +28,7 @@ public:
     void setNavigationController(NavigationController* controller);
 
     std::string getCreationGeometryType() const { return m_creationGeometryType; }
+    OperationMode getOperationMode() const { return m_operationMode; }
 
 private:
     void handleGeometrySelection(wxMouseEvent& event);

@@ -105,39 +105,24 @@ void OCCGeometry::setVisible(bool visible)
 
 void OCCGeometry::setSelected(bool selected)
 {
-    m_selected = selected;
-    
-    // Update visual representation for selection state
-    if (m_coinNode) {
-        // Find and update material for selection highlighting
-        for (int i = 0; i < m_coinNode->getNumChildren(); ++i) {
-            SoNode* child = m_coinNode->getChild(i);
-            if (child && child->isOfType(SoMaterial::getClassTypeId())) {
-                SoMaterial* material = static_cast<SoMaterial*>(child);
-                
-                if (selected) {
-                    // Highlight selected geometry with blue tint
-                    material->emissiveColor.setValue(0.2f, 0.2f, 0.4f);
-                    material->diffuseColor.setValue(
-                        static_cast<float>(m_color.Red() * 0.8 + 0.2),
-                        static_cast<float>(m_color.Green() * 0.8 + 0.2),
-                        static_cast<float>(m_color.Blue() * 0.8 + 0.4)
-                    );
-                } else {
-                    // Reset to normal appearance
-                    material->emissiveColor.setValue(0.2f, 0.2f, 0.2f);
-                    material->diffuseColor.setValue(
-                        static_cast<float>(m_color.Red()),
-                        static_cast<float>(m_color.Green()),
-                        static_cast<float>(m_color.Blue())
-                    );
-                }
-                break;
-            }
-        }
+    if (m_selected != selected) {
+        LOG_INF_S("Setting selection for geometry '" + m_name + "': " + (selected ? "true" : "false"));
+        m_selected = selected;
         
-        // Force refresh of the scene
+        // Force rebuild of Coin3D representation to update edge colors
         m_coinNeedsUpdate = true;
+        
+        if (m_coinNode) {
+            LOG_INF_S("Rebuilding Coin3D representation for selection change: " + m_name + ", selected: " + (selected ? "true" : "false"));
+            
+            // Rebuild the entire Coin3D representation to update edge colors
+            buildCoinRepresentation();
+            
+            // Force a refresh of the scene to show the selection change
+            m_coinNode->touch();
+        } else {
+            LOG_INF_S("Coin3D node not yet created for geometry: " + m_name);
+        }
     }
 }
 
@@ -229,16 +214,20 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
     m_coinNode->addChild(hints);
     
     SoMaterial* material = new SoMaterial;
+    
+    // Surface material - always use normal appearance, selection is handled by edge color
+    material->emissiveColor.setValue(0.2f, 0.2f, 0.2f);
     material->diffuseColor.setValue(
         static_cast<float>(m_color.Red()),
         static_cast<float>(m_color.Green()),
         static_cast<float>(m_color.Blue())
     );
+    LOG_INF_S("Built Coin3D representation with normal surface appearance for: " + m_name);
+    
     material->transparency.setValue(static_cast<float>(m_transparency));
     material->ambientColor.setValue(0.6f, 0.6f, 0.6f);
     material->specularColor.setValue(0.3f, 0.3f, 0.3f);
     material->shininess.setValue(0.4f);
-    material->emissiveColor.setValue(0.2f, 0.2f, 0.2f);
     m_coinNode->addChild(material);
 
     static const unsigned char texData[16] = {
@@ -253,7 +242,7 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
     m_coinNode->addChild(texture);
     
     if (!m_shape.IsNull()) {
-        SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape, params);
+        SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape, params, m_selected);
         if (meshNode) {
             m_coinNode->addChild(meshNode);
         }

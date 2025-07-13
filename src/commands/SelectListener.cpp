@@ -16,8 +16,18 @@ CommandResult SelectListener::executeCommand(const std::string& commandType,
         return CommandResult(false, "MouseHandler is null in SelectListener", commandType);
     }
 
+    // Toggle: if already in SELECT mode, switch back to VIEW
+    if (m_mouseHandler->getOperationMode() == MouseHandler::OperationMode::SELECT) {
+        m_mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
+        LOG_INF_S("Exited select mode");
+        return CommandResult(true, "Exited select mode", commandType);
+    }
+
     LOG_INF_S("Executing Select command");
     m_mouseHandler->setOperationMode(MouseHandler::OperationMode::SELECT);
+    
+    // Update status to indicate selection mode is active
+    LOG_INF_S("Select mode activated - click on objects to select them");
     
     return CommandResult(true, "Select mode activated", commandType);
 }

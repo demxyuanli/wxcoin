@@ -47,6 +47,8 @@ void OCCMeshConverter::setFeatureEdgeAngle(double angleDegrees)
     s_featureEdgeAngle = angleDegrees;
 }
 
+
+
 OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape, 
                                                               const MeshParameters& params)
 {
@@ -99,6 +101,11 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
 
 SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
 {
+    return createCoinNode(mesh, false); // Default to not selected
+}
+
+SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh, bool selected)
+{
     if (mesh.isEmpty()) {
         LOG_WRN_S("Cannot create Coin3D node from empty mesh");
         return nullptr;
@@ -136,6 +143,7 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
     }
     
     // Create edge set if showEdges is true
+    LOG_INF_S("ShowEdges is " + std::string(s_showEdges ? "enabled" : "disabled") + " for " + (selected ? "selected" : "unselected") + " geometry");
     if (s_showEdges) {
         SoSeparator* edgeGroup = new SoSeparator;
 
@@ -143,15 +151,28 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
         SoTexture2* disableTexture = new SoTexture2;
         edgeGroup->addChild(disableTexture);
 
-        // Set a black material for the edges
+        // Set material color based on selection state
         SoMaterial* edgeMaterial = new SoMaterial;
-        edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+        if (selected) {
+            // Red edges for selected geometry
+            edgeMaterial->diffuseColor.setValue(1.0f, 0.0f, 0.0f);
+            edgeMaterial->emissiveColor.setValue(0.5f, 0.0f, 0.0f); // Add emissive for better visibility
+            LOG_INF_S("Created red edges for selected geometry");
+        } else {
+            // Black edges for unselected geometry
+            edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+            edgeMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
+            LOG_INF_S("Created black edges for unselected geometry");
+        }
         edgeGroup->addChild(edgeMaterial);
 
         // Create and add the line geometry
         SoIndexedLineSet* edgeSet = createEdgeSetNode(mesh);
         if (edgeSet) {
             edgeGroup->addChild(edgeSet);
+            LOG_INF_S("Added edge set to Coin3D node for " + std::string(selected ? "selected" : "unselected") + " geometry");
+        } else {
+            LOG_WRN_S("Failed to create edge set for " + std::string(selected ? "selected" : "unselected") + " geometry");
         }
 
         root->addChild(edgeGroup);
@@ -165,6 +186,12 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, const M
 {
     TriangleMesh mesh = convertToMesh(shape, params);
     return createCoinNode(mesh);
+}
+
+SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params, bool selected)
+{
+    TriangleMesh mesh = convertToMesh(shape, params);
+    return createCoinNode(mesh, selected);
 }
 
 void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TriangleMesh& mesh)
@@ -494,9 +521,13 @@ static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh&
         }
     }
 
-    if (indices.empty()) return nullptr;
+    if (indices.empty()) {
+        LOG_WRN_S("No feature edges found for mesh with " + std::to_string(mesh.getTriangleCount()) + " triangles");
+        return nullptr;
+    }
     SoIndexedLineSet* lineSet = new SoIndexedLineSet;
     lineSet->coordIndex.setValues(0, static_cast<int>(indices.size()), indices.data());
+    LOG_INF_S("Created edge set with " + std::to_string(indices.size()) + " indices for " + std::to_string(indices.size() / 3) + " edges");
     return lineSet;
 }
 

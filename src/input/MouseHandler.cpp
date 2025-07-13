@@ -57,6 +57,9 @@ void MouseHandler::setNavigationController(NavigationController* controller) {
 }
 
 void MouseHandler::handleMouseButton(wxMouseEvent& event) {
+    LOG_INF_S("Mouse button event - Mode: " + std::to_string(static_cast<int>(m_operationMode)) + 
+              ", LeftDown: " + std::to_string(event.LeftDown()));
+    
     if (m_operationMode == OperationMode::VIEW && m_navigationController) {
         m_navigationController->handleMouseButton(event);
     }
@@ -102,6 +105,9 @@ void MouseHandler::handleGeometrySelection(wxMouseEvent& event) {
         // Update ObjectTree selection
         if (m_objectTree) {
             m_objectTree->selectOCCGeometry(pickedGeometry);
+            LOG_INF_S("Updated ObjectTree selection for: " + pickedGeometry->getName());
+        } else {
+            LOG_WRN_S("ObjectTree is null in MouseHandler");
         }
     } else {
         LOG_INF_S("No geometry picked at position");
@@ -112,7 +118,13 @@ void MouseHandler::handleGeometrySelection(wxMouseEvent& event) {
         // Clear ObjectTree selection
         if (m_objectTree) {
             m_objectTree->updateTreeSelectionFromViewer();
+            LOG_INF_S("Cleared ObjectTree selection");
+        } else {
+            LOG_WRN_S("ObjectTree is null in MouseHandler");
         }
+        // Exit select mode
+        setOperationMode(OperationMode::VIEW);
+        LOG_INF_S("Exited select mode due to empty click");
     }
 }
 

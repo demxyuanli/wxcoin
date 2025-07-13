@@ -78,7 +78,9 @@ public:
 
     // Coin3D node creation
     static SoSeparator* createCoinNode(const TriangleMesh& mesh);
+    static SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected);
     static SoSeparator* createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
+    static SoSeparator* createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params, bool selected);
     
     // Update existing Coin3D nodes
     static void updateCoinNode(SoSeparator* node, const TriangleMesh& mesh);
@@ -117,6 +119,8 @@ public:
     // Control whether edge lines are generated
     static void setShowEdges(bool show);
     static void setFeatureEdgeAngle(double angleDegrees);
+    
+
 
     // Feature edge filtering angle threshold (degrees)
     static double s_featureEdgeAngle;
