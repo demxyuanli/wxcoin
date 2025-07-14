@@ -142,7 +142,7 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                         canvas->getOCCViewer() 
                     );
                     // Use OCC modeling for all geometry types
-                    factory.createGeometry(geometryType, finalPos, GeometryType::OPENCASCADE);
+                    factory.createOCCGeometry(geometryType, finalPos);
                     LOG_INF_S("Creating geometry at position from dialog");
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");

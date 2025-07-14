@@ -511,9 +511,15 @@ static SoIndexedLineSet* createEdgeSetNode(const OCCMeshConverter::TriangleMesh&
             gp_Pnt n1p = OCCMeshConverter::calculateTriangleNormal(mesh.vertices[a1], mesh.vertices[b1], mesh.vertices[c1]);
             gp_Vec n0(n0p.X(), n0p.Y(), n0p.Z());
             gp_Vec n1(n1p.X(), n1p.Y(), n1p.Z());
-            double angle = n0.Angle(n1) * 180.0 / acos(-1.0);
-            if (angle >= threshold) {
-                includeEdge = true;
+            // Check for zero magnitude normals to avoid exception
+            if (n0.Magnitude() <= Precision::Confusion() || n1.Magnitude() <= Precision::Confusion()) {
+                includeEdge = true;  // Treat degenerate faces as feature edges
+                LOG_WRN_S("Degenerate normal detected for edge, treating as feature edge");
+            } else {
+                double angle = n0.Angle(n1) * 180.0 / acos(-1.0);
+                if (angle >= threshold) {
+                    includeEdge = true;
+                }
             }
         } else {
             includeEdge = true;

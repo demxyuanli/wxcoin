@@ -388,38 +388,39 @@ void OCCSphere::buildShape()
             return;
         }
         
-        // Use axis-based constructor for more reliable sphere creation
-        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-        BRepPrimAPI_MakeSphere sphereMaker(axis, m_radius);
-        LOG_INF_S("BRepPrimAPI_MakeSphere created for OCCSphere: " + m_name);
+        // Try simple constructor first, as in pythonocc examples
+        BRepPrimAPI_MakeSphere sphereMaker(m_radius);
+        sphereMaker.Build();
+        LOG_INF_S("Simple BRepPrimAPI_MakeSphere created for OCCSphere: " + m_name);
         
-        // Check if sphere creation was successful
         if (sphereMaker.IsDone()) {
             TopoDS_Shape shape = sphereMaker.Shape();
             if (!shape.IsNull()) {
-                LOG_INF_S("Sphere shape created successfully for OCCSphere: " + m_name + " - Shape is null: no");
+                LOG_INF_S("Sphere shape created successfully with simple constructor for: " + m_name);
                 setShape(shape);
+                return;
             } else {
-                LOG_ERR_S("BRepPrimAPI_MakeSphere returned null shape for OCCSphere: " + m_name);
-                
-                // Fallback: try simple constructor
-                LOG_INF_S("Attempting fallback with simple constructor for OCCSphere: " + m_name);
-                BRepPrimAPI_MakeSphere fallbackMaker(m_radius);
-                fallbackMaker.Build();  // Add this line to build the fallback sphere
-                if (fallbackMaker.IsDone()) {
-                    TopoDS_Shape fallbackShape = fallbackMaker.Shape();
-                    if (!fallbackShape.IsNull()) {
-                        LOG_INF_S("Fallback sphere creation successful for: " + m_name);
-                        setShape(fallbackShape);
-                    } else {
-                        LOG_ERR_S("Fallback sphere creation also returned null shape for: " + m_name);
-                    }
-                } else {
-                    LOG_ERR_S("Fallback BRepPrimAPI_MakeSphere also failed for: " + m_name);
-                }
+                LOG_ERR_S("Simple constructor returned null shape for: " + m_name);
             }
         } else {
-            LOG_ERR_S("BRepPrimAPI_MakeSphere failed (IsDone = false) for OCCSphere: " + m_name);
+            LOG_ERR_S("Simple BRepPrimAPI_MakeSphere failed (IsDone = false) for: " + m_name);
+        }
+        
+        // Fallback to axis-based constructor
+        LOG_INF_S("Falling back to axis-based constructor for OCCSphere: " + m_name);
+        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        BRepPrimAPI_MakeSphere fallbackMaker(axis, m_radius);
+        fallbackMaker.Build();
+        if (fallbackMaker.IsDone()) {
+            TopoDS_Shape fallbackShape = fallbackMaker.Shape();
+            if (!fallbackShape.IsNull()) {
+                LOG_INF_S("Fallback sphere creation successful for: " + m_name);
+                setShape(fallbackShape);
+            } else {
+                LOG_ERR_S("Fallback also returned null shape for: " + m_name);
+            }
+        } else {
+            LOG_ERR_S("Fallback BRepPrimAPI_MakeSphere failed for: " + m_name);
         }
     } catch (const std::exception& e) {
         LOG_ERR_S("Failed to create sphere: " + std::string(e.what()) + " for OCCSphere: " + m_name);
@@ -471,11 +472,12 @@ void OCCCone::buildShape()
         
         // Always use axis-based constructor with proper parameter validation
         BRepPrimAPI_MakeCone coneMaker(axis, m_bottomRadius, actualTopRadius, m_height);
-        coneMaker.Build();  // Add this line to build the cone
         LOG_INF_S("BRepPrimAPI_MakeCone created for OCCCone: " + m_name + 
                   " with params - bottomRadius: " + std::to_string(m_bottomRadius) + 
                   ", topRadius: " + std::to_string(actualTopRadius) + 
                   ", height: " + std::to_string(m_height));
+        
+        coneMaker.Build();
         
         if (coneMaker.IsDone()) {
             TopoDS_Shape shape = coneMaker.Shape();
@@ -490,7 +492,7 @@ void OCCCone::buildShape()
                     LOG_INF_S("Attempting fallback with small topRadius for perfect cone: " + m_name);
                     actualTopRadius = 0.001;
                     BRepPrimAPI_MakeCone fallbackMaker(axis, m_bottomRadius, actualTopRadius, m_height);
-                    fallbackMaker.Build();  // Add this line to build the fallback cone
+                    fallbackMaker.Build();
                     if (fallbackMaker.IsDone()) {
                         TopoDS_Shape fallbackShape = fallbackMaker.Shape();
                         if (!fallbackShape.IsNull()) {

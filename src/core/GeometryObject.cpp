@@ -49,3 +49,4 @@ void GeometryObject::setSelected(bool selected)
     m_selected = selected;
 }
 
+

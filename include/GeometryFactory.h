@@ -23,9 +23,6 @@ public:
                    CommandManager* cmdManager, OCCViewer* occViewer = nullptr);
     ~GeometryFactory();
 
-    // Create geometry with specified type system
-    void createGeometry(const std::string& type, const SbVec3f& position, GeometryType geomType = GeometryType::COIN3D);
-    
     // Create OpenCASCADE geometry
     void createOCCGeometry(const std::string& type, const SbVec3f& position);
     

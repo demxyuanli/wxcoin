@@ -28,21 +28,6 @@ GeometryFactory::~GeometryFactory() {
     LOG_INF_S("GeometryFactory destroying");
 }
 
-void GeometryFactory::createGeometry(const std::string& type, const SbVec3f& position, GeometryType geomType) {
-    if (geomType == GeometryType::OPENCASCADE) {
-        createOCCGeometry(type, position);
-        return;
-    }
-    
-    // For Coin3D geometry type, still use OCC modeling but convert to GeometryObject for compatibility
-    std::unique_ptr<GeometryObject> object = nullptr;
-
-    if (object) {
-        auto command = std::make_shared<CreateCommand>(std::move(object), m_root, m_treePanel, m_propPanel);
-        m_cmdManager->executeCommand(command);
-    }
-}
-
 void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& position) {
     if (!m_occViewer) {
         LOG_ERR_S("OCC Viewer not available for creating OpenCASCADE geometry");
@@ -84,6 +69,7 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
 }
 
 
+
 // OpenCASCADE geometry creation methods
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& position) {
     static int boxCounter = 0;
@@ -98,7 +84,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCSphere(const SbVec3f& pos
     static int sphereCounter = 0;
     std::string name = "OCCSphere_" + std::to_string(++sphereCounter);
     
-    auto sphere = std::make_shared<OCCSphere>(name, 1.0);  // Increased from 0.5 to 5.0
+    auto sphere = std::make_shared<OCCSphere>(name, 0.5);
     sphere->setPosition(gp_Pnt(position[0], position[1], position[2]));
     return sphere;
 }
@@ -107,7 +93,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& posit
     static int coneCounter = 0;
     std::string name = "OCCCone_" + std::to_string(++coneCounter);
     
-    auto cone = std::make_shared<OCCCone>(name, 1.0, 0.001, 2.0);  // Increased sizes: bottom 1.0, top 0.001 (from 0.001), height 2.0
+    auto cone = std::make_shared<OCCCone>(name, 0.5, 0, 1.0);
     cone->setPosition(gp_Pnt(position[0], position[1], position[2]));
     return cone;
 }
