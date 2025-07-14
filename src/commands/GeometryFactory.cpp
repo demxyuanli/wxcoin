@@ -8,6 +8,7 @@
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
 #include "OCCShapeBuilder.h"
+#include "PositionDialog.h" // For GeometryParameters
 #include <gp_Dir.hxx>
 #include <memory>
 #include <gp_Pnt.hxx>
@@ -19,7 +20,7 @@ GeometryFactory::GeometryFactory(SoSeparator* root, ObjectTreePanel* treePanel, 
     , m_propPanel(propPanel)
     , m_cmdManager(cmdManager)
     , m_occViewer(occViewer)
-    , m_defaultGeometryType(GeometryType::COIN3D)
+    , m_defaultGeometryType(GeometryType::OPENCASCADE)
 {
     LOG_INF_S("GeometryFactory initializing with OCC support");
 }
@@ -29,101 +30,188 @@ GeometryFactory::~GeometryFactory() {
 }
 
 void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& position) {
-    if (!m_occViewer) {
-        LOG_ERR_S("OCC Viewer not available for creating OpenCASCADE geometry");
-        return;
-    }
-    
-    std::shared_ptr<OCCGeometry> geometry = nullptr;
+    std::shared_ptr<OCCGeometry> geometry;
     
     if (type == "Box") {
         geometry = createOCCBox(position);
-    }
-    else if (type == "Sphere") {
+    } else if (type == "Sphere") {
         geometry = createOCCSphere(position);
-    }
-    else if (type == "Cylinder") {
+    } else if (type == "Cylinder") {
         geometry = createOCCCylinder(position);
-    }
-    else if (type == "Cone") {
+    } else if (type == "Cone") {
         geometry = createOCCCone(position);
-    }
-    else if (type == "Torus") {
+    } else if (type == "Torus") {
         geometry = createOCCTorus(position);
-    }
-    else if (type == "TruncatedCylinder") {
+    } else if (type == "TruncatedCylinder") {
         geometry = createOCCTruncatedCylinder(position);
-    }
-    else if (type == "Wrench") {
+    } else if (type == "Wrench") {
         geometry = createOCCWrench(position);
-    }
-    else {
-        LOG_ERR_S("Unknown OCC geometry type: " + type);
+    } else {
+        LOG_ERR_S("Unknown geometry type: " + type);
         return;
     }
     
     if (geometry) {
+        m_treePanel->addOCCGeometry(geometry);
         m_occViewer->addGeometry(geometry);
-        LOG_INF_S("Created OCC geometry: " + geometry->getName());
+        LOG_INF_S("Created OCC geometry: " + type);
+    } else {
+        LOG_ERR_S("Failed to create OCC geometry: " + type);
     }
 }
 
+void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const GeometryParameters& params) {
+    std::shared_ptr<OCCGeometry> geometry;
+    
+    if (type == "Box") {
+        geometry = createOCCBox(position, params.width, params.height, params.depth);
+    } else if (type == "Sphere") {
+        geometry = createOCCSphere(position, params.radius);
+    } else if (type == "Cylinder") {
+        geometry = createOCCCylinder(position, params.cylinderRadius, params.cylinderHeight);
+    } else if (type == "Cone") {
+        geometry = createOCCCone(position, params.bottomRadius, params.topRadius, params.coneHeight);
+    } else if (type == "Torus") {
+        geometry = createOCCTorus(position, params.majorRadius, params.minorRadius);
+    } else if (type == "TruncatedCylinder") {
+        geometry = createOCCTruncatedCylinder(position, params.truncatedBottomRadius, params.truncatedTopRadius, params.truncatedHeight);
+    } else if (type == "Wrench") {
+        geometry = createOCCWrench(position);
+    } else {
+        LOG_ERR_S("Unknown geometry type: " + type);
+        return;
+    }
+    
+    if (geometry) {
+        m_treePanel->addOCCGeometry(geometry);
+        m_occViewer->addGeometry(geometry);
+        LOG_INF_S("Created OCC geometry with parameters: " + type);
+    } else {
+        LOG_ERR_S("Failed to create OCC geometry with parameters: " + type);
+    }
+}
 
-
-// OpenCASCADE geometry creation methods
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& position) {
+    return createOCCBox(position, 2.0, 2.0, 2.0);
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& position, double width, double height, double depth) {
     static int boxCounter = 0;
     std::string name = "OCCBox_" + std::to_string(++boxCounter);
     
-    auto box = std::make_shared<OCCBox>(name, 1.0, 1.0, 1.0);
-    box->setPosition(gp_Pnt(position[0], position[1], position[2]));
-    return box;
+    try {
+        auto box = std::make_shared<OCCBox>(name, width, height, depth);
+        
+        if (box && !box->getShape().IsNull()) {
+            box->setPosition(gp_Pnt(position[0], position[1], position[2]));
+            LOG_INF_S("Created OCCBox: " + name + " with dimensions " + 
+                     std::to_string(width) + "x" + std::to_string(height) + "x" + std::to_string(depth));
+            return box;
+        } else {
+            LOG_ERR_S("Failed to create box shape");
+            return nullptr;
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception creating OCCBox: " + std::string(e.what()));
+        return nullptr;
+    }
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCSphere(const SbVec3f& position) {
+    return createOCCSphere(position, 1.0);
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCSphere(const SbVec3f& position, double radius) {
     static int sphereCounter = 0;
     std::string name = "OCCSphere_" + std::to_string(++sphereCounter);
     
-    auto sphere = std::make_shared<OCCSphere>(name, 0.5);
-    sphere->setPosition(gp_Pnt(position[0], position[1], position[2]));
-    return sphere;
-}
-
-std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& position) {
-    static int coneCounter = 0;
-    std::string name = "OCCCone_" + std::to_string(++coneCounter);
-    
-    auto cone = std::make_shared<OCCCone>(name, 0.5, 0, 1.0);
-    cone->setPosition(gp_Pnt(position[0], position[1], position[2]));
-    return cone;
+    try {
+        auto sphere = std::make_shared<OCCSphere>(name, radius);
+        
+        if (sphere && !sphere->getShape().IsNull()) {
+            sphere->setPosition(gp_Pnt(position[0], position[1], position[2]));
+            LOG_INF_S("Created OCCSphere: " + name + " with radius " + std::to_string(radius));
+            return sphere;
+        } else {
+            LOG_ERR_S("Failed to create sphere shape");
+            return nullptr;
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception creating OCCSphere: " + std::string(e.what()));
+        return nullptr;
+    }
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCylinder(const SbVec3f& position) {
+    return createOCCCylinder(position, 1.0, 2.0);
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCylinder(const SbVec3f& position, double radius, double height) {
     static int cylinderCounter = 0;
     std::string name = "OCCCylinder_" + std::to_string(++cylinderCounter);
     
-    auto cylinder = std::make_shared<OCCCylinder>(name, 0.5, 1.0);
-    cylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
-    return cylinder;
+    try {
+        auto cylinder = std::make_shared<OCCCylinder>(name, radius, height);
+        
+        if (cylinder && !cylinder->getShape().IsNull()) {
+            cylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
+            LOG_INF_S("Created OCCCylinder: " + name + " with radius " + std::to_string(radius) + " height " + std::to_string(height));
+            return cylinder;
+        } else {
+            LOG_ERR_S("Failed to create cylinder shape");
+            return nullptr;
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception creating OCCCylinder: " + std::string(e.what()));
+        return nullptr;
+    }
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& position) {
+    return createOCCCone(position, 1.0, 0.5, 2.0);
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& position, double bottomRadius, double topRadius, double height) {
+    static int coneCounter = 0;
+    std::string name = "OCCCone_" + std::to_string(++coneCounter);
+    
+    try {
+        auto cone = std::make_shared<OCCCone>(name, bottomRadius, topRadius, height);
+        
+        if (cone && !cone->getShape().IsNull()) {
+            cone->setPosition(gp_Pnt(position[0], position[1], position[2]));
+            LOG_INF_S("Created OCCCone: " + name + " with bottom radius " + std::to_string(bottomRadius) + 
+                     " top radius " + std::to_string(topRadius) + " height " + std::to_string(height));
+            return cone;
+        } else {
+            LOG_ERR_S("Failed to create cone shape");
+            return nullptr;
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception creating OCCCone: " + std::string(e.what()));
+        return nullptr;
+    }
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTorus(const SbVec3f& position) {
+    return createOCCTorus(position, 2.0, 0.5);
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTorus(const SbVec3f& position, double majorRadius, double minorRadius) {
     static int torusCounter = 0;
     std::string name = "OCCTorus_" + std::to_string(++torusCounter);
     
     try {
-        // Create torus using OCCTorus class
-        double majorRadius = 2.0;  // Distance from center to tube center
-        double minorRadius = 0.5;  // Tube radius
-        
         auto torus = std::make_shared<OCCTorus>(name, majorRadius, minorRadius);
         
         if (torus && !torus->getShape().IsNull()) {
             torus->setPosition(gp_Pnt(position[0], position[1], position[2]));
-            LOG_INF_S("Created OCCTorus: " + name + " at position (" + 
-                     std::to_string(position[0]) + ", " + 
-                     std::to_string(position[1]) + ", " + 
-                     std::to_string(position[2]) + ")");
+            LOG_INF_S("Created OCCTorus: " + name + " with major radius " + std::to_string(majorRadius) + 
+                     " minor radius " + std::to_string(minorRadius));
             return torus;
         } else {
             LOG_ERR_S("Failed to create torus shape");
@@ -137,23 +225,20 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTorus(const SbVec3f& posi
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTruncatedCylinder(const SbVec3f& position) {
+    return createOCCTruncatedCylinder(position, 1.0, 0.5, 2.0);
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTruncatedCylinder(const SbVec3f& position, double bottomRadius, double topRadius, double height) {
     static int truncatedCylinderCounter = 0;
     std::string name = "OCCTruncatedCylinder_" + std::to_string(++truncatedCylinderCounter);
     
     try {
-        // Create a truncated cylinder using OCCTruncatedCylinder class
-        double bottomRadius = 1.0;   // Bottom radius
-        double topRadius = 0.5;      // Top radius (smaller for trapezoidal shape)
-        double height = 2.0;         // Height
-        
         auto truncatedCylinder = std::make_shared<OCCTruncatedCylinder>(name, bottomRadius, topRadius, height);
         
         if (truncatedCylinder && !truncatedCylinder->getShape().IsNull()) {
             truncatedCylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
-            LOG_INF_S("Created OCCTruncatedCylinder: " + name + " at position (" + 
-                     std::to_string(position[0]) + ", " + 
-                     std::to_string(position[1]) + ", " + 
-                     std::to_string(position[2]) + ")");
+            LOG_INF_S("Created OCCTruncatedCylinder: " + name + " with bottom radius " + std::to_string(bottomRadius) + 
+                     " top radius " + std::to_string(topRadius) + " height " + std::to_string(height));
             return truncatedCylinder;
         } else {
             LOG_ERR_S("Failed to create truncated cylinder shape");

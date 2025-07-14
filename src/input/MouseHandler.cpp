@@ -21,6 +21,7 @@ MouseHandler::MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, Property
     , m_navigationController(nullptr)
     , m_operationMode(OperationMode::VIEW)
     , m_isDragging(false)
+    , m_currentPositionDialog(nullptr)
 {
     LOG_INF_S("MouseHandler initializing");
     if (!m_canvas) LOG_ERR_S("MouseHandler: Canvas is null");
@@ -31,6 +32,10 @@ MouseHandler::MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, Property
 
 MouseHandler::~MouseHandler() {
     LOG_INF_S("MouseHandler destroying");
+    if (m_currentPositionDialog) {
+        m_currentPositionDialog->Destroy();
+        m_currentPositionDialog = nullptr;
+    }
 }
 
 void MouseHandler::setOperationMode(OperationMode mode) {
@@ -43,11 +48,17 @@ void MouseHandler::setCreationGeometryType(const std::string& type) {
     LOG_INF_S("Creation geometry type set to: " + type);
 
     if (!type.empty()) {
-        // Create position dialog and pass the PickingAidManager
+        // Close existing position dialog if any
+        if (m_currentPositionDialog) {
+            m_currentPositionDialog->Destroy();
+            m_currentPositionDialog = nullptr;
+        }
+        
+        // Create new position dialog and pass the PickingAidManager
         PickingAidManager* pickingAidManager = m_canvas->getSceneManager()->getPickingAidManager();
-        PositionDialog* posDialog = new PositionDialog(m_canvas->GetParent(), "Set " + wxString(type) + " Position", pickingAidManager);
-        posDialog->SetPosition(SbVec3f(0.0f, 0.0f, 0.0f));
-        posDialog->Show(true);
+        m_currentPositionDialog = new PositionDialog(m_canvas->GetParent(), "Set " + wxString(type) + " Position", pickingAidManager, type);
+        m_currentPositionDialog->SetPosition(SbVec3f(0.0f, 0.0f, 0.0f));
+        m_currentPositionDialog->Show(true);
     }
 }
 
