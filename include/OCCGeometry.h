@@ -143,3 +143,35 @@ private:
     
     double m_bottomRadius, m_topRadius, m_height;
 }; 
+
+/**
+ * @brief OpenCASCADE torus geometry
+ */
+class OCCTorus : public OCCGeometry {
+public:
+    OCCTorus(const std::string& name, double majorRadius, double minorRadius);
+    
+    void setDimensions(double majorRadius, double minorRadius);
+    void getSize(double& majorRadius, double& minorRadius) const;
+
+private:
+    void buildShape();
+    
+    double m_majorRadius, m_minorRadius;
+}; 
+
+/**
+ * @brief OpenCASCADE truncated cylinder geometry (frustum)
+ */
+class OCCTruncatedCylinder : public OCCGeometry {
+public:
+    OCCTruncatedCylinder(const std::string& name, double bottomRadius, double topRadius, double height);
+    
+    void setDimensions(double bottomRadius, double topRadius, double height);
+    void getSize(double& bottomRadius, double& topRadius, double& height) const;
+
+private:
+    void buildShape();
+    
+    double m_bottomRadius, m_topRadius, m_height;
+}; 

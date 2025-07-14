@@ -112,29 +112,26 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTorus(const SbVec3f& posi
     std::string name = "OCCTorus_" + std::to_string(++torusCounter);
     
     try {
-        // Create torus using OCCShapeBuilder
+        // Create torus using OCCTorus class
         double majorRadius = 2.0;  // Distance from center to tube center
         double minorRadius = 0.5;  // Tube radius
-        gp_Dir direction(0, 0, 1); // Z-axis direction
         
-        TopoDS_Shape torusShape = OCCShapeBuilder::createTorus(majorRadius, minorRadius, 
-                                                              gp_Pnt(position[0], position[1], position[2]), 
-                                                              direction);
+        auto torus = std::make_shared<OCCTorus>(name, majorRadius, minorRadius);
         
-        if (torusShape.IsNull()) {
+        if (torus && !torus->getShape().IsNull()) {
+            torus->setPosition(gp_Pnt(position[0], position[1], position[2]));
+            LOG_INF_S("Created OCCTorus: " + name + " at position (" + 
+                     std::to_string(position[0]) + ", " + 
+                     std::to_string(position[1]) + ", " + 
+                     std::to_string(position[2]) + ")");
+            return torus;
+        } else {
             LOG_ERR_S("Failed to create torus shape");
             return nullptr;
         }
         
-        auto torus = std::make_shared<OCCGeometry>(name);
-        torus->setShape(torusShape);
-        torus->setPosition(gp_Pnt(position[0], position[1], position[2]));
-        
-        LOG_INF_S("Created OCC torus: " + name);
-        return torus;
-        
     } catch (const std::exception& e) {
-        LOG_ERR_S("Exception creating torus: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating OCCTorus: " + std::string(e.what()));
         return nullptr;
     }
 }
@@ -144,32 +141,27 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTruncatedCylinder(const S
     std::string name = "OCCTruncatedCylinder_" + std::to_string(++truncatedCylinderCounter);
     
     try {
-        // Create a truncated cylinder (trapezoidal cylinder)
+        // Create a truncated cylinder using OCCTruncatedCylinder class
         double bottomRadius = 1.0;   // Bottom radius
         double topRadius = 0.5;      // Top radius (smaller for trapezoidal shape)
         double height = 2.0;         // Height
         
-        // Create using cone with different top and bottom radii
-        TopoDS_Shape truncatedCylinderShape = OCCShapeBuilder::createCone(
-            bottomRadius, topRadius, height,
-            gp_Pnt(position[0], position[1], position[2]),
-            gp_Dir(0, 0, 1)  // Z-axis direction
-        );
+        auto truncatedCylinder = std::make_shared<OCCTruncatedCylinder>(name, bottomRadius, topRadius, height);
         
-        if (truncatedCylinderShape.IsNull()) {
+        if (truncatedCylinder && !truncatedCylinder->getShape().IsNull()) {
+            truncatedCylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
+            LOG_INF_S("Created OCCTruncatedCylinder: " + name + " at position (" + 
+                     std::to_string(position[0]) + ", " + 
+                     std::to_string(position[1]) + ", " + 
+                     std::to_string(position[2]) + ")");
+            return truncatedCylinder;
+        } else {
             LOG_ERR_S("Failed to create truncated cylinder shape");
             return nullptr;
         }
         
-        auto truncatedCylinder = std::make_shared<OCCGeometry>(name);
-        truncatedCylinder->setShape(truncatedCylinderShape);
-        truncatedCylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
-        
-        LOG_INF_S("Created OCC truncated cylinder: " + name);
-        return truncatedCylinder;
-        
     } catch (const std::exception& e) {
-        LOG_ERR_S("Exception creating truncated cylinder: " + std::string(e.what()));
+        LOG_ERR_S("Exception creating OCCTruncatedCylinder: " + std::string(e.what()));
         return nullptr;
     }
 }

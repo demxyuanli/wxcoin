@@ -78,6 +78,7 @@ TopoDS_Shape OCCShapeBuilder::createSphere(double radius, const gp_Pnt& center)
 {
     try {
         BRepPrimAPI_MakeSphere sphereMaker(radius);
+        sphereMaker.Build();
         if (!sphereMaker.IsDone()) {
             LOG_ERR_S("Failed to create sphere");
             return TopoDS_Shape();
@@ -129,6 +130,7 @@ TopoDS_Shape OCCShapeBuilder::createCone(double bottomRadius, double topRadius, 
     try {
         gp_Ax2 axis(position, direction);
         BRepPrimAPI_MakeCone coneMaker(axis, bottomRadius, topRadius, height);
+        coneMaker.Build();
         if (!coneMaker.IsDone()) {
             LOG_ERR_S("Failed to create cone");
             return TopoDS_Shape();
@@ -147,8 +149,9 @@ TopoDS_Shape OCCShapeBuilder::createTorus(double majorRadius, double minorRadius
     try {
         gp_Ax2 axis(center, direction);
         BRepPrimAPI_MakeTorus torusMaker(axis, majorRadius, minorRadius);
+        torusMaker.Build();
         if (!torusMaker.IsDone()) {
-            LOG_ERR_S("Failed to create torus");
+            LOG_ERR_S("Failed to create torus after Build(): algorithm is not done. Major radius: " + std::to_string(majorRadius) + ", Minor radius: " + std::to_string(minorRadius));
             return TopoDS_Shape();
         }
         

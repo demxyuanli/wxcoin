@@ -10,6 +10,7 @@
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
+#include <BRepPrimAPI_MakeTorus.hxx>
 #include <gp_Trsf.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Dir.hxx>
@@ -511,5 +512,136 @@ void OCCCone::buildShape()
         }
     } catch (const std::exception& e) {
         LOG_ERR_S("Failed to create cone: " + std::string(e.what()) + " for OCCCone: " + m_name);
+    }
+}
+
+// OCCTorus implementation
+OCCTorus::OCCTorus(const std::string& name, double majorRadius, double minorRadius)
+    : OCCGeometry(name), m_majorRadius(majorRadius), m_minorRadius(minorRadius)
+{
+    LOG_INF_S("Creating OCCTorus: " + name + " with major radius: " + std::to_string(majorRadius) + " minor radius: " + std::to_string(minorRadius));
+    buildShape();
+}
+
+void OCCTorus::setDimensions(double majorRadius, double minorRadius)
+{
+    if (m_majorRadius != majorRadius || m_minorRadius != minorRadius) {
+        m_majorRadius = majorRadius;
+        m_minorRadius = minorRadius;
+        LOG_INF_S("OCCTorus dimensions changed: " + m_name + " major: " + std::to_string(majorRadius) + " minor: " + std::to_string(minorRadius));
+        buildShape();
+        m_coinNeedsUpdate = true;
+    }
+}
+
+void OCCTorus::getSize(double& majorRadius, double& minorRadius) const
+{
+    majorRadius = m_majorRadius;
+    minorRadius = m_minorRadius;
+}
+
+void OCCTorus::buildShape()
+{
+    LOG_INF_S("Building OCCTorus shape with major radius: " + std::to_string(m_majorRadius) + " minor radius: " + std::to_string(m_minorRadius));
+    
+    try {
+        // Validate parameters
+        if (m_majorRadius <= 0.0 || m_minorRadius <= 0.0) {
+            LOG_ERR_S("Invalid radii for OCCTorus: " + m_name + " - major: " + std::to_string(m_majorRadius) + " minor: " + std::to_string(m_minorRadius));
+            return;
+        }
+        
+        if (m_minorRadius >= m_majorRadius) {
+            LOG_ERR_S("Invalid torus dimensions: minor radius must be less than major radius for " + m_name);
+            return;
+        }
+        
+        // Create torus using axis-based constructor for better control
+        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        BRepPrimAPI_MakeTorus torusMaker(axis, m_majorRadius, m_minorRadius);
+        torusMaker.Build();
+        
+        if (torusMaker.IsDone()) {
+            TopoDS_Shape shape = torusMaker.Shape();
+            if (!shape.IsNull()) {
+                m_shape = shape;
+                LOG_INF_S("OCCTorus shape created successfully: " + m_name);
+            } else {
+                LOG_ERR_S("OCCTorus shape is null after creation: " + m_name);
+            }
+        } else {
+            LOG_ERR_S("BRepPrimAPI_MakeTorus failed for: " + m_name);
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception in OCCTorus::buildShape for " + m_name + ": " + e.what());
+    }
+}
+
+// OCCTruncatedCylinder implementation
+OCCTruncatedCylinder::OCCTruncatedCylinder(const std::string& name, double bottomRadius, double topRadius, double height)
+    : OCCGeometry(name), m_bottomRadius(bottomRadius), m_topRadius(topRadius), m_height(height)
+{
+    LOG_INF_S("Creating OCCTruncatedCylinder: " + name + " with bottom radius: " + std::to_string(bottomRadius) + 
+              " top radius: " + std::to_string(topRadius) + " height: " + std::to_string(height));
+    buildShape();
+}
+
+void OCCTruncatedCylinder::setDimensions(double bottomRadius, double topRadius, double height)
+{
+    if (m_bottomRadius != bottomRadius || m_topRadius != topRadius || m_height != height) {
+        m_bottomRadius = bottomRadius;
+        m_topRadius = topRadius;
+        m_height = height;
+        LOG_INF_S("OCCTruncatedCylinder dimensions changed: " + m_name + 
+                  " bottom: " + std::to_string(bottomRadius) + 
+                  " top: " + std::to_string(topRadius) + 
+                  " height: " + std::to_string(height));
+        buildShape();
+        m_coinNeedsUpdate = true;
+    }
+}
+
+void OCCTruncatedCylinder::getSize(double& bottomRadius, double& topRadius, double& height) const
+{
+    bottomRadius = m_bottomRadius;
+    topRadius = m_topRadius;
+    height = m_height;
+}
+
+void OCCTruncatedCylinder::buildShape()
+{
+    LOG_INF_S("Building OCCTruncatedCylinder shape with bottom radius: " + std::to_string(m_bottomRadius) + 
+              " top radius: " + std::to_string(m_topRadius) + " height: " + std::to_string(m_height));
+    
+    try {
+        // Validate parameters
+        if (m_bottomRadius <= 0.0 || m_topRadius <= 0.0 || m_height <= 0.0) {
+            LOG_ERR_S("Invalid dimensions for OCCTruncatedCylinder: " + m_name + 
+                      " - bottom: " + std::to_string(m_bottomRadius) + 
+                      " top: " + std::to_string(m_topRadius) + 
+                      " height: " + std::to_string(m_height));
+            return;
+        }
+        
+        // Create truncated cylinder using cone with different radii
+        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        BRepPrimAPI_MakeCone truncatedCylinderMaker(axis, m_bottomRadius, m_topRadius, m_height);
+        truncatedCylinderMaker.Build();
+        
+        if (truncatedCylinderMaker.IsDone()) {
+            TopoDS_Shape shape = truncatedCylinderMaker.Shape();
+            if (!shape.IsNull()) {
+                m_shape = shape;
+                LOG_INF_S("OCCTruncatedCylinder shape created successfully: " + m_name);
+            } else {
+                LOG_ERR_S("OCCTruncatedCylinder shape is null after creation: " + m_name);
+            }
+        } else {
+            LOG_ERR_S("BRepPrimAPI_MakeCone failed for OCCTruncatedCylinder: " + m_name);
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception in OCCTruncatedCylinder::buildShape for " + m_name + ": " + e.what());
     }
 }
