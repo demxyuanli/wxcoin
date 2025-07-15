@@ -8,7 +8,11 @@ set(FLATUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIBarSpaces.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIBarStateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIBarTabs.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIButtonBar.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIButtonBarCore.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIButtonBarDrawing.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIButtonBarEvents.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIButtonBarControls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIButtonBarStyles.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatUICustomControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIEventManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIFixPanel.cpp

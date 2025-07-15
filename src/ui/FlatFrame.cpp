@@ -423,10 +423,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
     displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    displayButtonBar->AddButton(ID_VIEW_SHOWEDGES, "Toggle Edges", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Toggle edge display");
-    displayButtonBar->AddButton(ID_TOGGLE_WIREFRAME, "Toggle Wireframe", SVG_ICON("triangle", wxSize(16, 16)), nullptr, "Toggle wireframe display mode");
-    displayButtonBar->AddButton(ID_TOGGLE_SHADING, "Toggle Shading", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Toggle shading display mode");
-    displayButtonBar->AddButton(ID_SHOW_NORMALS, "Show Normals", SVG_ICON("normals", wxSize(16, 16)), nullptr, "Toggle normal vectors display");
+    displayButtonBar->AddToggleButton(ID_VIEW_SHOWEDGES, "Toggle Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle edge display");
+    displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Toggle Wireframe", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe display mode");
+    displayButtonBar->AddToggleButton(ID_TOGGLE_SHADING, "Toggle Shading", false, SVG_ICON("circle", wxSize(16, 16)), "Toggle shading display mode");
+    displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
     displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
     displayButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");
     displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
@@ -470,8 +470,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
     // Toggle buttons for UI spaces
     FlatUIButtonBar* toggleBar = new FlatUIButtonBar(helpPanel);
     toggleBar->SetDisplayStyle(ButtonDisplayStyle::TEXT_ONLY);
-    toggleBar->AddButton(ID_ToggleFunctionSpace, "ToggleFunc", wxNullBitmap, nullptr, "Toggle function space visibility");
-    toggleBar->AddButton(ID_ToggleProfileSpace, "ToggleProf", wxNullBitmap, nullptr, "Toggle profile space visibility");
+    toggleBar->AddToggleButton(ID_ToggleFunctionSpace, "ToggleFunc", false, wxNullBitmap, "Toggle function space visibility");
+    toggleBar->AddToggleButton(ID_ToggleProfileSpace, "ToggleProf", false, wxNullBitmap, "Toggle profile space visibility");
     helpPanel->AddButtonBar(toggleBar, 0, wxEXPAND | wxALL, 5);
     
     page5->AddPanel(helpPanel); 

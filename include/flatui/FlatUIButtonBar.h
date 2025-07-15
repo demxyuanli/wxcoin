@@ -17,6 +17,15 @@ enum class ButtonDisplayStyle {
     ICON_TEXT_BELOW
 };
 
+enum class ButtonType {
+    NORMAL,         // Standard button
+    TOGGLE,         // Toggle button (on/off state)
+    CHECKBOX,       // Checkbox
+    RADIO,          // Radio button (part of radio group)
+    CHOICE,         // Choice/dropdown control
+    SEPARATOR       // Visual separator
+};
+
 class FlatUIButtonBar : public wxControl
 {
 public:
@@ -47,18 +56,77 @@ public:
         bool pressed = false;
         wxSize textSize; // Cached text extent
         wxString tooltip; // Add tooltip field
+        
+        // Extended properties for new button types
+        ButtonType type = ButtonType::NORMAL;
+        bool checked = false;               // For toggle, checkbox, radio
+        bool enabled = true;                // Control enabled/disabled state
+        int radioGroup = -1;                // Radio button group ID (-1 means no group)
+        wxArrayString choiceItems;          // Items for choice control
+        int selectedChoice = -1;            // Selected item index for choice control
+        wxString value;                     // Current value (for complex controls)
+        
+        // Visual properties
+        wxColour customBgColor = wxNullColour;      // Custom background color
+        wxColour customTextColor = wxNullColour;    // Custom text color
+        wxColour customBorderColor = wxNullColour;  // Custom border color
+        bool visible = true;                        // Control visibility
+        
+        ButtonInfo(int buttonId = wxID_ANY, ButtonType buttonType = ButtonType::NORMAL)
+            : id(buttonId), type(buttonType) {}
     };
 
     FlatUIButtonBar(FlatUIPanel* parent);
     virtual ~FlatUIButtonBar();
 
+    // === BUTTON MANAGEMENT METHODS ===
+    // Original button method
     void AddButton(int id, const wxString& label, const wxBitmap& bitmap = wxNullBitmap, wxMenu* menu = nullptr, const wxString& tooltip = wxEmptyString);
+    
+    // Enhanced button method with type support
+    void AddButton(int id, ButtonType type, const wxString& label, const wxBitmap& bitmap = wxNullBitmap, const wxString& tooltip = wxEmptyString);
+    
+    // Specialized methods for different button types
+    void AddToggleButton(int id, const wxString& label, bool initialState = false, const wxBitmap& bitmap = wxNullBitmap, const wxString& tooltip = wxEmptyString);
+    void AddCheckBox(int id, const wxString& label, bool initialState = false, const wxString& tooltip = wxEmptyString);
+    void AddRadioButton(int id, const wxString& label, int radioGroup, bool initialState = false, const wxString& tooltip = wxEmptyString);
+    void AddChoiceControl(int id, const wxString& label, const wxArrayString& choices, int initialSelection = 0, const wxString& tooltip = wxEmptyString);
+    void AddSeparator();
+    
+    // Control state management
+    void SetButtonChecked(int id, bool checked);
+    bool IsButtonChecked(int id) const;
+    void SetButtonEnabled(int id, bool enabled);
+    bool IsButtonEnabled(int id) const;
+    void SetButtonVisible(int id, bool visible);
+    bool IsButtonVisible(int id) const;
+    
+    // Choice control specific methods
+    void SetChoiceItems(int id, const wxArrayString& items);
+    wxArrayString GetChoiceItems(int id) const;
+    void SetChoiceSelection(int id, int selection);
+    int GetChoiceSelection(int id) const;
+    wxString GetChoiceValue(int id) const;
+    
+    // Radio button group management
+    void SetRadioGroupSelection(int radioGroup, int selectedId);
+    int GetRadioGroupSelection(int radioGroup) const;
+    
+    // Button value and properties
+    void SetButtonValue(int id, const wxString& value);
+    wxString GetButtonValue(int id) const;
+    void SetButtonCustomColors(int id, const wxColour& bgColor, const wxColour& textColor = wxNullColour, const wxColour& borderColor = wxNullColour);
     
     // Add method to set tooltip for existing button
     void SetButtonTooltip(int id, const wxString& tooltip);
+    
+    // Remove button
+    void RemoveButton(int id);
+    void Clear();
 
     size_t GetButtonCount() const { return m_buttons.size(); }
 
+    // === DISPLAY AND LAYOUT METHODS ===
     void SetDisplayStyle(ButtonDisplayStyle style);
     ButtonDisplayStyle GetDisplayStyle() const { return m_displayStyle; }
 
@@ -68,6 +136,7 @@ public:
     void SetButtonBorderStyle(ButtonBorderStyle style);
     ButtonBorderStyle GetButtonBorderStyle() const { return m_buttonBorderStyle; }
 
+    // === STYLE AND COLOR METHODS ===
     void SetButtonBackgroundColour(const wxColour& colour);
     wxColour GetButtonBackgroundColour() const { return m_buttonBgColour; }
 
@@ -143,12 +212,35 @@ private:
     void RecalculateLayout();
     int CalculateButtonWidth(const ButtonInfo& button, wxDC& dc) const;
     void DrawButton(wxDC& dc, const ButtonInfo& button, int index);
-    void DrawButtonBackground(wxDC& dc, const wxRect& rect, bool isHovered, bool isPressed);
-    void DrawButtonBorder(wxDC& dc, const wxRect& rect, bool isHovered, bool isPressed);
+    void DrawButtonBackground(wxDC& dc, const ButtonInfo& button, const wxRect& rect, bool isHovered, bool isPressed);
+    void DrawButtonBorder(wxDC& dc, const ButtonInfo& button, const wxRect& rect, bool isHovered, bool isPressed);
     void DrawButtonIcon(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
     void DrawButtonText(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
     void DrawButtonDropdownArrow(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
-    void DrawButtonSeparator(wxDC& dc, const ButtonInfo& button, const wxRect& rect); // New method
+    void DrawButtonSeparator(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
+    
+    // New drawing methods for extended button types
+    void DrawToggleButton(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
+    void DrawCheckBox(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
+    void DrawRadioButton(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
+    void DrawChoiceControl(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
+    void DrawCheckBoxIndicator(wxDC& dc, const wxRect& rect, bool checked, bool enabled);
+    void DrawRadioButtonIndicator(wxDC& dc, const wxRect& rect, bool checked, bool enabled);
+    void DrawChoiceDropdownArrow(wxDC& dc, const wxRect& rect, bool enabled);
+    
+    // Helper methods
+    ButtonInfo* FindButton(int id);
+    const ButtonInfo* FindButton(int id) const;
+    int FindButtonIndex(int id) const;
+    wxRect GetCheckBoxIndicatorRect(const wxRect& buttonRect) const;
+    wxRect GetRadioButtonIndicatorRect(const wxRect& buttonRect) const;
+    wxRect GetChoiceDropdownRect(const wxRect& buttonRect) const;
+    
+    // Event handling for new button types
+    void HandleToggleButton(ButtonInfo& button);
+    void HandleCheckBox(ButtonInfo& button);
+    void HandleRadioButton(ButtonInfo& button);
+    void HandleChoiceControl(ButtonInfo& button, const wxPoint& mousePos);
 
 
     void OnMouseMove(wxMouseEvent& evt);

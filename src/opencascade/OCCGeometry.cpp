@@ -56,8 +56,16 @@ OCCGeometry::OCCGeometry(const std::string& name)
     m_textureColor = textureSettings.color;
     m_textureIntensity = textureSettings.intensity;
     m_textureEnabled = textureSettings.enabled;
+    m_textureImagePath = textureSettings.imagePath;
     
-    LOG_INF_S("Creating OCC geometry: " + name + " with configured material settings");
+    const auto& blendSettings = config.getBlendSettings();
+    m_blendMode = blendSettings.blendMode;
+    m_depthTest = blendSettings.depthTest;
+    m_depthWrite = blendSettings.depthWrite;
+    m_cullFace = blendSettings.cullFace;
+    m_alphaThreshold = blendSettings.alphaThreshold;
+    
+    LOG_INF_S("Creating OCC geometry: " + name + " with configured material and blend settings");
 }
 
 OCCGeometry::~OCCGeometry()
@@ -249,6 +257,42 @@ void OCCGeometry::setTextureEnabled(bool enabled)
     m_coinNeedsUpdate = true;
 }
 
+void OCCGeometry::setTextureImagePath(const std::string& path)
+{
+    m_textureImagePath = path;
+    m_coinNeedsUpdate = true;
+}
+
+void OCCGeometry::setBlendMode(RenderingConfig::BlendMode mode)
+{
+    m_blendMode = mode;
+    m_coinNeedsUpdate = true;
+}
+
+void OCCGeometry::setDepthTest(bool enabled)
+{
+    m_depthTest = enabled;
+    m_coinNeedsUpdate = true;
+}
+
+void OCCGeometry::setDepthWrite(bool enabled)
+{
+    m_depthWrite = enabled;
+    m_coinNeedsUpdate = true;
+}
+
+void OCCGeometry::setCullFace(bool enabled)
+{
+    m_cullFace = enabled;
+    m_coinNeedsUpdate = true;
+}
+
+void OCCGeometry::setAlphaThreshold(double threshold)
+{
+    m_alphaThreshold = threshold;
+    m_coinNeedsUpdate = true;
+}
+
 SoSeparator* OCCGeometry::getCoinNode()
 {
     LOG_INF_S("Getting Coin3D node for geometry: " + m_name + " - Node exists: " + (m_coinNode ? "yes" : "no") + " - Needs update: " + (m_coinNeedsUpdate ? "yes" : "no"));
@@ -343,20 +387,95 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
     }
     LOG_INF_S("Applied material with rendering settings properties");
 
+    // Apply blend settings - using material transparency instead of SoBlendFunc
+    if (m_blendMode != RenderingConfig::BlendMode::None) {
+        // Set material transparency based on blend mode
+        SoMaterial* material = new SoMaterial;
+        
+        switch (m_blendMode) {
+            case RenderingConfig::BlendMode::Alpha:
+                material->transparency = 0.5f;
+                break;
+            case RenderingConfig::BlendMode::Additive:
+                material->transparency = 0.3f;
+                break;
+            case RenderingConfig::BlendMode::Multiply:
+                material->transparency = 0.4f;
+                break;
+            case RenderingConfig::BlendMode::Screen:
+                material->transparency = 0.6f;
+                break;
+            case RenderingConfig::BlendMode::Overlay:
+                material->transparency = 0.5f;
+                break;
+            default:
+                material->transparency = 0.5f;
+                break;
+        }
+        
+        m_coinNode->addChild(material);
+        LOG_INF_S("Applied blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
+    }
+    
+    // Apply depth and face culling settings
+    if (!m_depthTest || !m_depthWrite || !m_cullFace) {
+        SoShapeHints* customHints = new SoShapeHints;
+        customHints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
+        customHints->shapeType = SoShapeHints::SOLID;
+        customHints->faceType = m_cullFace ? SoShapeHints::CONVEX : SoShapeHints::UNKNOWN_FACE_TYPE;
+        m_coinNode->addChild(customHints);
+        
+        LOG_INF_S("Applied custom blend settings - DepthTest: " + std::string(m_depthTest ? "enabled" : "disabled") + 
+                  ", DepthWrite: " + std::string(m_depthWrite ? "enabled" : "disabled") + 
+                  ", CullFace: " + std::string(m_cullFace ? "enabled" : "disabled"));
+    }
+
     // Apply texture settings if enabled
     if (m_textureEnabled) {
-        unsigned char alpha = static_cast<unsigned char>(255 * (1.0 - m_transparency) * m_textureIntensity);
-        unsigned char r = static_cast<unsigned char>(m_textureColor.Red() * 255);
-        unsigned char g = static_cast<unsigned char>(m_textureColor.Green() * 255);
-        unsigned char b = static_cast<unsigned char>(m_textureColor.Blue() * 255);
-        unsigned char texData[16] = {r, g, b, alpha, r, g, b, alpha, r, g, b, alpha, r, g, b, alpha};
         SoTexture2* texture = new SoTexture2;
         texture->wrapS = SoTexture2::REPEAT;
         texture->wrapT = SoTexture2::REPEAT;
-        texture->model = SoTexture2::DECAL;
-        texture->image.setValue(SbVec2s(2, 2), 4, texData);
+        texture->model = SoTexture2::MODULATE;
+        
+        // Try to load image texture first
+        if (!m_textureImagePath.empty()) {
+            SoInput input;
+            if (input.openFile(m_textureImagePath.c_str())) {
+                SoNode* node = SoDB::readAll(&input);
+                if (node && node->isOfType(SoTexture2::getClassTypeId())) {
+                    // If it's a texture node, copy its image data
+                    SoTexture2* loadedTexture = static_cast<SoTexture2*>(node);
+                    texture->filename.setValue(m_textureImagePath.c_str());
+                    LOG_INF_S("Loaded texture image from file: " + m_textureImagePath);
+                } else {
+                    // Try to load as image file directly
+                    texture->filename.setValue(m_textureImagePath.c_str());
+                    LOG_INF_S("Set texture filename: " + m_textureImagePath);
+                }
+                input.closeFile();
+            } else {
+                LOG_WRN_S("Failed to load texture image: " + m_textureImagePath + ", using color texture");
+                // Fall back to color texture
+                unsigned char alpha = static_cast<unsigned char>(255 * (1.0 - m_transparency) * m_textureIntensity);
+                unsigned char r = static_cast<unsigned char>(m_textureColor.Red() * 255);
+                unsigned char g = static_cast<unsigned char>(m_textureColor.Green() * 255);
+                unsigned char b = static_cast<unsigned char>(m_textureColor.Blue() * 255);
+                unsigned char texData[16] = {r, g, b, alpha, r, g, b, alpha, r, g, b, alpha, r, g, b, alpha};
+                texture->image.setValue(SbVec2s(2, 2), 4, texData);
+                LOG_INF_S("Applied fallback color texture with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
+            }
+        } else {
+            // Use color texture when no image is specified
+            unsigned char alpha = static_cast<unsigned char>(255 * (1.0 - m_transparency) * m_textureIntensity);
+            unsigned char r = static_cast<unsigned char>(m_textureColor.Red() * 255);
+            unsigned char g = static_cast<unsigned char>(m_textureColor.Green() * 255);
+            unsigned char b = static_cast<unsigned char>(m_textureColor.Blue() * 255);
+            unsigned char texData[16] = {r, g, b, alpha, r, g, b, alpha, r, g, b, alpha, r, g, b, alpha};
+            texture->image.setValue(SbVec2s(2, 2), 4, texData);
+            LOG_INF_S("Applied color texture with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
+        }
+        
         m_coinNode->addChild(texture);
-        LOG_INF_S("Applied texture with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
     }
 
     LOG_INF_S("Shape is null: " + std::string(m_shape.IsNull() ? "yes" : "no") + " for geometry: " + m_name);
@@ -775,4 +894,139 @@ void OCCTruncatedCylinder::buildShape()
     catch (const std::exception& e) {
         LOG_ERR_S("Exception in OCCTruncatedCylinder::buildShape for " + m_name + ": " + e.what());
     }
+}
+
+// Shading methods implementation
+void OCCGeometry::setShadingMode(RenderingConfig::ShadingMode mode) {
+    m_shadingModeType = mode;
+    LOG_INF_S("Shading mode set to: " + RenderingConfig::getShadingModeName(mode));
+}
+
+void OCCGeometry::setSmoothNormals(bool enabled) {
+    m_smoothNormals = enabled;
+    LOG_INF_S("Smooth normals " + std::string(enabled ? "enabled" : "disabled"));
+}
+
+void OCCGeometry::setWireframeWidth(double width) {
+    m_wireframeWidth = width;
+    LOG_INF_S("Wireframe width set to: " + std::to_string(width));
+}
+
+void OCCGeometry::setPointSize(double size) {
+    m_pointSize = size;
+    LOG_INF_S("Point size set to: " + std::to_string(size));
+}
+
+// Display methods implementation
+void OCCGeometry::setDisplayMode(RenderingConfig::DisplayMode mode) {
+    m_displayMode = mode;
+    LOG_INF_S("Display mode set to: " + RenderingConfig::getDisplayModeName(mode));
+}
+
+void OCCGeometry::setShowEdges(bool enabled) {
+    m_showEdges = enabled;
+    LOG_INF_S("Show edges " + std::string(enabled ? "enabled" : "disabled"));
+}
+
+void OCCGeometry::setShowVertices(bool enabled) {
+    m_showVertices = enabled;
+    LOG_INF_S("Show vertices " + std::string(enabled ? "enabled" : "disabled"));
+}
+
+void OCCGeometry::setEdgeWidth(double width) {
+    m_edgeWidth = width;
+    LOG_INF_S("Edge width set to: " + std::to_string(width));
+}
+
+void OCCGeometry::setVertexSize(double size) {
+    m_vertexSize = size;
+    LOG_INF_S("Vertex size set to: " + std::to_string(size));
+}
+
+void OCCGeometry::setEdgeColor(const Quantity_Color& color) {
+    m_edgeColor = color;
+    LOG_INF_S("Edge color set");
+}
+
+void OCCGeometry::setVertexColor(const Quantity_Color& color) {
+    m_vertexColor = color;
+    LOG_INF_S("Vertex color set");
+}
+
+// Quality methods implementation
+void OCCGeometry::setRenderingQuality(RenderingConfig::RenderingQuality quality) {
+    m_renderingQuality = quality;
+    LOG_INF_S("Rendering quality set to: " + RenderingConfig::getQualityModeName(quality));
+}
+
+void OCCGeometry::setTessellationLevel(int level) {
+    m_tessellationLevel = level;
+    LOG_INF_S("Tessellation level set to: " + std::to_string(level));
+}
+
+void OCCGeometry::setAntiAliasingSamples(int samples) {
+    m_antiAliasingSamples = samples;
+    LOG_INF_S("Anti-aliasing samples set to: " + std::to_string(samples));
+}
+
+void OCCGeometry::setEnableLOD(bool enabled) {
+    m_enableLOD = enabled;
+    LOG_INF_S("LOD " + std::string(enabled ? "enabled" : "disabled"));
+}
+
+void OCCGeometry::setLODDistance(double distance) {
+    m_lodDistance = distance;
+    LOG_INF_S("LOD distance set to: " + std::to_string(distance));
+}
+
+// Shadow methods implementation
+void OCCGeometry::setShadowMode(RenderingConfig::ShadowMode mode) {
+    m_shadowMode = mode;
+    LOG_INF_S("Shadow mode set to: " + RenderingConfig::getShadowModeName(mode));
+}
+
+void OCCGeometry::setShadowIntensity(double intensity) {
+    m_shadowIntensity = intensity;
+    LOG_INF_S("Shadow intensity set to: " + std::to_string(intensity));
+}
+
+void OCCGeometry::setShadowSoftness(double softness) {
+    m_shadowSoftness = softness;
+    LOG_INF_S("Shadow softness set to: " + std::to_string(softness));
+}
+
+void OCCGeometry::setShadowMapSize(int size) {
+    m_shadowMapSize = size;
+    LOG_INF_S("Shadow map size set to: " + std::to_string(size));
+}
+
+void OCCGeometry::setShadowBias(double bias) {
+    m_shadowBias = bias;
+    LOG_INF_S("Shadow bias set to: " + std::to_string(bias));
+}
+
+// Lighting model methods implementation
+void OCCGeometry::setLightingModel(RenderingConfig::LightingModel model) {
+    m_lightingModel = model;
+    LOG_INF_S("Lighting model set to: " + RenderingConfig::getLightingModelName(model));
+}
+
+void OCCGeometry::setRoughness(double roughness) {
+    m_roughness = roughness;
+    LOG_INF_S("Roughness set to: " + std::to_string(roughness));
+}
+
+void OCCGeometry::setMetallic(double metallic) {
+    m_metallic = metallic;
+    LOG_INF_S("Metallic set to: " + std::to_string(metallic));
+}
+
+void OCCGeometry::setFresnel(double fresnel) {
+    m_fresnel = fresnel;
+    LOG_INF_S("Fresnel set to: " + std::to_string(fresnel));
+}
+
+void OCCGeometry::setSubsurfaceScattering(double scattering) {
+    m_subsurfaceScattering = scattering;
+    LOG_INF_S("Subsurface scattering set to: " + std::to_string(scattering));
 }

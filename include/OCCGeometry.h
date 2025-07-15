@@ -1,6 +1,7 @@
 #pragma once
 
 #include "OCCMeshConverter.h"
+#include "config/RenderingConfig.h"
 #include <string>
 #include <memory>
 #include <vector>
@@ -73,6 +74,108 @@ public:
     
     bool isTextureEnabled() const { return m_textureEnabled; }
     virtual void setTextureEnabled(bool enabled);
+    
+    std::string getTextureImagePath() const { return m_textureImagePath; }
+    virtual void setTextureImagePath(const std::string& path);
+    
+    // Blend settings
+    RenderingConfig::BlendMode getBlendMode() const { return m_blendMode; }
+    virtual void setBlendMode(RenderingConfig::BlendMode mode);
+    
+    bool isDepthTestEnabled() const { return m_depthTest; }
+    virtual void setDepthTest(bool enabled);
+    
+    bool isDepthWriteEnabled() const { return m_depthWrite; }
+    virtual void setDepthWrite(bool enabled);
+    
+    bool isCullFaceEnabled() const { return m_cullFace; }
+    virtual void setCullFace(bool enabled);
+    
+    double getAlphaThreshold() const { return m_alphaThreshold; }
+    virtual void setAlphaThreshold(double threshold);
+
+    // Shading settings
+    RenderingConfig::ShadingMode getShadingMode() const { return m_shadingModeType; }
+    virtual void setShadingMode(RenderingConfig::ShadingMode mode);
+    
+    bool isSmoothNormalsEnabled() const { return m_smoothNormals; }
+    virtual void setSmoothNormals(bool enabled);
+    
+    double getWireframeWidth() const { return m_wireframeWidth; }
+    virtual void setWireframeWidth(double width);
+    
+    double getPointSize() const { return m_pointSize; }
+    virtual void setPointSize(double size);
+    
+    // Display settings
+    RenderingConfig::DisplayMode getDisplayMode() const { return m_displayMode; }
+    virtual void setDisplayMode(RenderingConfig::DisplayMode mode);
+    
+    bool isShowEdgesEnabled() const { return m_showEdges; }
+    virtual void setShowEdges(bool enabled);
+    
+    bool isShowVerticesEnabled() const { return m_showVertices; }
+    virtual void setShowVertices(bool enabled);
+    
+    double getEdgeWidth() const { return m_edgeWidth; }
+    virtual void setEdgeWidth(double width);
+    
+    double getVertexSize() const { return m_vertexSize; }
+    virtual void setVertexSize(double size);
+    
+    Quantity_Color getEdgeColor() const { return m_edgeColor; }
+    virtual void setEdgeColor(const Quantity_Color& color);
+    
+    Quantity_Color getVertexColor() const { return m_vertexColor; }
+    virtual void setVertexColor(const Quantity_Color& color);
+    
+    // Quality settings
+    RenderingConfig::RenderingQuality getRenderingQuality() const { return m_renderingQuality; }
+    virtual void setRenderingQuality(RenderingConfig::RenderingQuality quality);
+    
+    int getTessellationLevel() const { return m_tessellationLevel; }
+    virtual void setTessellationLevel(int level);
+    
+    int getAntiAliasingSamples() const { return m_antiAliasingSamples; }
+    virtual void setAntiAliasingSamples(int samples);
+    
+    bool isLODEnabled() const { return m_enableLOD; }
+    virtual void setEnableLOD(bool enabled);
+    
+    double getLODDistance() const { return m_lodDistance; }
+    virtual void setLODDistance(double distance);
+    
+    // Shadow settings
+    RenderingConfig::ShadowMode getShadowMode() const { return m_shadowMode; }
+    virtual void setShadowMode(RenderingConfig::ShadowMode mode);
+    
+    double getShadowIntensity() const { return m_shadowIntensity; }
+    virtual void setShadowIntensity(double intensity);
+    
+    double getShadowSoftness() const { return m_shadowSoftness; }
+    virtual void setShadowSoftness(double softness);
+    
+    int getShadowMapSize() const { return m_shadowMapSize; }
+    virtual void setShadowMapSize(int size);
+    
+    double getShadowBias() const { return m_shadowBias; }
+    virtual void setShadowBias(double bias);
+    
+    // Lighting model settings
+    RenderingConfig::LightingModel getLightingModel() const { return m_lightingModel; }
+    virtual void setLightingModel(RenderingConfig::LightingModel model);
+    
+    double getRoughness() const { return m_roughness; }
+    virtual void setRoughness(double roughness);
+    
+    double getMetallic() const { return m_metallic; }
+    virtual void setMetallic(double metallic);
+    
+    double getFresnel() const { return m_fresnel; }
+    virtual void setFresnel(double fresnel);
+    
+    double getSubsurfaceScattering() const { return m_subsurfaceScattering; }
+    virtual void setSubsurfaceScattering(double scattering);
 
     // Display modes
     bool isWireframeMode() const { return m_wireframeMode; }
@@ -113,6 +216,50 @@ protected:
     Quantity_Color m_textureColor;
     double m_textureIntensity;
     bool m_textureEnabled;
+    std::string m_textureImagePath;
+    
+    // Blend properties
+    RenderingConfig::BlendMode m_blendMode;
+    bool m_depthTest;
+    bool m_depthWrite;
+    bool m_cullFace;
+    double m_alphaThreshold;
+    
+    // Shading settings
+    RenderingConfig::ShadingMode m_shadingModeType;
+    bool m_smoothNormals;
+    double m_wireframeWidth;
+    double m_pointSize;
+    
+    // Display settings
+    RenderingConfig::DisplayMode m_displayMode;
+    bool m_showEdges;
+    bool m_showVertices;
+    double m_edgeWidth;
+    double m_vertexSize;
+    Quantity_Color m_edgeColor;
+    Quantity_Color m_vertexColor;
+    
+    // Quality settings
+    RenderingConfig::RenderingQuality m_renderingQuality;
+    int m_tessellationLevel;
+    int m_antiAliasingSamples;
+    bool m_enableLOD;
+    double m_lodDistance;
+    
+    // Shadow settings
+    RenderingConfig::ShadowMode m_shadowMode;
+    double m_shadowIntensity;
+    double m_shadowSoftness;
+    int m_shadowMapSize;
+    double m_shadowBias;
+    
+    // Lighting model settings
+    RenderingConfig::LightingModel m_lightingModel;
+    double m_roughness;
+    double m_metallic;
+    double m_fresnel;
+    double m_subsurfaceScattering;
     
     // Display modes
     bool m_wireframeMode;
