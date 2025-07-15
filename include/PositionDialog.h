@@ -37,7 +37,7 @@ struct GeometryParameters {
     
     // Cone parameters
     double bottomRadius = 1.0;
-    double topRadius = 0.5;
+    double topRadius = 0.0;
     double coneHeight = 2.0;
     
     // Torus parameters

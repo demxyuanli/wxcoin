@@ -2,6 +2,7 @@
 #include "SceneManager.h"
 #include "NavigationCubeManager.h"
 #include "logger/Logger.h"
+#include "config/RenderingConfig.h"
 #include <wx/msgdlg.h>
 #include <stdexcept>
 #include <GL/gl.h>
@@ -17,7 +18,17 @@ RenderingEngine::RenderingEngine(wxGLCanvas* canvas)
     , m_isRendering(false)
     , m_lastRenderTime(0)
 {
-    LOG_INF_S("RenderingEngine::RenderingEngine: Initializing");
+    // Load lighting settings from configuration
+    RenderingConfig& config = RenderingConfig::getInstance();
+    const auto& lightingSettings = config.getLightingSettings();
+    
+    m_lightAmbientColor = lightingSettings.ambientColor;
+    m_lightDiffuseColor = lightingSettings.diffuseColor;
+    m_lightSpecularColor = lightingSettings.specularColor;
+    m_lightIntensity = lightingSettings.intensity;
+    m_lightAmbientIntensity = lightingSettings.ambientIntensity;
+    
+    LOG_INF_S("RenderingEngine::RenderingEngine: Initializing with configured lighting settings");
 }
 
 RenderingEngine::~RenderingEngine() {
@@ -170,4 +181,44 @@ void RenderingEngine::updateViewport(const wxSize& size, float dpiScale) {
     }
     
     glViewport(0, 0, static_cast<int>(size.x * dpiScale), static_cast<int>(size.y * dpiScale));
-} 
+}
+
+// Lighting settings methods
+void RenderingEngine::setLightAmbientColor(const Quantity_Color& color)
+{
+    m_lightAmbientColor = color;
+    LOG_INF_S("RenderingEngine: Set light ambient color to (" + 
+             std::to_string(color.Red()) + ", " + 
+             std::to_string(color.Green()) + ", " + 
+             std::to_string(color.Blue()) + ")");
+}
+
+void RenderingEngine::setLightDiffuseColor(const Quantity_Color& color)
+{
+    m_lightDiffuseColor = color;
+    LOG_INF_S("RenderingEngine: Set light diffuse color to (" + 
+             std::to_string(color.Red()) + ", " + 
+             std::to_string(color.Green()) + ", " + 
+             std::to_string(color.Blue()) + ")");
+}
+
+void RenderingEngine::setLightSpecularColor(const Quantity_Color& color)
+{
+    m_lightSpecularColor = color;
+    LOG_INF_S("RenderingEngine: Set light specular color to (" + 
+             std::to_string(color.Red()) + ", " + 
+             std::to_string(color.Green()) + ", " + 
+             std::to_string(color.Blue()) + ")");
+}
+
+void RenderingEngine::setLightIntensity(double intensity)
+{
+    m_lightIntensity = std::max(0.0, std::min(1.0, intensity));
+    LOG_INF_S("RenderingEngine: Set light intensity to " + std::to_string(m_lightIntensity));
+}
+
+void RenderingEngine::setLightAmbientIntensity(double intensity)
+{
+    m_lightAmbientIntensity = std::max(0.0, std::min(1.0, intensity));
+    LOG_INF_S("RenderingEngine: Set light ambient intensity to " + std::to_string(m_lightAmbientIntensity));
+}

@@ -40,6 +40,9 @@ enum class CommandType {
     FixNormals,
     ShowEdges,
     SetTransparency,
+    ToggleWireframe,
+    ToggleShading,
+    ToggleEdges,
 
 
 
@@ -51,6 +54,7 @@ enum class CommandType {
     NavCubeConfig,
     ZoomSpeed,
     MeshQualityDialog,
+    RenderingSettings,
 
     // Help
     HelpAbout,
@@ -88,6 +92,9 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::FixNormals, "FIX_NORMALS"},
         {CommandType::ShowEdges, "SHOW_EDGES"},
         {CommandType::SetTransparency, "SET_TRANSPARENCY"},
+        {CommandType::ToggleWireframe, "TOGGLE_WIREFRAME"},
+        {CommandType::ToggleShading, "TOGGLE_SHADING"},
+        {CommandType::ToggleEdges, "TOGGLE_EDGES"},
 
 
 
@@ -97,6 +104,7 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::NavCubeConfig, "NAV_CUBE_CONFIG"},
         {CommandType::ZoomSpeed, "ZOOM_SPEED"},
         {CommandType::MeshQualityDialog, "MESH_QUALITY_DIALOG"},
+        {CommandType::RenderingSettings, "RENDERING_SETTINGS"},
 
         {CommandType::HelpAbout, "HELP_ABOUT"},
 
@@ -134,6 +142,9 @@ inline CommandType from_string(const std::string& str) {
         {"FIX_NORMALS", CommandType::FixNormals},
         {"SHOW_EDGES", CommandType::ShowEdges},
         {"SET_TRANSPARENCY", CommandType::SetTransparency},
+        {"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
+        {"TOGGLE_SHADING", CommandType::ToggleShading},
+        {"TOGGLE_EDGES", CommandType::ToggleEdges},
 
 
 
@@ -143,6 +154,7 @@ inline CommandType from_string(const std::string& str) {
         {"NAV_CUBE_CONFIG", CommandType::NavCubeConfig},
         {"ZOOM_SPEED", CommandType::ZoomSpeed},
         {"MESH_QUALITY_DIALOG", CommandType::MeshQualityDialog},
+        {"RENDERING_SETTINGS", CommandType::RenderingSettings},
 
         {"HELP_ABOUT", CommandType::HelpAbout}
     };

@@ -36,6 +36,7 @@
 #include "CommandListenerManager.h"
 #include "MeshQualityDialog.h"
 #include "MeshQualityDialogListener.h"
+#include "RenderingSettingsListener.h"
 // Add other command listeners includes...
 #include <unordered_map>
 #include "CommandType.h"  // for cmd::CommandType
@@ -70,6 +71,7 @@
 #include "FixNormalsListener.h"
 #include "ShowEdgesListener.h"
 #include "SetTransparencyListener.h"
+#include "ViewModeListener.h"
 
 #include "UndoListener.h"
 #include "RedoListener.h"
@@ -119,12 +121,16 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_SHOW_NORMALS, FlatFrame::onCommand)
     EVT_BUTTON(ID_FIX_NORMALS, FlatFrame::onCommand)
     EVT_BUTTON(ID_SET_TRANSPARENCY, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TOGGLE_WIREFRAME, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TOGGLE_SHADING, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TOGGLE_EDGES, FlatFrame::onCommand)
 
     EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_NAVIGATION_CUBE_CONFIG, FlatFrame::onCommand)
     EVT_BUTTON(ID_ZOOM_SPEED, FlatFrame::onCommand)
     EVT_BUTTON(ID_MESH_QUALITY_DIALOG, FlatFrame::onCommand)
+    EVT_BUTTON(ID_RENDERING_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_SHOWEDGES, FlatFrame::onCommand)
     EVT_CLOSE(FlatFrame::onClose)
@@ -155,6 +161,9 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_SHOW_NORMALS, cmd::CommandType::ShowNormals},
     {ID_FIX_NORMALS, cmd::CommandType::FixNormals},
     {ID_SET_TRANSPARENCY, cmd::CommandType::SetTransparency},
+    {ID_TOGGLE_WIREFRAME, cmd::CommandType::ToggleWireframe},
+    {ID_TOGGLE_SHADING, cmd::CommandType::ToggleShading},
+    {ID_TOGGLE_EDGES, cmd::CommandType::ToggleEdges},
 
     {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
     {ID_UNDO, cmd::CommandType::Undo},
@@ -162,6 +171,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_NAVIGATION_CUBE_CONFIG, cmd::CommandType::NavCubeConfig},
     {ID_ZOOM_SPEED, cmd::CommandType::ZoomSpeed},
     {ID_MESH_QUALITY_DIALOG, cmd::CommandType::MeshQualityDialog},
+    {ID_RENDERING_SETTINGS, cmd::CommandType::RenderingSettings},
     {wxID_ABOUT, cmd::CommandType::HelpAbout}
 };
 
@@ -413,7 +423,9 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
     displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    displayButtonBar->AddButton(ID_VIEW_SHOWEDGES, "Show Edges", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Toggle edge display");
+    displayButtonBar->AddButton(ID_VIEW_SHOWEDGES, "Toggle Edges", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Toggle edge display");
+    displayButtonBar->AddButton(ID_TOGGLE_WIREFRAME, "Toggle Wireframe", SVG_ICON("triangle", wxSize(16, 16)), nullptr, "Toggle wireframe display mode");
+    displayButtonBar->AddButton(ID_TOGGLE_SHADING, "Toggle Shading", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Toggle shading display mode");
     displayButtonBar->AddButton(ID_SHOW_NORMALS, "Show Normals", SVG_ICON("normals", wxSize(16, 16)), nullptr, "Toggle normal vectors display");
     displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
     displayButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");
@@ -433,6 +445,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     FlatUIButtonBar* toolsButtonBar = new FlatUIButtonBar(toolsPanel);
     toolsButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
     toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open mesh quality dialog");
+    toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
     toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
     toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
     toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
@@ -605,7 +618,8 @@ void FlatFrame::setupCommandSystem() {
     auto showNormalsListener = std::make_shared<ShowNormalsListener>(m_occViewer);
     auto fixNormalsListener = std::make_shared<FixNormalsListener>(m_occViewer);
     auto showEdgesListener = std::make_shared<ShowEdgesListener>(m_occViewer);
-    auto setTransparencyListener = std::make_shared<SetTransparencyListener>(m_occViewer);
+    auto setTransparencyListener = std::make_shared<SetTransparencyListener>(this, m_occViewer);
+    auto viewModeListener = std::make_shared<ViewModeListener>(m_occViewer);
 
     
     // Register view command listeners
@@ -618,6 +632,9 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowEdges, showEdgesListener);
     m_listenerManager->registerListener(cmd::CommandType::SetTransparency, setTransparencyListener);
+    m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, viewModeListener);
+    m_listenerManager->registerListener(cmd::CommandType::ToggleShading, viewModeListener);
+    m_listenerManager->registerListener(cmd::CommandType::ToggleEdges, viewModeListener);
 
     
     // Register file command listeners
@@ -639,6 +656,7 @@ void FlatFrame::setupCommandSystem() {
     auto zoomSpeedListener = std::make_shared<ZoomSpeedListener>(this, m_canvas);
     auto fileExitListener = std::make_shared<FileExitListener>(this);
     auto meshQualityDialogListener = std::make_shared<MeshQualityDialogListener>(this, m_occViewer);
+    auto renderingSettingsListener = std::make_shared<RenderingSettingsListener>(m_occViewer, m_canvas->getRenderingEngine());
     
     m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
     m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
@@ -647,6 +665,7 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::ZoomSpeed, zoomSpeedListener);
     m_listenerManager->registerListener(cmd::CommandType::FileExit, fileExitListener);
     m_listenerManager->registerListener(cmd::CommandType::MeshQualityDialog, meshQualityDialogListener);
+    m_listenerManager->registerListener(cmd::CommandType::RenderingSettings, renderingSettingsListener);
     
     // Set UI feedback handler
     m_commandDispatcher->setUIFeedbackHandler(

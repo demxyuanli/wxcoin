@@ -1,0 +1,333 @@
+#include "config/RenderingConfig.h"
+#include "logger/Logger.h"
+#include <fstream>
+#include <sstream>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+
+RenderingConfig& RenderingConfig::getInstance()
+{
+    static RenderingConfig instance;
+    return instance;
+}
+
+RenderingConfig::RenderingConfig()
+    : m_autoSave(true)
+{
+    // Load configuration from file on startup
+    loadFromFile();
+}
+
+std::string RenderingConfig::getConfigFilePath() const
+{
+    wxStandardPaths& paths = wxStandardPaths::Get();
+    wxString configDir = paths.GetUserConfigDir();
+    wxString appName = wxTheApp->GetAppName();
+    
+    wxFileName configFile(configDir, "rendering_settings.ini");
+    configFile.AppendDir(appName);
+    
+    // Create directory if it doesn't exist
+    if (!configFile.DirExists()) {
+        configFile.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    }
+    
+    return configFile.GetFullPath().ToStdString();
+}
+
+bool RenderingConfig::loadFromFile(const std::string& filename)
+{
+    std::string configPath = filename.empty() ? getConfigFilePath() : filename;
+    std::ifstream file(configPath);
+    
+    if (!file.is_open()) {
+        LOG_INF_S("RenderingConfig: No config file found, using defaults: " + configPath);
+        return false;
+    }
+    
+    LOG_INF_S("RenderingConfig: Loading configuration from: " + configPath);
+    
+    std::string line;
+    std::string section;
+    
+    while (std::getline(file, line)) {
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#' || line[0] == ';') {
+            continue;
+        }
+        
+        // Check for section headers
+        if (line[0] == '[' && line.back() == ']') {
+            section = line.substr(1, line.length() - 2);
+            continue;
+        }
+        
+        // Parse key=value pairs
+        size_t pos = line.find('=');
+        if (pos == std::string::npos) {
+            continue;
+        }
+        
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 1);
+        
+        // Remove whitespace
+        key.erase(0, key.find_first_not_of(" \t"));
+        key.erase(key.find_last_not_of(" \t") + 1);
+        value.erase(0, value.find_first_not_of(" \t"));
+        value.erase(value.find_last_not_of(" \t") + 1);
+        
+        // Parse values based on section
+        if (section == "Material") {
+            if (key == "AmbientColor") {
+                m_materialSettings.ambientColor = parseColor(value, m_materialSettings.ambientColor);
+            } else if (key == "DiffuseColor") {
+                m_materialSettings.diffuseColor = parseColor(value, m_materialSettings.diffuseColor);
+            } else if (key == "SpecularColor") {
+                m_materialSettings.specularColor = parseColor(value, m_materialSettings.specularColor);
+            } else if (key == "Shininess") {
+                m_materialSettings.shininess = std::stod(value);
+            } else if (key == "Transparency") {
+                m_materialSettings.transparency = std::stod(value);
+            }
+        } else if (section == "Lighting") {
+            if (key == "AmbientColor") {
+                m_lightingSettings.ambientColor = parseColor(value, m_lightingSettings.ambientColor);
+            } else if (key == "DiffuseColor") {
+                m_lightingSettings.diffuseColor = parseColor(value, m_lightingSettings.diffuseColor);
+            } else if (key == "SpecularColor") {
+                m_lightingSettings.specularColor = parseColor(value, m_lightingSettings.specularColor);
+            } else if (key == "Intensity") {
+                m_lightingSettings.intensity = std::stod(value);
+            } else if (key == "AmbientIntensity") {
+                m_lightingSettings.ambientIntensity = std::stod(value);
+            }
+        } else if (section == "Texture") {
+            if (key == "Color") {
+                m_textureSettings.color = parseColor(value, m_textureSettings.color);
+            } else if (key == "Intensity") {
+                m_textureSettings.intensity = std::stod(value);
+            } else if (key == "Enabled") {
+                m_textureSettings.enabled = (value == "true" || value == "1");
+            }
+        }
+    }
+    
+    file.close();
+    LOG_INF_S("RenderingConfig: Configuration loaded successfully");
+    return true;
+}
+
+bool RenderingConfig::saveToFile(const std::string& filename) const
+{
+    std::string configPath = filename.empty() ? getConfigFilePath() : filename;
+    std::ofstream file(configPath);
+    
+    if (!file.is_open()) {
+        LOG_ERR_S("RenderingConfig: Failed to save configuration to: " + configPath);
+        return false;
+    }
+    
+    LOG_INF_S("RenderingConfig: Saving configuration to: " + configPath);
+    
+    // Write header
+    file << "# Rendering Settings Configuration\n";
+    file << "# This file is automatically generated\n\n";
+    
+    // Write Material section
+    file << "[Material]\n";
+    file << "AmbientColor=" << colorToString(m_materialSettings.ambientColor) << "\n";
+    file << "DiffuseColor=" << colorToString(m_materialSettings.diffuseColor) << "\n";
+    file << "SpecularColor=" << colorToString(m_materialSettings.specularColor) << "\n";
+    file << "Shininess=" << m_materialSettings.shininess << "\n";
+    file << "Transparency=" << m_materialSettings.transparency << "\n\n";
+    
+    // Write Lighting section
+    file << "[Lighting]\n";
+    file << "AmbientColor=" << colorToString(m_lightingSettings.ambientColor) << "\n";
+    file << "DiffuseColor=" << colorToString(m_lightingSettings.diffuseColor) << "\n";
+    file << "SpecularColor=" << colorToString(m_lightingSettings.specularColor) << "\n";
+    file << "Intensity=" << m_lightingSettings.intensity << "\n";
+    file << "AmbientIntensity=" << m_lightingSettings.ambientIntensity << "\n\n";
+    
+    // Write Texture section
+    file << "[Texture]\n";
+    file << "Color=" << colorToString(m_textureSettings.color) << "\n";
+    file << "Intensity=" << m_textureSettings.intensity << "\n";
+    file << "Enabled=" << (m_textureSettings.enabled ? "true" : "false") << "\n";
+    
+    file.close();
+    LOG_INF_S("RenderingConfig: Configuration saved successfully");
+    return true;
+}
+
+Quantity_Color RenderingConfig::parseColor(const std::string& value, const Quantity_Color& defaultValue) const
+{
+    std::istringstream iss(value);
+    std::string token;
+    std::vector<double> components;
+    
+    while (std::getline(iss, token, ',')) {
+        token.erase(0, token.find_first_not_of(" \t"));
+        token.erase(token.find_last_not_of(" \t") + 1);
+        try {
+            components.push_back(std::stod(token));
+        } catch (const std::exception& e) {
+            LOG_ERR_S("RenderingConfig: Failed to parse color component: " + token);
+            return defaultValue;
+        }
+    }
+    
+    if (components.size() >= 3) {
+        return Quantity_Color(components[0], components[1], components[2], Quantity_TOC_RGB);
+    }
+    
+    return defaultValue;
+}
+
+std::string RenderingConfig::colorToString(const Quantity_Color& color) const
+{
+    std::ostringstream oss;
+    oss << color.Red() << "," << color.Green() << "," << color.Blue();
+    return oss.str();
+}
+
+// Setters with auto-save
+void RenderingConfig::setMaterialSettings(const MaterialSettings& settings)
+{
+    m_materialSettings = settings;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setLightingSettings(const LightingSettings& settings)
+{
+    m_lightingSettings = settings;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setTextureSettings(const TextureSettings& settings)
+{
+    m_textureSettings = settings;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setMaterialAmbientColor(const Quantity_Color& color)
+{
+    m_materialSettings.ambientColor = color;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setMaterialDiffuseColor(const Quantity_Color& color)
+{
+    m_materialSettings.diffuseColor = color;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setMaterialSpecularColor(const Quantity_Color& color)
+{
+    m_materialSettings.specularColor = color;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setMaterialShininess(double shininess)
+{
+    m_materialSettings.shininess = shininess;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setMaterialTransparency(double transparency)
+{
+    m_materialSettings.transparency = transparency;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setLightAmbientColor(const Quantity_Color& color)
+{
+    m_lightingSettings.ambientColor = color;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setLightDiffuseColor(const Quantity_Color& color)
+{
+    m_lightingSettings.diffuseColor = color;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setLightSpecularColor(const Quantity_Color& color)
+{
+    m_lightingSettings.specularColor = color;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setLightIntensity(double intensity)
+{
+    m_lightingSettings.intensity = intensity;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setLightAmbientIntensity(double intensity)
+{
+    m_lightingSettings.ambientIntensity = intensity;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setTextureColor(const Quantity_Color& color)
+{
+    m_textureSettings.color = color;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setTextureIntensity(double intensity)
+{
+    m_textureSettings.intensity = intensity;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setTextureEnabled(bool enabled)
+{
+    m_textureSettings.enabled = enabled;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::resetToDefaults()
+{
+    m_materialSettings = MaterialSettings();
+    m_lightingSettings = LightingSettings();
+    m_textureSettings = TextureSettings();
+    
+    if (m_autoSave) {
+        saveToFile();
+    }
+} 

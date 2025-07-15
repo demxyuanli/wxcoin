@@ -13,6 +13,7 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FixNormalsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ShowEdgesListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SetTransparencyListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ViewModeListener.cpp
 
     ${CMAKE_CURRENT_SOURCE_DIR}/FileNewListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ImportStepListener.cpp
@@ -34,6 +35,7 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FileExitListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CommandListenerManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialogListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -63,6 +65,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FixNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowEdgesListener.h
     ${CMAKE_SOURCE_DIR}/include/SetTransparencyListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewModeListener.h
 
     ${CMAKE_SOURCE_DIR}/include/UndoListener.h
     ${CMAKE_SOURCE_DIR}/include/RedoListener.h
@@ -72,6 +75,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FileExitListener.h
     ${CMAKE_SOURCE_DIR}/include/CommandListenerManager.h
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialogListener.h
+    ${CMAKE_SOURCE_DIR}/include/RenderingSettingsListener.h
 )
 
 # Create command static library

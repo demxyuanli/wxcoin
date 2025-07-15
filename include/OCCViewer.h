@@ -88,6 +88,9 @@ public:
     void setNormalLength(double length);
     void setNormalColor(const Quantity_Color& correct, const Quantity_Color& incorrect);
     void updateNormalsDisplay();
+    
+    // View refresh
+    void requestViewRefresh();
 
 private:
     void initializeViewer();

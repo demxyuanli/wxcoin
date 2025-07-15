@@ -6,17 +6,16 @@
 #include <unordered_map>
 #include <string>
 
-class SetTransparencyListener : public CommandListener
+class ViewModeListener : public CommandListener
 {
 public:
-    SetTransparencyListener(wxFrame* frame, OCCViewer* viewer);
-    virtual ~SetTransparencyListener() = default;
+    ViewModeListener(OCCViewer* viewer);
+    virtual ~ViewModeListener() = default;
 
     CommandResult executeCommand(const std::string& commandType, const std::unordered_map<std::string, std::string>& parameters) override;
     bool canHandleCommand(const std::string& commandType) const override;
     std::string getListenerName() const override;
 
 private:
-    wxFrame* m_frame;
     OCCViewer* m_viewer;
 }; 

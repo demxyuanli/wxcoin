@@ -11,6 +11,7 @@
 #include "logger/Logger.h"
 #include "Canvas.h"
 #include "ObjectTreePanel.h"
+#include "ViewRefreshManager.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
@@ -248,7 +249,14 @@ void OCCViewer::setGeometryColor(const std::string& name, const Quantity_Color& 
 
 void OCCViewer::setGeometryTransparency(const std::string& name, double transparency)
 {
-    if (auto g = findGeometry(name)) g->setTransparency(transparency);
+    if (auto g = findGeometry(name)) {
+        g->setTransparency(transparency);
+        // Request view refresh after transparency change
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            Canvas* canvas = m_sceneManager->getCanvas();
+            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
+        }
+    }
 }
 
 void OCCViewer::hideAll()
@@ -353,11 +361,39 @@ std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
 void OCCViewer::setWireframeMode(bool wireframe)
 {
     m_wireframeMode = wireframe;
+    // Update all geometries to wireframe mode
+    for (auto& geometry : m_geometries) {
+        if (geometry) {
+            geometry->setWireframeMode(wireframe);
+        }
+    }
+    
+    // Request view refresh
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
+        if (refreshManager) {
+            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
+        }
+    }
 }
 
 void OCCViewer::setShadingMode(bool shaded)
 {
     m_shadingMode = shaded;
+    // Update all geometries to shading mode
+    for (auto& geometry : m_geometries) {
+        if (geometry) {
+            geometry->setShadingMode(shaded);
+        }
+    }
+    
+    // Request view refresh
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
+        if (refreshManager) {
+            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
+        }
+    }
 }
 
 void OCCViewer::setShowEdges(bool showEdges)
@@ -685,5 +721,13 @@ void OCCViewer::startLODInteraction()
         
         // Start timer to switch back to fine mode
         m_lodTimer.Start(m_lodTransitionTime, wxTIMER_ONE_SHOT);
+    }
+}
+
+void OCCViewer::requestViewRefresh()
+{
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
     }
 }

@@ -51,6 +51,35 @@ public:
     double getTransparency() const { return m_transparency; }
     virtual void setTransparency(double transparency);
 
+    // Material properties
+    Quantity_Color getMaterialAmbientColor() const { return m_materialAmbientColor; }
+    virtual void setMaterialAmbientColor(const Quantity_Color& color);
+    
+    Quantity_Color getMaterialDiffuseColor() const { return m_materialDiffuseColor; }
+    virtual void setMaterialDiffuseColor(const Quantity_Color& color);
+    
+    Quantity_Color getMaterialSpecularColor() const { return m_materialSpecularColor; }
+    virtual void setMaterialSpecularColor(const Quantity_Color& color);
+    
+    double getMaterialShininess() const { return m_materialShininess; }
+    virtual void setMaterialShininess(double shininess);
+
+    // Texture properties
+    Quantity_Color getTextureColor() const { return m_textureColor; }
+    virtual void setTextureColor(const Quantity_Color& color);
+    
+    double getTextureIntensity() const { return m_textureIntensity; }
+    virtual void setTextureIntensity(double intensity);
+    
+    bool isTextureEnabled() const { return m_textureEnabled; }
+    virtual void setTextureEnabled(bool enabled);
+
+    // Display modes
+    bool isWireframeMode() const { return m_wireframeMode; }
+    virtual void setWireframeMode(bool wireframe);
+    bool isShadingMode() const { return m_shadingMode; }
+    virtual void setShadingMode(bool shaded);
+
     // Coin3D integration
     SoSeparator* getCoinNode();
     void regenerateMesh(const OCCMeshConverter::MeshParameters& params);
@@ -73,6 +102,21 @@ protected:
     bool m_selected;
     Quantity_Color m_color;
     double m_transparency;
+    
+    // Material properties
+    Quantity_Color m_materialAmbientColor;
+    Quantity_Color m_materialDiffuseColor;
+    Quantity_Color m_materialSpecularColor;
+    double m_materialShininess;
+    
+    // Texture properties
+    Quantity_Color m_textureColor;
+    double m_textureIntensity;
+    bool m_textureEnabled;
+    
+    // Display modes
+    bool m_wireframeMode;
+    bool m_shadingMode;
     
     // Coin3D representation
     SoSeparator* m_coinNode;
