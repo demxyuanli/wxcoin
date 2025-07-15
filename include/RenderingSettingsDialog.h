@@ -45,6 +45,7 @@ public:
     double getTextureIntensity() const { return m_textureIntensity; }
     bool isTextureEnabled() const { return m_textureEnabled; }
     std::string getTextureImagePath() const { return m_textureImagePath; }
+    RenderingConfig::TextureMode getTextureMode() const { return m_textureMode; }
     
     // Blend settings
     RenderingConfig::BlendMode getBlendMode() const { return m_blendMode; }
@@ -124,6 +125,7 @@ private:
     void onTextureIntensitySlider(wxCommandEvent& event);
     void onTextureEnabledCheckbox(wxCommandEvent& event);
     void onTextureImageButton(wxCommandEvent& event);
+    void onTextureModeChoice(wxCommandEvent& event);
     
     // Blend events
     void onBlendModeChoice(wxCommandEvent& event);
@@ -220,6 +222,7 @@ private:
     wxButton* m_textureImageButton;
     wxStaticBitmap* m_texturePreview;
     wxStaticText* m_texturePathLabel;
+    wxChoice* m_textureModeChoice;
     
     // Blend page
     wxPanel* m_blendPage;
@@ -309,6 +312,7 @@ private:
     double m_textureIntensity;
     bool m_textureEnabled;
     std::string m_textureImagePath;
+    RenderingConfig::TextureMode m_textureMode;
     
     RenderingConfig::BlendMode m_blendMode;
     bool m_depthTest;

@@ -49,17 +49,28 @@ public:
         {}
     };
     
+    // Texture mode enumeration
+    enum class TextureMode {
+        Replace,        // Replace base color with texture (default)
+        Modulate,       // Multiply texture with base color
+        Decal,          // Apply texture as decal over base color
+        Blend,          // Blend texture with base color
+        Add             // Add texture to base color
+    };
+
     struct TextureSettings {
         Quantity_Color color;
         double intensity;
         bool enabled;
         std::string imagePath;  // Path to texture image file
+        TextureMode textureMode;
         
         TextureSettings()
             : color(1.0, 1.0, 1.0, Quantity_TOC_RGB)
             , intensity(0.5)
             , enabled(false)
             , imagePath("")
+            , textureMode(TextureMode::Modulate)
         {}
     };
 
@@ -282,6 +293,7 @@ public:
     void setTextureIntensity(double intensity);
     void setTextureEnabled(bool enabled);
     void setTextureImagePath(const std::string& path);
+    void setTextureMode(TextureMode mode);
     
     void setBlendMode(BlendMode mode);
     void setDepthTest(bool enabled);
@@ -293,6 +305,11 @@ public:
     static std::vector<std::string> getAvailableBlendModes();
     static std::string getBlendModeName(BlendMode mode);
     static BlendMode getBlendModeFromName(const std::string& name);
+    
+    // Texture mode utility methods
+    static std::vector<std::string> getAvailableTextureModes();
+    static std::string getTextureModeName(TextureMode mode);
+    static TextureMode getTextureModeFromName(const std::string& name);
     
     // Shading mode individual setters
     void setShadingMode(ShadingMode mode);

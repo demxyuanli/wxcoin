@@ -45,6 +45,7 @@ RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* oc
     m_textureIntensity = textureSettings.intensity;
     m_textureEnabled = textureSettings.enabled;
     m_textureImagePath = textureSettings.imagePath;
+    m_textureMode = textureSettings.textureMode;
     
     m_blendMode = blendSettings.blendMode;
     m_depthTest = blendSettings.depthTest;
@@ -271,6 +272,14 @@ void RenderingSettingsDialog::createTexturePage()
     m_textureIntensitySlider = new wxSlider(m_texturePage, wxID_ANY, 50, 0, 100, wxDefaultPosition, wxSize(200, -1));
     m_textureIntensityLabel = new wxStaticText(m_texturePage, wxID_ANY, "50%");
     
+    // Texture mode choice
+    m_textureModeChoice = new wxChoice(m_texturePage, wxID_ANY);
+    auto textureModes = RenderingConfig::getAvailableTextureModes();
+    for (const auto& mode : textureModes) {
+        m_textureModeChoice->Append(mode);
+    }
+    m_textureModeChoice->SetSelection(static_cast<int>(m_textureMode));
+    
     // Layout texture page
     wxBoxSizer* textureSizer = new wxBoxSizer(wxVERTICAL);
     
@@ -289,7 +298,7 @@ void RenderingSettingsDialog::createTexturePage()
     textureSizer->Add(imageSizer, 0, wxEXPAND | wxALL, 10);
     
     // Settings section
-    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(2, 3, 10, 10);
+    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(3, 3, 10, 10);
     gridSizer->AddGrowableCol(1);
     
     gridSizer->Add(new wxStaticText(m_texturePage, wxID_ANY, "Texture Color:"), 0, wxALIGN_CENTER_VERTICAL);
@@ -299,6 +308,10 @@ void RenderingSettingsDialog::createTexturePage()
     gridSizer->Add(new wxStaticText(m_texturePage, wxID_ANY, "Texture Intensity:"), 0, wxALIGN_CENTER_VERTICAL);
     gridSizer->Add(m_textureIntensitySlider, 0, wxEXPAND);
     gridSizer->Add(m_textureIntensityLabel, 0, wxALIGN_CENTER_VERTICAL);
+    
+    gridSizer->Add(new wxStaticText(m_texturePage, wxID_ANY, "Texture Mode:"), 0, wxALIGN_CENTER_VERTICAL);
+    gridSizer->Add(m_textureModeChoice, 0, wxEXPAND);
+    gridSizer->Add(new wxStaticText(m_texturePage, wxID_ANY, ""), 0);
     
     textureSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_texturePage->SetSizer(textureSizer);
@@ -776,6 +789,7 @@ void RenderingSettingsDialog::bindEvents()
     m_textureIntensitySlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onTextureIntensitySlider, this);
     m_textureEnabledCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onTextureEnabledCheckbox, this);
     m_textureImageButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &RenderingSettingsDialog::onTextureImageButton, this);
+    m_textureModeChoice->Bind(wxEVT_COMMAND_CHOICE_SELECTED, &RenderingSettingsDialog::onTextureModeChoice, this);
     
     // Blend events
     m_blendModeChoice->Bind(wxEVT_COMMAND_CHOICE_SELECTED, &RenderingSettingsDialog::onBlendModeChoice, this);
@@ -848,6 +862,7 @@ void RenderingSettingsDialog::updateControls()
     m_textureIntensityLabel->SetLabel(wxString::Format("%.0f%%", m_textureIntensity * 100));
     
     m_textureEnabledCheckbox->SetValue(m_textureEnabled);
+    m_textureModeChoice->SetSelection(static_cast<int>(m_textureMode));
 }
 
 // Material event handlers
@@ -984,6 +999,12 @@ void RenderingSettingsDialog::onTextureIntensitySlider(wxCommandEvent& event)
 void RenderingSettingsDialog::onTextureEnabledCheckbox(wxCommandEvent& event)
 {
     m_textureEnabled = m_textureEnabledCheckbox->GetValue();
+}
+
+void RenderingSettingsDialog::onTextureModeChoice(wxCommandEvent& event)
+{
+    int selection = m_textureModeChoice->GetSelection();
+    m_textureMode = static_cast<RenderingConfig::TextureMode>(selection);
 }
 
 // Blend events
@@ -1238,6 +1259,7 @@ void RenderingSettingsDialog::applySettings()
     textureSettings.intensity = m_textureIntensity;
     textureSettings.enabled = m_textureEnabled;
     textureSettings.imagePath = m_textureImagePath;
+    textureSettings.textureMode = m_textureMode;
     config.setTextureSettings(textureSettings);
     
     // Update blend settings
@@ -1311,6 +1333,7 @@ void RenderingSettingsDialog::applySettings()
             geometry->setTextureIntensity(m_textureIntensity);
             geometry->setTextureEnabled(m_textureEnabled);
             geometry->setTextureImagePath(m_textureImagePath);
+            geometry->setTextureMode(m_textureMode);
             
             // Apply blend settings
             geometry->setBlendMode(m_blendMode);
@@ -1404,6 +1427,7 @@ void RenderingSettingsDialog::resetToDefaults()
     m_textureIntensity = textureSettings.intensity;
     m_textureEnabled = textureSettings.enabled;
     m_textureImagePath = textureSettings.imagePath;
+    m_textureMode = textureSettings.textureMode;
     
     m_blendMode = blendSettings.blendMode;
     m_depthTest = blendSettings.depthTest;

@@ -57,6 +57,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     m_textureIntensity = textureSettings.intensity;
     m_textureEnabled = textureSettings.enabled;
     m_textureImagePath = textureSettings.imagePath;
+    m_textureMode = textureSettings.textureMode;
     
     const auto& blendSettings = config.getBlendSettings();
     m_blendMode = blendSettings.blendMode;
@@ -268,6 +269,12 @@ void OCCGeometry::setTextureEnabled(bool enabled)
 void OCCGeometry::setTextureImagePath(const std::string& path)
 {
     m_textureImagePath = path;
+    m_coinNeedsUpdate = true;
+}
+
+void OCCGeometry::setTextureMode(RenderingConfig::TextureMode mode)
+{
+    m_textureMode = mode;
     m_coinNeedsUpdate = true;
 }
 

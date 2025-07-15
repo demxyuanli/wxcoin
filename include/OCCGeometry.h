@@ -78,6 +78,9 @@ public:
     std::string getTextureImagePath() const { return m_textureImagePath; }
     virtual void setTextureImagePath(const std::string& path);
     
+    RenderingConfig::TextureMode getTextureMode() const { return m_textureMode; }
+    virtual void setTextureMode(RenderingConfig::TextureMode mode);
+    
     // Blend settings
     RenderingConfig::BlendMode getBlendMode() const { return m_blendMode; }
     virtual void setBlendMode(RenderingConfig::BlendMode mode);
@@ -217,6 +220,7 @@ protected:
     double m_textureIntensity;
     bool m_textureEnabled;
     std::string m_textureImagePath;
+    RenderingConfig::TextureMode m_textureMode;
     
     // Blend properties
     RenderingConfig::BlendMode m_blendMode;

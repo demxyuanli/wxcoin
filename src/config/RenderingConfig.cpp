@@ -228,6 +228,39 @@ RenderingConfig::BlendMode RenderingConfig::getBlendModeFromName(const std::stri
     return BlendMode::Alpha;
 }
 
+std::vector<std::string> RenderingConfig::getAvailableTextureModes()
+{
+    return {
+        "Replace",
+        "Modulate",
+        "Decal",
+        "Blend",
+        "Add"
+    };
+}
+
+std::string RenderingConfig::getTextureModeName(TextureMode mode)
+{
+    switch (mode) {
+        case TextureMode::Replace: return "Replace";
+        case TextureMode::Modulate: return "Modulate";
+        case TextureMode::Decal: return "Decal";
+        case TextureMode::Blend: return "Blend";
+        case TextureMode::Add: return "Add";
+        default: return "Modulate";
+    }
+}
+
+RenderingConfig::TextureMode RenderingConfig::getTextureModeFromName(const std::string& name)
+{
+    if (name == "Replace") return TextureMode::Replace;
+    if (name == "Modulate") return TextureMode::Modulate;
+    if (name == "Decal") return TextureMode::Decal;
+    if (name == "Blend") return TextureMode::Blend;
+    if (name == "Add") return TextureMode::Add;
+    return TextureMode::Modulate;
+}
+
 // Shading mode utility methods
 std::vector<std::string> RenderingConfig::getAvailableShadingModes()
 {
@@ -513,6 +546,8 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
                 m_textureSettings.enabled = (value == "true" || value == "1");
             } else if (key == "ImagePath") {
                 m_textureSettings.imagePath = value;
+            } else if (key == "TextureMode") {
+                m_textureSettings.textureMode = getTextureModeFromName(value);
             }
         } else if (section == "Blend") {
             if (key == "BlendMode") {
@@ -633,7 +668,8 @@ bool RenderingConfig::saveToFile(const std::string& filename) const
     file << "Color=" << colorToString(m_textureSettings.color) << "\n";
     file << "Intensity=" << m_textureSettings.intensity << "\n";
     file << "Enabled=" << (m_textureSettings.enabled ? "true" : "false") << "\n";
-    file << "ImagePath=" << m_textureSettings.imagePath << "\n\n";
+    file << "ImagePath=" << m_textureSettings.imagePath << "\n";
+    file << "TextureMode=" << getTextureModeName(m_textureSettings.textureMode) << "\n\n";
     
     // Write Blend section
     file << "[Blend]\n";
@@ -852,6 +888,14 @@ void RenderingConfig::setTextureEnabled(bool enabled)
 void RenderingConfig::setTextureImagePath(const std::string& path)
 {
     m_textureSettings.imagePath = path;
+    if (m_autoSave) {
+        saveToFile();
+    }
+}
+
+void RenderingConfig::setTextureMode(TextureMode mode)
+{
+    m_textureSettings.textureMode = mode;
     if (m_autoSave) {
         saveToFile();
     }
