@@ -225,21 +225,20 @@ void FlatUIButtonBar::DrawToggleButton(wxDC& dc, const ButtonInfo& button, const
     dc.SetBrush(wxBrush(bgColour));
     dc.SetPen(*wxTRANSPARENT_PEN);
     
-    if (m_buttonStyle == ButtonStyle::PILL ||
-        (m_buttonBorderStyle == ButtonBorderStyle::ROUNDED && m_buttonCornerRadius > 0)) {
+    if (m_buttonStyle == ButtonStyle::PILL || m_buttonCornerRadius > 0) {
         dc.DrawRoundedRectangle(rect, m_buttonCornerRadius);
     } else {
         dc.DrawRectangle(rect);
     }
     
-    // Draw border if needed
+    // Draw border - always draw for checked toggle buttons to show state
     if (m_buttonBorderWidth > 0 || button.checked) {
         wxColour borderColour = button.customBorderColor.IsOk() ? button.customBorderColor : m_buttonBorderColour;
-        dc.SetPen(wxPen(borderColour, button.checked ? m_buttonBorderWidth + 1 : m_buttonBorderWidth));
+        int borderWidth = button.checked ? (m_buttonBorderWidth > 0 ? m_buttonBorderWidth + 1 : 2) : m_buttonBorderWidth;
+        dc.SetPen(wxPen(borderColour, borderWidth));
         dc.SetBrush(*wxTRANSPARENT_BRUSH);
         
-        if (m_buttonStyle == ButtonStyle::PILL ||
-            (m_buttonBorderStyle == ButtonBorderStyle::ROUNDED && m_buttonCornerRadius > 0)) {
+        if (m_buttonStyle == ButtonStyle::PILL || m_buttonCornerRadius > 0) {
             dc.DrawRoundedRectangle(rect, m_buttonCornerRadius);
         } else {
             dc.DrawRectangle(rect);

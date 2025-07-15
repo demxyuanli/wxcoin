@@ -4,6 +4,7 @@
 #include "logger/Logger.h"
 #include <wx/statbox.h>
 #include <wx/msgdlg.h>
+#include <wx/glcanvas.h>
 
 TransparencyDialog::TransparencyDialog(wxWindow* parent, OCCViewer* occViewer,
                                      const std::vector<std::shared_ptr<OCCGeometry>>& selectedGeometries)
@@ -104,9 +105,15 @@ void TransparencyDialog::layoutControls()
 
 void TransparencyDialog::bindEvents()
 {
+    // Bind slider events for real-time preview during dragging
     m_transparencySlider->Bind(wxEVT_SLIDER, &TransparencyDialog::onTransparencySlider, this);
+    m_transparencySlider->Bind(wxEVT_SCROLL_THUMBTRACK, &TransparencyDialog::onTransparencySlider, this);
+    m_transparencySlider->Bind(wxEVT_SCROLL_CHANGED, &TransparencyDialog::onTransparencySlider, this);
+    
+    // Bind spin control events
     m_transparencySpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &TransparencyDialog::onTransparencySpinCtrl, this);
     
+    // Bind button events
     FindWindow(wxID_APPLY)->Bind(wxEVT_BUTTON, &TransparencyDialog::onApply, this);
     FindWindow(wxID_OK)->Bind(wxEVT_BUTTON, &TransparencyDialog::onOK, this);
     FindWindow(wxID_CANCEL)->Bind(wxEVT_BUTTON, &TransparencyDialog::onCancel, this);
@@ -116,20 +123,49 @@ void TransparencyDialog::updateControls()
 {
     m_transparencySlider->SetValue(static_cast<int>(m_currentTransparency * 100));
     m_transparencySpinCtrl->SetValue(m_currentTransparency * 100);
+    
+    // Update info text to show current value
+    m_infoText->SetLabel(wxString::Format("Setting transparency for %zu selected object(s) - Current: %.1f%%", 
+                                         m_selectedGeometries.size(), m_currentTransparency * 100));
 }
 
 void TransparencyDialog::applyTransparency()
 {
     if (!m_occViewer || m_selectedGeometries.empty()) {
+        LOG_WRN_S("TransparencyDialog::applyTransparency: OCCViewer or selected geometries not available");
         return;
     }
     
     try {
+        LOG_INF_S("TransparencyDialog: Applying transparency " + std::to_string(m_currentTransparency) + 
+                  " to " + std::to_string(m_selectedGeometries.size()) + " geometries");
+        
         // Apply transparency to all selected geometries
         for (const auto& geometry : m_selectedGeometries) {
             if (geometry) {
+                LOG_DBG_S("Setting transparency for geometry: " + geometry->getName());
                 m_occViewer->setGeometryTransparency(geometry->getName(), m_currentTransparency);
+                
+                // Verify the transparency was set
+                double actualTransparency = geometry->getTransparency();
+                LOG_INF_S("Geometry " + geometry->getName() + " transparency set to: " + std::to_string(actualTransparency));
             }
+        }
+        
+        // Force refresh the view to show changes immediately
+        LOG_DBG_S("Requesting view refresh after transparency change");
+        m_occViewer->requestViewRefresh();
+        
+        // Additional force refresh by calling parent frame's refresh if available
+        wxWindow* parent = GetParent();
+        while (parent) {
+            if (parent->GetName() == "Canvas" || parent->IsKindOf(wxCLASSINFO(wxGLCanvas))) {
+                parent->Refresh();
+                parent->Update();
+                LOG_DBG_S("Found and refreshed Canvas parent");
+                break;
+            }
+            parent = parent->GetParent();
         }
         
         LOG_INF_S("Applied transparency " + std::to_string(m_currentTransparency) + 
@@ -145,11 +181,15 @@ void TransparencyDialog::onTransparencySlider(wxCommandEvent& event)
     int sliderValue = m_transparencySlider->GetValue();
     m_currentTransparency = sliderValue / 100.0;
     
-    // Update spin control
+    // Update spin control to sync values
     m_transparencySpinCtrl->SetValue(sliderValue);
     
-    // Apply transparency in real-time
+    // Apply transparency in real-time for preview
     applyTransparency();
+    
+    // Update info text to show current value
+    m_infoText->SetLabel(wxString::Format("Setting transparency for %zu selected object(s) - Current: %.1f%%", 
+                                         m_selectedGeometries.size(), m_currentTransparency * 100));
 }
 
 void TransparencyDialog::onTransparencySpinCtrl(wxSpinDoubleEvent& event)
@@ -157,16 +197,27 @@ void TransparencyDialog::onTransparencySpinCtrl(wxSpinDoubleEvent& event)
     double spinValue = m_transparencySpinCtrl->GetValue();
     m_currentTransparency = spinValue / 100.0;
     
-    // Update slider
+    // Update slider to sync values
     m_transparencySlider->SetValue(static_cast<int>(spinValue));
     
-    // Apply transparency in real-time
+    // Apply transparency in real-time for preview
     applyTransparency();
+    
+    // Update info text to show current value
+    m_infoText->SetLabel(wxString::Format("Setting transparency for %zu selected object(s) - Current: %.1f%%", 
+                                         m_selectedGeometries.size(), m_currentTransparency * 100));
 }
 
 void TransparencyDialog::onApply(wxCommandEvent& event)
 {
     applyTransparency();
+    
+    // Show feedback that apply was successful
+    m_infoText->SetLabel(wxString::Format("Applied transparency %.1f%% to %zu selected object(s)", 
+                                         m_currentTransparency * 100, m_selectedGeometries.size()));
+    
+    // Update the "original" transparency so Cancel won't revert this change
+    m_originalTransparency = m_currentTransparency;
 }
 
 void TransparencyDialog::onOK(wxCommandEvent& event)
@@ -185,6 +236,8 @@ void TransparencyDialog::onCancel(wxCommandEvent& event)
                     m_occViewer->setGeometryTransparency(geometry->getName(), m_originalTransparency);
                 }
             }
+            // Force refresh to show restored transparency
+            m_occViewer->requestViewRefresh();
         } catch (const std::exception& e) {
             LOG_ERR_S("Error restoring transparency: " + std::string(e.what()));
         }

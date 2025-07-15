@@ -13,7 +13,11 @@ void FlatUIButtonBar::OnPaint(wxPaintEvent& evt) {
     
     // Draw background
     dc.SetBrush(wxBrush(m_btnBarBgColour));
-    dc.SetPen(wxPen(m_btnBarBorderColour, m_btnBarBorderWidth));
+    if (m_btnBarBorderWidth > 0) {
+        dc.SetPen(wxPen(m_btnBarBorderColour, m_btnBarBorderWidth));
+    } else {
+        dc.SetPen(*wxTRANSPARENT_PEN);
+    }
     dc.DrawRectangle(0, 0, clientSize.x, clientSize.y);
     
     // Draw buttons
@@ -76,8 +80,7 @@ void FlatUIButtonBar::DrawButtonBackground(wxDC& dc, const ButtonInfo& button, c
     dc.SetBrush(wxBrush(bgColour));
     dc.SetPen(*wxTRANSPARENT_PEN);
     
-    if (m_buttonStyle == ButtonStyle::PILL ||
-        (m_buttonBorderStyle == ButtonBorderStyle::ROUNDED && m_buttonCornerRadius > 0)) {
+    if (m_buttonStyle == ButtonStyle::PILL || m_buttonCornerRadius > 0) {
         dc.DrawRoundedRectangle(rect, m_buttonCornerRadius);
     } else {
         dc.DrawRectangle(rect);
@@ -85,6 +88,8 @@ void FlatUIButtonBar::DrawButtonBackground(wxDC& dc, const ButtonInfo& button, c
 }
 
 void FlatUIButtonBar::DrawButtonBorder(wxDC& dc, const ButtonInfo& button, const wxRect& rect, bool isHovered, bool isPressed) {
+    if (m_buttonBorderWidth <= 0) return; // Only draw border if width > 0
+    
     wxColour borderColour = button.customBorderColor.IsOk() ? button.customBorderColor : m_buttonBorderColour;
     
     switch (m_buttonBorderStyle) {
@@ -106,8 +111,7 @@ void FlatUIButtonBar::DrawButtonBorder(wxDC& dc, const ButtonInfo& button, const
     }
 
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
-    if (m_buttonStyle == ButtonStyle::PILL ||
-        (m_buttonBorderStyle == ButtonBorderStyle::ROUNDED && m_buttonCornerRadius > 0)) {
+    if (m_buttonStyle == ButtonStyle::PILL || m_buttonCornerRadius > 0) {
         dc.DrawRoundedRectangle(rect, m_buttonCornerRadius);
     }
     else {

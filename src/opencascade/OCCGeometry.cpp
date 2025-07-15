@@ -185,6 +185,10 @@ void OCCGeometry::setTransparency(double transparency)
         m_transparency = std::min(m_transparency, 0.6);  // Limit for visible lines
         LOG_WRN_S("Wireframe: Limited transparency to " + std::to_string(m_transparency));
     }
+    
+    // Mark that the Coin representation needs update
+    m_coinNeedsUpdate = true;
+    
     if (m_coinNode) {
         // Clear old material and texture
         for (int i = m_coinNode->getNumChildren() - 1; i >= 0; --i) {
@@ -195,6 +199,10 @@ void OCCGeometry::setTransparency(double transparency)
         }
         // Force rebuild
         buildCoinRepresentation();
+        
+        // Mark the Coin node as modified to trigger scene graph update
+        m_coinNode->touch();
+        
         LOG_INF_S("Transparency set to " + std::to_string(m_transparency) + ", cleared old nodes, rebuilt in mode " + (m_wireframeMode ? "wireframe" : "filling"));
     }
 }

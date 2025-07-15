@@ -454,7 +454,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 
     // Help Page
     FlatUIPage* page5 = new FlatUIPage(m_ribbon, "Help");
-    FlatUIPanel* helpPanel = new FlatUIPanel(page5, "Help", wxVERTICAL);
+    FlatUIPanel* helpPanel = new FlatUIPanel(page5, "Help", wxHORIZONTAL);
     helpPanel->SetFont(CFG_DEFAULTFONT());
     helpPanel->SetPanelBorderWidths(0, 0, 0, 1);
     helpPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
@@ -465,14 +465,12 @@ void FlatFrame::InitializeUI(const wxSize& size)
     helpButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
     helpButtonBar->AddButton(wxID_ABOUT, "About", SVG_ICON("about", wxSize(16, 16)), nullptr, "Show application information");
     helpButtonBar->AddButton(ID_ShowUIHierarchy, "UI Debug", SVG_ICON("tree", wxSize(16, 16)), nullptr, "Show UI hierarchy debugger");
+    // Add separator between icon buttons and text buttons
+    helpButtonBar->AddSeparator();
+    // Add toggle buttons to the same button bar
+    helpButtonBar->AddToggleButton(ID_ToggleFunctionSpace, "ToggleFunc", true, SVG_ICON("find", wxSize(16, 16)),  "Toggle function space visibility");
+    helpButtonBar->AddToggleButton(ID_ToggleProfileSpace, "ToggleProf", true, SVG_ICON("user", wxSize(16, 16)),  "Toggle profile space visibility");
     helpPanel->AddButtonBar(helpButtonBar, 0, wxEXPAND | wxALL, 5);
-    
-    // Toggle buttons for UI spaces
-    FlatUIButtonBar* toggleBar = new FlatUIButtonBar(helpPanel);
-    toggleBar->SetDisplayStyle(ButtonDisplayStyle::TEXT_ONLY);
-    toggleBar->AddToggleButton(ID_ToggleFunctionSpace, "ToggleFunc", false, wxNullBitmap, "Toggle function space visibility");
-    toggleBar->AddToggleButton(ID_ToggleProfileSpace, "ToggleProf", false, wxNullBitmap, "Toggle profile space visibility");
-    helpPanel->AddButtonBar(toggleBar, 0, wxEXPAND | wxALL, 5);
     
     page5->AddPanel(helpPanel); 
     m_ribbon->AddPage(page5);
