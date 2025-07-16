@@ -57,6 +57,10 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
 {
     TriangleMesh mesh;
     
+    LOG_INF_S("Starting mesh conversion - Shape is null: " + std::string(shape.IsNull() ? "yes" : "no") + 
+              ", Deflection: " + std::to_string(params.deflection) + 
+              ", Relative: " + std::string(params.relative ? "true" : "false"));
+    
     if (shape.IsNull()) {
         LOG_WRN_S("Cannot convert null shape to mesh");
         return mesh;
@@ -64,23 +68,31 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
     
     try {
         // Create incremental mesh
+        LOG_INF_S("Creating incremental mesh generator");
         BRepMesh_IncrementalMesh meshGen(shape, params.deflection, params.relative, 
                                          params.angularDeflection, params.inParallel);
         
         if (!meshGen.IsDone()) {
-            LOG_ERR_S("Failed to generate mesh for shape");
+            LOG_ERR_S("Failed to generate mesh for shape - IsDone() returned false");
             return mesh;
         }
         
+        LOG_INF_S("Incremental mesh generation completed successfully");
+        
         // Extract triangles from all faces
         TopExp_Explorer faceExplorer(shape, TopAbs_FACE);
+        int faceCount = 0;
         for (; faceExplorer.More(); faceExplorer.Next()) {
             const TopoDS_Face& face = TopoDS::Face(faceExplorer.Current());
             meshFace(face, mesh, params);
+            faceCount++;
         }
+        
+        LOG_INF_S("Processed " + std::to_string(faceCount) + " faces");
         
         // Calculate normals if not already done
         if (mesh.normals.empty() && !mesh.vertices.empty()) {
+            LOG_INF_S("Calculating normals for mesh");
             calculateNormals(mesh);
         }
         
@@ -193,8 +205,31 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, const M
 
 SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params, bool selected)
 {
-    TriangleMesh mesh = convertToMesh(shape, params);
-    return createCoinNode(mesh, selected);
+    LOG_INF_S("Creating Coin3D node from shape - Shape is null: " + std::string(shape.IsNull() ? "yes" : "no"));
+    
+    if (shape.IsNull()) {
+        LOG_ERR_S("Cannot create Coin3D node from null shape");
+        return nullptr;
+    }
+    
+    try {
+        TriangleMesh mesh = convertToMesh(shape, params);
+        LOG_INF_S("Mesh conversion completed - Mesh is empty: " + std::string(mesh.isEmpty() ? "yes" : "no") + 
+                  ", Vertices: " + std::to_string(mesh.getVertexCount()) + 
+                  ", Triangles: " + std::to_string(mesh.getTriangleCount()));
+        
+        if (mesh.isEmpty()) {
+            LOG_ERR_S("Mesh conversion resulted in empty mesh");
+            return nullptr;
+        }
+        
+        SoSeparator* node = createCoinNode(mesh, selected);
+        LOG_INF_S("Coin3D node creation " + std::string(node ? "succeeded" : "failed"));
+        return node;
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception in createCoinNode: " + std::string(e.what()));
+        return nullptr;
+    }
 }
 
 void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TriangleMesh& mesh)

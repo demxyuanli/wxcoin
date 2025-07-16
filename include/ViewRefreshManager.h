@@ -30,6 +30,7 @@ public:
         TEXTURE_CHANGED,
         TRANSPARENCY_CHANGED,
         RENDERING_SETTINGS_CHANGED,
+        RESIZE,
         MANUAL_REQUEST
     };
     

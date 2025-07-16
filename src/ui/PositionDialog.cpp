@@ -370,8 +370,13 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                     
                     // Create geometry with parameters
                     GeometryParameters params = GetGeometryParameters();
-                    factory.createOCCGeometryWithParameters(geometryType, finalPos, params);
-                    LOG_INF_S("Creating geometry at position from dialog with parameters");
+                    try {
+                        factory.createOCCGeometryWithParameters(geometryType, finalPos, params);
+                        LOG_INF_S("Creating geometry at position from dialog with parameters");
+                    } catch (const std::exception& e) {
+                        LOG_ERR_S("Exception during geometry creation: " + std::string(e.what()));
+                        wxMessageBox("Failed to create geometry: " + std::string(e.what()), "Error", wxOK | wxICON_ERROR);
+                    }
                     
                     // Use unified refresh system for geometry creation
                     if (GlobalServices::GetRefreshSystem()) {

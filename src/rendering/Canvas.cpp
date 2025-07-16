@@ -48,6 +48,9 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
     , m_commandDispatcher(nullptr)
     , m_multiViewportEnabled(false)
 {
+    // Set window name for easy identification
+    SetName("Canvas");
+    
     LOG_INF_S("Canvas: Initializing");
     
     try {
@@ -64,16 +67,9 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
         Bind(wxEVT_RIGHT_DOWN, &Canvas::onMouseEvent, this);
         Bind(wxEVT_RIGHT_UP, &Canvas::onMouseEvent, this);
         
-        // Use UnifiedRefreshSystem for initial render if available
-        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
-        if (refreshSystem && refreshSystem->isInitialized()) {
-            refreshSystem->refreshView("", true);  // Immediate view refresh
-            LOG_INF_S("Canvas: Initial render triggered via UnifiedRefreshSystem");
-        } else {
-            // Fallback to direct refresh
-            Refresh();
-            LOG_INF_S("Canvas: Initial render triggered via direct refresh");
-        }
+        // Use direct refresh for initial render
+        Refresh();
+        LOG_INF_S("Canvas: Initial render triggered via direct refresh");
         
         LOG_INF_S("Canvas: Initialization completed successfully");
     } catch (const std::exception& e) {
@@ -107,8 +103,8 @@ void Canvas::initializeSubsystems() {
     m_inputManager = std::make_unique<InputManager>(this);
     m_navigationCubeManager = std::make_unique<NavigationCubeManager>(this, m_sceneManager.get());
     
-    // Get unified refresh system from global application services
-    m_unifiedRefreshSystem = GlobalServices::GetRefreshSystem();
+    // Canvas no longer uses UnifiedRefreshSystem internally
+    m_unifiedRefreshSystem = nullptr;
 
     // Initialize rendering engine FIRST
     if (!m_renderingEngine->initialize()) {
@@ -141,21 +137,9 @@ void Canvas::connectSubsystems() {
         m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
     }
     
-    // Set Canvas and SceneManager in global unified refresh system
-    if (m_unifiedRefreshSystem) {
-        m_unifiedRefreshSystem->setComponents(this, m_occViewer, m_sceneManager.get());
-    }
-    
-    // Use UnifiedRefreshSystem for initial render after all subsystems are connected
-    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
-    if (refreshSystem && refreshSystem->isInitialized()) {
-        refreshSystem->refreshView("", true);  // Immediate view refresh
-        LOG_INF_S("Canvas: Subsystems connected - Initial render triggered via UnifiedRefreshSystem");
-    } else {
-        // Fallback to direct refresh
-        Refresh();
-        LOG_INF_S("Canvas: Subsystems connected - Initial render triggered via direct refresh");
-    }
+    // Canvas uses direct refresh instead of UnifiedRefreshSystem
+    Refresh();
+    LOG_INF_S("Canvas: Subsystems connected - Initial render triggered via direct refresh");
 }
 
 void Canvas::showErrorDialog(const std::string& message) const {
@@ -210,6 +194,11 @@ void Canvas::onSize(wxSizeEvent& event) {
     }
     if (m_eventCoordinator) {
         m_eventCoordinator->handleSizeEvent(event);
+    }
+    if (m_refreshManager) {
+        m_refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::RESIZE, true);
+    } else {
+        Refresh();
     }
     event.Skip();
 }
@@ -307,10 +296,7 @@ float Canvas::getDPIScale() const {
 void Canvas::setOCCViewer(OCCViewer* occViewer) {
     m_occViewer = occViewer;
     
-    // Update global unified refresh system with the new OCCViewer
-    UnifiedRefreshSystem* globalRefreshSystem = GlobalServices::GetRefreshSystem();
-    if (globalRefreshSystem) {
-        globalRefreshSystem->setComponents(this, occViewer, m_sceneManager.get());
-    }
+    // Canvas no longer updates UnifiedRefreshSystem internally
+    // External components can still access UnifiedRefreshSystem if needed
 }
 

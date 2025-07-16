@@ -60,31 +60,39 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
 void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const GeometryParameters& params) {
     std::shared_ptr<OCCGeometry> geometry;
     
-    if (type == "Box") {
-        geometry = createOCCBox(position, params.width, params.height, params.depth);
-    } else if (type == "Sphere") {
-        geometry = createOCCSphere(position, params.radius);
-    } else if (type == "Cylinder") {
-        geometry = createOCCCylinder(position, params.cylinderRadius, params.cylinderHeight);
-    } else if (type == "Cone") {
-        geometry = createOCCCone(position, params.bottomRadius, params.topRadius, params.coneHeight);
-    } else if (type == "Torus") {
-        geometry = createOCCTorus(position, params.majorRadius, params.minorRadius);
-    } else if (type == "TruncatedCylinder") {
-        geometry = createOCCTruncatedCylinder(position, params.truncatedBottomRadius, params.truncatedTopRadius, params.truncatedHeight);
-    } else if (type == "Wrench") {
-        geometry = createOCCWrench(position);
-    } else {
-        LOG_ERR_S("Unknown geometry type: " + type);
-        return;
-    }
+    LOG_INF_S("Creating geometry of type: " + type + " at position: " + 
+              std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]));
     
-    if (geometry) {
-        m_treePanel->addOCCGeometry(geometry);
-        m_occViewer->addGeometry(geometry);
-        LOG_INF_S("Created OCC geometry with parameters: " + type);
-    } else {
-        LOG_ERR_S("Failed to create OCC geometry with parameters: " + type);
+    try {
+        if (type == "Box") {
+            geometry = createOCCBox(position, params.width, params.height, params.depth);
+        } else if (type == "Sphere") {
+            geometry = createOCCSphere(position, params.radius);
+        } else if (type == "Cylinder") {
+            geometry = createOCCCylinder(position, params.cylinderRadius, params.cylinderHeight);
+        } else if (type == "Cone") {
+            geometry = createOCCCone(position, params.bottomRadius, params.topRadius, params.coneHeight);
+        } else if (type == "Torus") {
+            geometry = createOCCTorus(position, params.majorRadius, params.minorRadius);
+        } else if (type == "TruncatedCylinder") {
+            geometry = createOCCTruncatedCylinder(position, params.truncatedBottomRadius, params.truncatedTopRadius, params.truncatedHeight);
+        } else if (type == "Wrench") {
+            geometry = createOCCWrench(position);
+        } else {
+            LOG_ERR_S("Unknown geometry type: " + type);
+            return;
+        }
+        
+        if (geometry) {
+            LOG_INF_S("Geometry created successfully, adding to tree panel and viewer");
+            m_treePanel->addOCCGeometry(geometry);
+            m_occViewer->addGeometry(geometry);
+            LOG_INF_S("Created OCC geometry with parameters: " + type);
+        } else {
+            LOG_ERR_S("Failed to create OCC geometry with parameters: " + type);
+        }
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception in createOCCGeometryWithParameters: " + std::string(e.what()));
     }
 }
 
@@ -512,6 +520,8 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             return nullptr;
         }
         
+        LOG_INF_S("Final wrench shape created successfully - Shape is null: " + std::string(wrenchBody.IsNull() ? "yes" : "no"));
+        
         // Validate the final shape
         if (!OCCShapeBuilder::isValid(wrenchBody)) {
             LOG_WRN_S("Wrench shape validation failed, but proceeding anyway");
@@ -524,9 +534,15 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         OCCShapeBuilder::outputFaceNormalsAndIndices(wrenchBody, name);
         OCCShapeBuilder::analyzeShapeProperties(wrenchBody, name);
         
+        LOG_INF_S("Creating OCCGeometry object for wrench: " + name);
         auto geometry = std::make_shared<OCCGeometry>(name);
+        
+        LOG_INF_S("Setting shape for wrench geometry: " + name);
         geometry->setShape(wrenchBody);
+        
         // Set position to the specified location - this ensures the geometry is properly positioned
+        LOG_INF_S("Setting position for wrench geometry: " + name + " at (" + 
+                  std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
         geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
         
         LOG_INF_S("Created connected professional wrench model: " + name);

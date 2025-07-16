@@ -60,7 +60,8 @@ public:
 
     // Refresh management
     ViewRefreshManager* getRefreshManager() const { return m_refreshManager.get(); }
-    UnifiedRefreshSystem* getUnifiedRefreshSystem() const { return m_unifiedRefreshSystem; }
+    // Canvas no longer uses UnifiedRefreshSystem internally
+    UnifiedRefreshSystem* getUnifiedRefreshSystem() const { return nullptr; }
 private:
     void initializeSubsystems();
     void connectSubsystems();
@@ -96,7 +97,8 @@ private:
     std::unique_ptr<MultiViewportManager> m_multiViewportManager;
     bool m_multiViewportEnabled;
     std::unique_ptr<ViewRefreshManager> m_refreshManager;
-    UnifiedRefreshSystem* m_unifiedRefreshSystem;
+    // Canvas no longer uses UnifiedRefreshSystem internally
+    UnifiedRefreshSystem* m_unifiedRefreshSystem = nullptr;
 
     DECLARE_EVENT_TABLE()
 

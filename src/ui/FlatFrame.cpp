@@ -506,16 +506,11 @@ void FlatFrame::InitializeUI(const wxSize& size)
 
     Layout();
     
-    // Use UnifiedRefreshSystem for initial render after UI is fully initialized
-    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
-    if (refreshSystem && refreshSystem->isInitialized() && m_canvas) {
-        refreshSystem->refreshView("", true);  // Immediate view refresh
-        LOG_INF_S("UI initialization: Initial render triggered via UnifiedRefreshSystem");
-    } else if (m_canvas) {
-        // Fallback to direct refresh
+    // Use direct refresh for initial render
+    if (m_canvas) {
         m_canvas->Refresh();
         m_canvas->Update();
-        LOG_INF_S("UI initialization: Initial render triggered via fallback method");
+        LOG_INF_S("UI initialization: Initial render triggered via direct refresh");
     }
 }
 
@@ -606,22 +601,25 @@ void FlatFrame::createPanels() {
         m_canvas->getSceneManager()->resetView();
         LOG_INF_S("Initial view set to isometric and fit to scene");
         
-        // Use UnifiedRefreshSystem for initial render
-        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
-        if (refreshSystem && refreshSystem->isInitialized()) {
-            refreshSystem->refreshScene("", true);  // Immediate scene refresh
-            LOG_INF_S("Initial render triggered via UnifiedRefreshSystem");
+        // Use direct refresh for initial render
+        if (m_canvas->getRefreshManager()) {
+            m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SCENE_CHANGED, true);
         } else {
-            // Fallback to direct refresh if UnifiedRefreshSystem is not available
-            if (m_canvas->getRefreshManager()) {
-                m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SCENE_CHANGED, true);
-            } else {
-                m_canvas->Refresh();
-                m_canvas->Update();
-            }
-            LOG_INF_S("Initial render triggered via fallback method");
+            m_canvas->Refresh();
+            m_canvas->Update();
         }
+        LOG_INF_S("Initial render triggered via direct refresh");
     }
+    
+    // Set components for UnifiedRefreshSystem to enable refresh commands
+    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+    if (refreshSystem) {
+        refreshSystem->setComponents(m_canvas, m_occViewer, m_canvas->getSceneManager());
+        LOG_INF_S("UnifiedRefreshSystem components set successfully");
+    } else {
+        LOG_WRN_S("UnifiedRefreshSystem not available, refresh commands will not work");
+    }
+    
     LOG_INF_S("Panels creation completed successfully");
 }
 
@@ -981,13 +979,8 @@ void FlatFrame::OnStartupTimer(wxTimerEvent& event)
         }
     }
     
-    // Use UnifiedRefreshSystem for initial render of the canvas to ensure proper display
-    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
-    if (refreshSystem && refreshSystem->isInitialized() && m_canvas) {
-        refreshSystem->refreshScene("", true);  // Immediate scene refresh
-        LOG_INF_S("Startup timer: Initial render triggered via UnifiedRefreshSystem");
-    } else if (m_canvas) {
-        // Fallback to direct refresh
+    // Use direct refresh for initial render
+    if (m_canvas) {
         m_canvas->Refresh();
         m_canvas->Update();
         
@@ -996,7 +989,7 @@ void FlatFrame::OnStartupTimer(wxTimerEvent& event)
             m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SCENE_CHANGED, true);
         }
         
-        LOG_INF_S("Startup timer: Initial render triggered via fallback method");
+        LOG_INF_S("Startup timer: Initial render triggered via direct refresh");
     }
     
     // Initial UI Hierarchy debug log (optional)

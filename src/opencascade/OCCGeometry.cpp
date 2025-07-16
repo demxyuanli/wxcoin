@@ -81,8 +81,10 @@ OCCGeometry::~OCCGeometry()
 
 void OCCGeometry::setShape(const TopoDS_Shape& shape)
 {
+    LOG_INF_S("Setting shape for geometry '" + m_name + "' - Shape is null: " + std::string(shape.IsNull() ? "yes" : "no"));
     m_shape = shape;
     m_coinNeedsUpdate = true;
+    LOG_INF_S("Shape set successfully for geometry '" + m_name + "' - m_coinNeedsUpdate: " + std::string(m_coinNeedsUpdate ? "true" : "false"));
 }
 
 void OCCGeometry::setPosition(const gp_Pnt& position)
@@ -530,13 +532,17 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
 
     if (!m_shape.IsNull()) {
         LOG_INF_S("Creating mesh node for geometry: " + m_name);
-        SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape, params, m_selected);
-        if (meshNode) {
-            m_coinNode->addChild(meshNode);
-            LOG_INF_S("Successfully added mesh node to Coin3D representation for: " + m_name);
-        }
-        else {
-            LOG_ERR_S("Failed to create mesh node for geometry: " + m_name);
+        try {
+            SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape, params, m_selected);
+            if (meshNode) {
+                m_coinNode->addChild(meshNode);
+                LOG_INF_S("Successfully added mesh node to Coin3D representation for: " + m_name);
+            }
+            else {
+                LOG_ERR_S("Failed to create mesh node for geometry: " + m_name + " - createCoinNode returned null");
+            }
+        } catch (const std::exception& e) {
+            LOG_ERR_S("Exception creating mesh node for geometry " + m_name + ": " + std::string(e.what()));
         }
     }
     else {
