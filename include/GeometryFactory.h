@@ -8,7 +8,6 @@
 class SoSeparator;
 class ObjectTreePanel;
 class PropertyPanel;
-class CommandManager;
 class OCCViewer;
 class OCCGeometry;
 struct GeometryParameters; // Forward declaration
@@ -21,7 +20,7 @@ enum class GeometryType {
 class GeometryFactory {
 public:
     GeometryFactory(SoSeparator* root, ObjectTreePanel* treePanel, PropertyPanel* propPanel, 
-                   CommandManager* cmdManager, OCCViewer* occViewer);
+                   OCCViewer* occViewer);
     ~GeometryFactory();
 
     // Create geometry with default parameters
@@ -60,7 +59,6 @@ private:
     SoSeparator* m_root;
     ObjectTreePanel* m_treePanel;
     PropertyPanel* m_propPanel;
-    CommandManager* m_cmdManager;
     OCCViewer* m_occViewer;
     GeometryType m_defaultGeometryType;
 };

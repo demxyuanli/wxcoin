@@ -1,4 +1,5 @@
 #include "PositionDialog.h"
+#include "GlobalServices.h"
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "PickingAidManager.h"
@@ -7,12 +8,15 @@
 #include "InputManager.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
+#include "UnifiedRefreshSystem.h"
 #include "logger/Logger.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/button.h>
 #include <wx/notebook.h>
 #include <wx/panel.h>
+#include "MainApplication.h"
+#include "GlobalServices.h"
 
 // Custom event ID
 enum {
@@ -361,7 +365,6 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                         canvas->getSceneManager()->getObjectRoot(),
                         canvas->getObjectTreePanel(),
                         canvas->getObjectTreePanel()->getPropertyPanel(),
-                        canvas->getCommandManager(),
                         canvas->getOCCViewer() 
                     );
                     
@@ -369,6 +372,16 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                     GeometryParameters params = GetGeometryParameters();
                     factory.createOCCGeometryWithParameters(geometryType, finalPos, params);
                     LOG_INF_S("Creating geometry at position from dialog with parameters");
+                    
+                    // Use unified refresh system for geometry creation
+                    if (GlobalServices::GetRefreshSystem()) {
+                        GlobalServices::GetRefreshSystem()->refreshGeometry("", true);  // Immediate refresh for new geometry
+                        GlobalServices::GetRefreshSystem()->refreshScene("", false);   // Scene update for bounds recalculation
+                    } else {
+                        // Fallback - no explicit refresh needed as creation should handle it
+                        LOG_DBG_S("Using default geometry creation refresh");
+                    }
+                    
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");
                     LOG_INF_S("Reset operation mode to VIEW");

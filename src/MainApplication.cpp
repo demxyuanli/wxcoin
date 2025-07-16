@@ -7,9 +7,16 @@
 #include "config/ConstantsConfig.h"
 #include "logger/Logger.h"
 #include "FlatFrame.h"
+#include "UnifiedRefreshSystem.h"
+#include "CommandDispatcher.h"
+#include "GlobalServices.h"
 #include <Inventor/SoDB.h>
 #include <Inventor/SoInput.h>
 #include <Inventor/nodes/SoSeparator.h>
+
+// Static member definitions
+std::unique_ptr<UnifiedRefreshSystem> MainApplication::s_unifiedRefreshSystem = nullptr;
+std::unique_ptr<CommandDispatcher> MainApplication::s_commandDispatcher = nullptr;
 
 bool MainApplication::OnInit()
 {
@@ -35,6 +42,11 @@ bool MainApplication::OnInit()
     
     LOG_INF("Starting application", "MainApplication");
 
+    // Initialize global services before creating any UI
+    if (!initializeGlobalServices()) {
+        wxMessageBox("Failed to initialize global services", "Initialization Error", wxOK | wxICON_ERROR);
+        return false;
+    }
     
     std::string titleStr = cm.getString("MainApplication", "MainFrameTitle", "FlatUI Demo");
     wxString title(titleStr);
@@ -60,6 +72,55 @@ bool MainApplication::OnInit()
     frame->Show(true);
 
     return true;
+}
+
+bool MainApplication::initializeGlobalServices()
+{
+    LOG_INF("Initializing global services", "MainApplication");
+    
+    try {
+        // Create command dispatcher first
+        s_commandDispatcher = std::make_unique<CommandDispatcher>();
+        LOG_INF("Command dispatcher created", "MainApplication");
+        
+        // Create unified refresh system (initially without Canvas/OCCViewer/SceneManager)
+        // These will be set later when UI components are created
+        s_unifiedRefreshSystem = std::make_unique<UnifiedRefreshSystem>(nullptr, nullptr, nullptr);
+        LOG_INF("Unified refresh system created", "MainApplication");
+        
+        // Initialize the refresh system with command dispatcher
+        s_unifiedRefreshSystem->initialize(s_commandDispatcher.get());
+        LOG_INF("Unified refresh system initialized", "MainApplication");
+        
+        // Register services with GlobalServices
+        GlobalServices::SetCommandDispatcher(s_commandDispatcher.get());
+        GlobalServices::SetRefreshSystem(s_unifiedRefreshSystem.get());
+        LOG_INF("Global services registered", "MainApplication");
+        
+        return true;
+    } catch (const std::exception& e) {
+        LOG_ERR("Failed to initialize global services: " + std::string(e.what()), "MainApplication");
+        return false;
+    }
+}
+
+void MainApplication::shutdownGlobalServices()
+{
+    LOG_INF("Shutting down global services", "MainApplication");
+    
+    // Clear global services registry first
+    GlobalServices::Clear();
+    
+    if (s_unifiedRefreshSystem) {
+        s_unifiedRefreshSystem->shutdown();
+        s_unifiedRefreshSystem.reset();
+    }
+    
+    if (s_commandDispatcher) {
+        s_commandDispatcher.reset();
+    }
+    
+    LOG_INF("Global services shutdown completed", "MainApplication");
 }
 
 wxIMPLEMENT_APP(MainApplication);

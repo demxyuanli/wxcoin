@@ -3,12 +3,14 @@
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
 #include "Canvas.h"
+#include "UnifiedRefreshSystem.h"
 #include "logger/Logger.h"
 #include "PropertyPanel.h"
 #include <wx/treectrl.h>
 #include <wx/sizer.h>
 #include <vector>
 #include <algorithm>
+#include "GlobalServices.h"
 
 ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
     : wxPanel(parent, wxID_ANY)
@@ -195,6 +197,15 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
         return;
     }
 
+    Canvas* canvas = nullptr;
+    wxWindow* parent = GetParent();
+    while (parent && !canvas) {
+        canvas = dynamic_cast<Canvas*>(parent);
+        if (!canvas) {
+            parent = parent->GetParent();
+        }
+    }
+
     if (itemId == m_rootId) {
         LOG_INF_S("Root item selected");
         if (m_propertyPanel) {
@@ -203,6 +214,12 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
         // Deselect all geometries
         if (m_occViewer) {
             m_occViewer->deselectAll();
+            
+            // Use unified refresh system for selection changes
+            UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+            if (refreshSystem) {
+                refreshSystem->refreshView("", false);  // Selection cleared
+            }
         }
         return;
     }
@@ -218,6 +235,12 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
             m_occViewer->deselectAll();
             m_occViewer->setGeometrySelected(geometry->getName(), true);
             LOG_INF_S("Updated OCCViewer selection for: " + geometry->getName());
+            
+            // Use unified refresh system for selection changes
+            UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+            if (refreshSystem) {
+                refreshSystem->refreshView(geometry->getName(), false);  // Selection changed
+            }
         } else {
             LOG_WRN_S("OCCViewer is null in ObjectTreePanel");
         }
@@ -246,6 +269,12 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
         selectedObject->setSelected(true);
         if (m_propertyPanel) {
             m_propertyPanel->updateProperties(selectedObject);
+        }
+        
+        // Use unified refresh system for legacy object selection
+        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+        if (refreshSystem) {
+            refreshSystem->refreshView(selectedObject->getName(), false);
         }
     }
 }

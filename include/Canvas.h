@@ -16,6 +16,8 @@ class EventCoordinator;
 class ViewportManager;
 class MultiViewportManager;
 class ViewRefreshManager;
+class UnifiedRefreshSystem;
+class CommandDispatcher;
 
 class Canvas : public wxGLCanvas {
 public:
@@ -45,7 +47,8 @@ public:
     // External dependencies
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
     void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
-    void setOCCViewer(class OCCViewer* occViewer) { m_occViewer = occViewer; }
+    void setCommandDispatcher(CommandDispatcher* dispatcher) { m_commandDispatcher = dispatcher; }
+    void setOCCViewer(class OCCViewer* occViewer);
     OCCViewer* getOCCViewer() const { return m_occViewer; }
 
     // Scene access shortcuts
@@ -57,6 +60,7 @@ public:
 
     // Refresh management
     ViewRefreshManager* getRefreshManager() const { return m_refreshManager.get(); }
+    UnifiedRefreshSystem* getUnifiedRefreshSystem() const { return m_unifiedRefreshSystem; }
 private:
     void initializeSubsystems();
     void connectSubsystems();
@@ -81,6 +85,7 @@ private:
     ObjectTreePanel* m_objectTreePanel;
     CommandManager* m_commandManager;
     class OCCViewer* m_occViewer;
+    CommandDispatcher* m_commandDispatcher;
 
     // Multi-viewport methods
     void setMultiViewportEnabled(bool enabled);
@@ -91,6 +96,7 @@ private:
     std::unique_ptr<MultiViewportManager> m_multiViewportManager;
     bool m_multiViewportEnabled;
     std::unique_ptr<ViewRefreshManager> m_refreshManager;
+    UnifiedRefreshSystem* m_unifiedRefreshSystem;
 
     DECLARE_EVENT_TABLE()
 

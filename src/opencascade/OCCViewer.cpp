@@ -73,11 +73,19 @@ void OCCViewer::initializeViewer()
     m_normalRoot->ref();
     
     if (m_sceneManager) {
-        m_sceneManager->getObjectRoot()->addChild(m_occRoot);
-        m_sceneManager->getObjectRoot()->addChild(m_normalRoot);
+        SoSeparator* objectRoot = m_sceneManager->getObjectRoot();
+        if (objectRoot) {
+            objectRoot->addChild(m_occRoot);
+            objectRoot->addChild(m_normalRoot);
+            LOG_INF_S("OCC Viewer initialized successfully");
+        } else {
+            LOG_ERR_S("SceneManager object root is null, cannot initialize OCC Viewer");
+            throw std::runtime_error("SceneManager object root is null");
+        }
+    } else {
+        LOG_ERR_S("SceneManager is null, cannot initialize OCC Viewer");
+        throw std::runtime_error("SceneManager is null");
     }
-    
-    LOG_INF_S("OCC Viewer initialized");
 }
 
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)

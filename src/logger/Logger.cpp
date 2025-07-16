@@ -22,8 +22,18 @@ Logger::Logger() : logCtrl(nullptr) {
 }
 
 Logger::~Logger() {
-    if (logFile.is_open()) {
-        logFile.close();
+    try {
+        // Mark as shutting down to prevent further logging
+        isShuttingDown = true;
+        
+        // Clear the log levels set to prevent access during destruction
+        allowedLogLevels.clear();
+        
+        if (logFile.is_open()) {
+            logFile.close();
+        }
+    } catch (...) {
+        // Ignore any exceptions during destruction
     }
 }
 
@@ -72,12 +82,26 @@ void Logger::SetLogLevels(const std::set<LogLevel>& levels, bool isSingleLevel) 
 }
 
 bool Logger::ShouldLog(LogLevel level) const {
-    return allowedLogLevels.find(level) != allowedLogLevels.end();
+    try {
+        // Check if the set is in a valid state
+        if (allowedLogLevels.empty()) {
+            return false;
+        }
+        return allowedLogLevels.find(level) != allowedLogLevels.end();
+    } catch (...) {
+        // If any exception occurs (e.g., during shutdown), return false
+        return false;
+    }
 }
 
 void Logger::Log(LogLevel level, const std::string& message, const std::string& context, 
                  const std::string& file, int line) {
-    if (!ShouldLog(level)) return; // Skip if level is not allowed
+    try {
+        if (!ShouldLog(level)) return; // Skip if level is not allowed
+    } catch (...) {
+        // If ShouldLog throws an exception, skip logging
+        return;
+    }
 
     if (!logFile.is_open()) {
         logFile.open("app.log", std::ios::out | std::ios::app);

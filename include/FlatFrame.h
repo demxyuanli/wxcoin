@@ -101,7 +101,7 @@ private:
     GeometryFactory* m_geometryFactory;
     CommandManager* m_commandManager;
     OCCViewer* m_occViewer;
-    std::unique_ptr<CommandDispatcher> m_commandDispatcher;
+    CommandDispatcher* m_commandDispatcher;
     std::unique_ptr<CommandListenerManager> m_listenerManager;
     bool m_isFirstActivate;
 

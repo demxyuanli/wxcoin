@@ -91,10 +91,10 @@ public:
     
     // View refresh
     void requestViewRefresh();
+    void remeshAllGeometries();
 
 private:
     void initializeViewer();
-    void remeshAllGeometries();
     void onLODTimer();
     void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
 

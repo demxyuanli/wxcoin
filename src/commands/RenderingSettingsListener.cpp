@@ -39,7 +39,12 @@ CommandResult RenderingSettingsListener::executeCommand(const std::string& comma
 CommandResult RenderingSettingsListener::executeCommand(cmd::CommandType commandType,
                                                       const std::unordered_map<std::string, std::string>& parameters)
 {
-    return executeCommand(cmd::to_string(commandType), parameters);
+    try {
+        return executeCommand(cmd::to_string(commandType), parameters);
+    } catch (...) {
+        // Handle potential static map access issues during shutdown
+        return CommandResult(false, "Static map access error during shutdown", "UNKNOWN");
+    }
 }
 
 bool RenderingSettingsListener::canHandleCommand(const std::string& commandType) const

@@ -1,6 +1,10 @@
 #include "TransparencyDialog.h"
+#include "GlobalServices.h"
+#include "FlatFrame.h"
 #include "OCCViewer.h"
 #include "OCCGeometry.h"
+#include "Canvas.h"
+#include "UnifiedRefreshSystem.h"
 #include "logger/Logger.h"
 #include <wx/statbox.h>
 #include <wx/msgdlg.h>
@@ -152,20 +156,19 @@ void TransparencyDialog::applyTransparency()
             }
         }
         
-        // Force refresh the view to show changes immediately
-        LOG_DBG_S("Requesting view refresh after transparency change");
-        m_occViewer->requestViewRefresh();
-        
-        // Additional force refresh by calling parent frame's refresh if available
-        wxWindow* parent = GetParent();
-        while (parent) {
-            if (parent->GetName() == "Canvas" || parent->IsKindOf(wxCLASSINFO(wxGLCanvas))) {
-                parent->Refresh();
-                parent->Update();
-                LOG_DBG_S("Found and refreshed Canvas parent");
-                break;
+        // Use unified refresh system instead of complex parent window refresh
+        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+        if (refreshSystem) {
+            // Refresh material for each selected geometry (for immediate visual feedback)
+            for (const auto& geometry : m_selectedGeometries) {
+                refreshSystem->refreshMaterial(geometry->getName(), true);
             }
-            parent = parent->GetParent();
+            // Refresh view for overall scene update
+            refreshSystem->refreshView("", false);
+        } else {
+            // Fallback to direct refresh if unified system not available
+            LOG_DBG_S("Using fallback refresh mechanism");
+            m_occViewer->requestViewRefresh();
         }
         
         LOG_INF_S("Applied transparency " + std::to_string(m_currentTransparency) + 

@@ -1,5 +1,8 @@
 #include "MeshQualityDialog.h"
+#include "GlobalServices.h"
 #include "OCCViewer.h"
+#include "Canvas.h"
+#include "UnifiedRefreshSystem.h"
 #include "logger/Logger.h"
 #include <wx/statbox.h>
 
@@ -232,6 +235,17 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
     m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
     m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
     m_occViewer->setLODTransitionTime(m_currentLODTransitionTime);
+    
+    // Use unified refresh system for mesh quality changes
+    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+    if (refreshSystem) {
+        // Use command-based refresh for mesh quality changes
+        refreshSystem->refreshGeometry("", true);  // Immediate refresh for mesh changes
+        refreshSystem->refreshView("", false);     // Normal view refresh
+    } else {
+        // Fallback - mesh quality changes should trigger automatic refresh in OCCViewer
+        LOG_DBG_S("Using default mesh quality refresh mechanism");
+    }
     
     LOG_INF_S("Mesh quality settings applied");
 }

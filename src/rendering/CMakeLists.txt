@@ -8,6 +8,7 @@ set(RENDERING_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/PickingAidManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MultiViewportManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewRefreshManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/UnifiedRefreshSystem.cpp
 )
 
 set(RENDERING_HEADERS
@@ -19,6 +20,7 @@ set(RENDERING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/PickingAidManager.h
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
+    ${CMAKE_SOURCE_DIR}/include/UnifiedRefreshSystem.h
 )
 
 # Create rendering static library
@@ -36,6 +38,7 @@ target_link_libraries(CADRendering PUBLIC
     CADCore
     CADOCC
     CADLogger
+    CADCommands
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )

@@ -53,14 +53,16 @@ OCCGeometry::OCCGeometry(const std::string& name)
     m_materialDiffuseColor = materialSettings.diffuseColor;
     m_materialSpecularColor = materialSettings.specularColor;
     m_materialShininess = materialSettings.shininess;
-    m_textureColor = textureSettings.color;
+    
+    // Initialize with light green texture color and enable texture by default
+    m_textureColor = Quantity_Color(0.7, 0.9, 0.7, Quantity_TOC_RGB); // Light green color
     m_textureIntensity = textureSettings.intensity;
-    m_textureEnabled = textureSettings.enabled;
+    m_textureEnabled = true; // Enable texture by default
     m_textureImagePath = textureSettings.imagePath;
-    m_textureMode = textureSettings.textureMode;
+    m_textureMode = RenderingConfig::TextureMode::Decal; // Initialize as DECAL mode
     
     const auto& blendSettings = config.getBlendSettings();
-    m_blendMode = blendSettings.blendMode;
+    m_blendMode = RenderingConfig::BlendMode::None; // Use None instead of blend settings
     m_depthTest = blendSettings.depthTest;
     m_depthWrite = blendSettings.depthWrite;
     m_cullFace = blendSettings.cullFace;
@@ -274,6 +276,9 @@ void OCCGeometry::setTextureImagePath(const std::string& path)
 
 void OCCGeometry::setTextureMode(RenderingConfig::TextureMode mode)
 {
+    LOG_INF_S("Setting texture mode for geometry '" + m_name + "' from " + 
+              RenderingConfig::getTextureModeName(m_textureMode) + " to " + 
+              RenderingConfig::getTextureModeName(mode));
     m_textureMode = mode;
     m_coinNeedsUpdate = true;
 }
@@ -450,7 +455,35 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
         SoTexture2* texture = new SoTexture2;
         texture->wrapS = SoTexture2::REPEAT;
         texture->wrapT = SoTexture2::REPEAT;
-        texture->model = SoTexture2::MODULATE;
+        
+        // Convert RenderingConfig::TextureMode to SoTexture2::Model
+        switch (m_textureMode) {
+            case RenderingConfig::TextureMode::Replace:
+                texture->model = SoTexture2::REPLACE;
+                LOG_INF_S("Applied REPLACE texture mode for geometry: " + m_name);
+                break;
+            case RenderingConfig::TextureMode::Modulate:
+                texture->model = SoTexture2::MODULATE;
+                LOG_INF_S("Applied MODULATE texture mode for geometry: " + m_name);
+                break;
+            case RenderingConfig::TextureMode::Decal:
+                texture->model = SoTexture2::DECAL;
+                LOG_INF_S("Applied DECAL texture mode for geometry: " + m_name);
+                break;
+            case RenderingConfig::TextureMode::Blend:
+                texture->model = SoTexture2::BLEND;
+                LOG_INF_S("Applied BLEND texture mode for geometry: " + m_name);
+                break;
+            case RenderingConfig::TextureMode::Add:
+                // Coin3D doesn't have ADD mode, use MODULATE as fallback
+                texture->model = SoTexture2::MODULATE;
+                LOG_WRN_S("ADD texture mode not supported by Coin3D, using MODULATE as fallback for: " + m_name);
+                break;
+            default:
+                texture->model = SoTexture2::DECAL;
+                LOG_WRN_S("Unknown texture mode, using DECAL as default for geometry: " + m_name);
+                break;
+        }
         
         // Try to load image texture first
         if (!m_textureImagePath.empty()) {

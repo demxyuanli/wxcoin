@@ -11,10 +11,12 @@
 #include "logger/Logger.h"
 #include "NavigationCubeManager.h"
 #include "ViewRefreshManager.h"
+#include "UnifiedRefreshSystem.h"
 #include "RenderingEngine.h"
 #include "EventCoordinator.h"
 #include "ViewportManager.h"
 #include "OCCViewer.h"
+#include "GlobalServices.h"
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
 #include "MultiViewportManager.h"
@@ -39,37 +41,44 @@ EVT_MOUSEWHEEL(Canvas::onMouseEvent)
 END_EVENT_TABLE()
 
 Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size)
-    : wxGLCanvas(parent, id, s_canvasAttribs, pos, size, wxFULL_REPAINT_ON_RESIZE | wxWANTS_CHARS | wxBORDER_NONE)
+    : wxGLCanvas(parent, id, s_canvasAttribs, pos, size, wxFULL_REPAINT_ON_RESIZE)
     , m_objectTreePanel(nullptr)
     , m_commandManager(nullptr)
     , m_occViewer(nullptr)
+    , m_commandDispatcher(nullptr)
+    , m_multiViewportEnabled(false)
 {
-    LOG_INF_S("Canvas::Canvas: Initializing");
-
-    SetName("Canvas");
-    wxSize clientSize = GetClientSize();
-    if (clientSize.x <= 0 || clientSize.y <= 0) {
-        clientSize = wxSize(400, 300);
-        SetSize(clientSize);
-        SetMinSize(clientSize);
-    }
-
+    LOG_INF_S("Canvas: Initializing");
+    
     try {
         initializeSubsystems();
         connectSubsystems();
         
-        if (m_sceneManager && !m_sceneManager->initScene()) {
-            LOG_ERR_S("Canvas::Canvas: Failed to initialize main scene");
-            showErrorDialog("Failed to initialize 3D scene. The application may not function correctly.");
-            throw std::runtime_error("Scene initialization failed");
+        Bind(wxEVT_PAINT, &Canvas::onPaint, this);
+        Bind(wxEVT_SIZE, &Canvas::onSize, this);
+        Bind(wxEVT_ERASE_BACKGROUND, &Canvas::onEraseBackground, this);
+        Bind(wxEVT_LEFT_DOWN, &Canvas::onMouseEvent, this);
+        Bind(wxEVT_LEFT_UP, &Canvas::onMouseEvent, this);
+        Bind(wxEVT_MOTION, &Canvas::onMouseEvent, this);
+        Bind(wxEVT_MOUSEWHEEL, &Canvas::onMouseEvent, this);
+        Bind(wxEVT_RIGHT_DOWN, &Canvas::onMouseEvent, this);
+        Bind(wxEVT_RIGHT_UP, &Canvas::onMouseEvent, this);
+        
+        // Use UnifiedRefreshSystem for initial render if available
+        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+        if (refreshSystem && refreshSystem->isInitialized()) {
+            refreshSystem->refreshView("", true);  // Immediate view refresh
+            LOG_INF_S("Canvas: Initial render triggered via UnifiedRefreshSystem");
+        } else {
+            // Fallback to direct refresh
+            Refresh();
+            LOG_INF_S("Canvas: Initial render triggered via direct refresh");
         }
-
-        Refresh(true);
-        Update();
-        LOG_INF_S("Canvas::Canvas: Initialized successfully");
-    }
-    catch (const std::exception& e) {
-        LOG_ERR_S("Canvas::Canvas: Initialization failed: " + std::string(e.what()));
+        
+        LOG_INF_S("Canvas: Initialization completed successfully");
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Canvas: Initialization failed: " + std::string(e.what()));
+        showErrorDialog("Canvas initialization failed: " + std::string(e.what()));
         throw;
     }
 }
@@ -88,8 +97,18 @@ void Canvas::initializeSubsystems() {
     m_eventCoordinator = std::make_unique<EventCoordinator>();
 
     m_sceneManager = std::make_unique<SceneManager>(this);
+    
+    // Initialize the scene manager
+    if (!m_sceneManager->initScene()) {
+        showErrorDialog("Failed to initialize scene manager.");
+        throw std::runtime_error("SceneManager initialization failed");
+    }
+    
     m_inputManager = std::make_unique<InputManager>(this);
     m_navigationCubeManager = std::make_unique<NavigationCubeManager>(this, m_sceneManager.get());
+    
+    // Get unified refresh system from global application services
+    m_unifiedRefreshSystem = GlobalServices::GetRefreshSystem();
 
     // Initialize rendering engine FIRST
     if (!m_renderingEngine->initialize()) {
@@ -120,6 +139,22 @@ void Canvas::connectSubsystems() {
     // Connect multi-viewport manager
     if (m_multiViewportManager) {
         m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
+    }
+    
+    // Set Canvas and SceneManager in global unified refresh system
+    if (m_unifiedRefreshSystem) {
+        m_unifiedRefreshSystem->setComponents(this, m_occViewer, m_sceneManager.get());
+    }
+    
+    // Use UnifiedRefreshSystem for initial render after all subsystems are connected
+    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+    if (refreshSystem && refreshSystem->isInitialized()) {
+        refreshSystem->refreshView("", true);  // Immediate view refresh
+        LOG_INF_S("Canvas: Subsystems connected - Initial render triggered via UnifiedRefreshSystem");
+    } else {
+        // Fallback to direct refresh
+        Refresh();
+        LOG_INF_S("Canvas: Subsystems connected - Initial render triggered via direct refresh");
     }
 }
 
@@ -267,5 +302,15 @@ float Canvas::getDPIScale() const {
         return m_viewportManager->getDPIScale();
     }
     return GetContentScaleFactor();
+}
+
+void Canvas::setOCCViewer(OCCViewer* occViewer) {
+    m_occViewer = occViewer;
+    
+    // Update global unified refresh system with the new OCCViewer
+    UnifiedRefreshSystem* globalRefreshSystem = GlobalServices::GetRefreshSystem();
+    if (globalRefreshSystem) {
+        globalRefreshSystem->setComponents(this, occViewer, m_sceneManager.get());
+    }
 }
 

@@ -1,4 +1,5 @@
 #include "FlatFrame.h"
+#include "GlobalServices.h"
 #include "flatui/FlatUIPanel.h"
 #include "flatui/FlatUIPage.h"
 #include "flatui/FlatUIButtonBar.h"
@@ -37,6 +38,7 @@
 #include "MeshQualityDialog.h"
 #include "MeshQualityDialogListener.h"
 #include "RenderingSettingsListener.h"
+#include "UnifiedRefreshSystem.h"
 // Add other command listeners includes...
 #include <unordered_map>
 #include "CommandType.h"  // for cmd::CommandType
@@ -503,6 +505,18 @@ void FlatFrame::InitializeUI(const wxSize& size)
     m_ribbon->SetMinSize(wxSize(-1, ribbonMinHeight));
 
     Layout();
+    
+    // Use UnifiedRefreshSystem for initial render after UI is fully initialized
+    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+    if (refreshSystem && refreshSystem->isInitialized() && m_canvas) {
+        refreshSystem->refreshView("", true);  // Immediate view refresh
+        LOG_INF_S("UI initialization: Initial render triggered via UnifiedRefreshSystem");
+    } else if (m_canvas) {
+        // Fallback to direct refresh
+        m_canvas->Refresh();
+        m_canvas->Update();
+        LOG_INF_S("UI initialization: Initial render triggered via fallback method");
+    }
 }
 
 // Complete createPanels method
@@ -563,14 +577,27 @@ void FlatFrame::createPanels() {
     m_canvas->getInputManager()->initializeStates();
     m_canvas->setObjectTreePanel(m_objectTreePanel);
     m_canvas->setCommandManager(m_commandManager);
+    m_canvas->setCommandDispatcher(m_commandDispatcher);
     
     // Set up bidirectional connections
     m_objectTreePanel->setOCCViewer(m_occViewer);
+    
+    // Check that SceneManager is properly initialized before creating GeometryFactory
+    if (!m_canvas->getSceneManager()) {
+        LOG_ERR_S("SceneManager is null, cannot create GeometryFactory");
+        throw std::runtime_error("SceneManager is null");
+    }
+    
+    SoSeparator* objectRoot = m_canvas->getSceneManager()->getObjectRoot();
+    if (!objectRoot) {
+        LOG_ERR_S("SceneManager object root is null, cannot create GeometryFactory");
+        throw std::runtime_error("SceneManager object root is null");
+    }
+    
     m_geometryFactory = new GeometryFactory(
-        m_canvas->getSceneManager()->getObjectRoot(),
+        objectRoot,
         m_objectTreePanel,
         m_propertyPanel,
-        m_commandManager,
         m_occViewer
     );
     
@@ -578,6 +605,22 @@ void FlatFrame::createPanels() {
     if (m_canvas && m_canvas->getSceneManager()) {
         m_canvas->getSceneManager()->resetView();
         LOG_INF_S("Initial view set to isometric and fit to scene");
+        
+        // Use UnifiedRefreshSystem for initial render
+        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+        if (refreshSystem && refreshSystem->isInitialized()) {
+            refreshSystem->refreshScene("", true);  // Immediate scene refresh
+            LOG_INF_S("Initial render triggered via UnifiedRefreshSystem");
+        } else {
+            // Fallback to direct refresh if UnifiedRefreshSystem is not available
+            if (m_canvas->getRefreshManager()) {
+                m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SCENE_CHANGED, true);
+            } else {
+                m_canvas->Refresh();
+                m_canvas->Update();
+            }
+            LOG_INF_S("Initial render triggered via fallback method");
+        }
     }
     LOG_INF_S("Panels creation completed successfully");
 }
@@ -585,8 +628,30 @@ void FlatFrame::createPanels() {
 void FlatFrame::setupCommandSystem() {
     LOG_INF_S("Setting up command system"); 
     
-    // Create command dispatcher
-    m_commandDispatcher = std::make_unique<CommandDispatcher>();
+    // Get global command dispatcher from MainApplication
+    m_commandDispatcher = GlobalServices::GetCommandDispatcher();
+    if (!m_commandDispatcher) {
+        LOG_ERR_S("setupCommandSystem: Global command dispatcher is null");
+        throw std::runtime_error("Global CommandDispatcher not available");
+    }
+    
+    // Check that required components are initialized
+    if (!m_mouseHandler) {
+        LOG_ERR_S("setupCommandSystem: m_mouseHandler is null");
+        throw std::runtime_error("MouseHandler not initialized");
+    }
+    if (!m_geometryFactory) {
+        LOG_ERR_S("setupCommandSystem: m_geometryFactory is null");
+        throw std::runtime_error("GeometryFactory not initialized");
+    }
+    if (!m_occViewer) {
+        LOG_ERR_S("setupCommandSystem: m_occViewer is null");
+        throw std::runtime_error("OCCViewer not initialized");
+    }
+    if (!m_canvas) {
+        LOG_ERR_S("setupCommandSystem: m_canvas is null");
+        throw std::runtime_error("Canvas not initialized");
+    }
     
     // Create command listeners with proper constructors
     auto createBoxListener = std::make_shared<CreateBoxListener>(m_mouseHandler);
@@ -915,6 +980,25 @@ void FlatFrame::OnStartupTimer(wxTimerEvent& event)
             }
         }
     }
+    
+    // Use UnifiedRefreshSystem for initial render of the canvas to ensure proper display
+    UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+    if (refreshSystem && refreshSystem->isInitialized() && m_canvas) {
+        refreshSystem->refreshScene("", true);  // Immediate scene refresh
+        LOG_INF_S("Startup timer: Initial render triggered via UnifiedRefreshSystem");
+    } else if (m_canvas) {
+        // Fallback to direct refresh
+        m_canvas->Refresh();
+        m_canvas->Update();
+        
+        // Also trigger a refresh through the refresh manager if available
+        if (m_canvas->getRefreshManager()) {
+            m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SCENE_CHANGED, true);
+        }
+        
+        LOG_INF_S("Startup timer: Initial render triggered via fallback method");
+    }
+    
     // Initial UI Hierarchy debug log (optional)
     // UIHierarchyDebugger debugger;
     // debugger.PrintUIHierarchy(this);
@@ -1063,16 +1147,21 @@ void FlatFrame::OnThemeChanged(wxCommandEvent& event)
 }
 
 void FlatFrame::onCommand(wxCommandEvent& event) {
-    auto it = kEventTable.find(event.GetId());
-    if (it == kEventTable.end()) { LOG_WRN_S("Unknown command ID: " + std::to_string(event.GetId())); return; }
-    cmd::CommandType commandType = it->second;
-    std::unordered_map<std::string, std::string> parameters;
-    if (commandType == cmd::CommandType::ShowNormals || commandType == cmd::CommandType::ShowEdges) { parameters["toggle"] = "true"; }
-    if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
-        CommandResult result = m_listenerManager->dispatch(commandType, parameters);
-        onCommandFeedback(result);
-    } else {
-        LOG_ERR_S("No listener registered for command"); SetStatusText("Error: No listener registered", 0);
+    try {
+        auto it = kEventTable.find(event.GetId());
+        if (it == kEventTable.end()) { LOG_WRN_S("Unknown command ID: " + std::to_string(event.GetId())); return; }
+        cmd::CommandType commandType = it->second;
+        std::unordered_map<std::string, std::string> parameters;
+        if (commandType == cmd::CommandType::ShowNormals || commandType == cmd::CommandType::ShowEdges) { parameters["toggle"] = "true"; }
+        if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
+            CommandResult result = m_listenerManager->dispatch(commandType, parameters);
+            onCommandFeedback(result);
+        } else {
+            LOG_ERR_S("No listener registered for command"); SetStatusText("Error: No listener registered", 0);
+        }
+    } catch (...) {
+        // Handle potential static map access issues during shutdown
+        std::cout << "Exception during command processing (ignored)" << std::endl;
     }
 }
 
@@ -1091,13 +1180,18 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
     }
     
     // Update UI state for toggle commands (since no menu bar in FlatFrame)
-    if (result.commandId == cmd::to_string(cmd::CommandType::ShowNormals) && result.success && m_occViewer) {
-        // Could update button states here if needed
-        LOG_INF_S("Show normals state updated: " + std::string(m_occViewer->isShowNormals() ? "shown" : "hidden"));
-    }
-    else if (result.commandId == cmd::to_string(cmd::CommandType::ShowEdges) && result.success && m_occViewer) {
-        // Could update button states here if needed
-        LOG_INF_S("Show edges state updated: " + std::string(m_occViewer->isShowEdges() ? "shown" : "hidden"));
+    try {
+        if (result.commandId == cmd::to_string(cmd::CommandType::ShowNormals) && result.success && m_occViewer) {
+            // Could update button states here if needed
+            LOG_INF_S("Show normals state updated: " + std::string(m_occViewer->isShowNormals() ? "shown" : "hidden"));
+        }
+        else if (result.commandId == cmd::to_string(cmd::CommandType::ShowEdges) && result.success && m_occViewer) {
+            // Could update button states here if needed
+            LOG_INF_S("Show edges state updated: " + std::string(m_occViewer->isShowEdges() ? "shown" : "hidden"));
+        }
+    } catch (...) {
+        // Handle potential static map access issues during shutdown
+        std::cout << "Exception during command feedback processing (ignored)" << std::endl;
     }
     
     // Refresh canvas if needed - ensure all view and display commands trigger refresh

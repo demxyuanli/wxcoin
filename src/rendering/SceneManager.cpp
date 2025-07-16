@@ -33,7 +33,12 @@ SceneManager::SceneManager(Canvas* canvas)
 
 SceneManager::~SceneManager() {
     cleanup();
-    LOG_INF_S("SceneManager destroyed");
+    try {
+        // Avoid logging during shutdown to prevent crashes
+        std::cout << "SceneManager destroyed" << std::endl;
+    } catch (...) {
+        // Ignore any exceptions during shutdown
+    }
 }
 
 bool SceneManager::initScene() {

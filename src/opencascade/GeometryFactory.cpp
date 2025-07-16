@@ -2,8 +2,6 @@
 #include "GeometryObject.h"
 #include "ObjectTreePanel.h"
 #include "PropertyPanel.h"
-#include "Command.h"
-#include "CreateCommand.h"
 #include "logger/Logger.h"
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
@@ -14,11 +12,10 @@
 #include <gp_Pnt.hxx>
 
 GeometryFactory::GeometryFactory(SoSeparator* root, ObjectTreePanel* treePanel, PropertyPanel* propPanel, 
-                                CommandManager* cmdManager, OCCViewer* occViewer)
+                                OCCViewer* occViewer)
     : m_root(root)
     , m_treePanel(treePanel)
     , m_propPanel(propPanel)
-    , m_cmdManager(cmdManager)
     , m_occViewer(occViewer)
     , m_defaultGeometryType(GeometryType::OPENCASCADE)
 {

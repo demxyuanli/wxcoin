@@ -28,7 +28,12 @@ public:
     // Override in derived classes for stronger type safety if desired.
     virtual inline CommandResult executeCommand(cmd::CommandType commandType,
                                                const std::unordered_map<std::string, std::string>& parameters) {
-        return executeCommand(cmd::to_string(commandType), parameters);
+        try {
+            return executeCommand(cmd::to_string(commandType), parameters);
+        } catch (...) {
+            // Handle potential static map access issues during shutdown
+            return CommandResult(false, "Static map access error during shutdown", "UNKNOWN");
+        }
     }
     
     /**
@@ -40,7 +45,12 @@ public:
     
     // New type-safe check helper.
     virtual inline bool canHandleCommand(cmd::CommandType commandType) const {
-        return canHandleCommand(cmd::to_string(commandType));
+        try {
+            return canHandleCommand(cmd::to_string(commandType));
+        } catch (...) {
+            // Handle potential static map access issues during shutdown
+            return false;
+        }
     }
     
     /**

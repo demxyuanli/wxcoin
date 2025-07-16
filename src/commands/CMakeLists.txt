@@ -2,7 +2,6 @@
 set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Command.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CreateCommand.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/GeometryFactory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CommandDispatcher.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewAllListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewTopListener.cpp
@@ -36,12 +35,13 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CommandListenerManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialogListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/RefreshCommand.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/RefreshCommandListener.cpp
 )
 
 set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/Command.h
     ${CMAKE_SOURCE_DIR}/include/CreateCommand.h
-    ${CMAKE_SOURCE_DIR}/include/GeometryFactory.h
     ${CMAKE_SOURCE_DIR}/include/CommandDispatcher.h
     ${CMAKE_SOURCE_DIR}/include/CommandListener.h
     ${CMAKE_SOURCE_DIR}/include/FileNewListener.h
@@ -76,6 +76,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/CommandListenerManager.h
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialogListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsListener.h
+    ${CMAKE_SOURCE_DIR}/include/RefreshCommand.h
+    ${CMAKE_SOURCE_DIR}/include/RefreshCommandListener.h
 )
 
 # Create command static library

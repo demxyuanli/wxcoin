@@ -60,7 +60,12 @@ MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneMa
 }
 
 MultiViewportManager::~MultiViewportManager() {
-    LOG_INF_S("MultiViewportManager: Destroyed");
+    try {
+        // Avoid logging during shutdown to prevent crashes
+        std::cout << "MultiViewportManager: Destroyed" << std::endl;
+    } catch (...) {
+        // Ignore any exceptions during shutdown
+    }
     
     if (m_cubeOutlineRoot) {
         m_cubeOutlineRoot->unref();

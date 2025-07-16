@@ -1,7 +1,10 @@
 #include "RenderingSettingsDialog.h"
+#include "GlobalServices.h"
 #include "OCCViewer.h"
 #include "RenderingEngine.h"
 #include "config/RenderingConfig.h"
+#include "Canvas.h"
+#include "UnifiedRefreshSystem.h"
 #include <wx/wx.h>
 #include <wx/colour.h>
 #include <wx/colordlg.h>
@@ -1388,8 +1391,16 @@ void RenderingSettingsDialog::applySettings()
             m_renderingEngine->setLightAmbientIntensity(m_lightAmbientIntensity);
         }
         
-        // Request view refresh to apply changes
-        m_occViewer->requestViewRefresh();
+        // Use unified refresh system instead of direct refresh
+        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+        if (refreshSystem) {
+            // Use command-based refresh for rendering settings changes
+            refreshSystem->refreshMaterial("", true);  // Immediate refresh for material changes
+            refreshSystem->refreshView("", false);     // Normal refresh for view update
+        } else {
+            // Fallback to direct refresh if unified system not available
+            m_occViewer->requestViewRefresh();
+        }
     }
 }
 
