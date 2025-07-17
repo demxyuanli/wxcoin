@@ -90,9 +90,11 @@ bool NavigationCubeManager::handleMouseEvent(wxMouseEvent& event) {
     float x = event.GetX() / dpiScale;
     float y = event.GetY() / dpiScale;
 
+    // Check if mouse is within the navigation cube bounds
     if (x >= m_cubeLayout.x && x < (m_cubeLayout.x + m_cubeLayout.size) &&
         y >= m_cubeLayout.y && y < (m_cubeLayout.y + m_cubeLayout.size)) {
 
+        // Create a new mouse event with coordinates relative to the cube
         wxMouseEvent cubeEvent(event);
         cubeEvent.m_x = static_cast<int>((x - m_cubeLayout.x) * dpiScale);
         cubeEvent.m_y = static_cast<int>((y - m_cubeLayout.y) * dpiScale);
@@ -100,14 +102,22 @@ bool NavigationCubeManager::handleMouseEvent(wxMouseEvent& event) {
         int scaled_cube_dimension = static_cast<int>(m_cubeLayout.size * dpiScale);
         wxSize cube_viewport_scaled_size(scaled_cube_dimension, scaled_cube_dimension);
 
+        // Only handle specific mouse events
         if (event.GetEventType() == wxEVT_LEFT_DOWN ||
             event.GetEventType() == wxEVT_LEFT_UP ||
             event.GetEventType() == wxEVT_MOTION) {
-            m_navCube->handleMouseEvent(cubeEvent, cube_viewport_scaled_size);
-            m_canvas->Refresh(true);
-            return true; // Event handled
+            
+            try {
+                m_navCube->handleMouseEvent(cubeEvent, cube_viewport_scaled_size);
+                m_canvas->Refresh(true);
+                return true; // Event handled
+            } catch (const std::exception& e) {
+                LOG_ERR_S("Error handling navigation cube mouse event: " + std::string(e.what()));
+                return false;
+            }
         }
     }
+    
     return false; // Event not handled
 }
 

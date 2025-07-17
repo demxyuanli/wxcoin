@@ -213,6 +213,9 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
             UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
             if (refreshSystem) {
                 refreshSystem->refreshView("", false);  // Selection cleared
+            } else if (canvas) {
+                // Fallback to direct refresh if UnifiedRefreshSystem is not available
+                canvas->Refresh();
             }
         }
         return;
@@ -226,14 +229,24 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
         
         // Update viewer selection
         if (m_occViewer) {
-            m_occViewer->deselectAll();
-            m_occViewer->setGeometrySelected(geometry->getName(), true);
-            LOG_INF_S("Updated OCCViewer selection for: " + geometry->getName());
-            
-            // Use unified refresh system for selection changes
-            UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
-            if (refreshSystem) {
-                refreshSystem->refreshView(geometry->getName(), false);  // Selection changed
+            try {
+                m_occViewer->deselectAll();
+                m_occViewer->setGeometrySelected(geometry->getName(), true);
+                LOG_INF_S("Updated OCCViewer selection for: " + geometry->getName());
+                
+                // Use unified refresh system for selection changes
+                UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+                if (refreshSystem) {
+                    refreshSystem->refreshView(geometry->getName(), false);  // Selection changed
+                } else if (canvas) {
+                    // Fallback to direct refresh if UnifiedRefreshSystem is not available
+                    canvas->Refresh();
+                }
+            } catch (const std::exception& e) {
+                LOG_ERR_S("Error updating OCCViewer selection: " + std::string(e.what()));
+                if (canvas) {
+                    canvas->Refresh();
+                }
             }
         } else {
             LOG_WRN_S("OCCViewer is null in ObjectTreePanel");
@@ -241,8 +254,12 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
         
         // Update property panel
         if (m_propertyPanel) {
-            m_propertyPanel->updateProperties(geometry);
-            LOG_INF_S("Updated PropertyPanel for OCCGeometry: " + geometry->getName());
+            try {
+                m_propertyPanel->updateProperties(geometry);
+                LOG_INF_S("Updated PropertyPanel for OCCGeometry: " + geometry->getName());
+            } catch (const std::exception& e) {
+                LOG_ERR_S("Error updating PropertyPanel: " + std::string(e.what()));
+            }
         } else {
             LOG_WRN_S("PropertyPanel is null in ObjectTreePanel");
         }
@@ -260,15 +277,25 @@ void ObjectTreePanel::onSelectionChanged(wxTreeEvent& event)
 
     if (selectedObject) {
         LOG_INF_S("Selected object in tree: " + selectedObject->getName());
-        selectedObject->setSelected(true);
-        if (m_propertyPanel) {
-            m_propertyPanel->updateProperties(selectedObject);
-        }
-        
-        // Use unified refresh system for legacy object selection
-        UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
-        if (refreshSystem) {
-            refreshSystem->refreshView(selectedObject->getName(), false);
+        try {
+            selectedObject->setSelected(true);
+            if (m_propertyPanel) {
+                m_propertyPanel->updateProperties(selectedObject);
+            }
+            
+            // Use unified refresh system for legacy object selection
+            UnifiedRefreshSystem* refreshSystem = GlobalServices::GetRefreshSystem();
+            if (refreshSystem) {
+                refreshSystem->refreshView(selectedObject->getName(), false);
+            } else if (canvas) {
+                // Fallback to direct refresh
+                canvas->Refresh();
+            }
+        } catch (const std::exception& e) {
+            LOG_ERR_S("Error handling legacy object selection: " + std::string(e.what()));
+            if (canvas) {
+                canvas->Refresh();
+            }
         }
     }
 }

@@ -30,6 +30,7 @@ target_include_directories(CADInput PUBLIC
 target_link_libraries(CADInput PUBLIC
     CADCore
     CADLogger
+    NavCubeLib
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )

@@ -20,29 +20,39 @@ bool EventCoordinator::handleMouseEvent(wxMouseEvent& event) {
         return false;
     }
 
-    // Give navigation cube manager first chance to handle event
-    if (m_navigationCubeManager && m_navigationCubeManager->handleMouseEvent(event)) {
-        return true; // Event was handled by the cube
-    }
+    try {
+        // Give navigation cube manager first chance to handle event
+        if (m_navigationCubeManager && m_navigationCubeManager->handleMouseEvent(event)) {
+            return true; // Event was handled by the cube
+        }
 
-    // Forward other events to InputManager
-    if (event.GetEventType() == wxEVT_LEFT_DOWN ||
-        event.GetEventType() == wxEVT_LEFT_UP ||
-        event.GetEventType() == wxEVT_RIGHT_DOWN ||
-        event.GetEventType() == wxEVT_RIGHT_UP) {
-        m_inputManager->onMouseButton(event);
-        return true;
-    }
-    else if (event.GetEventType() == wxEVT_MOTION) {
-        m_inputManager->onMouseMotion(event);
-        return true;
-    }
-    else if (event.GetEventType() == wxEVT_MOUSEWHEEL) {
-        m_inputManager->onMouseWheel(event);
-        return true;
-    }
+        // Forward other events to InputManager
+        if (event.GetEventType() == wxEVT_LEFT_DOWN ||
+            event.GetEventType() == wxEVT_LEFT_UP ||
+            event.GetEventType() == wxEVT_RIGHT_DOWN ||
+            event.GetEventType() == wxEVT_RIGHT_UP) {
+            m_inputManager->onMouseButton(event);
+            return true;
+        }
+        else if (event.GetEventType() == wxEVT_MOTION) {
+            m_inputManager->onMouseMotion(event);
+            return true;
+        }
+        else if (event.GetEventType() == wxEVT_MOUSEWHEEL) {
+            m_inputManager->onMouseWheel(event);
+            return true;
+        }
+        else if (event.GetEventType() == wxEVT_ENTER_WINDOW ||
+                 event.GetEventType() == wxEVT_LEAVE_WINDOW) {
+            // Handle window enter/leave events if needed
+            return false; // Let default handling
+        }
 
-    return false; // Event not handled
+        return false; // Event not handled
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Error in EventCoordinator::handleMouseEvent: " + std::string(e.what()));
+        return false;
+    }
 }
 
 void EventCoordinator::handleSizeEvent(wxSizeEvent& event) {

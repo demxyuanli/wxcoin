@@ -10,6 +10,7 @@
 #include "ObjectTreePanel.h"
 #include "logger/Logger.h"
 #include "NavigationCubeManager.h"
+#include "NavigationController.h"
 #include "ViewRefreshManager.h"
 #include "UnifiedRefreshSystem.h"
 #include "RenderingEngine.h"
@@ -103,6 +104,12 @@ void Canvas::initializeSubsystems() {
     m_inputManager = std::make_unique<InputManager>(this);
     m_navigationCubeManager = std::make_unique<NavigationCubeManager>(this, m_sceneManager.get());
     
+    // Create NavigationController
+    m_navigationController = std::make_unique<NavigationController>(this, m_sceneManager.get());
+    
+    // Create LODManager
+    m_lodManager = std::make_unique<LODManager>(m_sceneManager.get());
+    
     // Canvas no longer uses UnifiedRefreshSystem internally
     m_unifiedRefreshSystem = nullptr;
 
@@ -131,6 +138,11 @@ void Canvas::connectSubsystems() {
     // Connect event coordinator
     m_eventCoordinator->setNavigationCubeManager(m_navigationCubeManager.get());
     m_eventCoordinator->setInputManager(m_inputManager.get());
+    
+    // Connect input manager with navigation controller
+    if (m_inputManager && m_navigationController) {
+        m_inputManager->setNavigationController(m_navigationController.get());
+    }
     
     // Connect multi-viewport manager
     if (m_multiViewportManager) {
@@ -221,20 +233,6 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
-    // Check if this is an interaction event that should trigger LOD
-    bool isInteractionEvent = false;
-    if (event.GetEventType() == wxEVT_LEFT_DOWN || 
-        event.GetEventType() == wxEVT_RIGHT_DOWN ||
-        event.GetEventType() == wxEVT_MOTION ||
-        event.GetEventType() == wxEVT_MOUSEWHEEL) {
-        isInteractionEvent = true;
-    }
-    
-    // Trigger LOD interaction if enabled
-    if (isInteractionEvent && m_occViewer) {
-        m_occViewer->startLODInteraction();
-    }
-    
     // Check multi-viewport first - this should have higher priority
     if (m_multiViewportEnabled && m_multiViewportManager) {
         if (m_multiViewportManager->handleMouseEvent(event)) {
@@ -248,6 +246,8 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
             return; // Event was handled
         }
     }
+    
+    // If no one handled the event, skip it to allow default processing
     event.Skip();
 }
 
@@ -311,5 +311,42 @@ void Canvas::setOCCViewer(OCCViewer* occViewer) {
     
     // Canvas no longer updates UnifiedRefreshSystem internally
     // External components can still access UnifiedRefreshSystem if needed
+}
+
+NavigationController* Canvas::getNavigationController() const {
+    return m_navigationController.get();
+}
+
+void Canvas::setLODEnabled(bool enabled) {
+    if (m_lodManager) {
+        m_lodManager->setLODEnabled(enabled);
+    }
+}
+
+bool Canvas::isLODEnabled() const {
+    if (m_lodManager) {
+        return m_lodManager->isLODEnabled();
+    }
+    return false;
+}
+
+void Canvas::setLODLevel(LODManager::LODLevel level) {
+    if (m_lodManager) {
+        m_lodManager->setLODLevel(level);
+    }
+}
+
+LODManager::LODLevel Canvas::getCurrentLODLevel() const {
+    if (m_lodManager) {
+        return m_lodManager->getCurrentLODLevel();
+    }
+    return LODManager::LODLevel::FINE;
+}
+
+LODManager::PerformanceMetrics Canvas::getLODPerformanceMetrics() const {
+    if (m_lodManager) {
+        return m_lodManager->getPerformanceMetrics();
+    }
+    return LODManager::PerformanceMetrics();
 }
 

@@ -308,22 +308,34 @@ void OCCViewer::setGeometrySelected(const std::string& name, bool selected)
     }
 
     LOG_INF_S("Setting geometry selection: " + name + " -> " + (selected ? "true" : "false"));
+    
+    try {
         geometry->setSelected(selected);
         
         if (selected) {
-        if (std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry) == m_selectedGeometries.end()) {
+            if (std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry) == m_selectedGeometries.end()) {
                 m_selectedGeometries.push_back(geometry);
-            LOG_INF_S("Added geometry to selected list: " + name);
+                LOG_INF_S("Added geometry to selected list: " + name);
             }
         } else {
-        auto it = std::remove(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
-        if (it != m_selectedGeometries.end()) {
-            m_selectedGeometries.erase(it, m_selectedGeometries.end());
-            LOG_INF_S("Removed geometry from selected list: " + name);
+            auto it = std::remove(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
+            if (it != m_selectedGeometries.end()) {
+                m_selectedGeometries.erase(it, m_selectedGeometries.end());
+                LOG_INF_S("Removed geometry from selected list: " + name);
+            }
+        }
+        
+        onSelectionChanged();
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Error setting geometry selection: " + std::string(e.what()));
+        // Try to recover by forcing a refresh
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas) {
+                canvas->Refresh();
+            }
         }
     }
-    
-    onSelectionChanged();
 }
 
 void OCCViewer::setGeometryColor(const std::string& name, const Quantity_Color& color)
@@ -539,23 +551,38 @@ void OCCViewer::onSelectionChanged()
 {
     LOG_INF_S("Selection changed - selected geometries: " + std::to_string(m_selectedGeometries.size()));
     
-    // Update ObjectTree selection if available
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        Canvas* canvas = m_sceneManager->getCanvas();
-        if (canvas && canvas->getObjectTreePanel()) {
-            canvas->getObjectTreePanel()->updateTreeSelectionFromViewer();
-            LOG_INF_S("Updated ObjectTreePanel selection");
+    try {
+        // Update ObjectTree selection if available
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas && canvas->getObjectTreePanel()) {
+                canvas->getObjectTreePanel()->updateTreeSelectionFromViewer();
+                LOG_INF_S("Updated ObjectTreePanel selection");
+            } else {
+                LOG_WRN_S("Canvas or ObjectTreePanel is null in OCCViewer");
+            }
+            
+            // Force a scene refresh to show selection changes
+            if (canvas && canvas->getRefreshManager()) {
+                canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SELECTION_CHANGED, true);
+                LOG_INF_S("Requested scene refresh for selection change");
+            } else if (canvas) {
+                // Fallback to direct refresh if refresh manager is not available
+                canvas->Refresh();
+                LOG_INF_S("Used direct refresh for selection change");
+            }
         } else {
-            LOG_WRN_S("Canvas or ObjectTreePanel is null in OCCViewer");
+            LOG_WRN_S("SceneManager or Canvas is null in OCCViewer");
         }
-        
-        // Force a scene refresh to show selection changes
-        if (canvas && canvas->getRefreshManager()) {
-            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SELECTION_CHANGED, true);
-            LOG_INF_S("Requested scene refresh for selection change");
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Error in onSelectionChanged: " + std::string(e.what()));
+        // Try to recover by forcing a refresh
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas) {
+                canvas->Refresh();
+            }
         }
-    } else {
-        LOG_WRN_S("SceneManager or Canvas is null in OCCViewer");
     }
 }
 

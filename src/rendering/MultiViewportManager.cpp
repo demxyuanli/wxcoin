@@ -732,7 +732,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
     float y_wx = event.GetY();
     float y = canvasSize.y - y_wx; 
 
-    
     // Priority 1: Check navigation cube viewport first
     // Note: NavigationCubeManager uses wxWidgets coordinate system (top-left origin)
     if (m_navigationCubeManager) {
@@ -750,12 +749,10 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
         int actualYBottom = canvasSize.y - outlineViewport.y - outlineViewport.height;
         int actualYTop = actualYBottom + outlineViewport.height;
         
-        
         bool xInRange = (x >= outlineViewport.x && x < (outlineViewport.x + outlineViewport.width));
         bool yInRange = (y >= actualYBottom && y < actualYTop);
         
         if (xInRange && yInRange) {
-
             // Convert gl coordinates to Open Inventor viewport-local coordinates (left-bottom origin)
             int localX = static_cast<int>(x) - outlineViewport.x;
             int localY = static_cast<int>(y) - actualYBottom;
@@ -779,9 +776,7 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
                         std::string clickedShape = findShapeNameFromPath(path);
                         LOG_INF_S(clickedShape + " clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
                     }
-
                 }
-
                 return true;
             }
             else if (event.LeftUp()) {
@@ -806,7 +801,7 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
         }
     }
     
-    // Mouse is not in any viewport
+    // Mouse is not in any viewport - let other handlers process the event
     return false;
 }
 
