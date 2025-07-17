@@ -33,6 +33,7 @@ target_link_libraries(NavCubeLib PUBLIC
     CADLogger
     CADRendering
     CADOCC
+    optimizer
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )

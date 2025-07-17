@@ -12,6 +12,7 @@
 #include "Canvas.h"
 #include "ObjectTreePanel.h"
 #include "ViewRefreshManager.h"
+#include "optimizer/PerformanceOptimizer.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
@@ -90,11 +91,52 @@ void OCCViewer::initializeViewer()
 
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
+    START_PERFORMANCE_TIMING(geometry_add);
+    
     if (!geometry) {
         LOG_ERR_S("Attempted to add null geometry to OCCViewer");
+        END_PERFORMANCE_TIMING(geometry_add);
         return;
     }
     
+    // Use optimized geometry manager if available
+    if (g_performanceOptimizer && g_performanceOptimizer->getGeometryManager()) {
+        auto manager = g_performanceOptimizer->getGeometryManager();
+        manager->addGeometry(geometry);
+        
+        // Add to Coin3D scene
+        SoSeparator* coinNode = geometry->getCoinNode();
+        if (coinNode && m_occRoot) {
+            m_occRoot->addChild(coinNode);
+        }
+        
+        // Add geometry to ObjectTree if available
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas && canvas->getObjectTreePanel()) {
+                canvas->getObjectTreePanel()->addOCCGeometry(geometry);
+            }
+        }
+        
+        // Auto-update scene bounds and view when geometry is added
+        if (m_sceneManager) {
+            m_sceneManager->updateSceneBounds();
+            m_sceneManager->resetView();
+            
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas && canvas->getRefreshManager()) {
+                canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+            }
+            
+            canvas->Refresh();
+        }
+        
+        LOG_INF_S("Added OCC geometry using optimized manager: " + geometry->getName());
+        END_PERFORMANCE_TIMING(geometry_add);
+        return;
+    }
+    
+    // Fallback to original implementation
     auto it = std::find_if(m_geometries.begin(), m_geometries.end(),
         [&](const std::shared_ptr<OCCGeometry>& g) {
             return g->getName() == geometry->getName();
@@ -102,6 +144,7 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     
     if (it != m_geometries.end()) {
         LOG_WRN_S("Geometry with name '" + geometry->getName() + "' already exists");
+        END_PERFORMANCE_TIMING(geometry_add);
         return;
     }
     
@@ -148,12 +191,43 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
         canvas->Refresh();
         LOG_INF_S("Auto-updated scene bounds and view after adding geometry");
     }
+    
+    END_PERFORMANCE_TIMING(geometry_add);
 }
 
 void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
-    if (!geometry) return;
+    START_PERFORMANCE_TIMING(geometry_remove);
     
+    if (!geometry) {
+        END_PERFORMANCE_TIMING(geometry_remove);
+        return;
+    }
+    
+    // Use optimized geometry manager if available
+    if (g_performanceOptimizer && g_performanceOptimizer->getGeometryManager()) {
+        auto manager = g_performanceOptimizer->getGeometryManager();
+        manager->removeGeometry(geometry);
+        
+        // Remove from Coin3D scene
+        if (geometry->getCoinNode() && m_occRoot) {
+            m_occRoot->removeChild(geometry->getCoinNode());
+        }
+        
+        // Remove geometry from ObjectTree if available
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas && canvas->getObjectTreePanel()) {
+                canvas->getObjectTreePanel()->removeOCCGeometry(geometry);
+            }
+        }
+        
+        LOG_INF_S("Removed OCC geometry using optimized manager: " + geometry->getName());
+        END_PERFORMANCE_TIMING(geometry_remove);
+        return;
+    }
+    
+    // Fallback to original implementation
     auto it = std::find(m_geometries.begin(), m_geometries.end(), geometry);
     if (it != m_geometries.end()) {
         if (geometry->getCoinNode() && m_occRoot) {
@@ -176,6 +250,8 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
         m_geometries.erase(it);
         LOG_INF_S("Removed OCC geometry: " + geometry->getName());
     }
+    
+    END_PERFORMANCE_TIMING(geometry_remove);
 }
 
 void OCCViewer::removeGeometry(const std::string& name)

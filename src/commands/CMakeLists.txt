@@ -94,6 +94,7 @@ target_link_libraries(CADCommands PUBLIC
     CADCore
     CADLogger
     CADOCC
+    optimizer
     ${wxWidgets_LIBRARIES}
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}

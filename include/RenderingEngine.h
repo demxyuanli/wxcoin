@@ -28,6 +28,7 @@ public:
     
     void setSceneManager(SceneManager* sceneManager) { m_sceneManager = sceneManager; }
     void setNavigationCubeManager(NavigationCubeManager* navCubeManager) { m_navigationCubeManager = navCubeManager; }
+    void setOCCViewer(class OCCViewer* occViewer) { m_occViewer = occViewer; }
     
     // Lighting settings
     void setLightAmbientColor(const Quantity_Color& color);
@@ -45,6 +46,7 @@ private:
     std::unique_ptr<wxGLContext> m_glContext;
     SceneManager* m_sceneManager;
     NavigationCubeManager* m_navigationCubeManager;
+    class OCCViewer* m_occViewer;
     
     bool m_isInitialized;
     bool m_isRendering;

@@ -328,7 +328,6 @@ SbVec3f PositionDialog::GetPosition() const
 }
 
 void PositionDialog::OnPickButton(wxCommandEvent& event) {
-    LOG_INF_S("Pick button clicked - entering picking mode");
     if (m_pickingAidManager) {
         m_pickingAidManager->startPicking();
         m_pickingAidManager->showPickingAidLines(GetPosition());
@@ -337,12 +336,10 @@ void PositionDialog::OnPickButton(wxCommandEvent& event) {
     m_pickButton->Enable(false);
     this->Hide();
     if (m_pickingAidManager) {
-        LOG_INF("Dialog hidden, picking mode active: " + std::to_string(m_pickingAidManager->isPicking()),"PositionDialog");
     }
 }
 
 void PositionDialog::OnOkButton(wxCommandEvent& event) {
-    LOG_INF_S("Position confirmed: " + std::to_string(GetPosition()[0]) + ", " + std::to_string(GetPosition()[1]) + ", " + std::to_string(GetPosition()[2]));
     if (m_pickingAidManager) {
         m_pickingAidManager->stopPicking();
     }
@@ -372,7 +369,6 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                     GeometryParameters params = GetGeometryParameters();
                     try {
                         factory.createOCCGeometryWithParameters(geometryType, finalPos, params);
-                        LOG_INF_S("Creating geometry at position from dialog with parameters");
                     } catch (const std::exception& e) {
                         LOG_ERR_S("Exception during geometry creation: " + std::string(e.what()));
                         wxMessageBox("Failed to create geometry: " + std::string(e.what()), "Error", wxOK | wxICON_ERROR);
@@ -389,7 +385,6 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
                     
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");
-                    LOG_INF_S("Reset operation mode to VIEW");
                 }
                 else {
                     LOG_ERR_S("MouseHandler not found");
@@ -412,7 +407,6 @@ void PositionDialog::OnOkButton(wxCommandEvent& event) {
 }
 
 void PositionDialog::OnCancelButton(wxCommandEvent& event) {
-    LOG_INF_S("Position input cancelled");
     if (m_pickingAidManager) {
         m_pickingAidManager->stopPicking();
     }
@@ -428,7 +422,6 @@ void PositionDialog::OnCancelButton(wxCommandEvent& event) {
                 if (mouseHandler) {
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");
-                    LOG_INF_S("Reset operation mode to VIEW on cancel");
                 }
             }
             else {
@@ -457,7 +450,6 @@ void PositionDialog::OnReferenceZChanged(wxCommandEvent& event) {
                 Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
                 if (canvas) {
                     canvas->getSceneManager()->getPickingAidManager()->setReferenceZ(static_cast<float>(referenceZ));
-                    LOG_INF_S("Reference Z set to: " + std::to_string(referenceZ));
                 }
             }
         }
@@ -478,7 +470,6 @@ void PositionDialog::OnShowGridChanged(wxCommandEvent& event) {
             Canvas* canvas = dynamic_cast<Canvas*>(canvasWindow);
             if (canvas) {
                 canvas->getSceneManager()->getPickingAidManager()->showReferenceGrid(showGrid);
-                LOG_INF("Reference grid display: " + std::string(showGrid ? "enabled" : "disabled"),"PositionDialog");
             }
         }
     }
@@ -487,7 +478,6 @@ void PositionDialog::OnShowGridChanged(wxCommandEvent& event) {
 
 void PositionDialog::OnClose(wxCloseEvent& event)
 {
-    LOG_INF("Position dialog closed, ensuring picking mode is off.","PositionDialog");
     if (m_pickingAidManager) {
         m_pickingAidManager->stopPicking();
     }
@@ -503,7 +493,6 @@ void PositionDialog::OnClose(wxCloseEvent& event)
                 if (mouseHandler) {
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");
-                    LOG_INF_S("Reset operation mode to VIEW on close");
                 }
             }
         }

@@ -34,7 +34,7 @@ void PropertyPanel::updateProperties(GeometryObject* object)
         return;
     }
 
-    LOG_INF_S("Updating properties for object: " + object->getName());
+    // Removed high-frequency log: LOG_INF_S("Updating properties for object: " + object->getName());
     m_currentObject = object;
     m_currentOCCGeometry = nullptr;
     m_propGrid->Clear();
@@ -68,58 +68,28 @@ void PropertyPanel::updateProperties(std::shared_ptr<OCCGeometry> geometry)
         return;
     }
 
-    LOG_INF_S("Updating properties for OCCGeometry: " + geometry->getName());
+    // Removed high-frequency log: LOG_INF_S("Updating properties for OCCGeometry: " + geometry->getName());
     m_currentObject = nullptr;
     m_currentOCCGeometry = geometry;
     m_propGrid->Clear();
 
-    // Basic properties
     m_propGrid->Append(new wxStringProperty("Name", "Name", geometry->getName()));
-    m_propGrid->Append(new wxBoolProperty("Visible", "Visible", geometry->isVisible()));
-    m_propGrid->Append(new wxBoolProperty("Selected", "Selected", geometry->isSelected()));
 
-    // Position properties
     gp_Pnt position = geometry->getPosition();
     m_propGrid->Append(new wxFloatProperty("Position X", "PosX", position.X()));
     m_propGrid->Append(new wxFloatProperty("Position Y", "PosY", position.Y()));
     m_propGrid->Append(new wxFloatProperty("Position Z", "PosZ", position.Z()));
 
-    // Scale property
     m_propGrid->Append(new wxFloatProperty("Scale", "Scale", geometry->getScale()));
-
-    // Transparency property
     m_propGrid->Append(new wxFloatProperty("Transparency", "Transparency", geometry->getTransparency()));
 
-    // Color properties
     Quantity_Color color = geometry->getColor();
     m_propGrid->Append(new wxFloatProperty("Color R", "ColorR", color.Red()));
     m_propGrid->Append(new wxFloatProperty("Color G", "ColorG", color.Green()));
     m_propGrid->Append(new wxFloatProperty("Color B", "ColorB", color.Blue()));
 
-    // Geometry type specific properties
-    if (auto box = std::dynamic_pointer_cast<OCCBox>(geometry)) {
-        double width, height, depth;
-        box->getSize(width, height, depth);
-        m_propGrid->Append(new wxFloatProperty("Width", "Width", width));
-        m_propGrid->Append(new wxFloatProperty("Height", "Height", height));
-        m_propGrid->Append(new wxFloatProperty("Depth", "Depth", depth));
-    }
-    else if (auto cylinder = std::dynamic_pointer_cast<OCCCylinder>(geometry)) {
-        double radius, height;
-        cylinder->getSize(radius, height);
-        m_propGrid->Append(new wxFloatProperty("Radius", "Radius", radius));
-        m_propGrid->Append(new wxFloatProperty("Height", "Height", height));
-    }
-    else if (auto sphere = std::dynamic_pointer_cast<OCCSphere>(geometry)) {
-        m_propGrid->Append(new wxFloatProperty("Radius", "Radius", sphere->getRadius()));
-    }
-    else if (auto cone = std::dynamic_pointer_cast<OCCCone>(geometry)) {
-        double bottomRadius, topRadius, height;
-        cone->getSize(bottomRadius, topRadius, height);
-        m_propGrid->Append(new wxFloatProperty("Bottom Radius", "BottomRadius", bottomRadius));
-        m_propGrid->Append(new wxFloatProperty("Top Radius", "TopRadius", topRadius));
-        m_propGrid->Append(new wxFloatProperty("Height", "Height", height));
-    }
+    m_propGrid->Append(new wxBoolProperty("Visible", "Visible", geometry->isVisible()));
+    m_propGrid->Append(new wxBoolProperty("Selected", "Selected", geometry->isSelected()));
 }
 
 void PropertyPanel::onPropertyChanged(wxPropertyGridEvent& event)
@@ -130,7 +100,7 @@ void PropertyPanel::onPropertyChanged(wxPropertyGridEvent& event)
         return;
     }
 
-    LOG_INF_S("Property changed: " + property->GetName().ToStdString() + " to " + property->GetValueAsString().ToStdString());
+    // Removed high-frequency log: LOG_INF_S(Property changed: + property->GetName().ToStdString() + to +property->GetValueAsString().ToStdString());
 
     // Handle OCCGeometry properties
     if (m_currentOCCGeometry) {
@@ -180,10 +150,10 @@ void PropertyPanel::onPropertyChanged(wxPropertyGridEvent& event)
 void PropertyPanel::handleOCCGeometryPropertyChange(wxPGProperty* property)
 {
     if (!m_currentOCCGeometry) return;
-
+    
     if (property->GetName() == "Name") {
         // Note: OCCGeometry name is read-only for now
-        LOG_INF_S("OCCGeometry name change ignored (read-only): " + property->GetValueAsString().ToStdString());
+        // Removed high-frequency log: LOG_INF_S("OCCGeometry name change ignored (read-only): " + property->GetValueAsString().ToStdString());
     }
     else if (property->GetName() == "Visible") {
         m_currentOCCGeometry->setVisible(property->GetValue().GetBool());

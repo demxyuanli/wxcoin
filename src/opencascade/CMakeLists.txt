@@ -34,6 +34,7 @@ target_include_directories(CADOCC PUBLIC
 target_link_libraries(CADOCC PUBLIC
     CADCore
     CADLogger
+    optimizer
     ${wxWidgets_LIBRARIES}
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}

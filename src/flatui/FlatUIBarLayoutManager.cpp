@@ -23,10 +23,6 @@ void FlatUIBarLayoutManager::UpdateLayout(const wxSize& barClientSize)
         LOG_ERR("Invalid parameters for UpdateLayout", "LayoutManager");
         return;
     }
-
-    // Cache the new size
-    m_lastBarSize = barClientSize;
-    m_layoutDirty = false;
     
     // Get all child components from the bar
     FlatUIHomeSpace* homeSpace = m_bar->GetHomeSpace();
@@ -37,11 +33,45 @@ void FlatUIBarLayoutManager::UpdateLayout(const wxSize& barClientSize)
     FlatUISpacerControl* functionProfileSpacer = m_bar->GetFunctionProfileSpacer();
     FlatUIFixPanel* fixPanel = m_bar->GetFixPanel();
     
-    // Check if basic components are ready
-    if (!homeSpace) {
-        LOG_ERR("Core components not ready for layout", "LayoutManager");
+    // Comprehensive component readiness check
+    bool homeSpaceReady = (homeSpace != nullptr);
+    bool systemButtonsReady = (systemButtons != nullptr);
+    bool functionSpaceReady = (functionSpace != nullptr);
+    bool profileSpaceReady = (profileSpace != nullptr);
+    bool fixPanelReady = (fixPanel != nullptr);
+    
+    // Log component status for debugging
+    if (!homeSpaceReady || !systemButtonsReady || !functionSpaceReady || !profileSpaceReady) {
+        LOG_WRN("Component readiness check: HomeSpace=" + std::string(homeSpaceReady ? "ready" : "not ready") +
+                ", SystemButtons=" + std::string(systemButtonsReady ? "ready" : "not ready") +
+                ", FunctionSpace=" + std::string(functionSpaceReady ? "ready" : "not ready") +
+                ", ProfileSpace=" + std::string(profileSpaceReady ? "ready" : "not ready"), "LayoutManager");
+    }
+    
+    // Check if basic components are ready - be more lenient and continue with partial layout
+    if (!homeSpaceReady) {
+        LOG_WRN("HomeSpace not ready for layout, scheduling delayed update", "LayoutManager");
+        // Schedule a delayed update instead of failing
+        if (m_bar) {
+            m_bar->CallAfter([this, barClientSize]() {
+                if (m_bar && m_bar->GetHomeSpace()) {
+                    UpdateLayout(barClientSize);
+                }
+            });
+        }
         return;
     }
+    
+    // Check if other critical components are ready
+    bool componentsReady = systemButtonsReady && functionSpaceReady && profileSpaceReady;
+    if (!componentsReady) {
+        LOG_WRN("Some core components not ready for layout, using minimal layout", "LayoutManager");
+        // Continue with minimal layout instead of returning
+    }
+
+    // Cache the new size
+    m_lastBarSize = barClientSize;
+    m_layoutDirty = false;
     
     // Create a temporary DC for calculations
     wxMemoryDC dc;
@@ -103,8 +133,8 @@ void FlatUIBarLayoutManager::UpdateLayout(const wxSize& barClientSize)
         functionProfileSpacer->Show(false);
     }
 
-    // FixPanel handling based on pin state
-    if (fixPanel && m_bar->GetStateManager()) {
+    // FixPanel handling based on pin state - only if components are ready
+    if (fixPanel && m_bar->GetStateManager() && componentsReady) {
         bool shouldShowFixPanel = m_bar->GetStateManager()->IsPinned();
         
         if (shouldShowFixPanel) {
@@ -284,15 +314,12 @@ wxRect FlatUIBarLayoutManager::CalculateTabAreaRect(int currentX, int elementY, 
 void FlatUIBarLayoutManager::UpdateElementVisibility()
 {
     // Placeholder - will be implemented as we refactor more
-    LOG_INF("UpdateElementVisibility called", "LayoutManager");
 }
 
 void FlatUIBarLayoutManager::ShowElement(wxWindow* element, bool show)
 {
     if (element && element->IsShown() != show) {
         element->Show(show);
-        LOG_INF("Element visibility changed: " + element->GetName().ToStdString() + 
-               " -> " + (show ? "shown" : "hidden"), "LayoutManager");
     }
 }
 
@@ -303,10 +330,6 @@ bool FlatUIBarLayoutManager::ValidateLayout() const
 
 void FlatUIBarLayoutManager::LogLayoutInfo(const wxString& context) const
 {
-    LOG_INF("Layout Info [" + context.ToStdString() + 
-           "]: Valid=" + (m_layoutValid ? "true" : "false") + 
-           ", Size=(" + std::to_string(m_lastBarSize.GetWidth()) + 
-           "," + std::to_string(m_lastBarSize.GetHeight()) + ")", "LayoutManager");
 }
 
 int FlatUIBarLayoutManager::GetElementSpacing() const

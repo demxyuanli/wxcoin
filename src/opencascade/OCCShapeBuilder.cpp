@@ -509,14 +509,6 @@ void OCCShapeBuilder::outputFaceNormalsAndIndices(const TopoDS_Shape& shape, con
                 if (face.Orientation() == TopAbs_REVERSED) {
                     normalVec.Reverse();
                 }
-                
-                LOG_INF_S("Face " + std::to_string(faceIndex) + ":");
-                LOG_INF_S("  Center: (" + std::to_string(point.X()) + ", " + 
-                       std::to_string(point.Y()) + ", " + std::to_string(point.Z()) + ")");
-                LOG_INF_S("  Normal: (" + std::to_string(normalVec.X()) + ", " + 
-                       std::to_string(normalVec.Y()) + ", " + std::to_string(normalVec.Z()) + ")");
-                LOG_INF_S("  Orientation: " + std::string(face.Orientation() == TopAbs_FORWARD ? "FORWARD" : 
-                       face.Orientation() == TopAbs_REVERSED ? "REVERSED" : "OTHER"));
             } else {
                 LOG_WRN_S("Face " + std::to_string(faceIndex) + ": Normal not defined");
             }

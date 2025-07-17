@@ -3,6 +3,7 @@
 #include "OCCViewer.h"
 #include "SceneManager.h"
 #include "CommandType.h"
+#include "optimizer/PerformanceOptimizer.h"
 #include "logger/Logger.h"
 
 UnifiedRefreshSystem::UnifiedRefreshSystem(Canvas* canvas, OCCViewer* occViewer, SceneManager* sceneManager)
@@ -50,13 +51,25 @@ void UnifiedRefreshSystem::initialize(CommandDispatcher* commandDispatcher)
     // Register refresh command listener for all refresh command types if available
     if (m_refreshListener) {
         try {
-            m_commandDispatcher->registerListener(cmd::CommandType::RefreshView, m_refreshListener);
-            m_commandDispatcher->registerListener(cmd::CommandType::RefreshScene, m_refreshListener);
-            m_commandDispatcher->registerListener(cmd::CommandType::RefreshObject, m_refreshListener);
-            m_commandDispatcher->registerListener(cmd::CommandType::RefreshMaterial, m_refreshListener);
-            m_commandDispatcher->registerListener(cmd::CommandType::RefreshGeometry, m_refreshListener);
-            m_commandDispatcher->registerListener(cmd::CommandType::RefreshUI, m_refreshListener);
-            LOG_INF_S("UnifiedRefreshSystem: Refresh listeners registered");
+            // Check if we have access to the optimized dispatcher through the global optimizer
+            if (g_performanceOptimizer && g_performanceOptimizer->getCommandDispatcher()) {
+                // Use optimized dispatcher with enum registration
+                auto optimizedDispatcher = g_performanceOptimizer->getCommandDispatcher();
+                optimizedDispatcher->registerListener(cmd::CommandType::RefreshView, m_refreshListener);
+                optimizedDispatcher->registerListener(cmd::CommandType::RefreshScene, m_refreshListener);
+                optimizedDispatcher->registerListener(cmd::CommandType::RefreshObject, m_refreshListener);
+                optimizedDispatcher->registerListener(cmd::CommandType::RefreshMaterial, m_refreshListener);
+                optimizedDispatcher->registerListener(cmd::CommandType::RefreshGeometry, m_refreshListener);
+                optimizedDispatcher->registerListener(cmd::CommandType::RefreshUI, m_refreshListener);
+            } else {
+                // Use standard dispatcher
+                m_commandDispatcher->registerListener(cmd::CommandType::RefreshView, m_refreshListener);
+                m_commandDispatcher->registerListener(cmd::CommandType::RefreshScene, m_refreshListener);
+                m_commandDispatcher->registerListener(cmd::CommandType::RefreshObject, m_refreshListener);
+                m_commandDispatcher->registerListener(cmd::CommandType::RefreshMaterial, m_refreshListener);
+                m_commandDispatcher->registerListener(cmd::CommandType::RefreshGeometry, m_refreshListener);
+                m_commandDispatcher->registerListener(cmd::CommandType::RefreshUI, m_refreshListener);
+            }
         } catch (...) {
             // Handle potential static map access issues during shutdown
             std::cout << "UnifiedRefreshSystem: Exception during listener registration (ignored)" << std::endl;
@@ -71,7 +84,6 @@ void UnifiedRefreshSystem::initialize(CommandDispatcher* commandDispatcher)
     }
 
     m_initialized = true;
-    LOG_INF_S("UnifiedRefreshSystem initialized successfully");
 }
 
 void UnifiedRefreshSystem::shutdown()
@@ -101,7 +113,8 @@ void UnifiedRefreshSystem::shutdown()
     m_initialized = false;
     
     try {
-        LOG_INF_S("UnifiedRefreshSystem shutdown completed");
+        // Avoid logging during shutdown to prevent crashes
+        std::cout << "UnifiedRefreshSystem shutdown completed" << std::endl;
     } catch (...) {
         // Avoid logging during shutdown to prevent crashes
         std::cout << "UnifiedRefreshSystem shutdown completed" << std::endl;
@@ -117,7 +130,6 @@ void UnifiedRefreshSystem::setOCCViewer(OCCViewer* occViewer)
         m_refreshListener->setOCCViewer(occViewer);
     }
     
-    LOG_INF_S("UnifiedRefreshSystem: OCCViewer updated");
 }
 
 void UnifiedRefreshSystem::setComponents(Canvas* canvas, OCCViewer* occViewer, SceneManager* sceneManager)
@@ -135,13 +147,25 @@ void UnifiedRefreshSystem::setComponents(Canvas* canvas, OCCViewer* occViewer, S
             // Re-register with command dispatcher if already initialized
             if (m_initialized && m_commandDispatcher) {
                 try {
-                    m_commandDispatcher->registerListener(cmd::CommandType::RefreshView, m_refreshListener);
-                    m_commandDispatcher->registerListener(cmd::CommandType::RefreshScene, m_refreshListener);
-                    m_commandDispatcher->registerListener(cmd::CommandType::RefreshObject, m_refreshListener);
-                    m_commandDispatcher->registerListener(cmd::CommandType::RefreshMaterial, m_refreshListener);
-                    m_commandDispatcher->registerListener(cmd::CommandType::RefreshGeometry, m_refreshListener);
-                    m_commandDispatcher->registerListener(cmd::CommandType::RefreshUI, m_refreshListener);
-                    LOG_INF_S("UnifiedRefreshSystem: Refresh listener registered with command dispatcher");
+                    // Check if we have access to the optimized dispatcher through the global optimizer
+                    if (g_performanceOptimizer && g_performanceOptimizer->getCommandDispatcher()) {
+                        // Use optimized dispatcher with enum registration
+                        auto optimizedDispatcher = g_performanceOptimizer->getCommandDispatcher();
+                        optimizedDispatcher->registerListener(cmd::CommandType::RefreshView, m_refreshListener);
+                        optimizedDispatcher->registerListener(cmd::CommandType::RefreshScene, m_refreshListener);
+                        optimizedDispatcher->registerListener(cmd::CommandType::RefreshObject, m_refreshListener);
+                        optimizedDispatcher->registerListener(cmd::CommandType::RefreshMaterial, m_refreshListener);
+                        optimizedDispatcher->registerListener(cmd::CommandType::RefreshGeometry, m_refreshListener);
+                        optimizedDispatcher->registerListener(cmd::CommandType::RefreshUI, m_refreshListener);
+                    } else {
+                        // Use standard dispatcher
+                        m_commandDispatcher->registerListener(cmd::CommandType::RefreshView, m_refreshListener);
+                        m_commandDispatcher->registerListener(cmd::CommandType::RefreshScene, m_refreshListener);
+                        m_commandDispatcher->registerListener(cmd::CommandType::RefreshObject, m_refreshListener);
+                        m_commandDispatcher->registerListener(cmd::CommandType::RefreshMaterial, m_refreshListener);
+                        m_commandDispatcher->registerListener(cmd::CommandType::RefreshGeometry, m_refreshListener);
+                        m_commandDispatcher->registerListener(cmd::CommandType::RefreshUI, m_refreshListener);
+                    }
                 } catch (...) {
                     // Handle potential static map access issues during shutdown
                     std::cout << "UnifiedRefreshSystem: Exception during listener re-registration (ignored)" << std::endl;
@@ -153,7 +177,6 @@ void UnifiedRefreshSystem::setComponents(Canvas* canvas, OCCViewer* occViewer, S
         }
     }
     
-    LOG_INF_S("UnifiedRefreshSystem: Components updated");
 }
 
 void UnifiedRefreshSystem::setCanvas(Canvas* canvas)
@@ -322,10 +345,13 @@ void UnifiedRefreshSystem::directRefreshView(ViewRefreshManager::RefreshReason r
 {
     if (m_canvas && m_canvas->getRefreshManager()) {
         m_canvas->getRefreshManager()->requestRefresh(reason, true);
-    } else if (m_canvas) {
+    }
+    else if (m_canvas) {
         m_canvas->Refresh();
-    } else {
-        LOG_WRN_S("UnifiedRefreshSystem: No canvas available for direct refresh");
+        m_canvas->Update();
+    }
+    else {
+        LOG_ERR_S("UnifiedRefreshSystem: Critical - No canvas available for refresh");
     }
 }
 

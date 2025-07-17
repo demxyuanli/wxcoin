@@ -10,12 +10,14 @@
 #include "UnifiedRefreshSystem.h"
 #include "CommandDispatcher.h"
 #include "GlobalServices.h"
+#include "optimizer/PerformanceOptimizer.h"
 #include <Inventor/SoDB.h>
 #include <Inventor/SoInput.h>
 #include <Inventor/nodes/SoSeparator.h>
 
 // Static member definitions
 std::unique_ptr<UnifiedRefreshSystem> MainApplication::s_unifiedRefreshSystem = nullptr;
+
 std::unique_ptr<CommandDispatcher> MainApplication::s_commandDispatcher = nullptr;
 
 bool MainApplication::OnInit()
@@ -108,6 +110,9 @@ void MainApplication::shutdownGlobalServices()
 {
     LOG_INF("Shutting down global services", "MainApplication");
     
+    // Clean up performance optimizer first
+    cleanupGlobalOptimizer();
+    
     // Clear global services registry first
     GlobalServices::Clear();
     
@@ -121,6 +126,11 @@ void MainApplication::shutdownGlobalServices()
     }
     
     LOG_INF("Global services shutdown completed", "MainApplication");
+}
+
+MainApplication::~MainApplication()
+{
+    shutdownGlobalServices();
 }
 
 wxIMPLEMENT_APP(MainApplication);

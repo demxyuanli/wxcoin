@@ -20,6 +20,7 @@ public:
     void initializeScene();  // Add missing method declaration
     void cleanup();
     void resetView();
+    void viewAll();
     void toggleCameraMode();
     void setView(const std::string& viewName);
     void render(const wxSize& size, bool fastMode);

@@ -104,6 +104,7 @@ private:
     CommandDispatcher* m_commandDispatcher;
     std::unique_ptr<CommandListenerManager> m_listenerManager;
     bool m_isFirstActivate;
+    wxTimer* m_startupTimer;
 
     // Methods
     void InitializeUI(const wxSize& size);

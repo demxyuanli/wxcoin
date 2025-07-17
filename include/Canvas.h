@@ -3,6 +3,7 @@
 #include <wx/glcanvas.h>
 #include <memory>
 #include <Inventor/nodes/SoCamera.h>
+#include "LODManager.h"
 
 // Forward declarations
 class OCCViewer;
@@ -18,6 +19,7 @@ class MultiViewportManager;
 class ViewRefreshManager;
 class UnifiedRefreshSystem;
 class CommandDispatcher;
+class NavigationController;
 
 class Canvas : public wxGLCanvas {
 public:
@@ -43,6 +45,18 @@ public:
     void setNavigationCubeEnabled(bool enabled);
     bool isNavigationCubeEnabled() const;
     void ShowNavigationCubeConfigDialog();
+
+    // Enhanced LOD control
+    void setLODEnabled(bool enabled);
+    bool isLODEnabled() const;
+    void setLODLevel(LODManager::LODLevel level);
+    LODManager::LODLevel getCurrentLODLevel() const;
+    
+    // Performance monitoring
+    LODManager::PerformanceMetrics getLODPerformanceMetrics() const;
+    
+    // Navigation controller access
+    NavigationController* getNavigationController() const;
 
     // External dependencies
     void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
@@ -81,6 +95,7 @@ private:
     std::unique_ptr<RenderingEngine> m_renderingEngine;
     std::unique_ptr<EventCoordinator> m_eventCoordinator;
     std::unique_ptr<ViewportManager> m_viewportManager;
+    std::unique_ptr<NavigationController> m_navigationController;
 
     // External dependencies
     ObjectTreePanel* m_objectTreePanel;
@@ -99,6 +114,9 @@ private:
     std::unique_ptr<ViewRefreshManager> m_refreshManager;
     // Canvas no longer uses UnifiedRefreshSystem internally
     UnifiedRefreshSystem* m_unifiedRefreshSystem = nullptr;
+
+    // Enhanced subsystems
+    std::unique_ptr<LODManager> m_lodManager;
 
     DECLARE_EVENT_TABLE()
 

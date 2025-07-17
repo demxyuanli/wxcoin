@@ -16,19 +16,22 @@ add_subdirectory(opencascade)
 # 5. Commands module (depends on core and occ)
 add_subdirectory(commands)
 
-# 6. Rendering module (depends on core module)
+# 6. Optimizer module (depends on core, logger, commands, and occ)
+add_subdirectory(optimizer)
+
+# 7. Rendering module (depends on core module)
 add_subdirectory(rendering)
 
-# 7. Input module (depends on core module)
+# 8. Input module (depends on core module)
 add_subdirectory(input)
 
-# 8. Navigation module (depends on core and rendering modules)
+# 9. Navigation module (depends on core and rendering modules)
 add_subdirectory(navigation)
 
-# 9. FlatUI module (depends on core and config modules)
+# 10. FlatUI module (depends on core and config modules)
 add_subdirectory(flatui)
 
-# 10. UI module (depends on all other modules)
+# 11. UI module (depends on all other modules)
 add_subdirectory(ui)
 
 # Set module folder structure (for IDE organization)
@@ -37,6 +40,7 @@ set_target_properties(CADLogger PROPERTIES FOLDER "Modules")
 set_target_properties(CADConfig PROPERTIES FOLDER "Modules")
 set_target_properties(CADOCC PROPERTIES FOLDER "Modules")
 set_target_properties(CADCommands PROPERTIES FOLDER "Modules")
+set_target_properties(optimizer PROPERTIES FOLDER "Modules")
 set_target_properties(CADRendering PROPERTIES FOLDER "Modules")
 set_target_properties(CADInput PROPERTIES FOLDER "Modules")
 set_target_properties(NavCubeLib PROPERTIES FOLDER "Modules")

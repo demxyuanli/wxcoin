@@ -146,6 +146,46 @@ void SceneManager::cleanup() {
     }
 }
 
+void SceneManager::viewAll() {
+    if (!m_camera || !m_sceneRoot) {
+        LOG_ERR_S("Failed to view all: Invalid camera or scene");
+        return;
+    }
+
+    // Get scene bounding box
+    SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
+    SoGetBoundingBoxAction bboxAction(viewport);
+    bboxAction.apply(m_sceneRoot);
+    SbBox3f bbox = bboxAction.getBoundingBox();
+
+    if (!bbox.isEmpty()) {
+        // Calculate center and radius
+        SbVec3f center = bbox.getCenter();
+        float radius = (bbox.getMax() - bbox.getMin()).length() / 2.0f;
+        
+        // Ensure minimum radius for consistency
+        if (radius < 2.0f) radius = 2.0f;
+        
+        // Set camera to view the entire scene
+        m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
+        
+        // Ensure reasonable near/far planes
+        m_camera->nearDistance.setValue(0.001f);
+        m_camera->farDistance.setValue(10000.0f);
+        
+        LOG_INF_S("View all applied successfully");
+    } else {
+        // Fallback to default view if no objects
+        resetView();
+    }
+    
+    if (m_canvas->getRefreshManager()) {
+        m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
+    } else {
+        m_canvas->Refresh(true);
+    }
+}
+
 void SceneManager::resetView() {
     if (!m_camera || !m_sceneRoot) {
         LOG_ERR_S("Failed to reset view: Invalid camera or scene");

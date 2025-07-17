@@ -11,6 +11,7 @@ class CommandDispatcher;
 class MainApplication : public wxApp {
 public:
     bool OnInit() override;
+    ~MainApplication();
     
 private:
     // Global application services

@@ -4,6 +4,7 @@
 #include <Inventor/SbVec3f.h>
 #include <string>
 #include <memory>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
 
 class SoSeparator;
 class ObjectTreePanel;
@@ -55,6 +56,17 @@ public:
     GeometryType getDefaultGeometryType() const { return m_defaultGeometryType; }
 
 private:
+    // Optimized shape creation methods for caching
+    TopoDS_Shape createOCCBoxShape(const SbVec3f& position);
+    TopoDS_Shape createOCCSphereShape(const SbVec3f& position);
+    TopoDS_Shape createOCCCylinderShape(const SbVec3f& position);
+    TopoDS_Shape createOCCConeShape(const SbVec3f& position);
+    TopoDS_Shape createOCCTorusShape(const SbVec3f& position);
+    TopoDS_Shape createOCCTruncatedCylinderShape(const SbVec3f& position);
+    TopoDS_Shape createOCCWrenchShape(const SbVec3f& position);
+    
+    // Helper method to create geometry from cached shape
+    std::shared_ptr<OCCGeometry> createGeometryFromShape(const std::string& type, const TopoDS_Shape& shape, const SbVec3f& position);
     
     SoSeparator* m_root;
     ObjectTreePanel* m_treePanel;

@@ -47,7 +47,6 @@ void ObjectTreePanel::addObject(GeometryObject* object)
         return;
     }
 
-    LOG_INF_S("Adding object to tree: " + object->getName());
     wxTreeItemId itemId = m_treeCtrl->AppendItem(m_rootId, object->getName());
     m_objectMap[object] = itemId;
     m_treeCtrl->Expand(m_rootId);
@@ -66,7 +65,6 @@ void ObjectTreePanel::removeObject(GeometryObject* object)
         return;
     }
 
-    LOG_INF_S("Removing object from tree: " + object->getName());
     m_treeCtrl->Delete(it->second);
     m_objectMap.erase(it);
 }
@@ -84,7 +82,6 @@ void ObjectTreePanel::updateObjectName(GeometryObject* object)
         return;
     }
 
-    LOG_INF_S("Updating object name in tree: " + object->getName());
     m_treeCtrl->SetItemText(it->second, object->getName());
 }
 
@@ -99,7 +96,6 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
         return;
     }
 
-    LOG_INF_S("Adding OCCGeometry to tree: " + geometry->getName());
     wxTreeItemId itemId = m_treeCtrl->AppendItem(m_rootId, geometry->getName());
     m_occGeometryMap[geometry] = itemId;
     m_treeItemToOCCGeometry[itemId] = geometry;
@@ -119,7 +115,6 @@ void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
         return;
     }
 
-    LOG_INF_S("Removing OCCGeometry from tree: " + geometry->getName());
     wxTreeItemId itemId = it->second;
     m_treeCtrl->Delete(itemId);
     m_occGeometryMap.erase(it);
@@ -139,7 +134,6 @@ void ObjectTreePanel::updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometr
         return;
     }
 
-    LOG_INF_S("Updating OCCGeometry name in tree: " + geometry->getName());
     m_treeCtrl->SetItemText(it->second, geometry->getName());
 }
 

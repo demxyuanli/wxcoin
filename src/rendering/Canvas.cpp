@@ -148,30 +148,42 @@ void Canvas::showErrorDialog(const std::string& message) const {
 }
 
 void Canvas::render(bool fastMode) {
-    if (m_renderingEngine) {
-        // Create MultiViewportManager on first render when GL context is active
-        if (m_multiViewportEnabled && !m_multiViewportManager) {
-            try {
-                m_multiViewportManager = std::make_unique<MultiViewportManager>(this, m_sceneManager.get());
-                m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
-                m_multiViewportManager->handleSizeChange(GetClientSize());
-                LOG_INF_S("Canvas::render: MultiViewportManager created successfully");
-            } catch (const std::exception& e) {
-                LOG_ERR_S("Canvas::render: Failed to create MultiViewportManager: " + std::string(e.what()));
-                m_multiViewportEnabled = false;
-            }
+    if (!m_renderingEngine) {
+        return;
+    }
+    
+    // Add performance timing for debugging
+    auto startTime = std::chrono::steady_clock::now();
+    
+    // Create MultiViewportManager on first render when GL context is active
+    if (m_multiViewportEnabled && !m_multiViewportManager) {
+        try {
+            m_multiViewportManager = std::make_unique<MultiViewportManager>(this, m_sceneManager.get());
+            m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
+            m_multiViewportManager->handleSizeChange(GetClientSize());
+            LOG_INF_S("Canvas::render: MultiViewportManager created successfully");
+        } catch (const std::exception& e) {
+            LOG_ERR_S("Canvas::render: Failed to create MultiViewportManager: " + std::string(e.what()));
+            m_multiViewportEnabled = false;
         }
-        
-        // Render main scene first (without swapping buffers)
-        m_renderingEngine->renderWithoutSwap(fastMode);
-        
-        // Render additional viewports on top of main scene
-        if (m_multiViewportEnabled && m_multiViewportManager) {
-            m_multiViewportManager->render();
-        }
-        
-        // Finally swap buffers to display everything
-        m_renderingEngine->swapBuffers();
+    }
+    
+    // Render main scene first (without swapping buffers)
+    m_renderingEngine->renderWithoutSwap(fastMode);
+    
+    // Render additional viewports on top of main scene
+    if (m_multiViewportEnabled && m_multiViewportManager) {
+        m_multiViewportManager->render();
+    }
+    
+    // Finally swap buffers to display everything
+    m_renderingEngine->swapBuffers();
+    
+    // Log performance metrics in debug mode
+    auto endTime = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    if (duration.count() > 16000) { // > 16ms
+        LOG_WRN_S("Canvas::render: Slow frame detected: " + std::to_string(duration.count()) + "μs");
     }
 }
 
@@ -200,6 +212,7 @@ void Canvas::onSize(wxSizeEvent& event) {
     } else {
         Refresh();
     }
+
     event.Skip();
 }
 

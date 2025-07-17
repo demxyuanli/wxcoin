@@ -7,6 +7,7 @@
 #include "OCCViewer.h"
 #include "OCCShapeBuilder.h"
 #include "PositionDialog.h" // For GeometryParameters
+#include "optimizer/PerformanceOptimizer.h"
 #include <gp_Dir.hxx>
 #include <memory>
 #include <gp_Pnt.hxx>
@@ -27,25 +28,64 @@ GeometryFactory::~GeometryFactory() {
 }
 
 void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& position) {
+    START_PERFORMANCE_TIMING(geometry_creation);
+    
     std::shared_ptr<OCCGeometry> geometry;
     
-    if (type == "Box") {
-        geometry = createOCCBox(position);
-    } else if (type == "Sphere") {
-        geometry = createOCCSphere(position);
-    } else if (type == "Cylinder") {
-        geometry = createOCCCylinder(position);
-    } else if (type == "Cone") {
-        geometry = createOCCCone(position);
-    } else if (type == "Torus") {
-        geometry = createOCCTorus(position);
-    } else if (type == "TruncatedCylinder") {
-        geometry = createOCCTruncatedCylinder(position);
-    } else if (type == "Wrench") {
-        geometry = createOCCWrench(position);
+    // Use optimized geometry cache if available
+    if (g_performanceOptimizer && g_performanceOptimizer->getGeometryCache()) {
+        auto cache = g_performanceOptimizer->getGeometryCache();
+        
+        // Create geometry key for caching
+        std::vector<double> params = {position[0], position[1], position[2]};
+        optimizer::GeometryComputationCache::GeometryKey key(type, params);
+        
+        // Try to get from cache or create asynchronously
+        auto future = cache->createGeometryAsync(key, [this, type, position]() -> TopoDS_Shape {
+            if (type == "Box") {
+                return createOCCBoxShape(position);
+            } else if (type == "Sphere") {
+                return createOCCSphereShape(position);
+            } else if (type == "Cylinder") {
+                return createOCCCylinderShape(position);
+            } else if (type == "Cone") {
+                return createOCCConeShape(position);
+            } else if (type == "Torus") {
+                return createOCCTorusShape(position);
+            } else if (type == "TruncatedCylinder") {
+                return createOCCTruncatedCylinderShape(position);
+            } else if (type == "Wrench") {
+                return createOCCWrenchShape(position);
+            }
+            return TopoDS_Shape();
+        });
+        
+        // Wait for completion and create geometry object
+        auto shape = future.get();
+        if (!shape.IsNull()) {
+            geometry = createGeometryFromShape(type, shape, position);
+        }
     } else {
-        LOG_ERR_S("Unknown geometry type: " + type);
-        return;
+        // Fallback to original implementation
+        if (type == "Box") {
+            geometry = createOCCBox(position);
+        } else if (type == "Sphere") {
+            geometry = createOCCSphere(position);
+        } else if (type == "Cylinder") {
+            geometry = createOCCCylinder(position);
+        } else if (type == "Cone") {
+            geometry = createOCCCone(position);
+        } else if (type == "Torus") {
+            geometry = createOCCTorus(position);
+        } else if (type == "TruncatedCylinder") {
+            geometry = createOCCTruncatedCylinder(position);
+        } else if (type == "Wrench") {
+            geometry = createOCCWrench(position);
+        } else {
+            LOG_ERR_S("Unknown geometry type: " + type);
+            END_PERFORMANCE_TIMING(geometry_creation);
+            return;
+        }
     }
     
     if (geometry) {
@@ -55,6 +95,8 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
     } else {
         LOG_ERR_S("Failed to create OCC geometry: " + type);
     }
+    
+    END_PERFORMANCE_TIMING(geometry_creation);
 }
 
 void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const GeometryParameters& params) {
@@ -552,4 +594,61 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         LOG_ERR_S("Exception creating wrench: " + std::string(e.what()));
         return nullptr;
     }
+}
+
+// ============================================================================
+// Optimized Shape Creation Methods for Caching
+// ============================================================================
+
+TopoDS_Shape GeometryFactory::createOCCBoxShape(const SbVec3f& position) {
+    return OCCShapeBuilder::createBox(2.0, 2.0, 2.0, gp_Pnt(position[0], position[1], position[2]));
+}
+
+TopoDS_Shape GeometryFactory::createOCCSphereShape(const SbVec3f& position) {
+    return OCCShapeBuilder::createSphere(1.0, gp_Pnt(position[0], position[1], position[2]));
+}
+
+TopoDS_Shape GeometryFactory::createOCCCylinderShape(const SbVec3f& position) {
+    return OCCShapeBuilder::createCylinder(1.0, 2.0, gp_Pnt(position[0], position[1], position[2]), gp_Dir(0, 0, 1));
+}
+
+TopoDS_Shape GeometryFactory::createOCCConeShape(const SbVec3f& position) {
+    return OCCShapeBuilder::createCone(1.0, 0.5, 2.0, gp_Pnt(position[0], position[1], position[2]), gp_Dir(0, 0, 1));
+}
+
+TopoDS_Shape GeometryFactory::createOCCTorusShape(const SbVec3f& position) {
+    return OCCShapeBuilder::createTorus(2.0, 0.5, gp_Pnt(position[0], position[1], position[2]), gp_Dir(0, 0, 1));
+}
+
+TopoDS_Shape GeometryFactory::createOCCTruncatedCylinderShape(const SbVec3f& position) {
+    // Create a cylinder and then truncate it using boolean operations
+    auto cylinder = OCCShapeBuilder::createCylinder(1.0, 2.0, gp_Pnt(position[0], position[1], position[2]), gp_Dir(0, 0, 1));
+    
+    // Create a smaller cylinder to subtract for truncation
+    auto truncateCylinder = OCCShapeBuilder::createCylinder(0.5, 2.0, gp_Pnt(position[0], position[1], position[2]), gp_Dir(0, 0, 1));
+    
+    // Perform boolean difference to create truncated cylinder
+    return OCCShapeBuilder::booleanDifference(cylinder, truncateCylinder);
+}
+
+TopoDS_Shape GeometryFactory::createOCCWrenchShape(const SbVec3f& position) {
+    // Simplified wrench shape for caching - use basic box shape
+    return OCCShapeBuilder::createBox(8.0, 1.0, 1.0, gp_Pnt(position[0], position[1], position[2]));
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createGeometryFromShape(const std::string& type, const TopoDS_Shape& shape, const SbVec3f& position) {
+    if (shape.IsNull()) {
+        LOG_ERR_S("Cannot create geometry from null shape");
+        return nullptr;
+    }
+    
+    static int counter = 0;
+    std::string name = "OCC" + type + "_" + std::to_string(++counter);
+    
+    auto geometry = std::make_shared<OCCGeometry>(name);
+    geometry->setShape(shape);
+    geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
+    
+    LOG_INF_S("Created geometry from cached shape: " + name);
+    return geometry;
 }

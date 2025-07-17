@@ -9,6 +9,8 @@ set(RENDERING_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/MultiViewportManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewRefreshManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/UnifiedRefreshSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LODManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PerformanceMonitor.cpp
 )
 
 set(RENDERING_HEADERS
@@ -21,6 +23,8 @@ set(RENDERING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
     ${CMAKE_SOURCE_DIR}/include/UnifiedRefreshSystem.h
+    ${CMAKE_SOURCE_DIR}/include/LODManager.h
+    ${CMAKE_SOURCE_DIR}/include/PerformanceMonitor.h
 )
 
 # Create rendering static library

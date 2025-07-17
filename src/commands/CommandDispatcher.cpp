@@ -1,6 +1,7 @@
 #include "CommandDispatcher.h"
 #include "CommandListener.h"
 #include "logger/Logger.h"
+#include "optimizer/PerformanceOptimizer.h"
 #include <algorithm>
 #include <mutex>
 #include "CommandType.h"
@@ -8,6 +9,17 @@
 CommandDispatcher::CommandDispatcher()
 {
     LOG_INF_S("CommandDispatcher initialized");
+    
+    // Initialize performance optimizer if available
+    if (!g_performanceOptimizer) {
+        g_performanceOptimizer = std::make_unique<optimizer::PerformanceOptimizer>();
+        optimizer::PerformanceOptimizer::Config config;
+        config.enableCommandOptimization = true;
+        config.enableGeometryCaching = true;
+        config.enableParallelProcessing = true;
+        config.enableContainerOptimization = true;
+        g_performanceOptimizer->initialize(config);
+    }
 }
 
 CommandDispatcher::~CommandDispatcher()
@@ -40,6 +52,25 @@ void CommandDispatcher::registerListener(const std::string& commandType, std::sh
     std::lock_guard<std::mutex> lock(m_mutex);
     m_listeners[commandType].push_back(listener);
     LOG_INF_S("Registered listener '" + listener->getListenerName() + "' for command: " + commandType);
+    
+    // Also register with optimized dispatcher if available
+    if (g_performanceOptimizer && g_performanceOptimizer->getCommandDispatcher()) {
+        auto optimizedDispatcher = g_performanceOptimizer->getCommandDispatcher();
+        auto commandId = optimizer::OptimizedCommandDispatcher::stringToCommandId(commandType);
+        optimizedDispatcher->registerListener(commandId, listener);
+        
+        // Also register with the command type enum for reverse mapping
+        // Convert string to enum first
+        try {
+            cmd::CommandType cmdType = cmd::from_string(commandType);
+            optimizedDispatcher->registerListener(cmdType, listener);
+        } catch (...) {
+            // If conversion fails, just log it
+            LOG_WRN_S("Failed to convert command string to enum: " + commandType);
+        }
+        
+        LOG_INF_S("Also registered listener '" + listener->getListenerName() + "' with optimized dispatcher for command: " + commandType);
+    }
 }
 
 void CommandDispatcher::unregisterListener(const std::string& commandType, std::shared_ptr<CommandListener> listener)
@@ -75,8 +106,19 @@ void CommandDispatcher::unregisterListener(const std::string& commandType, std::
 CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType, 
                                                const std::unordered_map<std::string, std::string>& parameters)
 {
-    LOG_INF_S("Dispatching command: " + commandType);
+    START_PERFORMANCE_TIMING(command_dispatch);
     
+    // Use optimized dispatcher if available
+    if (g_performanceOptimizer && g_performanceOptimizer->getCommandDispatcher()) {
+        auto optimizedDispatcher = g_performanceOptimizer->getCommandDispatcher();
+        auto commandId = optimizer::OptimizedCommandDispatcher::stringToCommandId(commandType);
+        auto optimizedResult = optimizedDispatcher->dispatchCommand(commandId, parameters);
+        
+        END_PERFORMANCE_TIMING(command_dispatch);
+        return CommandResult(optimizedResult.success, optimizedResult.message, commandType);
+    }
+    
+    // Fallback to original implementation
     std::lock_guard<std::mutex> lock(m_mutex);
     auto it = m_listeners.find(commandType);
     if (it == m_listeners.end() || it->second.empty()) {
@@ -88,11 +130,11 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
             m_uiFeedbackHandler(result);
         }
         
+        END_PERFORMANCE_TIMING(command_dispatch);
         return result;
     }
     
     // Execute command with the first available listener
-    // In a more complex system, you might want to execute with all listeners
     auto& listeners = it->second;
     for (auto& listener : listeners) {
         if (listener && listener->canHandleCommand(commandType)) {
@@ -100,13 +142,11 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
                 CommandResult result = listener->executeCommand(commandType, parameters);
                 result.commandId = commandType;
                 
-                LOG_INF_S("Command '" + commandType + "' executed by '" + listener->getListenerName() + 
-                       "' with result: " + (result.success ? "SUCCESS" : "FAILURE"));
-                
                 if (m_uiFeedbackHandler) {
                     m_uiFeedbackHandler(result);
                 }
                 
+                END_PERFORMANCE_TIMING(command_dispatch);
                 return result;
             }
             catch (const std::exception& e) {
@@ -118,6 +158,7 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
                     m_uiFeedbackHandler(result);
                 }
                 
+                END_PERFORMANCE_TIMING(command_dispatch);
                 return result;
             }
         }
@@ -131,6 +172,7 @@ CommandResult CommandDispatcher::dispatchCommand(const std::string& commandType,
         m_uiFeedbackHandler(result);
     }
     
+    END_PERFORMANCE_TIMING(command_dispatch);
     return result;
 }
 

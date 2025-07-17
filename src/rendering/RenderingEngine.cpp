@@ -84,6 +84,11 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
         return;
     }
 
+    if (!m_canvas->IsShownOnScreen()) {
+        LOG_WRN_S("Canvas not visible, skipping render");
+        return;
+    }
+
     if (m_isRendering) {
         LOG_WRN_S("RenderingEngine::renderWithoutSwap: Skipped: Already rendering");
         return;
@@ -117,7 +122,7 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
         // Set viewport with DPI scaling
         // Note: We don't have direct access to DPI scale here, so we'll use the canvas size directly
         glViewport(0, 0, size.x, size.y);
-        
+
         // Render main scene
         m_sceneManager->render(size, fastMode);
 
