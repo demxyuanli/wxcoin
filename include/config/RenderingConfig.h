@@ -50,12 +50,13 @@ public:
     };
     
     // Texture mode enumeration
+    // Note: Coin3D SoTexture2 only supports DECAL and MODULATE modes
+    // Other modes will fall back to MODULATE
     enum class TextureMode {
-        Replace,        // Replace base color with texture (default)
-        Modulate,       // Multiply texture with base color
-        Decal,          // Apply texture as decal over base color
-        Blend,          // Blend texture with base color
-        Add             // Add texture to base color
+        Replace,        // Replace base color with texture (falls back to Modulate in Coin3D)
+        Modulate,       // Multiply texture with base color (Coin3D supported)
+        Decal,          // Apply texture as decal over base color (Coin3D supported)
+        Blend           // Blend texture with base color (falls back to Modulate in Coin3D)
     };
 
     struct TextureSettings {
@@ -92,7 +93,7 @@ public:
         double alphaThreshold;
         
         BlendSettings()
-            : blendMode(BlendMode::Alpha)
+            : blendMode(BlendMode::None)
             , depthTest(true)
             , depthWrite(true)
             , cullFace(true)
@@ -381,6 +382,58 @@ public:
     
     // Reset to defaults
     void resetToDefaults();
+    
+    // Notification system for real-time updates
+    using SettingsChangedCallback = std::function<void()>;
+    void registerSettingsChangedCallback(SettingsChangedCallback callback);
+    void unregisterSettingsChangedCallback();
+    void notifySettingsChanged() const;
+    
+    // Selected objects rendering settings
+    // These methods apply settings only to selected geometries
+    void applyMaterialSettingsToSelected(const MaterialSettings& settings);
+    void applyTextureSettingsToSelected(const TextureSettings& settings);
+    void applyBlendSettingsToSelected(const BlendSettings& settings);
+    void applyShadingSettingsToSelected(const ShadingSettings& settings);
+    void applyDisplaySettingsToSelected(const DisplaySettings& settings);
+    
+    // Individual property setters for selected objects
+    void setSelectedMaterialAmbientColor(const Quantity_Color& color);
+    void setSelectedMaterialDiffuseColor(const Quantity_Color& color);
+    void setSelectedMaterialSpecularColor(const Quantity_Color& color);
+    void setSelectedMaterialShininess(double shininess);
+    void setSelectedMaterialTransparency(double transparency);
+    
+    void setSelectedTextureColor(const Quantity_Color& color);
+    void setSelectedTextureIntensity(double intensity);
+    void setSelectedTextureEnabled(bool enabled);
+    void setSelectedTextureImagePath(const std::string& path);
+    void setSelectedTextureMode(TextureMode mode);
+    
+    void setSelectedBlendMode(BlendMode mode);
+    void setSelectedDepthTest(bool enabled);
+    void setSelectedDepthWrite(bool enabled);
+    void setSelectedCullFace(bool enabled);
+    void setSelectedAlphaThreshold(double threshold);
+    
+    void setSelectedShadingMode(ShadingMode mode);
+    void setSelectedSmoothNormals(bool enabled);
+    void setSelectedWireframeWidth(double width);
+    void setSelectedPointSize(double size);
+    
+    void setSelectedDisplayMode(DisplayMode mode);
+    void setSelectedShowEdges(bool enabled);
+    void setSelectedShowVertices(bool enabled);
+    void setSelectedEdgeWidth(double width);
+    void setSelectedVertexSize(double size);
+    void setSelectedEdgeColor(const Quantity_Color& color);
+    void setSelectedVertexColor(const Quantity_Color& color);
+    
+    // Utility method to check if any objects are selected
+    bool hasSelectedObjects() const;
+    
+    // Apply material preset to selected objects
+    void applyMaterialPresetToSelected(MaterialPreset preset);
 
 private:
     RenderingConfig();
@@ -407,4 +460,7 @@ private:
     
     bool m_autoSave;
     static std::map<MaterialPreset, MaterialSettings> s_materialPresets;
+    
+    // Callback for settings changes
+    SettingsChangedCallback m_settingsChangedCallback;
 }; 

@@ -36,6 +36,10 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CommandListenerManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialogListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeDecalListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeModulateListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeReplaceListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeBlendListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -76,6 +80,10 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/CommandListenerManager.h
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialogListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsListener.h
+    ${CMAKE_SOURCE_DIR}/include/TextureModeDecalListener.h
+    ${CMAKE_SOURCE_DIR}/include/TextureModeModulateListener.h
+    ${CMAKE_SOURCE_DIR}/include/TextureModeReplaceListener.h
+    ${CMAKE_SOURCE_DIR}/include/TextureModeBlendListener.h
 )
 
 # Create command static library

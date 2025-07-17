@@ -180,6 +180,9 @@ public:
     double getSubsurfaceScattering() const { return m_subsurfaceScattering; }
     virtual void setSubsurfaceScattering(double scattering);
 
+    // Update settings from RenderingConfig
+    virtual void updateFromRenderingConfig();
+
     // Display modes
     bool isWireframeMode() const { return m_wireframeMode; }
     virtual void setWireframeMode(bool wireframe);

@@ -67,6 +67,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     m_alphaThreshold = blendSettings.alphaThreshold;
     
     LOG_INF_S("Creating OCC geometry: " + name + " with configured material and blend settings");
+    LOG_INF_S("Initial transparency: " + std::to_string(m_transparency) + ", blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
 }
 
 OCCGeometry::~OCCGeometry()
@@ -400,7 +401,7 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
         material->transparency.setValue(static_cast<float>(m_transparency));
         m_coinNode->addChild(material);
     }
-    LOG_INF_S("Applied material with rendering settings properties");
+    LOG_INF_S("Applied material with rendering settings properties - transparency: " + std::to_string(m_transparency));
 
     // Apply blend settings - using material transparency instead of SoBlendFunc
     if (m_blendMode != RenderingConfig::BlendMode::None) {
@@ -430,6 +431,12 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
         
         m_coinNode->addChild(material);
         LOG_INF_S("Applied blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
+    } else {
+        // When blend mode is None, ensure transparency is 0.0
+        if (m_transparency > 0.0) {
+            m_transparency = 0.0;
+            LOG_INF_S("Reset transparency to 0.0 for None blend mode");
+        }
     }
     
     // Apply depth and face culling settings
@@ -450,7 +457,26 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
         SoTexture2* texture = new SoTexture2;
         texture->wrapS = SoTexture2::REPEAT;
         texture->wrapT = SoTexture2::REPEAT;
-        texture->model = SoTexture2::MODULATE;
+        
+        // Set texture model based on configuration
+        // Note: Coin3D SoTexture2 only supports DECAL and MODULATE modes
+        switch (m_textureMode) {
+            case RenderingConfig::TextureMode::Replace:
+                texture->model = SoTexture2::REPLACE;
+                break;
+            case RenderingConfig::TextureMode::Modulate:
+                texture->model = SoTexture2::MODULATE;
+                break;
+            case RenderingConfig::TextureMode::Decal:
+                texture->model = SoTexture2::DECAL;
+                break;
+            case RenderingConfig::TextureMode::Blend:
+                texture->model = SoTexture2::BLEND;
+                break;
+            default:
+                texture->model = SoTexture2::MODULATE;
+                break;
+        }
         
         // Try to load image texture first
         if (!m_textureImagePath.empty()) {
@@ -480,14 +506,75 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
                 LOG_INF_S("Applied fallback color texture with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
             }
         } else {
-            // Use color texture when no image is specified
-            unsigned char alpha = static_cast<unsigned char>(255 * (1.0 - m_transparency) * m_textureIntensity);
+            // Create a more complex texture pattern based on texture mode
             unsigned char r = static_cast<unsigned char>(m_textureColor.Red() * 255);
             unsigned char g = static_cast<unsigned char>(m_textureColor.Green() * 255);
             unsigned char b = static_cast<unsigned char>(m_textureColor.Blue() * 255);
-            unsigned char texData[16] = {r, g, b, alpha, r, g, b, alpha, r, g, b, alpha, r, g, b, alpha};
-            texture->image.setValue(SbVec2s(2, 2), 4, texData);
-            LOG_INF_S("Applied color texture with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
+            unsigned char alpha = static_cast<unsigned char>(255 * (1.0 - m_transparency) * m_textureIntensity);
+            
+            // Create a 4x4 texture with different patterns for each mode
+            unsigned char texData[64]; // 4x4 pixels, 4 bytes per pixel (RGBA)
+            
+            switch (m_textureMode) {
+                case RenderingConfig::TextureMode::Decal:
+                    // Decal: Strong texture color with some transparency
+                    for (int i = 0; i < 16; i++) {
+                        texData[i*4] = r;     // Red
+                        texData[i*4+1] = g;   // Green
+                        texData[i*4+2] = b;   // Blue
+                        texData[i*4+3] = alpha; // Alpha
+                    }
+                    break;
+                    
+                case RenderingConfig::TextureMode::Modulate:
+                    // Modulate: Alternating strong and weak texture
+                    for (int i = 0; i < 16; i++) {
+                        bool strong = (i % 2 == 0); // Alternate pattern
+                        unsigned char intensity = strong ? alpha : (alpha / 3);
+                        texData[i*4] = r;     // Red
+                        texData[i*4+1] = g;   // Green
+                        texData[i*4+2] = b;   // Blue
+                        texData[i*4+3] = intensity; // Alpha
+                    }
+                    break;
+                    
+                case RenderingConfig::TextureMode::Replace:
+                    // Replace: Full intensity texture
+                    for (int i = 0; i < 16; i++) {
+                        texData[i*4] = r;     // Red
+                        texData[i*4+1] = g;   // Green
+                        texData[i*4+2] = b;   // Blue
+                        texData[i*4+3] = 255; // Full alpha
+                    }
+                    break;
+                    
+                case RenderingConfig::TextureMode::Blend:
+                    // Blend: Gradient pattern
+                    for (int i = 0; i < 16; i++) {
+                        int row = i / 4;
+                        int col = i % 4;
+                        unsigned char blendAlpha = static_cast<unsigned char>(alpha * (row + col) / 6.0);
+                        texData[i*4] = r;     // Red
+                        texData[i*4+1] = g;   // Green
+                        texData[i*4+2] = b;   // Blue
+                        texData[i*4+3] = blendAlpha; // Gradient alpha
+                    }
+                    break;
+                    
+                default:
+                    // Default: Simple pattern
+                    for (int i = 0; i < 16; i++) {
+                        texData[i*4] = r;     // Red
+                        texData[i*4+1] = g;   // Green
+                        texData[i*4+2] = b;   // Blue
+                        texData[i*4+3] = alpha; // Alpha
+                    }
+                    break;
+            }
+            
+            texture->image.setValue(SbVec2s(4, 4), 4, texData);
+            LOG_INF_S("Applied enhanced texture pattern for mode " + RenderingConfig::getTextureModeName(m_textureMode) + 
+                     " with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
         }
         
         m_coinNode->addChild(texture);
@@ -1044,4 +1131,56 @@ void OCCGeometry::setFresnel(double fresnel) {
 void OCCGeometry::setSubsurfaceScattering(double scattering) {
     m_subsurfaceScattering = scattering;
     LOG_INF_S("Subsurface scattering set to: " + std::to_string(scattering));
+}
+
+void OCCGeometry::updateFromRenderingConfig()
+{
+    // Load current settings from configuration
+    RenderingConfig& config = RenderingConfig::getInstance();
+    const auto& materialSettings = config.getMaterialSettings();
+    const auto& textureSettings = config.getTextureSettings();
+    const auto& blendSettings = config.getBlendSettings();
+    
+    // Update material settings
+    m_color = materialSettings.diffuseColor;
+    m_transparency = materialSettings.transparency;
+    m_materialAmbientColor = materialSettings.ambientColor;
+    m_materialDiffuseColor = materialSettings.diffuseColor;
+    m_materialSpecularColor = materialSettings.specularColor;
+    m_materialShininess = materialSettings.shininess;
+    
+    // Update texture settings
+    m_textureColor = textureSettings.color;
+    m_textureIntensity = textureSettings.intensity;
+    m_textureEnabled = textureSettings.enabled;
+    m_textureImagePath = textureSettings.imagePath;
+    m_textureMode = textureSettings.textureMode;
+    
+    // Update blend settings
+    m_blendMode = blendSettings.blendMode;
+    m_depthTest = blendSettings.depthTest;
+    m_depthWrite = blendSettings.depthWrite;
+    m_cullFace = blendSettings.cullFace;
+    m_alphaThreshold = blendSettings.alphaThreshold;
+    
+    // Force rebuild of Coin3D representation
+    m_coinNeedsUpdate = true;
+    
+    // Actually rebuild the Coin3D representation to apply changes immediately
+    if (m_coinNode) {
+        // Force Coin3D to invalidate its cache
+        m_coinNode->touch();
+        
+        buildCoinRepresentation();
+        LOG_INF_S("Rebuilt Coin3D representation for geometry '" + m_name + "'");
+        
+        // Force the scene graph to be marked as needing update
+        // Note: Coin3D nodes don't have getParent() method, so we just touch the current node
+        m_coinNode->touch();
+    }
+    
+    LOG_INF_S("Updated geometry '" + m_name + "' from RenderingConfig - transparency: " + std::to_string(m_transparency) + 
+              ", blend mode: " + RenderingConfig::getBlendModeName(m_blendMode) + 
+              ", texture enabled: " + std::string(m_textureEnabled ? "true" : "false") + 
+              ", texture mode: " + RenderingConfig::getTextureModeName(m_textureMode));
 }

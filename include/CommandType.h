@@ -44,6 +44,12 @@ enum class CommandType {
     ToggleShading,
     ToggleEdges,
 
+    // Texture modes
+    TextureModeDecal,
+    TextureModeModulate,
+    TextureModeReplace,
+    TextureModeBlend,
+
 
 
     // Edit
@@ -96,6 +102,11 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ToggleShading, "TOGGLE_SHADING"},
         {CommandType::ToggleEdges, "TOGGLE_EDGES"},
 
+        {CommandType::TextureModeDecal, "TEXTURE_MODE_DECAL"},
+        {CommandType::TextureModeModulate, "TEXTURE_MODE_MODULATE"},
+        {CommandType::TextureModeReplace, "TEXTURE_MODE_REPLACE"},
+        {CommandType::TextureModeBlend, "TEXTURE_MODE_BLEND"},
+
 
 
         {CommandType::Undo, "UNDO"},
@@ -145,6 +156,11 @@ inline CommandType from_string(const std::string& str) {
         {"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
         {"TOGGLE_SHADING", CommandType::ToggleShading},
         {"TOGGLE_EDGES", CommandType::ToggleEdges},
+
+        {"TEXTURE_MODE_DECAL", CommandType::TextureModeDecal},
+        {"TEXTURE_MODE_MODULATE", CommandType::TextureModeModulate},
+        {"TEXTURE_MODE_REPLACE", CommandType::TextureModeReplace},
+        {"TEXTURE_MODE_BLEND", CommandType::TextureModeBlend},
 
 
 

@@ -50,6 +50,7 @@
 #include <wx/msgdlg.h>
 #include <wx/textdlg.h>
 #include <Inventor/SbVec3f.h>
+#include <Inventor/nodes/SoTexture2.h>
 #include "FileNewListener.h"
 #include "FileOpenListener.h"
 #include "FileSaveListener.h"
@@ -71,6 +72,10 @@
 #include "FixNormalsListener.h"
 #include "ShowEdgesListener.h"
 #include "SetTransparencyListener.h"
+#include "TextureModeDecalListener.h"
+#include "TextureModeModulateListener.h"
+#include "TextureModeReplaceListener.h"
+#include "TextureModeBlendListener.h"
 #include "ViewModeListener.h"
 
 #include "UndoListener.h"
@@ -79,6 +84,7 @@
 #include "NavCubeConfigListener.h"
 #include "ZoomSpeedListener.h"
 #include "FileExitListener.h"
+#include "config/RenderingConfig.h"
 
 #ifdef __WXMSW__
 #define NOMINMAX
@@ -133,6 +139,15 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_RENDERING_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_SHOWEDGES, FlatFrame::onCommand)
+    
+    // Texture Mode Command Events
+    EVT_BUTTON(ID_TEXTURE_MODE_DECAL, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TEXTURE_MODE_MODULATE, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TEXTURE_MODE_REPLACE, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TEXTURE_MODE_BLEND, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TEST_SELECTED_RENDERING, FlatFrame::onTestSelectedRendering)
+    
+    
     EVT_CLOSE(FlatFrame::onClose)
     EVT_ACTIVATE(FlatFrame::onActivate)
     EVT_SIZE(FlatFrame::onSize)
@@ -166,6 +181,10 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_TOGGLE_EDGES, cmd::CommandType::ToggleEdges},
 
     {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
+    {ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},
+    {ID_TEXTURE_MODE_MODULATE, cmd::CommandType::TextureModeModulate},
+    {ID_TEXTURE_MODE_REPLACE, cmd::CommandType::TextureModeReplace},
+    {ID_TEXTURE_MODE_BLEND, cmd::CommandType::TextureModeBlend},
     {ID_UNDO, cmd::CommandType::Undo},
     {ID_REDO, cmd::CommandType::Redo},
     {ID_NAVIGATION_CUBE_CONFIG, cmd::CommandType::NavCubeConfig},
@@ -448,8 +467,26 @@ void FlatFrame::InitializeUI(const wxSize& size)
     toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
     toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
     toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
+    toolsButtonBar->AddButton(ID_TEST_SELECTED_RENDERING, "Test Selected", SVG_ICON("target", wxSize(16, 16)), nullptr, "Test selected object rendering");
     toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
     page4->AddPanel(toolsPanel);
+    
+    // Texture Mode Test Panel
+    FlatUIPanel* textureTestPanel = new FlatUIPanel(page4, "Texture Mode", wxHORIZONTAL);
+    textureTestPanel->SetFont(CFG_DEFAULTFONT());
+    textureTestPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    textureTestPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    textureTestPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    textureTestPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    textureTestPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* textureTestButtonBar = new FlatUIButtonBar(textureTestPanel);
+    textureTestButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_DECAL, "Decal", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Decal texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_MODULATE, "Modulate", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Modulate texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_REPLACE, "Replace", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Replace texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_BLEND, "Blend", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Blend texture mode");
+    textureTestPanel->AddButtonBar(textureTestButtonBar, 0, wxEXPAND | wxALL, 5);
+    page4->AddPanel(textureTestPanel);
     m_ribbon->AddPage(page4);
 
     // Help Page
@@ -633,6 +670,19 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, viewModeListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleShading, viewModeListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleEdges, viewModeListener);
+    
+    // Register texture mode listeners
+    auto textureModeDecalListener = std::make_shared<TextureModeDecalListener>(this, m_occViewer);
+    m_listenerManager->registerListener(cmd::CommandType::TextureModeDecal, textureModeDecalListener);
+    
+    auto textureModeModulateListener = std::make_shared<TextureModeModulateListener>(this, m_occViewer);
+    m_listenerManager->registerListener(cmd::CommandType::TextureModeModulate, textureModeModulateListener);
+    
+    auto textureModeReplaceListener = std::make_shared<TextureModeReplaceListener>(this, m_occViewer);
+    m_listenerManager->registerListener(cmd::CommandType::TextureModeReplace, textureModeReplaceListener);
+    
+    auto textureModeBlendListener = std::make_shared<TextureModeBlendListener>(this, m_occViewer);
+    m_listenerManager->registerListener(cmd::CommandType::TextureModeBlend, textureModeBlendListener);
 
     
     // Register file command listeners
@@ -1150,5 +1200,54 @@ void FlatFrame::onSize(wxSizeEvent& event) {
         }
     }
 }
+
+void FlatFrame::onTestSelectedRendering(wxCommandEvent& event)
+{
+    if (!m_occViewer) {
+        wxMessageBox("OCCViewer not available", "Error", wxOK | wxICON_ERROR);
+        return;
+    }
+    
+    // Get selected geometries
+    auto selectedGeometries = m_occViewer->getSelectedGeometries();
+    
+    if (selectedGeometries.empty()) {
+        wxMessageBox("No objects selected. Please select one or more objects first.", 
+                    "No Selection", wxOK | wxICON_INFORMATION);
+        return;
+    }
+    
+    // Test selected object rendering by applying a distinctive material
+    RenderingConfig& config = RenderingConfig::getInstance();
+    
+    // Apply a distinctive material to selected objects
+    config.setSelectedMaterialDiffuseColor(Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB)); // Bright Red
+    config.setSelectedMaterialTransparency(0.3); // 30% transparency
+    config.setSelectedTextureEnabled(true);
+    config.setSelectedTextureColor(Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB)); // Bright Green
+    config.setSelectedTextureIntensity(0.8);
+    config.setSelectedTextureMode(RenderingConfig::TextureMode::Decal);
+    
+    // Force notification to update selected objects
+    config.notifySettingsChanged();
+    
+    // Show feedback
+    wxString message = wxString::Format("Applied test rendering to %zu selected object(s):\n"
+                                       "- Red diffuse color\n"
+                                       "- 30%% transparency\n"
+                                       "- Green texture in Decal mode", 
+                                       selectedGeometries.size());
+    
+    wxMessageBox(message, "Test Rendering Applied", wxOK | wxICON_INFORMATION);
+    
+    // Update status bar
+    if (m_statusBar) {
+        m_statusBar->SetStatusText(wxString::Format("Test rendering applied to %zu selected object(s)", 
+                                                   selectedGeometries.size()), 0);
+    }
+    
+    LOG_INF_S("Test rendering applied to " + std::to_string(selectedGeometries.size()) + " selected objects");
+}
+
 
 

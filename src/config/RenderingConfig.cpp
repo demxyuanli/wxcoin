@@ -234,8 +234,7 @@ std::vector<std::string> RenderingConfig::getAvailableTextureModes()
         "Replace",
         "Modulate",
         "Decal",
-        "Blend",
-        "Add"
+        "Blend"
     };
 }
 
@@ -246,7 +245,6 @@ std::string RenderingConfig::getTextureModeName(TextureMode mode)
         case TextureMode::Modulate: return "Modulate";
         case TextureMode::Decal: return "Decal";
         case TextureMode::Blend: return "Blend";
-        case TextureMode::Add: return "Add";
         default: return "Modulate";
     }
 }
@@ -257,7 +255,6 @@ RenderingConfig::TextureMode RenderingConfig::getTextureModeFromName(const std::
     if (name == "Modulate") return TextureMode::Modulate;
     if (name == "Decal") return TextureMode::Decal;
     if (name == "Blend") return TextureMode::Blend;
-    if (name == "Add") return TextureMode::Add;
     return TextureMode::Modulate;
 }
 
@@ -455,14 +452,11 @@ void RenderingConfig::applyMaterialPreset(MaterialPreset preset)
 
 std::string RenderingConfig::getConfigFilePath() const
 {
-    wxStandardPaths& paths = wxStandardPaths::Get();
-    wxString configDir = paths.GetUserConfigDir();
-    wxString appName = wxTheApp->GetAppName();
+    // Save to local root directory instead of user config directory
+    wxString currentDir = wxGetCwd();
+    wxFileName configFile(currentDir, "rendering_settings.ini");
     
-    wxFileName configFile(configDir, "rendering_settings.ini");
-    configFile.AppendDir(appName);
-    
-    // Create directory if it doesn't exist
+    // Create directory if it doesn't exist (should always exist for current directory)
     if (!configFile.DirExists()) {
         configFile.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     }
@@ -628,6 +622,10 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
     
     file.close();
     LOG_INF_S("RenderingConfig: Configuration loaded successfully");
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
+    
     return true;
 }
 
@@ -722,6 +720,10 @@ bool RenderingConfig::saveToFile(const std::string& filename) const
     
     file.close();
     LOG_INF_S("RenderingConfig: Configuration saved successfully");
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
+    
     return true;
 }
 
@@ -795,6 +797,9 @@ void RenderingConfig::setMaterialDiffuseColor(const Quantity_Color& color)
     if (m_autoSave) {
         saveToFile();
     }
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
 }
 
 void RenderingConfig::setMaterialSpecularColor(const Quantity_Color& color)
@@ -819,6 +824,9 @@ void RenderingConfig::setMaterialTransparency(double transparency)
     if (m_autoSave) {
         saveToFile();
     }
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
 }
 
 void RenderingConfig::setLightAmbientColor(const Quantity_Color& color)
@@ -867,6 +875,9 @@ void RenderingConfig::setTextureColor(const Quantity_Color& color)
     if (m_autoSave) {
         saveToFile();
     }
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
 }
 
 void RenderingConfig::setTextureIntensity(double intensity)
@@ -875,6 +886,9 @@ void RenderingConfig::setTextureIntensity(double intensity)
     if (m_autoSave) {
         saveToFile();
     }
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
 }
 
 void RenderingConfig::setTextureEnabled(bool enabled)
@@ -883,6 +897,9 @@ void RenderingConfig::setTextureEnabled(bool enabled)
     if (m_autoSave) {
         saveToFile();
     }
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
 }
 
 void RenderingConfig::setTextureImagePath(const std::string& path)
@@ -899,6 +916,9 @@ void RenderingConfig::setTextureMode(TextureMode mode)
     if (m_autoSave) {
         saveToFile();
     }
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
 }
 
 void RenderingConfig::setBlendSettings(const BlendSettings& settings)
@@ -915,6 +935,9 @@ void RenderingConfig::setBlendMode(BlendMode mode)
     if (m_autoSave) {
         saveToFile();
     }
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
 }
 
 void RenderingConfig::setDepthTest(bool enabled)
@@ -1218,4 +1241,237 @@ void RenderingConfig::resetToDefaults()
     if (m_autoSave) {
         saveToFile();
     }
-} 
+    
+    // Notify listeners of settings change
+    notifySettingsChanged();
+}
+
+// Notification system implementation
+void RenderingConfig::registerSettingsChangedCallback(SettingsChangedCallback callback)
+{
+    m_settingsChangedCallback = callback;
+    LOG_INF_S("RenderingConfig: Settings changed callback registered");
+}
+
+void RenderingConfig::unregisterSettingsChangedCallback()
+{
+    m_settingsChangedCallback = nullptr;
+    LOG_INF_S("RenderingConfig: Settings changed callback unregistered");
+}
+
+void RenderingConfig::notifySettingsChanged() const
+{
+    if (m_settingsChangedCallback) {
+        LOG_INF_S("RenderingConfig: Notifying settings changed - callback is registered");
+        m_settingsChangedCallback();
+        LOG_INF_S("RenderingConfig: Settings change notification completed");
+    } else {
+        LOG_WRN_S("RenderingConfig: Settings changed but no callback is registered");
+    }
+}
+
+// Selected objects rendering settings implementation
+// These methods apply settings only to selected geometries
+
+void RenderingConfig::applyMaterialSettingsToSelected(const MaterialSettings& settings)
+{
+    // Store the settings for selected objects
+    // The actual application to selected objects is handled by SceneManager callback
+    m_materialSettings = settings;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::applyTextureSettingsToSelected(const TextureSettings& settings)
+{
+    m_textureSettings = settings;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::applyBlendSettingsToSelected(const BlendSettings& settings)
+{
+    m_blendSettings = settings;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::applyShadingSettingsToSelected(const ShadingSettings& settings)
+{
+    m_shadingSettings = settings;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::applyDisplaySettingsToSelected(const DisplaySettings& settings)
+{
+    m_displaySettings = settings;
+    notifySettingsChanged();
+}
+
+// Individual property setters for selected objects
+void RenderingConfig::setSelectedMaterialAmbientColor(const Quantity_Color& color)
+{
+    m_materialSettings.ambientColor = color;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedMaterialDiffuseColor(const Quantity_Color& color)
+{
+    m_materialSettings.diffuseColor = color;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedMaterialSpecularColor(const Quantity_Color& color)
+{
+    m_materialSettings.specularColor = color;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedMaterialShininess(double shininess)
+{
+    m_materialSettings.shininess = shininess;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedMaterialTransparency(double transparency)
+{
+    m_materialSettings.transparency = transparency;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedTextureColor(const Quantity_Color& color)
+{
+    m_textureSettings.color = color;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedTextureIntensity(double intensity)
+{
+    m_textureSettings.intensity = intensity;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedTextureEnabled(bool enabled)
+{
+    m_textureSettings.enabled = enabled;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedTextureImagePath(const std::string& path)
+{
+    m_textureSettings.imagePath = path;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedTextureMode(TextureMode mode)
+{
+    m_textureSettings.textureMode = mode;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedBlendMode(BlendMode mode)
+{
+    m_blendSettings.blendMode = mode;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedDepthTest(bool enabled)
+{
+    m_blendSettings.depthTest = enabled;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedDepthWrite(bool enabled)
+{
+    m_blendSettings.depthWrite = enabled;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedCullFace(bool enabled)
+{
+    m_blendSettings.cullFace = enabled;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedAlphaThreshold(double threshold)
+{
+    m_blendSettings.alphaThreshold = threshold;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedShadingMode(ShadingMode mode)
+{
+    m_shadingSettings.shadingMode = mode;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedSmoothNormals(bool enabled)
+{
+    m_shadingSettings.smoothNormals = enabled;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedWireframeWidth(double width)
+{
+    m_shadingSettings.wireframeWidth = width;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedPointSize(double size)
+{
+    m_shadingSettings.pointSize = size;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedDisplayMode(DisplayMode mode)
+{
+    m_displaySettings.displayMode = mode;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedShowEdges(bool enabled)
+{
+    m_displaySettings.showEdges = enabled;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedShowVertices(bool enabled)
+{
+    m_displaySettings.showVertices = enabled;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedEdgeWidth(double width)
+{
+    m_displaySettings.edgeWidth = width;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedVertexSize(double size)
+{
+    m_displaySettings.vertexSize = size;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedEdgeColor(const Quantity_Color& color)
+{
+    m_displaySettings.edgeColor = color;
+    notifySettingsChanged();
+}
+
+void RenderingConfig::setSelectedVertexColor(const Quantity_Color& color)
+{
+    m_displaySettings.vertexColor = color;
+    notifySettingsChanged();
+}
+
+bool RenderingConfig::hasSelectedObjects() const
+{
+    // This method should check with SceneManager or OCCViewer
+    // For now, we'll return true to indicate that selection-based rendering is available
+    // The actual selection check is done in SceneManager callback
+    return true;
+}
+
+void RenderingConfig::applyMaterialPresetToSelected(MaterialPreset preset)
+{
+    MaterialSettings presetSettings = getPresetMaterial(preset);
+    applyMaterialSettingsToSelected(presetSettings);
+}

@@ -61,7 +61,16 @@ enum {
     ID_RENDERING_SETTINGS,
     ID_SAVE_AS,
     ID_LOD_ENABLE,
-    ID_LOD_CONFIG
+    ID_LOD_CONFIG,
+    
+    // Texture Mode Command IDs
+    ID_TEXTURE_MODE_DECAL,
+    ID_TEXTURE_MODE_MODULATE,
+    ID_TEXTURE_MODE_REPLACE,
+    ID_TEXTURE_MODE_BLEND,
+    
+    // Test IDs
+    ID_TEST_SELECTED_RENDERING
 };
 
 class FlatFrame : public FlatUIFrame
@@ -135,6 +144,8 @@ private:
     void OnShowUIHierarchy(wxCommandEvent& event);
     void PrintUILayout(wxCommandEvent& event);
     void OnThemeChanged(wxCommandEvent& event);
+    void onTestSelectedRendering(wxCommandEvent& event);
+    
     
     // Override OnGlobalPinStateChanged to handle main work area layout
     virtual void OnGlobalPinStateChanged(wxCommandEvent& event) override;

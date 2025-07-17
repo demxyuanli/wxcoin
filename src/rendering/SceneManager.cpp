@@ -1,8 +1,10 @@
 #include "SceneManager.h"
 #include "Canvas.h"
+#include "config/RenderingConfig.h"
 #include "CoordinateSystemRenderer.h"
 #include "PickingAidManager.h"
 #include "ViewRefreshManager.h"
+#include "OCCViewer.h"
 #include "logger/Logger.h"
 #include <map>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
@@ -107,6 +109,9 @@ bool SceneManager::initScene() {
 
         m_coordSystemRenderer = std::make_unique<CoordinateSystemRenderer>(m_objectRoot);
         m_pickingAidManager = std::make_unique<PickingAidManager>(this, m_canvas, m_canvas->getInputManager());
+
+        // Initialize RenderingConfig callback
+        initializeRenderingConfigCallback();
 
         resetView();
         return true;
@@ -488,4 +493,66 @@ void SceneManager::getSceneBoundingBoxMinMax(SbVec3f& min, SbVec3f& max) const {
     } else {
         m_sceneBoundingBox.getBounds(min, max);
     }
+}
+
+void SceneManager::initializeRenderingConfigCallback()
+{
+    // Register callback to update geometries when RenderingConfig changes
+    RenderingConfig& config = RenderingConfig::getInstance();
+    config.registerSettingsChangedCallback([this]() {
+        LOG_INF_S("RenderingConfig callback triggered - updating geometries");
+        
+        if (m_canvas && m_canvas->getOCCViewer()) {
+            OCCViewer* viewer = m_canvas->getOCCViewer();
+            auto selectedGeometries = viewer->getSelectedGeometries();
+            
+            // Check if any objects are selected
+            if (!selectedGeometries.empty()) {
+                LOG_INF_S("Found " + std::to_string(selectedGeometries.size()) + " selected geometries to update");
+                
+                // Update only selected geometries
+                for (auto& geometry : selectedGeometries) {
+                    LOG_INF_S("Updating selected geometry: " + geometry->getName());
+                    geometry->updateFromRenderingConfig();
+                }
+            } else {
+                LOG_INF_S("No objects selected, updating all geometries");
+                
+                // Update all geometries if none are selected
+                auto allGeometries = viewer->getAllGeometry();
+                LOG_INF_S("Found " + std::to_string(allGeometries.size()) + " total geometries to update");
+                
+                for (auto& geometry : allGeometries) {
+                    LOG_INF_S("Updating geometry: " + geometry->getName());
+                    geometry->updateFromRenderingConfig();
+                }
+            }
+            
+            // Force refresh with multiple methods to ensure update
+            LOG_INF_S("Requesting refresh via multiple methods");
+            
+            // Method 1: RefreshManager
+            if (m_canvas->getRefreshManager()) {
+                m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
+            }
+            
+            // Method 2: Direct Canvas refresh
+            m_canvas->Refresh(true);
+            
+            // Method 3: Force immediate update
+            m_canvas->Update();
+            
+            // Method 4: Touch the scene root to force Coin3D update
+            if (m_sceneRoot) {
+                m_sceneRoot->touch();
+                LOG_INF_S("Touched scene root to force Coin3D update");
+            }
+            
+            LOG_INF_S("Updated geometries from RenderingConfig changes");
+        } else {
+            LOG_ERR_S("Cannot update geometries: Canvas or OCCViewer not available");
+        }
+    });
+    
+    LOG_INF_S("RenderingConfig callback initialized in SceneManager");
 }
