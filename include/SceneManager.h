@@ -35,7 +35,7 @@ public:
     float getSceneBoundingBoxSize() const;
     void updateCoordinateSystemScale();
     void getSceneBoundingBoxMinMax(SbVec3f& min, SbVec3f& max) const;
-    
+
     // Initialize RenderingConfig callback
     void initializeRenderingConfigCallback();
 

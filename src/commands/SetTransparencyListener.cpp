@@ -17,16 +17,54 @@ CommandResult SetTransparencyListener::executeCommand(const std::string& command
 
     // Get selected geometries
     auto selectedGeometries = m_viewer->getSelectedGeometries();
-    if (selectedGeometries.empty()) {
-        return CommandResult(false, "No geometry selected", commandType);
-    }
+    bool hasSelection = !selectedGeometries.empty();
+    
+    LOG_INF_S("SetTransparencyListener: " + std::to_string(selectedGeometries.size()) + " objects selected");
 
-    // Create and show transparency dialog
-    TransparencyDialog dialog(m_frame, m_viewer, selectedGeometries);
-    if (dialog.ShowModal() == wxID_OK) {
-        LOG_INF_S("Transparency settings applied to " + 
-              std::to_string(selectedGeometries.size()) + " selected geometries");
-    return CommandResult(true, "Transparency set successfully", commandType);
+    if (hasSelection) {
+        // Apply transparency to selected objects only
+        LOG_INF_S("Applying transparency to " + std::to_string(selectedGeometries.size()) + " selected objects");
+        
+        // Create and show transparency dialog for selected geometries
+        TransparencyDialog dialog(m_frame, m_viewer, selectedGeometries);
+        if (dialog.ShowModal() == wxID_OK) {
+            LOG_INF_S("Transparency settings applied to " + 
+                  std::to_string(selectedGeometries.size()) + " selected geometries");
+            
+            // Add test feedback
+            std::string feedbackMessage = "Transparency settings applied to " + 
+                std::to_string(selectedGeometries.size()) + " selected objects";
+            
+            // Show feedback to user
+            wxMessageBox(feedbackMessage, "Transparency Applied", wxOK | wxICON_INFORMATION);
+            
+            // Show detailed test feedback in logs
+            RenderingConfig& config = RenderingConfig::getInstance();
+            config.showTestFeedback();
+            
+            return CommandResult(true, feedbackMessage, commandType);
+        }
+    } else {
+        // Apply transparency to all objects
+        LOG_INF_S("No objects selected, applying transparency to all objects");
+        
+        // Create and show transparency dialog for all geometries
+        TransparencyDialog dialog(m_frame, m_viewer, m_viewer->getAllGeometry());
+        if (dialog.ShowModal() == wxID_OK) {
+            LOG_INF_S("Transparency settings applied to all geometries");
+            
+            // Add test feedback
+            std::string feedbackMessage = "Transparency settings applied to all objects";
+            
+            // Show feedback to user
+            wxMessageBox(feedbackMessage, "Transparency Applied", wxOK | wxICON_INFORMATION);
+            
+            // Show detailed test feedback in logs
+            RenderingConfig& config = RenderingConfig::getInstance();
+            config.showTestFeedback();
+            
+            return CommandResult(true, feedbackMessage, commandType);
+        }
     }
 
     return CommandResult(false, "Transparency dialog cancelled", commandType);

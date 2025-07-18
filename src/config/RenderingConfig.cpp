@@ -4,6 +4,7 @@
 #include <sstream>
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
+#include <wx/msgdlg.h>
 
 // Initialize static member
 std::map<RenderingConfig::MaterialPreset, RenderingConfig::MaterialSettings> RenderingConfig::s_materialPresets;
@@ -1470,8 +1471,54 @@ bool RenderingConfig::hasSelectedObjects() const
     return true;
 }
 
+// Static method to get OCCViewer instance for selection checking
+OCCViewer* RenderingConfig::getOCCViewerInstance()
+{
+    // This is a temporary solution - in a real implementation, we would have a proper
+    // way to access the OCCViewer instance from RenderingConfig
+    // For now, we'll return nullptr and handle the selection check in SceneManager callback
+    return nullptr;
+}
+
 void RenderingConfig::applyMaterialPresetToSelected(MaterialPreset preset)
 {
     MaterialSettings presetSettings = getPresetMaterial(preset);
     applyMaterialSettingsToSelected(presetSettings);
 }
+
+std::string RenderingConfig::getCurrentSelectionStatus() const
+{
+    // This would ideally check with OCCViewer, but for now return a placeholder
+    return "Selection status: Available (check OCCViewer for actual selection)";
+}
+
+std::string RenderingConfig::getCurrentRenderingSettings() const
+{
+    std::stringstream ss;
+    ss << "Current Rendering Settings:\n";
+    ss << "- Material Diffuse: R=" << m_materialSettings.diffuseColor.Red() 
+       << " G=" << m_materialSettings.diffuseColor.Green() 
+       << " B=" << m_materialSettings.diffuseColor.Blue() << "\n";
+    ss << "- Material Transparency: " << m_materialSettings.transparency << "\n";
+    ss << "- Texture Enabled: " << (m_textureSettings.enabled ? "Yes" : "No") << "\n";
+    ss << "- Texture Mode: " << getTextureModeName(m_textureSettings.textureMode) << "\n";
+    ss << "- Texture Color: R=" << m_textureSettings.color.Red() 
+       << " G=" << m_textureSettings.color.Green() 
+       << " B=" << m_textureSettings.color.Blue() << "\n";
+    ss << "- Blend Mode: " << getBlendModeName(m_blendSettings.blendMode) << "\n";
+    ss << "- Display Mode: " << getDisplayModeName(m_displaySettings.displayMode) << "\n";
+    ss << "- Shading Mode: " << getShadingModeName(m_shadingSettings.shadingMode);
+    
+    return ss.str();
+}
+
+void RenderingConfig::showTestFeedback() const
+{
+    std::string status = getCurrentSelectionStatus();
+    std::string settings = getCurrentRenderingSettings();
+    
+    LOG_INF_S("=== RenderingConfig Test Feedback ===");
+    LOG_INF_S(status);
+    LOG_INF_S(settings);
+    LOG_INF_S("=== End Test Feedback ===");
+} 

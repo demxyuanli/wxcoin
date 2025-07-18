@@ -465,7 +465,7 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
                 texture->model = SoTexture2::REPLACE;
                 break;
             case RenderingConfig::TextureMode::Modulate:
-                texture->model = SoTexture2::MODULATE;
+        texture->model = SoTexture2::MODULATE;
                 break;
             case RenderingConfig::TextureMode::Decal:
                 texture->model = SoTexture2::DECAL;

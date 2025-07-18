@@ -5,6 +5,9 @@
 #include <map>
 #include <vector>
 
+// Forward declaration
+class OCCViewer;
+
 class RenderingConfig
 {
 public:
@@ -432,8 +435,16 @@ public:
     // Utility method to check if any objects are selected
     bool hasSelectedObjects() const;
     
+    // Static method to get OCCViewer instance for selection checking
+    static OCCViewer* getOCCViewerInstance();
+    
     // Apply material preset to selected objects
     void applyMaterialPresetToSelected(MaterialPreset preset);
+    
+    // Test feedback methods
+    std::string getCurrentSelectionStatus() const;
+    std::string getCurrentRenderingSettings() const;
+    void showTestFeedback() const;
 
 private:
     RenderingConfig();

@@ -67,10 +67,7 @@ enum {
     ID_TEXTURE_MODE_DECAL,
     ID_TEXTURE_MODE_MODULATE,
     ID_TEXTURE_MODE_REPLACE,
-    ID_TEXTURE_MODE_BLEND,
-    
-    // Test IDs
-    ID_TEST_SELECTED_RENDERING
+    ID_TEXTURE_MODE_BLEND
 };
 
 class FlatFrame : public FlatUIFrame
@@ -144,7 +141,6 @@ private:
     void OnShowUIHierarchy(wxCommandEvent& event);
     void PrintUILayout(wxCommandEvent& event);
     void OnThemeChanged(wxCommandEvent& event);
-    void onTestSelectedRendering(wxCommandEvent& event);
     
     
     // Override OnGlobalPinStateChanged to handle main work area layout

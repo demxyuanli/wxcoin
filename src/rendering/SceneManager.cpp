@@ -515,6 +515,9 @@ void SceneManager::initializeRenderingConfigCallback()
                     LOG_INF_S("Updating selected geometry: " + geometry->getName());
                     geometry->updateFromRenderingConfig();
                 }
+                
+                // Test feedback for selected objects
+                LOG_INF_S("=== Test Feedback: Updated " + std::to_string(selectedGeometries.size()) + " selected objects ===");
             } else {
                 LOG_INF_S("No objects selected, updating all geometries");
                 
@@ -526,6 +529,9 @@ void SceneManager::initializeRenderingConfigCallback()
                     LOG_INF_S("Updating geometry: " + geometry->getName());
                     geometry->updateFromRenderingConfig();
                 }
+                
+                // Test feedback for all objects
+                LOG_INF_S("=== Test Feedback: Updated " + std::to_string(allGeometries.size()) + " total objects ===");
             }
             
             // Force refresh with multiple methods to ensure update
