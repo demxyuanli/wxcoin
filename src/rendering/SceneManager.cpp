@@ -1,12 +1,14 @@
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "config/RenderingConfig.h"
+#include "config/LightingConfig.h"
 #include "CoordinateSystemRenderer.h"
 #include "PickingAidManager.h"
 #include "ViewRefreshManager.h"
 #include "OCCViewer.h"
 #include "logger/Logger.h"
 #include <map>
+#include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
 #include <Inventor/nodes/SoEnvironment.h>
@@ -20,6 +22,7 @@
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoLightModel.h>
+#include <Inventor/nodes/SoDirectionalLight.h>
 
 SceneManager::SceneManager(Canvas* canvas)
     : m_canvas(canvas)
@@ -61,11 +64,6 @@ bool SceneManager::initScene() {
         SbRotation s_rotation(s_defaultDir, s_viewDir);
         m_camera->orientation.setValue(s_rotation);
         m_sceneRoot->addChild(m_camera);
-
-        SoEnvironment* env = new SoEnvironment;
-        env->ambientColor.setValue(1.0f, 1.0f, 1.0f);
-        env->ambientIntensity.setValue(0.3f);
-        m_sceneRoot->addChild(env);
 
         // Set a light model to enable separate two-sided lighting
         SoLightModel* lightModel = new SoLightModel;
@@ -112,6 +110,9 @@ bool SceneManager::initScene() {
 
         // Initialize RenderingConfig callback
         initializeRenderingConfigCallback();
+        
+        // Initialize LightingConfig callback
+        initializeLightingConfigCallback();
 
         resetView();
         return true;
@@ -309,7 +310,7 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     );
 
     // Explicitly enable blending for line smoothing
-    glEnable(GL_LIGHTING);
+    // Note: Let Coin3D handle lighting, don't enable GL_LIGHTING here
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -561,4 +562,160 @@ void SceneManager::initializeRenderingConfigCallback()
     });
     
     LOG_INF_S("RenderingConfig callback initialized in SceneManager");
+}
+
+void SceneManager::initializeLightingConfigCallback()
+{
+    // Register callback to update lighting when LightingConfig changes
+    LightingConfig& config = LightingConfig::getInstance();
+    config.addSettingsChangedCallback([this, &config]() {
+        LOG_INF_S("LightingConfig callback triggered - updating scene lighting");
+        
+        // Clear existing environment nodes from scene root
+        if (m_sceneRoot) {
+            // Find and remove environment nodes from scene root
+            for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
+                SoNode* child = m_sceneRoot->getChild(i);
+                if (child->isOfType(SoEnvironment::getClassTypeId())) {
+                    LOG_INF_S("Removing environment node from scene root");
+                    m_sceneRoot->removeChild(i);
+                }
+            }
+        }
+        
+        // Clear existing lights from light root
+        if (m_lightRoot) {
+            // Remove all children except the first one (light model)
+            while (m_lightRoot->getNumChildren() > 1) {
+                m_lightRoot->removeChild(1);
+            }
+            LOG_INF_S("Cleared existing lights from light root");
+        }
+        
+        // Add environment settings to light root (consistent with initScene)
+        const LightSettings& envSettings = config.getEnvironmentSettings();
+        SoEnvironment* environment = new SoEnvironment;
+        environment->ambientColor.setValue(envSettings.ambientColor.Red(), 
+                                         envSettings.ambientColor.Green(), 
+                                         envSettings.ambientColor.Blue());
+        environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
+        m_lightRoot->addChild(environment);
+        LOG_INF_S("Added environment settings to light root");
+        
+        // Add all lights from config to light root
+        const auto& lights = config.getAllLights();
+        int lightCount = 0;
+        for (const auto& lightSettings : lights) {
+            if (!lightSettings.enabled) {
+                continue;
+            }
+            
+            if (lightSettings.type == "directional") {
+                SoDirectionalLight* light = new SoDirectionalLight;
+                light->direction.setValue(static_cast<float>(lightSettings.directionX),
+                                        static_cast<float>(lightSettings.directionY),
+                                        static_cast<float>(lightSettings.directionZ));
+                light->color.setValue(lightSettings.color.Red(),
+                                    lightSettings.color.Green(),
+                                    lightSettings.color.Blue());
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                m_lightRoot->addChild(light);
+                
+                LOG_INF_S("Added directional light: " + lightSettings.name + 
+                         " (dir: " + std::to_string(lightSettings.directionX) + "," + 
+                         std::to_string(lightSettings.directionY) + "," + 
+                         std::to_string(lightSettings.directionZ) + 
+                         ", intensity: " + std::to_string(lightSettings.intensity) + ")");
+                lightCount++;
+            }
+            // Add support for other light types (point, spot) as needed
+        }
+        
+        LOG_INF_S("Total lights added: " + std::to_string(lightCount));
+        
+        // Debug current lighting state
+        debugLightingState();
+        
+        // Force multiple refresh methods to ensure update
+        LOG_INF_S("Forcing scene refresh");
+        
+        // Method 1: Touch the scene root to force Coin3D update
+        if (m_sceneRoot) {
+            m_sceneRoot->touch();
+            LOG_INF_S("Touched scene root");
+        }
+        
+        // Method 2: Touch the light root
+        if (m_lightRoot) {
+            m_lightRoot->touch();
+            LOG_INF_S("Touched light root");
+        }
+        
+        // Method 3: Force immediate render update
+        if (m_canvas) {
+            // Force a complete scene rebuild
+            m_canvas->Refresh(true);
+            m_canvas->Update();
+            LOG_INF_S("Forced canvas refresh and update");
+        }
+        
+        // Method 4: RefreshManager
+        if (m_canvas && m_canvas->getRefreshManager()) {
+            m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
+            LOG_INF_S("Requested refresh via RefreshManager");
+        }
+        
+        LOG_INF_S("Updated scene lighting from LightingConfig changes - complete");
+    });
+    
+    LOG_INF_S("LightingConfig callback initialized in SceneManager");
+}
+
+void SceneManager::debugLightingState() const
+{
+    LOG_INF_S("=== SceneManager Lighting Debug ===");
+    
+    if (!m_sceneRoot) {
+        LOG_INF_S("Scene root is null");
+        return;
+    }
+    
+    LOG_INF_S("Scene root has " + std::to_string(m_sceneRoot->getNumChildren()) + " children");
+    
+    if (!m_lightRoot) {
+        LOG_INF_S("Light root is null");
+        return;
+    }
+    
+    LOG_INF_S("Light root has " + std::to_string(m_lightRoot->getNumChildren()) + " children");
+    
+    // Check each child of light root
+    for (int i = 0; i < m_lightRoot->getNumChildren(); ++i) {
+        SoNode* child = m_lightRoot->getChild(i);
+        if (child->isOfType(SoLightModel::getClassTypeId())) {
+            LOG_INF_S("Child " + std::to_string(i) + ": SoLightModel");
+        } else if (child->isOfType(SoEnvironment::getClassTypeId())) {
+            SoEnvironment* env = static_cast<SoEnvironment*>(child);
+            SbColor color = env->ambientColor.getValue();
+            float intensity = env->ambientIntensity.getValue();
+            LOG_INF_S("Child " + std::to_string(i) + ": SoEnvironment (ambient color: " + 
+                     std::to_string(color[0]) + "," + std::to_string(color[1]) + "," + std::to_string(color[2]) + 
+                     ", intensity: " + std::to_string(intensity) + ")");
+        } else if (child->isOfType(SoDirectionalLight::getClassTypeId())) {
+            SoDirectionalLight* light = static_cast<SoDirectionalLight*>(child);
+            SbVec3f dir = light->direction.getValue();
+            SbColor color = light->color.getValue();
+            float intensity = light->intensity.getValue();
+            bool on = light->on.getValue();
+            LOG_INF_S("Child " + std::to_string(i) + ": SoDirectionalLight (direction: " + 
+                     std::to_string(dir[0]) + "," + std::to_string(dir[1]) + "," + std::to_string(dir[2]) + 
+                     ", color: " + std::to_string(color[0]) + "," + std::to_string(color[1]) + "," + std::to_string(color[2]) + 
+                     ", intensity: " + std::to_string(intensity) + ", on: " + std::to_string(on) + ")");
+        } else {
+            LOG_INF_S("Child " + std::to_string(i) + ": Unknown type");
+        }
+    }
+    
+    LOG_INF_S("=== End Lighting Debug ===");
 }

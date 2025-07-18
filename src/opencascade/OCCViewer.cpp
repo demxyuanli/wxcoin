@@ -12,6 +12,7 @@
 #include "Canvas.h"
 #include "ObjectTreePanel.h"
 #include "ViewRefreshManager.h"
+#include "config/EdgeSettingsConfig.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
@@ -399,7 +400,14 @@ void OCCViewer::setShadingMode(bool shaded)
 void OCCViewer::setShowEdges(bool showEdges)
 {
     m_showEdges = showEdges;
+    
+    // Update EdgeSettingsConfig
+    EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
+    edgeConfig.setGlobalShowEdges(showEdges);
+    
+    // Update OCCMeshConverter
     OCCMeshConverter::setShowEdges(showEdges);
+    
     remeshAllGeometries();
     
     // Use refresh manager instead of direct refresh
@@ -409,6 +417,8 @@ void OCCViewer::setShowEdges(bool showEdges)
             refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
         }
     }
+    
+    LOG_INF_S("OCCViewer showEdges set to: " + std::string(showEdges ? "enabled" : "disabled"));
 }
 
 void OCCViewer::setAntiAliasing(bool enabled)

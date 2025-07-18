@@ -61,6 +61,8 @@ enum class CommandType {
     ZoomSpeed,
     MeshQualityDialog,
     RenderingSettings,
+    EdgeSettings,
+    LightingSettings,
 
     // Help
     HelpAbout,
@@ -116,6 +118,8 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ZoomSpeed, "ZOOM_SPEED"},
         {CommandType::MeshQualityDialog, "MESH_QUALITY_DIALOG"},
         {CommandType::RenderingSettings, "RENDERING_SETTINGS"},
+        {CommandType::EdgeSettings, "EDGE_SETTINGS"},
+        {CommandType::LightingSettings, "LIGHTING_SETTINGS"},
 
         {CommandType::HelpAbout, "HELP_ABOUT"},
 
@@ -171,6 +175,8 @@ inline CommandType from_string(const std::string& str) {
         {"ZOOM_SPEED", CommandType::ZoomSpeed},
         {"MESH_QUALITY_DIALOG", CommandType::MeshQualityDialog},
         {"RENDERING_SETTINGS", CommandType::RenderingSettings},
+        {"EDGE_SETTINGS", CommandType::EdgeSettings},
+        {"LIGHTING_SETTINGS", CommandType::LightingSettings},
 
         {"HELP_ABOUT", CommandType::HelpAbout}
     };

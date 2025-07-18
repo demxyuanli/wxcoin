@@ -1,5 +1,7 @@
 #include "OCCMeshConverter.h"
 #include "logger/Logger.h"
+#include "config/RenderingConfig.h"
+#include "config/EdgeSettingsConfig.h"
 
 // OpenCASCADE includes
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -43,6 +45,10 @@ double OCCMeshConverter::s_featureEdgeAngle = 30.0;
 void OCCMeshConverter::setShowEdges(bool show)
 {
     s_showEdges = show;
+    // Also update EdgeSettingsConfig
+    EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
+    edgeConfig.setGlobalShowEdges(show);
+    LOG_INF_S("OCCMeshConverter showEdges set to: " + std::string(show ? "enabled" : "disabled"));
 }
 
 void OCCMeshConverter::setFeatureEdgeAngle(double angleDegrees)
@@ -146,26 +152,47 @@ SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh, bool sel
     }
     
     // Create edge set if showEdges is true
-    LOG_INF_S("ShowEdges is " + std::string(s_showEdges ? "enabled" : "disabled") + " for " + (selected ? "selected" : "unselected") + " geometry");
-    if (s_showEdges) {
+    EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
+    EdgeSettings edgeSettings = selected ? edgeConfig.getSelectedSettings() : edgeConfig.getGlobalSettings();
+    
+    LOG_INF_S("ShowEdges is " + std::string(edgeSettings.showEdges ? "enabled" : "disabled") + " for " + (selected ? "selected" : "unselected") + " geometry");
+    if (edgeSettings.showEdges) {
         SoSeparator* edgeGroup = new SoSeparator;
 
         // Disable texture for this subgraph so edges are not textured
         SoTexture2* disableTexture = new SoTexture2;
         edgeGroup->addChild(disableTexture);
 
-        // Set material color based on selection state
+        // Set material color based on EdgeSettingsConfig
         SoMaterial* edgeMaterial = new SoMaterial;
+        
+        // Get edge settings from EdgeSettingsConfig
+        EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
+        EdgeSettings edgeSettings;
+        
         if (selected) {
-            // Red edges for selected geometry
-            edgeMaterial->diffuseColor.setValue(1.0f, 0.0f, 0.0f);
-            edgeMaterial->emissiveColor.setValue(0.5f, 0.0f, 0.0f); // Add emissive for better visibility
-            LOG_INF_S("Created red edges for selected geometry");
+            // Use selected object edge settings
+            edgeSettings = edgeConfig.getSelectedSettings();
+            LOG_INF_S("Using selected edge settings for geometry");
         } else {
-            // Black edges for unselected geometry
+            // Use global edge settings for unselected geometry
+            edgeSettings = edgeConfig.getGlobalSettings();
+            LOG_INF_S("Using global edge settings for geometry");
+        }
+        
+        if (edgeSettings.edgeColorEnabled) {
+            Quantity_Color edgeColor = edgeSettings.edgeColor;
+            edgeMaterial->diffuseColor.setValue(edgeColor.Red(), edgeColor.Green(), edgeColor.Blue());
+            edgeMaterial->emissiveColor.setValue(edgeColor.Red() * 0.5f, edgeColor.Green() * 0.5f, edgeColor.Blue() * 0.5f);
+            LOG_INF_S("Created edges with color: R=" + std::to_string(edgeColor.Red()) + 
+                     " G=" + std::to_string(edgeColor.Green()) + " B=" + std::to_string(edgeColor.Blue()) +
+                     " Width=" + std::to_string(edgeSettings.edgeWidth) +
+                     " Opacity=" + std::to_string(edgeSettings.edgeOpacity));
+        } else {
+            // Use default color when edge color is disabled
         edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
             edgeMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
-            LOG_INF_S("Created black edges for unselected geometry");
+            LOG_INF_S("Edge color disabled, using default black color");
         }
         edgeGroup->addChild(edgeMaterial);
 
@@ -233,16 +260,32 @@ void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TriangleMesh& mes
     }
     
     // Create edge set if showEdges is true
-    if (s_showEdges) {
+    EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
+    EdgeSettings edgeSettings = edgeConfig.getGlobalSettings();
+    
+    if (edgeSettings.showEdges) {
         SoSeparator* edgeGroup = new SoSeparator;
 
         // Disable texture for this subgraph so edges are not textured
         SoTexture2* disableTexture = new SoTexture2;
         edgeGroup->addChild(disableTexture);
 
-        // Set a black material for the edges
+        // Set material color based on EdgeSettingsConfig
         SoMaterial* edgeMaterial = new SoMaterial;
+        
+        // Get edge settings from EdgeSettingsConfig
+        EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
+        EdgeSettings edgeSettings = edgeConfig.getGlobalSettings();
+        
+        if (edgeSettings.edgeColorEnabled) {
+            Quantity_Color edgeColor = edgeSettings.edgeColor;
+            edgeMaterial->diffuseColor.setValue(edgeColor.Red(), edgeColor.Green(), edgeColor.Blue());
+            LOG_INF_S("Updated edges with color: R=" + std::to_string(edgeColor.Red()) + 
+                     " G=" + std::to_string(edgeColor.Green()) + " B=" + std::to_string(edgeColor.Blue()));
+        } else {
         edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+            LOG_INF_S("Edge color disabled, using default black color");
+        }
         edgeGroup->addChild(edgeMaterial);
 
         // Create and add the line geometry

@@ -6,6 +6,8 @@ set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TransparencyDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrame.cpp
 )
 
@@ -16,6 +18,8 @@ set(UI_HEADERS
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsDialog.h
+    ${CMAKE_SOURCE_DIR}/include/EdgeSettingsDialog.h
+    ${CMAKE_SOURCE_DIR}/include/LightingSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/FlatFrame.h
 )
 

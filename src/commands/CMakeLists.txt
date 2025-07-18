@@ -40,6 +40,8 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeModulateListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeReplaceListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeBlendListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -84,6 +86,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/TextureModeModulateListener.h
     ${CMAKE_SOURCE_DIR}/include/TextureModeReplaceListener.h
     ${CMAKE_SOURCE_DIR}/include/TextureModeBlendListener.h
+    ${CMAKE_SOURCE_DIR}/include/EdgeSettingsListener.h
+    ${CMAKE_SOURCE_DIR}/include/LightingSettingsListener.h
 )
 
 # Create command static library

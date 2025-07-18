@@ -24,12 +24,12 @@ CommandResult SetTransparencyListener::executeCommand(const std::string& command
     if (hasSelection) {
         // Apply transparency to selected objects only
         LOG_INF_S("Applying transparency to " + std::to_string(selectedGeometries.size()) + " selected objects");
-        
+
         // Create and show transparency dialog for selected geometries
-        TransparencyDialog dialog(m_frame, m_viewer, selectedGeometries);
-        if (dialog.ShowModal() == wxID_OK) {
-            LOG_INF_S("Transparency settings applied to " + 
-                  std::to_string(selectedGeometries.size()) + " selected geometries");
+    TransparencyDialog dialog(m_frame, m_viewer, selectedGeometries);
+    if (dialog.ShowModal() == wxID_OK) {
+        LOG_INF_S("Transparency settings applied to " + 
+              std::to_string(selectedGeometries.size()) + " selected geometries");
             
             // Add test feedback
             std::string feedbackMessage = "Transparency settings applied to " + 

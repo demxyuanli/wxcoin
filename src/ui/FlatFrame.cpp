@@ -77,6 +77,8 @@
 #include "TextureModeReplaceListener.h"
 #include "TextureModeBlendListener.h"
 #include "ViewModeListener.h"
+#include "EdgeSettingsListener.h"
+#include "LightingSettingsListener.h"
 
 #include "UndoListener.h"
 #include "RedoListener.h"
@@ -137,6 +139,8 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_ZOOM_SPEED, FlatFrame::onCommand)
     EVT_BUTTON(ID_MESH_QUALITY_DIALOG, FlatFrame::onCommand)
     EVT_BUTTON(ID_RENDERING_SETTINGS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_LIGHTING_SETTINGS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_EDGE_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_SHOWEDGES, FlatFrame::onCommand)
     
@@ -190,6 +194,8 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_ZOOM_SPEED, cmd::CommandType::ZoomSpeed},
     {ID_MESH_QUALITY_DIALOG, cmd::CommandType::MeshQualityDialog},
     {ID_RENDERING_SETTINGS, cmd::CommandType::RenderingSettings},
+    {ID_EDGE_SETTINGS, cmd::CommandType::EdgeSettings},
+    {ID_LIGHTING_SETTINGS, cmd::CommandType::LightingSettings},
     {wxID_ABOUT, cmd::CommandType::HelpAbout}
 };
 
@@ -464,6 +470,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
     toolsButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
     toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open mesh quality dialog");
     toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
+    toolsButtonBar->AddButton(ID_LIGHTING_SETTINGS, "Lighting Settings", SVG_ICON("light", wxSize(16, 16)), nullptr, "Configure scene lighting and environment settings");
+    toolsButtonBar->AddButton(ID_EDGE_SETTINGS, "Edge Settings", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Configure edge color, width and style settings");
     toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
     toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
     toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
@@ -703,6 +711,8 @@ void FlatFrame::setupCommandSystem() {
     auto fileExitListener = std::make_shared<FileExitListener>(this);
     auto meshQualityDialogListener = std::make_shared<MeshQualityDialogListener>(this, m_occViewer);
     auto renderingSettingsListener = std::make_shared<RenderingSettingsListener>(m_occViewer, m_canvas->getRenderingEngine());
+    auto edgeSettingsListener = std::make_shared<EdgeSettingsListener>(this, m_occViewer);
+    auto lightingSettingsListener = std::make_shared<LightingSettingsListener>(this);
     
     m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
     m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
@@ -712,6 +722,8 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::FileExit, fileExitListener);
     m_listenerManager->registerListener(cmd::CommandType::MeshQualityDialog, meshQualityDialogListener);
     m_listenerManager->registerListener(cmd::CommandType::RenderingSettings, renderingSettingsListener);
+    m_listenerManager->registerListener(cmd::CommandType::EdgeSettings, edgeSettingsListener);
+    m_listenerManager->registerListener(cmd::CommandType::LightingSettings, lightingSettingsListener);
     
     // Set UI feedback handler
     m_commandDispatcher->setUIFeedbackHandler(
