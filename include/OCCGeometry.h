@@ -1,6 +1,6 @@
 #pragma once
 
-#include "OCCMeshConverter.h"
+#include "rendering/GeometryProcessor.h"
 #include "config/RenderingConfig.h"
 #include <string>
 #include <memory>
@@ -192,10 +192,10 @@ public:
     // Coin3D integration
     SoSeparator* getCoinNode();
     void setCoinNode(SoSeparator* node);
-    void regenerateMesh(const OCCMeshConverter::MeshParameters& params);
+    void regenerateMesh(const MeshParameters& params);
 
 private:
-    void buildCoinRepresentation(const OCCMeshConverter::MeshParameters& params = OCCMeshConverter::MeshParameters());
+    void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
 
 protected:
     std::string m_name;

@@ -6,7 +6,7 @@
 
 #include "OCCViewer.h"
 #include "OCCGeometry.h"
-#include "OCCMeshConverter.h"
+#include "rendering/RenderingToolkitAPI.h"
 #include "SceneManager.h"
 #include "logger/Logger.h"
 #include "Canvas.h"
@@ -436,8 +436,9 @@ void OCCViewer::setShowEdges(bool showEdges)
     EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
     edgeConfig.setGlobalShowEdges(showEdges);
     
-    // Update OCCMeshConverter
-    OCCMeshConverter::setShowEdges(showEdges);
+    // Update rendering toolkit configuration
+    auto& config = RenderingToolkitAPI::getConfig();
+    config.getEdgeSettings().showEdges = showEdges;
     
     remeshAllGeometries();
     
@@ -579,9 +580,15 @@ void OCCViewer::updateNormalsDisplay()
 
 void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
 {
-    // Convert OCC shape to mesh to get normals
-    OCCMeshConverter::TriangleMesh mesh = OCCMeshConverter::convertToMesh(
-        geometry->getShape(), m_meshParams);
+    // Convert OCC shape to mesh to get normals using rendering toolkit
+    auto& manager = RenderingToolkitAPI::getManager();
+    auto processor = manager.getGeometryProcessor("OpenCASCADE");
+    if (!processor) {
+        LOG_ERR_S("OpenCASCADE geometry processor not available");
+        return;
+    }
+    
+    TriangleMesh mesh = processor->convertToMesh(geometry->getShape(), m_meshParams);
     
     if (mesh.vertices.empty() || mesh.normals.empty()) {
         return;

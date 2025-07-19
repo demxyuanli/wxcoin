@@ -1,7 +1,7 @@
 #pragma once
 
 #include "OCCGeometry.h"
-#include "OCCMeshConverter.h"
+#include "rendering/GeometryProcessor.h"
 #include "ViewRefreshManager.h"
 #include <vector>
 #include <memory>
@@ -121,7 +121,7 @@ private:
     bool m_showEdges;
     bool m_antiAliasing;
 
-    OCCMeshConverter::MeshParameters m_meshParams;
+    MeshParameters m_meshParams;
 
     // LOD settings
     bool m_lodEnabled;

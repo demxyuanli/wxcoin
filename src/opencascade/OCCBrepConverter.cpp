@@ -1,5 +1,5 @@
 #include "OCCBrepConverter.h"
-#include "OCCMeshConverter.h"
+#include "rendering/RenderingToolkitAPI.h"
 #include "logger/Logger.h"
 
 // OpenCASCADE includes
@@ -300,16 +300,39 @@ std::vector<TopoDS_Shape> OCCBrepConverter::loadMultipleFromSTEP(const std::stri
 
 SoSeparator* OCCBrepConverter::convertToCoin3D(const TopoDS_Shape& shape, double deflection)
 {
-    OCCMeshConverter::MeshParameters params;
+    MeshParameters params;
     params.deflection = deflection;
-    return OCCMeshConverter::createCoinNode(shape, params);
+    
+    auto& manager = RenderingToolkitAPI::getManager();
+    auto backend = manager.getRenderBackend("Coin3D");
+    if (!backend) {
+        LOG_ERR_S("Coin3D rendering backend not available");
+        return nullptr;
+    }
+    
+    auto sceneNode = backend->createSceneNode(shape, params, false);
+    if (sceneNode) {
+        SoSeparator* coinNode = sceneNode.get();
+        coinNode->ref(); // Take ownership
+        return coinNode;
+    }
+    
+    return nullptr;
 }
 
 void OCCBrepConverter::updateCoin3DNode(const TopoDS_Shape& shape, SoSeparator* node, double deflection)
 {
-    OCCMeshConverter::MeshParameters params;
+    MeshParameters params;
     params.deflection = deflection;
-    OCCMeshConverter::updateCoinNode(node, shape, params);
+    
+    auto& manager = RenderingToolkitAPI::getManager();
+    auto backend = manager.getRenderBackend("Coin3D");
+    if (!backend) {
+        LOG_ERR_S("Coin3D rendering backend not available");
+        return;
+    }
+    
+    backend->updateSceneNode(node, shape, params);
 }
 
 OCCBrepConverter::MeshData OCCBrepConverter::convertToMesh(const TopoDS_Shape& shape, double deflection)
@@ -321,8 +344,17 @@ OCCBrepConverter::MeshData OCCBrepConverter::convertToMesh(const TopoDS_Shape& s
     }
     
     try {
-        // Use OCCMeshConverter to get triangle mesh
-        OCCMeshConverter::TriangleMesh triangleMesh = OCCMeshConverter::convertToMesh(shape, deflection);
+        // Use rendering toolkit to get triangle mesh
+        auto& manager = RenderingToolkitAPI::getManager();
+        auto processor = manager.getGeometryProcessor("OpenCASCADE");
+        if (!processor) {
+            LOG_ERR_S("OpenCASCADE geometry processor not available");
+            return meshData;
+        }
+        
+        MeshParameters params;
+        params.deflection = deflection;
+        TriangleMesh triangleMesh = processor->convertToMesh(shape, params);
         
         // Convert to our MeshData format
         meshData.vertices.reserve(triangleMesh.vertices.size() * 3);

@@ -4,7 +4,6 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCViewer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCShapeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCBrepConverter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/OCCMeshConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPReader.cpp
 )
 
@@ -13,7 +12,6 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/OCCViewer.h
     ${CMAKE_SOURCE_DIR}/include/OCCShapeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/OCCBrepConverter.h
-    ${CMAKE_SOURCE_DIR}/include/OCCMeshConverter.h
     ${CMAKE_SOURCE_DIR}/include/STEPReader.h
 )
 
@@ -32,6 +30,7 @@ target_include_directories(CADOCC PUBLIC
 target_link_libraries(CADOCC PUBLIC
     CADCore
     CADLogger
+    CADRenderingToolkit
     ${wxWidgets_LIBRARIES}
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}

@@ -7,6 +7,7 @@
 #include "config/ConstantsConfig.h"
 #include "logger/Logger.h"
 #include "FlatFrame.h"
+#include "rendering/RenderingToolkitAPI.h"
 #include <Inventor/SoDB.h>
 #include <Inventor/SoInput.h>
 #include <Inventor/nodes/SoSeparator.h>
@@ -19,6 +20,18 @@ bool MainApplication::OnInit()
         LOG_INF("Coin3D initialized successfully", "MainApplication");
     } catch (const std::exception& e) {
         wxMessageBox("Failed to initialize Coin3D library: " + wxString(e.what()), "Initialization Error", wxOK | wxICON_ERROR);
+        return false;
+    }
+    
+    // Initialize rendering toolkit
+    try {
+        if (!RenderingToolkitAPI::initialize()) {
+            wxMessageBox("Failed to initialize rendering toolkit", "Initialization Error", wxOK | wxICON_ERROR);
+            return false;
+        }
+        LOG_INF("Rendering toolkit initialized successfully", "MainApplication");
+    } catch (const std::exception& e) {
+        wxMessageBox("Failed to initialize rendering toolkit: " + wxString(e.what()), "Initialization Error", wxOK | wxICON_ERROR);
         return false;
     }
     

@@ -1,5 +1,5 @@
 #include "OCCGeometry.h"
-#include "OCCMeshConverter.h"
+#include "rendering/RenderingToolkitAPI.h"
 #include "logger/Logger.h"
 #include "config/RenderingConfig.h"
 #include <limits>
@@ -354,12 +354,12 @@ void OCCGeometry::setCoinNode(SoSeparator* node)
     LOG_INF_S("Set Coin3D node for geometry: " + m_name);
 }
 
-void OCCGeometry::regenerateMesh(const OCCMeshConverter::MeshParameters& params)
+void OCCGeometry::regenerateMesh(const MeshParameters& params)
 {
     buildCoinRepresentation(params);
 }
 
-void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters& params)
+void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 {
     LOG_INF_S("Building Coin3D representation for geometry: " + m_name);
 
@@ -616,8 +616,18 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
 
     if (!m_shape.IsNull()) {
         LOG_INF_S("Creating mesh node for geometry: " + m_name);
-        SoSeparator* meshNode = OCCMeshConverter::createCoinNode(m_shape, params, m_selected);
-        if (meshNode) {
+        // Use rendering toolkit to create scene node
+        auto& manager = RenderingToolkitAPI::getManager();
+        auto backend = manager.getRenderBackend("Coin3D");
+        if (!backend) {
+            LOG_ERR_S("Coin3D rendering backend not available");
+            return;
+        }
+        
+        auto sceneNode = backend->createSceneNode(m_shape, params, m_selected);
+        if (sceneNode) {
+            SoSeparator* meshNode = sceneNode.get();
+            meshNode->ref(); // Take ownership
             m_coinNode->addChild(meshNode);
             LOG_INF_S("Successfully added mesh node to Coin3D representation for: " + m_name);
         }
