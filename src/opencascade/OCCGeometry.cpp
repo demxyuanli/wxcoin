@@ -133,7 +133,26 @@ void OCCGeometry::setScale(double scale)
 
 void OCCGeometry::setVisible(bool visible)
 {
-    m_visible = visible;
+    if (m_visible != visible) {
+        m_visible = visible;
+        
+        // Update Coin3D node visibility
+        if (m_coinNode) {
+            // Set the node's render action based on visibility
+            if (visible) {
+                m_coinNode->renderCulling = SoSeparator::OFF;
+            } else {
+                m_coinNode->renderCulling = SoSeparator::ON;
+            }
+            
+            // Force a refresh
+            m_coinNode->touch();
+            
+            LOG_INF_S("Set geometry visibility: " + m_name + " -> " + (visible ? "visible" : "hidden"));
+        } else {
+            LOG_INF_S("Set geometry visibility (no Coin3D node yet): " + m_name + " -> " + (visible ? "visible" : "hidden"));
+        }
+    }
 }
 
 void OCCGeometry::setSelected(bool selected)
@@ -320,6 +339,19 @@ SoSeparator* OCCGeometry::getCoinNode()
 
     LOG_INF_S("Returning Coin3D node for geometry: " + m_name + " - Node: " + (m_coinNode ? "valid" : "null"));
     return m_coinNode;
+}
+
+void OCCGeometry::setCoinNode(SoSeparator* node)
+{
+    if (m_coinNode) {
+        m_coinNode->unref();
+    }
+    m_coinNode = node;
+    if (m_coinNode) {
+        m_coinNode->ref();
+    }
+    m_coinNeedsUpdate = false;
+    LOG_INF_S("Set Coin3D node for geometry: " + m_name);
 }
 
 void OCCGeometry::regenerateMesh(const OCCMeshConverter::MeshParameters& params)
@@ -597,6 +629,16 @@ void OCCGeometry::buildCoinRepresentation(const OCCMeshConverter::MeshParameters
         LOG_ERR_S("Shape is null, cannot create mesh node for geometry: " + m_name);
     }
 
+    // Set visibility based on current state
+    if (m_coinNode) {
+        if (m_visible) {
+            m_coinNode->renderCulling = SoSeparator::OFF;
+        } else {
+            m_coinNode->renderCulling = SoSeparator::ON;
+        }
+        LOG_INF_S("Set Coin3D node visibility for geometry: " + m_name + " -> " + (m_visible ? "visible" : "hidden"));
+    }
+    
     m_coinNeedsUpdate = false;
     LOG_INF_S("Finished building Coin3D representation for geometry: " + m_name);
 }

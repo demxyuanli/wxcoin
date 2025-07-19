@@ -40,43 +40,79 @@ void LightingConfig::initializeDefaultLights()
 {
     m_lights.clear();
     
-    // Main directional light
+    // Enhanced lighting setup based on NavigationCube configuration
+    
+    // Enhanced lighting setup with increased intensity for better visibility
+    // Main directional light (increased intensity)
     LightSettings mainLight;
     mainLight.name = "Main Light";
     mainLight.type = "directional";
-    mainLight.directionX = 0.5;
-    mainLight.directionY = 0.5;
-    mainLight.directionZ = -1.0;
+    mainLight.directionX = 0.7; // More distant main light
+    mainLight.directionY = 0.7; // More distant main light
+    mainLight.directionZ = -0.7; // More distant main light
     mainLight.color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-    mainLight.intensity = 1.0;
+    mainLight.intensity = 1.2; // Increased intensity for better visibility
     m_lights.push_back(mainLight);
     
-    // Fill light
+    // Fill light (increased intensity)
     LightSettings fillLight;
     fillLight.name = "Fill Light";
     fillLight.type = "directional";
-    fillLight.directionX = -0.3;
-    fillLight.directionY = -0.3;
-    fillLight.directionZ = -0.5;
-    fillLight.color = Quantity_Color(0.9, 0.9, 1.0, Quantity_TOC_RGB);
-    fillLight.intensity = 0.6;
+    fillLight.directionX = -0.7; // More distant fill light
+    fillLight.directionY = -0.7; // More distant fill light
+    fillLight.directionZ = 0.7;  // More distant fill light
+    fillLight.color = Quantity_Color(0.95, 0.95, 1.0, Quantity_TOC_RGB); // Slightly cool
+    fillLight.intensity = 0.9; // Increased intensity for better visibility
     m_lights.push_back(fillLight);
     
-    // Back light
+    // Side light (increased intensity)
+    LightSettings sideLight;
+    sideLight.name = "Side Light";
+    sideLight.type = "directional";
+    sideLight.directionX = -0.9; // More distant side light
+    sideLight.directionY = 0.3;  // More distant side light
+    sideLight.directionZ = -0.4; // More distant side light
+    sideLight.color = Quantity_Color(1.0, 1.0, 0.95, Quantity_TOC_RGB); // Slightly warm
+    sideLight.intensity = 0.8; // Increased intensity for better visibility
+    m_lights.push_back(sideLight);
+    
+    // Back light (increased intensity)
     LightSettings backLight;
     backLight.name = "Back Light";
     backLight.type = "directional";
-    backLight.directionX = 0.2;
-    backLight.directionY = 0.2;
-    backLight.directionZ = 0.8;
-    backLight.color = Quantity_Color(1.0, 1.0, 0.9, Quantity_TOC_RGB);
-    backLight.intensity = 0.5;
+    backLight.directionX = 0.2; // More distant back light, slightly offset
+    backLight.directionY = 0.2; // More distant back light, slightly offset
+    backLight.directionZ = 0.9; // More distant back light, slightly offset
+    backLight.color = Quantity_Color(0.9, 0.9, 1.0, Quantity_TOC_RGB); // Slightly cool
+    backLight.intensity = 0.6; // Increased intensity for better visibility
     m_lights.push_back(backLight);
     
-    // Environment settings
+    // Bottom light (increased intensity)
+    LightSettings bottomLight;
+    bottomLight.name = "Bottom Light";
+    bottomLight.type = "directional";
+    bottomLight.directionX = 0.5;  // More distant bottom light
+    bottomLight.directionY = -0.9; // More distant bottom light
+    bottomLight.directionZ = 0.3;  // More distant bottom light
+    bottomLight.color = Quantity_Color(1.0, 0.95, 0.95, Quantity_TOC_RGB); // Slightly warm
+    bottomLight.intensity = 0.5; // Increased intensity for better visibility
+    m_lights.push_back(bottomLight);
+    
+    // Top side light (increased intensity)
+    LightSettings topSideLight;
+    topSideLight.name = "Top Side Light";
+    topSideLight.type = "directional";
+    topSideLight.directionX = 0.9; // More distant top side light
+    topSideLight.directionY = 0.4; // More distant top side light
+    topSideLight.directionZ = 0.4; // More distant top side light
+    topSideLight.color = Quantity_Color(0.95, 1.0, 0.95, Quantity_TOC_RGB); // Slightly cool
+    topSideLight.intensity = 0.5; // Increased intensity for better visibility
+    m_lights.push_back(topSideLight);
+    
+    // Environment settings (enhanced from NavigationCube settings)
     m_environmentSettings.name = "Environment";
     m_environmentSettings.type = "ambient";
-    m_environmentSettings.ambientColor = Quantity_Color(0.4, 0.4, 0.4, Quantity_TOC_RGB);
+    m_environmentSettings.ambientColor = Quantity_Color(0.8, 0.8, 0.85, Quantity_TOC_RGB); // Brighter and more neutral like NavigationCube
     m_environmentSettings.ambientIntensity = 1.0;
 }
 
@@ -375,102 +411,23 @@ void LightingConfig::setEnvironmentAmbientIntensity(double intensity)
 void LightingConfig::applyPreset(const std::string& presetName)
 {
     if (presetName == "Studio") {
-        m_lights.clear();
-        
-        // Key light
-        LightSettings keyLight;
-        keyLight.name = "Key Light";
-        keyLight.type = "directional";
-        keyLight.directionX = 0.7;
-        keyLight.directionY = 0.3;
-        keyLight.directionZ = -0.6;
-        keyLight.color = Quantity_Color(1.0, 0.95, 0.9, Quantity_TOC_RGB);
-        keyLight.intensity = 1.0;
-        m_lights.push_back(keyLight);
-        
-        // Fill light
-        LightSettings fillLight;
-        fillLight.name = "Fill Light";
-        fillLight.type = "directional";
-        fillLight.directionX = -0.4;
-        fillLight.directionY = 0.2;
-        fillLight.directionZ = -0.9;
-        fillLight.color = Quantity_Color(0.9, 0.95, 1.0, Quantity_TOC_RGB);
-        fillLight.intensity = 0.4;
-        m_lights.push_back(fillLight);
-        
-        // Rim light
-        LightSettings rimLight;
-        rimLight.name = "Rim Light";
-        rimLight.type = "directional";
-        rimLight.directionX = 0.2;
-        rimLight.directionY = -0.8;
-        rimLight.directionZ = 0.6;
-        rimLight.color = Quantity_Color(1.0, 1.0, 0.9, Quantity_TOC_RGB);
-        rimLight.intensity = 0.6;
-        m_lights.push_back(rimLight);
-        
-        m_environmentSettings.ambientColor = Quantity_Color(0.2, 0.2, 0.25, Quantity_TOC_RGB);
-        m_environmentSettings.ambientIntensity = 0.3;
-        
+        applyStudioPreset();
     } else if (presetName == "Outdoor") {
-        m_lights.clear();
-        
-        // Sun light
-        LightSettings sunLight;
-        sunLight.name = "Sun";
-        sunLight.type = "directional";
-        sunLight.directionX = 0.3;
-        sunLight.directionY = 0.7;
-        sunLight.directionZ = -0.6;
-        sunLight.color = Quantity_Color(1.0, 0.95, 0.8, Quantity_TOC_RGB);
-        sunLight.intensity = 1.2;
-        m_lights.push_back(sunLight);
-        
-        // Sky light
-        LightSettings skyLight;
-        skyLight.name = "Sky";
-        skyLight.type = "directional";
-        skyLight.directionX = -0.2;
-        skyLight.directionY = 0.1;
-        skyLight.directionZ = -0.9;
-        skyLight.color = Quantity_Color(0.6, 0.8, 1.0, Quantity_TOC_RGB);
-        skyLight.intensity = 0.8;
-        m_lights.push_back(skyLight);
-        
-        m_environmentSettings.ambientColor = Quantity_Color(0.4, 0.5, 0.6, Quantity_TOC_RGB);
-        m_environmentSettings.ambientIntensity = 0.5;
-        
+        applyOutdoorPreset();
     } else if (presetName == "Dramatic") {
-        m_lights.clear();
-        
-        // Main dramatic light
-        LightSettings dramaticLight;
-        dramaticLight.name = "Dramatic";
-        dramaticLight.type = "directional";
-        dramaticLight.directionX = 0.8;
-        dramaticLight.directionY = 0.2;
-        dramaticLight.directionZ = -0.6;
-        dramaticLight.color = Quantity_Color(1.0, 0.9, 0.7, Quantity_TOC_RGB);
-        dramaticLight.intensity = 1.5;
-        m_lights.push_back(dramaticLight);
-        
-        // Subtle fill
-        LightSettings subtleFill;
-        subtleFill.name = "Subtle Fill";
-        subtleFill.type = "directional";
-        subtleFill.directionX = -0.3;
-        subtleFill.directionY = -0.1;
-        subtleFill.directionZ = -0.9;
-        subtleFill.color = Quantity_Color(0.3, 0.4, 0.6, Quantity_TOC_RGB);
-        subtleFill.intensity = 0.2;
-        m_lights.push_back(subtleFill);
-        
-        m_environmentSettings.ambientColor = Quantity_Color(0.1, 0.1, 0.15, Quantity_TOC_RGB);
-        m_environmentSettings.ambientIntensity = 0.1;
+        applyDramaticPreset();
+    } else if (presetName == "Warm") {
+        applyWarmPreset();
+    } else if (presetName == "Cool") {
+        applyCoolPreset();
+    } else if (presetName == "Minimal") {
+        applyMinimalPreset();
+    } else if (presetName == "NavigationCube") {
+        applyNavigationCubePreset();
+    } else {
+        LOG_WRN_S("Unknown lighting preset: " + presetName + ", using default");
+        resetToDefaults();
     }
-    
-    notifySettingsChanged();
 }
 
 void LightingConfig::applyStudioPreset()
@@ -698,9 +655,88 @@ void LightingConfig::applyMinimalPreset()
     notifySettingsChanged();
 }
 
+void LightingConfig::applyNavigationCubePreset()
+{
+    m_lights.clear();
+    
+    // Enhanced lighting setup based on NavigationCube configuration
+    
+    // Main directional light (from NavigationCube settings)
+    LightSettings mainLight;
+    mainLight.name = "Main Light";
+    mainLight.type = "directional";
+    mainLight.directionX = 0.5;
+    mainLight.directionY = 0.5;
+    mainLight.directionZ = -0.5;
+    mainLight.color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+    mainLight.intensity = 0.4; // Same as NavigationCube
+    m_lights.push_back(mainLight);
+    
+    // Fill light (from NavigationCube settings)
+    LightSettings fillLight;
+    fillLight.name = "Fill Light";
+    fillLight.type = "directional";
+    fillLight.directionX = -0.5;
+    fillLight.directionY = -0.5;
+    fillLight.directionZ = 0.5;
+    fillLight.color = Quantity_Color(0.95, 0.95, 1.0, Quantity_TOC_RGB);
+    fillLight.intensity = 0.4; // Same as NavigationCube
+    m_lights.push_back(fillLight);
+    
+    // Side light (from NavigationCube settings)
+    LightSettings sideLight;
+    sideLight.name = "Side Light";
+    sideLight.type = "directional";
+    sideLight.directionX = -0.8;
+    sideLight.directionY = 0.2;
+    sideLight.directionZ = -0.3;
+    sideLight.color = Quantity_Color(1.0, 1.0, 0.95, Quantity_TOC_RGB);
+    sideLight.intensity = 0.3; // Same as NavigationCube
+    m_lights.push_back(sideLight);
+    
+    // Back light (from NavigationCube settings)
+    LightSettings backLight;
+    backLight.name = "Back Light";
+    backLight.type = "directional";
+    backLight.directionX = 0.0;
+    backLight.directionY = 0.0;
+    backLight.directionZ = 1.0;
+    backLight.color = Quantity_Color(0.9, 0.9, 1.0, Quantity_TOC_RGB);
+    backLight.intensity = 0.3; // Same as NavigationCube
+    m_lights.push_back(backLight);
+    
+    // Bottom light (from NavigationCube settings)
+    LightSettings bottomLight;
+    bottomLight.name = "Bottom Light";
+    bottomLight.type = "directional";
+    bottomLight.directionX = 0.4;
+    bottomLight.directionY = -0.8;
+    bottomLight.directionZ = 0.2;
+    bottomLight.color = Quantity_Color(1.0, 0.95, 0.95, Quantity_TOC_RGB);
+    bottomLight.intensity = 0.2; // Same as NavigationCube
+    m_lights.push_back(bottomLight);
+    
+    // Top side light (from NavigationCube settings)
+    LightSettings topSideLight;
+    topSideLight.name = "Top Side Light";
+    topSideLight.type = "directional";
+    topSideLight.directionX = 0.8;
+    topSideLight.directionY = 0.3;
+    topSideLight.directionZ = 0.3;
+    topSideLight.color = Quantity_Color(0.95, 1.0, 0.95, Quantity_TOC_RGB);
+    topSideLight.intensity = 0.2; // Same as NavigationCube
+    m_lights.push_back(topSideLight);
+    
+    // Environment settings (from NavigationCube settings)
+    m_environmentSettings.ambientColor = Quantity_Color(0.8, 0.8, 0.85, Quantity_TOC_RGB);
+    m_environmentSettings.ambientIntensity = 1.0;
+    
+    notifySettingsChanged();
+}
+
 std::vector<std::string> LightingConfig::getAvailablePresets() const
 {
-    return {"Studio", "Outdoor", "Dramatic", "Warm", "Cool", "Minimal"};
+    return {"Studio", "Outdoor", "Dramatic", "Warm", "Cool", "Minimal", "NavigationCube"};
 }
 
 void LightingConfig::resetToDefaults()

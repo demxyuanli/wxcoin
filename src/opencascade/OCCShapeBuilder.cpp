@@ -38,6 +38,19 @@
 #include <gp_Vec.hxx>
 #include <Standard_Failure.hxx>
 
+// Add Bezier curve and surface includes
+#include <Geom_BezierCurve.hxx>
+#include <Geom_BezierSurface.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_BSplineSurface.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <TColgp_Array1OfPnt.hxx>
+#include <TColgp_Array2OfPnt.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColStd_Array2OfReal.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+
 TopoDS_Shape OCCShapeBuilder::createBox(double width, double height, double depth, const gp_Pnt& position)
 {
     try {
@@ -662,4 +675,255 @@ void OCCShapeBuilder::analyzeShapeProperties(const TopoDS_Shape& shape, const st
     }
     
     LOG_INF_S("=== End Properties Analysis ===");
+} 
+
+// Bezier curve and surface implementations
+TopoDS_Shape OCCShapeBuilder::createBezierCurve(const std::vector<gp_Pnt>& controlPoints)
+{
+    try {
+        if (controlPoints.size() < 2) {
+            LOG_ERR_S("Bezier curve requires at least 2 control points");
+            return TopoDS_Shape();
+        }
+        
+        // Convert std::vector to OpenCASCADE array
+        TColgp_Array1OfPnt occPoints(1, static_cast<int>(controlPoints.size()));
+        for (size_t i = 0; i < controlPoints.size(); ++i) {
+            occPoints.SetValue(static_cast<int>(i + 1), controlPoints[i]);
+        }
+        
+        // Create Bezier curve
+        Handle(Geom_BezierCurve) bezierCurve = new Geom_BezierCurve(occPoints);
+        
+        // Convert to TopoDS_Edge
+        BRepBuilderAPI_MakeEdge edgeMaker(bezierCurve);
+        if (!edgeMaker.IsDone()) {
+            LOG_ERR_S("Failed to create edge from Bezier curve");
+            return TopoDS_Shape();
+        }
+        
+        TopoDS_Edge edge = edgeMaker.Edge();
+        LOG_INF_S("Created Bezier curve with " + std::to_string(controlPoints.size()) + " control points");
+        
+        return edge;
+    }
+    catch (const Standard_Failure& e) {
+        LOG_ERR_S("OpenCASCADE exception creating Bezier curve: " + std::string(e.GetMessageString()));
+        return TopoDS_Shape();
+    }
+    catch (const std::exception& e) {
+        LOG_ERR_S("Std exception creating Bezier curve: " + std::string(e.what()));
+        return TopoDS_Shape();
+    }
+}
+
+TopoDS_Shape OCCShapeBuilder::createBezierSurface(const std::vector<std::vector<gp_Pnt>>& controlPoints)
+{
+    try {
+        if (controlPoints.empty() || controlPoints[0].empty()) {
+            LOG_ERR_S("Bezier surface requires non-empty control point grid");
+            return TopoDS_Shape();
+        }
+        
+        int uCount = static_cast<int>(controlPoints.size());
+        int vCount = static_cast<int>(controlPoints[0].size());
+        
+        // Check if all rows have the same number of points
+        for (const auto& row : controlPoints) {
+            if (row.size() != vCount) {
+                LOG_ERR_S("All rows in control point grid must have the same number of points");
+                return TopoDS_Shape();
+            }
+        }
+        
+        // Convert std::vector to OpenCASCADE array
+        TColgp_Array2OfPnt occPoints(1, uCount, 1, vCount);
+        for (int i = 0; i < uCount; ++i) {
+            for (int j = 0; j < vCount; ++j) {
+                occPoints.SetValue(i + 1, j + 1, controlPoints[i][j]);
+            }
+        }
+        
+        // Create Bezier surface
+        Handle(Geom_BezierSurface) bezierSurface = new Geom_BezierSurface(occPoints);
+        
+        // Convert to TopoDS_Face
+        BRepBuilderAPI_MakeFace faceMaker(bezierSurface, 1e-6);
+        if (!faceMaker.IsDone()) {
+            LOG_ERR_S("Failed to create face from Bezier surface");
+            return TopoDS_Shape();
+        }
+        
+        TopoDS_Face face = faceMaker.Face();
+        LOG_INF_S("Created Bezier surface with " + std::to_string(uCount) + "x" + std::to_string(vCount) + " control points");
+        
+        return face;
+    }
+    catch (const Standard_Failure& e) {
+        LOG_ERR_S("OpenCASCADE exception creating Bezier surface: " + std::string(e.GetMessageString()));
+        return TopoDS_Shape();
+    }
+    catch (const std::exception& e) {
+        LOG_ERR_S("Std exception creating Bezier surface: " + std::string(e.what()));
+        return TopoDS_Shape();
+    }
+}
+
+TopoDS_Shape OCCShapeBuilder::createBSplineCurve(const std::vector<gp_Pnt>& poles, 
+                                                 const std::vector<double>& weights,
+                                                 int degree)
+{
+    try {
+        if (poles.size() < 2) {
+            LOG_ERR_S("B-spline curve requires at least 2 poles");
+            return TopoDS_Shape();
+        }
+        
+        if (degree >= static_cast<int>(poles.size())) {
+            LOG_ERR_S("B-spline degree must be less than number of poles");
+            return TopoDS_Shape();
+        }
+        
+        // Convert std::vector to OpenCASCADE arrays
+        TColgp_Array1OfPnt occPoles(1, static_cast<int>(poles.size()));
+        for (size_t i = 0; i < poles.size(); ++i) {
+            occPoles.SetValue(static_cast<int>(i + 1), poles[i]);
+        }
+        
+        Handle(Geom_BSplineCurve) bsplineCurve;
+        
+        if (weights.empty()) {
+            // Non-rational B-spline - need to generate knots
+            int numKnots = static_cast<int>(poles.size()) + degree + 1;
+            TColStd_Array1OfReal knots(1, numKnots);
+            TColStd_Array1OfInteger multiplicities(1, numKnots);
+            
+            // Generate uniform knots
+            for (int i = 1; i <= numKnots; ++i) {
+                knots.SetValue(i, static_cast<double>(i - 1));
+                multiplicities.SetValue(i, 1);
+            }
+            
+            // Set multiplicity at start and end
+            multiplicities.SetValue(1, degree + 1);
+            multiplicities.SetValue(numKnots, degree + 1);
+            
+            bsplineCurve = new Geom_BSplineCurve(occPoles, knots, multiplicities, degree);
+        } else {
+            // Rational B-spline (NURBS)
+            if (weights.size() != poles.size()) {
+                LOG_ERR_S("Number of weights must match number of poles");
+                return TopoDS_Shape();
+            }
+            
+            TColStd_Array1OfReal occWeights(1, static_cast<int>(weights.size()));
+            for (size_t i = 0; i < weights.size(); ++i) {
+                occWeights.SetValue(static_cast<int>(i + 1), weights[i]);
+            }
+            
+            // Generate uniform knots for rational B-spline
+            int numKnots = static_cast<int>(poles.size()) + degree + 1;
+            TColStd_Array1OfReal knots(1, numKnots);
+            TColStd_Array1OfInteger multiplicities(1, numKnots);
+            
+            for (int i = 1; i <= numKnots; ++i) {
+                knots.SetValue(i, static_cast<double>(i - 1));
+                multiplicities.SetValue(i, 1);
+            }
+            
+            multiplicities.SetValue(1, degree + 1);
+            multiplicities.SetValue(numKnots, degree + 1);
+            
+            bsplineCurve = new Geom_BSplineCurve(occPoles, occWeights, knots, multiplicities, degree);
+        }
+        
+        // Convert to TopoDS_Edge
+        BRepBuilderAPI_MakeEdge edgeMaker(bsplineCurve);
+        if (!edgeMaker.IsDone()) {
+            LOG_ERR_S("Failed to create edge from B-spline curve");
+            return TopoDS_Shape();
+        }
+        
+        TopoDS_Edge edge = edgeMaker.Edge();
+        LOG_INF_S("Created B-spline curve with " + std::to_string(poles.size()) + " poles, degree " + std::to_string(degree));
+        
+        return edge;
+    }
+    catch (const Standard_Failure& e) {
+        LOG_ERR_S("OpenCASCADE exception creating B-spline curve: " + std::string(e.GetMessageString()));
+        return TopoDS_Shape();
+    }
+    catch (const std::exception& e) {
+        LOG_ERR_S("Std exception creating B-spline curve: " + std::string(e.what()));
+        return TopoDS_Shape();
+    }
+}
+
+TopoDS_Shape OCCShapeBuilder::createNURBSCurve(const std::vector<gp_Pnt>& poles,
+                                               const std::vector<double>& weights,
+                                               const std::vector<double>& knots,
+                                               const std::vector<int>& multiplicities,
+                                               int degree)
+{
+    try {
+        if (poles.size() < 2) {
+            LOG_ERR_S("NURBS curve requires at least 2 poles");
+            return TopoDS_Shape();
+        }
+        
+        if (weights.size() != poles.size()) {
+            LOG_ERR_S("Number of weights must match number of poles");
+            return TopoDS_Shape();
+        }
+        
+        if (knots.size() != multiplicities.size()) {
+            LOG_ERR_S("Number of knots must match number of multiplicities");
+            return TopoDS_Shape();
+        }
+        
+        // Convert std::vector to OpenCASCADE arrays
+        TColgp_Array1OfPnt occPoles(1, static_cast<int>(poles.size()));
+        for (size_t i = 0; i < poles.size(); ++i) {
+            occPoles.SetValue(static_cast<int>(i + 1), poles[i]);
+        }
+        
+        TColStd_Array1OfReal occWeights(1, static_cast<int>(weights.size()));
+        for (size_t i = 0; i < weights.size(); ++i) {
+            occWeights.SetValue(static_cast<int>(i + 1), weights[i]);
+        }
+        
+        TColStd_Array1OfReal occKnots(1, static_cast<int>(knots.size()));
+        for (size_t i = 0; i < knots.size(); ++i) {
+            occKnots.SetValue(static_cast<int>(i + 1), knots[i]);
+        }
+        
+        TColStd_Array1OfInteger occMultiplicities(1, static_cast<int>(multiplicities.size()));
+        for (size_t i = 0; i < multiplicities.size(); ++i) {
+            occMultiplicities.SetValue(static_cast<int>(i + 1), multiplicities[i]);
+        }
+        
+        // Create NURBS curve
+        Handle(Geom_BSplineCurve) nurbsCurve = new Geom_BSplineCurve(
+            occPoles, occWeights, occKnots, occMultiplicities, degree);
+        
+        // Convert to TopoDS_Edge
+        BRepBuilderAPI_MakeEdge edgeMaker(nurbsCurve);
+        if (!edgeMaker.IsDone()) {
+            LOG_ERR_S("Failed to create edge from NURBS curve");
+            return TopoDS_Shape();
+        }
+        
+        TopoDS_Edge edge = edgeMaker.Edge();
+        LOG_INF_S("Created NURBS curve with " + std::to_string(poles.size()) + " poles, degree " + std::to_string(degree));
+        
+        return edge;
+    }
+    catch (const Standard_Failure& e) {
+        LOG_ERR_S("OpenCASCADE exception creating NURBS curve: " + std::string(e.GetMessageString()));
+        return TopoDS_Shape();
+    }
+    catch (const std::exception& e) {
+        LOG_ERR_S("Std exception creating NURBS curve: " + std::string(e.what()));
+        return TopoDS_Shape();
+    }
 } 

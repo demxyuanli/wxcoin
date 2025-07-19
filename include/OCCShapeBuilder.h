@@ -2,10 +2,18 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/gp_Vec.hxx>
 #include <OpenCASCADE/gp_Dir.hxx>
+
+// Forward declarations for OpenCASCADE geometry classes
+class Geom_BezierCurve;
+class Geom_BezierSurface;
+class Geom_BSplineCurve;
+class Geom_BSplineSurface;
+class Geom_Surface;
 
 /**
  * @brief OpenCASCADE shape builder
@@ -32,6 +40,32 @@ public:
     static TopoDS_Shape createTorus(double majorRadius, double minorRadius,
                                     const gp_Pnt& center = gp_Pnt(0,0,0),
                                     const gp_Dir& direction = gp_Dir(0,0,1));
+
+    // Bezier curve and surface creation
+    static TopoDS_Shape createBezierCurve(const std::vector<gp_Pnt>& controlPoints);
+    static TopoDS_Shape createBezierSurface(const std::vector<std::vector<gp_Pnt>>& controlPoints);
+    
+    // B-spline curve and surface creation
+    static TopoDS_Shape createBSplineCurve(const std::vector<gp_Pnt>& poles, 
+                                           const std::vector<double>& weights = {},
+                                           int degree = 3);
+    static TopoDS_Shape createBSplineSurface(const std::vector<std::vector<gp_Pnt>>& poles,
+                                             const std::vector<std::vector<double>>& weights = {},
+                                             int uDegree = 3, int vDegree = 3);
+    
+    // NURBS curve and surface creation
+    static TopoDS_Shape createNURBSCurve(const std::vector<gp_Pnt>& poles,
+                                         const std::vector<double>& weights,
+                                         const std::vector<double>& knots,
+                                         const std::vector<int>& multiplicities,
+                                         int degree = 3);
+    static TopoDS_Shape createNURBSSurface(const std::vector<std::vector<gp_Pnt>>& poles,
+                                           const std::vector<std::vector<double>>& weights,
+                                           const std::vector<double>& uKnots,
+                                           const std::vector<double>& vKnots,
+                                           const std::vector<int>& uMultiplicities,
+                                           const std::vector<int>& vMultiplicities,
+                                           int uDegree = 3, int vDegree = 3);
 
     // Complex geometric operations
     static TopoDS_Shape createExtrusion(const TopoDS_Shape& profile, const gp_Vec& direction);

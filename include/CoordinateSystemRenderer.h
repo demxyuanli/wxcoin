@@ -2,6 +2,8 @@
 
 #include <Inventor/nodes/SoSeparator.h>
 
+class SoSwitch;
+
 class CoordinateSystemRenderer {
 public:
     CoordinateSystemRenderer(SoSeparator* objectRoot);
@@ -11,6 +13,10 @@ public:
     void updateCoordinateSystemSize(float sceneSize);
     void setCoordinateSystemScale(float scale);
     float getCoordinateSystemSize() const { return m_currentPlaneSize; }
+    
+    // Visibility control
+    void setVisible(bool visible);
+    bool isVisible() const { return m_visible; }
 
 private:
     void rebuildCoordinateSystem();
@@ -19,5 +25,7 @@ private:
     static const float COORD_PLANE_TRANSPARENCY;
     SoSeparator* m_objectRoot;
     SoSeparator* m_coordSystemSeparator;
+    SoSwitch* m_coordSystemSwitch;
     float m_currentPlaneSize;
+    bool m_visible;
 };

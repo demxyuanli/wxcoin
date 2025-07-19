@@ -36,6 +36,10 @@ public:
     void updateCoordinateSystemScale();
     void getSceneBoundingBoxMinMax(SbVec3f& min, SbVec3f& max) const;
     
+    // Coordinate system visibility control
+    void setCoordinateSystemVisible(bool visible);
+    bool isCoordinateSystemVisible() const;
+    
     // Debug method to check lighting state
     void debugLightingState() const;
 

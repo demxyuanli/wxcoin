@@ -213,7 +213,20 @@ std::vector<std::shared_ptr<OCCGeometry>> OCCViewer::getSelectedGeometries() con
 
 void OCCViewer::setGeometryVisible(const std::string& name, bool visible)
 {
-    if (auto g = findGeometry(name)) g->setVisible(visible);
+    auto geometry = findGeometry(name);
+    if (!geometry) {
+        LOG_WRN_S("Geometry not found for visibility change: " + name);
+        return;
+    }
+    
+    LOG_INF_S("Setting geometry visibility: " + name + " -> " + (visible ? "visible" : "hidden"));
+    geometry->setVisible(visible);
+    
+    // Request view refresh after visibility change
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+    }
 }
 
 void OCCViewer::setGeometrySelected(const std::string& name, bool selected)
@@ -262,12 +275,30 @@ void OCCViewer::setGeometryTransparency(const std::string& name, double transpar
 
 void OCCViewer::hideAll()
 {
-    for (auto& g : m_geometries) g->setVisible(false);
+    LOG_INF_S("Hiding all geometries - count: " + std::to_string(m_geometries.size()));
+    for (auto& g : m_geometries) {
+        g->setVisible(false);
+    }
+    
+    // Request view refresh
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+    }
 }
 
 void OCCViewer::showAll()
 {
-    for (auto& g : m_geometries) g->setVisible(true);
+    LOG_INF_S("Showing all geometries - count: " + std::to_string(m_geometries.size()));
+    for (auto& g : m_geometries) {
+        g->setVisible(true);
+    }
+    
+    // Request view refresh
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+    }
 }
 
 void OCCViewer::selectAll()
@@ -741,3 +772,4 @@ void OCCViewer::requestViewRefresh()
         canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
     }
 }
+

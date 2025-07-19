@@ -69,7 +69,10 @@ enum {
     ID_TEXTURE_MODE_DECAL,
     ID_TEXTURE_MODE_MODULATE,
     ID_TEXTURE_MODE_REPLACE,
-    ID_TEXTURE_MODE_BLEND
+    ID_TEXTURE_MODE_BLEND,
+    
+    // Coordinate System Control
+    ID_TOGGLE_COORDINATE_SYSTEM
 };
 
 class FlatFrame : public FlatUIFrame

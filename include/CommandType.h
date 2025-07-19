@@ -63,6 +63,7 @@ enum class CommandType {
     RenderingSettings,
     EdgeSettings,
     LightingSettings,
+    ToggleCoordinateSystem,
 
     // Help
     HelpAbout,
@@ -120,6 +121,7 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::RenderingSettings, "RENDERING_SETTINGS"},
         {CommandType::EdgeSettings, "EDGE_SETTINGS"},
         {CommandType::LightingSettings, "LIGHTING_SETTINGS"},
+        {CommandType::ToggleCoordinateSystem, "TOGGLE_COORDINATE_SYSTEM"},
 
         {CommandType::HelpAbout, "HELP_ABOUT"},
 
@@ -177,6 +179,7 @@ inline CommandType from_string(const std::string& str) {
         {"RENDERING_SETTINGS", CommandType::RenderingSettings},
         {"EDGE_SETTINGS", CommandType::EdgeSettings},
         {"LIGHTING_SETTINGS", CommandType::LightingSettings},
+        {"TOGGLE_COORDINATE_SYSTEM", CommandType::ToggleCoordinateSystem},
 
         {"HELP_ABOUT", CommandType::HelpAbout}
     };

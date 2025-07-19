@@ -95,6 +95,7 @@ public:
     void applyWarmPreset();
     void applyCoolPreset();
     void applyMinimalPreset();
+    void applyNavigationCubePreset(); // New preset based on NavigationCube lighting
     std::vector<std::string> getAvailablePresets() const;
     
     // Reset to defaults

@@ -191,6 +191,7 @@ public:
 
     // Coin3D integration
     SoSeparator* getCoinNode();
+    void setCoinNode(SoSeparator* node);
     void regenerateMesh(const OCCMeshConverter::MeshParameters& params);
 
 private:

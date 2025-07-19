@@ -91,6 +91,17 @@ public:
     
     // View refresh
     void requestViewRefresh();
+    
+   
+    // Advanced geometry creation - NEW
+    std::shared_ptr<OCCGeometry> addGeometryWithAdvancedRendering(const TopoDS_Shape& shape, const std::string& name);
+    std::shared_ptr<OCCGeometry> addBezierCurve(const std::vector<gp_Pnt>& controlPoints, const std::string& name);
+    std::shared_ptr<OCCGeometry> addBezierSurface(const std::vector<std::vector<gp_Pnt>>& controlPoints, const std::string& name);
+    std::shared_ptr<OCCGeometry> addBSplineCurve(const std::vector<gp_Pnt>& poles, const std::vector<double>& weights, const std::string& name);
+    
+    // Upgrade existing geometries - NEW
+    void upgradeGeometryToAdvanced(const std::string& name);
+    void upgradeAllGeometriesToAdvanced();
 
 private:
     void initializeViewer();
@@ -128,4 +139,6 @@ private:
 
     Quantity_Color m_defaultColor;
     double m_defaultTransparency;
+    
+
 };

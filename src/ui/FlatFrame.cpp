@@ -79,6 +79,7 @@
 #include "ViewModeListener.h"
 #include "EdgeSettingsListener.h"
 #include "LightingSettingsListener.h"
+#include "CoordinateSystemVisibilityListener.h"
 
 #include "UndoListener.h"
 #include "RedoListener.h"
@@ -149,6 +150,7 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_TEXTURE_MODE_MODULATE, FlatFrame::onCommand)
     EVT_BUTTON(ID_TEXTURE_MODE_REPLACE, FlatFrame::onCommand)
     EVT_BUTTON(ID_TEXTURE_MODE_BLEND, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TOGGLE_COORDINATE_SYSTEM, FlatFrame::onCommand)
     
     
     EVT_CLOSE(FlatFrame::onClose)
@@ -188,6 +190,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_TEXTURE_MODE_MODULATE, cmd::CommandType::TextureModeModulate},
     {ID_TEXTURE_MODE_REPLACE, cmd::CommandType::TextureModeReplace},
     {ID_TEXTURE_MODE_BLEND, cmd::CommandType::TextureModeBlend},
+    {ID_TOGGLE_COORDINATE_SYSTEM, cmd::CommandType::ToggleCoordinateSystem},
     {ID_UNDO, cmd::CommandType::Undo},
     {ID_REDO, cmd::CommandType::Redo},
     {ID_NAVIGATION_CUBE_CONFIG, cmd::CommandType::NavCubeConfig},
@@ -453,6 +456,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
     displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
     displayButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");
+    displayButtonBar->AddToggleButton(ID_TOGGLE_COORDINATE_SYSTEM, "Toggle Coordinate System", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle coordinate system display");
     displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
     page3->AddPanel(displayPanel);
     m_ribbon->AddPage(page3);
@@ -468,12 +472,12 @@ void FlatFrame::InitializeUI(const wxSize& size)
     toolsPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* toolsButtonBar = new FlatUIButtonBar(toolsPanel);
     toolsButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open mesh quality dialog");
+    toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("mesh", wxSize(16, 16)), nullptr, "Open mesh quality dialog");
+    toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
+    toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
     toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
     toolsButtonBar->AddButton(ID_LIGHTING_SETTINGS, "Lighting Settings", SVG_ICON("light", wxSize(16, 16)), nullptr, "Configure scene lighting and environment settings");
     toolsButtonBar->AddButton(ID_EDGE_SETTINGS, "Edge Settings", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Configure edge color, width and style settings");
-    toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
-    toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
     toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
     page4->AddPanel(toolsPanel);
     
@@ -487,10 +491,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
     textureTestPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* textureTestButtonBar = new FlatUIButtonBar(textureTestPanel);
     textureTestButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_DECAL, "Decal", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Decal texture mode");
-    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_MODULATE, "Modulate", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Modulate texture mode");
-    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_REPLACE, "Replace", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Replace texture mode");
-    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_BLEND, "Blend", SVG_ICON("img", wxSize(16, 16)), nullptr, "Switch to Blend texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_DECAL, "Decal", SVG_ICON("decal", wxSize(16, 16)), nullptr, "Switch to Decal texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_MODULATE, "Modulate", SVG_ICON("modulate", wxSize(16, 16)), nullptr, "Switch to Modulate texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_REPLACE, "Replace", SVG_ICON("replace", wxSize(16, 16)), nullptr, "Switch to Replace texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_BLEND, "Blend", SVG_ICON("blend", wxSize(16, 16)), nullptr, "Switch to Blend texture mode");
     textureTestPanel->AddButtonBar(textureTestButtonBar, 0, wxEXPAND | wxALL, 5);
     page4->AddPanel(textureTestPanel);
     m_ribbon->AddPage(page4);
@@ -713,6 +717,7 @@ void FlatFrame::setupCommandSystem() {
     auto renderingSettingsListener = std::make_shared<RenderingSettingsListener>(m_occViewer, m_canvas->getRenderingEngine());
     auto edgeSettingsListener = std::make_shared<EdgeSettingsListener>(this, m_occViewer);
     auto lightingSettingsListener = std::make_shared<LightingSettingsListener>(this);
+    auto coordinateSystemVisibilityListener = std::make_shared<CoordinateSystemVisibilityListener>(this, m_canvas->getSceneManager());
     
     m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
     m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
@@ -724,6 +729,7 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::RenderingSettings, renderingSettingsListener);
     m_listenerManager->registerListener(cmd::CommandType::EdgeSettings, edgeSettingsListener);
     m_listenerManager->registerListener(cmd::CommandType::LightingSettings, lightingSettingsListener);
+    m_listenerManager->registerListener(cmd::CommandType::ToggleCoordinateSystem, coordinateSystemVisibilityListener);
     
     // Set UI feedback handler
     m_commandDispatcher->setUIFeedbackHandler(
@@ -1165,7 +1171,8 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
             result.commandId.find("VIEW_") == 0 ||
             result.commandId.find("SHOW_") == 0 ||
             result.commandId == "FIX_NORMALS" ||
-            result.commandId.find("CREATE_") == 0
+            result.commandId.find("CREATE_") == 0 ||
+            result.commandId == "TOGGLE_COORDINATE_SYSTEM"
         )) {
         m_canvas->Refresh();
         LOG_INF_S("Canvas refreshed for command: " + result.commandId);

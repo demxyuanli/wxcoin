@@ -30,6 +30,14 @@ public:
     void selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
     void deselectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
     
+    // Object management functions
+    void deleteSelectedObject();
+    void hideSelectedObject();
+    void showSelectedObject();
+    void toggleObjectVisibility();
+    void showAllObjects();
+    void hideAllObjects();
+    
     // Setup methods
     void setPropertyPanel(PropertyPanel* panel);
     void setOCCViewer(OCCViewer* viewer);
@@ -42,6 +50,18 @@ public:
 private:
     void onSelectionChanged(wxTreeEvent& event);
     void onTreeItemActivated(wxTreeEvent& event);
+    void onTreeItemRightClick(wxTreeEvent& event);
+    void onKeyDown(wxKeyEvent& event);
+    void onDeleteObject(wxCommandEvent& event);
+    void onHideObject(wxCommandEvent& event);
+    void onShowObject(wxCommandEvent& event);
+    void onToggleVisibility(wxCommandEvent& event);
+    void onShowAllObjects(wxCommandEvent& event);
+    void onHideAllObjects(wxCommandEvent& event);
+    
+    void createContextMenu();
+    void updateTreeItemIcon(wxTreeItemId itemId, bool visible);
+    std::shared_ptr<OCCGeometry> getSelectedOCCGeometry();
 
 
     wxTreeCtrl* m_treeCtrl;
@@ -58,4 +78,8 @@ private:
     OCCViewer* m_occViewer;
     
     bool m_isUpdatingSelection; // Prevent recursive updates
+    
+    // Context menu
+    wxMenu* m_contextMenu;
+    wxTreeItemId m_rightClickedItem;
 };

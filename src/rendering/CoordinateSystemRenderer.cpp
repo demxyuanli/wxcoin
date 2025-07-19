@@ -2,6 +2,7 @@
 #include "DPIAwareRendering.h"
 #include "logger/Logger.h"
 #include <Inventor/nodes/SoShapeHints.h>
+#include <Inventor/nodes/SoSwitch.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoFaceSet.h>
@@ -18,7 +19,9 @@ const float CoordinateSystemRenderer::COORD_PLANE_TRANSPARENCY = 1.0f;
 CoordinateSystemRenderer::CoordinateSystemRenderer(SoSeparator* objectRoot)
     : m_objectRoot(objectRoot)
     , m_coordSystemSeparator(nullptr)
+    , m_coordSystemSwitch(nullptr)
     , m_currentPlaneSize(DEFAULT_COORD_PLANE_SIZE)
+    , m_visible(true)
 {
     LOG_INF_S("CoordinateSystemRenderer initializing");
     createCoordinateSystem();
@@ -52,8 +55,9 @@ void CoordinateSystemRenderer::setCoordinateSystemScale(float scale)
 void CoordinateSystemRenderer::rebuildCoordinateSystem()
 {
     // Remove existing coordinate system if it exists
-    if (m_coordSystemSeparator && m_objectRoot) {
-        m_objectRoot->removeChild(m_coordSystemSeparator);
+    if (m_coordSystemSwitch && m_objectRoot) {
+        m_objectRoot->removeChild(m_coordSystemSwitch);
+        m_coordSystemSwitch = nullptr;
         m_coordSystemSeparator = nullptr;
     }
     
@@ -62,6 +66,10 @@ void CoordinateSystemRenderer::rebuildCoordinateSystem()
 }
 
 void CoordinateSystemRenderer::createCoordinateSystem() {
+    // Create switch node for visibility control
+    m_coordSystemSwitch = new SoSwitch;
+    m_coordSystemSwitch->whichChild.setValue(SO_SWITCH_ALL); // Show all children by default
+    
     m_coordSystemSeparator = new SoSeparator;
     SoTransform* originTransform = new SoTransform;
     originTransform->translation.setValue(0.0f, 0.0f, 0.0f);
@@ -267,5 +275,36 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
     zAxisSep->addChild(zAxisLine);
     m_coordSystemSeparator->addChild(zAxisSep);
 
-    m_objectRoot->addChild(m_coordSystemSeparator);
+    // Add coordinate system separator to switch
+    m_coordSystemSwitch->addChild(m_coordSystemSeparator);
+    
+    // Add switch to object root
+    m_objectRoot->addChild(m_coordSystemSwitch);
+}
+
+void CoordinateSystemRenderer::setVisible(bool visible)
+{
+    if (m_visible != visible) {
+        m_visible = visible;
+        
+        if (m_coordSystemSwitch) {
+            if (visible) {
+                m_coordSystemSwitch->whichChild.setValue(SO_SWITCH_ALL); // Show all children
+            } else {
+                m_coordSystemSwitch->whichChild.setValue(SO_SWITCH_NONE); // Hide all children
+            }
+            
+            // Force a refresh of the switch and its parent
+            m_coordSystemSwitch->touch();
+            if (m_objectRoot) {
+                m_objectRoot->touch();
+            }
+
+			LOG_INF_S("Coordinate system visibility set to: " + std::string(visible ? "ON" : "OFF"));
+        }
+        else
+        {
+			LOG_ERR_S("Coordinate system switch is null, cannot set visibility");
+        }
+    }
 }

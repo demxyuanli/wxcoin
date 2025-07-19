@@ -70,36 +70,63 @@ bool SceneManager::initScene() {
         lightModel->model.setValue(SoLightModel::PHONG);
         m_lightRoot->addChild(lightModel);
 
-        // Add an environment node for ambient light for overall brightness
+        // Enhanced lighting setup based on NavigationCube configuration
+        // Environment settings for overall brightness
         SoEnvironment* environment = new SoEnvironment;
-        environment->ambientColor.setValue(0.4f, 0.4f, 0.4f); // Moderate ambient light
-        environment->ambientIntensity.setValue(1.0f);
+        environment->ambientColor.setValue(0.8f, 0.8f, 0.85f); // Brighter and more neutral ambient color like NavigationCube
+        environment->ambientIntensity.setValue(1.0f);         // Max ambient intensity
         m_lightRoot->addChild(environment);
 
-        // Main directional light, made stronger
+        // Enhanced lighting setup with more distant and natural light positions
+        // Enhanced lighting setup with increased intensity for better visibility
+        // Main directional light (increased intensity)
         m_light = new SoDirectionalLight;
         m_light->ref();
-        m_light->direction.setValue(0.5f, 0.5f, -1.0f);
-        m_light->intensity.setValue(1.0f); // Increased from 0.8
-        m_light->color.setValue(1.0f, 1.0f, 1.0f);
+        m_light->direction.setValue(0.7f, 0.7f, -0.7f); // More distant main light from top-right-front
+        m_light->intensity.setValue(1.2f); // Increased intensity for better visibility
+        m_light->color.setValue(1.0f, 1.0f, 1.0f); // Pure white light
         m_light->on.setValue(true);
         m_lightRoot->addChild(m_light);
 
-        // Fill light, made stronger
+        // Fill light (increased intensity)
         SoDirectionalLight* fillLight = new SoDirectionalLight;
-        fillLight->direction.setValue(-0.3f, -0.3f, -0.5f);
-        fillLight->intensity.setValue(0.6f); // Increased from 0.4
-        fillLight->color.setValue(0.9f, 0.9f, 1.0f);
+        fillLight->direction.setValue(-0.7f, -0.7f, 0.7f); // More distant fill light from bottom-left-back
+        fillLight->intensity.setValue(0.9f); // Increased intensity for better visibility
+        fillLight->color.setValue(0.95f, 0.95f, 1.0f); // Slightly cool
         fillLight->on.setValue(true);
         m_lightRoot->addChild(fillLight);
 
-        // Back light, made stronger
+        // Side light (increased intensity)
+        SoDirectionalLight* sideLight = new SoDirectionalLight;
+        sideLight->direction.setValue(-0.9f, 0.3f, -0.4f); // More distant side light from left
+        sideLight->intensity.setValue(0.8f); // Increased intensity for better visibility
+        sideLight->color.setValue(1.0f, 1.0f, 0.95f); // Slightly warm
+        sideLight->on.setValue(true);
+        m_lightRoot->addChild(sideLight);
+
+        // Back light (increased intensity)
         SoDirectionalLight* backLight = new SoDirectionalLight;
-        backLight->direction.setValue(0.2f, 0.2f, 0.8f);
-        backLight->intensity.setValue(0.5f); // Increased from 0.3
-        backLight->color.setValue(1.0f, 1.0f, 0.9f);
+        backLight->direction.setValue(0.2f, 0.2f, 0.9f); // More distant back light, slightly offset
+        backLight->intensity.setValue(0.6f); // Increased intensity for better visibility
+        backLight->color.setValue(0.9f, 0.9f, 1.0f); // Slightly cool
         backLight->on.setValue(true);
         m_lightRoot->addChild(backLight);
+
+        // Bottom light (increased intensity)
+        SoDirectionalLight* bottomLight = new SoDirectionalLight;
+        bottomLight->direction.setValue(0.5f, -0.9f, 0.3f); // More distant bottom light from bottom-right
+        bottomLight->intensity.setValue(0.5f); // Increased intensity for better visibility
+        bottomLight->color.setValue(1.0f, 0.95f, 0.95f); // Slightly warm
+        bottomLight->on.setValue(true);
+        m_lightRoot->addChild(bottomLight);
+
+        // Top side light (increased intensity)
+        SoDirectionalLight* topSideLight = new SoDirectionalLight;
+        topSideLight->direction.setValue(0.9f, 0.4f, 0.4f); // More distant top side light from top-left
+        topSideLight->intensity.setValue(0.5f); // Increased intensity for better visibility
+        topSideLight->color.setValue(0.95f, 1.0f, 0.95f); // Slightly cool
+        topSideLight->on.setValue(true);
+        m_lightRoot->addChild(topSideLight);
 
         m_objectRoot = new SoSeparator;
         m_objectRoot->ref();
@@ -718,4 +745,45 @@ void SceneManager::debugLightingState() const
     }
     
     LOG_INF_S("=== End Lighting Debug ===");
+}
+
+void SceneManager::setCoordinateSystemVisible(bool visible)
+{
+    if (m_coordSystemRenderer) {
+        m_coordSystemRenderer->setVisible(visible);
+        
+        // Force multiple refresh methods to ensure update
+        LOG_INF_S("Forcing scene refresh for coordinate system visibility change");
+        
+        // Method 1: Touch the scene root to force Coin3D update
+        if (m_sceneRoot) {
+            m_sceneRoot->touch();
+            LOG_INF_S("Touched scene root for coordinate system visibility");
+        }
+        
+        // Method 2: Force immediate render update
+        if (m_canvas) {
+            m_canvas->Refresh(true);
+            m_canvas->Update();
+            LOG_INF_S("Forced canvas refresh and update for coordinate system visibility");
+        }
+        
+        // Method 3: RefreshManager
+        if (m_canvas && m_canvas->getRefreshManager()) {
+            m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+            LOG_INF_S("Requested refresh via RefreshManager for coordinate system visibility");
+        }
+        
+        LOG_INF_S("Set coordinate system visibility: " + std::string(visible ? "visible" : "hidden"));
+    } else {
+        LOG_WRN_S("Coordinate system renderer not available");
+    }
+}
+
+bool SceneManager::isCoordinateSystemVisible() const
+{
+    if (m_coordSystemRenderer) {
+        return m_coordSystemRenderer->isVisible();
+    }
+    return false;
 }

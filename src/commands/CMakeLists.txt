@@ -42,6 +42,7 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/TextureModeBlendListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CoordinateSystemVisibilityListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -88,6 +89,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/TextureModeBlendListener.h
     ${CMAKE_SOURCE_DIR}/include/EdgeSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/LightingSettingsListener.h
+    ${CMAKE_SOURCE_DIR}/include/CoordinateSystemVisibilityListener.h
 )
 
 # Create command static library

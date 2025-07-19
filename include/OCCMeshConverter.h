@@ -2,24 +2,27 @@
 
 #include <vector>
 #include <string>
+#include <map>
+#include <set>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/gp_Vec.hxx>
 #include <OpenCASCADE/TopAbs_Orientation.hxx>
-#include <OpenCASCADE/TopAbs_ShapeEnum.hxx>
+#include <OpenCASCADE/Quantity_Color.hxx>
 
 // Forward declarations
 class SoSeparator;
 class SoCoordinate3;
 class SoIndexedFaceSet;
+class SoIndexedLineSet;
 class SoNormal;
 class Poly_Triangulation;
 class TopLoc_Location;
 
 /**
- * @brief OpenCASCADE mesh converter
+ * @brief OpenCASCADE mesh converter with geometric smoothing
  * 
- * Converts OpenCASCADE geometry to triangle meshes for rendering and export
+ * Converts OpenCASCADE geometry to triangle meshes with advanced smoothing capabilities
  */
 class OCCMeshConverter {
 public:
@@ -29,8 +32,7 @@ public:
     struct TriangleMesh {
         std::vector<gp_Pnt> vertices;       // vertex coordinates
         std::vector<int> triangles;         // triangle indices (3 per triangle)
-        std::vector<gp_Vec> normals;        
-        std::vector<std::pair<double, double>> uvCoords; // UV texture coordinates
+        std::vector<gp_Vec> normals;        // vertex normals
         
         // Statistics
         int getVertexCount() const { return static_cast<int>(vertices.size()); }
@@ -40,7 +42,6 @@ public:
             vertices.clear();
             triangles.clear();
             normals.clear();
-            uvCoords.clear();
         }
         
         bool isEmpty() const {
@@ -56,30 +57,21 @@ public:
         double angularDeflection;   // angular deflection
         bool relative;              // relative deflection
         bool inParallel;            // parallel computation
-        bool internalVerticesMode;  // internal vertices mode
-        bool controlSurfaceDeflection; // control surface deflection
         
         MeshParameters() 
             : deflection(0.1)
             , angularDeflection(0.5)
             , relative(false)
-            , inParallel(true)
-            , internalVerticesMode(true)
-            , controlSurfaceDeflection(true) {}
+            , inParallel(true) {}
     };
 
 public:
     // Main conversion methods
     static TriangleMesh convertToMesh(const TopoDS_Shape& shape, 
                                       const MeshParameters& params = MeshParameters());
-    
     static TriangleMesh convertToMesh(const TopoDS_Shape& shape, double deflection);
-    
-    // Batch conversion
-    static std::vector<TriangleMesh> convertMultipleToMesh(const std::vector<TopoDS_Shape>& shapes,
-                                                           const MeshParameters& params = MeshParameters());
 
-    // Coin3D node creation
+    // Coin3D node creation with smoothing
     static SoSeparator* createCoinNode(const TriangleMesh& mesh);
     static SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected);
     static SoSeparator* createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
@@ -89,58 +81,65 @@ public:
     static void updateCoinNode(SoSeparator* node, const TriangleMesh& mesh);
     static void updateCoinNode(SoSeparator* node, const TopoDS_Shape& shape, const MeshParameters& params);
 
-    // Mesh export
-    static bool exportToSTL(const TriangleMesh& mesh, const std::string& filename, bool binary = true);
-    static bool exportToOBJ(const TriangleMesh& mesh, const std::string& filename);
-    static bool exportToPLY(const TriangleMesh& mesh, const std::string& filename, bool binary = true);
+    // Geometric smoothing methods
+    /**
+     * @brief FreeCAD-style angle threshold normal averaging
+     * 
+     * Implements FreeCAD's angle threshold normal averaging algorithm with 4-step logic:
+     * 1. Build adjacency relationships (vertex -> adjacent faces -> face normals)
+     * 2. Calculate face normals using cross product
+     * 3. Apply angle threshold filtering (only faces within threshold participate)
+     * 4. Perform iterative weighted averaging with boundary protection
+     * 
+     * @param mesh Input triangle mesh
+     * @param creaseAngle Angle threshold in degrees (default 30.0)
+     * @param iterations Number of smoothing iterations (default 2, supports <=2)
+     * @return Smoothed triangle mesh
+     */
+    static TriangleMesh smoothNormals(const TriangleMesh& mesh, double creaseAngle = 30.0, int iterations = 2);
+    static TriangleMesh createSubdivisionSurface(const TriangleMesh& mesh, int levels = 2);
     
-    // Mesh analysis
-    static void calculateBoundingBox(const TriangleMesh& mesh, gp_Pnt& minPt, gp_Pnt& maxPt);
-    static double calculateSurfaceArea(const TriangleMesh& mesh);
-    static double calculateVolume(const TriangleMesh& mesh);
-    static gp_Pnt calculateCentroid(const TriangleMesh& mesh);
-    
-    // Mesh quality checking
-    static bool validateMesh(const TriangleMesh& mesh);
-    static std::vector<int> findDegenerateTriangles(const TriangleMesh& mesh);
-    static std::vector<int> findDuplicateVertices(const TriangleMesh& mesh, double tolerance = 1e-6);
-    
-    // Mesh optimization
-    static TriangleMesh removeDuplicateVertices(const TriangleMesh& mesh, double tolerance = 1e-6);
-    static TriangleMesh removeDegenerateTriangles(const TriangleMesh& mesh);
-    static TriangleMesh smoothNormals(const TriangleMesh& mesh, double angleThreshold = 30.0);
-
     // Utility methods
     static void calculateNormals(TriangleMesh& mesh);
-    static void calculateUVCoords(TriangleMesh& mesh);
     static void flipNormals(TriangleMesh& mesh);
     
-    // Debug and information
-    static void printMeshInfo(const TriangleMesh& mesh);
-    static std::string getMeshStatistics(const TriangleMesh& mesh);
-
-    // Control whether edge lines are generated
+    // Control settings
     static void setShowEdges(bool show);
     static void setFeatureEdgeAngle(double angleDegrees);
-    
+    static void setSmoothingEnabled(bool enabled);
+    static void setSubdivisionEnabled(bool enabled);
+    static void setSubdivisionLevels(int levels);
+    static void setCreaseAngle(double angle);
 
-
-    // Feature edge filtering angle threshold (degrees)
-    static double s_featureEdgeAngle;
     // Calculate triangle face normal
-    static gp_Pnt calculateTriangleNormal(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
-	static gp_Vec calculateTriangleNormalVec(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
+    static gp_Vec calculateTriangleNormalVec(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
+
+public:
+    // Static member variables for configuration
+    static bool s_showEdges;
+    static double s_featureEdgeAngle;
+    static bool s_smoothingEnabled;
+    static bool s_subdivisionEnabled;
+    static int s_subdivisionLevels;
+    static double s_creaseAngle;
 
 private:
-    static bool s_showEdges;
+    
+    // Helper methods
     static void meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, const MeshParameters& params);
     static void extractTriangulation(const Handle(Poly_Triangulation)& triangulation, 
                                      const TopLoc_Location& location, 
                                      TriangleMesh& mesh, TopAbs_Orientation orientation = TopAbs_FORWARD);
-    static void addTriangleToMesh(TriangleMesh& mesh, const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
-    static bool isValidTriangle(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3, double tolerance = 1e-6);
     
     static SoCoordinate3* createCoordinateNode(const TriangleMesh& mesh);
     static SoIndexedFaceSet* createFaceSetNode(const TriangleMesh& mesh);
     static SoNormal* createNormalNode(const TriangleMesh& mesh);
+    
+    // Smoothing helper methods
+    static void subdivideTriangle(TriangleMesh& mesh, const gp_Pnt& p0, const gp_Pnt& p1, const gp_Pnt& p2, int levels);
+    static std::set<std::pair<int, int>> findBoundaryEdges(const TriangleMesh& mesh);
+    static SoIndexedLineSet* createEdgeSetNode(const TriangleMesh& mesh);
+    
+    // Internal helper methods
+    static void buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected);
 };

@@ -7,6 +7,8 @@
 #include "PropertyPanel.h"
 #include <wx/treectrl.h>
 #include <wx/sizer.h>
+#include <wx/menu.h>
+#include <wx/msgdlg.h>
 #include <vector>
 #include <algorithm>
 
@@ -15,6 +17,7 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
     , m_propertyPanel(nullptr)
     , m_occViewer(nullptr)
     , m_isUpdatingSelection(false)
+    , m_contextMenu(nullptr)
 {
     LOG_INF_S("ObjectTreePanel initializing");
     m_treeCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_SINGLE);
@@ -27,11 +30,21 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 
     m_treeCtrl->Bind(wxEVT_TREE_SEL_CHANGED, &ObjectTreePanel::onSelectionChanged, this);
     m_treeCtrl->Bind(wxEVT_TREE_ITEM_ACTIVATED, &ObjectTreePanel::onTreeItemActivated, this);
+    m_treeCtrl->Bind(wxEVT_TREE_ITEM_RIGHT_CLICK, &ObjectTreePanel::onTreeItemRightClick, this);
+    
+    // Bind keyboard events for shortcuts
+    m_treeCtrl->Bind(wxEVT_KEY_DOWN, &ObjectTreePanel::onKeyDown, this);
+    
+    // Create context menu
+    createContextMenu();
 }
 
 ObjectTreePanel::~ObjectTreePanel()
 {
     LOG_INF_S("ObjectTreePanel destroying");
+    if (m_contextMenu) {
+        delete m_contextMenu;
+    }
 }
 
 void ObjectTreePanel::addObject(GeometryObject* object)
@@ -98,7 +111,14 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
     }
 
     LOG_INF_S("Adding OCCGeometry to tree: " + geometry->getName());
-    wxTreeItemId itemId = m_treeCtrl->AppendItem(m_rootId, geometry->getName());
+    
+    // Create item text with visibility indicator
+    wxString itemText = geometry->getName();
+    if (!geometry->isVisible()) {
+        itemText = "[H] " + itemText;
+    }
+    
+    wxTreeItemId itemId = m_treeCtrl->AppendItem(m_rootId, itemText);
     m_occGeometryMap[geometry] = itemId;
     m_treeItemToOCCGeometry[itemId] = geometry;
     m_treeCtrl->Expand(m_rootId);
@@ -138,7 +158,14 @@ void ObjectTreePanel::updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometr
     }
 
     LOG_INF_S("Updating OCCGeometry name in tree: " + geometry->getName());
-    m_treeCtrl->SetItemText(it->second, geometry->getName());
+    
+    // Update item text with visibility indicator
+    wxString itemText = geometry->getName();
+    if (!geometry->isVisible()) {
+        itemText = "[H] " + itemText;
+    }
+    
+    m_treeCtrl->SetItemText(it->second, itemText);
 }
 
 void ObjectTreePanel::selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
@@ -151,6 +178,265 @@ void ObjectTreePanel::selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
     m_isUpdatingSelection = true;
     m_treeCtrl->SelectItem(it->second);
     m_isUpdatingSelection = false;
+}
+
+// Object management functions
+void ObjectTreePanel::deleteSelectedObject()
+{
+    auto geometry = getSelectedOCCGeometry();
+    if (!geometry) {
+        LOG_WRN_S("No object selected for deletion");
+        return;
+    }
+    
+    wxString message = wxString::Format("Are you sure you want to delete '%s'?", geometry->getName());
+    int result = wxMessageBox(message, "Confirm Delete", wxYES_NO | wxICON_QUESTION);
+    
+    if (result == wxYES) {
+        LOG_INF_S("Deleting object: " + geometry->getName());
+        if (m_occViewer) {
+            m_occViewer->removeGeometry(geometry->getName());
+        }
+        removeOCCGeometry(geometry);
+    }
+}
+
+void ObjectTreePanel::hideSelectedObject()
+{
+    auto geometry = getSelectedOCCGeometry();
+    if (!geometry) {
+        LOG_WRN_S("No object selected for hiding");
+        return;
+    }
+    
+    LOG_INF_S("Hiding object: " + geometry->getName());
+    geometry->setVisible(false);
+    if (m_occViewer) {
+        m_occViewer->setGeometryVisible(geometry->getName(), false);
+    }
+    
+    // Update tree item icon
+    auto it = m_occGeometryMap.find(geometry);
+    if (it != m_occGeometryMap.end()) {
+        updateTreeItemIcon(it->second, false);
+    }
+}
+
+void ObjectTreePanel::showSelectedObject()
+{
+    auto geometry = getSelectedOCCGeometry();
+    if (!geometry) {
+        LOG_WRN_S("No object selected for showing");
+        return;
+    }
+    
+    LOG_INF_S("Showing object: " + geometry->getName());
+    geometry->setVisible(true);
+    if (m_occViewer) {
+        m_occViewer->setGeometryVisible(geometry->getName(), true);
+    }
+    
+    // Update tree item icon
+    auto it = m_occGeometryMap.find(geometry);
+    if (it != m_occGeometryMap.end()) {
+        updateTreeItemIcon(it->second, true);
+    }
+}
+
+void ObjectTreePanel::toggleObjectVisibility()
+{
+    auto geometry = getSelectedOCCGeometry();
+    if (!geometry) {
+        LOG_WRN_S("No object selected for visibility toggle");
+        return;
+    }
+    
+    bool currentVisibility = geometry->isVisible();
+    if (currentVisibility) {
+        hideSelectedObject();
+    } else {
+        showSelectedObject();
+    }
+}
+
+void ObjectTreePanel::showAllObjects()
+{
+    LOG_INF_S("Showing all objects");
+    if (!m_occViewer) {
+        LOG_WRN_S("OCCViewer is null");
+        return;
+    }
+    
+    // Use OCCViewer's showAll method for better consistency
+    m_occViewer->showAll();
+    
+    // Update tree item icons
+    auto allGeometries = m_occViewer->getAllGeometry();
+    for (const auto& geometry : allGeometries) {
+        auto it = m_occGeometryMap.find(geometry);
+        if (it != m_occGeometryMap.end()) {
+            updateTreeItemIcon(it->second, true);
+        }
+    }
+}
+
+void ObjectTreePanel::hideAllObjects()
+{
+    LOG_INF_S("Hiding all objects");
+    if (!m_occViewer) {
+        LOG_WRN_S("OCCViewer is null");
+        return;
+    }
+    
+    // Use OCCViewer's hideAll method for better consistency
+    m_occViewer->hideAll();
+    
+    // Update tree item icons
+    auto allGeometries = m_occViewer->getAllGeometry();
+    for (const auto& geometry : allGeometries) {
+        auto it = m_occGeometryMap.find(geometry);
+        if (it != m_occGeometryMap.end()) {
+            updateTreeItemIcon(it->second, false);
+        }
+    }
+}
+
+// Event handlers
+void ObjectTreePanel::onTreeItemRightClick(wxTreeEvent& event)
+{
+    m_rightClickedItem = event.GetItem();
+    
+    if (!m_rightClickedItem.IsOk() || m_rightClickedItem == m_rootId) {
+        return; // Don't show context menu for root or invalid items
+    }
+    
+    // Show context menu
+    wxPoint point = event.GetPoint();
+    PopupMenu(m_contextMenu, point);
+}
+
+void ObjectTreePanel::onKeyDown(wxKeyEvent& event)
+{
+    int keyCode = event.GetKeyCode();
+    
+    switch (keyCode) {
+        case WXK_DELETE:
+        case WXK_BACK:
+            deleteSelectedObject();
+            break;
+        case 'H':
+        case 'h':
+            if (event.ControlDown()) {
+                hideSelectedObject();
+            }
+            break;
+        case 'S':
+        case 's':
+            if (event.ControlDown()) {
+                showSelectedObject();
+            }
+            break;
+        case WXK_F5:
+            toggleObjectVisibility();
+            break;
+        default:
+            event.Skip();
+            break;
+    }
+}
+
+void ObjectTreePanel::onDeleteObject(wxCommandEvent& event)
+{
+    deleteSelectedObject();
+}
+
+void ObjectTreePanel::onHideObject(wxCommandEvent& event)
+{
+    hideSelectedObject();
+}
+
+void ObjectTreePanel::onShowObject(wxCommandEvent& event)
+{
+    showSelectedObject();
+}
+
+void ObjectTreePanel::onToggleVisibility(wxCommandEvent& event)
+{
+    toggleObjectVisibility();
+}
+
+void ObjectTreePanel::onShowAllObjects(wxCommandEvent& event)
+{
+    showAllObjects();
+}
+
+void ObjectTreePanel::onHideAllObjects(wxCommandEvent& event)
+{
+    hideAllObjects();
+}
+
+// Helper functions
+void ObjectTreePanel::createContextMenu()
+{
+    m_contextMenu = new wxMenu();
+    
+    // Add menu items with keyboard shortcuts
+    m_contextMenu->Append(wxID_ANY, "Delete\tDel", "Delete selected object");
+    m_contextMenu->AppendSeparator();
+    m_contextMenu->Append(wxID_ANY, "Hide\tCtrl+H", "Hide selected object");
+    m_contextMenu->Append(wxID_ANY, "Show\tCtrl+S", "Show selected object");
+    m_contextMenu->Append(wxID_ANY, "Toggle Visibility\tF5", "Toggle object visibility");
+    m_contextMenu->AppendSeparator();
+    m_contextMenu->Append(wxID_ANY, "Show All", "Show all objects");
+    m_contextMenu->Append(wxID_ANY, "Hide All", "Hide all objects");
+    
+    // Bind menu events
+    Bind(wxEVT_MENU, &ObjectTreePanel::onDeleteObject, this, m_contextMenu->FindItem("Delete\tDel"));
+    Bind(wxEVT_MENU, &ObjectTreePanel::onHideObject, this, m_contextMenu->FindItem("Hide\tCtrl+H"));
+    Bind(wxEVT_MENU, &ObjectTreePanel::onShowObject, this, m_contextMenu->FindItem("Show\tCtrl+S"));
+    Bind(wxEVT_MENU, &ObjectTreePanel::onToggleVisibility, this, m_contextMenu->FindItem("Toggle Visibility\tF5"));
+    Bind(wxEVT_MENU, &ObjectTreePanel::onShowAllObjects, this, m_contextMenu->FindItem("Show All"));
+    Bind(wxEVT_MENU, &ObjectTreePanel::onHideAllObjects, this, m_contextMenu->FindItem("Hide All"));
+}
+
+void ObjectTreePanel::updateTreeItemIcon(wxTreeItemId itemId, bool visible)
+{
+    if (!itemId.IsOk()) return;
+    
+    // Update the item text to show visibility status
+    wxString currentText = m_treeCtrl->GetItemText(itemId);
+    wxString newText = currentText;
+    
+    if (visible) {
+        // Remove hidden indicator if present
+        if (newText.StartsWith("[H] ")) {
+            newText = newText.Mid(4);
+        }
+    } else {
+        // Add hidden indicator if not present
+        if (!newText.StartsWith("[H] ")) {
+            newText = "[H] " + newText;
+        }
+    }
+    
+    if (newText != currentText) {
+        m_treeCtrl->SetItemText(itemId, newText);
+    }
+}
+
+std::shared_ptr<OCCGeometry> ObjectTreePanel::getSelectedOCCGeometry()
+{
+    wxTreeItemId selectedItem = m_treeCtrl->GetSelection();
+    if (!selectedItem.IsOk() || selectedItem == m_rootId) {
+        return nullptr;
+    }
+    
+    auto it = m_treeItemToOCCGeometry.find(selectedItem);
+    if (it != m_treeItemToOCCGeometry.end()) {
+        return it->second;
+    }
+    
+    return nullptr;
 }
 
 void ObjectTreePanel::deselectOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
