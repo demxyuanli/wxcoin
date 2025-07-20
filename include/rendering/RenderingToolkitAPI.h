@@ -81,6 +81,51 @@ namespace RenderingToolkitAPI {
                                   const std::string& processorName = "",
                                   const std::string& backendName = "");
 
+    // Culling system methods
+    /**
+     * @brief Update culling systems with current camera
+     * @param camera Current camera
+     */
+    void updateCulling(const void* camera);
+
+    /**
+     * @brief Check if shape should be rendered (with culling)
+     * @param shape Shape to test
+     * @return true if should be rendered
+     */
+    bool shouldRenderShape(const TopoDS_Shape& shape);
+
+    /**
+     * @brief Add shape as occluder for occlusion culling
+     * @param shape Shape to add as occluder
+     * @param sceneNode Associated scene node
+     */
+    void addOccluder(const TopoDS_Shape& shape, void* sceneNode);
+
+    /**
+     * @brief Remove shape from occluders
+     * @param shape Shape to remove
+     */
+    void removeOccluder(const TopoDS_Shape& shape);
+
+    /**
+     * @brief Enable/disable frustum culling
+     * @param enabled Culling state
+     */
+    void setFrustumCullingEnabled(bool enabled);
+
+    /**
+     * @brief Enable/disable occlusion culling
+     * @param enabled Culling state
+     */
+    void setOcclusionCullingEnabled(bool enabled);
+
+    /**
+     * @brief Get culling statistics
+     * @return Statistics string
+     */
+    std::string getCullingStats();
+
     /**
      * @brief Load plugins from directory
      * @param directory Plugin directory path

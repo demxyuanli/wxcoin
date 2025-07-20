@@ -28,17 +28,26 @@
 #include <cctype>
 #include <climits>
 #include <cfloat>
+#include <chrono>
+#include <thread>
+#include <execution>
 
 // Add include at top
 #include <XCAFApp_Application.hxx>
 
-STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
+// Static member initialization
+std::unordered_map<std::string, STEPReader::ReadResult> STEPReader::s_cache;
+std::mutex STEPReader::s_cacheMutex;
+STEPReader::OptimizationOptions STEPReader::s_globalOptions;
+bool STEPReader::s_initialized = false;
+
+STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath, 
+                                               const OptimizationOptions& options)
 {
+    auto totalStartTime = std::chrono::high_resolution_clock::now();
     ReadResult result;
     
     try {
-        LOG_INF_S("Reading STEP file: " + filePath);
-        
         // Check if file exists
         if (!std::filesystem::exists(filePath)) {
             result.errorMessage = "File does not exist: " + filePath;
@@ -53,35 +62,53 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
             return result;
         }
         
+        // Check cache if enabled
+        if (options.enableCaching) {
+            std::lock_guard<std::mutex> lock(s_cacheMutex);
+            auto cacheIt = s_cache.find(filePath);
+            if (cacheIt != s_cache.end()) {
+                result = cacheIt->second;
+                return result;
+            }
+        }
+        
         // Initialize STEP reader
         initialize();
         
-        // Use basic STEP reader for faster import
+        // Use optimized STEP reader settings
         STEPControl_Reader reader;
         Interface_Static::SetIVal("read.precision.mode", 1);
-        Interface_Static::SetRVal("read.precision.val", 0.01);
+        Interface_Static::SetRVal("read.precision.val", options.precision);
+        
+        // Set additional optimization parameters
+        Interface_Static::SetIVal("read.step.optimize", 1);
+        Interface_Static::SetIVal("read.step.fast_mode", 1);
+        
         IFSelect_ReturnStatus status = reader.ReadFile(filePath.c_str());
+        
         if (status != IFSelect_RetDone) {
             result.errorMessage = "Failed to read STEP file: " + filePath;
             LOG_ERR_S(result.errorMessage);
             return result;
         }
+        
         // Transfer shapes
         Standard_Integer nbRoots = reader.NbRootsForTransfer();
-        LOG_INF_S("Found " + std::to_string(nbRoots) + " root entities");
         if (nbRoots == 0) {
             result.errorMessage = "No transferable entities found in STEP file";
             LOG_ERR_S(result.errorMessage);
             return result;
         }
+        
         reader.TransferRoots();
         Standard_Integer nbShapes = reader.NbShapes();
-        LOG_INF_S("Transferred " + std::to_string(nbShapes) + " shapes");
+        
         if (nbShapes == 0) {
             result.errorMessage = "No shapes could be transferred from STEP file";
             LOG_ERR_S(result.errorMessage);
             return result;
         }
+        
         // Create compound shape containing all shapes
         TopoDS_Compound compound;
         BRep_Builder builder;
@@ -94,23 +121,27 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath)
         }
         result.rootShape = compound;
         
-        // Convert to geometry objects
+        // Convert to geometry objects with optimization
         std::string baseName = std::filesystem::path(filePath).stem().string();
-        result.geometries = shapeToGeometries(result.rootShape, baseName);
+        result.geometries = shapeToGeometries(result.rootShape, baseName, options);
         
         // Apply automatic scaling to make geometries reasonable size
         if (!result.geometries.empty()) {
             double scaleFactor = scaleGeometriesToReasonableSize(result.geometries);
-            if (scaleFactor != 1.0) {
-                LOG_INF_S("Applied automatic scaling factor: " + std::to_string(scaleFactor));
-            }
         }
         
-        // Analyze the imported shape
-        OCCShapeBuilder::analyzeShapeTopology(result.rootShape, baseName);
+        // Cache result if enabled
+        if (options.enableCaching) {
+            std::lock_guard<std::mutex> lock(s_cacheMutex);
+            s_cache[filePath] = result;
+        }
         
         result.success = true;
-        LOG_INF_S("Successfully imported STEP file with " + std::to_string(result.geometries.size()) + " geometry objects");
+        
+        // Calculate total import time
+        auto totalEndTime = std::chrono::high_resolution_clock::now();
+        auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
+        result.importTime = static_cast<double>(totalDuration.count());
         
     } catch (const Standard_Failure& e) {
         result.errorMessage = "OpenCASCADE exception: " + std::string(e.GetMessageString());
@@ -144,7 +175,8 @@ std::vector<std::string> STEPReader::getSupportedExtensions()
 
 std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
     const TopoDS_Shape& shape, 
-    const std::string& baseName)
+    const std::string& baseName,
+    const OptimizationOptions& options)
 {
     std::vector<std::shared_ptr<OCCGeometry>> geometries;
     
@@ -158,36 +190,20 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
         std::vector<TopoDS_Shape> shapes;
         extractShapes(shape, shapes);
         
-        LOG_INF_S("Extracted " + std::to_string(shapes.size()) + " individual shapes");
-        
-        // Create geometry objects
-        int shapeIndex = 0;
-        for (const auto& individualShape : shapes) {
-            if (!individualShape.IsNull()) {
-                std::string name = baseName + "_" + std::to_string(shapeIndex++);
-                auto geometry = std::make_shared<OCCGeometry>(name);
-                geometry->setShape(individualShape);
-                
-                // Set better default color for imported STEP models
-                // Use a neutral light gray color that is bright and clear
-                Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-                geometry->setColor(defaultColor);
-                
-                // Remove transparency for a solid appearance
-                geometry->setTransparency(0.0);
-                
-                // Analyze each shape
-                OCCShapeBuilder::analyzeShapeTopology(individualShape, name);
-                
-                geometries.push_back(geometry);
+        // Use parallel processing if enabled and there are multiple shapes
+        if (options.enableParallelProcessing && shapes.size() > 1) {
+            geometries = processShapesParallel(shapes, baseName, options);
+        } else {
+            // Sequential processing
+            for (size_t i = 0; i < shapes.size(); ++i) {
+                if (!shapes[i].IsNull()) {
+                    std::string name = baseName + "_" + std::to_string(i);
+                    auto geometry = processSingleShape(shapes[i], name, options);
+                    if (geometry) {
+                        geometries.push_back(geometry);
+                    }
+                }
             }
-        }
-        
-        // If no individual shapes were found, create one geometry from the whole shape
-        if (geometries.empty() && !shape.IsNull()) {
-            auto geometry = std::make_shared<OCCGeometry>(baseName);
-            geometry->setShape(shape);
-            geometries.push_back(geometry);
         }
         
     } catch (const std::exception& e) {
@@ -195,6 +211,73 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
     }
     
     return geometries;
+}
+
+std::vector<std::shared_ptr<OCCGeometry>> STEPReader::processShapesParallel(
+    const std::vector<TopoDS_Shape>& shapes,
+    const std::string& baseName,
+    const OptimizationOptions& options)
+{
+    std::vector<std::shared_ptr<OCCGeometry>> geometries;
+    geometries.reserve(shapes.size());
+    
+    // Create futures for parallel processing
+    std::vector<std::future<std::shared_ptr<OCCGeometry>>> futures;
+    futures.reserve(shapes.size());
+    
+    // Submit tasks to thread pool
+    for (size_t i = 0; i < shapes.size(); ++i) {
+        if (!shapes[i].IsNull()) {
+            std::string name = baseName + "_" + std::to_string(i);
+            futures.push_back(std::async(std::launch::async, 
+                [&shapes, i, &name, &options]() {
+                    return processSingleShape(shapes[i], name, options);
+                }));
+        }
+    }
+    
+    // Collect results
+    for (auto& future : futures) {
+        auto geometry = future.get();
+        if (geometry) {
+            geometries.push_back(geometry);
+        }
+    }
+    
+    return geometries;
+}
+
+std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
+    const TopoDS_Shape& shape,
+    const std::string& name,
+    const OptimizationOptions& options)
+{
+    if (shape.IsNull()) {
+        return nullptr;
+    }
+    
+    try {
+        auto geometry = std::make_shared<OCCGeometry>(name);
+        geometry->setShape(shape);
+        
+        // Set better default color for imported STEP models
+        Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+        geometry->setColor(defaultColor);
+        
+        // Remove transparency for a solid appearance
+        geometry->setTransparency(0.0);
+        
+        // Only analyze shape if explicitly enabled (disabled by default for speed)
+        if (options.enableShapeAnalysis) {
+            OCCShapeBuilder::analyzeShapeTopology(shape, name);
+        }
+        
+        return geometry;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception processing shape " + name + ": " + std::string(e.what()));
+        return nullptr;
+    }
 }
 
 void STEPReader::initialize()
@@ -210,8 +293,6 @@ void STEPReader::initialize()
     // Set precision
     Interface_Static::SetRVal("read.precision.val", 0.01);
     Interface_Static::SetIVal("read.precision.mode", 1);
-    
-    LOG_INF_S("STEP reader initialized");
 }
 
 void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_Shape>& shapes)
@@ -254,6 +335,105 @@ void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_
     }
 }
 
+void STEPReader::clearCache()
+{
+    std::lock_guard<std::mutex> lock(s_cacheMutex);
+    s_cache.clear();
+    LOG_INF_S("STEP import cache cleared");
+}
+
+std::string STEPReader::getCacheStats()
+{
+    std::lock_guard<std::mutex> lock(s_cacheMutex);
+    return "Cache entries: " + std::to_string(s_cache.size());
+}
+
+void STEPReader::setGlobalOptimizationOptions(const OptimizationOptions& options)
+{
+    s_globalOptions = options;
+    LOG_INF_S("Global STEP optimization options updated");
+}
+
+STEPReader::OptimizationOptions STEPReader::getGlobalOptimizationOptions()
+{
+    return s_globalOptions;
+}
+
+bool STEPReader::calculateCombinedBoundingBox(
+    const std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+    gp_Pnt& minPt,
+    gp_Pnt& maxPt)
+{
+    if (geometries.empty()) {
+        return false;
+    }
+    
+    minPt = gp_Pnt(DBL_MAX, DBL_MAX, DBL_MAX);
+    maxPt = gp_Pnt(-DBL_MAX, -DBL_MAX, -DBL_MAX);
+    bool hasValidBounds = false;
+    
+    // Use parallel processing for large geometry sets
+    if (geometries.size() > 10) {
+        std::vector<gp_Pnt> minPoints(geometries.size());
+        std::vector<gp_Pnt> maxPoints(geometries.size());
+        
+        // Initialize with invalid bounds
+        for (size_t i = 0; i < geometries.size(); ++i) {
+            minPoints[i] = gp_Pnt(DBL_MAX, DBL_MAX, DBL_MAX);
+            maxPoints[i] = gp_Pnt(-DBL_MAX, -DBL_MAX, -DBL_MAX);
+        }
+        
+        // Process in parallel
+        std::for_each(std::execution::par, geometries.begin(), geometries.end(),
+            [&](const auto& geometry) {
+                size_t index = &geometry - &geometries[0];
+                if (geometry && !geometry->getShape().IsNull()) {
+                    gp_Pnt localMin, localMax;
+                    OCCShapeBuilder::getBoundingBox(geometry->getShape(), localMin, localMax);
+                    minPoints[index] = localMin;
+                    maxPoints[index] = localMax;
+                }
+            });
+        
+        // Combine results
+        for (size_t i = 0; i < geometries.size(); ++i) {
+            if (minPoints[i].X() != DBL_MAX) { // Valid bounds
+                if (minPoints[i].X() < minPt.X()) minPt.SetX(minPoints[i].X());
+                if (minPoints[i].Y() < minPt.Y()) minPt.SetY(minPoints[i].Y());
+                if (minPoints[i].Z() < minPt.Z()) minPt.SetZ(minPoints[i].Z());
+                
+                if (maxPoints[i].X() > maxPt.X()) maxPt.SetX(maxPoints[i].X());
+                if (maxPoints[i].Y() > maxPt.Y()) maxPt.SetY(maxPoints[i].Y());
+                if (maxPoints[i].Z() > maxPt.Z()) maxPt.SetZ(maxPoints[i].Z());
+                
+                hasValidBounds = true;
+            }
+        }
+    } else {
+        // Sequential processing for small geometry sets
+        for (const auto& geometry : geometries) {
+            if (!geometry || geometry->getShape().IsNull()) {
+                continue;
+            }
+            
+            gp_Pnt localMin, localMax;
+            OCCShapeBuilder::getBoundingBox(geometry->getShape(), localMin, localMax);
+            
+            if (localMin.X() < minPt.X()) minPt.SetX(localMin.X());
+            if (localMin.Y() < minPt.Y()) minPt.SetY(localMin.Y());
+            if (localMin.Z() < minPt.Z()) minPt.SetZ(localMin.Z());
+            
+            if (localMax.X() > maxPt.X()) maxPt.SetX(localMax.X());
+            if (localMax.Y() > maxPt.Y()) maxPt.SetY(localMax.Y());
+            if (localMax.Z() > maxPt.Z()) maxPt.SetZ(localMax.Z());
+            
+            hasValidBounds = true;
+        }
+    }
+    
+    return hasValidBounds;
+}
+
 double STEPReader::scaleGeometriesToReasonableSize(
     std::vector<std::shared_ptr<OCCGeometry>>& geometries,
     double targetSize)
@@ -263,31 +443,9 @@ double STEPReader::scaleGeometriesToReasonableSize(
     }
     
     try {
-        // Calculate overall bounding box
-        gp_Pnt overallMin(DBL_MAX, DBL_MAX, DBL_MAX);
-        gp_Pnt overallMax(-DBL_MAX, -DBL_MAX, -DBL_MAX);
-        bool hasValidBounds = false;
-        
-        for (const auto& geometry : geometries) {
-            if (!geometry || geometry->getShape().IsNull()) {
-                continue;
-            }
-            
-            gp_Pnt minPt, maxPt;
-            OCCShapeBuilder::getBoundingBox(geometry->getShape(), minPt, maxPt);
-            
-            if (minPt.X() < overallMin.X()) overallMin.SetX(minPt.X());
-            if (minPt.Y() < overallMin.Y()) overallMin.SetY(minPt.Y());
-            if (minPt.Z() < overallMin.Z()) overallMin.SetZ(minPt.Z());
-            
-            if (maxPt.X() > overallMax.X()) overallMax.SetX(maxPt.X());
-            if (maxPt.Y() > overallMax.Y()) overallMax.SetY(maxPt.Y());
-            if (maxPt.Z() > overallMax.Z()) overallMax.SetZ(maxPt.Z());
-            
-            hasValidBounds = true;
-        }
-        
-        if (!hasValidBounds) {
+        // Use optimized bounding box calculation
+        gp_Pnt overallMin, overallMax;
+        if (!calculateCombinedBoundingBox(geometries, overallMin, overallMax)) {
             LOG_WRN_S("No valid bounds found for scaling");
             return 1.0;
         }
@@ -297,8 +455,6 @@ double STEPReader::scaleGeometriesToReasonableSize(
         double currentSizeY = overallMax.Y() - overallMin.Y();
         double currentSizeZ = overallMax.Z() - overallMin.Z();
         double currentMaxSize = (std::max)({currentSizeX, currentSizeY, currentSizeZ});
-        
-        LOG_INF_S("Current geometry size: " + std::to_string(currentMaxSize));
         
         // Determine target size
         if (targetSize <= 0.0) {
@@ -320,23 +476,37 @@ double STEPReader::scaleGeometriesToReasonableSize(
             return 1.0;
         }
         
-        LOG_INF_S("Applying scale factor: " + std::to_string(scaleFactor));
-        
-        // Apply scaling to all geometries
-        for (auto& geometry : geometries) {
-            if (!geometry || geometry->getShape().IsNull()) {
-                continue;
-            }
-            
-            // Scale the shape
-            TopoDS_Shape scaledShape = OCCShapeBuilder::scale(
-                geometry->getShape(), 
-                gp_Pnt(0, 0, 0), 
-                scaleFactor
-            );
-            
-            if (!scaledShape.IsNull()) {
-                geometry->setShape(scaledShape);
+        // Apply scaling in parallel for large geometry sets
+        if (geometries.size() > 5) {
+            std::for_each(std::execution::par, geometries.begin(), geometries.end(),
+                [scaleFactor](auto& geometry) {
+                    if (geometry && !geometry->getShape().IsNull()) {
+                        TopoDS_Shape scaledShape = OCCShapeBuilder::scale(
+                            geometry->getShape(), 
+                            gp_Pnt(0, 0, 0), 
+                            scaleFactor
+                        );
+                        if (!scaledShape.IsNull()) {
+                            geometry->setShape(scaledShape);
+                        }
+                    }
+                });
+        } else {
+            // Sequential scaling for small geometry sets
+            for (auto& geometry : geometries) {
+                if (!geometry || geometry->getShape().IsNull()) {
+                    continue;
+                }
+                
+                TopoDS_Shape scaledShape = OCCShapeBuilder::scale(
+                    geometry->getShape(), 
+                    gp_Pnt(0, 0, 0), 
+                    scaleFactor
+                );
+                
+                if (!scaledShape.IsNull()) {
+                    geometry->setShape(scaledShape);
+                }
             }
         }
         

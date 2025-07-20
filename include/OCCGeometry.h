@@ -193,6 +193,11 @@ public:
     SoSeparator* getCoinNode();
     void setCoinNode(SoSeparator* node);
     void regenerateMesh(const MeshParameters& params);
+    
+    // Performance optimization
+    bool needsMeshRegeneration() const;
+    void setMeshRegenerationNeeded(bool needed);
+    void updateCoinRepresentationIfNeeded(const MeshParameters& params);
 
 private:
     void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
@@ -277,6 +282,10 @@ protected:
     SoSeparator* m_coinNode;
     SoTransform* m_coinTransform;
     bool m_coinNeedsUpdate;
+    
+    // Performance optimization
+    bool m_meshRegenerationNeeded;
+    MeshParameters m_lastMeshParams;
 };
 
 /**

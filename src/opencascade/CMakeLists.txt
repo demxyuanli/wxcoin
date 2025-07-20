@@ -5,6 +5,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCShapeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCBrepConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPReader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/STEPImportOptimizer.cpp
 )
 
 set(OPENCASCADE_HEADERS
@@ -13,6 +14,7 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/OCCShapeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/OCCBrepConverter.h
     ${CMAKE_SOURCE_DIR}/include/STEPReader.h
+    ${CMAKE_SOURCE_DIR}/include/STEPImportOptimizer.h
 )
 
 # Create OpenCASCADE static library

@@ -36,6 +36,17 @@ public:
     std::vector<std::shared_ptr<OCCGeometry>> getAllGeometry() const;
     std::vector<std::shared_ptr<OCCGeometry>> getSelectedGeometries() const;
 
+    // Batch operations for performance optimization
+    void beginBatchOperation();
+    void endBatchOperation();
+    bool isBatchOperationActive() const;
+    
+    // Batch geometry addition for better performance
+    void addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
+    
+    // Deferred ObjectTree updates
+    void updateObjectTreeDeferred();
+
     // View manipulation
     void setGeometryVisible(const std::string& name, bool visible);
     void setGeometrySelected(const std::string& name, bool selected);
@@ -140,5 +151,15 @@ private:
     Quantity_Color m_defaultColor;
     double m_defaultTransparency;
     
+    // Batch operation state
+    bool m_batchOperationActive;
+    bool m_needsViewRefresh;
+
+    // Performance optimization
+    bool m_meshRegenerationNeeded;
+    MeshParameters m_lastMeshParams;
+    
+    // Deferred ObjectTree updates
+    std::vector<std::shared_ptr<OCCGeometry>> m_pendingObjectTreeUpdates;
 
 };

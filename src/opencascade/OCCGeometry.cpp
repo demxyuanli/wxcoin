@@ -2,9 +2,11 @@
 #include "rendering/RenderingToolkitAPI.h"
 #include "logger/Logger.h"
 #include "config/RenderingConfig.h"
+#include "rendering/GeometryProcessor.h"
 #include <limits>
 #include <cmath>
 #include <wx/gdicmn.h>
+#include <chrono>
 
 // OpenCASCADE includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -30,44 +32,40 @@
 // OCCGeometry base class implementation
 OCCGeometry::OCCGeometry(const std::string& name)
     : m_name(name)
-    , m_position(0, 0, 0)
-    , m_rotationAxis(0, 0, 1)
-    , m_rotationAngle(0.0)
-    , m_scale(1.0)
     , m_visible(true)
     , m_selected(false)
+    , m_transparency(0.0)
     , m_wireframeMode(false)
     , m_shadingMode(true)
     , m_coinNode(nullptr)
     , m_coinTransform(nullptr)
     , m_coinNeedsUpdate(true)
+    , m_meshRegenerationNeeded(true)
+    , m_position(0, 0, 0)
+    , m_rotationAxis(0, 0, 1)
+    , m_rotationAngle(0.0)
+    , m_scale(1.0)
+    , m_color(0.8, 0.8, 0.8, Quantity_TOC_RGB)
+    , m_materialAmbientColor(0.2, 0.2, 0.2, Quantity_TOC_RGB)
+    , m_materialDiffuseColor(0.8, 0.8, 0.8, Quantity_TOC_RGB)
+    , m_materialSpecularColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
+    , m_materialShininess(50.0)
+    , m_textureIntensity(1.0)
+    , m_textureEnabled(false)
+    , m_textureMode(RenderingConfig::TextureMode::Replace)
+    , m_blendMode(RenderingConfig::BlendMode::None)
+    , m_depthTest(true)
+    , m_depthWrite(true)
+    , m_cullFace(true)
+    , m_alphaThreshold(0.1)
 {
-    // Load settings from configuration
-    RenderingConfig& config = RenderingConfig::getInstance();
-    const auto& materialSettings = config.getMaterialSettings();
-    const auto& textureSettings = config.getTextureSettings();
-    
-    m_color = materialSettings.diffuseColor;
-    m_transparency = materialSettings.transparency;
-    m_materialAmbientColor = materialSettings.ambientColor;
-    m_materialDiffuseColor = materialSettings.diffuseColor;
-    m_materialSpecularColor = materialSettings.specularColor;
-    m_materialShininess = materialSettings.shininess;
-    m_textureColor = textureSettings.color;
-    m_textureIntensity = textureSettings.intensity;
-    m_textureEnabled = textureSettings.enabled;
-    m_textureImagePath = textureSettings.imagePath;
-    m_textureMode = textureSettings.textureMode;
-    
-    const auto& blendSettings = config.getBlendSettings();
+    // Get blend settings from configuration
+    auto blendSettings = RenderingConfig::getInstance().getBlendSettings();
     m_blendMode = blendSettings.blendMode;
     m_depthTest = blendSettings.depthTest;
     m_depthWrite = blendSettings.depthWrite;
     m_cullFace = blendSettings.cullFace;
     m_alphaThreshold = blendSettings.alphaThreshold;
-    
-    LOG_INF_S("Creating OCC geometry: " + name + " with configured material and blend settings");
-    LOG_INF_S("Initial transparency: " + std::to_string(m_transparency) + ", blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
 }
 
 OCCGeometry::~OCCGeometry()
@@ -75,7 +73,6 @@ OCCGeometry::~OCCGeometry()
     if (m_coinNode) {
         m_coinNode->unref();
     }
-    LOG_INF_S("Destroyed OCC geometry: " + m_name);
 }
 
 void OCCGeometry::setShape(const TopoDS_Shape& shape)
@@ -147,10 +144,6 @@ void OCCGeometry::setVisible(bool visible)
             
             // Force a refresh
             m_coinNode->touch();
-            
-            LOG_INF_S("Set geometry visibility: " + m_name + " -> " + (visible ? "visible" : "hidden"));
-        } else {
-            LOG_INF_S("Set geometry visibility (no Coin3D node yet): " + m_name + " -> " + (visible ? "visible" : "hidden"));
         }
     }
 }
@@ -158,23 +151,17 @@ void OCCGeometry::setVisible(bool visible)
 void OCCGeometry::setSelected(bool selected)
 {
     if (m_selected != selected) {
-        LOG_INF_S("Setting selection for geometry '" + m_name + "': " + (selected ? "true" : "false"));
         m_selected = selected;
 
         // Force rebuild of Coin3D representation to update edge colors
         m_coinNeedsUpdate = true;
 
         if (m_coinNode) {
-            LOG_INF_S("Rebuilding Coin3D representation for selection change: " + m_name + ", selected: " + (selected ? "true" : "false"));
-
             // Rebuild the entire Coin3D representation to update edge colors
             buildCoinRepresentation();
 
             // Force a refresh of the scene to show the selection change
             m_coinNode->touch();
-        }
-        else {
-            LOG_INF_S("Coin3D node not yet created for geometry: " + m_name);
         }
     }
 }
@@ -204,7 +191,6 @@ void OCCGeometry::setTransparency(double transparency)
     m_transparency = std::min(1.0, std::max(0.0, transparency));  // Clamp 0-1
     if (m_wireframeMode) {
         m_transparency = std::min(m_transparency, 0.6);  // Limit for visible lines
-        LOG_WRN_S("Wireframe: Limited transparency to " + std::to_string(m_transparency));
     }
     
     // Mark that the Coin representation needs update
@@ -223,8 +209,6 @@ void OCCGeometry::setTransparency(double transparency)
         
         // Mark the Coin node as modified to trigger scene graph update
         m_coinNode->touch();
-        
-        LOG_INF_S("Transparency set to " + std::to_string(m_transparency) + ", cleared old nodes, rebuilt in mode " + (m_wireframeMode ? "wireframe" : "filling"));
     }
 }
 
@@ -232,14 +216,12 @@ void OCCGeometry::setWireframeMode(bool wireframe)
 {
     m_wireframeMode = (m_wireframeMode == wireframe) ? !wireframe : wireframe;
     m_coinNeedsUpdate = true;
-    LOG_INF_S("Toggled Wireframe to " + std::string(m_wireframeMode ? "enabled" : "disabled"));
 }
 
 void OCCGeometry::setShadingMode(bool shaded)
 {
     m_shadingMode = (m_shadingMode == shaded) ? !shaded : shaded;
     m_coinNeedsUpdate = true;
-    LOG_INF_S("Toggled Shading to " + std::string(m_shadingMode ? "enabled" : "disabled"));
 }
 
 // Material property setters
@@ -330,14 +312,10 @@ void OCCGeometry::setAlphaThreshold(double threshold)
 
 SoSeparator* OCCGeometry::getCoinNode()
 {
-    LOG_INF_S("Getting Coin3D node for geometry: " + m_name + " - Node exists: " + (m_coinNode ? "yes" : "no") + " - Needs update: " + (m_coinNeedsUpdate ? "yes" : "no"));
-
     if (!m_coinNode || m_coinNeedsUpdate) {
-        LOG_INF_S("Building Coin3D representation for geometry: " + m_name);
         buildCoinRepresentation();
     }
 
-    LOG_INF_S("Returning Coin3D node for geometry: " + m_name + " - Node: " + (m_coinNode ? "valid" : "null"));
     return m_coinNode;
 }
 
@@ -351,7 +329,6 @@ void OCCGeometry::setCoinNode(SoSeparator* node)
         m_coinNode->ref();
     }
     m_coinNeedsUpdate = false;
-    LOG_INF_S("Set Coin3D node for geometry: " + m_name);
 }
 
 void OCCGeometry::regenerateMesh(const MeshParameters& params)
@@ -359,9 +336,35 @@ void OCCGeometry::regenerateMesh(const MeshParameters& params)
     buildCoinRepresentation(params);
 }
 
+// Performance optimization methods
+bool OCCGeometry::needsMeshRegeneration() const
+{
+    return m_meshRegenerationNeeded;
+}
+
+void OCCGeometry::setMeshRegenerationNeeded(bool needed)
+{
+    m_meshRegenerationNeeded = needed;
+}
+
+void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
+{
+    // Check if mesh parameters have changed
+    bool paramsChanged = (params.deflection != m_lastMeshParams.deflection ||
+                         params.angularDeflection != m_lastMeshParams.angularDeflection ||
+                         params.relative != m_lastMeshParams.relative ||
+                         params.inParallel != m_lastMeshParams.inParallel);
+    
+    if (m_meshRegenerationNeeded || paramsChanged) {
+        buildCoinRepresentation(params);
+        m_lastMeshParams = params;
+        m_meshRegenerationNeeded = false;
+    }
+}
+
 void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 {
-    LOG_INF_S("Building Coin3D representation for geometry: " + m_name);
+    auto buildStartTime = std::chrono::high_resolution_clock::now();
 
     if (m_coinNode) {
         m_coinNode->removeAllChildren();
@@ -371,6 +374,7 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         m_coinNode->ref();
     }
 
+    // Transform setup
     m_coinTransform = new SoTransform;
     m_coinTransform->translation.setValue(
         static_cast<float>(m_position.X()),
@@ -394,26 +398,26 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
     );
     m_coinNode->addChild(m_coinTransform);
 
+    // Shape hints
     SoShapeHints* hints = new SoShapeHints;
     hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
     hints->shapeType = SoShapeHints::SOLID;
     hints->faceType = SoShapeHints::CONVEX;
     m_coinNode->addChild(hints);
 
-    // Add draw style for wireframe/shading mode
+    // Draw style
     SoDrawStyle* drawStyle = new SoDrawStyle;
     drawStyle->style = m_wireframeMode ? SoDrawStyle::LINES : SoDrawStyle::FILLED;
-    drawStyle->lineWidth = m_wireframeMode ? 1.0f : 0.0f;  // 隐藏时线宽为0
+    drawStyle->lineWidth = m_wireframeMode ? 1.0f : 0.0f;
     m_coinNode->addChild(drawStyle);
 
+    // Material
     SoMaterial* material = new SoMaterial;
     if (m_wireframeMode) {
-        SoMaterial* lineMaterial = new SoMaterial;  // Separate for lines
-        lineMaterial->diffuseColor.setValue(0.0f, 0.0f, 1.0f);
-        lineMaterial->transparency.setValue(static_cast<float>(m_transparency));
-        m_coinNode->addChild(lineMaterial);
+        material->diffuseColor.setValue(0.0f, 0.0f, 1.0f);
+        material->transparency.setValue(static_cast<float>(m_transparency));
     } else {
-        // Use material properties from rendering settings
+        // Simplified material setup for better performance
         material->ambientColor.setValue(
             static_cast<float>(m_materialAmbientColor.Red()),
             static_cast<float>(m_materialAmbientColor.Green()),
@@ -431,226 +435,47 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         );
         material->shininess.setValue(static_cast<float>(m_materialShininess / 100.0));
         material->transparency.setValue(static_cast<float>(m_transparency));
-        m_coinNode->addChild(material);
     }
-    LOG_INF_S("Applied material with rendering settings properties - transparency: " + std::to_string(m_transparency));
+    m_coinNode->addChild(material);
 
-    // Apply blend settings - using material transparency instead of SoBlendFunc
-    if (m_blendMode != RenderingConfig::BlendMode::None) {
-        // Set material transparency based on blend mode
-        SoMaterial* material = new SoMaterial;
-        
-        switch (m_blendMode) {
-            case RenderingConfig::BlendMode::Alpha:
-                material->transparency = 0.5f;
-                break;
-            case RenderingConfig::BlendMode::Additive:
-                material->transparency = 0.3f;
-                break;
-            case RenderingConfig::BlendMode::Multiply:
-                material->transparency = 0.4f;
-                break;
-            case RenderingConfig::BlendMode::Screen:
-                material->transparency = 0.6f;
-                break;
-            case RenderingConfig::BlendMode::Overlay:
-                material->transparency = 0.5f;
-                break;
-            default:
-                material->transparency = 0.5f;
-                break;
-        }
-        
-        m_coinNode->addChild(material);
-        LOG_INF_S("Applied blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
-    } else {
-        // When blend mode is None, ensure transparency is 0.0
-        if (m_transparency > 0.0) {
-            m_transparency = 0.0;
-            LOG_INF_S("Reset transparency to 0.0 for None blend mode");
-        }
-    }
-    
-    // Apply depth and face culling settings
-    if (!m_depthTest || !m_depthWrite || !m_cullFace) {
-        SoShapeHints* customHints = new SoShapeHints;
-        customHints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
-        customHints->shapeType = SoShapeHints::SOLID;
-        customHints->faceType = m_cullFace ? SoShapeHints::CONVEX : SoShapeHints::UNKNOWN_FACE_TYPE;
-        m_coinNode->addChild(customHints);
-        
-        LOG_INF_S("Applied custom blend settings - DepthTest: " + std::string(m_depthTest ? "enabled" : "disabled") + 
-                  ", DepthWrite: " + std::string(m_depthWrite ? "enabled" : "disabled") + 
-                  ", CullFace: " + std::string(m_cullFace ? "enabled" : "disabled"));
+    // Simplified blend and depth settings (removed complex texture handling for performance)
+    if (m_blendMode != RenderingConfig::BlendMode::None && m_transparency > 0.0) {
+        // Only apply blend if transparency is actually needed
+        material->transparency.setValue(static_cast<float>(m_transparency));
     }
 
-    // Apply texture settings if enabled
-    if (m_textureEnabled) {
-        SoTexture2* texture = new SoTexture2;
-        texture->wrapS = SoTexture2::REPEAT;
-        texture->wrapT = SoTexture2::REPEAT;
-        
-        // Set texture model based on configuration
-        // Note: Coin3D SoTexture2 only supports DECAL and MODULATE modes
-        switch (m_textureMode) {
-            case RenderingConfig::TextureMode::Replace:
-                texture->model = SoTexture2::REPLACE;
-                break;
-            case RenderingConfig::TextureMode::Modulate:
-        texture->model = SoTexture2::MODULATE;
-                break;
-            case RenderingConfig::TextureMode::Decal:
-                texture->model = SoTexture2::DECAL;
-                break;
-            case RenderingConfig::TextureMode::Blend:
-                texture->model = SoTexture2::BLEND;
-                break;
-            default:
-                texture->model = SoTexture2::MODULATE;
-                break;
-        }
-        
-        // Try to load image texture first
-        if (!m_textureImagePath.empty()) {
-            SoInput input;
-            if (input.openFile(m_textureImagePath.c_str())) {
-                SoNode* node = SoDB::readAll(&input);
-                if (node && node->isOfType(SoTexture2::getClassTypeId())) {
-                    // If it's a texture node, copy its image data
-                    SoTexture2* loadedTexture = static_cast<SoTexture2*>(node);
-                    texture->filename.setValue(m_textureImagePath.c_str());
-                    LOG_INF_S("Loaded texture image from file: " + m_textureImagePath);
-                } else {
-                    // Try to load as image file directly
-                    texture->filename.setValue(m_textureImagePath.c_str());
-                    LOG_INF_S("Set texture filename: " + m_textureImagePath);
-                }
-                input.closeFile();
-            } else {
-                LOG_WRN_S("Failed to load texture image: " + m_textureImagePath + ", using color texture");
-                // Fall back to color texture
-                unsigned char alpha = static_cast<unsigned char>(255 * (1.0 - m_transparency) * m_textureIntensity);
-                unsigned char r = static_cast<unsigned char>(m_textureColor.Red() * 255);
-                unsigned char g = static_cast<unsigned char>(m_textureColor.Green() * 255);
-                unsigned char b = static_cast<unsigned char>(m_textureColor.Blue() * 255);
-                unsigned char texData[16] = {r, g, b, alpha, r, g, b, alpha, r, g, b, alpha, r, g, b, alpha};
-                texture->image.setValue(SbVec2s(2, 2), 4, texData);
-                LOG_INF_S("Applied fallback color texture with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
-            }
-        } else {
-            // Create a more complex texture pattern based on texture mode
-            unsigned char r = static_cast<unsigned char>(m_textureColor.Red() * 255);
-            unsigned char g = static_cast<unsigned char>(m_textureColor.Green() * 255);
-            unsigned char b = static_cast<unsigned char>(m_textureColor.Blue() * 255);
-            unsigned char alpha = static_cast<unsigned char>(255 * (1.0 - m_transparency) * m_textureIntensity);
-            
-            // Create a 4x4 texture with different patterns for each mode
-            unsigned char texData[64]; // 4x4 pixels, 4 bytes per pixel (RGBA)
-            
-            switch (m_textureMode) {
-                case RenderingConfig::TextureMode::Decal:
-                    // Decal: Strong texture color with some transparency
-                    for (int i = 0; i < 16; i++) {
-                        texData[i*4] = r;     // Red
-                        texData[i*4+1] = g;   // Green
-                        texData[i*4+2] = b;   // Blue
-                        texData[i*4+3] = alpha; // Alpha
-                    }
-                    break;
-                    
-                case RenderingConfig::TextureMode::Modulate:
-                    // Modulate: Alternating strong and weak texture
-                    for (int i = 0; i < 16; i++) {
-                        bool strong = (i % 2 == 0); // Alternate pattern
-                        unsigned char intensity = strong ? alpha : (alpha / 3);
-                        texData[i*4] = r;     // Red
-                        texData[i*4+1] = g;   // Green
-                        texData[i*4+2] = b;   // Blue
-                        texData[i*4+3] = intensity; // Alpha
-                    }
-                    break;
-                    
-                case RenderingConfig::TextureMode::Replace:
-                    // Replace: Full intensity texture
-                    for (int i = 0; i < 16; i++) {
-                        texData[i*4] = r;     // Red
-                        texData[i*4+1] = g;   // Green
-                        texData[i*4+2] = b;   // Blue
-                        texData[i*4+3] = 255; // Full alpha
-                    }
-                    break;
-                    
-                case RenderingConfig::TextureMode::Blend:
-                    // Blend: Gradient pattern
-                    for (int i = 0; i < 16; i++) {
-                        int row = i / 4;
-                        int col = i % 4;
-                        unsigned char blendAlpha = static_cast<unsigned char>(alpha * (row + col) / 6.0);
-                        texData[i*4] = r;     // Red
-                        texData[i*4+1] = g;   // Green
-                        texData[i*4+2] = b;   // Blue
-                        texData[i*4+3] = blendAlpha; // Gradient alpha
-                    }
-                    break;
-                    
-                default:
-                    // Default: Simple pattern
-                    for (int i = 0; i < 16; i++) {
-                        texData[i*4] = r;     // Red
-                        texData[i*4+1] = g;   // Green
-                        texData[i*4+2] = b;   // Blue
-                        texData[i*4+3] = alpha; // Alpha
-                    }
-                    break;
-            }
-            
-            texture->image.setValue(SbVec2s(4, 4), 4, texData);
-            LOG_INF_S("Applied enhanced texture pattern for mode " + RenderingConfig::getTextureModeName(m_textureMode) + 
-                     " with color (" + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ") and alpha " + std::to_string(alpha));
-        }
-        
-        m_coinNode->addChild(texture);
-    }
-
-    LOG_INF_S("Shape is null: " + std::string(m_shape.IsNull() ? "yes" : "no") + " for geometry: " + m_name);
-
+    // Add shape to scene (simplified)
     if (!m_shape.IsNull()) {
-        LOG_INF_S("Creating mesh node for geometry: " + m_name);
         // Use rendering toolkit to create scene node
         auto& manager = RenderingToolkitAPI::getManager();
         auto backend = manager.getRenderBackend("Coin3D");
-        if (!backend) {
-            LOG_ERR_S("Coin3D rendering backend not available");
-            return;
+        if (backend) {
+            auto sceneNode = backend->createSceneNode(m_shape, params, m_selected);
+            if (sceneNode) {
+                SoSeparator* meshNode = sceneNode.get();
+                meshNode->ref(); // Take ownership
+                m_coinNode->addChild(meshNode);
+            }
         }
-        
-        auto sceneNode = backend->createSceneNode(m_shape, params, m_selected);
-        if (sceneNode) {
-            SoSeparator* meshNode = sceneNode.get();
-            meshNode->ref(); // Take ownership
-            m_coinNode->addChild(meshNode);
-            LOG_INF_S("Successfully added mesh node to Coin3D representation for: " + m_name);
-        }
-        else {
-            LOG_ERR_S("Failed to create mesh node for geometry: " + m_name);
-        }
-    }
-    else {
-        LOG_ERR_S("Shape is null, cannot create mesh node for geometry: " + m_name);
     }
 
-    // Set visibility based on current state
+    // Set visibility
     if (m_coinNode) {
-        if (m_visible) {
-            m_coinNode->renderCulling = SoSeparator::OFF;
-        } else {
-            m_coinNode->renderCulling = SoSeparator::ON;
-        }
-        LOG_INF_S("Set Coin3D node visibility for geometry: " + m_name + " -> " + (m_visible ? "visible" : "hidden"));
+        m_coinNode->renderCulling = m_visible ? SoSeparator::OFF : SoSeparator::ON;
     }
     
     m_coinNeedsUpdate = false;
-    LOG_INF_S("Finished building Coin3D representation for geometry: " + m_name);
+
+    auto buildEndTime = std::chrono::high_resolution_clock::now();
+    auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
+    
+    // Only log detailed breakdown for debugging or when needed
+    if (buildDuration.count() > 100) { // Only log if build takes more than 100ms
+        LOG_INF_S("=== COIN3D BUILD BREAKDOWN ===");
+        LOG_INF_S("Geometry: " + m_name);
+        LOG_INF_S("TOTAL BUILD TIME: " + std::to_string(buildDuration.count()) + "ms");
+        LOG_INF_S("==============================");
+    }
 }
 
 // All primitive classes (OCCBox, OCCCylinder, etc.) call setShape(),

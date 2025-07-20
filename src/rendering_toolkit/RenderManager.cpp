@@ -2,6 +2,8 @@
 #include "logger/Logger.h"
 #include <algorithm>
 #include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoCamera.h>
+#include <sstream>
 
 RenderManager& RenderManager::getInstance() {
     static RenderManager instance;
@@ -132,4 +134,75 @@ std::vector<std::string> RenderManager::getAvailableRenderBackends() const {
         names.push_back(pair.first);
     }
     return names;
+}
+
+void RenderManager::updateCulling(const void* camera) {
+    if (!m_initialized) {
+        return;
+    }
+    
+    const SoCamera* coinCamera = static_cast<const SoCamera*>(camera);
+    if (!coinCamera) {
+        return;
+    }
+    
+    // Update frustum culling
+    m_frustumCuller.updateFrustum(coinCamera);
+    
+    // Update occlusion culling
+    m_occlusionCuller.updateOcclusion(coinCamera, &m_frustumCuller);
+}
+
+bool RenderManager::shouldRenderShape(const TopoDS_Shape& shape) {
+    if (!m_initialized || shape.IsNull()) {
+        return true;
+    }
+    
+    // First check frustum culling
+    if (!m_frustumCuller.isShapeVisible(shape)) {
+        return false;
+    }
+    
+    // Then check occlusion culling
+    if (!m_occlusionCuller.isShapeVisible(shape)) {
+        return false;
+    }
+    
+    return true;
+}
+
+void RenderManager::addOccluder(const TopoDS_Shape& shape, SoSeparator* sceneNode) {
+    if (!m_initialized) {
+        return;
+    }
+    
+    m_occlusionCuller.addOccluder(shape, sceneNode);
+}
+
+void RenderManager::removeOccluder(const TopoDS_Shape& shape) {
+    if (!m_initialized) {
+        return;
+    }
+    
+    m_occlusionCuller.removeOccluder(shape);
+}
+
+void RenderManager::setFrustumCullingEnabled(bool enabled) {
+    m_frustumCuller.setEnabled(enabled);
+    LOG_INF_S("Frustum culling " + std::string(enabled ? "enabled" : "disabled"));
+}
+
+void RenderManager::setOcclusionCullingEnabled(bool enabled) {
+    m_occlusionCuller.setEnabled(enabled);
+    LOG_INF_S("Occlusion culling " + std::string(enabled ? "enabled" : "disabled"));
+}
+
+std::string RenderManager::getCullingStats() const {
+    std::ostringstream stats;
+    stats << "Frustum culling: " << (m_frustumCuller.isEnabled() ? "ON" : "OFF");
+    stats << " (culled: " << m_frustumCuller.getCulledCount() << ")";
+    stats << " | Occlusion culling: " << (m_occlusionCuller.isEnabled() ? "ON" : "OFF");
+    stats << " (culled: " << m_occlusionCuller.getOccludedCount() << ")";
+    stats << " | Active occluders: " << m_occlusionCuller.getOccluderCount();
+    return stats.str();
 } 

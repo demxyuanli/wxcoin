@@ -4,6 +4,8 @@
 #include "GeometryProcessor.h"
 #include "RenderBackend.h"
 #include "RenderConfig.h"
+#include "FrustumCuller.h"
+#include "OcclusionCuller.h"
 #include <memory>
 #include <string>
 #include <map>
@@ -126,6 +128,63 @@ public:
      */
     bool isInitialized() const { return m_initialized; }
 
+    // Culling system methods
+    /**
+     * @brief Update culling systems with current camera
+     * @param camera Current camera
+     */
+    void updateCulling(const void* camera);
+
+    /**
+     * @brief Check if shape should be rendered (frustum + occlusion culling)
+     * @param shape Shape to test
+     * @return true if should be rendered
+     */
+    bool shouldRenderShape(const TopoDS_Shape& shape);
+
+    /**
+     * @brief Add shape as occluder for occlusion culling
+     * @param shape Shape to add as occluder
+     * @param sceneNode Associated scene node
+     */
+    void addOccluder(const TopoDS_Shape& shape, SoSeparator* sceneNode);
+
+    /**
+     * @brief Remove shape from occluders
+     * @param shape Shape to remove
+     */
+    void removeOccluder(const TopoDS_Shape& shape);
+
+    /**
+     * @brief Enable/disable frustum culling
+     * @param enabled Culling state
+     */
+    void setFrustumCullingEnabled(bool enabled);
+
+    /**
+     * @brief Enable/disable occlusion culling
+     * @param enabled Culling state
+     */
+    void setOcclusionCullingEnabled(bool enabled);
+
+    /**
+     * @brief Get frustum culler
+     * @return Frustum culler reference
+     */
+    FrustumCuller& getFrustumCuller() { return m_frustumCuller; }
+
+    /**
+     * @brief Get occlusion culler
+     * @return Occlusion culler reference
+     */
+    OcclusionCuller& getOcclusionCuller() { return m_occlusionCuller; }
+
+    /**
+     * @brief Get culling statistics
+     * @return Statistics string
+     */
+    std::string getCullingStats() const;
+
 private:
     RenderManager();
     RenderManager(const RenderManager&) = delete;
@@ -139,4 +198,8 @@ private:
     
     std::map<std::string, std::unique_ptr<GeometryProcessor>> m_geometryProcessors;
     std::map<std::string, std::unique_ptr<RenderBackend>> m_renderBackends;
+    
+    // Culling systems
+    FrustumCuller m_frustumCuller;
+    OcclusionCuller m_occlusionCuller;
 }; 

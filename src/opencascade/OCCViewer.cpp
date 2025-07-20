@@ -23,6 +23,7 @@
 #include <limits>
 #include <cmath>
 #include <wx/gdicmn.h>
+#include <chrono>
 
 OCCViewer::OCCViewer(SceneManager* sceneManager)
     : m_sceneManager(sceneManager),
@@ -43,7 +44,9 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
       m_lodRoughDeflection(0.1),
       m_lodFineDeflection(0.01),
       m_lodTransitionTime(500),
-      m_lodTimer(this, wxID_ANY)
+      m_lodTimer(this, wxID_ANY),
+      m_batchOperationActive(false),
+      m_needsViewRefresh(false)
 {
     initializeViewer();
     setShowEdges(true);
@@ -83,11 +86,14 @@ void OCCViewer::initializeViewer()
 
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
+    auto addStartTime = std::chrono::high_resolution_clock::now();
+    
     if (!geometry) {
         LOG_ERR_S("Attempted to add null geometry to OCCViewer");
         return;
     }
     
+    auto validationStartTime = std::chrono::high_resolution_clock::now();
     auto it = std::find_if(m_geometries.begin(), m_geometries.end(),
         [&](const std::shared_ptr<OCCGeometry>& g) {
             return g->getName() == geometry->getName();
@@ -97,18 +103,33 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
         LOG_WRN_S("Geometry with name '" + geometry->getName() + "' already exists");
         return;
     }
+    auto validationEndTime = std::chrono::high_resolution_clock::now();
+    auto validationDuration = std::chrono::duration_cast<std::chrono::microseconds>(validationEndTime - validationStartTime);
     
-    LOG_INF_S("Adding geometry to OCCViewer: " + geometry->getName());
+    // Only log in non-batch mode to reduce overhead
+    if (!m_batchOperationActive) {
+        LOG_INF_S("Adding geometry: " + geometry->getName());
+    }
     
-    geometry->regenerateMesh(m_meshParams);
+    auto meshStartTime = std::chrono::high_resolution_clock::now();
+    // Use optimized mesh update method
+    geometry->updateCoinRepresentationIfNeeded(m_meshParams);
+    auto meshEndTime = std::chrono::high_resolution_clock::now();
+    auto meshDuration = std::chrono::duration_cast<std::chrono::milliseconds>(meshEndTime - meshStartTime);
+    
+    auto storageStartTime = std::chrono::high_resolution_clock::now();
     m_geometries.push_back(geometry);
+    auto storageEndTime = std::chrono::high_resolution_clock::now();
+    auto storageDuration = std::chrono::duration_cast<std::chrono::microseconds>(storageEndTime - storageStartTime);
     
+    auto coinNodeStartTime = std::chrono::high_resolution_clock::now();
     SoSeparator* coinNode = geometry->getCoinNode();
-    LOG_INF_S("Got Coin3D node for geometry: " + geometry->getName() + " - Node: " + (coinNode ? "valid" : "null"));
+    auto coinNodeEndTime = std::chrono::high_resolution_clock::now();
+    auto coinNodeDuration = std::chrono::duration_cast<std::chrono::microseconds>(coinNodeEndTime - coinNodeStartTime);
     
+    auto addChildStartTime = std::chrono::high_resolution_clock::now();
     if (coinNode && m_occRoot) {
         m_occRoot->addChild(coinNode);
-        LOG_INF_S("Added Coin3D node to OCC root for geometry: " + geometry->getName());
     } else {
         if (!coinNode) {
             LOG_ERR_S("Coin3D node is null for geometry: " + geometry->getName());
@@ -117,29 +138,62 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
             LOG_ERR_S("OCC root is null, cannot add geometry: " + geometry->getName());
         }
     }
+    auto addChildEndTime = std::chrono::high_resolution_clock::now();
+    auto addChildDuration = std::chrono::duration_cast<std::chrono::microseconds>(addChildEndTime - addChildStartTime);
     
-    LOG_INF_S("Added OCC geometry: " + geometry->getName());
-    
-    // Add geometry to ObjectTree if available
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
+    auto objectTreeStartTime = std::chrono::high_resolution_clock::now();
+    // Add geometry to ObjectTree if available (only in non-batch mode to reduce overhead)
+    if (!m_batchOperationActive && m_sceneManager && m_sceneManager->getCanvas()) {
         Canvas* canvas = m_sceneManager->getCanvas();
         if (canvas && canvas->getObjectTreePanel()) {
+            // Defer ObjectTree update to reduce blocking time
             canvas->getObjectTreePanel()->addOCCGeometry(geometry);
         }
+    } else if (m_batchOperationActive) {
+        // Queue for deferred update in batch mode
+        m_pendingObjectTreeUpdates.push_back(geometry);
     }
+    auto objectTreeEndTime = std::chrono::high_resolution_clock::now();
+    auto objectTreeDuration = std::chrono::duration_cast<std::chrono::microseconds>(objectTreeEndTime - objectTreeStartTime);
     
+    auto viewUpdateStartTime = std::chrono::high_resolution_clock::now();
     // Auto-update scene bounds and view when geometry is added
     if (m_sceneManager) {
-        m_sceneManager->updateSceneBounds();
-        m_sceneManager->resetView();
-        
-        Canvas* canvas = m_sceneManager->getCanvas();
-        if (canvas && canvas->getRefreshManager()) {
-            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+        // In batch mode, defer view updates until endBatchOperation
+        if (m_batchOperationActive) {
+            m_needsViewRefresh = true;
+        } else {
+            m_sceneManager->updateSceneBounds();
+            m_sceneManager->resetView();
+            
+            Canvas* canvas = m_sceneManager->getCanvas();
+            if (canvas && canvas->getRefreshManager()) {
+                canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+            }
+            
+            canvas->Refresh();
+            LOG_INF_S("Auto-updated scene bounds and view after adding geometry");
         }
-        
-        canvas->Refresh();
-        LOG_INF_S("Auto-updated scene bounds and view after adding geometry");
+    }
+    auto viewUpdateEndTime = std::chrono::high_resolution_clock::now();
+    auto viewUpdateDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewUpdateEndTime - viewUpdateStartTime);
+    
+    auto addEndTime = std::chrono::high_resolution_clock::now();
+    auto addDuration = std::chrono::duration_cast<std::chrono::milliseconds>(addEndTime - addStartTime);
+    
+    // Only show detailed breakdown in non-batch mode or for debugging
+    if (!m_batchOperationActive) {
+        LOG_INF_S("=== GEOMETRY ADDITION BREAKDOWN ===");
+        LOG_INF_S("Geometry: " + geometry->getName());
+        LOG_INF_S("  - Validation: " + std::to_string(validationDuration.count()) + "μs");
+        LOG_INF_S("  - Mesh regeneration: " + std::to_string(meshDuration.count()) + "ms");
+        LOG_INF_S("  - Storage: " + std::to_string(storageDuration.count()) + "μs");
+        LOG_INF_S("  - Coin3D node: " + std::to_string(coinNodeDuration.count()) + "μs");
+        LOG_INF_S("  - Add to scene: " + std::to_string(addChildDuration.count()) + "μs");
+        LOG_INF_S("  - Object tree: " + std::to_string(objectTreeDuration.count()) + "μs");
+        LOG_INF_S("  - View update: " + std::to_string(viewUpdateDuration.count()) + "μs");
+        LOG_INF_S("TOTAL ADDITION TIME: " + std::to_string(addDuration.count()) + "ms");
+        LOG_INF_S("==================================");
     }
 }
 
@@ -763,13 +817,114 @@ void OCCViewer::onLODTimer()
 
 void OCCViewer::startLODInteraction()
 {
-    if (m_lodEnabled) {
-        // Switch to rough mode immediately
+    if (m_lodEnabled && !m_lodRoughMode) {
         setLODMode(true);
-        
-        // Start timer to switch back to fine mode
         m_lodTimer.Start(m_lodTransitionTime, wxTIMER_ONE_SHOT);
     }
+}
+
+// Batch operations for performance optimization
+void OCCViewer::beginBatchOperation()
+{
+    m_batchOperationActive = true;
+    m_needsViewRefresh = false;
+    LOG_INF_S("Batch operation started");
+}
+
+void OCCViewer::endBatchOperation()
+{
+    m_batchOperationActive = false;
+    
+    // Process deferred ObjectTree updates
+    updateObjectTreeDeferred();
+    
+    // Perform deferred view refresh if needed
+    if (m_needsViewRefresh && m_sceneManager) {
+        auto batchRefreshStartTime = std::chrono::high_resolution_clock::now();
+        
+        m_sceneManager->updateSceneBounds();
+        m_sceneManager->resetView();
+        
+        Canvas* canvas = m_sceneManager->getCanvas();
+        if (canvas && canvas->getRefreshManager()) {
+            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+        }
+        
+        canvas->Refresh();
+        
+        auto batchRefreshEndTime = std::chrono::high_resolution_clock::now();
+        auto batchRefreshDuration = std::chrono::duration_cast<std::chrono::milliseconds>(batchRefreshEndTime - batchRefreshStartTime);
+        LOG_INF_S("Batch operation completed with view refresh in " + std::to_string(batchRefreshDuration.count()) + "ms");
+    } else {
+        LOG_INF_S("Batch operation completed");
+    }
+    
+    m_needsViewRefresh = false;
+}
+
+bool OCCViewer::isBatchOperationActive() const
+{
+    return m_batchOperationActive;
+}
+
+void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& geometries)
+{
+    if (geometries.empty()) {
+        return;
+    }
+    
+    auto batchAddStartTime = std::chrono::high_resolution_clock::now();
+    LOG_INF_S("Starting batch addition of " + std::to_string(geometries.size()) + " geometries");
+    
+    // Pre-allocate space to avoid reallocations
+    m_geometries.reserve(m_geometries.size() + geometries.size());
+    
+    // Collect all Coin3D nodes for batch addition
+    std::vector<SoSeparator*> coinNodes;
+    coinNodes.reserve(geometries.size());
+    
+    for (const auto& geometry : geometries) {
+        if (!geometry) {
+            LOG_ERR_S("Attempted to add null geometry in batch operation");
+            continue;
+        }
+        
+        // Quick validation (no logging in batch mode)
+        auto it = std::find_if(m_geometries.begin(), m_geometries.end(),
+            [&](const std::shared_ptr<OCCGeometry>& g) {
+                return g->getName() == geometry->getName();
+            });
+        
+        if (it != m_geometries.end()) {
+            LOG_WRN_S("Geometry with name '" + geometry->getName() + "' already exists (skipping in batch)");
+            continue;
+        }
+        
+        // Regenerate mesh
+        geometry->regenerateMesh(m_meshParams);
+        
+        // Store geometry
+        m_geometries.push_back(geometry);
+        
+        // Collect Coin3D node
+        SoSeparator* coinNode = geometry->getCoinNode();
+        if (coinNode) {
+            coinNodes.push_back(coinNode);
+        } else {
+            LOG_ERR_S("Coin3D node is null for geometry: " + geometry->getName());
+        }
+    }
+    
+    // Batch add all Coin3D nodes to scene
+    if (m_occRoot && !coinNodes.empty()) {
+        for (SoSeparator* coinNode : coinNodes) {
+            m_occRoot->addChild(coinNode);
+        }
+    }
+    
+    auto batchAddEndTime = std::chrono::high_resolution_clock::now();
+    auto batchAddDuration = std::chrono::duration_cast<std::chrono::milliseconds>(batchAddEndTime - batchAddStartTime);
+    LOG_INF_S("Batch geometry addition completed in " + std::to_string(batchAddDuration.count()) + "ms");
 }
 
 void OCCViewer::requestViewRefresh()
@@ -778,5 +933,30 @@ void OCCViewer::requestViewRefresh()
         Canvas* canvas = m_sceneManager->getCanvas();
         canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
     }
+}
+
+void OCCViewer::updateObjectTreeDeferred()
+{
+    if (m_pendingObjectTreeUpdates.empty()) {
+        return;
+    }
+    
+    auto updateStartTime = std::chrono::high_resolution_clock::now();
+    LOG_INF_S("Processing " + std::to_string(m_pendingObjectTreeUpdates.size()) + " deferred ObjectTree updates");
+    
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        if (canvas && canvas->getObjectTreePanel()) {
+            for (const auto& geometry : m_pendingObjectTreeUpdates) {
+                canvas->getObjectTreePanel()->addOCCGeometry(geometry);
+            }
+        }
+    }
+    
+    m_pendingObjectTreeUpdates.clear();
+    
+    auto updateEndTime = std::chrono::high_resolution_clock::now();
+    auto updateDuration = std::chrono::duration_cast<std::chrono::milliseconds>(updateEndTime - updateStartTime);
+    LOG_INF_S("Deferred ObjectTree updates completed in " + std::to_string(updateDuration.count()) + "ms");
 }
 

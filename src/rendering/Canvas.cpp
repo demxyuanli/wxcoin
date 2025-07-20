@@ -18,6 +18,7 @@
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
 #include "MultiViewportManager.h"
+#include <chrono>
 const int Canvas::s_canvasAttribs[] = {
     WX_GL_RGBA,
     WX_GL_DOUBLEBUFFER,
@@ -129,30 +130,58 @@ void Canvas::showErrorDialog(const std::string& message) const {
 }
 
 void Canvas::render(bool fastMode) {
+    auto renderStartTime = std::chrono::high_resolution_clock::now();
+    
     if (m_renderingEngine) {
         // Create MultiViewportManager on first render when GL context is active
         if (m_multiViewportEnabled && !m_multiViewportManager) {
+            auto multiViewportStartTime = std::chrono::high_resolution_clock::now();
             try {
                 m_multiViewportManager = std::make_unique<MultiViewportManager>(this, m_sceneManager.get());
                 m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
                 m_multiViewportManager->handleSizeChange(GetClientSize());
-                LOG_INF_S("Canvas::render: MultiViewportManager created successfully");
+                auto multiViewportEndTime = std::chrono::high_resolution_clock::now();
+                auto multiViewportDuration = std::chrono::duration_cast<std::chrono::milliseconds>(multiViewportEndTime - multiViewportStartTime);
+                LOG_INF_S("MultiViewportManager created in " + std::to_string(multiViewportDuration.count()) + "ms");
             } catch (const std::exception& e) {
-                LOG_ERR_S("Canvas::render: Failed to create MultiViewportManager: " + std::string(e.what()));
+                LOG_ERR_S("Failed to create MultiViewportManager: " + std::string(e.what()));
                 m_multiViewportEnabled = false;
             }
         }
         
         // Render main scene first (without swapping buffers)
+        auto mainRenderStartTime = std::chrono::high_resolution_clock::now();
         m_renderingEngine->renderWithoutSwap(fastMode);
+        auto mainRenderEndTime = std::chrono::high_resolution_clock::now();
+        auto mainRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(mainRenderEndTime - mainRenderStartTime);
         
         // Render additional viewports on top of main scene
         if (m_multiViewportEnabled && m_multiViewportManager) {
+            auto multiRenderStartTime = std::chrono::high_resolution_clock::now();
             m_multiViewportManager->render();
+            auto multiRenderEndTime = std::chrono::high_resolution_clock::now();
+            auto multiRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(multiRenderEndTime - multiRenderStartTime);
         }
         
         // Finally swap buffers to display everything
+        auto swapStartTime = std::chrono::high_resolution_clock::now();
         m_renderingEngine->swapBuffers();
+        auto swapEndTime = std::chrono::high_resolution_clock::now();
+        auto swapDuration = std::chrono::duration_cast<std::chrono::milliseconds>(swapEndTime - swapStartTime);
+        
+        auto renderEndTime = std::chrono::high_resolution_clock::now();
+        auto renderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(renderEndTime - renderStartTime);
+        
+        // Only log if render time is significant
+        if (renderDuration.count() > 16) {
+            LOG_INF_S("=== RENDERING PERFORMANCE ===");
+            LOG_INF_S("Render mode: " + std::string(fastMode ? "FAST" : "QUALITY"));
+            LOG_INF_S("Main scene: " + std::to_string(mainRenderDuration.count()) + "ms");
+            LOG_INF_S("Buffer swap: " + std::to_string(swapDuration.count()) + "ms");
+            LOG_INF_S("Total render: " + std::to_string(renderDuration.count()) + "ms");
+            LOG_INF_S("FPS: " + std::to_string(1000.0 / renderDuration.count()));
+            LOG_INF_S("=============================");
+        }
     }
 }
 

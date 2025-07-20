@@ -55,6 +55,9 @@ public:
     void setDefaultGeometryType(GeometryType type) { m_defaultGeometryType = type; }
     GeometryType getDefaultGeometryType() const { return m_defaultGeometryType; }
 
+    // Culling system integration
+    void addGeometryToCullingSystem(const std::shared_ptr<OCCGeometry>& geometry);
+
 private:
     
     SoSeparator* m_root;

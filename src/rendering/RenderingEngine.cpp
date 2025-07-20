@@ -6,6 +6,7 @@
 #include <wx/msgdlg.h>
 #include <stdexcept>
 #include <GL/gl.h>
+#include <chrono> // Added for rendering timing
 
 const int RenderingEngine::RENDER_INTERVAL = 16; // ~60 FPS (milliseconds)
 
@@ -74,18 +75,17 @@ void RenderingEngine::render(bool fastMode) {
 }
 
 void RenderingEngine::renderWithoutSwap(bool fastMode) {
+    auto renderStartTime = std::chrono::high_resolution_clock::now();
+    
     if (!m_isInitialized) {
-        LOG_WRN_S("RenderingEngine::renderWithoutSwap: Skipped: Not initialized");
         return;
     }
 
     if (!m_canvas->IsShown() || !m_glContext || !m_sceneManager) {
-        LOG_WRN_S("RenderingEngine::renderWithoutSwap: Skipped: Canvas not shown or context/scene invalid");
         return;
     }
 
     if (m_isRendering) {
-        LOG_WRN_S("RenderingEngine::renderWithoutSwap: Skipped: Already rendering");
         return;
     }
 
@@ -98,36 +98,63 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
     m_lastRenderTime = currentTime;
 
     try {
+        auto contextStartTime = std::chrono::high_resolution_clock::now();
         if (!m_canvas->SetCurrent(*m_glContext)) {
-            LOG_ERR_S("RenderingEngine::renderWithoutSwap: Failed to set GL context");
+            LOG_ERR_S("Failed to set GL context");
             m_isRendering = false;
             return;
         }
+        auto contextEndTime = std::chrono::high_resolution_clock::now();
+        auto contextDuration = std::chrono::duration_cast<std::chrono::microseconds>(contextEndTime - contextStartTime);
 
         wxSize size = m_canvas->GetClientSize();
         if (size.x <= 0 || size.y <= 0) {
-            LOG_WRN_S("RenderingEngine::renderWithoutSwap: Invalid viewport size: " + 
-                   std::to_string(size.x) + "x" + std::to_string(size.y));
             m_isRendering = false;
             return;
         }
 
+        auto clearStartTime = std::chrono::high_resolution_clock::now();
         clearBuffers();
-        
+        auto clearEndTime = std::chrono::high_resolution_clock::now();
+        auto clearDuration = std::chrono::duration_cast<std::chrono::microseconds>(clearEndTime - clearStartTime);
+
         // Set viewport with DPI scaling
-        // Note: We don't have direct access to DPI scale here, so we'll use the canvas size directly
+        auto viewportStartTime = std::chrono::high_resolution_clock::now();
         glViewport(0, 0, size.x, size.y);
-        
+        auto viewportEndTime = std::chrono::high_resolution_clock::now();
+        auto viewportDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewportEndTime - viewportStartTime);
+
         // Render main scene
+        auto sceneStartTime = std::chrono::high_resolution_clock::now();
         m_sceneManager->render(size, fastMode);
+        auto sceneEndTime = std::chrono::high_resolution_clock::now();
+        auto sceneDuration = std::chrono::duration_cast<std::chrono::milliseconds>(sceneEndTime - sceneStartTime);
 
         // Render navigation cube
         if (m_navigationCubeManager) {
+            auto navCubeStartTime = std::chrono::high_resolution_clock::now();
             m_navigationCubeManager->render();
+            auto navCubeEndTime = std::chrono::high_resolution_clock::now();
+            auto navCubeDuration = std::chrono::duration_cast<std::chrono::milliseconds>(navCubeEndTime - navCubeStartTime);
+        }
+
+        auto renderEndTime = std::chrono::high_resolution_clock::now();
+        auto renderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(renderEndTime - renderStartTime);
+        
+        // Only log if render time is significant
+        if (renderDuration.count() > 16) {
+            LOG_INF_S("=== RENDERING ENGINE PERFORMANCE ===");
+            LOG_INF_S("GL context: " + std::to_string(contextDuration.count()) + "μs");
+            LOG_INF_S("Buffer clear: " + std::to_string(clearDuration.count()) + "μs");
+            LOG_INF_S("Viewport set: " + std::to_string(viewportDuration.count()) + "μs");
+            LOG_INF_S("Scene render: " + std::to_string(sceneDuration.count()) + "ms");
+            LOG_INF_S("Total engine render: " + std::to_string(renderDuration.count()) + "ms");
+            LOG_INF_S("Engine FPS: " + std::to_string(1000.0 / renderDuration.count()));
+            LOG_INF_S("=====================================");
         }
     }
     catch (const std::exception& e) {
-        LOG_ERR_S("RenderingEngine::renderWithoutSwap: Exception during render: " + std::string(e.what()));
+        LOG_ERR_S("Exception during render: " + std::string(e.what()));
         clearBuffers();
         m_isRendering = false;
         

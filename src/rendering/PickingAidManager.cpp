@@ -1,3 +1,9 @@
+#ifdef _WIN32
+#define NOMINMAX
+#define _WINSOCKAPI_
+#include <windows.h>
+#endif
+
 #include "PickingAidManager.h"
 #include "SceneManager.h"
 #include "Canvas.h"

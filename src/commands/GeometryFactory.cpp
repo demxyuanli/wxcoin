@@ -54,6 +54,12 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
     if (geometry) {
         m_treePanel->addOCCGeometry(geometry);
         m_occViewer->addGeometry(geometry);
+        
+        // Add to culling system as occluder if it's a large object
+        if (type == "Box" || type == "Cylinder" || type == "Cone") {
+            addGeometryToCullingSystem(geometry);
+        }
+        
         LOG_INF_S("Created OCC geometry: " + type);
     } else {
         LOG_ERR_S("Failed to create OCC geometry: " + type);
@@ -85,6 +91,12 @@ void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, c
     if (geometry) {
         m_treePanel->addOCCGeometry(geometry);
         m_occViewer->addGeometry(geometry);
+        
+        // Add to culling system as occluder if it's a large object
+        if (type == "Box" || type == "Cylinder" || type == "Cone") {
+            addGeometryToCullingSystem(geometry);
+        }
+        
         LOG_INF_S("Created OCC geometry with parameters: " + type);
     } else {
         LOG_ERR_S("Failed to create OCC geometry with parameters: " + type);
@@ -538,5 +550,26 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
     } catch (const std::exception& e) {
         LOG_ERR_S("Exception creating wrench: " + std::string(e.what()));
         return nullptr;
+    }
+}
+
+// Add new method for culling system integration
+void GeometryFactory::addGeometryToCullingSystem(const std::shared_ptr<OCCGeometry>& geometry) {
+    try {
+        // Get the scene manager from the OCC viewer
+        if (m_occViewer) {
+            // This would require adding a method to get SceneManager from OCCViewer
+            // For now, we'll log the intention
+            LOG_INF_S("Geometry " + geometry->getName() + " should be added to culling system as occluder");
+            
+            // TODO: Get SceneManager and call addOccluder
+            // SceneManager* sceneManager = m_occViewer->getSceneManager();
+            // if (sceneManager) {
+            //     sceneManager->addOccluder(geometry->getShape());
+            // }
+        }
+    }
+    catch (const std::exception& e) {
+        LOG_ERR_S("Failed to add geometry to culling system: " + std::string(e.what()));
     }
 }

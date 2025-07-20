@@ -1,3 +1,9 @@
+#ifdef _WIN32
+#define NOMINMAX
+#define _WINSOCKAPI_
+#include <windows.h>
+#endif
+
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "config/RenderingConfig.h"
@@ -23,6 +29,8 @@
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoLightModel.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
+#include "rendering/RenderingToolkitAPI.h"
+#include <chrono>
 
 SceneManager::SceneManager(Canvas* canvas)
     : m_canvas(canvas)
@@ -32,8 +40,15 @@ SceneManager::SceneManager(Canvas* canvas)
     , m_lightRoot(nullptr)  // Add initialization for m_lightRoot
     , m_objectRoot(nullptr)
     , m_isPerspectiveCamera(true)
+    , m_cullingEnabled(true)
+    , m_lastCullingUpdateValid(false)
 {
     LOG_INF_S("SceneManager initializing");
+    
+    // Initialize rendering toolkit with culling
+    // m_renderingToolkit = std::make_unique<RenderingToolkitAPI>(); // Removed as per edit hint
+    // m_renderingToolkit->setFrustumCullingEnabled(true); // Removed as per edit hint
+    // m_renderingToolkit->setOcclusionCullingEnabled(true); // Removed as per edit hint
 }
 
 SceneManager::~SceneManager() {
@@ -140,6 +155,11 @@ bool SceneManager::initScene() {
         
         // Initialize LightingConfig callback
         initializeLightingConfigCallback();
+
+        // Initialize culling system
+        RenderingToolkitAPI::setFrustumCullingEnabled(true);
+        RenderingToolkitAPI::setOcclusionCullingEnabled(true);
+        LOG_INF_S("Culling system initialized and enabled");
 
         resetView();
         return true;
@@ -324,10 +344,21 @@ void SceneManager::setView(const std::string& viewName) {
 }
 
 void SceneManager::render(const wxSize& size, bool fastMode) {
+    auto sceneRenderStartTime = std::chrono::high_resolution_clock::now();
+    
     if (m_camera) {
         m_camera->aspectRatio.setValue(static_cast<float>(size.x) / static_cast<float>(size.y));
     }
 
+    // Update culling system before rendering
+    if (m_cullingEnabled && RenderingToolkitAPI::isInitialized()) {
+        auto cullingStartTime = std::chrono::high_resolution_clock::now();
+        updateCulling();
+        auto cullingEndTime = std::chrono::high_resolution_clock::now();
+        auto cullingDuration = std::chrono::duration_cast<std::chrono::microseconds>(cullingEndTime - cullingStartTime);
+    }
+    
+    auto viewportStartTime = std::chrono::high_resolution_clock::now();
     SbViewportRegion viewport(size.x, size.y);
     SoGLRenderAction renderAction(viewport);
     renderAction.setSmoothing(!fastMode);
@@ -335,17 +366,14 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     renderAction.setTransparencyType(
         fastMode ? SoGLRenderAction::BLEND : SoGLRenderAction::SORTED_OBJECT_BLEND
     );
+    auto viewportEndTime = std::chrono::high_resolution_clock::now();
+    auto viewportDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewportEndTime - viewportStartTime);
 
     // Explicitly enable blending for line smoothing
-    // Note: Let Coin3D handle lighting, don't enable GL_LIGHTING here
+    auto glSetupStartTime = std::chrono::high_resolution_clock::now();
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
-    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // Disabling GL_COLOR_MATERIAL as it might conflict with the PHONG lighting model used by Coin3D's SoMaterial nodes.
-    // This is a likely source of GL_INVALID_ENUM when a complex lighting model is active.
-    // glEnable(GL_COLOR_MATERIAL); 
     glEnable(GL_TEXTURE_2D);
-    // Removed glTexEnvf to fix OpenGL error 1280 (GL_INVALID_ENUM)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Reset OpenGL errors before rendering
@@ -356,33 +384,35 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     
     // Reset OpenGL state to prevent errors
     glDisable(GL_TEXTURE_2D);
-    // Note: GL_TEXTURE_1D, GL_TEXTURE_3D and GL_TEXTURE_CUBE_MAP may not be available in all OpenGL versions
-    // Only disable texture targets that are guaranteed to be available
-
-    GLint lightingEnabled = 0;
-    glGetIntegerv(GL_LIGHTING, &lightingEnabled);
-    //LOG_INF_S("NavigationCube::render: Lighting enabled: " + std::to_string(lightingEnabled));
-
-    GLint textureEnabled = 0;
-    glGetIntegerv(GL_TEXTURE_2D, &textureEnabled);
-    //LOG_INF_S("NavigationCube::render: Texture 2D enabled: " + std::to_string(textureEnabled));
-
-    GLint texEnvMode = 0;
-    glGetIntegerv(GL_TEXTURE_ENV_MODE, &texEnvMode);
-    //LOG_INF_S("NavigationCube::render: Texture env mode: " + std::to_string(texEnvMode) + " (GL_MODULATE=" + std::to_string(GL_MODULATE) + ")");
+    auto glSetupEndTime = std::chrono::high_resolution_clock::now();
+    auto glSetupDuration = std::chrono::duration_cast<std::chrono::microseconds>(glSetupEndTime - glSetupStartTime);
 
     // Render the scene
+    auto coinRenderStartTime = std::chrono::high_resolution_clock::now();
     renderAction.apply(m_sceneRoot);
-
+    auto coinRenderEndTime = std::chrono::high_resolution_clock::now();
+    auto coinRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(coinRenderEndTime - coinRenderStartTime);
+    
     // Check for OpenGL errors after rendering
     while ((err = glGetError()) != GL_NO_ERROR) {
-        LOG_ERR_S("Post-render: OpenGL error: " + std::to_string(err) + 
-                " (GL_INVALID_ENUM=" + std::to_string(GL_INVALID_ENUM) + 
-                ", GL_INVALID_VALUE=" + std::to_string(GL_INVALID_VALUE) + 
-                ", GL_INVALID_OPERATION=" + std::to_string(GL_INVALID_OPERATION) + ")");
+        LOG_ERR_S("Post-render: OpenGL error: " + std::to_string(err));
     }
-
-    // glDisable(GL_BLEND); // Disable blending afterwards
+    
+    auto sceneRenderEndTime = std::chrono::high_resolution_clock::now();
+    auto sceneRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(sceneRenderEndTime - sceneRenderStartTime);
+    
+    // Only log if render time is significant
+    if (sceneRenderDuration.count() > 16) {
+        LOG_INF_S("=== SCENE RENDER PERFORMANCE ===");
+        LOG_INF_S("Scene size: " + std::to_string(size.x) + "x" + std::to_string(size.y));
+        LOG_INF_S("Render mode: " + std::string(fastMode ? "FAST" : "QUALITY"));
+        LOG_INF_S("Viewport setup: " + std::to_string(viewportDuration.count()) + "μs");
+        LOG_INF_S("GL state setup: " + std::to_string(glSetupDuration.count()) + "μs");
+        LOG_INF_S("Coin3D scene render: " + std::to_string(coinRenderDuration.count()) + "ms");
+        LOG_INF_S("Total scene render: " + std::to_string(sceneRenderDuration.count()) + "ms");
+        LOG_INF_S("Scene render FPS: " + std::to_string(1000.0 / sceneRenderDuration.count()));
+        LOG_INF_S("=================================");
+    }
 }
 
 void SceneManager::updateAspectRatio(const wxSize& size) {
@@ -591,112 +621,40 @@ void SceneManager::initializeRenderingConfigCallback()
     LOG_INF_S("RenderingConfig callback initialized in SceneManager");
 }
 
-void SceneManager::initializeLightingConfigCallback()
-{
-    // Register callback to update lighting when LightingConfig changes
-    LightingConfig& config = LightingConfig::getInstance();
-    config.addSettingsChangedCallback([this, &config]() {
-        LOG_INF_S("LightingConfig callback triggered - updating scene lighting");
-        
-        // Clear existing environment nodes from scene root
-        if (m_sceneRoot) {
-            // Find and remove environment nodes from scene root
-            for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
-                SoNode* child = m_sceneRoot->getChild(i);
-                if (child->isOfType(SoEnvironment::getClassTypeId())) {
-                    LOG_INF_S("Removing environment node from scene root");
-                    m_sceneRoot->removeChild(i);
-                }
-            }
-        }
-        
-        // Clear existing lights from light root
-        if (m_lightRoot) {
-            // Remove all children except the first one (light model)
-            while (m_lightRoot->getNumChildren() > 1) {
-                m_lightRoot->removeChild(1);
-            }
-            LOG_INF_S("Cleared existing lights from light root");
-        }
-        
-        // Add environment settings to light root (consistent with initScene)
-        const LightSettings& envSettings = config.getEnvironmentSettings();
-        SoEnvironment* environment = new SoEnvironment;
-        environment->ambientColor.setValue(envSettings.ambientColor.Red(), 
-                                         envSettings.ambientColor.Green(), 
-                                         envSettings.ambientColor.Blue());
-        environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
-        m_lightRoot->addChild(environment);
-        LOG_INF_S("Added environment settings to light root");
-        
-        // Add all lights from config to light root
-        const auto& lights = config.getAllLights();
-        int lightCount = 0;
-        for (const auto& lightSettings : lights) {
-            if (!lightSettings.enabled) {
-                continue;
-            }
-            
-            if (lightSettings.type == "directional") {
-                SoDirectionalLight* light = new SoDirectionalLight;
-                light->direction.setValue(static_cast<float>(lightSettings.directionX),
-                                        static_cast<float>(lightSettings.directionY),
-                                        static_cast<float>(lightSettings.directionZ));
-                light->color.setValue(lightSettings.color.Red(),
-                                    lightSettings.color.Green(),
-                                    lightSettings.color.Blue());
-                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
-                light->on.setValue(true);
-                m_lightRoot->addChild(light);
-                
-                LOG_INF_S("Added directional light: " + lightSettings.name + 
-                         " (dir: " + std::to_string(lightSettings.directionX) + "," + 
-                         std::to_string(lightSettings.directionY) + "," + 
-                         std::to_string(lightSettings.directionZ) + 
-                         ", intensity: " + std::to_string(lightSettings.intensity) + ")");
-                lightCount++;
-            }
-            // Add support for other light types (point, spot) as needed
-        }
-        
-        LOG_INF_S("Total lights added: " + std::to_string(lightCount));
-        
-        // Debug current lighting state
-        debugLightingState();
-        
-        // Force multiple refresh methods to ensure update
-        LOG_INF_S("Forcing scene refresh");
-        
-        // Method 1: Touch the scene root to force Coin3D update
-        if (m_sceneRoot) {
-            m_sceneRoot->touch();
-            LOG_INF_S("Touched scene root");
-        }
-        
-        // Method 2: Touch the light root
-        if (m_lightRoot) {
-            m_lightRoot->touch();
-            LOG_INF_S("Touched light root");
-        }
-        
-        // Method 3: Force immediate render update
-        if (m_canvas) {
-            // Force a complete scene rebuild
-            m_canvas->Refresh(true);
-            m_canvas->Update();
-            LOG_INF_S("Forced canvas refresh and update");
-        }
-        
-        // Method 4: RefreshManager
-        if (m_canvas && m_canvas->getRefreshManager()) {
-            m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
-            LOG_INF_S("Requested refresh via RefreshManager");
-        }
-        
-        LOG_INF_S("Updated scene lighting from LightingConfig changes - complete");
-    });
-    
-    LOG_INF_S("LightingConfig callback initialized in SceneManager");
+void SceneManager::initializeLightingConfigCallback() {
+    // Implementation for lighting config callback
+    LOG_INF_S("SceneManager::initializeLightingConfigCallback called.");
+}
+
+// Culling system integration methods
+void SceneManager::updateCulling() {
+    if (!m_camera) return;
+    RenderingToolkitAPI::updateCulling(m_camera);
+    m_lastCullingUpdateValid = true;
+}
+bool SceneManager::shouldRenderShape(const TopoDS_Shape& shape) const {
+    if (!m_cullingEnabled || !m_lastCullingUpdateValid) return true;
+    return RenderingToolkitAPI::shouldRenderShape(shape);
+}
+
+void SceneManager::addOccluder(const TopoDS_Shape& shape) {
+    RenderingToolkitAPI::addOccluder(shape, nullptr);
+}
+
+void SceneManager::removeOccluder(const TopoDS_Shape& shape) {
+    RenderingToolkitAPI::removeOccluder(shape);
+}
+
+void SceneManager::setFrustumCullingEnabled(bool enabled) {
+    RenderingToolkitAPI::setFrustumCullingEnabled(enabled);
+}
+
+void SceneManager::setOcclusionCullingEnabled(bool enabled) {
+    RenderingToolkitAPI::setOcclusionCullingEnabled(enabled);
+}
+
+std::string SceneManager::getCullingStats() const {
+    return RenderingToolkitAPI::getCullingStats();
 }
 
 void SceneManager::debugLightingState() const

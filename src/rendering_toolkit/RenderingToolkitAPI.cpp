@@ -147,4 +147,67 @@ namespace RenderingToolkitAPI {
     bool isInitialized() {
         return s_initialized;
     }
+
+    // Culling system methods
+    void updateCulling(const void* camera) {
+        if (!s_initialized) {
+            LOG_ERR_S("Rendering toolkit not initialized");
+            return;
+        }
+        
+        s_manager->updateCulling(camera);
+    }
+
+    bool shouldRenderShape(const TopoDS_Shape& shape) {
+        if (!s_initialized) {
+            LOG_ERR_S("Rendering toolkit not initialized");
+            return true;
+        }
+        
+        return s_manager->shouldRenderShape(shape);
+    }
+
+    void addOccluder(const TopoDS_Shape& shape, void* sceneNode) {
+        if (!s_initialized) {
+            LOG_ERR_S("Rendering toolkit not initialized");
+            return;
+        }
+        
+        s_manager->addOccluder(shape, static_cast<SoSeparator*>(sceneNode));
+    }
+
+    void removeOccluder(const TopoDS_Shape& shape) {
+        if (!s_initialized) {
+            LOG_ERR_S("Rendering toolkit not initialized");
+            return;
+        }
+        
+        s_manager->removeOccluder(shape);
+    }
+
+    void setFrustumCullingEnabled(bool enabled) {
+        if (!s_initialized) {
+            LOG_ERR_S("Rendering toolkit not initialized");
+            return;
+        }
+        
+        s_manager->setFrustumCullingEnabled(enabled);
+    }
+
+    void setOcclusionCullingEnabled(bool enabled) {
+        if (!s_initialized) {
+            LOG_ERR_S("Rendering toolkit not initialized");
+            return;
+        }
+        
+        s_manager->setOcclusionCullingEnabled(enabled);
+    }
+
+    std::string getCullingStats() {
+        if (!s_initialized) {
+            return "Rendering toolkit not initialized";
+        }
+        
+        return s_manager->getCullingStats();
+    }
 } 

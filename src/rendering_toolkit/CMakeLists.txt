@@ -6,6 +6,8 @@ set(RENDERING_TOOLKIT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderPluginManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OpenCASCADEProcessor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Coin3DBackendImpl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FrustumCuller.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/OcclusionCuller.cpp
 )
 
 set(RENDERING_TOOLKIT_HEADERS
@@ -18,6 +20,8 @@ set(RENDERING_TOOLKIT_HEADERS
     ${CMAKE_SOURCE_DIR}/include/rendering/RenderManager.h
     ${CMAKE_SOURCE_DIR}/include/rendering/RenderPlugin.h
     ${CMAKE_SOURCE_DIR}/include/rendering/RenderingToolkitAPI.h
+    ${CMAKE_SOURCE_DIR}/include/rendering/FrustumCuller.h
+    ${CMAKE_SOURCE_DIR}/include/rendering/OcclusionCuller.h
 )
 
 # Create Rendering Toolkit static library

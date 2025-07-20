@@ -5,11 +5,13 @@
 #include <wx/frame.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
 #include <memory>
+#include "rendering/RenderingToolkitAPI.h"
 
 class Canvas;
 class CoordinateSystemRenderer;
 class PickingAidManager;
 class NavigationCube;
+class TopoDS_Shape; // Forward declaration for OpenCASCADE
 
 class SceneManager {
 public:
@@ -49,6 +51,15 @@ public:
     // Initialize LightingConfig callback
     void initializeLightingConfigCallback();
 
+    // Culling system integration
+    void updateCulling();
+    bool shouldRenderShape(const TopoDS_Shape& shape) const;
+    void addOccluder(const TopoDS_Shape& shape);
+    void removeOccluder(const TopoDS_Shape& shape);
+    void setFrustumCullingEnabled(bool enabled);
+    void setOcclusionCullingEnabled(bool enabled);
+    std::string getCullingStats() const;
+
 private:
     Canvas* m_canvas;
     SoSeparator* m_sceneRoot;
@@ -60,4 +71,8 @@ private:
     std::unique_ptr<PickingAidManager> m_pickingAidManager;
     bool m_isPerspectiveCamera;
     SbBox3f m_sceneBoundingBox;
+    
+    // Culling state
+    bool m_cullingEnabled;
+    bool m_lastCullingUpdateValid;
 };
