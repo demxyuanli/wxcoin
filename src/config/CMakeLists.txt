@@ -9,6 +9,7 @@ set(CONFIG_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingConfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsConfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LightingConfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LocalizationConfig.cpp
 )
 
 set(CONFIG_HEADERS
@@ -21,6 +22,7 @@ set(CONFIG_HEADERS
     ${CMAKE_SOURCE_DIR}/include/config/RenderingConfig.h
     ${CMAKE_SOURCE_DIR}/include/config/EdgeSettingsConfig.h
     ${CMAKE_SOURCE_DIR}/include/config/LightingConfig.h
+    ${CMAKE_SOURCE_DIR}/include/config/LocalizationConfig.h
     ${CMAKE_SOURCE_DIR}/include/config/ThemeUIInterface.h
 )
 

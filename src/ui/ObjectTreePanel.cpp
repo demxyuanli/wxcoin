@@ -110,7 +110,7 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
         return;
     }
 
-    LOG_INF_S("Adding OCCGeometry to tree: " + geometry->getName());
+    LOG_INF_S("Adding OCCGeometry to tree: " + geometry->getName() + " (total items: " + std::to_string(m_occGeometryMap.size()) + ")");
     
     // Create item text with visibility indicator
     wxString itemText = geometry->getName();
@@ -119,9 +119,16 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
     }
     
     wxTreeItemId itemId = m_treeCtrl->AppendItem(m_rootId, itemText);
+    if (!itemId.IsOk()) {
+        LOG_ERR_S("Failed to create tree item for geometry: " + geometry->getName());
+        return;
+    }
+    
     m_occGeometryMap[geometry] = itemId;
     m_treeItemToOCCGeometry[itemId] = geometry;
     m_treeCtrl->Expand(m_rootId);
+    
+    LOG_INF_S("Successfully added OCCGeometry to tree: " + geometry->getName() + " (new total: " + std::to_string(m_occGeometryMap.size()) + ")");
 }
 
 void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)

@@ -5,6 +5,7 @@
 #include "config/ConfigManager.h"
 #include "config/LoggerConfig.h"
 #include "config/ConstantsConfig.h"
+#include "config/LocalizationConfig.h"
 #include "logger/Logger.h"
 #include "FlatFrame.h"
 #include "rendering/RenderingToolkitAPI.h"
@@ -45,6 +46,14 @@ bool MainApplication::OnInit()
         }
     }
     ConstantsConfig::getInstance().initialize(cm);
+    
+    // Initialize localization system
+    LocalizationConfig& loc = LocalizationConfig::getInstance();
+    if (!loc.initialize("zh_CN", "config")) {
+        wxMessageBox("Failed to initialize localization system", "Initialization Error", wxOK | wxICON_ERROR);
+        return false;
+    }
+    LOG_INF("Localization system initialized with language: " + loc.getCurrentLanguage(), "MainApplication");
     
     LOG_INF("Starting application", "MainApplication");
 

@@ -89,6 +89,40 @@ public:
     void setLODMode(bool roughMode);
     bool isLODRoughMode() const;
     void startLODInteraction();
+    
+    // Subdivision surface control
+    void setSubdivisionEnabled(bool enabled);
+    bool isSubdivisionEnabled() const;
+    void setSubdivisionLevel(int level);
+    int getSubdivisionLevel() const;
+    void setSubdivisionMethod(int method);
+    int getSubdivisionMethod() const;
+    void setSubdivisionCreaseAngle(double angle);
+    double getSubdivisionCreaseAngle() const;
+    
+    // Mesh smoothing control
+    void setSmoothingEnabled(bool enabled);
+    bool isSmoothingEnabled() const;
+    void setSmoothingMethod(int method);
+    int getSmoothingMethod() const;
+    void setSmoothingIterations(int iterations);
+    int getSmoothingIterations() const;
+    void setSmoothingStrength(double strength);
+    double getSmoothingStrength() const;
+    void setSmoothingCreaseAngle(double angle);
+    double getSmoothingCreaseAngle() const;
+    
+    // Advanced tessellation control
+    void setTessellationMethod(int method);
+    int getTessellationMethod() const;
+    void setTessellationQuality(int quality);
+    int getTessellationQuality() const;
+    void setFeaturePreservation(double preservation);
+    double getFeaturePreservation() const;
+    void setParallelProcessing(bool enabled);
+    bool isParallelProcessing() const;
+    void setAdaptiveMeshing(bool enabled);
+    bool isAdaptiveMeshing() const;
 
     // Callbacks
     void onSelectionChanged();
@@ -113,10 +147,25 @@ public:
     // Upgrade existing geometries - NEW
     void upgradeGeometryToAdvanced(const std::string& name);
     void upgradeAllGeometriesToAdvanced();
+    
+    // Mesh quality validation and debugging
+    void validateMeshParameters();
+    void logCurrentMeshSettings();
+    void compareMeshQuality(const std::string& geometryName);
+    std::string getMeshQualityReport() const;
+    void exportMeshStatistics(const std::string& filename);
+    bool verifyParameterApplication(const std::string& parameterName, double expectedValue);
+    
+    // Real-time parameter monitoring
+    void enableParameterMonitoring(bool enabled);
+    bool isParameterMonitoringEnabled() const;
+    void logParameterChange(const std::string& parameterName, double oldValue, double newValue);
+    
+    // Force mesh regeneration
+    void remeshAllGeometries();
 
 private:
     void initializeViewer();
-    void remeshAllGeometries();
     void onLODTimer();
     void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
 
@@ -141,6 +190,26 @@ private:
     double m_lodFineDeflection;
     int m_lodTransitionTime;
     wxTimer m_lodTimer;
+    
+    // Subdivision settings
+    bool m_subdivisionEnabled;
+    int m_subdivisionLevel;
+    int m_subdivisionMethod;
+    double m_subdivisionCreaseAngle;
+    
+    // Smoothing settings
+    bool m_smoothingEnabled;
+    int m_smoothingMethod;
+    int m_smoothingIterations;
+    double m_smoothingStrength;
+    double m_smoothingCreaseAngle;
+    
+    // Advanced tessellation settings
+    int m_tessellationMethod;
+    int m_tessellationQuality;
+    double m_featurePreservation;
+    bool m_parallelProcessing;
+    bool m_adaptiveMeshing;
 
     // Normal display settings
     bool m_showNormals;
@@ -161,5 +230,8 @@ private:
     
     // Deferred ObjectTree updates
     std::vector<std::shared_ptr<OCCGeometry>> m_pendingObjectTreeUpdates;
+    
+    // Parameter monitoring
+    bool m_parameterMonitoringEnabled;
 
 };

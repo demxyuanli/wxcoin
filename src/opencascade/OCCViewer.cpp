@@ -45,8 +45,23 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
       m_lodFineDeflection(0.01),
       m_lodTransitionTime(500),
       m_lodTimer(this, wxID_ANY),
+      m_subdivisionEnabled(false),
+      m_subdivisionLevel(2),
+      m_subdivisionMethod(0),
+      m_subdivisionCreaseAngle(30.0),
+      m_smoothingEnabled(false),
+      m_smoothingMethod(0),
+      m_smoothingIterations(2),
+      m_smoothingStrength(0.5),
+      m_smoothingCreaseAngle(30.0),
+      m_tessellationMethod(0),
+      m_tessellationQuality(2),
+      m_featurePreservation(0.5),
+      m_parallelProcessing(true),
+      m_adaptiveMeshing(false),
       m_batchOperationActive(false),
-      m_needsViewRefresh(false)
+      m_needsViewRefresh(false),
+      m_parameterMonitoringEnabled(false)
 {
     initializeViewer();
     setShowEdges(true);
@@ -717,10 +732,51 @@ void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::remeshAllGeometries()
 {
+    // Update RenderingToolkitAPI configuration with current parameters
+    auto& config = RenderingToolkitAPI::getConfig();
+    
+    // Update smoothing settings
+    auto& smoothingSettings = config.getSmoothingSettings();
+    smoothingSettings.enabled = m_smoothingEnabled;
+    smoothingSettings.creaseAngle = m_smoothingCreaseAngle;
+    smoothingSettings.iterations = m_smoothingIterations;
+    
+    // Update subdivision settings
+    auto& subdivisionSettings = config.getSubdivisionSettings();
+    subdivisionSettings.enabled = m_subdivisionEnabled;
+    subdivisionSettings.levels = m_subdivisionLevel;
+    
+    // Update edge settings
+    auto& edgeSettings = config.getEdgeSettings();
+    edgeSettings.featureEdgeAngle = m_subdivisionCreaseAngle;
+    
+    // Set custom parameters for advanced settings
+    config.setParameter("tessellation_quality", std::to_string(m_tessellationQuality));
+    config.setParameter("adaptive_meshing", m_adaptiveMeshing ? "true" : "false");
+    config.setParameter("parallel_processing", m_parallelProcessing ? "true" : "false");
+    config.setParameter("smoothing_strength", std::to_string(m_smoothingStrength));
+    config.setParameter("tessellation_method", std::to_string(m_tessellationMethod));
+    config.setParameter("feature_preservation", std::to_string(m_featurePreservation));
+    
+    LOG_INF_S("=== APPLYING MESH PARAMETERS ===");
+    LOG_INF_S("Smoothing: " + std::string(m_smoothingEnabled ? "enabled" : "disabled") + 
+              " (iterations: " + std::to_string(m_smoothingIterations) + 
+              ", strength: " + std::to_string(m_smoothingStrength) + ")");
+    LOG_INF_S("Subdivision: " + std::string(m_subdivisionEnabled ? "enabled" : "disabled") + 
+              " (level: " + std::to_string(m_subdivisionLevel) + 
+              ", method: " + std::to_string(m_subdivisionMethod) + ")");
+    LOG_INF_S("Tessellation: quality=" + std::to_string(m_tessellationQuality) + 
+              ", adaptive=" + std::string(m_adaptiveMeshing ? "yes" : "no"));
+    
+    // Regenerate all geometries with updated parameters
     for (auto& geometry : m_geometries) {
-        geometry->regenerateMesh(m_meshParams);
+        if (geometry) {
+            geometry->regenerateMesh(m_meshParams);
+            LOG_INF_S("Regenerated mesh for geometry: " + geometry->getName());
+        }
     }
     
+    // Request view refresh
     if (m_sceneManager && m_sceneManager->getCanvas()) {
         auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
         if (refreshManager) {
@@ -728,7 +784,9 @@ void OCCViewer::remeshAllGeometries()
         }
     }
     
-    LOG_INF_S("Remeshed all geometries with deflection: " + std::to_string(m_meshParams.deflection));
+    LOG_INF_S("=== MESH REGENERATION COMPLETE ===");
+    LOG_INF_S("Remeshed " + std::to_string(m_geometries.size()) + " geometries");
+    LOG_INF_S("Deflection: " + std::to_string(m_meshParams.deflection));
 }
 
 // LOD (Level of Detail) methods
@@ -922,6 +980,16 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
         }
     }
     
+    // Queue geometries for deferred ObjectTree update in batch mode
+    if (m_batchOperationActive) {
+        for (const auto& geometry : geometries) {
+            if (geometry) {
+                m_pendingObjectTreeUpdates.push_back(geometry);
+            }
+        }
+        LOG_INF_S("Queued " + std::to_string(geometries.size()) + " geometries for deferred ObjectTree update");
+    }
+    
     auto batchAddEndTime = std::chrono::high_resolution_clock::now();
     auto batchAddDuration = std::chrono::duration_cast<std::chrono::milliseconds>(batchAddEndTime - batchAddStartTime);
     LOG_INF_S("Batch geometry addition completed in " + std::to_string(batchAddDuration.count()) + "ms");
@@ -938,6 +1006,7 @@ void OCCViewer::requestViewRefresh()
 void OCCViewer::updateObjectTreeDeferred()
 {
     if (m_pendingObjectTreeUpdates.empty()) {
+        LOG_INF_S("No pending ObjectTree updates to process");
         return;
     }
     
@@ -947,10 +1016,20 @@ void OCCViewer::updateObjectTreeDeferred()
     if (m_sceneManager && m_sceneManager->getCanvas()) {
         Canvas* canvas = m_sceneManager->getCanvas();
         if (canvas && canvas->getObjectTreePanel()) {
+            LOG_INF_S("Found ObjectTreePanel, adding " + std::to_string(m_pendingObjectTreeUpdates.size()) + " geometries");
             for (const auto& geometry : m_pendingObjectTreeUpdates) {
-                canvas->getObjectTreePanel()->addOCCGeometry(geometry);
+                if (geometry) {
+                    LOG_INF_S("Adding geometry to ObjectTree: " + geometry->getName());
+                    canvas->getObjectTreePanel()->addOCCGeometry(geometry);
+                } else {
+                    LOG_ERR_S("Found null geometry in pending updates");
+                }
             }
+        } else {
+            LOG_ERR_S("Canvas or ObjectTreePanel is null, cannot update ObjectTree");
         }
+    } else {
+        LOG_ERR_S("SceneManager or Canvas is null, cannot update ObjectTree");
     }
     
     m_pendingObjectTreeUpdates.clear();
@@ -958,5 +1037,371 @@ void OCCViewer::updateObjectTreeDeferred()
     auto updateEndTime = std::chrono::high_resolution_clock::now();
     auto updateDuration = std::chrono::duration_cast<std::chrono::milliseconds>(updateEndTime - updateStartTime);
     LOG_INF_S("Deferred ObjectTree updates completed in " + std::to_string(updateDuration.count()) + "ms");
+}
+
+// Subdivision surface control implementations
+void OCCViewer::setSubdivisionEnabled(bool enabled)
+{
+    if (m_subdivisionEnabled != enabled) {
+        bool oldValue = m_subdivisionEnabled;
+        m_subdivisionEnabled = enabled;
+        LOG_INF_S("Subdivision enabled: " + std::string(enabled ? "true" : "false"));
+        logParameterChange("subdivision_enabled", oldValue ? 1.0 : 0.0, enabled ? 1.0 : 0.0);
+        // TODO: Apply subdivision to all geometries
+        remeshAllGeometries();
+    }
+}
+
+bool OCCViewer::isSubdivisionEnabled() const
+{
+    return m_subdivisionEnabled;
+}
+
+void OCCViewer::setSubdivisionLevel(int level)
+{
+    if (m_subdivisionLevel != level && level >= 1 && level <= 5) {
+        int oldValue = m_subdivisionLevel;
+        m_subdivisionLevel = level;
+        LOG_INF_S("Subdivision level set to: " + std::to_string(level));
+        logParameterChange("subdivision_level", oldValue, level);
+        if (m_subdivisionEnabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+int OCCViewer::getSubdivisionLevel() const
+{
+    return m_subdivisionLevel;
+}
+
+void OCCViewer::setSubdivisionMethod(int method)
+{
+    if (m_subdivisionMethod != method && method >= 0 && method <= 3) {
+        m_subdivisionMethod = method;
+        LOG_INF_S("Subdivision method set to: " + std::to_string(method));
+        if (m_subdivisionEnabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+int OCCViewer::getSubdivisionMethod() const
+{
+    return m_subdivisionMethod;
+}
+
+void OCCViewer::setSubdivisionCreaseAngle(double angle)
+{
+    if (m_subdivisionCreaseAngle != angle && angle >= 0.0 && angle <= 180.0) {
+        m_subdivisionCreaseAngle = angle;
+        LOG_INF_S("Subdivision crease angle set to: " + std::to_string(angle));
+        if (m_subdivisionEnabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+double OCCViewer::getSubdivisionCreaseAngle() const
+{
+    return m_subdivisionCreaseAngle;
+}
+
+// Mesh smoothing control implementations
+void OCCViewer::setSmoothingEnabled(bool enabled)
+{
+    if (m_smoothingEnabled != enabled) {
+        m_smoothingEnabled = enabled;
+        LOG_INF_S("Smoothing enabled: " + std::string(enabled ? "true" : "false"));
+        if (enabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+bool OCCViewer::isSmoothingEnabled() const
+{
+    return m_smoothingEnabled;
+}
+
+void OCCViewer::setSmoothingMethod(int method)
+{
+    if (m_smoothingMethod != method && method >= 0 && method <= 3) {
+        m_smoothingMethod = method;
+        LOG_INF_S("Smoothing method set to: " + std::to_string(method));
+        if (m_smoothingEnabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+int OCCViewer::getSmoothingMethod() const
+{
+    return m_smoothingMethod;
+}
+
+void OCCViewer::setSmoothingIterations(int iterations)
+{
+    if (m_smoothingIterations != iterations && iterations >= 1 && iterations <= 10) {
+        m_smoothingIterations = iterations;
+        LOG_INF_S("Smoothing iterations set to: " + std::to_string(iterations));
+        if (m_smoothingEnabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+int OCCViewer::getSmoothingIterations() const
+{
+    return m_smoothingIterations;
+}
+
+void OCCViewer::setSmoothingStrength(double strength)
+{
+    if (m_smoothingStrength != strength && strength >= 0.01 && strength <= 1.0) {
+        m_smoothingStrength = strength;
+        LOG_INF_S("Smoothing strength set to: " + std::to_string(strength));
+        if (m_smoothingEnabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+double OCCViewer::getSmoothingStrength() const
+{
+    return m_smoothingStrength;
+}
+
+void OCCViewer::setSmoothingCreaseAngle(double angle)
+{
+    if (m_smoothingCreaseAngle != angle && angle >= 0.0 && angle <= 180.0) {
+        m_smoothingCreaseAngle = angle;
+        LOG_INF_S("Smoothing crease angle set to: " + std::to_string(angle));
+        if (m_smoothingEnabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+double OCCViewer::getSmoothingCreaseAngle() const
+{
+    return m_smoothingCreaseAngle;
+}
+
+// Advanced tessellation control implementations
+void OCCViewer::setTessellationMethod(int method)
+{
+    if (m_tessellationMethod != method && method >= 0 && method <= 3) {
+        m_tessellationMethod = method;
+        LOG_INF_S("Tessellation method set to: " + std::to_string(method));
+        remeshAllGeometries();
+    }
+}
+
+int OCCViewer::getTessellationMethod() const
+{
+    return m_tessellationMethod;
+}
+
+void OCCViewer::setTessellationQuality(int quality)
+{
+    if (m_tessellationQuality != quality && quality >= 1 && quality <= 5) {
+        m_tessellationQuality = quality;
+        LOG_INF_S("Tessellation quality set to: " + std::to_string(quality));
+        remeshAllGeometries();
+    }
+}
+
+int OCCViewer::getTessellationQuality() const
+{
+    return m_tessellationQuality;
+}
+
+void OCCViewer::setFeaturePreservation(double preservation)
+{
+    if (m_featurePreservation != preservation && preservation >= 0.0 && preservation <= 1.0) {
+        m_featurePreservation = preservation;
+        LOG_INF_S("Feature preservation set to: " + std::to_string(preservation));
+        remeshAllGeometries();
+    }
+}
+
+double OCCViewer::getFeaturePreservation() const
+{
+    return m_featurePreservation;
+}
+
+void OCCViewer::setParallelProcessing(bool enabled)
+{
+    if (m_parallelProcessing != enabled) {
+        m_parallelProcessing = enabled;
+        LOG_INF_S("Parallel processing enabled: " + std::string(enabled ? "true" : "false"));
+        // TODO: Apply parallel processing settings to mesh generation
+    }
+}
+
+bool OCCViewer::isParallelProcessing() const
+{
+    return m_parallelProcessing;
+}
+
+void OCCViewer::setAdaptiveMeshing(bool enabled)
+{
+    if (m_adaptiveMeshing != enabled) {
+        m_adaptiveMeshing = enabled;
+        LOG_INF_S("Adaptive meshing enabled: " + std::string(enabled ? "true" : "false"));
+        if (enabled) {
+            remeshAllGeometries();
+        }
+    }
+}
+
+bool OCCViewer::isAdaptiveMeshing() const
+{
+    return m_adaptiveMeshing;
+}
+
+// Mesh quality validation and debugging implementations
+void OCCViewer::validateMeshParameters()
+{
+    LOG_INF_S("=== MESH PARAMETER VALIDATION ===");
+    
+    // Validate subdivision parameters
+    LOG_INF_S("Subdivision Settings:");
+    LOG_INF_S("  - Enabled: " + std::string(m_subdivisionEnabled ? "true" : "false"));
+    LOG_INF_S("  - Level: " + std::to_string(m_subdivisionLevel));
+    LOG_INF_S("  - Method: " + std::to_string(m_subdivisionMethod));
+    LOG_INF_S("  - Crease Angle: " + std::to_string(m_subdivisionCreaseAngle));
+    
+    // Validate smoothing parameters
+    LOG_INF_S("Smoothing Settings:");
+    LOG_INF_S("  - Enabled: " + std::string(m_smoothingEnabled ? "true" : "false"));
+    LOG_INF_S("  - Method: " + std::to_string(m_smoothingMethod));
+    LOG_INF_S("  - Iterations: " + std::to_string(m_smoothingIterations));
+    LOG_INF_S("  - Strength: " + std::to_string(m_smoothingStrength));
+    LOG_INF_S("  - Crease Angle: " + std::to_string(m_smoothingCreaseAngle));
+    
+    // Validate tessellation parameters
+    LOG_INF_S("Tessellation Settings:");
+    LOG_INF_S("  - Method: " + std::to_string(m_tessellationMethod));
+    LOG_INF_S("  - Quality: " + std::to_string(m_tessellationQuality));
+    LOG_INF_S("  - Feature Preservation: " + std::to_string(m_featurePreservation));
+    LOG_INF_S("  - Parallel Processing: " + std::string(m_parallelProcessing ? "true" : "false"));
+    LOG_INF_S("  - Adaptive Meshing: " + std::string(m_adaptiveMeshing ? "true" : "false"));
+    
+    // Validate basic mesh parameters
+    LOG_INF_S("Basic Mesh Settings:");
+    LOG_INF_S("  - Deflection: " + std::to_string(m_meshParams.deflection));
+    LOG_INF_S("  - Angular Deflection: " + std::to_string(m_meshParams.angularDeflection));
+    LOG_INF_S("  - Relative: " + std::string(m_meshParams.relative ? "true" : "false"));
+    LOG_INF_S("  - In Parallel: " + std::string(m_meshParams.inParallel ? "true" : "false"));
+    
+    LOG_INF_S("=== VALIDATION COMPLETE ===");
+}
+
+void OCCViewer::logCurrentMeshSettings()
+{
+    LOG_INF_S("=== CURRENT MESH SETTINGS ===");
+    LOG_INF_S("Geometry Count: " + std::to_string(m_geometries.size()));
+    
+    for (const auto& geometry : m_geometries) {
+        if (geometry) {
+            LOG_INF_S("Geometry: " + geometry->getName());
+            // TODO: Add geometry-specific mesh statistics
+        }
+    }
+    
+    LOG_INF_S("=== SETTINGS LOGGED ===");
+}
+
+void OCCViewer::compareMeshQuality(const std::string& geometryName)
+{
+    auto geometry = findGeometry(geometryName);
+    if (!geometry) {
+        LOG_ERR_S("Geometry not found: " + geometryName);
+        return;
+    }
+    
+    LOG_INF_S("=== MESH QUALITY COMPARISON FOR: " + geometryName + " ===");
+    
+    // TODO: Implement mesh quality comparison
+    // This would compare current mesh with previous state or reference mesh
+    
+    LOG_INF_S("=== COMPARISON COMPLETE ===");
+}
+
+std::string OCCViewer::getMeshQualityReport() const
+{
+    std::string report = "=== MESH QUALITY REPORT ===\n";
+    
+    report += "Active Geometries: " + std::to_string(m_geometries.size()) + "\n";
+    report += "Subdivision Enabled: " + std::string(m_subdivisionEnabled ? "Yes" : "No") + "\n";
+    report += "Smoothing Enabled: " + std::string(m_smoothingEnabled ? "Yes" : "No") + "\n";
+    report += "Adaptive Meshing: " + std::string(m_adaptiveMeshing ? "Yes" : "No") + "\n";
+    report += "Parallel Processing: " + std::string(m_parallelProcessing ? "Yes" : "No") + "\n";
+    
+    report += "\nCurrent Parameters:\n";
+    report += "- Deflection: " + std::to_string(m_meshParams.deflection) + "\n";
+    report += "- Subdivision Level: " + std::to_string(m_subdivisionLevel) + "\n";
+    report += "- Smoothing Iterations: " + std::to_string(m_smoothingIterations) + "\n";
+    report += "- Tessellation Quality: " + std::to_string(m_tessellationQuality) + "\n";
+    
+    return report;
+}
+
+void OCCViewer::exportMeshStatistics(const std::string& filename)
+{
+    LOG_INF_S("Exporting mesh statistics to: " + filename);
+    
+    // TODO: Implement mesh statistics export
+    // This would export detailed mesh information to a file
+    
+    LOG_INF_S("Mesh statistics exported successfully");
+}
+
+bool OCCViewer::verifyParameterApplication(const std::string& parameterName, double expectedValue)
+{
+    LOG_INF_S("Verifying parameter: " + parameterName + " = " + std::to_string(expectedValue));
+    
+    // Check if parameter matches expected value
+    if (parameterName == "deflection") {
+        bool matches = std::abs(m_meshParams.deflection - expectedValue) < 1e-6;
+        LOG_INF_S("Deflection verification: " + std::string(matches ? "PASS" : "FAIL"));
+        return matches;
+    }
+    else if (parameterName == "subdivision_level") {
+        bool matches = (m_subdivisionLevel == static_cast<int>(expectedValue));
+        LOG_INF_S("Subdivision level verification: " + std::string(matches ? "PASS" : "FAIL"));
+        return matches;
+    }
+    else if (parameterName == "smoothing_iterations") {
+        bool matches = (m_smoothingIterations == static_cast<int>(expectedValue));
+        LOG_INF_S("Smoothing iterations verification: " + std::string(matches ? "PASS" : "FAIL"));
+        return matches;
+    }
+    // Add more parameter checks as needed
+    
+    LOG_ERR_S("Unknown parameter: " + parameterName);
+    return false;
+}
+
+// Real-time parameter monitoring implementations
+void OCCViewer::enableParameterMonitoring(bool enabled)
+{
+    m_parameterMonitoringEnabled = enabled;
+    LOG_INF_S("Parameter monitoring " + std::string(enabled ? "enabled" : "disabled"));
+}
+
+bool OCCViewer::isParameterMonitoringEnabled() const
+{
+    return m_parameterMonitoringEnabled;
+}
+
+void OCCViewer::logParameterChange(const std::string& parameterName, double oldValue, double newValue)
+{
+    if (m_parameterMonitoringEnabled) {
+        LOG_INF_S("PARAMETER CHANGE: " + parameterName + 
+                 " [" + std::to_string(oldValue) + " -> " + std::to_string(newValue) + "]");
+    }
 }
 

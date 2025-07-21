@@ -112,6 +112,8 @@ private:
     void onWarmPreset(wxCommandEvent& event);
     void onCoolPreset(wxCommandEvent& event);
     void onMinimalPreset(wxCommandEvent& event);
+    void onFreeCADPreset(wxCommandEvent& event);
+    void onNavcubePreset(wxCommandEvent& event);
     void onApply(wxCommandEvent& event);
     void onOK(wxCommandEvent& event);
     void onCancel(wxCommandEvent& event);

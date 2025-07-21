@@ -2,13 +2,15 @@
 #include "OCCViewer.h"
 #include "RenderingEngine.h"
 #include "config/RenderingConfig.h"
+#include "config/LocalizationConfig.h"
+#include "logger/Logger.h"
 #include <wx/wx.h>
 #include <wx/colour.h>
 #include <wx/colordlg.h>
 #include <wx/filename.h>
 
 RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* occViewer, RenderingEngine* renderingEngine)
-    : wxDialog(parent, wxID_ANY, "Rendering Settings", wxDefaultPosition, wxSize(500, 450), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+    : wxDialog(parent, wxID_ANY, L("RenderingSettingsDialog/Title"), wxDefaultPosition, wxSize(500, 450), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_occViewer(occViewer)
     , m_renderingEngine(renderingEngine)
     , m_notebook(nullptr)
@@ -110,10 +112,10 @@ void RenderingSettingsDialog::createControls()
     createLightingModelPage();
     
     // Create dialog buttons
-    m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
-    m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
-    m_okButton = new wxButton(this, wxID_OK, "OK");
-    m_resetButton = new wxButton(this, wxID_ANY, "Reset to Defaults");
+    m_applyButton = new wxButton(this, wxID_APPLY, L("RenderingSettingsDialog/Apply"));
+    m_cancelButton = new wxButton(this, wxID_CANCEL, L("RenderingSettingsDialog/Cancel"));
+    m_okButton = new wxButton(this, wxID_OK, L("RenderingSettingsDialog/OK"));
+    m_resetButton = new wxButton(this, wxID_ANY, L("RenderingSettingsDialog/Reset"));
 }
 
 void RenderingSettingsDialog::createMaterialPage()
@@ -187,7 +189,7 @@ void RenderingSettingsDialog::createMaterialPage()
     materialSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_materialPage->SetSizer(materialSizer);
     
-    m_notebook->AddPage(m_materialPage, "Material");
+    m_notebook->AddPage(m_materialPage, L("RenderingSettingsDialog/Material"));
 }
 
 void RenderingSettingsDialog::createLightingPage()
@@ -243,7 +245,7 @@ void RenderingSettingsDialog::createLightingPage()
     lightingSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_lightingPage->SetSizer(lightingSizer);
     
-    m_notebook->AddPage(m_lightingPage, "Lighting");
+    m_notebook->AddPage(m_lightingPage, L("RenderingSettingsDialog/Lighting"));
 }
 
 void RenderingSettingsDialog::createTexturePage()
@@ -316,7 +318,7 @@ void RenderingSettingsDialog::createTexturePage()
     textureSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_texturePage->SetSizer(textureSizer);
     
-    m_notebook->AddPage(m_texturePage, "Texture");
+    m_notebook->AddPage(m_texturePage, L("RenderingSettingsDialog/Texture"));
 }
 
 void RenderingSettingsDialog::createBlendPage()
@@ -744,7 +746,7 @@ void RenderingSettingsDialog::createLightingModelPage()
     lightingModelSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_lightingModelPage->SetSizer(lightingModelSizer);
     
-    m_notebook->AddPage(m_lightingModelPage, "Lighting Model");
+    m_notebook->AddPage(m_lightingModelPage, L("RenderingSettingsDialog/LightingModel"));
 }
 
 void RenderingSettingsDialog::layoutControls()
@@ -1334,6 +1336,14 @@ void RenderingSettingsDialog::applySettings()
             geometry->setTextureEnabled(m_textureEnabled);
             geometry->setTextureImagePath(m_textureImagePath);
             geometry->setTextureMode(m_textureMode);
+            
+            // Force texture update by rebuilding Coin3D representation
+            if (m_textureEnabled && !m_textureImagePath.empty()) {
+                geometry->forceTextureUpdate();
+                LOG_INF_S("Applied texture settings to geometry: " + geometry->getName() + 
+                         " - enabled: " + std::to_string(m_textureEnabled) + 
+                         " - path: " + m_textureImagePath);
+            }
             
             // Apply blend settings
             geometry->setBlendMode(m_blendMode);

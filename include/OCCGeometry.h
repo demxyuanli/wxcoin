@@ -65,6 +65,9 @@ public:
     double getMaterialShininess() const { return m_materialShininess; }
     virtual void setMaterialShininess(double shininess);
 
+    // Set default bright material for better visibility without textures
+    virtual void setDefaultBrightMaterial();
+
     // Texture properties
     Quantity_Color getTextureColor() const { return m_textureColor; }
     virtual void setTextureColor(const Quantity_Color& color);
@@ -182,6 +185,9 @@ public:
 
     // Update settings from RenderingConfig
     virtual void updateFromRenderingConfig();
+
+    // Force texture update
+    virtual void forceTextureUpdate();
 
     // Display modes
     bool isWireframeMode() const { return m_wireframeMode; }

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <wx/gdicmn.h>
 #include <chrono>
+#include <fstream> // Added for file validation
 
 // OpenCASCADE includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -28,6 +29,7 @@
 #include <Inventor/nodes/SoTexture2.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoNode.h>
+#include <Inventor/nodes/SoTextureCoordinate2.h>
 
 // OCCGeometry base class implementation
 OCCGeometry::OCCGeometry(const std::string& name)
@@ -46,8 +48,8 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , m_rotationAngle(0.0)
     , m_scale(1.0)
     , m_color(0.8, 0.8, 0.8, Quantity_TOC_RGB)
-    , m_materialAmbientColor(0.2, 0.2, 0.2, Quantity_TOC_RGB)
-    , m_materialDiffuseColor(0.8, 0.8, 0.8, Quantity_TOC_RGB)
+    , m_materialAmbientColor(0.5, 0.5, 0.5, Quantity_TOC_RGB)
+    , m_materialDiffuseColor(0.95, 0.95, 0.95, Quantity_TOC_RGB)
     , m_materialSpecularColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
     , m_materialShininess(50.0)
     , m_textureIntensity(1.0)
@@ -66,6 +68,12 @@ OCCGeometry::OCCGeometry(const std::string& name)
     m_depthWrite = blendSettings.depthWrite;
     m_cullFace = blendSettings.cullFace;
     m_alphaThreshold = blendSettings.alphaThreshold;
+    
+    // Set default bright material for better visibility
+    setDefaultBrightMaterial();
+    
+    // Apply settings from RenderingConfig
+    updateFromRenderingConfig();
 }
 
 OCCGeometry::~OCCGeometry()
@@ -249,6 +257,23 @@ void OCCGeometry::setMaterialShininess(double shininess)
     m_coinNeedsUpdate = true;
 }
 
+void OCCGeometry::setDefaultBrightMaterial()
+{
+    // Set bright material colors for better visibility without textures
+    m_materialAmbientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
+    m_materialDiffuseColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+    m_materialSpecularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+    m_materialShininess = 30.0; // Lower shininess for more diffuse appearance
+    
+    m_coinNeedsUpdate = true;
+    
+    if (m_coinNode) {
+        // Force rebuild of Coin3D representation to update material
+        buildCoinRepresentation();
+        m_coinNode->touch();
+    }
+}
+
 // Texture property setters
 void OCCGeometry::setTextureColor(const Quantity_Color& color)
 {
@@ -266,18 +291,39 @@ void OCCGeometry::setTextureEnabled(bool enabled)
 {
     m_textureEnabled = enabled;
     m_coinNeedsUpdate = true;
+    
+    if (m_coinNode) {
+        // Force rebuild of Coin3D representation to apply texture changes
+        buildCoinRepresentation();
+        m_coinNode->touch();
+        LOG_INF_S("Texture enabled set to " + std::to_string(enabled) + " for " + m_name);
+    }
 }
 
 void OCCGeometry::setTextureImagePath(const std::string& path)
 {
     m_textureImagePath = path;
     m_coinNeedsUpdate = true;
+    
+    if (m_coinNode) {
+        // Force rebuild of Coin3D representation to apply texture changes
+        buildCoinRepresentation();
+        m_coinNode->touch();
+        LOG_INF_S("Texture image path set to " + path + " for " + m_name);
+    }
 }
 
 void OCCGeometry::setTextureMode(RenderingConfig::TextureMode mode)
 {
     m_textureMode = mode;
     m_coinNeedsUpdate = true;
+    
+    if (m_coinNode) {
+        // Force rebuild of Coin3D representation to apply texture changes
+        buildCoinRepresentation();
+        m_coinNode->touch();
+        LOG_INF_S("Texture mode set to " + std::to_string(static_cast<int>(mode)) + " for " + m_name);
+    }
 }
 
 void OCCGeometry::setBlendMode(RenderingConfig::BlendMode mode)
@@ -374,6 +420,18 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         m_coinNode->ref();
     }
 
+    // Clean up any existing texture nodes to prevent memory issues
+    // This is especially important when switching between different textures
+    if (m_coinNode) {
+        for (int i = m_coinNode->getNumChildren() - 1; i >= 0; --i) {
+            SoNode* child = m_coinNode->getChild(i);
+            if (child && (child->isOfType(SoTexture2::getClassTypeId()) || 
+                         child->isOfType(SoTextureCoordinate2::getClassTypeId()))) {
+                m_coinNode->removeChild(i);
+            }
+        }
+    }
+
     // Transform setup
     m_coinTransform = new SoTransform;
     m_coinTransform->translation.setValue(
@@ -417,31 +475,113 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         material->diffuseColor.setValue(0.0f, 0.0f, 1.0f);
         material->transparency.setValue(static_cast<float>(m_transparency));
     } else {
-        // Simplified material setup for better performance
-        material->ambientColor.setValue(
-            static_cast<float>(m_materialAmbientColor.Red()),
-            static_cast<float>(m_materialAmbientColor.Green()),
-            static_cast<float>(m_materialAmbientColor.Blue())
-        );
-        material->diffuseColor.setValue(
-            static_cast<float>(m_materialDiffuseColor.Red()),
-            static_cast<float>(m_materialDiffuseColor.Green()),
-            static_cast<float>(m_materialDiffuseColor.Blue())
-        );
-        material->specularColor.setValue(
-            static_cast<float>(m_materialSpecularColor.Red()),
-            static_cast<float>(m_materialSpecularColor.Green()),
-            static_cast<float>(m_materialSpecularColor.Blue())
-        );
+        // Convert Quantity_Color to 0-1 range for Coin3D
+        Standard_Real r, g, b;
+        m_materialAmbientColor.Values(r, g, b, Quantity_TOC_RGB);
+        material->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+        
+        m_materialDiffuseColor.Values(r, g, b, Quantity_TOC_RGB);
+        material->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+        
+        m_materialSpecularColor.Values(r, g, b, Quantity_TOC_RGB);
+        material->specularColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+        
         material->shininess.setValue(static_cast<float>(m_materialShininess / 100.0));
         material->transparency.setValue(static_cast<float>(m_transparency));
+        
+        LOG_INF_S("Material set for " + m_name + " - ambient: " + 
+                 std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
+                 " diffuse: " + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b));
     }
     m_coinNode->addChild(material);
 
-    // Simplified blend and depth settings (removed complex texture handling for performance)
+    // Texture support
+    if (m_textureEnabled && !m_textureImagePath.empty()) {
+        // Validate texture file exists
+        std::ifstream fileCheck(m_textureImagePath);
+        if (!fileCheck.good()) {
+            LOG_WRN_S("Texture file not found or invalid: " + m_textureImagePath + " for " + m_name);
+            m_textureEnabled = false; // Disable texture if file is invalid
+        } else {
+            fileCheck.close();
+            
+            try {
+                // Create texture node
+                SoTexture2* texture = new SoTexture2;
+                
+                // Load texture image - use safer approach
+                texture->filename.setValue(m_textureImagePath.c_str());
+                
+                // Set texture mode based on configuration
+                switch (m_textureMode) {
+                    case RenderingConfig::TextureMode::Replace:
+                        texture->model.setValue(SoTexture2::DECAL);
+                        break;
+                    case RenderingConfig::TextureMode::Modulate:
+                        texture->model.setValue(SoTexture2::MODULATE);
+                        break;
+                    case RenderingConfig::TextureMode::Blend:
+                        texture->model.setValue(SoTexture2::BLEND);
+                        break;
+                    case RenderingConfig::TextureMode::Decal:
+                    default:
+                        texture->model.setValue(SoTexture2::DECAL);
+                        break;
+                }
+                
+                // Set texture intensity
+                Standard_Real tr, tg, tb;
+                m_textureColor.Values(tr, tg, tb, Quantity_TOC_RGB);
+                texture->blendColor.setValue(static_cast<float>(tr),
+                                           static_cast<float>(tg),
+                                           static_cast<float>(tb));
+                
+                // Add texture node first
+                m_coinNode->addChild(texture);
+                
+                // Set texture transformation - use safer approach
+                SoTextureCoordinate2* texCoord = new SoTextureCoordinate2;
+                
+                // Use default texture coordinates (Coin3D will handle this automatically)
+                // This avoids potential memory access issues with custom coordinate arrays
+                // Coin3D will generate appropriate texture coordinates based on the geometry
+                
+                // Add texture coordinate node
+                m_coinNode->addChild(texCoord);
+                
+                LOG_INF_S("Texture applied to " + m_name + " - path: " + m_textureImagePath + 
+                         " mode: " + std::to_string(static_cast<int>(m_textureMode)));
+            } catch (const std::exception& e) {
+                LOG_ERR_S("Exception while loading texture for " + m_name + ": " + std::string(e.what()));
+                m_textureEnabled = false; // Disable texture on error
+            } catch (...) {
+                LOG_ERR_S("Unknown exception while loading texture for " + m_name);
+                m_textureEnabled = false; // Disable texture on error
+            }
+        }
+    }
+
+    // Blend and depth settings
     if (m_blendMode != RenderingConfig::BlendMode::None && m_transparency > 0.0) {
-        // Only apply blend if transparency is actually needed
+        // Apply blend settings through material transparency
         material->transparency.setValue(static_cast<float>(m_transparency));
+        
+        // Set material blend mode through hints
+        SoShapeHints* blendHints = new SoShapeHints;
+        blendHints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
+        blendHints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
+        m_coinNode->addChild(blendHints);
+        
+        LOG_INF_S("Applied blend mode " + std::to_string(static_cast<int>(m_blendMode)) + 
+                 " with transparency " + std::to_string(m_transparency) + " for " + m_name);
+    }
+
+    // Face culling settings
+    if (m_cullFace) {
+        SoShapeHints* cullHints = new SoShapeHints;
+        cullHints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
+        cullHints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
+        m_coinNode->addChild(cullHints);
     }
 
     // Add shape to scene (simplified)
@@ -1060,4 +1200,18 @@ void OCCGeometry::updateFromRenderingConfig()
               ", blend mode: " + RenderingConfig::getBlendModeName(m_blendMode) + 
               ", texture enabled: " + std::string(m_textureEnabled ? "true" : "false") + 
               ", texture mode: " + RenderingConfig::getTextureModeName(m_textureMode));
+}
+
+void OCCGeometry::forceTextureUpdate()
+{
+    if (m_textureEnabled && !m_textureImagePath.empty()) {
+        m_coinNeedsUpdate = true;
+        
+        if (m_coinNode) {
+            // Force rebuild of Coin3D representation to apply texture changes
+            buildCoinRepresentation();
+            m_coinNode->touch();
+            LOG_INF_S("Forced texture update for " + m_name + " - path: " + m_textureImagePath);
+        }
+    }
 }

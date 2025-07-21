@@ -622,8 +622,293 @@ void SceneManager::initializeRenderingConfigCallback()
 }
 
 void SceneManager::initializeLightingConfigCallback() {
-    // Implementation for lighting config callback
-    LOG_INF_S("SceneManager::initializeLightingConfigCallback called.");
+    // Register callback to update lighting when LightingConfig changes
+    LightingConfig& config = LightingConfig::getInstance();
+    config.addSettingsChangedCallback([this]() {
+        LOG_INF_S("LightingConfig callback triggered - updating scene lighting");
+        updateSceneLighting();
+    });
+    
+    LOG_INF_S("LightingConfig callback initialized in SceneManager");
+}
+
+void SceneManager::updateSceneLighting() {
+    if (!m_lightRoot) {
+        LOG_ERR_S("Cannot update lighting: Light root not available");
+        return;
+    }
+    
+    LightingConfig& config = LightingConfig::getInstance();
+    
+    // Update environment settings first
+    auto envSettings = config.getEnvironmentSettings();
+    for (int i = 0; i < m_lightRoot->getNumChildren(); ++i) {
+        SoNode* child = m_lightRoot->getChild(i);
+        if (child->isOfType(SoEnvironment::getClassTypeId())) {
+            SoEnvironment* env = static_cast<SoEnvironment*>(child);
+            
+            // Convert Quantity_Color to SbColor
+            Standard_Real r, g, b;
+            envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
+            env->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+            env->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
+            
+            LOG_INF_S("Updated environment lighting - ambient color: " + 
+                     std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
+                     ", intensity: " + std::to_string(envSettings.ambientIntensity));
+            break;
+        }
+    }
+    
+    // Get lights from configuration
+    auto lights = config.getAllLights();
+    LOG_INF_S("Processing " + std::to_string(lights.size()) + " lights from configuration");
+    
+    // Find existing lights and update them, or create new ones if needed
+    std::vector<bool> lightProcessed(lights.size(), false);
+    
+    // First pass: try to update existing lights
+    for (int i = 0; i < m_lightRoot->getNumChildren(); ++i) {
+        SoNode* child = m_lightRoot->getChild(i);
+        
+        // Skip non-light nodes
+        if (!child->isOfType(SoDirectionalLight::getClassTypeId()) &&
+            !child->isOfType(SoPointLight::getClassTypeId()) &&
+            !child->isOfType(SoSpotLight::getClassTypeId())) {
+            continue;
+        }
+        
+        // Try to match with a light from configuration
+        for (size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex) {
+            if (lightProcessed[lightIndex]) continue;
+            
+            const auto& lightSettings = lights[lightIndex];
+            if (!lightSettings.enabled) continue;
+            
+            bool matched = false;
+            
+            if (lightSettings.type == "directional" && child->isOfType(SoDirectionalLight::getClassTypeId())) {
+                SoDirectionalLight* light = static_cast<SoDirectionalLight*>(child);
+                
+                // Update light properties
+                light->direction.setValue(static_cast<float>(lightSettings.directionX),
+                                        static_cast<float>(lightSettings.directionY),
+                                        static_cast<float>(lightSettings.directionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                matched = true;
+                LOG_INF_S("Updated existing directional light: " + lightSettings.name);
+                
+            } else if (lightSettings.type == "point" && child->isOfType(SoPointLight::getClassTypeId())) {
+                SoPointLight* light = static_cast<SoPointLight*>(child);
+                
+                // Update light properties
+                light->location.setValue(static_cast<float>(lightSettings.positionX),
+                                       static_cast<float>(lightSettings.positionY),
+                                       static_cast<float>(lightSettings.positionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                matched = true;
+                LOG_INF_S("Updated existing point light: " + lightSettings.name);
+                
+            } else if (lightSettings.type == "spot" && child->isOfType(SoSpotLight::getClassTypeId())) {
+                SoSpotLight* light = static_cast<SoSpotLight*>(child);
+                
+                // Update light properties
+                light->location.setValue(static_cast<float>(lightSettings.positionX),
+                                       static_cast<float>(lightSettings.positionY),
+                                       static_cast<float>(lightSettings.positionZ));
+                light->direction.setValue(static_cast<float>(lightSettings.directionX),
+                                        static_cast<float>(lightSettings.directionY),
+                                        static_cast<float>(lightSettings.directionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                matched = true;
+                LOG_INF_S("Updated existing spot light: " + lightSettings.name);
+            }
+            
+            if (matched) {
+                lightProcessed[lightIndex] = true;
+                break;
+            }
+        }
+    }
+    
+    // Second pass: create new lights for unprocessed configurations
+    for (size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex) {
+        if (lightProcessed[lightIndex]) continue;
+        
+        const auto& lightSettings = lights[lightIndex];
+        if (!lightSettings.enabled) continue;
+        
+        try {
+            if (lightSettings.type == "directional") {
+                SoDirectionalLight* light = new SoDirectionalLight;
+                
+                // Set light properties
+                light->direction.setValue(static_cast<float>(lightSettings.directionX),
+                                        static_cast<float>(lightSettings.directionY),
+                                        static_cast<float>(lightSettings.directionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                m_lightRoot->addChild(light);
+                
+                LOG_INF_S("Created new directional light: " + lightSettings.name);
+                
+            } else if (lightSettings.type == "point") {
+                SoPointLight* light = new SoPointLight;
+                
+                // Set light properties
+                light->location.setValue(static_cast<float>(lightSettings.positionX),
+                                       static_cast<float>(lightSettings.positionY),
+                                       static_cast<float>(lightSettings.positionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                m_lightRoot->addChild(light);
+                
+                LOG_INF_S("Created new point light: " + lightSettings.name);
+                
+            } else if (lightSettings.type == "spot") {
+                SoSpotLight* light = new SoSpotLight;
+                
+                // Set light properties
+                light->location.setValue(static_cast<float>(lightSettings.positionX),
+                                       static_cast<float>(lightSettings.positionY),
+                                       static_cast<float>(lightSettings.positionZ));
+                light->direction.setValue(static_cast<float>(lightSettings.directionX),
+                                        static_cast<float>(lightSettings.directionY),
+                                        static_cast<float>(lightSettings.directionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                m_lightRoot->addChild(light);
+                
+                LOG_INF_S("Created new spot light: " + lightSettings.name);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERR_S("Exception while creating light " + lightSettings.name + ": " + std::string(e.what()));
+        } catch (...) {
+            LOG_ERR_S("Unknown exception while creating light " + lightSettings.name);
+        }
+    }
+    
+    // Disable lights that are no longer in configuration
+    for (int i = 0; i < m_lightRoot->getNumChildren(); ++i) {
+        SoNode* child = m_lightRoot->getChild(i);
+        
+        if (child->isOfType(SoDirectionalLight::getClassTypeId())) {
+            SoDirectionalLight* light = static_cast<SoDirectionalLight*>(child);
+            bool found = false;
+            
+            for (const auto& lightSettings : lights) {
+                if (lightSettings.type == "directional" && lightSettings.enabled) {
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found) {
+                light->on.setValue(false);
+                LOG_INF_S("Disabled unused directional light");
+            }
+            
+        } else if (child->isOfType(SoPointLight::getClassTypeId())) {
+            SoPointLight* light = static_cast<SoPointLight*>(child);
+            bool found = false;
+            
+            for (const auto& lightSettings : lights) {
+                if (lightSettings.type == "point" && lightSettings.enabled) {
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found) {
+                light->on.setValue(false);
+                LOG_INF_S("Disabled unused point light");
+            }
+            
+        } else if (child->isOfType(SoSpotLight::getClassTypeId())) {
+            SoSpotLight* light = static_cast<SoSpotLight*>(child);
+            bool found = false;
+            
+            for (const auto& lightSettings : lights) {
+                if (lightSettings.type == "spot" && lightSettings.enabled) {
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found) {
+                light->on.setValue(false);
+                LOG_INF_S("Disabled unused spot light");
+            }
+        }
+    }
+    
+    // Force scene update
+    if (m_sceneRoot) {
+        m_sceneRoot->touch();
+        LOG_INF_S("Touched scene root to force lighting update");
+    }
+    
+    // Force update all geometries to apply new lighting
+    if (m_canvas && m_canvas->getOCCViewer()) {
+        OCCViewer* viewer = m_canvas->getOCCViewer();
+        auto allGeometries = viewer->getAllGeometry();
+        LOG_INF_S("Forcing update of " + std::to_string(allGeometries.size()) + " geometries for lighting changes");
+        
+        for (auto& geometry : allGeometries) {
+            if (geometry) {
+                // Force rebuild by updating material properties
+                geometry->setMaterialAmbientColor(geometry->getMaterialAmbientColor());
+                geometry->setMaterialDiffuseColor(geometry->getMaterialDiffuseColor());
+                geometry->setMaterialSpecularColor(geometry->getMaterialSpecularColor());
+                LOG_INF_S("Forced material update for geometry: " + geometry->getName());
+            }
+        }
+    }
+    
+    // Request refresh
+    if (m_canvas) {
+        if (m_canvas->getRefreshManager()) {
+            m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::LIGHTING_CHANGED, true);
+        } else {
+            m_canvas->Refresh(true);
+        }
+        LOG_INF_S("Requested scene refresh for lighting changes");
+    }
+    
+    LOG_INF_S("Scene lighting updated successfully");
 }
 
 // Culling system integration methods

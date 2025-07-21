@@ -1,6 +1,7 @@
 #include "TransparencyDialog.h"
 #include "OCCViewer.h"
 #include "OCCGeometry.h"
+#include "config/LocalizationConfig.h"
 #include "logger/Logger.h"
 #include <wx/statbox.h>
 #include <wx/msgdlg.h>
@@ -8,7 +9,7 @@
 
 TransparencyDialog::TransparencyDialog(wxWindow* parent, OCCViewer* occViewer,
                                      const std::vector<std::shared_ptr<OCCGeometry>>& selectedGeometries)
-    : wxDialog(parent, wxID_ANY, "Set Transparency", wxDefaultPosition, wxSize(400, 300))
+    : wxDialog(parent, wxID_ANY, L("TransparencyDialog/Title"), wxDefaultPosition, wxSize(400, 300))
     , m_occViewer(occViewer)
     , m_selectedGeometries(selectedGeometries)
     , m_transparencySlider(nullptr)
@@ -76,10 +77,10 @@ void TransparencyDialog::layoutControls()
     mainSizer->Add(m_infoText, 0, wxALL | wxEXPAND, 10);
     
     // Transparency control section
-    wxStaticBox* transparencyBox = new wxStaticBox(this, wxID_ANY, "Transparency Settings");
+    wxStaticBox* transparencyBox = new wxStaticBox(this, wxID_ANY, L("TransparencyDialog/Transparency"));
     wxStaticBoxSizer* transparencySizer = new wxStaticBoxSizer(transparencyBox, wxVERTICAL);
     
-    transparencySizer->Add(new wxStaticText(this, wxID_ANY, "Transparency (0% = Opaque, 100% = Transparent):"), 
+    transparencySizer->Add(new wxStaticText(this, wxID_ANY, L("TransparencyDialog/Transparency") + " (0% = Opaque, 100% = Transparent):"), 
                           0, wxALL, 5);
     transparencySizer->Add(m_transparencySlider, 0, wxEXPAND | wxALL, 5);
     
@@ -94,9 +95,9 @@ void TransparencyDialog::layoutControls()
     
     // Button section
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(new wxButton(this, wxID_APPLY, "Apply"), 0, wxRIGHT, 5);
-    buttonSizer->Add(new wxButton(this, wxID_OK, "OK"), 0, wxRIGHT, 5);
-    buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, 0);
+    buttonSizer->Add(new wxButton(this, wxID_APPLY, L("TransparencyDialog/Apply")), 0, wxRIGHT, 5);
+    buttonSizer->Add(new wxButton(this, wxID_OK, L("TransparencyDialog/OK")), 0, wxRIGHT, 5);
+    buttonSizer->Add(new wxButton(this, wxID_CANCEL, L("TransparencyDialog/Cancel")), 0, 0);
     
     mainSizer->Add(buttonSizer, 0, wxALIGN_RIGHT | wxALL, 10);
     

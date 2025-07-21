@@ -22,6 +22,7 @@ public:
         CAMERA_MOVED,
         SELECTION_CHANGED,
         RENDERING_CHANGED,
+        LIGHTING_CHANGED,
         MANUAL_REQUEST
     };
     

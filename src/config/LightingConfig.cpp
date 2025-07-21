@@ -40,80 +40,50 @@ void LightingConfig::initializeDefaultLights()
 {
     m_lights.clear();
     
-    // Enhanced lighting setup based on NavigationCube configuration
+    // FreeCAD-style three-light model
+    // Based on FreeCAD's classic lighting setup with main, fill, and back lights
     
-    // Enhanced lighting setup with increased intensity for better visibility
-    // Main directional light (increased intensity)
+    // Main light (key light) - primary directional light
     LightSettings mainLight;
     mainLight.name = "Main Light";
     mainLight.type = "directional";
-    mainLight.directionX = 0.7; // More distant main light
-    mainLight.directionY = 0.7; // More distant main light
-    mainLight.directionZ = -0.7; // More distant main light
-    mainLight.color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-    mainLight.intensity = 1.2; // Increased intensity for better visibility
+    mainLight.enabled = true;
+    mainLight.directionX = 0.5;   // From top-right-front
+    mainLight.directionY = 0.5;   // From top-right-front
+    mainLight.directionZ = -0.7;  // From top-right-front
+    mainLight.color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB); // Pure white
+    mainLight.intensity = 1.0;    // Full intensity for main light
     m_lights.push_back(mainLight);
     
-    // Fill light (increased intensity)
+    // Fill light - secondary directional light to reduce shadows
     LightSettings fillLight;
     fillLight.name = "Fill Light";
     fillLight.type = "directional";
-    fillLight.directionX = -0.7; // More distant fill light
-    fillLight.directionY = -0.7; // More distant fill light
-    fillLight.directionZ = 0.7;  // More distant fill light
-    fillLight.color = Quantity_Color(0.95, 0.95, 1.0, Quantity_TOC_RGB); // Slightly cool
-    fillLight.intensity = 0.9; // Increased intensity for better visibility
+    fillLight.enabled = true;
+    fillLight.directionX = -0.3;  // From opposite side of main light
+    fillLight.directionY = -0.3;  // From opposite side of main light
+    fillLight.directionZ = -0.9;  // From opposite side of main light
+    fillLight.color = Quantity_Color(0.9, 0.9, 1.0, Quantity_TOC_RGB); // Slightly cool white
+    fillLight.intensity = 0.4;    // Lower intensity to avoid washing out
     m_lights.push_back(fillLight);
     
-    // Side light (increased intensity)
-    LightSettings sideLight;
-    sideLight.name = "Side Light";
-    sideLight.type = "directional";
-    sideLight.directionX = -0.9; // More distant side light
-    sideLight.directionY = 0.3;  // More distant side light
-    sideLight.directionZ = -0.4; // More distant side light
-    sideLight.color = Quantity_Color(1.0, 1.0, 0.95, Quantity_TOC_RGB); // Slightly warm
-    sideLight.intensity = 0.8; // Increased intensity for better visibility
-    m_lights.push_back(sideLight);
-    
-    // Back light (increased intensity)
+    // Back light (rim light) - creates edge highlights and depth
     LightSettings backLight;
     backLight.name = "Back Light";
     backLight.type = "directional";
-    backLight.directionX = 0.2; // More distant back light, slightly offset
-    backLight.directionY = 0.2; // More distant back light, slightly offset
-    backLight.directionZ = 0.9; // More distant back light, slightly offset
-    backLight.color = Quantity_Color(0.9, 0.9, 1.0, Quantity_TOC_RGB); // Slightly cool
-    backLight.intensity = 0.6; // Increased intensity for better visibility
+    backLight.enabled = true;
+    backLight.directionX = 0.0;   // From behind
+    backLight.directionY = 0.0;   // From behind
+    backLight.directionZ = 1.0;   // From behind
+    backLight.color = Quantity_Color(0.8, 0.8, 1.0, Quantity_TOC_RGB); // Cool white
+    backLight.intensity = 0.3;    // Subtle intensity for edge definition
     m_lights.push_back(backLight);
     
-    // Bottom light (increased intensity)
-    LightSettings bottomLight;
-    bottomLight.name = "Bottom Light";
-    bottomLight.type = "directional";
-    bottomLight.directionX = 0.5;  // More distant bottom light
-    bottomLight.directionY = -0.9; // More distant bottom light
-    bottomLight.directionZ = 0.3;  // More distant bottom light
-    bottomLight.color = Quantity_Color(1.0, 0.95, 0.95, Quantity_TOC_RGB); // Slightly warm
-    bottomLight.intensity = 0.5; // Increased intensity for better visibility
-    m_lights.push_back(bottomLight);
-    
-    // Top side light (increased intensity)
-    LightSettings topSideLight;
-    topSideLight.name = "Top Side Light";
-    topSideLight.type = "directional";
-    topSideLight.directionX = 0.9; // More distant top side light
-    topSideLight.directionY = 0.4; // More distant top side light
-    topSideLight.directionZ = 0.4; // More distant top side light
-    topSideLight.color = Quantity_Color(0.95, 1.0, 0.95, Quantity_TOC_RGB); // Slightly cool
-    topSideLight.intensity = 0.5; // Increased intensity for better visibility
-    m_lights.push_back(topSideLight);
-    
-    // Environment settings (enhanced from NavigationCube settings)
+    // Environment settings - balanced ambient lighting
     m_environmentSettings.name = "Environment";
     m_environmentSettings.type = "ambient";
-    m_environmentSettings.ambientColor = Quantity_Color(0.8, 0.8, 0.85, Quantity_TOC_RGB); // Brighter and more neutral like NavigationCube
-    m_environmentSettings.ambientIntensity = 1.0;
+    m_environmentSettings.ambientColor = Quantity_Color(0.4, 0.4, 0.4, Quantity_TOC_RGB); // Neutral gray
+    m_environmentSettings.ambientIntensity = 0.3; // Moderate ambient for natural look
 }
 
 bool LightingConfig::loadFromFile(const std::string& filename)
@@ -655,6 +625,58 @@ void LightingConfig::applyMinimalPreset()
     notifySettingsChanged();
 }
 
+void LightingConfig::applyFreeCADThreeLightPreset()
+{
+    m_lights.clear();
+    
+    // FreeCAD Classic Three-Light Model
+    // This is the standard lighting setup used in FreeCAD for optimal 3D visualization
+    
+    // 1. Main Light (Key Light) - Primary illumination
+    LightSettings mainLight;
+    mainLight.name = "Main Light";
+    mainLight.type = "directional";
+    mainLight.enabled = true;
+    mainLight.directionX = 0.577;  // Normalized direction (1/sqrt(3))
+    mainLight.directionY = 0.577;  // Normalized direction (1/sqrt(3))
+    mainLight.directionZ = -0.577; // Normalized direction (1/sqrt(3))
+    mainLight.color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB); // Pure white
+    mainLight.intensity = 1.0;     // Full intensity
+    m_lights.push_back(mainLight);
+    
+    // 2. Fill Light - Reduces harsh shadows
+    LightSettings fillLight;
+    fillLight.name = "Fill Light";
+    fillLight.type = "directional";
+    fillLight.enabled = true;
+    fillLight.directionX = -0.408; // Opposite side from main light
+    fillLight.directionY = -0.408; // Opposite side from main light
+    fillLight.directionZ = -0.816; // Opposite side from main light
+    fillLight.color = Quantity_Color(0.85, 0.85, 1.0, Quantity_TOC_RGB); // Slightly cool
+    fillLight.intensity = 0.35;    // Lower intensity to avoid washing out
+    m_lights.push_back(fillLight);
+    
+    // 3. Back Light (Rim Light) - Creates edge definition
+    LightSettings backLight;
+    backLight.name = "Back Light";
+    backLight.type = "directional";
+    backLight.enabled = true;
+    backLight.directionX = 0.0;    // From directly behind
+    backLight.directionY = 0.0;    // From directly behind
+    backLight.directionZ = 1.0;    // From directly behind
+    backLight.color = Quantity_Color(0.75, 0.75, 1.0, Quantity_TOC_RGB); // Cool white
+    backLight.intensity = 0.25;    // Subtle for edge definition
+    m_lights.push_back(backLight);
+    
+    // Environment settings - Balanced ambient
+    m_environmentSettings.ambientColor = Quantity_Color(0.35, 0.35, 0.35, Quantity_TOC_RGB); // Neutral gray
+    m_environmentSettings.ambientIntensity = 0.25; // Moderate ambient
+    
+    notifySettingsChanged();
+    
+    LOG_INF_S("Applied FreeCAD Three-Light Model preset");
+}
+
 void LightingConfig::applyNavigationCubePreset()
 {
     m_lights.clear();
@@ -736,7 +758,7 @@ void LightingConfig::applyNavigationCubePreset()
 
 std::vector<std::string> LightingConfig::getAvailablePresets() const
 {
-    return {"Studio", "Outdoor", "Dramatic", "Warm", "Cool", "Minimal", "NavigationCube"};
+    return {"Studio", "Outdoor", "Dramatic", "Warm", "Cool", "Minimal", "FreeCAD Three-Light", "NavigationCube"};
 }
 
 void LightingConfig::resetToDefaults()

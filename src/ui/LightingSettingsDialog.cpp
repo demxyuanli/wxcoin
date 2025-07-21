@@ -1,5 +1,6 @@
 #include "LightingSettingsDialog.h"
 #include "config/LightingConfig.h"
+#include "config/LocalizationConfig.h"
 #include "SceneManager.h"
 #include "Logger.h"
 #include <wx/notebook.h>
@@ -42,13 +43,13 @@ LightingSettingsDialog::LightingSettingsDialog(wxWindow* parent, wxWindowID id, 
     
     // Create pages
     createEnvironmentPage();
-    m_notebook->AddPage(m_environmentPage, "Environment Lighting", true);
+    m_notebook->AddPage(m_environmentPage, L("LightingSettingsDialog/EnvironmentLighting"), true);
     
     createLightsPage();
-    m_notebook->AddPage(m_lightsPage, "Light Management", false);
+    m_notebook->AddPage(m_lightsPage, L("LightingSettingsDialog/LightManagement"), false);
     
     createPresetsPage();
-    m_notebook->AddPage(m_presetsPage, "Presets", false);
+    m_notebook->AddPage(m_presetsPage, L("LightingSettingsDialog/Presets"), false);
     
     mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 5);
     
@@ -63,7 +64,7 @@ LightingSettingsDialog::LightingSettingsDialog(wxWindow* parent, wxWindowID id, 
     updateLightList();
     
     // Initialize current preset label
-    m_currentPresetLabel->SetLabel("No preset applied");
+    m_currentPresetLabel->SetLabel(L("LightingSettingsDialog/NoPresetApplied"));
 }
 
 LightingSettingsDialog::~LightingSettingsDialog()
@@ -257,7 +258,7 @@ void LightingSettingsDialog::createPresetsPage()
     sizer->Add(descLabel, 0, wxALIGN_CENTER | wxALL, 10);
     
     // Create a grid of preset buttons
-    wxGridSizer* gridSizer = new wxGridSizer(2, 3, 10, 10);
+    wxGridSizer* gridSizer = new wxGridSizer(2, 4, 10, 10);
     
     // Studio Lighting
     wxButton* studioButton = new wxButton(m_presetsPage, wxID_ANY, "Studio\nLighting", wxDefaultPosition, wxSize(150, 80));
@@ -295,6 +296,18 @@ void LightingSettingsDialog::createPresetsPage()
     minimalButton->SetToolTip("Simple, minimal lighting with subtle shadows");
     gridSizer->Add(minimalButton, 0, wxEXPAND);
     
+    // FreeCAD Three-Light Model
+    wxButton* freecadButton = new wxButton(m_presetsPage, wxID_ANY, "FreeCAD\nThree-Light", wxDefaultPosition, wxSize(150, 80));
+    freecadButton->SetBackgroundColour(wxColour(230, 255, 230)); // Light green
+    freecadButton->SetToolTip("Classic FreeCAD three-light model: main, fill, and back lights");
+    gridSizer->Add(freecadButton, 0, wxEXPAND);
+    
+    // NavigationCube Lighting
+    wxButton* navcubeButton = new wxButton(m_presetsPage, wxID_ANY, "Navigation\nCube", wxDefaultPosition, wxSize(150, 80));
+    navcubeButton->SetBackgroundColour(wxColour(255, 230, 255)); // Light purple
+    navcubeButton->SetToolTip("NavigationCube-style lighting with multiple directional lights");
+    gridSizer->Add(navcubeButton, 0, wxEXPAND);
+    
     sizer->Add(gridSizer, 0, wxALIGN_CENTER | wxALL, 20);
     
     // Add some spacing
@@ -315,16 +328,18 @@ void LightingSettingsDialog::createPresetsPage()
     warmButton->Bind(wxEVT_BUTTON, &LightingSettingsDialog::onWarmPreset, this);
     coolButton->Bind(wxEVT_BUTTON, &LightingSettingsDialog::onCoolPreset, this);
     minimalButton->Bind(wxEVT_BUTTON, &LightingSettingsDialog::onMinimalPreset, this);
+    freecadButton->Bind(wxEVT_BUTTON, &LightingSettingsDialog::onFreeCADPreset, this);
+    navcubeButton->Bind(wxEVT_BUTTON, &LightingSettingsDialog::onNavcubePreset, this);
 }
 
 void LightingSettingsDialog::createButtons()
 {
     m_buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     
-    m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
-    m_okButton = new wxButton(this, wxID_OK, "OK");
-    m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
-    m_resetButton = new wxButton(this, wxID_RESET, "Reset");
+    m_applyButton = new wxButton(this, wxID_APPLY, L("LightingSettingsDialog/Apply"));
+    m_okButton = new wxButton(this, wxID_OK, L("LightingSettingsDialog/OK"));
+    m_cancelButton = new wxButton(this, wxID_CANCEL, L("LightingSettingsDialog/Cancel"));
+    m_resetButton = new wxButton(this, wxID_RESET, L("LightingSettingsDialog/Reset"));
     
     m_buttonSizer->Add(m_applyButton, 0, wxALL, 5);
     m_buttonSizer->AddStretchSpacer();
@@ -633,6 +648,16 @@ void LightingSettingsDialog::onMinimalPreset(wxCommandEvent& event)
     applyPresetAndUpdate("Minimal", "Simple, minimal lighting with subtle shadows");
 }
 
+void LightingSettingsDialog::onFreeCADPreset(wxCommandEvent& event)
+{
+    applyPresetAndUpdate("FreeCAD", "Classic FreeCAD three-light model: main, fill, and back lights");
+}
+
+void LightingSettingsDialog::onNavcubePreset(wxCommandEvent& event)
+{
+    applyPresetAndUpdate("Navcube", "NavigationCube-style lighting with multiple directional lights");
+}
+
 void LightingSettingsDialog::applyPresetAndUpdate(const std::string& presetName, const std::string& description)
 {
     // Apply the preset
@@ -648,6 +673,10 @@ void LightingSettingsDialog::applyPresetAndUpdate(const std::string& presetName,
         m_config.applyCoolPreset();
     } else if (presetName == "Minimal") {
         m_config.applyMinimalPreset();
+    } else if (presetName == "FreeCAD") {
+        m_config.applyFreeCADThreeLightPreset();
+    } else if (presetName == "Navcube") {
+        m_config.applyNavigationCubePreset();
     }
     
     // Update the UI to reflect the new settings

@@ -4,6 +4,8 @@
 #include <Inventor/nodes/SoCamera.h>
 #include <wx/frame.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
+#include <Inventor/nodes/SoPointLight.h>
+#include <Inventor/nodes/SoSpotLight.h>
 #include <memory>
 #include "rendering/RenderingToolkitAPI.h"
 
@@ -50,6 +52,9 @@ public:
     
     // Initialize LightingConfig callback
     void initializeLightingConfigCallback();
+    
+    // Update scene lighting from configuration
+    void updateSceneLighting();
 
     // Culling system integration
     void updateCulling();

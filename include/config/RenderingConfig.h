@@ -19,9 +19,9 @@ public:
         double transparency;
         
         MaterialSettings() 
-            : ambientColor(0.2, 0.2, 0.2, Quantity_TOC_RGB)
-            , diffuseColor(0.68, 0.85, 1.0, Quantity_TOC_RGB)  // Light green as before
-            , specularColor(0.9, 0.9, 0.9, Quantity_TOC_RGB)
+            : ambientColor(0.4, 0.4, 0.4, Quantity_TOC_RGB)
+            , diffuseColor(0.95, 0.95, 0.95, Quantity_TOC_RGB)  // Bright white for better visibility
+            , specularColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
             , shininess(30.0)
             , transparency(0.0)
         {}
@@ -44,11 +44,11 @@ public:
         double ambientIntensity;
         
         LightingSettings()
-            : ambientColor(0.3, 0.3, 0.3, Quantity_TOC_RGB)
+            : ambientColor(0.5, 0.5, 0.5, Quantity_TOC_RGB)
             , diffuseColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
             , specularColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
-            , intensity(0.8)
-            , ambientIntensity(0.3)
+            , intensity(1.0)
+            , ambientIntensity(0.6)
         {}
     };
     

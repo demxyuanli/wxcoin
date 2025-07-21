@@ -7,6 +7,7 @@
 #include "InputManager.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
+#include "config/LocalizationConfig.h"
 #include "logger/Logger.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -51,8 +52,8 @@ PositionDialog::PositionDialog(wxWindow* parent, const wxString& title, PickingA
 
     // OK and Cancel buttons
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_okButton = new wxButton(this, wxID_OK, "OK");
-    m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+    m_okButton = new wxButton(this, wxID_OK, L("PositionDialog/OK"));
+    m_cancelButton = new wxButton(this, wxID_CANCEL, L("PositionDialog/Cancel"));
     buttonSizer->Add(m_okButton, 0, wxALL, 5);
     buttonSizer->Add(m_cancelButton, 0, wxALL, 5);
 
@@ -67,7 +68,7 @@ PositionDialog::PositionDialog(wxWindow* parent, const wxString& title, PickingA
 void PositionDialog::CreatePositionTab()
 {
     m_positionPanel = new wxPanel(m_notebook);
-    m_notebook->AddPage(m_positionPanel, "Position", true);
+    m_notebook->AddPage(m_positionPanel, L("PositionDialog/Position"), true);
     
     wxBoxSizer* positionSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -75,24 +76,24 @@ void PositionDialog::CreatePositionTab()
     wxFlexGridSizer* gridSizer = new wxFlexGridSizer(4, 2, 5, 10);
 
     // X coordinate
-    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, "X:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, L("PositionDialog/X") + ":"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
     m_xTextCtrl = new wxTextCtrl(m_positionPanel, wxID_ANY, "0.0");
     gridSizer->Add(m_xTextCtrl, 0, wxEXPAND);
 
     // Y coordinate
-    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, "Y:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, L("PositionDialog/Y") + ":"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
     m_yTextCtrl = new wxTextCtrl(m_positionPanel, wxID_ANY, "0.0");
     gridSizer->Add(m_yTextCtrl, 0, wxEXPAND);
 
     // Z coordinate
-    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, "Z:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, L("PositionDialog/Z") + ":"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
     m_zTextCtrl = new wxTextCtrl(m_positionPanel, wxID_ANY, "0.0");
     gridSizer->Add(m_zTextCtrl, 0, wxEXPAND);
 
     // Reference Z coordinate for picking
-    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, "Reference Z:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
+    gridSizer->Add(new wxStaticText(m_positionPanel, wxID_ANY, L("PositionDialog/ReferenceZ") + ":"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
     m_referenceZTextCtrl = new wxTextCtrl(m_positionPanel, ID_REFERENCE_Z_TEXT, "0.0");
-    m_referenceZTextCtrl->SetToolTip("Z coordinate plane for mouse picking");
+    m_referenceZTextCtrl->SetToolTip(L("PositionDialog/ReferenceZTooltip"));
     gridSizer->Add(m_referenceZTextCtrl, 0, wxEXPAND);
 
     positionSizer->Add(gridSizer, 0, wxEXPAND | wxALL, 10);
@@ -112,7 +113,7 @@ void PositionDialog::CreatePositionTab()
 void PositionDialog::CreateParametersTab()
 {
     m_parametersPanel = new wxPanel(m_notebook);
-    m_notebook->AddPage(m_parametersPanel, "Parameters", false);
+    m_notebook->AddPage(m_parametersPanel, L("PositionDialog/Parameters"), false);
     
     wxBoxSizer* parametersSizer = new wxBoxSizer(wxVERTICAL);
     
