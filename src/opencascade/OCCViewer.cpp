@@ -1405,3 +1405,95 @@ void OCCViewer::logParameterChange(const std::string& parameterName, double oldV
     }
 }
 
+// DisplayFlags setters
+void OCCViewer::setShowEdgesFlag(bool flag) {
+    for (auto& geometry : m_geometries) {
+        if (geometry) geometry->setShowEdges(flag);
+    }
+    updateDisplay();
+}
+void OCCViewer::setShowWireframeFlag(bool flag) {
+    for (auto& geometry : m_geometries) {
+        if (geometry) geometry->setShowWireframe(flag);
+    }
+    updateDisplay();
+}
+void OCCViewer::setShowFacesFlag(bool flag) {
+    m_displayFlags.showFaces = flag;
+    updateDisplay();
+}
+void OCCViewer::setShowNormalsFlag(bool flag) {
+    m_displayFlags.showNormals = flag;
+    updateDisplay();
+}
+bool OCCViewer::isShowEdgesFlag() const { return m_displayFlags.showEdges; }
+bool OCCViewer::isShowWireframeFlag() const { return m_displayFlags.showWireframe; }
+bool OCCViewer::isShowFacesFlag() const { return m_displayFlags.showFaces; }
+bool OCCViewer::isShowNormalsFlag() const { return m_displayFlags.showNormals; }
+
+void OCCViewer::updateDisplay() {
+    // Clear scene or prepare for redraw if needed
+    // ...
+    if (isShowFacesFlag()) {
+        drawFaces();
+    }
+    if (isShowWireframeFlag()) {
+        drawWireframe();
+    }
+    if (isShowEdgesFlag()) {
+        drawEdges();
+    }
+    if (isShowNormalsFlag()) {
+        drawNormals();
+    }
+    // Trigger a canvas refresh if needed
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        m_sceneManager->getCanvas()->Refresh();
+    }
+}
+
+// Stub implementations for draw methods
+void OCCViewer::drawFaces() {
+    // Render all geometry faces/solids
+    for (const auto& geometry : m_geometries) {
+        if (!geometry || !geometry->isVisible()) continue;
+        SoSeparator* coinNode = geometry->getCoinNode();
+        if (coinNode && m_occRoot) {
+            // Ensure face display is enabled for this geometry
+            geometry->setFaceDisplay(true);
+            // Add to scene if not already present
+            if (!m_occRoot->findChild(coinNode)) {
+                m_occRoot->addChild(coinNode);
+            }
+        }
+    }
+}
+
+void OCCViewer::drawWireframe() {
+    // Render all geometry in wireframe mode (overlay)
+    for (const auto& geometry : m_geometries) {
+        if (!geometry || !geometry->isVisible()) continue;
+        geometry->setWireframeOverlay(true);
+    }
+}
+
+void OCCViewer::drawEdges() {
+    // Render edges: prefer original edges, otherwise feature edges
+    for (const auto& geometry : m_geometries) {
+        if (!geometry || !geometry->isVisible()) continue;
+        if (geometry->hasOriginalEdges()) {
+            geometry->setEdgeDisplay(true);
+        } else {
+            geometry->setFeatureEdgeDisplay(true);
+        }
+    }
+}
+
+void OCCViewer::drawNormals() {
+    // Render normals for all visible geometry
+    for (const auto& geometry : m_geometries) {
+        if (!geometry || !geometry->isVisible()) continue;
+        geometry->setNormalDisplay(true);
+    }
+}
+

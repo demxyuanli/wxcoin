@@ -227,6 +227,13 @@ public:
     bool GetProfileSpaceUserVisible() const { return m_profileSpaceUserVisible; }
     void SetProfileSpaceUserVisible(bool visible) { m_profileSpaceUserVisible = visible; }
 
+    // Theme refresh method
+    void RefreshTheme();
+
+    // --- Content Visibility Management ---
+    void ShowAllContent();
+    void HideAllContentExceptBarSpace();
+
 private:
     // Core managers - centralized logic
     std::unique_ptr<FlatUIBarStateManager> m_stateManager;
@@ -254,8 +261,6 @@ private:
     void HideTemporarilyShownPage();
     
     // Legacy methods - kept for compatibility
-    void ShowAllContent();
-    void HideAllContentExceptBarSpace();
     void UpdateButtonVisibility();
 
     // --- Child Component Controls ---

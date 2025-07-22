@@ -23,6 +23,9 @@ public:
     void CalculateButtonRect(const wxSize& controlSize);
     void OnHomeMenuClosed(FlatUIHomeMenu* closedMenu); // Method to be called by FlatUIHomeMenu
 
+    // Theme refresh method
+    void RefreshTheme();
+
     void SetHomeMenu(FlatUIHomeMenu* menu);
     FlatUIHomeMenu* GetActiveHomeMenu() const { return m_activeHomeMenu; }
 

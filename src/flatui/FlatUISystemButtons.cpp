@@ -16,13 +16,22 @@ FlatUISystemButtons::FlatUISystemButtons(wxWindow* parent, wxWindowID id)
     
     SetDoubleBuffered(true);
     
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
+    
     Bind(wxEVT_PAINT, &FlatUISystemButtons::OnPaint, this);
     Bind(wxEVT_LEFT_DOWN, &FlatUISystemButtons::OnMouseDown, this);
     Bind(wxEVT_MOTION, &FlatUISystemButtons::OnMouseMove, this);
     Bind(wxEVT_LEAVE_WINDOW, &FlatUISystemButtons::OnMouseLeave, this);
 }
 
-FlatUISystemButtons::~FlatUISystemButtons() {}
+FlatUISystemButtons::~FlatUISystemButtons() 
+{
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
+}
 
 int FlatUISystemButtons::GetRequiredWidth() const {
     return GetAllRequiredWidth(m_buttonWidth, m_buttonSpacing);
@@ -264,4 +273,21 @@ void FlatUISystemButtons::OnMouseLeave(wxMouseEvent& evt)
         Update();
     }
     evt.Skip();
+}
+
+void FlatUISystemButtons::RefreshTheme()
+{
+    // Update theme-based settings
+    m_buttonWidth = CFG_INT("SystemButtonWidth");
+    m_buttonSpacing = CFG_INT("SystemButtonSpacing");
+    
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    
+    // Recalculate button positions
+    SetButtonRects(m_minimizeButtonRect, m_maximizeButtonRect, m_closeButtonRect);
+    
+    // Force refresh to redraw with new theme colors
+    Refresh(true);
+    Update();
 }

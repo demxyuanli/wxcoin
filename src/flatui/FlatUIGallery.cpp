@@ -28,6 +28,11 @@ FlatUIGallery::FlatUIGallery(FlatUIPanel* parent)
     SetDoubleBuffered(true);
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
+
     m_galleryBgColour     = CFG_COLOUR("ActBarBackgroundColour");
     m_galleryBorderColour = CFG_COLOUR("ActBarBackgroundColour");
     m_itemSpacing         = CFG_INT("GalleryItemSpacing");
@@ -46,6 +51,7 @@ FlatUIGallery::FlatUIGallery(FlatUIPanel* parent)
 
 FlatUIGallery::~FlatUIGallery()
 {
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatUIGallery::AddItem(const wxBitmap& bitmap, int id)
@@ -470,4 +476,30 @@ void FlatUIGallery::SetSelectionEnabled(bool enabled)
         }
         Refresh();
     }
+}
+
+void FlatUIGallery::RefreshTheme()
+{
+    // Update all theme-based colors and settings
+    m_itemBgColour = CFG_COLOUR("GalleryItemBgColour");
+    m_itemHoverBgColour = CFG_COLOUR("GalleryItemHoverBgColour");
+    m_itemSelectedBgColour = CFG_COLOUR("GalleryItemSelectedBgColour");
+    m_itemBorderColour = CFG_COLOUR("GalleryItemBorderColour");
+    m_galleryBgColour = CFG_COLOUR("ActBarBackgroundColour");
+    m_galleryBorderColour = CFG_COLOUR("ActBarBackgroundColour");
+    
+    m_itemSpacing = CFG_INT("GalleryItemSpacing");
+    m_itemPadding = CFG_INT("GalleryItemPadding");
+    int targetH = CFG_INT("GalleryTargetHeight");
+    int horizMargin = CFG_INT("GalleryHorizontalMargin");
+    int galleryVerticalPadding = CFG_INT("GalleryInternalVerticalPadding");
+    
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    SetBackgroundColour(m_galleryBgColour);
+    SetMinSize(wxSize(targetH * 2, targetH));
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }

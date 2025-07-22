@@ -195,6 +195,15 @@ public:
     bool isShadingMode() const { return m_shadingMode; }
     virtual void setShadingMode(bool shaded);
 
+    void setFaceDisplay(bool enable);
+    void setWireframeOverlay(bool enable);
+    bool hasOriginalEdges() const;
+    void setEdgeDisplay(bool enable);
+    void setFeatureEdgeDisplay(bool enable);
+    void setNormalDisplay(bool enable);
+    void setShowWireframe(bool enabled);
+    bool isShowWireframe() const { return m_showWireframe; }
+
     // Coin3D integration
     SoSeparator* getCoinNode();
     void setCoinNode(SoSeparator* node);
@@ -283,6 +292,7 @@ protected:
     // Display modes
     bool m_wireframeMode;
     bool m_shadingMode;
+    bool m_showWireframe = false; // controls mesh wireframe
     
     // Coin3D representation
     SoSeparator* m_coinNode;

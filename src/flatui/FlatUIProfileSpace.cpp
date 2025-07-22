@@ -7,6 +7,10 @@ FlatUIProfileSpace::FlatUIProfileSpace(wxWindow* parent, wxWindowID id)
     m_childControl(nullptr),
     m_spaceWidth(CFG_INT("SpaceDefaulWidth"))
 {
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 
     Bind(wxEVT_SIZE, &FlatUIProfileSpace::OnSize, this);
     Bind(wxEVT_PAINT, &FlatUIProfileSpace::OnPaint, this);
@@ -14,7 +18,11 @@ FlatUIProfileSpace::FlatUIProfileSpace(wxWindow* parent, wxWindowID id)
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 }
 
-FlatUIProfileSpace::~FlatUIProfileSpace() {}
+FlatUIProfileSpace::~FlatUIProfileSpace() 
+{
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
+}
 
 void FlatUIProfileSpace::SetChildControl(wxWindow* child)
 {
@@ -75,4 +83,18 @@ void FlatUIProfileSpace::OnPaint(wxPaintEvent& evt)
     wxColour bgColor = CFG_COLOUR("BarBgColour");
     dc.SetBackground(wxBrush(bgColor));
     dc.Clear();
+}
+
+void FlatUIProfileSpace::RefreshTheme()
+{
+    // Update theme-based settings
+    m_spaceWidth = CFG_INT("SpaceDefaulWidth");
+    
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    SetMinSize(wxSize(m_spaceWidth, GetMinSize().y));
+    
+    // Force refresh to redraw with new theme colors
+    Refresh(true);
+    Update();
 }

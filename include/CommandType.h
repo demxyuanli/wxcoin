@@ -37,6 +37,7 @@ enum class CommandType {
 
     // Viewer toggles / actions
     ShowNormals,
+    ShowFaces,
     FixNormals,
     ShowEdges,
     SetTransparency,
@@ -98,6 +99,7 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ViewIsometric, "VIEW_ISOMETRIC"},
 
         {CommandType::ShowNormals, "SHOW_NORMALS"},
+        {CommandType::ShowFaces, "SHOW_FACES"},
         {CommandType::FixNormals, "FIX_NORMALS"},
         {CommandType::ShowEdges, "SHOW_EDGES"},
         {CommandType::SetTransparency, "SET_TRANSPARENCY"},
@@ -156,6 +158,7 @@ inline CommandType from_string(const std::string& str) {
         {"VIEW_ISOMETRIC", CommandType::ViewIsometric},
 
         {"SHOW_NORMALS", CommandType::ShowNormals},
+        {"SHOW_FACES", CommandType::ShowFaces},
         {"FIX_NORMALS", CommandType::FixNormals},
         {"SHOW_EDGES", CommandType::ShowEdges},
         {"SET_TRANSPARENCY", CommandType::SetTransparency},

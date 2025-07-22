@@ -773,7 +773,14 @@ void LightingConfig::applySettingsToScene()
     // The actual scene update is handled by SceneManager
     // This method serves as a notification point for settings application
     LOG_INF_S("LightingConfig: Applying settings to scene");
+    
+    // Force immediate application of settings
     notifySettingsChanged();
+    
+    // Additional logging for debugging
+    LOG_INF_S("LightingConfig: Settings applied - " + 
+             std::to_string(m_lights.size()) + " lights, " +
+             "ambient intensity: " + std::to_string(m_environmentSettings.ambientIntensity));
 }
 
 void LightingConfig::notifySettingsChanged()

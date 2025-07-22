@@ -21,6 +21,11 @@ FlatUIPage::FlatUIPage(wxWindow* parent, const wxString& label)
     SetBackgroundColour(bg);
     m_backgroundColour = bg;
 
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
+
 #ifdef __WXMSW__
     HWND hwnd = (HWND)GetHandle();
     if (hwnd) {
@@ -42,6 +47,9 @@ FlatUIPage::FlatUIPage(wxWindow* parent, const wxString& label)
 
 FlatUIPage::~FlatUIPage()
 {
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
+    
     for (auto panel : m_panels)
         delete panel;
 }
@@ -227,4 +235,27 @@ void FlatUIPage::InitializeLayout()
     LOG_INF("Initialized layout for page: " + GetLabel().ToStdString() +
         ", Size: (" + std::to_string(GetSize().GetWidth()) +
         "," + std::to_string(GetSize().GetHeight()) + ")", "FlatUIPage");
+}
+
+void FlatUIPage::RefreshTheme()
+{
+    // Update all theme-based colors and settings
+    wxColour bg = CFG_COLOUR("ActBarBackgroundColour");
+    m_backgroundColour = bg;
+    
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    SetBackgroundColour(bg);
+    
+    // Refresh all child panels
+    for (auto panel : m_panels) {
+        if (panel) {
+            panel->Refresh(true);
+            panel->Update();
+        }
+    }
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }

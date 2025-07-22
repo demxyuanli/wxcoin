@@ -16,7 +16,7 @@ enum {
 };
 
 FlatUIPanel::FlatUIPanel(FlatUIPage* parent, const wxString& label, int orientation) 
-    : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
+    : FlatUIThemeAware(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
     m_label(label),
     m_orientation(orientation),
     m_panelBorderTop(0),
@@ -26,15 +26,15 @@ FlatUIPanel::FlatUIPanel(FlatUIPage* parent, const wxString& label, int orientat
     m_borderStyle(PanelBorderStyle::NONE),
     m_resizeTimer(this, TIMER_RESIZE)
 {
-    SetFont(CFG_DEFAULTFONT());
+    SetFont(GetThemeFont());
     SetDoubleBuffered(true);
 
     // Initialize theme-based configuration values
-    m_bgColour = CFG_COLOUR("ActBarBackgroundColour");
-    m_borderColour = CFG_COLOUR("PanelBorderColour");
-    m_headerColour = CFG_COLOUR("PanelHeaderColour");
-    m_headerTextColour = CFG_COLOUR("PanelHeaderTextColour");
-    m_headerBorderColour = CFG_COLOUR("PanelBorderColour");
+    m_bgColour = GetThemeColour("ActBarBackgroundColour");
+    m_borderColour = GetThemeColour("PanelBorderColour");
+    m_headerColour = GetThemeColour("PanelHeaderColour");
+    m_headerTextColour = GetThemeColour("PanelHeaderTextColour");
+    m_headerBorderColour = GetThemeColour("PanelBorderColour");
 
     // int headerArea = CFG_INT("PanelDefaultHeaderAreaSize", FLATUI_PANEL_DEFAULT_HEADER_AREA_SIZE);
     // int padVertical = CFG_INT("PanelInternalVerticalPadding", FLATUI_PANEL_INTERNAL_VERTICAL_PADDING);
@@ -315,6 +315,45 @@ FlatUIPanel::~FlatUIPanel()
         delete buttonBar;
     for (auto gallery : m_galleries)
         delete gallery;
+}
+
+void FlatUIPanel::OnThemeChanged()
+{
+    // Update all theme-based colors and settings
+    m_bgColour = GetThemeColour("ActBarBackgroundColour");
+    m_borderColour = GetThemeColour("PanelBorderColour");
+    m_headerColour = GetThemeColour("PanelHeaderColour");
+    m_headerTextColour = GetThemeColour("PanelHeaderTextColour");
+    m_headerBorderColour = GetThemeColour("PanelBorderColour");
+    
+    // Update control properties
+    SetFont(GetThemeFont());
+    SetBackgroundColour(m_bgColour);
+    
+    // Refresh all child controls
+    wxWindowList& children = GetChildren();
+    for (wxWindow* child : children) {
+        // Check if child has RefreshTheme method
+        wxString className = child->GetClassInfo()->GetClassName();
+        if (className == wxT("FlatUIButtonBar")) {
+            FlatUIButtonBar* buttonBar = static_cast<FlatUIButtonBar*>(child);
+            buttonBar->RefreshTheme();
+        }
+        else if (className == wxT("FlatUIGallery")) {
+            // FlatUIGallery will be handled separately if needed
+            child->Refresh(true);
+            child->Update();
+        }
+        else {
+            // For other controls, just refresh
+            child->Refresh(true);
+            child->Update();
+        }
+    }
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }
 
 void FlatUIPanel::SetPanelBackgroundColour(const wxColour& colour)

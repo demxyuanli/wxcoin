@@ -32,7 +32,7 @@ private:
     void createSmoothingPage();
     void createAdvancedPage();
     
-    // Event handlers
+    // Basic quality event handlers
     void onDeflectionSlider(wxCommandEvent& event);
     void onDeflectionSpinCtrl(wxSpinDoubleEvent& event);
     void onLODEnable(wxCommandEvent& event);
@@ -61,7 +61,7 @@ private:
     void onSmoothingCreaseAngleSlider(wxCommandEvent& event);
     void onSmoothingCreaseAngleSpinCtrl(wxSpinDoubleEvent& event);
     
-    // Advanced event handlers
+    // Advanced tessellation event handlers
     void onTessellationMethodChoice(wxCommandEvent& event);
     void onTessellationQualitySlider(wxCommandEvent& event);
     void onTessellationQualitySpinCtrl(wxSpinEvent& event);
@@ -72,13 +72,15 @@ private:
     
     // Dialog event handlers
     void onApply(wxCommandEvent& event);
-    void onCancel(wxCommandEvent& event);
-    void onOK(wxCommandEvent& event);
-    void onReset(wxCommandEvent& event);
     void onValidate(wxCommandEvent& event);
     void onExportReport(wxCommandEvent& event);
+    void onReset(wxCommandEvent& event);
+    void onCancel(wxCommandEvent& event);
+    void onOK(wxCommandEvent& event); 
 
     OCCViewer* m_occViewer;
+    
+    // Notebook for tabbed interface
     wxNotebook* m_notebook;
     
     // Basic quality controls
@@ -110,7 +112,7 @@ private:
     wxSlider* m_smoothingCreaseAngleSlider;
     wxSpinCtrlDouble* m_smoothingCreaseAngleSpinCtrl;
     
-    // Advanced controls
+    // Advanced tessellation controls
     wxChoice* m_tessellationMethodChoice;
     wxSlider* m_tessellationQualitySlider;
     wxSpinCtrl* m_tessellationQualitySpinCtrl;
@@ -119,27 +121,27 @@ private:
     wxCheckBox* m_parallelProcessingCheckBox;
     wxCheckBox* m_adaptiveMeshingCheckBox;
     
-    // Current values
+    // Current parameter values
     double m_currentDeflection;
     bool m_currentLODEnabled;
     double m_currentLODRoughDeflection;
     double m_currentLODFineDeflection;
     int m_currentLODTransitionTime;
     
-    // Subdivision values
+    // Subdivision parameters
     bool m_currentSubdivisionEnabled;
     int m_currentSubdivisionLevel;
     int m_currentSubdivisionMethod;
     double m_currentSubdivisionCreaseAngle;
     
-    // Smoothing values
+    // Smoothing parameters
     bool m_currentSmoothingEnabled;
     int m_currentSmoothingMethod;
     int m_currentSmoothingIterations;
     double m_currentSmoothingStrength;
     double m_currentSmoothingCreaseAngle;
     
-    // Advanced values
+    // Advanced tessellation parameters
     int m_currentTessellationMethod;
     int m_currentTessellationQuality;
     double m_currentFeaturePreservation;

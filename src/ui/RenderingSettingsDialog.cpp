@@ -2,7 +2,6 @@
 #include "OCCViewer.h"
 #include "RenderingEngine.h"
 #include "config/RenderingConfig.h"
-#include "config/LocalizationConfig.h"
 #include "logger/Logger.h"
 #include <wx/wx.h>
 #include <wx/colour.h>
@@ -10,7 +9,7 @@
 #include <wx/filename.h>
 
 RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* occViewer, RenderingEngine* renderingEngine)
-    : wxDialog(parent, wxID_ANY, L("RenderingSettingsDialog/Title"), wxDefaultPosition, wxSize(500, 450), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+    : wxDialog(parent, wxID_ANY, "Rendering Settings", wxDefaultPosition, wxSize(500, 450), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_occViewer(occViewer)
     , m_renderingEngine(renderingEngine)
     , m_notebook(nullptr)
@@ -112,10 +111,10 @@ void RenderingSettingsDialog::createControls()
     createLightingModelPage();
     
     // Create dialog buttons
-    m_applyButton = new wxButton(this, wxID_APPLY, L("RenderingSettingsDialog/Apply"));
-    m_cancelButton = new wxButton(this, wxID_CANCEL, L("RenderingSettingsDialog/Cancel"));
-    m_okButton = new wxButton(this, wxID_OK, L("RenderingSettingsDialog/OK"));
-    m_resetButton = new wxButton(this, wxID_ANY, L("RenderingSettingsDialog/Reset"));
+    m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
+    m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+    m_okButton = new wxButton(this, wxID_OK, "OK");
+    m_resetButton = new wxButton(this, wxID_ANY, "Reset to Defaults");
 }
 
 void RenderingSettingsDialog::createMaterialPage()
@@ -189,7 +188,7 @@ void RenderingSettingsDialog::createMaterialPage()
     materialSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_materialPage->SetSizer(materialSizer);
     
-    m_notebook->AddPage(m_materialPage, L("RenderingSettingsDialog/Material"));
+    m_notebook->AddPage(m_materialPage, "Material");
 }
 
 void RenderingSettingsDialog::createLightingPage()
@@ -245,7 +244,7 @@ void RenderingSettingsDialog::createLightingPage()
     lightingSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_lightingPage->SetSizer(lightingSizer);
     
-    m_notebook->AddPage(m_lightingPage, L("RenderingSettingsDialog/Lighting"));
+    m_notebook->AddPage(m_lightingPage, "Lighting");
 }
 
 void RenderingSettingsDialog::createTexturePage()
@@ -318,7 +317,7 @@ void RenderingSettingsDialog::createTexturePage()
     textureSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_texturePage->SetSizer(textureSizer);
     
-    m_notebook->AddPage(m_texturePage, L("RenderingSettingsDialog/Texture"));
+    m_notebook->AddPage(m_texturePage, "Texture");
 }
 
 void RenderingSettingsDialog::createBlendPage()
@@ -746,7 +745,7 @@ void RenderingSettingsDialog::createLightingModelPage()
     lightingModelSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
     m_lightingModelPage->SetSizer(lightingModelSizer);
     
-    m_notebook->AddPage(m_lightingModelPage, L("RenderingSettingsDialog/LightingModel"));
+    m_notebook->AddPage(m_lightingModelPage, "Lighting Model");
 }
 
 void RenderingSettingsDialog::layoutControls()
@@ -1391,11 +1390,9 @@ void RenderingSettingsDialog::applySettings()
         
         // Apply lighting settings to rendering engine
         if (m_renderingEngine) {
-            m_renderingEngine->setLightAmbientColor(m_lightAmbientColor);
-            m_renderingEngine->setLightDiffuseColor(m_lightDiffuseColor);
-            m_renderingEngine->setLightSpecularColor(m_lightSpecularColor);
-            m_renderingEngine->setLightIntensity(m_lightIntensity);
-            m_renderingEngine->setLightAmbientIntensity(m_lightAmbientIntensity);
+            // Lighting is now handled by SceneManager through LightingConfig
+            // No need to call RenderingEngine lighting methods
+            LOG_INF_S("Lighting settings applied through SceneManager");
         }
         
         // Request view refresh to apply changes

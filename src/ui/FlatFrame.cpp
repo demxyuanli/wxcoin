@@ -133,6 +133,7 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_TOGGLE_WIREFRAME, FlatFrame::onCommand)
     EVT_BUTTON(ID_TOGGLE_SHADING, FlatFrame::onCommand)
     EVT_BUTTON(ID_TOGGLE_EDGES, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SHOW_FACES, FlatFrame::onCommand)
 
     EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
@@ -184,6 +185,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_TOGGLE_WIREFRAME, cmd::CommandType::ToggleWireframe},
     {ID_TOGGLE_SHADING, cmd::CommandType::ToggleShading},
     {ID_TOGGLE_EDGES, cmd::CommandType::ToggleEdges},
+    {ID_SHOW_FACES, cmd::CommandType::ShowFaces},
 
     {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
     {ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},
@@ -453,6 +455,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayButtonBar->AddToggleButton(ID_VIEW_SHOWEDGES, "Toggle Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle edge display");
     displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Toggle Wireframe", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe display mode");
     displayButtonBar->AddToggleButton(ID_TOGGLE_SHADING, "Toggle Shading", false, SVG_ICON("circle", wxSize(16, 16)), "Toggle shading display mode");
+    displayButtonBar->AddToggleButton(ID_SHOW_FACES, "Show Faces", true, SVG_ICON("faces", wxSize(16, 16)), "Toggle face/solid display");
     displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
     displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
     displayButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");

@@ -8,6 +8,14 @@
 #include <wx/gdicmn.h>
 #include <chrono>
 #include <fstream> // Added for file validation
+#include <TopExp_Explorer.hxx>
+#include <TopoDS_Edge.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <GCPnts_UniformAbscissa.hxx>
+#include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <TopoDS.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
 
 // OpenCASCADE includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -584,6 +592,77 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         m_coinNode->addChild(cullHints);
     }
 
+    // CAD edge visualization (red, thick)
+    if (m_showEdges) {
+        SoSeparator* edgeGroup = new SoSeparator;
+        SoDrawStyle* edgeStyle = new SoDrawStyle;
+        edgeStyle->style = SoDrawStyle::LINES;
+        edgeStyle->lineWidth = 3.0f; // thick
+        edgeGroup->addChild(edgeStyle);
+        SoMaterial* edgeMaterial = new SoMaterial;
+        edgeMaterial->diffuseColor.setValue(1, 0, 0); // red
+        edgeGroup->addChild(edgeMaterial);
+        std::vector<SbVec3f> edgePoints;
+        std::vector<int32_t> edgeIndices;
+        double deflection = params.deflection > 0 ? params.deflection : 0.1;
+        for (TopExp_Explorer exp(m_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+            TopoDS_Edge edge = TopoDS::Edge(exp.Current());
+            BRepAdaptor_Curve curve(edge);
+            double first = curve.FirstParameter();
+            double last = curve.LastParameter();
+            double length = 0.0;
+            try {
+                length = GCPnts_AbscissaPoint::Length(curve, first, last);
+            } catch (...) {
+                length = std::abs(last - first);
+            }
+            int nPts = std::max(2, static_cast<int>(length / deflection));
+            GCPnts_UniformAbscissa abscissa(curve, nPts);
+            if (!abscissa.IsDone() || abscissa.NbPoints() < 2) continue;
+            int startIdx = edgePoints.size();
+            for (int i = 1; i <= abscissa.NbPoints(); ++i) {
+                double param = abscissa.Parameter(i);
+                gp_Pnt p = curve.Value(param);
+                edgePoints.push_back(SbVec3f((float)p.X(), (float)p.Y(), (float)p.Z()));
+            }
+            for (int i = 0; i + 1 < abscissa.NbPoints(); ++i) {
+                edgeIndices.push_back(startIdx + i);
+                edgeIndices.push_back(startIdx + i + 1);
+                edgeIndices.push_back(SO_END_LINE_INDEX);
+            }
+        }
+        if (!edgePoints.empty()) {
+            SoCoordinate3* coords = new SoCoordinate3;
+            coords->point.setNum((int)edgePoints.size());
+            for (size_t i = 0; i < edgePoints.size(); ++i) {
+                coords->point.set1Value((int)i, edgePoints[i]);
+            }
+            edgeGroup->addChild(coords);
+            SoIndexedLineSet* lines = new SoIndexedLineSet;
+            lines->coordIndex.setValues(0, (int)edgeIndices.size(), edgeIndices.data());
+            edgeGroup->addChild(lines);
+        }
+        m_coinNode->addChild(edgeGroup);
+    }
+    // mesh wireframe visualization (black, thin)
+    if (m_showWireframe) {
+        SoSeparator* meshEdgeGroup = new SoSeparator;
+        SoDrawStyle* meshEdgeStyle = new SoDrawStyle;
+        meshEdgeStyle->style = SoDrawStyle::LINES;
+        meshEdgeStyle->lineWidth = 1.0f; // thin
+        meshEdgeGroup->addChild(meshEdgeStyle);
+        SoMaterial* meshEdgeMaterial = new SoMaterial;
+        meshEdgeMaterial->diffuseColor.setValue(0, 0, 0); // black
+        meshEdgeGroup->addChild(meshEdgeMaterial);
+        // TODO: If mesh edge data exists, add to meshEdgeGroup as before
+        // ...
+        m_coinNode->addChild(meshEdgeGroup);
+    }
+    // Comment out mesh face rendering for CAD edge debug
+    // if (!m_shape.IsNull()) {
+    //     ... mesh rendering ...
+    // }
+
     // Add shape to scene (simplified)
     if (!m_shape.IsNull()) {
         // Use rendering toolkit to create scene node
@@ -1044,7 +1123,11 @@ void OCCGeometry::setDisplayMode(RenderingConfig::DisplayMode mode) {
 
 void OCCGeometry::setShowEdges(bool enabled) {
     m_showEdges = enabled;
-    LOG_INF_S("Show edges " + std::string(enabled ? "enabled" : "disabled"));
+    m_coinNeedsUpdate = true;
+}
+void OCCGeometry::setShowWireframe(bool enabled) {
+    m_showWireframe = enabled;
+    m_coinNeedsUpdate = true;
 }
 
 void OCCGeometry::setShowVertices(bool enabled) {
@@ -1213,5 +1296,44 @@ void OCCGeometry::forceTextureUpdate()
             m_coinNode->touch();
             LOG_INF_S("Forced texture update for " + m_name + " - path: " + m_textureImagePath);
         }
+    }
+}
+
+void OCCGeometry::setFaceDisplay(bool enable) {
+    setShadingMode(enable);
+    if (m_coinNode) {
+        buildCoinRepresentation();
+        m_coinNode->touch();
+    }
+}
+void OCCGeometry::setWireframeOverlay(bool enable) {
+    setWireframeMode(enable);
+    if (m_coinNode) {
+        buildCoinRepresentation();
+        m_coinNode->touch();
+    }
+}
+bool OCCGeometry::hasOriginalEdges() const {
+    return m_showEdges;
+}
+void OCCGeometry::setEdgeDisplay(bool enable) {
+    setShowEdges(enable);
+    if (m_coinNode) {
+        buildCoinRepresentation();
+        m_coinNode->touch();
+    }
+}
+void OCCGeometry::setFeatureEdgeDisplay(bool enable) {
+    setShowEdges(enable); // For now, same as setEdgeDisplay
+    if (m_coinNode) {
+        buildCoinRepresentation();
+        m_coinNode->touch();
+    }
+}
+void OCCGeometry::setNormalDisplay(bool enable) {
+    setSmoothNormals(enable);
+    if (m_coinNode) {
+        buildCoinRepresentation();
+        m_coinNode->touch();
     }
 }

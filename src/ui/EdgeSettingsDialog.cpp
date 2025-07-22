@@ -1,7 +1,6 @@
 #include "EdgeSettingsDialog.h"
 #include "config/RenderingConfig.h"
 #include "config/EdgeSettingsConfig.h"
-#include "config/LocalizationConfig.h"
 #include "logger/Logger.h"
 #include <wx/sizer.h>
 #include <wx/colordlg.h>
@@ -10,7 +9,7 @@
 #include <string>
 
 EdgeSettingsDialog::EdgeSettingsDialog(wxWindow* parent, OCCViewer* viewer)
-    : wxDialog(parent, wxID_ANY, L("EdgeSettingsDialog/Title"), wxDefaultPosition, wxSize(600, 700))
+    : wxDialog(parent, wxID_ANY, "Edge Settings", wxDefaultPosition, wxSize(600, 700))
     , m_viewer(viewer)
     , m_currentPage("global")
 {
@@ -40,19 +39,19 @@ void EdgeSettingsDialog::createControls()
     createHoverPage();
     
     // Add pages to notebook
-    m_notebook->AddPage(m_globalPage, L("EdgeSettingsDialog/GlobalObjects"));
-    m_notebook->AddPage(m_selectedPage, L("EdgeSettingsDialog/SelectedObjects"));
-    m_notebook->AddPage(m_hoverPage, L("EdgeSettingsDialog/HoverObjects"));
+    m_notebook->AddPage(m_globalPage, "Global Objects");
+    m_notebook->AddPage(m_selectedPage, "Selected Objects");
+    m_notebook->AddPage(m_hoverPage, "Hover Objects");
     
     mainSizer->Add(m_notebook, 1, wxALL | wxEXPAND, 10);
     
     // Buttons
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_applyButton = new wxButton(this, wxID_APPLY, L("EdgeSettingsDialog/Apply"));
-    m_resetButton = new wxButton(this, wxID_RESET, L("EdgeSettingsDialog/Reset"));
-    m_saveButton = new wxButton(this, wxID_SAVE, L("EdgeSettingsDialog/SaveConfig"));
-    m_cancelButton = new wxButton(this, wxID_CANCEL, L("EdgeSettingsDialog/Cancel"));
-    m_okButton = new wxButton(this, wxID_OK, L("EdgeSettingsDialog/OK"));
+    m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
+    m_resetButton = new wxButton(this, wxID_RESET, "Reset");
+    m_saveButton = new wxButton(this, wxID_SAVE, "Save Config");
+    m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+    m_okButton = new wxButton(this, wxID_OK, "OK");
     
     buttonSizer->Add(m_applyButton, 0, wxALL, 5);
     buttonSizer->Add(m_resetButton, 0, wxALL, 5);
@@ -73,12 +72,12 @@ void EdgeSettingsDialog::createGlobalPage()
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     
     // Edge visibility
-    m_globalShowEdgesCheckbox = new wxCheckBox(m_globalPage, wxID_ANY, L("EdgeSettingsDialog/ShowEdges"));
+    m_globalShowEdgesCheckbox = new wxCheckBox(m_globalPage, wxID_ANY, "Show Edges");
     m_globalShowEdgesCheckbox->SetValue(m_globalSettings.showEdges);
     sizer->Add(m_globalShowEdgesCheckbox, 0, wxALL | wxEXPAND, 5);
     
     // Edge width
-    wxStaticText* widthLabel = new wxStaticText(m_globalPage, wxID_ANY, L("EdgeSettingsDialog/EdgeWidth") + ":");
+    wxStaticText* widthLabel = new wxStaticText(m_globalPage, wxID_ANY, "Edge Width:");
     sizer->Add(widthLabel, 0, wxALL, 5);
     
     wxBoxSizer* widthSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -92,12 +91,12 @@ void EdgeSettingsDialog::createGlobalPage()
     sizer->Add(widthSizer, 0, wxALL | wxEXPAND, 5);
     
     // Edge color enabled
-    m_globalEdgeColorEnabledCheckbox = new wxCheckBox(m_globalPage, wxID_ANY, L("EdgeSettingsDialog/EnableEdgeColor"));
+    m_globalEdgeColorEnabledCheckbox = new wxCheckBox(m_globalPage, wxID_ANY, "Enable Edge Color");
     m_globalEdgeColorEnabledCheckbox->SetValue(m_globalSettings.edgeColorEnabled);
     sizer->Add(m_globalEdgeColorEnabledCheckbox, 0, wxALL | wxEXPAND, 5);
     
     // Edge color
-    wxStaticText* colorLabel = new wxStaticText(m_globalPage, wxID_ANY, L("EdgeSettingsDialog/EdgeColor") + ":");
+    wxStaticText* colorLabel = new wxStaticText(m_globalPage, wxID_ANY, "Edge Color:");
     sizer->Add(colorLabel, 0, wxALL, 5);
     
     m_globalEdgeColorButton = new wxButton(m_globalPage, wxID_ANY, "Select Color");

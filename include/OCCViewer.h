@@ -89,7 +89,7 @@ public:
     void setLODMode(bool roughMode);
     bool isLODRoughMode() const;
     void startLODInteraction();
-    
+
     // Subdivision surface control
     void setSubdivisionEnabled(bool enabled);
     bool isSubdivisionEnabled() const;
@@ -164,6 +164,17 @@ public:
     // Force mesh regeneration
     void remeshAllGeometries();
 
+    // Display flags
+    void setShowEdgesFlag(bool flag);
+    void setShowWireframeFlag(bool flag);
+    void setShowFacesFlag(bool flag);
+    void setShowNormalsFlag(bool flag);
+    bool isShowEdgesFlag() const;
+    bool isShowWireframeFlag() const;
+    bool isShowFacesFlag() const;
+    bool isShowNormalsFlag() const;
+    void updateDisplay();
+
 private:
     void initializeViewer();
     void onLODTimer();
@@ -230,8 +241,19 @@ private:
     
     // Deferred ObjectTree updates
     std::vector<std::shared_ptr<OCCGeometry>> m_pendingObjectTreeUpdates;
-    
+
     // Parameter monitoring
     bool m_parameterMonitoringEnabled;
 
+    struct DisplayFlags {
+        bool showEdges = false;
+        bool showWireframe = false;
+        bool showFaces = true;
+        bool showNormals = false;
+    };
+    DisplayFlags m_displayFlags;
+    void drawFaces();
+    void drawWireframe();
+    void drawEdges();
+    void drawNormals();
 };

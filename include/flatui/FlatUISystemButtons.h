@@ -26,6 +26,9 @@ public:
     void OnMouseMove(wxMouseEvent& evt);
     void OnMouseLeave(wxMouseEvent& evt);
 
+    // Theme refresh method
+    void RefreshTheme();
+
 private:
     wxRect m_minimizeButtonRect;
     wxRect m_maximizeButtonRect;

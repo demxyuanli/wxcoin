@@ -1,6 +1,5 @@
 #include "LightingSettingsDialog.h"
 #include "config/LightingConfig.h"
-#include "config/LocalizationConfig.h"
 #include "SceneManager.h"
 #include "Logger.h"
 #include <wx/notebook.h>
@@ -43,13 +42,13 @@ LightingSettingsDialog::LightingSettingsDialog(wxWindow* parent, wxWindowID id, 
     
     // Create pages
     createEnvironmentPage();
-    m_notebook->AddPage(m_environmentPage, L("LightingSettingsDialog/EnvironmentLighting"), true);
+    m_notebook->AddPage(m_environmentPage, "Environment Lighting", true);
     
     createLightsPage();
-    m_notebook->AddPage(m_lightsPage, L("LightingSettingsDialog/LightManagement"), false);
+    m_notebook->AddPage(m_lightsPage, "Light Management", false);
     
     createPresetsPage();
-    m_notebook->AddPage(m_presetsPage, L("LightingSettingsDialog/Presets"), false);
+    m_notebook->AddPage(m_presetsPage, "Presets", false);
     
     mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 5);
     
@@ -64,7 +63,7 @@ LightingSettingsDialog::LightingSettingsDialog(wxWindow* parent, wxWindowID id, 
     updateLightList();
     
     // Initialize current preset label
-    m_currentPresetLabel->SetLabel(L("LightingSettingsDialog/NoPresetApplied"));
+    m_currentPresetLabel->SetLabel("No preset applied");
 }
 
 LightingSettingsDialog::~LightingSettingsDialog()
@@ -336,10 +335,10 @@ void LightingSettingsDialog::createButtons()
 {
     m_buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     
-    m_applyButton = new wxButton(this, wxID_APPLY, L("LightingSettingsDialog/Apply"));
-    m_okButton = new wxButton(this, wxID_OK, L("LightingSettingsDialog/OK"));
-    m_cancelButton = new wxButton(this, wxID_CANCEL, L("LightingSettingsDialog/Cancel"));
-    m_resetButton = new wxButton(this, wxID_RESET, L("LightingSettingsDialog/Reset"));
+    m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
+    m_okButton = new wxButton(this, wxID_OK, "OK");
+    m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+    m_resetButton = new wxButton(this, wxID_RESET, "Reset");
     
     m_buttonSizer->Add(m_applyButton, 0, wxALL, 5);
     m_buttonSizer->AddStretchSpacer();

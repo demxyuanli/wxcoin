@@ -10,56 +10,58 @@
 int targetH = -1;
 
 FlatUIButtonBar::FlatUIButtonBar(FlatUIPanel* parent)
-    : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
+    : FlatUIThemeAware(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
     m_displayStyle(ButtonDisplayStyle::ICON_TEXT_BESIDE),
     m_buttonStyle(ButtonStyle::DEFAULT),
     m_buttonBorderStyle(ButtonBorderStyle::SOLID),
-    m_buttonBgColour(CFG_COLOUR("ActBarBackgroundColour")),
-    m_buttonHoverBgColour(CFG_COLOUR("ActBarHoverBackgroundColour")),
-    m_buttonPressedBgColour(CFG_COLOUR("ActBarPressedBackgroundColour")),
-    m_buttonTextColour(CFG_COLOUR("ActBarTextColour")),
-    m_buttonBorderColour(CFG_COLOUR("ActBarBorderColour")),
-    m_buttonBorderWidth(CFG_INT("ActBarBorderWidth")),
-    m_buttonCornerRadius(CFG_INT("ActBarCornerRadius")),
-    m_buttonSpacing(CFG_INT("ActBarButtonSpacing")),
-    m_buttonHorizontalPadding(CFG_INT("ActBarButtonPaddingHorizontal")),
-    m_buttonVerticalPadding(CFG_INT("ActBarButtonPaddingVertical")),
-    m_btnBarBgColour(CFG_COLOUR("ActBarBackgroundColour")),
-    m_btnBarBorderColour(CFG_COLOUR("ActBarBorderColour")),
-    m_btnBarBorderWidth(CFG_INT("ActBarBorderWidth")),
-    m_dropdownArrowWidth(CFG_INT("ButtonbarDropdownArrowWidth")),
-    m_dropdownArrowHeight(CFG_INT("ButtonbarDropdownArrowHeight")),
-    m_separatorWidth(CFG_INT("ButtonbarSeparatorWidth")),
-    m_separatorPadding(CFG_INT("ButtonbarSeparatorPadding")),
-    m_separatorMargin(CFG_INT("ButtonbarSeparatorMargin")),
-    m_btnBarHorizontalMargin(CFG_INT("ButtonbarHorizontalMargin")),
-    m_hoverEffectsEnabled(true)
+    m_buttonBgColour(GetThemeColour("ActBarBackgroundColour")),
+    m_buttonHoverBgColour(GetThemeColour("ActBarHoverBackgroundColour")),
+    m_buttonPressedBgColour(GetThemeColour("ActBarPressedBackgroundColour")),
+    m_buttonTextColour(GetThemeColour("ActBarTextColour")),
+    m_buttonBorderColour(GetThemeColour("ActBarBorderColour")),
+    m_buttonBorderWidth(GetThemeInt("ActBarBorderWidth")),
+    m_buttonCornerRadius(GetThemeInt("ActBarCornerRadius")),
+    m_buttonSpacing(GetThemeInt("ActBarButtonSpacing")),
+    m_buttonHorizontalPadding(GetThemeInt("ActBarButtonPaddingHorizontal")),
+    m_buttonVerticalPadding(GetThemeInt("ActBarButtonPaddingVertical")),
+    m_btnBarBgColour(GetThemeColour("ActBarBackgroundColour")),
+    m_btnBarBorderColour(GetThemeColour("ActBarBorderColour")),
+    m_btnBarBorderWidth(GetThemeInt("ActBarBorderWidth")),
+    m_dropdownArrowWidth(GetThemeInt("ButtonbarDropdownArrowWidth")),
+    m_dropdownArrowHeight(GetThemeInt("ButtonbarDropdownArrowHeight")),
+    m_separatorWidth(GetThemeInt("ButtonbarSeparatorWidth")),
+    m_separatorPadding(GetThemeInt("ButtonbarSeparatorPadding")),
+    m_separatorMargin(GetThemeInt("ButtonbarSeparatorMargin")),
+    m_btnBarHorizontalMargin(GetThemeInt("ButtonbarHorizontalMargin")),
+    m_hoverEffectsEnabled(true),
+    m_hoveredButtonIndex(-1),
+    m_pressedButtonIndex(-1)
 {
     // Additional configuration setup (missing in refactor)
-    m_buttonBgColour = CFG_COLOUR("ActBarBackgroundColour");
-    m_buttonHoverBgColour = CFG_COLOUR("ButtonbarDefaultHoverBgColour");
-    m_buttonPressedBgColour = CFG_COLOUR("ButtonbarDefaultPressedBgColour");
-    m_buttonTextColour = CFG_COLOUR("ButtonbarDefaultTextColour");
-    m_buttonBorderColour = CFG_COLOUR("ButtonbarDefaultBorderColour");
-    m_btnBarBgColour = CFG_COLOUR("ButtonbarDefaultBgColour");
-    m_btnBarBorderColour = CFG_COLOUR("ButtonbarDefaultBorderColour");
+    m_buttonBgColour = GetThemeColour("ActBarBackgroundColour");
+    m_buttonHoverBgColour = GetThemeColour("ButtonbarDefaultHoverBgColour");
+    m_buttonPressedBgColour = GetThemeColour("ButtonbarDefaultPressedBgColour");
+    m_buttonTextColour = GetThemeColour("ButtonbarDefaultTextColour");
+    m_buttonBorderColour = GetThemeColour("ButtonbarDefaultBorderColour");
+    m_btnBarBgColour = GetThemeColour("ButtonbarDefaultBgColour");
+    m_btnBarBorderColour = GetThemeColour("ButtonbarDefaultBorderColour");
     
-    m_buttonBorderWidth = CFG_INT("ButtonbarDefaultBorderWidth");
-    m_buttonCornerRadius = CFG_INT("ButtonbarDefaultCornerRadius");
-    m_buttonSpacing = CFG_INT("ButtonbarSpacing");
-    m_buttonHorizontalPadding = CFG_INT("ButtonbarHorizontalPadding");
-    m_buttonVerticalPadding = CFG_INT("ButtonbarInternalVerticalPadding");
+    m_buttonBorderWidth = GetThemeInt("ButtonbarDefaultBorderWidth");
+    m_buttonCornerRadius = GetThemeInt("ButtonbarDefaultCornerRadius");
+    m_buttonSpacing = GetThemeInt("ButtonbarSpacing");
+    m_buttonHorizontalPadding = GetThemeInt("ButtonbarHorizontalPadding");
+    m_buttonVerticalPadding = GetThemeInt("ButtonbarInternalVerticalPadding");
     
-    m_dropdownArrowWidth = CFG_INT("ButtonbarDropdownArrowWidth");
-    m_dropdownArrowHeight = CFG_INT("ButtonbarDropdownArrowHeight");
-    m_separatorWidth = CFG_INT("ButtonbarSeparatorWidth");
-    m_separatorPadding = CFG_INT("ButtonbarSeparatorPadding");
-    m_separatorMargin = CFG_INT("ButtonbarSeparatorMargin");
-    m_btnBarHorizontalMargin = CFG_INT("ButtonbarBarHorizontalMargin");
+    m_dropdownArrowWidth = GetThemeInt("ButtonbarDropdownArrowWidth");
+    m_dropdownArrowHeight = GetThemeInt("ButtonbarDropdownArrowHeight");
+    m_separatorWidth = GetThemeInt("ButtonbarSeparatorWidth");
+    m_separatorPadding = GetThemeInt("ButtonbarSeparatorPadding");
+    m_separatorMargin = GetThemeInt("ButtonbarSeparatorMargin");
+    m_btnBarHorizontalMargin = GetThemeInt("ButtonbarBarHorizontalMargin");
     
-    targetH = CFG_INT("ButtonbarTargetHeight");
+    targetH = GetThemeInt("ButtonbarTargetHeight");
     
-    SetFont(CFG_DEFAULTFONT());
+    SetFont(GetThemeFont());
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetBackgroundColour(m_btnBarBgColour);
     SetMinSize(wxSize(targetH * 2, targetH));
@@ -73,6 +75,42 @@ FlatUIButtonBar::FlatUIButtonBar(FlatUIPanel* parent)
 
 FlatUIButtonBar::~FlatUIButtonBar() {
     // Clean up any resources if needed
+}
+
+void FlatUIButtonBar::OnThemeChanged()
+{
+    // Update all theme-based colors and settings
+    m_buttonBgColour = GetThemeColour("ActBarBackgroundColour");
+    m_buttonHoverBgColour = GetThemeColour("ButtonbarDefaultHoverBgColour");
+    m_buttonPressedBgColour = GetThemeColour("ButtonbarDefaultPressedBgColour");
+    m_buttonTextColour = GetThemeColour("ButtonbarDefaultTextColour");
+    m_buttonBorderColour = GetThemeColour("ButtonbarDefaultBorderColour");
+    m_btnBarBgColour = GetThemeColour("ButtonbarDefaultBgColour");
+    m_btnBarBorderColour = GetThemeColour("ButtonbarDefaultBorderColour");
+    
+    m_buttonBorderWidth = GetThemeInt("ButtonbarDefaultBorderWidth");
+    m_buttonCornerRadius = GetThemeInt("ButtonbarDefaultCornerRadius");
+    m_buttonSpacing = GetThemeInt("ButtonbarSpacing");
+    m_buttonHorizontalPadding = GetThemeInt("ButtonbarHorizontalPadding");
+    m_buttonVerticalPadding = GetThemeInt("ButtonbarInternalVerticalPadding");
+    
+    m_dropdownArrowWidth = GetThemeInt("ButtonbarDropdownArrowWidth");
+    m_dropdownArrowHeight = GetThemeInt("ButtonbarDropdownArrowHeight");
+    m_separatorWidth = GetThemeInt("ButtonbarSeparatorWidth");
+    m_separatorPadding = GetThemeInt("ButtonbarSeparatorPadding");
+    m_separatorMargin = GetThemeInt("ButtonbarSeparatorMargin");
+    m_btnBarHorizontalMargin = GetThemeInt("ButtonbarBarHorizontalMargin");
+    
+    targetH = GetThemeInt("ButtonbarTargetHeight");
+    
+    // Update control properties
+    SetFont(GetThemeFont());
+    SetBackgroundColour(m_btnBarBgColour);
+    SetMinSize(wxSize(targetH * 2, targetH));
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }
 
 // Basic button management
@@ -273,7 +311,7 @@ const FlatUIButtonBar::ButtonInfo* FlatUIButtonBar::FindButton(int id) const {
 int FlatUIButtonBar::FindButtonIndex(int id) const {
     for (size_t i = 0; i < m_buttons.size(); ++i) {
         if (m_buttons[i].id == id) {
-            return (int)i;
+            return static_cast<int>(i);
         }
     }
     return -1;

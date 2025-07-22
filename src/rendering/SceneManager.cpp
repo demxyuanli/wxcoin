@@ -85,63 +85,8 @@ bool SceneManager::initScene() {
         lightModel->model.setValue(SoLightModel::PHONG);
         m_lightRoot->addChild(lightModel);
 
-        // Enhanced lighting setup based on NavigationCube configuration
-        // Environment settings for overall brightness
-        SoEnvironment* environment = new SoEnvironment;
-        environment->ambientColor.setValue(0.8f, 0.8f, 0.85f); // Brighter and more neutral ambient color like NavigationCube
-        environment->ambientIntensity.setValue(1.0f);         // Max ambient intensity
-        m_lightRoot->addChild(environment);
-
-        // Enhanced lighting setup with more distant and natural light positions
-        // Enhanced lighting setup with increased intensity for better visibility
-        // Main directional light (increased intensity)
-        m_light = new SoDirectionalLight;
-        m_light->ref();
-        m_light->direction.setValue(0.7f, 0.7f, -0.7f); // More distant main light from top-right-front
-        m_light->intensity.setValue(1.2f); // Increased intensity for better visibility
-        m_light->color.setValue(1.0f, 1.0f, 1.0f); // Pure white light
-        m_light->on.setValue(true);
-        m_lightRoot->addChild(m_light);
-
-        // Fill light (increased intensity)
-        SoDirectionalLight* fillLight = new SoDirectionalLight;
-        fillLight->direction.setValue(-0.7f, -0.7f, 0.7f); // More distant fill light from bottom-left-back
-        fillLight->intensity.setValue(0.9f); // Increased intensity for better visibility
-        fillLight->color.setValue(0.95f, 0.95f, 1.0f); // Slightly cool
-        fillLight->on.setValue(true);
-        m_lightRoot->addChild(fillLight);
-
-        // Side light (increased intensity)
-        SoDirectionalLight* sideLight = new SoDirectionalLight;
-        sideLight->direction.setValue(-0.9f, 0.3f, -0.4f); // More distant side light from left
-        sideLight->intensity.setValue(0.8f); // Increased intensity for better visibility
-        sideLight->color.setValue(1.0f, 1.0f, 0.95f); // Slightly warm
-        sideLight->on.setValue(true);
-        m_lightRoot->addChild(sideLight);
-
-        // Back light (increased intensity)
-        SoDirectionalLight* backLight = new SoDirectionalLight;
-        backLight->direction.setValue(0.2f, 0.2f, 0.9f); // More distant back light, slightly offset
-        backLight->intensity.setValue(0.6f); // Increased intensity for better visibility
-        backLight->color.setValue(0.9f, 0.9f, 1.0f); // Slightly cool
-        backLight->on.setValue(true);
-        m_lightRoot->addChild(backLight);
-
-        // Bottom light (increased intensity)
-        SoDirectionalLight* bottomLight = new SoDirectionalLight;
-        bottomLight->direction.setValue(0.5f, -0.9f, 0.3f); // More distant bottom light from bottom-right
-        bottomLight->intensity.setValue(0.5f); // Increased intensity for better visibility
-        bottomLight->color.setValue(1.0f, 0.95f, 0.95f); // Slightly warm
-        bottomLight->on.setValue(true);
-        m_lightRoot->addChild(bottomLight);
-
-        // Top side light (increased intensity)
-        SoDirectionalLight* topSideLight = new SoDirectionalLight;
-        topSideLight->direction.setValue(0.9f, 0.4f, 0.4f); // More distant top side light from top-left
-        topSideLight->intensity.setValue(0.5f); // Increased intensity for better visibility
-        topSideLight->color.setValue(0.95f, 1.0f, 0.95f); // Slightly cool
-        topSideLight->on.setValue(true);
-        m_lightRoot->addChild(topSideLight);
+        // Initialize lighting from configuration instead of hardcoded values
+        initializeLightingFromConfig();
 
         m_objectRoot = new SoSeparator;
         m_objectRoot->ref();
@@ -909,6 +854,138 @@ void SceneManager::updateSceneLighting() {
     }
     
     LOG_INF_S("Scene lighting updated successfully");
+}
+
+void SceneManager::initializeLightingFromConfig() {
+    if (!m_lightRoot) {
+        LOG_ERR_S("Cannot initialize lighting: Light root not available");
+        return;
+    }
+    
+    LOG_INF_S("Initializing lighting from configuration");
+    
+    // Clear existing lights (except light model)
+    for (int i = m_lightRoot->getNumChildren() - 1; i >= 0; --i) {
+        SoNode* child = m_lightRoot->getChild(i);
+        if (!child->isOfType(SoLightModel::getClassTypeId())) {
+            m_lightRoot->removeChild(i);
+        }
+    }
+    
+    // Get lighting configuration
+    LightingConfig& config = LightingConfig::getInstance();
+    
+    // Add environment settings
+    auto envSettings = config.getEnvironmentSettings();
+    SoEnvironment* environment = new SoEnvironment;
+    
+    // Convert Quantity_Color to SbColor
+    Standard_Real r, g, b;
+    envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
+    environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+    environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
+    
+    m_lightRoot->addChild(environment);
+    
+    LOG_INF_S("Added environment lighting - ambient color: " + 
+             std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
+             ", intensity: " + std::to_string(envSettings.ambientIntensity));
+    
+    // Add lights from configuration
+    auto lights = config.getAllLights();
+    LOG_INF_S("Adding " + std::to_string(lights.size()) + " lights from configuration");
+    
+    for (const auto& lightSettings : lights) {
+        if (!lightSettings.enabled) {
+            LOG_INF_S("Skipping disabled light: " + lightSettings.name);
+            continue;
+        }
+        
+        try {
+            if (lightSettings.type == "directional") {
+                SoDirectionalLight* light = new SoDirectionalLight;
+                
+                // Set light properties
+                light->direction.setValue(static_cast<float>(lightSettings.directionX),
+                                        static_cast<float>(lightSettings.directionY),
+                                        static_cast<float>(lightSettings.directionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                m_lightRoot->addChild(light);
+                
+                // Store reference to main light for compatibility
+                if (lightSettings.name == "Main Light") {
+                    m_light = light;
+                    m_light->ref();
+                }
+                
+                LOG_INF_S("Added directional light: " + lightSettings.name);
+                
+            } else if (lightSettings.type == "point") {
+                SoPointLight* light = new SoPointLight;
+                
+                // Set light properties
+                light->location.setValue(static_cast<float>(lightSettings.positionX),
+                                       static_cast<float>(lightSettings.positionY),
+                                       static_cast<float>(lightSettings.positionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                m_lightRoot->addChild(light);
+                
+                LOG_INF_S("Added point light: " + lightSettings.name);
+                
+            } else if (lightSettings.type == "spot") {
+                SoSpotLight* light = new SoSpotLight;
+                
+                // Set light properties
+                light->location.setValue(static_cast<float>(lightSettings.positionX),
+                                       static_cast<float>(lightSettings.positionY),
+                                       static_cast<float>(lightSettings.positionZ));
+                light->direction.setValue(static_cast<float>(lightSettings.directionX),
+                                        static_cast<float>(lightSettings.directionY),
+                                        static_cast<float>(lightSettings.directionZ));
+                
+                Standard_Real r, g, b;
+                lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+                light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+                light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+                light->on.setValue(true);
+                
+                m_lightRoot->addChild(light);
+                
+                LOG_INF_S("Added spot light: " + lightSettings.name);
+            }
+        } catch (const std::exception& e) {
+            LOG_ERR_S("Exception while creating light " + lightSettings.name + ": " + std::string(e.what()));
+        } catch (...) {
+            LOG_ERR_S("Unknown exception while creating light " + lightSettings.name);
+        }
+    }
+    
+    // Ensure we have a main light reference for compatibility
+    if (!m_light) {
+        // Create a default main light if none exists
+        m_light = new SoDirectionalLight;
+        m_light->ref();
+        m_light->direction.setValue(0.5f, 0.5f, -0.7f);
+        m_light->intensity.setValue(1.0f);
+        m_light->color.setValue(1.0f, 1.0f, 1.0f);
+        m_light->on.setValue(true);
+        m_lightRoot->addChild(m_light);
+        LOG_INF_S("Created default main light for compatibility");
+    }
+    
+    LOG_INF_S("Lighting initialization from configuration completed");
 }
 
 // Culling system integration methods

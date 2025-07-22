@@ -15,6 +15,9 @@ public:
     void SetSpaceWidth(int width);
     int GetSpaceWidth() const;
 
+    // Theme refresh method
+    void RefreshTheme();
+
 protected:
     void OnSize(wxSizeEvent& evt);
     void OnPaint(wxPaintEvent& evt);

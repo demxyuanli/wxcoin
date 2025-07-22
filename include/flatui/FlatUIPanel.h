@@ -5,7 +5,7 @@
 #include <wx/vector.h>
 #include <wx/timer.h>
 #include <string>
-
+#include "flatui/FlatUIThemeAware.h"
 
 // Forward declarations
 class FlatUIPage;
@@ -30,11 +30,14 @@ enum class PanelHeaderStyle {
     BOTTOM_CENTERED // Header at the bottom, text centered
 };
 
-class FlatUIPanel : public wxControl
+class FlatUIPanel : public FlatUIThemeAware
 {
 public:
     FlatUIPanel(FlatUIPage* parent, const wxString& label, int orientation = wxVERTICAL);
     virtual ~FlatUIPanel();
+
+    // Override theme change method
+    virtual void OnThemeChanged() override;
 
     void AddButtonBar(FlatUIButtonBar* buttonBar, int proportion = 0, int flag = wxEXPAND | wxALL, int border = 5);
     void AddGallery(FlatUIGallery* gallery, int proportion = 0, int flag = wxEXPAND | wxALL, int border = 5);
@@ -103,18 +106,18 @@ private:
     int m_panelBorderLeft;
     int m_panelBorderRight;
     
-    PanelHeaderStyle m_headerStyle; 
-    wxColour m_headerColour;         
+    // Header properties
+    PanelHeaderStyle m_headerStyle;
+    wxColour m_headerColour;
     wxColour m_headerTextColour;
+    wxColour m_headerBorderColour;
     
     // Header border properties
     int m_headerBorderTop;
     int m_headerBorderBottom;
     int m_headerBorderLeft;
     int m_headerBorderRight;
-    wxColour m_headerBorderColour;
     
-    // Class level timer for size updates
     wxTimer m_resizeTimer;
 };
 

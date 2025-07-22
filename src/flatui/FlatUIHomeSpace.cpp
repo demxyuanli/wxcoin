@@ -20,11 +20,18 @@ FlatUIHomeSpace::FlatUIHomeSpace(wxWindow* parent, wxWindowID id)
     m_activeHomeMenu(nullptr) // Initialize m_activeHomeMenu
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT); // Important for custom painting
+    
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 FlatUIHomeSpace::~FlatUIHomeSpace()
 {
     // m_menu is not owned by this class
+    // Unregister theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 // void FlatUIHomeSpace::SetMenu(wxMenu* menu) { /* m_menu = menu; */ } // Removed
@@ -195,4 +202,17 @@ void FlatUIHomeSpace::OnHomeMenuClosed(FlatUIHomeMenu* closedMenu)
         m_show = false;
         Refresh();
     }
+}
+
+void FlatUIHomeSpace::RefreshTheme()
+{
+    // Update theme-based settings
+    m_buttonWidth = CFG_INT("SystemButtonWidth");
+    
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    
+    // Force refresh to redraw with new theme colors
+    Refresh(true);
+    Update();
 }

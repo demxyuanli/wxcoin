@@ -55,6 +55,7 @@ public:
     
     // Update scene lighting from configuration
     void updateSceneLighting();
+    void initializeLightingFromConfig();
 
     // Culling system integration
     void updateCulling();

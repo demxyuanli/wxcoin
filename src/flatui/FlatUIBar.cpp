@@ -99,6 +99,11 @@ FlatUIBar::FlatUIBar(wxWindow* parent, wxWindowID id, const wxPoint& pos, const 
     SetDoubleBuffered(true);
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
+
     SetBarTopMargin(0);
     SetBarBottomMargin(0);
 
@@ -249,6 +254,7 @@ FlatUIBar::~FlatUIBar() {
     }
 
     // Pages are now managed by PageManager - will be cleaned up automatically
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatUIBar::OnShow(wxShowEvent& event)
@@ -891,5 +897,72 @@ void FlatUIBar::HideTemporarilyShownPage()
         m_temporarilyShownPage = nullptr;
         LOG_INF("Hidden temporarily shown page", "FlatUIBar");
     }
+}
+
+void FlatUIBar::RefreshTheme()
+{
+    // Update all theme-based colors and settings
+    m_tabBorderColour = CFG_COLOUR("BarTabBorderColour");
+    m_tabBorderTopColour = CFG_COLOUR("BarActiveTabTopBorderColour");
+    m_tabBorderBottomColour = CFG_COLOUR("BarTabBorderColour");
+    m_tabBorderLeftColour = CFG_COLOUR("BarTabBorderColour");
+    m_tabBorderRightColour = CFG_COLOUR("BarTabBorderColour");
+    m_activeTabBgColour = CFG_COLOUR("ActBarBackgroundColour");
+    m_activeTabTextColour = CFG_COLOUR("BarActiveTextColour");
+    m_inactiveTabTextColour = CFG_COLOUR("BarInactiveTextColour");
+    m_barTopMargin = CFG_INT("BarTopMargin");
+    m_barBottomMargin = CFG_INT("BarBottomMargin");
+    m_tabTopSpacing = CFG_INT("TabTopSpacing");
+    m_barUnpinnedHeight = CFG_INT("BarUnpinnedHeight");
+    
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    
+    // Refresh all child components
+    if (m_homeSpace) {
+        m_homeSpace->Refresh(true);
+        m_homeSpace->Update();
+    }
+    if (m_functionSpace) {
+        m_functionSpace->Refresh(true);
+        m_functionSpace->Update();
+    }
+    if (m_profileSpace) {
+        m_profileSpace->Refresh(true);
+        m_profileSpace->Update();
+    }
+    if (m_systemButtons) {
+        m_systemButtons->Refresh(true);
+        m_systemButtons->Update();
+    }
+    if (m_fixPanel) {
+        m_fixPanel->Refresh(true);
+        m_fixPanel->Update();
+    }
+    if (m_floatPanel) {
+        m_floatPanel->Refresh(true);
+        m_floatPanel->Update();
+    }
+    if (m_tabFunctionSpacer) {
+        m_tabFunctionSpacer->Refresh(true);
+        m_tabFunctionSpacer->Update();
+    }
+    if (m_functionProfileSpacer) {
+        m_functionProfileSpacer->Refresh(true);
+        m_functionProfileSpacer->Update();
+    }
+    
+    // Refresh all pages
+    for (size_t i = 0; i < GetPageCount(); ++i) {
+        FlatUIPage* page = GetPage(i);
+        if (page) {
+            page->Refresh(true);
+            page->Update();
+        }
+    }
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }
 

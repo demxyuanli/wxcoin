@@ -1,12 +1,11 @@
 #include "MeshQualityDialog.h"
 #include "OCCViewer.h"
-#include "config/LocalizationConfig.h"
 #include "logger/Logger.h"
 #include <wx/statbox.h>
 #include <wx/notebook.h>
 
 MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
-    : wxDialog(parent, wxID_ANY, L("MeshQualityDialog/Title"), wxDefaultPosition, wxSize(600, 700))
+    : wxDialog(parent, wxID_ANY, "Advanced Mesh Quality Control", wxDefaultPosition, wxSize(600, 700))
     , m_occViewer(occViewer)
     , m_notebook(nullptr)
     , m_deflectionSlider(nullptr)
@@ -39,6 +38,25 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
     , m_featurePreservationSpinCtrl(nullptr)
     , m_parallelProcessingCheckBox(nullptr)
     , m_adaptiveMeshingCheckBox(nullptr)
+    , m_currentDeflection(0.1)
+    , m_currentLODEnabled(true)
+    , m_currentLODRoughDeflection(0.2)
+    , m_currentLODFineDeflection(0.05)
+    , m_currentLODTransitionTime(500)
+    , m_currentSubdivisionEnabled(false)
+    , m_currentSubdivisionLevel(2)
+    , m_currentSubdivisionMethod(0)
+    , m_currentSubdivisionCreaseAngle(30.0)
+    , m_currentSmoothingEnabled(false)
+    , m_currentSmoothingMethod(0)
+    , m_currentSmoothingIterations(2)
+    , m_currentSmoothingStrength(0.5)
+    , m_currentSmoothingCreaseAngle(30.0)
+    , m_currentTessellationMethod(0)
+    , m_currentTessellationQuality(2)
+    , m_currentFeaturePreservation(0.5)
+    , m_currentParallelProcessing(true)
+    , m_currentAdaptiveMeshing(false)
 {
     if (!m_occViewer) {
         LOG_ERR_S("OCCViewer is null in MeshQualityDialog");
@@ -118,12 +136,12 @@ void MeshQualityDialog::layoutControls()
     mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
     
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(new wxButton(this, wxID_APPLY, L("MeshQualityDialog/Apply")), 0, wxALL, 5);
-    buttonSizer->Add(new wxButton(this, wxID_RESET, L("MeshQualityDialog/Reset")), 0, wxALL, 5);
-    buttonSizer->Add(new wxButton(this, wxID_ANY, L("MeshQualityDialog/Validate")), 0, wxALL, 5);
-    buttonSizer->Add(new wxButton(this, wxID_ANY, L("MeshQualityDialog/ExportReport")), 0, wxALL, 5);
-    buttonSizer->Add(new wxButton(this, wxID_CANCEL, L("MeshQualityDialog/Cancel")), 0, wxALL, 5);
-    buttonSizer->Add(new wxButton(this, wxID_OK, L("MeshQualityDialog/OK")), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_APPLY, "Apply"), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_RESET, "Reset"), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_ANY, "Validate"), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_ANY, "Export Report"), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_OK, "OK"), 0, wxALL, 5);
     
     mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
     
@@ -327,8 +345,9 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
     LOG_INF_S("=== MESH QUALITY SETTINGS APPLIED SUCCESSFULLY ===");
     
     // Show success message
-    wxMessageBox(L("Messages/SettingsApplied") + "\n\n" + L("Messages/CheckLog"),
-                L("Messages/ValidationSuccess"), wxOK | wxICON_INFORMATION);
+    wxMessageBox("Mesh quality settings have been applied successfully!\n\n"
+                "Check the log for detailed information about the applied parameters.",
+                "Settings Applied", wxOK | wxICON_INFORMATION);
 }
 
 void MeshQualityDialog::onReset(wxCommandEvent& event)
@@ -533,25 +552,25 @@ void MeshQualityDialog::onValidate(wxCommandEvent& event)
     bool adaptiveMeshingOK = (m_occViewer->isAdaptiveMeshing() == m_currentAdaptiveMeshing);
     
     // Show detailed validation results
-    std::string result = "=== " + L("Messages/ValidationResults") + " ===\n\n";
-    result += L("MeshQualityDialog/BasicQuality") + ":\n";
-    result += "  " + L("MeshQualityDialog/MeshDeflection") + ": " + std::string(deflectionOK ? " " + L("Messages/Passed") : "" + L("Messages/Failed")) + 
+    std::string result = "=== MESH PARAMETER VALIDATION RESULTS ===\n\n";
+    result += "Basic Parameters:\n";
+    result += "  Deflection: " + std::string(deflectionOK ? " PASS" : " FAIL") + 
               " (Expected: " + std::to_string(m_currentDeflection) + ")\n";
     
-    result += "\n" + L("MeshQualityDialog/Subdivision") + ":\n";
-    result += "  " + L("MeshQualityDialog/SubdivisionEnabled") + ": " + std::string(subdivisionEnabledOK ? "" + L("Messages/Passed") : "" + L("Messages/Failed")) + 
+    result += "\nSubdivision Parameters:\n";
+    result += "  Enabled: " + std::string(subdivisionEnabledOK ? " PASS" : " FAIL") + 
               " (Expected: " + std::string(m_currentSubdivisionEnabled ? "true" : "false") + ")\n";
-    result += "  " + L("MeshQualityDialog/SubdivisionLevel") + ": " + std::string(subdivisionLevelOK ? "" + L("Messages/Passed") : "" + L("Messages/Failed")) + 
+    result += "  Level: " + std::string(subdivisionLevelOK ? " PASS" : " FAIL") + 
               " (Expected: " + std::to_string(m_currentSubdivisionLevel) + ")\n";
     
-    result += "\n" + L("MeshQualityDialog/Smoothing") + ":\n";
-    result += "  " + L("MeshQualityDialog/SmoothingEnabled") + ": " + std::string(smoothingEnabledOK ? " " + L("Messages/Passed") : "" + L("Messages/Failed")) + 
+    result += "\nSmoothing Parameters:\n";
+    result += "  Enabled: " + std::string(smoothingEnabledOK ? " PASS" : " FAIL") + 
               " (Expected: " + std::string(m_currentSmoothingEnabled ? "true" : "false") + ")\n";
-    result += "  " + L("MeshQualityDialog/SmoothingIterations") + ": " + std::string(smoothingIterationsOK ? " " + L("Messages/Passed") : "" + L("Messages/Failed")) + 
+    result += "  Iterations: " + std::string(smoothingIterationsOK ? " PASS" : " FAIL") + 
               " (Expected: " + std::to_string(m_currentSmoothingIterations) + ")\n";
     
-    result += "\n" + L("MeshQualityDialog/AdvancedTessellation") + ":\n";
-    result += "  " + L("MeshQualityDialog/AdaptiveMeshing") + ": " + std::string(adaptiveMeshingOK ? " " + L("Messages/Passed") : " " + L("Messages/Failed")) + 
+    result += "\nAdvanced Parameters:\n";
+    result += "  Adaptive Meshing: " + std::string(adaptiveMeshingOK ? " PASS" : " FAIL") + 
               " (Expected: " + std::string(m_currentAdaptiveMeshing ? "true" : "false") + ")\n";
     
     // Count total results
@@ -560,16 +579,16 @@ void MeshQualityDialog::onValidate(wxCommandEvent& event)
                       (smoothingIterationsOK ? 1 : 0) + (subdivisionEnabledOK ? 1 : 0) + 
                       (smoothingEnabledOK ? 1 : 0) + (adaptiveMeshingOK ? 1 : 0);
     
-    result += "\n=== " + L("Messages/Summary") + " ===\n";
-    result += L("Messages/Passed") + ": " + std::to_string(passedChecks) + "/" + std::to_string(totalChecks) + " " + L("Messages/Checks") + "\n";
+    result += "\n=== SUMMARY ===\n";
+    result += "Passed: " + std::to_string(passedChecks) + "/" + std::to_string(totalChecks) + " checks\n";
     
     if (passedChecks == totalChecks) {
-        result += "\n" + L("Messages/AllParametersApplied");
-        wxMessageBox(result, L("Messages/ValidationSuccess"), wxOK | wxICON_INFORMATION);
+        result += "\n All parameters applied successfully!";
+        wxMessageBox(result, "Validation Success", wxOK | wxICON_INFORMATION);
     } else {
-        result += "\n" + L("Messages/SomeParametersFailed") + "\n";
-        result += L("Messages/CheckLogForDetails");
-        wxMessageBox(result, L("Messages/ValidationWarning"), wxOK | wxICON_WARNING);
+        result += "\n  Some parameters failed to apply correctly.\n";
+        result += "Check the log for detailed information.";
+        wxMessageBox(result, "Validation Warning", wxOK | wxICON_WARNING);
     }
     
     LOG_INF_S("Validation completed: " + std::to_string(passedChecks) + "/" + std::to_string(totalChecks) + " checks passed");
@@ -619,10 +638,10 @@ void MeshQualityDialog::createBasicQualityPage()
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     
     // Mesh Deflection section
-    wxStaticBox* deflectionBox = new wxStaticBox(basicPage, wxID_ANY, L("MeshQualityDialog/MeshDeflection"));
+    wxStaticBox* deflectionBox = new wxStaticBox(basicPage, wxID_ANY, "Mesh Deflection");
     wxStaticBoxSizer* deflectionSizer = new wxStaticBoxSizer(deflectionBox, wxVERTICAL);
     
-    deflectionSizer->Add(new wxStaticText(basicPage, wxID_ANY, L("MeshQualityDialog/DeflectionDescription")), 0, wxALL, 5);
+    deflectionSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Deflection controls mesh precision (lower = higher quality):"), 0, wxALL, 5);
     
     m_deflectionSlider = new wxSlider(basicPage, wxID_ANY, 
         static_cast<int>(m_currentDeflection * 1000), 1, 1000,
@@ -638,16 +657,16 @@ void MeshQualityDialog::createBasicQualityPage()
     sizer->Add(deflectionSizer, 0, wxEXPAND | wxALL, 10);
     
     // LOD section
-    wxStaticBox* lodBox = new wxStaticBox(basicPage, wxID_ANY, L("MeshQualityDialog/LOD"));
+    wxStaticBox* lodBox = new wxStaticBox(basicPage, wxID_ANY, "Level of Detail (LOD)");
     wxStaticBoxSizer* lodSizer = new wxStaticBoxSizer(lodBox, wxVERTICAL);
     
-    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, L("MeshQualityDialog/LODDescription")), 0, wxALL, 5);
+    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, "LOD automatically adjusts mesh quality during interaction:"), 0, wxALL, 5);
     
-    m_lodEnableCheckBox = new wxCheckBox(basicPage, wxID_ANY, L("MeshQualityDialog/LODEnabled"));
+    m_lodEnableCheckBox = new wxCheckBox(basicPage, wxID_ANY, "Enable Level of Detail (LOD)");
     m_lodEnableCheckBox->SetValue(m_currentLODEnabled);
     lodSizer->Add(m_lodEnableCheckBox, 0, wxALL, 5);
     
-    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, L("MeshQualityDialog/LODRoughDeflection")), 0, wxALL, 5);
+    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Rough deflection (during interaction):"), 0, wxALL, 5);
     m_lodRoughDeflectionSlider = new wxSlider(basicPage, wxID_ANY,
         static_cast<int>(m_currentLODRoughDeflection * 1000), 1, 1000,
         wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
@@ -658,7 +677,7 @@ void MeshQualityDialog::createBasicQualityPage()
     lodSizer->Add(m_lodRoughDeflectionSlider, 0, wxEXPAND | wxALL, 5);
     lodSizer->Add(m_lodRoughDeflectionSpinCtrl, 0, wxALIGN_CENTER | wxALL, 5);
     
-    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, L("MeshQualityDialog/LODFineDeflection")), 0, wxALL, 5);
+    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Fine deflection (after interaction):"), 0, wxALL, 5);
     m_lodFineDeflectionSlider = new wxSlider(basicPage, wxID_ANY,
         static_cast<int>(m_currentLODFineDeflection * 1000), 1, 1000,
         wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
@@ -669,7 +688,7 @@ void MeshQualityDialog::createBasicQualityPage()
     lodSizer->Add(m_lodFineDeflectionSlider, 0, wxEXPAND | wxALL, 5);
     lodSizer->Add(m_lodFineDeflectionSpinCtrl, 0, wxALIGN_CENTER | wxALL, 5);
     
-    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, L("MeshQualityDialog/LODTransitionTime")), 0, wxALL, 5);
+    lodSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Transition time (milliseconds):"), 0, wxALL, 5);
     m_lodTransitionTimeSlider = new wxSlider(basicPage, wxID_ANY,
         m_currentLODTransitionTime, 100, 2000,
         wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
@@ -682,7 +701,7 @@ void MeshQualityDialog::createBasicQualityPage()
     
     sizer->Add(lodSizer, 0, wxEXPAND | wxALL, 10);
     basicPage->SetSizer(sizer);
-    m_notebook->AddPage(basicPage, L("MeshQualityDialog/BasicQuality"));
+    m_notebook->AddPage(basicPage, "Basic Quality");
 }
 
 void MeshQualityDialog::createSubdivisionPage()
@@ -690,21 +709,21 @@ void MeshQualityDialog::createSubdivisionPage()
     wxPanel* subdivisionPage = new wxPanel(m_notebook);
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     
-    wxStaticBox* subdivisionBox = new wxStaticBox(subdivisionPage, wxID_ANY, L("MeshQualityDialog/Subdivision"));
+    wxStaticBox* subdivisionBox = new wxStaticBox(subdivisionPage, wxID_ANY, "Subdivision Surface");
     wxStaticBoxSizer* subdivisionSizer = new wxStaticBoxSizer(subdivisionBox, wxVERTICAL);
     
-    subdivisionSizer->Add(new wxStaticText(subdivisionPage, wxID_ANY, L("MeshQualityDialog/SubdivisionDescription")), 0, wxALL, 5);
+    subdivisionSizer->Add(new wxStaticText(subdivisionPage, wxID_ANY, "Subdivision surfaces create smoother, higher quality meshes:"), 0, wxALL, 5);
     
-    m_subdivisionEnableCheckBox = new wxCheckBox(subdivisionPage, wxID_ANY, L("MeshQualityDialog/SubdivisionEnabled"));
+    m_subdivisionEnableCheckBox = new wxCheckBox(subdivisionPage, wxID_ANY, "Enable Subdivision Surfaces");
     m_subdivisionEnableCheckBox->SetValue(m_currentSubdivisionEnabled);
     subdivisionSizer->Add(m_subdivisionEnableCheckBox, 0, wxALL, 5);
     
-    subdivisionSizer->Add(new wxStaticText(subdivisionPage, wxID_ANY, L("MeshQualityDialog/SubdivisionMethod")), 0, wxALL, 5);
+    subdivisionSizer->Add(new wxStaticText(subdivisionPage, wxID_ANY, "Subdivision Method:"), 0, wxALL, 5);
     m_subdivisionMethodChoice = new wxChoice(subdivisionPage, wxID_ANY);
-    m_subdivisionMethodChoice->Append(L("MeshQualityDialog/CatmullClark"));
-    m_subdivisionMethodChoice->Append(L("MeshQualityDialog/Loop"));
-    m_subdivisionMethodChoice->Append(L("MeshQualityDialog/Butterfly"));
-    m_subdivisionMethodChoice->Append(L("MeshQualityDialog/DooSabin"));
+    m_subdivisionMethodChoice->Append("Catmull-Clark");
+    m_subdivisionMethodChoice->Append("Loop");
+    m_subdivisionMethodChoice->Append("Butterfly");
+    m_subdivisionMethodChoice->Append("Doo-Sabin");
     m_subdivisionMethodChoice->SetSelection(m_currentSubdivisionMethod);
     subdivisionSizer->Add(m_subdivisionMethodChoice, 0, wxEXPAND | wxALL, 5);
     
@@ -753,7 +772,7 @@ void MeshQualityDialog::createSmoothingPage()
     m_smoothingMethodChoice = new wxChoice(smoothingPage, wxID_ANY);
     m_smoothingMethodChoice->Append("Laplacian");
     m_smoothingMethodChoice->Append("Taubin");
-    m_smoothingMethodChoice->Append("HC Laplacian"); 
+    m_smoothingMethodChoice->Append("HC Laplacian");
     m_smoothingMethodChoice->Append("Bilateral");
     m_smoothingMethodChoice->SetSelection(m_currentSmoothingMethod);
     smoothingSizer->Add(m_smoothingMethodChoice, 0, wxEXPAND | wxALL, 5);

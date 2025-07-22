@@ -99,7 +99,11 @@ public:
     // Enable/disable selection
     void SetSelectionEnabled(bool enabled);
     bool GetSelectionEnabled() const { return m_selectionEnabled; }
-
+    
+    // Theme refresh method
+    void RefreshTheme();
+    
+    // Event handlers
     void OnMouseDown(wxMouseEvent& evt);
     void OnMouseMove(wxMouseEvent& evt);
     void OnMouseLeave(wxMouseEvent& evt);

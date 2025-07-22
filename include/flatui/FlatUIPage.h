@@ -33,6 +33,9 @@ public:
     void OnPaint(wxPaintEvent& evt);
     void OnSize(wxSizeEvent& evt);
 
+    // Theme refresh method
+    void RefreshTheme();
+
     void UpdateLayout();
 
 private:
