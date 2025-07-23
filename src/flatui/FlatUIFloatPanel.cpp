@@ -86,7 +86,7 @@ FlatUIFloatPanel::FlatUIFloatPanel(wxWindow* parent)
     wxBoxSizer* frameSizer = new wxBoxSizer(wxVERTICAL);
     frameSizer->Add(m_contentPanel, 1, wxEXPAND | wxALL, m_borderWidth);
     SetSizer(frameSizer);
-
+    SetDoubleBuffered(true);
     LOG_INF("Created FlatUIFloatPanel with scroll functionality", "FlatUIFloatPanel");
 }
 

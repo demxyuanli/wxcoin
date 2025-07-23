@@ -13,7 +13,7 @@
 #include <algorithm>
 
 ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
-    : wxPanel(parent, wxID_ANY)
+    : FlatUITitledPanel(parent, "CAD Object Tree")
     , m_propertyPanel(nullptr)
     , m_occViewer(nullptr)
     , m_isUpdatingSelection(false)
@@ -21,10 +21,7 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 {
     LOG_INF_S("ObjectTreePanel initializing");
     m_treeCtrl = new wxTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_DEFAULT_STYLE | wxTR_SINGLE);
-
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(m_treeCtrl, 1, wxEXPAND | wxALL, 5);
-    SetSizer(sizer);
+    m_mainSizer->Add(m_treeCtrl, 1, wxEXPAND | wxALL, 2);
 
     m_rootId = m_treeCtrl->AddRoot("Scene");
 

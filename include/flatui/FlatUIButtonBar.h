@@ -83,6 +83,9 @@ public:
     // Override theme change method
     virtual void OnThemeChanged() override;
 
+    // Override batch update method
+    virtual void UpdateThemeValues() override;
+
     // === BUTTON MANAGEMENT METHODS ===
     // Original button method
     void AddButton(int id, const wxString& label, const wxBitmap& bitmap = wxNullBitmap, wxMenu* menu = nullptr, const wxString& tooltip = wxEmptyString);
@@ -133,53 +136,53 @@ public:
     // === DISPLAY AND LAYOUT METHODS ===
     void SetDisplayStyle(ButtonDisplayStyle style);
     ButtonDisplayStyle GetDisplayStyle() const { return m_displayStyle; }
-    
+
     void SetButtonStyle(ButtonStyle style);
     ButtonStyle GetButtonStyle() const { return m_buttonStyle; }
-    
+
     void SetButtonBorderStyle(ButtonBorderStyle style);
     ButtonBorderStyle GetButtonBorderStyle() const { return m_buttonBorderStyle; }
-    
+
     // === COLOUR AND STYLE SETTERS ===
     void SetButtonBackgroundColour(const wxColour& colour);
     wxColour GetButtonBackgroundColour() const { return m_buttonBgColour; }
-    
+
     void SetButtonHoverBackgroundColour(const wxColour& colour);
     wxColour GetButtonHoverBackgroundColour() const { return m_buttonHoverBgColour; }
-    
+
     void SetButtonPressedBackgroundColour(const wxColour& colour);
     wxColour GetButtonPressedBackgroundColour() const { return m_buttonPressedBgColour; }
-    
+
     void SetButtonTextColour(const wxColour& colour);
     wxColour GetButtonTextColour() const { return m_buttonTextColour; }
-    
+
     void SetButtonBorderColour(const wxColour& colour);
     wxColour GetButtonBorderColour() const { return m_buttonBorderColour; }
-    
+
     void SetButtonBorderWidth(int width);
     int GetButtonBorderWidth() const { return m_buttonBorderWidth; }
-    
+
     void SetButtonCornerRadius(int radius);
     int GetButtonCornerRadius() const { return m_buttonCornerRadius; }
-    
+
     void SetButtonSpacing(int spacing);
     int GetButtonSpacing() const { return m_buttonSpacing; }
-    
+
     void SetButtonPadding(int horizontal, int vertical);
     void GetButtonPadding(int& horizontal, int& vertical) const;
-    
+
     void SetBtnBarBackgroundColour(const wxColour& colour);
     wxColour GetBtnBarBackgroundColour() const { return m_btnBarBgColour; }
-    
+
     void SetBtnBarBorderColour(const wxColour& colour);
     wxColour GetBtnBarBorderColour() const { return m_btnBarBorderColour; }
-    
+
     void SetBtnBarBorderWidth(int width);
     int GetBtnBarBorderWidth() const { return m_btnBarBorderWidth; }
-    
+
     void SetHoverEffectsEnabled(bool enabled);
     bool GetHoverEffectsEnabled() const { return m_hoverEffectsEnabled; }
-    
+
     // Event handlers
     void OnPaint(wxPaintEvent& evt);
     void OnMouseDown(wxMouseEvent& evt);
@@ -197,7 +200,7 @@ public:
     void DrawButtonText(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
     void DrawButtonDropdownArrow(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
     void DrawButtonSeparator(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
-
+    
     // Specialized drawing methods for different button types
     void DrawToggleButton(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
     void DrawCheckBox(wxDC& dc, const ButtonInfo& button, const wxRect& rect);
@@ -206,7 +209,7 @@ public:
     void DrawCheckBoxIndicator(wxDC& dc, const wxRect& rect, bool checked, bool enabled);
     void DrawRadioButtonIndicator(wxDC& dc, const wxRect& rect, bool checked, bool enabled);
     void DrawChoiceDropdownArrow(wxDC& dc, const wxRect& rect, bool enabled);
-
+    
     // Button finding and utility methods
     ButtonInfo* FindButton(int id);
     const ButtonInfo* FindButton(int id) const;
@@ -214,7 +217,7 @@ public:
     wxRect GetCheckBoxIndicatorRect(const wxRect& buttonRect) const;
     wxRect GetRadioButtonIndicatorRect(const wxRect& buttonRect) const;
     wxRect GetChoiceDropdownRect(const wxRect& buttonRect) const;
-
+    
     // Event handling methods for different button types
     void HandleToggleButton(ButtonInfo& button);
     void HandleCheckBox(ButtonInfo& button);
@@ -266,6 +269,9 @@ private:
     std::map<int, std::vector<int>> m_radioGroups; // radioGroup -> button IDs
 
 protected:
+    int m_topMargin = 0;
+public:
+    int GetTopMargin() const { return m_topMargin; }
     // Override wxControl virtual method
     wxSize DoGetBestSize() const override;
 };

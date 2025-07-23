@@ -1,11 +1,11 @@
 #pragma once
 
-#include <wx/panel.h>
+#include "flatui/FlatUITitledPanel.h"
 #include <wx/propgrid/propgrid.h>
 #include "GeometryObject.h"
 #include "OCCGeometry.h"
 
-class PropertyPanel : public wxPanel
+class PropertyPanel : public FlatUITitledPanel
 {
 public:
     PropertyPanel(wxWindow* parent);

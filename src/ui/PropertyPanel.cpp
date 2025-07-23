@@ -7,14 +7,11 @@
 #include <memory>
 
 PropertyPanel::PropertyPanel(wxWindow* parent)
-    : wxPanel(parent, wxID_ANY)
+    : FlatUITitledPanel(parent, "Object Properties")
 {
     LOG_INF_S("PropertyPanel initializing");
     m_propGrid = new wxPropertyGrid(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxPG_DEFAULT_STYLE | wxPG_SPLITTER_AUTO_CENTER);
-
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    sizer->Add(m_propGrid, 1, wxEXPAND | wxALL, 5);
-    SetSizer(sizer);
+    m_mainSizer->Add(m_propGrid, 1, wxEXPAND | wxALL, 2);
 
     m_propGrid->Bind(wxEVT_PG_CHANGED, &PropertyPanel::onPropertyChanged, this);
 }

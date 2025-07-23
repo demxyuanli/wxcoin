@@ -6,6 +6,7 @@
 #ifdef __WXMSW__
 #include <windows.h>
 #endif
+#include "flatui/FlatUIStatusBar.h"
 
 // Enum to represent window edges/corners for resizing
 enum class ResizeMode {
@@ -30,8 +31,13 @@ public:
 
     void ResetCursorToDefault();
     void UpdateMinSizeBasedOnBarContent();
+    wxBoxSizer* GetMainSizer() const { return m_mainSizer; }
+    void SetStatusText(const wxString& text, int field = 0);
+    FlatUIStatusBar* GetFlatUIStatusBar() const { return m_statusBar; }
 
 protected:
+    wxBoxSizer* m_mainSizer = nullptr;
+    FlatUIStatusBar* m_statusBar = nullptr;
     // Core mouse event handlers for dragging and resizing
     virtual void OnLeftDown(wxMouseEvent& event);
     virtual void OnLeftUp(wxMouseEvent& event);
@@ -62,6 +68,8 @@ protected:
     // Override SetSize methods to handle adaptive UI
     virtual void SetSize(const wxRect& rect) ;
     virtual void SetSize(const wxSize& size) ;
+
+    void addStatusBar();
 
 #ifdef __WXMSW__
     void OnDPIChanged(wxDPIChangedEvent& event);

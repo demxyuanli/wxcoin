@@ -1,6 +1,6 @@
 #pragma once
 
-#include <wx/panel.h>
+#include "flatui/FlatUITitledPanel.h"
 #include <wx/treectrl.h>
 #include <map>
 #include <vector>
@@ -12,7 +12,7 @@
 // Forward declarations
 class OCCViewer;
 
-class ObjectTreePanel : public wxPanel
+class ObjectTreePanel : public FlatUITitledPanel
 {
 public:
     ObjectTreePanel(wxWindow* parent);
@@ -62,7 +62,6 @@ private:
     void createContextMenu();
     void updateTreeItemIcon(wxTreeItemId itemId, bool visible);
     std::shared_ptr<OCCGeometry> getSelectedOCCGeometry();
-
 
     wxTreeCtrl* m_treeCtrl;
     wxTreeItemId m_rootId;

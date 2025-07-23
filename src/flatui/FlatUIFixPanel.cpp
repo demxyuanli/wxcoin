@@ -29,8 +29,6 @@ FlatUIFixPanel::FlatUIFixPanel(wxWindow* parent, wxWindowID id)
 {
     SetName("FlatUIFixPanel");
     SetDoubleBuffered(true);
-    SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
 
 #ifdef __WXMSW__
     HWND hwnd = (HWND)GetHandle();

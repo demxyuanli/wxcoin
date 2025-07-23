@@ -97,7 +97,7 @@ private:
     FlatUIHomeMenu* m_homeMenu;
     wxPanel* m_searchPanel;
     wxPanel* m_profilePanel;
-    wxStatusBar* m_statusBar;
+    FlatUIStatusBar* m_statusBar;
 
     wxAuiManager m_auiManager;
 

@@ -3,6 +3,7 @@
 
 #include "flatui/BorderlessFrameLogic.h"
 #include "flatui/FlatUIBar.h"
+#include "flatui/FlatUIStatusBar.h"
 #include <wx/log.h>
 
 // Custom events for FlatUIFrame
@@ -49,6 +50,7 @@ public:
     virtual void RefreshAllUI();
 
 protected:
+    FlatUIStatusBar* m_statusBar = nullptr;
     // Helper methods for minimum size calculation and adaptive UI
     int CalculateMinimumWidth() const;
     int CalculateMinimumHeight() const;

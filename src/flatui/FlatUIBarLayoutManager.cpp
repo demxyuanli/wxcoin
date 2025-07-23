@@ -55,8 +55,12 @@ void FlatUIBarLayoutManager::UpdateLayout(const wxSize& barClientSize)
     int barStripHeight = m_bar->GetBarHeight();
     int barTopMargin = m_bar->GetBarTopMargin();
     int barBottomMargin = m_bar->GetBarBottomMargin();
-    int innerHeight = barStripHeight - barTopMargin - barBottomMargin;
-    int elementY = barTopMargin;
+    
+    // In unpinned state, elements should start at the top (no margin)
+    // In pinned state, elements should have top margin
+    bool isPinned = m_bar->GetStateManager() ? m_bar->GetStateManager()->IsPinned() : false;
+    int elementY = isPinned ? barTopMargin : 0;
+    int innerHeight = barStripHeight - (isPinned ? barTopMargin : 0) - barBottomMargin;
     
     // Debug: Log bar measurements
     // LOG_INF_S("Bar measurements: barStripHeight=" + std::to_string(barStripHeight) + 

@@ -68,6 +68,29 @@ public:
         OnThemeChanged();
     }
 
+    /**
+     * @brief Batch refresh method - updates theme values without immediate refresh
+     * 
+     * This method should be overridden by derived classes to update theme values
+     * without triggering immediate refresh. The actual refresh will be handled
+     * by the parent frame to avoid multiple refreshes.
+     */
+    virtual void UpdateThemeValues()
+    {
+        // Default implementation - just call OnThemeChanged
+        OnThemeChanged();
+    }
+
+    /**
+     * @brief Check if this control needs refresh after theme change
+     * 
+     * @return true if the control needs refresh, false otherwise
+     */
+    virtual bool NeedsThemeRefresh() const
+    {
+        return true;
+    }
+
 protected:
     /**
      * @brief Helper method to get current theme color
@@ -106,6 +129,20 @@ protected:
     wxFont GetThemeFont() const
     {
         return CFG_DEFAULTFONT();
+    }
+
+    /**
+     * @brief Batch refresh method - updates theme values and marks for refresh
+     * 
+     * This method updates theme values and marks the control for refresh
+     * without immediately calling Refresh(). The actual refresh will be
+     * handled by the parent frame.
+     */
+    void BatchUpdateTheme()
+    {
+        UpdateThemeValues();
+        // Mark for refresh but don't call Refresh() immediately
+        // The parent frame will handle the actual refresh
     }
 
 private:

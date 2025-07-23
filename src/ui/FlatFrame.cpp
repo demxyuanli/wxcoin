@@ -290,7 +290,7 @@ FlatFrame::~FlatFrame()
 
 void FlatFrame::InitializeUI(const wxSize& size)
 {
-    SetBackgroundColour(CFG_COLOUR("FrameAppWorkspaceColour"));
+    SetBackgroundColour(CFG_COLOUR("TitledPanelBgColour"));
 
     int barHeight = FlatUIBar::GetBarHeight();
     m_ribbon = new FlatUIBar(this, wxID_ANY, wxDefaultPosition, wxSize(-1, barHeight * 3));
@@ -534,13 +534,13 @@ void FlatFrame::InitializeUI(const wxSize& size)
     setupCommandSystem();
 
     // Create status bar manually and add to main sizer
-    m_statusBar = new wxStatusBar(this, wxID_ANY);
-    m_statusBar->SetStatusText("Ready - Command system initialized", 0);
+    // m_statusBar = new FlatUIStatusBar(this);
+    // m_statusBar->SetStatusText("Ready - Command system initialized", 0);
     
     // Add status bar to main sizer
-    if (GetSizer()) {
-        GetSizer()->Add(m_statusBar, 0, wxEXPAND | wxALL, 0);
-    }
+    // if (GetSizer()) {
+    //     GetSizer()->Add(m_statusBar, 0, wxEXPAND | wxALL, 0);
+    // }
 
     SetClientSize(size); // Default size
     Layout();
@@ -558,8 +558,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
 // Complete createPanels method
 void FlatFrame::createPanels() {
 
-    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-    mainSizer->Add(m_ribbon, 0, wxEXPAND | wxALL, 2);
+    wxBoxSizer* mainSizer = GetMainSizer();
+    mainSizer->Add(m_ribbon, 0, wxEXPAND | wxALL, 1);
     
     LOG_INF_S("Creating panels...");
     if (m_mainSplitter) { m_mainSplitter->Destroy(); m_mainSplitter = nullptr; }
@@ -567,12 +567,19 @@ void FlatFrame::createPanels() {
 
     // Create main horizontal splitter (left panels vs right canvas)
     m_mainSplitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE);
+    m_mainSplitter->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_mainSplitter->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+    m_mainSplitter->SetDoubleBuffered(true);
     m_mainSplitter->SetSashGravity(0.0); // Fixed position for left side
     m_mainSplitter->SetMinimumPaneSize(200); // Left side minimum width
 
     // Create left vertical splitter (object tree vs property panel)
     m_leftSplitter = new wxSplitterWindow(m_mainSplitter, wxID_ANY);
+    m_leftSplitter->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_leftSplitter->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+    m_leftSplitter->SetDoubleBuffered(true);
     m_leftSplitter->SetSashGravity(0.0); // Fixed position for property panel
+
     m_leftSplitter->SetMinimumPaneSize(200); // Property panel minimum height
 
     // Create object tree panel (top of left side)
@@ -589,9 +596,9 @@ void FlatFrame::createPanels() {
     
     // Split main window vertically: left panels vs right canvas
     m_mainSplitter->SplitVertically(m_leftSplitter, m_canvas);
-
+    m_mainSplitter->SetSashPosition(200);
     // Create main vertical sizer: ribbon at top, splitter in middle
-    mainSizer->Add(m_mainSplitter, 1, wxEXPAND | wxALL, 5);
+    mainSizer->Add(m_mainSplitter, 1, wxEXPAND | wxALL, 2);
     SetSizer(mainSizer);
     Layout();
 
@@ -630,6 +637,8 @@ void FlatFrame::createPanels() {
         LOG_INF_S("Initial view set to isometric and fit to scene");
     }
     LOG_INF_S("Panels creation completed successfully");
+
+    addStatusBar();
 }
 
 void FlatFrame::setupCommandSystem() {
@@ -1141,20 +1150,17 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
         CommandResult result = m_listenerManager->dispatch(commandType, parameters);
         onCommandFeedback(result);
     } else {
-        LOG_ERR_S("No listener registered for command"); SetStatusText("Error: No listener registered", 0);
+        SetStatusText("Error: No listener registered", 0);
+        LOG_ERR_S("No listener registered for command");
     }
 }
 
 void FlatFrame::onCommandFeedback(const CommandResult& result) {
     if (result.success) {
-        if (m_statusBar) {
-            m_statusBar->SetStatusText(result.message.empty() ? "Command executed successfully" : result.message, 0);
-        }
+        SetStatusText(result.message.empty() ? "Command executed successfully" : result.message, 0);
         LOG_INF_S("Command executed: " + result.commandId);
     } else {
-        if (m_statusBar) {
-            m_statusBar->SetStatusText("Error: " + result.message, 0);
-        }
+        SetStatusText("Error: " + result.message, 0);
         LOG_ERR_S("Command failed: " + result.commandId + " - " + result.message);
         if (!result.message.empty() && result.commandId != "UNKNOWN") { wxMessageBox(result.message, "Command Error", wxOK | wxICON_ERROR, this); }
     }

@@ -37,6 +37,10 @@ BorderlessFrameLogic::BorderlessFrameLogic(wxWindow* parent, wxWindowID id, cons
     m_eventFilter = new BorderlessFrameLogicEventFilter(this);
     this->PushEventHandler(m_eventFilter);
 
+    m_mainSizer = new wxBoxSizer(wxVERTICAL);
+    SetSizer(m_mainSizer);
+    m_statusBar = new FlatUIStatusBar(this);
+
     Refresh(); // Ensure background is painted initially
 }
 
@@ -534,4 +538,15 @@ void BorderlessFrameLogic::SetSize(const wxSize& size)
 {
     // Call the base wxFrame::SetSize method
     wxFrame::SetSize(size);
+}
+
+void BorderlessFrameLogic::addStatusBar()
+{
+    // Call the base wxFrame::SetSize method
+    m_mainSizer->Add(m_statusBar, 0, wxEXPAND | wxALL, 1);
+}
+
+
+void BorderlessFrameLogic::SetStatusText(const wxString& text, int field) {
+    if (m_statusBar) m_statusBar->SetStatusText(text, field);
 }

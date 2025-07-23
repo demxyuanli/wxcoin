@@ -3,11 +3,12 @@
 
 #include <wx/wx.h>
 #include <wx/vector.h>
+#include "flatui/FlatUIThemeAware.h"
 
 // Forward declaration
 class FlatUIPanel;
 
-class FlatUIGallery : public wxControl
+class FlatUIGallery : public FlatUIThemeAware
 {
 public:
     // Gallery Item Style
@@ -99,9 +100,12 @@ public:
     // Enable/disable selection
     void SetSelectionEnabled(bool enabled);
     bool GetSelectionEnabled() const { return m_selectionEnabled; }
-    
-    // Theme refresh method
-    void RefreshTheme();
+
+    // Override theme change method
+    virtual void OnThemeChanged() override;
+
+    // Override batch update method
+    virtual void UpdateThemeValues() override;
     
     // Event handlers
     void OnMouseDown(wxMouseEvent& evt);

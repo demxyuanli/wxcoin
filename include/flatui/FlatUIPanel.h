@@ -39,6 +39,9 @@ public:
     // Override theme change method
     virtual void OnThemeChanged() override;
 
+    // Override batch update method
+    virtual void UpdateThemeValues() override;
+
     void AddButtonBar(FlatUIButtonBar* buttonBar, int proportion = 0, int flag = wxEXPAND | wxALL, int border = 5);
     void AddGallery(FlatUIGallery* gallery, int proportion = 0, int flag = wxEXPAND | wxALL, int border = 5);
     wxString GetLabel() const { return m_label; }
@@ -107,8 +110,8 @@ private:
     int m_panelBorderRight;
     
     // Header properties
-    PanelHeaderStyle m_headerStyle;
-    wxColour m_headerColour;
+    PanelHeaderStyle m_headerStyle; 
+    wxColour m_headerColour;         
     wxColour m_headerTextColour;
     wxColour m_headerBorderColour;
     

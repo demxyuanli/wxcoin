@@ -40,6 +40,8 @@ FlatUIPanel::FlatUIPanel(FlatUIPage* parent, const wxString& label, int orientat
     // int padVertical = CFG_INT("PanelInternalVerticalPadding", FLATUI_PANEL_INTERNAL_VERTICAL_PADDING);
     // int targetHeight= CFG_INT("PanelTargetHeight", FLATUI_PANEL_TARGET_HEIGHT);
 
+    SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
 #ifdef __WXMSW__
@@ -319,6 +321,12 @@ FlatUIPanel::~FlatUIPanel()
 
 void FlatUIPanel::OnThemeChanged()
 {
+    // Use batch update to avoid multiple refreshes
+    BatchUpdateTheme();
+}
+
+void FlatUIPanel::UpdateThemeValues()
+{
     // Update all theme-based colors and settings
     m_bgColour = GetThemeColour("ActBarBackgroundColour");
     m_borderColour = GetThemeColour("PanelBorderColour");
@@ -330,30 +338,26 @@ void FlatUIPanel::OnThemeChanged()
     SetFont(GetThemeFont());
     SetBackgroundColour(m_bgColour);
     
-    // Refresh all child controls
+    // Update child controls without immediate refresh
     wxWindowList& children = GetChildren();
     for (wxWindow* child : children) {
         // Check if child has RefreshTheme method
         wxString className = child->GetClassInfo()->GetClassName();
         if (className == wxT("FlatUIButtonBar")) {
             FlatUIButtonBar* buttonBar = static_cast<FlatUIButtonBar*>(child);
-            buttonBar->RefreshTheme();
+            buttonBar->UpdateThemeValues();
         }
         else if (className == wxT("FlatUIGallery")) {
             // FlatUIGallery will be handled separately if needed
-            child->Refresh(true);
-            child->Update();
+            // Don't refresh here - let parent frame handle it
         }
         else {
-            // For other controls, just refresh
-            child->Refresh(true);
-            child->Update();
+            // For other controls, just update properties without refresh
+            // Don't refresh here - let parent frame handle it
         }
     }
     
-    // Force refresh
-    Refresh(true);
-    Update();
+    // Note: Don't call Refresh() here - it will be handled by the parent frame
 }
 
 void FlatUIPanel::SetPanelBackgroundColour(const wxColour& colour)

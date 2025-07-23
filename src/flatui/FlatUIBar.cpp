@@ -435,7 +435,10 @@ void FlatUIBar::OnSize(wxSizeEvent& evt)
     // Position the container to fill the bar area
     if (m_barContainer) {
         int barHeight = GetBarHeight();
-        m_barContainer->SetPosition(wxPoint(0, m_barTopMargin));
+        // In unpinned state, barContainer should be at the top (no margin)
+        // In pinned state, barContainer should have top margin
+        int topMargin = m_stateManager->IsPinned() ? m_barTopMargin : 0;
+        m_barContainer->SetPosition(wxPoint(0, topMargin));
         m_barContainer->SetSize(newSize.GetWidth(), barHeight);
         
         // Force container layout update
@@ -651,6 +654,15 @@ void FlatUIBar::OnGlobalPinStateChanged(bool isPinned)
                std::to_string(clientSize.GetHeight()) + ")", "FlatUIBar");
         
         m_layoutManager->UpdateLayout(clientSize);
+        
+        // Update barContainer position based on pin state
+        if (m_barContainer) {
+            int barHeight = GetBarHeight();
+            int topMargin = isPinned ? m_barTopMargin : 0;
+            m_barContainer->SetPosition(wxPoint(0, topMargin));
+            m_barContainer->SetSize(clientSize.GetWidth(), barHeight);
+            m_barContainer->UpdateLayout();
+        }
         
         // Verify FixPanel position after layout
         if (m_fixPanel && m_fixPanel->IsShown()) {
@@ -917,6 +929,16 @@ void FlatUIBar::RefreshTheme()
     
     // Update control properties
     SetFont(CFG_DEFAULTFONT());
+    
+    // Update barContainer position based on current pin state
+    if (m_barContainer) {
+        wxSize clientSize = GetClientSize();
+        int barHeight = GetBarHeight();
+        int topMargin = m_stateManager->IsPinned() ? m_barTopMargin : 0;
+        m_barContainer->SetPosition(wxPoint(0, topMargin));
+        m_barContainer->SetSize(clientSize.GetWidth(), barHeight);
+        m_barContainer->UpdateLayout();
+    }
     
     // Refresh all child components
     if (m_homeSpace) {

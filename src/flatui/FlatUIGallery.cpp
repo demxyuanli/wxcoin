@@ -7,14 +7,14 @@
 #include "config/ThemeManager.h"
 
 FlatUIGallery::FlatUIGallery(FlatUIPanel* parent)
-    : wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
+    : FlatUIThemeAware(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE),
     m_itemStyle(ItemStyle::DEFAULT),
     m_itemBorderStyle(ItemBorderStyle::SOLID),
     m_layoutStyle(LayoutStyle::HORIZONTAL),
-    m_itemBgColour(CFG_COLOUR("GalleryItemBgColour")),
-    m_itemHoverBgColour(CFG_COLOUR("GalleryItemHoverBgColour")),
-    m_itemSelectedBgColour(CFG_COLOUR("GalleryItemSelectedBgColour")),
-    m_itemBorderColour(CFG_COLOUR("GalleryItemBorderColour")),
+    m_itemBgColour(GetThemeColour("GalleryItemBgColour")),
+    m_itemHoverBgColour(GetThemeColour("GalleryItemHoverBgColour")),
+    m_itemSelectedBgColour(GetThemeColour("GalleryItemSelectedBgColour")),
+    m_itemBorderColour(GetThemeColour("GalleryItemBorderColour")),
     m_itemBorderWidth(0),
     m_itemCornerRadius(0),
     m_galleryBorderWidth(0),
@@ -28,18 +28,13 @@ FlatUIGallery::FlatUIGallery(FlatUIPanel* parent)
     SetDoubleBuffered(true);
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
-    // Register theme change listener
-    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
-        RefreshTheme();
-    });
-
-    m_galleryBgColour     = CFG_COLOUR("ActBarBackgroundColour");
-    m_galleryBorderColour = CFG_COLOUR("ActBarBackgroundColour");
-    m_itemSpacing         = CFG_INT("GalleryItemSpacing");
-    m_itemPadding         = CFG_INT("GalleryItemPadding");
-    int targetH           = CFG_INT("GalleryTargetHeight");
-    int horizMargin       = CFG_INT("GalleryHorizontalMargin");
-    int galleryVerticalPadding = CFG_INT("GalleryInternalVerticalPadding");
+    m_galleryBgColour     = GetThemeColour("ActBarBackgroundColour");
+    m_galleryBorderColour = GetThemeColour("ActBarBackgroundColour");
+    m_itemSpacing         = GetThemeInt("GalleryItemSpacing");
+    m_itemPadding         = GetThemeInt("GalleryItemPadding");
+    int targetH           = GetThemeInt("GalleryTargetHeight");
+    int horizMargin       = GetThemeInt("GalleryHorizontalMargin");
+    int galleryVerticalPadding = GetThemeInt("GalleryInternalVerticalPadding");
     SetMinSize(wxSize(targetH * 2, targetH));
 
     Bind(wxEVT_PAINT, &FlatUIGallery::OnPaint, this);
@@ -51,7 +46,7 @@ FlatUIGallery::FlatUIGallery(FlatUIPanel* parent)
 
 FlatUIGallery::~FlatUIGallery()
 {
-    ThemeManager::getInstance().removeThemeChangeListener(this);
+    // Clean up any resources if needed
 }
 
 void FlatUIGallery::AddItem(const wxBitmap& bitmap, int id)
@@ -478,28 +473,32 @@ void FlatUIGallery::SetSelectionEnabled(bool enabled)
     }
 }
 
-void FlatUIGallery::RefreshTheme()
+void FlatUIGallery::OnThemeChanged()
+{
+    // Use batch update to avoid multiple refreshes
+    BatchUpdateTheme();
+}
+
+void FlatUIGallery::UpdateThemeValues()
 {
     // Update all theme-based colors and settings
-    m_itemBgColour = CFG_COLOUR("GalleryItemBgColour");
-    m_itemHoverBgColour = CFG_COLOUR("GalleryItemHoverBgColour");
-    m_itemSelectedBgColour = CFG_COLOUR("GalleryItemSelectedBgColour");
-    m_itemBorderColour = CFG_COLOUR("GalleryItemBorderColour");
-    m_galleryBgColour = CFG_COLOUR("ActBarBackgroundColour");
-    m_galleryBorderColour = CFG_COLOUR("ActBarBackgroundColour");
+    m_itemBgColour = GetThemeColour("GalleryItemBgColour");
+    m_itemHoverBgColour = GetThemeColour("GalleryItemHoverBgColour");
+    m_itemSelectedBgColour = GetThemeColour("GalleryItemSelectedBgColour");
+    m_itemBorderColour = GetThemeColour("GalleryItemBorderColour");
+    m_galleryBgColour = GetThemeColour("ActBarBackgroundColour");
+    m_galleryBorderColour = GetThemeColour("ActBarBackgroundColour");
     
-    m_itemSpacing = CFG_INT("GalleryItemSpacing");
-    m_itemPadding = CFG_INT("GalleryItemPadding");
-    int targetH = CFG_INT("GalleryTargetHeight");
-    int horizMargin = CFG_INT("GalleryHorizontalMargin");
-    int galleryVerticalPadding = CFG_INT("GalleryInternalVerticalPadding");
+    m_itemSpacing = GetThemeInt("GalleryItemSpacing");
+    m_itemPadding = GetThemeInt("GalleryItemPadding");
+    int targetH = GetThemeInt("GalleryTargetHeight");
+    int horizMargin = GetThemeInt("GalleryHorizontalMargin");
+    int galleryVerticalPadding = GetThemeInt("GalleryInternalVerticalPadding");
     
     // Update control properties
-    SetFont(CFG_DEFAULTFONT());
+    SetFont(GetThemeFont());
     SetBackgroundColour(m_galleryBgColour);
     SetMinSize(wxSize(targetH * 2, targetH));
     
-    // Force refresh
-    Refresh(true);
-    Update();
+    // Note: Don't call Refresh() here - it will be handled by the parent frame
 }
