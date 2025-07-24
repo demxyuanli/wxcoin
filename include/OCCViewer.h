@@ -10,6 +10,7 @@
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
+#include "EdgeTypes.h"
 
 // Forward declarations
 class OCCGeometry;
@@ -65,11 +66,9 @@ public:
 
     // Display modes
     void setWireframeMode(bool wireframe);
-    void setShadingMode(bool shaded);
     void setShowEdges(bool showEdges);
     void setAntiAliasing(bool enabled);
     bool isWireframeMode() const;
-    bool isShadingMode() const;
     bool isShowEdges() const;
     bool isShowNormals() const;
 
@@ -175,6 +174,17 @@ public:
     bool isShowNormalsFlag() const;
     void updateDisplay();
 
+    EdgeDisplayFlags globalEdgeFlags;
+    void setShowOriginalEdges(bool show);
+    void setShowFeatureEdges(bool show);
+    void setShowMeshEdges(bool show);
+    void setShowHighlightEdges(bool show);
+    void setShowNormalLines(bool show);
+    void setShowFaceNormalLines(bool show);
+    void toggleEdgeType(EdgeType type, bool show);
+    bool isEdgeTypeEnabled(EdgeType type) const;
+    void updateAllEdgeDisplays();
+
 private:
     void initializeViewer();
     void onLODTimer();
@@ -254,6 +264,6 @@ private:
     DisplayFlags m_displayFlags;
     void drawFaces();
     void drawWireframe();
-    void drawEdges();
+    // drawEdges() declaration removed - edge display is now handled by EdgeComponent system
     void drawNormals();
 };

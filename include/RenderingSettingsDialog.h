@@ -55,7 +55,6 @@ public:
     double getAlphaThreshold() const { return m_alphaThreshold; }
 
     // Shading settings
-    RenderingConfig::ShadingMode getShadingMode() const { return m_shadingMode; }
     bool isSmoothNormalsEnabled() const { return m_smoothNormals; }
     double getWireframeWidth() const { return m_wireframeWidth; }
     double getPointSize() const { return m_pointSize; }
@@ -96,7 +95,7 @@ private:
     void createLightingPage();
     void createTexturePage();
     void createBlendPage();
-    void createShadingPage();
+    // Removed createShadingPage - functionality not needed
     void createDisplayPage();
     void createQualityPage();
     void createShadowPage();
@@ -135,7 +134,6 @@ private:
     void onAlphaThresholdSlider(wxCommandEvent& event);
     
     // Shading events
-    void onShadingModeChoice(wxCommandEvent& event);
     void onSmoothNormalsCheckbox(wxCommandEvent& event);
     void onWireframeWidthSlider(wxCommandEvent& event);
     void onPointSizeSlider(wxCommandEvent& event);
@@ -321,7 +319,6 @@ private:
     double m_alphaThreshold;
     
     // Shading settings values
-    RenderingConfig::ShadingMode m_shadingMode;
     bool m_smoothNormals;
     double m_wireframeWidth;
     double m_pointSize;

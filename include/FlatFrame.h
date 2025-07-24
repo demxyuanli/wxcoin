@@ -51,8 +51,11 @@ enum {
     ID_FIX_NORMALS,
     ID_SET_TRANSPARENCY,
     ID_TOGGLE_WIREFRAME,
-    ID_TOGGLE_SHADING,
+    // Removed ID_TOGGLE_SHADING - functionality not needed
     ID_TOGGLE_EDGES,
+    ID_VIEW_SHOW_ORIGINAL_EDGES, // 新增：显示原始边
+    ID_SHOW_MESH_EDGES, // 新增：显示网格边
+    ID_SHOW_FACE_NORMALS, // 新增：显示面法线
 
     ID_UNDO,
     ID_REDO,

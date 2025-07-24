@@ -11,6 +11,7 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewIsometricListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ShowNormalsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FixNormalsListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShowOriginalEdgesListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ShowEdgesListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SetTransparencyListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewModeListener.cpp
@@ -43,6 +44,9 @@ set(COMMANDS_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsListener.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoordinateSystemVisibilityListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShowMeshEdgesListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShowWireFrameListener.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ShowFaceNormalsListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -69,6 +73,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ViewRightListener.h
     ${CMAKE_SOURCE_DIR}/include/ViewIsometricListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowNormalsListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowOriginalEdgesListener.h
     ${CMAKE_SOURCE_DIR}/include/FixNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowEdgesListener.h
     ${CMAKE_SOURCE_DIR}/include/SetTransparencyListener.h
@@ -90,6 +95,9 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/EdgeSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/LightingSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/CoordinateSystemVisibilityListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowMeshEdgesListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowWireFrameListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowFaceNormalsListener.h
 )
 
 # Create command static library

@@ -7,6 +7,7 @@
 #include <wx/msgdlg.h>
 #include <wx/settings.h>
 #include <string>
+#include "EdgeComponent.h"
 
 EdgeSettingsDialog::EdgeSettingsDialog(wxWindow* parent, OCCViewer* viewer)
     : wxDialog(parent, wxID_ANY, "Edge Settings", wxDefaultPosition, wxSize(600, 700))
@@ -37,11 +38,13 @@ void EdgeSettingsDialog::createControls()
     createGlobalPage();
     createSelectedPage();
     createHoverPage();
+    createFeatureEdgePage();
     
     // Add pages to notebook
     m_notebook->AddPage(m_globalPage, "Global Objects");
     m_notebook->AddPage(m_selectedPage, "Selected Objects");
     m_notebook->AddPage(m_hoverPage, "Hover Objects");
+    m_notebook->AddPage(m_featureEdgePage, "Feature Edges");
     
     mainSizer->Add(m_notebook, 1, wxALL | wxEXPAND, 10);
     
@@ -261,6 +264,36 @@ void EdgeSettingsDialog::createHoverPage()
     m_hoverPage->SetSizer(sizer);
 }
 
+void EdgeSettingsDialog::createFeatureEdgePage() {
+    m_featureEdgePage = new wxPanel(m_notebook);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+
+    wxStaticText* angleLabelStatic = new wxStaticText(m_featureEdgePage, wxID_ANY, "Feature Angle Threshold ():");
+    sizer->Add(angleLabelStatic, 0, wxALL, 5);
+    m_featureEdgeAngleSlider = new wxSlider(m_featureEdgePage, wxID_ANY, 30, 1, 90, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+    m_featureEdgeAngleLabel = new wxStaticText(m_featureEdgePage, wxID_ANY, wxString::Format("%d", 30));
+    wxBoxSizer* angleSizer = new wxBoxSizer(wxHORIZONTAL);
+    angleSizer->Add(m_featureEdgeAngleSlider, 1, wxEXPAND | wxRIGHT, 5);
+    angleSizer->Add(m_featureEdgeAngleLabel, 0, wxALIGN_CENTER_VERTICAL);
+    sizer->Add(angleSizer, 0, wxALL | wxEXPAND, 5);
+
+    wxStaticText* minLenLabelStatic = new wxStaticText(m_featureEdgePage, wxID_ANY, "Min Feature Edge Length:");
+    sizer->Add(minLenLabelStatic, 0, wxALL, 5);
+    m_featureEdgeMinLengthSlider = new wxSlider(m_featureEdgePage, wxID_ANY, 1, 0, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+    m_featureEdgeMinLengthLabel = new wxStaticText(m_featureEdgePage, wxID_ANY, wxString::Format("%.1f", 0.1));
+    wxBoxSizer* minLenSizer = new wxBoxSizer(wxHORIZONTAL);
+    minLenSizer->Add(m_featureEdgeMinLengthSlider, 1, wxEXPAND | wxRIGHT, 5);
+    minLenSizer->Add(m_featureEdgeMinLengthLabel, 0, wxALIGN_CENTER_VERTICAL);
+    sizer->Add(minLenSizer, 0, wxALL | wxEXPAND, 5);
+
+    m_onlyConvexCheckbox = new wxCheckBox(m_featureEdgePage, wxID_ANY, "Only Convex Edges");
+    m_onlyConcaveCheckbox = new wxCheckBox(m_featureEdgePage, wxID_ANY, "Only Concave Edges");
+    sizer->Add(m_onlyConvexCheckbox, 0, wxALL, 5);
+    sizer->Add(m_onlyConcaveCheckbox, 0, wxALL, 5);
+
+    m_featureEdgePage->SetSizer(sizer);
+}
+
 void EdgeSettingsDialog::bindEvents()
 {
     // Global page events
@@ -293,6 +326,11 @@ void EdgeSettingsDialog::bindEvents()
     m_saveButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &EdgeSettingsDialog::onSave, this);
     m_cancelButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &EdgeSettingsDialog::onCancel, this);
     m_okButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &EdgeSettingsDialog::onOK, this);
+    // Feature edge page events
+    m_featureEdgeAngleSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &EdgeSettingsDialog::onFeatureEdgeAngleSlider, this);
+    m_featureEdgeMinLengthSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &EdgeSettingsDialog::onFeatureEdgeMinLengthSlider, this);
+    m_onlyConvexCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &EdgeSettingsDialog::onFeatureEdgeConvexCheckbox, this);
+    m_onlyConcaveCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &EdgeSettingsDialog::onFeatureEdgeConcaveCheckbox, this);
 }
 
 void EdgeSettingsDialog::updateControls()
@@ -335,6 +373,10 @@ void EdgeSettingsDialog::loadSettings()
     m_selectedSettings = config.getSelectedSettings();
     m_hoverSettings = config.getHoverSettings();
     m_currentSettings = m_globalSettings;
+    m_featureEdgeAngle = config.getFeatureEdgeAngle();
+    m_featureEdgeMinLength = config.getFeatureEdgeMinLength();
+    m_onlyConvex = config.getFeatureEdgeOnlyConvex();
+    m_onlyConcave = config.getFeatureEdgeOnlyConcave();
 }
 
 void EdgeSettingsDialog::saveSettings()
@@ -343,6 +385,10 @@ void EdgeSettingsDialog::saveSettings()
     config.setGlobalSettings(m_globalSettings);
     config.setSelectedSettings(m_selectedSettings);
     config.setHoverSettings(m_hoverSettings);
+    config.setFeatureEdgeAngle(m_featureEdgeAngle);
+    config.setFeatureEdgeMinLength(m_featureEdgeMinLength);
+    config.setFeatureEdgeOnlyConvex(m_onlyConvex);
+    config.setFeatureEdgeOnlyConcave(m_onlyConcave);
     config.saveToFile();
 }
 
@@ -358,9 +404,21 @@ void EdgeSettingsDialog::applySettings()
     config.setGlobalSettings(m_globalSettings);
     config.setSelectedSettings(m_selectedSettings);
     config.setHoverSettings(m_hoverSettings);
+
+    config.setFeatureEdgeAngle(m_featureEdgeAngle);
+    config.setFeatureEdgeMinLength(m_featureEdgeMinLength);
+    config.setFeatureEdgeOnlyConvex(m_onlyConvex);
+    config.setFeatureEdgeOnlyConcave(m_onlyConcave);
     
     // Apply settings to geometries (this will trigger notifications)
     config.applySettingsToGeometries();
+    
+    for (auto& geometry : m_viewer->getAllGeometry()) {
+        if (geometry && geometry->edgeComponent) {
+            geometry->edgeComponent->extractFeatureEdges(geometry->getShape(), m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave);
+            geometry->edgeComponent->updateEdgeDisplay(geometry->getCoinNode());
+        }
+    }
     
     // Force refresh
     if (GetParent()) {
@@ -519,6 +577,24 @@ void EdgeSettingsDialog::onHoverEdgeOpacitySlider(wxCommandEvent& event)
     m_hoverSettings.edgeOpacity = static_cast<double>(m_hoverEdgeOpacitySlider->GetValue()) / 100.0;
     m_hoverEdgeOpacityLabel->SetLabel(wxString::Format("%.0f%%", m_hoverSettings.edgeOpacity * 100));
     LOG_INF_S("Hover edge opacity changed to: " + std::to_string(m_hoverSettings.edgeOpacity));
+}
+
+void EdgeSettingsDialog::onFeatureEdgeAngleSlider(wxCommandEvent& event) {
+    int angle = m_featureEdgeAngleSlider->GetValue();
+    m_featureEdgeAngleLabel->SetLabel(wxString::Format("%d", angle));
+    m_featureEdgeAngle = angle;
+}
+void EdgeSettingsDialog::onFeatureEdgeMinLengthSlider(wxCommandEvent& event) {
+    double minLen = m_featureEdgeMinLengthSlider->GetValue() / 10.0;
+    m_featureEdgeMinLengthLabel->SetLabel(wxString::Format("%.1f", minLen));
+    m_featureEdgeMinLength = minLen;
+}
+
+void EdgeSettingsDialog::onFeatureEdgeConvexCheckbox(wxCommandEvent& event) {
+    m_onlyConvex = m_onlyConvexCheckbox->GetValue();
+}
+void EdgeSettingsDialog::onFeatureEdgeConcaveCheckbox(wxCommandEvent& event) {
+    m_onlyConcave = m_onlyConcaveCheckbox->GetValue();
 }
 
 void EdgeSettingsDialog::onApply(wxCommandEvent& event)

@@ -86,17 +86,141 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 }
 
 void OpenCASCADEProcessor::calculateNormals(TriangleMesh& mesh) {
-    // This is a placeholder implementation
-    LOG_WRN_S("OpenCASCADEProcessor::calculateNormals not fully implemented yet");
+    if (mesh.vertices.empty() || mesh.triangles.empty()) {
+        LOG_WRN_S("Cannot calculate normals for empty mesh");
+        return;
+    }
+
+    // Initialize normals vector with zero vectors
+    mesh.normals.resize(mesh.vertices.size(), gp_Vec(0, 0, 0));
+
+    // Calculate face normals and accumulate at vertices
+    for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+        if (i + 2 >= mesh.triangles.size()) break;
+
+        int idx1 = mesh.triangles[i];
+        int idx2 = mesh.triangles[i + 1];
+        int idx3 = mesh.triangles[i + 2];
+
+        if (idx1 >= 0 && idx1 < static_cast<int>(mesh.vertices.size()) &&
+            idx2 >= 0 && idx2 < static_cast<int>(mesh.vertices.size()) &&
+            idx3 >= 0 && idx3 < static_cast<int>(mesh.vertices.size())) {
+
+            const gp_Pnt& p1 = mesh.vertices[idx1];
+            const gp_Pnt& p2 = mesh.vertices[idx2];
+            const gp_Pnt& p3 = mesh.vertices[idx3];
+
+            // Calculate face normal
+            gp_Vec v1(p1, p2);
+            gp_Vec v2(p1, p3);
+            gp_Vec faceNormal = v1.Crossed(v2);
+
+            // Normalize the face normal
+            double length = faceNormal.Magnitude();
+            if (length > Precision::Confusion()) {
+                faceNormal.Scale(1.0 / length);
+            }
+
+            // Accumulate face normal at each vertex
+            mesh.normals[idx1] += faceNormal;
+            mesh.normals[idx2] += faceNormal;
+            mesh.normals[idx3] += faceNormal;
+        }
+    }
+
+    // Normalize vertex normals
+    for (auto& normal : mesh.normals) {
+        double length = normal.Magnitude();
+        if (length > Precision::Confusion()) {
+            normal.Scale(1.0 / length);
+        } else {
+            // If normal is zero, set to default up vector
+            normal = gp_Vec(0, 0, 1);
+        }
+    }
+
+    LOG_INF_S("Calculated normals for " + std::to_string(mesh.normals.size()) + " vertices");
 }
 
 TriangleMesh OpenCASCADEProcessor::smoothNormals(const TriangleMesh& mesh, 
                                                 double creaseAngle, 
                                                 int iterations) {
-    // This is a placeholder implementation
-    LOG_WRN_S("OpenCASCADEProcessor::smoothNormals not fully implemented yet");
-    
+    if (mesh.vertices.empty() || mesh.triangles.empty() || mesh.normals.empty()) {
+        LOG_WRN_S("Cannot smooth normals for empty mesh");
+        return mesh;
+    }
+
     TriangleMesh result = mesh;
+    double creaseAngleRad = creaseAngle * M_PI / 180.0;
+    double cosCreaseAngle = cos(creaseAngleRad);
+
+    // Perform multiple iterations of normal smoothing
+    for (int iter = 0; iter < iterations; ++iter) {
+        std::vector<gp_Vec> newNormals(result.vertices.size(), gp_Vec(0, 0, 0));
+        std::vector<int> normalCounts(result.vertices.size(), 0);
+
+        // For each triangle, check if normals should be averaged
+        for (size_t i = 0; i < result.triangles.size(); i += 3) {
+            if (i + 2 >= result.triangles.size()) break;
+
+            int idx1 = result.triangles[i];
+            int idx2 = result.triangles[i + 1];
+            int idx3 = result.triangles[i + 2];
+
+            if (idx1 >= 0 && idx1 < static_cast<int>(result.vertices.size()) &&
+                idx2 >= 0 && idx2 < static_cast<int>(result.vertices.size()) &&
+                idx3 >= 0 && idx3 < static_cast<int>(result.vertices.size())) {
+
+                const gp_Vec& n1 = result.normals[idx1];
+                const gp_Vec& n2 = result.normals[idx2];
+                const gp_Vec& n3 = result.normals[idx3];
+
+                // Check if normals are similar enough to smooth
+                double dot12 = n1.Dot(n2);
+                double dot13 = n1.Dot(n3);
+                double dot23 = n2.Dot(n3);
+
+                // If all normals are similar, average them
+                if (dot12 > cosCreaseAngle && dot13 > cosCreaseAngle && dot23 > cosCreaseAngle) {
+                    gp_Vec avgNormal = n1 + n2 + n3;
+                    double length = avgNormal.Magnitude();
+                    if (length > Precision::Confusion()) {
+                        avgNormal.Scale(1.0 / length);
+                    }
+
+                    newNormals[idx1] += avgNormal;
+                    newNormals[idx2] += avgNormal;
+                    newNormals[idx3] += avgNormal;
+                    normalCounts[idx1]++;
+                    normalCounts[idx2]++;
+                    normalCounts[idx3]++;
+                } else {
+                    // Keep original normals for sharp edges
+                    newNormals[idx1] += n1;
+                    newNormals[idx2] += n2;
+                    newNormals[idx3] += n3;
+                    normalCounts[idx1]++;
+                    normalCounts[idx2]++;
+                    normalCounts[idx3]++;
+                }
+            }
+        }
+
+        // Average the accumulated normals
+        for (size_t i = 0; i < result.normals.size(); ++i) {
+            if (normalCounts[i] > 0) {
+                gp_Vec& normal = newNormals[i];
+                normal.Scale(1.0 / normalCounts[i]);
+                double length = normal.Magnitude();
+                if (length > Precision::Confusion()) {
+                    normal.Scale(1.0 / length);
+                }
+                result.normals[i] = normal;
+            }
+        }
+    }
+
+    LOG_INF_S("Smoothed normals with " + std::to_string(iterations) + " iterations, crease angle: " + std::to_string(creaseAngle));
     return result;
 }
 

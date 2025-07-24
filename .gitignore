@@ -21,3 +21,7 @@ CMakeUserPresets.json
 /todos.txt
 /vcpkg_installed
 /.gitignore
+/include/test_bezier_integration.cpp
+/.gitignore
+/.gitignore
+/include/examples/rendering_toolkit_example.cpp

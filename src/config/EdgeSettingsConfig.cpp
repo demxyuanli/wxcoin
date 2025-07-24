@@ -108,6 +108,14 @@ bool EdgeSettingsConfig::loadFromFile(const std::string& filename)
                 targetSettings->edgeOpacity = std::stod(value);
             }
         }
+
+        // Load feature edge settings
+        if (currentSection == "Global") {
+            if (key == "FeatureEdgeAngle") m_featureEdgeAngle = std::stod(value);
+            else if (key == "FeatureEdgeMinLength") m_featureEdgeMinLength = std::stod(value);
+            else if (key == "FeatureEdgeOnlyConvex") m_onlyConvex = stringToBool(value);
+            else if (key == "FeatureEdgeOnlyConcave") m_onlyConcave = stringToBool(value);
+        }
     }
     
     file.close();
@@ -138,7 +146,12 @@ bool EdgeSettingsConfig::saveToFile(const std::string& filename) const
     file << "EdgeColor=" << colorToString(m_globalSettings.edgeColor) << "\n";
     file << "EdgeColorEnabled=" << boolToString(m_globalSettings.edgeColorEnabled) << "\n";
     file << "EdgeStyle=" << m_globalSettings.edgeStyle << "\n";
-    file << "EdgeOpacity=" << m_globalSettings.edgeOpacity << "\n\n";
+    file << "EdgeOpacity=" << m_globalSettings.edgeOpacity << "\n";
+    file << "FeatureEdgeAngle=" << m_featureEdgeAngle << "\n";
+    file << "FeatureEdgeMinLength=" << m_featureEdgeMinLength << "\n";
+    file << "FeatureEdgeOnlyConvex=" << boolToString(m_onlyConvex) << "\n";
+    file << "FeatureEdgeOnlyConcave=" << boolToString(m_onlyConcave) << "\n";
+    file << "\n";
     
     // Save Selected settings
     file << "[Selected]\n";
@@ -204,6 +217,11 @@ void EdgeSettingsConfig::resetToDefaults()
     m_hoverSettings.edgeColor = Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB);
     m_hoverSettings.edgeStyle = 1;
     m_hoverSettings.edgeOpacity = 0.8;
+
+    m_featureEdgeAngle = 30.0;
+    m_featureEdgeMinLength = 0.1;
+    m_onlyConvex = false;
+    m_onlyConcave = false;
     
     notifySettingsChanged();
 }
@@ -264,3 +282,17 @@ bool EdgeSettingsConfig::stringToBool(const std::string& str) const
     std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), ::tolower);
     return (lowerStr == "true" || lowerStr == "1" || lowerStr == "yes");
 } 
+
+static constexpr const char* kFeatureEdgeAngle = "feature_edge_angle";
+static constexpr const char* kFeatureEdgeMinLength = "feature_edge_min_length";
+static constexpr const char* kFeatureEdgeOnlyConvex = "feature_edge_only_convex";
+static constexpr const char* kFeatureEdgeOnlyConcave = "feature_edge_only_concave";
+
+double EdgeSettingsConfig::getFeatureEdgeAngle() const { return m_featureEdgeAngle; }
+void EdgeSettingsConfig::setFeatureEdgeAngle(double angle) { m_featureEdgeAngle = angle; }
+double EdgeSettingsConfig::getFeatureEdgeMinLength() const { return m_featureEdgeMinLength; }
+void EdgeSettingsConfig::setFeatureEdgeMinLength(double len) { m_featureEdgeMinLength = len; }
+bool EdgeSettingsConfig::getFeatureEdgeOnlyConvex() const { return m_onlyConvex; }
+void EdgeSettingsConfig::setFeatureEdgeOnlyConvex(bool v) { m_onlyConvex = v; }
+bool EdgeSettingsConfig::getFeatureEdgeOnlyConcave() const { return m_onlyConcave; }
+void EdgeSettingsConfig::setFeatureEdgeOnlyConcave(bool v) { m_onlyConcave = v; } 

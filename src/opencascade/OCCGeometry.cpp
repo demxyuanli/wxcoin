@@ -16,6 +16,7 @@
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <TopoDS.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
+#include "EdgeComponent.h"
 
 // OpenCASCADE includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -46,7 +47,6 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , m_selected(false)
     , m_transparency(0.0)
     , m_wireframeMode(false)
-    , m_shadingMode(true)
     , m_coinNode(nullptr)
     , m_coinTransform(nullptr)
     , m_coinNeedsUpdate(true)
@@ -82,6 +82,11 @@ OCCGeometry::OCCGeometry(const std::string& name)
     
     // Apply settings from RenderingConfig
     updateFromRenderingConfig();
+    edgeComponent = std::make_unique<EdgeComponent>();
+    
+    // Ensure edge display is disabled by default to avoid conflicts with new EdgeComponent system
+    m_showEdges = false;
+    m_showWireframe = false;
 }
 
 OCCGeometry::~OCCGeometry()
@@ -230,15 +235,20 @@ void OCCGeometry::setTransparency(double transparency)
 
 void OCCGeometry::setWireframeMode(bool wireframe)
 {
-    m_wireframeMode = (m_wireframeMode == wireframe) ? !wireframe : wireframe;
-    m_coinNeedsUpdate = true;
+    if (m_wireframeMode != wireframe) {
+        m_wireframeMode = wireframe;
+        m_coinNeedsUpdate = true;
+        
+        // Force rebuild of Coin3D representation to apply wireframe mode change
+        if (m_coinNode) {
+            buildCoinRepresentation();
+            m_coinNode->touch();
+            LOG_INF_S("Wireframe mode changed to " + std::string(wireframe ? "enabled" : "disabled") + " for " + m_name);
+        }
+    }
 }
 
-void OCCGeometry::setShadingMode(bool shaded)
-{
-    m_shadingMode = (m_shadingMode == shaded) ? !shaded : shaded;
-    m_coinNeedsUpdate = true;
-}
+// Removed setShadingMode method - functionality not needed
 
 // Material property setters
 void OCCGeometry::setMaterialAmbientColor(const Quantity_Color& color)
@@ -592,88 +602,25 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         m_coinNode->addChild(cullHints);
     }
 
-    // CAD edge visualization (red, thick)
-    if (m_showEdges) {
-        SoSeparator* edgeGroup = new SoSeparator;
-        SoDrawStyle* edgeStyle = new SoDrawStyle;
-        edgeStyle->style = SoDrawStyle::LINES;
-        edgeStyle->lineWidth = 3.0f; // thick
-        edgeGroup->addChild(edgeStyle);
-        SoMaterial* edgeMaterial = new SoMaterial;
-        edgeMaterial->diffuseColor.setValue(1, 0, 0); // red
-        edgeGroup->addChild(edgeMaterial);
-        std::vector<SbVec3f> edgePoints;
-        std::vector<int32_t> edgeIndices;
-        double deflection = params.deflection > 0 ? params.deflection : 0.1;
-        for (TopExp_Explorer exp(m_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
-            TopoDS_Edge edge = TopoDS::Edge(exp.Current());
-            BRepAdaptor_Curve curve(edge);
-            double first = curve.FirstParameter();
-            double last = curve.LastParameter();
-            double length = 0.0;
-            try {
-                length = GCPnts_AbscissaPoint::Length(curve, first, last);
-            } catch (...) {
-                length = std::abs(last - first);
-            }
-            int nPts = std::max(2, static_cast<int>(length / deflection));
-            GCPnts_UniformAbscissa abscissa(curve, nPts);
-            if (!abscissa.IsDone() || abscissa.NbPoints() < 2) continue;
-            int startIdx = edgePoints.size();
-            for (int i = 1; i <= abscissa.NbPoints(); ++i) {
-                double param = abscissa.Parameter(i);
-                gp_Pnt p = curve.Value(param);
-                edgePoints.push_back(SbVec3f((float)p.X(), (float)p.Y(), (float)p.Z()));
-            }
-            for (int i = 0; i + 1 < abscissa.NbPoints(); ++i) {
-                edgeIndices.push_back(startIdx + i);
-                edgeIndices.push_back(startIdx + i + 1);
-                edgeIndices.push_back(SO_END_LINE_INDEX);
-            }
-        }
-        if (!edgePoints.empty()) {
-            SoCoordinate3* coords = new SoCoordinate3;
-            coords->point.setNum((int)edgePoints.size());
-            for (size_t i = 0; i < edgePoints.size(); ++i) {
-                coords->point.set1Value((int)i, edgePoints[i]);
-            }
-            edgeGroup->addChild(coords);
-            SoIndexedLineSet* lines = new SoIndexedLineSet;
-            lines->coordIndex.setValues(0, (int)edgeIndices.size(), edgeIndices.data());
-            edgeGroup->addChild(lines);
-        }
-        m_coinNode->addChild(edgeGroup);
-    }
-    // mesh wireframe visualization (black, thin)
-    if (m_showWireframe) {
-        SoSeparator* meshEdgeGroup = new SoSeparator;
-        SoDrawStyle* meshEdgeStyle = new SoDrawStyle;
-        meshEdgeStyle->style = SoDrawStyle::LINES;
-        meshEdgeStyle->lineWidth = 1.0f; // thin
-        meshEdgeGroup->addChild(meshEdgeStyle);
-        SoMaterial* meshEdgeMaterial = new SoMaterial;
-        meshEdgeMaterial->diffuseColor.setValue(0, 0, 0); // black
-        meshEdgeGroup->addChild(meshEdgeMaterial);
-        // TODO: If mesh edge data exists, add to meshEdgeGroup as before
-        // ...
-        m_coinNode->addChild(meshEdgeGroup);
-    }
-    // Comment out mesh face rendering for CAD edge debug
-    // if (!m_shape.IsNull()) {
-    //     ... mesh rendering ...
-    // }
+    // Edge visualization is now handled by EdgeComponent
+    // Old edge drawing code removed to avoid conflicts with new edge system
 
     // Add shape to scene (simplified)
     if (!m_shape.IsNull()) {
-        // Use rendering toolkit to create scene node
-        auto& manager = RenderingToolkitAPI::getManager();
-        auto backend = manager.getRenderBackend("Coin3D");
-        if (backend) {
-            auto sceneNode = backend->createSceneNode(m_shape, params, m_selected);
-            if (sceneNode) {
-                SoSeparator* meshNode = sceneNode.get();
-                meshNode->ref(); // Take ownership
-                m_coinNode->addChild(meshNode);
+        if (m_wireframeMode) {
+            // In wireframe mode, create wireframe representation directly
+            createWireframeRepresentation(params);
+        } else {
+            // Use rendering toolkit to create scene node for solid/filled mode
+            auto& manager = RenderingToolkitAPI::getManager();
+            auto backend = manager.getRenderBackend("Coin3D");
+            if (backend) {
+                auto sceneNode = backend->createSceneNode(m_shape, params, m_selected);
+                if (sceneNode) {
+                    SoSeparator* meshNode = sceneNode.get();
+                    meshNode->ref(); // Take ownership
+                    m_coinNode->addChild(meshNode);
+                }
             }
         }
     }
@@ -695,6 +642,108 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         LOG_INF_S("TOTAL BUILD TIME: " + std::to_string(buildDuration.count()) + "ms");
         LOG_INF_S("==============================");
     }
+
+    // Generate edge nodes for EdgeComponent
+    if (edgeComponent) {
+        LOG_INF_S("Generating edge nodes for geometry: " + m_name);
+        
+        // Generate original edges from CAD shape
+        edgeComponent->extractOriginalEdges(m_shape);
+        
+        // Generate feature edges with default parameters
+        edgeComponent->extractFeatureEdges(m_shape, 30.0, 0.1, false, false);
+        
+        // Generate mesh edges and normal lines
+        auto& manager = RenderingToolkitAPI::getManager();
+        auto processor = manager.getGeometryProcessor("OpenCASCADE");
+        if (processor) {
+            LOG_INF_S("Converting shape to mesh for edge visualization");
+            TriangleMesh mesh = processor->convertToMesh(m_shape, params);
+            LOG_INF_S("Mesh conversion result: " + std::to_string(mesh.vertices.size()) + 
+                      " vertices, " + std::to_string(mesh.normals.size()) + " normals");
+            
+            // Generate mesh edges
+            edgeComponent->extractMeshEdges(mesh);
+            
+            // Generate normal line nodes
+            LOG_INF_S("Generating normal line node for geometry: " + m_name);
+            edgeComponent->generateNormalLineNode(mesh, 0.5);
+            LOG_INF_S("Generating face normal line node for geometry: " + m_name);
+            edgeComponent->generateFaceNormalLineNode(mesh, 0.5);
+        } else {
+            LOG_WRN_S("OpenCASCADE processor not found for geometry: " + m_name);
+        }
+        
+        // Generate highlight edge node
+        edgeComponent->generateHighlightEdgeNode();
+        
+    } else {
+        LOG_WRN_S("EdgeComponent is null for geometry: " + m_name);
+    }
+}
+
+void OCCGeometry::createWireframeRepresentation(const MeshParameters& params)
+{
+    if (m_shape.IsNull()) {
+        return;
+    }
+
+    // Convert shape to mesh for wireframe generation
+    auto& manager = RenderingToolkitAPI::getManager();
+    auto processor = manager.getGeometryProcessor("OpenCASCADE");
+    if (!processor) {
+        LOG_WRN_S("OpenCASCADE processor not found for wireframe generation");
+        return;
+    }
+
+    TriangleMesh mesh = processor->convertToMesh(m_shape, params);
+    if (mesh.isEmpty()) {
+        LOG_WRN_S("Empty mesh generated for wireframe representation");
+        return;
+    }
+
+    // Create coordinate node
+    SoCoordinate3* coords = new SoCoordinate3;
+    std::vector<float> vertices;
+    for (const auto& vertex : mesh.vertices) {
+        vertices.push_back(static_cast<float>(vertex.X()));
+        vertices.push_back(static_cast<float>(vertex.Y()));
+        vertices.push_back(static_cast<float>(vertex.Z()));
+    }
+    coords->point.setValues(0, static_cast<int>(mesh.vertices.size()), 
+                           reinterpret_cast<const SbVec3f*>(vertices.data()));
+    m_coinNode->addChild(coords);
+
+    // Create wireframe line set
+    SoIndexedLineSet* lineSet = new SoIndexedLineSet;
+    std::vector<int32_t> indices;
+    
+    // Create wireframe from triangle edges
+    for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+        int v0 = mesh.triangles[i];
+        int v1 = mesh.triangles[i + 1];
+        int v2 = mesh.triangles[i + 2];
+        
+        // Add triangle edges
+        indices.push_back(v0);
+        indices.push_back(v1);
+        indices.push_back(SO_END_LINE_INDEX);
+        
+        indices.push_back(v1);
+        indices.push_back(v2);
+        indices.push_back(SO_END_LINE_INDEX);
+        
+        indices.push_back(v2);
+        indices.push_back(v0);
+        indices.push_back(SO_END_LINE_INDEX);
+    }
+    
+    lineSet->coordIndex.setValues(0, static_cast<int>(indices.size()), indices.data());
+    m_coinNode->addChild(lineSet);
+
+    LOG_INF_S("Created wireframe representation for " + m_name + 
+              " with " + std::to_string(mesh.vertices.size()) + " vertices and " + 
+              std::to_string(mesh.triangles.size() / 3) + " triangles");
 }
 
 // All primitive classes (OCCBox, OCCCylinder, etc.) call setShape(),
@@ -1094,11 +1143,7 @@ void OCCTruncatedCylinder::buildShape()
     }
 }
 
-// Shading methods implementation
-void OCCGeometry::setShadingMode(RenderingConfig::ShadingMode mode) {
-    m_shadingModeType = mode;
-    LOG_INF_S("Shading mode set to: " + RenderingConfig::getShadingModeName(mode));
-}
+// Removed setShadingMode(RenderingConfig::ShadingMode) method - functionality not needed
 
 void OCCGeometry::setSmoothNormals(bool enabled) {
     m_smoothNormals = enabled;
@@ -1300,7 +1345,7 @@ void OCCGeometry::forceTextureUpdate()
 }
 
 void OCCGeometry::setFaceDisplay(bool enable) {
-    setShadingMode(enable);
+    // Removed setShadingMode call - functionality not needed
     if (m_coinNode) {
         buildCoinRepresentation();
         m_coinNode->touch();
@@ -1324,7 +1369,7 @@ void OCCGeometry::setEdgeDisplay(bool enable) {
     }
 }
 void OCCGeometry::setFeatureEdgeDisplay(bool enable) {
-    setShowEdges(enable); // For now, same as setEdgeDisplay
+    if (edgeComponent) edgeComponent->setEdgeDisplayType(EdgeType::Feature, enable);
     if (m_coinNode) {
         buildCoinRepresentation();
         m_coinNode->touch();
@@ -1336,4 +1381,16 @@ void OCCGeometry::setNormalDisplay(bool enable) {
         buildCoinRepresentation();
         m_coinNode->touch();
     }
+}
+
+void OCCGeometry::setEdgeDisplayType(EdgeType type, bool show) {
+    if (edgeComponent) edgeComponent->setEdgeDisplayType(type, show);
+}
+
+bool OCCGeometry::isEdgeDisplayTypeEnabled(EdgeType type) const {
+    return edgeComponent ? edgeComponent->isEdgeDisplayTypeEnabled(type) : false;
+}
+
+void OCCGeometry::updateEdgeDisplay() {
+    if (edgeComponent) edgeComponent->updateEdgeDisplay(getCoinNode());
 }

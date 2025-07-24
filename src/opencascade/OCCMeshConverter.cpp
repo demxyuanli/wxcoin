@@ -43,7 +43,7 @@
 
 
 // Static member initialization
-bool OCCMeshConverter::s_showEdges = true;
+bool OCCMeshConverter::s_showEdges = false; // Changed to false to avoid conflicts with new EdgeComponent system
 double OCCMeshConverter::s_featureEdgeAngle = 45.0;  // Increased threshold for better feature edge detection
 bool OCCMeshConverter::s_smoothingEnabled = true;
 bool OCCMeshConverter::s_subdivisionEnabled = false;

@@ -15,7 +15,7 @@ struct RenderEdgeSettings {
     double featureEdgeAngle;           // Feature edge angle threshold
     
     RenderEdgeSettings() 
-        : showEdges(true)
+        : showEdges(false)
         , edgeColorEnabled(false)
         , edgeColor(Quantity_NOC_BLACK)
         , featureEdgeAngle(45.0) {}

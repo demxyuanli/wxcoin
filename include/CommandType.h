@@ -42,8 +42,11 @@ enum class CommandType {
     ShowEdges,
     SetTransparency,
     ToggleWireframe,
-    ToggleShading,
+    // Removed ToggleShading - functionality not needed
     ToggleEdges,
+    ShowOriginalEdges, 
+    ShowMeshEdges, // 新增：显示网格边
+    ShowFaceNormals, // 新增：显示面法线
 
     // Texture modes
     TextureModeDecal,
@@ -104,8 +107,11 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ShowEdges, "SHOW_EDGES"},
         {CommandType::SetTransparency, "SET_TRANSPARENCY"},
         {CommandType::ToggleWireframe, "TOGGLE_WIREFRAME"},
-        {CommandType::ToggleShading, "TOGGLE_SHADING"},
+        // Removed ToggleShading mapping
         {CommandType::ToggleEdges, "TOGGLE_EDGES"},
+        {CommandType::ShowOriginalEdges, "SHOW_ORIGINAL_EDGES"},
+        {CommandType::ShowMeshEdges, "SHOW_MESH_EDGES"},
+        {CommandType::ShowFaceNormals, "SHOW_FACE_NORMALS"},
 
         {CommandType::TextureModeDecal, "TEXTURE_MODE_DECAL"},
         {CommandType::TextureModeModulate, "TEXTURE_MODE_MODULATE"},
@@ -163,8 +169,11 @@ inline CommandType from_string(const std::string& str) {
         {"SHOW_EDGES", CommandType::ShowEdges},
         {"SET_TRANSPARENCY", CommandType::SetTransparency},
         {"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
-        {"TOGGLE_SHADING", CommandType::ToggleShading},
+        // Removed ToggleShading reverse mapping
         {"TOGGLE_EDGES", CommandType::ToggleEdges},
+        {"SHOW_ORIGINAL_EDGES", CommandType::ShowOriginalEdges},
+        {"SHOW_MESH_EDGES", CommandType::ShowMeshEdges},
+        {"SHOW_FACE_NORMALS", CommandType::ShowFaceNormals},
 
         {"TEXTURE_MODE_DECAL", CommandType::TextureModeDecal},
         {"TEXTURE_MODE_MODULATE", CommandType::TextureModeModulate},

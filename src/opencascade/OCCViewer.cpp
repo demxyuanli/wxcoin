@@ -24,13 +24,12 @@
 #include <cmath>
 #include <wx/gdicmn.h>
 #include <chrono>
+#include "EdgeComponent.h"
 
 OCCViewer::OCCViewer(SceneManager* sceneManager)
     : m_sceneManager(sceneManager),
       m_occRoot(nullptr),
-      m_normalRoot(nullptr),
       m_wireframeMode(false),
-      m_shadingMode(true),
       m_showEdges(true),
       m_antiAliasing(true),
       m_showNormals(false),
@@ -64,7 +63,8 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
       m_parameterMonitoringEnabled(false)
 {
     initializeViewer();
-    setShowEdges(true);
+    // Remove default edge display to avoid conflicts with new EdgeComponent system
+    // setShowEdges(true);
     
     // Connect LOD timer
     m_lodTimer.Bind(wxEVT_TIMER, [this](wxTimerEvent& event) {
@@ -78,9 +78,6 @@ OCCViewer::~OCCViewer()
     if (m_occRoot) {
         m_occRoot->unref();
     }
-    if (m_normalRoot) {
-        m_normalRoot->unref();
-    }
 }
 
 void OCCViewer::initializeViewer()
@@ -88,12 +85,8 @@ void OCCViewer::initializeViewer()
     m_occRoot = new SoSeparator;
     m_occRoot->ref();
     
-    m_normalRoot = new SoSeparator;
-    m_normalRoot->ref();
-    
     if (m_sceneManager) {
         m_sceneManager->getObjectRoot()->addChild(m_occRoot);
-        m_sceneManager->getObjectRoot()->addChild(m_normalRoot);
     }
     
     LOG_INF_S("OCC Viewer initialized");
@@ -399,6 +392,28 @@ void OCCViewer::setAllColor(const Quantity_Color& color)
 void OCCViewer::fitAll()
 {
     LOG_INF_S("Fit all OCC geometries");
+    
+    if (!m_sceneManager) {
+        LOG_WRN_S("SceneManager is null, cannot perform fitAll");
+        return;
+    }
+    
+    // Update scene bounds first to ensure we have accurate bounding information
+    m_sceneManager->updateSceneBounds();
+    
+    // Reset view to fit all geometries
+    m_sceneManager->resetView();
+    
+    // Request view refresh
+    if (m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        if (canvas && canvas->getRefreshManager()) {
+            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
+        }
+        canvas->Refresh();
+    }
+    
+    LOG_INF_S("FitAll completed - view adjusted to show all geometries");
 }
 
 void OCCViewer::fitGeometry(const std::string& name)
@@ -478,24 +493,7 @@ void OCCViewer::setWireframeMode(bool wireframe)
     }
 }
 
-void OCCViewer::setShadingMode(bool shaded)
-{
-    m_shadingMode = shaded;
-    // Update all geometries to shading mode
-    for (auto& geometry : m_geometries) {
-        if (geometry) {
-            geometry->setShadingMode(shaded);
-        }
-    }
-    
-    // Request view refresh
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
-        if (refreshManager) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
-        }
-    }
-}
+// Removed setShadingMode method - functionality not needed
 
 void OCCViewer::setShowEdges(bool showEdges)
 {
@@ -532,10 +530,7 @@ bool OCCViewer::isWireframeMode() const
     return m_wireframeMode;
 }
 
-bool OCCViewer::isShadingMode() const
-{
-    return m_shadingMode;
-}
+// Removed isShadingMode method - functionality not needed
 
 bool OCCViewer::isShowEdges() const
 {
@@ -596,7 +591,8 @@ void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
 void OCCViewer::setShowNormals(bool showNormals)
 {
     m_showNormals = showNormals;
-    updateNormalsDisplay();
+    globalEdgeFlags.showNormalLines = showNormals;
+    updateAllEdgeDisplays();
 }
 
 void OCCViewer::setNormalLength(double length)
@@ -614,120 +610,14 @@ void OCCViewer::setNormalColor(const Quantity_Color& correct, const Quantity_Col
 
 void OCCViewer::updateNormalsDisplay()
 {
-    if (!m_normalRoot) return;
-    m_normalRoot->removeAllChildren();
-    
-    if (!m_showNormals) {
-        if (m_sceneManager && m_sceneManager->getCanvas()) {
-            auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
-            if (refreshManager) {
-                refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::NORMALS_TOGGLED, true);
-            }
-        }
-        return;
-    }
-    
-    // Create normals for all visible geometries
-    for (auto& geometry : m_geometries) {
-        if (!geometry->isVisible()) continue;
-        
-        // Get mesh data from geometry
-        SoSeparator* geomNode = geometry->getCoinNode();
-        if (!geomNode) continue;
-        
-        // Extract mesh data and create normal visualization
-        createNormalVisualization(geometry);
-    }
-    
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
-        if (refreshManager) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::NORMALS_TOGGLED, true);
-        }
-    }
+    // This function is no longer needed as m_normalRoot is removed.
+    // The normal display logic is now handled by the EdgeComponent.
 }
 
 void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
 {
-    // Convert OCC shape to mesh to get normals using rendering toolkit
-    auto& manager = RenderingToolkitAPI::getManager();
-    auto processor = manager.getGeometryProcessor("OpenCASCADE");
-    if (!processor) {
-        LOG_ERR_S("OpenCASCADE geometry processor not available");
-        return;
-    }
-    
-    TriangleMesh mesh = processor->convertToMesh(geometry->getShape(), m_meshParams);
-    
-    if (mesh.vertices.empty() || mesh.normals.empty()) {
-        return;
-    }
-    
-    SoSeparator* normalGroup = new SoSeparator;
-    
-    // Get the geometry's position to apply to normal positions
-    gp_Pnt geometryPosition = geometry->getPosition();
-    
-    // Create coordinate points for normal lines
-    std::vector<SbVec3f> linePoints;
-    std::vector<int32_t> lineIndices;
-    
-    for (size_t i = 0; i < mesh.vertices.size(); ++i) {
-        const gp_Pnt& vertex = mesh.vertices[i];
-        const gp_Vec& normal = mesh.normals[i];  
-        
-        // Start point (vertex position with geometry offset)
-        SbVec3f startPoint(
-            static_cast<float>(vertex.X() + geometryPosition.X()),
-            static_cast<float>(vertex.Y() + geometryPosition.Y()),
-            static_cast<float>(vertex.Z() + geometryPosition.Z())
-        );
-        
-        // End point (vertex position + normal vector with geometry offset)
-        SbVec3f endPoint(
-            static_cast<float>(vertex.X() + geometryPosition.X() + normal.X() * m_normalLength),
-            static_cast<float>(vertex.Y() + geometryPosition.Y() + normal.Y() * m_normalLength),
-            static_cast<float>(vertex.Z() + geometryPosition.Z() + normal.Z() * m_normalLength)
-        );
-        
-        linePoints.push_back(startPoint);
-        linePoints.push_back(endPoint);
-        
-        // Line indices
-        int baseIndex = static_cast<int>(linePoints.size()) - 2;
-        lineIndices.push_back(baseIndex);
-        lineIndices.push_back(baseIndex + 1);
-        lineIndices.push_back(SO_END_LINE_INDEX);
-    }
-    
-    // Create coordinate node
-    SoCoordinate3* coords = new SoCoordinate3;
-    coords->point.setNum(static_cast<int>(linePoints.size()));
-    SbVec3f* points = coords->point.startEditing();
-    for (size_t i = 0; i < linePoints.size(); ++i) {
-        points[i] = linePoints[i];
-    }
-    coords->point.finishEditing();
-    normalGroup->addChild(coords);
-    
-    // Create material for normals
-    SoMaterial* normalMaterial = new SoMaterial;
-    // Use correct normal color (green for correct, red for incorrect)
-    // For now, assume all normals are correct
-    normalMaterial->diffuseColor.setValue(
-        static_cast<float>(m_correctNormalColor.Red()),
-        static_cast<float>(m_correctNormalColor.Green()),
-        static_cast<float>(m_correctNormalColor.Blue())
-    );
-    normalGroup->addChild(normalMaterial);
-    
-    // Create line set
-    SoIndexedLineSet* lineSet = new SoIndexedLineSet;
-    lineSet->coordIndex.setValues(0, static_cast<int>(lineIndices.size()), 
-                                  lineIndices.data());
-    normalGroup->addChild(lineSet);
-    
-    m_normalRoot->addChild(normalGroup);
+    // This function is no longer needed as m_normalRoot is removed.
+    // The normal display logic is now handled by the EdgeComponent.
 }
 
 void OCCViewer::remeshAllGeometries()
@@ -1440,9 +1330,8 @@ void OCCViewer::updateDisplay() {
     if (isShowWireframeFlag()) {
         drawWireframe();
     }
-    if (isShowEdgesFlag()) {
-        drawEdges();
-    }
+    // Edge display is now handled by EdgeComponent system
+    // drawEdges() call removed to avoid conflicts
     if (isShowNormalsFlag()) {
         drawNormals();
     }
@@ -1477,23 +1366,85 @@ void OCCViewer::drawWireframe() {
     }
 }
 
-void OCCViewer::drawEdges() {
-    // Render edges: prefer original edges, otherwise feature edges
-    for (const auto& geometry : m_geometries) {
-        if (!geometry || !geometry->isVisible()) continue;
-        if (geometry->hasOriginalEdges()) {
-            geometry->setEdgeDisplay(true);
-        } else {
-            geometry->setFeatureEdgeDisplay(true);
-        }
-    }
-}
+// drawEdges() method removed - edge display is now handled by EdgeComponent system
 
 void OCCViewer::drawNormals() {
     // Render normals for all visible geometry
     for (const auto& geometry : m_geometries) {
         if (!geometry || !geometry->isVisible()) continue;
         geometry->setNormalDisplay(true);
+    }
+}
+
+void OCCViewer::setShowOriginalEdges(bool show) {
+    globalEdgeFlags.showOriginalEdges = show;
+    updateAllEdgeDisplays();
+}
+void OCCViewer::setShowFeatureEdges(bool show) {
+    globalEdgeFlags.showFeatureEdges = show;
+    updateAllEdgeDisplays();
+}
+void OCCViewer::setShowMeshEdges(bool show) {
+    globalEdgeFlags.showMeshEdges = show;
+    updateAllEdgeDisplays();
+}
+void OCCViewer::setShowHighlightEdges(bool show) {
+    globalEdgeFlags.showHighlightEdges = show;
+    updateAllEdgeDisplays();
+}
+void OCCViewer::setShowNormalLines(bool show) {
+    LOG_INF_S("Setting show normal lines to: " + std::string(show ? "true" : "false"));
+    globalEdgeFlags.showNormalLines = show;
+    updateAllEdgeDisplays();
+}
+
+void OCCViewer::setShowFaceNormalLines(bool show) {
+    LOG_INF_S("Setting show face normal lines to: " + std::string(show ? "true" : "false"));
+    globalEdgeFlags.showFaceNormalLines = show;
+    updateAllEdgeDisplays();
+}
+
+void OCCViewer::toggleEdgeType(EdgeType type, bool show) {
+    switch(type) {
+        case EdgeType::Original: globalEdgeFlags.showOriginalEdges = show; break;
+        case EdgeType::Feature: globalEdgeFlags.showFeatureEdges = show; break;
+        case EdgeType::Mesh: globalEdgeFlags.showMeshEdges = show; break;
+        case EdgeType::Highlight: globalEdgeFlags.showHighlightEdges = show; break;
+        case EdgeType::NormalLine: globalEdgeFlags.showNormalLines = show; break;
+        case EdgeType::FaceNormalLine: globalEdgeFlags.showFaceNormalLines = show; break;
+    }
+    updateAllEdgeDisplays();
+}
+
+bool OCCViewer::isEdgeTypeEnabled(EdgeType type) const {
+    switch(type) {
+        case EdgeType::Original: return globalEdgeFlags.showOriginalEdges;
+        case EdgeType::Feature: return globalEdgeFlags.showFeatureEdges;
+        case EdgeType::Mesh: return globalEdgeFlags.showMeshEdges;
+        case EdgeType::Highlight: return globalEdgeFlags.showHighlightEdges;
+        case EdgeType::NormalLine: return globalEdgeFlags.showNormalLines;
+        case EdgeType::FaceNormalLine: return globalEdgeFlags.showFaceNormalLines;
+    }
+    return false;
+}
+
+void OCCViewer::updateAllEdgeDisplays() {
+    LOG_INF_S("Updating all edge displays for " + std::to_string(m_geometries.size()) + " geometries");
+    LOG_INF_S("Global edge flags - Normal lines: " + std::string(globalEdgeFlags.showNormalLines ? "true" : "false") + 
+              ", Face normal lines: " + std::string(globalEdgeFlags.showFaceNormalLines ? "true" : "false"));
+    
+    for (auto& g : m_geometries) {
+        if (g->edgeComponent) {
+            g->edgeComponent->edgeFlags = globalEdgeFlags;
+            LOG_INF_S("Updated edge flags for geometry: " + g->getName());
+        } else {
+            LOG_WRN_S("EdgeComponent is null for geometry: " + g->getName());
+        }
+        g->updateEdgeDisplay();
+    }
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        m_sceneManager->getCanvas()->Refresh();
+        LOG_INF_S("Canvas refreshed");
     }
 }
 

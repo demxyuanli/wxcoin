@@ -88,6 +88,10 @@
 #include "ZoomSpeedListener.h"
 #include "FileExitListener.h"
 #include "config/RenderingConfig.h"
+#include "ShowOriginalEdgesListener.h"
+#include "ShowMeshEdgesListener.h"
+#include "ShowWireFrameListener.h"
+#include "ShowFaceNormalsListener.h"
 
 #ifdef __WXMSW__
 #define NOMINMAX
@@ -128,12 +132,15 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_VIEW_RIGHT, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_ISOMETRIC, FlatFrame::onCommand)
     EVT_BUTTON(ID_SHOW_NORMALS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SHOW_FACE_NORMALS, FlatFrame::onCommand)
     EVT_BUTTON(ID_FIX_NORMALS, FlatFrame::onCommand)
     EVT_BUTTON(ID_SET_TRANSPARENCY, FlatFrame::onCommand)
     EVT_BUTTON(ID_TOGGLE_WIREFRAME, FlatFrame::onCommand)
-    EVT_BUTTON(ID_TOGGLE_SHADING, FlatFrame::onCommand)
+    // Removed Toggle Shading event handler
     EVT_BUTTON(ID_TOGGLE_EDGES, FlatFrame::onCommand)
     EVT_BUTTON(ID_SHOW_FACES, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_SHOW_ORIGINAL_EDGES, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SHOW_MESH_EDGES, FlatFrame::onCommand)
 
     EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
@@ -183,9 +190,12 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_FIX_NORMALS, cmd::CommandType::FixNormals},
     {ID_SET_TRANSPARENCY, cmd::CommandType::SetTransparency},
     {ID_TOGGLE_WIREFRAME, cmd::CommandType::ToggleWireframe},
-    {ID_TOGGLE_SHADING, cmd::CommandType::ToggleShading},
+    // Removed Toggle Shading command mapping
     {ID_TOGGLE_EDGES, cmd::CommandType::ToggleEdges},
     {ID_SHOW_FACES, cmd::CommandType::ShowFaces},
+    {ID_VIEW_SHOW_ORIGINAL_EDGES, cmd::CommandType::ShowOriginalEdges},
+    {ID_SHOW_MESH_EDGES, cmd::CommandType::ShowMeshEdges},
+    {ID_SHOW_FACE_NORMALS, cmd::CommandType::ShowFaceNormals},
 
     {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
     {ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},
@@ -453,10 +463,13 @@ void FlatFrame::InitializeUI(const wxSize& size)
     FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
     displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
     displayButtonBar->AddToggleButton(ID_VIEW_SHOWEDGES, "Toggle Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle edge display");
-    displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Toggle Wireframe", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe display mode");
-    displayButtonBar->AddToggleButton(ID_TOGGLE_SHADING, "Toggle Shading", false, SVG_ICON("circle", wxSize(16, 16)), "Toggle shading display mode");
+    displayButtonBar->AddToggleButton(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle original edge display");
+    displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Wireframe Mode", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe rendering mode");
+    displayButtonBar->AddToggleButton(ID_SHOW_MESH_EDGES, "Show Mesh Edges", false, SVG_ICON("mesh", wxSize(16, 16)), "Show/hide mesh edges overlay");
+    // Removed Toggle Shading button - functionality not needed and conflicts with other features
     displayButtonBar->AddToggleButton(ID_SHOW_FACES, "Show Faces", true, SVG_ICON("faces", wxSize(16, 16)), "Toggle face/solid display");
     displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
+    displayButtonBar->AddToggleButton(ID_SHOW_FACE_NORMALS, "Show Face Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle face normal vectors display");
     displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
     displayButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");
     displayButtonBar->AddToggleButton(ID_TOGGLE_COORDINATE_SYSTEM, "Toggle Coordinate System", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle coordinate system display");
@@ -677,6 +690,10 @@ void FlatFrame::setupCommandSystem() {
     auto showEdgesListener = std::make_shared<ShowEdgesListener>(m_occViewer);
     auto setTransparencyListener = std::make_shared<SetTransparencyListener>(this, m_occViewer);
     auto viewModeListener = std::make_shared<ViewModeListener>(m_occViewer);
+    auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer);
+    auto showMeshEdgesListener = std::make_shared<ShowMeshEdgesListener>(m_occViewer);
+    auto showWireFrameListener = std::make_shared<ShowWireFrameListener>(m_occViewer);
+    auto showFaceNormalsListener = std::make_shared<ShowFaceNormalsListener>(m_occViewer);
 
     
     // Register view command listeners
@@ -690,8 +707,12 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::ShowEdges, showEdgesListener);
     m_listenerManager->registerListener(cmd::CommandType::SetTransparency, setTransparencyListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, viewModeListener);
-    m_listenerManager->registerListener(cmd::CommandType::ToggleShading, viewModeListener);
+    // Removed Toggle Shading listener registration
     m_listenerManager->registerListener(cmd::CommandType::ToggleEdges, viewModeListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowOriginalEdges, showOriginalEdgesListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowMeshEdges, showMeshEdgesListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowFaceNormals, showFaceNormalsListener);
+    m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, showWireFrameListener);
     
     // Register texture mode listeners
     auto textureModeDecalListener = std::make_shared<TextureModeDecalListener>(this, m_occViewer);
@@ -952,6 +973,18 @@ void FlatFrame::OnButtonClick(wxCommandEvent& event)
     case ID_ShowUIHierarchy:
         ShowUIHierarchy();
         break;
+    case ID_VIEW_SHOWEDGES:
+        if (m_occViewer) m_occViewer->setShowFeatureEdges(event.IsChecked());
+        break;
+    case ID_VIEW_SHOW_ORIGINAL_EDGES:
+        if (m_occViewer) m_occViewer->setShowOriginalEdges(event.IsChecked());
+        break;
+    case ID_TOGGLE_WIREFRAME:
+        if (m_occViewer) m_occViewer->setWireframeMode(event.IsChecked());
+        return;
+    case ID_SHOW_MESH_EDGES:
+        if (m_occViewer) m_occViewer->setShowMeshEdges(event.IsChecked());
+        return;
     default:
         // For other buttons, let the event propagate to be handled by command system
         event.Skip();

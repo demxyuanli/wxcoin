@@ -12,7 +12,7 @@ struct EdgeSettings {
     double edgeOpacity;
     
     EdgeSettings()
-        : showEdges(true)
+        : showEdges(false)
         , edgeWidth(1.0)
         , edgeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
         , edgeColorEnabled(true)
@@ -75,6 +75,15 @@ public:
     void notifySettingsChanged();
     void addSettingsChangedCallback(std::function<void()> callback);
     
+    double getFeatureEdgeAngle() const;
+    void setFeatureEdgeAngle(double angle);
+    double getFeatureEdgeMinLength() const;
+    void setFeatureEdgeMinLength(double len);
+    bool getFeatureEdgeOnlyConvex() const;
+    void setFeatureEdgeOnlyConvex(bool v);
+    bool getFeatureEdgeOnlyConcave() const;
+    void setFeatureEdgeOnlyConcave(bool v);
+    
 private:
     EdgeSettingsConfig();
     ~EdgeSettingsConfig() = default;
@@ -92,4 +101,9 @@ private:
     EdgeSettings m_hoverSettings;
     
     std::vector<std::function<void()>> m_callbacks;
+    
+    double m_featureEdgeAngle = 30.0;
+    double m_featureEdgeMinLength = 0.1;
+    bool m_onlyConvex = false;
+    bool m_onlyConcave = false;
 }; 

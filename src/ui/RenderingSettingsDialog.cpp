@@ -55,7 +55,7 @@ RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* oc
     m_alphaThreshold = blendSettings.alphaThreshold;
     
     // Initialize new rendering mode settings
-    m_shadingMode = shadingSettings.shadingMode;
+    // Removed m_shadingMode initialization - functionality not needed
     m_smoothNormals = shadingSettings.smoothNormals;
     m_wireframeWidth = shadingSettings.wireframeWidth;
     m_pointSize = shadingSettings.pointSize;
@@ -104,7 +104,7 @@ void RenderingSettingsDialog::createControls()
     createLightingPage();
     createTexturePage();
     createBlendPage();
-    createShadingPage();
+    // Removed createShadingPage call - functionality not needed
     createDisplayPage();
     createQualityPage();
     createShadowPage();
@@ -381,64 +381,7 @@ void RenderingSettingsDialog::createBlendPage()
     m_notebook->AddPage(m_blendPage, "Blend");
 }
 
-void RenderingSettingsDialog::createShadingPage()
-{
-    m_shadingPage = new wxPanel(m_notebook);
-    
-    // Shading mode choice
-    m_shadingModeChoice = new wxChoice(m_shadingPage, wxID_ANY);
-    auto shadingModes = RenderingConfig::getAvailableShadingModes();
-    for (const auto& mode : shadingModes) {
-        m_shadingModeChoice->Append(mode);
-    }
-    m_shadingModeChoice->SetSelection(static_cast<int>(m_shadingMode));
-    
-    // Smooth normals checkbox
-    m_smoothNormalsCheckbox = new wxCheckBox(m_shadingPage, wxID_ANY, "Smooth Normals");
-    m_smoothNormalsCheckbox->SetValue(m_smoothNormals);
-    
-    // Wireframe width slider
-    m_wireframeWidthSlider = new wxSlider(m_shadingPage, wxID_ANY, 
-        static_cast<int>(m_wireframeWidth * 10), 1, 50, 
-        wxDefaultPosition, wxSize(200, -1));
-    m_wireframeWidthLabel = new wxStaticText(m_shadingPage, wxID_ANY, 
-        wxString::Format("%.1f", m_wireframeWidth));
-    
-    // Point size slider
-    m_pointSizeSlider = new wxSlider(m_shadingPage, wxID_ANY, 
-        static_cast<int>(m_pointSize * 10), 1, 100, 
-        wxDefaultPosition, wxSize(200, -1));
-    m_pointSizeLabel = new wxStaticText(m_shadingPage, wxID_ANY, 
-        wxString::Format("%.1f", m_pointSize));
-    
-    // Layout shading page
-    wxBoxSizer* shadingSizer = new wxBoxSizer(wxVERTICAL);
-    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(4, 2, 10, 10);
-    gridSizer->AddGrowableCol(1);
-    
-    gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Shading Mode:"), 0, wxALIGN_CENTER_VERTICAL);
-    gridSizer->Add(m_shadingModeChoice, 0, wxEXPAND);
-    
-    gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Wireframe Width:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* wireframeSizer = new wxBoxSizer(wxHORIZONTAL);
-    wireframeSizer->Add(m_wireframeWidthSlider, 1, wxEXPAND | wxRIGHT, 5);
-    wireframeSizer->Add(m_wireframeWidthLabel, 0, wxALIGN_CENTER_VERTICAL);
-    gridSizer->Add(wireframeSizer, 0, wxEXPAND);
-    
-    gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Point Size:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* pointSizer = new wxBoxSizer(wxHORIZONTAL);
-    pointSizer->Add(m_pointSizeSlider, 1, wxEXPAND | wxRIGHT, 5);
-    pointSizer->Add(m_pointSizeLabel, 0, wxALIGN_CENTER_VERTICAL);
-    gridSizer->Add(pointSizer, 0, wxEXPAND);
-    
-    gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, ""), 0);
-    gridSizer->Add(m_smoothNormalsCheckbox, 0, wxEXPAND);
-    
-    shadingSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
-    m_shadingPage->SetSizer(shadingSizer);
-    
-    m_notebook->AddPage(m_shadingPage, "Shading");
-}
+// Removed createShadingPage method - functionality not needed
 
 void RenderingSettingsDialog::createDisplayPage()
 {
@@ -800,7 +743,7 @@ void RenderingSettingsDialog::bindEvents()
     m_alphaThresholdSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onAlphaThresholdSlider, this);
     
     // Shading events
-    m_shadingModeChoice->Bind(wxEVT_COMMAND_CHOICE_SELECTED, &RenderingSettingsDialog::onShadingModeChoice, this);
+    // Removed shading mode choice binding - functionality not needed
     m_smoothNormalsCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onSmoothNormalsCheckbox, this);
     m_wireframeWidthSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onWireframeWidthSlider, this);
     m_pointSizeSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onPointSizeSlider, this);
@@ -1036,12 +979,7 @@ void RenderingSettingsDialog::onAlphaThresholdSlider(wxCommandEvent& event)
     m_alphaThresholdLabel->SetLabel(wxString::Format("%.2f", m_alphaThreshold));
 } 
 
-// Shading events
-void RenderingSettingsDialog::onShadingModeChoice(wxCommandEvent& event)
-{
-    int selection = m_shadingModeChoice->GetSelection();
-    m_shadingMode = static_cast<RenderingConfig::ShadingMode>(selection);
-}
+// Removed onShadingModeChoice method - functionality not needed
 
 void RenderingSettingsDialog::onSmoothNormalsCheckbox(wxCommandEvent& event)
 {
@@ -1274,7 +1212,7 @@ void RenderingSettingsDialog::applySettings()
     
     // Update shading settings
     RenderingConfig::ShadingSettings shadingSettings;
-    shadingSettings.shadingMode = m_shadingMode;
+    // Removed shadingMode assignment - functionality not needed
     shadingSettings.smoothNormals = m_smoothNormals;
     shadingSettings.wireframeWidth = m_wireframeWidth;
     shadingSettings.pointSize = m_pointSize;
@@ -1352,7 +1290,6 @@ void RenderingSettingsDialog::applySettings()
             geometry->setAlphaThreshold(m_alphaThreshold);
 
             // Apply shading settings
-            geometry->setShadingMode(m_shadingMode);
             geometry->setSmoothNormals(m_smoothNormals);
             geometry->setWireframeWidth(m_wireframeWidth);
             geometry->setPointSize(m_pointSize);
@@ -1443,7 +1380,7 @@ void RenderingSettingsDialog::resetToDefaults()
     m_alphaThreshold = blendSettings.alphaThreshold;
     
     // Initialize new rendering mode settings
-    m_shadingMode = shadingSettings.shadingMode;
+    // Removed m_shadingMode initialization - functionality not needed
     m_smoothNormals = shadingSettings.smoothNormals;
     m_wireframeWidth = shadingSettings.wireframeWidth;
     m_pointSize = shadingSettings.pointSize;

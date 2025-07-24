@@ -61,6 +61,12 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
         }
         
         LOG_INF_S("Created OCC geometry: " + type);
+        
+        // Auto-fit all geometries after creating new geometry
+        if (m_occViewer) {
+            LOG_INF_S("Auto-executing fitAll after creating geometry: " + type);
+            m_occViewer->fitAll();
+        }
     } else {
         LOG_ERR_S("Failed to create OCC geometry: " + type);
     }
@@ -98,6 +104,12 @@ void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, c
         }
         
         LOG_INF_S("Created OCC geometry with parameters: " + type);
+        
+        // Auto-fit all geometries after creating new geometry with parameters
+        if (m_occViewer) {
+            LOG_INF_S("Auto-executing fitAll after creating geometry with parameters: " + type);
+            m_occViewer->fitAll();
+        }
     } else {
         LOG_ERR_S("Failed to create OCC geometry with parameters: " + type);
     }

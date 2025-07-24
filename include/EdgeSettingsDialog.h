@@ -35,6 +35,7 @@ private:
     void createGlobalPage();
     void createSelectedPage();
     void createHoverPage();
+    void createFeatureEdgePage();
     void bindEvents();
     void updateControls();
     void applySettings();
@@ -86,6 +87,7 @@ private:
     wxPanel* m_globalPage;
     wxPanel* m_selectedPage;
     wxPanel* m_hoverPage;
+    wxPanel* m_featureEdgePage = nullptr;
     
     // Global page controls
     wxCheckBox* m_globalShowEdgesCheckbox;
@@ -130,4 +132,21 @@ private:
     wxButton* m_okButton;
     wxButton* m_resetButton;
     wxButton* m_saveButton;
+
+    int m_featureEdgeAngle = 30;
+    double m_featureEdgeMinLength = 0.1;
+    void onFeatureEdgeAngleSlider(wxCommandEvent& event);
+    void onFeatureEdgeMinLengthSlider(wxCommandEvent& event);
+    void onFeatureEdgeConvexCheckbox(wxCommandEvent& event);
+    void onFeatureEdgeConcaveCheckbox(wxCommandEvent& event);
+
+    wxSlider* m_featureEdgeAngleSlider = nullptr;
+    wxStaticText* m_featureEdgeAngleLabel = nullptr;
+    wxSlider* m_featureEdgeMinLengthSlider = nullptr;
+    wxStaticText* m_featureEdgeMinLengthLabel = nullptr;
+
+    wxCheckBox* m_onlyConvexCheckbox = nullptr;
+    wxCheckBox* m_onlyConcaveCheckbox = nullptr;
+    bool m_onlyConvex = false;
+    bool m_onlyConcave = false;
 }; 

@@ -9,6 +9,8 @@
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/gp_Vec.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
+#include "EdgeTypes.h"
+class EdgeComponent;
 
 // Forward declarations
 class SoSeparator;
@@ -101,8 +103,7 @@ public:
     virtual void setAlphaThreshold(double threshold);
 
     // Shading settings
-    RenderingConfig::ShadingMode getShadingMode() const { return m_shadingModeType; }
-    virtual void setShadingMode(RenderingConfig::ShadingMode mode);
+    // Removed getShadingMode and setShadingMode - functionality not needed
     
     bool isSmoothNormalsEnabled() const { return m_smoothNormals; }
     virtual void setSmoothNormals(bool enabled);
@@ -192,8 +193,6 @@ public:
     // Display modes
     bool isWireframeMode() const { return m_wireframeMode; }
     virtual void setWireframeMode(bool wireframe);
-    bool isShadingMode() const { return m_shadingMode; }
-    virtual void setShadingMode(bool shaded);
 
     void setFaceDisplay(bool enable);
     void setWireframeOverlay(bool enable);
@@ -214,8 +213,14 @@ public:
     void setMeshRegenerationNeeded(bool needed);
     void updateCoinRepresentationIfNeeded(const MeshParameters& params);
 
+    std::unique_ptr<EdgeComponent> edgeComponent;
+    void setEdgeDisplayType(EdgeType type, bool show);
+    bool isEdgeDisplayTypeEnabled(EdgeType type) const;
+    void updateEdgeDisplay();
+
 private:
     void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
+    void createWireframeRepresentation(const MeshParameters& params);
 
 protected:
     std::string m_name;
@@ -254,7 +259,6 @@ protected:
     double m_alphaThreshold;
     
     // Shading settings
-    RenderingConfig::ShadingMode m_shadingModeType;
     bool m_smoothNormals;
     double m_wireframeWidth;
     double m_pointSize;
@@ -291,7 +295,6 @@ protected:
     
     // Display modes
     bool m_wireframeMode;
-    bool m_shadingMode;
     bool m_showWireframe = false; // controls mesh wireframe
     
     // Coin3D representation

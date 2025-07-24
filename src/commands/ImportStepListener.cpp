@@ -113,6 +113,12 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
             LOG_INF_S("Performance: " + std::to_string(totalGeometries / (totalImportDuration.count() / 1000.0)) + " geometries/second");
             LOG_INF_S("=============================");
             
+            // Auto-fit all geometries after import
+            if (m_occViewer) {
+                LOG_INF_S("Auto-executing fitAll after STEP import");
+                m_occViewer->fitAll();
+            }
+            
             return CommandResult(true, "STEP files imported successfully", commandType);
         } else {
             wxString warningMsg = wxString::Format(
