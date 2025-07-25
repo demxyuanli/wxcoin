@@ -70,7 +70,7 @@
 #include "ViewIsometricListener.h"
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
-#include "ShowEdgesListener.h"
+#include "ShowSilhouetteEdgesListener.h"
 #include "SetTransparencyListener.h"
 #include "TextureModeDecalListener.h"
 #include "TextureModeModulateListener.h"
@@ -89,9 +89,11 @@
 #include "FileExitListener.h"
 #include "config/RenderingConfig.h"
 #include "ShowOriginalEdgesListener.h"
+#include "ShowFeatureEdgesListener.h"
 #include "ShowMeshEdgesListener.h"
 #include "ShowWireFrameListener.h"
 #include "ShowFaceNormalsListener.h"
+#include "ShowSilhouetteEdgesListener.h"
 
 #ifdef __WXMSW__
 #define NOMINMAX
@@ -138,8 +140,10 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_TOGGLE_WIREFRAME, FlatFrame::onCommand)
     // Removed Toggle Shading event handler
     EVT_BUTTON(ID_TOGGLE_EDGES, FlatFrame::onCommand)
-    EVT_BUTTON(ID_SHOW_FACES, FlatFrame::onCommand)
+    // Removed Show Faces event handler - functionality interferes with edge testing
+    // EVT_BUTTON(ID_SHOW_FACES, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_SHOW_ORIGINAL_EDGES, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SHOW_FEATURE_EDGES, FlatFrame::onCommand)
     EVT_BUTTON(ID_SHOW_MESH_EDGES, FlatFrame::onCommand)
 
     EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
@@ -151,7 +155,7 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_LIGHTING_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(ID_EDGE_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
-    EVT_BUTTON(ID_VIEW_SHOWEDGES, FlatFrame::onCommand)
+    EVT_BUTTON(ID_VIEW_SHOWSILHOUETTEEDGES, FlatFrame::onCommand)
     
     // Texture Mode Command Events
     EVT_BUTTON(ID_TEXTURE_MODE_DECAL, FlatFrame::onCommand)
@@ -192,12 +196,14 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_TOGGLE_WIREFRAME, cmd::CommandType::ToggleWireframe},
     // Removed Toggle Shading command mapping
     {ID_TOGGLE_EDGES, cmd::CommandType::ToggleEdges},
-    {ID_SHOW_FACES, cmd::CommandType::ShowFaces},
+    // Removed Show Faces command mapping - functionality interferes with edge testing
+    // {ID_SHOW_FACES, cmd::CommandType::ShowFaces},
     {ID_VIEW_SHOW_ORIGINAL_EDGES, cmd::CommandType::ShowOriginalEdges},
+    {ID_SHOW_FEATURE_EDGES, cmd::CommandType::ShowFeatureEdges},
     {ID_SHOW_MESH_EDGES, cmd::CommandType::ShowMeshEdges},
     {ID_SHOW_FACE_NORMALS, cmd::CommandType::ShowFaceNormals},
 
-    {ID_VIEW_SHOWEDGES, cmd::CommandType::ShowEdges},
+    {ID_VIEW_SHOWSILHOUETTEEDGES, cmd::CommandType::ShowSilhouetteEdges},
     {ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},
     {ID_TEXTURE_MODE_MODULATE, cmd::CommandType::TextureModeModulate},
     {ID_TEXTURE_MODE_REPLACE, cmd::CommandType::TextureModeReplace},
@@ -462,12 +468,14 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
     displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    displayButtonBar->AddToggleButton(ID_VIEW_SHOWEDGES, "Toggle Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle edge display");
+    displayButtonBar->AddToggleButton(ID_VIEW_SHOWSILHOUETTEEDGES, "Silhouette Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle silhouette edge display (dynamic outline)");
     displayButtonBar->AddToggleButton(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle original edge display");
+    displayButtonBar->AddToggleButton(ID_SHOW_FEATURE_EDGES, "Feature Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle feature edge display");
     displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Wireframe Mode", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe rendering mode");
     displayButtonBar->AddToggleButton(ID_SHOW_MESH_EDGES, "Show Mesh Edges", false, SVG_ICON("mesh", wxSize(16, 16)), "Show/hide mesh edges overlay");
     // Removed Toggle Shading button - functionality not needed and conflicts with other features
-    displayButtonBar->AddToggleButton(ID_SHOW_FACES, "Show Faces", true, SVG_ICON("faces", wxSize(16, 16)), "Toggle face/solid display");
+    // Removed Show Faces button - functionality interferes with edge testing
+    // displayButtonBar->AddToggleButton(ID_SHOW_FACES, "Show Faces", true, SVG_ICON("faces", wxSize(16, 16)), "Toggle face/solid display");
     displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
     displayButtonBar->AddToggleButton(ID_SHOW_FACE_NORMALS, "Show Face Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle face normal vectors display");
     displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
@@ -687,13 +695,14 @@ void FlatFrame::setupCommandSystem() {
     auto viewIsoListener = std::make_shared<ViewIsometricListener>(m_canvas->getInputManager()->getNavigationController());
     auto showNormalsListener = std::make_shared<ShowNormalsListener>(m_occViewer);
     auto fixNormalsListener = std::make_shared<FixNormalsListener>(m_occViewer);
-    auto showEdgesListener = std::make_shared<ShowEdgesListener>(m_occViewer);
+    auto showEdgesListener = std::make_shared<ShowSilhouetteEdgesListener>(m_occViewer);
     auto setTransparencyListener = std::make_shared<SetTransparencyListener>(this, m_occViewer);
     auto viewModeListener = std::make_shared<ViewModeListener>(m_occViewer);
     auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer);
     auto showMeshEdgesListener = std::make_shared<ShowMeshEdgesListener>(m_occViewer);
     auto showWireFrameListener = std::make_shared<ShowWireFrameListener>(m_occViewer);
     auto showFaceNormalsListener = std::make_shared<ShowFaceNormalsListener>(m_occViewer);
+    auto showFeatureEdgesListener = std::make_shared<ShowFeatureEdgesListener>(m_occViewer);
 
     
     // Register view command listeners
@@ -704,12 +713,13 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::ViewIsometric, viewIsoListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowNormals, showNormalsListener);
     m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
-    m_listenerManager->registerListener(cmd::CommandType::ShowEdges, showEdgesListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowSilhouetteEdges, showEdgesListener);
     m_listenerManager->registerListener(cmd::CommandType::SetTransparency, setTransparencyListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, viewModeListener);
     // Removed Toggle Shading listener registration
     m_listenerManager->registerListener(cmd::CommandType::ToggleEdges, viewModeListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowOriginalEdges, showOriginalEdgesListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowFeatureEdges, showFeatureEdgesListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowMeshEdges, showMeshEdgesListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowFaceNormals, showFaceNormalsListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, showWireFrameListener);
@@ -973,7 +983,7 @@ void FlatFrame::OnButtonClick(wxCommandEvent& event)
     case ID_ShowUIHierarchy:
         ShowUIHierarchy();
         break;
-    case ID_VIEW_SHOWEDGES:
+    case ID_VIEW_SHOWSILHOUETTEEDGES:
         if (m_occViewer) m_occViewer->setShowFeatureEdges(event.IsChecked());
         break;
     case ID_VIEW_SHOW_ORIGINAL_EDGES:
@@ -1178,7 +1188,7 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
     if (it == kEventTable.end()) { LOG_WRN_S("Unknown command ID: " + std::to_string(event.GetId())); return; }
     cmd::CommandType commandType = it->second;
     std::unordered_map<std::string, std::string> parameters;
-    if (commandType == cmd::CommandType::ShowNormals || commandType == cmd::CommandType::ShowEdges) { parameters["toggle"] = "true"; }
+            if (commandType == cmd::CommandType::ShowNormals || commandType == cmd::CommandType::ShowSilhouetteEdges) { parameters["toggle"] = "true"; }
     if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
         CommandResult result = m_listenerManager->dispatch(commandType, parameters);
         onCommandFeedback(result);
@@ -1203,9 +1213,9 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
         // Could update button states here if needed
         LOG_INF_S("Show normals state updated: " + std::string(m_occViewer->isShowNormals() ? "shown" : "hidden"));
     }
-    else if (result.commandId == cmd::to_string(cmd::CommandType::ShowEdges) && result.success && m_occViewer) {
+    else if (result.commandId == cmd::to_string(cmd::CommandType::ShowSilhouetteEdges) && result.success && m_occViewer) {
         // Could update button states here if needed
-        LOG_INF_S("Show edges state updated: " + std::string(m_occViewer->isShowEdges() ? "shown" : "hidden"));
+        LOG_INF_S("Show silhouette edges state updated: " + std::string(m_occViewer->isEdgeTypeEnabled(EdgeType::Silhouette) ? "shown" : "hidden"));
     }
     
     // Refresh canvas if needed - ensure all view and display commands trigger refresh

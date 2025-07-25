@@ -353,10 +353,6 @@ void CuteNavCube::setupGeometry() {
     for (const auto& faceDef : faces) {
         std::string indices_str;
         for (int idx : faceDef.indices) { indices_str += std::to_string(idx) + " "; }
-        LOG_INF_S("Face " + std::to_string(faceIndex) + ": Name='" + faceDef.name +
-            "', Type=" + std::to_string(faceDef.materialType) +
-            "', TextureKey='" + faceDef.textureKey +
-            "', Indices: " + indices_str);
 
         SoSeparator* faceSep = new SoSeparator;
         faceSep->setName(SbName(faceDef.name.c_str()));

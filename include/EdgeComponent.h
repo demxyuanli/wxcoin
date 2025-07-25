@@ -1,11 +1,14 @@
 #pragma once
-#include <memory>
-#include <vector>
+
 #include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
+#include <opencascade/TopoDS_Shape.hxx>
+#include <opencascade/gp_Pnt.hxx>
 #include "EdgeTypes.h"
-class TopoDS_Shape;
-struct TriangleMesh;
+#include "rendering/GeometryProcessor.h"
 
 class EdgeComponent {
 public:
@@ -28,6 +31,8 @@ public:
     void generateHighlightEdgeNode();
     void generateNormalLineNode(const TriangleMesh& mesh, double length);
     void generateFaceNormalLineNode(const TriangleMesh& mesh, double length);
+    void generateSilhouetteEdgeNode(const TopoDS_Shape& shape, const gp_Pnt& cameraPos);
+    void clearSilhouetteEdgeNode();  // New: clear silhouette edge node
 
 private:
     SoSeparator* originalEdgeNode = nullptr;
@@ -36,5 +41,9 @@ private:
     SoSeparator* highlightEdgeNode = nullptr;
     SoSeparator* normalLineNode = nullptr;
     SoSeparator* faceNormalLineNode = nullptr;
+    SoSeparator* silhouetteEdgeNode = nullptr;  // New: silhouette edge node
 
+public:
+    // Friend class to allow OCCViewer access to silhouetteEdgeNode
+    friend class OCCViewer;
 }; 

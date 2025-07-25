@@ -73,6 +73,7 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
 }
 
 void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const GeometryParameters& params) {
+    LOG_INF_S("[GeometryFactoryDebug] createOCCGeometryWithParameters called with position: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
     std::shared_ptr<OCCGeometry> geometry;
     
     if (type == "Box") {
@@ -299,7 +300,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             handleLength, 
             handleWidth, 
             handleThickness,
-            gp_Pnt(position[0] - handleLength/2.0, position[1] - handleWidth/2.0, position[2] - handleThickness/2.0)
+            gp_Pnt(-handleLength/2.0, -handleWidth/2.0, -handleThickness/2.0)
         );
         
         if (handle.IsNull()) {
@@ -313,7 +314,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             fixedJawLength, 
             headWidth, 
             headThickness,
-            gp_Pnt(position[0] - handleLength/2.0 - fixedJawLength, position[1] - headWidth/2.0, position[2] - headThickness/2.0)
+            gp_Pnt(-handleLength/2.0 - fixedJawLength, -headWidth/2.0, -headThickness/2.0)
         );
         
         if (fixedJaw.IsNull()) {
@@ -327,7 +328,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             movableJawLength, 
             headWidth, 
             headThickness,
-            gp_Pnt(position[0] + handleLength/2.0, position[1] - headWidth/2.0, position[2] - headThickness/2.0)
+            gp_Pnt(handleLength/2.0, -headWidth/2.0, -headThickness/2.0)
         );
         
         if (movableJaw.IsNull()) {
@@ -344,9 +345,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             bridgeLength,
             bridgeWidth,
             bridgeThickness,
-            gp_Pnt(position[0] - handleLength/2.0 - fixedJawLength + bridgeLength/2.0, 
-                   position[1] - bridgeWidth/2.0, 
-                   position[2] - bridgeThickness/2.0)
+            gp_Pnt(-handleLength/2.0 - fixedJawLength + bridgeLength/2.0, 
+                   -bridgeWidth/2.0, 
+                   -bridgeThickness/2.0)
         );
         
         if (connectionBridge.IsNull()) {
@@ -385,9 +386,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             fixedSlotWidth,
             fixedSlotDepth,
             fixedSlotHeight,
-            gp_Pnt(position[0] - handleLength/2.0 - fixedJawLength + fixedSlotWidth/2.0, 
-                   position[1] - fixedSlotDepth/2.0, 
-                   position[2] - fixedSlotHeight/2.0)
+            gp_Pnt(-handleLength/2.0 - fixedJawLength + fixedSlotWidth/2.0, 
+                   -fixedSlotDepth/2.0, 
+                   -fixedSlotHeight/2.0)
         );
         
         if (!fixedSlot.IsNull()) {
@@ -407,9 +408,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             movableSlotWidth,
             movableSlotDepth,
             movableSlotHeight,
-            gp_Pnt(position[0] + handleLength/2.0 + movableJawLength - movableSlotWidth - 0.1, 
-                   position[1] - movableSlotDepth/2.0, 
-                   position[2] - movableSlotHeight/2.0)
+            gp_Pnt(handleLength/2.0 - movableSlotWidth - 0.1, 
+                   -movableSlotDepth/2.0, 
+                   -movableSlotHeight/2.0)
         );
         
         if (!movableSlot.IsNull() && !wrenchBody.IsNull()) {
@@ -427,9 +428,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         TopoDS_Shape adjustmentThread = OCCShapeBuilder::createCylinder(
             threadDiameter/2.0,
             threadLength,
-            gp_Pnt(position[0] + handleLength/2.0 + movableJawLength + threadLength/2.0, 
-                   position[1], 
-                   position[2]),
+            gp_Pnt(handleLength/2.0 + movableJawLength + threadLength/2.0, 
+                   0.0, 
+                   0.0),
             gp_Dir(1, 0, 0)
         );
         
@@ -448,9 +449,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         TopoDS_Shape adjustmentKnob = OCCShapeBuilder::createCylinder(
             knobDiameter/2.0,
             knobThickness,
-            gp_Pnt(position[0] + handleLength/2.0 + movableJawLength + threadLength + knobThickness/2.0, 
-                   position[1], 
-                   position[2]),
+            gp_Pnt(handleLength/2.0 + movableJawLength + threadLength + knobThickness/2.0, 
+                   0.0, 
+                   0.0),
             gp_Dir(1, 0, 0)
         );
         
@@ -471,9 +472,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
             double grooveHeight = knobThickness * 0.7;
             
             // Position groove on knob surface
-            double grooveX = position[0] + handleLength/2.0 + movableJawLength + threadLength + knobThickness/2.0;
-            double grooveY = position[1] + (knobDiameter/2.0 - grooveDepth/2.0) * cos(angleRad);
-            double grooveZ = position[2] + (knobDiameter/2.0 - grooveDepth/2.0) * sin(angleRad);
+            double grooveX = handleLength/2.0 + movableJawLength + threadLength + knobThickness/2.0;
+            double grooveY = (knobDiameter/2.0 - grooveDepth/2.0) * cos(angleRad);
+            double grooveZ = (knobDiameter/2.0 - grooveDepth/2.0) * sin(angleRad);
             
             TopoDS_Shape groove = OCCShapeBuilder::createBox(
                 grooveWidth,
@@ -494,7 +495,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         
         // 11. Add ergonomic handle grip pattern (multiple grooves with varying depths)
         for (int i = 0; i < 6; i++) {
-            double grooveX = position[0] - handleLength/3.0 + i * handleLength/6.0;
+            double grooveX = -handleLength/3.0 + i * handleLength/6.0;
             double grooveWidth = 0.4;
             double grooveDepth = handleWidth * 0.8;
             double grooveHeight = 0.25 + (i % 2) * 0.1; // Varying depths for better grip
@@ -504,8 +505,8 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
                 grooveDepth,
                 grooveHeight,
                 gp_Pnt(grooveX - grooveWidth/2.0, 
-                       position[1] - grooveDepth/2.0, 
-                       position[2] + handleThickness/2.0 - grooveHeight/2.0)
+                       -grooveDepth/2.0, 
+                       handleThickness/2.0 - grooveHeight/2.0)
             );
             
             if (!groove.IsNull() && !wrenchBody.IsNull()) {
@@ -555,6 +556,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
         geometry->setShape(wrenchBody);
         // Set position to the specified location - this ensures the geometry is properly positioned
         geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
+        LOG_INF_S("[GeometryFactoryDebug] Final wrench position set to: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
         
         LOG_INF_S("Created connected professional wrench model: " + name);
         return geometry;

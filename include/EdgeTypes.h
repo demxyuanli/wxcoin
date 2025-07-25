@@ -1,16 +1,17 @@
 #pragma once
 
-// 边线类型枚举
+// Edge type enumeration
 enum class EdgeType {
     Original,
     Feature,
     Mesh,
     Highlight,
     NormalLine,
-    FaceNormalLine
+    FaceNormalLine,
+    Silhouette  // New: silhouette edge type
 };
 
-// 边线显示状态结构体
+// Edge display state structure
 struct EdgeDisplayFlags {
     bool showOriginalEdges = false;
     bool showFeatureEdges = false;
@@ -18,4 +19,5 @@ struct EdgeDisplayFlags {
     bool showHighlightEdges = false;
     bool showNormalLines = false;
     bool showFaceNormalLines = false;
+    bool showSilhouetteEdges = false;  // New: silhouette edge display flag
 }; 

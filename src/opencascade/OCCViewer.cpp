@@ -25,6 +25,23 @@
 #include <wx/gdicmn.h>
 #include <chrono>
 #include "EdgeComponent.h"
+#include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoNode.h>
+#include <Inventor/nodes/SoTransform.h>
+#include "DynamicSilhouetteRenderer.h"
+
+gp_Pnt OCCViewer::getCameraPosition() const {
+    if (!m_sceneManager || !m_sceneManager->getCanvas()) return gp_Pnt(0,0,0);
+    SoCamera* camera = m_sceneManager->getCanvas()->getCamera();
+    if (!camera) return gp_Pnt(0,0,0);
+    SbVec3f pos = camera->position.getValue();
+    return gp_Pnt(pos[0], pos[1], pos[2]);
+}
+
+// Invalidate and regenerate silhouette edges on camera/view change (pseudo-code, actual integration may depend on your event system)
+// void OCCViewer::onCameraChanged() {
+//     if (globalEdgeFlags.showSilhouetteEdges) setShowSilhouetteEdges(true);
+// }
 
 OCCViewer::OCCViewer(SceneManager* sceneManager)
     : m_sceneManager(sceneManager),
@@ -1309,8 +1326,10 @@ void OCCViewer::setShowWireframeFlag(bool flag) {
     updateDisplay();
 }
 void OCCViewer::setShowFacesFlag(bool flag) {
-    m_displayFlags.showFaces = flag;
-    updateDisplay();
+    // ShowFaces functionality disabled to avoid interference with edge testing
+    // m_displayFlags.showFaces = flag;
+    // updateDisplay();
+    LOG_INF_S("ShowFaces functionality disabled - faces are always shown for edge testing");
 }
 void OCCViewer::setShowNormalsFlag(bool flag) {
     m_displayFlags.showNormals = flag;
@@ -1318,15 +1337,17 @@ void OCCViewer::setShowNormalsFlag(bool flag) {
 }
 bool OCCViewer::isShowEdgesFlag() const { return m_displayFlags.showEdges; }
 bool OCCViewer::isShowWireframeFlag() const { return m_displayFlags.showWireframe; }
-bool OCCViewer::isShowFacesFlag() const { return m_displayFlags.showFaces; }
+bool OCCViewer::isShowFacesFlag() const { 
+    // ShowFaces functionality disabled - faces are always shown for edge testing
+    return true; 
+}
 bool OCCViewer::isShowNormalsFlag() const { return m_displayFlags.showNormals; }
 
 void OCCViewer::updateDisplay() {
     // Clear scene or prepare for redraw if needed
     // ...
-    if (isShowFacesFlag()) {
-        drawFaces();
-    }
+    // Faces are always shown for edge testing - ShowFaces functionality disabled
+    drawFaces();
     if (isShowWireframeFlag()) {
         drawWireframe();
     }
@@ -1404,6 +1425,61 @@ void OCCViewer::setShowFaceNormalLines(bool show) {
     updateAllEdgeDisplays();
 }
 
+void OCCViewer::setShowSilhouetteEdges(bool show) {
+    LOG_INF_S("[OCCViewerDebug] setShowSilhouetteEdges called with show=" + std::string(show ? "true" : "false"));
+    LOG_INF_S("[OCCViewerDebug] Number of geometries: " + std::to_string(m_geometries.size()));
+    
+    // Update global flags but don't use them for EdgeComponent
+    // We're using dynamic renderers instead
+    globalEdgeFlags.showSilhouetteEdges = show;
+    
+    if (show) {
+        // Enable dynamic silhouette rendering for all geometries
+        for (auto& g : m_geometries) {
+            if (g) {
+                std::string name = g->getName();
+                LOG_INF_S("[OCCViewerDebug] Processing geometry: " + name);
+                
+                // Create dynamic silhouette renderer if it doesn't exist
+                if (m_silhouetteRenderers.find(name) == m_silhouetteRenderers.end()) {
+                    LOG_INF_S("[OCCViewerDebug] Creating new dynamic silhouette renderer for: " + name);
+                    m_silhouetteRenderers[name] = std::make_unique<DynamicSilhouetteRenderer>(m_occRoot);
+                    m_silhouetteRenderers[name]->setShape(g->getShape());
+                    
+                    // Add silhouette node to the scene
+                    if (m_occRoot) {
+                        m_occRoot->addChild(m_silhouetteRenderers[name]->getSilhouetteNode());
+                        LOG_INF_S("[OCCViewerDebug] Added silhouette node to scene for: " + name);
+                    } else {
+                        LOG_WRN_S("[OCCViewerDebug] m_occRoot is null, cannot add silhouette node");
+                    }
+                } else {
+                    LOG_INF_S("[OCCViewerDebug] Dynamic silhouette renderer already exists for: " + name);
+                }
+                
+                // Enable the renderer
+                m_silhouetteRenderers[name]->setEnabled(true);
+                LOG_INF_S("[OCCViewerDebug] Enabled dynamic silhouette renderer for geometry: " + name);
+            } else {
+                LOG_WRN_S("[OCCViewerDebug] Geometry is null");
+            }
+        }
+    } else {
+        // Disable dynamic silhouette rendering for all geometries
+        for (auto& renderer : m_silhouetteRenderers) {
+            renderer.second->setEnabled(false);
+            LOG_INF_S("[OCCViewerDebug] Disabled dynamic silhouette renderer for: " + renderer.first);
+        }
+    }
+    
+    // Don't call updateAllEdgeDisplays() as it will try to use old EdgeComponent system
+    // Instead, just refresh the canvas
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        m_sceneManager->getCanvas()->Refresh();
+        LOG_INF_S("[OCCViewerDebug] Canvas refreshed");
+    }
+}
+
 void OCCViewer::toggleEdgeType(EdgeType type, bool show) {
     switch(type) {
         case EdgeType::Original: globalEdgeFlags.showOriginalEdges = show; break;
@@ -1412,6 +1488,7 @@ void OCCViewer::toggleEdgeType(EdgeType type, bool show) {
         case EdgeType::Highlight: globalEdgeFlags.showHighlightEdges = show; break;
         case EdgeType::NormalLine: globalEdgeFlags.showNormalLines = show; break;
         case EdgeType::FaceNormalLine: globalEdgeFlags.showFaceNormalLines = show; break;
+        case EdgeType::Silhouette: globalEdgeFlags.showSilhouetteEdges = show; break;
     }
     updateAllEdgeDisplays();
 }
@@ -1424,6 +1501,7 @@ bool OCCViewer::isEdgeTypeEnabled(EdgeType type) const {
         case EdgeType::Highlight: return globalEdgeFlags.showHighlightEdges;
         case EdgeType::NormalLine: return globalEdgeFlags.showNormalLines;
         case EdgeType::FaceNormalLine: return globalEdgeFlags.showFaceNormalLines;
+        case EdgeType::Silhouette: return globalEdgeFlags.showSilhouetteEdges;
     }
     return false;
 }

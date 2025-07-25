@@ -8,6 +8,7 @@ set(RENDERING_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/PickingAidManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MultiViewportManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ViewRefreshManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DynamicSilhouetteRenderer.cpp
 )
 
 set(RENDERING_HEADERS
@@ -19,6 +20,7 @@ set(RENDERING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/PickingAidManager.h
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
+    ${CMAKE_SOURCE_DIR}/include/DynamicSilhouetteRenderer.h
 )
 
 # Create rendering static library

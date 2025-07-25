@@ -39,14 +39,15 @@ enum class CommandType {
     ShowNormals,
     ShowFaces,
     FixNormals,
-    ShowEdges,
+    ShowSilhouetteEdges,
     SetTransparency,
     ToggleWireframe,
     // Removed ToggleShading - functionality not needed
     ToggleEdges,
     ShowOriginalEdges, 
-    ShowMeshEdges, // 新增：显示网格边
-    ShowFaceNormals, // 新增：显示面法线
+    ShowFeatureEdges, // New: show feature edges
+    ShowMeshEdges, // New: show mesh edges
+    ShowFaceNormals, // New: show face normals
 
     // Texture modes
     TextureModeDecal,
@@ -104,12 +105,13 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ShowNormals, "SHOW_NORMALS"},
         {CommandType::ShowFaces, "SHOW_FACES"},
         {CommandType::FixNormals, "FIX_NORMALS"},
-        {CommandType::ShowEdges, "SHOW_EDGES"},
+        {CommandType::ShowSilhouetteEdges, "SHOW_SILHOUETTE_EDGES"},
         {CommandType::SetTransparency, "SET_TRANSPARENCY"},
         {CommandType::ToggleWireframe, "TOGGLE_WIREFRAME"},
         // Removed ToggleShading mapping
         {CommandType::ToggleEdges, "TOGGLE_EDGES"},
         {CommandType::ShowOriginalEdges, "SHOW_ORIGINAL_EDGES"},
+        {CommandType::ShowFeatureEdges, "SHOW_FEATURE_EDGES"},
         {CommandType::ShowMeshEdges, "SHOW_MESH_EDGES"},
         {CommandType::ShowFaceNormals, "SHOW_FACE_NORMALS"},
 
@@ -166,12 +168,13 @@ inline CommandType from_string(const std::string& str) {
         {"SHOW_NORMALS", CommandType::ShowNormals},
         {"SHOW_FACES", CommandType::ShowFaces},
         {"FIX_NORMALS", CommandType::FixNormals},
-        {"SHOW_EDGES", CommandType::ShowEdges},
+        {"SHOW_SILHOUETTE_EDGES", CommandType::ShowSilhouetteEdges},
         {"SET_TRANSPARENCY", CommandType::SetTransparency},
         {"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
         // Removed ToggleShading reverse mapping
         {"TOGGLE_EDGES", CommandType::ToggleEdges},
         {"SHOW_ORIGINAL_EDGES", CommandType::ShowOriginalEdges},
+        {"SHOW_FEATURE_EDGES", CommandType::ShowFeatureEdges},
         {"SHOW_MESH_EDGES", CommandType::ShowMeshEdges},
         {"SHOW_FACE_NORMALS", CommandType::ShowFaceNormals},
 

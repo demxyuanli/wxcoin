@@ -736,10 +736,9 @@ void FlatBarSpaceContainer::UpdateTabOverflow()
             m_tabDropdown->SetDropdownRect(dropdownRect);
         }
     }
-    
-    LOG_INF("UpdateTabOverflow: Visible tabs: " + std::to_string(m_visibleTabIndices.size()) + 
-           ", Hidden tabs: " + std::to_string(m_hiddenTabIndices.size()) + 
-           ", Has overflow: " + (m_hasTabOverflow ? "true" : "false"), "BarSpaceContainer");
+	else {
+		LOG_ERR("Tab dropdown component is not initialized", "BarSpaceContainer");
+	}
 }
 
 std::vector<size_t> FlatBarSpaceContainer::GetVisibleTabIndices() const

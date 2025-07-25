@@ -77,11 +77,10 @@ OCCGeometry::OCCGeometry(const std::string& name)
     m_cullFace = blendSettings.cullFace;
     m_alphaThreshold = blendSettings.alphaThreshold;
     
-    // Set default bright material for better visibility
-    setDefaultBrightMaterial();
-    
-    // Apply settings from RenderingConfig
+    // Apply settings from RenderingConfig first
     updateFromRenderingConfig();
+    
+    
     edgeComponent = std::make_unique<EdgeComponent>();
     
     // Ensure edge display is disabled by default to avoid conflicts with new EdgeComponent system
@@ -278,7 +277,7 @@ void OCCGeometry::setMaterialShininess(double shininess)
 void OCCGeometry::setDefaultBrightMaterial()
 {
     // Set bright material colors for better visibility without textures
-    m_materialAmbientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
+    m_materialAmbientColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
     m_materialDiffuseColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
     m_materialSpecularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
     m_materialShininess = 30.0; // Lower shininess for more diffuse appearance
@@ -509,7 +508,8 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         
         LOG_INF_S("Material set for " + m_name + " - ambient: " + 
                  std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
-                 " diffuse: " + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b));
+                 " diffuse: " + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
+                 " shininess: " + std::to_string(m_materialShininess) + " transparency: " + std::to_string(m_transparency));
     }
     m_coinNode->addChild(material);
 
@@ -650,8 +650,8 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         // Generate original edges from CAD shape
         edgeComponent->extractOriginalEdges(m_shape);
         
-        // Generate feature edges with default parameters
-        edgeComponent->extractFeatureEdges(m_shape, 30.0, 0.1, false, false);
+        // Generate feature edges with very sensitive parameters for basic shapes
+        edgeComponent->extractFeatureEdges(m_shape, 10.0, 0.01, false, false);
         
         // Generate mesh edges and normal lines
         auto& manager = RenderingToolkitAPI::getManager();
@@ -789,6 +789,16 @@ void OCCBox::buildShape()
             TopoDS_Shape shape = boxMaker.Shape();
             LOG_INF_S("Box shape created successfully for OCCBox: " + m_name + " - Shape is null: " + (shape.IsNull() ? "yes" : "no"));
             setShape(shape);
+
+            // Log the center of the created shape
+            Bnd_Box box;
+            BRepBndLib::Add(shape, box);
+            if (!box.IsVoid()) {
+                Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+                box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+                gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
+                LOG_INF_S("[OCCGeometryDebug] OCCBox shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
+            }
         }
         else {
             LOG_ERR_S("BRepPrimAPI_MakeBox failed for OCCBox: " + m_name);
@@ -834,6 +844,16 @@ void OCCCylinder::buildShape()
             TopoDS_Shape shape = cylinderMaker.Shape();
             LOG_INF_S("Cylinder shape created successfully for OCCCylinder: " + m_name + " - Shape is null: " + (shape.IsNull() ? "yes" : "no"));
             setShape(shape);
+
+            // Log the center of the created shape
+            Bnd_Box box;
+            BRepBndLib::Add(shape, box);
+            if (!box.IsVoid()) {
+                Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+                box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+                gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
+                LOG_INF_S("[OCCGeometryDebug] OCCCylinder shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
+            }
         }
         else {
             LOG_ERR_S("BRepPrimAPI_MakeCylinder failed for OCCCylinder: " + m_name);
@@ -879,6 +899,16 @@ void OCCSphere::buildShape()
             if (!shape.IsNull()) {
                 LOG_INF_S("Sphere shape created successfully with simple constructor for: " + m_name);
                 setShape(shape);
+
+                // Log the center of the created shape
+                Bnd_Box box;
+                BRepBndLib::Add(shape, box);
+                if (!box.IsVoid()) {
+                    Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+                    box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+                    gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
+                    LOG_INF_S("[OCCGeometryDebug] OCCSphere shape center (simple): (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
+                }
                 return;
             }
             else {
@@ -899,6 +929,16 @@ void OCCSphere::buildShape()
             if (!fallbackShape.IsNull()) {
                 LOG_INF_S("Fallback sphere creation successful for: " + m_name);
                 setShape(fallbackShape);
+
+                // Log the center of the created shape
+                Bnd_Box box;
+                BRepBndLib::Add(fallbackShape, box);
+                if (!box.IsVoid()) {
+                    Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+                    box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+                    gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
+                    LOG_INF_S("[OCCGeometryDebug] OCCSphere shape center (fallback): (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
+                }
             }
             else {
                 LOG_ERR_S("Fallback also returned null shape for: " + m_name);
@@ -971,6 +1011,16 @@ void OCCCone::buildShape()
             if (!shape.IsNull()) {
                 LOG_INF_S("Cone shape created successfully for OCCCone: " + m_name);
                 setShape(shape);
+
+                // Log the center of the created shape
+                Bnd_Box box;
+                BRepBndLib::Add(shape, box);
+                if (!box.IsVoid()) {
+                    Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+                    box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+                    gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
+                    LOG_INF_S("[OCCGeometryDebug] OCCCone shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
+                }
             }
             else {
                 LOG_ERR_S("BRepPrimAPI_MakeCone returned null shape for OCCCone: " + m_name);
@@ -986,6 +1036,16 @@ void OCCCone::buildShape()
                         if (!fallbackShape.IsNull()) {
                             LOG_INF_S("Fallback cone creation successful for: " + m_name);
                             setShape(fallbackShape);
+
+                            // Log the center of the created shape
+                            Bnd_Box box;
+                            BRepBndLib::Add(fallbackShape, box);
+                            if (!box.IsVoid()) {
+                                Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+                                box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+                                gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
+                                LOG_INF_S("[OCCGeometryDebug] OCCCone fallback shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
+                            }
                         }
                         else {
                             LOG_ERR_S("Fallback cone creation also failed for: " + m_name);
@@ -1324,10 +1384,14 @@ void OCCGeometry::updateFromRenderingConfig()
         m_coinNode->touch();
     }
     
-    LOG_INF_S("Updated geometry '" + m_name + "' from RenderingConfig - transparency: " + std::to_string(m_transparency) + 
-              ", blend mode: " + RenderingConfig::getBlendModeName(m_blendMode) + 
-              ", texture enabled: " + std::string(m_textureEnabled ? "true" : "false") + 
-              ", texture mode: " + RenderingConfig::getTextureModeName(m_textureMode));
+    LOG_INF_S("Updated geometry '" + m_name + "' from RenderingConfig:");
+    LOG_INF_S("  - Material diffuse color: " + std::to_string(m_materialDiffuseColor.Red()) + "," + 
+              std::to_string(m_materialDiffuseColor.Green()) + "," + std::to_string(m_materialDiffuseColor.Blue()));
+    LOG_INF_S("  - Material ambient color: " + std::to_string(m_materialAmbientColor.Red()) + "," + 
+              std::to_string(m_materialAmbientColor.Green()) + "," + std::to_string(m_materialAmbientColor.Blue()));
+    LOG_INF_S("  - Transparency: " + std::to_string(m_transparency));
+    LOG_INF_S("  - Texture enabled: " + std::string(m_textureEnabled ? "true" : "false"));
+    LOG_INF_S("  - Blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
 }
 
 void OCCGeometry::forceTextureUpdate()

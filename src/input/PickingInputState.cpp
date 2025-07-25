@@ -18,7 +18,7 @@ void PickingInputState::onMouseButton(wxMouseEvent& event) {
     LOG_INF_S("Picking position with mouse click (PickingInputState)");
     SbVec3f worldPos;
     if (m_canvas->getSceneManager()->screenToWorld(event.GetPosition(), worldPos)) {
-        LOG_INF_S("Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
+        LOG_INF_S("[PickingDebug] Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
 
         wxWindow* dialog = wxWindow::FindWindowByName("PositionDialog");
         if (dialog) {

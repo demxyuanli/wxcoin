@@ -11,6 +11,7 @@
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include "EdgeTypes.h"
+#include "DynamicSilhouetteRenderer.h"
 
 // Forward declarations
 class OCCGeometry;
@@ -181,9 +182,13 @@ public:
     void setShowHighlightEdges(bool show);
     void setShowNormalLines(bool show);
     void setShowFaceNormalLines(bool show);
+    void setShowSilhouetteEdges(bool show);  // New: set silhouette edge display
     void toggleEdgeType(EdgeType type, bool show);
     bool isEdgeTypeEnabled(EdgeType type) const;
     void updateAllEdgeDisplays();
+
+    gp_Pnt getCameraPosition() const;
+    SoSeparator* getRootSeparator() const { return m_occRoot; }
 
 private:
     void initializeViewer();
@@ -254,6 +259,8 @@ private:
 
     // Parameter monitoring
     bool m_parameterMonitoringEnabled;
+
+    std::map<std::string, std::unique_ptr<DynamicSilhouetteRenderer>> m_silhouetteRenderers;
 
     struct DisplayFlags {
         bool showEdges = false;

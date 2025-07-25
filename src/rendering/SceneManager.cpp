@@ -400,10 +400,13 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
     SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
     if (pickedPoint) {
         worldPos = pickedPoint->getPoint();
-        LOG_INF_S("Successfully picked 3D point from scene geometry");
         return true;
     }
+    else {
+		LOG_ERR_S("No geometry picked at screen position: (" + std::to_string(screenPos.x) + ", " + std::to_string(screenPos.y) + ")");
+    }
 
+    
     // If no geometry was picked, try intersecting with the current reference plane
     float referenceZ = m_pickingAidManager ? m_pickingAidManager->getReferenceZ() : 0.0f;
     SbPlane referencePlane(SbVec3f(0, 0, 1), referenceZ);
