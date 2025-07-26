@@ -2,7 +2,8 @@
 set(UI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/ObjectTreePanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PropertyPanel.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/PositionDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PositionBasicDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/VisualSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TransparencyDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsDialog.cpp
@@ -14,7 +15,9 @@ set(UI_SOURCES
 set(UI_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ObjectTreePanel.h
     ${CMAKE_SOURCE_DIR}/include/PropertyPanel.h
-    ${CMAKE_SOURCE_DIR}/include/PositionDialog.h
+    ${CMAKE_SOURCE_DIR}/include/PositionBasicDialog.h
+    ${CMAKE_SOURCE_DIR}/include/VisualSettingsDialog.h
+    ${CMAKE_SOURCE_DIR}/include/GeometryDialogTypes.h
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsDialog.h

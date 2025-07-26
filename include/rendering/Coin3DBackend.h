@@ -29,13 +29,21 @@ public:
     bool initialize(const std::string& config = "") override;
     void shutdown() override;
     
-    SoSeparatorPtr createSceneNode(const TriangleMesh& mesh, bool selected = false) override;
+
+    SoSeparatorPtr createSceneNode(const TriangleMesh& mesh, bool selected,
+                                 const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                                 const Quantity_Color& specularColor, double shininess, double transparency) override;
     void updateSceneNode(SoSeparator* node, const TriangleMesh& mesh) override;
     void updateSceneNode(SoSeparator* node, const TopoDS_Shape& shape, const MeshParameters& params) override;
     
     SoSeparatorPtr createSceneNode(const TopoDS_Shape& shape, 
                                   const MeshParameters& params = MeshParameters(),
                                   bool selected = false) override;
+    SoSeparatorPtr createSceneNode(const TopoDS_Shape& shape, 
+                                  const MeshParameters& params,
+                                  bool selected,
+                                  const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                                  const Quantity_Color& specularColor, double shininess, double transparency) override;
     
     void setEdgeSettings(bool show, double angle = 45.0) override;
     void setSmoothingSettings(bool enabled, double creaseAngle = 30.0, int iterations = 2) override;
@@ -45,7 +53,10 @@ public:
     bool isAvailable() const override;
 
     // Coin3DBackend interface
-    SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected = false) override;
+
+    SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected,
+                              const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                              const Quantity_Color& specularColor, double shininess, double transparency) override;
     void updateCoinNode(SoSeparator* node, const TriangleMesh& mesh) override;
     
     SoCoordinate3* createCoordinateNode(const TriangleMesh& mesh) override;
@@ -55,7 +66,10 @@ public:
 
 private:
     // Helper methods
-    void buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected);
+
+    void buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected, 
+                               const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                               const Quantity_Color& specularColor, double shininess, double transparency);
     SoShapeHints* createShapeHints();
     SoNormalBinding* createNormalBinding();
     SoMaterial* createEdgeMaterial(bool selected = false);

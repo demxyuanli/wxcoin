@@ -88,8 +88,8 @@ void OCCMeshConverter::setCreaseAngle(double angle)
     LOG_INF_S("Crease angle set to: " + std::to_string(angle));
 }
 
-OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape,
-    const MeshParameters& params)
+TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape,
+                                      const MeshParameters& params)
 {
     TriangleMesh mesh;
 
@@ -142,132 +142,16 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shap
     return mesh;
 }
 
-OCCMeshConverter::TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape, double deflection)
+TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape, double deflection)
 {
     MeshParameters params;
     params.deflection = deflection;
     return convertToMesh(shape, params);
 }
 
-SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh)
-{
-    return createCoinNode(mesh, false);
-}
 
-SoSeparator* OCCMeshConverter::createCoinNode(const TriangleMesh& mesh, bool selected)
-{
-    if (mesh.isEmpty()) {
-        LOG_WRN_S("Cannot create Coin3D node from empty mesh");
-        return nullptr;
-    }
 
-    SoSeparator* root = new SoSeparator;
-    root->ref();
 
-    // Build common structure
-    buildCoinNodeStructure(root, mesh, selected);
-
-    root->unrefNoDelete();
-    return root;
-}
-
-SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params)
-{
-    TriangleMesh mesh = convertToMesh(shape, params);
-    return createCoinNode(mesh);
-}
-
-SoSeparator* OCCMeshConverter::createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params, bool selected)
-{
-    TriangleMesh mesh = convertToMesh(shape, params);
-    return createCoinNode(mesh, selected);
-}
-
-// Helper function to build common Coin3D node structure
-void OCCMeshConverter::buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected)
-{
-    // Add shape hints
-    SoShapeHints* hints = new SoShapeHints;
-    hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
-    hints->shapeType = SoShapeHints::SOLID;
-    hints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
-    hints->creaseAngle = static_cast<float>(s_creaseAngle * M_PI / 180.0);
-    node->addChild(hints);
-
-    // Add coordinate node
-    SoCoordinate3* coords = createCoordinateNode(mesh);
-    if (coords) {
-        node->addChild(coords);
-    }
-
-    // Add normal node with binding
-    if (!mesh.normals.empty()) {
-        SoNormal* normals = createNormalNode(mesh);
-        if (normals) {
-            node->addChild(normals);
-            
-            SoNormalBinding* binding = new SoNormalBinding;
-            binding->value = SoNormalBinding::PER_VERTEX_INDEXED;
-            node->addChild(binding);
-        }
-    }
-
-    // Add face set
-    SoIndexedFaceSet* faceSet = createFaceSetNode(mesh);
-    if (faceSet) {
-        node->addChild(faceSet);
-    }
-
-    // Add edge set if enabled
-    EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
-    EdgeSettings edgeSettings = selected ? edgeConfig.getSelectedSettings() : edgeConfig.getGlobalSettings();
-
-    if (edgeSettings.showEdges) {
-        SoSeparator* edgeGroup = new SoSeparator;
-        SoTexture2* disableTexture = new SoTexture2;
-        edgeGroup->addChild(disableTexture);
-
-        SoMaterial* edgeMaterial = new SoMaterial;
-        if (edgeSettings.edgeColorEnabled) {
-            Quantity_Color edgeColor = edgeSettings.edgeColor;
-            edgeMaterial->diffuseColor.setValue(edgeColor.Red(), edgeColor.Green(), edgeColor.Blue());
-            edgeMaterial->emissiveColor.setValue(edgeColor.Red() * 0.5f, edgeColor.Green() * 0.5f, edgeColor.Blue() * 0.5f);
-        } else {
-            edgeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
-            edgeMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
-        }
-        edgeGroup->addChild(edgeMaterial);
-
-        SoIndexedLineSet* edgeSet = createEdgeSetNode(mesh);
-        if (edgeSet) {
-            edgeGroup->addChild(edgeSet);
-        }
-
-        node->addChild(edgeGroup);
-    }
-}
-
-void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TriangleMesh& mesh)
-{
-    if (!node || mesh.isEmpty()) {
-        return;
-    }
-
-    // Remove all children and rebuild
-    node->removeAllChildren();
-    
-    // Build common structure
-    buildCoinNodeStructure(node, mesh, false);
-}
-
-void OCCMeshConverter::updateCoinNode(SoSeparator* node, const TopoDS_Shape& shape, const MeshParameters& params)
-{
-    if (!node) {
-        return;
-    }
-    TriangleMesh mesh = convertToMesh(shape, params);
-    updateCoinNode(node, mesh);
-}
 
 void OCCMeshConverter::calculateNormals(TriangleMesh& mesh)
 {
@@ -313,7 +197,7 @@ void OCCMeshConverter::calculateNormals(TriangleMesh& mesh)
     }
 }
 
-OCCMeshConverter::TriangleMesh OCCMeshConverter::smoothNormals(const TriangleMesh& mesh, double creaseAngle, int iterations)
+TriangleMesh OCCMeshConverter::smoothNormals(const TriangleMesh& mesh, double creaseAngle, int iterations)
 {
     TriangleMesh result = mesh;
     
@@ -432,7 +316,7 @@ OCCMeshConverter::TriangleMesh OCCMeshConverter::smoothNormals(const TriangleMes
     return result;
 }
 
-OCCMeshConverter::TriangleMesh OCCMeshConverter::createSubdivisionSurface(const TriangleMesh& mesh, int levels)
+TriangleMesh OCCMeshConverter::createSubdivisionSurface(const TriangleMesh& mesh, int levels)
 {
     TriangleMesh result = mesh;
     
@@ -653,78 +537,7 @@ void OCCMeshConverter::extractTriangulation(const Handle(Poly_Triangulation)& tr
     }
 }
 
-SoCoordinate3* OCCMeshConverter::createCoordinateNode(const TriangleMesh& mesh)
-{
-    if (mesh.vertices.empty()) {
-        return nullptr;
-    }
 
-    SoCoordinate3* coords = new SoCoordinate3;
-    coords->point.setNum(static_cast<int>(mesh.vertices.size()));
-
-    SbVec3f* points = coords->point.startEditing();
-    for (size_t i = 0; i < mesh.vertices.size(); i++) {
-        const gp_Pnt& vertex = mesh.vertices[i];
-        points[i].setValue(
-            static_cast<float>(vertex.X()),
-            static_cast<float>(vertex.Y()),
-            static_cast<float>(vertex.Z())
-        );
-    }
-    coords->point.finishEditing();
-
-    return coords;
-}
-
-SoIndexedFaceSet* OCCMeshConverter::createFaceSetNode(const TriangleMesh& mesh)
-{
-    if (mesh.triangles.empty()) {
-        return nullptr;
-    }
-
-    SoIndexedFaceSet* faceSet = new SoIndexedFaceSet;
-
-    // Set up coordinate indices
-    int numIndices = static_cast<int>(mesh.triangles.size()) + mesh.getTriangleCount(); // +1 for each triangle separator
-    faceSet->coordIndex.setNum(numIndices);
-
-    int32_t* indices = faceSet->coordIndex.startEditing();
-    int indexPos = 0;
-
-    for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
-        indices[indexPos++] = mesh.triangles[i];
-        indices[indexPos++] = mesh.triangles[i + 1];
-        indices[indexPos++] = mesh.triangles[i + 2];
-        indices[indexPos++] = -1; // Triangle separator
-    }
-
-    faceSet->coordIndex.finishEditing();
-
-    return faceSet;
-}
-
-SoNormal* OCCMeshConverter::createNormalNode(const TriangleMesh& mesh)
-{
-    if (mesh.normals.empty()) {
-        return nullptr;
-    }
-
-    SoNormal* normals = new SoNormal;
-    normals->vector.setNum(static_cast<int>(mesh.normals.size()));
-
-    SbVec3f* normalVecs = normals->vector.startEditing();
-    for (size_t i = 0; i < mesh.normals.size(); i++) {
-        const gp_Vec& normal = mesh.normals[i];
-        normalVecs[i].setValue(
-            static_cast<float>(normal.X()),
-            static_cast<float>(normal.Y()),
-            static_cast<float>(normal.Z())
-        );
-    }
-    normals->vector.finishEditing();
-
-    return normals;
-}
 
 
 
@@ -783,89 +596,3 @@ std::set<std::pair<int, int>> OCCMeshConverter::findBoundaryEdges(const Triangle
     return boundaryEdges;
 }
 
-// Helper function for edge set creation with improved feature edge detection
-SoIndexedLineSet* OCCMeshConverter::createEdgeSetNode(const TriangleMesh& mesh)
-{
-    if (mesh.triangles.empty()) return nullptr;
-
-    // Build edge-to-faces mapping
-    std::map<std::pair<int, int>, std::vector<int>> edgeFaces;
-    for (size_t i = 0; i + 2 < mesh.triangles.size(); i += 3) {
-        int verts[3] = { mesh.triangles[i], mesh.triangles[i + 1], mesh.triangles[i + 2] };
-        auto processEdge = [&](int v1, int v2) {
-            if (v1 > v2) std::swap(v1, v2);
-            edgeFaces[{v1, v2}].push_back(static_cast<int>(i));
-        };
-        processEdge(verts[0], verts[1]);
-        processEdge(verts[1], verts[2]);
-        processEdge(verts[2], verts[0]);
-    }
-
-    // Find boundary edges (edges that appear only once)
-    std::set<std::pair<int, int>> boundaryEdges = findBoundaryEdges(mesh);
-
-    std::vector<int32_t> indices;
-    double threshold = OCCMeshConverter::s_featureEdgeAngle;
-    
-    for (auto& kv : edgeFaces) {
-        const auto& edge = kv.first;
-        const auto& faces = kv.second;
-        bool includeEdge = false;
-        
-        // Always include boundary edges
-        if (boundaryEdges.find(edge) != boundaryEdges.end()) {
-            includeEdge = true;
-        }
-        // For internal edges, apply angle threshold filtering
-        else if (faces.size() == 2 && threshold > 0.0) {
-            int f0 = faces[0], f1 = faces[1];
-            
-            // Get triangle vertices
-            int a0 = mesh.triangles[f0], b0 = mesh.triangles[f0 + 1], c0 = mesh.triangles[f0 + 2];
-            int a1 = mesh.triangles[f1], b1 = mesh.triangles[f1 + 1], c1 = mesh.triangles[f1 + 2];
-            
-            // Calculate face normals
-            gp_Vec n0 = OCCMeshConverter::calculateTriangleNormalVec(mesh.vertices[a0], mesh.vertices[b0], mesh.vertices[c0]);
-            gp_Vec n1 = OCCMeshConverter::calculateTriangleNormalVec(mesh.vertices[a1], mesh.vertices[b1], mesh.vertices[c1]);
-            
-            // Check if normals are valid
-            if (n0.Magnitude() > Precision::Confusion() && n1.Magnitude() > Precision::Confusion()) {
-                // Normalize normals
-                n0 = n0 / n0.Magnitude();
-                n1 = n1 / n1.Magnitude();
-                
-                // Calculate angle between faces
-                double cosAngle = n0.Dot(n1);
-                cosAngle = std::max(-1.0, std::min(1.0, cosAngle)); // Clamp to [-1, 1]
-                double angle = acos(cosAngle) * 180.0 / M_PI;
-                
-                // Only include edge if angle exceeds threshold (sharp edge)
-                if (angle >= threshold) {
-                    includeEdge = true;
-                }
-            }
-        }
-        // For edges with more than 2 faces, include them as they represent complex geometry
-        else if (faces.size() > 2) {
-            includeEdge = true;
-        }
-        // For threshold <= 0, include all edges (debug mode)
-        else if (threshold <= 0.0) {
-            includeEdge = true;
-        }
-        
-        if (includeEdge) {
-            indices.push_back(edge.first);
-            indices.push_back(edge.second);
-            indices.push_back(SO_END_LINE_INDEX);
-        }
-    }
-
-    if (indices.empty()) {
-        return nullptr;
-    }
-    
-    SoIndexedLineSet* lineSet = new SoIndexedLineSet;
-    lineSet->coordIndex.setValues(0, static_cast<int>(indices.size()), indices.data());
-    return lineSet;
-}

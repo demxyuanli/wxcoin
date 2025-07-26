@@ -68,7 +68,7 @@ public:
     virtual void setMaterialShininess(double shininess);
 
     // Set default bright material for better visibility without textures
-    virtual void setDefaultBrightMaterial();
+    virtual void setDefaultBrightMaterial(); 
 
     // Texture properties
     Quantity_Color getTextureColor() const { return m_textureColor; }
@@ -184,9 +184,12 @@ public:
     double getSubsurfaceScattering() const { return m_subsurfaceScattering; }
     virtual void setSubsurfaceScattering(double scattering);
 
-    // Update settings from RenderingConfig
+    // Update geometry from RenderingConfig settings
     virtual void updateFromRenderingConfig();
-
+    
+    // Update material properties for better lighting response
+    virtual void updateMaterialForLighting();
+    
     // Force texture update
     virtual void forceTextureUpdate();
 
@@ -207,6 +210,10 @@ public:
     SoSeparator* getCoinNode();
     void setCoinNode(SoSeparator* node);
     void regenerateMesh(const MeshParameters& params);
+    void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
+    void buildCoinRepresentation(const MeshParameters& params, 
+                                const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                                const Quantity_Color& specularColor, double shininess, double transparency);
     
     // Performance optimization
     bool needsMeshRegeneration() const;
@@ -219,7 +226,6 @@ public:
     void updateEdgeDisplay();
 
 private:
-    void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
     void createWireframeRepresentation(const MeshParameters& params);
 
 protected:
@@ -262,6 +268,8 @@ protected:
     bool m_smoothNormals;
     double m_wireframeWidth;
     double m_pointSize;
+    bool m_subdivisionEnabled;
+    int m_subdivisionLevels;
     
     // Display settings
     RenderingConfig::DisplayMode m_displayMode;

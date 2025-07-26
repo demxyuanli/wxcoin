@@ -1257,73 +1257,9 @@ void RenderingSettingsDialog::applySettings()
     config.setLightingModelSettings(lightingModelSettings);
     
     if (m_occViewer) {
-        // Apply settings to all geometries
-        auto geometries = m_occViewer->getAllGeometry();
-        for (auto& geometry : geometries) {
-            // Apply material settings
-            geometry->setMaterialAmbientColor(m_materialAmbientColor);
-            geometry->setMaterialDiffuseColor(m_materialDiffuseColor);
-            geometry->setMaterialSpecularColor(m_materialSpecularColor);
-            geometry->setMaterialShininess(m_materialShininess);
-            geometry->setTransparency(m_materialTransparency);
-            
-            // Apply texture settings
-            geometry->setTextureColor(m_textureColor);
-            geometry->setTextureIntensity(m_textureIntensity);
-            geometry->setTextureEnabled(m_textureEnabled);
-            geometry->setTextureImagePath(m_textureImagePath);
-            geometry->setTextureMode(m_textureMode);
-            
-            // Force texture update by rebuilding Coin3D representation
-            if (m_textureEnabled && !m_textureImagePath.empty()) {
-                geometry->forceTextureUpdate();
-                LOG_INF_S("Applied texture settings to geometry: " + geometry->getName() + 
-                         " - enabled: " + std::to_string(m_textureEnabled) + 
-                         " - path: " + m_textureImagePath);
-            }
-            
-            // Apply blend settings
-            geometry->setBlendMode(m_blendMode);
-            geometry->setDepthTest(m_depthTest);
-            geometry->setDepthWrite(m_depthWrite);
-            geometry->setCullFace(m_cullFace);
-            geometry->setAlphaThreshold(m_alphaThreshold);
-
-            // Apply shading settings
-            geometry->setSmoothNormals(m_smoothNormals);
-            geometry->setWireframeWidth(m_wireframeWidth);
-            geometry->setPointSize(m_pointSize);
-
-            // Apply display settings
-            geometry->setDisplayMode(m_displayMode);
-            geometry->setShowEdges(m_showEdges);
-            geometry->setShowVertices(m_showVertices);
-            geometry->setEdgeWidth(m_edgeWidth);
-            geometry->setVertexSize(m_vertexSize);
-            geometry->setEdgeColor(m_edgeColor);
-            geometry->setVertexColor(m_vertexColor);
-
-            // Apply quality settings
-            geometry->setRenderingQuality(m_renderingQuality);
-            geometry->setTessellationLevel(m_tessellationLevel);
-            geometry->setAntiAliasingSamples(m_antiAliasingSamples);
-            geometry->setEnableLOD(m_enableLOD);
-            geometry->setLODDistance(m_lodDistance);
-
-            // Apply shadow settings
-            geometry->setShadowMode(m_shadowMode);
-            geometry->setShadowIntensity(m_shadowIntensity);
-            geometry->setShadowSoftness(m_shadowSoftness);
-            geometry->setShadowMapSize(m_shadowMapSize);
-            geometry->setShadowBias(m_shadowBias);
-
-            // Apply lighting model settings
-            geometry->setLightingModel(m_lightingModel);
-            geometry->setRoughness(m_roughness);
-            geometry->setMetallic(m_metallic);
-            geometry->setFresnel(m_fresnel);
-            geometry->setSubsurfaceScattering(m_subsurfaceScattering);
-        }
+        // Note: Individual geometry settings are now handled by PositionBasicDialog and VisualSettingsDialog
+        // RenderingSettingsDialog only manages global rendering configuration
+        LOG_INF_S("Global rendering settings applied. Individual geometry settings are managed by PositionBasicDialog and VisualSettingsDialog.");
         
         // Apply lighting settings to rendering engine
         if (m_renderingEngine) {

@@ -2,7 +2,9 @@
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "PickingAidManager.h"
-#include "PositionDialog.h"
+#include "PositionBasicDialog.h"
+#include "MouseHandler.h"
+#include "InputManager.h"
 #include "logger/Logger.h"
 #include <wx/wx.h>
 
@@ -20,19 +22,19 @@ void PickingInputState::onMouseButton(wxMouseEvent& event) {
     if (m_canvas->getSceneManager()->screenToWorld(event.GetPosition(), worldPos)) {
         LOG_INF_S("[PickingDebug] Picked position: " + std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]));
 
-        wxWindow* dialog = wxWindow::FindWindowByName("PositionDialog");
-        if (dialog) {
-            PositionDialog* posDialog = dynamic_cast<PositionDialog*>(dialog);
-            if (posDialog) {
-                posDialog->SetPosition(worldPos);
-                posDialog->Show(true);
-                LOG_INF_S("Position dialog updated and shown");
-                // The dialog itself will call stopPicking, which will trigger the state change
+        // Get the MouseHandler through InputManager
+        InputManager* inputManager = m_canvas->getInputManager();
+        if (inputManager) {
+            MouseHandler* mouseHandler = inputManager->getMouseHandler();
+            if (mouseHandler) {
+                // Call the position picked handler
+                mouseHandler->OnPositionPicked(worldPos);
+                LOG_INF_S("Position picked and sent to MouseHandler");
             } else {
-                LOG_ERR_S("Failed to cast dialog to PositionDialog");
+                LOG_ERR_S("MouseHandler is null in PickingInputState");
             }
         } else {
-            LOG_ERR_S("PositionDialog not found");
+            LOG_ERR_S("InputManager is null in PickingInputState");
         }
     } else {
         LOG_WRN_S("Failed to convert screen position to world coordinates");

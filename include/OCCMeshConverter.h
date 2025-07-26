@@ -9,6 +9,7 @@
 #include <OpenCASCADE/gp_Vec.hxx>
 #include <OpenCASCADE/TopAbs_Orientation.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
+#include "rendering/GeometryProcessor.h"
 
 // Forward declarations
 class SoSeparator;
@@ -26,29 +27,6 @@ class TopLoc_Location;
  */
 class OCCMeshConverter {
 public:
-    /**
-     * @brief Triangle mesh data structure
-     */
-    struct TriangleMesh {
-        std::vector<gp_Pnt> vertices;       // vertex coordinates
-        std::vector<int> triangles;         // triangle indices (3 per triangle)
-        std::vector<gp_Vec> normals;        // vertex normals
-        
-        // Statistics
-        int getVertexCount() const { return static_cast<int>(vertices.size()); }
-        int getTriangleCount() const { return static_cast<int>(triangles.size() / 3); }
-        
-        void clear() {
-            vertices.clear();
-            triangles.clear();
-            normals.clear();
-        }
-        
-        bool isEmpty() const {
-            return vertices.empty() || triangles.empty();
-        }
-    };
-
     /**
      * @brief Meshing parameters
      */
@@ -71,15 +49,7 @@ public:
                                       const MeshParameters& params = MeshParameters());
     static TriangleMesh convertToMesh(const TopoDS_Shape& shape, double deflection);
 
-    // Coin3D node creation with smoothing
-    static SoSeparator* createCoinNode(const TriangleMesh& mesh);
-    static SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected);
-    static SoSeparator* createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
-    static SoSeparator* createCoinNode(const TopoDS_Shape& shape, const MeshParameters& params, bool selected);
-    
-    // Update existing Coin3D nodes
-    static void updateCoinNode(SoSeparator* node, const TriangleMesh& mesh);
-    static void updateCoinNode(SoSeparator* node, const TopoDS_Shape& shape, const MeshParameters& params);
+
 
     // Geometric smoothing methods
     /**
@@ -131,15 +101,7 @@ private:
                                      const TopLoc_Location& location, 
                                      TriangleMesh& mesh, TopAbs_Orientation orientation = TopAbs_FORWARD);
     
-    static SoCoordinate3* createCoordinateNode(const TriangleMesh& mesh);
-    static SoIndexedFaceSet* createFaceSetNode(const TriangleMesh& mesh);
-    static SoNormal* createNormalNode(const TriangleMesh& mesh);
-    
     // Smoothing helper methods
     static void subdivideTriangle(TriangleMesh& mesh, const gp_Pnt& p0, const gp_Pnt& p1, const gp_Pnt& p2, int levels);
     static std::set<std::pair<int, int>> findBoundaryEdges(const TriangleMesh& mesh);
-    static SoIndexedLineSet* createEdgeSetNode(const TriangleMesh& mesh);
-    
-    // Internal helper methods
-    static void buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected);
 };

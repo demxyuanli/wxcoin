@@ -12,7 +12,7 @@ class CommandManager;
 class NavigationController;
 class OCCViewer;
 class OCCGeometry;
-class PositionDialog;
+class PositionBasicDialog;
 
 class MouseHandler {
 public:
@@ -23,6 +23,9 @@ public:
 
     void handleMouseButton(wxMouseEvent& event);
     void handleMouseMotion(wxMouseEvent& event);
+    
+    // Position picking completion handler
+    void OnPositionPicked(const SbVec3f& position);
 
     void setOperationMode(OperationMode mode);
     void setCreationGeometryType(const std::string& type);
@@ -43,5 +46,5 @@ private:
     std::string m_creationGeometryType;
     bool m_isDragging;
     wxPoint m_lastMousePos;
-    PositionDialog* m_currentPositionDialog;
+    PositionBasicDialog* m_currentPositionBasicDialog;
 };

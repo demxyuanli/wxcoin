@@ -11,7 +11,7 @@ class PropertyPanel;
 class CommandManager;
 class OCCViewer;
 class OCCGeometry;
-struct GeometryParameters; // Forward declaration
+struct BasicGeometryParameters; // Forward declaration
 
 enum class GeometryType {
     COIN3D,     // Traditional Coin3D geometry
@@ -28,7 +28,10 @@ public:
     void createOCCGeometry(const std::string& type, const SbVec3f& position);
     
     // Create geometry with custom parameters
-    void createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const GeometryParameters& params);
+    void createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params);
+
+    // Create geometry with material parameters
+    void createOCCGeometryWithMaterial(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params);
 
     // Individual geometry creation methods
     std::shared_ptr<OCCGeometry> createOCCBox(const SbVec3f& position);

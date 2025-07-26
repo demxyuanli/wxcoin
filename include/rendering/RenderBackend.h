@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "GeometryProcessor.h"
+#include <OpenCASCADE/Quantity_Color.hxx>
 
 // Include Coin3D headers for complete type definitions
 #include <Inventor/nodes/SoSeparator.h>
@@ -44,13 +45,22 @@ public:
      */
     virtual void shutdown() = 0;
 
+
+
     /**
-     * @brief Create scene node from mesh
+     * @brief Create scene node from mesh with custom material
      * @param mesh Input mesh
      * @param selected Selection state
+     * @param diffuseColor Diffuse color
+     * @param ambientColor Ambient color
+     * @param specularColor Specular color
+     * @param shininess Material shininess
+     * @param transparency Material transparency
      * @return Scene node
      */
-    virtual SoSeparatorPtr createSceneNode(const TriangleMesh& mesh, bool selected = false) = 0;
+    virtual SoSeparatorPtr createSceneNode(const TriangleMesh& mesh, bool selected,
+                                         const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                                         const Quantity_Color& specularColor, double shininess, double transparency) = 0;
 
     /**
      * @brief Update existing scene node
@@ -77,6 +87,24 @@ public:
     virtual SoSeparatorPtr createSceneNode(const TopoDS_Shape& shape, 
                                           const MeshParameters& params = MeshParameters(),
                                           bool selected = false) = 0;
+
+    /**
+     * @brief Create scene node from shape with custom material
+     * @param shape Input shape
+     * @param params Meshing parameters
+     * @param selected Selection state
+     * @param diffuseColor Diffuse color
+     * @param ambientColor Ambient color
+     * @param specularColor Specular color
+     * @param shininess Material shininess
+     * @param transparency Material transparency
+     * @return Scene node
+     */
+    virtual SoSeparatorPtr createSceneNode(const TopoDS_Shape& shape, 
+                                          const MeshParameters& params,
+                                          bool selected,
+                                          const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                                          const Quantity_Color& specularColor, double shininess, double transparency) = 0;
 
     /**
      * @brief Set edge display settings
@@ -118,13 +146,22 @@ public:
  */
 class Coin3DBackend : public RenderBackend {
 public:
+
+
     /**
-     * @brief Create Coin3D separator node
+     * @brief Create Coin3D separator node with custom material
      * @param mesh Input mesh
      * @param selected Selection state
+     * @param diffuseColor Diffuse color
+     * @param ambientColor Ambient color
+     * @param specularColor Specular color
+     * @param shininess Material shininess
+     * @param transparency Material transparency
      * @return SoSeparator node
      */
-    virtual SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected = false) = 0;
+    virtual SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected,
+                                      const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                                      const Quantity_Color& specularColor, double shininess, double transparency) = 0;
 
     /**
      * @brief Update Coin3D separator node

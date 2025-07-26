@@ -82,8 +82,8 @@ void LightingConfig::initializeDefaultLights()
     // Environment settings - balanced ambient lighting
     m_environmentSettings.name = "Environment";
     m_environmentSettings.type = "ambient";
-    m_environmentSettings.ambientColor = Quantity_Color(0.4, 0.4, 0.4, Quantity_TOC_RGB); // Neutral gray
-    m_environmentSettings.ambientIntensity = 0.3; // Moderate ambient for natural look
+    m_environmentSettings.ambientColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB); // Neutral gray
+    m_environmentSettings.ambientIntensity = 0.6; // Moderate ambient for natural look
 }
 
 bool LightingConfig::loadFromFile(const std::string& filename)
@@ -111,7 +111,7 @@ bool LightingConfig::loadFromFile(const std::string& filename)
         
         // Trim whitespace
         line.erase(0, line.find_first_not_of(" \t\r\n"));
-        line.erase(line.find_last_not_of(" \t\r\n") + 1);
+        line.erase(line.find_last_not_of(" \t\r\n") + 1); 
         
         if (line.empty()) {
             continue;

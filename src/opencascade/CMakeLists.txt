@@ -4,6 +4,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCViewer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCShapeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCBrepConverter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/OCCMeshConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPImportOptimizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeComponent.cpp

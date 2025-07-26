@@ -17,6 +17,7 @@
 #include <TopoDS.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
 #include "EdgeComponent.h"
+#include "OCCMeshConverter.h"
 
 // OpenCASCADE includes
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -68,6 +69,11 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , m_depthWrite(true)
     , m_cullFace(true)
     , m_alphaThreshold(0.1)
+    , m_smoothNormals(false)
+    , m_wireframeWidth(1.0)
+    , m_pointSize(1.0)
+    , m_subdivisionEnabled(false)
+    , m_subdivisionLevels(2)
 {
     // Get blend settings from configuration
     auto blendSettings = RenderingConfig::getInstance().getBlendSettings();
@@ -189,21 +195,8 @@ void OCCGeometry::setSelected(bool selected)
 void OCCGeometry::setColor(const Quantity_Color& color)
 {
     m_color = color;
-    if (m_coinNode) {
-        // Find the material node and update it. It might not be at a fixed index.
-        for (int i = 0; i < m_coinNode->getNumChildren(); ++i) {
-            SoNode* child = m_coinNode->getChild(i);
-            if (child && child->isOfType(SoMaterial::getClassTypeId())) {
-                SoMaterial* material = static_cast<SoMaterial*>(child);
-                material->diffuseColor.setValue(
-                    static_cast<float>(m_color.Red()),
-                    static_cast<float>(m_color.Green()),
-                    static_cast<float>(m_color.Blue())
-                );
-                break;
-            }
-        }
-    }
+    m_materialDiffuseColor = color;
+    m_coinNeedsUpdate = true;
 }
 
 void OCCGeometry::setTransparency(double transparency)
@@ -506,6 +499,9 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         material->shininess.setValue(static_cast<float>(m_materialShininess / 100.0));
         material->transparency.setValue(static_cast<float>(m_transparency));
         
+        // Add emissive color for better lighting response
+        material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
+        
         LOG_INF_S("Material set for " + m_name + " - ambient: " + 
                  std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
                  " diffuse: " + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
@@ -611,17 +607,20 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
             // In wireframe mode, create wireframe representation directly
             createWireframeRepresentation(params);
         } else {
-            // Use rendering toolkit to create scene node for solid/filled mode
-            auto& manager = RenderingToolkitAPI::getManager();
-            auto backend = manager.getRenderBackend("Coin3D");
-            if (backend) {
-                auto sceneNode = backend->createSceneNode(m_shape, params, m_selected);
-                if (sceneNode) {
-                    SoSeparator* meshNode = sceneNode.get();
-                    meshNode->ref(); // Take ownership
-                    m_coinNode->addChild(meshNode);
-                }
+                    // Use rendering toolkit to create scene node for solid/filled mode
+        auto& manager = RenderingToolkitAPI::getManager();
+        auto backend = manager.getRenderBackend("Coin3D");
+        if (backend) {
+            // Use the material-aware version to preserve custom material settings
+            auto sceneNode = backend->createSceneNode(m_shape, params, m_selected,
+                                                     m_materialDiffuseColor, m_materialAmbientColor,
+                                                     m_materialSpecularColor, m_materialShininess, m_transparency);
+            if (sceneNode) {
+                SoSeparator* meshNode = sceneNode.get();
+                meshNode->ref(); // Take ownership
+                m_coinNode->addChild(meshNode);
             }
+        }
         }
     }
 
@@ -1376,8 +1375,12 @@ void OCCGeometry::updateFromRenderingConfig()
         // Force Coin3D to invalidate its cache
         m_coinNode->touch();
         
-        buildCoinRepresentation();
-        LOG_INF_S("Rebuilt Coin3D representation for geometry '" + m_name + "'");
+        // Use the material-aware version to preserve custom material settings
+        MeshParameters meshParams;
+        buildCoinRepresentation(meshParams, 
+                               m_materialDiffuseColor, m_materialAmbientColor, 
+                               m_materialSpecularColor, m_materialShininess, m_transparency);
+        LOG_INF_S("Rebuilt Coin3D representation for geometry '" + m_name + "' with custom material");
         
         // Force the scene graph to be marked as needing update
         // Note: Coin3D nodes don't have getParent() method, so we just touch the current node
@@ -1392,6 +1395,56 @@ void OCCGeometry::updateFromRenderingConfig()
     LOG_INF_S("  - Transparency: " + std::to_string(m_transparency));
     LOG_INF_S("  - Texture enabled: " + std::string(m_textureEnabled ? "true" : "false"));
     LOG_INF_S("  - Blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
+}
+
+void OCCGeometry::updateMaterialForLighting()
+{
+    // This method is called when lighting changes to adjust material properties
+    // for better lighting response without changing the base material settings
+    
+    if (!m_coinNode) {
+        LOG_WRN_S("Cannot update material for lighting: Coin3D node not available for " + m_name);
+        return;
+    }
+    
+    // Find the material node in the Coin3D representation
+    for (int i = 0; i < m_coinNode->getNumChildren(); ++i) {
+        SoNode* child = m_coinNode->getChild(i);
+        if (child && child->isOfType(SoMaterial::getClassTypeId())) {
+            SoMaterial* material = static_cast<SoMaterial*>(child);
+            
+            // Adjust material properties for better lighting response
+            if (!m_wireframeMode) {
+                // Enhance ambient component for better lighting visibility
+                Standard_Real r, g, b;
+                m_materialAmbientColor.Values(r, g, b, Quantity_TOC_RGB);
+                material->ambientColor.setValue(static_cast<float>(r * 1.2), 
+                                              static_cast<float>(g * 1.2), 
+                                              static_cast<float>(b * 1.2));
+                
+                // Ensure diffuse component is properly set
+                m_materialDiffuseColor.Values(r, g, b, Quantity_TOC_RGB);
+                material->diffuseColor.setValue(static_cast<float>(r), 
+                                              static_cast<float>(g), 
+                                              static_cast<float>(b));
+                
+                // Enhance specular component for better lighting highlights
+                m_materialSpecularColor.Values(r, g, b, Quantity_TOC_RGB);
+                material->specularColor.setValue(static_cast<float>(r * 1.1), 
+                                               static_cast<float>(g * 1.1), 
+                                               static_cast<float>(b * 1.1));
+                
+                // Adjust shininess for better lighting response
+                material->shininess.setValue(static_cast<float>(m_materialShininess / 100.0));
+                
+                LOG_INF_S("Updated material for lighting response: " + m_name);
+            }
+            break;
+        }
+    }
+    
+    // Force Coin3D to update
+    m_coinNode->touch();
 }
 
 void OCCGeometry::forceTextureUpdate()
@@ -1453,6 +1506,108 @@ void OCCGeometry::setEdgeDisplayType(EdgeType type, bool show) {
 
 bool OCCGeometry::isEdgeDisplayTypeEnabled(EdgeType type) const {
     return edgeComponent ? edgeComponent->isEdgeDisplayTypeEnabled(type) : false;
+}
+
+void OCCGeometry::buildCoinRepresentation(const MeshParameters& params, 
+                                        const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                                        const Quantity_Color& specularColor, double shininess, double transparency)
+{
+    auto buildStartTime = std::chrono::high_resolution_clock::now();
+
+    if (m_coinNode) {
+        m_coinNode->removeAllChildren();
+    }
+    else {
+        m_coinNode = new SoSeparator;
+        m_coinNode->ref();
+    }
+
+    // Clean up any existing texture nodes to prevent memory issues
+    if (m_coinNode) {
+        for (int i = m_coinNode->getNumChildren() - 1; i >= 0; --i) {
+            SoNode* child = m_coinNode->getChild(i);
+            if (child && (child->isOfType(SoTexture2::getClassTypeId()) || 
+                         child->isOfType(SoTextureCoordinate2::getClassTypeId()))) {
+                m_coinNode->removeChild(i);
+            }
+        }
+    }
+
+    // Transform setup
+    m_coinTransform = new SoTransform;
+    m_coinTransform->translation.setValue(
+        static_cast<float>(m_position.X()),
+        static_cast<float>(m_position.Y()),
+        static_cast<float>(m_position.Z())
+    );
+
+    if (m_rotationAngle != 0.0) {
+        SbVec3f axis(
+            static_cast<float>(m_rotationAxis.X()),
+            static_cast<float>(m_rotationAxis.Y()),
+            static_cast<float>(m_rotationAxis.Z())
+        );
+        m_coinTransform->rotation.setValue(axis, static_cast<float>(m_rotationAngle));
+    }
+
+    m_coinTransform->scaleFactor.setValue(
+        static_cast<float>(m_scale),
+        static_cast<float>(m_scale),
+        static_cast<float>(m_scale)
+    );
+    m_coinNode->addChild(m_coinTransform);
+
+    // Shape hints
+    SoShapeHints* hints = new SoShapeHints;
+    hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
+    hints->shapeType = SoShapeHints::SOLID;
+    hints->faceType = SoShapeHints::CONVEX;
+    m_coinNode->addChild(hints);
+
+    // Draw style
+    SoDrawStyle* drawStyle = new SoDrawStyle;
+    drawStyle->style = m_wireframeMode ? SoDrawStyle::LINES : SoDrawStyle::FILLED;
+    drawStyle->lineWidth = m_wireframeMode ? 1.0f : 0.0f;
+    m_coinNode->addChild(drawStyle);
+
+    // Convert shape to mesh using OCCMeshConverter (geometry conversion only)
+    TriangleMesh mesh = OCCMeshConverter::convertToMesh(m_shape, params.deflection);
+    
+    if (mesh.isEmpty()) {
+        LOG_ERR_S("Failed to convert shape to mesh for " + m_name);
+        return;
+    }
+
+    // Apply smoothing if enabled
+    if (m_smoothNormals) {
+        mesh = OCCMeshConverter::smoothNormals(mesh, 30.0, 2);
+    }
+
+    // Apply subdivision if enabled
+    if (m_subdivisionEnabled) {
+        mesh = OCCMeshConverter::createSubdivisionSurface(mesh, m_subdivisionLevels);
+    }
+
+    // Use RenderingToolkitAPI for all rendering operations (proper architecture)
+    auto& manager = RenderingToolkitAPI::getManager();
+    auto backend = manager.getRenderBackend("Coin3D");
+    if (backend) {
+        auto sceneNode = backend->createSceneNode(mesh, m_selected,
+                                                 diffuseColor, ambientColor, specularColor, shininess, transparency);
+        if (sceneNode) {
+            SoSeparator* meshNode = sceneNode.get();
+            meshNode->ref(); // Take ownership
+            m_coinNode->addChild(meshNode);
+        }
+    } else {
+        LOG_ERR_S("Coin3D backend not available for " + m_name);
+    }
+
+    auto buildEndTime = std::chrono::high_resolution_clock::now();
+    auto buildDuration = std::chrono::duration_cast<std::chrono::microseconds>(buildEndTime - buildStartTime);
+    
+    LOG_INF_S("Coin3D representation built for " + m_name + " with custom material in " + std::to_string(buildDuration.count()) + " microseconds");
+    LOG_INF_S("Mesh statistics: " + std::to_string(mesh.getVertexCount()) + " vertices, " + std::to_string(mesh.getTriangleCount()) + " triangles");
 }
 
 void OCCGeometry::updateEdgeDisplay() {

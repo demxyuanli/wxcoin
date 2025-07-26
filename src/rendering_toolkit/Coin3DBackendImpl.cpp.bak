@@ -36,11 +36,7 @@ void Coin3DBackendImpl::shutdown() {
     LOG_INF_S("Coin3DBackendImpl shutdown");
 }
 
-
-
-SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TriangleMesh& mesh, bool selected,
-                                                const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                                const Quantity_Color& specularColor, double shininess, double transparency) {
+SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TriangleMesh& mesh, bool selected) {
     if (mesh.isEmpty()) {
         LOG_WRN_S("Cannot create Coin3D node from empty mesh");
         return SoSeparatorPtr(nullptr, SoSeparatorDeleter());
@@ -49,8 +45,8 @@ SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TriangleMesh& mesh, bool
     SoSeparator* root = new SoSeparator;
     root->ref();
 
-    // Build common structure with custom material
-    buildCoinNodeStructure(root, mesh, selected, diffuseColor, ambientColor, specularColor, shininess, transparency);
+    // Build common structure
+    buildCoinNodeStructure(root, mesh, selected);
 
     root->unrefNoDelete();
     return SoSeparatorPtr(root, SoSeparatorDeleter());
@@ -83,34 +79,8 @@ SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TopoDS_Shape& shape,
         return SoSeparatorPtr(nullptr, SoSeparatorDeleter());
     }
 
-    // Create scene node from mesh with default material
-    Quantity_Color defaultDiffuse(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-    Quantity_Color defaultAmbient(0.2, 0.2, 0.2, Quantity_TOC_RGB);
-    Quantity_Color defaultSpecular(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-    return createSceneNode(mesh, selected, defaultDiffuse, defaultAmbient, defaultSpecular, 0.5, 0.0);
-}
-
-SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TopoDS_Shape& shape, 
-                                                 const MeshParameters& params,
-                                                 bool selected,
-                                                 const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                                 const Quantity_Color& specularColor, double shininess, double transparency) {
-    if (shape.IsNull()) {
-        LOG_WRN_S("Cannot create Coin3D node from null shape");
-        return SoSeparatorPtr(nullptr, SoSeparatorDeleter());
-    }
-
-    // Convert shape to mesh first
-    TriangleMesh mesh;
-    if (m_geometryProcessor) {
-        mesh = m_geometryProcessor->convertToMesh(shape, params);
-    } else {
-        LOG_ERR_S("No geometry processor available");
-        return SoSeparatorPtr(nullptr, SoSeparatorDeleter());
-    }
-
-    // Create scene node from mesh with custom material
-    return createSceneNode(mesh, selected, diffuseColor, ambientColor, specularColor, shininess, transparency);
+    // Create scene node from mesh
+    return createSceneNode(mesh, selected);
 }
 
 void Coin3DBackendImpl::setEdgeSettings(bool show, double angle) {
@@ -133,11 +103,7 @@ bool Coin3DBackendImpl::isAvailable() const {
     return true; // Placeholder
 }
 
-
-
-SoSeparator* Coin3DBackendImpl::createCoinNode(const TriangleMesh& mesh, bool selected,
-                                             const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                             const Quantity_Color& specularColor, double shininess, double transparency) {
+SoSeparator* Coin3DBackendImpl::createCoinNode(const TriangleMesh& mesh, bool selected) {
     if (mesh.isEmpty()) {
         LOG_WRN_S("Cannot create Coin3D node from empty mesh");
         return nullptr;
@@ -146,8 +112,8 @@ SoSeparator* Coin3DBackendImpl::createCoinNode(const TriangleMesh& mesh, bool se
     SoSeparator* root = new SoSeparator;
     root->ref();
 
-    // Build common structure with custom material
-    buildCoinNodeStructure(root, mesh, selected, diffuseColor, ambientColor, specularColor, shininess, transparency);
+    // Build common structure
+    buildCoinNodeStructure(root, mesh, selected);
 
     root->unrefNoDelete();
     return root;
@@ -263,11 +229,7 @@ SoIndexedLineSet* Coin3DBackendImpl::createEdgeSetNode(const TriangleMesh& mesh)
     return lineSet;
 }
 
-
-
-void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected,
-                                             const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                             const Quantity_Color& specularColor, double shininess, double transparency) {
+void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected) {
     if (!node || mesh.isEmpty()) {
         return;
     }
@@ -298,39 +260,23 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
         }
     }
 
-    // Add material node with custom properties
+    // Add material node for main geometry
     SoMaterial* material = new SoMaterial;
     if (selected) {
-        // Selected geometry - use highlight color but keep custom properties
-        Standard_Real r, g, b;
-        diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-        
-        ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-        
-        specularColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->specularColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-        
-        material->shininess.setValue(static_cast<float>(shininess));
-        material->transparency.setValue(static_cast<float>(transparency));
-        material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);  // No emission for selected
+        // Selected geometry - use highlight color
+        material->diffuseColor.setValue(1.0f, 0.8f, 0.0f);  // Yellow highlight
+        material->ambientColor.setValue(0.8f, 0.8f, 0.0f);
+        material->specularColor.setValue(1.0f, 1.0f, 1.0f);
+        material->shininess.setValue(0.8f);
     } else {
-        // Use custom material properties
-        Standard_Real r, g, b;
-        diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-        
-        ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-        
-        specularColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->specularColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-        
-        material->shininess.setValue(static_cast<float>(shininess));
-        material->transparency.setValue(static_cast<float>(transparency));
-        material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);  // No emission by default
+        // Default material properties
+        material->diffuseColor.setValue(0.8f, 0.8f, 0.8f);  // Light gray
+        material->ambientColor.setValue(0.8f, 0.8f, 0.2f);   // Dark gray
+        material->specularColor.setValue(1.0f, 1.0f, 1.0f);  // White
+        material->shininess.setValue(0.5f);
+        material->emissiveColor.setValue(0.8f, 0.8f, 0.8f);  // No emission
     }
+    material->transparency.setValue(0.0f);  // No transparency by default
     node->addChild(material);
 
     // Add face set

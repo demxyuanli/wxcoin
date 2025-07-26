@@ -8,7 +8,7 @@
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
 #include "OCCShapeBuilder.h"
-#include "PositionDialog.h" // For GeometryParameters
+#include "PositionBasicDialog.h" // For BasicGeometryParameters
 #include <gp_Dir.hxx>
 #include <memory>
 #include <gp_Pnt.hxx>
@@ -72,7 +72,7 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
     }
 }
 
-void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const GeometryParameters& params) {
+void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params) {
     LOG_INF_S("[GeometryFactoryDebug] createOCCGeometryWithParameters called with position: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
     std::shared_ptr<OCCGeometry> geometry;
     
@@ -106,14 +106,22 @@ void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, c
         
         LOG_INF_S("Created OCC geometry with parameters: " + type);
         
-        // Auto-fit all geometries after creating new geometry with parameters
+        // Auto-fit all geometries after creating new geometry
         if (m_occViewer) {
-            LOG_INF_S("Auto-executing fitAll after creating geometry with parameters: " + type);
+            LOG_INF_S("Auto-executing fitAll after creating geometry: " + type);
             m_occViewer->fitAll();
         }
     } else {
         LOG_ERR_S("Failed to create OCC geometry with parameters: " + type);
     }
+}
+
+void GeometryFactory::createOCCGeometryWithMaterial(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params) {
+    LOG_INF_S("[GeometryFactoryDebug] createOCCGeometryWithMaterial called with position: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
+    
+    // For now, just call the basic parameters function since PositionBasicDialog only contains basic parameters
+    // Material and visual settings will be handled by VisualSettingsDialog in the future
+    createOCCGeometryWithParameters(type, position, params);
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& position) {

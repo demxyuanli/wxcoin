@@ -4,7 +4,7 @@
 #include "MouseHandler.h"
 #include "NavigationController.h"
 #include "logger/Logger.h"
-#include "PositionDialog.h"
+#include "PositionBasicDialog.h"
 #include "PickingAidManager.h"
 #include "DefaultInputState.h"
 #include "PickingInputState.h"
