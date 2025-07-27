@@ -10,6 +10,7 @@
 #include <wx/choice.h>
 #include <wx/spinctrl.h>
 #include <wx/colour.h>
+#include <wx/statbmp.h>
 #include <string>
 #include <map>
 #include <vector>
@@ -64,49 +65,50 @@ private:
     wxCheckBox* m_backfaceCullingCheckBox;
     wxCheckBox* m_depthTestCheckBox;
     
-    // Display controls
-    wxCheckBox* m_showNormalsCheckBox;
-    wxCheckBox* m_showEdgesCheckBox;
-    wxCheckBox* m_showWireframeCheckBox;
-    wxCheckBox* m_showSilhouetteCheckBox;
-    wxCheckBox* m_showFeatureEdgesCheckBox;
-    wxCheckBox* m_showMeshEdgesCheckBox;
-    wxCheckBox* m_showOriginalEdgesCheckBox;
-    wxCheckBox* m_showFaceNormalsCheckBox;
-    
     // Subdivision controls
     wxCheckBox* m_subdivisionEnabledCheckBox;
     wxSpinCtrl* m_subdivisionLevelsSpinCtrl;
     
-    // Edge settings controls
-    wxChoice* m_edgeTypeChoice;
-    wxTextCtrl* m_edgeWidthTextCtrl;
-    wxTextCtrl* m_edgeColorRTextCtrl;
-    wxTextCtrl* m_edgeColorGTextCtrl;
-    wxTextCtrl* m_edgeColorBTextCtrl;
-    wxCheckBox* m_edgeEnabledCheckBox;
+    // Color picker buttons
+    wxButton* m_diffuseColorButton;
+    wxButton* m_ambientColorButton;
+    wxButton* m_specularColorButton;
+    wxButton* m_emissiveColorButton;
+    
+    // Texture preview
+    wxStaticBitmap* m_texturePreview;
     
     // Basic info display (read-only)
     wxStaticText* m_geometryTypeLabel;
     wxStaticText* m_positionLabel;
     wxStaticText* m_dimensionsLabel;
     
-    void CreateBasicInfoPanel();
-    void CreateMaterialPanel();
-    void CreateTexturePanel();
-    void CreateRenderingPanel();
-    void CreateDisplayPanel();
-    void CreateSubdivisionPanel();
-    void CreateEdgeSettingsPanel();
+    void CreateBasicInfoPanel(wxPanel* panel);
+    void CreateMaterialPanel(wxPanel* panel);
+    void CreateTexturePanel(wxPanel* panel);
+    void CreateRenderingPanel(wxPanel* panel);
+    void CreateSubdivisionPanel(wxPanel* panel);
     
     void LoadAdvancedParametersFromControls();
     void SaveAdvancedParametersToControls();
     void UpdateBasicInfoDisplay();
     
+    // Color picker event handlers
+    void OnDiffuseColorButton(wxCommandEvent& event);
+    void OnAmbientColorButton(wxCommandEvent& event);
+    void OnSpecularColorButton(wxCommandEvent& event);
+    void OnEmissiveColorButton(wxCommandEvent& event);
+    
     void OnBrowseTexture(wxCommandEvent& event);
     void OnOkButton(wxCommandEvent& event);
     void OnCancelButton(wxCommandEvent& event);
     void OnApplyButton(wxCommandEvent& event);
+    
+    // Helper methods
+    void UpdateColorButton(wxButton* button, const Quantity_Color& color);
+    void UpdateTexturePreview();
+    wxColour QuantityColorToWxColour(const Quantity_Color& color);
+    Quantity_Color WxColourToQuantityColor(const wxColour& color);
     
     DECLARE_EVENT_TABLE()
 }; 

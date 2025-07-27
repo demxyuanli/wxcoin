@@ -7,6 +7,7 @@
 #include "GeometryFactory.h"
 #include "ObjectTreePanel.h"
 #include "PropertyPanel.h"
+#include "VisualSettingsDialog.h"
 #include "logger/Logger.h"
 #include <wx/notebook.h>
 #include <wx/grid.h>
@@ -19,13 +20,15 @@
 enum {
     ID_PICK_BUTTON = wxID_HIGHEST + 1000,
     ID_REFERENCE_Z_TEXT,
-    ID_SHOW_GRID_CHECK
+    ID_SHOW_GRID_CHECK,
+    ID_VISUAL_SETTINGS_BUTTON
 };
 
 BEGIN_EVENT_TABLE(PositionBasicDialog, wxDialog)
     EVT_BUTTON(wxID_OK, PositionBasicDialog::OnOkButton)
     EVT_BUTTON(wxID_CANCEL, PositionBasicDialog::OnCancelButton)
     EVT_BUTTON(ID_PICK_BUTTON, PositionBasicDialog::OnPickButton)
+    EVT_BUTTON(ID_VISUAL_SETTINGS_BUTTON, PositionBasicDialog::OnVisualSettingsButton)
     EVT_CHECKBOX(ID_SHOW_GRID_CHECK, PositionBasicDialog::OnShowGridChanged)
     EVT_TEXT(ID_REFERENCE_Z_TEXT, PositionBasicDialog::OnReferenceZChanged)
 END_EVENT_TABLE()
@@ -41,14 +44,16 @@ PositionBasicDialog::PositionBasicDialog(wxWindow* parent, const wxString& title
     
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
     
-    // Create notebook for tabs
+    // Create notebook for tabs - use 'this' as parent
     wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
     
-    // Create tabs
-    m_positionPanel = new wxPanel(notebook);
-    m_parametersPanel = new wxPanel(notebook);
+    // Create tabs with notebook as parent
+    m_positionPanel = new wxPanel(notebook, wxID_ANY);
+    m_parametersPanel = new wxPanel(notebook, wxID_ANY);
+    
     CreatePositionTab();
     CreateParametersTab();
+    
     notebook->AddPage(m_positionPanel, "Position");
     notebook->AddPage(m_parametersPanel, "Parameters");
     
@@ -113,9 +118,18 @@ void PositionBasicDialog::CreatePositionTab()
     m_showGridCheckBox = new wxCheckBox(m_positionPanel, ID_SHOW_GRID_CHECK, "Show Grid");
     sizer->Add(m_showGridCheckBox, 0, wxALL, 5);
     
+    // Button sizer for action buttons
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    
     // Pick button
     m_pickButton = new wxButton(m_positionPanel, ID_PICK_BUTTON, "Pick Position");
-    sizer->Add(m_pickButton, 0, wxALIGN_CENTER | wxALL, 5);
+    buttonSizer->Add(m_pickButton, 1, wxEXPAND | wxALL, 5);
+    
+    // Visual Settings button
+    m_visualSettingsButton = new wxButton(m_positionPanel, ID_VISUAL_SETTINGS_BUTTON, "Visual Settings");
+    buttonSizer->Add(m_visualSettingsButton, 1, wxEXPAND | wxALL, 5);
+    
+    sizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
     
     m_positionPanel->SetSizer(sizer);
 }
@@ -304,6 +318,11 @@ BasicGeometryParameters PositionBasicDialog::GetBasicParameters() const
     return m_basicParams;
 }
 
+AdvancedGeometryParameters PositionBasicDialog::GetAdvancedParameters() const
+{
+    return m_advancedParams;
+}
+
 void PositionBasicDialog::OnPickButton(wxCommandEvent& event)
 {
     if (m_pickingAidManager) {
@@ -345,10 +364,23 @@ void PositionBasicDialog::OnOkButton(wxCommandEvent& event)
                         canvas->getOCCViewer() 
                     );
                     
-                    // Create geometry with parameters
-                    BasicGeometryParameters params = GetBasicParameters();
-                    factory.createOCCGeometryWithParameters(geometryType, finalPos, params);
-                    LOG_INF_S("Creating geometry at position from dialog with parameters");
+                    // Create geometry with basic parameters
+                    BasicGeometryParameters basicParams = GetBasicParameters();
+                    std::shared_ptr<OCCGeometry> geometry = factory.createOCCGeometryWithParameters(geometryType, finalPos, basicParams);
+                    
+                    // Apply advanced parameters if geometry was created successfully
+                    if (geometry) {
+                        AdvancedGeometryParameters advancedParams = GetAdvancedParameters();
+                        geometry->applyAdvancedParameters(advancedParams);
+                        
+                        LOG_INF_S("Created geometry with advanced parameters:");
+                        LOG_INF_S("  - Material diffuse color: " + std::to_string(advancedParams.materialDiffuseColor.Red()) + "," + 
+                                  std::to_string(advancedParams.materialDiffuseColor.Green()) + "," + 
+                                  std::to_string(advancedParams.materialDiffuseColor.Blue()));
+                        LOG_INF_S("  - Transparency: " + std::to_string(advancedParams.materialTransparency));
+                        LOG_INF_S("  - Texture enabled: " + std::string(advancedParams.textureEnabled ? "true" : "false"));
+                    }
+                    
                     mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);
                     mouseHandler->setCreationGeometryType("");
                     LOG_INF_S("Reset operation mode to VIEW");
@@ -456,4 +488,33 @@ void PositionBasicDialog::OnPickingComplete(const SbVec3f& position)
     LOG_INF_S("Position picked: X=" + std::to_string(position[0]) + 
               ", Y=" + std::to_string(position[1]) + 
               ", Z=" + std::to_string(position[2]));
+}
+
+void PositionBasicDialog::OnVisualSettingsButton(wxCommandEvent& event)
+{
+    LOG_INF_S("Opening VisualSettingsDialog for geometry type: " + m_basicParams.geometryType);
+    
+    // Create and show VisualSettingsDialog
+    VisualSettingsDialog* visualDialog = new VisualSettingsDialog(this, "Visual Settings", m_basicParams);
+    
+    // Set the current advanced parameters
+    visualDialog->SetAdvancedParameters(m_advancedParams);
+    
+    // Show the dialog modally
+    if (visualDialog->ShowModal() == wxID_OK) {
+        // Get the updated parameters
+        m_advancedParams = visualDialog->GetAdvancedParameters();
+        
+        LOG_INF_S("Visual settings updated for geometry: " + m_basicParams.geometryType);
+        LOG_INF_S("  - Material diffuse color: " + std::to_string(m_advancedParams.materialDiffuseColor.Red()) + "," + 
+                  std::to_string(m_advancedParams.materialDiffuseColor.Green()) + "," + 
+                  std::to_string(m_advancedParams.materialDiffuseColor.Blue()));
+        LOG_INF_S("  - Transparency: " + std::to_string(m_advancedParams.materialTransparency));
+        LOG_INF_S("  - Texture enabled: " + std::string(m_advancedParams.textureEnabled ? "true" : "false"));
+    } else {
+        LOG_INF_S("Visual settings dialog cancelled");
+    }
+    
+    // Clean up the dialog
+    visualDialog->Destroy();
 } 

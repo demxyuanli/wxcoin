@@ -54,13 +54,15 @@ public:
      * @param diffuseColor Diffuse color
      * @param ambientColor Ambient color
      * @param specularColor Specular color
+     * @param emissiveColor Emissive color
      * @param shininess Material shininess
      * @param transparency Material transparency
      * @return Scene node
      */
     virtual SoSeparatorPtr createSceneNode(const TriangleMesh& mesh, bool selected,
                                          const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                         const Quantity_Color& specularColor, double shininess, double transparency) = 0;
+                                         const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
+                                         double shininess, double transparency) = 0;
 
     /**
      * @brief Update existing scene node
@@ -96,6 +98,7 @@ public:
      * @param diffuseColor Diffuse color
      * @param ambientColor Ambient color
      * @param specularColor Specular color
+     * @param emissiveColor Emissive color
      * @param shininess Material shininess
      * @param transparency Material transparency
      * @return Scene node
@@ -104,7 +107,8 @@ public:
                                           const MeshParameters& params,
                                           bool selected,
                                           const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                          const Quantity_Color& specularColor, double shininess, double transparency) = 0;
+                                          const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
+                                          double shininess, double transparency) = 0;
 
     /**
      * @brief Set edge display settings
@@ -155,13 +159,15 @@ public:
      * @param diffuseColor Diffuse color
      * @param ambientColor Ambient color
      * @param specularColor Specular color
+     * @param emissiveColor Emissive color
      * @param shininess Material shininess
      * @param transparency Material transparency
      * @return SoSeparator node
      */
     virtual SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected,
                                       const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                      const Quantity_Color& specularColor, double shininess, double transparency) = 0;
+                                      const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
+                                      double shininess, double transparency) = 0;
 
     /**
      * @brief Update Coin3D separator node

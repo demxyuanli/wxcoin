@@ -14,6 +14,7 @@
 
 // Forward declarations
 class PickingAidManager;
+class VisualSettingsDialog;
 
 // Callback function type for position picking completion
 typedef std::function<void(const SbVec3f&)> PositionPickingCallback;
@@ -27,6 +28,7 @@ public:
     SbVec3f GetPosition() const;
     void SetGeometryType(const std::string& geometryType);
     BasicGeometryParameters GetBasicParameters() const;
+    AdvancedGeometryParameters GetAdvancedParameters() const;
 
 private:
     wxTextCtrl* m_xTextCtrl;
@@ -35,6 +37,7 @@ private:
     wxTextCtrl* m_referenceZTextCtrl;
     wxCheckBox* m_showGridCheckBox;
     wxButton* m_pickButton;
+    wxButton* m_visualSettingsButton; // New button for VisualSettingsDialog
     std::map<std::string, wxTextCtrl*> m_parameterControls;
     wxStaticText* m_geometryTypeLabel;
     
@@ -45,12 +48,15 @@ private:
     PositionPickingCallback m_pickingCallback;
 
     BasicGeometryParameters m_basicParams;
+    AdvancedGeometryParameters m_advancedParams; // Store advanced parameters
+    
     void CreatePositionTab();
     void CreateParametersTab();
     void UpdateParametersTab();
     void LoadParametersFromControls();
     void SaveParametersToControls();
     void OnPickButton(wxCommandEvent& event);
+    void OnVisualSettingsButton(wxCommandEvent& event); // New event handler
     void OnOkButton(wxCommandEvent& event);
     void OnCancelButton(wxCommandEvent& event);
     void OnShowGridChanged(wxCommandEvent& event);

@@ -94,10 +94,11 @@ namespace RenderingToolkitAPI {
         }
         
         // Use default material properties when no custom material is specified
-    Quantity_Color defaultDiffuse(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-    Quantity_Color defaultAmbient(0.2, 0.2, 0.2, Quantity_TOC_RGB);
-    Quantity_Color defaultSpecular(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-    return backend->createSceneNode(mesh, selected, defaultDiffuse, defaultAmbient, defaultSpecular, 0.5, 0.0);
+        Quantity_Color defaultDiffuse(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+        Quantity_Color defaultAmbient(0.2, 0.2, 0.2, Quantity_TOC_RGB);
+        Quantity_Color defaultSpecular(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+        Quantity_Color defaultEmissive(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        return backend->createSceneNode(mesh, selected, defaultDiffuse, defaultAmbient, defaultSpecular, defaultEmissive, 0.5, 0.0);
     }
     
     SoSeparatorPtr createSceneNode(const TopoDS_Shape& shape,

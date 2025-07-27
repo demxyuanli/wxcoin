@@ -28,7 +28,7 @@ public:
     void createOCCGeometry(const std::string& type, const SbVec3f& position);
     
     // Create geometry with custom parameters
-    void createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params);
+    std::shared_ptr<OCCGeometry> createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params);
 
     // Create geometry with material parameters
     void createOCCGeometryWithMaterial(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params);

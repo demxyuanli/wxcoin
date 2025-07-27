@@ -2,10 +2,10 @@
 
 #include <string>
 #include <Inventor/SbColor.h>
+#include <OpenCASCADE/Quantity_Color.hxx>
 #include "config/RenderingConfig.h"
 #include "config/EdgeSettingsConfig.h"
 
-// 只包含与坐标和尺寸相关的参数
 struct BasicGeometryParameters {
     std::string geometryType;
     // Box
@@ -30,15 +30,13 @@ struct BasicGeometryParameters {
     double truncatedHeight = 2.0;
 };
 
-// 包含材质、贴图、渲染、显示等高级参数
 struct AdvancedGeometryParameters {
-    // Material
-    SbColor materialDiffuseColor = SbColor(0.8f, 0.8f, 0.8f);
-    SbColor materialAmbientColor = SbColor(0.2f, 0.2f, 0.2f);
-    SbColor materialSpecularColor = SbColor(1.0f, 1.0f, 1.0f);
-    float materialShininess = 50.0f;
-    float materialTransparency = 0.0f;
-    SbColor materialEmissiveColor = SbColor(0.0f, 0.0f, 0.0f);
+    Quantity_Color materialDiffuseColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+    Quantity_Color materialAmbientColor = Quantity_Color(0.2, 0.2, 0.2, Quantity_TOC_RGB);
+    Quantity_Color materialSpecularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+    double materialShininess = 50.0;
+    double materialTransparency = 0.0;
+    Quantity_Color materialEmissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
     
     // Texture
     std::string texturePath;
@@ -68,7 +66,7 @@ struct AdvancedGeometryParameters {
     
     // Edge Settings
     int edgeStyle = 0; // 0=Solid, 1=Dashed, 2=Dotted
-    float edgeWidth = 1.0f;
-    SbColor edgeColor = SbColor(0.0f, 0.0f, 0.0f);
+    double edgeWidth = 1.0;
+    Quantity_Color edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
     bool edgeEnabled = true;
 }; 

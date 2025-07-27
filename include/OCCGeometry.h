@@ -2,6 +2,7 @@
 
 #include "rendering/GeometryProcessor.h"
 #include "config/RenderingConfig.h"
+#include "GeometryDialogTypes.h"
 #include <string>
 #include <memory>
 #include <vector>
@@ -63,12 +64,18 @@ public:
     
     Quantity_Color getMaterialSpecularColor() const { return m_materialSpecularColor; }
     virtual void setMaterialSpecularColor(const Quantity_Color& color);
-    
-    double getMaterialShininess() const { return m_materialShininess; }
+    virtual void setMaterialEmissiveColor(const Quantity_Color& color);
     virtual void setMaterialShininess(double shininess);
 
     // Set default bright material for better visibility without textures
     virtual void setDefaultBrightMaterial(); 
+
+    // Material tracking
+    virtual void resetMaterialExplicitFlag() { m_materialExplicitlySet = false; }
+    virtual bool isMaterialExplicitlySet() const { return m_materialExplicitlySet; }
+    
+    // Apply advanced parameters from VisualSettingsDialog
+    virtual void applyAdvancedParameters(const AdvancedGeometryParameters& params);
 
     // Texture properties
     Quantity_Color getTextureColor() const { return m_textureColor; }
@@ -212,8 +219,9 @@ public:
     void regenerateMesh(const MeshParameters& params);
     void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
     void buildCoinRepresentation(const MeshParameters& params, 
-                                const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                const Quantity_Color& specularColor, double shininess, double transparency);
+                               const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
+                               const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
+                               double shininess, double transparency);
     
     // Performance optimization
     bool needsMeshRegeneration() const;
@@ -248,6 +256,7 @@ protected:
     Quantity_Color m_materialAmbientColor;
     Quantity_Color m_materialDiffuseColor;
     Quantity_Color m_materialSpecularColor;
+    Quantity_Color m_materialEmissiveColor;
     double m_materialShininess;
     
     // Texture properties
@@ -313,6 +322,9 @@ protected:
     // Performance optimization
     bool m_meshRegenerationNeeded;
     MeshParameters m_lastMeshParams;
+    
+    // Material tracking
+    bool m_materialExplicitlySet; // Flag to track if material has been explicitly set
 };
 
 /**

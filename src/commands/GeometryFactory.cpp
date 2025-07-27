@@ -72,9 +72,10 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
     }
 }
 
-void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params) {
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params) {
     LOG_INF_S("[GeometryFactoryDebug] createOCCGeometryWithParameters called with position: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
-    std::shared_ptr<OCCGeometry> geometry;
+    
+    std::shared_ptr<OCCGeometry> geometry = nullptr;
     
     if (type == "Box") {
         geometry = createOCCBox(position, params.width, params.height, params.depth);
@@ -92,7 +93,7 @@ void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, c
         geometry = createOCCWrench(position);
     } else {
         LOG_ERR_S("Unknown geometry type: " + type);
-        return;
+        return nullptr;
     }
     
     if (geometry) {
@@ -114,6 +115,8 @@ void GeometryFactory::createOCCGeometryWithParameters(const std::string& type, c
     } else {
         LOG_ERR_S("Failed to create OCC geometry with parameters: " + type);
     }
+    
+    return geometry;
 }
 
 void GeometryFactory::createOCCGeometryWithMaterial(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params) {

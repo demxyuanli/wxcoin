@@ -60,6 +60,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , m_materialAmbientColor(0.5, 0.5, 0.5, Quantity_TOC_RGB)
     , m_materialDiffuseColor(0.95, 0.95, 0.95, Quantity_TOC_RGB)
     , m_materialSpecularColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
+    , m_materialEmissiveColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
     , m_materialShininess(50.0)
     , m_textureIntensity(1.0)
     , m_textureEnabled(false)
@@ -74,6 +75,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , m_pointSize(1.0)
     , m_subdivisionEnabled(false)
     , m_subdivisionLevels(2)
+    , m_materialExplicitlySet(false) // Added flag to track if material was explicitly set
 {
     // Get blend settings from configuration
     auto blendSettings = RenderingConfig::getInstance().getBlendSettings();
@@ -196,6 +198,7 @@ void OCCGeometry::setColor(const Quantity_Color& color)
 {
     m_color = color;
     m_materialDiffuseColor = color;
+    m_materialExplicitlySet = true; // Mark that material has been explicitly set
     m_coinNeedsUpdate = true;
 }
 
@@ -246,24 +249,35 @@ void OCCGeometry::setWireframeMode(bool wireframe)
 void OCCGeometry::setMaterialAmbientColor(const Quantity_Color& color)
 {
     m_materialAmbientColor = color;
+    m_materialExplicitlySet = true; // Mark that material has been explicitly set
     m_coinNeedsUpdate = true;
 }
 
 void OCCGeometry::setMaterialDiffuseColor(const Quantity_Color& color)
 {
     m_materialDiffuseColor = color;
+    m_materialExplicitlySet = true; // Mark that material has been explicitly set
     m_coinNeedsUpdate = true;
 }
 
 void OCCGeometry::setMaterialSpecularColor(const Quantity_Color& color)
 {
     m_materialSpecularColor = color;
+    m_materialExplicitlySet = true; // Mark that material has been explicitly set
+    m_coinNeedsUpdate = true;
+}
+
+void OCCGeometry::setMaterialEmissiveColor(const Quantity_Color& color)
+{
+    m_materialEmissiveColor = color;
+    m_materialExplicitlySet = true; // Mark that material has been explicitly set
     m_coinNeedsUpdate = true;
 }
 
 void OCCGeometry::setMaterialShininess(double shininess)
 {
     m_materialShininess = std::max(0.0, std::min(100.0, shininess));
+    m_materialExplicitlySet = true; // Mark that material has been explicitly set
     m_coinNeedsUpdate = true;
 }
 
@@ -614,7 +628,8 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
             // Use the material-aware version to preserve custom material settings
             auto sceneNode = backend->createSceneNode(m_shape, params, m_selected,
                                                      m_materialDiffuseColor, m_materialAmbientColor,
-                                                     m_materialSpecularColor, m_materialShininess, m_transparency);
+                                                     m_materialSpecularColor, m_materialEmissiveColor,
+                                                     m_materialShininess, m_transparency);
             if (sceneNode) {
                 SoSeparator* meshNode = sceneNode.get();
                 meshNode->ref(); // Take ownership
@@ -1345,13 +1360,16 @@ void OCCGeometry::updateFromRenderingConfig()
     const auto& textureSettings = config.getTextureSettings();
     const auto& blendSettings = config.getBlendSettings();
     
-    // Update material settings
-    m_color = materialSettings.diffuseColor;
-    m_transparency = materialSettings.transparency;
-    m_materialAmbientColor = materialSettings.ambientColor;
-    m_materialDiffuseColor = materialSettings.diffuseColor;
-    m_materialSpecularColor = materialSettings.specularColor;
-    m_materialShininess = materialSettings.shininess;
+    // Only update material settings if they haven't been explicitly set for this geometry
+    // This prevents global config from overriding individual geometry material settings
+    if (!m_materialExplicitlySet) {
+        m_color = materialSettings.diffuseColor;
+        m_transparency = materialSettings.transparency;
+        m_materialAmbientColor = materialSettings.ambientColor;
+        m_materialDiffuseColor = materialSettings.diffuseColor;
+        m_materialSpecularColor = materialSettings.specularColor;
+        m_materialShininess = materialSettings.shininess;
+    }
     
     // Update texture settings
     m_textureColor = textureSettings.color;
@@ -1379,7 +1397,8 @@ void OCCGeometry::updateFromRenderingConfig()
         MeshParameters meshParams;
         buildCoinRepresentation(meshParams, 
                                m_materialDiffuseColor, m_materialAmbientColor, 
-                               m_materialSpecularColor, m_materialShininess, m_transparency);
+                               m_materialSpecularColor, m_materialEmissiveColor,
+                               m_materialShininess, m_transparency);
         LOG_INF_S("Rebuilt Coin3D representation for geometry '" + m_name + "' with custom material");
         
         // Force the scene graph to be marked as needing update
@@ -1510,7 +1529,8 @@ bool OCCGeometry::isEdgeDisplayTypeEnabled(EdgeType type) const {
 
 void OCCGeometry::buildCoinRepresentation(const MeshParameters& params, 
                                         const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
-                                        const Quantity_Color& specularColor, double shininess, double transparency)
+                                        const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
+                                        double shininess, double transparency)
 {
     auto buildStartTime = std::chrono::high_resolution_clock::now();
 
@@ -1593,7 +1613,7 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
     auto backend = manager.getRenderBackend("Coin3D");
     if (backend) {
         auto sceneNode = backend->createSceneNode(mesh, m_selected,
-                                                 diffuseColor, ambientColor, specularColor, shininess, transparency);
+                                                 diffuseColor, ambientColor, specularColor, emissiveColor, shininess, transparency);
         if (sceneNode) {
             SoSeparator* meshNode = sceneNode.get();
             meshNode->ref(); // Take ownership
@@ -1612,4 +1632,61 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
 
 void OCCGeometry::updateEdgeDisplay() {
     if (edgeComponent) edgeComponent->updateEdgeDisplay(getCoinNode());
+}
+
+void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& params)
+{
+    LOG_INF_S("Applying advanced parameters to geometry: " + m_name);
+    
+    // Apply material parameters
+    setMaterialDiffuseColor(params.materialDiffuseColor);
+    setMaterialAmbientColor(params.materialAmbientColor);
+    setMaterialSpecularColor(params.materialSpecularColor);
+    setMaterialEmissiveColor(params.materialEmissiveColor);
+    setMaterialShininess(params.materialShininess);
+    setTransparency(params.materialTransparency);
+    
+    // Apply texture parameters
+    setTextureEnabled(params.textureEnabled);
+    setTextureImagePath(params.texturePath);
+    setTextureMode(params.textureMode);
+    
+    // Apply display parameters
+    setShowEdges(params.showEdges);
+    setShowWireframe(params.showWireframe);
+    setSmoothNormals(params.showNormals);
+    
+    // Apply edge display types
+    if (edgeComponent) {
+        edgeComponent->setEdgeDisplayType(EdgeType::Original, params.showOriginalEdges);
+        edgeComponent->setEdgeDisplayType(EdgeType::Feature, params.showFeatureEdges);
+        edgeComponent->setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
+        edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, params.showSilhouette);
+    }
+    
+    // Apply subdivision settings
+    m_subdivisionEnabled = params.subdivisionEnabled;
+    m_subdivisionLevels = params.subdivisionLevels;
+    
+    // Apply blend settings
+    setBlendMode(params.blendMode);
+    setDepthTest(params.depthTest);
+    setCullFace(params.backfaceCulling);
+    
+    // Force rebuild of Coin3D representation
+    m_coinNeedsUpdate = true;
+    
+    if (m_coinNode) {
+        buildCoinRepresentation();
+        m_coinNode->touch();
+        LOG_INF_S("Rebuilt Coin3D representation for geometry '" + m_name + "' with advanced parameters");
+    }
+    
+    LOG_INF_S("Advanced parameters applied to geometry '" + m_name + "':");
+    LOG_INF_S("  - Material diffuse color: " + std::to_string(params.materialDiffuseColor.Red()) + "," + 
+              std::to_string(params.materialDiffuseColor.Green()) + "," + std::to_string(params.materialDiffuseColor.Blue()));
+    LOG_INF_S("  - Transparency: " + std::to_string(params.materialTransparency));
+    LOG_INF_S("  - Texture enabled: " + std::string(params.textureEnabled ? "true" : "false"));
+    LOG_INF_S("  - Show edges: " + std::string(params.showEdges ? "true" : "false"));
+    LOG_INF_S("  - Subdivision enabled: " + std::string(params.subdivisionEnabled ? "true" : "false"));
 }
