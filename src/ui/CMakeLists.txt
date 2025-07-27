@@ -46,6 +46,7 @@ target_link_libraries(CADUI PUBLIC
     NavCubeLib
     CADOCC
     CADCommands
+    RenderPreview
     CADFlatUI
     ${wxWidgets_LIBRARIES}
     Coin::Coin

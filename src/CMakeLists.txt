@@ -33,6 +33,7 @@ add_subdirectory(flatui)
 
 # 10. UI module (depends on all other modules)
 add_subdirectory(ui)
+add_subdirectory(renderpreview)
 
 # Set module folder structure (for IDE organization)
 set_target_properties(CADCore PROPERTIES FOLDER "Modules")

@@ -94,6 +94,8 @@
 #include "ShowWireFrameListener.h"
 #include "ShowFaceNormalsListener.h"
 #include "ShowSilhouetteEdgesListener.h"
+#include "renderpreview/RenderPreviewDialog.h"
+#include "RenderPreviewSystemListener.h"
 
 #ifdef __WXMSW__
 #define NOMINMAX
@@ -154,6 +156,7 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_RENDERING_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(ID_LIGHTING_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(ID_EDGE_SETTINGS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_RENDER_PREVIEW_SYSTEM, FlatFrame::onCommand)
     EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_SHOWSILHOUETTEEDGES, FlatFrame::onCommand)
     
@@ -216,7 +219,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_MESH_QUALITY_DIALOG, cmd::CommandType::MeshQualityDialog},
     {ID_RENDERING_SETTINGS, cmd::CommandType::RenderingSettings},
     {ID_EDGE_SETTINGS, cmd::CommandType::EdgeSettings},
-    {ID_LIGHTING_SETTINGS, cmd::CommandType::LightingSettings},
+    {ID_RENDER_PREVIEW_SYSTEM, cmd::CommandType::RenderPreviewSystem},
     {wxID_ABOUT, cmd::CommandType::HelpAbout}
 };
 
@@ -502,6 +505,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
     toolsButtonBar->AddButton(ID_LIGHTING_SETTINGS, "Lighting Settings", SVG_ICON("light", wxSize(16, 16)), nullptr, "Configure scene lighting and environment settings");
     toolsButtonBar->AddButton(ID_EDGE_SETTINGS, "Edge Settings", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Configure edge color, width and style settings");
+    toolsButtonBar->AddButton(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Open render preview system");
     toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
     page4->AddPanel(toolsPanel);
     
@@ -761,6 +765,7 @@ void FlatFrame::setupCommandSystem() {
     auto edgeSettingsListener = std::make_shared<EdgeSettingsListener>(this, m_occViewer);
     auto lightingSettingsListener = std::make_shared<LightingSettingsListener>(this);
     auto coordinateSystemVisibilityListener = std::make_shared<CoordinateSystemVisibilityListener>(this, m_canvas->getSceneManager());
+    auto renderPreviewSystemListener = std::make_shared<RenderPreviewSystemListener>(this);
     
     m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
     m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
@@ -773,6 +778,7 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::EdgeSettings, edgeSettingsListener);
     m_listenerManager->registerListener(cmd::CommandType::LightingSettings, lightingSettingsListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleCoordinateSystem, coordinateSystemVisibilityListener);
+    m_listenerManager->registerListener(cmd::CommandType::RenderPreviewSystem, renderPreviewSystemListener);
     
     // Set UI feedback handler
     m_commandDispatcher->setUIFeedbackHandler(

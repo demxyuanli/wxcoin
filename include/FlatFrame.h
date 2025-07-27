@@ -77,7 +77,10 @@ enum {
     ID_TEXTURE_MODE_BLEND,
     
     // Coordinate System Control
-    ID_TOGGLE_COORDINATE_SYSTEM
+    ID_TOGGLE_COORDINATE_SYSTEM,
+
+    // Render Preview System
+    ID_RENDER_PREVIEW_SYSTEM
 };
 
 class FlatFrame : public FlatUIFrame
