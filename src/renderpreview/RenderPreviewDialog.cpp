@@ -23,7 +23,7 @@ wxBEGIN_EVENT_TABLE(RenderPreviewDialog, wxDialog)
 wxEND_EVENT_TABLE()
 
 RenderPreviewDialog::RenderPreviewDialog(wxWindow* parent)
-    : wxDialog(parent, wxID_ANY, "Render Preview System", wxDefaultPosition, wxSize(1000, 500), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLOSE_BOX | wxCAPTION)
+    : wxDialog(parent, wxID_ANY, "Render Preview System", wxDefaultPosition, wxSize(1100, 640), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLOSE_BOX | wxCAPTION)
     , m_lightColor(255, 255, 255)
 {
     LOG_INF_S("RenderPreviewDialog::RenderPreviewDialog: Initializing");
@@ -32,8 +32,8 @@ RenderPreviewDialog::RenderPreviewDialog(wxWindow* parent)
     SetSizer(GetSizer());
     
     // Set fixed size to ensure 1000x500
-    SetSize(1000, 500);
-    SetMinSize(wxSize(1000, 500));
+    SetSize(1100, 640);
+    SetMinSize(wxSize(1100, 640));
     
     // Center the dialog on parent window
     if (parent) {
@@ -51,7 +51,7 @@ void RenderPreviewDialog::createUI()
     auto* topSizer = new wxBoxSizer(wxHORIZONTAL);
     
     // Left panel: Configuration tabs (fixed 320px width)
-    auto* leftPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(320, -1), wxBORDER_SUNKEN);
+    auto* leftPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(400, -1), wxBORDER_SUNKEN);
     m_configNotebook = new wxNotebook(leftPanel, wxID_ANY);
     
     createLightingPanel(m_configNotebook);
@@ -60,25 +60,25 @@ void RenderPreviewDialog::createUI()
     createAntiAliasingPanel(m_configNotebook);
     
     auto* leftSizer = new wxBoxSizer(wxVERTICAL);
-    leftSizer->Add(m_configNotebook, 1, wxEXPAND | wxALL, 5);
+    leftSizer->Add(m_configNotebook, 1, wxEXPAND | wxALL, 2);
     leftPanel->SetSizer(leftSizer);
     
     // Right panel: Render preview canvas (adaptive width)
     m_renderCanvas = new PreviewCanvas(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     
-    topSizer->Add(leftPanel, 0, wxEXPAND | wxALL, 5);
-    topSizer->Add(m_renderCanvas, 1, wxEXPAND | wxALL, 5);
+    topSizer->Add(leftPanel, 0, wxEXPAND | wxALL, 2);
+    topSizer->Add(m_renderCanvas, 1, wxEXPAND | wxALL, 2);
     
-    mainSizer->Add(topSizer, 1, wxEXPAND | wxALL, 5);
+    mainSizer->Add(topSizer, 1, wxEXPAND | wxALL, 2);
     
     // Bottom section: Buttons in a row (fixed 40px height)
     auto* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(new wxButton(this, wxID_RESET, "Reset"), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_RESET, "Reset"), 0, wxALL, 2);
     buttonSizer->AddStretchSpacer();
-    buttonSizer->Add(new wxButton(this, wxID_SAVE, "Save"), 0, wxALL, 5);
-    buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxALL, 5);
+    buttonSizer->Add(new wxButton(this, wxID_SAVE, "Save"), 0, wxALL, 2);
+    buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxALL, 2);
     
-    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
+    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 2);
     
     SetSizer(mainSizer);
 }
@@ -287,14 +287,22 @@ void RenderPreviewDialog::onMaterialChanged(wxCommandEvent& event)
 void RenderPreviewDialog::onTextureChanged(wxCommandEvent& event)
 {
     if (m_renderCanvas) {
-        m_renderCanvas->render(true);
+        bool enabled = m_enableTextureCheckBox->GetValue();
+        int mode = m_textureModeChoice->GetSelection();
+        float scale = m_textureScaleSlider->GetValue() / 100.0f;
+        
+        m_renderCanvas->updateTexture(enabled, mode, scale);
     }
 }
 
 void RenderPreviewDialog::onAntiAliasingChanged(wxCommandEvent& event)
 {
     if (m_renderCanvas) {
-        m_renderCanvas->render(true);
+        int method = m_antiAliasingChoice->GetSelection();
+        int msaaSamples = m_msaaSamplesSlider->GetValue();
+        bool fxaaEnabled = m_enableFXAACheckBox->GetValue();
+        
+        m_renderCanvas->updateAntiAliasing(method, msaaSamples, fxaaEnabled);
     }
 }
 

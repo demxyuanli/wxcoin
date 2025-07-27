@@ -28,6 +28,7 @@
 #include <Inventor/SoInteraction.h>
 #include <Inventor/SoOffscreenRenderer.h>
 #include <Inventor/actions/SoGLRenderAction.h>
+#include <Inventor/actions/SoSearchAction.h>
 
 const int PreviewCanvas::s_canvasAttribs[] = {
     WX_GL_RGBA,
@@ -41,6 +42,12 @@ BEGIN_EVENT_TABLE(PreviewCanvas, wxGLCanvas)
 EVT_PAINT(PreviewCanvas::onPaint)
 EVT_SIZE(PreviewCanvas::onSize)
 EVT_ERASE_BACKGROUND(PreviewCanvas::onEraseBackground)
+EVT_LEFT_DOWN(PreviewCanvas::onMouseDown)
+EVT_RIGHT_DOWN(PreviewCanvas::onMouseDown)
+EVT_LEFT_UP(PreviewCanvas::onMouseUp)
+EVT_RIGHT_UP(PreviewCanvas::onMouseUp)
+EVT_MOTION(PreviewCanvas::onMouseMove)
+EVT_MOUSEWHEEL(PreviewCanvas::onMouseWheel)
 END_EVENT_TABLE()
 
 PreviewCanvas::PreviewCanvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size)
@@ -53,6 +60,10 @@ PreviewCanvas::PreviewCanvas(wxWindow* parent, wxWindowID id, const wxPoint& pos
     , m_lightIndicator(nullptr)
     , m_glContext(nullptr)
     , m_initialized(false)
+    , m_mouseDown(false)
+    , m_lastMousePos(0, 0)
+    , m_cameraDistance(15.0f)
+    , m_cameraCenter(0.0f, 0.0f, 0.0f)
 {
     LOG_INF_S("PreviewCanvas::PreviewCanvas: Initializing");
     SetName("PreviewCanvas");
@@ -138,10 +149,10 @@ void PreviewCanvas::setupLighting()
     lightModel->model.setValue(SoLightModel::PHONG);
     m_sceneRoot->addChild(lightModel);
     
-    // Create main directional light (front light)
+    // Create main directional light (top 45-degree light)
     m_light = new SoDirectionalLight;
     m_light->ref();
-    m_light->direction.setValue(SbVec3f(0.0f, 0.0f, -1.0f)); // Light from front
+    m_light->direction.setValue(SbVec3f(0.0f, -0.707f, -0.707f)); // Light from top 45 degrees pointing down (Y=-0.707, Z=-0.707)
     m_light->intensity.setValue(1.0f);
     m_light->color.setValue(SbColor(1.0f, 1.0f, 1.0f)); // White light
     m_sceneRoot->addChild(m_light);
@@ -188,6 +199,10 @@ void PreviewCanvas::createDefaultScene()
     // Create light indicator
     createLightIndicator();
     LOG_INF_S("PreviewCanvas::createDefaultScene: Light indicator created");
+    
+    // Create coordinate system
+    createCoordinateSystem();
+    LOG_INF_S("PreviewCanvas::createDefaultScene: Coordinate system created");
     
     // Create basic geometry objects
     createBasicGeometryObjects();
@@ -244,7 +259,7 @@ void PreviewCanvas::createCheckerboardPlane()
             cellGroup->addChild(cellMaterial);
             
             // Create face set for this cell
-            auto* faceSet = new SoIndexedFaceSet;
+    auto* faceSet = new SoIndexedFaceSet;
             int baseIndex = z * (gridSize + 1) + x;
             
             // Create face indices for this cell
@@ -371,74 +386,108 @@ void PreviewCanvas::createLightIndicator()
     m_lightIndicator = new SoSeparator;
     m_lightIndicator->ref();
 
-    // Helper lambda to create a single arrow indicator for a light
-    auto createArrowForLight = [](SoDirectionalLight* light) -> SoSeparator* {
+    // Helper lambda to create a single light indicator
+    auto createLightIndicator = [](SoDirectionalLight* light, int lightIndex) -> SoSeparator* {
         if (!light) return nullptr;
 
         SoSeparator* indicatorSep = new SoSeparator;
 
-        // Group for the whole arrow, so we can position it
+        // Get light properties
+        SbVec3f lightDir = light->direction.getValue();
+        SbColor lightColor = light->color.getValue();
+        float lightIntensity = light->intensity.getValue();
+
+        // Position the indicator based on light direction
+        SoTransform* positionTransform = new SoTransform;
+        // Position indicator at a visible distance from origin
+        SbVec3f indicatorPos = lightDir * -8.0f; // 8 units away from origin
+        positionTransform->translation.setValue(indicatorPos);
+        indicatorSep->addChild(positionTransform);
+
+        // Create material for the light source sphere
+        SoMaterial* sphereMaterial = new SoMaterial;
+        sphereMaterial->diffuseColor.setValue(lightColor);
+        sphereMaterial->ambientColor.setValue(lightColor * 0.3f);
+        sphereMaterial->emissiveColor.setValue(lightColor * 0.6f); // Make it glow
+        sphereMaterial->transparency.setValue(0.2f); // Slight transparency
+        indicatorSep->addChild(sphereMaterial);
+
+        // Create light source sphere (size based on intensity)
+        SoSphere* lightSphere = new SoSphere;
+        lightSphere->radius.setValue(0.3f + lightIntensity * 0.2f); // Size varies with intensity
+        indicatorSep->addChild(lightSphere);
+
+        // Create arrow to show light direction
         SoSeparator* arrowGroup = new SoSeparator;
 
-        // Transform to position the arrow far away, pointing towards the origin
-        SoTransform* positionTransform = new SoTransform;
-        SbVec3f lightDir = light->direction.getValue();
-        positionTransform->translation.setValue(lightDir * -12.0f); // Position far out
-        arrowGroup->addChild(positionTransform);
+        // Arrow material (same color as light but more opaque)
+        SoMaterial* arrowMaterial = new SoMaterial;
+        arrowMaterial->diffuseColor.setValue(lightColor);
+        arrowMaterial->ambientColor.setValue(lightColor * 0.5f);
+        arrowMaterial->emissiveColor.setValue(lightColor * 0.3f);
+        arrowGroup->addChild(arrowMaterial);
 
-        // Material based on light color and intensity
-        SoMaterial* material = new SoMaterial;
-        SbColor color = light->color.getValue();
-        material->diffuseColor.setValue(color);
-        // Emissive color makes it glow, good for indicators
-        material->emissiveColor.setValue(color * 0.4f);
-        arrowGroup->addChild(material);
+        // Position arrow to point towards origin
+        SoTransform* arrowTransform = new SoTransform;
+        arrowTransform->translation.setValue(0.0f, 0.0f, 0.0f);
+        
+        // Calculate rotation to point arrow towards origin
+        SbVec3f arrowDir = -lightDir; // Point towards origin
+        SbVec3f defaultDir(0.0f, 0.0f, -1.0f); // Default arrow direction
+        SbRotation rotation(defaultDir, arrowDir);
+        arrowTransform->rotation.setValue(rotation);
+        arrowGroup->addChild(arrowTransform);
 
-        // Transform to orient the arrow geometry
-        SoTransform* orientationTransform = new SoTransform;
-        SbVec3f defaultArrowDir(0.0f, 1.0f, 0.0f); // Assuming arrow model points up Y
-        SbRotation rotation(defaultArrowDir, -lightDir);
-        orientationTransform->rotation.setValue(rotation);
-        arrowGroup->addChild(orientationTransform);
+        // Arrow shaft (cylinder)
+        SoCylinder* arrowShaft = new SoCylinder;
+        arrowShaft->radius.setValue(0.05f);
+        arrowShaft->height.setValue(1.5f + lightIntensity * 1.0f); // Length varies with intensity
+        arrowGroup->addChild(arrowShaft);
 
-        // Arrow Geometry (Shaft and Head)
-        // Shaft (a cylinder)
-        SoCylinder* shaft = new SoCylinder;
-        shaft->radius = 0.1f;
-        // Scale height by intensity
-        shaft->height.setValue(2.0f * light->intensity.getValue());
-        arrowGroup->addChild(shaft);
-
-        // Head (a cone)
-        SoCone* head = new SoCone;
-        head->bottomRadius = 0.2f;
-        head->height = 0.5f;
+        // Arrow head (cone)
+        SoCone* arrowHead = new SoCone;
+        arrowHead->bottomRadius.setValue(0.12f);
+        arrowHead->height.setValue(0.3f);
+        
         SoTransform* headTransform = new SoTransform;
-        // Position at the end of the shaft
-        headTransform->translation.setValue(0.0f, (shaft->height.getValue() / 2.0f) + (head->height.getValue() / 2.0f), 0.0f);
+        headTransform->translation.setValue(0.0f, 0.0f, 0.75f + lightIntensity * 0.5f); // Position at end of shaft
         arrowGroup->addChild(headTransform);
-        arrowGroup->addChild(head);
+        arrowGroup->addChild(arrowHead);
 
         indicatorSep->addChild(arrowGroup);
+
+        // Add intensity text indicator (optional - could be implemented with SoText2)
+        // For now, we'll use the sphere size and arrow length to indicate intensity
+
         return indicatorSep;
     };
 
-    // Use SoSearchAction to find all directional lights in the scene
+    // Create indicators for each light
+    // Main light (front)
+    if (m_light) {
+        SoSeparator* mainIndicator = createLightIndicator(m_light, 0);
+        if (mainIndicator) {
+            m_lightIndicator->addChild(mainIndicator);
+        }
+    }
+
+    // Find and create indicators for other lights
     SoSearchAction searchAction;
     searchAction.setType(SoDirectionalLight::getClassTypeId(), true);
     searchAction.setSearchingAll(true);
     searchAction.apply(m_sceneRoot);
 
-    int numLights = searchAction.getPaths().getLength();
-    LOG_INF_S("Found " + std::to_string(numLights) + " directional lights to create indicators for.");
-
-    for (int i = 0; i < numLights; ++i) {
+    int lightIndex = 1;
+    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
         SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
         if (path && path->getTail()->isOfType(SoDirectionalLight::getClassTypeId())) {
             SoDirectionalLight* light = static_cast<SoDirectionalLight*>(path->getTail());
-            SoSeparator* arrow = createArrowForLight(light);
-            if (arrow) {
-                m_lightIndicator->addChild(arrow);
+            // Skip the main light as it's already handled
+            if (light != m_light) {
+                SoSeparator* indicator = createLightIndicator(light, lightIndex++);
+                if (indicator) {
+                    m_lightIndicator->addChild(indicator);
+                }
             }
         }
     }
@@ -464,6 +513,96 @@ void PreviewCanvas::updateLightIndicator(const wxColour& color, float intensity)
     createLightIndicator();
 
     LOG_INF_S("PreviewCanvas::updateLightIndicator: Light indicators updated.");
+}
+
+void PreviewCanvas::createCoordinateSystem()
+{
+    LOG_INF_S("PreviewCanvas::createCoordinateSystem: Creating coordinate system");
+    
+    auto* coordGroup = new SoSeparator;
+    
+    // Create coordinate axes (X, Y, Z)
+    // X-axis (Red)
+    auto* xAxisGroup = new SoSeparator;
+    auto* xMaterial = new SoMaterial;
+    xMaterial->diffuseColor.setValue(SbColor(1.0f, 0.0f, 0.0f)); // Red
+    xMaterial->emissiveColor.setValue(SbColor(0.3f, 0.0f, 0.0f)); // Glow effect
+    xAxisGroup->addChild(xMaterial);
+    
+    auto* xCylinder = new SoCylinder;
+    xCylinder->radius.setValue(0.05f);
+    xCylinder->height.setValue(4.0f);
+    xAxisGroup->addChild(xCylinder);
+    
+    // X-axis cone (arrow head)
+    auto* xCone = new SoCone;
+    xCone->bottomRadius.setValue(0.15f);
+    xCone->height.setValue(0.3f);
+    auto* xConeTransform = new SoTransform;
+    xConeTransform->translation.setValue(SbVec3f(2.0f, 0.0f, 0.0f));
+    xAxisGroup->addChild(xConeTransform);
+    xAxisGroup->addChild(xCone);
+    
+    coordGroup->addChild(xAxisGroup);
+    
+    // Y-axis (Green)
+    auto* yAxisGroup = new SoSeparator;
+    auto* yMaterial = new SoMaterial;
+    yMaterial->diffuseColor.setValue(SbColor(0.0f, 1.0f, 0.0f)); // Green
+    yMaterial->emissiveColor.setValue(SbColor(0.0f, 0.3f, 0.0f)); // Glow effect
+    yAxisGroup->addChild(yMaterial);
+    
+    auto* yCylinder = new SoCylinder;
+    yCylinder->radius.setValue(0.05f);
+    yCylinder->height.setValue(4.0f);
+    auto* yTransform = new SoTransform;
+    yTransform->rotation.setValue(SbRotation(SbVec3f(0.0f, 0.0f, 1.0f), M_PI / 2.0f)); // Rotate 90 degrees around Z
+    yAxisGroup->addChild(yTransform);
+    yAxisGroup->addChild(yCylinder);
+    
+    // Y-axis cone (arrow head)
+    auto* yCone = new SoCone;
+    yCone->bottomRadius.setValue(0.15f);
+    yCone->height.setValue(0.3f);
+    auto* yConeTransform = new SoTransform;
+    yConeTransform->translation.setValue(SbVec3f(0.0f, 2.0f, 0.0f));
+    yConeTransform->rotation.setValue(SbRotation(SbVec3f(0.0f, 0.0f, 1.0f), M_PI / 2.0f));
+    yAxisGroup->addChild(yConeTransform);
+    yAxisGroup->addChild(yCone);
+    
+    coordGroup->addChild(yAxisGroup);
+    
+    // Z-axis (Blue)
+    auto* zAxisGroup = new SoSeparator;
+    auto* zMaterial = new SoMaterial;
+    zMaterial->diffuseColor.setValue(SbColor(0.0f, 0.0f, 1.0f)); // Blue
+    zMaterial->emissiveColor.setValue(SbColor(0.0f, 0.0f, 0.3f)); // Glow effect
+    zAxisGroup->addChild(zMaterial);
+    
+    auto* zCylinder = new SoCylinder;
+    zCylinder->radius.setValue(0.05f);
+    zCylinder->height.setValue(4.0f);
+    auto* zTransform = new SoTransform;
+    zTransform->rotation.setValue(SbRotation(SbVec3f(1.0f, 0.0f, 0.0f), -M_PI / 2.0f)); // Rotate -90 degrees around X
+    zAxisGroup->addChild(zTransform);
+    zAxisGroup->addChild(zCylinder);
+    
+    // Z-axis cone (arrow head)
+    auto* zCone = new SoCone;
+    zCone->bottomRadius.setValue(0.15f);
+    zCone->height.setValue(0.3f);
+    auto* zConeTransform = new SoTransform;
+    zConeTransform->translation.setValue(SbVec3f(0.0f, 0.0f, 2.0f));
+    zConeTransform->rotation.setValue(SbRotation(SbVec3f(1.0f, 0.0f, 0.0f), -M_PI / 2.0f));
+    zAxisGroup->addChild(zConeTransform);
+    zAxisGroup->addChild(zCone);
+    
+    coordGroup->addChild(zAxisGroup);
+    
+    // Add coordinate system to scene
+    m_objectRoot->addChild(coordGroup);
+    
+    LOG_INF_S("PreviewCanvas::createCoordinateSystem: Coordinate system created successfully");
 }
 
 void PreviewCanvas::setupDefaultCamera()
@@ -554,7 +693,9 @@ void PreviewCanvas::resetView()
 
 void PreviewCanvas::updateLighting(float ambient, float diffuse, float specular, const wxColour& color, float intensity)
 {
-    if (!m_lightMaterial || !m_light) return;
+    LOG_INF_S("PreviewCanvas::updateLighting: Updating lighting properties");
+    
+    if (!m_lightMaterial) return;
     
     // Update light material
     float r = color.Red() / 255.0f;
@@ -565,8 +706,26 @@ void PreviewCanvas::updateLighting(float ambient, float diffuse, float specular,
     m_lightMaterial->diffuseColor.setValue(SbColor(r * diffuse, g * diffuse, b * diffuse));
     m_lightMaterial->specularColor.setValue(SbColor(r * specular, g * specular, b * specular));
     
-    // Update light intensity
-    m_light->intensity.setValue(intensity);
+    // Update all directional lights in the scene
+    SoSearchAction searchAction;
+    searchAction.setType(SoDirectionalLight::getClassTypeId(), true);
+    searchAction.setSearchingAll(true);
+    searchAction.apply(m_sceneRoot);
+    
+    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
+        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
+        if (path && path->getTail()->isOfType(SoDirectionalLight::getClassTypeId())) {
+            SoDirectionalLight* light = static_cast<SoDirectionalLight*>(path->getTail());
+            
+            // Update light color
+            light->color.setValue(SbColor(r, g, b));
+            
+            // Update light intensity (scale based on original intensity)
+            float originalIntensity = light->intensity.getValue();
+            float scaledIntensity = originalIntensity * intensity;
+            light->intensity.setValue(scaledIntensity);
+        }
+    }
     
     // Update light indicator
     updateLightIndicator(color, intensity);
@@ -576,9 +735,67 @@ void PreviewCanvas::updateLighting(float ambient, float diffuse, float specular,
 
 void PreviewCanvas::updateMaterial(float ambient, float diffuse, float specular, float shininess, float transparency)
 {
+    LOG_INF_S("PreviewCanvas::updateMaterial: Updating material properties");
+    
     // Update material properties for all geometry objects
-    // This would need to be implemented by updating the materials of individual objects
+    if (m_occSphere && m_occSphere->getCoinNode()) {
+        updateObjectMaterial(m_occSphere->getCoinNode(), ambient, diffuse, specular, shininess, transparency);
+    }
+    
+    if (m_occCone && m_occCone->getCoinNode()) {
+        updateObjectMaterial(m_occCone->getCoinNode(), ambient, diffuse, specular, shininess, transparency);
+    }
+    
+    if (m_occBox && m_occBox->getCoinNode()) {
+        updateObjectMaterial(m_occBox->getCoinNode(), ambient, diffuse, specular, shininess, transparency);
+    }
+    
+    render(true);
+}
+
+void PreviewCanvas::updateObjectMaterial(SoNode* node, float ambient, float diffuse, float specular, float shininess, float transparency)
+{
+    if (!node) return;
+    
+    // Use SoSearchAction to find material nodes in the object's scene graph
+    SoSearchAction searchAction;
+    searchAction.setType(SoMaterial::getClassTypeId(), true);
+    searchAction.setSearchingAll(true);
+    searchAction.apply(node);
+    
+    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
+        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
+        if (path && path->getTail()->isOfType(SoMaterial::getClassTypeId())) {
+            SoMaterial* material = static_cast<SoMaterial*>(path->getTail());
+            
+            // Update material properties directly
+            // Use base colors for each object (red, green, blue)
+            SbColor baseColor(0.8f, 0.8f, 0.8f); // Default gray color
+            
+            material->ambientColor.setValue(SbColor(baseColor[0] * ambient, baseColor[1] * ambient, baseColor[2] * ambient));
+            material->diffuseColor.setValue(SbColor(baseColor[0] * diffuse, baseColor[1] * diffuse, baseColor[2] * diffuse));
+            material->specularColor.setValue(SbColor(specular, specular, specular));
+            material->shininess.setValue(shininess);
+            material->transparency.setValue(transparency);
+        }
+    }
+}
+
+void PreviewCanvas::updateTexture(bool enabled, int mode, float scale)
+{
+    LOG_INF_S("PreviewCanvas::updateTexture: Updating texture settings");
+    
     // For now, we'll just trigger a re-render
+    // In a full implementation, this would apply textures to the geometry objects
+    render(true);
+}
+
+void PreviewCanvas::updateAntiAliasing(int method, int msaaSamples, bool fxaaEnabled)
+{
+    LOG_INF_S("PreviewCanvas::updateAntiAliasing: Updating anti-aliasing settings");
+    
+    // For now, we'll just trigger a re-render
+    // In a full implementation, this would configure MSAA and FXAA settings
     render(true);
 }
 
@@ -598,4 +815,104 @@ void PreviewCanvas::onSize(wxSizeEvent& event)
 void PreviewCanvas::onEraseBackground(wxEraseEvent& event)
 {
     // Do nothing to prevent flickering
+}
+
+void PreviewCanvas::onMouseDown(wxMouseEvent& event)
+{
+    m_mouseDown = true;
+    m_lastMousePos = event.GetPosition();
+    CaptureMouse();
+    event.Skip();
+}
+
+void PreviewCanvas::onMouseUp(wxMouseEvent& event)
+{
+    m_mouseDown = false;
+    if (HasCapture()) {
+        ReleaseMouse();
+    }
+    event.Skip();
+}
+
+void PreviewCanvas::onMouseMove(wxMouseEvent& event)
+{
+    if (!m_mouseDown || !m_camera) {
+        event.Skip();
+        return;
+    }
+
+    wxPoint currentPos = event.GetPosition();
+    int deltaX = currentPos.x - m_lastMousePos.x;
+    
+    // Only handle left mouse button for rotation
+    if (event.LeftIsDown()) {
+        // Calculate rotation angle based on mouse movement
+        float rotationAngle = deltaX * 0.01f; // Sensitivity factor
+        
+        // Get current camera position
+        SbVec3f cameraPos = m_camera->position.getValue();
+        
+        // Calculate vector from center to camera
+        SbVec3f cameraVector = cameraPos - m_cameraCenter;
+        
+        // Create rotation around Z-axis
+        SbRotation zRotation(SbVec3f(0.0f, 0.0f, 1.0f), rotationAngle);
+        
+        // Apply rotation to camera vector
+        SbVec3f rotatedVector;
+        zRotation.multVec(cameraVector, rotatedVector);
+        
+        // Set new camera position
+        SbVec3f newPosition = m_cameraCenter + rotatedVector;
+        m_camera->position.setValue(newPosition);
+        
+        // Make camera look at center
+        m_camera->pointAt(m_cameraCenter);
+        
+        // Update last mouse position
+        m_lastMousePos = currentPos;
+        
+        // Trigger re-render
+        render(true);
+    }
+    
+    event.Skip();
+}
+
+void PreviewCanvas::onMouseWheel(wxMouseEvent& event)
+{
+    if (!m_camera) {
+        event.Skip();
+        return;
+    }
+    
+    // Handle zoom with mouse wheel
+    int wheelRotation = event.GetWheelRotation();
+    float zoomFactor = 1.0f;
+    
+    if (wheelRotation > 0) {
+        zoomFactor = 1.1f; // Zoom in
+    } else if (wheelRotation < 0) {
+        zoomFactor = 0.9f; // Zoom out
+    }
+    
+    // Get current camera position
+    SbVec3f currentPos = m_camera->position.getValue();
+    SbVec3f cameraVector = currentPos - m_cameraCenter;
+    
+    // Scale the camera distance
+    cameraVector *= zoomFactor;
+    m_cameraDistance = cameraVector.length();
+    
+    // Set new camera position
+    SbVec3f newPosition = m_cameraCenter + cameraVector;
+    m_camera->position.setValue(newPosition);
+    
+    // Make camera look at center
+    m_camera->pointAt(m_cameraCenter);
+    
+    // Trigger re-render
+    render(true);
+    
+    event.Skip();
 } 

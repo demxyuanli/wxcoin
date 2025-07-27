@@ -26,6 +26,9 @@ public:
     void resetView();
     void updateLighting(float ambient, float diffuse, float specular, const wxColour& color, float intensity);
     void updateMaterial(float ambient, float diffuse, float specular, float shininess, float transparency);
+    void updateObjectMaterial(SoNode* node, float ambient, float diffuse, float specular, float shininess, float transparency);
+    void updateTexture(bool enabled, int mode, float scale);
+    void updateAntiAliasing(int method, int msaaSamples, bool fxaaEnabled);
 
 private:
     void initializeScene();
@@ -34,6 +37,7 @@ private:
     void createBasicGeometryObjects();
     void createLightIndicator();
     void updateLightIndicator(const wxColour& color, float intensity);
+    void createCoordinateSystem();
     void setupDefaultCamera();
     void setupLighting();
 
@@ -41,6 +45,10 @@ private:
     void onPaint(wxPaintEvent& event);
     void onSize(wxSizeEvent& event);
     void onEraseBackground(wxEraseEvent& event);
+    void onMouseDown(wxMouseEvent& event);
+    void onMouseUp(wxMouseEvent& event);
+    void onMouseMove(wxMouseEvent& event);
+    void onMouseWheel(wxMouseEvent& event);
 
     static const int s_canvasAttribs[];
 
@@ -62,6 +70,12 @@ private:
     // OpenGL context
     wxGLContext* m_glContext;
     bool m_initialized;
+
+    // Mouse interaction state
+    bool m_mouseDown;
+    wxPoint m_lastMousePos;
+    float m_cameraDistance;
+    SbVec3f m_cameraCenter;
 
     DECLARE_EVENT_TABLE()
 }; 
