@@ -29,6 +29,7 @@ public:
     void updateObjectMaterial(SoNode* node, float ambient, float diffuse, float specular, float shininess, float transparency);
     void updateTexture(bool enabled, int mode, float scale);
     void updateAntiAliasing(int method, int msaaSamples, bool fxaaEnabled);
+    void updateRenderingMode(int mode);
 
 private:
     void initializeScene();

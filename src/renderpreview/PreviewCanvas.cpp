@@ -18,6 +18,7 @@
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoLineSet.h>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
 #include <Inventor/nodes/SoShapeHints.h>
@@ -230,7 +231,7 @@ void PreviewCanvas::createCheckerboardPlane()
         for (int x = 0; x <= gridSize; ++x) {
             float xPos = x * cellSize - halfSize;
             float zPos = z * cellSize - halfSize;
-            coordinates->point.set1Value(z * (gridSize + 1) + x, SbVec3f(xPos, 0.0f, zPos));
+            coordinates->point.set1Value(z * (gridSize + 1) + x, SbVec3f(xPos, -1.0f, zPos));
         }
     }
     planeGroup->addChild(coordinates);
@@ -521,81 +522,60 @@ void PreviewCanvas::createCoordinateSystem()
     
     auto* coordGroup = new SoSeparator;
     
-    // Create coordinate axes (X, Y, Z)
-    // X-axis (Red)
+    // Create coordinate axes using SoLineSet (based on FreeCAD implementation)
+    float axisLength = 4.0f;
+    
+    // X-axis (Red) - pointing right
     auto* xAxisGroup = new SoSeparator;
     auto* xMaterial = new SoMaterial;
     xMaterial->diffuseColor.setValue(SbColor(1.0f, 0.0f, 0.0f)); // Red
     xMaterial->emissiveColor.setValue(SbColor(0.3f, 0.0f, 0.0f)); // Glow effect
     xAxisGroup->addChild(xMaterial);
     
-    auto* xCylinder = new SoCylinder;
-    xCylinder->radius.setValue(0.05f);
-    xCylinder->height.setValue(4.0f);
-    xAxisGroup->addChild(xCylinder);
+    auto* xCoords = new SoCoordinate3;
+    xCoords->point.set1Value(0, SbVec3f(-axisLength, 0.0f, 0.0f));
+    xCoords->point.set1Value(1, SbVec3f(axisLength, 0.0f, 0.0f));
+    xAxisGroup->addChild(xCoords);
     
-    // X-axis cone (arrow head)
-    auto* xCone = new SoCone;
-    xCone->bottomRadius.setValue(0.15f);
-    xCone->height.setValue(0.3f);
-    auto* xConeTransform = new SoTransform;
-    xConeTransform->translation.setValue(SbVec3f(2.0f, 0.0f, 0.0f));
-    xAxisGroup->addChild(xConeTransform);
-    xAxisGroup->addChild(xCone);
+    auto* xLine = new SoLineSet;
+    xLine->numVertices.setValue(2);
+    xAxisGroup->addChild(xLine);
     
     coordGroup->addChild(xAxisGroup);
     
-    // Y-axis (Green)
+    // Y-axis (Green) - pointing up
     auto* yAxisGroup = new SoSeparator;
     auto* yMaterial = new SoMaterial;
     yMaterial->diffuseColor.setValue(SbColor(0.0f, 1.0f, 0.0f)); // Green
     yMaterial->emissiveColor.setValue(SbColor(0.0f, 0.3f, 0.0f)); // Glow effect
     yAxisGroup->addChild(yMaterial);
     
-    auto* yCylinder = new SoCylinder;
-    yCylinder->radius.setValue(0.05f);
-    yCylinder->height.setValue(4.0f);
-    auto* yTransform = new SoTransform;
-    yTransform->rotation.setValue(SbRotation(SbVec3f(0.0f, 0.0f, 1.0f), M_PI / 2.0f)); // Rotate 90 degrees around Z
-    yAxisGroup->addChild(yTransform);
-    yAxisGroup->addChild(yCylinder);
+    auto* yCoords = new SoCoordinate3;
+    yCoords->point.set1Value(0, SbVec3f(0.0f, -axisLength, 0.0f));
+    yCoords->point.set1Value(1, SbVec3f(0.0f, axisLength, 0.0f));
+    yAxisGroup->addChild(yCoords);
     
-    // Y-axis cone (arrow head)
-    auto* yCone = new SoCone;
-    yCone->bottomRadius.setValue(0.15f);
-    yCone->height.setValue(0.3f);
-    auto* yConeTransform = new SoTransform;
-    yConeTransform->translation.setValue(SbVec3f(0.0f, 2.0f, 0.0f));
-    yConeTransform->rotation.setValue(SbRotation(SbVec3f(0.0f, 0.0f, 1.0f), M_PI / 2.0f));
-    yAxisGroup->addChild(yConeTransform);
-    yAxisGroup->addChild(yCone);
+    auto* yLine = new SoLineSet;
+    yLine->numVertices.setValue(2);
+    yAxisGroup->addChild(yLine);
     
     coordGroup->addChild(yAxisGroup);
     
-    // Z-axis (Blue)
+    // Z-axis (Blue) - pointing forward
     auto* zAxisGroup = new SoSeparator;
     auto* zMaterial = new SoMaterial;
     zMaterial->diffuseColor.setValue(SbColor(0.0f, 0.0f, 1.0f)); // Blue
     zMaterial->emissiveColor.setValue(SbColor(0.0f, 0.0f, 0.3f)); // Glow effect
     zAxisGroup->addChild(zMaterial);
     
-    auto* zCylinder = new SoCylinder;
-    zCylinder->radius.setValue(0.05f);
-    zCylinder->height.setValue(4.0f);
-    auto* zTransform = new SoTransform;
-    zTransform->rotation.setValue(SbRotation(SbVec3f(1.0f, 0.0f, 0.0f), -M_PI / 2.0f)); // Rotate -90 degrees around X
-    zAxisGroup->addChild(zTransform);
-    zAxisGroup->addChild(zCylinder);
+    auto* zCoords = new SoCoordinate3;
+    zCoords->point.set1Value(0, SbVec3f(0.0f, 0.0f, -axisLength));
+    zCoords->point.set1Value(1, SbVec3f(0.0f, 0.0f, axisLength));
+    zAxisGroup->addChild(zCoords);
     
-    // Z-axis cone (arrow head)
-    auto* zCone = new SoCone;
-    zCone->bottomRadius.setValue(0.15f);
-    zCone->height.setValue(0.3f);
-    auto* zConeTransform = new SoTransform;
-    zConeTransform->translation.setValue(SbVec3f(0.0f, 0.0f, 2.0f));
-    zConeTransform->rotation.setValue(SbRotation(SbVec3f(1.0f, 0.0f, 0.0f), -M_PI / 2.0f));
-    zAxisGroup->addChild(zConeTransform);
-    zAxisGroup->addChild(zCone);
+    auto* zLine = new SoLineSet;
+    zLine->numVertices.setValue(2);
+    zAxisGroup->addChild(zLine);
     
     coordGroup->addChild(zAxisGroup);
     
@@ -915,4 +895,35 @@ void PreviewCanvas::onMouseWheel(wxMouseEvent& event)
     render(true);
     
     event.Skip();
+} 
+
+void PreviewCanvas::updateRenderingMode(int mode)
+{
+    // This method will handle different rendering modes
+    // For now, we'll implement basic modes
+    switch (mode) {
+        case 0: // Solid
+            // Default solid rendering
+            break;
+        case 1: // Wireframe
+            // TODO: Implement wireframe rendering
+            break;
+        case 2: // Points
+            // TODO: Implement point rendering
+            break;
+        case 3: // Hidden Line
+            // TODO: Implement hidden line rendering
+            break;
+        case 4: // Shaded
+            // Default shaded rendering
+            break;
+        default:
+            // Default to solid rendering
+            break;
+    }
+    
+    // Trigger re-render
+    render(false);
+    
+    LOG_INF_S("PreviewCanvas::updateRenderingMode: Rendering mode updated to " + std::to_string(mode));
 } 

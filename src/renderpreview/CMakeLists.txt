@@ -3,6 +3,8 @@
 add_library(RenderPreview STATIC
     RenderPreviewDialog.cpp
     PreviewCanvas.cpp
+    GlobalSettingsPanel.cpp
+    ObjectSettingsPanel.cpp
 )
 
 target_include_directories(RenderPreview PUBLIC

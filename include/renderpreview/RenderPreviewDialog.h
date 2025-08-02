@@ -1,72 +1,81 @@
 #pragma once
 
-#include <wx/wx.h>
+#include <wx/dialog.h>
 #include <wx/notebook.h>
 #include <wx/panel.h>
+#include <wx/button.h>
 #include <wx/slider.h>
 #include <wx/checkbox.h>
 #include <wx/choice.h>
-#include <wx/colour.h>
-#include <wx/button.h>
-#include <memory>
+#include <wx/stattext.h>
+#include <wx/listbox.h>
+#include <wx/textctrl.h>
+#include <wx/spinctrl.h>
+#include <vector>
+#include <string>
+#include "renderpreview/RenderLightSettings.h"
 
+// Forward declarations
 class PreviewCanvas;
+class LightManagementPanel;
+class MaterialPanel;
+class GlobalSettingsPanel;
+class ObjectSettingsPanel;
 
 class RenderPreviewDialog : public wxDialog
 {
 public:
     RenderPreviewDialog(wxWindow* parent);
 
-private:
-    void createUI();
-    void createLightingPanel(wxNotebook* notebook);
-    void createMaterialPanel(wxNotebook* notebook);
-    void createTexturePanel(wxNotebook* notebook);
-    void createAntiAliasingPanel(wxNotebook* notebook);
+    // Global settings accessors
+    void updateGlobalLighting();
+    void updateGlobalAntiAliasing();
+    void updateGlobalRenderingMode();
     
-    void onLightingChanged(wxCommandEvent& event);
-    void onMaterialChanged(wxCommandEvent& event);
-    void onTextureChanged(wxCommandEvent& event);
-    void onAntiAliasingChanged(wxCommandEvent& event);
-    void onLightColorButton(wxCommandEvent& event);
+    // Object settings accessors
+    void applyObjectSettingsToCanvas();
     
-    void OnReset(wxCommandEvent& event);
-    void OnSave(wxCommandEvent& event);
-    void OnCancel(wxCommandEvent& event);
-    void OnClose(wxCloseEvent& event);
+    // Global settings methods
+    void applyGlobalSettingsToCanvas();
     
+    // Configuration methods
     void saveConfiguration();
     void loadConfiguration();
     void resetToDefaults();
+    
+    // Light management
+    void updateLightList();
+    
+    // Event handlers for global settings
+    void onGlobalLightingChanged(wxCommandEvent& event);
+    void onGlobalAntiAliasingChanged(wxCommandEvent& event);
+    void onGlobalRenderingModeChanged(wxCommandEvent& event);
+    
+    // Event handlers for object settings
+    void onObjectMaterialChanged(wxCommandEvent& event);
+    void onObjectTextureChanged(wxCommandEvent& event);
+    
+    // Dialog event handlers
+    void OnReset(wxCommandEvent& event);
+    void OnApply(wxCommandEvent& event);
+    void OnSave(wxCommandEvent& event);
+    void OnCancel(wxCommandEvent& event);
+    void OnClose(wxCloseEvent& event);
 
+private:
+    void createUI();
+    
     // UI Components
     PreviewCanvas* m_renderCanvas;
-    wxNotebook* m_configNotebook;
+    wxButton* m_applyButton;
     
-    // Lighting controls
-    wxSlider* m_ambientLightSlider;
-    wxSlider* m_diffuseLightSlider;
-    wxSlider* m_specularLightSlider;
-    wxButton* m_lightColorButton;
-    wxSlider* m_lightIntensitySlider;
-    wxColour m_lightColor;
+    // Panel instances
+    GlobalSettingsPanel* m_globalSettingsPanel;
+    ObjectSettingsPanel* m_objectSettingsPanel;
     
-    // Material controls
-    wxSlider* m_ambientMaterialSlider;
-    wxSlider* m_diffuseMaterialSlider;
-    wxSlider* m_specularMaterialSlider;
-    wxSlider* m_shininessSlider;
-    wxSlider* m_transparencySlider;
+    // Data
+    std::vector<RenderLightSettings> m_lights;
+    int m_currentLightIndex;
     
-    // Texture controls
-    wxChoice* m_textureModeChoice;
-    wxSlider* m_textureScaleSlider;
-    wxCheckBox* m_enableTextureCheckBox;
-    
-    // Anti-aliasing controls
-    wxChoice* m_antiAliasingChoice;
-    wxSlider* m_msaaSamplesSlider;
-    wxCheckBox* m_enableFXAACheckBox;
-
-    wxDECLARE_EVENT_TABLE();
+    DECLARE_EVENT_TABLE()
 };
