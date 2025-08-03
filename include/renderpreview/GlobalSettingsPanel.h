@@ -35,9 +35,16 @@ public:
     int getAntiAliasingMethod() const;
     int getMSAASamples() const;
     bool isFXAAEnabled() const;
+    void setAntiAliasingMethod(int method);
+    void setMSAASamples(int samples);
+    void setFXAAEnabled(bool enabled);
     
     // Rendering mode methods
     int getRenderingMode() const;
+    void setRenderingMode(int mode);
+    
+    // Auto-apply methods
+    void setAutoApply(bool enabled);
     
     // Configuration methods
     void loadSettings();
@@ -74,7 +81,7 @@ private:
     void onNavcubePreset(wxCommandEvent& event);
     
     // UI Components for Lighting
-    wxListBox* m_lightListBox;
+    wxBoxSizer* m_lightListSizer;
     wxButton* m_addLightButton;
     wxButton* m_removeLightButton;
     wxTextCtrl* m_lightNameText;
@@ -112,6 +119,7 @@ private:
     std::vector<RenderLightSettings> m_lights;
     int m_currentLightIndex;
     RenderPreviewDialog* m_parentDialog;
+    bool m_autoApply;
     
     // Tab notebook
     wxNotebook* m_notebook;

@@ -13,7 +13,10 @@
 #include <wx/spinctrl.h>
 #include <vector>
 #include <string>
+#include <memory>
 #include "renderpreview/RenderLightSettings.h"
+#include "renderpreview/ConfigValidator.h"
+#include "renderpreview/UndoManager.h"
 
 // Forward declarations
 class PreviewCanvas;
@@ -43,6 +46,14 @@ public:
     void loadConfiguration();
     void resetToDefaults();
     
+    // New feature methods
+    void saveCurrentState(const std::string& description = "");
+    void applySnapshot(const ConfigSnapshot& snapshot);
+    ConfigSnapshot createSnapshot() const;
+    bool validateCurrentSettings();
+    void setAutoApply(bool enabled);
+    void setValidationEnabled(bool enabled);
+    
     // Light management
     void updateLightList();
     
@@ -61,6 +72,8 @@ public:
     void OnSave(wxCommandEvent& event);
     void OnCancel(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
+    void OnUndo(wxCommandEvent& event);
+    void OnRedo(wxCommandEvent& event);
 
 private:
     void createUI();
@@ -76,6 +89,11 @@ private:
     // Data
     std::vector<RenderLightSettings> m_lights;
     int m_currentLightIndex;
+    
+    // New features
+    std::unique_ptr<UndoManager> m_undoManager;
+    bool m_autoApply;
+    bool m_validationEnabled;
     
     DECLARE_EVENT_TABLE()
 };

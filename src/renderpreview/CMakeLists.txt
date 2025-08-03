@@ -5,6 +5,8 @@ add_library(RenderPreview STATIC
     PreviewCanvas.cpp
     GlobalSettingsPanel.cpp
     ObjectSettingsPanel.cpp
+    ConfigValidator.cpp
+    UndoManager.cpp
 )
 
 target_include_directories(RenderPreview PUBLIC

@@ -29,19 +29,6 @@ void ObjectSettingsPanel::createUI()
 {
     auto* mainSizer = new wxBoxSizer(wxVERTICAL);
     
-    // Title
-    auto* titleLabel = new wxStaticText(this, wxID_ANY, "Object Settings", 
-        wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-    titleLabel->SetFont(wxFont(14, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
-    mainSizer->Add(titleLabel, 0, wxALIGN_CENTER | wxALL, 10);
-    
-    // Description
-    auto* descLabel = new wxStaticText(this, wxID_ANY, 
-        "These settings affect individual geometric objects.\n"
-        "Changes apply only to selected objects.", 
-        wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-    mainSizer->Add(descLabel, 0, wxALIGN_CENTER | wxALL, 10);
-    
     // Create notebook for tabs
     m_notebook = new wxNotebook(this, wxID_ANY);
     

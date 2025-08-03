@@ -22,6 +22,7 @@ GlobalSettingsPanel::GlobalSettingsPanel(wxWindow* parent, RenderPreviewDialog* 
     : wxPanel(parent, id)
     , m_parentDialog(dialog)
     , m_currentLightIndex(-1)
+    , m_autoApply(false)
 {
     LOG_INF_S("GlobalSettingsPanel::GlobalSettingsPanel: Initializing");
     createUI();
@@ -38,19 +39,6 @@ GlobalSettingsPanel::~GlobalSettingsPanel()
 void GlobalSettingsPanel::createUI()
 {
     auto* mainSizer = new wxBoxSizer(wxVERTICAL);
-    
-    // Title
-    auto* titleLabel = new wxStaticText(this, wxID_ANY, "Global Settings", 
-        wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-    titleLabel->SetFont(wxFont(14, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
-    mainSizer->Add(titleLabel, 0, wxALIGN_CENTER | wxALL, 10);
-    
-    // Description
-    auto* descLabel = new wxStaticText(this, wxID_ANY, 
-        "These settings affect the entire scene and view.\n"
-        "Changes apply to all objects in the scene.", 
-        wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
-    mainSizer->Add(descLabel, 0, wxALIGN_CENTER | wxALL, 10);
     
     // Create notebook for tabs
     m_notebook = new wxNotebook(this, wxID_ANY);
@@ -85,8 +73,17 @@ wxSizer* GlobalSettingsPanel::createLightingTab(wxWindow* parent)
     // Light list section with better styling
     auto* listBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Light List");
     
-    m_lightListBox = new wxListBox(parent, wxID_ANY, wxDefaultPosition, wxSize(-1, 120));
-    listBoxSizer->Add(m_lightListBox, 1, wxEXPAND | wxALL, 8);
+    // Create a custom list with color preview buttons
+    auto* lightListSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Create a scrollable panel for the light list
+    auto* lightListPanel = new wxScrolledWindow(parent, wxID_ANY, wxDefaultPosition, wxSize(-1, 120));
+    lightListPanel->SetScrollRate(10, 10);
+    m_lightListSizer = new wxBoxSizer(wxVERTICAL);
+    lightListPanel->SetSizer(m_lightListSizer);
+    
+    lightListSizer->Add(lightListPanel, 1, wxEXPAND | wxALL, 8);
+    listBoxSizer->Add(lightListSizer, 1, wxEXPAND | wxALL, 8);
     
     // Light list buttons with better spacing
     auto* listButtonSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -322,16 +319,68 @@ wxSizer* GlobalSettingsPanel::createLightPresetsTab(wxWindow* parent)
 
 void GlobalSettingsPanel::updateLightList()
 {
-    m_lightListBox->Clear();
-    for (const auto& light : m_lights) {
-        m_lightListBox->Append(light.name);
+    // Clear existing light list items
+    m_lightListSizer->Clear(true);
+    
+    // Create list items for each light
+    for (size_t i = 0; i < m_lights.size(); ++i) {
+        auto* lightItemSizer = new wxBoxSizer(wxHORIZONTAL);
+        
+        // Light name button (for selection)
+        auto* nameButton = new wxButton(m_lightListSizer->GetContainingWindow(), wxID_ANY, m_lights[i].name, 
+            wxDefaultPosition, wxSize(-1, 25));
+        nameButton->SetToolTip("Click to select this light");
+        
+        // Color preview button
+        auto* colorButton = new wxButton(m_lightListSizer->GetContainingWindow(), wxID_ANY, "", 
+            wxDefaultPosition, wxSize(30, 25));
+        colorButton->SetBackgroundColour(m_lights[i].color);
+        colorButton->SetToolTip("Click to change light color");
+        
+        // Bind events
+        nameButton->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& event) {
+            // Select this light
+            m_currentLightIndex = static_cast<int>(i);
+            onLightSelected(event);
+        });
+        
+        colorButton->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& event) {
+            // Open color dialog for this light
+            wxColourDialog dialog(this);
+            if (dialog.ShowModal() == wxID_OK) {
+                wxColour color = dialog.GetColourData().GetColour();
+                m_lights[i].color = color;
+                
+                // Update the color button
+                wxButton* button = dynamic_cast<wxButton*>(event.GetEventObject());
+                if (button) {
+                    button->SetBackgroundColour(color);
+                }
+                
+                // Update the main color button if this light is selected
+                if (m_currentLightIndex == static_cast<int>(i)) {
+                    m_lightColorButton->SetBackgroundColour(color);
+                    m_lightColorButton->SetLabel(wxString::Format("RGB(%d,%d,%d)", color.Red(), color.Green(), color.Blue()));
+                }
+                
+                onLightingChanged(event);
+            }
+        });
+        
+        lightItemSizer->Add(nameButton, 1, wxEXPAND | wxRIGHT, 5);
+        lightItemSizer->Add(colorButton, 0, wxEXPAND);
+        
+        m_lightListSizer->Add(lightItemSizer, 0, wxEXPAND | wxALL, 2);
     }
+    
+    // Layout the sizer
+    m_lightListSizer->Layout();
+    m_lightListSizer->GetContainingWindow()->Layout();
 }
 
 void GlobalSettingsPanel::bindEvents()
 {
-    // Lighting events
-    m_lightListBox->Bind(wxEVT_LISTBOX, &GlobalSettingsPanel::onLightSelected, this);
+    // Lighting events (note: light selection is now handled in updateLightList)
     m_addLightButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onAddLight, this);
     m_removeLightButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onRemoveLight, this);
     m_lightNameText->Bind(wxEVT_TEXT, &GlobalSettingsPanel::onLightPropertyChanged, this);
@@ -389,7 +438,7 @@ void GlobalSettingsPanel::addLight(const RenderLightSettings& light)
 {
     m_lights.push_back(light);
     updateLightList();
-    m_lightListBox->SetSelection(m_lights.size() - 1);
+    m_currentLightIndex = static_cast<int>(m_lights.size()) - 1;
     onLightSelected(wxCommandEvent());
 }
 
@@ -402,7 +451,6 @@ void GlobalSettingsPanel::removeLight(int index)
             m_currentLightIndex = -1;
         } else {
             m_currentLightIndex = std::min(m_currentLightIndex, static_cast<int>(m_lights.size()) - 1);
-            m_lightListBox->SetSelection(m_currentLightIndex);
             onLightSelected(wxCommandEvent());
         }
     }
@@ -418,10 +466,8 @@ void GlobalSettingsPanel::updateLight(int index, const RenderLightSettings& ligh
 
 void GlobalSettingsPanel::onLightSelected(wxCommandEvent& event)
 {
-    int selection = m_lightListBox->GetSelection();
-    if (selection >= 0 && selection < static_cast<int>(m_lights.size())) {
-        m_currentLightIndex = selection;
-        const auto& light = m_lights[selection];
+    if (m_currentLightIndex >= 0 && m_currentLightIndex < static_cast<int>(m_lights.size())) {
+        const auto& light = m_lights[m_currentLightIndex];
         
         m_lightNameText->SetValue(light.name);
         m_lightTypeChoice->SetSelection(m_lightTypeChoice->FindString(light.type));
@@ -453,12 +499,29 @@ void GlobalSettingsPanel::onAddLight(wxCommandEvent& event)
     newLight.intensity = 1.0;
     newLight.enabled = true;
     
-    addLight(newLight);
+    m_lights.push_back(newLight);
+    m_currentLightIndex = static_cast<int>(m_lights.size()) - 1;
+    updateLightList();
+    onLightSelected(wxCommandEvent());
 }
 
 void GlobalSettingsPanel::onRemoveLight(wxCommandEvent& event)
 {
-    removeLight(m_currentLightIndex);
+    if (m_currentLightIndex >= 0 && m_currentLightIndex < static_cast<int>(m_lights.size())) {
+        m_lights.erase(m_lights.begin() + m_currentLightIndex);
+        
+        if (m_lights.empty()) {
+            m_currentLightIndex = -1;
+        } else {
+            m_currentLightIndex = std::min(m_currentLightIndex, static_cast<int>(m_lights.size()) - 1);
+        }
+        
+        updateLightList();
+        
+        if (m_currentLightIndex >= 0) {
+            onLightSelected(wxCommandEvent());
+        }
+    }
 }
 
 void GlobalSettingsPanel::onLightPropertyChanged(wxCommandEvent& event)
@@ -475,6 +538,7 @@ void GlobalSettingsPanel::onLightPropertyChanged(wxCommandEvent& event)
         
         light.enabled = m_lightEnabledCheckBox->GetValue();
         
+        // Update the light list to reflect name changes
         updateLightList();
         onLightingChanged(event);
     }
@@ -498,8 +562,10 @@ void GlobalSettingsPanel::onLightPropertyChangedSpin(wxSpinDoubleEvent& event)
 
 void GlobalSettingsPanel::onLightingChanged(wxCommandEvent& event)
 {
-    // This will be handled by the parent dialog
-    // The parent dialog can call getLights()
+    // Auto-apply if enabled
+    if (m_autoApply && m_parentDialog) {
+        m_parentDialog->applyGlobalSettingsToCanvas();
+    }
 }
 
 // Anti-aliasing methods
@@ -526,14 +592,53 @@ int GlobalSettingsPanel::getRenderingMode() const
 
 void GlobalSettingsPanel::onAntiAliasingChanged(wxCommandEvent& event)
 {
-    // This will be handled by the parent dialog
-    // The parent dialog can call getAntiAliasingMethod(), getMSAASamples(), etc.
+    // Auto-apply if enabled
+    if (m_autoApply && m_parentDialog) {
+        m_parentDialog->applyGlobalSettingsToCanvas();
+    }
 }
 
 void GlobalSettingsPanel::onRenderingModeChanged(wxCommandEvent& event)
 {
-    // This will be handled by the parent dialog
-    // The parent dialog can call getRenderingMode()
+    // Auto-apply if enabled
+    if (m_autoApply && m_parentDialog) {
+        m_parentDialog->applyGlobalSettingsToCanvas();
+    }
+}
+
+// Setter methods for anti-aliasing
+void GlobalSettingsPanel::setAntiAliasingMethod(int method)
+{
+    if (m_antiAliasingChoice && method >= 0 && method < m_antiAliasingChoice->GetCount()) {
+        m_antiAliasingChoice->SetSelection(method);
+    }
+}
+
+void GlobalSettingsPanel::setMSAASamples(int samples)
+{
+    if (m_msaaSamplesSlider) {
+        m_msaaSamplesSlider->SetValue(samples);
+    }
+}
+
+void GlobalSettingsPanel::setFXAAEnabled(bool enabled)
+{
+    if (m_fxaaCheckBox) {
+        m_fxaaCheckBox->SetValue(enabled);
+    }
+}
+
+// Setter method for rendering mode
+void GlobalSettingsPanel::setRenderingMode(int mode)
+{
+    if (m_renderingModeChoice && mode >= 0 && mode < m_renderingModeChoice->GetCount()) {
+        m_renderingModeChoice->SetSelection(mode);
+    }
+}
+
+void GlobalSettingsPanel::setAutoApply(bool enabled)
+{
+    m_autoApply = enabled;
 }
 
 void GlobalSettingsPanel::loadSettings()

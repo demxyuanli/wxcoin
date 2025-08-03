@@ -5,11 +5,15 @@
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
+#include <Inventor/nodes/SoLight.h>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
+#include <Inventor/nodes/SoText2.h>
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbColor.h>
 #include <Inventor/actions/SoSearchAction.h>
 #include <memory>
+#include <vector>
+#include "renderpreview/RenderLightSettings.h"
 
 // Forward declarations
 class OCCBox;
@@ -25,8 +29,13 @@ public:
     void render(bool fastMode = false);
     void resetView();
     void updateLighting(float ambient, float diffuse, float specular, const wxColour& color, float intensity);
+    void updateMultiLighting(const std::vector<RenderLightSettings>& lights);
+    SoLight* createLightByType(const RenderLightSettings& lightSettings);
+    void createLightIndicator(SoLight* light, int lightIndex, const std::string& lightName, SoSeparator* container, const SbVec3f& lightPosition);
     void updateMaterial(float ambient, float diffuse, float specular, float shininess, float transparency);
     void updateObjectMaterial(SoNode* node, float ambient, float diffuse, float specular, float shininess, float transparency);
+    void updateGeometryMaterialsForLighting(float lightR, float lightG, float lightB, float totalIntensity);
+    void updateObjectMaterialForLighting(SoNode* node, const SbColor& baseColor, float lightR, float lightG, float lightB, float totalIntensity);
     void updateTexture(bool enabled, int mode, float scale);
     void updateAntiAliasing(int method, int msaaSamples, bool fxaaEnabled);
     void updateRenderingMode(int mode);
@@ -41,6 +50,7 @@ private:
     void createCoordinateSystem();
     void setupDefaultCamera();
     void setupLighting();
+    void clearAllLights();
 
     // Event handlers
     void onPaint(wxPaintEvent& event);
@@ -67,6 +77,7 @@ private:
     
     // Light indicator visualization
     SoSeparator* m_lightIndicator;
+    SoSeparator* m_lightIndicatorsContainer;
 
     // OpenGL context
     wxGLContext* m_glContext;
