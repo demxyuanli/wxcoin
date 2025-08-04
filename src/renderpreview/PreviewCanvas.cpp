@@ -85,10 +85,8 @@ PreviewCanvas::PreviewCanvas(wxWindow* parent, wxWindowID id, const wxPoint& pos
         // Initialize scene
         initializeScene();
         
-        // Initialize light manager
-        m_lightManager = std::make_unique<LightManager>(m_sceneRoot, m_objectRoot);
-        m_antiAliasingManager = std::make_unique<AntiAliasingManager>(this, m_glContext);
-        m_renderingManager = std::make_unique<RenderingManager>(m_sceneRoot, this, m_glContext);
+        // Setup default lighting using LightManager
+        setupDefaultLighting();
         
         m_initialized = true;
         
@@ -137,16 +135,21 @@ void PreviewCanvas::initializeScene()
     m_camera->orientation.setValue(rotation);
     m_sceneRoot->addChild(m_camera);
     
-    // Create lighting
-    setupLighting();
-    
     // Create object root
     m_objectRoot = new SoSeparator;
     m_objectRoot->ref();
     m_sceneRoot->addChild(m_objectRoot);
     
-    // Initialize object manager BEFORE creating objects
+    // Set light model to enable proper lighting calculation (must be before lights)
+    SoLightModel* lightModel = new SoLightModel;
+    lightModel->model.setValue(SoLightModel::PHONG);
+    m_sceneRoot->addChild(lightModel);
+    
+    // Initialize managers
     m_objectManager = std::make_unique<ObjectManager>(m_sceneRoot, m_objectRoot);
+    m_lightManager = std::make_unique<LightManager>(m_sceneRoot, m_objectRoot);
+    m_antiAliasingManager = std::make_unique<AntiAliasingManager>(this, m_glContext);
+    m_renderingManager = std::make_unique<RenderingManager>(m_sceneRoot, this, m_glContext);
     
     // Create default scene
     createDefaultScene();
@@ -154,48 +157,104 @@ void PreviewCanvas::initializeScene()
     LOG_INF_S("PreviewCanvas::initializeScene: Scene graph created successfully");
 }
 
-void PreviewCanvas::setupLighting()
+void PreviewCanvas::setupDefaultLighting()
 {
-    LOG_INF_S("PreviewCanvas::setupLighting: Setting up FreeCAD-style three-point lighting");
+    LOG_INF_S("PreviewCanvas::setupDefaultLighting: Setting up default three-point lighting using LightManager");
     
-    // Set a light model to enable proper lighting calculation
-    SoLightModel* lightModel = new SoLightModel;
-    lightModel->model.setValue(SoLightModel::PHONG);
-    m_sceneRoot->addChild(lightModel);
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::setupDefaultLighting: Light manager not initialized");
+        return;
+    }
     
-    // Create main directional light (top 45-degree light)
-    auto* mainLight = new SoDirectionalLight;
-    mainLight->ref();
-    mainLight->direction.setValue(SbVec3f(0.0f, -0.707f, -0.707f)); // Light from top 45 degrees pointing down (Y=-0.707, Z=-0.707)
-    mainLight->intensity.setValue(1.0f);
-    mainLight->color.setValue(SbColor(1.0f, 1.0f, 1.0f)); // White light
-    m_sceneRoot->addChild(mainLight);
+    // Light model is already set in initializeScene()
     
-    // Create left fill light
-    auto* leftLight = new SoDirectionalLight;
-    leftLight->ref();
-    leftLight->direction.setValue(SbVec3f(-1.0f, 0.0f, 0.0f)); // Light from left
-    leftLight->intensity.setValue(0.6f);
-    leftLight->color.setValue(SbColor(1.0f, 1.0f, 1.0f)); // White light
-    m_sceneRoot->addChild(leftLight);
+    // Create default three-point lighting system using LightManager
+    std::vector<RenderLightSettings> defaultLights;
     
-    // Create top rim light with increased intensity
-    auto* topLight = new SoDirectionalLight;
-    topLight->ref();
-    topLight->direction.setValue(SbVec3f(0.0f, 1.0f, 0.0f)); // Light from top
-    topLight->intensity.setValue(0.8f); // Increased from 0.4f to 0.8f
-    topLight->color.setValue(SbColor(1.0f, 1.0f, 1.0f)); // White light
-    m_sceneRoot->addChild(topLight);
+    // Main directional light (top 45-degree light)
+    RenderLightSettings mainLight;
+    mainLight.name = "Main Light";
+    mainLight.type = "directional";
+    mainLight.directionX = 0.0f;
+    mainLight.directionY = -0.707f;
+    mainLight.directionZ = -0.707f;
+    mainLight.intensity = 1.5f; // Increased default intensity from 1.0f to 1.5f
+    mainLight.color = wxColour(255, 255, 255); // White light
+    mainLight.enabled = true;
+    defaultLights.push_back(mainLight);
     
-    // Create light material for controlling light properties
+    // Left fill light
+    RenderLightSettings leftLight;
+    leftLight.name = "Fill Light";
+    leftLight.type = "directional";
+    leftLight.directionX = -1.0f;
+    leftLight.directionY = 0.0f;
+    leftLight.directionZ = 0.0f;
+    leftLight.intensity = 0.6f;
+    leftLight.color = wxColour(255, 255, 255); // White light
+    leftLight.enabled = true;
+    defaultLights.push_back(leftLight);
+    
+    // Top rim light
+    RenderLightSettings topLight;
+    topLight.name = "Rim Light";
+    topLight.type = "directional";
+    topLight.directionX = 0.0f;
+    topLight.directionY = 1.0f;
+    topLight.directionZ = 0.0f;
+    topLight.intensity = 0.8f;
+    topLight.color = wxColour(255, 255, 255); // White light
+    topLight.enabled = true;
+    defaultLights.push_back(topLight);
+    
+    // Add ambient light to ensure basic visibility
+    RenderLightSettings ambientLight;
+    ambientLight.name = "Ambient Light";
+    ambientLight.type = "directional";
+    ambientLight.directionX = 0.0f;
+    ambientLight.directionY = 0.0f;
+    ambientLight.directionZ = -1.0f;
+    ambientLight.intensity = 0.3f; // Low intensity ambient light
+    ambientLight.color = wxColour(255, 255, 255);
+    ambientLight.enabled = true;
+    defaultLights.push_back(ambientLight);
+    
+    // Apply default lighting using LightManager
+    m_lightManager->updateMultipleLights(defaultLights);
+    
+    // Create default material for scene objects
     m_lightMaterial = new SoMaterial;
     m_lightMaterial->ref();
-    m_lightMaterial->ambientColor.setValue(SbColor(0.4f, 0.4f, 0.4f)); // Increased ambient for better top illumination
+    m_lightMaterial->ambientColor.setValue(SbColor(0.4f, 0.4f, 0.4f));
     m_lightMaterial->diffuseColor.setValue(SbColor(0.8f, 0.8f, 0.8f));
     m_lightMaterial->specularColor.setValue(SbColor(0.5f, 0.5f, 0.5f));
     m_sceneRoot->addChild(m_lightMaterial);
     
-    LOG_INF_S("PreviewCanvas::setupLighting: FreeCAD-style three-point lighting setup completed");
+    LOG_INF_S("PreviewCanvas::setupDefaultLighting: Default three-point lighting setup completed using LightManager");
+    LOG_INF_S("PreviewCanvas::setupDefaultLighting: Light count: " + std::to_string(m_lightManager->getLightCount()));
+    
+    // Debug: Check scene structure
+    LOG_INF_S("PreviewCanvas::setupDefaultLighting: Scene root children count: " + std::to_string(m_sceneRoot->getNumChildren()));
+    for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
+        SoNode* child = m_sceneRoot->getChild(i);
+        if (child->isOfType(SoDirectionalLight::getClassTypeId())) {
+            LOG_INF_S("PreviewCanvas::setupDefaultLighting: Found directional light at index " + std::to_string(i));
+        } else if (child->isOfType(SoSeparator::getClassTypeId())) {
+            LOG_INF_S("PreviewCanvas::setupDefaultLighting: Found separator at index " + std::to_string(i));
+        }
+    }
+    
+    // Debug: Check light container
+    if (m_lightManager) {
+        auto lightIds = m_lightManager->getAllLightIds();
+        LOG_INF_S("PreviewCanvas::setupDefaultLighting: Light IDs: " + std::to_string(lightIds.size()));
+        for (int lightId : lightIds) {
+            auto settings = m_lightManager->getLightSettings(lightId);
+            LOG_INF_S("PreviewCanvas::setupDefaultLighting: Light " + std::to_string(lightId) + 
+                     " - " + settings.name + " - enabled: " + std::to_string(settings.enabled) + 
+                     " - intensity: " + std::to_string(settings.intensity));
+        }
+    }
 }
 
 void PreviewCanvas::createDefaultScene()
@@ -210,8 +269,8 @@ void PreviewCanvas::createDefaultScene()
     createCheckerboardPlane();
     LOG_INF_S("PreviewCanvas::createDefaultScene: Checkerboard plane created");
     
-    // Light indicators are now handled by LightManager
-    LOG_INF_S("PreviewCanvas::createDefaultScene: Light indicators handled by LightManager");
+    // Light indicators are managed by LightManager
+    LOG_INF_S("PreviewCanvas::createDefaultScene: Light indicators managed by LightManager");
     
     // Create coordinate system
     createCoordinateSystem();
@@ -610,8 +669,6 @@ void PreviewCanvas::render(bool fastMode)
     }
     
     SwapBuffers();
-    
-    LOG_INF_S("PreviewCanvas::render: Rendered successfully");
 }
 
 void PreviewCanvas::resetView()
@@ -622,19 +679,19 @@ void PreviewCanvas::resetView()
 
 void PreviewCanvas::updateLighting(float ambient, float diffuse, float specular, const wxColour& color, float intensity)
 {
-    LOG_INF_S("PreviewCanvas::updateLighting: Updating lighting properties");
+    LOG_INF_S("PreviewCanvas::updateLighting: Updating lighting properties using LightManager");
+    
+    if (!m_lightManager) {
+        LOG_WRN_S("PreviewCanvas::updateLighting: Light manager not initialized");
+        return;
+    }
     
     if (!m_lightMaterial) {
         LOG_WRN_S("PreviewCanvas::updateLighting: No light material available");
         return;
     }
     
-    if (!m_sceneRoot) {
-        LOG_WRN_S("PreviewCanvas::updateLighting: No scene root available");
-        return;
-    }
-    
-    // Update light material
+    // Update material properties
     float r = color.Red() / 255.0f;
     float g = color.Green() / 255.0f;
     float b = color.Blue() / 255.0f;
@@ -643,55 +700,37 @@ void PreviewCanvas::updateLighting(float ambient, float diffuse, float specular,
     m_lightMaterial->diffuseColor.setValue(SbColor(r * diffuse, g * diffuse, b * diffuse));
     m_lightMaterial->specularColor.setValue(SbColor(r * specular, g * specular, b * specular));
     
-    // Update all directional lights in the scene
-    SoSearchAction searchAction;
-    searchAction.setType(SoDirectionalLight::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(m_sceneRoot);
+    // Get current lights and update their properties
+    auto currentLights = m_lightManager->getAllLightSettings();
+    std::vector<RenderLightSettings> updatedLights;
     
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (!path) {
-            LOG_WRN_S("PreviewCanvas::updateLighting: Null path encountered, skipping");
-            continue;
-        }
-        
-        SoNode* tailNode = path->getTail();
-        if (!tailNode) {
-            LOG_WRN_S("PreviewCanvas::updateLighting: Null tail node, skipping");
-            continue;
-        }
-        
-        if (!tailNode->isOfType(SoDirectionalLight::getClassTypeId())) {
-            LOG_WRN_S("PreviewCanvas::updateLighting: Tail node is not a directional light, skipping");
-            continue;
-        }
-        
-        SoDirectionalLight* light = static_cast<SoDirectionalLight*>(tailNode);
-        if (!light) {
-            LOG_WRN_S("PreviewCanvas::updateLighting: Failed to cast to directional light, skipping");
-            continue;
-        }
-            
-            // Update light color
-            light->color.setValue(SbColor(r, g, b));
-            
-            // Update light intensity (scale based on original intensity)
-            float originalIntensity = light->intensity.getValue();
-            float scaledIntensity = originalIntensity * intensity;
-            light->intensity.setValue(scaledIntensity);
+    for (auto& light : currentLights) {
+        // Update light color and intensity
+        light.color = color;
+        light.intensity = light.intensity * intensity; // Scale existing intensity
+        updatedLights.push_back(light);
     }
     
-    // Light indicators are now handled by LightManager
+    // Apply updated lights through LightManager
+    if (!updatedLights.empty()) {
+        m_lightManager->updateMultipleLights(updatedLights);
+    }
     
     render(true);
 }
 
 void PreviewCanvas::updateMaterial(float ambient, float diffuse, float specular, float shininess, float transparency)
 {
-    LOG_INF_S("PreviewCanvas::updateMaterial: Updating material properties");
+    LOG_INF_S("PreviewCanvas::updateMaterial: Updating material properties using LightManager");
     
-    // Material updates are now handled by LightManager
+    if (!m_lightManager) {
+        LOG_WRN_S("PreviewCanvas::updateMaterial: Light manager not initialized");
+        return;
+    }
+    
+    // Material updates are handled by LightManager
+    m_lightManager->updateMaterialsForLighting();
+    
     render(true);
 }
 
@@ -901,6 +940,44 @@ std::vector<RenderLightSettings> PreviewCanvas::getAllLights() const
     }
     
     return m_lightManager->getAllLightSettings();
+}
+
+void PreviewCanvas::clearAllLights()
+{
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::clearAllLights: Light manager not initialized");
+        return;
+    }
+    
+    m_lightManager->clearAllLights();
+    render(true);
+}
+
+void PreviewCanvas::resetToDefaultLighting()
+{
+    LOG_INF_S("PreviewCanvas::resetToDefaultLighting: Resetting to default three-point lighting");
+    
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::resetToDefaultLighting: Light manager not initialized");
+        return;
+    }
+    
+    // Clear existing lights
+    m_lightManager->clearAllLights();
+    
+    // Setup default lighting
+    setupDefaultLighting();
+    
+    render(true);
+}
+
+bool PreviewCanvas::hasLights() const
+{
+    if (!m_lightManager) {
+        return false;
+    }
+    
+    return m_lightManager->getLightCount() > 0;
 }
 
 

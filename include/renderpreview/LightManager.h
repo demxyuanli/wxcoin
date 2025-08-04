@@ -79,14 +79,12 @@ private:
         int lightId;
         RenderLightSettings settings;
         SoLight* lightNode;
-        SoSeparator* lightGroup;
         SoSeparator* indicatorNode;
     };
 
     // Member variables
     SoSeparator* m_sceneRoot;
     SoSeparator* m_objectRoot;
-    SoSeparator* m_lightContainer;
     SoSeparator* m_indicatorContainer;
     std::map<int, std::unique_ptr<ManagedLight>> m_lights;
     int m_nextLightId;

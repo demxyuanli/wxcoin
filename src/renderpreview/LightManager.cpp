@@ -20,24 +20,18 @@
 LightManager::LightManager(SoSeparator* sceneRoot, SoSeparator* objectRoot)
     : m_sceneRoot(sceneRoot), m_objectRoot(objectRoot), m_nextLightId(1)
 {
-    m_lightContainer = new SoSeparator();
-    m_lightContainer->ref();
-    m_sceneRoot->addChild(m_lightContainer);
-    
+    // Create indicator container for light visualization
     m_indicatorContainer = new SoSeparator();
     m_indicatorContainer->ref();
     m_objectRoot->addChild(m_indicatorContainer);
     
-    LOG_INF_S("LightManager: Initialized with containers");
+    LOG_INF_S("LightManager: Initialized. Lights will be added directly to scene root");
 }
 
 LightManager::~LightManager()
 {
     clearAllLights();
     
-    if (m_lightContainer) {
-        m_lightContainer->unref();
-    }
     if (m_indicatorContainer) {
         m_indicatorContainer->unref();
     }
@@ -57,20 +51,27 @@ int LightManager::addLight(const RenderLightSettings& settings)
         return -1;
     }
     
-    managedLight->lightGroup = new SoSeparator();
-    managedLight->lightGroup->ref();
+    // Ref the light node to ensure it's not deleted when removed from scene
+    managedLight->lightNode->ref();
     
-    if (settings.type != "directional") {
-        SoTransform* lightTransform = new SoTransform();
-        SbVec3f position(static_cast<float>(settings.positionX),
-                        static_cast<float>(settings.positionY),
-                        static_cast<float>(settings.positionZ));
-        lightTransform->translation.setValue(position);
-        managedLight->lightGroup->addChild(lightTransform);
+    // Add light directly to scene root (after camera but before object root)
+    // Find the index of object root to insert before it
+    int objectRootIndex = -1;
+    for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
+        if (m_sceneRoot->getChild(i) == m_objectRoot) {
+            objectRootIndex = i;
+            break;
+        }
     }
     
-    managedLight->lightGroup->addChild(managedLight->lightNode);
-    m_lightContainer->addChild(managedLight->lightGroup);
+    if (objectRootIndex >= 0) {
+        m_sceneRoot->insertChild(managedLight->lightNode, objectRootIndex);
+        LOG_INF_S("LightManager::addLight: Added light directly to scene root at index " + std::to_string(objectRootIndex));
+    } else {
+        // Fallback: add to end
+        m_sceneRoot->addChild(managedLight->lightNode);
+        LOG_INF_S("LightManager::addLight: Added light to end of scene root");
+    }
     
     managedLight->indicatorNode = createLightIndicator(settings, managedLight->lightNode);
     if (managedLight->indicatorNode) {
@@ -94,12 +95,12 @@ bool LightManager::removeLight(int lightId)
     
     auto& managedLight = it->second;
     
-    if (managedLight->lightGroup) {
-        int index = m_lightContainer->findChild(managedLight->lightGroup);
+    if (managedLight->lightNode) {
+        int index = m_sceneRoot->findChild(managedLight->lightNode);
         if (index >= 0) {
-            m_lightContainer->removeChild(index);
+            m_sceneRoot->removeChild(index);
         }
-        managedLight->lightGroup->unref();
+        managedLight->lightNode->unref();
     }
     
     if (managedLight->indicatorNode) {
@@ -148,8 +149,12 @@ void LightManager::clearAllLights()
     for (auto& pair : m_lights) {
         auto& managedLight = pair.second;
         
-        if (managedLight->lightGroup) {
-            managedLight->lightGroup->unref();
+        if (managedLight->lightNode) {
+            int index = m_sceneRoot->findChild(managedLight->lightNode);
+            if (index >= 0) {
+                m_sceneRoot->removeChild(index);
+            }
+            managedLight->lightNode->unref();
         }
         if (managedLight->indicatorNode) {
             managedLight->indicatorNode->unref();
@@ -158,7 +163,6 @@ void LightManager::clearAllLights()
     
     m_lights.clear();
     
-    m_lightContainer->removeAllChildren();
     m_indicatorContainer->removeAllChildren();
     
     LOG_INF_S("LightManager::clearAllLights: All lights cleared");
@@ -172,12 +176,17 @@ void LightManager::updateMultipleLights(const std::vector<RenderLightSettings>& 
     
     for (const auto& lightSettings : lights) {
         if (lightSettings.enabled) {
-            addLight(lightSettings);
+            int lightId = addLight(lightSettings);
+            LOG_INF_S("LightManager::updateMultipleLights: Added light '" + lightSettings.name + "' with ID " + std::to_string(lightId));
+        } else {
+            LOG_INF_S("LightManager::updateMultipleLights: Skipping disabled light '" + lightSettings.name + "'");
         }
     }
     
     // Add material update
     updateMaterialsForLighting();
+    
+    LOG_INF_S("LightManager::updateMultipleLights: Final light count: " + std::to_string(getLightCount()));
 }
 
 std::vector<RenderLightSettings> LightManager::getAllLightSettings() const
@@ -297,47 +306,26 @@ void LightManager::applyLightPreset(const std::string& presetName)
 
 void LightManager::updateMaterialsForLighting()
 {
-    LOG_INF_S("LightManager::updateMaterialsForLighting: Updating materials based on current lighting");
+    LOG_INF_S("LightManager::updateMaterialsForLighting: Coin3D lighting system handles materials automatically");
+    
+    // Coin3D's lighting system automatically handles material lighting
+    // We don't need to manually adjust material colors
+    // The SoLightModel and SoLight nodes work together to provide proper lighting
     
     if (!m_objectRoot) {
         LOG_WRN_S("LightManager::updateMaterialsForLighting: Object root not available");
         return;
     }
     
-    // Calculate combined lighting from all enabled lights
-    float totalR = 0.0f, totalG = 0.0f, totalB = 0.0f;
-    float totalIntensity = 0.0f;
+    // Just log the current lighting state for debugging
     int enabledLightCount = 0;
-    
     for (const auto& pair : m_lights) {
-        const auto& settings = pair.second->settings;
-        if (settings.enabled) {
-            float r = settings.color.Red() / 255.0f;
-            float g = settings.color.Green() / 255.0f;
-            float b = settings.color.Blue() / 255.0f;
-            float intensity = static_cast<float>(settings.intensity);
-            
-            totalR += r * intensity;
-            totalG += g * intensity;
-            totalB += b * intensity;
-            totalIntensity += intensity;
+        if (pair.second->settings.enabled) {
             enabledLightCount++;
         }
     }
     
-    // Use weighted average for better multi-light effect
-    if (totalIntensity > 0.0f) {
-        totalR /= totalIntensity;
-        totalG /= totalIntensity;
-        totalB /= totalIntensity;
-    } else {
-        // Default lighting if no lights are enabled
-        totalR = totalG = totalB = 0.5f;
-        totalIntensity = 1.0f;
-    }
-    
-    // Update all materials in the scene
-    updateSceneMaterials(SbColor(totalR, totalG, totalB), totalIntensity, enabledLightCount);
+    LOG_INF_S("LightManager::updateMaterialsForLighting: " + std::to_string(enabledLightCount) + " lights enabled");
 }
 
 SoLight* LightManager::createLightNode(const RenderLightSettings& settings)
@@ -581,57 +569,7 @@ void LightManager::updateLightIndicator(SoSeparator* indicator, const RenderLigh
 
 void LightManager::updateSceneMaterials(const SbColor& lightColor, float totalIntensity, int lightCount)
 {
-    // Search for all material nodes in the object root
-    SoSearchAction searchAction;
-    searchAction.setType(SoMaterial::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(m_objectRoot);
-    
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (!path) continue;
-        
-        SoNode* tailNode = path->getTail();
-        if (!tailNode || !tailNode->isOfType(SoMaterial::getClassTypeId())) continue;
-        
-        SoMaterial* material = static_cast<SoMaterial*>(tailNode);
-        if (!material) continue;
-        
-        // Get the base color from the material's current diffuse color
-        SbColor baseDiffuse = material->diffuseColor[0];
-        
-        // Calculate lighting-adjusted colors
-        float ambientStrength = 0.3f + (lightCount * 0.05f); // Increase ambient with more lights
-        float diffuseStrength = 0.8f;
-        float specularStrength = 0.6f;
-        
-        // Apply intensity scaling (cap at 2x intensity)
-        float intensityScale = std::min(totalIntensity / static_cast<float>(lightCount > 0 ? lightCount : 1), 2.0f);
-        
-        // Calculate new material colors
-        SbColor newAmbient(
-            baseDiffuse[0] * lightColor[0] * ambientStrength * intensityScale,
-            baseDiffuse[1] * lightColor[1] * ambientStrength * intensityScale,
-            baseDiffuse[2] * lightColor[2] * ambientStrength * intensityScale
-        );
-        
-        SbColor newDiffuse(
-            baseDiffuse[0] * lightColor[0] * diffuseStrength * intensityScale,
-            baseDiffuse[1] * lightColor[1] * diffuseStrength * intensityScale,
-            baseDiffuse[2] * lightColor[2] * diffuseStrength * intensityScale
-        );
-        
-        SbColor newSpecular(
-            lightColor[0] * specularStrength * intensityScale,
-            lightColor[1] * specularStrength * intensityScale,
-            lightColor[2] * specularStrength * intensityScale
-        );
-        
-        // Apply the new colors
-        material->ambientColor.setValue(newAmbient);
-        material->diffuseColor.setValue(newDiffuse);
-        material->specularColor.setValue(newSpecular);
-    }
-    
-    LOG_INF_S("LightManager::updateSceneMaterials: Updated materials for " + std::to_string(lightCount) + " lights");
+    // Coin3D automatically handles material lighting when SoLightModel is present
+    // No need to manually adjust material colors
+    LOG_INF_S("LightManager::updateSceneMaterials: Coin3D handles material lighting automatically");
 } 

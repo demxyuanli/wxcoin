@@ -45,7 +45,9 @@ public:
     bool updateLight(int lightId, const RenderLightSettings& settings);
     void updateMultipleLights(const std::vector<RenderLightSettings>& lights);
     void clearAllLights();
+    void resetToDefaultLighting();
     std::vector<RenderLightSettings> getAllLights() const;
+    bool hasLights() const;
     
     // Unified anti-aliasing management interface
     int addAntiAliasingConfig(const AntiAliasingSettings& settings);
@@ -65,6 +67,7 @@ public:
     AntiAliasingManager* getAntiAliasingManager() const { return m_antiAliasingManager.get(); }
     RenderingManager* getRenderingManager() const { return m_renderingManager.get(); }
     ObjectManager* getObjectManager() const { return m_objectManager.get(); }
+    LightManager* getLightManager() const { return m_lightManager.get(); }
     
     // Legacy methods (for backward compatibility)
     void updateLighting(float ambient, float diffuse, float specular, const wxColour& color, float intensity);
@@ -91,7 +94,7 @@ private:
     void createBasicGeometryObjects();
     void createCoordinateSystem();
     void setupDefaultCamera();
-    void setupLighting();
+    void setupDefaultLighting();
 
     
     // Event handlers
