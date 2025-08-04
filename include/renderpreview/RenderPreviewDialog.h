@@ -45,14 +45,18 @@ public:
     void saveConfiguration();
     void loadConfiguration();
     void resetToDefaults();
+    void applyLoadedConfigurationToCanvas();
     
     // New feature methods
     void saveCurrentState(const std::string& description = "");
     void applySnapshot(const ConfigSnapshot& snapshot);
     ConfigSnapshot createSnapshot() const;
     bool validateCurrentSettings();
-    void setAutoApply(bool enabled);
     void setValidationEnabled(bool enabled);
+    
+    // Getter for render canvas
+    PreviewCanvas* getRenderCanvas() const { return m_renderCanvas; }
+    void setAutoApply(bool enabled); // Legacy method for backward compatibility
     
     // Light management
     void updateLightList();
@@ -66,21 +70,20 @@ public:
     void onObjectMaterialChanged(wxCommandEvent& event);
     void onObjectTextureChanged(wxCommandEvent& event);
     
-    // Dialog event handlers
-    void OnReset(wxCommandEvent& event);
-    void OnApply(wxCommandEvent& event);
-    void OnSave(wxCommandEvent& event);
-    void OnCancel(wxCommandEvent& event);
+    // Global dialog event handlers
+    void OnCloseButton(wxCommandEvent& event);
+    void OnHelp(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
-    void OnUndo(wxCommandEvent& event);
-    void OnRedo(wxCommandEvent& event);
 
 private:
     void createUI();
     
     // UI Components
     PreviewCanvas* m_renderCanvas;
-    wxButton* m_applyButton;
+    
+    // Global dialog buttons
+    wxButton* m_closeButton;
+    wxButton* m_helpButton;
     
     // Panel instances
     GlobalSettingsPanel* m_globalSettingsPanel;
@@ -92,8 +95,6 @@ private:
     
     // New features
     std::unique_ptr<UndoManager> m_undoManager;
-    bool m_autoApply;
     bool m_validationEnabled;
     
-    DECLARE_EVENT_TABLE()
 };

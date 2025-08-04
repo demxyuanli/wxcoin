@@ -6,6 +6,8 @@
 #include "renderpreview/UndoManager.h"
 #include "config/ConfigManager.h"
 #include "logger/Logger.h"
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
 #include <wx/wx.h>
 #include <wx/notebook.h>
 #include <wx/panel.h>
@@ -27,21 +29,12 @@
 #include <fstream>
 #include <sstream>
 
-wxBEGIN_EVENT_TABLE(RenderPreviewDialog, wxDialog)
-    EVT_BUTTON(wxID_RESET, RenderPreviewDialog::OnReset)
-    EVT_BUTTON(wxID_APPLY, RenderPreviewDialog::OnApply)
-    EVT_BUTTON(wxID_SAVE, RenderPreviewDialog::OnSave)
-    EVT_BUTTON(wxID_CANCEL, RenderPreviewDialog::OnCancel)
-    EVT_CLOSE(RenderPreviewDialog::OnClose)
-    EVT_BUTTON(wxID_UNDO, RenderPreviewDialog::OnUndo)
-    EVT_BUTTON(wxID_REDO, RenderPreviewDialog::OnRedo)
-wxEND_EVENT_TABLE()
+// Event table removed - using Bind() method instead
 
 RenderPreviewDialog::RenderPreviewDialog(wxWindow* parent)
     : wxDialog(parent, wxID_ANY, wxT("Render Preview System"), wxDefaultPosition, wxSize(1200, 700), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLOSE_BOX | wxCAPTION)
     , m_currentLightIndex(-1)
     , m_undoManager(std::make_unique<UndoManager>())
-    , m_autoApply(false)
     , m_validationEnabled(true)
 {
     LOG_INF_S("RenderPreviewDialog::RenderPreviewDialog: Initializing");
@@ -87,29 +80,49 @@ void RenderPreviewDialog::createUI()
     // Right panel: Render preview canvas (adaptive width)
     m_renderCanvas = new PreviewCanvas(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     
+    // Set up manager references after canvas is created
+    if (m_renderCanvas) {
+        m_globalSettingsPanel->setAntiAliasingManager(m_renderCanvas->getAntiAliasingManager());
+        m_globalSettingsPanel->setRenderingManager(m_renderCanvas->getRenderingManager());
+        
+        // IMPORTANT: Set ObjectManager reference AFTER canvas is fully initialized
+        if (m_objectSettingsPanel) {
+            // Use CallAfter to ensure canvas is fully constructed
+            CallAfter([this]() {
+                ObjectManager* objectManager = m_renderCanvas->getObjectManager();
+                if (objectManager) {
+                    m_objectSettingsPanel->setObjectManager(objectManager);
+                    m_objectSettingsPanel->setPreviewCanvas(m_renderCanvas);
+                    LOG_INF_S("RenderPreviewDialog: ObjectManager and PreviewCanvas connected to ObjectSettingsPanel");
+                } else {
+                    LOG_ERR_S("RenderPreviewDialog: Failed to get ObjectManager from canvas");
+                }
+            });
+        }
+    }
+    
     topSizer->Add(leftPanel, 0, wxEXPAND | wxALL, 2);
     topSizer->Add(m_renderCanvas, 1, wxEXPAND | wxALL, 2);
     
     mainSizer->Add(topSizer, 1, wxEXPAND | wxALL, 2);
     
-    // Bottom section: Buttons and options in a row (fixed 40px height)
+    // Only global dialog buttons at the bottom
     auto* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(new wxButton(this, wxID_RESET, wxT("Reset")), 0, wxALL, 2);
-    buttonSizer->Add(new wxButton(this, wxID_UNDO, wxT("Undo")), 0, wxALL, 2);
-    buttonSizer->Add(new wxButton(this, wxID_REDO, wxT("Redo")), 0, wxALL, 2);
+    
     buttonSizer->AddStretchSpacer();
     
-    // Auto-apply checkbox
-    auto* autoApplyCheckBox = new wxCheckBox(this, wxID_ANY, wxT("Auto Apply"));
-    autoApplyCheckBox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& event) {
-        setAutoApply(event.IsChecked());
-    });
-    buttonSizer->Add(autoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+    // Global dialog buttons (right side)
+    auto* dialogButtonSizer = new wxBoxSizer(wxHORIZONTAL);
     
-    m_applyButton = new wxButton(this, wxID_APPLY, wxT("Apply"));
-    buttonSizer->Add(m_applyButton, 0, wxALL, 2);
-    buttonSizer->Add(new wxButton(this, wxID_SAVE, wxT("Save")), 0, wxALL, 2);
-    buttonSizer->Add(new wxButton(this, wxID_CANCEL, wxT("Cancel")), 0, wxALL, 2);
+    m_helpButton = new wxButton(this, wxID_HELP, wxT("Help"));
+    m_helpButton->Bind(wxEVT_BUTTON, &RenderPreviewDialog::OnHelp, this);
+    dialogButtonSizer->Add(m_helpButton, 0, wxALL, 2);
+    
+    m_closeButton = new wxButton(this, wxID_CLOSE, wxT("Close"));
+    m_closeButton->Bind(wxEVT_BUTTON, &RenderPreviewDialog::OnCloseButton, this);
+    dialogButtonSizer->Add(m_closeButton, 0, wxALL, 2);
+    
+    buttonSizer->Add(dialogButtonSizer, 0, wxALL, 2);
     
     mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 2);
     
@@ -132,39 +145,34 @@ void RenderPreviewDialog::createUI()
 
 
 
-void RenderPreviewDialog::OnReset(wxCommandEvent& event)
+// Global dialog event handlers
+
+// Global dialog event handlers
+void RenderPreviewDialog::OnCloseButton(wxCommandEvent& event)
 {
-    resetToDefaults();
-    if (m_renderCanvas) {
-        m_renderCanvas->resetView();
-        m_renderCanvas->render(false);
-    }
+    EndModal(wxID_CLOSE);
 }
 
-void RenderPreviewDialog::OnApply(wxCommandEvent& event)
+void RenderPreviewDialog::OnHelp(wxCommandEvent& event)
 {
-    // Save current state before applying changes
-    saveCurrentState("Apply Settings");
+    wxString helpMessage = wxT("Render Preview System Help\n\n");
+    helpMessage += wxT("Global Settings:\n");
+    helpMessage += wxT("- Auto: Automatically apply global settings changes\n");
+    helpMessage += wxT("- Apply: Apply current global settings to preview\n");
+    helpMessage += wxT("- Save: Save global settings to configuration file\n");
+    helpMessage += wxT("- Reset: Reset global settings to defaults\n");
+    helpMessage += wxT("- Undo/Redo: Navigate through global settings history\n\n");
+    helpMessage += wxT("Object Settings:\n");
+    helpMessage += wxT("- Auto: Automatically apply object settings changes\n");
+    helpMessage += wxT("- Apply: Apply current object settings to preview\n");
+    helpMessage += wxT("- Save: Save object settings to configuration file\n");
+    helpMessage += wxT("- Reset: Reset object settings to defaults\n");
+    helpMessage += wxT("- Undo/Redo: Navigate through object settings history\n\n");
+    helpMessage += wxT("Global Buttons:\n");
+    helpMessage += wxT("- Help: Show this help message\n");
+    helpMessage += wxT("- Close: Close the dialog");
     
-    // Apply all current settings to the preview canvas
-    applyGlobalSettingsToCanvas();
-    applyObjectSettingsToCanvas();
-    
-    // Show feedback to user
-    wxMessageBox(wxT("Settings applied to preview successfully!"), wxT("Apply"), wxOK | wxICON_INFORMATION);
-    
-    LOG_INF_S("RenderPreviewDialog::OnApply: Settings applied to preview");
-}
-
-void RenderPreviewDialog::OnSave(wxCommandEvent& event)
-{
-    saveConfiguration();
-    EndModal(wxID_OK);
-}
-
-void RenderPreviewDialog::OnCancel(wxCommandEvent& event)
-{
-    EndModal(wxID_CANCEL);
+    wxMessageBox(helpMessage, wxT("Help"), wxOK | wxICON_INFORMATION);
 }
 
 void RenderPreviewDialog::OnClose(wxCloseEvent& event)
@@ -218,6 +226,9 @@ void RenderPreviewDialog::loadConfiguration()
             m_lights.push_back(defaultLight);
             updateLightList();
         }
+        
+        // Apply loaded configuration to the preview canvas immediately
+        applyLoadedConfigurationToCanvas();
     }
     catch (const std::exception& e) {
         LOG_ERR_S("RenderPreviewDialog::loadConfiguration: Failed to load configuration: " + std::string(e.what()));
@@ -363,23 +374,6 @@ void RenderPreviewDialog::applyObjectSettingsToCanvas()
 }
 
 // New feature implementations
-void RenderPreviewDialog::OnUndo(wxCommandEvent& event)
-{
-    if (m_undoManager && m_undoManager->canUndo()) {
-        auto snapshot = m_undoManager->undo();
-        applySnapshot(snapshot);
-        wxMessageBox(wxT("Undo: ") + wxString(m_undoManager->getUndoDescription()), wxT("Undo"), wxOK | wxICON_INFORMATION);
-    }
-}
-
-void RenderPreviewDialog::OnRedo(wxCommandEvent& event)
-{
-    if (m_undoManager && m_undoManager->canRedo()) {
-        auto snapshot = m_undoManager->redo();
-        applySnapshot(snapshot);
-        wxMessageBox(wxT("Redo: ") + wxString(m_undoManager->getRedoDescription()), wxT("Redo"), wxOK | wxICON_INFORMATION);
-    }
-}
 
 void RenderPreviewDialog::saveCurrentState(const std::string& description)
 {
@@ -510,21 +504,36 @@ bool RenderPreviewDialog::validateCurrentSettings()
     return true;
 }
 
+// Legacy method for backward compatibility - now delegates to panels
 void RenderPreviewDialog::setAutoApply(bool enabled)
 {
-    m_autoApply = enabled;
-    
-    // Set auto-apply mode for panels
     if (m_globalSettingsPanel) {
         m_globalSettingsPanel->setAutoApply(enabled);
     }
     if (m_objectSettingsPanel) {
-        // Note: ObjectSettingsPanel would need similar setAutoApply method
-        // m_objectSettingsPanel->setAutoApply(enabled);
+        // TODO: Add setAutoApply method to ObjectSettingsPanel if needed
     }
 }
 
 void RenderPreviewDialog::setValidationEnabled(bool enabled)
 {
     m_validationEnabled = enabled;
+}
+
+void RenderPreviewDialog::applyLoadedConfigurationToCanvas()
+{
+    LOG_INF_S("RenderPreviewDialog::applyLoadedConfigurationToCanvas: Applying loaded configuration to preview canvas");
+    
+    if (!m_renderCanvas) {
+        LOG_ERR_S("RenderPreviewDialog::applyLoadedConfigurationToCanvas: No render canvas available");
+        return;
+    }
+    
+    // Apply global settings to canvas
+    applyGlobalSettingsToCanvas();
+    
+    // Apply object settings to canvas
+    applyObjectSettingsToCanvas();
+    
+    LOG_INF_S("RenderPreviewDialog::applyLoadedConfigurationToCanvas: Configuration applied successfully");
 }

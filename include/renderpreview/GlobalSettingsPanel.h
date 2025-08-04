@@ -43,6 +43,10 @@ public:
     int getRenderingMode() const;
     void setRenderingMode(int mode);
     
+    // Manager access methods
+    void setAntiAliasingManager(class AntiAliasingManager* manager);
+    void setRenderingManager(class RenderingManager* manager);
+    
     // Auto-apply methods
     void setAutoApply(bool enabled);
     
@@ -50,6 +54,14 @@ public:
     void loadSettings();
     void saveSettings();
     void resetToDefaults();
+    
+    // Button event handlers
+    void OnGlobalApply(wxCommandEvent& event);
+    void OnGlobalSave(wxCommandEvent& event);
+    void OnGlobalReset(wxCommandEvent& event);
+    void OnGlobalUndo(wxCommandEvent& event);
+    void OnGlobalRedo(wxCommandEvent& event);
+    void OnGlobalAutoApply(wxCommandEvent& event);
 
 private:
     void createUI();
@@ -59,6 +71,7 @@ private:
     wxSizer* createRenderingModeTab(wxWindow* parent);
     void bindEvents();
     void updateLightList();
+    void updateControlStates();
     
     // Event handlers
     void onLightSelected(wxCommandEvent& event);
@@ -120,6 +133,18 @@ private:
     int m_currentLightIndex;
     RenderPreviewDialog* m_parentDialog;
     bool m_autoApply;
+    
+    // Global Settings buttons
+    wxButton* m_globalApplyButton;
+    wxButton* m_globalSaveButton;
+    wxButton* m_globalResetButton;
+    wxButton* m_globalUndoButton;
+    wxButton* m_globalRedoButton;
+    wxCheckBox* m_globalAutoApplyCheckBox;
+    
+    // Manager references
+    class AntiAliasingManager* m_antiAliasingManager;
+    class RenderingManager* m_renderingManager;
     
     // Tab notebook
     wxNotebook* m_notebook;

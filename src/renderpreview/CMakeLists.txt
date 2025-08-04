@@ -3,8 +3,12 @@
 add_library(RenderPreview STATIC
     RenderPreviewDialog.cpp
     PreviewCanvas.cpp
+    LightManager.cpp
+    AntiAliasingManager.cpp
+    RenderingManager.cpp
     GlobalSettingsPanel.cpp
     ObjectSettingsPanel.cpp
+    ObjectManager.cpp
     ConfigValidator.cpp
     UndoManager.cpp
 )

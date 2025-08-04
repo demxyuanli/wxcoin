@@ -1,0 +1,544 @@
+#include "renderpreview/AntiAliasingManager.h"
+#include "logger/Logger.h"
+#include <wx/glcanvas.h>
+#include <GL/gl.h>
+#include <GL/glext.h>
+#include <algorithm>
+
+AntiAliasingManager::AntiAliasingManager(wxGLCanvas* canvas, wxGLContext* glContext)
+    : m_canvas(canvas), m_glContext(glContext), m_nextConfigId(1), m_activeConfigId(-1)
+{
+    initializePresets();
+    LOG_INF_S("AntiAliasingManager: Initialized");
+}
+
+AntiAliasingManager::~AntiAliasingManager()
+{
+    // Don't call clearAllConfigurations() in destructor as it may try to access destroyed OpenGL context
+    m_configurations.clear();
+    m_activeConfigId = -1;
+    LOG_INF_S("AntiAliasingManager: Destroyed");
+}
+
+int AntiAliasingManager::addConfiguration(const AntiAliasingSettings& settings)
+{
+    LOG_INF_S("AntiAliasingManager::addConfiguration: Adding configuration '" + settings.name + "'");
+    
+    // Validate settings before adding
+    if (settings.method < 0 || settings.method > 4) {
+        LOG_ERR_S("AntiAliasingManager::addConfiguration: Invalid method value " + std::to_string(settings.method) + " in configuration '" + settings.name + "'");
+        return -1;
+    }
+    
+    auto managedConfig = std::make_unique<ManagedAntiAliasing>();
+    managedConfig->settings = settings;
+    managedConfig->configId = m_nextConfigId++;
+    managedConfig->isActive = false;
+    
+    int configId = managedConfig->configId;
+    m_configurations[configId] = std::move(managedConfig);
+    
+    LOG_INF_S("AntiAliasingManager::addConfiguration: Successfully added configuration with ID " + std::to_string(configId));
+    return configId;
+}
+
+bool AntiAliasingManager::removeConfiguration(int configId)
+{
+    auto it = m_configurations.find(configId);
+    if (it == m_configurations.end()) {
+        LOG_WRN_S("AntiAliasingManager::removeConfiguration: Configuration with ID " + std::to_string(configId) + " not found");
+        return false;
+    }
+    
+    if (it->second->isActive) {
+        setActiveConfiguration(-1);
+    }
+    
+    m_configurations.erase(it);
+    
+    LOG_INF_S("AntiAliasingManager::removeConfiguration: Successfully removed configuration with ID " + std::to_string(configId));
+    return true;
+}
+
+bool AntiAliasingManager::updateConfiguration(int configId, const AntiAliasingSettings& settings)
+{
+    auto it = m_configurations.find(configId);
+    if (it == m_configurations.end()) {
+        LOG_WRN_S("AntiAliasingManager::updateConfiguration: Configuration with ID " + std::to_string(configId) + " not found");
+        return false;
+    }
+    
+    it->second->settings = settings;
+    
+    if (it->second->isActive) {
+        applyToRenderPipeline();
+    }
+    
+    LOG_INF_S("AntiAliasingManager::updateConfiguration: Successfully updated configuration with ID " + std::to_string(configId));
+    return true;
+}
+
+void AntiAliasingManager::clearAllConfigurations()
+{
+    LOG_INF_S("AntiAliasingManager::clearAllConfigurations: Clearing all configurations");
+    
+    m_configurations.clear();
+    m_activeConfigId = -1;
+    
+    // Only disable anti-aliasing if OpenGL context is still valid
+    if (m_canvas && m_glContext) {
+        try {
+            disableAllAntiAliasing();
+        } catch (...) {
+            LOG_WRN_S("AntiAliasingManager::clearAllConfigurations: Failed to disable anti-aliasing (OpenGL context may be destroyed)");
+        }
+    }
+    
+    LOG_INF_S("AntiAliasingManager::clearAllConfigurations: All configurations cleared");
+}
+
+std::vector<int> AntiAliasingManager::getAllConfigurationIds() const
+{
+    std::vector<int> ids;
+    for (const auto& pair : m_configurations) {
+        ids.push_back(pair.first);
+    }
+    return ids;
+}
+
+std::vector<AntiAliasingSettings> AntiAliasingManager::getAllConfigurations() const
+{
+    std::vector<AntiAliasingSettings> configs;
+    for (const auto& pair : m_configurations) {
+        configs.push_back(pair.second->settings);
+    }
+    return configs;
+}
+
+AntiAliasingSettings AntiAliasingManager::getConfiguration(int configId) const
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        return it->second->settings;
+    }
+    return AntiAliasingSettings();
+}
+
+bool AntiAliasingManager::hasConfiguration(int configId) const
+{
+    return m_configurations.find(configId) != m_configurations.end();
+}
+
+int AntiAliasingManager::getConfigurationCount() const
+{
+    return static_cast<int>(m_configurations.size());
+}
+
+bool AntiAliasingManager::setActiveConfiguration(int configId)
+{
+    if (m_activeConfigId != -1) {
+        auto it = m_configurations.find(m_activeConfigId);
+        if (it != m_configurations.end()) {
+            it->second->isActive = false;
+        }
+    }
+    
+    if (configId != -1) {
+        auto it = m_configurations.find(configId);
+        if (it == m_configurations.end()) {
+            LOG_WRN_S("AntiAliasingManager::setActiveConfiguration: Configuration with ID " + std::to_string(configId) + " not found");
+            return false;
+        }
+        
+        it->second->isActive = true;
+        m_activeConfigId = configId;
+        
+        applyToRenderPipeline();
+        
+        LOG_INF_S("AntiAliasingManager::setActiveConfiguration: Activated configuration with ID " + std::to_string(configId));
+    } else {
+        m_activeConfigId = -1;
+        disableAllAntiAliasing();
+        LOG_INF_S("AntiAliasingManager::setActiveConfiguration: Deactivated all configurations");
+    }
+    
+    return true;
+}
+
+int AntiAliasingManager::getActiveConfigurationId() const
+{
+    return m_activeConfigId;
+}
+
+AntiAliasingSettings AntiAliasingManager::getActiveConfiguration() const
+{
+    if (m_activeConfigId != -1) {
+        auto it = m_configurations.find(m_activeConfigId);
+        if (it != m_configurations.end()) {
+            return it->second->settings;
+        }
+    }
+    return AntiAliasingSettings();
+}
+
+bool AntiAliasingManager::hasActiveConfiguration() const
+{
+    return m_activeConfigId != -1;
+}
+
+void AntiAliasingManager::setMethod(int configId, int method)
+{
+    // Validate method range (0-4)
+    if (method < 0 || method > 4) {
+        LOG_WRN_S("AntiAliasingManager::setMethod: Method must be between 0 and 4, got " + std::to_string(method));
+        return;
+    }
+    
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.method = method;
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::setMSAASamples(int configId, int samples)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.msaaSamples = samples;
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::setFXAAEnabled(int configId, bool enabled)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.fxaaEnabled = enabled;
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::setFXAAQuality(int configId, float quality)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.fxaaQuality = std::max(0.0f, std::min(1.0f, quality));
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::setSSAAEnabled(int configId, bool enabled)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.ssaaEnabled = enabled;
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::setSSAAFactor(int configId, int factor)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.ssaaFactor = factor;
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::setTAAEnabled(int configId, bool enabled)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.taaEnabled = enabled;
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::setTAAStrength(int configId, float strength)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        it->second->settings.taaStrength = std::max(0.0f, std::min(1.0f, strength));
+        if (it->second->isActive) {
+            applyToRenderPipeline();
+        }
+    }
+}
+
+void AntiAliasingManager::applyPreset(const std::string& presetName)
+{
+    auto it = m_presets.find(presetName);
+    if (it != m_presets.end()) {
+        // Validate the preset settings before applying
+        const AntiAliasingSettings& settings = it->second;
+        if (settings.method < 0 || settings.method > 4) {
+            LOG_ERR_S("AntiAliasingManager::applyPreset: Invalid method value " + std::to_string(settings.method) + " in preset '" + presetName + "'");
+            return;
+        }
+        
+        int configId = addConfiguration(settings);
+        setActiveConfiguration(configId);
+        LOG_INF_S("AntiAliasingManager::applyPreset: Applied preset '" + presetName + "' with method " + std::to_string(settings.method));
+    } else {
+        LOG_WRN_S("AntiAliasingManager::applyPreset: Preset '" + presetName + "' not found");
+    }
+}
+
+void AntiAliasingManager::saveAsPreset(int configId, const std::string& presetName)
+{
+    auto it = m_configurations.find(configId);
+    if (it != m_configurations.end()) {
+        m_presets[presetName] = it->second->settings;
+        LOG_INF_S("AntiAliasingManager::saveAsPreset: Saved configuration as preset '" + presetName + "'");
+    }
+}
+
+std::vector<std::string> AntiAliasingManager::getAvailablePresets() const
+{
+    std::vector<std::string> presets;
+    for (const auto& pair : m_presets) {
+        presets.push_back(pair.first);
+    }
+    return presets;
+}
+
+void AntiAliasingManager::applyToRenderPipeline()
+{
+    if (m_activeConfigId != -1) {
+        auto it = m_configurations.find(m_activeConfigId);
+        if (it != m_configurations.end()) {
+            const auto& settings = it->second->settings;
+            
+            if (!settings.enabled) {
+                disableAllAntiAliasing();
+                return;
+            }
+            
+            switch (settings.method) {
+                case 0: // None
+                    disableAllAntiAliasing();
+                    break;
+                case 1: // MSAA
+                    applyMSAA(settings);
+                    break;
+                case 2: // FXAA
+                    applyFXAA(settings);
+                    break;
+                case 3: // SSAA
+                    applySSAA(settings);
+                    break;
+                case 4: // TAA
+                    applyTAA(settings);
+                    break;
+                default:
+                    disableAllAntiAliasing();
+                    break;
+            }
+            
+            LOG_INF_S("AntiAliasingManager::applyToRenderPipeline: Applied method " + std::to_string(settings.method));
+        }
+    }
+}
+
+void AntiAliasingManager::updateRenderingState()
+{
+    applyToRenderPipeline();
+}
+
+float AntiAliasingManager::getPerformanceImpact() const
+{
+    if (m_activeConfigId != -1) {
+        auto it = m_configurations.find(m_activeConfigId);
+        if (it != m_configurations.end()) {
+            const auto& settings = it->second->settings;
+            
+            float impact = 1.0f;
+            
+            switch (settings.method) {
+                case 0: // None
+                    impact = 1.0f;
+                    break;
+                case 1: // MSAA
+                    impact = 1.0f + (settings.msaaSamples / 4.0f) * 0.5f;
+                    break;
+                case 2: // FXAA
+                    impact = 1.0f + 0.2f * settings.fxaaQuality;
+                    break;
+                case 3: // SSAA
+                    impact = 1.0f + settings.ssaaFactor * 0.8f;
+                    break;
+                case 4: // TAA
+                    impact = 1.0f + 0.3f * settings.taaStrength;
+                    break;
+            }
+            
+            return impact;
+        }
+    }
+    return 1.0f;
+}
+
+std::string AntiAliasingManager::getQualityDescription() const
+{
+    if (m_activeConfigId != -1) {
+        auto it = m_configurations.find(m_activeConfigId);
+        if (it != m_configurations.end()) {
+            const auto& settings = it->second->settings;
+            
+            switch (settings.method) {
+                case 0: return "No Anti-Aliasing";
+                case 1: return "MSAA " + std::to_string(settings.msaaSamples) + "x";
+                case 2: return "FXAA (Quality: " + std::to_string(static_cast<int>(settings.fxaaQuality * 100)) + "%)";
+                case 3: return "SSAA " + std::to_string(settings.ssaaFactor) + "x";
+                case 4: return "TAA (Strength: " + std::to_string(static_cast<int>(settings.taaStrength * 100)) + "%)";
+                default: return "Unknown";
+            }
+        }
+    }
+    return "No Configuration Active";
+}
+
+void AntiAliasingManager::initializePresets()
+{
+    // No Anti-Aliasing
+    AntiAliasingSettings none;
+    none.name = "No Anti-Aliasing";
+    none.enabled = false;
+    none.method = 0;
+    m_presets["None"] = none;
+    
+    // MSAA Presets
+    AntiAliasingSettings msaa2x;
+    msaa2x.name = "MSAA 2x";
+    msaa2x.method = 1;
+    msaa2x.msaaSamples = 2;
+    m_presets["MSAA 2x"] = msaa2x;
+    
+    AntiAliasingSettings msaa4x;
+    msaa4x.name = "MSAA 4x";
+    msaa4x.method = 1;
+    msaa4x.msaaSamples = 4;
+    m_presets["MSAA 4x"] = msaa4x;
+    
+    AntiAliasingSettings msaa8x;
+    msaa8x.name = "MSAA 8x";
+    msaa8x.method = 1;
+    msaa8x.msaaSamples = 8;
+    m_presets["MSAA 8x"] = msaa8x;
+    
+    // FXAA Presets
+    AntiAliasingSettings fxaaLow;
+    fxaaLow.name = "FXAA Low";
+    fxaaLow.method = 2;
+    fxaaLow.fxaaEnabled = true;
+    fxaaLow.fxaaQuality = 0.25f;
+    m_presets["FXAA Low"] = fxaaLow;
+    
+    AntiAliasingSettings fxaaMedium;
+    fxaaMedium.name = "FXAA Medium";
+    fxaaMedium.method = 2;
+    fxaaMedium.fxaaEnabled = true;
+    fxaaMedium.fxaaQuality = 0.5f;
+    m_presets["FXAA Medium"] = fxaaMedium;
+    
+    AntiAliasingSettings fxaaHigh;
+    fxaaHigh.name = "FXAA High";
+    fxaaHigh.method = 2;
+    fxaaHigh.fxaaEnabled = true;
+    fxaaHigh.fxaaQuality = 0.75f;
+    m_presets["FXAA High"] = fxaaHigh;
+    
+    LOG_INF_S("AntiAliasingManager::initializePresets: Initialized " + std::to_string(m_presets.size()) + " presets");
+}
+
+void AntiAliasingManager::applyMSAA(const AntiAliasingSettings& settings)
+{
+    if (m_canvas && m_glContext) {
+        m_canvas->SetCurrent(*m_glContext);
+        glEnable(GL_MULTISAMPLE);
+        LOG_INF_S("AntiAliasingManager::applyMSAA: Applied MSAA with " + std::to_string(settings.msaaSamples) + " samples");
+    }
+}
+
+void AntiAliasingManager::applyFXAA(const AntiAliasingSettings& settings)
+{
+    if (m_canvas && m_glContext) {
+        m_canvas->SetCurrent(*m_glContext);
+        glDisable(GL_MULTISAMPLE);
+        LOG_INF_S("AntiAliasingManager::applyFXAA: Applied FXAA with quality " + std::to_string(settings.fxaaQuality));
+    }
+}
+
+void AntiAliasingManager::applySSAA(const AntiAliasingSettings& settings)
+{
+    if (m_canvas && m_glContext) {
+        m_canvas->SetCurrent(*m_glContext);
+        glDisable(GL_MULTISAMPLE);
+        LOG_INF_S("AntiAliasingManager::applySSAA: Applied SSAA with factor " + std::to_string(settings.ssaaFactor));
+    }
+}
+
+void AntiAliasingManager::applyTAA(const AntiAliasingSettings& settings)
+{
+    if (m_canvas && m_glContext) {
+        m_canvas->SetCurrent(*m_glContext);
+        glDisable(GL_MULTISAMPLE);
+        LOG_INF_S("AntiAliasingManager::applyTAA: Applied TAA with strength " + std::to_string(settings.taaStrength));
+    }
+}
+
+void AntiAliasingManager::disableAllAntiAliasing()
+{
+    if (m_canvas && m_glContext) {
+        try {
+            m_canvas->SetCurrent(*m_glContext);
+            glDisable(GL_MULTISAMPLE);
+            LOG_INF_S("AntiAliasingManager::disableAllAntiAliasing: Disabled all anti-aliasing");
+        } catch (...) {
+            LOG_WRN_S("AntiAliasingManager::disableAllAntiAliasing: Failed to disable anti-aliasing (OpenGL context may be destroyed)");
+        }
+    }
+}
+
+void AntiAliasingManager::setupOpenGLState(const AntiAliasingSettings& settings)
+{
+    if (m_canvas && m_glContext) {
+        m_canvas->SetCurrent(*m_glContext);
+        
+        if (settings.enabled) {
+            switch (settings.method) {
+                case 1: // MSAA
+                    glEnable(GL_MULTISAMPLE);
+                    break;
+                default:
+                    glDisable(GL_MULTISAMPLE);
+                    break;
+            }
+        } else {
+            glDisable(GL_MULTISAMPLE);
+        }
+    }
+}
+
+void AntiAliasingManager::restoreOpenGLState()
+{
+    if (m_canvas && m_glContext) {
+        m_canvas->SetCurrent(*m_glContext);
+        glDisable(GL_MULTISAMPLE);
+    }
+} 

@@ -1,6 +1,8 @@
 #include <wx/wx.h>
+#include <wx/display.h>
 #include <cstdio>  
 #include <string>
+#include <algorithm>
 #include "MainApplication.h"
 #include "config/ConfigManager.h"
 #include "config/LoggerConfig.h"
@@ -51,9 +53,21 @@ bool MainApplication::OnInit()
     
     std::string titleStr = cm.getString("MainApplication", "MainFrameTitle", "FlatUI Demo");
     wxString title(titleStr);
-    std::string sizeStr = cm.getString("MainApplication", "MainFrameSize", "1200,700");
-    int fw = 1200, fh = 700;
-    sscanf(sizeStr.c_str(), "%d,%d", &fw, &fh); 
+    
+    // Calculate window size based on 80% of screen size, minimum 1200x700
+    wxDisplay display;
+    wxRect screenRect = display.GetGeometry();
+    int screenWidth = screenRect.GetWidth();
+    int screenHeight = screenRect.GetHeight();
+    
+    // Calculate 80% of screen size
+    int fw = static_cast<int>(screenWidth * 0.8);
+    int fh = static_cast<int>(screenHeight * 0.8);
+    
+    // Ensure minimum size of 1200x700
+    fw = std::max(fw, 1200);
+    fh = std::max(fh, 700);
+    
     wxSize fsize(fw, fh);
     FlatFrame* frame = new FlatFrame(title, wxDefaultPosition, fsize);
     std::string posStr = cm.getString("MainApplication", "MainFramePosition", "Center");

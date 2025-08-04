@@ -1,4 +1,5 @@
 #include "renderpreview/PreviewCanvas.h"
+#include "renderpreview/LightManager.h"
 #include "logger/Logger.h"
 #include "OCCGeometry.h"
 #include "OCCMeshConverter.h"
@@ -8,6 +9,7 @@
 #include <wx/dcclient.h>
 #include <memory>
 #include <cmath>
+#include <map>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTransform.h>
@@ -25,6 +27,7 @@
 #include <Inventor/nodes/SoSpotLight.h>
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoLightModel.h>
+#include <Inventor/nodes/SoText2.h>
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbColor.h>
 #include <Inventor/SoDB.h>
@@ -32,6 +35,8 @@
 #include <Inventor/SoOffscreenRenderer.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoSearchAction.h>
+
+// LightManager implementation will be moved to a separate file
 
 const int PreviewCanvas::s_canvasAttribs[] = {
     WX_GL_RGBA,
@@ -57,10 +62,8 @@ PreviewCanvas::PreviewCanvas(wxWindow* parent, wxWindowID id, const wxPoint& pos
     : wxGLCanvas(parent, id, s_canvasAttribs, pos, size, wxFULL_REPAINT_ON_RESIZE | wxWANTS_CHARS | wxBORDER_NONE)
     , m_sceneRoot(nullptr)
     , m_camera(nullptr)
-    , m_light(nullptr)
     , m_objectRoot(nullptr)
     , m_lightMaterial(nullptr)
-    , m_lightIndicator(nullptr)
     , m_glContext(nullptr)
     , m_initialized(false)
     , m_mouseDown(false)
@@ -81,6 +84,11 @@ PreviewCanvas::PreviewCanvas(wxWindow* parent, wxWindowID id, const wxPoint& pos
         
         // Initialize scene
         initializeScene();
+        
+        // Initialize light manager
+        m_lightManager = std::make_unique<LightManager>(m_sceneRoot, m_objectRoot);
+        m_antiAliasingManager = std::make_unique<AntiAliasingManager>(this, m_glContext);
+        m_renderingManager = std::make_unique<RenderingManager>(m_sceneRoot, this, m_glContext);
         
         m_initialized = true;
         
@@ -137,6 +145,9 @@ void PreviewCanvas::initializeScene()
     m_objectRoot->ref();
     m_sceneRoot->addChild(m_objectRoot);
     
+    // Initialize object manager BEFORE creating objects
+    m_objectManager = std::make_unique<ObjectManager>(m_sceneRoot, m_objectRoot);
+    
     // Create default scene
     createDefaultScene();
     
@@ -153,12 +164,12 @@ void PreviewCanvas::setupLighting()
     m_sceneRoot->addChild(lightModel);
     
     // Create main directional light (top 45-degree light)
-    m_light = new SoDirectionalLight;
-    m_light->ref();
-    m_light->direction.setValue(SbVec3f(0.0f, -0.707f, -0.707f)); // Light from top 45 degrees pointing down (Y=-0.707, Z=-0.707)
-    m_light->intensity.setValue(1.0f);
-    m_light->color.setValue(SbColor(1.0f, 1.0f, 1.0f)); // White light
-    m_sceneRoot->addChild(m_light);
+    auto* mainLight = new SoDirectionalLight;
+    mainLight->ref();
+    mainLight->direction.setValue(SbVec3f(0.0f, -0.707f, -0.707f)); // Light from top 45 degrees pointing down (Y=-0.707, Z=-0.707)
+    mainLight->intensity.setValue(1.0f);
+    mainLight->color.setValue(SbColor(1.0f, 1.0f, 1.0f)); // White light
+    m_sceneRoot->addChild(mainLight);
     
     // Create left fill light
     auto* leftLight = new SoDirectionalLight;
@@ -199,17 +210,12 @@ void PreviewCanvas::createDefaultScene()
     createCheckerboardPlane();
     LOG_INF_S("PreviewCanvas::createDefaultScene: Checkerboard plane created");
     
-    // Create light indicator
-    createLightIndicator();
-    LOG_INF_S("PreviewCanvas::createDefaultScene: Light indicator created");
+    // Light indicators are now handled by LightManager
+    LOG_INF_S("PreviewCanvas::createDefaultScene: Light indicators handled by LightManager");
     
     // Create coordinate system
     createCoordinateSystem();
     LOG_INF_S("PreviewCanvas::createDefaultScene: Coordinate system created");
-    
-    // Create basic geometry objects
-    createBasicGeometryObjects();
-    LOG_INF_S("PreviewCanvas::createDefaultScene: Basic geometry objects created");
     
     // Set up camera for 46-degree view
     setupDefaultCamera();
@@ -308,6 +314,15 @@ void PreviewCanvas::createCheckerboardPlane()
 void PreviewCanvas::createBasicGeometryObjects()
 {
     LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: Creating OCCGeometry objects");
+    
+    // Clear any existing objects first
+    if (m_objectManager) {
+        auto objectIds = m_objectManager->getAllObjectIds();
+        for (int objectId : objectIds) {
+            m_objectManager->removeObject(objectId);
+        }
+        LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: Cleared " + std::to_string(objectIds.size()) + " existing objects");
+    }
 
     const double R = 2.5; // Radius of the arrangement
     const double h_sphere = 1.2; // y position for sphere to sit on plane
@@ -368,308 +383,71 @@ void PreviewCanvas::createBasicGeometryObjects()
         Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),  // emissive
         0.7, 0.0); // shininess, transparency
 
-    // Add Coin3D nodes to scene
-    if (m_occSphere->getCoinNode()) {
-        m_objectRoot->addChild(m_occSphere->getCoinNode());
-    }
-    if (m_occCone->getCoinNode()) {
-        m_objectRoot->addChild(m_occCone->getCoinNode());
-    }
-    if (m_occBox->getCoinNode()) {
-        m_objectRoot->addChild(m_occBox->getCoinNode());
+    // Note: OCC geometry nodes will be managed by ObjectManager
+    // Do not add them directly to scene to avoid duplication
+
+    // Add OCCGeometry objects to ObjectManager for property management
+    LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: ObjectManager pointer: " + std::string(m_objectManager ? "valid" : "null"));
+    LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: Current object count: " + std::to_string(m_objectManager ? m_objectManager->getAllObjectIds().size() : 0));
+    if (m_objectManager) {
+        // Sphere object settings
+        ObjectSettings sphereSettings;
+        sphereSettings.objectType = ObjectType::SPHERE;
+        sphereSettings.name = "Red Sphere";
+        sphereSettings.position = SbVec3f(0.0f, 1.2f, 2.5f);
+        sphereSettings.materialColor = wxColour(255, 77, 77); // Bright red
+        sphereSettings.ambient = 0.6f;
+        sphereSettings.diffuse = 1.0f;
+        sphereSettings.specular = 1.0f;
+        sphereSettings.shininess = 102.4f; // 0.8 * 128
+        sphereSettings.transparency = 0.0f;
+        int sphereId = m_objectManager->addObject(sphereSettings);
+        m_objectManager->associateOCCGeometry(sphereId, m_occSphere.get());
+        LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: Added sphere to ObjectManager with ID " + std::to_string(sphereId));
+
+        // Cone object settings
+        ObjectSettings coneSettings;
+        coneSettings.objectType = ObjectType::CONE;
+        coneSettings.name = "Green Cone";
+        coneSettings.position = SbVec3f(-2.165f, 1.25f, -1.25f);
+        coneSettings.materialColor = wxColour(77, 255, 77); // Bright green
+        coneSettings.ambient = 0.2f;
+        coneSettings.diffuse = 1.0f;
+        coneSettings.specular = 1.0f;
+        coneSettings.shininess = 76.8f; // 0.6 * 128
+        coneSettings.transparency = 0.0f;
+        int coneId = m_objectManager->addObject(coneSettings);
+        m_objectManager->associateOCCGeometry(coneId, m_occCone.get());
+        LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: Added cone to ObjectManager with ID " + std::to_string(coneId));
+
+        // Box object settings
+        ObjectSettings boxSettings;
+        boxSettings.objectType = ObjectType::BOX;
+        boxSettings.name = "Blue Box";
+        boxSettings.position = SbVec3f(2.165f, 1.0f, -1.25f);
+        boxSettings.materialColor = wxColour(77, 77, 255); // Bright blue
+        boxSettings.ambient = 0.2f;
+        boxSettings.diffuse = 0.3f;
+        boxSettings.specular = 1.0f;
+        boxSettings.shininess = 89.6f; // 0.7 * 128
+        boxSettings.transparency = 0.0f;
+        int boxId = m_objectManager->addObject(boxSettings);
+        m_objectManager->associateOCCGeometry(boxId, m_occBox.get());
+        LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: Added box to ObjectManager with ID " + std::to_string(boxId));
     }
 
     LOG_INF_S("PreviewCanvas::createBasicGeometryObjects: OCCGeometry objects created successfully");
 }
 
-void PreviewCanvas::createLightIndicator(SoLight* light, int lightIndex, const std::string& lightName, SoSeparator* container, const SbVec3f& lightPosition)
-{
-    if (!light || !container) {
-        LOG_WRN_S("PreviewCanvas::createLightIndicator: Invalid light or container");
-        return;
-    }
-    
-    // Create a visual indicator for the light
-    SoSeparator* indicator = new SoSeparator();
-    if (!indicator) {
-        LOG_ERR_S("PreviewCanvas::createLightIndicator: Failed to create indicator separator");
-        return;
-    }
-    
-    // Get light properties
-    SbColor lightColor = light->color.getValue();
-    float lightIntensity = light->intensity.getValue();
-    
-    // Calculate proper position and direction based on light type
-    SbVec3f indicatorPosition = lightPosition;
-    SbVec3f lightDirection(0.0f, 0.0f, -1.0f); // Default direction
-    
-    if (light->isOfType(SoDirectionalLight::getClassTypeId())) {
-        SoDirectionalLight* dirLight = static_cast<SoDirectionalLight*>(light);
-        if (dirLight) {
-            lightDirection = dirLight->direction.getValue();
-            // For directional lights, position the indicator at a reasonable distance from origin
-            // based on the light direction
-            indicatorPosition = lightDirection * -8.0f; // 8 units away from origin in light direction
-        }
-    } else if (light->isOfType(SoSpotLight::getClassTypeId())) {
-        SoSpotLight* spotLight = static_cast<SoSpotLight*>(light);
-        if (spotLight) {
-            lightDirection = spotLight->direction.getValue();
-            // For spot lights, use the actual position
-            indicatorPosition = lightPosition;
-        }
-    } else if (light->isOfType(SoPointLight::getClassTypeId())) {
-        SoPointLight* pointLight = static_cast<SoPointLight*>(light);
-        if (pointLight) {
-            // For point lights, use the actual position
-            indicatorPosition = lightPosition;
-            // Point lights don't have a specific direction, so we'll show a sphere without direction line
-        }
-    }
-    
-    // Create transform to position the indicator
-    SoTransform* transform = new SoTransform();
-    if (transform) {
-        transform->translation.setValue(indicatorPosition);
-        indicator->addChild(transform);
-    }
-    
-    // Create material for the indicator
-    SoMaterial* indicatorMaterial = new SoMaterial();
-    if (indicatorMaterial) {
-        indicatorMaterial->diffuseColor.setValue(lightColor);
-        indicatorMaterial->emissiveColor.setValue(lightColor * 0.8f); // Make it glow
-        indicatorMaterial->ambientColor.setValue(lightColor * 0.3f);
-        indicatorMaterial->transparency.setValue(0.2f); // Slight transparency
-        indicator->addChild(indicatorMaterial);
-    }
-    
-    // Create light source sphere (size based on intensity)
-    SoSphere* lightSphere = new SoSphere();
-    if (lightSphere) {
-        float sphereRadius = 0.2f + lightIntensity * 0.3f; // Size varies with intensity
-        lightSphere->radius.setValue(sphereRadius);
-        indicator->addChild(lightSphere);
-    }
-    
-    // Create direction line for directional and spot lights
-    if (light->isOfType(SoDirectionalLight::getClassTypeId()) || light->isOfType(SoSpotLight::getClassTypeId())) {
-        SoSeparator* lineGroup = new SoSeparator();
-        if (lineGroup) {
-            // Line material (same color as light but more opaque)
-            SoMaterial* lineMaterial = new SoMaterial();
-            if (lineMaterial) {
-                lineMaterial->diffuseColor.setValue(lightColor);
-                lineMaterial->ambientColor.setValue(lightColor * 0.5f);
-                lineMaterial->emissiveColor.setValue(lightColor * 0.3f);
-                lineGroup->addChild(lineMaterial);
-            }
-            
-            // Create line coordinates
-            SoCoordinate3* lineCoords = new SoCoordinate3();
-            if (lineCoords) {
-                SbVec3f startPos = SbVec3f(0.0f, 0.0f, 0.0f); // Start from light sphere center
-                SbVec3f endPos = SbVec3f(0.0f, 0.0f, 0.0f); // End at scene origin
-                
-                // Calculate line length based on intensity
-                float lineLength = 1.0f + lightIntensity * 2.0f;
-                
-                // For directional lights, calculate the direction to origin
-                if (light->isOfType(SoDirectionalLight::getClassTypeId())) {
-                    // Calculate direction from light position to origin
-                    SbVec3f lightPos = indicatorPosition;
-                    SbVec3f origin = SbVec3f(0.0f, 0.0f, 0.0f);
-                    SbVec3f directionToOrigin = origin - lightPos;
-                    directionToOrigin.normalize();
-                    
-                    // Use calculated line length
-                    endPos = directionToOrigin * lineLength;
-                } else {
-                    // For spot lights, use the light direction
-                    SbVec3f lightDir = lightDirection;
-                    endPos = lightDir * lineLength;
-                }
-                
-                lineCoords->point.set1Value(0, startPos);
-                lineCoords->point.set1Value(1, endPos);
-                lineGroup->addChild(lineCoords);
-            }
-            
-            // Create line set
-            SoLineSet* lineSet = new SoLineSet();
-            if (lineSet) {
-                lineSet->numVertices.setValue(2);
-                lineGroup->addChild(lineSet);
-            }
-            
-            indicator->addChild(lineGroup);
-        }
-    }
-    
-    // Create light name indicator (first letter of light name) at the end of the line
-    if (lightIndex >= 0) {
-        // Create a small name indicator
-        SoSeparator* nameGroup = new SoSeparator();
-        if (nameGroup) {
-            // Calculate line end position for letter placement
-            SbVec3f lineEndPos;
-            float lineLength = 1.0f + lightIntensity * 2.0f;
-            
-            if (light->isOfType(SoDirectionalLight::getClassTypeId())) {
-                // Calculate direction from light position to origin
-                SbVec3f lightPos = indicatorPosition;
-                SbVec3f origin = SbVec3f(0.0f, 0.0f, 0.0f);
-                SbVec3f directionToOrigin = origin - lightPos;
-                directionToOrigin.normalize();
-                lineEndPos = directionToOrigin * lineLength;
-            } else if (light->isOfType(SoSpotLight::getClassTypeId())) {
-                lineEndPos = lightDirection * lineLength;
-            } else {
-                lineEndPos = SbVec3f(0.0f, 0.0f, 0.0f);
-            }
-            
-            // Position letter at the end of the line
-            SoTransform* nameTransform = new SoTransform();
-            if (nameTransform) {
-                nameTransform->translation.setValue(lineEndPos);
-                nameGroup->addChild(nameTransform);
-            }
-            
-            // Name material (black text)
-            SoMaterial* nameMaterial = new SoMaterial();
-            if (nameMaterial) {
-                nameMaterial->diffuseColor.setValue(SbColor(0.0f, 0.0f, 0.0f)); // Black
-                nameMaterial->emissiveColor.setValue(SbColor(0.0f, 0.0f, 0.0f)); // No glow
-                nameGroup->addChild(nameMaterial);
-            }
-            
-            // Create text node for the first letter
-            SoText2* nameText = new SoText2();
-            if (nameText) {
-                // Extract first letter from light name
-                std::string firstLetter = "L"; // Default to "L" for Light
-                if (!lightName.empty()) {
-                    firstLetter = std::string(1, lightName[0]);
-                }
-                
-                nameText->string.setValue(firstLetter.c_str());
-                nameText->justification.setValue(SoText2::CENTER);
-                nameText->spacing.setValue(1.0f);
-                nameGroup->addChild(nameText);
-            }
-            
-            indicator->addChild(nameGroup);
-        }
-    }
-    
-    // Add indicator to container
-    container->addChild(indicator);
-}
 
-void PreviewCanvas::createLightIndicator()
-{
-    LOG_INF_S("PreviewCanvas::createLightIndicator: Creating visual indicators for all lights");
 
-    if (!m_objectRoot) {
-        LOG_WRN_S("PreviewCanvas::createLightIndicator: Object root not available");
-        return;
-    }
 
-    m_lightIndicator = new SoSeparator;
-    if (!m_lightIndicator) {
-        LOG_ERR_S("PreviewCanvas::createLightIndicator: Failed to create light indicator separator");
-        return;
-    }
-    m_lightIndicator->ref();
 
-    // Create indicators for each light
-    // Main light (front)
-    if (m_light) {
-        // Calculate position for directional light
-        SbVec3f lightDirection = m_light->direction.getValue();
-        SbVec3f indicatorPosition = lightDirection * -8.0f; // 8 units away from origin in light direction
-        
-        createLightIndicator(m_light, 0, "Main Light", m_lightIndicator, indicatorPosition);
-    }
 
-    // Find and create indicators for other lights
-    if (!m_sceneRoot) {
-        LOG_WRN_S("PreviewCanvas::createLightIndicator: Scene root not available");
-        return;
-    }
 
-    SoSearchAction searchAction;
-    searchAction.setType(SoDirectionalLight::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(m_sceneRoot);
 
-    int lightIndex = 1;
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (!path) {
-            LOG_WRN_S("PreviewCanvas::createLightIndicator: Null path encountered, skipping");
-            continue;
-        }
-        
-        SoNode* tailNode = path->getTail();
-        if (!tailNode) {
-            LOG_WRN_S("PreviewCanvas::createLightIndicator: Null tail node, skipping");
-            continue;
-        }
-        
-        if (!tailNode->isOfType(SoDirectionalLight::getClassTypeId())) {
-            LOG_WRN_S("PreviewCanvas::createLightIndicator: Tail node is not a directional light, skipping");
-            continue;
-        }
-        
-        SoDirectionalLight* light = static_cast<SoDirectionalLight*>(tailNode);
-        if (!light) {
-            LOG_WRN_S("PreviewCanvas::createLightIndicator: Failed to cast to directional light, skipping");
-            continue;
-        }
-        
-        // Skip the main light as it's already handled
-        if (light != m_light) {
-            // Calculate position for directional light
-            SbVec3f lightDirection = light->direction.getValue();
-            SbVec3f indicatorPosition = lightDirection * -8.0f; // 8 units away from origin in light direction
-            
-            createLightIndicator(light, lightIndex++, "Light " + std::to_string(lightIndex), m_lightIndicator, indicatorPosition);
-        }
-    }
 
-    m_objectRoot->addChild(m_lightIndicator);
-    LOG_INF_S("PreviewCanvas::createLightIndicator: Light indicators created successfully");
-}
 
-void PreviewCanvas::updateLightIndicator(const wxColour& color, float intensity)
-{
-    LOG_INF_S("PreviewCanvas::updateLightIndicator: Updating all light indicators");
-
-    // The simplest and most robust way to reflect changes is to rebuild the indicators.
-    if (m_lightIndicator) {
-        if (m_objectRoot) {
-            int indicatorIndex = m_objectRoot->findChild(m_lightIndicator);
-            if (indicatorIndex >= 0) {
-                m_objectRoot->removeChild(indicatorIndex);
-            } else {
-                LOG_WRN_S("PreviewCanvas::updateLightIndicator: Light indicator not found in object root");
-            }
-        } else {
-            LOG_WRN_S("PreviewCanvas::updateLightIndicator: Object root not available");
-        }
-        // The node was ref'd, so it won't be deleted until unref'd.
-        // Since we are replacing it, let's unref the old one.
-        m_lightIndicator->unref();
-        m_lightIndicator = nullptr;
-    }
-
-    // Re-create all indicators based on the current state of the lights in the scene graph.
-    createLightIndicator();
-
-    LOG_INF_S("PreviewCanvas::updateLightIndicator: Light indicators updated.");
-}
 
 void PreviewCanvas::createCoordinateSystem()
 {
@@ -787,7 +565,7 @@ void PreviewCanvas::render(bool fastMode)
     // Create viewport region
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
-    // Create render action with proper settings
+    // Create render action with proper settings for multi-light support
     SoGLRenderAction renderAction(viewport);
     renderAction.setSmoothing(!fastMode);
     renderAction.setNumPasses(fastMode ? 1 : 2);
@@ -795,9 +573,11 @@ void PreviewCanvas::render(bool fastMode)
         fastMode ? SoGLRenderAction::BLEND : SoGLRenderAction::SORTED_OBJECT_BLEND
     );
     
-    // Set up OpenGL state like SceneManager does
+    // Set up OpenGL state for proper lighting
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
+    glEnable(GL_LIGHTING); // Enable lighting
+    glEnable(GL_NORMALIZE); // Enable normal normalization for proper lighting
     glEnable(GL_TEXTURE_2D);
     
     // Set light blue background as per requirements
@@ -815,7 +595,7 @@ void PreviewCanvas::render(bool fastMode)
     
     // Render the scene
     try {
-        renderAction.apply(m_sceneRoot);
+    renderAction.apply(m_sceneRoot);
     } catch (const std::exception& e) {
         LOG_ERR_S("PreviewCanvas::render: Exception during rendering: " + std::string(e.what()));
         return;
@@ -892,18 +672,17 @@ void PreviewCanvas::updateLighting(float ambient, float diffuse, float specular,
             LOG_WRN_S("PreviewCanvas::updateLighting: Failed to cast to directional light, skipping");
             continue;
         }
-        
-        // Update light color
-        light->color.setValue(SbColor(r, g, b));
-        
-        // Update light intensity (scale based on original intensity)
-        float originalIntensity = light->intensity.getValue();
-        float scaledIntensity = originalIntensity * intensity;
-        light->intensity.setValue(scaledIntensity);
+            
+            // Update light color
+            light->color.setValue(SbColor(r, g, b));
+            
+            // Update light intensity (scale based on original intensity)
+            float originalIntensity = light->intensity.getValue();
+            float scaledIntensity = originalIntensity * intensity;
+            light->intensity.setValue(scaledIntensity);
     }
     
-    // Update light indicator
-    updateLightIndicator(color, intensity);
+    // Light indicators are now handled by LightManager
     
     render(true);
 }
@@ -912,76 +691,11 @@ void PreviewCanvas::updateMaterial(float ambient, float diffuse, float specular,
 {
     LOG_INF_S("PreviewCanvas::updateMaterial: Updating material properties");
     
-    // Update material properties for all geometry objects
-    if (m_occSphere && m_occSphere->getCoinNode()) {
-        updateObjectMaterial(m_occSphere->getCoinNode(), ambient, diffuse, specular, shininess, transparency);
-    } else {
-        LOG_WRN_S("PreviewCanvas::updateMaterial: Sphere object or its Coin node not available");
-    }
-    
-    if (m_occCone && m_occCone->getCoinNode()) {
-        updateObjectMaterial(m_occCone->getCoinNode(), ambient, diffuse, specular, shininess, transparency);
-    } else {
-        LOG_WRN_S("PreviewCanvas::updateMaterial: Cone object or its Coin node not available");
-    }
-    
-    if (m_occBox && m_occBox->getCoinNode()) {
-        updateObjectMaterial(m_occBox->getCoinNode(), ambient, diffuse, specular, shininess, transparency);
-    } else {
-        LOG_WRN_S("PreviewCanvas::updateMaterial: Box object or its Coin node not available");
-    }
-    
+    // Material updates are now handled by LightManager
     render(true);
 }
 
-void PreviewCanvas::updateObjectMaterial(SoNode* node, float ambient, float diffuse, float specular, float shininess, float transparency)
-{
-    if (!node) {
-        LOG_WRN_S("PreviewCanvas::updateObjectMaterial: Null node provided");
-        return;
-    }
-    
-    // Use SoSearchAction to find material nodes in the object's scene graph
-    SoSearchAction searchAction;
-    searchAction.setType(SoMaterial::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(node);
-    
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (!path) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterial: Null path encountered, skipping");
-            continue;
-        }
-        
-        SoNode* tailNode = path->getTail();
-        if (!tailNode) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterial: Null tail node, skipping");
-            continue;
-        }
-        
-        if (!tailNode->isOfType(SoMaterial::getClassTypeId())) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterial: Tail node is not a material, skipping");
-            continue;
-        }
-        
-        SoMaterial* material = static_cast<SoMaterial*>(tailNode);
-        if (!material) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterial: Failed to cast to material, skipping");
-            continue;
-        }
-        
-        // Update material properties directly
-        // Use base colors for each object (red, green, blue)
-        SbColor baseColor(0.8f, 0.8f, 0.8f); // Default gray color
-        
-        material->ambientColor.setValue(SbColor(baseColor[0] * ambient, baseColor[1] * ambient, baseColor[2] * ambient));
-        material->diffuseColor.setValue(SbColor(baseColor[0] * diffuse, baseColor[1] * diffuse, baseColor[2] * diffuse));
-        material->specularColor.setValue(SbColor(specular, specular, specular));
-        material->shininess.setValue(shininess);
-        material->transparency.setValue(transparency);
-    }
-}
+
 
 void PreviewCanvas::updateTexture(bool enabled, int mode, float scale)
 {
@@ -1119,423 +833,83 @@ void PreviewCanvas::onMouseWheel(wxMouseEvent& event)
     event.Skip();
 } 
 
-void PreviewCanvas::updateMultiLighting(const std::vector<RenderLightSettings>& lights)
+// Unified light management interface methods
+int PreviewCanvas::addLight(const RenderLightSettings& settings)
 {
-    LOG_INF_S("PreviewCanvas::updateMultiLighting: Updating multiple lights");
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::addLight: Light manager not initialized");
+        return -1;
+    }
     
-    if (!m_lightMaterial) {
-        LOG_WRN_S("PreviewCanvas::updateMultiLighting: No light material available");
+    int lightId = m_lightManager->addLight(settings);
+    if (lightId >= 0) {
+        render(true);
+    }
+    return lightId;
+}
+
+bool PreviewCanvas::removeLight(int lightId)
+{
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::removeLight: Light manager not initialized");
+        return false;
+    }
+    
+    bool success = m_lightManager->removeLight(lightId);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+bool PreviewCanvas::updateLight(int lightId, const RenderLightSettings& settings)
+{
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::updateLight: Light manager not initialized");
+        return false;
+    }
+    
+    bool success = m_lightManager->updateLight(lightId, settings);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+void PreviewCanvas::updateMultipleLights(const std::vector<RenderLightSettings>& lights)
+{
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::updateMultipleLights: Light manager not initialized");
         return;
     }
     
-    if (!m_sceneRoot) {
-        LOG_WRN_S("PreviewCanvas::updateMultiLighting: No scene root available");
-        return;
-    }
-    
-    // Clear ALL existing lights including the main light
-    // Use a safer approach to clear lights
-    clearAllLights();
-    
-    // Reset main light pointer since we removed it
-    m_light = nullptr;
-    
-    // Clear existing light indicators container
-    if (m_lightIndicatorsContainer) {
-        // Check if the container is still a valid child of scene root
-        int containerIndex = m_sceneRoot->findChild(m_lightIndicatorsContainer);
-        if (containerIndex >= 0) {
-            m_sceneRoot->removeChild(containerIndex);
-        }
-        m_lightIndicatorsContainer = nullptr;
-    }
-    
-    // Clear main light indicator
-    if (m_lightIndicator) {
-        // Check if the indicator is still a valid child of object root
-        if (m_objectRoot) {
-            int indicatorIndex = m_objectRoot->findChild(m_lightIndicator);
-            if (indicatorIndex >= 0) {
-                m_objectRoot->removeChild(indicatorIndex);
-            }
-        }
-        m_lightIndicator->unref();
-        m_lightIndicator = nullptr;
-    }
-    
-    // Create new light indicators container
-    m_lightIndicatorsContainer = new SoSeparator();
-    if (m_lightIndicatorsContainer) {
-        m_sceneRoot->addChild(m_lightIndicatorsContainer);
-    }
-    
-    // Add new lights and create indicators
-    for (size_t i = 0; i < lights.size(); ++i) {
-        const auto& lightSettings = lights[i];
-        if (lightSettings.enabled) {
-            // Create light based on type
-            SoLight* newLight = createLightByType(lightSettings);
-            if (!newLight) {
-                LOG_ERR_S("PreviewCanvas::updateMultiLighting: Failed to create light of type: " + lightSettings.type);
-                continue;
-            }
-            
-            // Set common light properties
-            float r = lightSettings.color.Red() / 255.0f;
-            float g = lightSettings.color.Green() / 255.0f;
-            float b = lightSettings.color.Blue() / 255.0f;
-            
-            newLight->color.setValue(SbColor(r, g, b));
-            newLight->intensity.setValue(static_cast<float>(lightSettings.intensity));
-            
-            // Create light group and add to scene
-            SoSeparator* lightGroup = new SoSeparator();
-            if (!lightGroup) {
-                LOG_ERR_S("PreviewCanvas::updateMultiLighting: Failed to create light group");
-                newLight->unref();
-                continue;
-            }
-            
-            // For directional lights, we need a transform for positioning
-            // For point and spot lights, position is handled by the light itself
-            if (lightSettings.type == "directional") {
-                SoTransform* lightTransform = new SoTransform();
-                if (lightTransform) {
-                    SbVec3f position(static_cast<float>(lightSettings.positionX),
-                                    static_cast<float>(lightSettings.positionY),
-                                    static_cast<float>(lightSettings.positionZ));
-                    lightTransform->translation.setValue(position);
-                    lightGroup->addChild(lightTransform);
-                }
-            }
-            
-            lightGroup->addChild(newLight);
-            m_sceneRoot->addChild(lightGroup);
-            
-            // Create light indicator
-            SbVec3f lightPosition(static_cast<float>(lightSettings.positionX),
-                                 static_cast<float>(lightSettings.positionY),
-                                 static_cast<float>(lightSettings.positionZ));
-            createLightIndicator(newLight, static_cast<int>(i), lightSettings.name, m_lightIndicatorsContainer, lightPosition);
-        }
-    }
-    
-    // Update material based on all lights for better multi-light support
-    if (!lights.empty() && m_lightMaterial) {
-        // Calculate combined lighting from all enabled lights
-        float totalR = 0.0f, totalG = 0.0f, totalB = 0.0f;
-        float totalIntensity = 0.0f;
-        
-        for (const auto& light : lights) {
-            if (light.enabled) {
-                float r = light.color.Red() / 255.0f;
-                float g = light.color.Green() / 255.0f;
-                float b = light.color.Blue() / 255.0f;
-                float intensity = static_cast<float>(light.intensity);
-                
-                totalR += r * intensity;
-                totalG += g * intensity;
-                totalB += b * intensity;
-                totalIntensity += intensity;
-            }
-        }
-        
-        // Normalize the combined color
-        if (totalIntensity > 0.0f) {
-            totalR /= totalIntensity;
-            totalG /= totalIntensity;
-            totalB /= totalIntensity;
-        }
-        
-        // Set material properties based on combined lighting
-        m_lightMaterial->ambientColor.setValue(SbColor(totalR * 0.2f, totalG * 0.2f, totalB * 0.2f));
-        m_lightMaterial->diffuseColor.setValue(SbColor(totalR * 0.8f, totalG * 0.8f, totalB * 0.8f));
-        m_lightMaterial->specularColor.setValue(SbColor(totalR * 0.6f, totalG * 0.6f, totalB * 0.6f));
-        
-        // Update geometry object materials to respond to lighting changes
-        updateGeometryMaterialsForLighting(totalR, totalG, totalB, totalIntensity);
-    }
-    
+    m_lightManager->updateMultipleLights(lights);
     render(true);
 }
 
-SoLight* PreviewCanvas::createLightByType(const RenderLightSettings& lightSettings)
+void PreviewCanvas::updateMultiLighting(const std::vector<RenderLightSettings>& lights)
 {
-    LOG_INF_S("PreviewCanvas::createLightByType: Creating light of type: " + lightSettings.type);
-    
-    if (lightSettings.type == "directional") {
-        SoDirectionalLight* light = new SoDirectionalLight();
-        if (!light) {
-            LOG_ERR_S("PreviewCanvas::createLightByType: Failed to create directional light");
-            return nullptr;
-        }
-        
-        // Set direction for directional light
-        SbVec3f direction(static_cast<float>(lightSettings.directionX),
-                          static_cast<float>(lightSettings.directionY),
-                          static_cast<float>(lightSettings.directionZ));
-        direction.normalize();
-        light->direction.setValue(direction);
-        
-        LOG_INF_S("PreviewCanvas::createLightByType: Created directional light with direction (" + 
-                  std::to_string(direction[0]) + ", " + std::to_string(direction[1]) + ", " + std::to_string(direction[2]) + ")");
-        return light;
-    }
-    else if (lightSettings.type == "point") {
-        SoPointLight* light = new SoPointLight();
-        if (!light) {
-            LOG_ERR_S("PreviewCanvas::createLightByType: Failed to create point light");
-            return nullptr;
-        }
-        
-        // Set position for point light
-        SbVec3f position(static_cast<float>(lightSettings.positionX),
-                         static_cast<float>(lightSettings.positionY),
-                         static_cast<float>(lightSettings.positionZ));
-        light->location.setValue(position);
-        
-        LOG_INF_S("PreviewCanvas::createLightByType: Created point light at position (" + 
-                  std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
-        return light;
-    }
-    else if (lightSettings.type == "spot") {
-        SoSpotLight* light = new SoSpotLight();
-        if (!light) {
-            LOG_ERR_S("PreviewCanvas::createLightByType: Failed to create spot light");
-            return nullptr;
-        }
-        
-        // Set position for spot light
-        SbVec3f position(static_cast<float>(lightSettings.positionX),
-                         static_cast<float>(lightSettings.positionY),
-                         static_cast<float>(lightSettings.positionZ));
-        light->location.setValue(position);
-        
-        // Set direction for spot light
-        SbVec3f direction(static_cast<float>(lightSettings.directionX),
-                          static_cast<float>(lightSettings.directionY),
-                          static_cast<float>(lightSettings.directionZ));
-        direction.normalize();
-        light->direction.setValue(direction);
-        
-        // Set spot angle (convert from degrees to radians)
-        float spotAngle = static_cast<float>(lightSettings.spotAngle) * M_PI / 180.0f;
-        light->cutOffAngle.setValue(spotAngle);
-        
-        // Set spot exponent
-        light->dropOffRate.setValue(static_cast<float>(lightSettings.spotExponent));
-        
-        LOG_INF_S("PreviewCanvas::createLightByType: Created spot light at position (" + 
-                  std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + 
-                  ") with angle " + std::to_string(lightSettings.spotAngle) + " degrees");
-        return light;
-    }
-    else {
-        LOG_ERR_S("PreviewCanvas::createLightByType: Unknown light type: " + lightSettings.type);
-        return nullptr;
-    }
+    // Legacy method - now delegates to updateMultipleLights
+    updateMultipleLights(lights);
 }
 
-void PreviewCanvas::updateGeometryMaterialsForLighting(float lightR, float lightG, float lightB, float totalIntensity)
+std::vector<RenderLightSettings> PreviewCanvas::getAllLights() const
 {
-    LOG_INF_S("PreviewCanvas::updateGeometryMaterialsForLighting: Updating geometry materials for lighting");
-    
-    // Update sphere material (red base color)
-    if (m_occSphere && m_occSphere->getCoinNode()) {
-        updateObjectMaterialForLighting(m_occSphere->getCoinNode(), 
-            SbColor(1.0f, 0.3f, 0.3f), // Base red color
-            lightR, lightG, lightB, totalIntensity);
-    } else {
-        LOG_WRN_S("PreviewCanvas::updateGeometryMaterialsForLighting: Sphere object or its Coin node not available");
+    if (!m_lightManager) {
+        LOG_ERR_S("PreviewCanvas::getAllLights: Light manager not initialized");
+        return {};
     }
     
-    // Update cone material (green base color)
-    if (m_occCone && m_occCone->getCoinNode()) {
-        updateObjectMaterialForLighting(m_occCone->getCoinNode(), 
-            SbColor(0.3f, 1.0f, 0.3f), // Base green color
-            lightR, lightG, lightB, totalIntensity);
-    } else {
-        LOG_WRN_S("PreviewCanvas::updateGeometryMaterialsForLighting: Cone object or its Coin node not available");
-    }
-    
-    // Update box material (blue base color)
-    if (m_occBox && m_occBox->getCoinNode()) {
-        updateObjectMaterialForLighting(m_occBox->getCoinNode(), 
-            SbColor(0.3f, 0.3f, 1.0f), // Base blue color
-            lightR, lightG, lightB, totalIntensity);
-    } else {
-        LOG_WRN_S("PreviewCanvas::updateGeometryMaterialsForLighting: Box object or its Coin node not available");
-    }
+    return m_lightManager->getAllLightSettings();
 }
 
-void PreviewCanvas::clearAllLights()
-{
-    LOG_INF_S("PreviewCanvas::clearAllLights: Safely clearing all lights");
-    
-    if (!m_sceneRoot) {
-        LOG_WRN_S("PreviewCanvas::clearAllLights: No scene root available");
-        return;
-    }
-    
-    // Store paths to lights before removing them to avoid iterator invalidation
-    std::vector<SoFullPath*> lightPaths;
-    
-    // Find all directional lights
-    SoSearchAction searchAction;
-    searchAction.setType(SoDirectionalLight::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(m_sceneRoot);
-    
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (path && path->getTail() && path->getTail()->isOfType(SoDirectionalLight::getClassTypeId())) {
-            lightPaths.push_back(path);
-        }
-    }
-    
-    // Find all point lights
-    searchAction.setType(SoPointLight::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(m_sceneRoot);
-    
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (path && path->getTail() && path->getTail()->isOfType(SoPointLight::getClassTypeId())) {
-            lightPaths.push_back(path);
-        }
-    }
-    
-    // Find all spot lights
-    searchAction.setType(SoSpotLight::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(m_sceneRoot);
-    
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (path && path->getTail() && path->getTail()->isOfType(SoSpotLight::getClassTypeId())) {
-            lightPaths.push_back(path);
-        }
-    }
-    
-    // Now safely remove all found lights
-    for (SoFullPath* path : lightPaths) {
-        if (!path) {
-            LOG_WRN_S("PreviewCanvas::clearAllLights: Null path encountered, skipping");
-            continue;
-        }
-        
-        if (path->getLength() < 2) {
-            LOG_WRN_S("PreviewCanvas::clearAllLights: Invalid path length, skipping");
-            continue;
-        }
-        
-        SoNode* lightNode = path->getTail();
-        if (!lightNode) {
-            LOG_WRN_S("PreviewCanvas::clearAllLights: Null light node, skipping");
-            continue;
-        }
-        
-        // Check if the light node is still valid
-        if (lightNode->getRefCount() <= 0) {
-            LOG_WRN_S("PreviewCanvas::clearAllLights: Light node has invalid ref count, skipping");
-            continue;
-        }
-        
-        SoNode* parentNode = path->getNode(path->getLength() - 2);
-        if (!parentNode) {
-            LOG_WRN_S("PreviewCanvas::clearAllLights: Null parent node, skipping");
-            continue;
-        }
-        
-        if (!parentNode->isOfType(SoSeparator::getClassTypeId())) {
-            LOG_WRN_S("PreviewCanvas::clearAllLights: Parent is not a separator, skipping");
-            continue;
-        }
-        
-        SoSeparator* parent = static_cast<SoSeparator*>(parentNode);
-        
-        // Check if the light is still a child of the parent before removing
-        int childIndex = parent->findChild(lightNode);
-        if (childIndex >= 0) {
-            LOG_INF_S("PreviewCanvas::clearAllLights: Removing light at index " + std::to_string(childIndex));
-            
-            // Additional safety check: verify the child at this index is still the expected light
-            SoNode* childAtIndex = parent->getChild(childIndex);
-            if (childAtIndex == lightNode) {
-                parent->removeChild(childIndex);
-            } else {
-                LOG_WRN_S("PreviewCanvas::clearAllLights: Child at index does not match expected light, skipping removal");
-            }
-        } else {
-            LOG_WRN_S("PreviewCanvas::clearAllLights: Light not found in parent, skipping removal");
-        }
-    }
-    
-    // Clear the paths vector to prevent memory leaks
-    lightPaths.clear();
-    
-    LOG_INF_S("PreviewCanvas::clearAllLights: All lights cleared successfully");
-}
 
-void PreviewCanvas::updateObjectMaterialForLighting(SoNode* node, const SbColor& baseColor, 
-                                                   float lightR, float lightG, float lightB, float totalIntensity)
-{
-    if (!node) {
-        LOG_WRN_S("PreviewCanvas::updateObjectMaterialForLighting: Null node provided");
-        return;
-    }
-    
-    // Use SoSearchAction to find material nodes in the object's scene graph
-    SoSearchAction searchAction;
-    searchAction.setType(SoMaterial::getClassTypeId(), true);
-    searchAction.setSearchingAll(true);
-    searchAction.apply(node);
-    
-    for (int i = 0; i < searchAction.getPaths().getLength(); ++i) {
-        SoFullPath* path = static_cast<SoFullPath*>(searchAction.getPaths()[i]);
-        if (!path) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterialForLighting: Null path encountered, skipping");
-            continue;
-        }
-        
-        SoNode* tailNode = path->getTail();
-        if (!tailNode) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterialForLighting: Null tail node, skipping");
-            continue;
-        }
-        
-        if (!tailNode->isOfType(SoMaterial::getClassTypeId())) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterialForLighting: Tail node is not a material, skipping");
-            continue;
-        }
-        
-        SoMaterial* material = static_cast<SoMaterial*>(tailNode);
-        if (!material) {
-            LOG_WRN_S("PreviewCanvas::updateObjectMaterialForLighting: Failed to cast to material, skipping");
-            continue;
-        }
-        
-        // Calculate lighting-adjusted colors
-        float ambientR = baseColor[0] * lightR * 0.3f;
-        float ambientG = baseColor[1] * lightG * 0.3f;
-        float ambientB = baseColor[2] * lightB * 0.3f;
-        
-        float diffuseR = baseColor[0] * lightR * 0.8f;
-        float diffuseG = baseColor[1] * lightG * 0.8f;
-        float diffuseB = baseColor[2] * lightB * 0.8f;
-        
-        float specularR = lightR * 0.6f;
-        float specularG = lightG * 0.6f;
-        float specularB = lightB * 0.6f;
-        
-        // Apply intensity scaling
-        float intensityScale = std::min(totalIntensity / 3.0f, 2.0f); // Cap at 2x intensity
-        
-        material->ambientColor.setValue(SbColor(ambientR * intensityScale, ambientG * intensityScale, ambientB * intensityScale));
-        material->diffuseColor.setValue(SbColor(diffuseR * intensityScale, diffuseG * intensityScale, diffuseB * intensityScale));
-        material->specularColor.setValue(SbColor(specularR * intensityScale, specularG * intensityScale, specularB * intensityScale));
-    }
-}
+
+
+
+
+
+
 
 void PreviewCanvas::updateRenderingMode(int mode)
 {
@@ -1566,4 +940,213 @@ void PreviewCanvas::updateRenderingMode(int mode)
     render(false);
     
     LOG_INF_S("PreviewCanvas::updateRenderingMode: Rendering mode updated to " + std::to_string(mode));
+}
+
+// Anti-aliasing management interface
+int PreviewCanvas::addAntiAliasingConfig(const AntiAliasingSettings& settings)
+{
+    if (!m_antiAliasingManager) {
+        LOG_ERR_S("PreviewCanvas::addAntiAliasingConfig: Anti-aliasing manager not initialized");
+        return -1;
+    }
+    
+    int configId = m_antiAliasingManager->addConfiguration(settings);
+    if (configId >= 0) {
+        render(true);
+    }
+    return configId;
+}
+
+bool PreviewCanvas::removeAntiAliasingConfig(int configId)
+{
+    if (!m_antiAliasingManager) {
+        LOG_ERR_S("PreviewCanvas::removeAntiAliasingConfig: Anti-aliasing manager not initialized");
+        return false;
+    }
+    
+    bool success = m_antiAliasingManager->removeConfiguration(configId);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+bool PreviewCanvas::updateAntiAliasingConfig(int configId, const AntiAliasingSettings& settings)
+{
+    if (!m_antiAliasingManager) {
+        LOG_ERR_S("PreviewCanvas::updateAntiAliasingConfig: Anti-aliasing manager not initialized");
+        return false;
+    }
+    
+    bool success = m_antiAliasingManager->updateConfiguration(configId, settings);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+bool PreviewCanvas::setActiveAntiAliasingConfig(int configId)
+{
+    if (!m_antiAliasingManager) {
+        LOG_ERR_S("PreviewCanvas::setActiveAntiAliasingConfig: Anti-aliasing manager not initialized");
+        return false;
+    }
+    
+    bool success = m_antiAliasingManager->setActiveConfiguration(configId);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+std::vector<AntiAliasingSettings> PreviewCanvas::getAllAntiAliasingConfigs() const
+{
+    if (!m_antiAliasingManager) {
+        LOG_ERR_S("PreviewCanvas::getAllAntiAliasingConfigs: Anti-aliasing manager not initialized");
+        return {};
+    }
+    
+    return m_antiAliasingManager->getAllConfigurations();
+}
+
+// Rendering management interface
+int PreviewCanvas::addRenderingConfig(const RenderingSettings& settings)
+{
+    if (!m_renderingManager) {
+        LOG_ERR_S("PreviewCanvas::addRenderingConfig: Rendering manager not initialized");
+        return -1;
+    }
+    
+    int configId = m_renderingManager->addConfiguration(settings);
+    if (configId >= 0) {
+        render(true);
+    }
+    return configId;
+}
+
+bool PreviewCanvas::removeRenderingConfig(int configId)
+{
+    if (!m_renderingManager) {
+        LOG_ERR_S("PreviewCanvas::removeRenderingConfig: Rendering manager not initialized");
+        return false;
+    }
+    
+    bool success = m_renderingManager->removeConfiguration(configId);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+bool PreviewCanvas::updateRenderingConfig(int configId, const RenderingSettings& settings)
+{
+    if (!m_renderingManager) {
+        LOG_ERR_S("PreviewCanvas::updateRenderingConfig: Rendering manager not initialized");
+        return false;
+    }
+    
+    bool success = m_renderingManager->updateConfiguration(configId, settings);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+bool PreviewCanvas::setActiveRenderingConfig(int configId)
+{
+    if (!m_renderingManager) {
+        LOG_ERR_S("PreviewCanvas::setActiveRenderingConfig: Rendering manager not initialized");
+        return false;
+    }
+    
+    bool success = m_renderingManager->setActiveConfiguration(configId);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+std::vector<RenderingSettings> PreviewCanvas::getAllRenderingConfigs() const
+{
+    if (!m_renderingManager) {
+        LOG_ERR_S("PreviewCanvas::getAllRenderingConfigs: Rendering manager not initialized");
+        return {};
+    }
+    
+    return m_renderingManager->getAllConfigurations();
+}
+
+// Object management interface implementation
+int PreviewCanvas::addObject(const ObjectSettings& settings)
+{
+    if (!m_objectManager) {
+        LOG_ERR_S("PreviewCanvas::addObject: Object manager not initialized");
+        return -1;
+    }
+    
+    int objectId = m_objectManager->addObject(settings);
+    if (objectId >= 0) {
+        render(true);
+    }
+    return objectId;
+}
+
+bool PreviewCanvas::removeObject(int objectId)
+{
+    if (!m_objectManager) {
+        LOG_ERR_S("PreviewCanvas::removeObject: Object manager not initialized");
+        return false;
+    }
+    
+    bool success = m_objectManager->removeObject(objectId);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+bool PreviewCanvas::updateObject(int objectId, const ObjectSettings& settings)
+{
+    if (!m_objectManager) {
+        LOG_ERR_S("PreviewCanvas::updateObject: Object manager not initialized");
+        return false;
+    }
+    
+    bool success = m_objectManager->updateObject(objectId, settings);
+    if (success) {
+        render(true);
+    }
+    return success;
+}
+
+void PreviewCanvas::updateMultipleObjects(const std::vector<ObjectSettings>& objects)
+{
+    if (!m_objectManager) {
+        LOG_ERR_S("PreviewCanvas::updateMultipleObjects: Object manager not initialized");
+        return;
+    }
+    
+    m_objectManager->updateMultipleObjects(objects);
+    render(true);
+}
+
+void PreviewCanvas::clearAllObjects()
+{
+    if (!m_objectManager) {
+        LOG_ERR_S("PreviewCanvas::clearAllObjects: Object manager not initialized");
+        return;
+    }
+    
+    m_objectManager->clearAllObjects();
+    render(true);
+}
+
+std::vector<ObjectSettings> PreviewCanvas::getAllObjects() const
+{
+    if (!m_objectManager) {
+        LOG_ERR_S("PreviewCanvas::getAllObjects: Object manager not initialized");
+        return std::vector<ObjectSettings>();
+    }
+    
+    return m_objectManager->getAllObjectSettings();
 } 

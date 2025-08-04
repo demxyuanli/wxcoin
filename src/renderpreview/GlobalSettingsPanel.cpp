@@ -1,9 +1,14 @@
 #include "renderpreview/GlobalSettingsPanel.h"
 #include "renderpreview/RenderPreviewDialog.h"
+#include "renderpreview/PreviewCanvas.h"
+#include "renderpreview/AntiAliasingManager.h"
+#include "renderpreview/RenderingManager.h"
 #include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include <wx/msgdlg.h>
 #include <wx/colordlg.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
 
 BEGIN_EVENT_TABLE(GlobalSettingsPanel, wxPanel)
     EVT_LISTBOX(wxID_ANY, GlobalSettingsPanel::onLightSelected)
@@ -23,11 +28,17 @@ GlobalSettingsPanel::GlobalSettingsPanel(wxWindow* parent, RenderPreviewDialog* 
     , m_parentDialog(dialog)
     , m_currentLightIndex(-1)
     , m_autoApply(false)
+    , m_antiAliasingManager(nullptr)
+    , m_renderingManager(nullptr)
 {
     LOG_INF_S("GlobalSettingsPanel::GlobalSettingsPanel: Initializing");
     createUI();
     bindEvents();
     loadSettings();
+    
+    // Initialize control states after loading settings
+    updateControlStates();
+    
     LOG_INF_S("GlobalSettingsPanel::GlobalSettingsPanel: Initialized successfully");
 }
 
@@ -61,7 +72,42 @@ void GlobalSettingsPanel::createUI()
     m_notebook->AddPage(antiAliasingPanel, "Anti-aliasing");
     m_notebook->AddPage(renderingModePanel, "Rendering Mode");
     
-    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
+    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 2);
+    
+    // Add Global Settings buttons at the bottom
+    auto* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Auto-apply checkbox
+    m_globalAutoApplyCheckBox = new wxCheckBox(this, wxID_ANY, wxT("Auto"));
+    m_globalAutoApplyCheckBox->Bind(wxEVT_CHECKBOX, &GlobalSettingsPanel::OnGlobalAutoApply, this);
+    buttonSizer->Add(m_globalAutoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+    
+    // Apply button
+    m_globalApplyButton = new wxButton(this, wxID_APPLY, wxT("Apply"));
+    m_globalApplyButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalApply, this);
+    buttonSizer->Add(m_globalApplyButton, 0, wxALL, 2);
+    
+    // Save button
+    m_globalSaveButton = new wxButton(this, wxID_SAVE, wxT("Save"));
+    m_globalSaveButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalSave, this);
+    buttonSizer->Add(m_globalSaveButton, 0, wxALL, 2);
+    
+    // Reset button
+    m_globalResetButton = new wxButton(this, wxID_RESET, wxT("Reset"));
+    m_globalResetButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalReset, this);
+    buttonSizer->Add(m_globalResetButton, 0, wxALL, 2);
+    
+    // Undo button
+    m_globalUndoButton = new wxButton(this, wxID_UNDO, wxT("Undo"));
+    m_globalUndoButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalUndo, this);
+    buttonSizer->Add(m_globalUndoButton, 0, wxALL, 2);
+    
+    // Redo button
+    m_globalRedoButton = new wxButton(this, wxID_REDO, wxT("Redo"));
+    m_globalRedoButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalRedo, this);
+    buttonSizer->Add(m_globalRedoButton, 0, wxALL, 2);
+    
+    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
     
     SetSizer(mainSizer);
 }
@@ -189,29 +235,52 @@ wxSizer* GlobalSettingsPanel::createAntiAliasingTab(wxWindow* parent)
 {
     auto* antiAliasingSizer = new wxBoxSizer(wxVERTICAL);
     
-    // Anti-aliasing Method
-    auto* methodLabel = new wxStaticText(parent, wxID_ANY, "Anti-aliasing Method:");
-    antiAliasingSizer->Add(methodLabel, 0, wxALL, 8);
+    // Anti-aliasing Presets Section
+    auto* presetsBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Anti-aliasing Presets");
+    
+    auto* presetsLabel = new wxStaticText(parent, wxID_ANY, "Choose an anti-aliasing preset:");
+    presetsBoxSizer->Add(presetsLabel, 0, wxALL, 8);
     
     m_antiAliasingChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
     m_antiAliasingChoice->Append("None");
-    m_antiAliasingChoice->Append("MSAA");
-    m_antiAliasingChoice->Append("FXAA");
-    m_antiAliasingChoice->Append("MSAA + FXAA");
-    m_antiAliasingChoice->SetSelection(1);
-    antiAliasingSizer->Add(m_antiAliasingChoice, 0, wxEXPAND | wxALL, 8);
+    m_antiAliasingChoice->Append("MSAA 2x");
+    m_antiAliasingChoice->Append("MSAA 4x");
+    m_antiAliasingChoice->Append("MSAA 8x");
+    m_antiAliasingChoice->Append("FXAA Low");
+    m_antiAliasingChoice->Append("FXAA Medium");
+    m_antiAliasingChoice->Append("FXAA High");
+    m_antiAliasingChoice->SetSelection(2); // Default to MSAA 4x
+    presetsBoxSizer->Add(m_antiAliasingChoice, 0, wxEXPAND | wxALL, 8);
     
-    // MSAA Samples
+    antiAliasingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 8);
+    
+    // Performance Impact Section
+    auto* performanceBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Performance Impact");
+    
+    auto* impactLabel = new wxStaticText(parent, wxID_ANY, "Performance Impact: Low");
+    impactLabel->SetForegroundColour(wxColour(0, 128, 0));
+    performanceBoxSizer->Add(impactLabel, 0, wxALL, 8);
+    
+    auto* qualityLabel = new wxStaticText(parent, wxID_ANY, "Quality: MSAA 4x");
+    qualityLabel->SetForegroundColour(wxColour(0, 0, 128));
+    performanceBoxSizer->Add(qualityLabel, 0, wxALL, 8);
+    
+    antiAliasingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 8);
+    
+    // Legacy controls (kept for backward compatibility)
+    auto* legacyBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Advanced Settings");
+    
     auto* msaaLabel = new wxStaticText(parent, wxID_ANY, "MSAA Samples:");
-    antiAliasingSizer->Add(msaaLabel, 0, wxALL, 8);
+    legacyBoxSizer->Add(msaaLabel, 0, wxALL, 8);
     
     m_msaaSamplesSlider = new wxSlider(parent, wxID_ANY, 4, 2, 16, 
         wxDefaultPosition, wxSize(250, -1), wxSL_HORIZONTAL | wxSL_LABELS);
-    antiAliasingSizer->Add(m_msaaSamplesSlider, 0, wxEXPAND | wxALL, 8);
+    legacyBoxSizer->Add(m_msaaSamplesSlider, 0, wxEXPAND | wxALL, 8);
     
-    // Enable FXAA
     m_fxaaCheckBox = new wxCheckBox(parent, wxID_ANY, "Enable FXAA");
-    antiAliasingSizer->Add(m_fxaaCheckBox, 0, wxALL, 8);
+    legacyBoxSizer->Add(m_fxaaCheckBox, 0, wxALL, 8);
+    
+    antiAliasingSizer->Add(legacyBoxSizer, 0, wxEXPAND | wxALL, 8);
     
     return antiAliasingSizer;
 }
@@ -220,17 +289,56 @@ wxSizer* GlobalSettingsPanel::createRenderingModeTab(wxWindow* parent)
 {
     auto* renderingSizer = new wxBoxSizer(wxVERTICAL);
     
-    auto* modeLabel = new wxStaticText(parent, wxID_ANY, "Rendering Mode:");
-    renderingSizer->Add(modeLabel, 0, wxALL, 8);
+    // Rendering Presets Section
+    auto* presetsBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Rendering Presets");
+    
+    auto* presetsLabel = new wxStaticText(parent, wxID_ANY, "Choose a rendering preset:");
+    presetsBoxSizer->Add(presetsLabel, 0, wxALL, 8);
     
     m_renderingModeChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
-    m_renderingModeChoice->Append("Solid");
+    m_renderingModeChoice->Append("Performance");
+    m_renderingModeChoice->Append("Balanced");
+    m_renderingModeChoice->Append("Quality");
+    m_renderingModeChoice->Append("Ultra");
     m_renderingModeChoice->Append("Wireframe");
-    m_renderingModeChoice->Append("Points");
-    m_renderingModeChoice->Append("Hidden Line");
-    m_renderingModeChoice->Append("Shaded");
-    m_renderingModeChoice->SetSelection(4);
-    renderingSizer->Add(m_renderingModeChoice, 0, wxEXPAND | wxALL, 8);
+    m_renderingModeChoice->SetSelection(1); // Default to Balanced
+    presetsBoxSizer->Add(m_renderingModeChoice, 0, wxEXPAND | wxALL, 8);
+    
+    renderingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 8);
+    
+    // Performance Impact Section
+    auto* performanceBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Performance Impact");
+    
+    auto* impactLabel = new wxStaticText(parent, wxID_ANY, "Performance Impact: Medium");
+    impactLabel->SetForegroundColour(wxColour(255, 165, 0));
+    performanceBoxSizer->Add(impactLabel, 0, wxALL, 8);
+    
+    auto* qualityLabel = new wxStaticText(parent, wxID_ANY, "Quality: Balanced");
+    qualityLabel->SetForegroundColour(wxColour(0, 0, 128));
+    performanceBoxSizer->Add(qualityLabel, 0, wxALL, 8);
+    
+    auto* fpsLabel = new wxStaticText(parent, wxID_ANY, "Estimated FPS: 60");
+    fpsLabel->SetForegroundColour(wxColour(0, 128, 0));
+    performanceBoxSizer->Add(fpsLabel, 0, wxALL, 8);
+    
+    renderingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 8);
+    
+    // Legacy controls (kept for backward compatibility)
+    auto* legacyBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Legacy Mode Settings");
+    
+    auto* modeLabel = new wxStaticText(parent, wxID_ANY, "Legacy Rendering Mode:");
+    legacyBoxSizer->Add(modeLabel, 0, wxALL, 8);
+    
+    auto* legacyChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
+    legacyChoice->Append("Solid");
+    legacyChoice->Append("Wireframe");
+    legacyChoice->Append("Points");
+    legacyChoice->Append("Hidden Line");
+    legacyChoice->Append("Shaded");
+    legacyChoice->SetSelection(4);
+    legacyBoxSizer->Add(legacyChoice, 0, wxEXPAND | wxALL, 8);
+    
+    renderingSizer->Add(legacyBoxSizer, 0, wxEXPAND | wxALL, 8);
     
     return renderingSizer;
 }
@@ -481,6 +589,9 @@ void GlobalSettingsPanel::onLightSelected(wxCommandEvent& event)
         m_lightColorButton->SetBackgroundColour(light.color);
         m_lightColorButton->SetLabel(wxString::Format("RGB(%d,%d,%d)", light.color.Red(), light.color.Green(), light.color.Blue()));
         m_lightEnabledCheckBox->SetValue(light.enabled);
+        
+        // Update control states based on current light name
+        updateControlStates();
     }
 }
 
@@ -540,6 +651,15 @@ void GlobalSettingsPanel::onLightPropertyChanged(wxCommandEvent& event)
         
         // Update the light list to reflect name changes
         updateLightList();
+        
+        // Update control states based on light name
+        updateControlStates();
+        
+        // Always apply lighting changes immediately for better user experience
+        if (m_parentDialog) {
+            m_parentDialog->applyGlobalSettingsToCanvas();
+        }
+        
         onLightingChanged(event);
     }
 }
@@ -548,13 +668,41 @@ void GlobalSettingsPanel::onLightPropertyChangedSpin(wxSpinDoubleEvent& event)
 {
     if (m_currentLightIndex >= 0 && m_currentLightIndex < static_cast<int>(m_lights.size())) {
         auto& light = m_lights[m_currentLightIndex];
+        
+        // Get the control that triggered the event
+        wxSpinCtrlDouble* sourceControl = dynamic_cast<wxSpinCtrlDouble*>(event.GetEventObject());
+        bool shouldApplyChanges = true;
+        
+        // Update position values
         light.positionX = m_positionXSpin->GetValue();
         light.positionY = m_positionYSpin->GetValue();
         light.positionZ = m_positionZSpin->GetValue();
+        
+        // Update direction values
         light.directionX = m_directionXSpin->GetValue();
         light.directionY = m_directionYSpin->GetValue();
         light.directionZ = m_directionZSpin->GetValue();
+        
+        // Update intensity value
         light.intensity = m_intensitySpin->GetValue();
+        
+        // Check if position changes should affect rendering
+        if (sourceControl == m_positionXSpin || sourceControl == m_positionYSpin || sourceControl == m_positionZSpin) {
+            if (light.type == "directional") {
+                // For directional lights, position changes don't affect rendering
+                shouldApplyChanges = false;
+                LOG_INF_S("GlobalSettingsPanel::onLightPropertyChangedSpin: Position change ignored for directional light");
+            }
+        }
+        
+        // Update control states to ensure UI reflects current state
+        updateControlStates();
+        
+        // Apply lighting changes only if they should affect rendering
+        if (shouldApplyChanges && m_parentDialog) {
+            m_parentDialog->applyGlobalSettingsToCanvas();
+            LOG_INF_S("GlobalSettingsPanel::onLightPropertyChangedSpin: Applied changes to canvas");
+        }
         
         onLightingChanged(wxCommandEvent());
     }
@@ -592,6 +740,16 @@ int GlobalSettingsPanel::getRenderingMode() const
 
 void GlobalSettingsPanel::onAntiAliasingChanged(wxCommandEvent& event)
 {
+    if (m_antiAliasingManager && m_antiAliasingChoice) {
+        int selection = m_antiAliasingChoice->GetSelection();
+        wxString presetName = m_antiAliasingChoice->GetString(selection);
+        
+        // Apply the selected preset
+        m_antiAliasingManager->applyPreset(presetName.ToStdString());
+        
+        LOG_INF_S("GlobalSettingsPanel::onAntiAliasingChanged: Applied preset '" + presetName.ToStdString() + "'");
+    }
+    
     // Auto-apply if enabled
     if (m_autoApply && m_parentDialog) {
         m_parentDialog->applyGlobalSettingsToCanvas();
@@ -600,6 +758,16 @@ void GlobalSettingsPanel::onAntiAliasingChanged(wxCommandEvent& event)
 
 void GlobalSettingsPanel::onRenderingModeChanged(wxCommandEvent& event)
 {
+    if (m_renderingManager && m_renderingModeChoice) {
+        int selection = m_renderingModeChoice->GetSelection();
+        wxString presetName = m_renderingModeChoice->GetString(selection);
+        
+        // Apply the selected preset
+        m_renderingManager->applyPreset(presetName.ToStdString());
+        
+        LOG_INF_S("GlobalSettingsPanel::onRenderingModeChanged: Applied preset '" + presetName.ToStdString() + "'");
+    }
+    
     // Auto-apply if enabled
     if (m_autoApply && m_parentDialog) {
         m_parentDialog->applyGlobalSettingsToCanvas();
@@ -641,27 +809,105 @@ void GlobalSettingsPanel::setAutoApply(bool enabled)
     m_autoApply = enabled;
 }
 
+void GlobalSettingsPanel::setAntiAliasingManager(AntiAliasingManager* manager)
+{
+    m_antiAliasingManager = manager;
+}
+
+void GlobalSettingsPanel::setRenderingManager(RenderingManager* manager)
+{
+    m_renderingManager = manager;
+}
+
 void GlobalSettingsPanel::loadSettings()
 {
     try {
-        auto& configManager = ConfigManager::getInstance();
+        // Load from render_settings.ini file
+        wxString exePath = wxStandardPaths::Get().GetExecutablePath();
+        wxFileName exeFile(exePath);
+        wxString exeDir = exeFile.GetPath();
+        wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
+        
+        // Create wxFileConfig for render settings
+        wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
         
         // Load anti-aliasing settings
         if (m_antiAliasingChoice) {
-            m_antiAliasingChoice->SetSelection(configManager.getInt("RenderPreview", "Global.AntiAliasing.Method", 1));
+            int method;
+            if (renderConfig.Read("Global.AntiAliasing.Method", &method, 2)) { // Default to MSAA 4x (index 2)
+                // Validate method value against current choice count
+                if (method >= 0 && method < m_antiAliasingChoice->GetCount()) {
+                    m_antiAliasingChoice->SetSelection(method);
+                } else {
+                    // If invalid, default to MSAA 4x
+                    m_antiAliasingChoice->SetSelection(2);
+                    LOG_WRN_S("GlobalSettingsPanel::loadSettings: Invalid anti-aliasing method " + std::to_string(method) + ", defaulting to MSAA 4x");
+                }
+            }
         }
         if (m_msaaSamplesSlider) {
-            m_msaaSamplesSlider->SetValue(configManager.getInt("RenderPreview", "Global.AntiAliasing.MSAASamples", 4));
+            int samples;
+            if (renderConfig.Read("Global.AntiAliasing.MSAASamples", &samples, 4)) {
+                m_msaaSamplesSlider->SetValue(samples);
+            }
         }
         if (m_fxaaCheckBox) {
-            m_fxaaCheckBox->SetValue(configManager.getBool("RenderPreview", "Global.AntiAliasing.FXAAEnabled", false));
+            bool enabled;
+            if (renderConfig.Read("Global.AntiAliasing.FXAAEnabled", &enabled, false)) {
+                m_fxaaCheckBox->SetValue(enabled);
+            }
         }
         if (m_renderingModeChoice) {
-            m_renderingModeChoice->SetSelection(configManager.getInt("RenderPreview", "Global.RenderingMode", 4));
+            int mode;
+            if (renderConfig.Read("Global.RenderingMode", &mode, 1)) { // Default to Balanced (index 1)
+                // Validate mode value against current choice count
+                if (mode >= 0 && mode < m_renderingModeChoice->GetCount()) {
+                    m_renderingModeChoice->SetSelection(mode);
+                } else {
+                    // If invalid, default to Balanced
+                    m_renderingModeChoice->SetSelection(1);
+                    LOG_WRN_S("GlobalSettingsPanel::loadSettings: Invalid rendering mode " + std::to_string(mode) + ", defaulting to Balanced");
+                }
+            }
         }
         
-        // Initialize default light if none exists
-        if (m_lights.empty()) {
+        // Load lighting settings
+        m_lights.clear();
+        int lightCount = 0;
+        if (renderConfig.Read("Global.Lighting.Count", &lightCount, 0) && lightCount > 0) {
+            for (int i = 0; i < lightCount; ++i) {
+                RenderLightSettings light;
+                std::string lightPrefix = "Global.Lighting.Light" + std::to_string(i);
+                
+                renderConfig.Read(lightPrefix + ".Enabled", &light.enabled, true);
+                wxString lightName;
+                renderConfig.Read(lightPrefix + ".Name", &lightName, "Light " + std::to_string(i + 1));
+                light.name = lightName.ToStdString();
+                
+                wxString lightType;
+                renderConfig.Read(lightPrefix + ".Type", &lightType, "directional");
+                light.type = lightType.ToStdString();
+                renderConfig.Read(lightPrefix + ".PositionX", &light.positionX, 0.0);
+                renderConfig.Read(lightPrefix + ".PositionY", &light.positionY, 0.0);
+                renderConfig.Read(lightPrefix + ".PositionZ", &light.positionZ, 10.0);
+                renderConfig.Read(lightPrefix + ".DirectionX", &light.directionX, 0.0);
+                renderConfig.Read(lightPrefix + ".DirectionY", &light.directionY, 0.0);
+                renderConfig.Read(lightPrefix + ".DirectionZ", &light.directionZ, -1.0);
+                
+                int colorR, colorG, colorB;
+                renderConfig.Read(lightPrefix + ".ColorR", &colorR, 255);
+                renderConfig.Read(lightPrefix + ".ColorG", &colorG, 255);
+                renderConfig.Read(lightPrefix + ".ColorB", &colorB, 255);
+                light.color = wxColour(colorR, colorG, colorB);
+                
+                renderConfig.Read(lightPrefix + ".Intensity", &light.intensity, 1.0);
+                renderConfig.Read(lightPrefix + ".SpotAngle", &light.spotAngle, 30.0);
+                renderConfig.Read(lightPrefix + ".SpotExponent", &light.spotExponent, 1.0);
+                
+                m_lights.push_back(light);
+            }
+        } else {
+            // Initialize default light if no lights are saved
             RenderLightSettings defaultLight;
             defaultLight.name = "Default Light";
             defaultLight.type = "directional";
@@ -675,10 +921,14 @@ void GlobalSettingsPanel::loadSettings()
             defaultLight.intensity = 1.0;
             defaultLight.enabled = true;
             m_lights.push_back(defaultLight);
-            updateLightList();
         }
         
-        LOG_INF_S("GlobalSettingsPanel::loadSettings: Settings loaded successfully");
+        updateLightList();
+        
+        // Update control states after loading settings
+        updateControlStates();
+        
+        LOG_INF_S("GlobalSettingsPanel::loadSettings: Settings loaded from render_settings.ini successfully");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("GlobalSettingsPanel::loadSettings: Failed to load settings: " + std::string(e.what()));
@@ -688,24 +938,55 @@ void GlobalSettingsPanel::loadSettings()
 void GlobalSettingsPanel::saveSettings()
 {
     try {
-        auto& configManager = ConfigManager::getInstance();
+        // Create a separate config file for render settings
+        wxString exePath = wxStandardPaths::Get().GetExecutablePath();
+        wxFileName exeFile(exePath);
+        wxString exeDir = exeFile.GetPath();
+        wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
+        
+        // Create wxFileConfig for render settings
+        wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
         
         // Save anti-aliasing settings
         if (m_antiAliasingChoice) {
-            configManager.setInt("RenderPreview", "Global.AntiAliasing.Method", m_antiAliasingChoice->GetSelection());
+            renderConfig.Write("Global.AntiAliasing.Method", m_antiAliasingChoice->GetSelection());
         }
         if (m_msaaSamplesSlider) {
-            configManager.setInt("RenderPreview", "Global.AntiAliasing.MSAASamples", m_msaaSamplesSlider->GetValue());
+            renderConfig.Write("Global.AntiAliasing.MSAASamples", m_msaaSamplesSlider->GetValue());
         }
         if (m_fxaaCheckBox) {
-            configManager.setBool("RenderPreview", "Global.AntiAliasing.FXAAEnabled", m_fxaaCheckBox->GetValue());
+            renderConfig.Write("Global.AntiAliasing.FXAAEnabled", m_fxaaCheckBox->GetValue());
         }
         if (m_renderingModeChoice) {
-            configManager.setInt("RenderPreview", "Global.RenderingMode", m_renderingModeChoice->GetSelection());
+            renderConfig.Write("Global.RenderingMode", m_renderingModeChoice->GetSelection());
         }
         
-        configManager.save();
-        LOG_INF_S("GlobalSettingsPanel::saveSettings: Settings saved successfully");
+        // Save lighting settings
+        renderConfig.Write("Global.Lighting.Count", static_cast<int>(m_lights.size()));
+        
+        for (size_t i = 0; i < m_lights.size(); ++i) {
+            const auto& light = m_lights[i];
+            std::string lightPrefix = "Global.Lighting.Light" + std::to_string(i);
+            
+            renderConfig.Write(lightPrefix + ".Enabled", light.enabled);
+            renderConfig.Write(lightPrefix + ".Name", wxString(light.name));
+            renderConfig.Write(lightPrefix + ".Type", wxString(light.type));
+            renderConfig.Write(lightPrefix + ".PositionX", light.positionX);
+            renderConfig.Write(lightPrefix + ".PositionY", light.positionY);
+            renderConfig.Write(lightPrefix + ".PositionZ", light.positionZ);
+            renderConfig.Write(lightPrefix + ".DirectionX", light.directionX);
+            renderConfig.Write(lightPrefix + ".DirectionY", light.directionY);
+            renderConfig.Write(lightPrefix + ".DirectionZ", light.directionZ);
+            renderConfig.Write(lightPrefix + ".ColorR", light.color.Red());
+            renderConfig.Write(lightPrefix + ".ColorG", light.color.Green());
+            renderConfig.Write(lightPrefix + ".ColorB", light.color.Blue());
+            renderConfig.Write(lightPrefix + ".Intensity", light.intensity);
+            renderConfig.Write(lightPrefix + ".SpotAngle", light.spotAngle);
+            renderConfig.Write(lightPrefix + ".SpotExponent", light.spotExponent);
+        }
+        
+        renderConfig.Flush();
+        LOG_INF_S("GlobalSettingsPanel::saveSettings: Settings saved to render_settings.ini successfully");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("GlobalSettingsPanel::saveSettings: Failed to save settings: " + std::string(e.what()));
@@ -744,6 +1025,9 @@ void GlobalSettingsPanel::resetToDefaults()
     defaultLight.enabled = true;
     m_lights.push_back(defaultLight);
     updateLightList();
+    
+    // Update control states after reset
+    updateControlStates();
     
     LOG_INF_S("GlobalSettingsPanel::resetToDefaults: Settings reset to defaults");
 }
@@ -1087,4 +1371,185 @@ void GlobalSettingsPanel::onNavcubePreset(wxCommandEvent& event)
     updateLightList();
     m_currentPresetLabel->SetLabel("Navcube Lighting");
     onLightingChanged(event);
+}
+
+void GlobalSettingsPanel::updateControlStates()
+{
+    bool hasValidName = false;
+    wxColour currentColor = wxColour(255, 255, 255);
+    std::string lightType = "directional";
+    
+    // Check if we have a valid light selected
+    if (m_currentLightIndex >= 0 && m_currentLightIndex < static_cast<int>(m_lights.size())) {
+        const auto& light = m_lights[m_currentLightIndex];
+        hasValidName = !light.name.empty() && light.name.length() > 0;
+        currentColor = light.color;
+        lightType = light.type;
+        
+        LOG_INF_S("GlobalSettingsPanel::updateControlStates: Light '" + light.name + "' - Type: " + lightType + 
+                  " - Valid name: " + std::string(hasValidName ? "true" : "false"));
+    } else {
+        LOG_INF_S("GlobalSettingsPanel::updateControlStates: No light selected");
+    }
+    
+    // Enable/disable controls based on light name validity and type
+    if (m_lightTypeChoice) {
+        m_lightTypeChoice->Enable(hasValidName);
+        LOG_INF_S("GlobalSettingsPanel::updateControlStates: Light type choice " + std::string(hasValidName ? "enabled" : "disabled"));
+    }
+    
+    // Position controls: only enabled for point and spot lights
+    bool positionEnabled = hasValidName && (lightType == "point" || lightType == "spot");
+    if (m_positionXSpin) {
+        m_positionXSpin->Enable(positionEnabled);
+    }
+    if (m_positionYSpin) {
+        m_positionYSpin->Enable(positionEnabled);
+    }
+    if (m_positionZSpin) {
+        m_positionZSpin->Enable(positionEnabled);
+    }
+    
+    // Direction controls: enabled for all light types
+    bool directionEnabled = hasValidName;
+    if (m_directionXSpin) {
+        m_directionXSpin->Enable(directionEnabled);
+    }
+    if (m_directionYSpin) {
+        m_directionYSpin->Enable(directionEnabled);
+    }
+    if (m_directionZSpin) {
+        m_directionZSpin->Enable(directionEnabled);
+    }
+    
+    // Other controls: enabled if name is valid
+    if (m_intensitySpin) {
+        m_intensitySpin->Enable(hasValidName);
+    }
+    if (m_lightColorButton) {
+        m_lightColorButton->Enable(hasValidName);
+    }
+    if (m_lightEnabledCheckBox) {
+        m_lightEnabledCheckBox->Enable(hasValidName);
+    }
+    
+    LOG_INF_S("GlobalSettingsPanel::updateControlStates: Position controls " + std::string(positionEnabled ? "enabled" : "disabled") + 
+              " for light type: " + lightType);
+    
+    // Update color button appearance to indicate disabled state
+    if (m_lightColorButton) {
+        if (!hasValidName) {
+            m_lightColorButton->SetBackgroundColour(wxColour(200, 200, 200)); // Gray out
+            m_lightColorButton->SetLabel("RGB(200,200,200)");
+            LOG_INF_S("GlobalSettingsPanel::updateControlStates: Color button grayed out");
+        } else {
+            // Restore original color
+            m_lightColorButton->SetBackgroundColour(currentColor);
+            m_lightColorButton->SetLabel(wxString::Format("RGB(%d,%d,%d)", 
+                currentColor.Red(), currentColor.Green(), currentColor.Blue()));
+            LOG_INF_S("GlobalSettingsPanel::updateControlStates: Color button restored to original color");
+        }
+    }
+    
+    // Force refresh of the UI
+    if (m_lightTypeChoice) {
+        m_lightTypeChoice->Refresh();
+    }
+    if (m_positionXSpin) {
+        m_positionXSpin->Refresh();
+    }
+    if (m_positionYSpin) {
+        m_positionYSpin->Refresh();
+    }
+    if (m_positionZSpin) {
+        m_positionZSpin->Refresh();
+    }
+    if (m_directionXSpin) {
+        m_directionXSpin->Refresh();
+    }
+    if (m_directionYSpin) {
+        m_directionYSpin->Refresh();
+    }
+    if (m_directionZSpin) {
+        m_directionZSpin->Refresh();
+    }
+    if (m_intensitySpin) {
+        m_intensitySpin->Refresh();
+    }
+    if (m_lightColorButton) {
+        m_lightColorButton->Refresh();
+    }
+    if (m_lightEnabledCheckBox) {
+        m_lightEnabledCheckBox->Refresh();
+    }
+    
+    LOG_INF_S("GlobalSettingsPanel::updateControlStates: All controls updated - Valid name: " + 
+              std::string(hasValidName ? "true" : "false"));
+}
+
+// Global Settings button event handlers
+void GlobalSettingsPanel::OnGlobalApply(wxCommandEvent& event)
+{
+    // Apply only global settings (lighting, anti-aliasing, rendering mode)
+    if (m_parentDialog && m_parentDialog->getRenderCanvas()) {
+        auto canvas = m_parentDialog->getRenderCanvas();
+        
+        // Apply lighting settings
+        auto lights = getLights();
+        if (!lights.empty()) {
+            canvas->updateMultiLighting(lights);
+        }
+        
+        // Apply anti-aliasing settings
+        int antiAliasingMethod = getAntiAliasingMethod();
+        int msaaSamples = getMSAASamples();
+        bool fxaaEnabled = isFXAAEnabled();
+        canvas->updateAntiAliasing(antiAliasingMethod, msaaSamples, fxaaEnabled);
+        
+        // Apply rendering mode
+        int renderingMode = getRenderingMode();
+        canvas->updateRenderingMode(renderingMode);
+        
+        // Force canvas refresh
+        canvas->render(true);
+        canvas->Refresh();
+        canvas->Update();
+        
+        wxMessageBox(wxT("Global settings applied to preview successfully!"), wxT("Apply Global"), wxOK | wxICON_INFORMATION);
+        LOG_INF_S("GlobalSettingsPanel::OnGlobalApply: Global settings applied");
+    }
+}
+
+void GlobalSettingsPanel::OnGlobalSave(wxCommandEvent& event)
+{
+    saveSettings();
+    wxMessageBox(wxT("Global settings saved successfully!"), wxT("Save Global"), wxOK | wxICON_INFORMATION);
+    LOG_INF_S("GlobalSettingsPanel::OnGlobalSave: Global settings saved");
+}
+
+void GlobalSettingsPanel::OnGlobalReset(wxCommandEvent& event)
+{
+    resetToDefaults();
+    wxMessageBox(wxT("Global settings reset to defaults!"), wxT("Reset Global"), wxOK | wxICON_INFORMATION);
+    LOG_INF_S("GlobalSettingsPanel::OnGlobalReset: Global settings reset");
+}
+
+void GlobalSettingsPanel::OnGlobalUndo(wxCommandEvent& event)
+{
+    // TODO: Implement undo functionality for global settings
+    wxMessageBox(wxT("Global Undo: Not implemented yet"), wxT("Undo Global"), wxOK | wxICON_INFORMATION);
+    LOG_INF_S("GlobalSettingsPanel::OnGlobalUndo: Global undo requested");
+}
+
+void GlobalSettingsPanel::OnGlobalRedo(wxCommandEvent& event)
+{
+    // TODO: Implement redo functionality for global settings
+    wxMessageBox(wxT("Global Redo: Not implemented yet"), wxT("Redo Global"), wxOK | wxICON_INFORMATION);
+    LOG_INF_S("GlobalSettingsPanel::OnGlobalRedo: Global redo requested");
+}
+
+void GlobalSettingsPanel::OnGlobalAutoApply(wxCommandEvent& event)
+{
+    m_autoApply = event.IsChecked();
+    LOG_INF_S("GlobalSettingsPanel::OnGlobalAutoApply: Global auto apply " + std::string(m_autoApply ? "enabled" : "disabled"));
 } 
