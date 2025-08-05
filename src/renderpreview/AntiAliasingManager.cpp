@@ -374,17 +374,28 @@ float AntiAliasingManager::getPerformanceImpact() const
                     impact = 1.0f;
                     break;
                 case 1: // MSAA
-                    impact = 1.0f + (settings.msaaSamples / 4.0f) * 0.5f;
+                    impact = 1.0f + (settings.msaaSamples / 4.0f) * 0.8f;
                     break;
                 case 2: // FXAA
-                    impact = 1.0f + 0.2f * settings.fxaaQuality;
+                    impact = 1.0f + settings.fxaaQuality * 0.3f;
                     break;
                 case 3: // SSAA
-                    impact = 1.0f + settings.ssaaFactor * 0.8f;
+                    impact = 1.0f + (settings.ssaaFactor * settings.ssaaFactor) * 0.5f;
                     break;
                 case 4: // TAA
-                    impact = 1.0f + 0.3f * settings.taaStrength;
+                    impact = 1.0f + settings.taaStrength * 0.4f + settings.jitterStrength * 0.2f;
                     break;
+                default:
+                    impact = 1.0f;
+                    break;
+            }
+            
+            // Additional factors
+            if (settings.adaptiveEnabled) {
+                impact *= 0.9f; // Adaptive AA reduces impact
+            }
+            if (settings.temporalFiltering) {
+                impact *= 1.1f; // Temporal filtering increases impact
             }
             
             return impact;
@@ -441,6 +452,12 @@ void AntiAliasingManager::initializePresets()
     msaa8x.msaaSamples = 8;
     m_presets["MSAA 8x"] = msaa8x;
     
+    AntiAliasingSettings msaa16x;
+    msaa16x.name = "MSAA 16x";
+    msaa16x.method = 1;
+    msaa16x.msaaSamples = 16;
+    m_presets["MSAA 16x"] = msaa16x;
+    
     // FXAA Presets
     AntiAliasingSettings fxaaLow;
     fxaaLow.name = "FXAA Low";
@@ -462,6 +479,165 @@ void AntiAliasingManager::initializePresets()
     fxaaHigh.fxaaEnabled = true;
     fxaaHigh.fxaaQuality = 0.75f;
     m_presets["FXAA High"] = fxaaHigh;
+    
+    AntiAliasingSettings fxaaUltra;
+    fxaaUltra.name = "FXAA Ultra";
+    fxaaUltra.method = 2;
+    fxaaUltra.fxaaEnabled = true;
+    fxaaUltra.fxaaQuality = 1.0f;
+    m_presets["FXAA Ultra"] = fxaaUltra;
+    
+    // SSAA Presets
+    AntiAliasingSettings ssaa2x;
+    ssaa2x.name = "SSAA 2x";
+    ssaa2x.method = 3;
+    ssaa2x.ssaaEnabled = true;
+    ssaa2x.ssaaFactor = 2;
+    m_presets["SSAA 2x"] = ssaa2x;
+    
+    AntiAliasingSettings ssaa4x;
+    ssaa4x.name = "SSAA 4x";
+    ssaa4x.method = 3;
+    ssaa4x.ssaaEnabled = true;
+    ssaa4x.ssaaFactor = 4;
+    m_presets["SSAA 4x"] = ssaa4x;
+    
+    // TAA Presets
+    AntiAliasingSettings taaLow;
+    taaLow.name = "TAA Low";
+    taaLow.method = 4;
+    taaLow.taaEnabled = true;
+    taaLow.taaStrength = 0.3f;
+    taaLow.jitterStrength = 0.3f;
+    m_presets["TAA Low"] = taaLow;
+    
+    AntiAliasingSettings taaMedium;
+    taaMedium.name = "TAA Medium";
+    taaMedium.method = 4;
+    taaMedium.taaEnabled = true;
+    taaMedium.taaStrength = 0.6f;
+    taaMedium.jitterStrength = 0.5f;
+    m_presets["TAA Medium"] = taaMedium;
+    
+    AntiAliasingSettings taaHigh;
+    taaHigh.name = "TAA High";
+    taaHigh.method = 4;
+    taaHigh.taaEnabled = true;
+    taaHigh.taaStrength = 0.8f;
+    taaHigh.jitterStrength = 0.7f;
+    m_presets["TAA High"] = taaHigh;
+    
+    // Hybrid Presets (Combination of methods)
+    AntiAliasingSettings hybridMSAA_FXAA;
+    hybridMSAA_FXAA.name = "MSAA 4x + FXAA";
+    hybridMSAA_FXAA.method = 1;
+    hybridMSAA_FXAA.msaaSamples = 4;
+    hybridMSAA_FXAA.fxaaEnabled = true;
+    hybridMSAA_FXAA.fxaaQuality = 0.5f;
+    m_presets["MSAA 4x + FXAA"] = hybridMSAA_FXAA;
+    
+    AntiAliasingSettings hybridMSAA_TAA;
+    hybridMSAA_TAA.name = "MSAA 4x + TAA";
+    hybridMSAA_TAA.method = 1;
+    hybridMSAA_TAA.msaaSamples = 4;
+    hybridMSAA_TAA.taaEnabled = true;
+    hybridMSAA_TAA.taaStrength = 0.6f;
+    hybridMSAA_TAA.jitterStrength = 0.5f;
+    m_presets["MSAA 4x + TAA"] = hybridMSAA_TAA;
+    
+    // Performance Optimized Presets
+    AntiAliasingSettings performanceLow;
+    performanceLow.name = "Performance Low";
+    performanceLow.method = 2;
+    performanceLow.fxaaEnabled = true;
+    performanceLow.fxaaQuality = 0.25f;
+    performanceLow.adaptiveEnabled = true;
+    performanceLow.edgeThreshold = 0.05f;
+    m_presets["Performance Low"] = performanceLow;
+    
+    AntiAliasingSettings performanceMedium;
+    performanceMedium.name = "Performance Medium";
+    performanceMedium.method = 1;
+    performanceMedium.msaaSamples = 2;
+    performanceMedium.adaptiveEnabled = true;
+    performanceMedium.edgeThreshold = 0.1f;
+    m_presets["Performance Medium"] = performanceMedium;
+    
+    // Quality Optimized Presets
+    AntiAliasingSettings qualityHigh;
+    qualityHigh.name = "Quality High";
+    qualityHigh.method = 1;
+    qualityHigh.msaaSamples = 8;
+    qualityHigh.adaptiveEnabled = true;
+    qualityHigh.edgeThreshold = 0.15f;
+    qualityHigh.temporalFiltering = true;
+    m_presets["Quality High"] = qualityHigh;
+    
+    AntiAliasingSettings qualityUltra;
+    qualityUltra.name = "Quality Ultra";
+    qualityUltra.method = 3;
+    qualityUltra.ssaaEnabled = true;
+    qualityUltra.ssaaFactor = 4;
+    qualityUltra.adaptiveEnabled = true;
+    qualityUltra.edgeThreshold = 0.2f;
+    qualityUltra.temporalFiltering = true;
+    m_presets["Quality Ultra"] = qualityUltra;
+    
+    // CAD/Engineering Specific Presets
+    AntiAliasingSettings cadStandard;
+    cadStandard.name = "CAD Standard";
+    cadStandard.method = 1;
+    cadStandard.msaaSamples = 4;
+    cadStandard.adaptiveEnabled = true;
+    cadStandard.edgeThreshold = 0.12f;
+    m_presets["CAD Standard"] = cadStandard;
+    
+    AntiAliasingSettings cadHighQuality;
+    cadHighQuality.name = "CAD High Quality";
+    cadHighQuality.method = 1;
+    cadHighQuality.msaaSamples = 8;
+    cadHighQuality.adaptiveEnabled = true;
+    cadHighQuality.edgeThreshold = 0.15f;
+    cadHighQuality.temporalFiltering = true;
+    m_presets["CAD High Quality"] = cadHighQuality;
+    
+    // Gaming/Real-time Presets
+    AntiAliasingSettings gamingFast;
+    gamingFast.name = "Gaming Fast";
+    gamingFast.method = 2;
+    gamingFast.fxaaEnabled = true;
+    gamingFast.fxaaQuality = 0.4f;
+    gamingFast.adaptiveEnabled = true;
+    gamingFast.edgeThreshold = 0.08f;
+    m_presets["Gaming Fast"] = gamingFast;
+    
+    AntiAliasingSettings gamingBalanced;
+    gamingBalanced.name = "Gaming Balanced";
+    gamingBalanced.method = 4;
+    gamingBalanced.taaEnabled = true;
+    gamingBalanced.taaStrength = 0.7f;
+    gamingBalanced.jitterStrength = 0.6f;
+    gamingBalanced.temporalFiltering = true;
+    m_presets["Gaming Balanced"] = gamingBalanced;
+    
+    // Mobile/Embedded Presets
+    AntiAliasingSettings mobileLow;
+    mobileLow.name = "Mobile Low";
+    mobileLow.method = 2;
+    mobileLow.fxaaEnabled = true;
+    mobileLow.fxaaQuality = 0.2f;
+    mobileLow.adaptiveEnabled = true;
+    mobileLow.edgeThreshold = 0.03f;
+    m_presets["Mobile Low"] = mobileLow;
+    
+    AntiAliasingSettings mobileMedium;
+    mobileMedium.name = "Mobile Medium";
+    mobileMedium.method = 2;
+    mobileMedium.fxaaEnabled = true;
+    mobileMedium.fxaaQuality = 0.35f;
+    mobileMedium.adaptiveEnabled = true;
+    mobileMedium.edgeThreshold = 0.06f;
+    m_presets["Mobile Medium"] = mobileMedium;
     
     LOG_INF_S("AntiAliasingManager::initializePresets: Initialized " + std::to_string(m_presets.size()) + " presets");
 }

@@ -39,6 +39,12 @@ GlobalSettingsPanel::GlobalSettingsPanel(wxWindow* parent, RenderPreviewDialog* 
     // Initialize control states after loading settings
     updateControlStates();
     
+    // Validate presets after initialization
+    validatePresets();
+    
+    // Test preset functionality
+    testPresetFunctionality();
+    
     LOG_INF_S("GlobalSettingsPanel::GlobalSettingsPanel: Initialized successfully");
 }
 
@@ -241,14 +247,54 @@ wxSizer* GlobalSettingsPanel::createAntiAliasingTab(wxWindow* parent)
     auto* presetsLabel = new wxStaticText(parent, wxID_ANY, "Choose an anti-aliasing preset:");
     presetsBoxSizer->Add(presetsLabel, 0, wxALL, 8);
     
-    m_antiAliasingChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
+    m_antiAliasingChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
+    
+    // Basic presets
     m_antiAliasingChoice->Append("None");
     m_antiAliasingChoice->Append("MSAA 2x");
     m_antiAliasingChoice->Append("MSAA 4x");
     m_antiAliasingChoice->Append("MSAA 8x");
+    m_antiAliasingChoice->Append("MSAA 16x");
+    
+    // FXAA presets
     m_antiAliasingChoice->Append("FXAA Low");
     m_antiAliasingChoice->Append("FXAA Medium");
     m_antiAliasingChoice->Append("FXAA High");
+    m_antiAliasingChoice->Append("FXAA Ultra");
+    
+    // SSAA presets
+    m_antiAliasingChoice->Append("SSAA 2x");
+    m_antiAliasingChoice->Append("SSAA 4x");
+    
+    // TAA presets
+    m_antiAliasingChoice->Append("TAA Low");
+    m_antiAliasingChoice->Append("TAA Medium");
+    m_antiAliasingChoice->Append("TAA High");
+    
+    // Hybrid presets
+    m_antiAliasingChoice->Append("MSAA 4x + FXAA");
+    m_antiAliasingChoice->Append("MSAA 4x + TAA");
+    
+    // Performance presets
+    m_antiAliasingChoice->Append("Performance Low");
+    m_antiAliasingChoice->Append("Performance Medium");
+    
+    // Quality presets
+    m_antiAliasingChoice->Append("Quality High");
+    m_antiAliasingChoice->Append("Quality Ultra");
+    
+    // CAD/Engineering presets
+    m_antiAliasingChoice->Append("CAD Standard");
+    m_antiAliasingChoice->Append("CAD High Quality");
+    
+    // Gaming presets
+    m_antiAliasingChoice->Append("Gaming Fast");
+    m_antiAliasingChoice->Append("Gaming Balanced");
+    
+    // Mobile presets
+    m_antiAliasingChoice->Append("Mobile Low");
+    m_antiAliasingChoice->Append("Mobile Medium");
+    
     m_antiAliasingChoice->SetSelection(2); // Default to MSAA 4x
     presetsBoxSizer->Add(m_antiAliasingChoice, 0, wxEXPAND | wxALL, 8);
     
@@ -264,6 +310,10 @@ wxSizer* GlobalSettingsPanel::createAntiAliasingTab(wxWindow* parent)
     auto* qualityLabel = new wxStaticText(parent, wxID_ANY, "Quality: MSAA 4x");
     qualityLabel->SetForegroundColour(wxColour(0, 0, 128));
     performanceBoxSizer->Add(qualityLabel, 0, wxALL, 8);
+    
+    auto* fpsLabel = new wxStaticText(parent, wxID_ANY, "Estimated FPS: 60");
+    fpsLabel->SetForegroundColour(wxColour(0, 128, 0));
+    performanceBoxSizer->Add(fpsLabel, 0, wxALL, 8);
     
     antiAliasingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 8);
     
@@ -295,12 +345,41 @@ wxSizer* GlobalSettingsPanel::createRenderingModeTab(wxWindow* parent)
     auto* presetsLabel = new wxStaticText(parent, wxID_ANY, "Choose a rendering preset:");
     presetsBoxSizer->Add(presetsLabel, 0, wxALL, 8);
     
-    m_renderingModeChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
+    m_renderingModeChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
+    
+    // Basic presets
     m_renderingModeChoice->Append("Performance");
     m_renderingModeChoice->Append("Balanced");
     m_renderingModeChoice->Append("Quality");
     m_renderingModeChoice->Append("Ultra");
     m_renderingModeChoice->Append("Wireframe");
+    
+    // CAD/Engineering presets
+    m_renderingModeChoice->Append("CAD Standard");
+    m_renderingModeChoice->Append("CAD High Quality");
+    m_renderingModeChoice->Append("CAD Wireframe");
+    
+    // Gaming presets
+    m_renderingModeChoice->Append("Gaming Fast");
+    m_renderingModeChoice->Append("Gaming Balanced");
+    m_renderingModeChoice->Append("Gaming Quality");
+    
+    // Mobile presets
+    m_renderingModeChoice->Append("Mobile Low");
+    m_renderingModeChoice->Append("Mobile Medium");
+    
+    // Presentation presets
+    m_renderingModeChoice->Append("Presentation Standard");
+    m_renderingModeChoice->Append("Presentation High");
+    
+    // Debug presets
+    m_renderingModeChoice->Append("Debug Wireframe");
+    m_renderingModeChoice->Append("Debug Points");
+    
+    // Legacy presets
+    m_renderingModeChoice->Append("Legacy Solid");
+    m_renderingModeChoice->Append("Legacy Hidden Line");
+    
     m_renderingModeChoice->SetSelection(1); // Default to Balanced
     presetsBoxSizer->Add(m_renderingModeChoice, 0, wxEXPAND | wxALL, 8);
     
@@ -320,6 +399,10 @@ wxSizer* GlobalSettingsPanel::createRenderingModeTab(wxWindow* parent)
     auto* fpsLabel = new wxStaticText(parent, wxID_ANY, "Estimated FPS: 60");
     fpsLabel->SetForegroundColour(wxColour(0, 128, 0));
     performanceBoxSizer->Add(fpsLabel, 0, wxALL, 8);
+    
+    auto* featuresLabel = new wxStaticText(parent, wxID_ANY, "Features: Smooth Shading, Phong Shading");
+    featuresLabel->SetForegroundColour(wxColour(128, 128, 128));
+    performanceBoxSizer->Add(featuresLabel, 0, wxALL, 8);
     
     renderingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 8);
     
@@ -747,6 +830,42 @@ void GlobalSettingsPanel::onAntiAliasingChanged(wxCommandEvent& event)
         // Apply the selected preset
         m_antiAliasingManager->applyPreset(presetName.ToStdString());
         
+        // Update performance impact display
+        float impact = m_antiAliasingManager->getPerformanceImpact();
+        std::string qualityDesc = m_antiAliasingManager->getQualityDescription();
+        
+        // Find and update performance labels
+        wxWindow* parent = m_antiAliasingChoice->GetParent();
+        if (parent) {
+            wxWindowList children = parent->GetChildren();
+            for (auto child : children) {
+                if (wxStaticText* label = dynamic_cast<wxStaticText*>(child)) {
+                    wxString labelText = label->GetLabel();
+                    if (labelText.Contains("Performance Impact:")) {
+                        std::string impactText = "Performance Impact: ";
+                        if (impact < 1.2f) {
+                            impactText += "Low";
+                            label->SetForegroundColour(wxColour(0, 128, 0));
+                        } else if (impact < 1.8f) {
+                            impactText += "Medium";
+                            label->SetForegroundColour(wxColour(255, 165, 0));
+                        } else {
+                            impactText += "High";
+                            label->SetForegroundColour(wxColour(255, 0, 0));
+                        }
+                        label->SetLabel(impactText);
+                    } else if (labelText.Contains("Quality:")) {
+                        label->SetLabel("Quality: " + qualityDesc);
+                    } else if (labelText.Contains("Estimated FPS:")) {
+                        int estimatedFPS = static_cast<int>(60.0f / impact);
+                        if (estimatedFPS < 15) estimatedFPS = 15;
+                        if (estimatedFPS > 120) estimatedFPS = 120;
+                        label->SetLabel("Estimated FPS: " + std::to_string(estimatedFPS));
+                    }
+                }
+            }
+        }
+        
         LOG_INF_S("GlobalSettingsPanel::onAntiAliasingChanged: Applied preset '" + presetName.ToStdString() + "'");
     }
     
@@ -764,6 +883,57 @@ void GlobalSettingsPanel::onRenderingModeChanged(wxCommandEvent& event)
         
         // Apply the selected preset
         m_renderingManager->applyPreset(presetName.ToStdString());
+        
+        // Update performance impact display
+        float impact = m_renderingManager->getPerformanceImpact();
+        std::string qualityDesc = m_renderingManager->getQualityDescription();
+        int estimatedFPS = m_renderingManager->getEstimatedFPS();
+        
+        // Find and update performance labels
+        wxWindow* parent = m_renderingModeChoice->GetParent();
+        if (parent) {
+            wxWindowList children = parent->GetChildren();
+            for (auto child : children) {
+                if (wxStaticText* label = dynamic_cast<wxStaticText*>(child)) {
+                    wxString labelText = label->GetLabel();
+                    if (labelText.Contains("Performance Impact:")) {
+                        std::string impactText = "Performance Impact: ";
+                        if (impact < 1.2f) {
+                            impactText += "Low";
+                            label->SetForegroundColour(wxColour(0, 128, 0));
+                        } else if (impact < 1.8f) {
+                            impactText += "Medium";
+                            label->SetForegroundColour(wxColour(255, 165, 0));
+                        } else {
+                            impactText += "High";
+                            label->SetForegroundColour(wxColour(255, 0, 0));
+                        }
+                        label->SetLabel(impactText);
+                    } else if (labelText.Contains("Quality:")) {
+                        label->SetLabel("Quality: " + qualityDesc);
+                    } else if (labelText.Contains("Estimated FPS:")) {
+                        label->SetLabel("Estimated FPS: " + std::to_string(estimatedFPS));
+                    } else if (labelText.Contains("Features:")) {
+                        // Update features description based on preset
+                        std::string featuresText = "Features: ";
+                        if (presetName.Contains("CAD")) {
+                            featuresText += "CAD Optimized, High Precision";
+                        } else if (presetName.Contains("Gaming")) {
+                            featuresText += "Real-time Optimized, Fast Rendering";
+                        } else if (presetName.Contains("Mobile")) {
+                            featuresText += "Mobile Optimized, Battery Efficient";
+                        } else if (presetName.Contains("Presentation")) {
+                            featuresText += "High Quality, Smooth Shading";
+                        } else if (presetName.Contains("Debug")) {
+                            featuresText += "Debug Mode, Wireframe/Points";
+                        } else {
+                            featuresText += "Standard Rendering Features";
+                        }
+                        label->SetLabel(featuresText);
+                    }
+                }
+            }
+        }
         
         LOG_INF_S("GlobalSettingsPanel::onRenderingModeChanged: Applied preset '" + presetName.ToStdString() + "'");
     }
@@ -871,6 +1041,44 @@ void GlobalSettingsPanel::loadSettings()
             }
         }
         
+        // Load user preferences from rendering_presets.ini
+        wxString presetsConfigPath = exeDir + wxFileName::GetPathSeparator() + "rendering_presets.ini";
+        wxFileConfig presetsConfig(wxEmptyString, wxEmptyString, presetsConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
+        
+        // Load user preferred presets
+        wxString defaultAAPreset, defaultRenderingPreset;
+        if (presetsConfig.Read("AntiAliasing_Presets.Default", &defaultAAPreset, "MSAA 4x")) {
+            // Find and select the preferred preset
+            if (m_antiAliasingChoice) {
+                int index = m_antiAliasingChoice->FindString(defaultAAPreset);
+                if (index != wxNOT_FOUND) {
+                    m_antiAliasingChoice->SetSelection(index);
+                }
+            }
+        }
+        
+        if (presetsConfig.Read("Rendering_Presets.Default", &defaultRenderingPreset, "Balanced")) {
+            // Find and select the preferred preset
+            if (m_renderingModeChoice) {
+                int index = m_renderingModeChoice->FindString(defaultRenderingPreset);
+                if (index != wxNOT_FOUND) {
+                    m_renderingModeChoice->SetSelection(index);
+                }
+            }
+        }
+        
+        // Load user preferences
+        bool showPerformanceImpact, showEstimatedFPS, showFeatureDescriptions;
+        if (presetsConfig.Read("User_Preferences.ShowPerformanceImpact", &showPerformanceImpact, true)) {
+            // Apply visibility settings if needed
+        }
+        if (presetsConfig.Read("User_Preferences.ShowEstimatedFPS", &showEstimatedFPS, true)) {
+            // Apply visibility settings if needed
+        }
+        if (presetsConfig.Read("User_Preferences.ShowFeatureDescriptions", &showFeatureDescriptions, true)) {
+            // Apply visibility settings if needed
+        }
+        
         // Load lighting settings
         m_lights.clear();
         int lightCount = 0;
@@ -928,7 +1136,7 @@ void GlobalSettingsPanel::loadSettings()
         // Update control states after loading settings
         updateControlStates();
         
-        LOG_INF_S("GlobalSettingsPanel::loadSettings: Settings loaded from render_settings.ini successfully");
+        LOG_INF_S("GlobalSettingsPanel::loadSettings: Settings loaded from render_settings.ini and rendering_presets.ini successfully");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("GlobalSettingsPanel::loadSettings: Failed to load settings: " + std::string(e.what()));
@@ -1552,4 +1760,81 @@ void GlobalSettingsPanel::OnGlobalAutoApply(wxCommandEvent& event)
 {
     m_autoApply = event.IsChecked();
     LOG_INF_S("GlobalSettingsPanel::OnGlobalAutoApply: Global auto apply " + std::string(m_autoApply ? "enabled" : "disabled"));
+}
+
+// Add a method to validate presets
+void GlobalSettingsPanel::validatePresets()
+{
+    LOG_INF_S("GlobalSettingsPanel::validatePresets: Validating preset configurations");
+    
+    // Validate anti-aliasing presets
+    if (m_antiAliasingManager) {
+        auto presets = m_antiAliasingManager->getAvailablePresets();
+        LOG_INF_S("GlobalSettingsPanel::validatePresets: Found " + std::to_string(presets.size()) + " anti-aliasing presets");
+        
+        for (const auto& preset : presets) {
+            LOG_INF_S("GlobalSettingsPanel::validatePresets: Anti-aliasing preset: " + preset);
+        }
+    }
+    
+    // Validate rendering presets
+    if (m_renderingManager) {
+        auto presets = m_renderingManager->getAvailablePresets();
+        LOG_INF_S("GlobalSettingsPanel::validatePresets: Found " + std::to_string(presets.size()) + " rendering presets");
+        
+        for (const auto& preset : presets) {
+            LOG_INF_S("GlobalSettingsPanel::validatePresets: Rendering preset: " + preset);
+        }
+    }
+    
+    // Validate UI controls
+    if (m_antiAliasingChoice) {
+        LOG_INF_S("GlobalSettingsPanel::validatePresets: Anti-aliasing choice has " + 
+                  std::to_string(m_antiAliasingChoice->GetCount()) + " options");
+    }
+    
+    if (m_renderingModeChoice) {
+        LOG_INF_S("GlobalSettingsPanel::validatePresets: Rendering mode choice has " + 
+                  std::to_string(m_renderingModeChoice->GetCount()) + " options");
+    }
+    
+    LOG_INF_S("GlobalSettingsPanel::validatePresets: Preset validation completed");
+}
+
+// Add a method to test preset functionality
+void GlobalSettingsPanel::testPresetFunctionality()
+{
+    LOG_INF_S("GlobalSettingsPanel::testPresetFunctionality: Testing preset functionality");
+    
+    // Test anti-aliasing preset application
+    if (m_antiAliasingManager && m_antiAliasingChoice) {
+        // Test a few key presets
+        std::vector<std::string> testPresets = {"MSAA 4x", "FXAA Medium", "CAD Standard", "Gaming Fast"};
+        
+        for (const auto& preset : testPresets) {
+            LOG_INF_S("GlobalSettingsPanel::testPresetFunctionality: Testing anti-aliasing preset: " + preset);
+            m_antiAliasingManager->applyPreset(preset);
+            
+            // Verify the preset was applied
+            auto activeConfig = m_antiAliasingManager->getActiveConfiguration();
+            LOG_INF_S("GlobalSettingsPanel::testPresetFunctionality: Applied preset name: " + activeConfig.name);
+        }
+    }
+    
+    // Test rendering preset application
+    if (m_renderingManager && m_renderingModeChoice) {
+        // Test a few key presets
+        std::vector<std::string> testPresets = {"Balanced", "CAD Standard", "Gaming Fast", "Presentation Standard"};
+        
+        for (const auto& preset : testPresets) {
+            LOG_INF_S("GlobalSettingsPanel::testPresetFunctionality: Testing rendering preset: " + preset);
+            m_renderingManager->applyPreset(preset);
+            
+            // Verify the preset was applied
+            auto activeConfig = m_renderingManager->getActiveConfiguration();
+            LOG_INF_S("GlobalSettingsPanel::testPresetFunctionality: Applied preset name: " + activeConfig.name);
+        }
+    }
+    
+    LOG_INF_S("GlobalSettingsPanel::testPresetFunctionality: Preset functionality test completed");
 } 

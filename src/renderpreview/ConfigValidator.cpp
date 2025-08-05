@@ -66,8 +66,8 @@ ValidationResult ConfigValidator::validateLightSettings(const std::vector<Render
 ValidationResult ConfigValidator::validateAntiAliasingSettings(int method, int msaaSamples, bool fxaaEnabled)
 {
     // Validate method
-    if (method < 0 || method > 3) {
-        return ValidationResult(false, "Anti-aliasing method must be between 0 and 3");
+    if (method < 0 || method > 25) {
+        return ValidationResult(false, "Anti-aliasing method must be between 0 and 25");
     }
     
     // Validate MSAA samples

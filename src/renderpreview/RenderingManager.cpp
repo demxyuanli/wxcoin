@@ -400,26 +400,44 @@ float RenderingManager::getPerformanceImpact() const
             float impact = 1.0f;
             
             // Quality impact
-            impact += settings.quality * 0.3f;
+            switch (settings.quality) {
+                case 0: impact *= 0.6f; break; // Low
+                case 1: impact *= 1.0f; break; // Medium
+                case 2: impact *= 1.5f; break; // High
+                case 3: impact *= 2.2f; break; // Ultra
+            }
             
-            // Fast mode reduces impact
+            // Mode impact
+            switch (settings.mode) {
+                case 0: impact *= 0.8f; break;  // Solid
+                case 1: impact *= 0.6f; break;  // Wireframe
+                case 2: impact *= 0.5f; break;  // Points
+                case 3: impact *= 0.9f; break;  // HiddenLine
+                case 4: impact *= 1.0f; break;  // Shaded
+                case 5: impact *= 1.2f; break;  // ShadedWireframe
+            }
+            
+            // Feature impacts
             if (settings.fastMode) {
                 impact *= 0.7f;
             }
-            
-            // Transparency impact
-            if (settings.transparencyType > 0) {
-                impact += 0.2f;
+            if (settings.smoothShading) {
+                impact *= 1.2f;
             }
-            
-            // Shading impact
             if (settings.phongShading) {
-                impact += 0.1f;
+                impact *= 1.3f;
             }
-            
-            // Culling impact (positive for performance)
-            if (settings.backfaceCulling) {
+            if (settings.transparencyType > 0) {
+                impact *= (1.0f + settings.transparencyType * 0.3f);
+            }
+            if (settings.frustumCulling) {
                 impact *= 0.9f;
+            }
+            if (settings.occlusionCulling) {
+                impact *= 0.8f;
+            }
+            if (settings.adaptiveQuality) {
+                impact *= 0.85f;
             }
             
             return impact;
@@ -435,32 +453,27 @@ std::string RenderingManager::getQualityDescription() const
         if (it != m_configurations.end()) {
             const auto& settings = it->second->settings;
             
-            std::string desc = "Mode: ";
+            std::string description = settings.name;
             
-            switch (settings.mode) {
-                case 0: desc += "Solid"; break;
-                case 1: desc += "Wireframe"; break;
-                case 2: desc += "Points"; break;
-                case 3: desc += "Hidden Line"; break;
-                case 4: desc += "Shaded"; break;
-                case 5: desc += "Shaded Wireframe"; break;
-                default: desc += "Unknown"; break;
-            }
-            
-            desc += ", Quality: ";
+            // Add quality level
             switch (settings.quality) {
-                case 0: desc += "Low"; break;
-                case 1: desc += "Medium"; break;
-                case 2: desc += "High"; break;
-                case 3: desc += "Ultra"; break;
-                default: desc += "Unknown"; break;
+                case 0: description += " (Low Quality)"; break;
+                case 1: description += " (Medium Quality)"; break;
+                case 2: description += " (High Quality)"; break;
+                case 3: description += " (Ultra Quality)"; break;
             }
             
-            if (settings.fastMode) {
-                desc += " (Fast Mode)";
+            // Add mode
+            switch (settings.mode) {
+                case 0: description += " - Solid"; break;
+                case 1: description += " - Wireframe"; break;
+                case 2: description += " - Points"; break;
+                case 3: description += " - Hidden Line"; break;
+                case 4: description += " - Shaded"; break;
+                case 5: description += " - Shaded Wireframe"; break;
             }
             
-            return desc;
+            return description;
         }
     }
     return "No Configuration Active";
@@ -475,7 +488,10 @@ int RenderingManager::getEstimatedFPS() const
     int estimatedFPS = static_cast<int>(baseFPS / impact);
     
     // Clamp to reasonable range
-    return std::max(15, std::min(120, estimatedFPS));
+    if (estimatedFPS < 15) estimatedFPS = 15;
+    if (estimatedFPS > 120) estimatedFPS = 120;
+    
+    return estimatedFPS;
 }
 
 void RenderingManager::initializePresets()
@@ -492,6 +508,9 @@ void RenderingManager::initializePresets()
     performance.backfaceCulling = true;
     performance.depthTest = true;
     performance.depthWrite = true;
+    performance.frustumCulling = true;
+    performance.occlusionCulling = false;
+    performance.adaptiveQuality = true;
     m_presets["Performance"] = performance;
     
     // Balanced Preset
@@ -506,6 +525,9 @@ void RenderingManager::initializePresets()
     balanced.backfaceCulling = true;
     balanced.depthTest = true;
     balanced.depthWrite = true;
+    balanced.frustumCulling = true;
+    balanced.occlusionCulling = false;
+    balanced.adaptiveQuality = false;
     m_presets["Balanced"] = balanced;
     
     // Quality Preset
@@ -520,6 +542,9 @@ void RenderingManager::initializePresets()
     quality.backfaceCulling = true;
     quality.depthTest = true;
     quality.depthWrite = true;
+    quality.frustumCulling = true;
+    quality.occlusionCulling = true;
+    quality.adaptiveQuality = false;
     m_presets["Quality"] = quality;
     
     // Ultra Preset
@@ -534,6 +559,9 @@ void RenderingManager::initializePresets()
     ultra.backfaceCulling = true;
     ultra.depthTest = true;
     ultra.depthWrite = true;
+    ultra.frustumCulling = true;
+    ultra.occlusionCulling = true;
+    ultra.adaptiveQuality = false;
     m_presets["Ultra"] = ultra;
     
     // Wireframe Preset
@@ -548,7 +576,254 @@ void RenderingManager::initializePresets()
     wireframe.backfaceCulling = false;
     wireframe.depthTest = true;
     wireframe.depthWrite = true;
+    wireframe.frustumCulling = true;
+    wireframe.occlusionCulling = false;
+    wireframe.adaptiveQuality = false;
     m_presets["Wireframe"] = wireframe;
+    
+    // CAD/Engineering Presets
+    RenderingSettings cadStandard;
+    cadStandard.name = "CAD Standard";
+    cadStandard.mode = 4; // Shaded
+    cadStandard.quality = 2; // High
+    cadStandard.fastMode = false;
+    cadStandard.transparencyType = 1; // Blend
+    cadStandard.smoothShading = true;
+    cadStandard.phongShading = true;
+    cadStandard.backfaceCulling = true;
+    cadStandard.depthTest = true;
+    cadStandard.depthWrite = true;
+    cadStandard.frustumCulling = true;
+    cadStandard.occlusionCulling = false;
+    cadStandard.adaptiveQuality = false;
+    cadStandard.backgroundColor = wxColour(240, 240, 240); // Light gray
+    m_presets["CAD Standard"] = cadStandard;
+    
+    RenderingSettings cadHighQuality;
+    cadHighQuality.name = "CAD High Quality";
+    cadHighQuality.mode = 4; // Shaded
+    cadHighQuality.quality = 3; // Ultra
+    cadHighQuality.fastMode = false;
+    cadHighQuality.transparencyType = 2; // SortedBlend
+    cadHighQuality.smoothShading = true;
+    cadHighQuality.phongShading = true;
+    cadHighQuality.backfaceCulling = true;
+    cadHighQuality.depthTest = true;
+    cadHighQuality.depthWrite = true;
+    cadHighQuality.frustumCulling = true;
+    cadHighQuality.occlusionCulling = true;
+    cadHighQuality.adaptiveQuality = false;
+    cadHighQuality.backgroundColor = wxColour(255, 255, 255); // White
+    m_presets["CAD High Quality"] = cadHighQuality;
+    
+    RenderingSettings cadWireframe;
+    cadWireframe.name = "CAD Wireframe";
+    cadWireframe.mode = 1; // Wireframe
+    cadWireframe.quality = 2; // High
+    cadWireframe.fastMode = false;
+    cadWireframe.transparencyType = 0; // None
+    cadWireframe.smoothShading = false;
+    cadWireframe.phongShading = false;
+    cadWireframe.backfaceCulling = false;
+    cadWireframe.depthTest = true;
+    cadWireframe.depthWrite = true;
+    cadWireframe.frustumCulling = true;
+    cadWireframe.occlusionCulling = false;
+    cadWireframe.adaptiveQuality = false;
+    cadWireframe.backgroundColor = wxColour(255, 255, 255); // White
+    m_presets["CAD Wireframe"] = cadWireframe;
+    
+    // Gaming/Real-time Presets
+    RenderingSettings gamingFast;
+    gamingFast.name = "Gaming Fast";
+    gamingFast.mode = 4; // Shaded
+    gamingFast.quality = 0; // Low
+    gamingFast.fastMode = true;
+    gamingFast.transparencyType = 0; // None
+    gamingFast.smoothShading = false;
+    gamingFast.phongShading = false;
+    gamingFast.backfaceCulling = true;
+    gamingFast.depthTest = true;
+    gamingFast.depthWrite = true;
+    gamingFast.frustumCulling = true;
+    gamingFast.occlusionCulling = false;
+    gamingFast.adaptiveQuality = true;
+    gamingFast.backgroundColor = wxColour(0, 0, 0); // Black
+    m_presets["Gaming Fast"] = gamingFast;
+    
+    RenderingSettings gamingBalanced;
+    gamingBalanced.name = "Gaming Balanced";
+    gamingBalanced.mode = 4; // Shaded
+    gamingBalanced.quality = 1; // Medium
+    gamingBalanced.fastMode = false;
+    gamingBalanced.transparencyType = 1; // Blend
+    gamingBalanced.smoothShading = true;
+    gamingBalanced.phongShading = true;
+    gamingBalanced.backfaceCulling = true;
+    gamingBalanced.depthTest = true;
+    gamingBalanced.depthWrite = true;
+    gamingBalanced.frustumCulling = true;
+    gamingBalanced.occlusionCulling = false;
+    gamingBalanced.adaptiveQuality = true;
+    gamingBalanced.backgroundColor = wxColour(0, 0, 0); // Black
+    m_presets["Gaming Balanced"] = gamingBalanced;
+    
+    RenderingSettings gamingQuality;
+    gamingQuality.name = "Gaming Quality";
+    gamingQuality.mode = 4; // Shaded
+    gamingQuality.quality = 2; // High
+    gamingQuality.fastMode = false;
+    gamingQuality.transparencyType = 2; // SortedBlend
+    gamingQuality.smoothShading = true;
+    gamingQuality.phongShading = true;
+    gamingQuality.backfaceCulling = true;
+    gamingQuality.depthTest = true;
+    gamingQuality.depthWrite = true;
+    gamingQuality.frustumCulling = true;
+    gamingQuality.occlusionCulling = true;
+    gamingQuality.adaptiveQuality = false;
+    gamingQuality.backgroundColor = wxColour(0, 0, 0); // Black
+    m_presets["Gaming Quality"] = gamingQuality;
+    
+    // Mobile/Embedded Presets
+    RenderingSettings mobileLow;
+    mobileLow.name = "Mobile Low";
+    mobileLow.mode = 4; // Shaded
+    mobileLow.quality = 0; // Low
+    mobileLow.fastMode = true;
+    mobileLow.transparencyType = 0; // None
+    mobileLow.smoothShading = false;
+    mobileLow.phongShading = false;
+    mobileLow.backfaceCulling = true;
+    mobileLow.depthTest = true;
+    mobileLow.depthWrite = true;
+    mobileLow.frustumCulling = true;
+    mobileLow.occlusionCulling = false;
+    mobileLow.adaptiveQuality = true;
+    mobileLow.maxRenderDistance = 500;
+    m_presets["Mobile Low"] = mobileLow;
+    
+    RenderingSettings mobileMedium;
+    mobileMedium.name = "Mobile Medium";
+    mobileMedium.mode = 4; // Shaded
+    mobileMedium.quality = 1; // Medium
+    mobileMedium.fastMode = false;
+    mobileMedium.transparencyType = 1; // Blend
+    mobileMedium.smoothShading = true;
+    mobileMedium.phongShading = false;
+    mobileMedium.backfaceCulling = true;
+    mobileMedium.depthTest = true;
+    mobileMedium.depthWrite = true;
+    mobileMedium.frustumCulling = true;
+    mobileMedium.occlusionCulling = false;
+    mobileMedium.adaptiveQuality = true;
+    mobileMedium.maxRenderDistance = 750;
+    m_presets["Mobile Medium"] = mobileMedium;
+    
+    // Presentation/Visualization Presets
+    RenderingSettings presentationStandard;
+    presentationStandard.name = "Presentation Standard";
+    presentationStandard.mode = 4; // Shaded
+    presentationStandard.quality = 2; // High
+    presentationStandard.fastMode = false;
+    presentationStandard.transparencyType = 2; // SortedBlend
+    presentationStandard.smoothShading = true;
+    presentationStandard.phongShading = true;
+    presentationStandard.backfaceCulling = true;
+    presentationStandard.depthTest = true;
+    presentationStandard.depthWrite = true;
+    presentationStandard.frustumCulling = true;
+    presentationStandard.occlusionCulling = false;
+    presentationStandard.adaptiveQuality = false;
+    presentationStandard.backgroundColor = wxColour(255, 255, 255); // White
+    presentationStandard.gradientBackground = true;
+    m_presets["Presentation Standard"] = presentationStandard;
+    
+    RenderingSettings presentationHigh;
+    presentationHigh.name = "Presentation High";
+    presentationHigh.mode = 4; // Shaded
+    presentationHigh.quality = 3; // Ultra
+    presentationHigh.fastMode = false;
+    presentationHigh.transparencyType = 3; // DelayedBlend
+    presentationHigh.smoothShading = true;
+    presentationHigh.phongShading = true;
+    presentationHigh.backfaceCulling = true;
+    presentationHigh.depthTest = true;
+    presentationHigh.depthWrite = true;
+    presentationHigh.frustumCulling = true;
+    presentationHigh.occlusionCulling = true;
+    presentationHigh.adaptiveQuality = false;
+    presentationHigh.backgroundColor = wxColour(255, 255, 255); // White
+    presentationHigh.gradientBackground = true;
+    m_presets["Presentation High"] = presentationHigh;
+    
+    // Debug/Development Presets
+    RenderingSettings debugWireframe;
+    debugWireframe.name = "Debug Wireframe";
+    debugWireframe.mode = 1; // Wireframe
+    debugWireframe.quality = 0; // Low
+    debugWireframe.fastMode = true;
+    debugWireframe.transparencyType = 0; // None
+    debugWireframe.smoothShading = false;
+    debugWireframe.phongShading = false;
+    debugWireframe.backfaceCulling = false;
+    debugWireframe.depthTest = true;
+    debugWireframe.depthWrite = true;
+    debugWireframe.frustumCulling = false;
+    debugWireframe.occlusionCulling = false;
+    debugWireframe.adaptiveQuality = false;
+    debugWireframe.backgroundColor = wxColour(0, 0, 0); // Black
+    m_presets["Debug Wireframe"] = debugWireframe;
+    
+    RenderingSettings debugPoints;
+    debugPoints.name = "Debug Points";
+    debugPoints.mode = 2; // Points
+    debugPoints.quality = 0; // Low
+    debugPoints.fastMode = true;
+    debugPoints.transparencyType = 0; // None
+    debugPoints.smoothShading = false;
+    debugPoints.phongShading = false;
+    debugPoints.backfaceCulling = false;
+    debugPoints.depthTest = true;
+    debugPoints.depthWrite = true;
+    debugPoints.frustumCulling = false;
+    debugPoints.occlusionCulling = false;
+    debugPoints.adaptiveQuality = false;
+    debugPoints.backgroundColor = wxColour(0, 0, 0); // Black
+    m_presets["Debug Points"] = debugPoints;
+    
+    // Legacy/Compatibility Presets
+    RenderingSettings legacySolid;
+    legacySolid.name = "Legacy Solid";
+    legacySolid.mode = 0; // Solid
+    legacySolid.quality = 1; // Medium
+    legacySolid.fastMode = true;
+    legacySolid.transparencyType = 0; // None
+    legacySolid.smoothShading = false;
+    legacySolid.phongShading = false;
+    legacySolid.backfaceCulling = true;
+    legacySolid.depthTest = true;
+    legacySolid.depthWrite = true;
+    legacySolid.frustumCulling = false;
+    legacySolid.occlusionCulling = false;
+    legacySolid.adaptiveQuality = false;
+    m_presets["Legacy Solid"] = legacySolid;
+    
+    RenderingSettings legacyHiddenLine;
+    legacyHiddenLine.name = "Legacy Hidden Line";
+    legacyHiddenLine.mode = 3; // HiddenLine
+    legacyHiddenLine.quality = 1; // Medium
+    legacyHiddenLine.fastMode = true;
+    legacyHiddenLine.transparencyType = 0; // None
+    legacyHiddenLine.smoothShading = false;
+    legacyHiddenLine.phongShading = false;
+    legacyHiddenLine.backfaceCulling = true;
+    legacyHiddenLine.depthTest = true;
+    legacyHiddenLine.depthWrite = true;
+    legacyHiddenLine.frustumCulling = false;
+    legacyHiddenLine.occlusionCulling = false;
+    legacyHiddenLine.adaptiveQuality = false;
+    m_presets["Legacy Hidden Line"] = legacyHiddenLine;
     
     LOG_INF_S("RenderingManager::initializePresets: Initialized " + std::to_string(m_presets.size()) + " presets");
 }

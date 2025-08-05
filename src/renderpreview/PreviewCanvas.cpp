@@ -168,59 +168,11 @@ void PreviewCanvas::setupDefaultLighting()
     
     // Light model is already set in initializeScene()
     
-    // Create default three-point lighting system using LightManager
-    std::vector<RenderLightSettings> defaultLights;
+    // Use the new preset lighting system
+    m_lightManager->createThreePointLighting();
     
-    // Main directional light (top 45-degree light)
-    RenderLightSettings mainLight;
-    mainLight.name = "Main Light";
-    mainLight.type = "directional";
-    mainLight.directionX = 0.0f;
-    mainLight.directionY = -0.707f;
-    mainLight.directionZ = -0.707f;
-    mainLight.intensity = 1.5f; // Increased default intensity from 1.0f to 1.5f
-    mainLight.color = wxColour(255, 255, 255); // White light
-    mainLight.enabled = true;
-    defaultLights.push_back(mainLight);
-    
-    // Left fill light
-    RenderLightSettings leftLight;
-    leftLight.name = "Fill Light";
-    leftLight.type = "directional";
-    leftLight.directionX = -1.0f;
-    leftLight.directionY = 0.0f;
-    leftLight.directionZ = 0.0f;
-    leftLight.intensity = 0.6f;
-    leftLight.color = wxColour(255, 255, 255); // White light
-    leftLight.enabled = true;
-    defaultLights.push_back(leftLight);
-    
-    // Top rim light
-    RenderLightSettings topLight;
-    topLight.name = "Rim Light";
-    topLight.type = "directional";
-    topLight.directionX = 0.0f;
-    topLight.directionY = 1.0f;
-    topLight.directionZ = 0.0f;
-    topLight.intensity = 0.8f;
-    topLight.color = wxColour(255, 255, 255); // White light
-    topLight.enabled = true;
-    defaultLights.push_back(topLight);
-    
-    // Add ambient light to ensure basic visibility
-    RenderLightSettings ambientLight;
-    ambientLight.name = "Ambient Light";
-    ambientLight.type = "directional";
-    ambientLight.directionX = 0.0f;
-    ambientLight.directionY = 0.0f;
-    ambientLight.directionZ = -1.0f;
-    ambientLight.intensity = 0.3f; // Low intensity ambient light
-    ambientLight.color = wxColour(255, 255, 255);
-    ambientLight.enabled = true;
-    defaultLights.push_back(ambientLight);
-    
-    // Apply default lighting using LightManager
-    m_lightManager->updateMultipleLights(defaultLights);
+    // Setup event callbacks for interactive lighting
+    m_lightManager->setupEventCallbacks(m_sceneRoot);
     
     // Create default material for scene objects
     m_lightMaterial = new SoMaterial;

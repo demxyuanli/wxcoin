@@ -62,6 +62,12 @@ public:
     void OnGlobalUndo(wxCommandEvent& event);
     void OnGlobalRedo(wxCommandEvent& event);
     void OnGlobalAutoApply(wxCommandEvent& event);
+    
+    // Preset validation
+    void validatePresets();
+    
+    // Preset testing
+    void testPresetFunctionality();
 
 private:
     void createUI();

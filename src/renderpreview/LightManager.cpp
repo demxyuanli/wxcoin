@@ -15,21 +15,37 @@
 #include <Inventor/SbRotation.h>
 #include <Inventor/actions/SoSearchAction.h>
 #include <Inventor/SoFullPath.h>
+#include <Inventor/sensors/SoTimerSensor.h>
+#include <Inventor/nodes/SoEventCallback.h>
+#include <Inventor/events/SoKeyboardEvent.h>
+#include <Inventor/events/SoMouseButtonEvent.h>
 #include <cmath>
+#include <algorithm>
+#include <limits>
+#include <cstdlib>
 
 LightManager::LightManager(SoSeparator* sceneRoot, SoSeparator* objectRoot)
     : m_sceneRoot(sceneRoot), m_objectRoot(objectRoot), m_nextLightId(1)
+    , m_animationRunning(false), m_animationRate(DEFAULT_UPDATE_RATE)
+    , m_keyEventCallback(nullptr), m_mouseEventCallback(nullptr), m_eventRoot(nullptr)
+    , m_maxLights(MAX_LIGHTS), m_cameraPosition(0.0f, 0.0f, 10.0f)
 {
     // Create indicator container for light visualization
     m_indicatorContainer = new SoSeparator();
     m_indicatorContainer->ref();
     m_objectRoot->addChild(m_indicatorContainer);
     
-    LOG_INF_S("LightManager: Initialized. Lights will be added directly to scene root");
+    // Initialize animation timer
+    m_animationTimer = std::make_unique<SoTimerSensor>(animationTimerCallback, this);
+    m_animationTimer->setInterval(1.0f / m_animationRate);
+    
+    LOG_INF_S("LightManager: Initialized with animation and event support");
 }
 
 LightManager::~LightManager()
 {
+    stopAnimation();
+    removeEventCallbacks();
     clearAllLights();
     
     if (m_indicatorContainer) {
@@ -41,45 +57,89 @@ int LightManager::addLight(const RenderLightSettings& settings)
 {
     LOG_INF_S("LightManager::addLight: Adding light '" + settings.name + "' of type '" + settings.type + "'");
     
+    // Check light limit
+    if (getLightCount() >= m_maxLights) {
+        LOG_WRN_S("LightManager::addLight: Light limit reached (" + std::to_string(m_maxLights) + "), enforcing limit");
+        enforceLightLimit();
+    }
+    
     auto managedLight = std::make_unique<ManagedLight>();
     managedLight->settings = settings;
     managedLight->lightId = m_nextLightId++;
+    managedLight->animationTime = 0.0;
+    managedLight->needsUpdate = false;
     
-    managedLight->lightNode = createLightNode(settings);
-    if (!managedLight->lightNode) {
+    SoLight* lightNode = createLightNode(settings);
+    if (!lightNode) {
         LOG_ERR_S("LightManager::addLight: Failed to create light node");
         return -1;
     }
     
     // Ref the light node to ensure it's not deleted when removed from scene
-    managedLight->lightNode->ref();
+    lightNode->ref();
     
-    // Add light directly to scene root (after camera but before object root)
-    // Find the index of object root to insert before it
-    int objectRootIndex = -1;
-    for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
-        if (m_sceneRoot->getChild(i) == m_objectRoot) {
-            objectRootIndex = i;
-            break;
+    // Create transform node for animated lights
+    if (settings.animated) {
+        managedLight->transformNode = new SoTransform();
+        managedLight->transformNode->ref();
+        
+        // Add transform before light node
+        SoSeparator* lightGroup = new SoSeparator();
+        lightGroup->ref();
+        lightGroup->addChild(managedLight->transformNode);
+        lightGroup->addChild(managedLight->lightNode);
+        
+        // Add light group to scene root
+        int objectRootIndex = -1;
+        for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
+            if (m_sceneRoot->getChild(i) == m_objectRoot) {
+                objectRootIndex = i;
+                break;
+            }
+        }
+        
+        if (objectRootIndex >= 0) {
+            m_sceneRoot->insertChild(lightGroup, objectRootIndex);
+        } else {
+            m_sceneRoot->addChild(lightGroup);
+        }
+        
+        managedLight->lightNode = lightGroup; // Store group instead of individual light
+    } else {
+        managedLight->transformNode = nullptr;
+        managedLight->lightNode = lightNode;
+        
+        // Add light directly to scene root
+        int objectRootIndex = -1;
+        for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
+            if (m_sceneRoot->getChild(i) == m_objectRoot) {
+                objectRootIndex = i;
+                break;
+            }
+        }
+        
+        if (objectRootIndex >= 0) {
+            m_sceneRoot->insertChild(lightNode, objectRootIndex);
+        } else {
+            m_sceneRoot->addChild(lightNode);
         }
     }
     
-    if (objectRootIndex >= 0) {
-        m_sceneRoot->insertChild(managedLight->lightNode, objectRootIndex);
-        LOG_INF_S("LightManager::addLight: Added light directly to scene root at index " + std::to_string(objectRootIndex));
+    // Cast to SoLight* for indicator creation
+    if (managedLight->lightNode->isOfType(SoLight::getClassTypeId())) {
+        managedLight->indicatorNode = createLightIndicator(settings, static_cast<SoLight*>(managedLight->lightNode));
     } else {
-        // Fallback: add to end
-        m_sceneRoot->addChild(managedLight->lightNode);
-        LOG_INF_S("LightManager::addLight: Added light to end of scene root");
+        managedLight->indicatorNode = nullptr;
     }
-    
-    managedLight->indicatorNode = createLightIndicator(settings, managedLight->lightNode);
     if (managedLight->indicatorNode) {
         m_indicatorContainer->addChild(managedLight->indicatorNode);
     }
     
     int lightId = managedLight->lightId;
     m_lights[lightId] = std::move(managedLight);
+    
+    // Add to priority queue
+    m_lightPriorityQueue.push({settings.priority, lightId});
     
     LOG_INF_S("LightManager::addLight: Successfully added light with ID " + std::to_string(lightId));
     return lightId;
@@ -95,12 +155,17 @@ bool LightManager::removeLight(int lightId)
     
     auto& managedLight = it->second;
     
+    // Remove from scene graph
     if (managedLight->lightNode) {
         int index = m_sceneRoot->findChild(managedLight->lightNode);
         if (index >= 0) {
             m_sceneRoot->removeChild(index);
         }
         managedLight->lightNode->unref();
+    }
+    
+    if (managedLight->transformNode) {
+        managedLight->transformNode->unref();
     }
     
     if (managedLight->indicatorNode) {
@@ -127,7 +192,10 @@ bool LightManager::updateLight(int lightId, const RenderLightSettings& settings)
     
     auto& managedLight = it->second;
     
-    updateLightNode(managedLight->lightNode, settings);
+    // Cast to SoLight* for update
+    if (managedLight->lightNode->isOfType(SoLight::getClassTypeId())) {
+        updateLightNode(static_cast<SoLight*>(managedLight->lightNode), settings);
+    }
     
     if (managedLight->indicatorNode) {
         updateLightIndicator(managedLight->indicatorNode, settings);
@@ -155,6 +223,9 @@ void LightManager::clearAllLights()
                 m_sceneRoot->removeChild(index);
             }
             managedLight->lightNode->unref();
+        }
+        if (managedLight->transformNode) {
+            managedLight->transformNode->unref();
         }
         if (managedLight->indicatorNode) {
             managedLight->indicatorNode->unref();
@@ -229,8 +300,9 @@ int LightManager::getLightCount() const
 void LightManager::setLightEnabled(int lightId, bool enabled)
 {
     auto it = m_lights.find(lightId);
-    if (it != m_lights.end()) {
-        it->second->lightNode->on.setValue(enabled);
+    if (it != m_lights.end() && it->second->lightNode->isOfType(SoLight::getClassTypeId())) {
+        SoLight* light = static_cast<SoLight*>(it->second->lightNode);
+        light->on.setValue(enabled);
         it->second->settings.enabled = enabled;
         updateMaterialsForLighting();
     }
@@ -239,8 +311,9 @@ void LightManager::setLightEnabled(int lightId, bool enabled)
 void LightManager::setLightIntensity(int lightId, float intensity)
 {
     auto it = m_lights.find(lightId);
-    if (it != m_lights.end()) {
-        it->second->lightNode->intensity.setValue(intensity);
+    if (it != m_lights.end() && it->second->lightNode->isOfType(SoLight::getClassTypeId())) {
+        SoLight* light = static_cast<SoLight*>(it->second->lightNode);
+        light->intensity.setValue(intensity);
         it->second->settings.intensity = intensity;
         updateMaterialsForLighting();
     }
@@ -249,11 +322,12 @@ void LightManager::setLightIntensity(int lightId, float intensity)
 void LightManager::setLightColor(int lightId, const wxColour& color)
 {
     auto it = m_lights.find(lightId);
-    if (it != m_lights.end()) {
+    if (it != m_lights.end() && it->second->lightNode->isOfType(SoLight::getClassTypeId())) {
+        SoLight* light = static_cast<SoLight*>(it->second->lightNode);
         float r = color.Red() / 255.0f;
         float g = color.Green() / 255.0f;
         float b = color.Blue() / 255.0f;
-        it->second->lightNode->color.setValue(SbColor(r, g, b));
+        light->color.setValue(SbColor(r, g, b));
         it->second->settings.color = color;
         updateMaterialsForLighting();
     }
@@ -572,4 +646,399 @@ void LightManager::updateSceneMaterials(const SbColor& lightColor, float totalIn
     // Coin3D automatically handles material lighting when SoLightModel is present
     // No need to manually adjust material colors
     LOG_INF_S("LightManager::updateSceneMaterials: Coin3D handles material lighting automatically");
+}
+
+// Animation system methods
+void LightManager::setLightAnimation(int lightId, bool animated, double speed, double radius)
+{
+    auto it = m_lights.find(lightId);
+    if (it == m_lights.end()) {
+        LOG_WRN_S("LightManager::setLightAnimation: Light with ID " + std::to_string(lightId) + " not found");
+        return;
+    }
+    
+    auto& managedLight = it->second;
+    managedLight->settings.animated = animated;
+    managedLight->settings.animationSpeed = speed;
+    managedLight->settings.animationRadius = radius;
+    
+    if (animated && !m_animationRunning) {
+        startAnimation();
+    }
+    
+    LOG_INF_S("LightManager::setLightAnimation: Set animation for light " + std::to_string(lightId) + 
+              " - animated: " + std::to_string(animated) + ", speed: " + std::to_string(speed));
+}
+
+void LightManager::startAnimation()
+{
+    if (!m_animationRunning) {
+        m_animationRunning = true;
+        m_animationTimer->schedule();
+        LOG_INF_S("LightManager::startAnimation: Animation started");
+    }
+}
+
+void LightManager::stopAnimation()
+{
+    if (m_animationRunning) {
+        m_animationRunning = false;
+        m_animationTimer->unschedule();
+        LOG_INF_S("LightManager::stopAnimation: Animation stopped");
+    }
+}
+
+void LightManager::setAnimationRate(int fps)
+{
+    m_animationRate = fps;
+    m_animationTimer->setInterval(1.0f / m_animationRate);
+    LOG_INF_S("LightManager::setAnimationRate: Animation rate set to " + std::to_string(fps) + " FPS");
+}
+
+bool LightManager::isAnimationRunning() const
+{
+    return m_animationRunning;
+}
+
+void LightManager::updateLightAnimation(int lightId, double time)
+{
+    auto it = m_lights.find(lightId);
+    if (it == m_lights.end() || !it->second->settings.animated) {
+        return;
+    }
+    
+    auto& managedLight = it->second;
+    const auto& settings = managedLight->settings;
+    
+    // Calculate orbital animation
+    double angle = time * settings.animationSpeed * 2.0 * M_PI;
+    double x = settings.animationRadius * cos(angle);
+    double z = settings.animationRadius * sin(angle);
+    double y = settings.animationHeight;
+    
+    // Update transform node
+    if (managedLight->transformNode) {
+        SbVec3f position(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+        managedLight->transformNode->translation.setValue(position);
+        
+        // Update light direction to point towards origin
+        SbVec3f direction = -position;
+        direction.normalize();
+        
+        // Update light node direction
+        if (managedLight->lightNode->isOfType(SoDirectionalLight::getClassTypeId())) {
+            SoDirectionalLight* dirLight = static_cast<SoDirectionalLight*>(managedLight->lightNode);
+            dirLight->direction.setValue(direction);
+        } else if (managedLight->lightNode->isOfType(SoSpotLight::getClassTypeId())) {
+            SoSpotLight* spotLight = static_cast<SoSpotLight*>(managedLight->lightNode);
+            spotLight->direction.setValue(direction);
+        }
+        
+        // Call animation callback if set
+        if (m_animationCallback) {
+            m_animationCallback(lightId, position, direction);
+        }
+    }
+}
+
+void LightManager::updateAllAnimations()
+{
+    static double lastTime = 0.0;
+    double currentTime = lastTime + (1.0 / m_animationRate);
+    lastTime = currentTime;
+    
+    for (auto& pair : m_lights) {
+        if (pair.second->settings.animated) {
+            updateLightAnimation(pair.first, currentTime);
+        }
+    }
+}
+
+void LightManager::animationTimerCallback(void* data, SoSensor* sensor)
+{
+    LightManager* manager = static_cast<LightManager*>(data);
+    if (manager && manager->m_animationRunning) {
+        manager->updateAllAnimations();
+    }
+}
+
+// Event callback methods
+void LightManager::setupEventCallbacks(SoSeparator* eventRoot)
+{
+    if (m_eventRoot) {
+        removeEventCallbacks();
+    }
+    
+    m_eventRoot = eventRoot;
+    
+    // Setup keyboard event callback
+    m_keyEventCallback = new SoEventCallback();
+    m_keyEventCallback->addEventCallback(SoKeyboardEvent::getClassTypeId(), keyEventCallback, this);
+    m_eventRoot->addChild(m_keyEventCallback);
+    
+    // Setup mouse event callback
+    m_mouseEventCallback = new SoEventCallback();
+    m_mouseEventCallback->addEventCallback(SoMouseButtonEvent::getClassTypeId(), mouseEventCallback, this);
+    m_eventRoot->addChild(m_mouseEventCallback);
+    
+    LOG_INF_S("LightManager::setupEventCallbacks: Event callbacks setup completed");
+}
+
+void LightManager::removeEventCallbacks()
+{
+    if (m_keyEventCallback) {
+        m_keyEventCallback->removeEventCallback(SoKeyboardEvent::getClassTypeId(), keyEventCallback, this);
+        m_keyEventCallback->unref();
+        m_keyEventCallback = nullptr;
+    }
+    
+    if (m_mouseEventCallback) {
+        m_mouseEventCallback->removeEventCallback(SoMouseButtonEvent::getClassTypeId(), mouseEventCallback, this);
+        m_mouseEventCallback->unref();
+        m_mouseEventCallback = nullptr;
+    }
+    
+    m_eventRoot = nullptr;
+    LOG_INF_S("LightManager::removeEventCallbacks: Event callbacks removed");
+}
+
+void LightManager::keyEventCallback(void* data, SoEventCallback* eventCB)
+{
+    LightManager* manager = static_cast<LightManager*>(data);
+    const SoKeyboardEvent* keyEvent = dynamic_cast<const SoKeyboardEvent*>(eventCB->getEvent());
+    
+    if (keyEvent && keyEvent->getState() == SoButtonEvent::DOWN) {
+        if (keyEvent->getKey() == SoKeyboardEvent::L) {
+            // Add new light on 'L' key press
+            RenderLightSettings newLight;
+            newLight.name = "Dynamic Light " + std::to_string(manager->getLightCount() + 1);
+            newLight.type = "point";
+            newLight.positionX = (rand() % 100 - 50) / 10.0;
+            newLight.positionY = (rand() % 100 - 50) / 10.0;
+            newLight.positionZ = (rand() % 100 - 50) / 10.0;
+            newLight.intensity = 1.0 + (rand() % 100) / 100.0;
+            newLight.color = wxColour(rand() % 255, rand() % 255, rand() % 255);
+            newLight.animated = true;
+            newLight.animationSpeed = 0.5 + (rand() % 100) / 100.0;
+            
+            manager->addLight(newLight);
+            LOG_INF_S("LightManager::keyEventCallback: Added dynamic light on 'L' key press");
+        } else if (keyEvent->getKey() == SoKeyboardEvent::A) {
+            // Toggle animation on 'A' key press
+            if (manager->isAnimationRunning()) {
+                manager->stopAnimation();
+            } else {
+                manager->startAnimation();
+            }
+            LOG_INF_S("LightManager::keyEventCallback: Toggled animation on 'A' key press");
+        }
+    }
+    
+    eventCB->setHandled();
+}
+
+void LightManager::mouseEventCallback(void* data, SoEventCallback* eventCB)
+{
+    LightManager* manager = static_cast<LightManager*>(data);
+    const SoMouseButtonEvent* mouseEvent = dynamic_cast<const SoMouseButtonEvent*>(eventCB->getEvent());
+    
+    if (mouseEvent && mouseEvent->getState() == SoButtonEvent::DOWN) {
+        if (mouseEvent->getButton() == SoMouseButtonEvent::BUTTON2) { // Right click
+            // Remove last light on right click
+            auto lightIds = manager->getAllLightIds();
+            if (!lightIds.empty()) {
+                manager->removeLight(lightIds.back());
+                LOG_INF_S("LightManager::mouseEventCallback: Removed last light on right click");
+            }
+        }
+    }
+    
+    eventCB->setHandled();
+}
+
+// Performance management methods
+void LightManager::setMaxLights(int maxLights)
+{
+    m_maxLights = std::min(maxLights, MAX_LIGHTS);
+    if (getLightCount() > m_maxLights) {
+        enforceLightLimit();
+    }
+    LOG_INF_S("LightManager::setMaxLights: Max lights set to " + std::to_string(m_maxLights));
+}
+
+int LightManager::getMaxLights() const
+{
+    return m_maxLights;
+}
+
+void LightManager::enforceLightLimit()
+{
+    if (getLightCount() <= m_maxLights) {
+        return;
+    }
+    
+    // Remove lowest priority lights
+    std::vector<std::pair<int, int>> lightPriorities; // priority, lightId
+    for (const auto& pair : m_lights) {
+        lightPriorities.push_back({pair.second->settings.priority, pair.first});
+    }
+    
+    // Sort by priority (lowest first)
+    std::sort(lightPriorities.begin(), lightPriorities.end());
+    
+    // Remove excess lights
+    int lightsToRemove = getLightCount() - m_maxLights;
+    for (int i = 0; i < lightsToRemove; ++i) {
+        removeLight(lightPriorities[i].second);
+    }
+    
+    LOG_INF_S("LightManager::enforceLightLimit: Removed " + std::to_string(lightsToRemove) + " lights to enforce limit");
+}
+
+double LightManager::calculateLightDistance(int lightId, const SbVec3f& cameraPosition)
+{
+    auto it = m_lights.find(lightId);
+    if (it == m_lights.end()) {
+        return std::numeric_limits<double>::max();
+    }
+    
+    const auto& settings = it->second->settings;
+    SbVec3f lightPosition(static_cast<float>(settings.positionX),
+                         static_cast<float>(settings.positionY),
+                         static_cast<float>(settings.positionZ));
+    
+    return (lightPosition - cameraPosition).length();
+}
+
+void LightManager::optimizeLightOrder()
+{
+    // Reorder lights by priority and distance to camera
+    std::vector<std::pair<double, int>> lightScores;
+    
+    for (const auto& pair : m_lights) {
+        int lightId = pair.first;
+        const auto& settings = pair.second->settings;
+        
+        // Calculate score based on priority and distance
+        double distance = calculateLightDistance(lightId, m_cameraPosition);
+        double score = settings.priority * 1000.0 - distance; // Higher priority and closer = better score
+        
+        lightScores.push_back({score, lightId});
+    }
+    
+    // Sort by score (highest first)
+    std::sort(lightScores.begin(), lightScores.end(), std::greater<>());
+    
+    LOG_INF_S("LightManager::optimizeLightOrder: Light order optimized");
+}
+
+// Preset lighting methods
+void LightManager::createThreePointLighting()
+{
+    clearAllLights();
+    
+    // Main light (key light)
+    RenderLightSettings mainLight;
+    mainLight.name = "Key Light";
+    mainLight.type = "directional";
+    mainLight.directionX = 0.0f;
+    mainLight.directionY = -0.707f;
+    mainLight.directionZ = -0.707f;
+    mainLight.intensity = 1.5f;
+    mainLight.priority = 3;
+    addLight(mainLight);
+    
+    // Fill light
+    RenderLightSettings fillLight;
+    fillLight.name = "Fill Light";
+    fillLight.type = "directional";
+    fillLight.directionX = -1.0f;
+    fillLight.directionY = 0.0f;
+    fillLight.directionZ = 0.0f;
+    fillLight.intensity = 0.6f;
+    fillLight.priority = 2;
+    addLight(fillLight);
+    
+    // Rim light
+    RenderLightSettings rimLight;
+    rimLight.name = "Rim Light";
+    rimLight.type = "directional";
+    rimLight.directionX = 0.0f;
+    rimLight.directionY = 1.0f;
+    rimLight.directionZ = 0.0f;
+    rimLight.intensity = 0.8f;
+    rimLight.priority = 1;
+    addLight(rimLight);
+    
+    LOG_INF_S("LightManager::createThreePointLighting: Three-point lighting setup completed");
+}
+
+void LightManager::createStudioLighting()
+{
+    clearAllLights();
+    
+    // Main studio light
+    RenderLightSettings mainLight;
+    mainLight.name = "Studio Main";
+    mainLight.type = "spot";
+    mainLight.positionX = 0.0f;
+    mainLight.positionY = 5.0f;
+    mainLight.positionZ = 5.0f;
+    mainLight.directionX = 0.0f;
+    mainLight.directionY = -1.0f;
+    mainLight.directionZ = -1.0f;
+    mainLight.intensity = 2.0f;
+    mainLight.spotAngle = 45.0f;
+    mainLight.spotExponent = 2.0f;
+    mainLight.priority = 3;
+    addLight(mainLight);
+    
+    // Ambient fill
+    RenderLightSettings ambientLight;
+    ambientLight.name = "Studio Ambient";
+    ambientLight.type = "point";
+    ambientLight.positionX = 0.0f;
+    ambientLight.positionY = 2.0f;
+    ambientLight.positionZ = 0.0f;
+    ambientLight.intensity = 0.3f;
+    ambientLight.priority = 1;
+    addLight(ambientLight);
+    
+    LOG_INF_S("LightManager::createStudioLighting: Studio lighting setup completed");
+}
+
+void LightManager::createOutdoorLighting()
+{
+    clearAllLights();
+    
+    // Sun light
+    RenderLightSettings sunLight;
+    sunLight.name = "Sun";
+    sunLight.type = "directional";
+    sunLight.directionX = 0.5f;
+    sunLight.directionY = -0.8f;
+    sunLight.directionZ = -0.3f;
+    sunLight.intensity = 2.0f;
+    sunLight.color = wxColour(255, 248, 220); // Warm sunlight
+    sunLight.priority = 3;
+    addLight(sunLight);
+    
+    // Sky light
+    RenderLightSettings skyLight;
+    skyLight.name = "Sky";
+    skyLight.type = "directional";
+    skyLight.directionX = 0.0f;
+    skyLight.directionY = 1.0f;
+    skyLight.directionZ = 0.0f;
+    skyLight.intensity = 0.5f;
+    skyLight.color = wxColour(173, 216, 230); // Light blue sky
+    skyLight.priority = 2;
+    addLight(skyLight);
+    
+    LOG_INF_S("LightManager::createOutdoorLighting: Outdoor lighting setup completed");
+}
+
+void LightManager::setAnimationCallback(LightAnimationCallback callback)
+{
+    m_animationCallback = callback;
 } 
