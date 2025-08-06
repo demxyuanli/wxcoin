@@ -22,6 +22,7 @@
 #include "renderpreview/RenderingSettings.h"
 #include "renderpreview/ObjectManager.h"
 #include "renderpreview/ObjectSettings.h"
+#include "renderpreview/BackgroundManager.h"
 
 // Forward declarations
 class OCCBox;
@@ -68,6 +69,7 @@ public:
     RenderingManager* getRenderingManager() const { return m_renderingManager.get(); }
     ObjectManager* getObjectManager() const { return m_objectManager.get(); }
     LightManager* getLightManager() const { return m_lightManager.get(); }
+    BackgroundManager* getBackgroundManager() const { return m_backgroundManager.get(); }
     
     // Legacy methods (for backward compatibility)
     void updateLighting(float ambient, float diffuse, float specular, const wxColour& color, float intensity);
@@ -125,6 +127,7 @@ private:
     std::unique_ptr<AntiAliasingManager> m_antiAliasingManager;
     std::unique_ptr<RenderingManager> m_renderingManager;
     std::unique_ptr<ObjectManager> m_objectManager;  // New object manager
+    std::unique_ptr<BackgroundManager> m_backgroundManager; // New background manager
 
     // OpenGL context
     wxGLContext* m_glContext;

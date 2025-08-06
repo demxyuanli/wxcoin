@@ -93,6 +93,7 @@ void RenderPreviewDialog::createUI()
     if (m_renderCanvas) {
         m_globalSettingsPanel->setAntiAliasingManager(m_renderCanvas->getAntiAliasingManager());
         m_globalSettingsPanel->setRenderingManager(m_renderCanvas->getRenderingManager());
+        m_globalSettingsPanel->setBackgroundManager(m_renderCanvas->getBackgroundManager());
         
         // IMPORTANT: Set ObjectManager reference AFTER canvas is fully initialized
         if (m_objectSettingsPanel) {

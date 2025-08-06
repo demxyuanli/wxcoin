@@ -7,10 +7,15 @@ add_library(RenderPreview STATIC
     AntiAliasingManager.cpp
     RenderingManager.cpp
     GlobalSettingsPanel.cpp
+    LightingPanel.cpp
+    AntiAliasingPanel.cpp
+    RenderingModePanel.cpp
+    BackgroundStylePanel.cpp
     ObjectSettingsPanel.cpp
     ObjectManager.cpp
     ConfigValidator.cpp
     UndoManager.cpp
+    BackgroundManager.cpp
 )
 
 target_include_directories(RenderPreview PUBLIC

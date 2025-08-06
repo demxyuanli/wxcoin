@@ -154,6 +154,7 @@ void PreviewCanvas::initializeScene()
     m_lightManager = std::make_unique<LightManager>(m_sceneRoot, m_objectRoot);
     m_antiAliasingManager = std::make_unique<AntiAliasingManager>(this, m_glContext);
     m_renderingManager = std::make_unique<RenderingManager>(m_sceneRoot, this, m_glContext);
+    m_backgroundManager = std::make_unique<BackgroundManager>(this);
     
     // Create default scene
     createDefaultScene();
@@ -606,11 +607,53 @@ void PreviewCanvas::render(bool fastMode)
         glClearColor(r, g, b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        // Render gradient background if enabled
-        if (settings.backgroundStyle == 1 && settings.gradientBackground) { // Gradient style
-            renderGradientBackground(settings.gradientTopColor, settings.gradientBottomColor);
+        // Render background based on style
+        switch (settings.backgroundStyle) {
+            case 0: // Solid Color
+                // Already handled by glClearColor above
+                break;
+            case 1: // Gradient
+                renderGradientBackground(settings.gradientTopColor, settings.gradientBottomColor);
+                break;
+            case 2: // Image
+                // TODO: Implement image background rendering
+                break;
+            case 3: // Environment
+                // Use environment color (sky blue)
+                glClearColor(0.53f, 0.81f, 0.92f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
+            case 4: // Studio
+                // Use studio color (light blue)
+                glClearColor(0.94f, 0.97f, 1.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
+            case 5: // Outdoor
+                // Use outdoor color (light yellow)
+                glClearColor(1.0f, 1.0f, 0.88f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
+            case 6: // Industrial
+                // Use industrial color (light gray)
+                glClearColor(0.96f, 0.96f, 0.96f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
+            case 7: // CAD
+                // Use CAD color (light cream)
+                glClearColor(1.0f, 0.97f, 0.86f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
+            case 8: // Dark
+                // Use dark color (dark gray)
+                glClearColor(0.16f, 0.16f, 0.16f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
+            default:
+                // Default light blue background
+                glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                break;
         }
-        // Note: Image background rendering will be implemented separately
     } else {
         // Default light blue background
         glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
