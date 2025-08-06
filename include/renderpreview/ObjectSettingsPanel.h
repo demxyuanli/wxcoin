@@ -92,6 +92,10 @@ private:
     wxSizer* createTransformTab(wxWindow* parent);
     void bindEvents();
     
+    // Font application methods
+    void applySpecificFonts();
+    void applyFontsToChildren(wxWindow* parent, class FontManager& fontManager);
+    
     // Event handlers
     void onMaterialChanged(wxCommandEvent& event);
     void onTextureChanged(wxCommandEvent& event);

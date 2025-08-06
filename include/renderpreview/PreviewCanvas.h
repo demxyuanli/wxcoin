@@ -95,6 +95,7 @@ private:
     void createCoordinateSystem();
     void setupDefaultCamera();
     void setupDefaultLighting();
+    void renderGradientBackground(const wxColour& topColor, const wxColour& bottomColor);
 
     
     // Event handlers
@@ -136,4 +137,12 @@ private:
     SbVec3f m_cameraCenter;
 
     DECLARE_EVENT_TABLE()
+    
+    // Runtime configuration management
+    int m_runtimeConfigId = -1;  // ID for runtime rendering configuration
+    
+    // Helper methods for unified coordination
+    RenderingSettings createRenderingSettingsForMode(int mode);
+    int getRuntimeConfigurationId() const;
+    void setRuntimeConfigurationId(int configId);
 };

@@ -43,6 +43,17 @@ public:
     int getRenderingMode() const;
     void setRenderingMode(int mode);
     
+    // Background settings getters
+    int getBackgroundStyle() const;
+    wxColour getBackgroundColor() const;
+    wxColour getGradientTopColor() const;
+    wxColour getGradientBottomColor() const;
+    std::string getBackgroundImagePath() const;
+    bool isBackgroundImageEnabled() const;
+    float getBackgroundImageOpacity() const;
+    int getBackgroundImageFit() const;
+    bool isBackgroundImageMaintainAspect() const;
+    
     // Manager access methods
     void setAntiAliasingManager(class AntiAliasingManager* manager);
     void setRenderingManager(class RenderingManager* manager);
@@ -75,9 +86,14 @@ private:
     wxSizer* createLightPresetsTab(wxWindow* parent);
     wxSizer* createAntiAliasingTab(wxWindow* parent);
     wxSizer* createRenderingModeTab(wxWindow* parent);
+    wxSizer* createBackgroundStyleTab(wxWindow* parent);
     void bindEvents();
     void updateLightList();
     void updateControlStates();
+    
+    // Font application methods
+    void applySpecificFonts();
+    void applyFontsToChildren(wxWindow* parent, class FontManager& fontManager);
     
     // Event handlers
     void onLightSelected(wxCommandEvent& event);
@@ -88,6 +104,18 @@ private:
     void onLightingChanged(wxCommandEvent& event);
     void onAntiAliasingChanged(wxCommandEvent& event);
     void onRenderingModeChanged(wxCommandEvent& event);
+    void onLegacyModeChanged(wxCommandEvent& event);
+    void updateLegacyChoiceFromCurrentMode();
+    
+    // Background style event handlers
+    void onBackgroundStyleChanged(wxCommandEvent& event);
+    void onBackgroundColorButton(wxCommandEvent& event);
+    void onGradientTopColorButton(wxCommandEvent& event);
+    void onGradientBottomColorButton(wxCommandEvent& event);
+    void onBackgroundImageButton(wxCommandEvent& event);
+    void onBackgroundImageOpacityChanged(wxCommandEvent& event);
+    void onBackgroundImageFitChanged(wxCommandEvent& event);
+    void onBackgroundImageMaintainAspectChanged(wxCommandEvent& event);
     
     // Light preset event handlers
     void onStudioPreset(wxCommandEvent& event);
@@ -133,6 +161,18 @@ private:
     
     // UI Components for Rendering Mode
     wxChoice* m_renderingModeChoice;
+    wxChoice* m_legacyChoice;  // Legacy rendering mode choice
+    
+    // UI Components for Background Style
+    wxChoice* m_backgroundStyleChoice;
+    wxButton* m_backgroundColorButton;
+    wxButton* m_gradientTopColorButton;
+    wxButton* m_gradientBottomColorButton;
+    wxButton* m_backgroundImageButton;
+    wxSlider* m_backgroundImageOpacitySlider;
+    wxChoice* m_backgroundImageFitChoice;
+    wxCheckBox* m_backgroundImageMaintainAspectCheckBox;
+    wxStaticText* m_backgroundImagePathLabel;
     
     // Internal data
     std::vector<RenderLightSettings> m_lights;
@@ -140,7 +180,6 @@ private:
     RenderPreviewDialog* m_parentDialog;
     bool m_autoApply;
     
-    // Global Settings buttons
     wxButton* m_globalApplyButton;
     wxButton* m_globalSaveButton;
     wxButton* m_globalResetButton;

@@ -3,6 +3,7 @@
 #include <wx/string.h>
 #include <vector>
 #include "renderpreview/RenderLightSettings.h"
+#include "renderpreview/RenderingSettings.h"
 
 // Configuration validation result
 struct ValidationResult {
@@ -38,4 +39,16 @@ public:
     static bool isValidPosition(double x, double y, double z);
     static bool isValidDirection(double x, double y, double z);
     static bool isValidRange(double value, double min, double max, const wxString& name);
-}; 
+    
+    // Validate complete rendering settings
+    static ValidationResult validateRenderingSettings(const RenderingSettings& settings);
+    
+    // Validate rendering configuration consistency
+    static ValidationResult validateRenderingConfiguration(const RenderingSettings& settings);
+    
+    // Validate preset compatibility
+    static ValidationResult validatePresetCompatibility(const std::string& presetName, const RenderingSettings& settings);
+    
+    // Performance impact validation
+    static ValidationResult validatePerformanceImpact(const RenderingSettings& settings, float maxImpactThreshold = 1.0f);
+};

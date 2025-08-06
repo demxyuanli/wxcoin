@@ -5,6 +5,7 @@
 #include "renderpreview/ConfigValidator.h"
 #include "renderpreview/UndoManager.h"
 #include "config/ConfigManager.h"
+#include "config/FontManager.h"
 #include "logger/Logger.h"
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
@@ -38,9 +39,17 @@ RenderPreviewDialog::RenderPreviewDialog(wxWindow* parent)
     , m_validationEnabled(true)
 {
     LOG_INF_S("RenderPreviewDialog::RenderPreviewDialog: Initializing");
+    
+    // Initialize font manager
+    FontManager& fontManager = FontManager::getInstance();
+    fontManager.initialize();
+    
     createUI();
     loadConfiguration();
     SetSizer(GetSizer());
+    
+    // Apply fonts to the entire dialog and its children
+    fontManager.applyFontToWindowAndChildren(this, "Default");
     
     // Set fixed size to ensure proper layout
     SetSize(1200, 700);
@@ -273,6 +282,17 @@ void RenderPreviewDialog::applyGlobalSettingsToCanvas()
     // Apply rendering mode
     int renderingMode = m_globalSettingsPanel->getRenderingMode();
     
+    // Get background settings from global panel
+    int backgroundStyle = m_globalSettingsPanel->getBackgroundStyle();
+    wxColour backgroundColor = m_globalSettingsPanel->getBackgroundColor();
+    wxColour gradientTopColor = m_globalSettingsPanel->getGradientTopColor();
+    wxColour gradientBottomColor = m_globalSettingsPanel->getGradientBottomColor();
+    std::string backgroundImagePath = m_globalSettingsPanel->getBackgroundImagePath();
+    bool backgroundImageEnabled = m_globalSettingsPanel->isBackgroundImageEnabled();
+    float backgroundImageOpacity = m_globalSettingsPanel->getBackgroundImageOpacity();
+    int backgroundImageFit = m_globalSettingsPanel->getBackgroundImageFit();
+    bool backgroundImageMaintainAspect = m_globalSettingsPanel->isBackgroundImageMaintainAspect();
+    
     // Apply to canvas using update methods
     if (!lights.empty()) {
         // Use multi-light support
@@ -280,6 +300,38 @@ void RenderPreviewDialog::applyGlobalSettingsToCanvas()
     }
     m_renderCanvas->updateAntiAliasing(antiAliasingMethod, msaaSamples, fxaaEnabled);
     m_renderCanvas->updateRenderingMode(renderingMode);
+    
+    // Apply background settings to rendering manager
+    if (m_renderCanvas->getRenderingManager()) {
+        RenderingManager* renderingManager = m_renderCanvas->getRenderingManager();
+        if (renderingManager->hasActiveConfiguration()) {
+            int activeConfigId = renderingManager->getActiveConfigurationId();
+            RenderingSettings settings = renderingManager->getConfiguration(activeConfigId);
+            
+            // Update background settings
+            settings.backgroundStyle = backgroundStyle;
+            settings.backgroundColor = backgroundColor;
+            settings.gradientTopColor = gradientTopColor;
+            settings.gradientBottomColor = gradientBottomColor;
+            settings.backgroundImagePath = backgroundImagePath;
+            settings.backgroundImageEnabled = backgroundImageEnabled;
+            settings.backgroundImageOpacity = backgroundImageOpacity;
+            settings.backgroundImageFit = backgroundImageFit;
+            settings.backgroundImageMaintainAspect = backgroundImageMaintainAspect;
+            
+            // Update configuration and apply
+            renderingManager->updateConfiguration(activeConfigId, settings);
+            renderingManager->setupRenderingState();
+            
+            LOG_INF_S("RenderPreviewDialog::applyGlobalSettingsToCanvas: Applied background settings");
+        }
+    }
+    
+    // Force canvas refresh to apply background changes
+    if (m_renderCanvas) {
+        m_renderCanvas->Refresh();
+        m_renderCanvas->Update();
+    }
     
     LOG_INF_S("RenderPreviewDialog::applyGlobalSettingsToCanvas: Applied global settings to canvas");
 }

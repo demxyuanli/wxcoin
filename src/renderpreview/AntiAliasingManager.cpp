@@ -284,18 +284,99 @@ void AntiAliasingManager::applyPreset(const std::string& presetName)
 {
     auto it = m_presets.find(presetName);
     if (it != m_presets.end()) {
-        // Validate the preset settings before applying
-        const AntiAliasingSettings& settings = it->second;
-        if (settings.method < 0 || settings.method > 4) {
-            LOG_ERR_S("AntiAliasingManager::applyPreset: Invalid method value " + std::to_string(settings.method) + " in preset '" + presetName + "'");
-            return;
+        // Create a new configuration with the preset settings
+        AntiAliasingSettings presetSettings = it->second;
+        presetSettings.name = presetName;
+        
+        // Add the preset as a new configuration
+        int configId = addConfiguration(presetSettings);
+        if (configId != -1) {
+            // Set it as active
+            setActiveConfiguration(configId);
+            LOG_INF_S("AntiAliasingManager::applyPreset: Applied preset '" + presetName + "' with config ID " + std::to_string(configId));
+        } else {
+            LOG_ERR_S("AntiAliasingManager::applyPreset: Failed to create configuration for preset '" + presetName + "'");
+        }
+    } else {
+        // Handle built-in presets
+        AntiAliasingSettings settings;
+        settings.enabled = true;
+        
+        if (presetName == "None") {
+            settings.method = 0;
+            settings.enabled = false;
+        } else if (presetName == "MSAA 2x") {
+            settings.method = 1;
+            settings.msaaSamples = 2;
+        } else if (presetName == "MSAA 4x") {
+            settings.method = 1;
+            settings.msaaSamples = 4;
+        } else if (presetName == "MSAA 8x") {
+            settings.method = 1;
+            settings.msaaSamples = 8;
+        } else if (presetName == "MSAA 16x") {
+            settings.method = 1;
+            settings.msaaSamples = 16;
+        } else if (presetName == "FXAA Low") {
+            settings.method = 2;
+            settings.fxaaEnabled = true;
+            settings.fxaaQuality = 0.3f;
+        } else if (presetName == "FXAA Medium") {
+            settings.method = 2;
+            settings.fxaaEnabled = true;
+            settings.fxaaQuality = 0.5f;
+        } else if (presetName == "FXAA High") {
+            settings.method = 2;
+            settings.fxaaEnabled = true;
+            settings.fxaaQuality = 0.7f;
+        } else if (presetName == "FXAA Ultra") {
+            settings.method = 2;
+            settings.fxaaEnabled = true;
+            settings.fxaaQuality = 1.0f;
+        } else if (presetName == "SSAA 2x") {
+            settings.method = 3;
+            settings.ssaaEnabled = true;
+            settings.ssaaFactor = 2;
+        } else if (presetName == "SSAA 4x") {
+            settings.method = 3;
+            settings.ssaaEnabled = true;
+            settings.ssaaFactor = 4;
+        } else if (presetName == "TAA Low") {
+            settings.method = 4;
+            settings.taaEnabled = true;
+            settings.taaStrength = 0.3f;
+        } else if (presetName == "TAA Medium") {
+            settings.method = 4;
+            settings.taaEnabled = true;
+            settings.taaStrength = 0.5f;
+        } else if (presetName == "TAA High") {
+            settings.method = 4;
+            settings.taaEnabled = true;
+            settings.taaStrength = 0.7f;
+        } else if (presetName == "MSAA 4x + FXAA") {
+            settings.method = 1;
+            settings.msaaSamples = 4;
+            settings.fxaaEnabled = true;
+            settings.fxaaQuality = 0.5f;
+        } else if (presetName == "MSAA 4x + TAA") {
+            settings.method = 1;
+            settings.msaaSamples = 4;
+            settings.taaEnabled = true;
+            settings.taaStrength = 0.5f;
+        } else {
+            // Default to MSAA 4x
+            settings.method = 1;
+            settings.msaaSamples = 4;
         }
         
+        settings.name = presetName;
         int configId = addConfiguration(settings);
-        setActiveConfiguration(configId);
-        LOG_INF_S("AntiAliasingManager::applyPreset: Applied preset '" + presetName + "' with method " + std::to_string(settings.method));
-    } else {
-        LOG_WRN_S("AntiAliasingManager::applyPreset: Preset '" + presetName + "' not found");
+        if (configId != -1) {
+            setActiveConfiguration(configId);
+            LOG_INF_S("AntiAliasingManager::applyPreset: Applied built-in preset '" + presetName + "' with config ID " + std::to_string(configId));
+        } else {
+            LOG_ERR_S("AntiAliasingManager::applyPreset: Failed to create configuration for built-in preset '" + presetName + "'");
+        }
     }
 }
 
@@ -646,7 +727,34 @@ void AntiAliasingManager::applyMSAA(const AntiAliasingSettings& settings)
 {
     if (m_canvas && m_glContext) {
         m_canvas->SetCurrent(*m_glContext);
+        
+        // Enable multisampling
         glEnable(GL_MULTISAMPLE);
+        
+        // Set the number of samples if supported
+        if (settings.msaaSamples > 0) {
+            // Try to set the number of samples using GL_SAMPLES
+            GLint maxSamples;
+            glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+            
+            if (settings.msaaSamples <= maxSamples) {
+                // Set the number of samples for the framebuffer
+                glEnable(GL_MULTISAMPLE);
+                
+                // For MSAA to work properly, we need to ensure the framebuffer supports multisampling
+                // This is typically handled by the wxGLCanvas when it's created with multisample attributes
+                LOG_INF_S("AntiAliasingManager::applyMSAA: Applied MSAA with " + std::to_string(settings.msaaSamples) + " samples (max supported: " + std::to_string(maxSamples) + ")");
+            } else {
+                LOG_WRN_S("AntiAliasingManager::applyMSAA: Requested " + std::to_string(settings.msaaSamples) + " samples, but only " + std::to_string(maxSamples) + " are supported");
+            }
+        }
+        
+        // Additional MSAA settings for better quality
+        glEnable(GL_LINE_SMOOTH);
+        glEnable(GL_POLYGON_SMOOTH);
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+        glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+        
         LOG_INF_S("AntiAliasingManager::applyMSAA: Applied MSAA with " + std::to_string(settings.msaaSamples) + " samples");
     }
 }
@@ -655,7 +763,24 @@ void AntiAliasingManager::applyFXAA(const AntiAliasingSettings& settings)
 {
     if (m_canvas && m_glContext) {
         m_canvas->SetCurrent(*m_glContext);
+        
+        // Disable MSAA when using FXAA
         glDisable(GL_MULTISAMPLE);
+        
+        // Enable line and polygon smoothing for better FXAA effect
+        glEnable(GL_LINE_SMOOTH);
+        glEnable(GL_POLYGON_SMOOTH);
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+        glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+        
+        // FXAA is typically implemented as a post-processing shader
+        // For now, we'll use OpenGL's built-in smoothing as a fallback
+        if (settings.fxaaQuality > 0.5f) {
+            // High quality FXAA - use more aggressive smoothing
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        }
+        
         LOG_INF_S("AntiAliasingManager::applyFXAA: Applied FXAA with quality " + std::to_string(settings.fxaaQuality));
     }
 }

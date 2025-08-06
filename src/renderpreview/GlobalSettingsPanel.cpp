@@ -4,9 +4,11 @@
 #include "renderpreview/AntiAliasingManager.h"
 #include "renderpreview/RenderingManager.h"
 #include "config/ConfigManager.h"
+#include "config/FontManager.h"
 #include "logger/Logger.h"
 #include <wx/msgdlg.h>
 #include <wx/colordlg.h>
+#include <wx/filedlg.h>
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 
@@ -30,11 +32,32 @@ GlobalSettingsPanel::GlobalSettingsPanel(wxWindow* parent, RenderPreviewDialog* 
     , m_autoApply(false)
     , m_antiAliasingManager(nullptr)
     , m_renderingManager(nullptr)
+    , m_legacyChoice(nullptr)
+    , m_backgroundStyleChoice(nullptr)
+    , m_backgroundColorButton(nullptr)
+    , m_gradientTopColorButton(nullptr)
+    , m_gradientBottomColorButton(nullptr)
+    , m_backgroundImageButton(nullptr)
+    , m_backgroundImageOpacitySlider(nullptr)
+    , m_backgroundImageFitChoice(nullptr)
+    , m_backgroundImageMaintainAspectCheckBox(nullptr)
+    , m_backgroundImagePathLabel(nullptr)
 {
     LOG_INF_S("GlobalSettingsPanel::GlobalSettingsPanel: Initializing");
+    
+    // Initialize font manager
+    FontManager& fontManager = FontManager::getInstance();
+    fontManager.initialize();
+    
     createUI();
     bindEvents();
     loadSettings();
+    
+    // Apply fonts to the entire panel and its children
+    fontManager.applyFontToWindowAndChildren(this, "Default");
+    
+    // Apply specific fonts to buttons and static texts
+    applySpecificFonts();
     
     // Initialize control states after loading settings
     updateControlStates();
@@ -44,6 +67,11 @@ GlobalSettingsPanel::GlobalSettingsPanel(wxWindow* parent, RenderPreviewDialog* 
     
     // Test preset functionality
     testPresetFunctionality();
+    
+    // Initialize legacy choice state (should be enabled for "None" mode)
+    if (m_legacyChoice) {
+        m_legacyChoice->Enable(true);
+    }
     
     LOG_INF_S("GlobalSettingsPanel::GlobalSettingsPanel: Initialized successfully");
 }
@@ -65,18 +93,21 @@ void GlobalSettingsPanel::createUI()
     auto* lightPresetsPanel = new wxPanel(m_notebook, wxID_ANY);
     auto* antiAliasingPanel = new wxPanel(m_notebook, wxID_ANY);
     auto* renderingModePanel = new wxPanel(m_notebook, wxID_ANY);
+    auto* backgroundStylePanel = new wxPanel(m_notebook, wxID_ANY);
     
     // Set up tab panels with their content
     lightingPanel->SetSizer(createLightingTab(lightingPanel));
     lightPresetsPanel->SetSizer(createLightPresetsTab(lightPresetsPanel));
     antiAliasingPanel->SetSizer(createAntiAliasingTab(antiAliasingPanel));
     renderingModePanel->SetSizer(createRenderingModeTab(renderingModePanel));
+    backgroundStylePanel->SetSizer(createBackgroundStyleTab(backgroundStylePanel));
     
     // Add tabs to notebook
     m_notebook->AddPage(lightingPanel, "Lighting");
     m_notebook->AddPage(lightPresetsPanel, "Light Presets");
     m_notebook->AddPage(antiAliasingPanel, "Anti-aliasing");
     m_notebook->AddPage(renderingModePanel, "Rendering Mode");
+    m_notebook->AddPage(backgroundStylePanel, "Background Style");
     
     mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 2);
     
@@ -347,6 +378,9 @@ wxSizer* GlobalSettingsPanel::createRenderingModeTab(wxWindow* parent)
     
     m_renderingModeChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
     
+    // None option for legacy mode
+    m_renderingModeChoice->Append("None");
+    
     // Basic presets
     m_renderingModeChoice->Append("Performance");
     m_renderingModeChoice->Append("Balanced");
@@ -380,7 +414,7 @@ wxSizer* GlobalSettingsPanel::createRenderingModeTab(wxWindow* parent)
     m_renderingModeChoice->Append("Legacy Solid");
     m_renderingModeChoice->Append("Legacy Hidden Line");
     
-    m_renderingModeChoice->SetSelection(1); // Default to Balanced
+    m_renderingModeChoice->SetSelection(0); // Default to None
     presetsBoxSizer->Add(m_renderingModeChoice, 0, wxEXPAND | wxALL, 8);
     
     renderingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 8);
@@ -412,14 +446,18 @@ wxSizer* GlobalSettingsPanel::createRenderingModeTab(wxWindow* parent)
     auto* modeLabel = new wxStaticText(parent, wxID_ANY, "Legacy Rendering Mode:");
     legacyBoxSizer->Add(modeLabel, 0, wxALL, 8);
     
-    auto* legacyChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
-    legacyChoice->Append("Solid");
-    legacyChoice->Append("Wireframe");
-    legacyChoice->Append("Points");
-    legacyChoice->Append("Hidden Line");
-    legacyChoice->Append("Shaded");
-    legacyChoice->SetSelection(4);
-    legacyBoxSizer->Add(legacyChoice, 0, wxEXPAND | wxALL, 8);
+    m_legacyChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
+    m_legacyChoice->Append("Solid");
+    m_legacyChoice->Append("Wireframe");
+    m_legacyChoice->Append("Points");
+    m_legacyChoice->Append("Hidden Line");
+    m_legacyChoice->Append("Shaded");
+    m_legacyChoice->SetSelection(4);
+    
+    // Initially disable legacy choice (will be enabled when "None" is selected)
+    m_legacyChoice->Enable(false);
+    
+    legacyBoxSizer->Add(m_legacyChoice, 0, wxEXPAND | wxALL, 8);
     
     renderingSizer->Add(legacyBoxSizer, 0, wxEXPAND | wxALL, 8);
     
@@ -513,6 +551,9 @@ void GlobalSettingsPanel::updateLightList()
     // Clear existing light list items
     m_lightListSizer->Clear(true);
     
+    // Get font manager for applying fonts to dynamic buttons
+    FontManager& fontManager = FontManager::getInstance();
+    
     // Create list items for each light
     for (size_t i = 0; i < m_lights.size(); ++i) {
         auto* lightItemSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -521,12 +562,14 @@ void GlobalSettingsPanel::updateLightList()
         auto* nameButton = new wxButton(m_lightListSizer->GetContainingWindow(), wxID_ANY, m_lights[i].name, 
             wxDefaultPosition, wxSize(-1, 25));
         nameButton->SetToolTip("Click to select this light");
+        nameButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
         
         // Color preview button
         auto* colorButton = new wxButton(m_lightListSizer->GetContainingWindow(), wxID_ANY, "", 
             wxDefaultPosition, wxSize(30, 25));
         colorButton->SetBackgroundColour(m_lights[i].color);
         colorButton->SetToolTip("Click to change light color");
+        colorButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
         
         // Bind events
         nameButton->Bind(wxEVT_BUTTON, [this, i](wxCommandEvent& event) {
@@ -602,6 +645,11 @@ void GlobalSettingsPanel::bindEvents()
     // Rendering mode events
     m_renderingModeChoice->Bind(wxEVT_CHOICE, &GlobalSettingsPanel::onRenderingModeChanged, this);
     
+    // Legacy mode events
+    if (m_legacyChoice) {
+        m_legacyChoice->Bind(wxEVT_CHOICE, &GlobalSettingsPanel::onLegacyModeChanged, this);
+    }
+    
     // Light preset events
     m_studioButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onStudioPreset, this);
     m_outdoorButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onOutdoorPreset, this);
@@ -611,6 +659,32 @@ void GlobalSettingsPanel::bindEvents()
     m_minimalButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onMinimalPreset, this);
     m_freeCADButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onFreeCADPreset, this);
     m_navcubeButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onNavcubePreset, this);
+    
+    // Background style events
+    if (m_backgroundStyleChoice) {
+        m_backgroundStyleChoice->Bind(wxEVT_CHOICE, &GlobalSettingsPanel::onBackgroundStyleChanged, this);
+    }
+    if (m_backgroundColorButton) {
+        m_backgroundColorButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onBackgroundColorButton, this);
+    }
+    if (m_gradientTopColorButton) {
+        m_gradientTopColorButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onGradientTopColorButton, this);
+    }
+    if (m_gradientBottomColorButton) {
+        m_gradientBottomColorButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onGradientBottomColorButton, this);
+    }
+    if (m_backgroundImageButton) {
+        m_backgroundImageButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::onBackgroundImageButton, this);
+    }
+    if (m_backgroundImageOpacitySlider) {
+        m_backgroundImageOpacitySlider->Bind(wxEVT_SLIDER, &GlobalSettingsPanel::onBackgroundImageOpacityChanged, this);
+    }
+    if (m_backgroundImageFitChoice) {
+        m_backgroundImageFitChoice->Bind(wxEVT_CHOICE, &GlobalSettingsPanel::onBackgroundImageFitChanged, this);
+    }
+    if (m_backgroundImageMaintainAspectCheckBox) {
+        m_backgroundImageMaintainAspectCheckBox->Bind(wxEVT_CHECKBOX, &GlobalSettingsPanel::onBackgroundImageMaintainAspectChanged, this);
+    }
 }
 
 // Lighting methods
@@ -881,8 +955,32 @@ void GlobalSettingsPanel::onRenderingModeChanged(wxCommandEvent& event)
         int selection = m_renderingModeChoice->GetSelection();
         wxString presetName = m_renderingModeChoice->GetString(selection);
         
-        // Apply the selected preset
-        m_renderingManager->applyPreset(presetName.ToStdString());
+        // Handle "None" option for legacy mode
+        if (presetName == "None") {
+            // Enable legacy choice for manual mode selection
+            if (m_legacyChoice) {
+                m_legacyChoice->Enable(true);
+            }
+            
+            // Clear any active configuration to allow legacy mode to work
+            m_renderingManager->setActiveConfiguration(-1);
+            
+            LOG_INF_S("GlobalSettingsPanel::onRenderingModeChanged: Selected None - Legacy mode enabled");
+        } else {
+            // Apply the selected preset
+            m_renderingManager->applyPreset(presetName.ToStdString());
+            
+            // Setup rendering state to apply the preset immediately
+            m_renderingManager->setupRenderingState();
+            
+            // Update legacy choice to reflect the current preset's rendering mode
+            updateLegacyChoiceFromCurrentMode();
+            
+            // Disable legacy choice when preset is selected
+            if (m_legacyChoice) {
+                m_legacyChoice->Enable(false);
+            }
+        }
         
         // Update performance impact display
         float impact = m_renderingManager->getPerformanceImpact();
@@ -1837,4 +1935,773 @@ void GlobalSettingsPanel::testPresetFunctionality()
     }
     
     LOG_INF_S("GlobalSettingsPanel::testPresetFunctionality: Preset functionality test completed");
+}
+
+void GlobalSettingsPanel::onLegacyModeChanged(wxCommandEvent& event)
+{
+    if (!m_legacyChoice) {
+        return;
+    }
+    
+    // Check if legacy choice is enabled (only works in "None" mode)
+    if (!m_legacyChoice->IsEnabled()) {
+        LOG_INF_S("GlobalSettingsPanel::onLegacyModeChanged: Legacy choice is disabled - ignoring change");
+        return;
+    }
+    
+    int selection = m_legacyChoice->GetSelection();
+    LOG_INF_S("GlobalSettingsPanel::onLegacyModeChanged: Legacy mode changed to selection " + std::to_string(selection));
+    
+    // Map legacy mode selection to rendering mode
+    int renderingMode = 0; // Default to Solid
+    switch (selection) {
+        case 0: // Solid
+            renderingMode = 0;
+            break;
+        case 1: // Wireframe
+            renderingMode = 1;
+            break;
+        case 2: // Points
+            renderingMode = 2;
+            break;
+        case 3: // Hidden Line
+            renderingMode = 3;
+            break;
+        case 4: // Shaded
+            renderingMode = 4;
+            break;
+        default:
+            renderingMode = 0;
+            break;
+    }
+    
+    // Apply the rendering mode
+    if (m_renderingManager) {
+        // Get current active configuration
+        if (m_renderingManager->hasActiveConfiguration()) {
+            int activeConfigId = m_renderingManager->getActiveConfigurationId();
+            RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+            settings.mode = renderingMode;
+            
+            // Set corresponding polygon mode based on rendering mode
+            switch (renderingMode) {
+                case 0: // Solid
+                    settings.polygonMode = 0; // Fill
+                    break;
+                case 1: // Wireframe
+                    settings.polygonMode = 1; // Line
+                    settings.lineWidth = 1.5f;
+                    break;
+                case 2: // Points
+                    settings.polygonMode = 2; // Point
+                    settings.pointSize = 3.0f;
+                    break;
+                case 3: // Hidden Line
+                    settings.polygonMode = 1; // Line
+                    settings.lineWidth = 1.0f;
+                    break;
+                case 4: // Shaded
+                    settings.polygonMode = 0; // Fill
+                    break;
+                default:
+                    settings.polygonMode = 0; // Fill
+                    break;
+            }
+            
+            m_renderingManager->updateConfiguration(activeConfigId, settings);
+            
+            LOG_INF_S("GlobalSettingsPanel::onLegacyModeChanged: Applied rendering mode " + std::to_string(renderingMode) + 
+                      " with polygon mode " + std::to_string(settings.polygonMode) + 
+                      " to configuration " + std::to_string(activeConfigId));
+        } else {
+            // Create a new configuration with the selected mode
+            RenderingSettings settings;
+            settings.mode = renderingMode;
+            
+            // Set corresponding polygon mode based on rendering mode
+            switch (renderingMode) {
+                case 0: // Solid
+                    settings.polygonMode = 0; // Fill
+                    break;
+                case 1: // Wireframe
+                    settings.polygonMode = 1; // Line
+                    settings.lineWidth = 1.5f;
+                    break;
+                case 2: // Points
+                    settings.polygonMode = 2; // Point
+                    settings.pointSize = 3.0f;
+                    break;
+                case 3: // Hidden Line
+                    settings.polygonMode = 1; // Line
+                    settings.lineWidth = 1.0f;
+                    break;
+                case 4: // Shaded
+                    settings.polygonMode = 0; // Fill
+                    break;
+                default:
+                    settings.polygonMode = 0; // Fill
+                    break;
+            }
+            
+            int configId = m_renderingManager->addConfiguration(settings);
+            m_renderingManager->setActiveConfiguration(configId);
+            
+            LOG_INF_S("GlobalSettingsPanel::onLegacyModeChanged: Created new configuration " + std::to_string(configId) + 
+                      " with rendering mode " + std::to_string(renderingMode) + 
+                      " and polygon mode " + std::to_string(settings.polygonMode));
+        }
+        
+        // Apply rendering state immediately
+        m_renderingManager->setupRenderingState();
+        LOG_INF_S("GlobalSettingsPanel::onLegacyModeChanged: Applied rendering changes");
+    }
+    
+    // Update the main rendering mode choice to reflect the change
+    if (m_renderingModeChoice) {
+        m_renderingModeChoice->SetSelection(selection);
+    }
+    
+    // Update legacy choice to reflect the current rendering mode
+    updateLegacyChoiceFromCurrentMode();
+}
+
+void GlobalSettingsPanel::updateLegacyChoiceFromCurrentMode()
+{
+    if (!m_legacyChoice || !m_renderingManager) {
+        return;
+    }
+    
+    // Only update if legacy choice is disabled (preset mode)
+    if (m_legacyChoice->IsEnabled()) {
+        return;
+    }
+    
+    // Get current rendering mode from active configuration
+    if (m_renderingManager->hasActiveConfiguration()) {
+        RenderingSettings settings = m_renderingManager->getActiveConfiguration();
+        int currentMode = settings.mode;
+        
+        // Map rendering mode to legacy choice selection
+        int legacySelection = 0; // Default to Solid
+        switch (currentMode) {
+            case 0: // Solid
+                legacySelection = 0;
+                break;
+            case 1: // Wireframe
+                legacySelection = 1;
+                break;
+            case 2: // Points
+                legacySelection = 2;
+                break;
+            case 3: // Hidden Line
+                legacySelection = 3;
+                break;
+            case 4: // Shaded
+                legacySelection = 4;
+                break;
+            default:
+                legacySelection = 0;
+                break;
+        }
+        
+        // Update legacy choice selection without triggering the event
+        m_legacyChoice->SetSelection(legacySelection);
+        
+        LOG_INF_S("GlobalSettingsPanel::updateLegacyChoiceFromCurrentMode: Updated legacy choice to selection " + 
+                  std::to_string(legacySelection) + " for mode " + std::to_string(currentMode));
+    }
+}
+
+void GlobalSettingsPanel::applySpecificFonts()
+{
+    FontManager& fontManager = FontManager::getInstance();
+    
+    // Apply button fonts to all known buttons
+    if (m_globalApplyButton) {
+        m_globalApplyButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_globalSaveButton) {
+        m_globalSaveButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_globalResetButton) {
+        m_globalResetButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_globalUndoButton) {
+        m_globalUndoButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_globalRedoButton) {
+        m_globalRedoButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_addLightButton) {
+        m_addLightButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_removeLightButton) {
+        m_removeLightButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_lightColorButton) {
+        m_lightColorButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_studioButton) {
+        m_studioButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_outdoorButton) {
+        m_outdoorButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_dramaticButton) {
+        m_dramaticButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_warmButton) {
+        m_warmButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_coolButton) {
+        m_coolButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_minimalButton) {
+        m_minimalButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_freeCADButton) {
+        m_freeCADButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_navcubeButton) {
+        m_navcubeButton->SetFont(fontManager.getButtonFont());
+    }
+    
+    // Apply background button fonts
+    if (m_backgroundColorButton) {
+        m_backgroundColorButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_gradientTopColorButton) {
+        m_gradientTopColorButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_gradientBottomColorButton) {
+        m_gradientBottomColorButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_backgroundImageButton) {
+        m_backgroundImageButton->SetFont(fontManager.getButtonFont());
+    }
+    
+    // Apply static text fonts
+    if (m_currentPresetLabel) {
+        m_currentPresetLabel->SetFont(fontManager.getStatusFont());
+    }
+    
+    // Apply fonts to all children recursively, including buttons that might have been missed
+    applyFontsToChildren(this, fontManager);
+    
+    // Also apply fonts to all static texts in the panel
+    wxWindowList& children = GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        if (child) {
+            if (wxStaticText* staticText = dynamic_cast<wxStaticText*>(child)) {
+                staticText->SetFont(fontManager.getLabelFont());
+            }
+            // Recursively apply to children of this child
+            applyFontsToChildren(child, fontManager);
+        }
+    }
+}
+
+void GlobalSettingsPanel::applyFontsToChildren(wxWindow* parent, FontManager& fontManager)
+{
+    wxWindowList& children = parent->GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        if (child) {
+            if (wxStaticText* staticText = dynamic_cast<wxStaticText*>(child)) {
+                staticText->SetFont(fontManager.getLabelFont());
+            } else if (wxButton* button = dynamic_cast<wxButton*>(child)) {
+                button->SetFont(fontManager.getButtonFont());
+            } else if (wxChoice* choice = dynamic_cast<wxChoice*>(child)) {
+                choice->SetFont(fontManager.getChoiceFont());
+            } else if (wxTextCtrl* textCtrl = dynamic_cast<wxTextCtrl*>(child)) {
+                textCtrl->SetFont(fontManager.getTextCtrlFont());
+            } else if (wxCheckBox* checkBox = dynamic_cast<wxCheckBox*>(child)) {
+                checkBox->SetFont(fontManager.getLabelFont());
+            } else if (wxSlider* slider = dynamic_cast<wxSlider*>(child)) {
+                slider->SetFont(fontManager.getLabelFont());
+            } else if (wxSpinCtrl* spinCtrl = dynamic_cast<wxSpinCtrl*>(child)) {
+                spinCtrl->SetFont(fontManager.getTextCtrlFont());
+            } else if (wxSpinCtrlDouble* spinCtrlDouble = dynamic_cast<wxSpinCtrlDouble*>(child)) {
+                spinCtrlDouble->SetFont(fontManager.getTextCtrlFont());
+            }
+            
+            // Recursively apply to children of this child
+            applyFontsToChildren(child, fontManager);
+        }
+    }
+}
+
+// Background settings getter implementations
+int GlobalSettingsPanel::getBackgroundStyle() const
+{
+    if (!m_backgroundStyleChoice) {
+        return 0; // Default to Solid Color
+    }
+    return m_backgroundStyleChoice->GetSelection();
+}
+
+wxColour GlobalSettingsPanel::getBackgroundColor() const
+{
+    if (!m_backgroundColorButton) {
+        return wxColour(173, 204, 255); // Default light blue
+    }
+    return m_backgroundColorButton->GetBackgroundColour();
+}
+
+wxColour GlobalSettingsPanel::getGradientTopColor() const
+{
+    if (!m_gradientTopColorButton) {
+        return wxColour(200, 220, 255); // Default light blue
+    }
+    return m_gradientTopColorButton->GetBackgroundColour();
+}
+
+wxColour GlobalSettingsPanel::getGradientBottomColor() const
+{
+    if (!m_gradientBottomColorButton) {
+        return wxColour(150, 180, 255); // Default darker blue
+    }
+    return m_gradientBottomColorButton->GetBackgroundColour();
+}
+
+std::string GlobalSettingsPanel::getBackgroundImagePath() const
+{
+    if (!m_backgroundImagePathLabel) {
+        return "";
+    }
+    wxString path = m_backgroundImagePathLabel->GetLabel();
+    if (path == "No image selected") {
+        return "";
+    }
+    return path.ToStdString();
+}
+
+bool GlobalSettingsPanel::isBackgroundImageEnabled() const
+{
+    return !getBackgroundImagePath().empty();
+}
+
+float GlobalSettingsPanel::getBackgroundImageOpacity() const
+{
+    if (!m_backgroundImageOpacitySlider) {
+        return 1.0f; // Default full opacity
+    }
+    return m_backgroundImageOpacitySlider->GetValue() / 100.0f;
+}
+
+int GlobalSettingsPanel::getBackgroundImageFit() const
+{
+    if (!m_backgroundImageFitChoice) {
+        return 1; // Default to Fit
+    }
+    return m_backgroundImageFitChoice->GetSelection();
+}
+
+bool GlobalSettingsPanel::isBackgroundImageMaintainAspect() const
+{
+    if (!m_backgroundImageMaintainAspectCheckBox) {
+        return true; // Default to maintain aspect ratio
+    }
+    return m_backgroundImageMaintainAspectCheckBox->GetValue();
+}
+
+wxSizer* GlobalSettingsPanel::createBackgroundStyleTab(wxWindow* parent)
+{
+    auto* backgroundSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Background Style Selection
+    auto* styleBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Background Style");
+    
+    m_backgroundStyleChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
+    m_backgroundStyleChoice->Append("Solid Color");
+    m_backgroundStyleChoice->Append("Gradient");
+    m_backgroundStyleChoice->Append("Image");
+    m_backgroundStyleChoice->Append("Environment");
+    m_backgroundStyleChoice->Append("Studio");
+    m_backgroundStyleChoice->Append("Outdoor");
+    m_backgroundStyleChoice->Append("Industrial");
+    m_backgroundStyleChoice->SetSelection(0);
+    styleBoxSizer->Add(m_backgroundStyleChoice, 0, wxEXPAND | wxALL, 2);
+    
+    backgroundSizer->Add(styleBoxSizer, 0, wxEXPAND | wxALL, 2);
+    
+    // Color Settings
+    auto* colorBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Color Settings");
+    
+    // Use wxGridSizer for perfect alignment of labels and buttons
+    // 3 rows, 2 columns for 3 label-button pairs
+    auto* colorGridSizer = new wxGridSizer(3, 2, 5, 5);
+    
+    // Solid Color
+    auto* solidColorLabel = new wxStaticText(parent, wxID_ANY, "Background Color:");
+    solidColorLabel->SetMinSize(wxSize(120, -1)); // Fixed width for alignment
+    colorGridSizer->Add(solidColorLabel, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_backgroundColorButton = new wxButton(parent, wxID_ANY, "Select Color", wxDefaultPosition, wxSize(120, -1));
+    m_backgroundColorButton->SetBackgroundColour(wxColour(173, 204, 255));
+    colorGridSizer->Add(m_backgroundColorButton, 0, wxEXPAND);
+    
+    // Gradient Top
+    auto* gradientTopLabel = new wxStaticText(parent, wxID_ANY, "Gradient Top:");
+    gradientTopLabel->SetMinSize(wxSize(120, -1)); // Fixed width for alignment
+    colorGridSizer->Add(gradientTopLabel, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_gradientTopColorButton = new wxButton(parent, wxID_ANY, "Select Color", wxDefaultPosition, wxSize(120, -1));
+    m_gradientTopColorButton->SetBackgroundColour(wxColour(200, 220, 255));
+    colorGridSizer->Add(m_gradientTopColorButton, 0, wxEXPAND);
+    
+    // Gradient Bottom
+    auto* gradientBottomLabel = new wxStaticText(parent, wxID_ANY, "Gradient Bottom:");
+    gradientBottomLabel->SetMinSize(wxSize(120, -1)); // Fixed width for alignment
+    colorGridSizer->Add(gradientBottomLabel, 0, wxALIGN_CENTER_VERTICAL);
+    
+    m_gradientBottomColorButton = new wxButton(parent, wxID_ANY, "Select Color", wxDefaultPosition, wxSize(120, -1));
+    m_gradientBottomColorButton->SetBackgroundColour(wxColour(150, 180, 255));
+    colorGridSizer->Add(m_gradientBottomColorButton, 0, wxEXPAND);
+    
+    colorBoxSizer->Add(colorGridSizer, 0, wxEXPAND | wxALL, 2);
+    
+    backgroundSizer->Add(colorBoxSizer, 0, wxEXPAND | wxALL, 2);
+    
+    // Image Settings
+    auto* imageBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Image Settings");
+    
+    // Image Selection
+    auto* imageSelectSizer = new wxBoxSizer(wxHORIZONTAL);
+    auto* imageSelectLabel = new wxStaticText(parent, wxID_ANY, "Background Image:");
+    imageSelectSizer->Add(imageSelectLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    
+    m_backgroundImageButton = new wxButton(parent, wxID_ANY, "Browse Image", wxDefaultPosition, wxSize(120, -1));
+    imageSelectSizer->Add(m_backgroundImageButton, 0, wxALL, 2);
+    imageBoxSizer->Add(imageSelectSizer, 0, wxEXPAND | wxALL, 2);
+    
+    // Image Path Display
+    m_backgroundImagePathLabel = new wxStaticText(parent, wxID_ANY, "No image selected");
+    m_backgroundImagePathLabel->SetForegroundColour(wxColour(128, 128, 128));
+    imageBoxSizer->Add(m_backgroundImagePathLabel, 0, wxALL, 2);
+    
+    // Image Opacity
+    auto* opacitySizer = new wxBoxSizer(wxHORIZONTAL);
+    auto* opacityLabel = new wxStaticText(parent, wxID_ANY, "Opacity:");
+    opacitySizer->Add(opacityLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    
+    m_backgroundImageOpacitySlider = new wxSlider(parent, wxID_ANY, 100, 0, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+    opacitySizer->Add(m_backgroundImageOpacitySlider, 1, wxEXPAND | wxALL, 2);
+    imageBoxSizer->Add(opacitySizer, 0, wxEXPAND | wxALL, 2);
+    
+    // Image Fit Options
+    auto* fitSizer = new wxBoxSizer(wxHORIZONTAL);
+    auto* fitLabel = new wxStaticText(parent, wxID_ANY, "Fit Mode:");
+    fitSizer->Add(fitLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    
+    m_backgroundImageFitChoice = new wxChoice(parent, wxID_ANY, wxDefaultPosition, wxSize(150, -1));
+    m_backgroundImageFitChoice->Append("Stretch");
+    m_backgroundImageFitChoice->Append("Fit");
+    m_backgroundImageFitChoice->Append("Center");
+    m_backgroundImageFitChoice->Append("Tile");
+    m_backgroundImageFitChoice->SetSelection(1);
+    fitSizer->Add(m_backgroundImageFitChoice, 0, wxALL, 2);
+    imageBoxSizer->Add(fitSizer, 0, wxEXPAND | wxALL, 2);
+    
+    // Maintain Aspect Ratio
+    m_backgroundImageMaintainAspectCheckBox = new wxCheckBox(parent, wxID_ANY, "Maintain Aspect Ratio");
+    m_backgroundImageMaintainAspectCheckBox->SetValue(true);
+    imageBoxSizer->Add(m_backgroundImageMaintainAspectCheckBox, 0, wxALL, 2);
+    
+    backgroundSizer->Add(imageBoxSizer, 0, wxEXPAND | wxALL, 2);
+    
+    // Preset Backgrounds
+    auto* presetBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Preset Backgrounds");
+    
+    auto* presetGridSizer = new wxGridSizer(3, 2, 10, 10);
+    
+    // Get font manager for applying fonts to dynamic buttons
+    FontManager& fontManager = FontManager::getInstance();
+    
+    // Studio Background
+    auto* studioButton = new wxButton(parent, wxID_ANY, "Studio\nBackground", wxDefaultPosition, wxSize(180, 30));
+    studioButton->SetBackgroundColour(wxColour(240, 240, 240));
+    studioButton->SetForegroundColour(wxColour(50, 50, 50)); // Dark text on light background
+    studioButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
+    presetGridSizer->Add(studioButton, 0, wxEXPAND);
+    
+    // Outdoor Background
+    auto* outdoorButton = new wxButton(parent, wxID_ANY, "Outdoor\nBackground", wxDefaultPosition, wxSize(180, 30));
+    outdoorButton->SetBackgroundColour(wxColour(135, 206, 235));
+    outdoorButton->SetForegroundColour(wxColour(20, 20, 20)); // Dark text on light blue background
+    outdoorButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
+    presetGridSizer->Add(outdoorButton, 0, wxEXPAND);
+    
+    // Industrial Background
+    auto* industrialButton = new wxButton(parent, wxID_ANY, "Industrial\nBackground", wxDefaultPosition, wxSize(180, 30));
+    industrialButton->SetBackgroundColour(wxColour(105, 105, 105));
+    industrialButton->SetForegroundColour(wxColour(255, 255, 255)); // White text on dark background
+    industrialButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
+    presetGridSizer->Add(industrialButton, 0, wxEXPAND);
+    
+    // CAD Background
+    auto* cadButton = new wxButton(parent, wxID_ANY, "CAD\nBackground", wxDefaultPosition, wxSize(180, 30));
+    cadButton->SetBackgroundColour(wxColour(255, 255, 255));
+    cadButton->SetForegroundColour(wxColour(50, 50, 50)); // Dark text on white background
+    cadButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
+    presetGridSizer->Add(cadButton, 0, wxEXPAND);
+    
+    // Dark Background
+    auto* darkButton = new wxButton(parent, wxID_ANY, "Dark\nBackground", wxDefaultPosition, wxSize(180, 30));
+    darkButton->SetBackgroundColour(wxColour(40, 40, 40));
+    darkButton->SetForegroundColour(wxColour(255, 255, 255)); // White text on dark background
+    darkButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
+    presetGridSizer->Add(darkButton, 0, wxEXPAND);
+    
+    // Gradient Background
+    auto* gradientButton = new wxButton(parent, wxID_ANY, "Gradient\nBackground", wxDefaultPosition, wxSize(180, 30));
+    gradientButton->SetBackgroundColour(wxColour(200, 220, 255));
+    gradientButton->SetForegroundColour(wxColour(30, 30, 30)); // Dark text on light blue background
+    gradientButton->SetFont(fontManager.getButtonFont()); // Apply font to dynamic button
+    presetGridSizer->Add(gradientButton, 0, wxEXPAND);
+    
+    presetBoxSizer->Add(presetGridSizer, 0, wxALL, 2);
+    backgroundSizer->Add(presetBoxSizer, 0, wxEXPAND | wxALL, 2);
+    
+    return backgroundSizer;
+}
+
+// Background style event handlers
+void GlobalSettingsPanel::onBackgroundStyleChanged(wxCommandEvent& event)
+{
+    if (!m_backgroundStyleChoice) {
+        return;
+    }
+    
+    int selection = m_backgroundStyleChoice->GetSelection();
+    LOG_INF_S("GlobalSettingsPanel::onBackgroundStyleChanged: Background style changed to selection " + std::to_string(selection));
+    
+    // Apply background style to rendering manager
+    if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+        int activeConfigId = m_renderingManager->getActiveConfigurationId();
+        RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+        settings.backgroundStyle = selection;
+        
+        // Set default colors based on style
+        switch (selection) {
+            case 0: // Solid Color
+                settings.backgroundColor = wxColour(173, 204, 255);
+                break;
+            case 1: // Gradient
+                settings.gradientBackground = true;
+                settings.gradientTopColor = wxColour(200, 220, 255);
+                settings.gradientBottomColor = wxColour(150, 180, 255);
+                break;
+            case 2: // Image
+                settings.backgroundImageEnabled = true;
+                break;
+            case 3: // Environment
+                settings.backgroundColor = wxColour(135, 206, 235);
+                break;
+            case 4: // Studio
+                settings.backgroundColor = wxColour(240, 240, 240);
+                break;
+            case 5: // Outdoor
+                settings.backgroundColor = wxColour(135, 206, 235);
+                break;
+            case 6: // Industrial
+                settings.backgroundColor = wxColour(105, 105, 105);
+                break;
+        }
+        
+        m_renderingManager->updateConfiguration(activeConfigId, settings);
+        m_renderingManager->setupRenderingState();
+        
+        LOG_INF_S("GlobalSettingsPanel::onBackgroundStyleChanged: Applied background style " + std::to_string(selection));
+    }
+    
+    // Auto-apply if enabled
+    if (m_autoApply && m_parentDialog) {
+        m_parentDialog->applyGlobalSettingsToCanvas();
+    }
+}
+
+void GlobalSettingsPanel::onBackgroundColorButton(wxCommandEvent& event)
+{
+    wxColourDialog dialog(this);
+    if (dialog.ShowModal() == wxID_OK) {
+        wxColour color = dialog.GetColourData().GetColour();
+        m_backgroundColorButton->SetBackgroundColour(color);
+        m_backgroundColorButton->SetLabel(wxString::Format("RGB(%d,%d,%d)", color.Red(), color.Green(), color.Blue()));
+        
+        // Apply color to rendering manager
+        if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+            int activeConfigId = m_renderingManager->getActiveConfigurationId();
+            RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+            settings.backgroundColor = color;
+            m_renderingManager->updateConfiguration(activeConfigId, settings);
+            m_renderingManager->setupRenderingState();
+            
+            LOG_INF_S("GlobalSettingsPanel::onBackgroundColorButton: Applied background color");
+        }
+        
+        // Auto-apply if enabled
+        if (m_autoApply && m_parentDialog) {
+            m_parentDialog->applyGlobalSettingsToCanvas();
+        }
+    }
+}
+
+void GlobalSettingsPanel::onGradientTopColorButton(wxCommandEvent& event)
+{
+    wxColourDialog dialog(this);
+    if (dialog.ShowModal() == wxID_OK) {
+        wxColour color = dialog.GetColourData().GetColour();
+        m_gradientTopColorButton->SetBackgroundColour(color);
+        m_gradientTopColorButton->SetLabel(wxString::Format("RGB(%d,%d,%d)", color.Red(), color.Green(), color.Blue()));
+        
+        // Apply color to rendering manager
+        if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+            int activeConfigId = m_renderingManager->getActiveConfigurationId();
+            RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+            settings.gradientTopColor = color;
+            m_renderingManager->updateConfiguration(activeConfigId, settings);
+            m_renderingManager->setupRenderingState();
+            
+            LOG_INF_S("GlobalSettingsPanel::onGradientTopColorButton: Applied gradient top color");
+        }
+        
+        // Auto-apply if enabled
+        if (m_autoApply && m_parentDialog) {
+            m_parentDialog->applyGlobalSettingsToCanvas();
+        }
+    }
+}
+
+void GlobalSettingsPanel::onGradientBottomColorButton(wxCommandEvent& event)
+{
+    wxColourDialog dialog(this);
+    if (dialog.ShowModal() == wxID_OK) {
+        wxColour color = dialog.GetColourData().GetColour();
+        m_gradientBottomColorButton->SetBackgroundColour(color);
+        m_gradientBottomColorButton->SetLabel(wxString::Format("RGB(%d,%d,%d)", color.Red(), color.Green(), color.Blue()));
+        
+        // Apply color to rendering manager
+        if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+            int activeConfigId = m_renderingManager->getActiveConfigurationId();
+            RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+            settings.gradientBottomColor = color;
+            m_renderingManager->updateConfiguration(activeConfigId, settings);
+            m_renderingManager->setupRenderingState();
+            
+            LOG_INF_S("GlobalSettingsPanel::onGradientBottomColorButton: Applied gradient bottom color");
+        }
+        
+        // Auto-apply if enabled
+        if (m_autoApply && m_parentDialog) {
+            m_parentDialog->applyGlobalSettingsToCanvas();
+        }
+    }
+}
+
+void GlobalSettingsPanel::onBackgroundImageButton(wxCommandEvent& event)
+{
+    wxFileDialog dialog(this, "Select Background Image", "", "", 
+                       "Image files (*.jpg;*.jpeg;*.png;*.bmp)|*.jpg;*.jpeg;*.png;*.bmp|All files (*.*)|*.*",
+                       wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    
+    if (dialog.ShowModal() == wxID_OK) {
+        wxString filePath = dialog.GetPath();
+        m_backgroundImagePathLabel->SetLabel(filePath);
+        m_backgroundImagePathLabel->SetForegroundColour(wxColour(0, 128, 0));
+        
+        // Apply image path to rendering manager
+        if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+            int activeConfigId = m_renderingManager->getActiveConfigurationId();
+            RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+            settings.backgroundImagePath = filePath.ToStdString();
+            settings.backgroundImageEnabled = true;
+            m_renderingManager->updateConfiguration(activeConfigId, settings);
+            m_renderingManager->setupRenderingState();
+            
+            LOG_INF_S("GlobalSettingsPanel::onBackgroundImageButton: Applied background image: " + filePath.ToStdString());
+        }
+        
+        // Auto-apply if enabled
+        if (m_autoApply && m_parentDialog) {
+            m_parentDialog->applyGlobalSettingsToCanvas();
+        }
+    }
+}
+
+void GlobalSettingsPanel::onBackgroundImageOpacityChanged(wxCommandEvent& event)
+{
+    if (!m_backgroundImageOpacitySlider) {
+        return;
+    }
+    
+    int opacity = m_backgroundImageOpacitySlider->GetValue();
+    float opacityFloat = opacity / 100.0f;
+    
+    // Apply opacity to rendering manager
+    if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+        int activeConfigId = m_renderingManager->getActiveConfigurationId();
+        RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+        settings.backgroundImageOpacity = opacityFloat;
+        m_renderingManager->updateConfiguration(activeConfigId, settings);
+        m_renderingManager->setupRenderingState();
+        
+        LOG_INF_S("GlobalSettingsPanel::onBackgroundImageOpacityChanged: Applied opacity " + std::to_string(opacityFloat));
+    }
+    
+    // Auto-apply if enabled
+    if (m_autoApply && m_parentDialog) {
+        m_parentDialog->applyGlobalSettingsToCanvas();
+    }
+}
+
+void GlobalSettingsPanel::onBackgroundImageFitChanged(wxCommandEvent& event)
+{
+    if (!m_backgroundImageFitChoice) {
+        return;
+    }
+    
+    int selection = m_backgroundImageFitChoice->GetSelection();
+    
+    // Apply fit mode to rendering manager
+    if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+        int activeConfigId = m_renderingManager->getActiveConfigurationId();
+        RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+        settings.backgroundImageFit = selection;
+        m_renderingManager->updateConfiguration(activeConfigId, settings);
+        m_renderingManager->setupRenderingState();
+        
+        LOG_INF_S("GlobalSettingsPanel::onBackgroundImageFitChanged: Applied fit mode " + std::to_string(selection));
+    }
+    
+    // Auto-apply if enabled
+    if (m_autoApply && m_parentDialog) {
+        m_parentDialog->applyGlobalSettingsToCanvas();
+    }
+}
+
+void GlobalSettingsPanel::onBackgroundImageMaintainAspectChanged(wxCommandEvent& event)
+{
+    if (!m_backgroundImageMaintainAspectCheckBox) {
+        return;
+    }
+    
+    bool maintainAspect = m_backgroundImageMaintainAspectCheckBox->GetValue();
+    
+    // Apply aspect ratio setting to rendering manager
+    if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+        int activeConfigId = m_renderingManager->getActiveConfigurationId();
+        RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
+        settings.backgroundImageMaintainAspect = maintainAspect;
+        m_renderingManager->updateConfiguration(activeConfigId, settings);
+        m_renderingManager->setupRenderingState();
+        
+        LOG_INF_S("GlobalSettingsPanel::onBackgroundImageMaintainAspectChanged: Applied maintain aspect " + std::to_string(maintainAspect));
+    }
+    
+    // Auto-apply if enabled
+    if (m_autoApply && m_parentDialog) {
+        m_parentDialog->applyGlobalSettingsToCanvas();
+    }
 } 

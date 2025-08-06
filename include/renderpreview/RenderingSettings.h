@@ -46,6 +46,14 @@ struct RenderingSettings {
     wxColour gradientTopColor;
     wxColour gradientBottomColor;
     
+    // Background style settings
+    int backgroundStyle;   // 0=Solid, 1=Gradient, 2=Image, 3=Environment, 4=Studio, 5=Outdoor, 6=Industrial
+    std::string backgroundImagePath;
+    bool backgroundImageEnabled;
+    float backgroundImageOpacity;
+    int backgroundImageFit;  // 0=Stretch, 1=Fit, 2=Center, 3=Tile
+    bool backgroundImageMaintainAspect;
+    
     // Performance settings
     bool frustumCulling;
     bool occlusionCulling;
@@ -79,6 +87,11 @@ struct RenderingSettings {
         , gradientBackground(false)
         , gradientTopColor(200, 220, 255)
         , gradientBottomColor(150, 180, 255)
+        , backgroundStyle(0)  // Solid
+        , backgroundImageEnabled(false)
+        , backgroundImageOpacity(1.0f)
+        , backgroundImageFit(1)  // Fit
+        , backgroundImageMaintainAspect(true)
         , frustumCulling(true)
         , occlusionCulling(false)
         , maxRenderDistance(1000)

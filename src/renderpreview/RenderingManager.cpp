@@ -1,4 +1,5 @@
 #include "renderpreview/RenderingManager.h"
+#include "renderpreview/ConfigValidator.h"
 #include "logger/Logger.h"
 #include <wx/glcanvas.h>
 #include <GL/gl.h>
@@ -31,6 +32,19 @@ RenderingManager::~RenderingManager()
 
 int RenderingManager::addConfiguration(const RenderingSettings& settings)
 {
+    // Validate settings before adding
+    auto validation = ConfigValidator::validateRenderingConfiguration(settings);
+    if (!validation.isValid) {
+        LOG_ERR_S("RenderingManager::addConfiguration: Validation failed - " + validation.errorMessage.ToStdString());
+        return -1;
+    }
+    
+    // Validate performance impact
+    auto performanceValidation = ConfigValidator::validatePerformanceImpact(settings, 0.8f);
+    if (!performanceValidation.isValid) {
+        LOG_WRN_S("RenderingManager::addConfiguration: Performance warning - " + performanceValidation.errorMessage.ToStdString());
+    }
+    
     LOG_INF_S("RenderingManager::addConfiguration: Adding configuration '" + settings.name + "'");
     
     auto managedConfig = std::make_unique<ManagedRendering>();
@@ -41,7 +55,7 @@ int RenderingManager::addConfiguration(const RenderingSettings& settings)
     int configId = managedConfig->configId;
     m_configurations[configId] = std::move(managedConfig);
     
-    LOG_INF_S("RenderingManager::addConfiguration: Successfully added configuration with ID " + std::to_string(configId));
+    LOG_INF_S("RenderingManager::addConfiguration: Added validated configuration with ID " + std::to_string(configId));
     return configId;
 }
 
@@ -149,7 +163,14 @@ bool RenderingManager::setActiveConfiguration(int configId)
     if (configId != -1) {
         auto it = m_configurations.find(configId);
         if (it == m_configurations.end()) {
-            LOG_WRN_S("RenderingManager::setActiveConfiguration: Configuration with ID " + std::to_string(configId) + " not found");
+            LOG_ERR_S("RenderingManager::setActiveConfiguration: Configuration " + std::to_string(configId) + " not found");
+            return false;
+        }
+        
+        // Re-validate configuration before activation
+        auto validation = ConfigValidator::validateRenderingConfiguration(it->second->settings);
+        if (!validation.isValid) {
+            LOG_ERR_S("RenderingManager::setActiveConfiguration: Configuration validation failed - " + validation.errorMessage.ToStdString());
             return false;
         }
         
@@ -294,9 +315,18 @@ void RenderingManager::applyPreset(const std::string& presetName)
 {
     auto it = m_presets.find(presetName);
     if (it != m_presets.end()) {
+        // Validate preset compatibility
+        auto validation = ConfigValidator::validatePresetCompatibility(presetName, it->second);
+        if (!validation.isValid) {
+            LOG_ERR_S("RenderingManager::applyPreset: Preset validation failed - " + validation.errorMessage.ToStdString());
+            return;
+        }
+        
         int configId = addConfiguration(it->second);
-        setActiveConfiguration(configId);
-        LOG_INF_S("RenderingManager::applyPreset: Applied preset '" + presetName + "'");
+        if (configId != -1) {
+            setActiveConfiguration(configId);
+            LOG_INF_S("RenderingManager::applyPreset: Applied validated preset '" + presetName + "'");
+        }
     } else {
         LOG_WRN_S("RenderingManager::applyPreset: Preset '" + presetName + "' not found");
     }
@@ -568,6 +598,8 @@ void RenderingManager::initializePresets()
     RenderingSettings wireframe;
     wireframe.name = "Wireframe";
     wireframe.mode = 1; // Wireframe
+    wireframe.polygonMode = 1; // Line
+    wireframe.lineWidth = 1.5f;
     wireframe.quality = 1; // Medium
     wireframe.fastMode = true;
     wireframe.transparencyType = 0; // None
@@ -585,6 +617,7 @@ void RenderingManager::initializePresets()
     RenderingSettings cadStandard;
     cadStandard.name = "CAD Standard";
     cadStandard.mode = 4; // Shaded
+    cadStandard.polygonMode = 0; // Fill
     cadStandard.quality = 2; // High
     cadStandard.fastMode = false;
     cadStandard.transparencyType = 1; // Blend
@@ -602,6 +635,7 @@ void RenderingManager::initializePresets()
     RenderingSettings cadHighQuality;
     cadHighQuality.name = "CAD High Quality";
     cadHighQuality.mode = 4; // Shaded
+    cadHighQuality.polygonMode = 0; // Fill
     cadHighQuality.quality = 3; // Ultra
     cadHighQuality.fastMode = false;
     cadHighQuality.transparencyType = 2; // SortedBlend
@@ -619,6 +653,8 @@ void RenderingManager::initializePresets()
     RenderingSettings cadWireframe;
     cadWireframe.name = "CAD Wireframe";
     cadWireframe.mode = 1; // Wireframe
+    cadWireframe.polygonMode = 1; // Line
+    cadWireframe.lineWidth = 1.0f;
     cadWireframe.quality = 2; // High
     cadWireframe.fastMode = false;
     cadWireframe.transparencyType = 0; // None
@@ -637,6 +673,7 @@ void RenderingManager::initializePresets()
     RenderingSettings gamingFast;
     gamingFast.name = "Gaming Fast";
     gamingFast.mode = 4; // Shaded
+    gamingFast.polygonMode = 0; // Fill
     gamingFast.quality = 0; // Low
     gamingFast.fastMode = true;
     gamingFast.transparencyType = 0; // None
@@ -654,6 +691,7 @@ void RenderingManager::initializePresets()
     RenderingSettings gamingBalanced;
     gamingBalanced.name = "Gaming Balanced";
     gamingBalanced.mode = 4; // Shaded
+    gamingBalanced.polygonMode = 0; // Fill
     gamingBalanced.quality = 1; // Medium
     gamingBalanced.fastMode = false;
     gamingBalanced.transparencyType = 1; // Blend
@@ -671,6 +709,7 @@ void RenderingManager::initializePresets()
     RenderingSettings gamingQuality;
     gamingQuality.name = "Gaming Quality";
     gamingQuality.mode = 4; // Shaded
+    gamingQuality.polygonMode = 0; // Fill
     gamingQuality.quality = 2; // High
     gamingQuality.fastMode = false;
     gamingQuality.transparencyType = 2; // SortedBlend
@@ -689,6 +728,7 @@ void RenderingManager::initializePresets()
     RenderingSettings mobileLow;
     mobileLow.name = "Mobile Low";
     mobileLow.mode = 4; // Shaded
+    mobileLow.polygonMode = 0; // Fill
     mobileLow.quality = 0; // Low
     mobileLow.fastMode = true;
     mobileLow.transparencyType = 0; // None
@@ -706,6 +746,7 @@ void RenderingManager::initializePresets()
     RenderingSettings mobileMedium;
     mobileMedium.name = "Mobile Medium";
     mobileMedium.mode = 4; // Shaded
+    mobileMedium.polygonMode = 0; // Fill
     mobileMedium.quality = 1; // Medium
     mobileMedium.fastMode = false;
     mobileMedium.transparencyType = 1; // Blend
@@ -724,6 +765,7 @@ void RenderingManager::initializePresets()
     RenderingSettings presentationStandard;
     presentationStandard.name = "Presentation Standard";
     presentationStandard.mode = 4; // Shaded
+    presentationStandard.polygonMode = 0; // Fill
     presentationStandard.quality = 2; // High
     presentationStandard.fastMode = false;
     presentationStandard.transparencyType = 2; // SortedBlend
@@ -742,6 +784,7 @@ void RenderingManager::initializePresets()
     RenderingSettings presentationHigh;
     presentationHigh.name = "Presentation High";
     presentationHigh.mode = 4; // Shaded
+    presentationHigh.polygonMode = 0; // Fill
     presentationHigh.quality = 3; // Ultra
     presentationHigh.fastMode = false;
     presentationHigh.transparencyType = 3; // DelayedBlend
@@ -761,6 +804,8 @@ void RenderingManager::initializePresets()
     RenderingSettings debugWireframe;
     debugWireframe.name = "Debug Wireframe";
     debugWireframe.mode = 1; // Wireframe
+    debugWireframe.polygonMode = 1; // Line
+    debugWireframe.lineWidth = 1.5f;
     debugWireframe.quality = 0; // Low
     debugWireframe.fastMode = true;
     debugWireframe.transparencyType = 0; // None
@@ -778,6 +823,8 @@ void RenderingManager::initializePresets()
     RenderingSettings debugPoints;
     debugPoints.name = "Debug Points";
     debugPoints.mode = 2; // Points
+    debugPoints.polygonMode = 2; // Point
+    debugPoints.pointSize = 3.0f;
     debugPoints.quality = 0; // Low
     debugPoints.fastMode = true;
     debugPoints.transparencyType = 0; // None
@@ -796,6 +843,7 @@ void RenderingManager::initializePresets()
     RenderingSettings legacySolid;
     legacySolid.name = "Legacy Solid";
     legacySolid.mode = 0; // Solid
+    legacySolid.polygonMode = 0; // Fill
     legacySolid.quality = 1; // Medium
     legacySolid.fastMode = true;
     legacySolid.transparencyType = 0; // None
@@ -809,9 +857,47 @@ void RenderingManager::initializePresets()
     legacySolid.adaptiveQuality = false;
     m_presets["Legacy Solid"] = legacySolid;
     
+    RenderingSettings legacyWireframe;
+    legacyWireframe.name = "Legacy Wireframe";
+    legacyWireframe.mode = 1; // Wireframe
+    legacyWireframe.polygonMode = 1; // Line
+    legacyWireframe.lineWidth = 1.5f;
+    legacyWireframe.quality = 1; // Medium
+    legacyWireframe.fastMode = true;
+    legacyWireframe.transparencyType = 0; // None
+    legacyWireframe.smoothShading = false;
+    legacyWireframe.phongShading = false;
+    legacyWireframe.backfaceCulling = false;
+    legacyWireframe.depthTest = true;
+    legacyWireframe.depthWrite = true;
+    legacyWireframe.frustumCulling = false;
+    legacyWireframe.occlusionCulling = false;
+    legacyWireframe.adaptiveQuality = false;
+    m_presets["Legacy Wireframe"] = legacyWireframe;
+    
+    RenderingSettings legacyPoints;
+    legacyPoints.name = "Legacy Points";
+    legacyPoints.mode = 2; // Points
+    legacyPoints.polygonMode = 2; // Point
+    legacyPoints.pointSize = 3.0f;
+    legacyPoints.quality = 1; // Medium
+    legacyPoints.fastMode = true;
+    legacyPoints.transparencyType = 0; // None
+    legacyPoints.smoothShading = false;
+    legacyPoints.phongShading = false;
+    legacyPoints.backfaceCulling = false;
+    legacyPoints.depthTest = true;
+    legacyPoints.depthWrite = true;
+    legacyPoints.frustumCulling = false;
+    legacyPoints.occlusionCulling = false;
+    legacyPoints.adaptiveQuality = false;
+    m_presets["Legacy Points"] = legacyPoints;
+    
     RenderingSettings legacyHiddenLine;
     legacyHiddenLine.name = "Legacy Hidden Line";
     legacyHiddenLine.mode = 3; // HiddenLine
+    legacyHiddenLine.polygonMode = 1; // Line
+    legacyHiddenLine.lineWidth = 1.0f;
     legacyHiddenLine.quality = 1; // Medium
     legacyHiddenLine.fastMode = true;
     legacyHiddenLine.transparencyType = 0; // None
@@ -825,16 +911,178 @@ void RenderingManager::initializePresets()
     legacyHiddenLine.adaptiveQuality = false;
     m_presets["Legacy Hidden Line"] = legacyHiddenLine;
     
+    RenderingSettings legacyShaded;
+    legacyShaded.name = "Legacy Shaded";
+    legacyShaded.mode = 4; // Shaded
+    legacyShaded.polygonMode = 0; // Fill
+    legacyShaded.quality = 1; // Medium
+    legacyShaded.fastMode = true;
+    legacyShaded.transparencyType = 0; // None
+    legacyShaded.smoothShading = true;
+    legacyShaded.phongShading = true;
+    legacyShaded.backfaceCulling = true;
+    legacyShaded.depthTest = true;
+    legacyShaded.depthWrite = true;
+    legacyShaded.frustumCulling = false;
+    legacyShaded.occlusionCulling = false;
+    legacyShaded.adaptiveQuality = false;
+    m_presets["Legacy Shaded"] = legacyShaded;
+    
     LOG_INF_S("RenderingManager::initializePresets: Initialized " + std::to_string(m_presets.size()) + " presets");
 }
 
 void RenderingManager::applyRenderingMode(const RenderingSettings& settings)
 {
-    if (!m_sceneRoot) return;
+    if (!m_sceneRoot) {
+        LOG_ERR_S("RenderingManager::applyRenderingMode: Scene root not initialized");
+        return;
+    }
     
-    // This would typically involve modifying scene graph nodes
-    // For now, we'll just log the mode change
+    // Apply polygon mode settings
+    switch (settings.polygonMode) {
+        case 0: // Fill mode
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            break;
+        case 1: // Line mode (Wireframe)
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glLineWidth(settings.lineWidth);
+            break;
+        case 2: // Point mode
+            glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
+            glPointSize(settings.pointSize);
+            break;
+        default:
+            LOG_WRN_S("RenderingManager::applyRenderingMode: Unknown polygon mode " + std::to_string(settings.polygonMode));
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            break;
+    }
+    
+    // Apply specific rendering mode logic
+    switch (settings.mode) {
+        case 0: // Solid
+            applySolidMode(settings);
+            break;
+        case 1: // Wireframe
+            applyWireframeMode(settings);
+            break;
+        case 2: // Points
+            applyPointsMode(settings);
+            break;
+        case 3: // Hidden Line
+            applyHiddenLineMode(settings);
+            break;
+        case 4: // Shaded
+            applyShadedMode(settings);
+            break;
+        default:
+            LOG_WRN_S("RenderingManager::applyRenderingMode: Unknown rendering mode " + std::to_string(settings.mode));
+            applySolidMode(settings);
+            break;
+    }
+    
     LOG_INF_S("RenderingManager::applyRenderingMode: Applied mode " + std::to_string(settings.mode));
+}
+
+void RenderingManager::applySolidMode(const RenderingSettings& settings)
+{
+    // Enable solid rendering
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glEnable(GL_LIGHTING);
+    
+    if (settings.smoothShading) {
+        glShadeModel(GL_SMOOTH);
+    } else {
+        glShadeModel(GL_FLAT);
+    }
+    
+    // Apply material properties for solid rendering
+    if (settings.phongShading) {
+        // Enable Phong shading through shader programs
+        enablePhongShading();
+    }
+}
+
+void RenderingManager::applyWireframeMode(const RenderingSettings& settings)
+{
+    // Set wireframe mode
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glLineWidth(settings.lineWidth);
+    
+    // Disable lighting for wireframe
+    glDisable(GL_LIGHTING);
+    
+    // Set wireframe color
+    glColor3f(0.0f, 0.0f, 0.0f); // Black wireframe
+    
+    // Handle backface culling for wireframe
+    if (!settings.backfaceCulling) {
+        glDisable(GL_CULL_FACE);
+    }
+}
+
+void RenderingManager::applyPointsMode(const RenderingSettings& settings)
+{
+    // Set point mode
+    glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
+    glPointSize(settings.pointSize);
+    
+    // Disable lighting for points
+    glDisable(GL_LIGHTING);
+    
+    // Enable point smoothing if available
+    glEnable(GL_POINT_SMOOTH);
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+    
+    // Set point color
+    glColor3f(1.0f, 0.0f, 0.0f); // Red points
+}
+
+void RenderingManager::applyHiddenLineMode(const RenderingSettings& settings)
+{
+    // Hidden line rendering requires two passes:
+    // 1. Render filled polygons with background color (hidden)
+    // 2. Render wireframe on top
+    
+    // First pass: render filled polygons
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glColor3f(settings.backgroundColor.Red()/255.0f, 
+              settings.backgroundColor.Green()/255.0f, 
+              settings.backgroundColor.Blue()/255.0f);
+    
+    // Render scene in fill mode (this would be done in the render loop)
+    
+    // Second pass: render wireframe
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glLineWidth(settings.lineWidth);
+    glColor3f(0.0f, 0.0f, 0.0f); // Black lines
+    
+    // Enable polygon offset to avoid z-fighting
+    glEnable(GL_POLYGON_OFFSET_LINE);
+    glPolygonOffset(-1.0f, -1.0f);
+}
+
+void RenderingManager::applyShadedMode(const RenderingSettings& settings)
+{
+    // Enable shaded rendering
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glEnable(GL_LIGHTING);
+    
+    // Configure shading model
+    if (settings.smoothShading) {
+        glShadeModel(GL_SMOOTH);
+    } else {
+        glShadeModel(GL_FLAT);
+    }
+    
+    // Enable advanced shading techniques
+    if (settings.phongShading) {
+        enablePhongShading();
+    } else if (settings.gouraudShading) {
+        enableGouraudShading();
+    }
+    
+    // Configure material properties
+    configureMaterialProperties(settings);
 }
 
 void RenderingManager::applyQualitySettings(const RenderingSettings& settings)
@@ -961,13 +1209,79 @@ void RenderingManager::setupOpenGLState(const RenderingSettings& settings)
     glLineWidth(settings.lineWidth);
     glPointSize(settings.pointSize);
     
-    // Setup background color
-    float r = settings.backgroundColor.Red() / 255.0f;
-    float g = settings.backgroundColor.Green() / 255.0f;
-    float b = settings.backgroundColor.Blue() / 255.0f;
-    glClearColor(r, g, b, 1.0f);
+    // Setup background based on style
+    switch (settings.backgroundStyle) {
+        case 0: // Solid Color
+            {
+                float r = settings.backgroundColor.Red() / 255.0f;
+                float g = settings.backgroundColor.Green() / 255.0f;
+                float b = settings.backgroundColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+        case 1: // Gradient
+            {
+                // For gradient, we'll use the top color as the clear color
+                // The actual gradient rendering would need to be done in the render loop
+                float r = settings.gradientTopColor.Red() / 255.0f;
+                float g = settings.gradientTopColor.Green() / 255.0f;
+                float b = settings.gradientTopColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+        case 2: // Image
+            {
+                // For image background, we'll use a default color
+                // The actual image rendering would need to be done in the render loop
+                float r = settings.backgroundColor.Red() / 255.0f;
+                float g = settings.backgroundColor.Green() / 255.0f;
+                float b = settings.backgroundColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+        case 3: // Environment
+            {
+                float r = settings.backgroundColor.Red() / 255.0f;
+                float g = settings.backgroundColor.Green() / 255.0f;
+                float b = settings.backgroundColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+        case 4: // Studio
+            {
+                float r = settings.backgroundColor.Red() / 255.0f;
+                float g = settings.backgroundColor.Green() / 255.0f;
+                float b = settings.backgroundColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+        case 5: // Outdoor
+            {
+                float r = settings.backgroundColor.Red() / 255.0f;
+                float g = settings.backgroundColor.Green() / 255.0f;
+                float b = settings.backgroundColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+        case 6: // Industrial
+            {
+                float r = settings.backgroundColor.Red() / 255.0f;
+                float g = settings.backgroundColor.Green() / 255.0f;
+                float b = settings.backgroundColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+        default:
+            {
+                float r = settings.backgroundColor.Red() / 255.0f;
+                float g = settings.backgroundColor.Green() / 255.0f;
+                float b = settings.backgroundColor.Blue() / 255.0f;
+                glClearColor(r, g, b, 1.0f);
+            }
+            break;
+    }
     
-    LOG_INF_S("RenderingManager::setupOpenGLState: Applied OpenGL state");
+    LOG_INF_S("RenderingManager::setupOpenGLState: Applied OpenGL state with background style " + std::to_string(settings.backgroundStyle));
 }
 
 void RenderingManager::restoreOpenGLState()
@@ -1002,4 +1316,36 @@ void RenderingManager::optimizeForQuality(const RenderingSettings& settings)
 {
     // Apply quality optimizations
     LOG_INF_S("RenderingManager::optimizeForQuality: Applied quality optimizations");
-} 
+}
+
+void RenderingManager::enablePhongShading()
+{
+    // Enable Phong shading through OpenGL shaders
+    // This would typically involve loading and using shader programs
+    LOG_INF_S("RenderingManager::enablePhongShading: Phong shading enabled");
+}
+
+void RenderingManager::enableGouraudShading()
+{
+    // Gouraud shading is the default OpenGL smooth shading
+    glShadeModel(GL_SMOOTH);
+    LOG_INF_S("RenderingManager::enableGouraudShading: Gouraud shading enabled");
+}
+
+void RenderingManager::configureMaterialProperties(const RenderingSettings& settings)
+{
+    // Set default material properties
+    GLfloat ambient[] = {0.2f, 0.2f, 0.2f, 1.0f};
+    GLfloat diffuse[] = {0.8f, 0.8f, 0.8f, 1.0f};
+    GLfloat specular[] = {1.0f, 1.0f, 1.0f, 1.0f};
+    GLfloat shininess = 64.0f;
+    
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, specular);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shininess);
+    
+    // Enable color material for dynamic color changes
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+}

@@ -2,6 +2,7 @@
 #include "renderpreview/ObjectManager.h"
 #include "renderpreview/PreviewCanvas.h"
 #include "config/ConfigManager.h"
+#include "config/FontManager.h"
 #include "logger/Logger.h"
 #include <wx/msgdlg.h>
 #include <wx/stdpaths.h>
@@ -20,11 +21,20 @@ ObjectSettingsPanel::ObjectSettingsPanel(wxWindow* parent, wxWindowID id)
 
 {
     LOG_INF_S("ObjectSettingsPanel::ObjectSettingsPanel: Initializing");
+    
+    // Initialize font manager
+    FontManager& fontManager = FontManager::getInstance();
+    fontManager.initialize();
+    
     createUI();
     bindEvents();
     loadSettings();
     
-
+    // Apply fonts to the entire panel and its children
+    fontManager.applyFontToWindowAndChildren(this, "Default");
+    
+    // Apply specific fonts to buttons and static texts
+    applySpecificFonts();
     
     // Create default object controls even without ObjectManager
     createDefaultObjectControls();
@@ -46,6 +56,11 @@ void ObjectSettingsPanel::createUI()
     
     // Object controls section
     auto* objectControlsSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Object Controls");
+    
+    // Apply title font to StaticBoxSizer label
+    if (objectControlsSizer->GetStaticBox()) {
+        objectControlsSizer->GetStaticBox()->SetFont(FontManager::getInstance().getTitleFont());
+    }
     
     // Create individual controls for each object
     m_objectControlsSizer = new wxBoxSizer(wxVERTICAL);
@@ -238,6 +253,11 @@ wxSizer* ObjectSettingsPanel::createTransformTab(wxWindow* parent)
     // Position
     auto* posGroup = new wxStaticBoxSizer(wxVERTICAL, parent, "Position");
     
+    // Apply title font to StaticBoxSizer label
+    if (posGroup->GetStaticBox()) {
+        posGroup->GetStaticBox()->SetFont(FontManager::getInstance().getTitleFont());
+    }
+    
     auto* posXSizer = new wxBoxSizer(wxHORIZONTAL);
     posXSizer->Add(new wxStaticText(parent, wxID_ANY, "X:"), 0, wxALIGN_CENTER | wxRIGHT, 4);
     m_posXSpin = new wxSpinCtrl(parent, wxID_ANY, "0", wxDefaultPosition, wxSize(80, -1), 
@@ -264,6 +284,11 @@ wxSizer* ObjectSettingsPanel::createTransformTab(wxWindow* parent)
     // Rotation
     auto* rotGroup = new wxStaticBoxSizer(wxVERTICAL, parent, "Rotation");
     
+    // Apply title font to StaticBoxSizer label
+    if (rotGroup->GetStaticBox()) {
+        rotGroup->GetStaticBox()->SetFont(FontManager::getInstance().getTitleFont());
+    }
+    
     auto* rotXSizer = new wxBoxSizer(wxHORIZONTAL);
     rotXSizer->Add(new wxStaticText(parent, wxID_ANY, "X:"), 0, wxALIGN_CENTER | wxRIGHT, 4);
     m_rotXSpin = new wxSpinCtrl(parent, wxID_ANY, "0", wxDefaultPosition, wxSize(80, -1), 
@@ -289,6 +314,11 @@ wxSizer* ObjectSettingsPanel::createTransformTab(wxWindow* parent)
     
     // Scale
     auto* scaleGroup = new wxStaticBoxSizer(wxVERTICAL, parent, "Scale");
+    
+    // Apply title font to StaticBoxSizer label
+    if (scaleGroup->GetStaticBox()) {
+        scaleGroup->GetStaticBox()->SetFont(FontManager::getInstance().getTitleFont());
+    }
     
     auto* scaleXSizer = new wxBoxSizer(wxHORIZONTAL);
     scaleXSizer->Add(new wxStaticText(parent, wxID_ANY, "X:"), 0, wxALIGN_CENTER | wxRIGHT, 4);
@@ -1517,6 +1547,80 @@ void ObjectSettingsPanel::OnObjectAutoApply(wxCommandEvent& event)
     }
     
     LOG_INF_S("ObjectSettingsPanel::OnObjectAutoApply: Object auto apply " + std::string(m_autoApplyEnabled ? "enabled" : "disabled"));
+}
+
+void ObjectSettingsPanel::applySpecificFonts()
+{
+    FontManager& fontManager = FontManager::getInstance();
+    
+    // Apply button fonts
+    if (m_objectApplyButton) {
+        m_objectApplyButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_objectSaveButton) {
+        m_objectSaveButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_objectResetButton) {
+        m_objectResetButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_objectUndoButton) {
+        m_objectUndoButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_objectRedoButton) {
+        m_objectRedoButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_textureFileButton) {
+        m_textureFileButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_colorPickerButton) {
+        m_colorPickerButton->SetFont(fontManager.getButtonFont());
+    }
+    if (m_generateTextureButton) {
+        m_generateTextureButton->SetFont(fontManager.getButtonFont());
+    }
+    
+    // Apply fonts to all static texts and other controls in the panel
+    wxWindowList& children = GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        if (child) {
+            if (wxStaticText* staticText = dynamic_cast<wxStaticText*>(child)) {
+                staticText->SetFont(fontManager.getLabelFont());
+            }
+            // Recursively apply to children of this child
+            applyFontsToChildren(child, fontManager);
+        }
+    }
+}
+
+void ObjectSettingsPanel::applyFontsToChildren(wxWindow* parent, FontManager& fontManager)
+{
+    wxWindowList& children = parent->GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        if (child) {
+            if (wxStaticText* staticText = dynamic_cast<wxStaticText*>(child)) {
+                staticText->SetFont(fontManager.getLabelFont());
+            } else if (wxButton* button = dynamic_cast<wxButton*>(child)) {
+                button->SetFont(fontManager.getButtonFont());
+            } else if (wxChoice* choice = dynamic_cast<wxChoice*>(child)) {
+                choice->SetFont(fontManager.getChoiceFont());
+            } else if (wxTextCtrl* textCtrl = dynamic_cast<wxTextCtrl*>(child)) {
+                textCtrl->SetFont(fontManager.getTextCtrlFont());
+            } else if (wxCheckBox* checkBox = dynamic_cast<wxCheckBox*>(child)) {
+                checkBox->SetFont(fontManager.getLabelFont());
+            } else if (wxSlider* slider = dynamic_cast<wxSlider*>(child)) {
+                slider->SetFont(fontManager.getLabelFont());
+            } else if (wxSpinCtrl* spinCtrl = dynamic_cast<wxSpinCtrl*>(child)) {
+                spinCtrl->SetFont(fontManager.getTextCtrlFont());
+            } else if (wxSpinCtrlDouble* spinCtrlDouble = dynamic_cast<wxSpinCtrlDouble*>(child)) {
+                spinCtrlDouble->SetFont(fontManager.getTextCtrlFont());
+            }
+            
+            // Recursively apply to children of this child
+            applyFontsToChildren(child, fontManager);
+        }
+    }
 }
 
  

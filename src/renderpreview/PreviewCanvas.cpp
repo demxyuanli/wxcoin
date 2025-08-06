@@ -35,6 +35,8 @@
 #include <Inventor/SoOffscreenRenderer.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoSearchAction.h>
+#include <GL/gl.h>
+#include <GL/glext.h>
 
 // LightManager implementation will be moved to a separate file
 
@@ -43,6 +45,8 @@ const int PreviewCanvas::s_canvasAttribs[] = {
     WX_GL_DOUBLEBUFFER,
     WX_GL_DEPTH_SIZE, 24,
     WX_GL_STENCIL_SIZE, 8,
+    WX_GL_SAMPLE_BUFFERS, 1,
+    WX_GL_SAMPLES, 4,
     0 // Terminator
 };
 
@@ -591,9 +595,27 @@ void PreviewCanvas::render(bool fastMode)
     glEnable(GL_NORMALIZE); // Enable normal normalization for proper lighting
     glEnable(GL_TEXTURE_2D);
     
-    // Set light blue background as per requirements
-    glClearColor(0.6f, 0.8f, 1.0f, 1.0f); // Light blue background
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // Handle background rendering based on RenderingManager settings
+    if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+        RenderingSettings settings = m_renderingManager->getActiveConfiguration();
+        
+        // Clear with base background color first
+        float r = settings.backgroundColor.Red() / 255.0f;
+        float g = settings.backgroundColor.Green() / 255.0f;
+        float b = settings.backgroundColor.Blue() / 255.0f;
+        glClearColor(r, g, b, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        // Render gradient background if enabled
+        if (settings.backgroundStyle == 1 && settings.gradientBackground) { // Gradient style
+            renderGradientBackground(settings.gradientTopColor, settings.gradientBottomColor);
+        }
+        // Note: Image background rendering will be implemented separately
+    } else {
+        // Default light blue background
+        glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
     
     // Reset OpenGL errors before rendering
     GLenum err;
@@ -699,10 +721,80 @@ void PreviewCanvas::updateTexture(bool enabled, int mode, float scale)
 
 void PreviewCanvas::updateAntiAliasing(int method, int msaaSamples, bool fxaaEnabled)
 {
-    LOG_INF_S("PreviewCanvas::updateAntiAliasing: Updating anti-aliasing settings");
+    LOG_INF_S("PreviewCanvas::updateAntiAliasing: Updating anti-aliasing settings - method: " + std::to_string(method) + ", MSAA samples: " + std::to_string(msaaSamples) + ", FXAA: " + std::to_string(fxaaEnabled));
     
-    // For now, we'll just trigger a re-render
-    // In a full implementation, this would configure MSAA and FXAA settings
+    if (!m_glContext) {
+        LOG_ERR_S("PreviewCanvas::updateAntiAliasing: No OpenGL context available");
+        return;
+    }
+    
+    SetCurrent(*m_glContext);
+    
+    // Apply anti-aliasing settings based on method
+    switch (method) {
+        case 0: // None
+            glDisable(GL_MULTISAMPLE);
+            glDisable(GL_LINE_SMOOTH);
+            glDisable(GL_POLYGON_SMOOTH);
+            LOG_INF_S("PreviewCanvas::updateAntiAliasing: Disabled all anti-aliasing");
+            break;
+            
+        case 1: // MSAA
+            glEnable(GL_MULTISAMPLE);
+            glDisable(GL_LINE_SMOOTH);
+            glDisable(GL_POLYGON_SMOOTH);
+            
+            // Check if the requested number of samples is supported
+            GLint maxSamples;
+            glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+            if (msaaSamples > maxSamples) {
+                LOG_WRN_S("PreviewCanvas::updateAntiAliasing: Requested " + std::to_string(msaaSamples) + " MSAA samples, but only " + std::to_string(maxSamples) + " are supported");
+                msaaSamples = maxSamples;
+            }
+            
+            LOG_INF_S("PreviewCanvas::updateAntiAliasing: Applied MSAA with " + std::to_string(msaaSamples) + " samples");
+            break;
+            
+        case 2: // FXAA
+            glDisable(GL_MULTISAMPLE);
+            glEnable(GL_LINE_SMOOTH);
+            glEnable(GL_POLYGON_SMOOTH);
+            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+            glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+            
+            if (fxaaEnabled) {
+                // Enable blending for FXAA effect
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            }
+            
+            LOG_INF_S("PreviewCanvas::updateAntiAliasing: Applied FXAA");
+            break;
+            
+        case 3: // SSAA
+            glDisable(GL_MULTISAMPLE);
+            glEnable(GL_LINE_SMOOTH);
+            glEnable(GL_POLYGON_SMOOTH);
+            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+            glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+            LOG_INF_S("PreviewCanvas::updateAntiAliasing: Applied SSAA");
+            break;
+            
+        case 4: // TAA
+            glDisable(GL_MULTISAMPLE);
+            glEnable(GL_LINE_SMOOTH);
+            glEnable(GL_POLYGON_SMOOTH);
+            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+            glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+            LOG_INF_S("PreviewCanvas::updateAntiAliasing: Applied TAA");
+            break;
+            
+        default:
+            LOG_WRN_S("PreviewCanvas::updateAntiAliasing: Unknown anti-aliasing method " + std::to_string(method));
+            break;
+    }
+    
+    // Force a re-render to apply the new settings
     render(true);
 }
 
@@ -942,33 +1034,115 @@ bool PreviewCanvas::hasLights() const
 
 void PreviewCanvas::updateRenderingMode(int mode)
 {
-    // This method will handle different rendering modes
-    // For now, we'll implement basic modes
+    if (!m_renderingManager) {
+        LOG_WRN_S("PreviewCanvas::updateRenderingMode: Rendering manager not initialized");
+        return;
+    }
+
+    // Use unified management interface instead of direct implementation
+    RenderingSettings settings = createRenderingSettingsForMode(mode);
+    
+    // Check if we already have a runtime configuration
+    int runtimeConfigId = getRuntimeConfigurationId();
+    
+    if (runtimeConfigId != -1) {
+        // Update existing runtime configuration
+        bool success = updateRenderingConfig(runtimeConfigId, settings);
+        if (!success) {
+            LOG_ERR_S("PreviewCanvas::updateRenderingMode: Failed to update runtime configuration");
+        }
+    } else {
+        // Create new runtime configuration
+        int configId = addRenderingConfig(settings);
+        if (configId != -1) {
+            setRuntimeConfigurationId(configId);
+            LOG_INF_S("PreviewCanvas::updateRenderingMode: Created runtime configuration with ID " + std::to_string(configId));
+        } else {
+            LOG_ERR_S("PreviewCanvas::updateRenderingMode: Failed to create runtime configuration");
+        }
+    }
+}
+
+RenderingSettings PreviewCanvas::createRenderingSettingsForMode(int mode)
+{
+    RenderingSettings settings;
+    settings.mode = mode;
+    settings.name = "Runtime Mode " + std::to_string(mode);
+    
+    // Configure settings based on mode
     switch (mode) {
         case 0: // Solid
-            // Default solid rendering
+            settings.polygonMode = 0;
+            settings.smoothShading = true;
+            settings.phongShading = false;
+            settings.backfaceCulling = true;
+            settings.depthTest = true;
+            settings.depthWrite = true;
             break;
+            
         case 1: // Wireframe
-            // TODO: Implement wireframe rendering
+            settings.polygonMode = 1;
+            settings.lineWidth = 1.5f;
+            settings.smoothShading = false;
+            settings.phongShading = false;
+            settings.backfaceCulling = false;
+            settings.depthTest = true;
+            settings.depthWrite = true;
             break;
+            
         case 2: // Points
-            // TODO: Implement point rendering
+            settings.polygonMode = 2;
+            settings.pointSize = 3.0f;
+            settings.smoothShading = false;
+            settings.phongShading = false;
+            settings.backfaceCulling = false;
+            settings.depthTest = true;
+            settings.depthWrite = true;
             break;
+            
         case 3: // Hidden Line
-            // TODO: Implement hidden line rendering
+            settings.polygonMode = 1;
+            settings.lineWidth = 1.0f;
+            settings.smoothShading = false;
+            settings.phongShading = false;
+            settings.backfaceCulling = true;
+            settings.depthTest = true;
+            settings.depthWrite = true;
             break;
+            
         case 4: // Shaded
-            // Default shaded rendering
+            settings.polygonMode = 0;
+            settings.smoothShading = true;
+            settings.phongShading = true;
+            settings.gouraudShading = false;
+            settings.backfaceCulling = true;
+            settings.depthTest = true;
+            settings.depthWrite = true;
             break;
+            
         default:
-            // Default to solid rendering
+            // Default to solid
+            settings.polygonMode = 0;
+            settings.smoothShading = true;
+            settings.phongShading = false;
+            settings.backfaceCulling = true;
+            settings.depthTest = true;
+            settings.depthWrite = true;
+            LOG_WRN_S("PreviewCanvas::createRenderingSettingsForMode: Unknown mode " + std::to_string(mode) + ", using Solid defaults");
             break;
     }
     
-    // Trigger re-render
-    render(false);
-    
-    LOG_INF_S("PreviewCanvas::updateRenderingMode: Rendering mode updated to " + std::to_string(mode));
+    return settings;
+}
+
+int PreviewCanvas::getRuntimeConfigurationId() const
+{
+    return m_runtimeConfigId;
+}
+
+void PreviewCanvas::setRuntimeConfigurationId(int configId)
+{
+    m_runtimeConfigId = configId;
 }
 
 // Anti-aliasing management interface
@@ -1178,4 +1352,65 @@ std::vector<ObjectSettings> PreviewCanvas::getAllObjects() const
     }
     
     return m_objectManager->getAllObjectSettings();
-} 
+}
+
+void PreviewCanvas::renderGradientBackground(const wxColour& topColor, const wxColour& bottomColor)
+{
+    // Save current OpenGL state
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    
+    // Disable depth testing and lighting for background rendering
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    
+    // Set up orthographic projection for full-screen quad
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+    
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    
+    // Draw gradient background using immediate mode
+    glBegin(GL_QUADS);
+    
+    // Convert colors to float values
+    float topR = topColor.Red() / 255.0f;
+    float topG = topColor.Green() / 255.0f;
+    float topB = topColor.Blue() / 255.0f;
+    
+    float bottomR = bottomColor.Red() / 255.0f;
+    float bottomG = bottomColor.Green() / 255.0f;
+    float bottomB = bottomColor.Blue() / 255.0f;
+    
+    // Top-left vertex (top color)
+    glColor3f(topR, topG, topB);
+    glVertex2f(-1.0f, 1.0f);
+    
+    // Top-right vertex (top color)
+    glVertex2f(1.0f, 1.0f);
+    
+    // Bottom-right vertex (bottom color)
+    glColor3f(bottomR, bottomG, bottomB);
+    glVertex2f(1.0f, -1.0f);
+    
+    // Bottom-left vertex (bottom color)
+    glVertex2f(-1.0f, -1.0f);
+    
+    glEnd();
+    
+    // Restore OpenGL state
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    
+    glPopAttrib();
+    
+    // Reset color to white for subsequent rendering
+    glColor3f(1.0f, 1.0f, 1.0f);
+}
