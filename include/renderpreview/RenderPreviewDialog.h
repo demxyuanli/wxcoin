@@ -74,6 +74,9 @@ public:
     void OnCloseButton(wxCommandEvent& event);
     void OnHelp(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
+    
+    // Close dialog with save prompt
+    bool shouldSaveOnClose();
 
 private:
     void createUI();

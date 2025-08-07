@@ -97,7 +97,7 @@ void ObjectSettingsPanel::createUI()
     // Auto-apply checkbox
     m_objectAutoApplyCheckBox = new wxCheckBox(this, wxID_ANY, wxT("Auto"));
     m_objectAutoApplyCheckBox->Bind(wxEVT_CHECKBOX, &ObjectSettingsPanel::OnObjectAutoApply, this);
-    buttonSizer->Add(m_objectAutoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+    buttonSizer->Add(m_objectAutoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 4);
     
     // Apply button
     m_objectApplyButton = new wxButton(this, wxID_APPLY, wxT("Apply"));

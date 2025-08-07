@@ -22,6 +22,7 @@ GlobalSettingsPanel::GlobalSettingsPanel(wxWindow* parent, RenderPreviewDialog* 
     : wxPanel(parent, id)
     , m_parentDialog(dialog)
     , m_autoApply(false)
+    , m_hasUnsavedChanges(false)
     , m_antiAliasingManager(nullptr)
     , m_renderingManager(nullptr)
     , m_backgroundManager(nullptr)
@@ -62,36 +63,49 @@ void GlobalSettingsPanel::createUI()
     m_renderingModePanel = new RenderingModePanel(m_notebook, m_parentDialog);
     m_backgroundStylePanel = new BackgroundStylePanel(m_notebook, m_parentDialog);
     
+    // Set parameter change callbacks for all panels
+    m_lightingPanel->setParameterChangeCallback([this]() { markAsChanged(); });
+    m_antiAliasingPanel->setParameterChangeCallback([this]() { markAsChanged(); });
+    m_renderingModePanel->setParameterChangeCallback([this]() { markAsChanged(); });
+    m_backgroundStylePanel->setParameterChangeCallback([this]() { markAsChanged(); });
+    
     m_notebook->AddPage(m_lightingPanel, "Lighting");
     m_notebook->AddPage(m_antiAliasingPanel, "Anti-aliasing");
     m_notebook->AddPage(m_renderingModePanel, "Rendering Mode");
     m_notebook->AddPage(m_backgroundStylePanel, "Background Style");
     
-    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 2);
+    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 4);
     
     auto* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     
     m_globalAutoApplyCheckBox = new wxCheckBox(this, wxID_ANY, wxT("Auto"));
-    buttonSizer->Add(m_globalAutoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+    buttonSizer->Add(m_globalAutoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 4);
     
     m_globalApplyButton = new wxButton(this, wxID_APPLY, wxT("Apply"));
-    buttonSizer->Add(m_globalApplyButton, 0, wxALL, 2);
+    buttonSizer->Add(m_globalApplyButton, 0, wxALL, 4);
     
     m_globalSaveButton = new wxButton(this, wxID_SAVE, wxT("Save"));
-    buttonSizer->Add(m_globalSaveButton, 0, wxALL, 2);
+    buttonSizer->Add(m_globalSaveButton, 0, wxALL, 4);
     
     m_globalResetButton = new wxButton(this, wxID_RESET, wxT("Reset"));
-    buttonSizer->Add(m_globalResetButton, 0, wxALL, 2);
+    buttonSizer->Add(m_globalResetButton, 0, wxALL, 4);
     
     m_globalUndoButton = new wxButton(this, wxID_UNDO, wxT("Undo"));
-    buttonSizer->Add(m_globalUndoButton, 0, wxALL, 2);
+    buttonSizer->Add(m_globalUndoButton, 0, wxALL, 4);
     
     m_globalRedoButton = new wxButton(this, wxID_REDO, wxT("Redo"));
-    buttonSizer->Add(m_globalRedoButton, 0, wxALL, 2);
+    buttonSizer->Add(m_globalRedoButton, 0, wxALL, 4);
     
-    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
+    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 4);
     
     SetSizer(mainSizer);
+    
+    // Apply fonts to all panels
+    applySpecificFonts();
+    if (m_lightingPanel) m_lightingPanel->applyFonts();
+    if (m_antiAliasingPanel) m_antiAliasingPanel->applyFonts();
+    if (m_renderingModePanel) m_renderingModePanel->applyFonts();
+    if (m_backgroundStylePanel) m_backgroundStylePanel->applyFonts();
 }
 
 void GlobalSettingsPanel::bindEvents()
@@ -107,11 +121,35 @@ void GlobalSettingsPanel::bindEvents()
 void GlobalSettingsPanel::applySpecificFonts()
 {
     FontManager& fontManager = FontManager::getInstance();
-    m_globalApplyButton->SetFont(fontManager.getButtonFont());
-    m_globalSaveButton->SetFont(fontManager.getButtonFont());
-    m_globalResetButton->SetFont(fontManager.getButtonFont());
-    m_globalUndoButton->SetFont(fontManager.getButtonFont());
-    m_globalRedoButton->SetFont(fontManager.getButtonFont());
+    
+    // Apply fonts to buttons
+    if (m_globalApplyButton) m_globalApplyButton->SetFont(fontManager.getButtonFont());
+    if (m_globalSaveButton) m_globalSaveButton->SetFont(fontManager.getButtonFont());
+    if (m_globalResetButton) m_globalResetButton->SetFont(fontManager.getButtonFont());
+    if (m_globalUndoButton) m_globalUndoButton->SetFont(fontManager.getButtonFont());
+    if (m_globalRedoButton) m_globalRedoButton->SetFont(fontManager.getButtonFont());
+    
+    // Apply fonts to checkbox
+    if (m_globalAutoApplyCheckBox) m_globalAutoApplyCheckBox->SetFont(fontManager.getLabelFont());
+    
+    // Apply fonts to notebook tabs
+    if (m_notebook) {
+        m_notebook->SetFont(fontManager.getDefaultFont());
+    }
+    
+    // Apply fonts to child panels
+    if (m_lightingPanel) {
+        fontManager.applyFontToWindowAndChildren(m_lightingPanel, "Default");
+    }
+    if (m_antiAliasingPanel) {
+        fontManager.applyFontToWindowAndChildren(m_antiAliasingPanel, "Default");
+    }
+    if (m_renderingModePanel) {
+        fontManager.applyFontToWindowAndChildren(m_renderingModePanel, "Default");
+    }
+    if (m_backgroundStylePanel) {
+        fontManager.applyFontToWindowAndChildren(m_backgroundStylePanel, "Default");
+    }
 }
 
 std::vector<RenderLightSettings> GlobalSettingsPanel::getLights() const
@@ -230,6 +268,33 @@ void GlobalSettingsPanel::setBackgroundManager(BackgroundManager* manager)
 void GlobalSettingsPanel::setAutoApply(bool enabled)
 {
     m_autoApply = enabled;
+    m_globalAutoApplyCheckBox->SetValue(enabled);
+}
+
+void GlobalSettingsPanel::markAsChanged()
+{
+    m_hasUnsavedChanges = true;
+    if (m_autoApply) {
+        applySettingsToCanvas();
+    }
+}
+
+void GlobalSettingsPanel::markAsSaved()
+{
+    m_hasUnsavedChanges = false;
+}
+
+void GlobalSettingsPanel::applySettingsToCanvas()
+{
+    if (m_parentDialog && m_parentDialog->getRenderCanvas()) {
+        auto canvas = m_parentDialog->getRenderCanvas();
+        canvas->updateMultiLighting(getLights());
+        canvas->updateAntiAliasing(getAntiAliasingMethod(), getMSAASamples(), isFXAAEnabled());
+        canvas->render(true);
+        canvas->Refresh();
+        canvas->Update();
+        LOG_INF_S("GlobalSettingsPanel::applySettingsToCanvas: Settings automatically applied");
+    }
 }
 
 void GlobalSettingsPanel::loadSettings()
@@ -255,22 +320,15 @@ void GlobalSettingsPanel::resetToDefaults()
 
 void GlobalSettingsPanel::OnGlobalApply(wxCommandEvent& event)
 {
-    if (m_parentDialog && m_parentDialog->getRenderCanvas()) {
-        auto canvas = m_parentDialog->getRenderCanvas();
-        canvas->updateMultiLighting(getLights());
-        canvas->updateAntiAliasing(getAntiAliasingMethod(), getMSAASamples(), isFXAAEnabled());
-        canvas->updateRenderingMode(getRenderingMode());
-        canvas->render(true);
-        canvas->Refresh();
-        canvas->Update();
-        wxMessageBox(wxT("Global settings applied to preview successfully!"), wxT("Apply Global"), wxOK | wxICON_INFORMATION);
-        LOG_INF_S("GlobalSettingsPanel::OnGlobalApply: Global settings applied");
-    }
+    applySettingsToCanvas();
+    wxMessageBox(wxT("Global settings applied to preview successfully!"), wxT("Apply Global"), wxOK | wxICON_INFORMATION);
+    LOG_INF_S("GlobalSettingsPanel::OnGlobalApply: Global settings applied");
 }
 
 void GlobalSettingsPanel::OnGlobalSave(wxCommandEvent& event)
 {
     saveSettings();
+    markAsSaved();
     wxMessageBox(wxT("Global settings saved successfully!"), wxT("Save Global"), wxOK | wxICON_INFORMATION);
     LOG_INF_S("GlobalSettingsPanel::OnGlobalSave: Global settings saved");
 }
@@ -298,6 +356,11 @@ void GlobalSettingsPanel::OnGlobalAutoApply(wxCommandEvent& event)
 {
     m_autoApply = event.IsChecked();
     LOG_INF_S("GlobalSettingsPanel::OnGlobalAutoApply: Global auto apply " + std::string(m_autoApply ? "enabled" : "disabled"));
+    
+    // If auto apply is enabled and there are unsaved changes, apply them immediately
+    if (m_autoApply && m_hasUnsavedChanges) {
+        applySettingsToCanvas();
+    }
 }
 
 void GlobalSettingsPanel::validatePresets()

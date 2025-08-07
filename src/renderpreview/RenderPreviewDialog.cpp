@@ -60,6 +60,9 @@ RenderPreviewDialog::RenderPreviewDialog(wxWindow* parent)
         CenterOnParent();
     }
     
+    // Bind close event
+    Bind(wxEVT_CLOSE_WINDOW, &RenderPreviewDialog::OnClose, this);
+    
     LOG_INF_S("RenderPreviewDialog::RenderPreviewDialog: Initialized successfully");
 }
 
@@ -83,7 +86,7 @@ void RenderPreviewDialog::createUI()
     configNotebook->AddPage(m_objectSettingsPanel, wxT("Object Settings"));
     
     auto* leftSizer = new wxBoxSizer(wxVERTICAL);
-    leftSizer->Add(configNotebook, 1, wxEXPAND | wxALL, 2);
+    leftSizer->Add(configNotebook, 1, wxEXPAND | wxALL, 4);
     leftPanel->SetSizer(leftSizer);
     
     // Right panel: Render preview canvas (adaptive width)
@@ -183,11 +186,6 @@ void RenderPreviewDialog::OnHelp(wxCommandEvent& event)
     helpMessage += wxT("- Close: Close the dialog");
     
     wxMessageBox(helpMessage, wxT("Help"), wxOK | wxICON_INFORMATION);
-}
-
-void RenderPreviewDialog::OnClose(wxCloseEvent& event)
-{
-    EndModal(wxID_CANCEL);
 }
 
 void RenderPreviewDialog::saveConfiguration()
@@ -571,6 +569,39 @@ void RenderPreviewDialog::setAutoApply(bool enabled)
 void RenderPreviewDialog::setValidationEnabled(bool enabled)
 {
     m_validationEnabled = enabled;
+}
+
+bool RenderPreviewDialog::shouldSaveOnClose()
+{
+    if (m_globalSettingsPanel && m_globalSettingsPanel->hasUnsavedChanges()) {
+        int result = wxMessageBox(
+            wxT("You have unsaved changes. Would you like to save them before closing?"),
+            wxT("Save Changes"),
+            wxYES_NO | wxCANCEL | wxICON_QUESTION
+        );
+        
+        switch (result) {
+            case wxYES:
+                m_globalSettingsPanel->saveSettings();
+                return true;
+            case wxNO:
+                return true;
+            case wxCANCEL:
+                return false;
+            default:
+                return false;
+        }
+    }
+    return true;
+}
+
+void RenderPreviewDialog::OnClose(wxCloseEvent& event)
+{
+    if (shouldSaveOnClose()) {
+        event.Skip();
+    } else {
+        event.Veto();
+    }
 }
 
 void RenderPreviewDialog::applyLoadedConfigurationToCanvas()

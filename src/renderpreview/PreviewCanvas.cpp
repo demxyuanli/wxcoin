@@ -7,9 +7,13 @@
 #include "rendering/GeometryProcessor.h"
 #include "config/RenderingConfig.h"
 #include <wx/dcclient.h>
+#include <wx/image.h>
+#include <wx/filename.h>
+#include <wx/filesys.h>
 #include <memory>
 #include <cmath>
 #include <map>
+#include <vector>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTransform.h>
@@ -600,64 +604,90 @@ void PreviewCanvas::render(bool fastMode)
     if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
         RenderingSettings settings = m_renderingManager->getActiveConfiguration();
         
-        // Clear with base background color first
-        float r = settings.backgroundColor.Red() / 255.0f;
-        float g = settings.backgroundColor.Green() / 255.0f;
-        float b = settings.backgroundColor.Blue() / 255.0f;
-        glClearColor(r, g, b, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        // Render background based on style
+        // Render background based on style BEFORE clearing the buffer
         switch (settings.backgroundStyle) {
             case 0: // Solid Color
-                // Already handled by glClearColor above
+                // Clear with solid background color
+                {
+                    float r = settings.backgroundColor.Red() / 255.0f;
+                    float g = settings.backgroundColor.Green() / 255.0f;
+                    float b = settings.backgroundColor.Blue() / 255.0f;
+                    glClearColor(r, g, b, 1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    LOG_INF_S("PreviewCanvas::render: Applied solid background color");
+                }
                 break;
             case 1: // Gradient
+                // Clear with a neutral color first
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                // Then render gradient background
                 renderGradientBackground(settings.gradientTopColor, settings.gradientBottomColor);
+                LOG_INF_S("PreviewCanvas::render: Applied gradient background");
                 break;
             case 2: // Image
-                // TODO: Implement image background rendering
+                // Clear with a neutral color first
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                // Render image background
+                if (settings.backgroundImageEnabled && !settings.backgroundImagePath.empty()) {
+                    renderImageBackground(settings.backgroundImagePath, 
+                                        settings.backgroundImageOpacity, 
+                                        settings.backgroundImageFit, 
+                                        settings.backgroundImageMaintainAspect);
+                    LOG_INF_S("PreviewCanvas::render: Applied image background");
+                } else {
+                    LOG_INF_S("PreviewCanvas::render: Image background not enabled or no path specified");
+                }
                 break;
             case 3: // Environment
                 // Use environment color (sky blue)
                 glClearColor(0.53f, 0.81f, 0.92f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                LOG_INF_S("PreviewCanvas::render: Applied environment background");
                 break;
             case 4: // Studio
                 // Use studio color (light blue)
                 glClearColor(0.94f, 0.97f, 1.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                LOG_INF_S("PreviewCanvas::render: Applied studio background");
                 break;
             case 5: // Outdoor
                 // Use outdoor color (light yellow)
                 glClearColor(1.0f, 1.0f, 0.88f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                LOG_INF_S("PreviewCanvas::render: Applied outdoor background");
                 break;
             case 6: // Industrial
                 // Use industrial color (light gray)
                 glClearColor(0.96f, 0.96f, 0.96f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                LOG_INF_S("PreviewCanvas::render: Applied industrial background");
                 break;
             case 7: // CAD
                 // Use CAD color (light cream)
                 glClearColor(1.0f, 0.97f, 0.86f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                LOG_INF_S("PreviewCanvas::render: Applied CAD background");
                 break;
             case 8: // Dark
                 // Use dark color (dark gray)
                 glClearColor(0.16f, 0.16f, 0.16f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                LOG_INF_S("PreviewCanvas::render: Applied dark background");
                 break;
             default:
                 // Default light blue background
                 glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                LOG_INF_S("PreviewCanvas::render: Applied default background");
                 break;
         }
     } else {
         // Default light blue background
         glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        LOG_INF_S("PreviewCanvas::render: Applied default background (no RenderingManager)");
     }
     
     // Reset OpenGL errors before rendering
@@ -666,12 +696,18 @@ void PreviewCanvas::render(bool fastMode)
         LOG_ERR_S("Pre-render: OpenGL error: " + std::to_string(err));
     }
     
+    // Apply rendering mode settings before rendering the scene
+    if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
+        RenderingSettings settings = m_renderingManager->getActiveConfiguration();
+        applyRenderingModeSettings(settings);
+    }
+    
     // Reset OpenGL state to prevent errors
     glDisable(GL_TEXTURE_2D);
     
     // Render the scene
     try {
-    renderAction.apply(m_sceneRoot);
+        renderAction.apply(m_sceneRoot);
     } catch (const std::exception& e) {
         LOG_ERR_S("PreviewCanvas::render: Exception during rendering: " + std::string(e.what()));
         return;
@@ -1104,6 +1140,11 @@ void PreviewCanvas::updateRenderingMode(int mode)
             LOG_ERR_S("PreviewCanvas::updateRenderingMode: Failed to create runtime configuration");
         }
     }
+    
+    // Immediately apply the rendering settings
+    applyRenderingModeSettings(settings);
+    
+    LOG_INF_S("PreviewCanvas::updateRenderingMode: Applied mode " + std::to_string(mode));
 }
 
 RenderingSettings PreviewCanvas::createRenderingSettingsForMode(int mode)
@@ -1456,4 +1497,293 @@ void PreviewCanvas::renderGradientBackground(const wxColour& topColor, const wxC
     
     // Reset color to white for subsequent rendering
     glColor3f(1.0f, 1.0f, 1.0f);
+    
+    // Re-enable depth testing for scene rendering
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_LIGHTING);
+}
+
+void PreviewCanvas::renderImageBackground(const std::string& imagePath, float opacity, int fit, bool maintainAspect)
+{
+    if (imagePath.empty()) {
+        LOG_WRN_S("PreviewCanvas::renderImageBackground: Empty image path");
+        return;
+    }
+    
+    // Load texture if needed
+    unsigned int textureId = 0;
+    if (!loadTexture(imagePath, textureId)) {
+        LOG_ERR_S("PreviewCanvas::renderImageBackground: Failed to load texture from " + imagePath);
+        return;
+    }
+    
+    // Save current OpenGL state
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    
+    // Disable depth testing and lighting for background rendering
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_LIGHTING);
+    glEnable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // Bind texture
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    
+    // Set up orthographic projection for full-screen quad
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
+    
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    
+    // Calculate texture coordinates based on fit mode
+    float texLeft = 0.0f, texRight = 1.0f, texTop = 1.0f, texBottom = 0.0f;
+    
+    if (fit == 1) { // Fit mode
+        // Calculate aspect ratio to fit image within viewport
+        int viewportWidth, viewportHeight;
+        GetSize(&viewportWidth, &viewportHeight);
+        
+        if (viewportWidth > 0 && viewportHeight > 0) {
+            float viewportAspect = static_cast<float>(viewportWidth) / viewportHeight;
+            // For now, we'll use the full texture. In a more sophisticated implementation,
+            // we would calculate the actual image aspect ratio and adjust accordingly
+        }
+    }
+    
+    // Draw fullscreen quad with texture
+    glColor4f(1.0f, 1.0f, 1.0f, opacity);
+    glBegin(GL_QUADS);
+    
+    // Since we flipped the Y coordinates during texture loading, we can use standard coordinates
+    glTexCoord2f(texLeft, texBottom);  // Bottom-left
+    glVertex2f(-1.0f, -1.0f);
+    
+    glTexCoord2f(texRight, texBottom); // Bottom-right
+    glVertex2f(1.0f, -1.0f);
+    
+    glTexCoord2f(texRight, texTop);    // Top-right
+    glVertex2f(1.0f, 1.0f);
+    
+    glTexCoord2f(texLeft, texTop);     // Top-left
+    glVertex2f(-1.0f, 1.0f);
+    
+    glEnd();
+    
+    // Restore OpenGL state
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    
+    glPopAttrib();
+    
+    // Reset color to white for subsequent rendering
+    glColor3f(1.0f, 1.0f, 1.0f);
+    
+    // Re-enable depth testing for scene rendering
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_LIGHTING);
+}
+
+bool PreviewCanvas::loadTexture(const std::string& imagePath, unsigned int& textureId)
+{
+    // Check if texture is already cached
+    auto it = m_textureCache.find(imagePath);
+    if (it != m_textureCache.end()) {
+        textureId = it->second;
+        return true;
+    }
+    
+    // Convert path to wxString and normalize it
+    wxString wxPath;
+    try {
+        // Try to convert from UTF-8
+        wxPath = wxString::FromUTF8(imagePath);
+    } catch (...) {
+        // If UTF-8 conversion fails, try as-is
+        wxPath = wxString(imagePath);
+    }
+    
+    // Normalize the path to handle spaces and special characters
+    wxFileName fileName(wxPath);
+    if (!fileName.IsAbsolute()) {
+        // If it's a relative path, make it absolute
+        fileName.MakeAbsolute();
+    }
+    
+    // Get the normalized full path
+    wxString normalizedPath = fileName.GetFullPath();
+    
+    // Load image using wxImage with proper path handling
+    wxImage image;
+    bool loadSuccess = false;
+    
+    // Try multiple loading methods
+    if (image.LoadFile(normalizedPath)) {
+        loadSuccess = true;
+    } else if (image.LoadFile(wxPath)) {
+        loadSuccess = true;
+    } else {
+        // Try with wxFileSystem for better Unicode support
+        wxFileSystem fs;
+        wxFSFile* file = fs.OpenFile(wxPath);
+        if (file) {
+            wxInputStream* stream = file->GetStream();
+            if (stream) {
+                if (image.LoadFile(*stream)) {
+                    loadSuccess = true;
+                } else {
+                    LOG_ERR_S("PreviewCanvas::loadTexture: Failed to load image from stream " + imagePath);
+                }
+            } else {
+                LOG_ERR_S("PreviewCanvas::loadTexture: Failed to get stream for " + imagePath);
+            }
+            delete file;
+        }
+    }
+    
+    if (!loadSuccess) {
+        LOG_ERR_S("PreviewCanvas::loadTexture: Failed to load image " + imagePath + " (normalized: " + normalizedPath.ToUTF8().data() + ")");
+        return false;
+    }
+    
+    // Get image data
+    int width = image.GetWidth();
+    int height = image.GetHeight();
+    unsigned char* data = image.GetData();
+    unsigned char* alpha = image.GetAlpha();
+    
+    if (!data) {
+        LOG_ERR_S("PreviewCanvas::loadTexture: Failed to get image data for " + imagePath);
+        return false;
+    }
+    
+    // Generate OpenGL texture
+    glGenTextures(1, &textureId);
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    
+    // Set texture parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    // Upload texture data
+    if (alpha) {
+        // Image has alpha channel - convert to RGBA
+        std::vector<unsigned char> rgbaData(width * height * 4);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int srcIndex = (y * width + x) * 3;
+                int dstIndex = ((height - 1 - y) * width + x) * 4; // Flip Y coordinate
+                
+                // wxImage stores data as RGB, convert to RGBA
+                rgbaData[dstIndex + 0] = data[srcIndex + 0]; // R
+                rgbaData[dstIndex + 1] = data[srcIndex + 1]; // G
+                rgbaData[dstIndex + 2] = data[srcIndex + 2]; // B
+                rgbaData[dstIndex + 3] = alpha[y * width + x]; // A
+            }
+        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaData.data());
+    } else {
+        // Image has no alpha channel - convert RGB to RGBA
+        std::vector<unsigned char> rgbaData(width * height * 4);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int srcIndex = (y * width + x) * 3;
+                int dstIndex = ((height - 1 - y) * width + x) * 4; // Flip Y coordinate
+                
+                rgbaData[dstIndex + 0] = data[srcIndex + 0]; // R
+                rgbaData[dstIndex + 1] = data[srcIndex + 1]; // G
+                rgbaData[dstIndex + 2] = data[srcIndex + 2]; // B
+                rgbaData[dstIndex + 3] = 255; // A (fully opaque)
+            }
+        }
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaData.data());
+    }
+    
+    // Cache the texture
+    m_textureCache[imagePath] = textureId;
+    
+    LOG_INF_S("PreviewCanvas::loadTexture: Successfully loaded texture " + imagePath + " (ID: " + std::to_string(textureId) + ", Size: " + std::to_string(width) + "x" + std::to_string(height) + ")");
+    return true;
+}
+
+void PreviewCanvas::drawFullscreenQuad()
+{
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 1.0f);
+    glVertex2f(-1.0f, 1.0f);
+    
+    glTexCoord2f(1.0f, 1.0f);
+    glVertex2f(1.0f, 1.0f);
+    
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2f(1.0f, -1.0f);
+    
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2f(-1.0f, -1.0f);
+    glEnd();
+}
+
+void PreviewCanvas::applyRenderingModeSettings(const RenderingSettings& settings)
+{
+    // Apply polygon mode
+    switch (settings.polygonMode) {
+        case 0: // Solid
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            break;
+        case 1: // Wireframe
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            if (settings.lineWidth > 0) {
+                glLineWidth(settings.lineWidth);
+            }
+            break;
+        case 2: // Points
+            glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
+            if (settings.pointSize > 0) {
+                glPointSize(settings.pointSize);
+            }
+            break;
+        default:
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            break;
+    }
+    
+    // Apply shading settings
+    if (settings.smoothShading) {
+        glShadeModel(GL_SMOOTH);
+    } else {
+        glShadeModel(GL_FLAT);
+    }
+    
+    // Apply backface culling
+    if (settings.backfaceCulling) {
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+    } else {
+        glDisable(GL_CULL_FACE);
+    }
+    
+    // Apply depth testing
+    if (settings.depthTest) {
+        glEnable(GL_DEPTH_TEST);
+    } else {
+        glDisable(GL_DEPTH_TEST);
+    }
+    
+    // Apply depth writing
+    if (settings.depthWrite) {
+        glDepthMask(GL_TRUE);
+    } else {
+        glDepthMask(GL_FALSE);
+    }
+    
+    LOG_INF_S("PreviewCanvas::applyRenderingModeSettings: Applied mode " + std::to_string(settings.polygonMode));
 }

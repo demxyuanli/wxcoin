@@ -4,6 +4,7 @@
 #include <wx/choice.h>
 #include <wx/sizer.h>
 #include <wx/statbox.h>
+#include <functional>
 
 class RenderPreviewDialog;
 class RenderingManager;
@@ -22,10 +23,17 @@ public:
     void resetToDefaults();
 
     void setRenderingManager(RenderingManager* manager);
+    
+    // Set callback for parameter changes
+    void setParameterChangeCallback(std::function<void()> callback) { m_parameterChangeCallback = callback; }
+    
+    // Apply fonts to all controls
+    void applyFonts();
 
 private:
     void createUI();
     void bindEvents();
+    void notifyParameterChanged();
 
     void onRenderingModeChanged(wxCommandEvent& event);
     void onLegacyModeChanged(wxCommandEvent& event);
@@ -33,6 +41,7 @@ private:
 
     RenderPreviewDialog* m_parentDialog;
     RenderingManager* m_renderingManager;
+    std::function<void()> m_parameterChangeCallback;
 
     wxChoice* m_renderingModeChoice;
     wxChoice* m_legacyChoice;

@@ -1,11 +1,27 @@
 #include "renderpreview/LightingPanel.h"
 #include "renderpreview/RenderPreviewDialog.h"
+#include "renderpreview/LightManager.h"
 #include "config/FontManager.h"
 #include "logger/Logger.h"
-#include <wx/scrolwin.h>
+#include <wx/colordlg.h>
+#include <wx/sizer.h>
+#include <wx/statbox.h>
+#include <wx/button.h>
+#include <wx/choice.h>
+#include <wx/slider.h>
+#include <wx/checkbox.h>
+#include <wx/stattext.h>
+#include <wx/textctrl.h>
+#include <wx/spinctrl.h>
+#include <wx/listbox.h>
+#include <wx/notebook.h>
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 #include <wx/config.h>
+#include <wx/fileconf.h>
+#include <vector>
+#include <string>
+#include <sstream>
 
 BEGIN_EVENT_TABLE(LightingPanel, wxPanel)
     EVT_BUTTON(wxID_ANY, LightingPanel::onAddLight)
@@ -41,7 +57,7 @@ void LightingPanel::createUI()
     m_notebook->AddPage(lightingPanel, "Lighting");
     m_notebook->AddPage(lightPresetsPanel, "Light Presets");
 
-    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 2);
+    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 4);
     SetSizer(mainSizer);
 }
 
@@ -56,20 +72,20 @@ wxSizer* LightingPanel::createLightingTab(wxWindow* parent)
     m_lightListSizer = new wxBoxSizer(wxVERTICAL);
     lightListPanel->SetSizer(m_lightListSizer);
     
-    listBoxSizer->Add(lightListPanel, 1, wxEXPAND | wxALL, 8);
+    listBoxSizer->Add(lightListPanel, 1, wxEXPAND | wxALL, 4);
     
     auto* listButtonSizer = new wxBoxSizer(wxHORIZONTAL);
     m_addLightButton = new wxButton(parent, wxID_ANY, "Add Light");
     m_removeLightButton = new wxButton(parent, wxID_ANY, "Remove Light");
-    listButtonSizer->Add(m_addLightButton, 1, wxEXPAND | wxRIGHT, 5);
-    listButtonSizer->Add(m_removeLightButton, 1, wxEXPAND | wxLEFT, 5);
-    listBoxSizer->Add(listButtonSizer, 0, wxEXPAND | wxALL, 8);
+    listButtonSizer->Add(m_addLightButton, 1, wxEXPAND | wxRIGHT, 4);
+    listButtonSizer->Add(m_removeLightButton, 1, wxEXPAND | wxLEFT, 4);
+    listBoxSizer->Add(listButtonSizer, 0, wxEXPAND | wxALL, 4);
     
-    lightingSizer->Add(listBoxSizer, 0, wxEXPAND | wxALL, 10);
+    lightingSizer->Add(listBoxSizer, 0, wxEXPAND | wxALL, 4);
     
     auto* propertiesBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Light Properties");
     
-    auto* basicGridSizer = new wxFlexGridSizer(2, 2, 10, 15);
+    auto* basicGridSizer = new wxFlexGridSizer(2, 2, 4, 4);
     basicGridSizer->AddGrowableCol(1, 1);
     
     basicGridSizer->Add(new wxStaticText(parent, wxID_ANY, "Name:"), 0, wxALIGN_CENTER_VERTICAL);
@@ -83,68 +99,68 @@ wxSizer* LightingPanel::createLightingTab(wxWindow* parent)
     m_lightTypeChoice->Append("spot");
     basicGridSizer->Add(m_lightTypeChoice, 1, wxEXPAND);
     
-    propertiesBoxSizer->Add(basicGridSizer, 0, wxEXPAND | wxALL, 10);
+    propertiesBoxSizer->Add(basicGridSizer, 0, wxEXPAND | wxALL, 4);
     
     auto* positionSizer = new wxBoxSizer(wxHORIZONTAL);
-    positionSizer->Add(new wxStaticText(parent, wxID_ANY, "Position:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    positionSizer->Add(new wxStaticText(parent, wxID_ANY, "Position:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     
     auto* posControlsSizer = new wxBoxSizer(wxHORIZONTAL);
-    posControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "X:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    posControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "X:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_positionXSpin = new wxSpinCtrlDouble(parent, wxID_ANY, "0.0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, -100.0, 100.0, 0.0, 0.1);
-    posControlsSizer->Add(m_positionXSpin, 0, wxRIGHT, 8);
+    posControlsSizer->Add(m_positionXSpin, 0, wxRIGHT, 4);
     
-    posControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Y:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    posControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Y:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_positionYSpin = new wxSpinCtrlDouble(parent, wxID_ANY, "0.0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, -100.0, 100.0, 0.0, 0.1);
-    posControlsSizer->Add(m_positionYSpin, 0, wxRIGHT, 8);
+    posControlsSizer->Add(m_positionYSpin, 0, wxRIGHT, 4);
     
-    posControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Z:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    posControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Z:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_positionZSpin = new wxSpinCtrlDouble(parent, wxID_ANY, "10.0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, -100.0, 100.0, 10.0, 0.1);
     posControlsSizer->Add(m_positionZSpin, 0);
     
     positionSizer->Add(posControlsSizer, 1, wxEXPAND);
-    propertiesBoxSizer->Add(positionSizer, 0, wxEXPAND | wxALL, 10);
+    propertiesBoxSizer->Add(positionSizer, 0, wxEXPAND | wxALL, 4);
     
     auto* directionSizer = new wxBoxSizer(wxHORIZONTAL);
-    directionSizer->Add(new wxStaticText(parent, wxID_ANY, "Direction:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    directionSizer->Add(new wxStaticText(parent, wxID_ANY, "Direction:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     
     auto* dirControlsSizer = new wxBoxSizer(wxHORIZONTAL);
-    dirControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "X:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    dirControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "X:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_directionXSpin = new wxSpinCtrlDouble(parent, wxID_ANY, "0.0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, -1.0, 1.0, 0.0, 0.1);
-    dirControlsSizer->Add(m_directionXSpin, 0, wxRIGHT, 8);
+    dirControlsSizer->Add(m_directionXSpin, 0, wxRIGHT, 4);
     
-    dirControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Y:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    dirControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Y:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_directionYSpin = new wxSpinCtrlDouble(parent, wxID_ANY, "0.0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, -1.0, 1.0, 0.0, 0.1);
-    dirControlsSizer->Add(m_directionYSpin, 0, wxRIGHT, 8);
+    dirControlsSizer->Add(m_directionYSpin, 0, wxRIGHT, 4);
     
-    dirControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Z:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    dirControlsSizer->Add(new wxStaticText(parent, wxID_ANY, "Z:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_directionZSpin = new wxSpinCtrlDouble(parent, wxID_ANY, "-1.0", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, -1.0, 1.0, -1.0, 0.1);
     dirControlsSizer->Add(m_directionZSpin, 0);
     
     directionSizer->Add(dirControlsSizer, 1, wxEXPAND);
-    propertiesBoxSizer->Add(directionSizer, 0, wxEXPAND | wxALL, 10);
+    propertiesBoxSizer->Add(directionSizer, 0, wxEXPAND | wxALL, 4);
     
     auto* intensityColorSizer = new wxBoxSizer(wxHORIZONTAL);
     
     auto* intensitySizer = new wxBoxSizer(wxHORIZONTAL);
-    intensitySizer->Add(new wxStaticText(parent, wxID_ANY, "Intensity:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    intensitySizer->Add(new wxStaticText(parent, wxID_ANY, "Intensity:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_intensitySpin = new wxSpinCtrlDouble(parent, wxID_ANY, "1.0", wxDefaultPosition, wxSize(100, -1), wxSP_ARROW_KEYS, 0.0, 10.0, 1.0, 0.1);
     intensitySizer->Add(m_intensitySpin, 0);
     intensityColorSizer->Add(intensitySizer, 0, wxRIGHT, 20);
     
     auto* colorSizer = new wxBoxSizer(wxHORIZONTAL);
-    colorSizer->Add(new wxStaticText(parent, wxID_ANY, "Color:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+    colorSizer->Add(new wxStaticText(parent, wxID_ANY, "Color:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     m_lightColorButton = new wxButton(parent, wxID_ANY, "White", wxDefaultPosition, wxSize(100, -1));
     m_lightColorButton->SetBackgroundColour(wxColour(255, 255, 255));
     colorSizer->Add(m_lightColorButton, 0);
     intensityColorSizer->Add(colorSizer, 0);
     
-    propertiesBoxSizer->Add(intensityColorSizer, 0, wxALL, 10);
+    propertiesBoxSizer->Add(intensityColorSizer, 0, wxALL, 4);
     
     m_lightEnabledCheckBox = new wxCheckBox(parent, wxID_ANY, "Enabled");
     m_lightEnabledCheckBox->SetValue(true);
-    propertiesBoxSizer->Add(m_lightEnabledCheckBox, 0, wxALL, 10);
+    propertiesBoxSizer->Add(m_lightEnabledCheckBox, 0, wxALL, 4);
     
-    lightingSizer->Add(propertiesBoxSizer, 1, wxEXPAND | wxALL, 10);
+    lightingSizer->Add(propertiesBoxSizer, 1, wxEXPAND | wxALL, 4);
     
     return lightingSizer;
 }
@@ -157,54 +173,54 @@ wxSizer* LightingPanel::createLightPresetsTab(wxWindow* parent)
     auto* headerText = new wxStaticText(parent, wxID_ANY, "Choose a lighting preset to apply to your scene");
     headerText->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
     headerSizer->Add(headerText, 1, wxALIGN_CENTER_VERTICAL);
-    presetsSizer->Add(headerSizer, 0, wxALL, 15);
+    presetsSizer->Add(headerSizer, 0, wxALL, 4);
     
     auto* presetsBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Lighting Presets");
     
-    auto* gridSizer = new wxGridSizer(4, 2, 10, 10);
+    auto* gridSizer = new wxGridSizer(4, 2, 4, 4);
     
-    m_studioButton = new wxButton(parent, wxID_ANY, "Studio\nLighting", wxDefaultPosition, wxSize(120, 60));
+    m_studioButton = new wxButton(parent, wxID_ANY, "Studio\nLighting", wxDefaultPosition, wxSize(160, 60));
     m_studioButton->SetBackgroundColour(wxColour(240, 248, 255));
     m_studioButton->SetToolTip("Professional studio lighting with soft shadows");
-    gridSizer->Add(m_studioButton, 0, wxEXPAND);
+    gridSizer->Add(m_studioButton, 0, wxALIGN_CENTER);
     
-    m_outdoorButton = new wxButton(parent, wxID_ANY, "Outdoor\nNatural", wxDefaultPosition, wxSize(120, 60));
+    m_outdoorButton = new wxButton(parent, wxID_ANY, "Outdoor\nNatural", wxDefaultPosition, wxSize(160, 60));
     m_outdoorButton->SetBackgroundColour(wxColour(255, 255, 224));
     m_outdoorButton->SetToolTip("Natural outdoor lighting with sunlight");
-    gridSizer->Add(m_outdoorButton, 0, wxEXPAND);
+    gridSizer->Add(m_outdoorButton, 0, wxALIGN_CENTER);
     
-    m_dramaticButton = new wxButton(parent, wxID_ANY, "Dramatic\nShadows", wxDefaultPosition, wxSize(120, 60));
+    m_dramaticButton = new wxButton(parent, wxID_ANY, "Dramatic\nShadows", wxDefaultPosition, wxSize(160, 60));
     m_dramaticButton->SetBackgroundColour(wxColour(255, 228, 225));
     m_dramaticButton->SetToolTip("Dramatic lighting with strong contrasts");
-    gridSizer->Add(m_dramaticButton, 0, wxEXPAND);
+    gridSizer->Add(m_dramaticButton, 0, wxALIGN_CENTER);
     
-    m_warmButton = new wxButton(parent, wxID_ANY, "Warm\nTones", wxDefaultPosition, wxSize(120, 60));
+    m_warmButton = new wxButton(parent, wxID_ANY, "Warm\nTones", wxDefaultPosition, wxSize(160, 60));
     m_warmButton->SetBackgroundColour(wxColour(255, 240, 245));
     m_warmButton->SetToolTip("Warm, cozy lighting atmosphere");
-    gridSizer->Add(m_warmButton, 0, wxEXPAND);
+    gridSizer->Add(m_warmButton, 0, wxALIGN_CENTER);
     
-    m_coolButton = new wxButton(parent, wxID_ANY, "Cool\nBlues", wxDefaultPosition, wxSize(120, 60));
+    m_coolButton = new wxButton(parent, wxID_ANY, "Cool\nBlues", wxDefaultPosition, wxSize(160, 60));
     m_coolButton->SetBackgroundColour(wxColour(240, 255, 255));
     m_coolButton->SetToolTip("Cool, blue-tinted lighting");
-    gridSizer->Add(m_coolButton, 0, wxEXPAND);
+    gridSizer->Add(m_coolButton, 0, wxALIGN_CENTER);
     
-    m_minimalButton = new wxButton(parent, wxID_ANY, "Minimal\nClean", wxDefaultPosition, wxSize(120, 60));
+    m_minimalButton = new wxButton(parent, wxID_ANY, "Minimal\nClean", wxDefaultPosition, wxSize(160, 60));
     m_minimalButton->SetBackgroundColour(wxColour(245, 245, 245));
     m_minimalButton->SetToolTip("Minimal, clean lighting setup");
-    gridSizer->Add(m_minimalButton, 0, wxEXPAND);
+    gridSizer->Add(m_minimalButton, 0, wxALIGN_CENTER);
     
-    m_freeCADButton = new wxButton(parent, wxID_ANY, "FreeCAD\nClassic", wxDefaultPosition, wxSize(120, 60));
+    m_freeCADButton = new wxButton(parent, wxID_ANY, "FreeCAD\nClassic", wxDefaultPosition, wxSize(160, 60));
     m_freeCADButton->SetBackgroundColour(wxColour(255, 248, 220));
     m_freeCADButton->SetToolTip("Classic FreeCAD lighting style");
-    gridSizer->Add(m_freeCADButton, 0, wxEXPAND);
+    gridSizer->Add(m_freeCADButton, 0, wxALIGN_CENTER);
     
-    m_navcubeButton = new wxButton(parent, wxID_ANY, "Navcube\nStyle", wxDefaultPosition, wxSize(120, 60));
+    m_navcubeButton = new wxButton(parent, wxID_ANY, "Navcube\nStyle", wxDefaultPosition, wxSize(160, 60));
     m_navcubeButton->SetBackgroundColour(wxColour(240, 248, 255));
     m_navcubeButton->SetToolTip("NavigationCube-style lighting");
-    gridSizer->Add(m_navcubeButton, 0, wxEXPAND);
+    gridSizer->Add(m_navcubeButton, 0, wxALIGN_CENTER);
     
-    presetsBoxSizer->Add(gridSizer, 0, wxALL, 15);
-    presetsSizer->Add(presetsBoxSizer, 1, wxEXPAND | wxALL, 10);
+    presetsBoxSizer->Add(gridSizer, 0, wxALL | wxALIGN_CENTER, 4);
+    presetsSizer->Add(presetsBoxSizer, 1, wxEXPAND | wxALL, 4);
     
     auto* statusBoxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Current Status");
     
@@ -213,8 +229,8 @@ wxSizer* LightingPanel::createLightPresetsTab(wxWindow* parent)
     m_currentPresetLabel->SetFont(wxFont(9, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
     statusSizer->Add(m_currentPresetLabel, 1, wxALIGN_CENTER_VERTICAL);
     
-    statusBoxSizer->Add(statusSizer, 0, wxALL, 10);
-    presetsSizer->Add(statusBoxSizer, 0, wxEXPAND | wxALL, 10);
+    statusBoxSizer->Add(statusSizer, 0, wxALL, 4);
+    presetsSizer->Add(statusBoxSizer, 0, wxEXPAND | wxALL, 4);
     
     return presetsSizer;
 }
@@ -361,6 +377,13 @@ void LightingPanel::onRemoveLight(wxCommandEvent& event)
     }
 }
 
+void LightingPanel::notifyParameterChanged()
+{
+    if (m_parameterChangeCallback) {
+        m_parameterChangeCallback();
+    }
+}
+
 void LightingPanel::onLightPropertyChanged(wxCommandEvent& event)
 {
     if (m_currentLightIndex >= 0 && m_currentLightIndex < static_cast<int>(m_lights.size())) {
@@ -373,6 +396,7 @@ void LightingPanel::onLightPropertyChanged(wxCommandEvent& event)
         light.enabled = m_lightEnabledCheckBox->GetValue();
         updateLightList();
         updateControlStates();
+        notifyParameterChanged();
         if (m_parentDialog) {
             m_parentDialog->applyGlobalSettingsToCanvas();
         }
@@ -400,6 +424,7 @@ void LightingPanel::onLightPropertyChangedSpin(wxSpinDoubleEvent& event)
             }
         }
         updateControlStates();
+        notifyParameterChanged();
         if (shouldApplyChanges && m_parentDialog) {
             m_parentDialog->applyGlobalSettingsToCanvas();
             LOG_INF_S("LightingPanel::onLightPropertyChangedSpin: Applied changes to canvas");
@@ -923,4 +948,56 @@ void LightingPanel::resetToDefaults()
     this->updateLightList();
     this->updateControlStates();
     LOG_INF_S("LightingPanel::resetToDefaults: Settings reset to defaults");
+}
+
+void LightingPanel::applyFonts()
+{
+    FontManager& fontManager = FontManager::getInstance();
+    
+    // Apply fonts to buttons
+    if (m_addLightButton) m_addLightButton->SetFont(fontManager.getButtonFont());
+    if (m_removeLightButton) m_removeLightButton->SetFont(fontManager.getButtonFont());
+    if (m_lightColorButton) m_lightColorButton->SetFont(fontManager.getButtonFont());
+    
+    // Apply fonts to text controls
+    if (m_lightNameText) m_lightNameText->SetFont(fontManager.getTextCtrlFont());
+    
+    // Apply fonts to choice controls
+    if (m_lightTypeChoice) m_lightTypeChoice->SetFont(fontManager.getChoiceFont());
+    
+    // Apply fonts to spin controls
+    if (m_positionXSpin) m_positionXSpin->SetFont(fontManager.getTextCtrlFont());
+    if (m_positionYSpin) m_positionYSpin->SetFont(fontManager.getTextCtrlFont());
+    if (m_positionZSpin) m_positionZSpin->SetFont(fontManager.getTextCtrlFont());
+    if (m_directionXSpin) m_directionXSpin->SetFont(fontManager.getTextCtrlFont());
+    if (m_directionYSpin) m_directionYSpin->SetFont(fontManager.getTextCtrlFont());
+    if (m_directionZSpin) m_directionZSpin->SetFont(fontManager.getTextCtrlFont());
+    if (m_intensitySpin) m_intensitySpin->SetFont(fontManager.getTextCtrlFont());
+    
+    // Apply fonts to checkbox
+    if (m_lightEnabledCheckBox) m_lightEnabledCheckBox->SetFont(fontManager.getLabelFont());
+    
+    // Apply fonts to preset buttons
+    if (m_studioButton) m_studioButton->SetFont(fontManager.getButtonFont());
+    if (m_outdoorButton) m_outdoorButton->SetFont(fontManager.getButtonFont());
+    if (m_dramaticButton) m_dramaticButton->SetFont(fontManager.getButtonFont());
+    if (m_warmButton) m_warmButton->SetFont(fontManager.getButtonFont());
+    if (m_coolButton) m_coolButton->SetFont(fontManager.getButtonFont());
+    if (m_minimalButton) m_minimalButton->SetFont(fontManager.getButtonFont());
+    if (m_freeCADButton) m_freeCADButton->SetFont(fontManager.getButtonFont());
+    if (m_navcubeButton) m_navcubeButton->SetFont(fontManager.getButtonFont());
+    
+    // Apply fonts to labels
+    if (m_currentPresetLabel) m_currentPresetLabel->SetFont(fontManager.getLabelFont());
+    
+    // Apply fonts to all static texts in the panel
+    wxWindowList& children = GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        if (child) {
+            if (dynamic_cast<wxStaticText*>(child)) {
+                child->SetFont(fontManager.getLabelFont());
+            }
+        }
+    }
 }

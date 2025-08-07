@@ -1,6 +1,7 @@
 #include "renderpreview/AntiAliasingPanel.h"
 #include "renderpreview/RenderPreviewDialog.h"
 #include "renderpreview/AntiAliasingManager.h"
+#include "config/FontManager.h"
 #include "logger/Logger.h"
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -32,7 +33,7 @@ void AntiAliasingPanel::createUI()
 
     auto* presetsBoxSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Anti-aliasing Presets");
     auto* presetsLabel = new wxStaticText(this, wxID_ANY, "Choose an anti-aliasing preset:");
-    presetsBoxSizer->Add(presetsLabel, 0, wxALL, 8);
+    presetsBoxSizer->Add(presetsLabel, 0, wxALL, 4);
     m_antiAliasingChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
     m_antiAliasingChoice->Append("None");
     m_antiAliasingChoice->Append("MSAA 2x");
@@ -61,29 +62,30 @@ void AntiAliasingPanel::createUI()
     m_antiAliasingChoice->Append("Mobile Low");
     m_antiAliasingChoice->Append("Mobile Medium");
     m_antiAliasingChoice->SetSelection(2);
-    presetsBoxSizer->Add(m_antiAliasingChoice, 0, wxEXPAND | wxALL, 8);
-    antiAliasingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 8);
+    presetsBoxSizer->Add(m_antiAliasingChoice, 0, wxEXPAND | wxALL, 4);
+    antiAliasingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 4);
 
     auto* performanceBoxSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Performance Impact");
     auto* impactLabel = new wxStaticText(this, wxID_ANY, "Performance Impact: Low");
     impactLabel->SetForegroundColour(wxColour(0, 128, 0));
-    performanceBoxSizer->Add(impactLabel, 0, wxALL, 8);
+    performanceBoxSizer->Add(impactLabel, 0, wxALL, 4);
     auto* qualityLabel = new wxStaticText(this, wxID_ANY, "Quality: MSAA 4x");
     qualityLabel->SetForegroundColour(wxColour(0, 0, 128));
-    performanceBoxSizer->Add(qualityLabel, 0, wxALL, 8);
+    performanceBoxSizer->Add(qualityLabel, 0, wxALL, 4);
     auto* fpsLabel = new wxStaticText(this, wxID_ANY, "Estimated FPS: 60");
     fpsLabel->SetForegroundColour(wxColour(0, 128, 0));
-    performanceBoxSizer->Add(fpsLabel, 0, wxALL, 8);
-    antiAliasingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 8);
+    performanceBoxSizer->Add(fpsLabel, 0, wxALL, 4);
+    antiAliasingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 4);
 
     auto* legacyBoxSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Advanced Settings");
     auto* msaaLabel = new wxStaticText(this, wxID_ANY, "MSAA Samples:");
-    legacyBoxSizer->Add(msaaLabel, 0, wxALL, 8);
-    m_msaaSamplesSlider = new wxSlider(this, wxID_ANY, 4, 2, 16, wxDefaultPosition, wxSize(250, -1), wxSL_HORIZONTAL | wxSL_LABELS);
-    legacyBoxSizer->Add(m_msaaSamplesSlider, 0, wxEXPAND | wxALL, 8);
+    legacyBoxSizer->Add(msaaLabel, 0, wxALL, 4);
+    // Create slider with only power of 2 values: 2, 4, 8, 16
+    m_msaaSamplesSlider = new wxSlider(this, wxID_ANY, 1, 0, 3, wxDefaultPosition, wxSize(250, -1), wxSL_HORIZONTAL | wxSL_LABELS);
+    legacyBoxSizer->Add(m_msaaSamplesSlider, 0, wxEXPAND | wxALL, 4);
     m_fxaaCheckBox = new wxCheckBox(this, wxID_ANY, "Enable FXAA");
-    legacyBoxSizer->Add(m_fxaaCheckBox, 0, wxALL, 8);
-    antiAliasingSizer->Add(legacyBoxSizer, 0, wxEXPAND | wxALL, 8);
+    legacyBoxSizer->Add(m_fxaaCheckBox, 0, wxALL, 4);
+    antiAliasingSizer->Add(legacyBoxSizer, 0, wxEXPAND | wxALL, 4);
 
     SetSizer(antiAliasingSizer);
 }
@@ -102,7 +104,12 @@ int AntiAliasingPanel::getAntiAliasingMethod() const
 
 int AntiAliasingPanel::getMSAASamples() const
 {
-    return m_msaaSamplesSlider ? m_msaaSamplesSlider->GetValue() : 4;
+    if (!m_msaaSamplesSlider) {
+        return 4;
+    }
+    // Convert slider value (0-3) to power of 2 (2, 4, 8, 16)
+    int sliderValue = m_msaaSamplesSlider->GetValue();
+    return 1 << (sliderValue + 1); // 2^(sliderValue + 1)
 }
 
 bool AntiAliasingPanel::isFXAAEnabled() const
@@ -120,7 +127,16 @@ void AntiAliasingPanel::setAntiAliasingMethod(int method)
 void AntiAliasingPanel::setMSAASamples(int samples)
 {
     if (m_msaaSamplesSlider) {
-        m_msaaSamplesSlider->SetValue(samples);
+        // Convert power of 2 to slider value
+        int sliderValue = 0;
+        switch (samples) {
+            case 2: sliderValue = 0; break;
+            case 4: sliderValue = 1; break;
+            case 8: sliderValue = 2; break;
+            case 16: sliderValue = 3; break;
+            default: sliderValue = 1; break; // Default to 4x
+        }
+        m_msaaSamplesSlider->SetValue(sliderValue);
     }
 }
 
@@ -134,6 +150,13 @@ void AntiAliasingPanel::setFXAAEnabled(bool enabled)
 void AntiAliasingPanel::setAntiAliasingManager(AntiAliasingManager* manager)
 {
     m_antiAliasingManager = manager;
+}
+
+void AntiAliasingPanel::notifyParameterChanged()
+{
+    if (m_parameterChangeCallback) {
+        m_parameterChangeCallback();
+    }
 }
 
 void AntiAliasingPanel::onAntiAliasingChanged(wxCommandEvent& event)
@@ -174,6 +197,27 @@ void AntiAliasingPanel::onAntiAliasingChanged(wxCommandEvent& event)
                 }
             }
         }
+        
+        // Update MSAA slider label if it exists
+        if (m_msaaSamplesSlider) {
+            int samples = getMSAASamples();
+            wxString labelText = wxString::Format("MSAA Samples: %dx", samples);
+            // Find and update the MSAA label
+            if (parent) {
+                wxWindowList children = parent->GetChildren();
+                for (auto child : children) {
+                    if (wxStaticText* label = dynamic_cast<wxStaticText*>(child)) {
+                        wxString currentLabel = label->GetLabel();
+                        if (currentLabel.Contains("MSAA Samples:")) {
+                            label->SetLabel(labelText);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        notifyParameterChanged();
         LOG_INF_S("AntiAliasingPanel::onAntiAliasingChanged: Applied preset '" + presetName.ToStdString() + "'");
     }
     if (m_parentDialog) {
@@ -204,7 +248,16 @@ void AntiAliasingPanel::loadSettings()
         if (this->m_msaaSamplesSlider) {
             int samples;
             if (renderConfig.Read("Global.AntiAliasing.MSAASamples", &samples, 4)) {
-                this->m_msaaSamplesSlider->SetValue(samples);
+                // Convert samples to slider value
+                int sliderValue = 1; // Default to 4x
+                switch (samples) {
+                    case 2: sliderValue = 0; break;
+                    case 4: sliderValue = 1; break;
+                    case 8: sliderValue = 2; break;
+                    case 16: sliderValue = 3; break;
+                    default: sliderValue = 1; break; // Default to 4x
+                }
+                this->m_msaaSamplesSlider->SetValue(sliderValue);
             }
         }
         if (this->m_fxaaCheckBox) {
@@ -233,7 +286,8 @@ void AntiAliasingPanel::saveSettings()
             renderConfig.Write("Global.AntiAliasing.Method", this->m_antiAliasingChoice->GetSelection());
         }
         if (this->m_msaaSamplesSlider) {
-            renderConfig.Write("Global.AntiAliasing.MSAASamples", this->m_msaaSamplesSlider->GetValue());
+            int samples = getMSAASamples(); // This will convert slider value to actual samples
+            renderConfig.Write("Global.AntiAliasing.MSAASamples", samples);
         }
         if (this->m_fxaaCheckBox) {
             renderConfig.Write("Global.AntiAliasing.FXAAEnabled", this->m_fxaaCheckBox->GetValue());
@@ -252,10 +306,35 @@ void AntiAliasingPanel::resetToDefaults()
         this->m_antiAliasingChoice->SetSelection(1);
     }
     if (this->m_msaaSamplesSlider) {
-        this->m_msaaSamplesSlider->SetValue(4);
+        this->m_msaaSamplesSlider->SetValue(1); // Default to 4x (slider value 1)
     }
     if (this->m_fxaaCheckBox) {
         this->m_fxaaCheckBox->SetValue(false);
     }
     LOG_INF_S("AntiAliasingPanel::resetToDefaults: Settings reset to defaults");
+}
+
+void AntiAliasingPanel::applyFonts()
+{
+    FontManager& fontManager = FontManager::getInstance();
+    
+    // Apply fonts to choice controls
+    if (m_antiAliasingChoice) m_antiAliasingChoice->SetFont(fontManager.getChoiceFont());
+    
+    // Apply fonts to slider
+    if (m_msaaSamplesSlider) m_msaaSamplesSlider->SetFont(fontManager.getLabelFont());
+    
+    // Apply fonts to checkbox
+    if (m_fxaaCheckBox) m_fxaaCheckBox->SetFont(fontManager.getLabelFont());
+    
+    // Apply fonts to all static texts in the panel
+    wxWindowList& children = GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        if (child) {
+            if (dynamic_cast<wxStaticText*>(child)) {
+                child->SetFont(fontManager.getLabelFont());
+            }
+        }
+    }
 }

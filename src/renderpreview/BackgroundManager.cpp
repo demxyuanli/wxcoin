@@ -17,8 +17,49 @@ BackgroundManager::BackgroundManager(PreviewCanvas* canvas)
     
     // Create default configuration
     BackgroundSettings defaultSettings;
+    defaultSettings.style = 0; // Solid color
+    defaultSettings.backgroundColor = wxColour(173, 204, 255); // Light blue
+    defaultSettings.gradientTopColor = wxColour(200, 220, 255);
+    defaultSettings.gradientBottomColor = wxColour(150, 180, 255);
+    defaultSettings.name = "Default Background";
+    
     int configId = addConfiguration(defaultSettings);
-    setActiveConfiguration(configId);
+    if (configId != -1) {
+        setActiveConfiguration(configId);
+        
+        // Apply the default configuration to RenderingManager
+        if (m_canvas && m_canvas->getRenderingManager()) {
+            RenderingManager* renderingManager = m_canvas->getRenderingManager();
+            if (renderingManager->hasActiveConfiguration()) {
+                int activeConfigId = renderingManager->getActiveConfigurationId();
+                RenderingSettings renderingSettings = renderingManager->getConfiguration(activeConfigId);
+                
+                // Update background settings
+                renderingSettings.backgroundStyle = defaultSettings.style;
+                renderingSettings.backgroundColor = defaultSettings.backgroundColor;
+                renderingSettings.gradientTopColor = defaultSettings.gradientTopColor;
+                renderingSettings.gradientBottomColor = defaultSettings.gradientBottomColor;
+                
+                renderingManager->updateConfiguration(activeConfigId, renderingSettings);
+            } else {
+                // Create a new configuration if none exists
+                RenderingSettings newSettings;
+                newSettings.backgroundStyle = defaultSettings.style;
+                newSettings.backgroundColor = defaultSettings.backgroundColor;
+                newSettings.gradientTopColor = defaultSettings.gradientTopColor;
+                newSettings.gradientBottomColor = defaultSettings.gradientBottomColor;
+                
+                int newConfigId = renderingManager->addConfiguration(newSettings);
+                if (newConfigId != -1) {
+                    renderingManager->setActiveConfiguration(newConfigId);
+                }
+            }
+        }
+        
+        LOG_INF_S("BackgroundManager: Initialized with default configuration " + std::to_string(configId));
+    } else {
+        LOG_ERR_S("BackgroundManager: Failed to create default configuration");
+    }
     
     LOG_INF_S("BackgroundManager: Initialized with canvas " + std::to_string(reinterpret_cast<uintptr_t>(canvas)));
 }
@@ -335,7 +376,49 @@ void BackgroundManager::applyToPreviewViewport()
 {
     if (hasActiveConfiguration() && m_canvas) {
         BackgroundSettings activeSettings = getActiveConfiguration();
-        setupOpenGLState(activeSettings);
+        
+        // Update the RenderingManager with our background settings
+        if (m_canvas->getRenderingManager()) {
+            RenderingManager* renderingManager = m_canvas->getRenderingManager();
+            if (renderingManager->hasActiveConfiguration()) {
+                int activeConfigId = renderingManager->getActiveConfigurationId();
+                RenderingSettings renderingSettings = renderingManager->getConfiguration(activeConfigId);
+                
+                // Update background settings
+                renderingSettings.backgroundStyle = activeSettings.style;
+                renderingSettings.backgroundColor = activeSettings.backgroundColor;
+                renderingSettings.gradientTopColor = activeSettings.gradientTopColor;
+                renderingSettings.gradientBottomColor = activeSettings.gradientBottomColor;
+                renderingSettings.backgroundImagePath = activeSettings.imagePath;
+                renderingSettings.backgroundImageEnabled = activeSettings.imageEnabled;
+                renderingSettings.backgroundImageOpacity = activeSettings.imageOpacity;
+                renderingSettings.backgroundImageFit = activeSettings.imageFit;
+                renderingSettings.backgroundImageMaintainAspect = activeSettings.imageMaintainAspect;
+                
+                // Update the rendering manager configuration
+                renderingManager->updateConfiguration(activeConfigId, renderingSettings);
+                
+                LOG_INF_S("BackgroundManager::applyToPreviewViewport: Updated RenderingManager with background settings");
+            } else {
+                // Create a new configuration if none exists
+                RenderingSettings newSettings;
+                newSettings.backgroundStyle = activeSettings.style;
+                newSettings.backgroundColor = activeSettings.backgroundColor;
+                newSettings.gradientTopColor = activeSettings.gradientTopColor;
+                newSettings.gradientBottomColor = activeSettings.gradientBottomColor;
+                newSettings.backgroundImagePath = activeSettings.imagePath;
+                newSettings.backgroundImageEnabled = activeSettings.imageEnabled;
+                newSettings.backgroundImageOpacity = activeSettings.imageOpacity;
+                newSettings.backgroundImageFit = activeSettings.imageFit;
+                newSettings.backgroundImageMaintainAspect = activeSettings.imageMaintainAspect;
+                
+                int newConfigId = renderingManager->addConfiguration(newSettings);
+                if (newConfigId != -1) {
+                    renderingManager->setActiveConfiguration(newConfigId);
+                    LOG_INF_S("BackgroundManager::applyToPreviewViewport: Created new RenderingManager configuration " + std::to_string(newConfigId));
+                }
+            }
+        }
         
         // Force a render to apply the background
         m_canvas->render(false);
@@ -345,6 +428,8 @@ void BackgroundManager::applyToPreviewViewport()
         m_canvas->Update();
         
         LOG_INF_S("BackgroundManager::applyToPreviewViewport: Applied active configuration to preview viewport");
+    } else {
+        LOG_WRN_S("BackgroundManager::applyToPreviewViewport: No active configuration or canvas");
     }
 }
 
@@ -356,6 +441,7 @@ void BackgroundManager::updatePreviewViewport()
 void BackgroundManager::renderBackground()
 {
     if (!hasActiveConfiguration() || !m_canvas) {
+        LOG_WRN_S("BackgroundManager::renderBackground: No active configuration or canvas");
         return;
     }
     
@@ -363,26 +449,54 @@ void BackgroundManager::renderBackground()
     
     // Update the RenderingManager with our background settings
     if (m_canvas->getRenderingManager()) {
-        RenderingSettings renderingSettings = m_canvas->getRenderingManager()->getActiveConfiguration();
-        renderingSettings.backgroundStyle = settings.style;
-        renderingSettings.backgroundColor = settings.backgroundColor;
-        renderingSettings.gradientTopColor = settings.gradientTopColor;
-        renderingSettings.gradientBottomColor = settings.gradientBottomColor;
-        renderingSettings.backgroundImagePath = settings.imagePath;
-        renderingSettings.backgroundImageEnabled = settings.imageEnabled;
-        renderingSettings.backgroundImageOpacity = settings.imageOpacity;
-        renderingSettings.backgroundImageFit = settings.imageFit;
-        renderingSettings.backgroundImageMaintainAspect = settings.imageMaintainAspect;
-        
-        // Update the rendering manager
-        int activeConfigId = m_canvas->getRenderingManager()->getActiveConfigurationId();
-        if (activeConfigId != -1) {
-            m_canvas->getRenderingManager()->updateConfiguration(activeConfigId, renderingSettings);
+        RenderingManager* renderingManager = m_canvas->getRenderingManager();
+        if (renderingManager->hasActiveConfiguration()) {
+            int activeConfigId = renderingManager->getActiveConfigurationId();
+            RenderingSettings renderingSettings = renderingManager->getConfiguration(activeConfigId);
+            
+            // Update background settings
+            renderingSettings.backgroundStyle = settings.style;
+            renderingSettings.backgroundColor = settings.backgroundColor;
+            renderingSettings.gradientTopColor = settings.gradientTopColor;
+            renderingSettings.gradientBottomColor = settings.gradientBottomColor;
+            renderingSettings.backgroundImagePath = settings.imagePath;
+            renderingSettings.backgroundImageEnabled = settings.imageEnabled;
+            renderingSettings.backgroundImageOpacity = settings.imageOpacity;
+            renderingSettings.backgroundImageFit = settings.imageFit;
+            renderingSettings.backgroundImageMaintainAspect = settings.imageMaintainAspect;
+            
+            // Update the rendering manager configuration
+            renderingManager->updateConfiguration(activeConfigId, renderingSettings);
+            
+            LOG_INF_S("BackgroundManager::renderBackground: Updated RenderingManager with background settings");
+        } else {
+            // Create a new configuration if none exists
+            RenderingSettings newSettings;
+            newSettings.backgroundStyle = settings.style;
+            newSettings.backgroundColor = settings.backgroundColor;
+            newSettings.gradientTopColor = settings.gradientTopColor;
+            newSettings.gradientBottomColor = settings.gradientBottomColor;
+            newSettings.backgroundImagePath = settings.imagePath;
+            newSettings.backgroundImageEnabled = settings.imageEnabled;
+            newSettings.backgroundImageOpacity = settings.imageOpacity;
+            newSettings.backgroundImageFit = settings.imageFit;
+            newSettings.backgroundImageMaintainAspect = settings.imageMaintainAspect;
+            
+            int newConfigId = renderingManager->addConfiguration(newSettings);
+            if (newConfigId != -1) {
+                renderingManager->setActiveConfiguration(newConfigId);
+                LOG_INF_S("BackgroundManager::renderBackground: Created new RenderingManager configuration " + std::to_string(newConfigId));
+            }
         }
     }
     
     // Force a render to apply the background
-    m_canvas->render(false);
+    if (m_canvas) {
+        m_canvas->render(false);
+        m_canvas->Refresh();
+        m_canvas->Update();
+        LOG_INF_S("BackgroundManager::renderBackground: Forced canvas render and refresh");
+    }
 }
 
 void BackgroundManager::renderSolidBackground(const wxColour& color)
@@ -475,6 +589,11 @@ void BackgroundManager::resetToDefaults()
 {
     clearAllConfigurations();
     BackgroundSettings defaultSettings;
+    defaultSettings.style = 0; // Solid color
+    defaultSettings.backgroundColor = wxColour(173, 204, 255); // Light blue
+    defaultSettings.gradientTopColor = wxColour(200, 220, 255);
+    defaultSettings.gradientBottomColor = wxColour(150, 180, 255);
+    defaultSettings.name = "Default Background";
     addConfiguration(defaultSettings);
     setActiveConfiguration(0);
     LOG_INF_S("BackgroundManager::resetToDefaults: Reset to default configuration");

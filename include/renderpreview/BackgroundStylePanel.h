@@ -9,6 +9,7 @@
 #include <wx/sizer.h>
 #include <wx/statbox.h>
 #include <string>
+#include <functional>
 #include "renderpreview/BackgroundManager.h"
 
 class RenderPreviewDialog;
@@ -31,11 +32,19 @@ public:
     bool isBackgroundImageMaintainAspect() const;
 
     void setBackgroundManager(BackgroundManager* manager);
+    
+    // Set callback for parameter changes
+    void setParameterChangeCallback(std::function<void()> callback) { m_parameterChangeCallback = callback; }
+    
+    // Apply fonts to all controls
+    void applyFonts();
 
 private:
     void createUI();
     void bindEvents();
     void updateControlStates();
+    void updateButtonColors();
+    void notifyParameterChanged();
 
     void onBackgroundStyleChanged(wxCommandEvent& event);
     void onBackgroundColorButton(wxCommandEvent& event);
@@ -45,9 +54,18 @@ private:
     void onBackgroundImageOpacityChanged(wxCommandEvent& event);
     void onBackgroundImageFitChanged(wxCommandEvent& event);
     void onBackgroundImageMaintainAspectChanged(wxCommandEvent& event);
+    
+    // Preset button event handlers
+    void onEnvironmentPresetButton(wxCommandEvent& event);
+    void onStudioPresetButton(wxCommandEvent& event);
+    void onOutdoorPresetButton(wxCommandEvent& event);
+    void onIndustrialPresetButton(wxCommandEvent& event);
+    void onCadPresetButton(wxCommandEvent& event);
+    void onDarkPresetButton(wxCommandEvent& event);
 
     RenderPreviewDialog* m_parentDialog;
     BackgroundManager* m_backgroundManager;
+    std::function<void()> m_parameterChangeCallback;
 
     wxChoice* m_backgroundStyleChoice;
     wxButton* m_backgroundColorButton;
@@ -58,6 +76,14 @@ private:
     wxChoice* m_backgroundImageFitChoice;
     wxCheckBox* m_backgroundImageMaintainAspectCheckBox;
     wxStaticText* m_backgroundImagePathLabel;
+    
+    // Preset buttons
+    wxButton* m_environmentPresetButton;
+    wxButton* m_studioPresetButton;
+    wxButton* m_outdoorPresetButton;
+    wxButton* m_industrialPresetButton;
+    wxButton* m_cadPresetButton;
+    wxButton* m_darkPresetButton;
 
     DECLARE_EVENT_TABLE()
 };

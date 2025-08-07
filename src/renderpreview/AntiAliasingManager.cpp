@@ -30,6 +30,19 @@ int AntiAliasingManager::addConfiguration(const AntiAliasingSettings& settings)
         return -1;
     }
     
+    // Validate MSAA samples if method is MSAA
+    if (settings.method == 1) { // MSAA method
+        if (settings.msaaSamples < 2 || settings.msaaSamples > 16) {
+            LOG_ERR_S("AntiAliasingManager::addConfiguration: MSAA samples must be between 2 and 16");
+            return -1;
+        }
+        // Check if samples is a power of 2
+        if ((settings.msaaSamples & (settings.msaaSamples - 1)) != 0) {
+            LOG_ERR_S("AntiAliasingManager::addConfiguration: MSAA samples must be a power of 2");
+            return -1;
+        }
+    }
+    
     auto managedConfig = std::make_unique<ManagedAntiAliasing>();
     managedConfig->settings = settings;
     managedConfig->configId = m_nextConfigId++;
@@ -205,12 +218,26 @@ void AntiAliasingManager::setMethod(int configId, int method)
 
 void AntiAliasingManager::setMSAASamples(int configId, int samples)
 {
+    // Validate MSAA samples
+    if (samples < 2 || samples > 16) {
+        LOG_ERR_S("AntiAliasingManager::setMSAASamples: MSAA samples must be between 2 and 16");
+        return;
+    }
+    // Check if samples is a power of 2
+    if ((samples & (samples - 1)) != 0) {
+        LOG_ERR_S("AntiAliasingManager::setMSAASamples: MSAA samples must be a power of 2");
+        return;
+    }
+    
     auto it = m_configurations.find(configId);
     if (it != m_configurations.end()) {
         it->second->settings.msaaSamples = samples;
         if (it->second->isActive) {
             applyToRenderPipeline();
         }
+        LOG_INF_S("AntiAliasingManager::setMSAASamples: Set MSAA samples to " + std::to_string(samples));
+    } else {
+        LOG_WRN_S("AntiAliasingManager::setMSAASamples: Configuration with ID " + std::to_string(configId) + " not found");
     }
 }
 

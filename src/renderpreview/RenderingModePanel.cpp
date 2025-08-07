@@ -2,6 +2,7 @@
 #include "renderpreview/RenderPreviewDialog.h"
 #include "renderpreview/RenderingManager.h"
 #include "renderpreview/PreviewCanvas.h"
+#include "config/FontManager.h"
 #include "logger/Logger.h"
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -30,7 +31,7 @@ void RenderingModePanel::createUI()
 
     auto* presetsBoxSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Rendering Presets");
     auto* presetsLabel = new wxStaticText(this, wxID_ANY, "Choose a rendering preset:");
-    presetsBoxSizer->Add(presetsLabel, 0, wxALL, 8);
+    presetsBoxSizer->Add(presetsLabel, 0, wxALL, 4);
     m_renderingModeChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
     m_renderingModeChoice->Append("None");
     m_renderingModeChoice->Append("Performance");
@@ -53,27 +54,27 @@ void RenderingModePanel::createUI()
     m_renderingModeChoice->Append("Legacy Solid");
     m_renderingModeChoice->Append("Legacy Hidden Line");
     m_renderingModeChoice->SetSelection(0);
-    presetsBoxSizer->Add(m_renderingModeChoice, 0, wxEXPAND | wxALL, 8);
-    renderingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 8);
+    presetsBoxSizer->Add(m_renderingModeChoice, 0, wxEXPAND | wxALL, 4);
+    renderingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 4);
 
     auto* performanceBoxSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Performance Impact");
     auto* impactLabel = new wxStaticText(this, wxID_ANY, "Performance Impact: Medium");
     impactLabel->SetForegroundColour(wxColour(255, 165, 0));
-    performanceBoxSizer->Add(impactLabel, 0, wxALL, 8);
+    performanceBoxSizer->Add(impactLabel, 0, wxALL, 4);
     auto* qualityLabel = new wxStaticText(this, wxID_ANY, "Quality: Balanced");
     qualityLabel->SetForegroundColour(wxColour(0, 0, 128));
-    performanceBoxSizer->Add(qualityLabel, 0, wxALL, 8);
+    performanceBoxSizer->Add(qualityLabel, 0, wxALL, 4);
     auto* fpsLabel = new wxStaticText(this, wxID_ANY, "Estimated FPS: 60");
     fpsLabel->SetForegroundColour(wxColour(0, 128, 0));
-    performanceBoxSizer->Add(fpsLabel, 0, wxALL, 8);
+    performanceBoxSizer->Add(fpsLabel, 0, wxALL, 4);
     auto* featuresLabel = new wxStaticText(this, wxID_ANY, "Features: Smooth Shading, Phong Shading");
     featuresLabel->SetForegroundColour(wxColour(128, 128, 128));
-    performanceBoxSizer->Add(featuresLabel, 0, wxALL, 8);
-    renderingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 8);
+    performanceBoxSizer->Add(featuresLabel, 0, wxALL, 4);
+    renderingSizer->Add(performanceBoxSizer, 0, wxEXPAND | wxALL, 4);
 
     auto* legacyBoxSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Legacy Mode Settings");
     auto* modeLabel = new wxStaticText(this, wxID_ANY, "Legacy Rendering Mode:");
-    legacyBoxSizer->Add(modeLabel, 0, wxALL, 8);
+    legacyBoxSizer->Add(modeLabel, 0, wxALL, 4);
     m_legacyChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(250, -1));
     m_legacyChoice->Append("Solid");
     m_legacyChoice->Append("Wireframe");
@@ -82,8 +83,8 @@ void RenderingModePanel::createUI()
     m_legacyChoice->Append("Shaded");
     m_legacyChoice->SetSelection(4);
     m_legacyChoice->Enable(false);
-    legacyBoxSizer->Add(m_legacyChoice, 0, wxEXPAND | wxALL, 8);
-    renderingSizer->Add(legacyBoxSizer, 0, wxEXPAND | wxALL, 8);
+    legacyBoxSizer->Add(m_legacyChoice, 0, wxEXPAND | wxALL, 4);
+    renderingSizer->Add(legacyBoxSizer, 0, wxEXPAND | wxALL, 4);
 
     SetSizer(renderingSizer);
 }
@@ -113,71 +114,23 @@ void RenderingModePanel::setRenderingManager(RenderingManager* manager)
     m_renderingManager = manager;
 }
 
+void RenderingModePanel::notifyParameterChanged()
+{
+    if (m_parameterChangeCallback) {
+        m_parameterChangeCallback();
+    }
+}
+
 void RenderingModePanel::onRenderingModeChanged(wxCommandEvent& event)
 {
     if (m_renderingManager && m_renderingModeChoice) {
         int selection = m_renderingModeChoice->GetSelection();
         wxString presetName = m_renderingModeChoice->GetString(selection);
-        if (presetName == "None") {
-            if (m_legacyChoice) {
-                m_legacyChoice->Enable(true);
-            }
-            m_renderingManager->setActiveConfiguration(-1);
-            LOG_INF_S("RenderingModePanel::onRenderingModeChanged: Selected None - Legacy mode enabled");
-        } else {
-            m_renderingManager->applyPreset(presetName.ToStdString());
-            m_renderingManager->setupRenderingState();
-            updateLegacyChoiceFromCurrentMode();
-            if (m_legacyChoice) {
-                m_legacyChoice->Enable(false);
-            }
-        }
-        float impact = m_renderingManager->getPerformanceImpact();
-        std::string qualityDesc = m_renderingManager->getQualityDescription();
-        int estimatedFPS = m_renderingManager->getEstimatedFPS();
-        wxWindow* parent = m_renderingModeChoice->GetParent();
-        if (parent) {
-            wxWindowList children = parent->GetChildren();
-            for (auto child : children) {
-                if (wxStaticText* label = dynamic_cast<wxStaticText*>(child)) {
-                    wxString labelText = label->GetLabel();
-                    if (labelText.Contains("Performance Impact:")) {
-                        std::string impactText = "Performance Impact: ";
-                        if (impact < 1.2f) {
-                            impactText += "Low";
-                            label->SetForegroundColour(wxColour(0, 128, 0));
-                        } else if (impact < 1.8f) {
-                            impactText += "Medium";
-                            label->SetForegroundColour(wxColour(255, 165, 0));
-                        } else {
-                            impactText += "High";
-                            label->SetForegroundColour(wxColour(255, 0, 0));
-                        }
-                        label->SetLabel(impactText);
-                    } else if (labelText.Contains("Quality:")) {
-                        label->SetLabel("Quality: " + qualityDesc);
-                    } else if (labelText.Contains("Estimated FPS:")) {
-                        label->SetLabel("Estimated FPS: " + std::to_string(estimatedFPS));
-                    } else if (labelText.Contains("Features:")) {
-                        std::string featuresText = "Features: ";
-                        if (presetName.Contains("CAD")) {
-                            featuresText += "CAD Optimized, High Precision";
-                        } else if (presetName.Contains("Gaming")) {
-                            featuresText += "Real-time Optimized, Fast Rendering";
-                        } else if (presetName.Contains("Mobile")) {
-                            featuresText += "Mobile Optimized, Battery Efficient";
-                        } else if (presetName.Contains("Presentation")) {
-                            featuresText += "High Quality, Smooth Shading";
-                        } else if (presetName.Contains("Debug")) {
-                            featuresText += "Debug Mode, Wireframe/Points";
-                        } else {
-                            featuresText += "Standard Rendering Features";
-                        }
-                        label->SetLabel(featuresText);
-                    }
-                }
-            }
-        }
+        m_renderingManager->applyPreset(presetName.ToStdString());
+        updateLegacyChoiceFromCurrentMode();
+        
+        notifyParameterChanged();
+        
         LOG_INF_S("RenderingModePanel::onRenderingModeChanged: Applied preset '" + presetName.ToStdString() + "'");
     }
     if (m_parentDialog) {
@@ -187,42 +140,25 @@ void RenderingModePanel::onRenderingModeChanged(wxCommandEvent& event)
 
 void RenderingModePanel::onLegacyModeChanged(wxCommandEvent& event)
 {
-    if (!m_legacyChoice) {
-        return;
-    }
-    if (!m_legacyChoice->IsEnabled()) {
-        LOG_INF_S("RenderingModePanel::onLegacyModeChanged: Legacy choice is disabled - ignoring change");
-        return;
-    }
-    int selection = m_legacyChoice->GetSelection();
-    LOG_INF_S("RenderingModePanel::onLegacyModeChanged: Legacy mode changed to selection " + std::to_string(selection));
-    int renderingMode = 0;
-    switch (selection) {
-        case 0: renderingMode = 0; break;
-        case 1: renderingMode = 1; break;
-        case 2: renderingMode = 2; break;
-        case 3: renderingMode = 3; break;
-        case 4: renderingMode = 4; break;
-        default: renderingMode = 0; break;
-    }
-    if (m_renderingManager) {
+    if (m_renderingManager && m_legacyChoice) {
+        int selection = m_legacyChoice->GetSelection();
+        wxString modeName = m_legacyChoice->GetString(selection);
+        
+        // Use the existing setRenderingMode method
         if (m_renderingManager->hasActiveConfiguration()) {
-            int activeConfigId = m_renderingManager->getActiveConfigurationId();
-            RenderingSettings settings = m_renderingManager->getConfiguration(activeConfigId);
-            settings.mode = renderingMode;
-            switch (renderingMode) {
-                case 0: settings.polygonMode = 0; break;
-                case 1: settings.polygonMode = 1; break;
-                case 2: settings.polygonMode = 2; break;
-                case 3: settings.polygonMode = 0; break;
-                case 4: settings.polygonMode = 0; break;
-            }
-            m_renderingManager->updateConfiguration(activeConfigId, settings);
-            m_renderingManager->setupRenderingState();
+            int activeId = m_renderingManager->getActiveConfigurationId();
+            m_renderingManager->setRenderingMode(activeId, selection);
         }
+        
+        notifyParameterChanged();
+        
+        LOG_INF_S("RenderingModePanel::onLegacyModeChanged: Applied legacy mode '" + modeName.ToStdString() + "'");
     }
-    if (m_parentDialog) {
-        m_parentDialog->applyGlobalSettingsToCanvas();
+    if (m_parentDialog && m_parentDialog->getRenderCanvas()) {
+        auto canvas = m_parentDialog->getRenderCanvas();
+        canvas->render(false);
+        canvas->Refresh();
+        canvas->Update();
     }
 }
 
@@ -296,4 +232,24 @@ void RenderingModePanel::resetToDefaults()
         this->m_renderingModeChoice->SetSelection(4);
     }
     LOG_INF_S("RenderingModePanel::resetToDefaults: Settings reset to defaults");
+}
+
+void RenderingModePanel::applyFonts()
+{
+    FontManager& fontManager = FontManager::getInstance();
+    
+    // Apply fonts to choice controls
+    if (m_renderingModeChoice) m_renderingModeChoice->SetFont(fontManager.getChoiceFont());
+    if (m_legacyChoice) m_legacyChoice->SetFont(fontManager.getChoiceFont());
+    
+    // Apply fonts to all static texts in the panel
+    wxWindowList& children = GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        if (child) {
+            if (dynamic_cast<wxStaticText*>(child)) {
+                child->SetFont(fontManager.getLabelFont());
+            }
+        }
+    }
 }

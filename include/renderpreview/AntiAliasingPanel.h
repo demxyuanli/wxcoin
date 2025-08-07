@@ -7,6 +7,7 @@
 #include <wx/stattext.h>
 #include <wx/sizer.h>
 #include <wx/statbox.h>
+#include <functional>
 
 class RenderPreviewDialog;
 class AntiAliasingManager;
@@ -29,15 +30,23 @@ public:
     void resetToDefaults();
 
     void setAntiAliasingManager(AntiAliasingManager* manager);
+    
+    // Set callback for parameter changes
+    void setParameterChangeCallback(std::function<void()> callback) { m_parameterChangeCallback = callback; }
+    
+    // Apply fonts to all controls
+    void applyFonts();
 
 private:
     void createUI();
     void bindEvents();
+    void notifyParameterChanged();
 
     void onAntiAliasingChanged(wxCommandEvent& event);
 
     RenderPreviewDialog* m_parentDialog;
     AntiAliasingManager* m_antiAliasingManager;
+    std::function<void()> m_parameterChangeCallback;
 
     wxChoice* m_antiAliasingChoice;
     wxSlider* m_msaaSamplesSlider;

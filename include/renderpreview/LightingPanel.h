@@ -14,6 +14,7 @@
 #include <wx/button.h>
 #include <wx/colordlg.h>
 #include <vector>
+#include <functional>
 #include "renderpreview/RenderLightSettings.h"
 
 class RenderPreviewDialog;
@@ -30,6 +31,12 @@ public:
     void loadSettings();
     void saveSettings();
     void resetToDefaults();
+    
+    // Set callback for parameter changes
+    void setParameterChangeCallback(std::function<void()> callback) { m_parameterChangeCallback = callback; }
+    
+    // Apply fonts to all controls
+    void applyFonts();
 
 private:
     void createUI();
@@ -38,6 +45,7 @@ private:
     void bindEvents();
     void updateLightList();
     void updateControlStates();
+    void notifyParameterChanged();
 
     void onLightSelected(wxCommandEvent& event);
     void onAddLight(wxCommandEvent& event);
@@ -58,6 +66,7 @@ private:
     RenderPreviewDialog* m_parentDialog;
     std::vector<RenderLightSettings> m_lights;
     int m_currentLightIndex;
+    std::function<void()> m_parameterChangeCallback;
 
     wxBoxSizer* m_lightListSizer;
     wxButton* m_addLightButton;

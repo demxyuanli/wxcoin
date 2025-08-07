@@ -50,10 +50,14 @@ public:
     void setBackgroundManager(BackgroundManager* manager);
 
     void setAutoApply(bool enabled);
+    bool isAutoApplyEnabled() const { return m_autoApply; }
+    bool hasUnsavedChanges() const { return m_hasUnsavedChanges; }
 
     void loadSettings();
     void saveSettings();
     void resetToDefaults();
+    void markAsChanged();
+    void markAsSaved();
 
     void OnGlobalApply(wxCommandEvent& event);
     void OnGlobalSave(wxCommandEvent& event);
@@ -69,9 +73,11 @@ private:
     void createUI();
     void bindEvents();
     void applySpecificFonts();
+    void applySettingsToCanvas();
 
     RenderPreviewDialog* m_parentDialog;
     bool m_autoApply;
+    bool m_hasUnsavedChanges;
 
     wxNotebook* m_notebook;
     LightingPanel* m_lightingPanel;

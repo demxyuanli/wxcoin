@@ -98,6 +98,10 @@ private:
     void setupDefaultCamera();
     void setupDefaultLighting();
     void renderGradientBackground(const wxColour& topColor, const wxColour& bottomColor);
+    void renderImageBackground(const std::string& imagePath, float opacity, int fit, bool maintainAspect);
+    bool loadTexture(const std::string& imagePath, unsigned int& textureId);
+    void drawFullscreenQuad();
+    void applyRenderingModeSettings(const RenderingSettings& settings);
 
     
     // Event handlers
@@ -143,6 +147,11 @@ private:
     
     // Runtime configuration management
     int m_runtimeConfigId = -1;  // ID for runtime rendering configuration
+    
+    // Texture cache for background images
+    std::unordered_map<std::string, unsigned int> m_textureCache;
+    std::string m_currentBackgroundImagePath;
+    unsigned int m_currentBackgroundTextureId = 0;
     
     // Helper methods for unified coordination
     RenderingSettings createRenderingSettingsForMode(int mode);
