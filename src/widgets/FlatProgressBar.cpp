@@ -42,25 +42,25 @@ FlatProgressBar::~FlatProgressBar()
 
 void FlatProgressBar::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for progress bars
+    // Fluent Design System inspired colors for progress bars (based on PyQt-Fluent-Widgets)
     switch (m_progressBarStyle) {
         case ProgressBarStyle::DEFAULT_STYLE:
             m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_progressColor = wxColour(0, 120, 215);      // Fluent Blue
+            m_progressColor = wxColour(32, 167, 232);      // Fluent Blue
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
             break;
             
         case ProgressBarStyle::INDETERMINATE:
             m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_progressColor = wxColour(0, 120, 215);      // Fluent Blue
+            m_progressColor = wxColour(32, 167, 232);      // Fluent Blue
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
             break;
             
         case ProgressBarStyle::STRIPED:
             m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_progressColor = wxColour(0, 120, 215);      // Fluent Blue
+            m_progressColor = wxColour(32, 167, 232);      // Fluent Blue
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
             break;
@@ -295,7 +295,7 @@ wxSize FlatProgressBar::DoGetBestSize() const
     return wxSize(width, height);
 }
 
-void FlatProgressBar::OnPaint(wxPaintEvent& event)
+void FlatProgressBar::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
     wxPaintDC dc(this);
     DrawProgressBar(dc);

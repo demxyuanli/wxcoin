@@ -46,13 +46,13 @@ FlatSlider::~FlatSlider()
 
 void FlatSlider::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for sliders
+    // Fluent Design System inspired colors for sliders (based on PyQt-Fluent-Widgets)
     switch (m_sliderStyle) {
         case SliderStyle::NORMAL:
             m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
             m_hoverColor = wxColour(235, 235, 235);       // Slightly darker on hover
             m_progressColor = wxColour(200, 200, 200);    // Medium gray track
-            m_thumbColor = wxColour(0, 120, 215);         // Fluent Blue thumb
+            m_thumbColor = wxColour(32, 167, 232);         // Fluent Blue thumb
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(180, 180, 180);      // Light gray border
             break;
@@ -61,7 +61,7 @@ void FlatSlider::InitializeDefaultColors()
             m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
             m_hoverColor = wxColour(235, 235, 235);       // Slightly darker on hover
             m_progressColor = wxColour(200, 200, 200);    // Medium gray track
-            m_thumbColor = wxColour(0, 120, 215);         // Fluent Blue thumb
+            m_thumbColor = wxColour(32, 167, 232);         // Fluent Blue thumb
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(180, 180, 180);      // Light gray border
             break;
@@ -70,7 +70,7 @@ void FlatSlider::InitializeDefaultColors()
             m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
             m_hoverColor = wxColour(235, 235, 235);       // Slightly darker on hover
             m_progressColor = wxColour(200, 200, 200);    // Medium gray track
-            m_thumbColor = wxColour(0, 120, 215);         // Fluent Blue thumb
+            m_thumbColor = wxColour(32, 167, 232);         // Fluent Blue thumb
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(180, 180, 180);      // Light gray border
             break;
@@ -185,7 +185,7 @@ wxSize FlatSlider::DoGetBestSize() const
     return wxSize(width, height);
 }
 
-void FlatSlider::OnPaint(wxPaintEvent& event)
+void FlatSlider::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
     wxPaintDC dc(this);
     wxRect rect = this->GetClientRect();
@@ -327,14 +327,30 @@ void FlatSlider::DrawTrack(wxDC& dc)
     // Draw progress
     if (m_maxValue > m_minValue) {
         double progress = (double)(m_value - m_minValue) / (m_maxValue - m_minValue);
-        int progressWidth = (int)(trackRect.width * progress);
         
-        if (progressWidth > 0) {
-            wxRect progressRect = trackRect;
-            progressRect.width = progressWidth;
+        if (m_sliderStyle == SliderStyle::VERTICAL) {
+            // Vertical slider - progress is height-based
+            int progressHeight = (int)(trackRect.height * progress);
             
-            dc.SetBrush(wxBrush(m_thumbColor));
-            DrawRoundedRectangle(dc, progressRect, m_cornerRadius);
+            if (progressHeight > 0) {
+                wxRect progressRect = trackRect;
+                progressRect.y = trackRect.y + trackRect.height - progressHeight;
+                progressRect.height = progressHeight;
+                
+                dc.SetBrush(wxBrush(m_thumbColor));
+                DrawRoundedRectangle(dc, progressRect, m_cornerRadius);
+            }
+        } else {
+            // Horizontal slider - progress is width-based
+            int progressWidth = (int)(trackRect.width * progress);
+            
+            if (progressWidth > 0) {
+                wxRect progressRect = trackRect;
+                progressRect.width = progressWidth;
+                
+                dc.SetBrush(wxBrush(m_thumbColor));
+                DrawRoundedRectangle(dc, progressRect, m_cornerRadius);
+            }
         }
     }
 }
@@ -379,8 +395,18 @@ void FlatSlider::UpdateValueFromPosition(const wxPoint& pos)
     wxRect trackRect = GetTrackRect();
     if (trackRect.IsEmpty()) return;
     
-    int posInTrack = pos.x - trackRect.x;
-    double ratio = (double)posInTrack / trackRect.width;
+    double ratio = 0.0;
+    
+    if (m_sliderStyle == SliderStyle::VERTICAL) {
+        // Vertical slider - use Y coordinate
+        int posInTrack = trackRect.y + trackRect.height - pos.y;
+        ratio = (double)posInTrack / trackRect.height;
+    } else {
+        // Horizontal slider - use X coordinate
+        int posInTrack = pos.x - trackRect.x;
+        ratio = (double)posInTrack / trackRect.width;
+    }
+    
     ratio = wxMax(0.0, wxMin(1.0, ratio));
     
     int newValue = m_minValue + (int)(ratio * (m_maxValue - m_minValue));
@@ -399,14 +425,28 @@ void FlatSlider::UpdateValueFromPosition(const wxPoint& pos)
 wxRect FlatSlider::GetTrackRect() const
 {
     wxRect clientRect = this->GetClientRect();
-    int trackY = (clientRect.height - m_trackHeight) / 2;
     
-    return wxRect(
-        clientRect.x + m_borderWidth + m_thumbSize.GetWidth() / 2,
-        trackY,
-        clientRect.width - 2 * m_borderWidth - m_thumbSize.GetWidth(),
-        m_trackHeight
-    );
+    if (m_sliderStyle == SliderStyle::VERTICAL) {
+        // Vertical slider - track is vertical
+        int trackX = (clientRect.width - m_trackHeight) / 2;
+        
+        return wxRect(
+            trackX,
+            clientRect.y + m_borderWidth + m_thumbSize.GetHeight() / 2,
+            m_trackHeight,
+            clientRect.height - 2 * m_borderWidth - m_thumbSize.GetHeight()
+        );
+    } else {
+        // Horizontal slider - track is horizontal
+        int trackY = (clientRect.height - m_trackHeight) / 2;
+        
+        return wxRect(
+            clientRect.x + m_borderWidth + m_thumbSize.GetWidth() / 2,
+            trackY,
+            clientRect.width - 2 * m_borderWidth - m_thumbSize.GetWidth(),
+            m_trackHeight
+        );
+    }
 }
 
 wxRect FlatSlider::GetThumbRect() const
@@ -415,10 +455,20 @@ wxRect FlatSlider::GetThumbRect() const
     if (trackRect.IsEmpty()) return wxRect();
     
     double ratio = (double)(m_value - m_minValue) / (m_maxValue - m_minValue);
-    int thumbX = trackRect.x + (int)(ratio * trackRect.width) - m_thumbSize.GetWidth() / 2;
-    int thumbY = (trackRect.y + trackRect.height / 2) - m_thumbSize.GetHeight() / 2;
     
-    return wxRect(thumbX, thumbY, m_thumbSize.GetWidth(), m_thumbSize.GetHeight());
+    if (m_sliderStyle == SliderStyle::VERTICAL) {
+        // Vertical slider - thumb position is Y-based
+        int thumbY = trackRect.y + trackRect.height - (int)(ratio * trackRect.height) - m_thumbSize.GetHeight() / 2;
+        int thumbX = (trackRect.x + trackRect.width / 2) - m_thumbSize.GetWidth() / 2;
+        
+        return wxRect(thumbX, thumbY, m_thumbSize.GetWidth(), m_thumbSize.GetHeight());
+    } else {
+        // Horizontal slider - thumb position is X-based
+        int thumbX = trackRect.x + (int)(ratio * trackRect.width) - m_thumbSize.GetWidth() / 2;
+        int thumbY = (trackRect.y + trackRect.height / 2) - m_thumbSize.GetHeight() / 2;
+        
+        return wxRect(thumbX, thumbY, m_thumbSize.GetWidth(), m_thumbSize.GetHeight());
+    }
 }
 
 wxColour FlatSlider::GetCurrentBackgroundColor() const

@@ -44,12 +44,12 @@ FlatSwitch::~FlatSwitch()
 
 void FlatSwitch::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for switches
+    // Fluent Design System inspired colors for switches (based on PyQt-Fluent-Widgets)
     switch (m_switchStyle) {
         case SwitchStyle::DEFAULT_STYLE:
             m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
             m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(0, 120, 215);       // Fluent Blue when checked
+            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
             m_thumbColor = wxColour(255, 255, 255);       // White thumb
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(180, 180, 180);      // Light gray border
@@ -58,7 +58,7 @@ void FlatSwitch::InitializeDefaultColors()
         case SwitchStyle::ROUND:
             m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
             m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(0, 120, 215);       // Fluent Blue when checked
+            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
             m_thumbColor = wxColour(255, 255, 255);       // White thumb
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(180, 180, 180);      // Light gray border
@@ -67,7 +67,7 @@ void FlatSwitch::InitializeDefaultColors()
         case SwitchStyle::SQUARE:
             m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
             m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(0, 120, 215);       // Fluent Blue when checked
+            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
             m_thumbColor = wxColour(255, 255, 255);       // White thumb
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(180, 180, 180);      // Light gray border
@@ -226,7 +226,7 @@ wxSize FlatSwitch::DoGetBestSize() const
     return wxSize(width, height);
 }
 
-void FlatSwitch::OnPaint(wxPaintEvent& event)
+void FlatSwitch::OnPaint(wxPaintEvent& WXUNUSED(event))
 {
     wxPaintDC dc(this);
     DrawSwitch(dc);

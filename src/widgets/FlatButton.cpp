@@ -66,20 +66,20 @@ FlatButton::~FlatButton()
 
 void FlatButton::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors
+    // Fluent Design System inspired colors (based on PyQt-Fluent-Widgets)
     switch (m_buttonStyle) {
         case ButtonStyle::PRIMARY:
-            // Primary button - Blue accent color
-            m_backgroundColor = wxColour(0, 120, 215);  // Fluent Blue
-            m_hoverColor = wxColour(0, 102, 184);       // Darker blue on hover
-            m_pressedColor = wxColour(0, 84, 153);      // Even darker on press
+            // Primary button - Accent color
+            m_backgroundColor = wxColour(32, 167, 232);  // Fluent Blue
+            m_hoverColor = wxColour(50, 180, 240);       // Lighter blue on hover
+            m_pressedColor = wxColour(20, 140, 200);      // Darker blue on press
             m_textColor = wxColour(255, 255, 255);      // White text
-            m_borderColor = wxColour(0, 120, 215);      // Same as background
+            m_borderColor = wxColour(32, 167, 232);      // Same as background
             break;
             
         case ButtonStyle::SECONDARY:
             // Secondary button - Subtle gray background
-            m_backgroundColor = wxColour(243, 243, 243); // Light gray
+            m_backgroundColor = wxColour(240, 240, 240); // Light gray
             m_hoverColor = wxColour(230, 230, 230);      // Slightly darker on hover
             m_pressedColor = wxColour(220, 220, 220);    // Even darker on press
             m_textColor = wxColour(32, 32, 32);          // Dark gray text
@@ -100,8 +100,8 @@ void FlatButton::InitializeDefaultColors()
             m_backgroundColor = wxColour(255, 255, 255); // White background
             m_hoverColor = wxColour(248, 248, 248);      // Very light gray on hover
             m_pressedColor = wxColour(240, 240, 240);    // Light gray on press
-            m_textColor = wxColour(0, 120, 215);         // Blue text
-            m_borderColor = wxColour(0, 120, 215);       // Blue border
+            m_textColor = wxColour(32, 167, 232);         // Blue text
+            m_borderColor = wxColour(32, 167, 232);       // Blue border
             break;
             
         case ButtonStyle::TEXT:
@@ -109,7 +109,7 @@ void FlatButton::InitializeDefaultColors()
             m_backgroundColor = wxTransparentColour;     // Transparent
             m_hoverColor = wxColour(0, 0, 0, 20);       // Subtle hover effect
             m_pressedColor = wxColour(0, 0, 0, 40);     // More visible press effect
-            m_textColor = wxColour(0, 120, 215);        // Blue text
+            m_textColor = wxColour(32, 167, 232);        // Blue text
             m_borderColor = wxTransparentColour;         // No border
             break;
             
@@ -270,11 +270,17 @@ void FlatButton::OnPaint(wxPaintEvent& event)
 {
     wxUnusedVar(event);
     wxPaintDC dc(this);
-    dc.SetFont(GetFont());
     
     // Enable high-quality rendering
     dc.SetLogicalFunction(wxCOPY);
     
+    // Set the font for drawing
+    wxFont currentFont = GetFont();
+    if (currentFont.IsOk()) {
+        dc.SetFont(currentFont);
+    }
+    
+    // Draw in the correct order: shadow -> background -> border -> icon -> text
     DrawBackground(dc);
     DrawBorder(dc);
     DrawIcon(dc);
@@ -500,7 +506,6 @@ void FlatButton::DrawIcon(wxDC& dc)
     if (!m_icon.IsOk()) return;
     
     wxRect iconRect = GetIconRect();
-    wxColour textColor = GetCurrentTextColor();
     
     // Create a memory DC for the icon
     wxMemoryDC memDC;
@@ -513,7 +518,7 @@ void FlatButton::DrawIcon(wxDC& dc)
 
 void FlatButton::DrawRoundedRectangle(wxDC& dc, const wxRect& rect, int radius)
 {
-    // Improved rounded rectangle implementation
+    // High-quality rounded rectangle implementation using precise arc drawing
     if (radius <= 0) {
         dc.DrawRectangle(rect);
         return;
@@ -529,41 +534,77 @@ void FlatButton::DrawRoundedRectangle(wxDC& dc, const wxRect& rect, int radius)
     int width = rect.width;
     int height = rect.height;
     
-    // Set up the brush and pen
-    dc.SetBrush(dc.GetBrush());
-    dc.SetPen(dc.GetPen());
+    // Check if we're drawing a border by checking if the brush is transparent
+    bool isDrawingBorder = (dc.GetBrush().GetColour() == wxTransparentColour);
     
-    // Draw the rounded rectangle using a simpler approach
-    // We'll draw the corners as arcs and fill the rest with rectangles
-    
-    // Top-left corner (90-degree arc from top to left)
-    dc.DrawArc(x + radius, y + radius, x + radius, y, x, y + radius);
-    
-    // Top-right corner (90-degree arc from right to top)
-    dc.DrawArc(x + width - radius, y + radius, x + width, y + radius, x + width - radius, y);
-    
-    // Bottom-right corner (90-degree arc from bottom to right)
-    dc.DrawArc(x + width - radius, y + height - radius, x + width - radius, y + height, x + width, y + height - radius);
-    
-    // Bottom-left corner (90-degree arc from left to bottom)
-    dc.DrawArc(x + radius, y + height - radius, x, y + height - radius, x + radius, y + height);
-    
-    // Fill the center rectangle
-    if (width > 2 * radius) {
-        wxRect centerRect(x + radius, y, width - 2 * radius, height);
-        dc.DrawRectangle(centerRect);
-    }
-    
-    // Fill the left rectangle
-    if (height > 2 * radius) {
-        wxRect leftRect(x, y + radius, radius, height - 2 * radius);
-        dc.DrawRectangle(leftRect);
-    }
-    
-    // Fill the right rectangle
-    if (height > 2 * radius) {
-        wxRect rightRect(x + width - radius, y + radius, radius, height - 2 * radius);
-        dc.DrawRectangle(rightRect);
+    if (isDrawingBorder) {
+        // Draw border outline using a more precise approach
+        // Draw the four straight edges
+        if (width > 2 * radius) {
+            dc.DrawLine(x + radius, y, x + width - radius, y); // Top
+            dc.DrawLine(x + radius, y + height, x + width - radius, y + height); // Bottom
+        }
+        if (height > 2 * radius) {
+            dc.DrawLine(x, y + radius, x, y + height - radius); // Left
+            dc.DrawLine(x + width, y + radius, x + width, y + height - radius); // Right
+        }
+        
+        // Draw the four corner arcs using precise parameters
+        // Top-left corner (90-degree arc from top to left)
+        dc.DrawArc(x + radius, y + radius, x + radius, y, x, y + radius);
+        
+        // Top-right corner (90-degree arc from right to top)
+        dc.DrawArc(x + width - radius, y + radius, x + width, y + radius, x + width - radius, y);
+        
+        // Bottom-right corner (90-degree arc from bottom to right)
+        dc.DrawArc(x + width - radius, y + height - radius, x + width - radius, y + height, x + width, y + height - radius);
+        
+        // Bottom-left corner (90-degree arc from left to bottom)
+        dc.DrawArc(x + radius, y + height - radius, x, y + height - radius, x + radius, y + height);
+    } else {
+        // Fill the rounded rectangle using a more robust approach
+        // This approach draws the rounded rectangle as a series of filled shapes
+        
+        // Fill the center rectangle
+        if (width > 2 * radius) {
+            dc.DrawRectangle(x + radius, y, width - 2 * radius, height);
+        }
+        
+        // Fill the left rectangle
+        if (height > 2 * radius) {
+            dc.DrawRectangle(x, y + radius, radius, height - 2 * radius);
+        }
+        
+        // Fill the right rectangle
+        if (height > 2 * radius) {
+            dc.DrawRectangle(x + width - radius, y + radius, radius, height - 2 * radius);
+        }
+        
+        // Fill the top rectangle
+        if (width > 2 * radius) {
+            dc.DrawRectangle(x + radius, y, width - 2 * radius, radius);
+        }
+        
+        // Fill the bottom rectangle
+        if (width > 2 * radius) {
+            dc.DrawRectangle(x + radius, y + height - radius, width - 2 * radius, radius);
+        }
+        
+        // Draw the corner arcs to fill the corners
+        // We need to use a different approach for filling arcs
+        // Create filled pie segments for the corners
+        
+        // Top-left corner
+        dc.DrawArc(x + radius, y + radius, x + radius, y, x, y + radius);
+        
+        // Top-right corner
+        dc.DrawArc(x + width - radius, y + radius, x + width, y + radius, x + width - radius, y);
+        
+        // Bottom-right corner
+        dc.DrawArc(x + width - radius, y + height - radius, x + width - radius, y + height, x + width, y + height - radius);
+        
+        // Bottom-left corner
+        dc.DrawArc(x + radius, y + height - radius, x, y + height - radius, x + radius, y + height);
     }
 }
 

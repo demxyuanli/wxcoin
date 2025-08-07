@@ -10,6 +10,7 @@
 #include "logger/Logger.h"
 #include "FlatFrame.h"
 #include "rendering/RenderingToolkitAPI.h"
+#include "config/FontManager.h" // Include FontManager
 #include <Inventor/SoDB.h>
 #include <Inventor/SoInput.h>
 #include <Inventor/nodes/SoSeparator.h>
@@ -47,6 +48,13 @@ bool MainApplication::OnInit()
         }
     }
     ConstantsConfig::getInstance().initialize(cm);
+
+    // Initialize FontManager after ConfigManager
+    FontManager& fm = FontManager::getInstance();
+    if (!fm.initialize("config/config.ini")) { // Pass the path to config.ini
+        wxMessageBox("Failed to initialize font manager", "Initialization Error", wxOK | wxICON_ERROR);
+        return false;
+    }
     
     LOG_INF("Starting application", "MainApplication");
 

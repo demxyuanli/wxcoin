@@ -64,7 +64,7 @@ FlatLineEdit::~FlatLineEdit()
 
 void FlatLineEdit::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for text inputs
+    // Fluent Design System inspired colors for text inputs (based on PyQt-Fluent-Widgets)
     switch (m_lineEditStyle) {
         case LineEditStyle::DEFAULT_STYLE:
             m_backgroundColor = wxColour(255, 255, 255);  // White background
@@ -72,7 +72,7 @@ void FlatLineEdit::InitializeDefaultColors()
             m_focusedColor = wxColour(255, 255, 255);     // White when focused
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(0, 120, 215);   // Blue border when focused
+            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
             m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
             break;
             
@@ -82,7 +82,7 @@ void FlatLineEdit::InitializeDefaultColors()
             m_focusedColor = wxColour(255, 255, 255);     // White when focused
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(0, 120, 215);   // Blue border when focused
+            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
             m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
             break;
             
@@ -92,7 +92,7 @@ void FlatLineEdit::InitializeDefaultColors()
             m_focusedColor = wxColour(255, 255, 255);     // White when focused
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(0, 120, 215);   // Blue border when focused
+            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
             m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
             break;
             
@@ -102,7 +102,7 @@ void FlatLineEdit::InitializeDefaultColors()
             m_focusedColor = wxColour(255, 255, 255);     // White when focused
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(0, 120, 215);   // Blue border when focused
+            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
             m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
             break;
     }

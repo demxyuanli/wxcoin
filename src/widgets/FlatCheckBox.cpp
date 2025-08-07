@@ -50,12 +50,12 @@ FlatCheckBox::~FlatCheckBox()
 
 void FlatCheckBox::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for checkboxes
+    // Fluent Design System inspired colors for checkboxes (based on PyQt-Fluent-Widgets)
     switch (m_checkBoxStyle) {
         case CheckBoxStyle::DEFAULT_STYLE:
             m_backgroundColor = wxColour(255, 255, 255);  // White background
             m_hoverColor = wxColour(248, 248, 248);       // Very light gray on hover
-            m_checkedColor = wxColour(0, 120, 215);       // Fluent Blue when checked
+            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
             break;
@@ -63,7 +63,7 @@ void FlatCheckBox::InitializeDefaultColors()
         case CheckBoxStyle::SWITCH:
             m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
             m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(0, 120, 215);       // Fluent Blue when checked
+            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(180, 180, 180);      // Light gray border
             break;
@@ -71,7 +71,7 @@ void FlatCheckBox::InitializeDefaultColors()
         case CheckBoxStyle::RADIO:
             m_backgroundColor = wxColour(255, 255, 255);  // White background
             m_hoverColor = wxColour(248, 248, 248);       // Very light gray on hover
-            m_checkedColor = wxColour(0, 120, 215);       // Fluent Blue when checked
+            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
             m_textColor = wxColour(32, 32, 32);           // Dark gray text
             m_borderColor = wxColour(200, 200, 200);      // Light gray border
             break;
@@ -284,27 +284,58 @@ void FlatCheckBox::DrawCheckBox(wxDC& dc)
     wxColour bgColor = m_checked ? m_checkedColor : GetCurrentBackgroundColor();
     dc.SetBrush(wxBrush(bgColor));
     dc.SetPen(wxPen(GetCurrentBorderColor(), m_borderWidth));
-    DrawRoundedRectangle(dc, checkBoxRect, m_cornerRadius);
     
-    // Draw check mark if checked
-    if (m_checked) {
-        DrawCheckMark(dc, checkBoxRect);
+    if (m_checkBoxStyle == CheckBoxStyle::RADIO) {
+        // Draw radio button (circle)
+        int centerX = checkBoxRect.x + checkBoxRect.width / 2;
+        int centerY = checkBoxRect.y + checkBoxRect.height / 2;
+        int radius = wxMin(checkBoxRect.width, checkBoxRect.height) / 2 - 2;
+        
+        // Draw outer circle
+        dc.DrawCircle(centerX, centerY, radius);
+        
+        // Draw inner circle if checked
+        if (m_checked) {
+            dc.SetBrush(wxBrush(m_checkedColor));
+            dc.DrawCircle(centerX, centerY, radius - 4);
+        }
+    } else if (m_checkBoxStyle == CheckBoxStyle::SWITCH) {
+        // Draw switch
+        DrawSwitch(dc, checkBoxRect);
+    } else {
+        // Draw regular checkbox
+        DrawRoundedRectangle(dc, checkBoxRect, m_cornerRadius);
+        
+        // Draw check mark if checked
+        if (m_checked) {
+            DrawCheckMark(dc, checkBoxRect);
+        }
     }
 }
 
-void FlatCheckBox::DrawText(wxDC& dc)
+void FlatCheckBox::DrawSwitch(wxDC& dc, const wxRect& rect)
 {
-    wxRect textRect = GetTextRect();
-    if (textRect.IsEmpty() || m_label.IsEmpty()) return;
+    // Draw switch track
+    wxColour trackColor = m_checked ? m_checkedColor : wxColour(200, 200, 200);
+    dc.SetBrush(wxBrush(trackColor));
+    dc.SetPen(wxPen(trackColor));
     
-    // Set the font for drawing
-    wxFont currentFont = GetFont();
-    if (currentFont.IsOk()) {
-        dc.SetFont(currentFont);
-    }
+    int trackHeight = rect.height;
+    int trackWidth = rect.width;
+    int trackY = rect.y;
+    int trackX = rect.x;
     
-    dc.SetTextForeground(GetCurrentTextColor());
-    dc.DrawText(m_label, textRect.x, textRect.y);
+    // Draw rounded rectangle for track
+    DrawRoundedRectangle(dc, wxRect(trackX, trackY, trackWidth, trackHeight), trackHeight / 2);
+    
+    // Draw thumb
+    int thumbSize = trackHeight - 4;
+    int thumbY = trackY + 2;
+    int thumbX = m_checked ? (trackX + trackWidth - thumbSize - 2) : (trackX + 2);
+    
+    dc.SetBrush(wxBrush(wxColour(255, 255, 255)));
+    dc.SetPen(wxPen(wxColour(200, 200, 200)));
+    dc.DrawCircle(thumbX + thumbSize/2, thumbY + thumbSize/2, thumbSize/2);
 }
 
 void FlatCheckBox::DrawCheckMark(wxDC& dc, const wxRect& rect)
@@ -412,4 +443,19 @@ void FlatCheckBox::ReloadFontFromConfig()
             SetFont(defaultFont);
         }
     }
+}
+
+void FlatCheckBox::DrawText(wxDC& dc)
+{
+    wxRect textRect = GetTextRect();
+    if (textRect.IsEmpty() || m_label.IsEmpty()) return;
+    
+    // Set the font for drawing
+    wxFont currentFont = GetFont();
+    if (currentFont.IsOk()) {
+        dc.SetFont(currentFont);
+    }
+    
+    dc.SetTextForeground(GetCurrentTextColor());
+    dc.DrawText(m_label, textRect.x, textRect.y);
 }
