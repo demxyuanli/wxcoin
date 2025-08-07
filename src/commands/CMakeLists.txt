@@ -48,6 +48,7 @@ set(COMMANDS_SOURCES
     ViewTopListener.cpp
     ZoomSpeedListener.cpp
     RenderPreviewSystemListener.cpp
+    ShowFlatWidgetsExampleListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -101,6 +102,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ViewTopListener.h
     ${CMAKE_SOURCE_DIR}/include/ZoomSpeedListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderPreviewSystemListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowFlatWidgetsExampleListener.h
 )
 
 # Create command static library

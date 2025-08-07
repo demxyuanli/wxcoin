@@ -488,17 +488,11 @@ void BorderlessFrameLogic::EraseRubberBand()
 
 void BorderlessFrameLogic::OnPaint(wxPaintEvent& event)
 {
-    // Add debug logging
-    static int paintCount = 0;
-    paintCount++;
-    wxLogDebug("BorderlessFrameLogic::OnPaint called #%d", paintCount);
 
     wxAutoBufferedPaintDC dc(this);
     dc.Clear();
     wxSize sz = GetClientSize();
 
-    // Log drawing context info
-    wxLogDebug("Drawing border at size: %dx%d", sz.x, sz.y);
 
     dc.SetPen(wxPen(CFG_COLOUR("FrameBorderColor"), 1));
     dc.DrawLine(0, 0, sz.x, 0);

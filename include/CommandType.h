@@ -76,6 +76,9 @@ enum class CommandType {
     // Render Preview
     RenderPreviewSystem,
 
+    // Flat Widgets Example
+    ShowFlatWidgetsExample,
+
     // Sentinel
     Unknown
 };
@@ -138,6 +141,7 @@ inline const std::string& to_string(CommandType type) {
 
         {CommandType::HelpAbout, "HELP_ABOUT"},
         {CommandType::RenderPreviewSystem, "RENDER_PREVIEW_SYSTEM"},
+        {CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
 
         {CommandType::Unknown, "UNKNOWN"}
     };
@@ -201,7 +205,8 @@ inline CommandType from_string(const std::string& str) {
         {"TOGGLE_COORDINATE_SYSTEM", CommandType::ToggleCoordinateSystem},
 
         {"HELP_ABOUT", CommandType::HelpAbout},
-        {"RENDER_PREVIEW_SYSTEM", CommandType::RenderPreviewSystem}
+        {"RENDER_PREVIEW_SYSTEM", CommandType::RenderPreviewSystem},
+        {"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample}
     };
     auto it = kStringToEnum.find(str);
     return it == kStringToEnum.end() ? CommandType::Unknown : it->second;

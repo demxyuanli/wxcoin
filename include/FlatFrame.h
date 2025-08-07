@@ -80,7 +80,10 @@ enum {
     ID_TOGGLE_COORDINATE_SYSTEM,
 
     // Render Preview System
-    ID_RENDER_PREVIEW_SYSTEM
+    ID_RENDER_PREVIEW_SYSTEM,
+    
+    // Flat Widgets Example
+    ID_SHOW_FLAT_WIDGETS_EXAMPLE
 };
 
 class FlatFrame : public FlatUIFrame

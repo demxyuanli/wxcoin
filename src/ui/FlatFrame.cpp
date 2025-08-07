@@ -96,6 +96,8 @@
 #include "ShowSilhouetteEdgesListener.h"
 #include "renderpreview/RenderPreviewDialog.h"
 #include "RenderPreviewSystemListener.h"
+#include "ShowFlatWidgetsExampleListener.h"
+#include "widgets/FlatWidgetsExampleDialog.h"
 
 #ifdef __WXMSW__
 #define NOMINMAX
@@ -157,6 +159,7 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_LIGHTING_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(ID_EDGE_SETTINGS, FlatFrame::onCommand)
     EVT_BUTTON(ID_RENDER_PREVIEW_SYSTEM, FlatFrame::onCommand)
+    EVT_BUTTON(ID_SHOW_FLAT_WIDGETS_EXAMPLE, FlatFrame::onCommand)
     EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
     EVT_BUTTON(ID_VIEW_SHOWSILHOUETTEEDGES, FlatFrame::onCommand)
     
@@ -220,6 +223,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_RENDERING_SETTINGS, cmd::CommandType::RenderingSettings},
     {ID_EDGE_SETTINGS, cmd::CommandType::EdgeSettings},
     {ID_RENDER_PREVIEW_SYSTEM, cmd::CommandType::RenderPreviewSystem},
+    {ID_SHOW_FLAT_WIDGETS_EXAMPLE, cmd::CommandType::ShowFlatWidgetsExample},
     {wxID_ABOUT, cmd::CommandType::HelpAbout}
 };
 
@@ -540,6 +544,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     helpButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
     helpButtonBar->AddButton(wxID_ABOUT, "About", SVG_ICON("about", wxSize(16, 16)), nullptr, "Show application information");
     helpButtonBar->AddButton(ID_ShowUIHierarchy, "UI Debug", SVG_ICON("tree", wxSize(16, 16)), nullptr, "Show UI hierarchy debugger");
+    helpButtonBar->AddButton(ID_SHOW_FLAT_WIDGETS_EXAMPLE, "Flat Widgets", SVG_ICON("help", wxSize(16, 16)), nullptr, "Show Flat Widgets Example");
     // Add separator between icon buttons and text buttons
     helpButtonBar->AddSeparator();
     // Add toggle buttons to the same button bar
@@ -766,6 +771,7 @@ void FlatFrame::setupCommandSystem() {
     auto lightingSettingsListener = std::make_shared<LightingSettingsListener>(this);
     auto coordinateSystemVisibilityListener = std::make_shared<CoordinateSystemVisibilityListener>(this, m_canvas->getSceneManager());
     auto renderPreviewSystemListener = std::make_shared<RenderPreviewSystemListener>(this);
+    auto showFlatWidgetsExampleListener = std::make_shared<ShowFlatWidgetsExampleListener>(this);
     
     m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
     m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
@@ -779,6 +785,7 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::LightingSettings, lightingSettingsListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleCoordinateSystem, coordinateSystemVisibilityListener);
     m_listenerManager->registerListener(cmd::CommandType::RenderPreviewSystem, renderPreviewSystemListener);
+    m_listenerManager->registerListener(cmd::CommandType::ShowFlatWidgetsExample, showFlatWidgetsExampleListener);
     
     // Set UI feedback handler
     m_commandDispatcher->setUIFeedbackHandler(

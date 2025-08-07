@@ -48,6 +48,7 @@ target_link_libraries(CADUI PUBLIC
     CADCommands
     RenderPreview
     CADFlatUI
+    widgets
     ${wxWidgets_LIBRARIES}
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}
