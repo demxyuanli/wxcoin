@@ -1,5 +1,6 @@
 #include "widgets/FlatComboBox.h"
 #include <wx/combobox.h>
+#include "config/ThemeManager.h"
 
 wxDEFINE_EVENT(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_FLAT_COMBO_BOX_DROPDOWN_OPENED, wxCommandEvent);
@@ -45,6 +46,12 @@ FlatComboBox::FlatComboBox(wxWindow* parent, wxWindowID id, const wxString& valu
     if (size == wxDefaultSize) {
         SetInitialSize(DoGetBestSize());
     }
+
+    // Theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        InitializeDefaultColors();
+        Refresh();
+    });
 }
 
 FlatComboBox::~FlatComboBox()
@@ -53,36 +60,28 @@ FlatComboBox::~FlatComboBox()
         m_popup->Destroy();
         m_popup = nullptr;
     }
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatComboBox::InitializeDefaultColors()
 {
     switch (m_comboBoxStyle) {
         case ComboBoxStyle::DEFAULT_STYLE:
-            m_backgroundColor = wxColour(255, 255, 255);
-            m_focusedColor = wxColour(255, 255, 255);
-            m_textColor = wxColour(0, 0, 0);
-            m_borderColor = wxColour(200, 200, 200);
-            m_dropdownBackgroundColor = wxColour(255, 255, 255);
-            m_dropdownBorderColor = wxColour(200, 200, 200);
-            break;
-            
         case ComboBoxStyle::EDITABLE:
-            m_backgroundColor = wxColour(255, 255, 255);
-            m_focusedColor = wxColour(255, 255, 255);
-            m_textColor = wxColour(0, 0, 0);
-            m_borderColor = wxColour(200, 200, 200);
-            m_dropdownBackgroundColor = wxColour(255, 255, 255);
-            m_dropdownBorderColor = wxColour(200, 200, 200);
+            m_backgroundColor = CFG_COLOUR("SecondaryBackgroundColour");
+            m_focusedColor = CFG_COLOUR("SecondaryBackgroundColour");
+            m_textColor = CFG_COLOUR("PrimaryTextColour");
+            m_borderColor = CFG_COLOUR("ButtonBorderColour");
+            m_dropdownBackgroundColor = CFG_COLOUR("PanelBgColour");
+            m_dropdownBorderColor = CFG_COLOUR("PanelBorderColour");
             break;
-            
         case ComboBoxStyle::SEARCH:
-            m_backgroundColor = wxColour(240, 240, 240);
-            m_focusedColor = wxColour(255, 255, 255);
-            m_textColor = wxColour(0, 0, 0);
-            m_borderColor = wxColour(200, 200, 200);
-            m_dropdownBackgroundColor = wxColour(255, 255, 255);
-            m_dropdownBorderColor = wxColour(200, 200, 200);
+            m_backgroundColor = CFG_COLOUR("SecondaryBackgroundColour");
+            m_focusedColor = CFG_COLOUR("SecondaryBackgroundColour");
+            m_textColor = CFG_COLOUR("PrimaryTextColour");
+            m_borderColor = CFG_COLOUR("ButtonBorderColour");
+            m_dropdownBackgroundColor = CFG_COLOUR("PanelBgColour");
+            m_dropdownBorderColor = CFG_COLOUR("PanelBorderColour");
             break;
     }
 }
@@ -465,14 +464,22 @@ void FlatComboBox::HideDropdown()
 
 wxString FlatComboBox::GetValue() const
 {
-    // Return the current value - this would need to be implemented based on the actual data structure
-    return wxEmptyString; // Placeholder implementation
+    return m_value;
 }
 
 void FlatComboBox::SetValue(const wxString& value)
 {
-    // Set the current value - this would need to be implemented based on the actual data structure
-    this->Refresh();
+    if (m_value != value) {
+        m_value = value;
+        // Try auto-select matching item
+        for (size_t i = 0; i < m_items.size(); ++i) {
+            if (m_items[i].text == value) {
+                m_selection = static_cast<int>(i);
+                break;
+            }
+        }
+        this->Refresh();
+    }
 }
 
 void FlatComboBox::OnSelectionChanged(wxCommandEvent& event)

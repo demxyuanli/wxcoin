@@ -1,5 +1,6 @@
 #include "widgets/FlatProgressBar.h"
 #include <wx/dcclient.h>
+#include "config/ThemeManager.h"
 
 wxDEFINE_EVENT(wxEVT_FLAT_PROGRESS_BAR_VALUE_CHANGED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_FLAT_PROGRESS_BAR_COMPLETED, wxCommandEvent);
@@ -34,37 +35,26 @@ FlatProgressBar::FlatProgressBar(wxWindow* parent, wxWindowID id, int value, int
     if (size == wxDefaultSize) {
         SetInitialSize(DoGetBestSize());
     }
+
+    // Theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        InitializeDefaultColors();
+        Refresh();
+    });
 }
 
 FlatProgressBar::~FlatProgressBar()
 {
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatProgressBar::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for progress bars (based on PyQt-Fluent-Widgets)
-    switch (m_progressBarStyle) {
-        case ProgressBarStyle::DEFAULT_STYLE:
-            m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_progressColor = wxColour(32, 167, 232);      // Fluent Blue
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            break;
-            
-        case ProgressBarStyle::INDETERMINATE:
-            m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_progressColor = wxColour(32, 167, 232);      // Fluent Blue
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            break;
-            
-        case ProgressBarStyle::STRIPED:
-            m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_progressColor = wxColour(32, 167, 232);      // Fluent Blue
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            break;
-    }
+    // Theme-based colors
+    m_backgroundColor = CFG_COLOUR("SecondaryBackgroundColour");
+    m_progressColor = CFG_COLOUR("AccentColour");
+    m_textColor = CFG_COLOUR("PrimaryTextColour");
+    m_borderColor = CFG_COLOUR("ButtonBorderColour");
 }
 
 void FlatProgressBar::SetProgressBarStyle(ProgressBarStyle style)

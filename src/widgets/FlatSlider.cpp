@@ -1,5 +1,6 @@
 #include "widgets/FlatSlider.h"
 #include <wx/slider.h>
+#include "config/ThemeManager.h"
 
 wxDEFINE_EVENT(wxEVT_FLAT_SLIDER_VALUE_CHANGED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_FLAT_SLIDER_THUMB_DRAGGED, wxCommandEvent);
@@ -38,43 +39,28 @@ FlatSlider::FlatSlider(wxWindow* parent, wxWindowID id, int value, int minValue,
     if (size == wxDefaultSize) {
         SetInitialSize(DoGetBestSize());
     }
+
+    // Theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        InitializeDefaultColors();
+        Refresh();
+    });
 }
 
 FlatSlider::~FlatSlider()
 {
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatSlider::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for sliders (based on PyQt-Fluent-Widgets)
-    switch (m_sliderStyle) {
-        case SliderStyle::NORMAL:
-            m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_hoverColor = wxColour(235, 235, 235);       // Slightly darker on hover
-            m_progressColor = wxColour(200, 200, 200);    // Medium gray track
-            m_thumbColor = wxColour(32, 167, 232);         // Fluent Blue thumb
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(180, 180, 180);      // Light gray border
-            break;
-            
-        case SliderStyle::PROGRESS:
-            m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_hoverColor = wxColour(235, 235, 235);       // Slightly darker on hover
-            m_progressColor = wxColour(200, 200, 200);    // Medium gray track
-            m_thumbColor = wxColour(32, 167, 232);         // Fluent Blue thumb
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(180, 180, 180);      // Light gray border
-            break;
-            
-        case SliderStyle::VERTICAL:
-            m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_hoverColor = wxColour(235, 235, 235);       // Slightly darker on hover
-            m_progressColor = wxColour(200, 200, 200);    // Medium gray track
-            m_thumbColor = wxColour(32, 167, 232);         // Fluent Blue thumb
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(180, 180, 180);      // Light gray border
-            break;
-    }
+    // Theme-based colors
+    m_backgroundColor = CFG_COLOUR("SecondaryBackgroundColour");
+    m_hoverColor = CFG_COLOUR("HomespaceHoverBgColour");
+    m_progressColor = CFG_COLOUR("ButtonbarDefaultPressedBgColour");
+    m_thumbColor = CFG_COLOUR("AccentColour");
+    m_textColor = CFG_COLOUR("PrimaryTextColour");
+    m_borderColor = CFG_COLOUR("ButtonBorderColour");
 }
 
 void FlatSlider::SetSliderStyle(SliderStyle style)

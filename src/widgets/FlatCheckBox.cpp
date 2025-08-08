@@ -1,23 +1,27 @@
 #include "widgets/FlatCheckBox.h"
 #include <wx/checkbox.h>
 #include "config/FontManager.h"
+#include <wx/graphics.h>
+#include "config/ThemeManager.h"
 
 wxDEFINE_EVENT(wxEVT_FLAT_CHECK_BOX_CLICKED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, wxCommandEvent);
 
 BEGIN_EVENT_TABLE(FlatCheckBox, wxControl)
-    EVT_PAINT(FlatCheckBox::OnPaint)
-    EVT_SIZE(FlatCheckBox::OnSize)
-    EVT_LEFT_DOWN(FlatCheckBox::OnMouseDown)
-    EVT_MOTION(FlatCheckBox::OnMouseMove)
-    EVT_LEAVE_WINDOW(FlatCheckBox::OnMouseLeave)
-    EVT_ENTER_WINDOW(FlatCheckBox::OnMouseEnter)
-    EVT_SET_FOCUS(FlatCheckBox::OnFocus)
-    EVT_KILL_FOCUS(FlatCheckBox::OnKillFocus)
+EVT_PAINT(FlatCheckBox::OnPaint)
+EVT_SIZE(FlatCheckBox::OnSize)
+EVT_LEFT_DOWN(FlatCheckBox::OnMouseDown)
+EVT_LEFT_UP(FlatCheckBox::OnMouseUp)
+EVT_MOTION(FlatCheckBox::OnMouseMove)
+EVT_LEAVE_WINDOW(FlatCheckBox::OnMouseLeave)
+EVT_ENTER_WINDOW(FlatCheckBox::OnMouseEnter)
+EVT_KEY_UP(FlatCheckBox::OnKeyUp)
+EVT_SET_FOCUS(FlatCheckBox::OnFocus)
+EVT_KILL_FOCUS(FlatCheckBox::OnKillFocus)
 END_EVENT_TABLE()
 
 FlatCheckBox::FlatCheckBox(wxWindow* parent, wxWindowID id, const wxString& label,
-                           const wxPoint& pos, const wxSize& size, CheckBoxStyle style, long style_flags)
+    const wxPoint& pos, const wxSize& size, CheckBoxStyle style, long style_flags)
     : wxControl(parent, id, pos, size, style_flags | wxBORDER_NONE)
     , m_label(label)
     , m_checkBoxStyle(style)
@@ -34,14 +38,20 @@ FlatCheckBox::FlatCheckBox(wxWindow* parent, wxWindowID id, const wxString& labe
 {
     // Initialize default colors based on style
     InitializeDefaultColors();
-    
+
     // Initialize font from configuration
     ReloadFontFromConfig();
-    
+
     // Set default size if not specified
     if (size == wxDefaultSize) {
         SetInitialSize(DoGetBestSize());
     }
+
+    // Add a theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        InitializeDefaultColors();
+        Refresh();
+        });
 }
 
 FlatCheckBox::~FlatCheckBox()
@@ -50,32 +60,13 @@ FlatCheckBox::~FlatCheckBox()
 
 void FlatCheckBox::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for checkboxes (based on PyQt-Fluent-Widgets)
-    switch (m_checkBoxStyle) {
-        case CheckBoxStyle::DEFAULT_STYLE:
-            m_backgroundColor = wxColour(255, 255, 255);  // White background
-            m_hoverColor = wxColour(248, 248, 248);       // Very light gray on hover
-            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            break;
-            
-        case CheckBoxStyle::SWITCH:
-            m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
-            m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(180, 180, 180);      // Light gray border
-            break;
-            
-        case CheckBoxStyle::RADIO:
-            m_backgroundColor = wxColour(255, 255, 255);  // White background
-            m_hoverColor = wxColour(248, 248, 248);       // Very light gray on hover
-            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            break;
-    }
+    // Fluent Design System inspired colors from ThemeManager
+    m_backgroundColor = CFG_COLOUR("SecondaryBackgroundColour");
+    m_hoverColor = CFG_COLOUR("HomespaceHoverBgColour");
+    m_checkedColor = CFG_COLOUR("AccentColour");
+    m_textColor = CFG_COLOUR("PrimaryTextColour");
+    m_borderColor = CFG_COLOUR("ButtonBorderColour");
+    m_disabledColor = CFG_COLOUR("PanelDisabledBgColour");
 }
 
 void FlatCheckBox::SetCheckBoxStyle(CheckBoxStyle style)
@@ -158,23 +149,27 @@ wxSize FlatCheckBox::DoGetBestSize() const
     wxSize textSize = GetTextExtent(m_label);
     int width = m_checkBoxSize.GetWidth() + m_labelSpacing + textSize.GetWidth() + 2 * m_borderWidth;
     int height = wxMax(m_checkBoxSize.GetHeight(), textSize.GetHeight()) + 2 * m_borderWidth;
-    
+
     return wxSize(width, height);
 }
 
 void FlatCheckBox::OnPaint(wxPaintEvent& event)
 {
     wxPaintDC dc(this);
-    wxRect rect = this->GetClientRect();
-    
-    // Draw background
-    DrawBackground(dc);
-    
-    // Draw checkbox
-    DrawCheckBox(dc);
-    
-    // Draw text
-    DrawText(dc);
+    wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+
+    if (gc) {
+        // Draw background
+        DrawBackground(*gc);
+
+        // Draw checkbox
+        DrawCheckBox(*gc);
+
+        // Draw text
+        DrawText(*gc);
+
+        delete gc;
+    }
 }
 
 void FlatCheckBox::OnSize(wxSizeEvent& event)
@@ -189,7 +184,7 @@ void FlatCheckBox::OnMouseDown(wxMouseEvent& event)
         event.Skip();
         return;
     }
-    
+
     m_isPressed = true;
     this->SetFocus();
     this->Refresh();
@@ -202,14 +197,14 @@ void FlatCheckBox::OnMouseMove(wxMouseEvent& event)
         event.Skip();
         return;
     }
-    
+
     bool wasHovered = m_isHovered;
     m_isHovered = true;
-    
+
     if (!wasHovered) {
         this->Refresh();
     }
-    
+
     event.Skip();
 }
 
@@ -219,7 +214,7 @@ void FlatCheckBox::OnMouseLeave(wxMouseEvent& event)
         event.Skip();
         return;
     }
-    
+
     m_isHovered = false;
     this->Refresh();
     event.Skip();
@@ -231,7 +226,7 @@ void FlatCheckBox::OnMouseEnter(wxMouseEvent& event)
         event.Skip();
         return;
     }
-    
+
     m_isHovered = true;
     this->Refresh();
     event.Skip();
@@ -243,7 +238,7 @@ void FlatCheckBox::OnFocus(wxFocusEvent& event)
         event.Skip();
         return;
     }
-    
+
     m_hasFocus = true;
     UpdateState(CheckBoxState::HOVERED);
     this->Refresh();
@@ -256,7 +251,7 @@ void FlatCheckBox::OnKillFocus(wxFocusEvent& event)
         event.Skip();
         return;
     }
-    
+
     m_hasFocus = false;
     m_isPressed = false;
     UpdateState(CheckBoxState::UNCHECKED);
@@ -264,100 +259,159 @@ void FlatCheckBox::OnKillFocus(wxFocusEvent& event)
     event.Skip();
 }
 
+void FlatCheckBox::OnMouseUp(wxMouseEvent& event)
+{
+    if (!m_enabled || !m_isPressed) return;
+    m_isPressed = false;
+
+    wxPoint mousePos = event.GetPosition();
+    if (GetClientRect().Contains(mousePos)) {
+        ToggleValue();
+        SendCheckBoxEvent();
+    }
+    Refresh();
+}
+
+void FlatCheckBox::OnKeyUp(wxKeyEvent& event)
+{
+    if (!m_enabled) return;
+    if (event.GetKeyCode() == WXK_SPACE) {
+        ToggleValue();
+        SendCheckBoxEvent();
+    }
+    event.Skip();
+}
+
+void FlatCheckBox::ToggleValue()
+{
+    if (m_triState) {
+        // In tri-state, cycle through unchecked -> checked -> partially checked
+        if (m_partiallyChecked) {
+            m_partiallyChecked = false;
+            m_checked = false;
+        }
+        else if (m_checked) {
+            m_partiallyChecked = true;
+            m_checked = true;
+        }
+        else {
+            m_checked = true;
+        }
+    }
+    else {
+        m_checked = !m_checked;
+    }
+    Refresh();
+}
+
+void FlatCheckBox::SendCheckBoxEvent()
+{
+    wxCommandEvent event(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, GetId());
+    event.SetEventObject(this);
+    event.SetInt(m_checked ? (m_partiallyChecked ? wxCHK_UNDETERMINED : wxCHK_CHECKED) : wxCHK_UNCHECKED);
+    ProcessWindowEvent(event);
+}
+
 // Helper functions
-void FlatCheckBox::DrawBackground(wxDC& dc)
+void FlatCheckBox::DrawBackground(wxGraphicsContext& gc)
 {
     wxRect rect = this->GetClientRect();
     wxColour bgColor = GetCurrentBackgroundColor();
-    
-    dc.SetBrush(wxBrush(bgColor));
-    dc.SetPen(wxPen(bgColor));
-    DrawRoundedRectangle(dc, rect, m_cornerRadius);
+
+    gc.SetBrush(wxBrush(bgColor));
+    gc.SetPen(wxPen(bgColor));
+    DrawRoundedRectangle(gc, rect, m_cornerRadius);
 }
 
-void FlatCheckBox::DrawCheckBox(wxDC& dc)
+void FlatCheckBox::DrawCheckBox(wxGraphicsContext& gc)
 {
     wxRect checkBoxRect = GetCheckBoxRect();
     if (checkBoxRect.IsEmpty()) return;
-    
+
     // Draw checkbox background
     wxColour bgColor = m_checked ? m_checkedColor : GetCurrentBackgroundColor();
-    dc.SetBrush(wxBrush(bgColor));
-    dc.SetPen(wxPen(GetCurrentBorderColor(), m_borderWidth));
-    
+    gc.SetBrush(wxBrush(bgColor));
+    gc.SetPen(wxPen(GetCurrentBorderColor(), m_borderWidth));
+
     if (m_checkBoxStyle == CheckBoxStyle::RADIO) {
         // Draw radio button (circle)
         int centerX = checkBoxRect.x + checkBoxRect.width / 2;
         int centerY = checkBoxRect.y + checkBoxRect.height / 2;
         int radius = wxMin(checkBoxRect.width, checkBoxRect.height) / 2 - 2;
-        
+
         // Draw outer circle
-        dc.DrawCircle(centerX, centerY, radius);
-        
+        gc.DrawEllipse(centerX - radius, centerY - radius, 2 * radius, 2 * radius);
+
         // Draw inner circle if checked
         if (m_checked) {
-            dc.SetBrush(wxBrush(m_checkedColor));
-            dc.DrawCircle(centerX, centerY, radius - 4);
+            gc.SetBrush(wxBrush(m_checkedColor));
+            gc.DrawEllipse(centerX - (radius - 4), centerY - (radius - 4), 2 * (radius - 4), 2 * (radius - 4));
         }
-    } else if (m_checkBoxStyle == CheckBoxStyle::SWITCH) {
+    }
+    else if (m_checkBoxStyle == CheckBoxStyle::SWITCH) {
         // Draw switch
-        DrawSwitch(dc, checkBoxRect);
-    } else {
+        DrawSwitch(gc, checkBoxRect);
+    }
+    else {
         // Draw regular checkbox
-        DrawRoundedRectangle(dc, checkBoxRect, m_cornerRadius);
-        
+        DrawRoundedRectangle(gc, checkBoxRect, m_cornerRadius);
+
         // Draw check mark if checked
         if (m_checked) {
-            DrawCheckMark(dc, checkBoxRect);
+            DrawCheckMark(gc, checkBoxRect);
         }
     }
 }
 
-void FlatCheckBox::DrawSwitch(wxDC& dc, const wxRect& rect)
+void FlatCheckBox::DrawSwitch(wxGraphicsContext& gc, const wxRect& rect)
 {
     // Draw switch track
     wxColour trackColor = m_checked ? m_checkedColor : wxColour(200, 200, 200);
-    dc.SetBrush(wxBrush(trackColor));
-    dc.SetPen(wxPen(trackColor));
-    
+    gc.SetBrush(wxBrush(trackColor));
+    gc.SetPen(wxPen(trackColor));
+
     int trackHeight = rect.height;
     int trackWidth = rect.width;
     int trackY = rect.y;
     int trackX = rect.x;
-    
+
     // Draw rounded rectangle for track
-    DrawRoundedRectangle(dc, wxRect(trackX, trackY, trackWidth, trackHeight), trackHeight / 2);
-    
+    DrawRoundedRectangle(gc, wxRect(trackX, trackY, trackWidth, trackHeight), trackHeight / 2);
+
     // Draw thumb
     int thumbSize = trackHeight - 4;
     int thumbY = trackY + 2;
     int thumbX = m_checked ? (trackX + trackWidth - thumbSize - 2) : (trackX + 2);
-    
-    dc.SetBrush(wxBrush(wxColour(255, 255, 255)));
-    dc.SetPen(wxPen(wxColour(200, 200, 200)));
-    dc.DrawCircle(thumbX + thumbSize/2, thumbY + thumbSize/2, thumbSize/2);
+
+    gc.SetBrush(wxBrush(wxColour(255, 255, 255)));
+    gc.SetPen(wxPen(wxColour(200, 200, 200)));
+    gc.DrawEllipse(thumbX, thumbY, thumbSize, thumbSize);
 }
 
-void FlatCheckBox::DrawCheckMark(wxDC& dc, const wxRect& rect)
+void FlatCheckBox::DrawCheckMark(wxGraphicsContext& gc, const wxRect& rect)
 {
-    dc.SetPen(wxPen(wxColour(255, 255, 255), 2));
-    
+    gc.SetPen(wxPen(wxColour(255, 255, 255), 2));
+
     int centerX = rect.x + rect.width / 2;
     int centerY = rect.y + rect.height / 2;
     int size = wxMin(rect.width, rect.height) / 4;
-    
+
     // Draw check mark
-    wxPoint points[3];
-    points[0] = wxPoint(centerX - size, centerY);
-    points[1] = wxPoint(centerX - size/2, centerY + size/2);
-    points[2] = wxPoint(centerX + size, centerY - size/2);
-    
-    dc.DrawLines(3, points);
+    wxPoint2DDouble points[3];
+    points[0] = wxPoint2DDouble(centerX - size, centerY);
+    points[1] = wxPoint2DDouble(centerX - size / 2, centerY + size / 2);
+    points[2] = wxPoint2DDouble(centerX + size, centerY - size / 2);
+
+    gc.StrokeLines(3, points);
 }
 
-void FlatCheckBox::DrawRoundedRectangle(wxDC& dc, const wxRect& rect, int radius)
+void FlatCheckBox::DrawRoundedRectangle(wxGraphicsContext& gc, const wxRect& rect, int radius)
 {
-    dc.DrawRoundedRectangle(rect, radius);
+    if (radius <= 0) {
+        gc.DrawRectangle(rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight());
+        return;
+    }
+    gc.DrawRoundedRectangle(rect.GetX(), rect.GetY(), rect.GetWidth(), rect.GetHeight(), radius);
 }
 
 void FlatCheckBox::UpdateState(CheckBoxState newState)
@@ -380,7 +434,7 @@ wxRect FlatCheckBox::GetTextRect() const
 {
     wxRect clientRect = this->GetClientRect();
     wxRect checkBoxRect = GetCheckBoxRect();
-    
+
     return wxRect(
         checkBoxRect.x + checkBoxRect.width + m_labelSpacing,
         (clientRect.height - GetTextExtent(m_label).GetHeight()) / 2,
@@ -437,7 +491,8 @@ void FlatCheckBox::ReloadFontFromConfig()
                 InvalidateBestSize();
                 Refresh();
             }
-        } catch (...) {
+        }
+        catch (...) {
             // If font manager is not available, use default font
             wxFont defaultFont = wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT);
             SetFont(defaultFont);
@@ -445,17 +500,19 @@ void FlatCheckBox::ReloadFontFromConfig()
     }
 }
 
-void FlatCheckBox::DrawText(wxDC& dc)
+void FlatCheckBox::DrawText(wxGraphicsContext& gc)
 {
     wxRect textRect = GetTextRect();
     if (textRect.IsEmpty() || m_label.IsEmpty()) return;
-    
+
     // Set the font for drawing
     wxFont currentFont = GetFont();
     if (currentFont.IsOk()) {
-        dc.SetFont(currentFont);
+        gc.SetFont(currentFont, GetCurrentTextColor());
     }
-    
-    dc.SetTextForeground(GetCurrentTextColor());
-    dc.DrawText(m_label, textRect.x, textRect.y);
+    else {
+        gc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT), GetCurrentTextColor());
+    }
+
+    gc.DrawText(m_label, textRect.x, textRect.y);
 }

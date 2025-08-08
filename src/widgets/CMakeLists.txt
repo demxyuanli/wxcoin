@@ -6,6 +6,7 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatSlider.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatProgressBar.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatSwitch.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatRadioButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsExample.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsExampleDialog.cpp
 )
@@ -18,6 +19,7 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatSlider.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatProgressBar.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatSwitch.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/FlatRadioButton.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsExample.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsExampleDialog.h
 )

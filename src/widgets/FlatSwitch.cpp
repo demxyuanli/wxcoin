@@ -1,5 +1,6 @@
 #include "widgets/FlatSwitch.h"
 #include <wx/dcclient.h>
+#include "config/ThemeManager.h"
 
 wxDEFINE_EVENT(wxEVT_FLAT_SWITCH_TOGGLED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_FLAT_SWITCH_STATE_CHANGED, wxCommandEvent);
@@ -36,43 +37,28 @@ FlatSwitch::FlatSwitch(wxWindow* parent, wxWindowID id, bool value,
     if (size == wxDefaultSize) {
         SetInitialSize(DoGetBestSize());
     }
+
+    // Theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        InitializeDefaultColors();
+        Refresh();
+    });
 }
 
 FlatSwitch::~FlatSwitch()
 {
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatSwitch::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for switches (based on PyQt-Fluent-Widgets)
-    switch (m_switchStyle) {
-        case SwitchStyle::DEFAULT_STYLE:
-            m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
-            m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
-            m_thumbColor = wxColour(255, 255, 255);       // White thumb
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(180, 180, 180);      // Light gray border
-            break;
-            
-        case SwitchStyle::ROUND:
-            m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
-            m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
-            m_thumbColor = wxColour(255, 255, 255);       // White thumb
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(180, 180, 180);      // Light gray border
-            break;
-            
-        case SwitchStyle::SQUARE:
-            m_backgroundColor = wxColour(200, 200, 200);  // Light gray when unchecked
-            m_hoverColor = wxColour(190, 190, 190);       // Slightly darker on hover
-            m_checkedColor = wxColour(32, 167, 232);       // Fluent Blue when checked
-            m_thumbColor = wxColour(255, 255, 255);       // White thumb
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(180, 180, 180);      // Light gray border
-            break;
-    }
+    // Theme-based colors
+    m_backgroundColor = CFG_COLOUR("PanelDisabledBgColour");
+    m_hoverColor = CFG_COLOUR("HomespaceHoverBgColour");
+    m_checkedColor = CFG_COLOUR("AccentColour");
+    m_thumbColor = CFG_COLOUR("SecondaryBackgroundColour");
+    m_textColor = CFG_COLOUR("PrimaryTextColour");
+    m_borderColor = CFG_COLOUR("ButtonBorderColour");
 }
 
 void FlatSwitch::SetSwitchStyle(SwitchStyle style)

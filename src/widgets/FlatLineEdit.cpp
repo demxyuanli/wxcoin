@@ -1,6 +1,7 @@
 #include "widgets/FlatLineEdit.h"
 #include <wx/textctrl.h>
 #include "config/FontManager.h"
+#include "config/ThemeManager.h"
 
 wxDEFINE_EVENT(wxEVT_FLAT_LINE_EDIT_TEXT_CHANGED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_FLAT_LINE_EDIT_FOCUS_GAINED, wxCommandEvent);
@@ -56,60 +57,32 @@ FlatLineEdit::FlatLineEdit(wxWindow* parent, wxWindowID id, const wxString& valu
     if (size == wxDefaultSize) {
         SetInitialSize(DoGetBestSize());
     }
+
+    // Theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        InitializeDefaultColors();
+        Refresh();
+    });
 }
 
 FlatLineEdit::~FlatLineEdit()
 {
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatLineEdit::InitializeDefaultColors()
 {
-    // Fluent Design System inspired colors for text inputs (based on PyQt-Fluent-Widgets)
-    switch (m_lineEditStyle) {
-        case LineEditStyle::DEFAULT_STYLE:
-            m_backgroundColor = wxColour(255, 255, 255);  // White background
-            m_hoverColor = wxColour(248, 248, 248);       // Very light gray on hover
-            m_focusedColor = wxColour(255, 255, 255);     // White when focused
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
-            m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
-            break;
-            
-        case LineEditStyle::SEARCH:
-            m_backgroundColor = wxColour(243, 243, 243);  // Light gray background
-            m_hoverColor = wxColour(235, 235, 235);       // Slightly darker on hover
-            m_focusedColor = wxColour(255, 255, 255);     // White when focused
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
-            m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
-            break;
-            
-        case LineEditStyle::PASSWORD:
-            m_backgroundColor = wxColour(255, 255, 255);  // White background
-            m_hoverColor = wxColour(248, 248, 248);       // Very light gray on hover
-            m_focusedColor = wxColour(255, 255, 255);     // White when focused
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
-            m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
-            break;
-            
-        case LineEditStyle::CLEARABLE:
-            m_backgroundColor = wxColour(255, 255, 255);  // White background
-            m_hoverColor = wxColour(248, 248, 248);       // Very light gray on hover
-            m_focusedColor = wxColour(255, 255, 255);     // White when focused
-            m_textColor = wxColour(32, 32, 32);           // Dark gray text
-            m_borderColor = wxColour(200, 200, 200);      // Light gray border
-            m_focusBorderColor = wxColour(32, 167, 232);   // Blue border when focused
-            m_placeholderColor = wxColour(128, 128, 128); // Medium gray placeholder
-            break;
-    }
-    
+    // Fluent Design System inspired colors using ThemeManager
+    m_backgroundColor = CFG_COLOUR("TextCtrlBgColour");
+    m_hoverColor = CFG_COLOUR("HomespaceHoverBgColour");
+    m_focusedColor = CFG_COLOUR("TextCtrlBgColour");
+    m_textColor = CFG_COLOUR("PrimaryTextColour");
+    m_borderColor = CFG_COLOUR("ButtonBorderColour");
+    m_focusBorderColor = CFG_COLOUR("AccentColour");
+    m_placeholderColor = CFG_COLOUR("PlaceholderTextColour");
     // Error state colors
-    m_errorColor = wxColour(232, 17, 35);  // Fluent Design error red
-    m_errorBorderColor = wxColour(232, 17, 35);
+    m_errorColor = CFG_COLOUR("ErrorTextColour");
+    m_errorBorderColor = CFG_COLOUR("ErrorTextColour");
 }
 
 void FlatLineEdit::SetPlaceholderText(const wxString& placeholder)
