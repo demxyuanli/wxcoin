@@ -100,7 +100,7 @@ void ObjectSettingsPanel::createUI()
     buttonSizer->Add(m_objectAutoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 4);
     
     // Apply button
-    m_objectApplyButton = new wxButton(this, wxID_APPLY, wxT("Apply"));
+    m_objectApplyButton = new wxButton(this, wxID_APPLY, wxT("Preview"));
     m_objectApplyButton->Bind(wxEVT_BUTTON, &ObjectSettingsPanel::OnObjectApply, this);
     buttonSizer->Add(m_objectApplyButton, 0, wxALL, 2);
     
@@ -113,16 +113,6 @@ void ObjectSettingsPanel::createUI()
     m_objectResetButton = new wxButton(this, wxID_RESET, wxT("Reset"));
     m_objectResetButton->Bind(wxEVT_BUTTON, &ObjectSettingsPanel::OnObjectReset, this);
     buttonSizer->Add(m_objectResetButton, 0, wxALL, 2);
-    
-    // Undo button
-    m_objectUndoButton = new wxButton(this, wxID_UNDO, wxT("Undo"));
-    m_objectUndoButton->Bind(wxEVT_BUTTON, &ObjectSettingsPanel::OnObjectUndo, this);
-    buttonSizer->Add(m_objectUndoButton, 0, wxALL, 2);
-    
-    // Redo button
-    m_objectRedoButton = new wxButton(this, wxID_REDO, wxT("Redo"));
-    m_objectRedoButton->Bind(wxEVT_BUTTON, &ObjectSettingsPanel::OnObjectRedo, this);
-    buttonSizer->Add(m_objectRedoButton, 0, wxALL, 2);
     
     mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
     
@@ -1514,20 +1504,6 @@ void ObjectSettingsPanel::OnObjectReset(wxCommandEvent& event)
     LOG_INF_S("ObjectSettingsPanel::OnObjectReset: Object settings reset");
 }
 
-void ObjectSettingsPanel::OnObjectUndo(wxCommandEvent& event)
-{
-    // TODO: Implement undo functionality for object settings
-    wxMessageBox(wxT("Object Undo: Not implemented yet"), wxT("Undo Object"), wxOK | wxICON_INFORMATION);
-    LOG_INF_S("ObjectSettingsPanel::OnObjectUndo: Object undo requested");
-}
-
-void ObjectSettingsPanel::OnObjectRedo(wxCommandEvent& event)
-{
-    // TODO: Implement redo functionality for object settings
-    wxMessageBox(wxT("Object Redo: Not implemented yet"), wxT("Redo Object"), wxOK | wxICON_INFORMATION);
-    LOG_INF_S("ObjectSettingsPanel::OnObjectRedo: Object redo requested");
-}
-
 void ObjectSettingsPanel::OnObjectAutoApply(wxCommandEvent& event)
 {
     m_autoApplyEnabled = event.IsChecked();
@@ -1562,12 +1538,6 @@ void ObjectSettingsPanel::applySpecificFonts()
     }
     if (m_objectResetButton) {
         m_objectResetButton->SetFont(fontManager.getButtonFont());
-    }
-    if (m_objectUndoButton) {
-        m_objectUndoButton->SetFont(fontManager.getButtonFont());
-    }
-    if (m_objectRedoButton) {
-        m_objectRedoButton->SetFont(fontManager.getButtonFont());
     }
     if (m_textureFileButton) {
         m_textureFileButton->SetFont(fontManager.getButtonFont());

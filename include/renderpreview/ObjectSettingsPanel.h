@@ -66,8 +66,6 @@ public:
     void OnObjectApply(wxCommandEvent& event);
     void OnObjectSave(wxCommandEvent& event);
     void OnObjectReset(wxCommandEvent& event);
-    void OnObjectUndo(wxCommandEvent& event);
-    void OnObjectRedo(wxCommandEvent& event);
     void OnObjectAutoApply(wxCommandEvent& event);
     
     // Helper methods

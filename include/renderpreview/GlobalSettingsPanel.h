@@ -60,10 +60,9 @@ public:
     void markAsSaved();
 
     void OnGlobalApply(wxCommandEvent& event);
+    void OnMainApply(wxCommandEvent& event);
     void OnGlobalSave(wxCommandEvent& event);
     void OnGlobalReset(wxCommandEvent& event);
-    void OnGlobalUndo(wxCommandEvent& event);
-    void OnGlobalRedo(wxCommandEvent& event);
     void OnGlobalAutoApply(wxCommandEvent& event);
 
     void validatePresets();
@@ -86,10 +85,9 @@ private:
     BackgroundStylePanel* m_backgroundStylePanel;
 
     wxButton* m_globalApplyButton;
+    wxButton* m_mainApplyButton;
     wxButton* m_globalSaveButton;
     wxButton* m_globalResetButton;
-    wxButton* m_globalUndoButton;
-    wxButton* m_globalRedoButton;
     wxCheckBox* m_globalAutoApplyCheckBox;
 
     AntiAliasingManager* m_antiAliasingManager;

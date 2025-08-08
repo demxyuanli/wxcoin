@@ -81,8 +81,11 @@ void GlobalSettingsPanel::createUI()
     m_globalAutoApplyCheckBox = new wxCheckBox(this, wxID_ANY, wxT("Auto"));
     buttonSizer->Add(m_globalAutoApplyCheckBox, 0, wxALL | wxALIGN_CENTER_VERTICAL, 4);
     
-    m_globalApplyButton = new wxButton(this, wxID_APPLY, wxT("Apply"));
+    m_globalApplyButton = new wxButton(this, wxID_APPLY, wxT("Preview"));
     buttonSizer->Add(m_globalApplyButton, 0, wxALL, 4);
+
+    m_mainApplyButton = new wxButton(this, wxID_ANY, wxT("Main Apply"));
+    buttonSizer->Add(m_mainApplyButton, 0, wxALL, 4);
     
     m_globalSaveButton = new wxButton(this, wxID_SAVE, wxT("Save"));
     buttonSizer->Add(m_globalSaveButton, 0, wxALL, 4);
@@ -90,11 +93,7 @@ void GlobalSettingsPanel::createUI()
     m_globalResetButton = new wxButton(this, wxID_RESET, wxT("Reset"));
     buttonSizer->Add(m_globalResetButton, 0, wxALL, 4);
     
-    m_globalUndoButton = new wxButton(this, wxID_UNDO, wxT("Undo"));
-    buttonSizer->Add(m_globalUndoButton, 0, wxALL, 4);
-    
-    m_globalRedoButton = new wxButton(this, wxID_REDO, wxT("Redo"));
-    buttonSizer->Add(m_globalRedoButton, 0, wxALL, 4);
+    // Removed Undo/Redo buttons
     
     mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 4);
     
@@ -112,10 +111,9 @@ void GlobalSettingsPanel::bindEvents()
 {
     m_globalAutoApplyCheckBox->Bind(wxEVT_CHECKBOX, &GlobalSettingsPanel::OnGlobalAutoApply, this);
     m_globalApplyButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalApply, this);
+    m_mainApplyButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnMainApply, this);
     m_globalSaveButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalSave, this);
     m_globalResetButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalReset, this);
-    m_globalUndoButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalUndo, this);
-    m_globalRedoButton->Bind(wxEVT_BUTTON, &GlobalSettingsPanel::OnGlobalRedo, this);
 }
 
 void GlobalSettingsPanel::applySpecificFonts()
@@ -126,8 +124,7 @@ void GlobalSettingsPanel::applySpecificFonts()
     if (m_globalApplyButton) m_globalApplyButton->SetFont(fontManager.getButtonFont());
     if (m_globalSaveButton) m_globalSaveButton->SetFont(fontManager.getButtonFont());
     if (m_globalResetButton) m_globalResetButton->SetFont(fontManager.getButtonFont());
-    if (m_globalUndoButton) m_globalUndoButton->SetFont(fontManager.getButtonFont());
-    if (m_globalRedoButton) m_globalRedoButton->SetFont(fontManager.getButtonFont());
+    if (m_mainApplyButton) m_mainApplyButton->SetFont(fontManager.getButtonFont());
     
     // Apply fonts to checkbox
     if (m_globalAutoApplyCheckBox) m_globalAutoApplyCheckBox->SetFont(fontManager.getLabelFont());
@@ -340,16 +337,11 @@ void GlobalSettingsPanel::OnGlobalReset(wxCommandEvent& event)
     LOG_INF_S("GlobalSettingsPanel::OnGlobalReset: Global settings reset");
 }
 
-void GlobalSettingsPanel::OnGlobalUndo(wxCommandEvent& event)
+void GlobalSettingsPanel::OnMainApply(wxCommandEvent& event)
 {
-    wxMessageBox(wxT("Global Undo: Not implemented yet"), wxT("Undo Global"), wxOK | wxICON_INFORMATION);
-    LOG_INF_S("GlobalSettingsPanel::OnGlobalUndo: Global undo requested");
-}
-
-void GlobalSettingsPanel::OnGlobalRedo(wxCommandEvent& event)
-{
-    wxMessageBox(wxT("Global Redo: Not implemented yet"), wxT("Redo Global"), wxOK | wxICON_INFORMATION);
-    LOG_INF_S("GlobalSettingsPanel::OnGlobalRedo: Global redo requested");
+    // Placeholder: apply current settings to main viewport in future
+    wxMessageBox(wxT("Main viewport apply placeholder"), wxT("Main Apply"), wxOK | wxICON_INFORMATION);
+    LOG_INF_S("GlobalSettingsPanel::OnMainApply: Main apply requested (placeholder)");
 }
 
 void GlobalSettingsPanel::OnGlobalAutoApply(wxCommandEvent& event)
