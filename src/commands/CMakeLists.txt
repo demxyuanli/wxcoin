@@ -28,7 +28,7 @@ set(COMMANDS_SOURCES
     RedoListener.cpp
     RenderingSettingsListener.cpp
     SetTransparencyListener.cpp
-    ShowSilhouetteEdgesListener.cpp
+    # ShowSilhouetteEdgesListener.cpp  # disabled
     ShowFaceNormalsListener.cpp
     ShowFeatureEdgesListener.cpp
     ShowMeshEdgesListener.cpp

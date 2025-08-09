@@ -70,6 +70,36 @@ SoSeparator* DynamicSilhouetteRenderer::getSilhouetteNode() {
 
 void DynamicSilhouetteRenderer::updateSilhouettes(const gp_Pnt& cameraPos, const SbMatrix* modelMatrix) {
     if (!m_enabled) return;
+    auto now = std::chrono::steady_clock::now();
+    auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastUpdateTs).count();
+
+    // Fast mode: build once, reuse cached boundary polylines (camera independent)
+    if (m_fastMode) {
+        if (m_needsUpdate || m_cachedBoundaryPoints.empty()) {
+            buildBoundaryOnlyCache();
+            m_needsUpdate = false;
+        }
+        // Push cached data to Coin nodes
+        m_coordinates->point.setNum(static_cast<int>(m_cachedBoundaryPoints.size()));
+        for (size_t i = 0; i < m_cachedBoundaryPoints.size(); ++i) {
+            const gp_Pnt& p = m_cachedBoundaryPoints[i];
+            m_coordinates->point.set1Value(static_cast<int>(i), static_cast<float>(p.X()), static_cast<float>(p.Y()), static_cast<float>(p.Z()));
+        }
+        m_lineSet->coordIndex.setValues(0, static_cast<int>(m_cachedBoundaryIndices.size()), m_cachedBoundaryIndices.data());
+        return;
+    }
+
+    // Throttle expensive computation: only if camera moved enough or interval passed
+    double dx = cameraPos.X() - m_lastCameraPos.X();
+    double dy = cameraPos.Y() - m_lastCameraPos.Y();
+    double dz = cameraPos.Z() - m_lastCameraPos.Z();
+    double moveDist2 = dx*dx + dy*dy + dz*dz;
+    if (!m_needsUpdate && moveDist2 < (m_minCameraMove * m_minCameraMove) && elapsedMs < m_minUpdateIntervalMs) {
+        return;
+    }
+    m_lastUpdateTs = now;
+    m_lastCameraPos = cameraPos;
+
     calculateSilhouettes(cameraPos, modelMatrix);
 }
 
@@ -84,58 +114,123 @@ bool DynamicSilhouetteRenderer::isEnabled() const {
     return m_enabled;
 }
 
+static inline gp_Pnt transformPoint(const gp_Pnt& p, const SbMatrix* m) {
+    if (!m) return p;
+    SbVec3f v(static_cast<float>(p.X()), static_cast<float>(p.Y()), static_cast<float>(p.Z()));
+    SbVec3f out;
+    m->multVecMatrix(v, out);
+    return gp_Pnt(out[0], out[1], out[2]);
+}
+
+static inline gp_Vec transformVector(const gp_Vec& v, const SbMatrix* m) {
+    if (!m) return v;
+    // Apply linear part only (ignore translation). This assumes no shear/non-uniform scaling for normal correctness.
+    float a[4][4];
+    m->getValue(a);
+    double x = v.X(), y = v.Y(), z = v.Z();
+    double tx = a[0][0]*x + a[0][1]*y + a[0][2]*z;
+    double ty = a[1][0]*x + a[1][1]*y + a[1][2]*z;
+    double tz = a[2][0]*x + a[2][1]*y + a[2][2]*z;
+    gp_Vec out(tx, ty, tz);
+    if (out.Magnitude() > 1e-9) out.Normalize();
+    return out;
+}
+
 void DynamicSilhouetteRenderer::calculateSilhouettes(const gp_Pnt& cameraPos, const SbMatrix* modelMatrix) {
     m_silhouettePoints.clear();
     m_silhouetteIndices.clear();
     if (m_shape.IsNull()) return;
     int pointIndex = 0;
-    int totalEdges = 0;
-    int edgesWithTwoFaces = 0;
-    int silhouetteCount = 0;
     TopTools_IndexedDataMapOfShapeListOfShape edgeFaceMap;
     TopExp::MapShapesAndAncestors(m_shape, TopAbs_EDGE, TopAbs_FACE, edgeFaceMap);
     for (TopExp_Explorer exp(m_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
-        totalEdges++;
         TopoDS_Edge edge = TopoDS::Edge(exp.Current());
         const TopTools_ListOfShape& faces = edgeFaceMap.FindFromKey(edge);
         if (faces.Extent() != 2) continue;
-        edgesWithTwoFaces++;
         TopoDS_Face face1 = TopoDS::Face(faces.First());
         TopoDS_Face face2 = TopoDS::Face(faces.Last());
         Standard_Real first, last;
         Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
         if (curve.IsNull()) continue;
-        Standard_Real mid = (first + last) / 2.0;
-        gp_Pnt midPnt = curve->Value(mid);
-        gp_Vec n1 = getNormalAt(face1, midPnt);
-        gp_Vec n2 = getNormalAt(face2, midPnt);
-        gp_Vec view = midPnt.XYZ() - cameraPos.XYZ();
-        if (view.Magnitude() < 1e-6) continue;
-        view.Normalize();
-        double dot1 = n1.Dot(view);
-        double dot2 = n2.Dot(view);
-        bool f1Front = dot1 > 0;
-        bool f2Front = dot2 > 0;
-        gp_Pnt p1 = curve->Value(first);
-        gp_Pnt p2 = curve->Value(last);
-        // 直接使用shape的原始坐标，不应用modelMatrix变换
-        // 因为几何体已经通过setPosition设置了正确的世界坐标
-        if (f1Front != f2Front) {
-            m_silhouettePoints.push_back(p1);
-            m_silhouettePoints.push_back(p2);
-            m_silhouetteIndices.push_back(pointIndex++);
-            m_silhouetteIndices.push_back(pointIndex++);
-            m_silhouetteIndices.push_back(SO_END_LINE_INDEX);
-            silhouetteCount++;
-            LOG_INF_S("[SilhouetteDebug] silhouette edge: (" + std::to_string(p1.X()) + ", " + std::to_string(p1.Y()) + ", " + std::to_string(p1.Z()) + ") -> (" + std::to_string(p2.X()) + ", " + std::to_string(p2.Y()) + ", " + std::to_string(p2.Z()) + ")");
+        // Sample the edge to handle curved surfaces correctly
+        const int sampleCount = 8;
+        Standard_Real step = (last - first) / static_cast<Standard_Real>(sampleCount);
+        auto normalAt = [&](const TopoDS_Face& f, const gp_Pnt& pObj) -> gp_Vec {
+            gp_Vec n = getNormalAt(f, pObj);
+            return transformVector(n, modelMatrix);
+        };
+        gp_Pnt prevObj = curve->Value(first);
+        gp_Pnt prevW = transformPoint(prevObj, modelMatrix);
+        gp_Vec n1Prev = normalAt(face1, prevObj);
+        gp_Vec n2Prev = normalAt(face2, prevObj);
+        gp_Vec viewPrev = gp_Vec(prevW.XYZ() - cameraPos.XYZ());
+        if (viewPrev.Magnitude() > 1e-6) viewPrev.Normalize();
+        bool f1FrontPrev = n1Prev.Dot(viewPrev) > 0.0;
+        bool f2FrontPrev = n2Prev.Dot(viewPrev) > 0.0;
+
+        for (int s = 1; s <= sampleCount; ++s) {
+            Standard_Real t = (s == sampleCount) ? last : (first + step * s);
+            gp_Pnt curObj = curve->Value(t);
+            gp_Pnt curW = transformPoint(curObj, modelMatrix);
+            gp_Vec n1Cur = normalAt(face1, curObj);
+            gp_Vec n2Cur = normalAt(face2, curObj);
+            gp_Vec viewCur = gp_Vec(curW.XYZ() - cameraPos.XYZ());
+            if (viewCur.Magnitude() > 1e-6) viewCur.Normalize();
+            bool f1FrontCur = n1Cur.Dot(viewCur) > 0.0;
+            bool f2FrontCur = n2Cur.Dot(viewCur) > 0.0;
+
+            // If visibility differs between faces over this segment, draw the segment
+            bool prevOpp = (f1FrontPrev != f2FrontPrev);
+            bool curOpp = (f1FrontCur != f2FrontCur);
+            if (prevOpp || curOpp) {
+                m_silhouettePoints.push_back(prevW);
+                m_silhouettePoints.push_back(curW);
+                m_silhouetteIndices.push_back(pointIndex++);
+                m_silhouetteIndices.push_back(pointIndex++);
+                m_silhouetteIndices.push_back(SO_END_LINE_INDEX);
+            }
+
+            prevObj = curObj;
+            prevW = curW;
+            n1Prev = n1Cur;
+            n2Prev = n2Cur;
+            f1FrontPrev = f1FrontCur;
+            f2FrontPrev = f2FrontCur;
         }
     }
-    m_coordinates->point.setNum(m_silhouettePoints.size());
+    m_coordinates->point.setNum(static_cast<int>(m_silhouettePoints.size()));
     for (size_t i = 0; i < m_silhouettePoints.size(); ++i) {
         const gp_Pnt& p = m_silhouettePoints[i];
-        m_coordinates->point.set1Value(i, p.X(), p.Y(), p.Z());
+        m_coordinates->point.set1Value(static_cast<int>(i), static_cast<float>(p.X()), static_cast<float>(p.Y()), static_cast<float>(p.Z()));
     }
-    m_lineSet->coordIndex.setValues(0, m_silhouetteIndices.size(), m_silhouetteIndices.data());
+    m_lineSet->coordIndex.setValues(0, static_cast<int>(m_silhouetteIndices.size()), m_silhouetteIndices.data());
+}
+
+void DynamicSilhouetteRenderer::buildBoundaryOnlyCache() {
+    m_cachedBoundaryPoints.clear();
+    m_cachedBoundaryIndices.clear();
+    if (m_shape.IsNull()) return;
+
+    // Use edge-face incidence to collect edges incident to only one face (boundary)
+    TopTools_IndexedDataMapOfShapeListOfShape edgeFaceMap;
+    TopExp::MapShapesAndAncestors(m_shape, TopAbs_EDGE, TopAbs_FACE, edgeFaceMap);
+    int pointIndex = 0;
+    for (TopExp_Explorer exp(m_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+        TopoDS_Edge edge = TopoDS::Edge(exp.Current());
+        const TopTools_ListOfShape& faces = edgeFaceMap.FindFromKey(edge);
+        if (faces.Extent() != 1) continue; // boundary only
+
+        Standard_Real first = 0.0, last = 0.0;
+        Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
+        if (curve.IsNull()) continue;
+        gp_Pnt p1 = curve->Value(first);
+        gp_Pnt p2 = curve->Value(last);
+        m_cachedBoundaryPoints.push_back(p1);
+        m_cachedBoundaryPoints.push_back(p2);
+        m_cachedBoundaryIndices.push_back(pointIndex++);
+        m_cachedBoundaryIndices.push_back(pointIndex++);
+        m_cachedBoundaryIndices.push_back(SO_END_LINE_INDEX);
+    }
 }
 
 gp_Vec DynamicSilhouetteRenderer::getNormalAt(const TopoDS_Face& face, const gp_Pnt& p) {
@@ -173,20 +268,26 @@ SoCamera* findCameraRecursive(SoNode* node) {
 }
 
 void DynamicSilhouetteRenderer::renderCallback(void* userData, SoAction* action) {
-    LOG_INF_S("[SilhouetteDebug] renderCallback called");
+    // debug log removed for performance
     DynamicSilhouetteRenderer* renderer = static_cast<DynamicSilhouetteRenderer*>(userData);
     if (!renderer->m_enabled) return;
     gp_Pnt cameraPos(10.0, 10.0, 10.0);
-    // 用保存的sceneRoot递归查找SoCamera
-    if (renderer->m_sceneRoot) { 
-        SoCamera* camera = findCameraRecursive(renderer->m_sceneRoot);
+    // Find camera from current action state's scene graph if possible
+    SoState* state = action->getState();
+    SoNode* rootNode = nullptr;
+    if (state) {
+        // Try to get camera by traversing from the action's root if available
+        // Fallback to stored scene root
+        rootNode = renderer->m_sceneRoot;
+    }
+    if (rootNode) {
+        SoCamera* camera = findCameraRecursive(rootNode);
         if (camera) {
             SbVec3f pos = camera->position.getValue();
             cameraPos = gp_Pnt(pos[0], pos[1], pos[2]);
         }
     }
-    LOG_INF_S("[SilhouetteDebug] cameraPos: (" + std::to_string(cameraPos.X()) + ", " + std::to_string(cameraPos.Y()) + ", " + std::to_string(cameraPos.Z()) + ")");
-    SoState* state = action->getState();
+    // debug log removed for performance
     SbMatrix modelMatrix = SoModelMatrixElement::get(state);
     renderer->calculateSilhouettes(cameraPos, &modelMatrix);
 } 

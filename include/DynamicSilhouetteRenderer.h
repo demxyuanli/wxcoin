@@ -12,6 +12,7 @@
 #include <opencascade/gp_Pnt.hxx>
 #include <opencascade/gp_Vec.hxx>
 #include <vector>
+#include <chrono>
 
 class DynamicSilhouetteRenderer {
 public:
@@ -30,10 +31,15 @@ public:
     // Enable/disable silhouette rendering
     void setEnabled(bool enabled);
     bool isEnabled() const;
+    
+    // Enable simplified fast mode (boundary edges only, camera-independent)
+    void setFastMode(bool enabled) { m_fastMode = enabled; }
+    bool isFastMode() const { return m_fastMode; }
 
 private:
     // Dynamic silhouette calculation
     void calculateSilhouettes(const gp_Pnt& cameraPos, const SbMatrix* modelMatrix = nullptr);
+    void buildBoundaryOnlyCache();
     
     // Helper function to get face normal at a point
     static gp_Vec getNormalAt(const TopoDS_Face& face, const gp_Pnt& p);
@@ -54,6 +60,17 @@ private:
     std::vector<gp_Pnt> m_silhouettePoints;
     std::vector<int32_t> m_silhouetteIndices;
     
+    // Cached boundary-only polyline for fast mode
+    std::vector<gp_Pnt> m_cachedBoundaryPoints;
+    std::vector<int32_t> m_cachedBoundaryIndices;
+    
     bool m_enabled;
     bool m_needsUpdate;
+    bool m_fastMode { true }; // default to fast mode for performance
+    
+    // Throttling
+    gp_Pnt m_lastCameraPos {0,0,0};
+    double m_minCameraMove { 1.0 }; // world units
+    int m_minUpdateIntervalMs { 200 }; // ms
+    std::chrono::steady_clock::time_point m_lastUpdateTs { std::chrono::steady_clock::now() - std::chrono::milliseconds(1000) };
 }; 

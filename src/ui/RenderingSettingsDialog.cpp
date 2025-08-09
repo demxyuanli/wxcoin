@@ -56,6 +56,7 @@ RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* oc
     
     // Initialize new rendering mode settings
     // Removed m_shadingMode initialization - functionality not needed
+    // Shading page removed; ensure defaults are still initialized safely
     m_smoothNormals = shadingSettings.smoothNormals;
     m_wireframeWidth = shadingSettings.wireframeWidth;
     m_pointSize = shadingSettings.pointSize;
@@ -742,11 +743,7 @@ void RenderingSettingsDialog::bindEvents()
     m_cullFaceCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onCullFaceCheckbox, this);
     m_alphaThresholdSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onAlphaThresholdSlider, this);
     
-    // Shading events
-    // Removed shading mode choice binding - functionality not needed
-    m_smoothNormalsCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onSmoothNormalsCheckbox, this);
-    m_wireframeWidthSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onWireframeWidthSlider, this);
-    m_pointSizeSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onPointSizeSlider, this);
+    // Shading events (page removed) - skip binding non-existent controls
     
     // Display events
     m_displayModeChoice->Bind(wxEVT_COMMAND_CHOICE_SELECTED, &RenderingSettingsDialog::onDisplayModeChoice, this);

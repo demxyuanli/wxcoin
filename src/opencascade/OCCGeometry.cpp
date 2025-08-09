@@ -17,6 +17,7 @@
 #include <TopoDS.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
 #include "EdgeComponent.h"
+#include "config/EdgeSettingsConfig.h"
 #include "OCCMeshConverter.h"
 
 // OpenCASCADE includes
@@ -657,8 +658,13 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         LOG_INF_S("==============================");
     }
 
-    // Generate edge nodes for EdgeComponent
-    if (edgeComponent) {
+    // Generate edge nodes for EdgeComponent (only when any edge display is requested)
+    const EdgeSettingsConfig& edgeCfg = EdgeSettingsConfig::getInstance();
+    const bool anyEdgeDisplayRequested = edgeCfg.getGlobalSettings().showEdges ||
+                                         edgeCfg.getSelectedSettings().showEdges ||
+                                         edgeCfg.getHoverSettings().showEdges;
+
+    if (edgeComponent && anyEdgeDisplayRequested) {
         LOG_INF_S("Generating edge nodes for geometry: " + m_name);
         
         // Generate original edges from CAD shape
@@ -692,7 +698,11 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         edgeComponent->generateHighlightEdgeNode();
         
     } else {
-        LOG_WRN_S("EdgeComponent is null for geometry: " + m_name);
+        if (!edgeComponent) {
+            LOG_WRN_S("EdgeComponent is null for geometry: " + m_name);
+        } else {
+            LOG_INF_S("Skipping edge generation for geometry (edge display disabled): " + m_name);
+        }
     }
 }
 
@@ -1656,12 +1666,12 @@ void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& para
     setShowWireframe(params.showWireframe);
     setSmoothNormals(params.showNormals);
     
-    // Apply edge display types
+    // Apply edge display types (silhouette disabled)
     if (edgeComponent) {
         edgeComponent->setEdgeDisplayType(EdgeType::Original, params.showOriginalEdges);
         edgeComponent->setEdgeDisplayType(EdgeType::Feature, params.showFeatureEdges);
         edgeComponent->setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
-        edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, params.showSilhouette);
+        edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
     }
     
     // Apply subdivision settings

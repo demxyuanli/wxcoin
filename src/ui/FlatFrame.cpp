@@ -209,7 +209,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_SHOW_MESH_EDGES, cmd::CommandType::ShowMeshEdges},
     {ID_SHOW_FACE_NORMALS, cmd::CommandType::ShowFaceNormals},
 
-    {ID_VIEW_SHOWSILHOUETTEEDGES, cmd::CommandType::ShowSilhouetteEdges},
+    // {ID_VIEW_SHOWSILHOUETTEEDGES, cmd::CommandType::ShowSilhouetteEdges}, // disabled
     {ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},
     {ID_TEXTURE_MODE_MODULATE, cmd::CommandType::TextureModeModulate},
     {ID_TEXTURE_MODE_REPLACE, cmd::CommandType::TextureModeReplace},
@@ -221,6 +221,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
     {ID_ZOOM_SPEED, cmd::CommandType::ZoomSpeed},
     {ID_MESH_QUALITY_DIALOG, cmd::CommandType::MeshQualityDialog},
     {ID_RENDERING_SETTINGS, cmd::CommandType::RenderingSettings},
+    {ID_LIGHTING_SETTINGS, cmd::CommandType::LightingSettings},
     {ID_EDGE_SETTINGS, cmd::CommandType::EdgeSettings},
     {ID_RENDER_PREVIEW_SYSTEM, cmd::CommandType::RenderPreviewSystem},
     {ID_SHOW_FLAT_WIDGETS_EXAMPLE, cmd::CommandType::ShowFlatWidgetsExample},
@@ -475,7 +476,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
     FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
     displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-    displayButtonBar->AddToggleButton(ID_VIEW_SHOWSILHOUETTEEDGES, "Silhouette Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle silhouette edge display (dynamic outline)");
+    // Silhouette edges feature disabled
     displayButtonBar->AddToggleButton(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle original edge display");
     displayButtonBar->AddToggleButton(ID_SHOW_FEATURE_EDGES, "Feature Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle feature edge display");
     displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Wireframe Mode", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe rendering mode");
@@ -704,7 +705,7 @@ void FlatFrame::setupCommandSystem() {
     auto viewIsoListener = std::make_shared<ViewIsometricListener>(m_canvas->getInputManager()->getNavigationController());
     auto showNormalsListener = std::make_shared<ShowNormalsListener>(m_occViewer);
     auto fixNormalsListener = std::make_shared<FixNormalsListener>(m_occViewer);
-    auto showEdgesListener = std::make_shared<ShowSilhouetteEdgesListener>(m_occViewer);
+    // auto showEdgesListener = std::make_shared<ShowSilhouetteEdgesListener>(m_occViewer); // disabled
     auto setTransparencyListener = std::make_shared<SetTransparencyListener>(this, m_occViewer);
     auto viewModeListener = std::make_shared<ViewModeListener>(m_occViewer);
     auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer);
@@ -722,7 +723,7 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::ViewIsometric, viewIsoListener);
     m_listenerManager->registerListener(cmd::CommandType::ShowNormals, showNormalsListener);
     m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
-    m_listenerManager->registerListener(cmd::CommandType::ShowSilhouetteEdges, showEdgesListener);
+    // m_listenerManager->registerListener(cmd::CommandType::ShowSilhouetteEdges, showEdgesListener); // disabled
     m_listenerManager->registerListener(cmd::CommandType::SetTransparency, setTransparencyListener);
     m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, viewModeListener);
     // Removed Toggle Shading listener registration

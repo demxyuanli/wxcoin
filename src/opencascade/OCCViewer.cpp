@@ -28,6 +28,9 @@
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoTransform.h>
+#include <Inventor/actions/SoRayPickAction.h>
+#include <Inventor/SoPickedPoint.h>
+#include <unordered_map>
 #include "DynamicSilhouetteRenderer.h"
 
 gp_Pnt OCCViewer::getCameraPosition() const {
@@ -155,6 +158,8 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     auto addChildStartTime = std::chrono::high_resolution_clock::now();
     if (coinNode && m_occRoot) {
         m_occRoot->addChild(coinNode);
+        // Map coin node to geometry for fast picking -> silhouette hover
+        m_nodeToGeom[coinNode] = geometry;
     } else {
         if (!coinNode) {
             LOG_ERR_S("Coin3D node is null for geometry: " + geometry->getName());
@@ -230,6 +235,7 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
     if (it != m_geometries.end()) {
         if (geometry->getCoinNode() && m_occRoot) {
             m_occRoot->removeChild(geometry->getCoinNode());
+            m_nodeToGeom.erase(geometry->getCoinNode());
         }
         
         auto selectedIt = std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
@@ -266,8 +272,92 @@ void OCCViewer::clearAll()
     if (m_occRoot) {
         m_occRoot->removeAllChildren();
     }
+    m_nodeToGeom.clear();
     
     LOG_INF_S("Cleared all OCC geometries");
+}
+
+// --- Hover silhouette helpers ---
+
+namespace {
+    // Find the first separator that is a direct child of m_occRoot (top-level geometry node)
+    SoSeparator* findTopLevelSeparatorInPath(SoPath* path, SoSeparator* occRoot) {
+        if (!path || !occRoot) return nullptr;
+        for (int i = 0; i < path->getLength(); ++i) {
+            SoNode* node = path->getNode(i);
+            if (node == occRoot) {
+                // Next separator child under occRoot is the geometry root we added
+                for (int j = i + 1; j < path->getLength(); ++j) {
+                    SoSeparator* sep = dynamic_cast<SoSeparator*>(path->getNode(j));
+                    if (sep) return sep;
+                }
+                break;
+            }
+        }
+        return nullptr;
+    }
+}
+
+std::shared_ptr<OCCGeometry> OCCViewer::pickGeometryAtScreen(const wxPoint& screenPos) {
+    if (!m_sceneManager || !m_occRoot) return nullptr;
+    wxSize size = m_sceneManager->getCanvas() ? m_sceneManager->getCanvas()->GetClientSize() : wxSize(0, 0);
+    if (size.x <= 0 || size.y <= 0) return nullptr;
+    SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
+    SoRayPickAction pick(viewport);
+    // Flip Y for OpenInventor
+    int pickY = size.GetHeight() - screenPos.y;
+    pick.setPoint(SbVec2s(screenPos.x, pickY));
+    pick.setRadius(3);
+    pick.apply(m_occRoot);
+    SoPickedPoint* picked = pick.getPickedPoint();
+    if (!picked) return nullptr;
+    SoPath* p = picked->getPath();
+    SoSeparator* sep = findTopLevelSeparatorInPath(p, m_occRoot);
+    if (!sep) return nullptr;
+    auto it = m_nodeToGeom.find(sep);
+    if (it != m_nodeToGeom.end()) return it->second;
+    return nullptr;
+}
+
+void OCCViewer::setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry) {
+    // Disable all existing renderers first
+    for (auto& kv : m_silhouetteRenderers) {
+        kv.second->setEnabled(false);
+    }
+    if (!geometry) return;
+
+    std::string name = geometry->getName();
+    // Ensure renderer
+    if (m_silhouetteRenderers.find(name) == m_silhouetteRenderers.end()) {
+        m_silhouetteRenderers[name] = std::make_unique<DynamicSilhouetteRenderer>(m_occRoot);
+        m_silhouetteRenderers[name]->setFastMode(true); // fast for hover
+        m_silhouetteRenderers[name]->setShape(geometry->getShape());
+    } else {
+        // Update shape reference in case geometry changed
+        m_silhouetteRenderers[name]->setShape(geometry->getShape());
+    }
+    // Attach under the geometry's Coin node so it inherits the same transform
+    if (SoSeparator* geomSep = geometry->getCoinNode()) {
+        SoSeparator* silhouetteNode = m_silhouetteRenderers[name]->getSilhouetteNode();
+        // Add once under the geometry separator to inherit its transform
+        bool alreadyChild = false;
+        for (int i = 0; i < geomSep->getNumChildren(); ++i) {
+            if (geomSep->getChild(i) == silhouetteNode) { alreadyChild = true; break; }
+        }
+        if (!alreadyChild) {
+            geomSep->addChild(silhouetteNode);
+        }
+    }
+    // Enable only the hovered renderer; computation will occur in its render callback
+    m_silhouetteRenderers[name]->setEnabled(true);
+}
+
+void OCCViewer::updateHoverSilhouetteAt(const wxPoint& screenPos) {
+    auto g = pickGeometryAtScreen(screenPos);
+    if (g.get() == m_lastHoverGeometry.lock().get()) return; // no change
+    m_lastHoverGeometry = g;
+    setHoveredSilhouette(g);
+    if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh(false);
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::findGeometry(const std::string& name)
@@ -678,8 +768,8 @@ void OCCViewer::remeshAllGeometries()
     // Regenerate all geometries with updated parameters
     for (auto& geometry : m_geometries) {
         if (geometry) {
-            geometry->regenerateMesh(m_meshParams);
-            LOG_INF_S("Regenerated mesh for geometry: " + geometry->getName());
+            geometry->updateCoinRepresentationIfNeeded(m_meshParams);
+            LOG_INF_S("Updated mesh (if needed) for geometry: " + geometry->getName());
         }
     }
     
@@ -865,16 +955,17 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
             continue;
         }
         
-        // Regenerate mesh
-        geometry->regenerateMesh(m_meshParams);
+        // Regenerate mesh (lazy)
+        geometry->updateCoinRepresentationIfNeeded(m_meshParams);
         
         // Store geometry
         m_geometries.push_back(geometry);
         
-        // Collect Coin3D node
+        // Collect Coin3D node and record mapping for picking -> hover silhouette
         SoSeparator* coinNode = geometry->getCoinNode();
         if (coinNode) {
             coinNodes.push_back(coinNode);
+            m_nodeToGeom[coinNode] = geometry;
         } else {
             LOG_ERR_S("Coin3D node is null for geometry: " + geometry->getName());
         }
@@ -1425,58 +1516,15 @@ void OCCViewer::setShowFaceNormalLines(bool show) {
     updateAllEdgeDisplays();
 }
 
-void OCCViewer::setShowSilhouetteEdges(bool show) {
-    LOG_INF_S("[OCCViewerDebug] setShowSilhouetteEdges called with show=" + std::string(show ? "true" : "false"));
-    LOG_INF_S("[OCCViewerDebug] Number of geometries: " + std::to_string(m_geometries.size()));
-    
-    // Update global flags but don't use them for EdgeComponent
-    // We're using dynamic renderers instead
-    globalEdgeFlags.showSilhouetteEdges = show;
-    
-    if (show) {
-        // Enable dynamic silhouette rendering for all geometries
-        for (auto& g : m_geometries) {
-            if (g) {
-                std::string name = g->getName();
-                LOG_INF_S("[OCCViewerDebug] Processing geometry: " + name);
-                
-                // Create dynamic silhouette renderer if it doesn't exist
-                if (m_silhouetteRenderers.find(name) == m_silhouetteRenderers.end()) {
-                    LOG_INF_S("[OCCViewerDebug] Creating new dynamic silhouette renderer for: " + name);
-                    m_silhouetteRenderers[name] = std::make_unique<DynamicSilhouetteRenderer>(m_occRoot);
-                    m_silhouetteRenderers[name]->setShape(g->getShape());
-                    
-                    // Add silhouette node to the scene
-                    if (m_occRoot) {
-                        m_occRoot->addChild(m_silhouetteRenderers[name]->getSilhouetteNode());
-                        LOG_INF_S("[OCCViewerDebug] Added silhouette node to scene for: " + name);
-                    } else {
-                        LOG_WRN_S("[OCCViewerDebug] m_occRoot is null, cannot add silhouette node");
-                    }
-                } else {
-                    LOG_INF_S("[OCCViewerDebug] Dynamic silhouette renderer already exists for: " + name);
-                }
-                
-                // Enable the renderer
-                m_silhouetteRenderers[name]->setEnabled(true);
-                LOG_INF_S("[OCCViewerDebug] Enabled dynamic silhouette renderer for geometry: " + name);
-            } else {
-                LOG_WRN_S("[OCCViewerDebug] Geometry is null");
-            }
-        }
-    } else {
-        // Disable dynamic silhouette rendering for all geometries
-        for (auto& renderer : m_silhouetteRenderers) {
-            renderer.second->setEnabled(false);
-            LOG_INF_S("[OCCViewerDebug] Disabled dynamic silhouette renderer for: " + renderer.first);
-        }
+void OCCViewer::setShowSilhouetteEdges(bool /*show*/) {
+    // Silhouette feature disabled per request. Ensure global flag is false
+    globalEdgeFlags.showSilhouetteEdges = false;
+    // Turn off any existing dynamic silhouette renderers if present
+    for (auto& kv : m_silhouetteRenderers) {
+        if (kv.second) kv.second->setEnabled(false);
     }
-    
-    // Don't call updateAllEdgeDisplays() as it will try to use old EdgeComponent system
-    // Instead, just refresh the canvas
     if (m_sceneManager && m_sceneManager->getCanvas()) {
         m_sceneManager->getCanvas()->Refresh();
-        LOG_INF_S("[OCCViewerDebug] Canvas refreshed");
     }
 }
 
@@ -1488,7 +1536,7 @@ void OCCViewer::toggleEdgeType(EdgeType type, bool show) {
         case EdgeType::Highlight: globalEdgeFlags.showHighlightEdges = show; break;
         case EdgeType::NormalLine: globalEdgeFlags.showNormalLines = show; break;
         case EdgeType::FaceNormalLine: globalEdgeFlags.showFaceNormalLines = show; break;
-        case EdgeType::Silhouette: globalEdgeFlags.showSilhouetteEdges = show; break;
+        case EdgeType::Silhouette: globalEdgeFlags.showSilhouetteEdges = false; break; // force disabled
     }
     updateAllEdgeDisplays();
 }
@@ -1501,7 +1549,7 @@ bool OCCViewer::isEdgeTypeEnabled(EdgeType type) const {
         case EdgeType::Highlight: return globalEdgeFlags.showHighlightEdges;
         case EdgeType::NormalLine: return globalEdgeFlags.showNormalLines;
         case EdgeType::FaceNormalLine: return globalEdgeFlags.showFaceNormalLines;
-        case EdgeType::Silhouette: return globalEdgeFlags.showSilhouetteEdges;
+        case EdgeType::Silhouette: return false;
     }
     return false;
 }

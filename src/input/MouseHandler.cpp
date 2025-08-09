@@ -12,6 +12,19 @@
 #include <Inventor/nodes/SoSelection.h>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/SoPickedPoint.h>
+#include <wx/frame.h>
+#include <wx/statusbr.h>
+#include <wx/utils.h>
+
+namespace {
+    inline void updateStatusBar(wxWindow* anyChild, const wxString& text) {
+        if (!anyChild) return;
+        wxWindow* top = wxGetTopLevelParent(anyChild);
+        if (auto* frame = dynamic_cast<wxFrame*>(top)) {
+            frame->SetStatusText(text, 0);
+        }
+    }
+}
 
 MouseHandler::MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel, CommandManager* commandManager)
     : m_canvas(canvas)
@@ -28,6 +41,8 @@ MouseHandler::MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, Property
     if (!m_objectTree) LOG_ERR_S("MouseHandler: ObjectTree is null");
     if (!m_propertyPanel) LOG_ERR_S("MouseHandler: PropertyPanel is null");
     if (!m_commandManager) LOG_ERR_S("MouseHandler: CommandManager is null");
+    // Show initial mode on status bar
+    updateStatusBar(m_canvas, wxString("Mode: VIEW"));
 }
 
 MouseHandler::~MouseHandler() {
@@ -41,11 +56,21 @@ MouseHandler::~MouseHandler() {
 void MouseHandler::setOperationMode(OperationMode mode) {
     m_operationMode = mode;
     LOG_INF_S("Operation mode set to: " + std::to_string(static_cast<int>(mode)));
+    // Reflect mode change on status bar
+    if (m_canvas) {
+        const wxString msg = (mode == OperationMode::VIEW) ? wxString("Mode: VIEW") : wxString("Mode: CREATE");
+        updateStatusBar(m_canvas, msg);
+    }
 }
 
 void MouseHandler::setCreationGeometryType(const std::string& type) {
     m_creationGeometryType = type;
     LOG_INF_S("Creation geometry type set to: " + type);
+
+    // Update status to reflect current creation type
+    if (!type.empty() && m_canvas) {
+        updateStatusBar(m_canvas, wxString("Create: ") + wxString(type));
+    }
 
     if (!type.empty()) {
         // Close existing position dialog if any

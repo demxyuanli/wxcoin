@@ -78,9 +78,20 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
         if (!allGeometries.empty() && m_occViewer) {
             // Add all geometries using batch operations
             auto geometryAddStartTime = std::chrono::high_resolution_clock::now();
+            // Temporarily use rough deflection to accelerate initial meshing
+            double prevDeflection = m_occViewer->getMeshDeflection();
+            double roughDeflection = m_occViewer->getLODRoughDeflection();
+            if (roughDeflection <= 0.0) {
+                roughDeflection = 0.1; // fallback
+            }
+
             m_occViewer->beginBatchOperation();
+            m_occViewer->setMeshDeflection(roughDeflection, false);
             m_occViewer->addGeometries(allGeometries);
             m_occViewer->endBatchOperation();
+
+            // Restore previous deflection without immediate remesh to avoid long stall
+            m_occViewer->setMeshDeflection(prevDeflection, false);
             auto geometryAddEndTime = std::chrono::high_resolution_clock::now();
             auto geometryAddDuration = std::chrono::duration_cast<std::chrono::milliseconds>(geometryAddEndTime - geometryAddStartTime);
             

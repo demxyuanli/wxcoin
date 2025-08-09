@@ -451,7 +451,7 @@ void EdgeComponent::setEdgeDisplayType(EdgeType type, bool show) {
         case EdgeType::Highlight: edgeFlags.showHighlightEdges = show; break;
         case EdgeType::NormalLine: edgeFlags.showNormalLines = show; break;
         case EdgeType::FaceNormalLine: edgeFlags.showFaceNormalLines = show; break;
-        case EdgeType::Silhouette: edgeFlags.showSilhouetteEdges = show; break;
+        case EdgeType::Silhouette: edgeFlags.showSilhouetteEdges = false; break; // force disabled
     }
 }
 bool EdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
@@ -462,7 +462,7 @@ bool EdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
         case EdgeType::Highlight: return edgeFlags.showHighlightEdges;
         case EdgeType::NormalLine: return edgeFlags.showNormalLines;
         case EdgeType::FaceNormalLine: return edgeFlags.showFaceNormalLines;
-        case EdgeType::Silhouette: return edgeFlags.showSilhouetteEdges;
+        case EdgeType::Silhouette: return false;
     }
     return false;
 }
@@ -529,7 +529,7 @@ void EdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
         LOG_WRN_S("Face normal lines enabled but faceNormalLineNode is null");
     }
     
-    if (edgeFlags.showSilhouetteEdges && silhouetteEdgeNode) {
+    if (false && silhouetteEdgeNode) {
         if (parentNode->findChild(silhouetteEdgeNode) < 0) {
             parentNode->addChild(silhouetteEdgeNode);
             LOG_INF_S("Added silhouette edge node to parent");
@@ -540,7 +540,7 @@ void EdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
             parentNode->removeChild(idx);
             LOG_INF_S("Removed silhouette edge node from parent");
         }
-    } else if (edgeFlags.showSilhouetteEdges) {
+    } else if (false) {
         LOG_WRN_S("Silhouette edges enabled but silhouetteEdgeNode is null");
     }
 }

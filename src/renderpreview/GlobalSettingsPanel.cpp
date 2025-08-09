@@ -9,6 +9,7 @@
 #include "renderpreview/RenderingManager.h"
 #include "renderpreview/BackgroundManager.h"
 #include "config/ConfigManager.h"
+#include "config/LightingConfig.h"
 #include "config/FontManager.h"
 #include "logger/Logger.h"
 #include <wx/msgdlg.h>
@@ -339,9 +340,50 @@ void GlobalSettingsPanel::OnGlobalReset(wxCommandEvent& event)
 
 void GlobalSettingsPanel::OnMainApply(wxCommandEvent& event)
 {
-    // Placeholder: apply current settings to main viewport in future
-    wxMessageBox(wxT("Main viewport apply placeholder"), wxT("Main Apply"), wxOK | wxICON_INFORMATION);
-    LOG_INF_S("GlobalSettingsPanel::OnMainApply: Main apply requested (placeholder)");
+    // Apply preview-approved lighting to main viewport via LightingConfig
+    try {
+        LightingConfig& lightingConfig = LightingConfig::getInstance();
+
+        // Clear existing lights in config
+        auto& existingLights = lightingConfig.getAllLights();
+        for (int i = static_cast<int>(existingLights.size()) - 1; i >= 0; --i) {
+            lightingConfig.removeLight(i);
+        }
+
+        // Convert preview RenderLightSettings to main LightSettings
+        std::vector<RenderLightSettings> previewLights = getLights();
+        for (const auto& rl : previewLights) {
+            LightSettings ls;
+            ls.enabled = rl.enabled;
+            ls.name = rl.name;
+            ls.type = rl.type; // expects "directional" | "point" | "spot"
+            ls.positionX = rl.positionX;
+            ls.positionY = rl.positionY;
+            ls.positionZ = rl.positionZ;
+            ls.directionX = rl.directionX;
+            ls.directionY = rl.directionY;
+            ls.directionZ = rl.directionZ;
+            ls.color = Quantity_Color(rl.color.Red() / 255.0, rl.color.Green() / 255.0, rl.color.Blue() / 255.0, Quantity_TOC_RGB);
+            ls.intensity = rl.intensity;
+            ls.spotAngle = rl.spotAngle;
+            ls.spotExponent = rl.spotExponent;
+            ls.constantAttenuation = rl.constantAttenuation;
+            ls.linearAttenuation = rl.linearAttenuation;
+            ls.quadraticAttenuation = rl.quadraticAttenuation;
+
+            lightingConfig.addLight(ls);
+        }
+
+        // Persist and notify main scene to rebuild lighting
+        lightingConfig.saveToFile();
+        lightingConfig.applySettingsToScene();
+
+        wxMessageBox(wxT("Applied preview lighting to main viewport"), wxT("Main Apply"), wxOK | wxICON_INFORMATION);
+        LOG_INF_S("GlobalSettingsPanel::OnMainApply: Applied preview lighting to main viewport");
+    } catch (const std::exception& e) {
+        LOG_ERR_S(std::string("GlobalSettingsPanel::OnMainApply: Exception: ") + e.what());
+        wxMessageBox(wxT("Failed to apply settings to main viewport"), wxT("Main Apply"), wxOK | wxICON_ERROR);
+    }
 }
 
 void GlobalSettingsPanel::OnGlobalAutoApply(wxCommandEvent& event)

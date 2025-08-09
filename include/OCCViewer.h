@@ -12,6 +12,7 @@
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include "EdgeTypes.h"
 #include "DynamicSilhouetteRenderer.h"
+#include <unordered_map>
 
 // Forward declarations
 class OCCGeometry;
@@ -190,6 +191,9 @@ public:
     gp_Pnt getCameraPosition() const;
     SoSeparator* getRootSeparator() const { return m_occRoot; }
 
+    // Hover silhouette API (screen-space driven)
+    void updateHoverSilhouetteAt(const wxPoint& screenPos);
+
 private:
     void initializeViewer();
     void onLODTimer();
@@ -261,6 +265,10 @@ private:
     bool m_parameterMonitoringEnabled;
 
     std::map<std::string, std::unique_ptr<DynamicSilhouetteRenderer>> m_silhouetteRenderers;
+    std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>> m_nodeToGeom;
+    std::weak_ptr<OCCGeometry> m_lastHoverGeometry;
+    std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos);
+    void setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry);
 
     struct DisplayFlags {
         bool showEdges = false;

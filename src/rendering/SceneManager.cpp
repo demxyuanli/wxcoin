@@ -81,9 +81,24 @@ bool SceneManager::initScene() {
         m_sceneRoot->addChild(m_camera);
 
         // Set a light model to enable proper lighting calculation
+        // Place on scene root (not inside lightRoot) so the lighting model applies globally to subsequent nodes
         SoLightModel* lightModel = new SoLightModel;
         lightModel->model.setValue(SoLightModel::PHONG);
-        m_lightRoot->addChild(lightModel);
+        if (m_sceneRoot) {
+            // Insert at the beginning to ensure it precedes lights and objects
+            m_sceneRoot->insertChild(lightModel, 0);
+
+            // Ensure at least one fallback light exists even if configuration is empty
+            SoDirectionalLight* fallbackLight = new SoDirectionalLight;
+            fallbackLight->direction.setValue(0.5f, 0.5f, -0.7f);
+            fallbackLight->intensity.setValue(1.0f);
+            int insertIndex = m_sceneRoot->getNumChildren();
+            if (m_objectRoot) {
+                int objectIndex = m_sceneRoot->findChild(m_objectRoot);
+                if (objectIndex >= 0) insertIndex = objectIndex;
+            }
+            m_sceneRoot->insertChild(fallbackLight, insertIndex);
+        }
 
         // Initialize lighting from configuration instead of hardcoded values
         initializeLightingFromConfig();
@@ -318,6 +333,9 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     auto glSetupStartTime = std::chrono::high_resolution_clock::now();
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_NORMALIZE);
+    glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE); // allow two-sided lighting for CAD meshes
     glEnable(GL_TEXTURE_2D);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -581,18 +599,24 @@ void SceneManager::initializeLightingConfigCallback() {
 }
 
 void SceneManager::updateSceneLighting() {
-    if (!m_lightRoot) {
-        LOG_ERR_S("Cannot update lighting: Light root not available");
+    if (!m_sceneRoot) {
+        LOG_ERR_S("Cannot update lighting: Scene root not available");
         return;
     }
     
     LOG_INF_S("Updating lighting from configuration");
     
-    // Clear existing lights (except light model)
-    for (int i = m_lightRoot->getNumChildren() - 1; i >= 0; --i) {
-        SoNode* child = m_lightRoot->getChild(i);
-        if (!child->isOfType(SoLightModel::getClassTypeId())) {
-            m_lightRoot->removeChild(i);
+    // Clear existing environment and light nodes that were previously inserted
+    // We only remove nodes that appear before m_objectRoot to avoid touching other overlays
+    int objectIndex = m_objectRoot ? m_sceneRoot->findChild(m_objectRoot) : -1;
+    for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
+        if (objectIndex >= 0 && i >= objectIndex) continue; // do not remove anything after objects
+        SoNode* child = m_sceneRoot->getChild(i);
+        if (child->isOfType(SoEnvironment::getClassTypeId()) ||
+            child->isOfType(SoDirectionalLight::getClassTypeId()) ||
+            child->isOfType(SoPointLight::getClassTypeId()) ||
+            child->isOfType(SoSpotLight::getClassTypeId())) {
+            m_sceneRoot->removeChild(i);
         }
     }
     
@@ -609,7 +633,15 @@ void SceneManager::updateSceneLighting() {
     environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
     environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
     
-    m_lightRoot->addChild(environment);
+    // Place environment on scene root before object root so it affects geometry
+    {
+        int insertIndex = m_sceneRoot->getNumChildren();
+        if (m_objectRoot) {
+            int objIdx = m_sceneRoot->findChild(m_objectRoot);
+            if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+        }
+        m_sceneRoot->insertChild(environment, insertIndex);
+    }
     
     LOG_INF_S("Added environment lighting - ambient color: " + 
              std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
@@ -640,10 +672,19 @@ void SceneManager::updateSceneLighting() {
                 light->intensity.setValue(static_cast<float>(lightSettings.intensity));
                 light->on.setValue(true);
                 
-                m_lightRoot->addChild(light);
+                // Place lights on scene root before object root so they affect subsequent geometry
+                {
+                    int insertIndex = m_sceneRoot->getNumChildren();
+                    if (m_objectRoot) {
+                        int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                        if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+                    }
+                    m_sceneRoot->insertChild(light, insertIndex);
+                }
                 
                 // Store reference to main light for compatibility
                 if (lightSettings.name == "Main Light") {
+                    if (m_light) { m_light->unref(); }
                     m_light = light;
                     m_light->ref();
                 }
@@ -664,7 +705,14 @@ void SceneManager::updateSceneLighting() {
                 light->intensity.setValue(static_cast<float>(lightSettings.intensity));
                 light->on.setValue(true);
                 
-                m_lightRoot->addChild(light);
+                {
+                    int insertIndex = m_sceneRoot->getNumChildren();
+                    if (m_objectRoot) {
+                        int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                        if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+                    }
+                    m_sceneRoot->insertChild(light, insertIndex);
+                }
                 
                 LOG_INF_S("Added point light: " + lightSettings.name);
                 
@@ -685,7 +733,14 @@ void SceneManager::updateSceneLighting() {
                 light->intensity.setValue(static_cast<float>(lightSettings.intensity));
                 light->on.setValue(true);
                 
-                m_lightRoot->addChild(light);
+                {
+                    int insertIndex = m_sceneRoot->getNumChildren();
+                    if (m_objectRoot) {
+                        int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                        if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+                    }
+                    m_sceneRoot->insertChild(light, insertIndex);
+                }
                 
                 LOG_INF_S("Added spot light: " + lightSettings.name);
             }
@@ -705,7 +760,14 @@ void SceneManager::updateSceneLighting() {
         m_light->intensity.setValue(1.0f);
         m_light->color.setValue(1.0f, 1.0f, 1.0f);
         m_light->on.setValue(true);
-        m_lightRoot->addChild(m_light);
+        {
+            int insertIndex = m_sceneRoot->getNumChildren();
+            if (m_objectRoot) {
+                int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                if (objIdx >= 0) insertIndex = objIdx;
+            }
+            m_sceneRoot->insertChild(m_light, insertIndex);
+        }
         LOG_INF_S("Created default main light for compatibility");
     }
     
@@ -744,18 +806,23 @@ void SceneManager::updateSceneLighting() {
 }
 
 void SceneManager::initializeLightingFromConfig() {
-    if (!m_lightRoot) {
-        LOG_ERR_S("Cannot initialize lighting: Light root not available");
+    if (!m_sceneRoot) {
+        LOG_ERR_S("Cannot initialize lighting: Scene root not available");
         return;
     }
     
     LOG_INF_S("Initializing lighting from configuration");
     
-    // Clear existing lights (except light model)
-    for (int i = m_lightRoot->getNumChildren() - 1; i >= 0; --i) {
-        SoNode* child = m_lightRoot->getChild(i);
-        if (!child->isOfType(SoLightModel::getClassTypeId())) {
-            m_lightRoot->removeChild(i);
+    // Clear existing environment and light nodes before objects
+    int objectIndex = m_objectRoot ? m_sceneRoot->findChild(m_objectRoot) : -1;
+    for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
+        if (objectIndex >= 0 && i >= objectIndex) continue;
+        SoNode* child = m_sceneRoot->getChild(i);
+        if (child->isOfType(SoEnvironment::getClassTypeId()) ||
+            child->isOfType(SoDirectionalLight::getClassTypeId()) ||
+            child->isOfType(SoPointLight::getClassTypeId()) ||
+            child->isOfType(SoSpotLight::getClassTypeId())) {
+            m_sceneRoot->removeChild(i);
         }
     }
     
@@ -772,7 +839,15 @@ void SceneManager::initializeLightingFromConfig() {
     environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
     environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
     
-    m_lightRoot->addChild(environment);
+    // Place environment on scene root before object root so it affects geometry
+    {
+        int insertIndex = m_sceneRoot->getNumChildren();
+        if (m_objectRoot) {
+            int objIdx = m_sceneRoot->findChild(m_objectRoot);
+            if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+        }
+        m_sceneRoot->insertChild(environment, insertIndex);
+    }
     
     LOG_INF_S("Added environment lighting - ambient color: " + 
              std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + 
@@ -803,7 +878,14 @@ void SceneManager::initializeLightingFromConfig() {
                 light->intensity.setValue(static_cast<float>(lightSettings.intensity));
                 light->on.setValue(true);
                 
-                m_lightRoot->addChild(light);
+                {
+                    int insertIndex = m_sceneRoot->getNumChildren();
+                    if (m_objectRoot) {
+                        int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                        if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+                    }
+                    m_sceneRoot->insertChild(light, insertIndex);
+                }
                 
                 // Store reference to main light for compatibility
                 if (lightSettings.name == "Main Light") {
@@ -827,7 +909,14 @@ void SceneManager::initializeLightingFromConfig() {
                 light->intensity.setValue(static_cast<float>(lightSettings.intensity));
                 light->on.setValue(true);
                 
-                m_lightRoot->addChild(light);
+                {
+                    int insertIndex = m_sceneRoot->getNumChildren();
+                    if (m_objectRoot) {
+                        int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                        if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+                    }
+                    m_sceneRoot->insertChild(light, insertIndex);
+                }
                 
                 LOG_INF_S("Added point light: " + lightSettings.name);
                 
@@ -848,7 +937,14 @@ void SceneManager::initializeLightingFromConfig() {
                 light->intensity.setValue(static_cast<float>(lightSettings.intensity));
                 light->on.setValue(true);
                 
-                m_lightRoot->addChild(light);
+                {
+                    int insertIndex = m_sceneRoot->getNumChildren();
+                    if (m_objectRoot) {
+                        int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                        if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+                    }
+                    m_sceneRoot->insertChild(light, insertIndex);
+                }
                 
                 LOG_INF_S("Added spot light: " + lightSettings.name);
             }
@@ -868,7 +964,14 @@ void SceneManager::initializeLightingFromConfig() {
         m_light->intensity.setValue(1.0f);
         m_light->color.setValue(1.0f, 1.0f, 1.0f);
         m_light->on.setValue(true);
-        m_lightRoot->addChild(m_light);
+        {
+            int insertIndex = m_sceneRoot->getNumChildren();
+            if (m_objectRoot) {
+                int objIdx = m_sceneRoot->findChild(m_objectRoot);
+                if (objIdx >= 0) insertIndex = objIdx;
+            }
+            m_sceneRoot->insertChild(m_light, insertIndex);
+        }
         LOG_INF_S("Created default main light for compatibility");
     }
     

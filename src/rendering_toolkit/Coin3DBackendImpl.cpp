@@ -76,6 +76,15 @@ SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TopoDS_Shape& shape,
     // Convert shape to mesh first
     TriangleMesh mesh;
     if (m_geometryProcessor) {
+        // Sync processor settings with runtime config to avoid extra work when disabled
+        const auto& smoothing = m_config.getSmoothingSettings();
+        const auto& subdivision = m_config.getSubdivisionSettings();
+        if (auto occ = dynamic_cast<OpenCASCADEProcessor*>(m_geometryProcessor.get())) {
+            occ->setSmoothingEnabled(smoothing.enabled);
+            occ->setCreaseAngle(smoothing.creaseAngle);
+            occ->setSubdivisionEnabled(subdivision.enabled);
+            occ->setSubdivisionLevels(subdivision.levels);
+        }
         mesh = m_geometryProcessor->convertToMesh(shape, params);
     } else {
         LOG_ERR_S("No geometry processor available");
