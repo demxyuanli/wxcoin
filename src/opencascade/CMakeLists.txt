@@ -34,6 +34,7 @@ target_include_directories(CADOCC PUBLIC
 target_link_libraries(CADOCC PUBLIC
     CADCore
     CADLogger
+    CADView
     CADRenderingToolkit
     ${wxWidgets_LIBRARIES}
     Coin::Coin

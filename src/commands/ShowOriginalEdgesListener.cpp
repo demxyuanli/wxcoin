@@ -6,8 +6,10 @@ ShowOriginalEdgesListener::ShowOriginalEdgesListener(OCCViewer* viewer): m_viewe
 
 CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& commandType,
                                                         const std::unordered_map<std::string, std::string>&) {
-    if (!m_viewer) return CommandResult(false, "OCCViewer not available", commandType);
-    bool show = !m_viewer->isEdgeTypeEnabled(EdgeType::Original);
+    if (!m_viewer) {
+        return CommandResult(false, "OCCViewer not available", commandType);
+    }
+    const bool show = !m_viewer->isEdgeTypeEnabled(EdgeType::Original);
     m_viewer->setShowOriginalEdges(show);
     return CommandResult(true, show ? "Original edges shown" : "Original edges hidden", commandType);
 }

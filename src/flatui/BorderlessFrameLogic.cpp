@@ -365,7 +365,7 @@ ResizeMode BorderlessFrameLogic::GetResizeModeForPosition(const wxPoint& clientP
     if (onLeft) return ResizeMode::LEFT;
     if (onRight) return ResizeMode::RIGHT;
     if (onTop) return ResizeMode::TOP;
-    if (onBottom) return ResizeMode::BOTTOM;
+    if (onBottom) return ResizeMode::BOTTOM; 
     return ResizeMode::NONE;
 }
 

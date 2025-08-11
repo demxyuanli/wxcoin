@@ -17,12 +17,14 @@ class PositionBasicDialog;
 class MouseHandler {
 public:
     enum class OperationMode { VIEW, CREATE };
+    enum class SliceDragState { None, Dragging };
 
     MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, PropertyPanel* propertyPanel, CommandManager* commandManager);
     ~MouseHandler();
 
     void handleMouseButton(wxMouseEvent& event);
     void handleMouseMotion(wxMouseEvent& event);
+    void enableSliceDragging(bool enable);
     
     // Position picking completion handler
     void OnPositionPicked(const SbVec3f& position);
@@ -43,6 +45,8 @@ private:
     CommandManager* m_commandManager;
     NavigationController* m_navigationController;
     OperationMode m_operationMode;
+    SliceDragState m_sliceDragState{SliceDragState::None};
+    SbVec3f m_sliceDragLastWorld;
     std::string m_creationGeometryType;
     bool m_isDragging;
     wxPoint m_lastMousePos;

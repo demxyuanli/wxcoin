@@ -28,8 +28,11 @@
 #include <rendering/GeometryProcessor.h>
 #include <TopExp_Explorer.hxx>
 #include <TopExp.hxx>
+#include <execution>
+#include <numeric>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <algorithm>
 
 EdgeComponent::EdgeComponent() {
 
@@ -72,10 +75,10 @@ void EdgeComponent::extractOriginalEdges(const TopoDS_Shape& shape) {
                 edgePoints.push_back(startPoint);
                 edgePoints.push_back(endPoint);
             } else {
-                // For curves, use very aggressive sampling to eliminate visual gaps
+                // For curves, use moderate sampling; dense sampling will be applied only on-demand
                 Standard_Real curveLength = last - first;
-                int numSamples = std::max(100, static_cast<int>(curveLength * 200)); // Very dense sampling
-                numSamples = std::min(numSamples, 500); // Much higher cap for perfect curve representation
+                int numSamples = std::max(32, static_cast<int>(curveLength * 80));
+                numSamples = std::min(numSamples, 200);
                 
                 for (int i = 0; i <= numSamples; ++i) {
                     Standard_Real t = first + (last - first) * i / numSamples;
@@ -96,26 +99,11 @@ void EdgeComponent::extractOriginalEdges(const TopoDS_Shape& shape) {
                 indices.push_back(SO_END_LINE_INDEX);
             }
             
-            // Debug: Log edge information
-            LOG_INF_S("Edge " + std::to_string(pointIndex / edgePoints.size()) + 
-                      ": " + std::to_string(edgePoints.size()) + " points, " + 
-                      std::to_string(edgePoints.size() - 1) + " segments");
-            
             pointIndex += edgePoints.size();
         }
     }
     
-    LOG_INF_S("Extracted " + std::to_string(points.size()) + " points and " + 
-              std::to_string(indices.size() / 3) + " line segments for original edges");
-    
-    // Debug: Check for potential gaps
-    if (!points.empty()) {
-        LOG_INF_S("First point: (" + std::to_string(points[0].X()) + ", " + 
-                  std::to_string(points[0].Y()) + ", " + std::to_string(points[0].Z()) + ")");
-        LOG_INF_S("Last point: (" + std::to_string(points.back().X()) + ", " + 
-                  std::to_string(points.back().Y()) + ", " + std::to_string(points.back().Z()) + ")");
-    }
-    
+   
     if (originalEdgeNode) originalEdgeNode->unref();
     
     // Create material for original edges
@@ -153,38 +141,62 @@ void EdgeComponent::extractFeatureEdges(const TopoDS_Shape& shape, double featur
     std::vector<int32_t> indices;
     int pointIndex = 0;
     double cosThreshold = std::cos(featureAngle * M_PI / 180.0);
+    // Build edge->faces adjacency once for performance on large models
+    TopTools_IndexedDataMapOfShapeListOfShape edgeFaceMap;
+    TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, edgeFaceMap);
+
+    // Collect all edges first
+    std::vector<TopoDS_Edge> allEdges;
+    allEdges.reserve(edgeFaceMap.Extent());
+    for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+        allEdges.push_back(TopoDS::Edge(exp.Current()));
+    }
+
+    // Per-edge polyline results (to enable parallel processing without locks)
+    struct EdgePolyline { std::vector<gp_Pnt> pts; };
+    std::vector<EdgePolyline> polylines(allEdges.size());
+    std::vector<size_t> edgeIndices(allEdges.size());
+    std::iota(edgeIndices.begin(), edgeIndices.end(), 0);
+    auto approximateCurveLength = [&](const Handle(Geom_Curve)& curve, Standard_Real first, Standard_Real last) -> double {
+        if (curve.IsNull() || last <= first) return 0.0;
+        // Sample-based approximation to handle periodic/closed curves (e.g., cylinder circle edges)
+        const int samples = std::min(400, std::max(32, static_cast<int>((last - first) * 200)));
+        gp_Pnt prev = curve->Value(first);
+        double length = 0.0;
+        for (int i = 1; i <= samples; ++i) {
+            Standard_Real t = first + (last - first) * (static_cast<double>(i) / samples);
+            gp_Pnt cur = curve->Value(t);
+            length += prev.Distance(cur);
+            prev = cur;
+        }
+        return length;
+    };
     
     LOG_INF_S("Extracting feature edges with angle threshold: " + std::to_string(featureAngle) + 
               " degrees, min length: " + std::to_string(minLength) + 
               ", only convex: " + std::string(onlyConvex ? "true" : "false") + 
               ", only concave: " + std::string(onlyConcave ? "true" : "false"));
-    for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
-        TopoDS_Edge edge = TopoDS::Edge(exp.Current());
-        TopTools_ListOfShape faceList;
-        for (TopExp_Explorer fexp(shape, TopAbs_FACE); fexp.More(); fexp.Next()) {
-            TopoDS_Face face = TopoDS::Face(fexp.Current());
-            for (TopExp_Explorer eexp(face, TopAbs_EDGE); eexp.More(); eexp.Next()) {
-                if (edge.IsSame(eexp.Current())) {
-                    faceList.Append(face);
-                }
-            }
-        }
-        // Process edges shared by 1 or more faces (not just 2)
-        if (faceList.Extent() >= 1) {
-            TopoDS_Face face1 = TopoDS::Face(faceList.First());
-            TopoDS_Face face2 = faceList.Extent() >= 2 ? TopoDS::Face(faceList.Last()) : TopoDS_Face();
+    // Process edges in parallel via index array
+    std::for_each(std::execution::par, edgeIndices.begin(), edgeIndices.end(), [&](size_t idxEdge){
+        // Safety: watchdog to avoid infinite loops on degenerate parameter ranges
+        static const int kMaxSamples = 2000;
+        const TopoDS_Edge& edge = allEdges[idxEdge];
+        const TopTools_ListOfShape& faces = edgeFaceMap.FindFromKey(edge);
+        if (faces.Extent() >= 1) {
+            TopoDS_Face face1 = TopoDS::Face(faces.First());
+            TopoDS_Face face2 = faces.Extent() >= 2 ? TopoDS::Face(faces.Last()) : TopoDS_Face();
             
             //LOG_INF_S("Found edge shared by " + std::to_string(faceList.Extent()) + " faces, processing...");
             Standard_Real first, last;
             Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
-            if (curve.IsNull()) continue;
+            if (curve.IsNull()) return; // skip this edge in parallel loop
             Standard_Real mid = (first + last) / 2.0;
             gp_Pnt midPnt = curve->Value(mid);
             
             bool isFeatureEdge = false;
             double angleDegrees = 0.0;
             
-            if (faceList.Extent() >= 2) {
+            if (faces.Extent() >= 2) {
                 // Two faces case - use angle between face normals
                 // Get proper UV coordinates for the midpoint on both faces
                 Standard_Real u1, v1, u2, v2;
@@ -285,12 +297,12 @@ void EdgeComponent::extractFeatureEdges(const TopoDS_Shape& shape, double featur
                 gp_Pnt p1 = curve->Value(first);
                 gp_Pnt p2 = curve->Value(last);
                 double edgeLength = p1.Distance(p2);
-                
-                //LOG_INF_S("Feature edge candidate - length: " + std::to_string(edgeLength) + ", min required: " + std::to_string(minLength));
-                
+                // Fallback to approximate arc length for closed/periodic edges where start==end (e.g., cylinder rims)
                 if (edgeLength < minLength) {
-                    LOG_INF_S("Edge too short, skipping");
-                    continue;
+                    edgeLength = approximateCurveLength(curve, first, last);
+                }
+                if (edgeLength < minLength) {
+                    return; // skip this edge
                 }
                 
 
@@ -311,35 +323,44 @@ void EdgeComponent::extractFeatureEdges(const TopoDS_Shape& shape, double featur
                 } else {
                     // For curves, use dense sampling
                     Standard_Real curveLength = last - first;
-                    int numSamples = std::max(50, static_cast<int>(curveLength * 100));
-                    numSamples = std::min(numSamples, 200);
+                int numSamples = std::max(50, static_cast<int>(curveLength * 100));
+                numSamples = std::min(numSamples, 200);
+                if (numSamples <= 0 || numSamples > kMaxSamples) numSamples = 200;
                     
                     for (int i = 0; i <= numSamples; ++i) {
-                        Standard_Real t = first + (last - first) * i / numSamples;
+                        Standard_Real alpha = static_cast<Standard_Real>(i) / static_cast<Standard_Real>(numSamples);
+                        if (alpha < 0.0) alpha = 0.0; if (alpha > 1.0) alpha = 1.0;
+                        Standard_Real t = first + (last - first) * alpha;
                         gp_Pnt point = curve->Value(t);
                         edgePoints.push_back(point);
                     }
                 }
                 
-                // Add points to global array
-                for (const auto& point : edgePoints) {
-                    points.push_back(point);
-                }
-                
-                // Add indices for this edge
-                for (size_t i = 0; i < edgePoints.size() - 1; ++i) {
-                    indices.push_back(pointIndex + i);
-                    indices.push_back(pointIndex + i + 1);
-                    indices.push_back(SO_END_LINE_INDEX);
-                }
-                
-                pointIndex += edgePoints.size();
+                // Store into the per-edge polyline container
+                polylines[idxEdge].pts = std::move(edgePoints);
                 
                 //LOG_INF_S("Added feature edge: (" + std::to_string(p1.X()) + ", " + std::to_string(p1.Y()) + ", " + std::to_string(p1.Z()) + 
                 //          ") to (" + std::to_string(p2.X()) + ", " + std::to_string(p2.Y()) + ", " + std::to_string(p2.Z()) + ")");
             } else {
-                LOG_INF_S("Edge angle too small, not a feature edge");
+                // Not a feature edge; leave empty
             }
+        }
+    });
+
+    // Merge per-edge polylines into SoIndexedLineSet buffers
+    // Precompute total point count
+    size_t totalPts = 0;
+    for (const auto& pl : polylines) totalPts += pl.pts.size();
+    points.reserve(totalPts);
+    // Merge and create indices on the fly
+    for (const auto& pl : polylines) {
+        if (pl.pts.size() < 2) continue;
+        size_t base = points.size();
+        for (const auto& p : pl.pts) points.push_back(p);
+        for (size_t i = 0; i + 1 < pl.pts.size(); ++i) {
+            indices.push_back(static_cast<int32_t>(base + i));
+            indices.push_back(static_cast<int32_t>(base + i + 1));
+            indices.push_back(SO_END_LINE_INDEX);
         }
     }
     
@@ -542,6 +563,25 @@ void EdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
         }
     } else if (false) {
         LOG_WRN_S("Silhouette edges enabled but silhouetteEdgeNode is null");
+    }
+}
+
+void EdgeComponent::applyAppearanceToEdgeNode(EdgeType type, const Quantity_Color& color, double width) {
+    SoSeparator* node = getEdgeNode(type);
+    if (!node) return;
+
+    // Update material color if present
+    for (int i = 0; i < node->getNumChildren(); ++i) {
+        SoMaterial* mat = dynamic_cast<SoMaterial*>(node->getChild(i));
+        if (mat) {
+            Standard_Real r, g, b;
+            color.Values(r, g, b, Quantity_TOC_RGB);
+            mat->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+        }
+        SoDrawStyle* style = dynamic_cast<SoDrawStyle*>(node->getChild(i));
+        if (style) {
+            style->lineWidth = static_cast<float>(std::max(0.1, std::min(10.0, width)));
+        }
     }
 }
 void EdgeComponent::generateHighlightEdgeNode() {

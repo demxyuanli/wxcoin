@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <wx/timer.h>
+#include "interfaces/IViewRefresher.h"
 
 class Canvas;
 
@@ -12,7 +13,7 @@ class Canvas;
  * 
  * Provides centralized view refresh management with debouncing and listener pattern
  */
-class ViewRefreshManager : public wxEvtHandler {
+class ViewRefreshManager : public wxEvtHandler, public IViewRefresher {
 public:
     enum class RefreshReason {
         GEOMETRY_CHANGED,
@@ -34,6 +35,10 @@ public:
     
     // Request refresh with optional debouncing
     void requestRefresh(RefreshReason reason = RefreshReason::MANUAL_REQUEST, bool immediate = false);
+    // IViewRefresher
+    void requestRefresh(IViewRefresher::Reason reason, bool immediate) override {
+        requestRefresh(static_cast<RefreshReason>(reason), immediate);
+    }
     
     // Listener management
     void addRefreshListener(RefreshListener listener);

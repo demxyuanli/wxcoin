@@ -7,6 +7,7 @@
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <opencascade/TopoDS_Shape.hxx>
 #include <opencascade/gp_Pnt.hxx>
+#include <OpenCASCADE/Quantity_Color.hxx>
 #include "EdgeTypes.h"
 #include "rendering/GeometryProcessor.h"
 
@@ -27,6 +28,9 @@ public:
     void setEdgeDisplayType(EdgeType type, bool show);
     bool isEdgeDisplayTypeEnabled(EdgeType type) const;
     void updateEdgeDisplay(SoSeparator* parentNode);
+
+    // Apply appearance (color and width) to a specific edge node type if it exists
+    void applyAppearanceToEdgeNode(EdgeType type, const Quantity_Color& color, double width);
 
     void generateHighlightEdgeNode();
     void generateNormalLineNode(const TriangleMesh& mesh, double length);

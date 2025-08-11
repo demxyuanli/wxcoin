@@ -761,8 +761,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
             SbVec2s pickPoint(localX, pickY);
 
             if (event.LeftDown()) {
-                LOG_INF_S("Mouse left down in cube outline viewport at (" + std::to_string(x) + ", " + std::to_string(y) + ") [local: (" + std::to_string(localX) + ", " + std::to_string(localY) + ", pick: (" + std::to_string(pickPoint[0]) + ", " + std::to_string(pickPoint[1]) + ")]");
-
                 SoRayPickAction pickAction(viewportRegion);
                 pickAction.setPoint(pickPoint);
                 pickAction.apply(m_cubeOutlineRoot);
@@ -772,7 +770,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
                     SoPath* path = pickedPoint->getPath();
                     if (path) {
                         std::string clickedShape = findShapeNameFromPath(path);
-                        LOG_INF_S(clickedShape + " clicked at position (" + std::to_string(x) + ", " + std::to_string(y) + ")");
                     }
 
                 }
@@ -785,9 +782,8 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
             else if (event.Moving()) {
                 return true;
             }
-            else {
-                return true;
-            }
+            // For other events, do not consume
+            return false;
         }
     }
     

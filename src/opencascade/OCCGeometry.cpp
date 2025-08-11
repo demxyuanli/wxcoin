@@ -47,6 +47,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     : m_name(name)
     , m_visible(true)
     , m_selected(false)
+    , m_facesVisible(true)
     , m_transparency(0.0)
     , m_wireframeMode(false)
     , m_coinNode(nullptr)
@@ -488,7 +489,7 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
     hints->faceType = SoShapeHints::CONVEX;
     m_coinNode->addChild(hints);
 
-    // Draw style
+    // Draw style (wireframe vs filled)
     SoDrawStyle* drawStyle = new SoDrawStyle;
     drawStyle->style = m_wireframeMode ? SoDrawStyle::LINES : SoDrawStyle::FILLED;
     drawStyle->lineWidth = m_wireframeMode ? 1.0f : 0.0f;
@@ -512,7 +513,9 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         material->specularColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
         
         material->shininess.setValue(static_cast<float>(m_materialShininess / 100.0));
-        material->transparency.setValue(static_cast<float>(m_transparency));
+        // Hide faces when requested by pushing transparency to 1.0
+        double appliedTransparency = m_facesVisible ? m_transparency : 1.0;
+        material->transparency.setValue(static_cast<float>(appliedTransparency));
         
         // Add emissive color for better lighting response
         material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
@@ -631,7 +634,7 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
                                                      m_materialDiffuseColor, m_materialAmbientColor,
                                                      m_materialSpecularColor, m_materialEmissiveColor,
                                                      m_materialShininess, m_transparency);
-            if (sceneNode) {
+            if (sceneNode && m_facesVisible) {
                 SoSeparator* meshNode = sceneNode.get();
                 meshNode->ref(); // Take ownership
                 m_coinNode->addChild(meshNode);
@@ -658,20 +661,31 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
         LOG_INF_S("==============================");
     }
 
-    // Generate edge nodes for EdgeComponent (only when any edge display is requested)
+    // Generate edge nodes for EdgeComponent on demand when any edge type is toggled or if overlay edges are requested
+    bool anyEdgeDisplayRequested = false;
+    if (edgeComponent) {
+        // If edgeComponent already exists, reuse; else create when needed
+        const EdgeDisplayFlags& flags = edgeComponent->edgeFlags;
+        anyEdgeDisplayRequested = flags.showOriginalEdges || flags.showFeatureEdges ||
+                                  flags.showMeshEdges || flags.showHighlightEdges ||
+                                  flags.showNormalLines || flags.showFaceNormalLines;
+    }
     const EdgeSettingsConfig& edgeCfg = EdgeSettingsConfig::getInstance();
-    const bool anyEdgeDisplayRequested = edgeCfg.getGlobalSettings().showEdges ||
-                                         edgeCfg.getSelectedSettings().showEdges ||
-                                         edgeCfg.getHoverSettings().showEdges;
+    anyEdgeDisplayRequested = anyEdgeDisplayRequested || edgeCfg.getGlobalSettings().showEdges ||
+                              edgeCfg.getSelectedSettings().showEdges ||
+                              edgeCfg.getHoverSettings().showEdges;
 
     if (edgeComponent && anyEdgeDisplayRequested) {
         LOG_INF_S("Generating edge nodes for geometry: " + m_name);
         
-        // Generate original edges from CAD shape
-        edgeComponent->extractOriginalEdges(m_shape);
-        
-        // Generate feature edges with very sensitive parameters for basic shapes
-        edgeComponent->extractFeatureEdges(m_shape, 10.0, 0.01, false, false);
+        // Generate nodes only for requested types to avoid unnecessary overlays
+        if (edgeComponent->edgeFlags.showOriginalEdges) {
+            edgeComponent->extractOriginalEdges(m_shape);
+        }
+        if (edgeComponent->edgeFlags.showFeatureEdges) {
+            // Start with permissive parameters for responsiveness
+            edgeComponent->extractFeatureEdges(m_shape, 15.0, 0.005, false, false);
+        }
         
         // Generate mesh edges and normal lines
         auto& manager = RenderingToolkitAPI::getManager();
@@ -682,20 +696,27 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
             LOG_INF_S("Mesh conversion result: " + std::to_string(mesh.vertices.size()) + 
                       " vertices, " + std::to_string(mesh.normals.size()) + " normals");
             
-            // Generate mesh edges
-            edgeComponent->extractMeshEdges(mesh);
-            
-            // Generate normal line nodes
-            LOG_INF_S("Generating normal line node for geometry: " + m_name);
-            edgeComponent->generateNormalLineNode(mesh, 0.5);
-            LOG_INF_S("Generating face normal line node for geometry: " + m_name);
-            edgeComponent->generateFaceNormalLineNode(mesh, 0.5);
+            // Generate mesh edges when requested
+            if (edgeComponent->edgeFlags.showMeshEdges) {
+                edgeComponent->extractMeshEdges(mesh);
+            }
+            // Generate normal/face-normal lines when requested
+            if (edgeComponent->edgeFlags.showNormalLines) {
+                LOG_INF_S("Generating normal line node for geometry: " + m_name);
+                edgeComponent->generateNormalLineNode(mesh, 0.5);
+            }
+            if (edgeComponent->edgeFlags.showFaceNormalLines) {
+                LOG_INF_S("Generating face normal line node for geometry: " + m_name);
+                edgeComponent->generateFaceNormalLineNode(mesh, 0.5);
+            }
         } else {
             LOG_WRN_S("OpenCASCADE processor not found for geometry: " + m_name);
         }
         
-        // Generate highlight edge node
-        edgeComponent->generateHighlightEdgeNode();
+        // Generate highlight edge node only if requested
+        if (edgeComponent->edgeFlags.showHighlightEdges) {
+            edgeComponent->generateHighlightEdgeNode();
+        }
         
     } else {
         if (!edgeComponent) {
@@ -1492,6 +1513,16 @@ void OCCGeometry::forceTextureUpdate()
 
 void OCCGeometry::setFaceDisplay(bool enable) {
     // Removed setShadingMode call - functionality not needed
+    if (m_coinNode) {
+        buildCoinRepresentation();
+        m_coinNode->touch();
+    }
+}
+
+void OCCGeometry::setFacesVisible(bool visible) {
+    if (m_facesVisible == visible) return;
+    m_facesVisible = visible;
+    m_coinNeedsUpdate = true;
     if (m_coinNode) {
         buildCoinRepresentation();
         m_coinNode->touch();

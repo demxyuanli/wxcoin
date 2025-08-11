@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <future>
+#include <functional>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/TopoDS_Compound.hxx>
 #include "OCCGeometry.h"
@@ -18,6 +19,7 @@
  */
 class STEPReader {
 public:
+    using ProgressCallback = std::function<void(int /*percent*/, const std::string& /*stage*/)>;
     /**
      * @brief Result structure for STEP file reading
      */
@@ -52,7 +54,8 @@ public:
      * @return ReadResult containing success status and geometry objects
      */
     static ReadResult readSTEPFile(const std::string& filePath, 
-                                  const OptimizationOptions& options = OptimizationOptions());
+                                  const OptimizationOptions& options = OptimizationOptions(),
+                                  ProgressCallback progress = nullptr);
     
     /**
      * @brief Read a STEP file and return a single compound shape
@@ -84,7 +87,10 @@ public:
     static std::vector<std::shared_ptr<OCCGeometry>> shapeToGeometries(
         const TopoDS_Shape& shape, 
         const std::string& baseName = "ImportedGeometry",
-        const OptimizationOptions& options = OptimizationOptions()
+        const OptimizationOptions& options = OptimizationOptions(),
+        ProgressCallback progress = nullptr,
+        int progressStart = 50,
+        int progressSpan = 40
     );
     
     /**
@@ -146,7 +152,10 @@ private:
     static std::vector<std::shared_ptr<OCCGeometry>> processShapesParallel(
         const std::vector<TopoDS_Shape>& shapes,
         const std::string& baseName,
-        const OptimizationOptions& options
+        const OptimizationOptions& options,
+        ProgressCallback progress = nullptr,
+        int progressStart = 50,
+        int progressSpan = 40
     );
     
     /**

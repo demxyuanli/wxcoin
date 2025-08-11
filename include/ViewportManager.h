@@ -2,24 +2,25 @@
 
 #include <wx/wx.h>
 #include <wx/glcanvas.h>
+#include "interfaces/IViewportManager.h"
 
 // Forward declarations
 class RenderingEngine;
 class NavigationCubeManager;
 
-class ViewportManager {
+class ViewportManager : public IViewportManager {
 public:
     explicit ViewportManager(wxGLCanvas* canvas);
     ~ViewportManager();
 
-    void handleSizeChange(const wxSize& size);
-    void updateDPISettings();
-    void applyDPIScalingToUI();
+    void handleSizeChange(const wxSize& size) override;
+    void updateDPISettings() override;
+    void applyDPIScalingToUI() override;
     
-    float getDPIScale() const { return m_dpiScale; }
+    float getDPIScale() const override { return m_dpiScale; }
     
     void setRenderingEngine(RenderingEngine* renderingEngine) { m_renderingEngine = renderingEngine; }
-    void setNavigationCubeManager(NavigationCubeManager* navCubeManager) { m_navigationCubeManager = navCubeManager; }
+    void setNavigationCubeManager(NavigationCubeManager* navCubeManager) override { m_navigationCubeManager = navCubeManager; }
 
 private:
     bool shouldProcessSizeEvent(const wxSize& size);

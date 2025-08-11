@@ -40,6 +40,9 @@
 #include <windows.h>
 #endif
 #include <GL/gl.h>
+#ifndef GL_MULTISAMPLE
+#define GL_MULTISAMPLE 0x809D
+#endif
 
 std::map<std::string, std::shared_ptr<CuteNavCube::TextureData>> CuteNavCube::s_textureCache;
 
@@ -602,16 +605,19 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 
     SoGLRenderAction renderAction(viewport);
     renderAction.setSmoothing(true);
-    renderAction.setNumPasses(4); // Multiple passes for better anti-aliasing
+    renderAction.setNumPasses(1);
 
     // Isolate minimal GL state to avoid interference from main scene render
     GLboolean wasTex2D = glIsEnabled(GL_TEXTURE_2D);
     GLboolean wasBlend = glIsEnabled(GL_BLEND);
+    GLboolean wasMSAA = glIsEnabled(GL_MULTISAMPLE);
     GLint prevSrc = 0, prevDst = 0;
     glGetIntegerv(GL_BLEND_SRC, &prevSrc);
     glGetIntegerv(GL_BLEND_DST, &prevDst);
 
     glEnable(GL_TEXTURE_2D);
+    // Enable MSAA if available
+    glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -621,6 +627,7 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
     glBlendFunc(prevSrc, prevDst);
     if (!wasBlend) glDisable(GL_BLEND);
     if (!wasTex2D) glDisable(GL_TEXTURE_2D);
+    if (!wasMSAA) glDisable(GL_MULTISAMPLE);
 }
 
 void CuteNavCube::setEnabled(bool enabled) {

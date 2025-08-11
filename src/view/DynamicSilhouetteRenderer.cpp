@@ -18,19 +18,17 @@
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoGroup.h>
 #include <Inventor/SoDB.h>
-// #include <Inventor/elements/SoCameraElement.h>
 
 DynamicSilhouetteRenderer::DynamicSilhouetteRenderer(SoSeparator* sceneRoot)
     : m_sceneRoot(sceneRoot)
     , m_enabled(false)
     , m_needsUpdate(true)
 {
-    // Create Coin3D nodes
     m_silhouetteNode = new SoSeparator;
     m_silhouetteNode->ref();
     
     m_material = new SoMaterial;
-    m_material->diffuseColor.setValue(1.0, 1.0, 0.0); // Yellow
+    m_material->diffuseColor.setValue(1.0, 1.0, 0.0);
     m_material->ambientColor.setValue(1.0, 1.0, 0.0);
     m_material->emissiveColor.setValue(1.0, 1.0, 0.0);
     m_material->specularColor.setValue(1.0, 1.0, 0.0);
@@ -45,7 +43,6 @@ DynamicSilhouetteRenderer::DynamicSilhouetteRenderer(SoSeparator* sceneRoot)
     m_renderCallback = new SoCallback;
     m_renderCallback->setCallback(renderCallback, this);
     
-    // Add nodes to separator
     m_silhouetteNode->addChild(m_material);
     m_silhouetteNode->addChild(m_drawStyle);
     m_silhouetteNode->addChild(m_renderCallback);
@@ -73,13 +70,11 @@ void DynamicSilhouetteRenderer::updateSilhouettes(const gp_Pnt& cameraPos, const
     auto now = std::chrono::steady_clock::now();
     auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastUpdateTs).count();
 
-    // Fast mode: build once, reuse cached boundary polylines (camera independent)
     if (m_fastMode) {
         if (m_needsUpdate || m_cachedBoundaryPoints.empty()) {
             buildBoundaryOnlyCache();
             m_needsUpdate = false;
         }
-        // Push cached data to Coin nodes
         m_coordinates->point.setNum(static_cast<int>(m_cachedBoundaryPoints.size()));
         for (size_t i = 0; i < m_cachedBoundaryPoints.size(); ++i) {
             const gp_Pnt& p = m_cachedBoundaryPoints[i];
@@ -89,7 +84,6 @@ void DynamicSilhouetteRenderer::updateSilhouettes(const gp_Pnt& cameraPos, const
         return;
     }
 
-    // Throttle expensive computation: only if camera moved enough or interval passed
     double dx = cameraPos.X() - m_lastCameraPos.X();
     double dy = cameraPos.Y() - m_lastCameraPos.Y();
     double dz = cameraPos.Z() - m_lastCameraPos.Z();
@@ -124,7 +118,6 @@ static inline gp_Pnt transformPoint(const gp_Pnt& p, const SbMatrix* m) {
 
 static inline gp_Vec transformVector(const gp_Vec& v, const SbMatrix* m) {
     if (!m) return v;
-    // Apply linear part only (ignore translation). This assumes no shear/non-uniform scaling for normal correctness.
     float a[4][4];
     m->getValue(a);
     double x = v.X(), y = v.Y(), z = v.Z();
@@ -152,7 +145,6 @@ void DynamicSilhouetteRenderer::calculateSilhouettes(const gp_Pnt& cameraPos, co
         Standard_Real first, last;
         Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
         if (curve.IsNull()) continue;
-        // Sample the edge to handle curved surfaces correctly
         const int sampleCount = 8;
         Standard_Real step = (last - first) / static_cast<Standard_Real>(sampleCount);
         auto normalAt = [&](const TopoDS_Face& f, const gp_Pnt& pObj) -> gp_Vec {
@@ -179,7 +171,6 @@ void DynamicSilhouetteRenderer::calculateSilhouettes(const gp_Pnt& cameraPos, co
             bool f1FrontCur = n1Cur.Dot(viewCur) > 0.0;
             bool f2FrontCur = n2Cur.Dot(viewCur) > 0.0;
 
-            // If visibility differs between faces over this segment, draw the segment
             bool prevOpp = (f1FrontPrev != f2FrontPrev);
             bool curOpp = (f1FrontCur != f2FrontCur);
             if (prevOpp || curOpp) {
@@ -211,14 +202,13 @@ void DynamicSilhouetteRenderer::buildBoundaryOnlyCache() {
     m_cachedBoundaryIndices.clear();
     if (m_shape.IsNull()) return;
 
-    // Use edge-face incidence to collect edges incident to only one face (boundary)
     TopTools_IndexedDataMapOfShapeListOfShape edgeFaceMap;
     TopExp::MapShapesAndAncestors(m_shape, TopAbs_EDGE, TopAbs_FACE, edgeFaceMap);
     int pointIndex = 0;
     for (TopExp_Explorer exp(m_shape, TopAbs_EDGE); exp.More(); exp.Next()) {
         TopoDS_Edge edge = TopoDS::Edge(exp.Current());
         const TopTools_ListOfShape& faces = edgeFaceMap.FindFromKey(edge);
-        if (faces.Extent() != 1) continue; // boundary only
+        if (faces.Extent() != 1) continue;
 
         Standard_Real first = 0.0, last = 0.0;
         Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
@@ -268,16 +258,12 @@ SoCamera* findCameraRecursive(SoNode* node) {
 }
 
 void DynamicSilhouetteRenderer::renderCallback(void* userData, SoAction* action) {
-    // debug log removed for performance
     DynamicSilhouetteRenderer* renderer = static_cast<DynamicSilhouetteRenderer*>(userData);
     if (!renderer->m_enabled) return;
     gp_Pnt cameraPos(10.0, 10.0, 10.0);
-    // Find camera from current action state's scene graph if possible
     SoState* state = action->getState();
     SoNode* rootNode = nullptr;
     if (state) {
-        // Try to get camera by traversing from the action's root if available
-        // Fallback to stored scene root
         rootNode = renderer->m_sceneRoot;
     }
     if (rootNode) {
@@ -287,7 +273,6 @@ void DynamicSilhouetteRenderer::renderCallback(void* userData, SoAction* action)
             cameraPos = gp_Pnt(pos[0], pos[1], pos[2]);
         }
     }
-    // debug log removed for performance
     SbMatrix modelMatrix = SoModelMatrixElement::get(state);
     renderer->calculateSilhouettes(cameraPos, &modelMatrix);
-} 
+}

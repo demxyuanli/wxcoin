@@ -14,6 +14,8 @@
 #include "RenderingEngine.h"
 #include "EventCoordinator.h"
 #include "ViewportManager.h"
+#include "interfaces/ISubsystemFactory.h"
+#include "interfaces/ServiceLocator.h"
 #include "OCCViewer.h"
 #include <wx/dcclient.h>
 #include <wx/msgdlg.h>
@@ -24,6 +26,9 @@ const int Canvas::s_canvasAttribs[] = {
     WX_GL_DOUBLEBUFFER,
     WX_GL_DEPTH_SIZE, 24,
     WX_GL_STENCIL_SIZE, 8,
+    // Request multisample buffers for MSAA
+    WX_GL_SAMPLE_BUFFERS, 1,
+    WX_GL_SAMPLES, 4,
     0 // Terminator
 };
 
@@ -79,18 +84,25 @@ Canvas::~Canvas() {
     LOG_INF_S("Canvas::Canvas: Destroying");
 }
 
+void Canvas::SetSubsystemFactory(ISubsystemFactory* factory) {
+    ServiceLocator::setFactory(factory);
+}
+
 void Canvas::initializeSubsystems() {
     LOG_INF_S("Canvas::initializeSubsystems: Creating subsystems");
 
     // Create core subsystems
     m_refreshManager = std::make_unique<ViewRefreshManager>(this);
-    m_renderingEngine = std::make_unique<RenderingEngine>(this);
-    m_viewportManager = std::make_unique<ViewportManager>(this);
-    m_eventCoordinator = std::make_unique<EventCoordinator>();
 
-    m_sceneManager = std::make_unique<SceneManager>(this);
-    m_inputManager = std::make_unique<InputManager>(this);
-    m_navigationCubeManager = std::make_unique<NavigationCubeManager>(this, m_sceneManager.get());
+    ISubsystemFactory* factory = ServiceLocator::getFactory();
+
+    m_renderingEngine.reset(factory ? factory->createRenderingEngine(this) : new RenderingEngine(this));
+    m_viewportManager.reset(factory ? factory->createViewportManager(this) : new ViewportManager(this));
+    m_eventCoordinator.reset(factory ? factory->createEventCoordinator() : new EventCoordinator());
+
+    m_sceneManager.reset(factory ? factory->createSceneManager(this) : new SceneManager(this));
+    m_inputManager.reset(factory ? factory->createInputManager(this) : new InputManager(this));
+    m_navigationCubeManager.reset(factory ? factory->createNavigationCubeManager(this, m_sceneManager.get()) : new NavigationCubeManager(this, m_sceneManager.get()));
 
     // Initialize rendering engine FIRST
     if (!m_renderingEngine->initialize()) {
@@ -213,6 +225,7 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
+    // Debug: log incoming mouse event
     // Check if this is an interaction event that should trigger LOD
     bool isInteractionEvent = false;
     if (event.GetEventType() == wxEVT_LEFT_DOWN || 
@@ -229,14 +242,16 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
     
     // Check multi-viewport first - this should have higher priority
     if (m_multiViewportEnabled && m_multiViewportManager) {
-        if (m_multiViewportManager->handleMouseEvent(event)) {
+        bool handled = m_multiViewportManager->handleMouseEvent(event);
+        if (handled) {
             return; // Event was handled
         }
     }
     
     // Only pass to EventCoordinator if MultiViewportManager didn't handle it
     if (m_eventCoordinator) {
-        if (m_eventCoordinator->handleMouseEvent(event)) {
+        bool handled = m_eventCoordinator->handleMouseEvent(event);
+        if (handled) {
             return; // Event was handled
         }
     }

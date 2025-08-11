@@ -5,6 +5,7 @@
 #include <memory>
 #include <map>
 #include <Inventor/nodes/SoSeparator.h>
+#include "interfaces/IMultiViewportManager.h"
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
@@ -44,7 +45,7 @@ struct ViewportInfo {
         : x(_x), y(_y), width(_w), height(_h), enabled(_enabled) {}
 };
 
-class MultiViewportManager {
+class MultiViewportManager : public IMultiViewportManager {
 public:
     enum ViewportType {
         VIEWPORT_NAVIGATION_CUBE = 0,
@@ -58,10 +59,10 @@ public:
     ~MultiViewportManager();
 
     // Core functionality
-    void render();
-    void handleSizeChange(const wxSize& canvasSize);
-    void handleDPIChange();
-    bool handleMouseEvent(wxMouseEvent& event);
+    void render() override;
+    void handleSizeChange(const wxSize& canvasSize) override;
+    void handleDPIChange() override;
+    bool handleMouseEvent(wxMouseEvent& event) override;
 
     // Viewport management
     void setViewportEnabled(ViewportType type, bool enabled);
@@ -70,7 +71,7 @@ public:
     ViewportInfo getViewportInfo(ViewportType type) const;
 
     // Navigation cube integration
-    void setNavigationCubeManager(NavigationCubeManager* manager);
+    void setNavigationCubeManager(NavigationCubeManager* manager) override;
 
 private:
     void syncCoordinateSystemCameraToMain();

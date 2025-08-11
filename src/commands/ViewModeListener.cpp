@@ -1,6 +1,7 @@
 #include "ViewModeListener.h"
 #include "CommandType.h"
 #include "logger/Logger.h"
+#include "OCCViewer.h"
 
 ViewModeListener::ViewModeListener(OCCViewer* viewer)
     : m_viewer(viewer)
@@ -15,9 +16,17 @@ CommandResult ViewModeListener::executeCommand(const std::string& commandType,
     }
 
     if (commandType == cmd::to_string(cmd::CommandType::ToggleWireframe)) {
-        bool current = m_viewer->isWireframeMode();
-        m_viewer->setWireframeMode(!current);
-        std::string msg = "Wireframe " + std::string(!current ? "enabled" : "disabled");
+        const bool toWire = !m_viewer->isWireframeMode();
+        m_viewer->setWireframeMode(toWire);
+        std::string msg = std::string(toWire ? "Wireframe enabled" : "Wireframe disabled");
+        LOG_INF_S(msg);
+        return CommandResult(true, msg, commandType);
+    }
+
+    if (commandType == cmd::to_string(cmd::CommandType::ToggleEdges)) {
+        const bool toShow = !m_viewer->isShowEdges();
+        m_viewer->setShowEdges(toShow);
+        std::string msg = std::string(toShow ? "Edges enabled" : "Edges disabled");
         LOG_INF_S(msg);
         return CommandResult(true, msg, commandType);
     }
@@ -28,7 +37,8 @@ CommandResult ViewModeListener::executeCommand(const std::string& commandType,
 
 bool ViewModeListener::canHandleCommand(const std::string& commandType) const
 {
-    return commandType == cmd::to_string(cmd::CommandType::ToggleWireframe);
+    return commandType == cmd::to_string(cmd::CommandType::ToggleWireframe) ||
+           commandType == cmd::to_string(cmd::CommandType::ToggleEdges);
 }
 
 std::string ViewModeListener::getListenerName() const

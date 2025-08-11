@@ -4,6 +4,8 @@ set(COMMANDS_SOURCES
     CommandDispatcher.cpp
     CommandListenerManager.cpp
     CoordinateSystemVisibilityListener.cpp
+    ReferenceGridToggleListener.cpp
+    ChessboardGridToggleListener.cpp
     CreateBoxListener.cpp
     CreateCommand.cpp
     CreateConeListener.cpp
@@ -49,6 +51,8 @@ set(COMMANDS_SOURCES
     ZoomSpeedListener.cpp
     RenderPreviewSystemListener.cpp
     ShowFlatWidgetsExampleListener.cpp
+    ExplodeAssemblyListener.cpp
+    SliceToggleListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -58,6 +62,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/CommandListenerManager.h
     ${CMAKE_SOURCE_DIR}/include/CommandType.h
     ${CMAKE_SOURCE_DIR}/include/CoordinateSystemVisibilityListener.h
+    ${CMAKE_SOURCE_DIR}/include/ReferenceGridToggleListener.h
+    ${CMAKE_SOURCE_DIR}/include/ChessboardGridToggleListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateBoxListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateCommand.h
     ${CMAKE_SOURCE_DIR}/include/CreateConeListener.h
@@ -103,6 +109,9 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ZoomSpeedListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderPreviewSystemListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowFlatWidgetsExampleListener.h
+    ${CMAKE_SOURCE_DIR}/include/ExplodeAssemblyListener.h
+    ${CMAKE_SOURCE_DIR}/include/SliceToggleListener.h
+    ${CMAKE_SOURCE_DIR}/include/ExplodeConfigListener.h
 )
 
 # Create command static library

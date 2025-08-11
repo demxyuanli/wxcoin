@@ -42,7 +42,8 @@ STEPReader::OptimizationOptions STEPReader::s_globalOptions;
 bool STEPReader::s_initialized = false;
 
 STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath, 
-                                               const OptimizationOptions& options)
+                                               const OptimizationOptions& options,
+                                               ProgressCallback progress)
 {
     auto totalStartTime = std::chrono::high_resolution_clock::now();
     ReadResult result;
@@ -74,6 +75,7 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
         
         // Initialize STEP reader
         initialize();
+        if (progress) progress(5, "initialize");
         
         // Use optimized STEP reader settings
         STEPControl_Reader reader;
@@ -91,6 +93,7 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
             LOG_ERR_S(result.errorMessage);
             return result;
         }
+        if (progress) progress(20, "read");
         
         // Transfer shapes
         Standard_Integer nbRoots = reader.NbRootsForTransfer();
@@ -102,6 +105,7 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
         
         reader.TransferRoots();
         Standard_Integer nbShapes = reader.NbShapes();
+        if (progress) progress(35, "transfer");
         
         if (nbShapes == 0) {
             result.errorMessage = "No shapes could be transferred from STEP file";
@@ -120,15 +124,17 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
             }
         }
         result.rootShape = compound;
+        if (progress) progress(45, "assemble");
         
         // Convert to geometry objects with optimization
         std::string baseName = std::filesystem::path(filePath).stem().string();
-        result.geometries = shapeToGeometries(result.rootShape, baseName, options);
+        result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 50, 40);
         
         // Apply automatic scaling to make geometries reasonable size
         if (!result.geometries.empty()) {
             double scaleFactor = scaleGeometriesToReasonableSize(result.geometries);
         }
+        if (progress) progress(92, "postprocess");
         
         // Cache result if enabled
         if (options.enableCaching) {
@@ -142,6 +148,7 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
         auto totalEndTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
         result.importTime = static_cast<double>(totalDuration.count());
+        if (progress) progress(100, "done");
         
     } catch (const Standard_Failure& e) {
         result.errorMessage = "OpenCASCADE exception: " + std::string(e.GetMessageString());
@@ -176,7 +183,10 @@ std::vector<std::string> STEPReader::getSupportedExtensions()
 std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
     const TopoDS_Shape& shape, 
     const std::string& baseName,
-    const OptimizationOptions& options)
+    const OptimizationOptions& options,
+    ProgressCallback progress,
+    int progressStart,
+    int progressSpan)
 {
     std::vector<std::shared_ptr<OCCGeometry>> geometries;
     
@@ -192,9 +202,10 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
         
         // Use parallel processing if enabled and there are multiple shapes
         if (options.enableParallelProcessing && shapes.size() > 1) {
-            geometries = processShapesParallel(shapes, baseName, options);
+            geometries = processShapesParallel(shapes, baseName, options, progress, progressStart, progressSpan);
         } else {
-            // Sequential processing
+            // Sequential processing with progress
+            size_t total = shapes.size();
             for (size_t i = 0; i < shapes.size(); ++i) {
                 if (!shapes[i].IsNull()) {
                     std::string name = baseName + "_" + std::to_string(i);
@@ -202,6 +213,11 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
                     if (geometry) {
                         geometries.push_back(geometry);
                     }
+                }
+                if (progress && total > 0) {
+                    int pct = progressStart + (int)std::round(((double)(i + 1) / (double)total) * progressSpan);
+                    pct = std::max(progressStart, std::min(progressStart + progressSpan, pct));
+                    progress(pct, "convert");
                 }
             }
         }
@@ -216,7 +232,10 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 std::vector<std::shared_ptr<OCCGeometry>> STEPReader::processShapesParallel(
     const std::vector<TopoDS_Shape>& shapes,
     const std::string& baseName,
-    const OptimizationOptions& options)
+    const OptimizationOptions& options,
+    ProgressCallback progress,
+    int progressStart,
+    int progressSpan)
 {
     std::vector<std::shared_ptr<OCCGeometry>> geometries;
     geometries.reserve(shapes.size());
@@ -236,11 +255,17 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::processShapesParallel(
         }
     }
     
-    // Collect results
-    for (auto& future : futures) {
-        auto geometry = future.get();
+    // Collect results with progress
+    size_t total = futures.size();
+    for (size_t idx = 0; idx < futures.size(); ++idx) {
+        auto geometry = futures[idx].get();
         if (geometry) {
             geometries.push_back(geometry);
+        }
+        if (progress && total > 0) {
+            int pct = progressStart + (int)std::round(((double)(idx + 1) / (double)total) * progressSpan);
+            pct = std::max(progressStart, std::min(progressStart + progressSpan, pct));
+            progress(pct, "convert");
         }
     }
     

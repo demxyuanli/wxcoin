@@ -57,6 +57,7 @@ enum {
     ID_SHOW_FEATURE_EDGES, // New: show feature edges
     ID_SHOW_MESH_EDGES, // New: show mesh edges
     ID_SHOW_FACE_NORMALS, // New: show face normals
+    ID_TOGGLE_SLICE,
 
     ID_UNDO,
     ID_REDO,
@@ -78,6 +79,11 @@ enum {
     
     // Coordinate System Control
     ID_TOGGLE_COORDINATE_SYSTEM,
+    ID_TOGGLE_REFERENCE_GRID,
+    ID_TOGGLE_CHESSBOARD_GRID,
+
+    // Assembly tools
+    ID_EXPLODE_ASSEMBLY,
 
     // Render Preview System
     ID_RENDER_PREVIEW_SYSTEM,
@@ -103,11 +109,14 @@ private:
     // UI components
     FlatUIBar* m_ribbon;
     wxTextCtrl* m_messageOutput;
+    wxTimer m_progressTimer;
+    wxTimer m_startupTimer;  // Add startup timer as member variable
+    bool m_prevFeatureEdgesRunning = false; // track running state edge
+    int m_featureProgressHoldTicks = 0;     // brief hold at 100% after completion
     wxSearchCtrl* m_searchCtrl;
     FlatUIHomeMenu* m_homeMenu;
     wxPanel* m_searchPanel;
     wxPanel* m_profilePanel;
-    FlatUIStatusBar* m_statusBar;
 
     wxAuiManager m_auiManager;
 
@@ -126,6 +135,7 @@ private:
     std::unique_ptr<CommandDispatcher> m_commandDispatcher;
     std::unique_ptr<CommandListenerManager> m_listenerManager;
     bool m_isFirstActivate;
+    bool m_startupTimerFired;  // Track if startup timer has already fired
 
     // Methods
     void InitializeUI(const wxSize& size);
@@ -141,6 +151,10 @@ private:
     void onClose(wxCloseEvent& event);
     void onActivate(wxActivateEvent& event);
     void onSize(wxSizeEvent& event);
+    
+public:
+    // Message output methods
+    void appendMessage(const wxString& message);
 
     // Event handlers
     void OnButtonClick(wxCommandEvent& event);

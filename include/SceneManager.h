@@ -8,6 +8,7 @@
 #include <Inventor/nodes/SoSpotLight.h>
 #include <memory>
 #include "rendering/RenderingToolkitAPI.h"
+#include "interfaces/ISceneManager.h"
 
 class Canvas;
 class CoordinateSystemRenderer;
@@ -15,23 +16,23 @@ class PickingAidManager;
 class NavigationCube;
 class TopoDS_Shape; // Forward declaration for OpenCASCADE
 
-class SceneManager {
+class SceneManager : public ISceneManager {
 public:
     SceneManager(Canvas* canvas);
     ~SceneManager();
     Canvas* getCanvas() const { return m_canvas; }
-    bool initScene();
+    bool initScene() override;
     void initializeScene();  // Add missing method declaration
     void cleanup();
-    void resetView();
+    void resetView() override;
     void toggleCameraMode();
     void setView(const std::string& viewName);
-    void render(const wxSize& size, bool fastMode);
-    void updateAspectRatio(const wxSize& size);
+    void render(const wxSize& size, bool fastMode) override;
+    void updateAspectRatio(const wxSize& size) override;
     bool screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos);
 
-    SoSeparator* getObjectRoot() const { return m_objectRoot; }
-    SoCamera* getCamera() const { return m_camera; }
+    SoSeparator* getObjectRoot() const override { return m_objectRoot; }
+    SoCamera* getCamera() const override { return m_camera; }
     PickingAidManager* getPickingAidManager() const { return m_pickingAidManager.get(); }
 
     // Scene bounds and coordinate system management
@@ -43,6 +44,10 @@ public:
     // Coordinate system visibility control
     void setCoordinateSystemVisible(bool visible);
     bool isCoordinateSystemVisible() const;
+
+    // Checkerboard plane control
+    void setCheckerboardVisible(bool visible);
+    bool isCheckerboardVisible() const;
     
     // Debug method to check lighting state
     void debugLightingState() const;
@@ -77,6 +82,12 @@ private:
     std::unique_ptr<PickingAidManager> m_pickingAidManager;
     bool m_isPerspectiveCamera;
     SbBox3f m_sceneBoundingBox;
+
+    // Checkerboard plane state
+    SoSeparator* m_checkerboardSeparator = nullptr;
+    bool m_checkerboardVisible = false;
+
+    void createCheckerboardPlane(float planeZ = 0.0f);
     
     // Culling state
     bool m_cullingEnabled;

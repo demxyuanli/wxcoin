@@ -5,6 +5,10 @@
 #endif
 
 #include "SceneManager.h"
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoIndexedFaceSet.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
 #include "Canvas.h"
 #include "config/RenderingConfig.h"
 #include "config/LightingConfig.h"
@@ -290,10 +294,6 @@ void SceneManager::setView(const std::string& viewName) {
     m_camera->nearDistance.setValue(0.001f);
     m_camera->farDistance.setValue(10000.0f);
 
-    if (m_pickingAidManager) {
-        m_pickingAidManager->showReferenceGrid(true);
-    }
-
     LOG_INF_S("Switched to view: " + viewName);
     
     if (m_canvas->getRefreshManager()) {
@@ -508,6 +508,92 @@ void SceneManager::initializeScene() {
     // Providing a basic implementation.
     LOG_INF_S("SceneManager::initializeScene called.");
     // If there's specific initialization logic needed, it should go here.
+}
+
+void SceneManager::createCheckerboardPlane(float planeZ) {
+    if (m_checkerboardSeparator) return;
+    m_checkerboardSeparator = new SoSeparator;
+    m_checkerboardSeparator->ref();
+
+    auto* coordinates = new SoCoordinate3;
+    const int gridSize = 8;
+    const float cellSize = 10.0f;
+    const float halfSize = (gridSize * cellSize) / 2.0f;
+
+    for (int z = 0; z <= gridSize; ++z) {
+        for (int x = 0; x <= gridSize; ++x) {
+            float xPos = x * cellSize - halfSize;
+            float yPos = z * cellSize - halfSize;
+            coordinates->point.set1Value(z * (gridSize + 1) + x, SbVec3f(xPos, yPos, planeZ));
+        }
+    }
+    m_checkerboardSeparator->addChild(coordinates);
+
+    for (int z = 0; z < gridSize; ++z) {
+        for (int x = 0; x < gridSize; ++x) {
+            auto* cellGroup = new SoSeparator;
+            bool isLightCell = ((x + z) % 2) == 0;
+            auto* cellMaterial = new SoMaterial;
+            if (isLightCell) {
+                cellMaterial->diffuseColor.setValue(0.90f, 0.90f, 0.92f);
+                cellMaterial->ambientColor.setValue(0.70f, 0.70f, 0.72f);
+            } else {
+                cellMaterial->diffuseColor.setValue(0.60f, 0.60f, 0.65f);
+                cellMaterial->ambientColor.setValue(0.40f, 0.40f, 0.45f);
+            }
+            cellMaterial->transparency.setValue(0.6f);
+            cellGroup->addChild(cellMaterial);
+
+            auto* faceSet = new SoIndexedFaceSet;
+            int baseIndex = z * (gridSize + 1) + x;
+            faceSet->coordIndex.set1Value(0, baseIndex);
+            faceSet->coordIndex.set1Value(1, baseIndex + 1);
+            faceSet->coordIndex.set1Value(2, baseIndex + gridSize + 2);
+            faceSet->coordIndex.set1Value(3, baseIndex + gridSize + 1);
+            faceSet->coordIndex.set1Value(4, -1);
+            cellGroup->addChild(faceSet);
+            m_checkerboardSeparator->addChild(cellGroup);
+        }
+    }
+
+    auto* lineSet = new SoIndexedLineSet;
+    for (int z = 0; z < gridSize; ++z) {
+        for (int x = 0; x < gridSize; ++x) {
+            int baseIndex = z * (gridSize + 1) + x;
+            lineSet->coordIndex.set1Value(lineSet->coordIndex.getNum(), baseIndex);
+            lineSet->coordIndex.set1Value(lineSet->coordIndex.getNum(), baseIndex + 1);
+            lineSet->coordIndex.set1Value(lineSet->coordIndex.getNum(), -1);
+            lineSet->coordIndex.set1Value(lineSet->coordIndex.getNum(), baseIndex);
+            lineSet->coordIndex.set1Value(lineSet->coordIndex.getNum(), baseIndex + gridSize + 1);
+            lineSet->coordIndex.set1Value(lineSet->coordIndex.getNum(), -1);
+        }
+    }
+    auto* lineMaterial = new SoMaterial;
+    lineMaterial->diffuseColor.setValue(0.3f, 0.3f, 0.3f);
+    m_checkerboardSeparator->addChild(lineMaterial);
+    m_checkerboardSeparator->addChild(lineSet);
+}
+
+void SceneManager::setCheckerboardVisible(bool visible) {
+    if (visible) {
+        if (!m_checkerboardSeparator) createCheckerboardPlane(0.0f);
+        if (!m_checkerboardVisible && m_objectRoot && m_checkerboardSeparator) {
+            m_objectRoot->addChild(m_checkerboardSeparator);
+            m_checkerboardVisible = true;
+        }
+    } else {
+        if (m_checkerboardSeparator && m_objectRoot && m_checkerboardVisible) {
+            m_objectRoot->removeChild(m_checkerboardSeparator);
+            m_checkerboardVisible = false;
+        }
+    }
+    if (m_canvas) {
+        m_canvas->Refresh(true);
+    }
+}
+
+bool SceneManager::isCheckerboardVisible() const {
+    return m_checkerboardVisible;
 }
 
 void SceneManager::getSceneBoundingBoxMinMax(SbVec3f& min, SbVec3f& max) const {

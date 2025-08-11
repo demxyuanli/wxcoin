@@ -12,5 +12,6 @@ CommandResult ShowWireFrameListener::executeCommand(const std::string& commandTy
 }
 
 bool ShowWireFrameListener::canHandleCommand(const std::string& commandType) const {
+    // Ensure only wireframe toggling is handled here
     return commandType == cmd::to_string(cmd::CommandType::ToggleWireframe);
 } 

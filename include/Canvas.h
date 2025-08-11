@@ -3,6 +3,10 @@
 #include <wx/glcanvas.h>
 #include <memory>
 #include <Inventor/nodes/SoCamera.h>
+#include "interfaces/ICanvas.h"
+#include "interfaces/IViewportManager.h"
+#include "interfaces/IMultiViewportManager.h"
+#include "interfaces/IViewRefresher.h"
 
 // Forward declarations
 class OCCViewer;
@@ -13,17 +17,19 @@ class CommandManager;
 class NavigationCubeManager;
 class RenderingEngine;
 class EventCoordinator;
-class ViewportManager;
-class MultiViewportManager;
+class IViewportManager;
+class IMultiViewportManager;
+class ViewportManager;        // concrete, kept as member type
+class MultiViewportManager;   // concrete, kept as member type
 class ViewRefreshManager;
 
-class Canvas : public wxGLCanvas {
+class Canvas : public wxGLCanvas, public ICanvas {
 public:
     Canvas(wxWindow* parent, wxWindowID id = wxID_ANY, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize);
     virtual ~Canvas();
 
     // Core rendering interface
-    void render(bool fastMode = false);
+    void render(bool fastMode = false) override;
 
     // UI state management
     void setPickingCursor(bool enable);
@@ -35,7 +41,8 @@ public:
     ObjectTreePanel* getObjectTreePanel() const { return m_objectTreePanel; }
     CommandManager* getCommandManager() const { return m_commandManager; }
     RenderingEngine* getRenderingEngine() const { return m_renderingEngine.get(); }
-    ViewportManager* getViewportManager() const { return m_viewportManager.get(); }
+    IRenderingEngine* getRenderingEngineInterface() const override { return reinterpret_cast<IRenderingEngine*>(m_renderingEngine.get()); }
+    IViewportManager* getViewportManager() const { return reinterpret_cast<IViewportManager*>(m_viewportManager.get()); }
 
     // Navigation cube methods (delegated to NavigationCubeManager)
     void setNavigationCubeEnabled(bool enabled);
@@ -50,6 +57,7 @@ public:
 
     // Scene access shortcuts
     SoCamera* getCamera() const;
+    ISceneManager* getSceneManagerInterface() const override { return reinterpret_cast<ISceneManager*>(m_sceneManager.get()); }
     void resetView();
 
     // DPI access shortcuts
@@ -57,6 +65,9 @@ public:
 
     // Refresh management
     ViewRefreshManager* getRefreshManager() const { return m_refreshManager.get(); }
+    IViewRefresher* getViewRefresher() const { return reinterpret_cast<IViewRefresher*>(m_refreshManager.get()); }
+    // Optional injection entry
+    static void SetSubsystemFactory(class ISubsystemFactory* factory);
 private:
     void initializeSubsystems();
     void connectSubsystems();
@@ -85,7 +96,7 @@ private:
     // Multi-viewport methods
     void setMultiViewportEnabled(bool enabled);
     bool isMultiViewportEnabled() const;
-    MultiViewportManager* getMultiViewportManager() const { return m_multiViewportManager.get(); }
+    IMultiViewportManager* getMultiViewportManager() const { return reinterpret_cast<IMultiViewportManager*>(m_multiViewportManager.get()); }
 
 private:
     std::unique_ptr<MultiViewportManager> m_multiViewportManager;

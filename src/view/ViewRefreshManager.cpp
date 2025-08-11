@@ -66,8 +66,7 @@ void ViewRefreshManager::performRefresh(RefreshReason reason) {
         }
     }
     
-    // Perform the actual refresh
-    m_canvas->Refresh();
+    // Perform the actual refresh: force immediate redraw during interactions
     m_canvas->render(false);
     
     LOG_DBG_S("ViewRefreshManager: Refresh completed for reason: " + std::to_string(static_cast<int>(reason)));

@@ -9,6 +9,7 @@
 #include "OCCGeometry.h"
 #include "ObjectTreePanel.h"
 #include "logger/Logger.h"
+#include "OCCViewer.h"
 #include <Inventor/nodes/SoSelection.h>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/SoPickedPoint.h>
@@ -106,6 +107,21 @@ void MouseHandler::handleMouseButton(wxMouseEvent& event) {
               ", LeftDown: " + std::to_string(event.LeftDown()));
     
     if (m_operationMode == OperationMode::VIEW && m_navigationController) {
+        // Start/stop slice dragging with left button when slice is enabled
+        if (auto* viewer = m_canvas ? m_canvas->getOCCViewer() : nullptr) {
+            if (viewer->isSliceEnabled()) {
+                if (event.LeftDown()) {
+                    enableSliceDragging(true);
+                    m_lastMousePos = event.GetPosition();
+                    // Do not forward to navigation when starting slice drag
+                    return;
+                } else if (event.LeftUp()) {
+                    enableSliceDragging(false);
+                    // Consume release as well
+                    return;
+                }
+            }
+        }
         m_navigationController->handleMouseButton(event);
     } else {
         event.Skip();
@@ -116,9 +132,51 @@ void MouseHandler::handleMouseButton(wxMouseEvent& event) {
 
 void MouseHandler::handleMouseMotion(wxMouseEvent& event) {
     if (m_operationMode == OperationMode::VIEW && m_navigationController) {
-        m_navigationController->handleMouseMotion(event);
+        // If slice dragging is active, convert mouse delta to world movement along slice normal
+        if (m_sliceDragState == SliceDragState::Dragging && m_canvas && m_canvas->getSceneManager()) {
+            // Convert pixel delta to a movement along the slice normal using scene scale
+            wxPoint cur = event.GetPosition();
+            wxPoint dpx = cur - m_lastMousePos;
+            m_lastMousePos = cur;
+            if (auto* viewer = m_canvas->getOCCViewer()) {
+                float sceneSize = m_canvas->getSceneManager()->getSceneBoundingBoxSize();
+                if (sceneSize <= 0.0f) sceneSize = 1.0f;
+                // Scale by viewport height to be resolution independent; invert Y for intuitive drag
+                int h = std::max(1, m_canvas->GetClientSize().GetHeight());
+                // Use camera orientation to align vertical drag with slice normal projection
+                SbVec3f n = viewer->getSliceNormal();
+                n.normalize();
+                // Map pixel delta to world along camera up vector, then project to normal
+                SbVec3f up(0,1,0);
+                if (auto* cam = m_canvas->getSceneManager()->getCamera()) {
+                    SbRotation r = cam->orientation.getValue();
+                    r.multVec(up, up);
+                }
+                up.normalize();
+                float worldPerPixel = sceneSize / static_cast<float>(h);
+                float alongUp = -static_cast<float>(dpx.y) * worldPerPixel;
+                float delta = alongUp * up.dot(n);
+                viewer->moveSliceAlongNormal(delta);
+            }
+        } else {
+            m_navigationController->handleMouseMotion(event);
+        }
     } else {
         event.Skip();
+    }
+}
+void MouseHandler::enableSliceDragging(bool enable) {
+    if (!m_canvas || !m_canvas->getSceneManager()) return;
+    if (enable) {
+        m_sliceDragState = SliceDragState::Dragging;
+        SbVec3f world;
+        if (m_canvas->getSceneManager()->screenToWorld(wxGetMousePosition() - m_canvas->GetScreenPosition(), world)) {
+            m_sliceDragLastWorld = world;
+        } else {
+            m_sliceDragLastWorld = SbVec3f(0,0,0);
+        }
+    } else {
+        m_sliceDragState = SliceDragState::None;
     }
 }
 

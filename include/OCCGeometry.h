@@ -205,6 +205,8 @@ public:
     virtual void setWireframeMode(bool wireframe);
 
     void setFaceDisplay(bool enable);
+    // New: control visibility of faces for edges-only mode without rebuilding flags externally
+    void setFacesVisible(bool visible);
     void setWireframeOverlay(bool enable);
     bool hasOriginalEdges() const;
     void setEdgeDisplay(bool enable);
@@ -249,6 +251,7 @@ protected:
     // Display properties
     bool m_visible;
     bool m_selected;
+      bool m_facesVisible; // control face visibility independently for edges-only mode
     Quantity_Color m_color;
     double m_transparency;
     

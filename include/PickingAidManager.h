@@ -32,6 +32,7 @@ public:
     void showReferenceGrid(bool show);
     void updatePickingAidColor(const SbVec3f& color);
     void updateReferenceGrid();
+    bool isReferenceGridVisible() const { return m_referenceGridVisible; }
 
 private:
     void createPickingAids();

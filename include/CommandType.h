@@ -55,8 +55,10 @@ enum class CommandType {
     TextureModeReplace,
     TextureModeBlend,
 
-
-
+    // Assembly
+    ExplodeAssembly,
+    // Slice
+    SliceToggle,
     // Edit
     Undo,
     Redo,
@@ -69,6 +71,8 @@ enum class CommandType {
     EdgeSettings,
     LightingSettings,
     ToggleCoordinateSystem,
+    ToggleReferenceGrid,
+    ToggleChessboardGrid,
 
     // Help
     HelpAbout,
@@ -125,6 +129,8 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::TextureModeModulate, "TEXTURE_MODE_MODULATE"},
         {CommandType::TextureModeReplace, "TEXTURE_MODE_REPLACE"},
         {CommandType::TextureModeBlend, "TEXTURE_MODE_BLEND"},
+        {CommandType::ExplodeAssembly, "EXPLODE_ASSEMBLY"},
+        {CommandType::SliceToggle, "SLICE_TOGGLE"},
 
 
 
@@ -138,6 +144,8 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::EdgeSettings, "EDGE_SETTINGS"},
         {CommandType::LightingSettings, "LIGHTING_SETTINGS"},
         {CommandType::ToggleCoordinateSystem, "TOGGLE_COORDINATE_SYSTEM"},
+        {CommandType::ToggleReferenceGrid, "TOGGLE_REFERENCE_GRID"},
+        {CommandType::ToggleChessboardGrid, "TOGGLE_CHESSBOARD_GRID"},
 
         {CommandType::HelpAbout, "HELP_ABOUT"},
         {CommandType::RenderPreviewSystem, "RENDER_PREVIEW_SYSTEM"},
@@ -190,6 +198,8 @@ inline CommandType from_string(const std::string& str) {
         {"TEXTURE_MODE_MODULATE", CommandType::TextureModeModulate},
         {"TEXTURE_MODE_REPLACE", CommandType::TextureModeReplace},
         {"TEXTURE_MODE_BLEND", CommandType::TextureModeBlend},
+        {"EXPLODE_ASSEMBLY", CommandType::ExplodeAssembly},
+        {"SLICE_TOGGLE", CommandType::SliceToggle},
 
 
 
@@ -203,6 +213,8 @@ inline CommandType from_string(const std::string& str) {
         {"EDGE_SETTINGS", CommandType::EdgeSettings},
         {"LIGHTING_SETTINGS", CommandType::LightingSettings},
         {"TOGGLE_COORDINATE_SYSTEM", CommandType::ToggleCoordinateSystem},
+        {"TOGGLE_REFERENCE_GRID", CommandType::ToggleReferenceGrid},
+        {"TOGGLE_CHESSBOARD_GRID", CommandType::ToggleChessboardGrid},
 
         {"HELP_ABOUT", CommandType::HelpAbout},
         {"RENDER_PREVIEW_SYSTEM", CommandType::RenderPreviewSystem},

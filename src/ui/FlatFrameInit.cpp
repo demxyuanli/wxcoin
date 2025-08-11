@@ -1,0 +1,464 @@
+#include "FlatFrame.h"
+#include "flatui/FlatUIPanel.h"
+#include "flatui/FlatUIPage.h"
+#include "flatui/FlatUIButtonBar.h"
+#include "flatui/FlatUIGallery.h"
+#include "flatui/FlatUIEventManager.h"
+#include "flatui/FlatUIHomeSpace.h"
+#include "flatui/FlatUIHomeMenu.h"
+#include "flatui/FlatUIFunctionSpace.h"
+#include "flatui/FlatUIProfileSpace.h"
+#include "flatui/FlatUISystemButtons.h"
+#include "flatui/FlatUICustomControl.h"
+#include "flatui/UIHierarchyDebugger.h"
+#include "config/ThemeManager.h"
+#include "config/SvgIconManager.h"
+#include <wx/display.h>
+#include "logger/Logger.h"
+#include <wx/dcbuffer.h>
+#include <wx/splitter.h>
+#include <wx/sizer.h>
+#include <wx/stdpaths.h>
+#include <wx/filename.h>
+#include <wx/bmpbndl.h>
+#include <string>
+#include "Canvas.h"
+#include "PropertyPanel.h"
+#include "ObjectTreePanel.h"
+#include "MouseHandler.h"
+#include "NavigationController.h"
+#include "GeometryFactory.h"
+#include "InputManager.h"
+#include "SceneManager.h"
+#include "Command.h"
+#include "OCCViewer.h"
+#include "CommandDispatcher.h"
+#include "CommandListenerManager.h"
+#include "MeshQualityDialog.h"
+#include "MeshQualityDialogListener.h"
+#include "RenderingSettingsListener.h"
+#include <unordered_map>
+#include "CommandType.h"
+#include "STEPReader.h"
+#include <wx/artprov.h>
+#include <wx/aboutdlg.h>
+#include <wx/filedlg.h>
+#include <wx/toolbar.h>
+#include <wx/msgdlg.h>
+#include <wx/textdlg.h>
+#include <Inventor/SbVec3f.h>
+#include <Inventor/nodes/SoTexture2.h>
+#include "FileNewListener.h"
+#include "FileOpenListener.h"
+#include "FileSaveListener.h"
+#include "FileSaveAsListener.h"
+#include "ImportStepListener.h"
+#include "CreateBoxListener.h"
+#include "CreateSphereListener.h"
+#include "CreateCylinderListener.h"
+#include "CreateConeListener.h"
+#include "CreateTorusListener.h"
+#include "CreateTruncatedCylinderListener.h"
+#include "CreateWrenchListener.h"
+#include "ViewAllListener.h"
+#include "ViewTopListener.h"
+#include "ViewFrontListener.h"
+#include "ViewRightListener.h"
+#include "ViewIsometricListener.h"
+#include "ShowNormalsListener.h"
+#include "FixNormalsListener.h"
+#include "ShowSilhouetteEdgesListener.h"
+#include "SetTransparencyListener.h"
+#include "TextureModeDecalListener.h"
+#include "TextureModeModulateListener.h"
+#include "TextureModeReplaceListener.h"
+#include "TextureModeBlendListener.h"
+#include "ViewModeListener.h"
+#include "EdgeSettingsListener.h"
+#include "LightingSettingsListener.h"
+#include "CoordinateSystemVisibilityListener.h"
+#include "ShowOriginalEdgesListener.h"
+#include "ShowFeatureEdgesListener.h"
+#include "ShowMeshEdgesListener.h"
+#include "ShowWireFrameListener.h"
+#include "ShowFaceNormalsListener.h"
+#include "RenderPreviewSystemListener.h"
+#include "ShowFlatWidgetsExampleListener.h"
+#include "ReferenceGridToggleListener.h"
+#include "ChessboardGridToggleListener.h"
+
+void FlatFrame::InitializeUI(const wxSize& size)
+{
+    SetBackgroundColour(CFG_COLOUR("TitledPanelBgColour"));
+
+    int barHeight = FlatUIBar::GetBarHeight();
+    m_ribbon = new FlatUIBar(this, wxID_ANY, wxDefaultPosition, wxSize(-1, barHeight * 3));
+    wxFont defaultFont = CFG_DEFAULTFONT();
+    m_ribbon->SetDoubleBuffered(true);
+    m_ribbon->SetTabStyle(FlatUIBar::TabStyle::DEFAULT);
+    m_ribbon->SetTabBorderColour(CFG_COLOUR("BarTabBorderColour"));
+    m_ribbon->SetActiveTabBackgroundColour(CFG_COLOUR("BarActiveTabBgColour"));
+    m_ribbon->SetActiveTabTextColour(CFG_COLOUR("BarActiveTextColour"));
+    m_ribbon->SetInactiveTabTextColour(CFG_COLOUR("BarInactiveTextColour"));
+    m_ribbon->SetTabBorderStyle(FlatUIBar::TabBorderStyle::SOLID);
+    m_ribbon->SetTabBorderWidths(2, 0, 1, 1);
+    m_ribbon->SetTabBorderTopColour(CFG_COLOUR("BarTabBorderTopColour"));
+    m_ribbon->SetTabCornerRadius(0);
+    m_ribbon->SetHomeButtonWidth(30);
+
+    FlatUIHomeSpace* homeSpace = m_ribbon->GetHomeSpace();
+    if (homeSpace) {
+        m_homeMenu = new FlatUIHomeMenu(homeSpace, this);
+        m_homeMenu->AddMenuItem("&New Project...\tCtrl-N", ID_Menu_NewProject_MainFrame);
+        m_homeMenu->AddSeparator();
+        m_homeMenu->AddMenuItem("Show UI &Hierarchy\tCtrl-H", ID_ShowUIHierarchy);
+        m_homeMenu->AddSeparator();
+        m_homeMenu->AddMenuItem("Print Frame All wxCtr", ID_Menu_PrintLayout_MainFrame);
+        m_homeMenu->BuildMenuLayout();
+        homeSpace->SetHomeMenu(m_homeMenu);
+    } else {
+        LOG_ERR("FlatUIHomeSpace is not available to attach the menu.", "FlatFrame");
+    }
+
+    m_ribbon->AddSpaceSeparator(FlatUIBar::SPACER_TAB_FUNCTION, 30, false, true, true);
+
+    wxPanel* searchPanel = new wxPanel(m_ribbon);
+    searchPanel->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+    wxBoxSizer* searchSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_searchCtrl = new wxSearchCtrl(searchPanel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(240, -1), wxTE_PROCESS_ENTER);
+    m_searchCtrl->SetFont(defaultFont);
+    m_searchCtrl->SetBackgroundColour(CFG_COLOUR("SearchCtrlBgColour"));
+    m_searchCtrl->SetForegroundColour(CFG_COLOUR("SearchCtrlFgColour"));
+    m_searchCtrl->ShowSearchButton(true);
+    m_searchCtrl->ShowCancelButton(true);
+    wxBitmapButton* searchButton = new wxBitmapButton(searchPanel, ID_SearchExecute, SVG_ICON("search", wxSize(16, 16)));
+    searchButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+    searchSizer->Add(m_searchCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+    searchSizer->Add(searchButton, 0, wxALIGN_CENTER_VERTICAL);
+    searchPanel->SetSizer(searchSizer);
+    searchPanel->SetFont(defaultFont);
+    m_ribbon->SetFunctionSpaceControl(searchPanel, 270);
+
+    wxPanel* profilePanel = new wxPanel(m_ribbon);
+    profilePanel->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+    wxBoxSizer* profileSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxBitmapButton* userButton = new wxBitmapButton(profilePanel, ID_UserProfile, SVG_ICON("user",wxSize(16, 16)));
+    userButton->SetToolTip("User Profile");
+    userButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+    wxBitmapButton* settingsButton = new wxBitmapButton(profilePanel, wxID_PREFERENCES, SVG_ICON("settings", wxSize(16, 16)));
+    settingsButton->SetToolTip("Settings");
+    settingsButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+    profileSizer->Add(userButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    profileSizer->Add(settingsButton, 0, wxALIGN_CENTER_VERTICAL);
+    profilePanel->SetSizer(profileSizer);
+    m_ribbon->SetProfileSpaceControl(profilePanel, 60);
+
+    m_ribbon->AddSpaceSeparator(FlatUIBar::SPACER_FUNCTION_PROFILE, 30, false, true, true);
+
+    m_searchPanel = searchPanel;
+    m_profilePanel = profilePanel;
+
+    FlatUIPage* page1 = new FlatUIPage(m_ribbon, "Project");
+    FlatUIPanel* filePanel = new FlatUIPanel(page1, "File", wxHORIZONTAL);
+    filePanel->SetFont(CFG_DEFAULTFONT());
+    filePanel->SetPanelBorderWidths(0, 0, 0, 1);
+    filePanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    filePanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    filePanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    filePanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* fileButtonBar = new FlatUIButtonBar(filePanel);
+    fileButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    fileButtonBar->AddButton(wxID_NEW, "New", SVG_ICON("new", wxSize(16, 16)), nullptr, "Create a new project");
+    fileButtonBar->AddButton(wxID_OPEN, "Open", SVG_ICON("open", wxSize(16, 16)), nullptr, "Open an existing project");
+    fileButtonBar->AddButton(wxID_SAVE, "Save", SVG_ICON("save", wxSize(16, 16)), nullptr, "Save current project");
+    fileButtonBar->AddButton(ID_SAVE_AS, "Save As", SVG_ICON("saveas", wxSize(16, 16)), nullptr, "Save project with a new name");
+    fileButtonBar->AddButton(ID_IMPORT_STEP, "Import STEP", SVG_ICON("import", wxSize(16, 16)), nullptr, "Import STEP file");
+    filePanel->AddButtonBar(fileButtonBar, 0, wxEXPAND | wxALL, 5);
+    page1->AddPanel(filePanel);
+
+    FlatUIPanel* createPanel = new FlatUIPanel(page1, "Create", wxHORIZONTAL);
+    createPanel->SetFont(CFG_DEFAULTFONT());
+    createPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    createPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    createPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    createPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    createPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* createButtonBar = new FlatUIButtonBar(createPanel);
+    createButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    createButtonBar->AddButton(ID_CREATE_BOX, "Box", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Create a box geometry");
+    createButtonBar->AddButton(ID_CREATE_SPHERE, "Sphere", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Create a sphere geometry");
+    createButtonBar->AddButton(ID_CREATE_CYLINDER, "Cylinder", SVG_ICON("cylinder", wxSize(16, 16)), nullptr, "Create a cylinder geometry");
+    createButtonBar->AddButton(ID_CREATE_CONE, "Cone", SVG_ICON("cone", wxSize(16, 16)), nullptr, "Create a cone geometry");
+    createButtonBar->AddButton(ID_CREATE_TORUS, "Torus", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Create a torus geometry");
+    createButtonBar->AddButton(ID_CREATE_TRUNCATED_CYLINDER, "Truncated Cylinder", SVG_ICON("cylinder", wxSize(16, 16)), nullptr, "Create a truncated cylinder geometry");
+    createButtonBar->AddButton(ID_CREATE_WRENCH, "Wrench", SVG_ICON("wrench", wxSize(16, 16)), nullptr, "Create a wrench geometry");
+    createPanel->AddButtonBar(createButtonBar, 0, wxEXPAND | wxALL, 5);
+    page1->AddPanel(createPanel);
+    m_ribbon->AddPage(page1);
+
+    FlatUIPage* page2 = new FlatUIPage(m_ribbon, "Edit");
+    FlatUIPanel* editPanel = new FlatUIPanel(page2, "Edit", wxHORIZONTAL);
+    editPanel->SetFont(CFG_DEFAULTFONT());
+    editPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    editPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    editPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    editPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    editPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* editButtonBar = new FlatUIButtonBar(editPanel);
+    editButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    editButtonBar->AddButton(ID_UNDO, "Undo", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Undo last operation");
+    editButtonBar->AddButton(ID_REDO, "Redo", SVG_ICON("redo", wxSize(16, 16)), nullptr, "Redo last undone operation");
+    editPanel->AddButtonBar(editButtonBar, 0, wxEXPAND | wxALL, 5);
+    page2->AddPanel(editPanel);
+    m_ribbon->AddPage(page2);
+
+    FlatUIPage* page3 = new FlatUIPage(m_ribbon, "View");
+    FlatUIPanel* viewPanel = new FlatUIPanel(page3, "Views", wxHORIZONTAL);
+    viewPanel->SetFont(CFG_DEFAULTFONT());
+    viewPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    viewPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    viewPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    viewPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    viewPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* viewButtonBar = new FlatUIButtonBar(viewPanel);
+    viewButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    viewButtonBar->AddButton(ID_VIEW_ALL, "Fit All", SVG_ICON("fitview", wxSize(16, 16)), nullptr, "Fit all objects in view");
+    viewButtonBar->AddButton(ID_VIEW_TOP, "Top", SVG_ICON("topview", wxSize(16, 16)), nullptr, "Switch to top view");
+    viewButtonBar->AddButton(ID_VIEW_FRONT, "Front", SVG_ICON("frontview", wxSize(16, 16)), nullptr, "Switch to front view");
+    viewButtonBar->AddButton(ID_VIEW_RIGHT, "Right", SVG_ICON("rightview", wxSize(16, 16)), nullptr, "Switch to right view");
+    viewButtonBar->AddButton(ID_VIEW_ISOMETRIC, "Isometric", SVG_ICON("isoview", wxSize(16, 16)), nullptr, "Switch to isometric view");
+    viewPanel->AddButtonBar(viewButtonBar, 0, wxEXPAND | wxALL, 5);
+    page3->AddPanel(viewPanel);
+
+    FlatUIPanel* assemblyPanel = new FlatUIPanel(page3, "Assembly", wxHORIZONTAL);
+    assemblyPanel->SetFont(CFG_DEFAULTFONT());
+    assemblyPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    assemblyPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    assemblyPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    assemblyPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    assemblyPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* assemblyButtonBar = new FlatUIButtonBar(assemblyPanel);
+    assemblyButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    assemblyButtonBar->AddToggleButton(ID_EXPLODE_ASSEMBLY, "Explode", false, SVG_ICON("expand", wxSize(16, 16)), "Toggle exploded view for assemblies");
+    // Remove separate config button to match requirement: clicking Explode opens config first
+    assemblyPanel->AddButtonBar(assemblyButtonBar, 0, wxEXPAND | wxALL, 5);
+    page3->AddPanel(assemblyPanel);
+
+    FlatUIPanel* assiPanel = new FlatUIPanel(page3, "Assistant", wxHORIZONTAL);
+    assiPanel->SetFont(CFG_DEFAULTFONT());
+    assiPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    assiPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    assiPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    assiPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    assiPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* AssiButtonBar = new FlatUIButtonBar(assiPanel);
+    AssiButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    AssiButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");
+    AssiButtonBar->AddToggleButton(ID_TOGGLE_COORDINATE_SYSTEM, "Toggle Coordinate System", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle coordinate system display");
+    AssiButtonBar->AddToggleButton(ID_TOGGLE_REFERENCE_GRID, "Reference Grid", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle reference grid plane");
+    AssiButtonBar->AddToggleButton(ID_TOGGLE_CHESSBOARD_GRID, "Chessboard Grid", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle chessboard ground plane");
+    assiPanel->AddButtonBar(AssiButtonBar, 0, wxEXPAND | wxALL, 5);
+    page3->AddPanel(assiPanel);
+
+    FlatUIPanel* displayPanel = new FlatUIPanel(page3, "Geom Display", wxHORIZONTAL);
+    displayPanel->SetFont(CFG_DEFAULTFONT());
+    displayPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    displayPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    displayPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    displayPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
+    displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    displayButtonBar->AddToggleButton(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle original edge display");
+    displayButtonBar->AddToggleButton(ID_SHOW_FEATURE_EDGES, "Feature Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle feature edge display");
+    displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Wireframe Mode", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe rendering mode");
+    displayButtonBar->AddToggleButton(ID_SHOW_MESH_EDGES, "Show Mesh Edges", false, SVG_ICON("mesh", wxSize(16, 16)), "Show/hide mesh edges overlay");
+    displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
+    displayButtonBar->AddToggleButton(ID_SHOW_FACE_NORMALS, "Show Face Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle face normal vectors display");
+    displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
+    displayButtonBar->AddToggleButton(ID_TOGGLE_SLICE, "Slice", false, SVG_ICON("layout", wxSize(16, 16)), "Toggle slicing plane and drag to move");
+    displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
+    page3->AddPanel(displayPanel);
+    m_ribbon->AddPage(page3);
+
+    FlatUIPage* page4 = new FlatUIPage(m_ribbon, "Tools");
+    FlatUIPanel* toolsPanel = new FlatUIPanel(page4, "Tools", wxHORIZONTAL);
+    toolsPanel->SetFont(CFG_DEFAULTFONT());
+    toolsPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    toolsPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    toolsPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    toolsPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    toolsPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* toolsButtonBar = new FlatUIButtonBar(toolsPanel);
+    toolsButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("mesh", wxSize(16, 16)), nullptr, "Open mesh quality dialog");
+    toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
+    toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
+    toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
+    toolsButtonBar->AddButton(ID_LIGHTING_SETTINGS, "Lighting Settings", SVG_ICON("light", wxSize(16, 16)), nullptr, "Configure scene lighting and environment settings");
+    toolsButtonBar->AddButton(ID_EDGE_SETTINGS, "Edge Settings", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Configure edge color, width and style settings");
+    toolsButtonBar->AddButton(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Open render preview system");
+    toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
+    page4->AddPanel(toolsPanel);
+
+    FlatUIPanel* textureTestPanel = new FlatUIPanel(page4, "Texture Mode", wxHORIZONTAL);
+    textureTestPanel->SetFont(CFG_DEFAULTFONT());
+    textureTestPanel->SetPanelBorderWidths(0, 0, 0, 1);
+    textureTestPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+    textureTestPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+    textureTestPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    textureTestPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+    FlatUIButtonBar* textureTestButtonBar = new FlatUIButtonBar(textureTestPanel);
+    textureTestButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_DECAL, "Decal", SVG_ICON("decal", wxSize(16, 16)), nullptr, "Switch to Decal texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_MODULATE, "Modulate", SVG_ICON("modulate", wxSize(16, 16)), nullptr, "Switch to Modulate texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_REPLACE, "Replace", SVG_ICON("replace", wxSize(16, 16)), nullptr, "Switch to Replace texture mode");
+    textureTestButtonBar->AddButton(ID_TEXTURE_MODE_BLEND, "Blend", SVG_ICON("blend", wxSize(16, 16)), nullptr, "Switch to Blend texture mode");
+    textureTestPanel->AddButtonBar(textureTestButtonBar, 0, wxEXPAND | wxALL, 5);
+    page4->AddPanel(textureTestPanel);
+    m_ribbon->AddPage(page4);
+
+    createPanels();
+    setupCommandSystem();
+
+    SetClientSize(size);
+    Layout();
+
+    int panelTargetHeight = CFG_INT("PanelTargetHeight");
+    if (panelTargetHeight <= 0) {
+        panelTargetHeight = 80;
+    }
+    int ribbonMinHeight = FlatUIBar::GetBarHeight() + panelTargetHeight + 10;
+    m_ribbon->SetMinSize(wxSize(-1, ribbonMinHeight));
+
+    Layout();
+}
+
+void FlatFrame::createPanels() {
+    wxBoxSizer* mainSizer = GetMainSizer();
+    mainSizer->Add(m_ribbon, 0, wxEXPAND | wxALL, 1);
+
+    LOG_INF_S("Creating panels...");
+    if (m_mainSplitter) { m_mainSplitter->Destroy(); m_mainSplitter = nullptr; }
+    if (m_leftSplitter) { m_leftSplitter->Destroy(); m_leftSplitter = nullptr; }
+
+    m_mainSplitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE);
+    m_mainSplitter->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_mainSplitter->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+    m_mainSplitter->SetDoubleBuffered(true);
+    m_mainSplitter->SetSashGravity(0.0);
+    m_mainSplitter->SetMinimumPaneSize(200);
+
+    m_leftSplitter = new wxSplitterWindow(m_mainSplitter, wxID_ANY);
+    m_leftSplitter->SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_leftSplitter->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+    m_leftSplitter->SetDoubleBuffered(true);
+    m_leftSplitter->SetSashGravity(0.0);
+    m_leftSplitter->SetMinimumPaneSize(200);
+
+    m_objectTreePanel = new ObjectTreePanel(m_leftSplitter);
+    m_propertyPanel = new PropertyPanel(m_leftSplitter);
+    m_leftSplitter->SplitHorizontally(m_objectTreePanel, m_propertyPanel);
+
+    m_canvas = new Canvas(m_mainSplitter);
+    m_mainSplitter->SplitVertically(m_leftSplitter, m_canvas);
+    m_mainSplitter->SetSashPosition(200);
+    mainSizer->Add(m_mainSplitter, 1, wxEXPAND | wxALL, 2);
+
+    wxPanel* msgPanel = new wxPanel(this);
+    msgPanel->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+    wxBoxSizer* msgSizer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText* msgLabel = new wxStaticText(msgPanel, wxID_ANY, "Message Output / Progress");
+    msgLabel->SetFont(CFG_DEFAULTFONT());
+    msgLabel->SetForegroundColour(CFG_COLOUR("PanelHeaderTextColour"));
+    msgSizer->Add(msgLabel, 0, wxALL | wxALIGN_CENTER, 5);
+    m_messageOutput = new wxTextCtrl(msgPanel, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 100), wxTE_READONLY | wxTE_MULTILINE | wxBORDER_SIMPLE);
+    m_messageOutput->SetFont(CFG_DEFAULTFONT());
+    m_messageOutput->SetBackgroundColour(CFG_COLOUR("SearchCtrlBgColour"));
+    m_messageOutput->SetForegroundColour(CFG_COLOUR("SearchCtrlFgColour"));
+    msgSizer->Add(m_messageOutput, 1, wxEXPAND | wxLEFT | wxRIGHT, 5);
+    msgPanel->SetSizer(msgSizer);
+    mainSizer->Add(msgPanel, 0, wxEXPAND | wxALL, 2);
+
+    SetSizer(mainSizer);
+    Layout();
+
+    m_progressTimer.SetOwner(this);
+    Bind(wxEVT_TIMER, [this](wxTimerEvent&){
+        bool running = m_occViewer && m_occViewer->isFeatureEdgeGenerationRunning();
+        bool justFinished = (!running && m_prevFeatureEdgesRunning);
+        if (running) {
+            int p = m_occViewer->getFeatureEdgeProgress();
+            wxLogDebug("Progress timer: Feature edge generation running, progress: %d%%", p);
+            if (auto* bar = GetFlatUIStatusBar()) {
+                wxLogDebug("Progress timer: Got status bar, enabling progress gauge");
+                bar->EnableProgressGauge(true);
+                bar->SetGaugeRange(100);
+                bar->SetGaugeValue(std::max(0, std::min(100, p)));
+            } else {
+                wxLogDebug("Progress timer: Failed to get status bar");
+            }
+            if (m_messageOutput) {
+                wxString progressMsg = wxString::Format("Feature edge generation progress: %d%%", p);
+                m_messageOutput->SetValue(progressMsg);
+            }
+            m_featureProgressHoldTicks = 4;
+        } else {
+            if (justFinished && m_messageOutput) {
+                appendMessage("Feature edge generation completed.");
+            }
+            if (m_featureProgressHoldTicks > 0) {
+                m_featureProgressHoldTicks--;
+            } else {
+                if (auto* bar = GetFlatUIStatusBar()) {
+                    bar->EnableProgressGauge(false);
+                }
+            }
+        }
+        m_prevFeatureEdgesRunning = running;
+    });
+    m_progressTimer.Start(50);
+
+    if (m_messageOutput) {
+        m_messageOutput->SetValue("Message output ready. Click 'Feature Edges' button to start parameter dialog.");
+    }
+
+    m_objectTreePanel->setPropertyPanel(m_propertyPanel);
+    m_mouseHandler = new MouseHandler(m_canvas, m_objectTreePanel, m_propertyPanel, m_commandManager);
+    m_canvas->getInputManager()->setMouseHandler(m_mouseHandler);
+    NavigationController* navController = new NavigationController(m_canvas, m_canvas->getSceneManager());
+    m_canvas->getInputManager()->setNavigationController(navController);
+    m_mouseHandler->setNavigationController(navController);
+
+    m_occViewer = new OCCViewer(m_canvas->getSceneManager());
+    m_canvas->setOCCViewer(m_occViewer);
+    m_canvas->getInputManager()->initializeStates();
+    m_canvas->setObjectTreePanel(m_objectTreePanel);
+    m_canvas->setCommandManager(m_commandManager);
+
+    m_objectTreePanel->setOCCViewer(m_occViewer);
+    m_geometryFactory = new GeometryFactory(
+        m_canvas->getSceneManager()->getObjectRoot(),
+        m_objectTreePanel,
+        m_propertyPanel,
+        m_commandManager,
+        m_occViewer
+    );
+
+    if (m_canvas && m_canvas->getSceneManager()) {
+        m_canvas->getSceneManager()->resetView();
+        LOG_INF_S("Initial view set to isometric and fit to scene");
+    }
+    LOG_INF_S("Panels creation completed successfully");
+
+    addStatusBar();
+    if (auto* bar = GetFlatUIStatusBar()) {
+        bar->SetFieldsCount(3);
+        bar->SetStatusText("", 1);
+        bar->EnableProgressGauge(false);
+        bar->SetGaugeRange(100);
+        bar->SetGaugeValue(0);
+    }
+}
+
+

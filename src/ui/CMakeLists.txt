@@ -1,43 +1,93 @@
-# UI module - interface components and dialogs
-set(UI_SOURCES
+# UI module split into multiple libraries (no underscores in target names)
+
+# Panels split
+add_library(UIPanelTree STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/ObjectTreePanel.cpp
+    ${CMAKE_SOURCE_DIR}/include/ObjectTreePanel.h
+)
+target_include_directories(UIPanelTree PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
+target_link_libraries(UIPanelTree PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets ${wxWidgets_LIBRARIES})
+set_target_properties(UIPanelTree PROPERTIES FOLDER "UI")
+
+add_library(UIPanelProperty STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/PropertyPanel.cpp
+    ${CMAKE_SOURCE_DIR}/include/PropertyPanel.h
+)
+target_include_directories(UIPanelProperty PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
+target_link_libraries(UIPanelProperty PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets ${wxWidgets_LIBRARIES})
+set_target_properties(UIPanelProperty PROPERTIES FOLDER "UI")
+
+# Aggregator for panels
+add_library(UIPanels INTERFACE)
+target_link_libraries(UIPanels INTERFACE UIPanelTree UIPanelProperty)
+set_target_properties(UIPanels PROPERTIES FOLDER "UI")
+
+# Dialogs split
+add_library(UIDialogGeometry STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/PositionBasicDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VisualSettingsDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/TransparencyDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrame.cpp
-)
-
-set(UI_HEADERS
-    ${CMAKE_SOURCE_DIR}/include/ObjectTreePanel.h
-    ${CMAKE_SOURCE_DIR}/include/PropertyPanel.h
     ${CMAKE_SOURCE_DIR}/include/PositionBasicDialog.h
     ${CMAKE_SOURCE_DIR}/include/VisualSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/GeometryDialogTypes.h
+)
+target_include_directories(UIDialogGeometry PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
+target_link_libraries(UIDialogGeometry PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets ${wxWidgets_LIBRARIES})
+set_target_properties(UIDialogGeometry PROPERTIES FOLDER "UI")
+
+add_library(UIDialogRendering STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsDialog.cpp
+    ${CMAKE_SOURCE_DIR}/include/RenderingSettingsDialog.h
+    ${CMAKE_SOURCE_DIR}/include/LightingSettingsDialog.h
+)
+target_include_directories(UIDialogRendering PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
+target_link_libraries(UIDialogRendering PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
+set_target_properties(UIDialogRendering PROPERTIES FOLDER "UI")
+
+add_library(UIDialogEdges STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FeatureEdgesParamDialog.cpp
+    ${CMAKE_SOURCE_DIR}/include/EdgeSettingsDialog.h
+    ${CMAKE_SOURCE_DIR}/include/FeatureEdgesParamDialog.h
+)
+target_include_directories(UIDialogEdges PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
+target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
+set_target_properties(UIDialogEdges PROPERTIES FOLDER "UI")
+
+add_library(UIDialogMesh STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TransparencyDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
-    ${CMAKE_SOURCE_DIR}/include/RenderingSettingsDialog.h
-    ${CMAKE_SOURCE_DIR}/include/EdgeSettingsDialog.h
-    ${CMAKE_SOURCE_DIR}/include/LightingSettingsDialog.h
+)
+target_include_directories(UIDialogMesh PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
+target_link_libraries(UIDialogMesh PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
+set_target_properties(UIDialogMesh PROPERTIES FOLDER "UI")
+
+# Aggregator for dialogs
+add_library(UIDialogs INTERFACE)
+target_link_libraries(UIDialogs INTERFACE UIDialogGeometry UIDialogRendering UIDialogEdges UIDialogMesh)
+set_target_properties(UIDialogs PROPERTIES FOLDER "UI")
+
+# Frame library
+set(UIFrame_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrame.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrameInit.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrameEvents.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrameCommands.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrameStatus.cpp
+)
+set(UIFrame_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FlatFrame.h
 )
-
-# Create UI static library
-add_library(CADUI STATIC ${UI_SOURCES} ${UI_HEADERS})
-
-# Set header directories
-target_include_directories(CADUI PUBLIC
+add_library(UIFrame STATIC ${UIFrame_SOURCES} ${UIFrame_HEADERS})
+target_include_directories(UIFrame PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${wxWidgets_INCLUDE_DIRS}
-    ${Coin3D_INCLUDE_DIRS}
 )
-
-# Link dependencies
-target_link_libraries(CADUI PUBLIC
+target_link_libraries(UIFrame PUBLIC
+    UIPanels
+    UIDialogs
     CADCore
     CADConfig
     CADLogger
@@ -53,9 +103,9 @@ target_link_libraries(CADUI PUBLIC
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}
 )
+set_target_properties(UIFrame PROPERTIES FOLDER "UI")
 
-# Set library export properties
-set_target_properties(CADUI PROPERTIES
-    FOLDER "UI"
-    EXPORT_NAME UI
-) 
+# Aggregator target to keep existing references working
+add_library(CADUI INTERFACE)
+target_link_libraries(CADUI INTERFACE UIFrame UIPanels UIDialogs)
+set_target_properties(CADUI PROPERTIES FOLDER "UI" EXPORT_NAME UI)

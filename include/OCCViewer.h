@@ -13,10 +13,14 @@
 #include "EdgeTypes.h"
 #include "DynamicSilhouetteRenderer.h"
 #include <unordered_map>
+#include <atomic>
+#include <thread>
 
 // Forward declarations
 class OCCGeometry;
 class SoSeparator;
+class SoClipPlane;
+class SoTransform;
 class SceneManager;
 
 /**
@@ -179,6 +183,7 @@ public:
     EdgeDisplayFlags globalEdgeFlags;
     void setShowOriginalEdges(bool show);
     void setShowFeatureEdges(bool show);
+    void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave);
     void setShowMeshEdges(bool show);
     void setShowHighlightEdges(bool show);
     void setShowNormalLines(bool show);
@@ -187,6 +192,33 @@ public:
     void toggleEdgeType(EdgeType type, bool show);
     bool isEdgeTypeEnabled(EdgeType type) const;
     void updateAllEdgeDisplays();
+
+    // Appearance application for edges (does not trigger recomputation)
+    void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly);
+
+    // Slice (clipping plane) control
+    void setSliceEnabled(bool enabled);
+    bool isSliceEnabled() const { return m_sliceEnabled; }
+    void setSlicePlane(const SbVec3f& normal, float offset);
+    void moveSliceAlongNormal(float delta);
+    SbVec3f getSliceNormal() const { return m_sliceNormal; }
+    float getSliceOffset() const { return m_sliceOffset; }
+
+    // Assembly explode view
+    void setExplodeEnabled(bool enabled, double factor = 1.0);
+    bool isExplodeEnabled() const { return m_explodeEnabled; }
+    // Explode config
+    enum class ExplodeMode { Radial, AxisX, AxisY, AxisZ };
+    void setExplodeParams(ExplodeMode mode, double factor);
+    void getExplodeParams(ExplodeMode& mode, double& factor) const { mode = m_explodeMode; factor = m_explodeFactor; }
+
+    // Async feature edge generation
+    void startAsyncFeatureEdgeGeneration(double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave);
+    bool isFeatureEdgeGenerationRunning() const { return m_featureEdgeRunning; }
+    int getFeatureEdgeProgress() const { return m_featureEdgeProgress.load(); }
+    struct FeatureEdgeParams { double angleDeg{15.0}; double minLength{0.005}; bool onlyConvex{false}; bool onlyConcave{false}; };
+    bool hasFeatureEdgeCache() const { return m_featureCacheValid; }
+    FeatureEdgeParams getLastFeatureEdgeParams() const { return m_lastFeatureParams; }
 
     gp_Pnt getCameraPosition() const;
     SoSeparator* getRootSeparator() const { return m_occRoot; }
@@ -198,6 +230,8 @@ private:
     void initializeViewer();
     void onLODTimer();
     void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
+    static bool approximatelyEqual(double a, double b, double eps = 1e-6) { return std::abs(a - b) <= eps; }
+    void invalidateFeatureEdgeCache();
 
     SceneManager* m_sceneManager;
     SoSeparator* m_occRoot;
@@ -270,6 +304,26 @@ private:
     std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos);
     void setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry);
 
+    // Explode state
+    bool m_explodeEnabled{false};
+    double m_explodeFactor{1.0};
+    ExplodeMode m_explodeMode{ExplodeMode::Radial};
+    std::unordered_map<std::string, gp_Pnt> m_originalPositions;
+    void applyExplode();
+    void clearExplode();
+
+    // Slice state
+    bool m_sliceEnabled{false};
+    SbVec3f m_sliceNormal{0,0,1};
+    float m_sliceOffset{0.0f};
+    // Slice implementation nodes
+    SoClipPlane* m_clipPlane{nullptr};
+    SoSeparator* m_sliceVisual{nullptr};
+    SoTransform* m_sliceTransform{nullptr};
+    void ensureSliceNodes();
+    void updateSliceNodes();
+    void removeSliceNodes();
+
     struct DisplayFlags {
         bool showEdges = false;
         bool showWireframe = false;
@@ -281,4 +335,11 @@ private:
     void drawWireframe();
     // drawEdges() declaration removed - edge display is now handled by EdgeComponent system
     void drawNormals();
+
+    // Async edge generation state
+    std::atomic<bool> m_featureEdgeRunning{false};
+    std::atomic<int> m_featureEdgeProgress{0};
+    std::thread m_featureEdgeThread;
+    FeatureEdgeParams m_lastFeatureParams; 
+    bool m_featureCacheValid{false};
 };

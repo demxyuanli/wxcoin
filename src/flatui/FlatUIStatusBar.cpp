@@ -2,6 +2,7 @@
 
 wxBEGIN_EVENT_TABLE(FlatUIStatusBar, FlatUIThemeAware)
     EVT_PAINT(FlatUIStatusBar::OnPaint)
+    EVT_SIZE(FlatUIStatusBar::OnSize)
 wxEND_EVENT_TABLE()
 
 FlatUIStatusBar::FlatUIStatusBar(wxWindow* parent, wxWindowID id)
@@ -10,6 +11,11 @@ FlatUIStatusBar::FlatUIStatusBar(wxWindow* parent, wxWindowID id)
     SetFieldsCount(1);
     SetMinSize(wxSize(-1, 24)); 
     UpdateThemeValues();
+
+    // Create flat progress bar; keep hidden by default
+    m_progress = new FlatProgressBar(this, wxID_ANY, 0, 0, 100, wxDefaultPosition, wxSize(140, 16));
+    m_progress->SetShowPercentage(true);
+    m_progress->Hide();
 }
 
 void FlatUIStatusBar::SetFieldsCount(int count) {
@@ -64,4 +70,42 @@ void FlatUIStatusBar::OnPaint(wxPaintEvent& evt) {
             dc.DrawLine(x - 1, 2, x - 1, h - 2);
         }
     }
+
+    LayoutChildren();
 } 
+
+void FlatUIStatusBar::OnSize(wxSizeEvent& evt) {
+    LayoutChildren();
+    evt.Skip();
+}
+
+void FlatUIStatusBar::LayoutChildren() {
+    if (!m_progress) return;
+    if (!m_progress->IsShown()) return;
+    int w, h; GetClientSize(&w, &h);
+    int fieldCount = std::max(1, (int)m_fields.size());
+    int fieldWidth = w / fieldCount;
+    // Place gauge in rightmost field, centered vertically and with some padding
+    wxRect rightRect((fieldCount - 1) * fieldWidth, 0, fieldWidth, h);
+    int gw = std::min(180, std::max(100, rightRect.width - 16));
+    int gh = std::min(18, std::max(12, h - 8));
+    int gx = rightRect.x + (rightRect.width - gw) - 8; // right aligned with padding
+    int gy = rightRect.y + (rightRect.height - gh) / 2;
+    m_progress->SetSize(gw, gh);
+    m_progress->Move(gx, gy);
+}
+
+void FlatUIStatusBar::EnableProgressGauge(bool enable) {
+    if (!m_progress) return;
+    if (enable) m_progress->Show(); else m_progress->Hide();
+    LayoutChildren();
+    Refresh();
+}
+
+void FlatUIStatusBar::SetGaugeRange(int range) {
+    if (m_progress) m_progress->SetRange(0, range);
+}
+
+void FlatUIStatusBar::SetGaugeValue(int value) {
+    if (m_progress) m_progress->SetValue(value);
+}

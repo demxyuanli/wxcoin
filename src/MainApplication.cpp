@@ -10,6 +10,9 @@
 #include "logger/Logger.h"
 #include "FlatFrame.h"
 #include "rendering/RenderingToolkitAPI.h"
+#include "interfaces/ISubsystemFactory.h"
+#include "interfaces/DefaultSubsystemFactory.h"
+#include "interfaces/ServiceLocator.h"
 #include "config/FontManager.h" // Include FontManager
 #include <Inventor/SoDB.h>
 #include <Inventor/SoInput.h>
@@ -38,6 +41,10 @@ bool MainApplication::OnInit()
         return false;
     }
     
+    // Set default subsystem factory (can be replaced by tests or other compositions)
+    static DefaultSubsystemFactory s_factory;
+    ServiceLocator::setFactory(&s_factory);
+
     ConfigManager& cm = ConfigManager::getInstance();
     // Try to initialize with config/config.ini first
     if (!cm.initialize("")) {
