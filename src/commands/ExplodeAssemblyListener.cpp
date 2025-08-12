@@ -1,6 +1,7 @@
 #include "ExplodeAssemblyListener.h"
 #include "ExplodeConfigListener.h"
 #include "OCCViewer.h"
+#include "viewer/ExplodeTypes.h"
 #include "logger/Logger.h"
 #include <wx/msgdlg.h>
 #include <wx/radiobox.h>
@@ -29,8 +30,8 @@ CommandResult ExplodeAssemblyListener::executeCommand(const std::string& command
             m_mode = new wxRadioBox(this, wxID_ANY, "Mode", wxDefaultPosition, wxDefaultSize, modes, 1, wxRA_SPECIFY_ROWS);
             m_factor = new wxSpinCtrlDouble(this, wxID_ANY);
             m_factor->SetRange(0.01, 10.0); m_factor->SetIncrement(0.05);
-            OCCViewer::ExplodeMode mode; double factor; viewer->getExplodeParams(mode, factor);
-            int sel = 0; if (mode==OCCViewer::ExplodeMode::AxisX) sel=1; else if (mode==OCCViewer::ExplodeMode::AxisY) sel=2; else if (mode==OCCViewer::ExplodeMode::AxisZ) sel=3;
+            ExplodeMode mode; double factor; viewer->getExplodeParams(mode, factor);
+            int sel = 0; if (mode==ExplodeMode::AxisX) sel=1; else if (mode==ExplodeMode::AxisY) sel=2; else if (mode==ExplodeMode::AxisZ) sel=3;
             m_mode->SetSelection(sel); m_factor->SetValue(factor);
             wxFlexGridSizer* grid = new wxFlexGridSizer(2, 8, 8);
             grid->Add(new wxStaticText(this, wxID_ANY, "Distance Factor:"), 0, wxALIGN_CENTER_VERTICAL);
@@ -43,12 +44,12 @@ CommandResult ExplodeAssemblyListener::executeCommand(const std::string& command
             btns->Realize(); top->Add(btns, 0, wxALL | wxALIGN_RIGHT, 8);
             SetSizerAndFit(top);
         }
-        OCCViewer::ExplodeMode getMode() const {
+        ExplodeMode getMode() const {
             int sel = m_mode->GetSelection();
-            if (sel==1) return OCCViewer::ExplodeMode::AxisX;
-            if (sel==2) return OCCViewer::ExplodeMode::AxisY;
-            if (sel==3) return OCCViewer::ExplodeMode::AxisZ;
-            return OCCViewer::ExplodeMode::Radial;
+            if (sel==1) return ExplodeMode::AxisX;
+            if (sel==2) return ExplodeMode::AxisY;
+            if (sel==3) return ExplodeMode::AxisZ;
+            return ExplodeMode::Radial;
         }
         double getFactor() const { return m_factor->GetValue(); }
     private:

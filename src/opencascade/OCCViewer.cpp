@@ -29,15 +29,29 @@
 #include <wx/gdicmn.h>
 #include <chrono>
 #include "EdgeComponent.h"
+#include "edges/EdgeDisplayManager.h"
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/actions/SoRayPickAction.h>
 #include <Inventor/SoPickedPoint.h>
 #include <unordered_map>
-#include "DynamicSilhouetteRenderer.h"
+// DynamicSilhouetteRenderer usage removed; hover silhouettes managed by HoverSilhouetteManager
 #include <future>
 #include "OCCShapeBuilder.h"
+#include "viewer/SliceController.h"
+#include "viewer/ExplodeController.h"
+#include "viewer/LODController.h"
+#include "viewer/PickingService.h"
+#include "viewer/SelectionManager.h"
+#include "viewer/ObjectTreeSync.h"
+#include "viewer/GeometryRepository.h"
+#include "viewer/SceneAttachmentService.h"
+#include "viewer/ViewUpdateService.h"
+#include "viewer/MeshingService.h"
+#include "viewer/MeshParameterController.h"
+#include "viewer/HoverSilhouetteManager.h"
+#include "viewer/BatchOperationManager.h"
 
 gp_Pnt OCCViewer::getCameraPosition() const {
     if (!m_sceneManager || !m_sceneManager->getCanvas()) return gp_Pnt(0,0,0);
@@ -65,11 +79,7 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
       m_defaultColor(0.7, 0.7, 0.7, Quantity_TOC_RGB),
       m_defaultTransparency(0.0),
       m_lodEnabled(false),
-      m_lodRoughMode(false),
-      m_lodRoughDeflection(0.1),
-      m_lodFineDeflection(0.01),
-      m_lodTransitionTime(500),
-      m_lodTimer(this, wxID_ANY),
+      
       m_subdivisionEnabled(false),
       m_subdivisionLevel(2),
       m_subdivisionMethod(0),
@@ -92,10 +102,20 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
     // Remove default edge display to avoid conflicts with new EdgeComponent system
     // setShowEdges(true);
     
-    // Connect LOD timer
-    m_lodTimer.Bind(wxEVT_TIMER, [this](wxTimerEvent& event) {
-        this->onLODTimer();
-    });
+    // Create LOD controller
+    m_lodController = std::make_unique<LODController>(this);
+    // Create edge display manager
+    m_edgeDisplayManager = std::make_unique<EdgeDisplayManager>(m_sceneManager, &m_geometries);
+    // Create selection manager and object tree sync
+    m_selectionManager = std::make_unique<SelectionManager>(m_sceneManager, &m_geometries, &m_selectedGeometries);
+    m_objectTreeSync = std::make_unique<ObjectTreeSync>(m_sceneManager, &m_pendingObjectTreeUpdates);
+    // Create geometry repo and scene attachment helper
+    m_geometryRepo = std::make_unique<GeometryRepository>(&m_geometries);
+    m_sceneAttach = std::make_unique<SceneAttachmentService>(m_occRoot, &m_nodeToGeom);
+    m_viewUpdater = std::make_unique<ViewUpdateService>(m_sceneManager);
+    m_meshingService = std::make_unique<MeshingService>();
+    m_meshController = std::make_unique<MeshParameterController>(this, m_meshingService.get(), &m_meshParams, &m_geometries);
+    m_batchManager = std::make_unique<BatchOperationManager>(m_sceneManager, m_objectTreeSync.get(), m_viewUpdater.get());
 }
 
 OCCViewer::~OCCViewer()
@@ -114,65 +134,15 @@ void OCCViewer::initializeViewer()
     if (m_sceneManager) {
         m_sceneManager->getObjectRoot()->addChild(m_occRoot);
     }
+    // Create slice controller bound to current root
+    m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+    // Create picking service bound to current root and node map
+    m_pickingService = std::make_unique<PickingService>(m_sceneManager, m_occRoot, &m_nodeToGeom);
     
     LOG_INF_S("OCC Viewer initialized");
 }
 
-void OCCViewer::ensureSliceNodes() {
-    if (!m_occRoot) return;
-    if (!m_clipPlane) {
-        m_clipPlane = new SoClipPlane;
-        // Insert at the beginning so it affects subsequent geometry
-        m_occRoot->insertChild(m_clipPlane, 0);
-    }
-    if (!m_sliceVisual) {
-        m_sliceVisual = new SoSeparator;
-        m_sliceTransform = new SoTransform;
-        m_sliceVisual->addChild(m_sliceTransform);
-        // A large quad proxy using a very thin cube scaled
-        SoScale* scale = new SoScale;
-        scale->scaleFactor.setValue(1000.0f, 0.001f, 1000.0f);
-        m_sliceVisual->addChild(scale);
-        SoMaterial* mat = new SoMaterial;
-        mat->diffuseColor.setValue(0.9f, 0.6f, 0.1f);
-        mat->transparency.setValue(0.5f);
-        m_sliceVisual->addChild(mat);
-        SoCube* quad = new SoCube;
-        m_sliceVisual->addChild(quad);
-        m_occRoot->addChild(m_sliceVisual);
-    }
-    updateSliceNodes();
-}
-
-void OCCViewer::updateSliceNodes() {
-    if (!m_clipPlane) return;
-    SbVec3f n = m_sliceNormal;
-    n.normalize();
-    // Plane equation: n.x + d = 0 -> SoClipPlane uses plane defined by normal and point
-    SbVec3f point = n * m_sliceOffset;
-    m_clipPlane->plane.setValue(SbPlane(n, point));
-    if (m_sliceTransform) {
-        // Position the visual plane at the same location and orientation
-        // Build a rotation from Z axis to normal
-        SbVec3f z(0,0,1);
-        SbRotation rot = SbRotation(z, n);
-        m_sliceTransform->rotation.setValue(rot);
-        m_sliceTransform->translation.setValue(point);
-    }
-}
-
-void OCCViewer::removeSliceNodes() {
-    if (!m_occRoot) return;
-    if (m_clipPlane) {
-        m_occRoot->removeChild(m_clipPlane);
-        m_clipPlane = nullptr;
-    }
-    if (m_sliceVisual) {
-        m_occRoot->removeChild(m_sliceVisual);
-        m_sliceVisual = nullptr;
-        m_sliceTransform = nullptr;
-    }
-}
+// Slice nodes are managed by SliceController
 
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
@@ -184,12 +154,7 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     }
     
     auto validationStartTime = std::chrono::high_resolution_clock::now();
-    auto it = std::find_if(m_geometries.begin(), m_geometries.end(),
-        [&](const std::shared_ptr<OCCGeometry>& g) {
-            return g->getName() == geometry->getName();
-        });
-    
-    if (it != m_geometries.end()) {
+    if (m_geometryRepo && m_geometryRepo->existsByName(geometry->getName())) {
         LOG_WRN_S("Geometry with name '" + geometry->getName() + "' already exists");
         return;
     }
@@ -208,7 +173,7 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     auto meshDuration = std::chrono::duration_cast<std::chrono::milliseconds>(meshEndTime - meshStartTime);
     
     auto storageStartTime = std::chrono::high_resolution_clock::now();
-    m_geometries.push_back(geometry);
+    if (m_geometryRepo) m_geometryRepo->add(geometry);
     auto storageEndTime = std::chrono::high_resolution_clock::now();
     auto storageDuration = std::chrono::duration_cast<std::chrono::microseconds>(storageEndTime - storageStartTime);
     
@@ -219,9 +184,7 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     
     auto addChildStartTime = std::chrono::high_resolution_clock::now();
     if (coinNode && m_occRoot) {
-        m_occRoot->addChild(coinNode);
-        // Map coin node to geometry for fast picking -> silhouette hover
-        m_nodeToGeom[coinNode] = geometry;
+        if (m_sceneAttach) m_sceneAttach->attach(geometry);
     } else {
         if (!coinNode) {
             LOG_ERR_S("Coin3D node is null for geometry: " + geometry->getName());
@@ -234,37 +197,24 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
     auto addChildDuration = std::chrono::duration_cast<std::chrono::microseconds>(addChildEndTime - addChildStartTime);
     
     auto objectTreeStartTime = std::chrono::high_resolution_clock::now();
-    // Add geometry to ObjectTree if available (only in non-batch mode to reduce overhead)
-    if (!m_batchOperationActive && m_sceneManager && m_sceneManager->getCanvas()) {
-        Canvas* canvas = m_sceneManager->getCanvas();
-        if (canvas && canvas->getObjectTreePanel()) {
-            // Defer ObjectTree update to reduce blocking time
-            canvas->getObjectTreePanel()->addOCCGeometry(geometry);
-        }
-    } else if (m_batchOperationActive) {
-        // Queue for deferred update in batch mode
-        m_pendingObjectTreeUpdates.push_back(geometry);
+    if (m_objectTreeSync) {
+        m_objectTreeSync->addGeometry(geometry, m_batchOperationActive);
     }
     auto objectTreeEndTime = std::chrono::high_resolution_clock::now();
     auto objectTreeDuration = std::chrono::duration_cast<std::chrono::microseconds>(objectTreeEndTime - objectTreeStartTime);
     
     auto viewUpdateStartTime = std::chrono::high_resolution_clock::now();
-    // Auto-update scene bounds and view when geometry is added
-    if (m_sceneManager) {
-        // In batch mode, defer view updates until endBatchOperation
+    // Auto-update scene bounds and optionally view when geometry is added
+    if (m_viewUpdater) {
+        m_viewUpdater->updateSceneBounds();
         if (m_batchOperationActive) {
             m_needsViewRefresh = true;
+            if (m_batchManager) m_batchManager->markNeedsViewRefresh();
         } else {
-            m_sceneManager->updateSceneBounds();
-            m_sceneManager->resetView();
-            
-            Canvas* canvas = m_sceneManager->getCanvas();
-            if (canvas && canvas->getViewRefresher()) {
-                canvas->getViewRefresher()->requestRefresh(IViewRefresher::Reason::GEOMETRY_CHANGED, true);
-            }
-            
-            canvas->Refresh();
-            LOG_INF_S("Auto-updated scene bounds and view after adding geometry");
+            if (!m_preserveViewOnAdd && m_viewUpdater) m_viewUpdater->resetView();
+            m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::GEOMETRY_CHANGED), true);
+            m_viewUpdater->refreshCanvas(false);
+            LOG_INF_S(std::string("Scene bounds updated and ") + (m_preserveViewOnAdd?"view preserved":"view reset") + " after adding geometry");
         }
     }
     auto viewUpdateEndTime = std::chrono::high_resolution_clock::now();
@@ -295,25 +245,17 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
     
     auto it = std::find(m_geometries.begin(), m_geometries.end(), geometry);
     if (it != m_geometries.end()) {
-        if (geometry->getCoinNode() && m_occRoot) {
-            m_occRoot->removeChild(geometry->getCoinNode());
-            m_nodeToGeom.erase(geometry->getCoinNode());
-        }
+        if (m_sceneAttach) m_sceneAttach->detach(geometry);
         
         auto selectedIt = std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
         if (selectedIt != m_selectedGeometries.end()) {
             m_selectedGeometries.erase(selectedIt);
         }
         
-        // Remove geometry from ObjectTree if available
-        if (m_sceneManager && m_sceneManager->getCanvas()) {
-            Canvas* canvas = m_sceneManager->getCanvas();
-            if (canvas && canvas->getObjectTreePanel()) {
-                canvas->getObjectTreePanel()->removeOCCGeometry(geometry);
-            }
-        }
+        // Remove geometry from ObjectTree
+        if (m_objectTreeSync) m_objectTreeSync->removeGeometry(geometry);
         
-        m_geometries.erase(it);
+        if (m_geometryRepo) m_geometryRepo->remove(geometry);
         LOG_INF_S("Removed OCC geometry: " + geometry->getName());
     }
 }
@@ -329,12 +271,8 @@ void OCCViewer::removeGeometry(const std::string& name)
 void OCCViewer::clearAll()
 {
     m_selectedGeometries.clear();
-    m_geometries.clear();
-    
-    if (m_occRoot) {
-        m_occRoot->removeAllChildren();
-    }
-    m_nodeToGeom.clear();
+    if (m_geometryRepo) m_geometryRepo->clear();
+    if (m_sceneAttach) m_sceneAttach->detachAll();
     
     LOG_INF_S("Cleared all OCC geometries");
 }
@@ -361,75 +299,24 @@ namespace {
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::pickGeometryAtScreen(const wxPoint& screenPos) {
-    if (!m_sceneManager || !m_occRoot) return nullptr;
-    wxSize size = m_sceneManager->getCanvas() ? m_sceneManager->getCanvas()->GetClientSize() : wxSize(0, 0);
-    if (size.x <= 0 || size.y <= 0) return nullptr;
-    SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
-    SoRayPickAction pick(viewport);
-    // Flip Y for OpenInventor
-    int pickY = size.GetHeight() - screenPos.y;
-    pick.setPoint(SbVec2s(screenPos.x, pickY));
-    pick.setRadius(3);
-    pick.apply(m_occRoot);
-    SoPickedPoint* picked = pick.getPickedPoint();
-    if (!picked) return nullptr;
-    SoPath* p = picked->getPath();
-    SoSeparator* sep = findTopLevelSeparatorInPath(p, m_occRoot);
-    if (!sep) return nullptr;
-    auto it = m_nodeToGeom.find(sep);
-    if (it != m_nodeToGeom.end()) return it->second;
-    return nullptr;
+    if (!m_pickingService) m_pickingService = std::make_unique<PickingService>(m_sceneManager, m_occRoot, &m_nodeToGeom);
+    return m_pickingService->pickGeometryAtScreen(screenPos);
 }
 
 void OCCViewer::setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry) {
-    // Disable all existing renderers first
-    for (auto& kv : m_silhouetteRenderers) {
-        kv.second->setEnabled(false);
-    }
-    if (!geometry) return;
-
-    std::string name = geometry->getName();
-    // Ensure renderer
-    if (m_silhouetteRenderers.find(name) == m_silhouetteRenderers.end()) {
-        m_silhouetteRenderers[name] = std::make_unique<DynamicSilhouetteRenderer>(m_occRoot);
-        m_silhouetteRenderers[name]->setFastMode(true); // fast for hover
-        m_silhouetteRenderers[name]->setShape(geometry->getShape());
-    } else {
-        // Update shape reference in case geometry changed
-        m_silhouetteRenderers[name]->setShape(geometry->getShape());
-    }
-    // Attach under the geometry's Coin node so it inherits the same transform
-    if (SoSeparator* geomSep = geometry->getCoinNode()) {
-        SoSeparator* silhouetteNode = m_silhouetteRenderers[name]->getSilhouetteNode();
-        // Add once under the geometry separator to inherit its transform
-        bool alreadyChild = false;
-        for (int i = 0; i < geomSep->getNumChildren(); ++i) {
-            if (geomSep->getChild(i) == silhouetteNode) { alreadyChild = true; break; }
-        }
-        if (!alreadyChild) {
-            geomSep->addChild(silhouetteNode);
-        }
-    }
-    // Enable only the hovered renderer; computation will occur in its render callback
-    m_silhouetteRenderers[name]->setEnabled(true);
+    if (!m_hoverManager) m_hoverManager = std::make_unique<HoverSilhouetteManager>(m_sceneManager, m_occRoot, m_pickingService.get());
+    m_hoverManager->setHoveredSilhouette(geometry);
 }
 
 void OCCViewer::updateHoverSilhouetteAt(const wxPoint& screenPos) {
-    auto g = pickGeometryAtScreen(screenPos);
-    if (g.get() == m_lastHoverGeometry.lock().get()) return; // no change
-    m_lastHoverGeometry = g;
-    setHoveredSilhouette(g);
-    if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh(false);
+    if (!m_hoverManager) m_hoverManager = std::make_unique<HoverSilhouetteManager>(m_sceneManager, m_occRoot, m_pickingService.get());
+    m_hoverManager->updateHoverSilhouetteAt(screenPos);
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::findGeometry(const std::string& name)
 {
-    auto it = std::find_if(m_geometries.begin(), m_geometries.end(),
-        [&](const std::shared_ptr<OCCGeometry>& g) {
-            return g->getName() == name;
-        });
-    
-    return (it != m_geometries.end()) ? *it : nullptr;
+    if (m_geometryRepo) return m_geometryRepo->findByName(name);
+    return nullptr;
 }
 
 std::vector<std::shared_ptr<OCCGeometry>> OCCViewer::getAllGeometry() const
@@ -444,115 +331,68 @@ std::vector<std::shared_ptr<OCCGeometry>> OCCViewer::getSelectedGeometries() con
 
 void OCCViewer::setGeometryVisible(const std::string& name, bool visible)
 {
-    auto geometry = findGeometry(name);
-    if (!geometry) {
-        LOG_WRN_S("Geometry not found for visibility change: " + name);
-        return;
-    }
-    
-    LOG_INF_S("Setting geometry visibility: " + name + " -> " + (visible ? "visible" : "hidden"));
-    geometry->setVisible(visible);
-    
-    // Request view refresh after visibility change
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        Canvas* canvas = m_sceneManager->getCanvas();
-        if (auto refresher = canvas->getViewRefresher()) {
-            refresher->requestRefresh(IViewRefresher::Reason::GEOMETRY_CHANGED, true);
+    if (m_selectionManager) m_selectionManager->setGeometryVisible(name, visible);
+    // Ensure scene attachment reflects visibility
+    if (auto g = findGeometry(name)) {
+        SoSeparator* coinNode = g->getCoinNode();
+        if (coinNode && m_occRoot) {
+            int idx = m_occRoot->findChild(coinNode);
+            if (visible) {
+                if (idx < 0) {
+                    m_occRoot->addChild(coinNode);
+                }
+            } else {
+                if (idx >= 0) {
+                    m_occRoot->removeChild(idx);
+                }
+            }
         }
     }
+    // Also update tree item text to reflect [H] marker
+    if (m_sceneManager && m_sceneManager->getCanvas()) {
+        Canvas* canvas = m_sceneManager->getCanvas();
+        if (canvas && canvas->getObjectTreePanel()) {
+            if (auto g = findGeometry(name)) {
+                canvas->getObjectTreePanel()->updateOCCGeometryName(g);
+            }
+        }
+    }
+    if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 }
 
 void OCCViewer::setGeometrySelected(const std::string& name, bool selected)
 {
-    auto geometry = findGeometry(name);
-    if (!geometry) {
-        LOG_WRN_S("Geometry not found for selection: " + name);
-        return;
-    }
-
-    LOG_INF_S("Setting geometry selection: " + name + " -> " + (selected ? "true" : "false"));
-        geometry->setSelected(selected);
-        
-        if (selected) {
-        if (std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry) == m_selectedGeometries.end()) {
-                m_selectedGeometries.push_back(geometry);
-            LOG_INF_S("Added geometry to selected list: " + name);
-            }
-        } else {
-        auto it = std::remove(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
-        if (it != m_selectedGeometries.end()) {
-            m_selectedGeometries.erase(it, m_selectedGeometries.end());
-            LOG_INF_S("Removed geometry from selected list: " + name);
-        }
-    }
-    
-    onSelectionChanged();
+    if (m_selectionManager) m_selectionManager->setGeometrySelected(name, selected);
 }
 
 void OCCViewer::setGeometryColor(const std::string& name, const Quantity_Color& color)
 {
-    if (auto g = findGeometry(name)) g->setColor(color);
+    if (m_selectionManager) m_selectionManager->setGeometryColor(name, color);
 }
 
 void OCCViewer::setGeometryTransparency(const std::string& name, double transparency)
 {
-    if (auto g = findGeometry(name)) {
-        g->setTransparency(transparency);
-        // Request view refresh after transparency change
-        if (m_sceneManager && m_sceneManager->getCanvas()) {
-            Canvas* canvas = m_sceneManager->getCanvas();
-            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
-        }
-    }
+    if (m_selectionManager) m_selectionManager->setGeometryTransparency(name, transparency);
 }
 
 void OCCViewer::hideAll()
 {
-    LOG_INF_S("Hiding all geometries - count: " + std::to_string(m_geometries.size()));
-    for (auto& g : m_geometries) {
-        g->setVisible(false);
-    }
-    
-    // Request view refresh
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        Canvas* canvas = m_sceneManager->getCanvas();
-        canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
-    }
+    if (m_selectionManager) m_selectionManager->hideAll();
 }
 
 void OCCViewer::showAll()
 {
-    LOG_INF_S("Showing all geometries - count: " + std::to_string(m_geometries.size()));
-    for (auto& g : m_geometries) {
-        g->setVisible(true);
-    }
-    
-    // Request view refresh
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        Canvas* canvas = m_sceneManager->getCanvas();
-        canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
-    }
+    if (m_selectionManager) m_selectionManager->showAll();
 }
 
 void OCCViewer::selectAll()
 {
-    m_selectedGeometries.clear();
-    for (auto& g : m_geometries) {
-        g->setSelected(true);
-        m_selectedGeometries.push_back(g);
-    }
-    onSelectionChanged();
+    if (m_selectionManager) m_selectionManager->selectAll();
 }
 
 void OCCViewer::deselectAll()
 {
-    LOG_INF_S("Deselecting all geometries - count: " + std::to_string(m_selectedGeometries.size()));
-    
-    for (auto& g : m_selectedGeometries) {
-        g->setSelected(false);
-    }
-    m_selectedGeometries.clear();
-    onSelectionChanged();
+    if (m_selectionManager) m_selectionManager->deselectAll();
 }
 
 void OCCViewer::setAllColor(const Quantity_Color& color)
@@ -656,12 +496,7 @@ void OCCViewer::setWireframeMode(bool wireframe)
     }
     
     // Request immediate view refresh
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
-        if (refreshManager) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
-        }
-    }
+    if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 }
 
 // Removed setShadingMode method - functionality not needed
@@ -681,12 +516,7 @@ void OCCViewer::setShowEdges(bool showEdges)
     remeshAllGeometries();
     
     // Immediate refresh
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
-        if (refreshManager) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
-        }
-    }
+    if (m_viewUpdater) m_viewUpdater->requestEdgesToggled(true);
     
     LOG_INF_S("OCCViewer showEdges set to: " + std::string(showEdges ? "enabled" : "disabled"));
 }
@@ -730,26 +560,7 @@ double OCCViewer::getMeshDeflection() const
 
 void OCCViewer::onSelectionChanged()
 {
-    LOG_INF_S("Selection changed - selected geometries: " + std::to_string(m_selectedGeometries.size()));
-    
-    // Update ObjectTree selection if available
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        Canvas* canvas = m_sceneManager->getCanvas();
-        if (canvas && canvas->getObjectTreePanel()) {
-            canvas->getObjectTreePanel()->updateTreeSelectionFromViewer();
-            LOG_INF_S("Updated ObjectTreePanel selection");
-        } else {
-            LOG_WRN_S("Canvas or ObjectTreePanel is null in OCCViewer");
-        }
-        
-        // Force a scene refresh to show selection changes
-        if (canvas && canvas->getRefreshManager()) {
-            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SELECTION_CHANGED, true);
-            LOG_INF_S("Requested scene refresh for selection change");
-        }
-    } else {
-        LOG_WRN_S("SceneManager or Canvas is null in OCCViewer");
-    }
+    if (m_selectionManager) m_selectionManager->onSelectionChanged();
 }
 
 void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
@@ -762,8 +573,7 @@ void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
 void OCCViewer::setShowNormals(bool showNormals)
 {
     m_showNormals = showNormals;
-    globalEdgeFlags.showNormalLines = showNormals;
-    updateAllEdgeDisplays();
+    if (m_edgeDisplayManager) m_edgeDisplayManager->setShowNormalLines(showNormals, m_meshParams);
     if (m_sceneManager && m_sceneManager->getCanvas()) {
         auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
         if (refreshManager) {
@@ -799,61 +609,7 @@ void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::remeshAllGeometries()
 {
-    // Update RenderingToolkitAPI configuration with current parameters
-    auto& config = RenderingToolkitAPI::getConfig();
-    
-    // Update smoothing settings
-    auto& smoothingSettings = config.getSmoothingSettings();
-    smoothingSettings.enabled = m_smoothingEnabled;
-    smoothingSettings.creaseAngle = m_smoothingCreaseAngle;
-    smoothingSettings.iterations = m_smoothingIterations;
-    
-    // Update subdivision settings
-    auto& subdivisionSettings = config.getSubdivisionSettings();
-    subdivisionSettings.enabled = m_subdivisionEnabled;
-    subdivisionSettings.levels = m_subdivisionLevel;
-    
-    // Update edge settings
-    auto& edgeSettings = config.getEdgeSettings();
-    edgeSettings.featureEdgeAngle = m_subdivisionCreaseAngle;
-    
-    // Set custom parameters for advanced settings
-    config.setParameter("tessellation_quality", std::to_string(m_tessellationQuality));
-    config.setParameter("adaptive_meshing", m_adaptiveMeshing ? "true" : "false");
-    config.setParameter("parallel_processing", m_parallelProcessing ? "true" : "false");
-    config.setParameter("smoothing_strength", std::to_string(m_smoothingStrength));
-    config.setParameter("tessellation_method", std::to_string(m_tessellationMethod));
-    config.setParameter("feature_preservation", std::to_string(m_featurePreservation));
-    
-    LOG_INF_S("=== APPLYING MESH PARAMETERS ===");
-    LOG_INF_S("Smoothing: " + std::string(m_smoothingEnabled ? "enabled" : "disabled") + 
-              " (iterations: " + std::to_string(m_smoothingIterations) + 
-              ", strength: " + std::to_string(m_smoothingStrength) + ")");
-    LOG_INF_S("Subdivision: " + std::string(m_subdivisionEnabled ? "enabled" : "disabled") + 
-              " (level: " + std::to_string(m_subdivisionLevel) + 
-              ", method: " + std::to_string(m_subdivisionMethod) + ")");
-    LOG_INF_S("Tessellation: quality=" + std::to_string(m_tessellationQuality) + 
-              ", adaptive=" + std::string(m_adaptiveMeshing ? "yes" : "no"));
-    
-    // Regenerate all geometries with updated parameters
-    for (auto& geometry : m_geometries) {
-        if (geometry) {
-            geometry->updateCoinRepresentationIfNeeded(m_meshParams);
-            LOG_INF_S("Updated mesh (if needed) for geometry: " + geometry->getName());
-        }
-    }
-    
-    // Request view refresh
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
-        if (refreshManager) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED);
-        }
-    }
-    
-    LOG_INF_S("=== MESH REGENERATION COMPLETE ===");
-    LOG_INF_S("Remeshed " + std::to_string(m_geometries.size()) + " geometries");
-    LOG_INF_S("Deflection: " + std::to_string(m_meshParams.deflection));
+    if (m_meshController) m_meshController->remeshAll();
 }
 
 // LOD (Level of Detail) methods
@@ -861,91 +617,56 @@ void OCCViewer::setLODEnabled(bool enabled)
 {
     if (m_lodEnabled != enabled) {
         m_lodEnabled = enabled;
-        if (!enabled) {
-            m_lodTimer.Stop();
-            // Switch back to fine mode when disabling LOD
-            setLODMode(false);
-        }
+        if (m_lodController) m_lodController->setEnabled(enabled);
         LOG_INF_S("LOD " + std::string(enabled ? "enabled" : "disabled"));
     }
 }
 
-bool OCCViewer::isLODEnabled() const
-{
-    return m_lodEnabled;
-}
+bool OCCViewer::isLODEnabled() const { return m_lodEnabled; }
 
 void OCCViewer::setLODRoughDeflection(double deflection)
 {
-    if (m_lodRoughDeflection != deflection) {
-        m_lodRoughDeflection = deflection;
+    if (m_lodController && m_lodController->getRoughDeflection() != deflection) {
+        m_lodController->setRoughDeflection(deflection);
         LOG_INF_S("LOD rough deflection set to: " + std::to_string(deflection));
     }
 }
 
-double OCCViewer::getLODRoughDeflection() const
-{
-    return m_lodRoughDeflection;
-}
+double OCCViewer::getLODRoughDeflection() const { return m_lodController ? m_lodController->getRoughDeflection() : 0.1; }
 
 void OCCViewer::setLODFineDeflection(double deflection)
 {
-    if (m_lodFineDeflection != deflection) {
-        m_lodFineDeflection = deflection;
+    if (m_lodController && m_lodController->getFineDeflection() != deflection) {
+        m_lodController->setFineDeflection(deflection);
         LOG_INF_S("LOD fine deflection set to: " + std::to_string(deflection));
     }
 }
 
-double OCCViewer::getLODFineDeflection() const
-{
-    return m_lodFineDeflection;
-}
+double OCCViewer::getLODFineDeflection() const { return m_lodController ? m_lodController->getFineDeflection() : 0.01; }
 
 void OCCViewer::setLODTransitionTime(int milliseconds)
 {
-    if (m_lodTransitionTime != milliseconds) {
-        m_lodTransitionTime = milliseconds;
+    if (m_lodController && m_lodController->getTransitionTimeMs() != milliseconds) {
+        m_lodController->setTransitionTimeMs(milliseconds);
         LOG_INF_S("LOD transition time set to: " + std::to_string(milliseconds) + "ms");
     }
 }
 
-int OCCViewer::getLODTransitionTime() const
-{
-    return m_lodTransitionTime;
-}
+int OCCViewer::getLODTransitionTime() const { return m_lodController ? m_lodController->getTransitionTimeMs() : 500; }
 
 void OCCViewer::setLODMode(bool roughMode)
 {
-    if (m_lodRoughMode != roughMode) {
-        m_lodRoughMode = roughMode;
-        
-        // Set appropriate deflection based on mode
-        double targetDeflection = roughMode ? m_lodRoughDeflection : m_lodFineDeflection;
-        setMeshDeflection(targetDeflection, true);
-        
-        LOG_INF_S("LOD mode switched to " + std::string(roughMode ? "rough" : "fine") + 
-                " (deflection: " + std::to_string(targetDeflection) + ")");
-    }
+    if (m_lodController) m_lodController->setMode(roughMode);
+    LOG_INF_S("LOD mode switched to " + std::string(roughMode ? "rough" : "fine"));
 }
 
-bool OCCViewer::isLODRoughMode() const
-{
-    return m_lodRoughMode;
-}
+bool OCCViewer::isLODRoughMode() const { return m_lodController ? m_lodController->isRoughMode() : false; }
 
-void OCCViewer::onLODTimer()
-{
-    // Switch to fine mode when timer expires
-    setLODMode(false);
-    m_lodTimer.Stop();
-}
+void OCCViewer::onLODTimer() { /* handled by LODController now */ }
 
 void OCCViewer::startLODInteraction()
 {
-    if (m_lodEnabled && !m_lodRoughMode) {
-        setLODMode(true);
-        m_lodTimer.Start(m_lodTransitionTime, wxTIMER_ONE_SHOT);
-    }
+    if (m_lodEnabled && m_lodController) m_lodController->startInteraction();
 }
 
 // Batch operations for performance optimization
@@ -953,37 +674,14 @@ void OCCViewer::beginBatchOperation()
 {
     m_batchOperationActive = true;
     m_needsViewRefresh = false;
+    if (m_batchManager) m_batchManager->begin();
     LOG_INF_S("Batch operation started");
 }
 
 void OCCViewer::endBatchOperation()
 {
     m_batchOperationActive = false;
-    
-    // Process deferred ObjectTree updates
-    updateObjectTreeDeferred();
-    
-    // Perform deferred view refresh if needed
-    if (m_needsViewRefresh && m_sceneManager) {
-        auto batchRefreshStartTime = std::chrono::high_resolution_clock::now();
-        
-        m_sceneManager->updateSceneBounds();
-        m_sceneManager->resetView();
-        
-        Canvas* canvas = m_sceneManager->getCanvas();
-        if (canvas && canvas->getRefreshManager()) {
-            canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
-        }
-        
-        canvas->Refresh();
-        
-        auto batchRefreshEndTime = std::chrono::high_resolution_clock::now();
-        auto batchRefreshDuration = std::chrono::duration_cast<std::chrono::milliseconds>(batchRefreshEndTime - batchRefreshStartTime);
-        LOG_INF_S("Batch operation completed with view refresh in " + std::to_string(batchRefreshDuration.count()) + "ms");
-    } else {
-        LOG_INF_S("Batch operation completed");
-    }
-    
+    if (m_batchManager) m_batchManager->end();
     m_needsViewRefresh = false;
 }
 
@@ -1042,9 +740,9 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
     }
     
     // Batch add all Coin3D nodes to scene
-    if (m_occRoot && !coinNodes.empty()) {
-        for (SoSeparator* coinNode : coinNodes) {
-            m_occRoot->addChild(coinNode);
+    if (m_sceneAttach && !coinNodes.empty()) {
+        for (const auto& geometry : geometries) {
+            if (geometry) m_sceneAttach->attach(geometry);
         }
     }
     
@@ -1077,47 +775,21 @@ void OCCViewer::updateObjectTreeDeferred()
         LOG_INF_S("No pending ObjectTree updates to process");
         return;
     }
-    
     auto updateStartTime = std::chrono::high_resolution_clock::now();
-    LOG_INF_S("Processing " + std::to_string(m_pendingObjectTreeUpdates.size()) + " deferred ObjectTree updates");
-    
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        Canvas* canvas = m_sceneManager->getCanvas();
-        if (canvas && canvas->getObjectTreePanel()) {
-            LOG_INF_S("Found ObjectTreePanel, adding " + std::to_string(m_pendingObjectTreeUpdates.size()) + " geometries");
-            for (const auto& geometry : m_pendingObjectTreeUpdates) {
-                if (geometry) {
-                    LOG_INF_S("Adding geometry to ObjectTree: " + geometry->getName());
-                    canvas->getObjectTreePanel()->addOCCGeometry(geometry);
-                } else {
-                    LOG_ERR_S("Found null geometry in pending updates");
-                }
-            }
-        } else {
-            LOG_ERR_S("Canvas or ObjectTreePanel is null, cannot update ObjectTree");
-        }
-    } else {
-        LOG_ERR_S("SceneManager or Canvas is null, cannot update ObjectTree");
-    }
-    
-    m_pendingObjectTreeUpdates.clear();
-    
+    if (m_objectTreeSync) m_objectTreeSync->processDeferred();
     auto updateEndTime = std::chrono::high_resolution_clock::now();
     auto updateDuration = std::chrono::duration_cast<std::chrono::milliseconds>(updateEndTime - updateStartTime);
-    LOG_INF_S("Deferred ObjectTree updates completed in " + std::to_string(updateDuration.count()) + "ms");
+    LOG_INF_S("Deferred ObjectTree updates processed in " + std::to_string(updateDuration.count()) + "ms");
 }
 
 // Subdivision surface control implementations
 void OCCViewer::setSubdivisionEnabled(bool enabled)
 {
-    if (m_subdivisionEnabled != enabled) {
-        bool oldValue = m_subdivisionEnabled;
-        m_subdivisionEnabled = enabled;
-        LOG_INF_S("Subdivision enabled: " + std::string(enabled ? "true" : "false"));
-        logParameterChange("subdivision_enabled", oldValue ? 1.0 : 0.0, enabled ? 1.0 : 0.0);
-        // TODO: Apply subdivision to all geometries
-        remeshAllGeometries();
-    }
+    if (m_subdivisionEnabled == enabled) return;
+    m_subdivisionEnabled = enabled;
+    LOG_INF_S("Subdivision enabled: " + std::string(enabled ? "true" : "false"));
+    logParameterChange("subdivision_enabled", enabled ? 0.0 : 1.0, enabled ? 1.0 : 0.0);
+    if (m_meshController) m_meshController->setSubdivisionEnabled(enabled);
 }
 
 bool OCCViewer::isSubdivisionEnabled() const
@@ -1127,15 +799,12 @@ bool OCCViewer::isSubdivisionEnabled() const
 
 void OCCViewer::setSubdivisionLevel(int level)
 {
-    if (m_subdivisionLevel != level && level >= 1 && level <= 5) {
-        int oldValue = m_subdivisionLevel;
-        m_subdivisionLevel = level;
-        LOG_INF_S("Subdivision level set to: " + std::to_string(level));
-        logParameterChange("subdivision_level", oldValue, level);
-        if (m_subdivisionEnabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (level < 1 || level > 5 || m_subdivisionLevel == level) return;
+    int oldValue = m_subdivisionLevel;
+    m_subdivisionLevel = level;
+    LOG_INF_S("Subdivision level set to: " + std::to_string(level));
+    logParameterChange("subdivision_level", oldValue, level);
+    if (m_meshController) m_meshController->setSubdivisionLevel(level);
 }
 
 int OCCViewer::getSubdivisionLevel() const
@@ -1145,13 +814,10 @@ int OCCViewer::getSubdivisionLevel() const
 
 void OCCViewer::setSubdivisionMethod(int method)
 {
-    if (m_subdivisionMethod != method && method >= 0 && method <= 3) {
-        m_subdivisionMethod = method;
-        LOG_INF_S("Subdivision method set to: " + std::to_string(method));
-        if (m_subdivisionEnabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (method < 0 || method > 3 || m_subdivisionMethod == method) return;
+    m_subdivisionMethod = method;
+    LOG_INF_S("Subdivision method set to: " + std::to_string(method));
+    if (m_meshController) m_meshController->setSubdivisionMethod(method);
 }
 
 int OCCViewer::getSubdivisionMethod() const
@@ -1161,13 +827,10 @@ int OCCViewer::getSubdivisionMethod() const
 
 void OCCViewer::setSubdivisionCreaseAngle(double angle)
 {
-    if (m_subdivisionCreaseAngle != angle && angle >= 0.0 && angle <= 180.0) {
-        m_subdivisionCreaseAngle = angle;
-        LOG_INF_S("Subdivision crease angle set to: " + std::to_string(angle));
-        if (m_subdivisionEnabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (angle < 0.0 || angle > 180.0 || m_subdivisionCreaseAngle == angle) return;
+    m_subdivisionCreaseAngle = angle;
+    LOG_INF_S("Subdivision crease angle set to: " + std::to_string(angle));
+    if (m_meshController) m_meshController->setSubdivisionCreaseAngle(angle);
 }
 
 double OCCViewer::getSubdivisionCreaseAngle() const
@@ -1178,13 +841,10 @@ double OCCViewer::getSubdivisionCreaseAngle() const
 // Mesh smoothing control implementations
 void OCCViewer::setSmoothingEnabled(bool enabled)
 {
-    if (m_smoothingEnabled != enabled) {
-        m_smoothingEnabled = enabled;
-        LOG_INF_S("Smoothing enabled: " + std::string(enabled ? "true" : "false"));
-        if (enabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (m_smoothingEnabled == enabled) return;
+    m_smoothingEnabled = enabled;
+    LOG_INF_S("Smoothing enabled: " + std::string(enabled ? "true" : "false"));
+    if (m_meshController) m_meshController->setSmoothingEnabled(enabled);
 }
 
 bool OCCViewer::isSmoothingEnabled() const
@@ -1194,13 +854,10 @@ bool OCCViewer::isSmoothingEnabled() const
 
 void OCCViewer::setSmoothingMethod(int method)
 {
-    if (m_smoothingMethod != method && method >= 0 && method <= 3) {
-        m_smoothingMethod = method;
-        LOG_INF_S("Smoothing method set to: " + std::to_string(method));
-        if (m_smoothingEnabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (method < 0 || method > 3 || m_smoothingMethod == method) return;
+    m_smoothingMethod = method;
+    LOG_INF_S("Smoothing method set to: " + std::to_string(method));
+    if (m_meshController) m_meshController->setSmoothingMethod(method);
 }
 
 int OCCViewer::getSmoothingMethod() const
@@ -1210,13 +867,10 @@ int OCCViewer::getSmoothingMethod() const
 
 void OCCViewer::setSmoothingIterations(int iterations)
 {
-    if (m_smoothingIterations != iterations && iterations >= 1 && iterations <= 10) {
-        m_smoothingIterations = iterations;
-        LOG_INF_S("Smoothing iterations set to: " + std::to_string(iterations));
-        if (m_smoothingEnabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (iterations < 1 || iterations > 10 || m_smoothingIterations == iterations) return;
+    m_smoothingIterations = iterations;
+    LOG_INF_S("Smoothing iterations set to: " + std::to_string(iterations));
+    if (m_meshController) m_meshController->setSmoothingIterations(iterations);
 }
 
 int OCCViewer::getSmoothingIterations() const
@@ -1226,13 +880,10 @@ int OCCViewer::getSmoothingIterations() const
 
 void OCCViewer::setSmoothingStrength(double strength)
 {
-    if (m_smoothingStrength != strength && strength >= 0.01 && strength <= 1.0) {
-        m_smoothingStrength = strength;
-        LOG_INF_S("Smoothing strength set to: " + std::to_string(strength));
-        if (m_smoothingEnabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (strength < 0.01 || strength > 1.0 || m_smoothingStrength == strength) return;
+    m_smoothingStrength = strength;
+    LOG_INF_S("Smoothing strength set to: " + std::to_string(strength));
+    if (m_meshController) m_meshController->setSmoothingStrength(strength);
 }
 
 double OCCViewer::getSmoothingStrength() const
@@ -1242,13 +893,10 @@ double OCCViewer::getSmoothingStrength() const
 
 void OCCViewer::setSmoothingCreaseAngle(double angle)
 {
-    if (m_smoothingCreaseAngle != angle && angle >= 0.0 && angle <= 180.0) {
-        m_smoothingCreaseAngle = angle;
-        LOG_INF_S("Smoothing crease angle set to: " + std::to_string(angle));
-        if (m_smoothingEnabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (angle < 0.0 || angle > 180.0 || m_smoothingCreaseAngle == angle) return;
+    m_smoothingCreaseAngle = angle;
+    LOG_INF_S("Smoothing crease angle set to: " + std::to_string(angle));
+    if (m_meshController) m_meshController->setSmoothingCreaseAngle(angle);
 }
 
 double OCCViewer::getSmoothingCreaseAngle() const
@@ -1259,11 +907,10 @@ double OCCViewer::getSmoothingCreaseAngle() const
 // Advanced tessellation control implementations
 void OCCViewer::setTessellationMethod(int method)
 {
-    if (m_tessellationMethod != method && method >= 0 && method <= 3) {
-        m_tessellationMethod = method;
-        LOG_INF_S("Tessellation method set to: " + std::to_string(method));
-        remeshAllGeometries();
-    }
+    if (method < 0 || method > 3 || m_tessellationMethod == method) return;
+    m_tessellationMethod = method;
+    LOG_INF_S("Tessellation method set to: " + std::to_string(method));
+    if (m_meshController) m_meshController->setTessellationMethod(method);
 }
 
 int OCCViewer::getTessellationMethod() const
@@ -1273,11 +920,10 @@ int OCCViewer::getTessellationMethod() const
 
 void OCCViewer::setTessellationQuality(int quality)
 {
-    if (m_tessellationQuality != quality && quality >= 1 && quality <= 5) {
-        m_tessellationQuality = quality;
-        LOG_INF_S("Tessellation quality set to: " + std::to_string(quality));
-        remeshAllGeometries();
-    }
+    if (quality < 1 || quality > 5 || m_tessellationQuality == quality) return;
+    m_tessellationQuality = quality;
+    LOG_INF_S("Tessellation quality set to: " + std::to_string(quality));
+    if (m_meshController) m_meshController->setTessellationQuality(quality);
 }
 
 int OCCViewer::getTessellationQuality() const
@@ -1287,11 +933,10 @@ int OCCViewer::getTessellationQuality() const
 
 void OCCViewer::setFeaturePreservation(double preservation)
 {
-    if (m_featurePreservation != preservation && preservation >= 0.0 && preservation <= 1.0) {
-        m_featurePreservation = preservation;
-        LOG_INF_S("Feature preservation set to: " + std::to_string(preservation));
-        remeshAllGeometries();
-    }
+    if (preservation < 0.0 || preservation > 1.0 || m_featurePreservation == preservation) return;
+    m_featurePreservation = preservation;
+    LOG_INF_S("Feature preservation set to: " + std::to_string(preservation));
+    if (m_meshController) m_meshController->setFeaturePreservation(preservation);
 }
 
 double OCCViewer::getFeaturePreservation() const
@@ -1301,11 +946,10 @@ double OCCViewer::getFeaturePreservation() const
 
 void OCCViewer::setParallelProcessing(bool enabled)
 {
-    if (m_parallelProcessing != enabled) {
-        m_parallelProcessing = enabled;
-        LOG_INF_S("Parallel processing enabled: " + std::string(enabled ? "true" : "false"));
-        // TODO: Apply parallel processing settings to mesh generation
-    }
+    if (m_parallelProcessing == enabled) return;
+    m_parallelProcessing = enabled;
+    LOG_INF_S("Parallel processing enabled: " + std::string(enabled ? "true" : "false"));
+    if (m_meshController) m_meshController->setParallelProcessing(enabled);
 }
 
 bool OCCViewer::isParallelProcessing() const
@@ -1315,13 +959,10 @@ bool OCCViewer::isParallelProcessing() const
 
 void OCCViewer::setAdaptiveMeshing(bool enabled)
 {
-    if (m_adaptiveMeshing != enabled) {
-        m_adaptiveMeshing = enabled;
-        LOG_INF_S("Adaptive meshing enabled: " + std::string(enabled ? "true" : "false"));
-        if (enabled) {
-            remeshAllGeometries();
-        }
-    }
+    if (m_adaptiveMeshing == enabled) return;
+    m_adaptiveMeshing = enabled;
+    LOG_INF_S("Adaptive meshing enabled: " + std::string(enabled ? "true" : "false"));
+    if (m_meshController) m_meshController->setAdaptiveMeshing(enabled);
 }
 
 bool OCCViewer::isAdaptiveMeshing() const
@@ -1473,145 +1114,25 @@ void OCCViewer::logParameterChange(const std::string& parameterName, double oldV
     }
 }
 
-// DisplayFlags setters
-void OCCViewer::setShowEdgesFlag(bool flag) {
-    for (auto& geometry : m_geometries) {
-        if (geometry) geometry->setShowEdges(flag);
-    }
-    updateDisplay();
-}
-void OCCViewer::setShowWireframeFlag(bool flag) {
-    for (auto& geometry : m_geometries) {
-        if (geometry) geometry->setShowWireframe(flag);
-    }
-    updateDisplay();
-}
-void OCCViewer::setShowFacesFlag(bool flag) {
-    // ShowFaces functionality disabled to avoid interference with edge testing
-    // m_displayFlags.showFaces = flag;
-    // updateDisplay();
-    LOG_INF_S("ShowFaces functionality disabled - faces are always shown for edge testing");
-}
-void OCCViewer::setShowNormalsFlag(bool flag) {
-    m_displayFlags.showNormals = flag;
-    updateDisplay();
-}
-bool OCCViewer::isShowEdgesFlag() const { return m_displayFlags.showEdges; }
-bool OCCViewer::isShowWireframeFlag() const { return m_displayFlags.showWireframe; }
-bool OCCViewer::isShowFacesFlag() const { 
-    // ShowFaces functionality disabled - faces are always shown for edge testing
-    return true; 
-}
-bool OCCViewer::isShowNormalsFlag() const { return m_displayFlags.showNormals; }
-
-void OCCViewer::updateDisplay() {
-    // Clear scene or prepare for redraw if needed
-    // ...
-    // Faces are always shown for edge testing - ShowFaces functionality disabled
-    drawFaces();
-    if (isShowWireframeFlag()) {
-        drawWireframe();
-    }
-    // Edge display is now handled by EdgeComponent system
-    // drawEdges() call removed to avoid conflicts
-    if (isShowNormalsFlag()) {
-        drawNormals();
-    }
-    // Trigger a canvas refresh if needed
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        m_sceneManager->getCanvas()->Refresh();
-    }
-}
-
-// Stub implementations for draw methods
-void OCCViewer::drawFaces() {
-    // Render all geometry faces/solids
-    for (const auto& geometry : m_geometries) {
-        if (!geometry || !geometry->isVisible()) continue;
-        SoSeparator* coinNode = geometry->getCoinNode();
-        if (coinNode && m_occRoot) {
-            // Ensure face display is enabled for this geometry
-            geometry->setFaceDisplay(true);
-            // Add to scene if not already present
-            if (!m_occRoot->findChild(coinNode)) {
-                m_occRoot->addChild(coinNode);
-            }
-        }
-    }
-}
-
-void OCCViewer::drawWireframe() {
-    // Render all geometry in wireframe mode (overlay)
-    for (const auto& geometry : m_geometries) {
-        if (!geometry || !geometry->isVisible()) continue;
-        geometry->setWireframeOverlay(true);
-    }
-}
-
-// drawEdges() method removed - edge display is now handled by EdgeComponent system
-
-void OCCViewer::drawNormals() {
-    // Render normals for all visible geometry
-    for (const auto& geometry : m_geometries) {
-        if (!geometry || !geometry->isVisible()) continue;
-        geometry->setNormalDisplay(true);
-    }
-}
+// Legacy display flag APIs removed; rendering handled at geometry level and by EdgeDisplayManager
 
 void OCCViewer::setShowOriginalEdges(bool show) {
-    globalEdgeFlags.showOriginalEdges = show;
-    updateAllEdgeDisplays();
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        if (auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager()) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
-        }
-    }
+    if (m_edgeDisplayManager) m_edgeDisplayManager->setShowOriginalEdges(show, m_meshParams);
 }
 void OCCViewer::setShowFeatureEdges(bool show) {
-    globalEdgeFlags.showFeatureEdges = show;
-    if (show) {
-        // If cache exists and params unchanged, reuse; otherwise compute
-        if (m_featureCacheValid) {
-            // Use cached nodes: just attach/display
-        } else if (!m_featureEdgeRunning) {
-            startAsyncFeatureEdgeGeneration(m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength,
-                                            m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave);
-        }
-    }
-    // Always update displays to show/hide nodes based on current flags
-    updateAllEdgeDisplays();
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        if (auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager()) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
-        }
-    }
+    if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFeatureEdges(show, m_meshParams);
 }
 
 void OCCViewer::applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) {
-    for (auto& g : m_geometries) {
-        if (!g) continue;
-        g->setEdgeColor(color);
-        g->setEdgeWidth(width);
-        g->setFacesVisible(!edgesOnly);
-        // Ensure edge nodes are attached per current flags and apply appearance to feature edges
-        if (g->edgeComponent) {
-            g->edgeComponent->edgeFlags = globalEdgeFlags;
-            // Apply appearance to feature edges node
-            g->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width);
-            g->updateEdgeDisplay();
-        }
-    }
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        if (auto* rm = m_sceneManager->getCanvas()->getRefreshManager()) {
-            rm->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
-        }
-    }
+    if (m_edgeDisplayManager) m_edgeDisplayManager->applyFeatureEdgeAppearance(color, width, edgesOnly);
 }
 
 void OCCViewer::setExplodeEnabled(bool enabled, double factor) {
+    if (!m_explodeController) m_explodeController = std::make_unique<ExplodeController>(m_occRoot);
     if (m_explodeEnabled == enabled && std::abs(m_explodeFactor - factor) < 1e-6) return;
     m_explodeEnabled = enabled;
     m_explodeFactor = factor;
+    m_explodeController->setEnabled(enabled, factor);
     if (enabled) applyExplode(); else clearExplode();
     if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
 }
@@ -1619,6 +1140,8 @@ void OCCViewer::setExplodeEnabled(bool enabled, double factor) {
 void OCCViewer::setExplodeParams(ExplodeMode mode, double factor) {
     m_explodeMode = mode;
     m_explodeFactor = factor;
+    if (!m_explodeController) m_explodeController = std::make_unique<ExplodeController>(m_occRoot);
+    m_explodeController->setParams(mode, factor);
     if (m_explodeEnabled) {
         applyExplode();
         if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
@@ -1626,328 +1149,96 @@ void OCCViewer::setExplodeParams(ExplodeMode mode, double factor) {
 }
 
 void OCCViewer::applyExplode() {
-    if (m_geometries.size() <= 1) return;
-    // Compute overall bounding box center
-    gp_Pnt minPt, maxPt;
-    bool init = false;
-    for (auto& g : m_geometries) {
-        if (!g) continue;
-        gp_Pnt gmin, gmax;
-        OCCShapeBuilder::getBoundingBox(g->getShape(), gmin, gmax);
-        if (!init) { minPt = gmin; maxPt = gmax; init = true; }
-        else {
-            if (gmin.X() < minPt.X()) minPt.SetX(gmin.X());
-            if (gmin.Y() < minPt.Y()) minPt.SetY(gmin.Y());
-            if (gmin.Z() < minPt.Z()) minPt.SetZ(gmin.Z());
-            if (gmax.X() > maxPt.X()) maxPt.SetX(gmax.X());
-            if (gmax.Y() > maxPt.Y()) maxPt.SetY(gmax.Y());
-            if (gmax.Z() > maxPt.Z()) maxPt.SetZ(gmax.Z());
-        }
-    }
-    if (!init) return;
-    gp_Pnt center((minPt.X()+maxPt.X())*0.5, (minPt.Y()+maxPt.Y())*0.5, (minPt.Z()+maxPt.Z())*0.5);
-    double sceneSize = std::max({maxPt.X()-minPt.X(), maxPt.Y()-minPt.Y(), maxPt.Z()-minPt.Z()});
-    double baseOffset = std::max(0.1, sceneSize * 0.15) * m_explodeFactor;
-
-    m_originalPositions.clear();
-    for (auto& g : m_geometries) {
-        if (!g) continue;
-        // Store original
-        gp_Pnt pos = g->getPosition();
-        m_originalPositions[g->getName()] = pos;
-        // Compute geometry center
-        gp_Pnt gmin, gmax;
-        OCCShapeBuilder::getBoundingBox(g->getShape(), gmin, gmax);
-        gp_Pnt gc((gmin.X()+gmax.X())*0.5, (gmin.Y()+gmax.Y())*0.5, (gmin.Z()+gmax.Z())*0.5);
-        gp_Vec dir;
-        switch (m_explodeMode) {
-            case ExplodeMode::Radial: {
-                dir = gp_Vec(center, gc);
-                if (dir.Magnitude() < 1e-9) dir = gp_Vec(1,0,0);
-                dir.Normalize();
-                break;
-            }
-            case ExplodeMode::AxisX: {
-                double sign = (gc.X() - center.X()) >= 0 ? 1.0 : -1.0;
-                dir = gp_Vec(sign, 0, 0);
-                break;
-            }
-            case ExplodeMode::AxisY: {
-                double sign = (gc.Y() - center.Y()) >= 0 ? 1.0 : -1.0;
-                dir = gp_Vec(0, sign, 0);
-                break;
-            }
-            case ExplodeMode::AxisZ: {
-                double sign = (gc.Z() - center.Z()) >= 0 ? 1.0 : -1.0;
-                dir = gp_Vec(0, 0, sign);
-                break;
-            }
-        }
-        gp_Pnt newPos(pos.X() + dir.X()*baseOffset, pos.Y() + dir.Y()*baseOffset, pos.Z() + dir.Z()*baseOffset);
-        g->setPosition(newPos);
-    }
+    if (!m_explodeController) m_explodeController = std::make_unique<ExplodeController>(m_occRoot);
+    m_explodeController->setParams(m_explodeMode, m_explodeFactor);
+    m_explodeController->apply(m_geometries);
 }
 
 void OCCViewer::clearExplode() {
-    if (m_originalPositions.empty()) return;
-    for (auto& g : m_geometries) {
-        if (!g) continue;
-        auto it = m_originalPositions.find(g->getName());
-        if (it != m_originalPositions.end()) {
-            g->setPosition(it->second);
-        }
-    }
-    m_originalPositions.clear();
+    if (!m_explodeController) return;
+    m_explodeController->clear(m_geometries);
 }
 
 void OCCViewer::setSliceEnabled(bool enabled) {
-    if (m_sliceEnabled == enabled) return;
-    m_sliceEnabled = enabled;
-    if (enabled) {
-        // Initialize plane at scene center for immediate visible effect
-        if (m_sceneManager) {
-            SbVec3f bbMin, bbMax;
-            m_sceneManager->getSceneBoundingBoxMinMax(bbMin, bbMax);
-            SbVec3f center = (bbMin + bbMax) * 0.5f;
-            SbVec3f n = m_sliceNormal; n.normalize(); if (n.length() < 1e-6f) n = SbVec3f(0,0,1);
-            m_sliceOffset = n.dot(center);
-        }
-        ensureSliceNodes();
-        updateSliceNodes();
-    } else {
-        removeSliceNodes();
-    }
+    if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+    m_sliceController->setEnabled(enabled);
     if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
 }
 
 void OCCViewer::setSlicePlane(const SbVec3f& normal, float offset) {
-    m_sliceNormal = normal;
-    m_sliceOffset = offset;
-    if (m_sliceEnabled) {
-        ensureSliceNodes();
-        updateSliceNodes();
+    if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+    m_sliceController->setPlane(normal, offset);
         if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
-    }
 }
 
 void OCCViewer::moveSliceAlongNormal(float delta) {
-    m_sliceOffset += delta;
-    if (m_sliceEnabled) {
-        updateSliceNodes();
+    if (!m_sliceController) return;
+    m_sliceController->moveAlongNormal(delta);
         if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
     }
+
+bool OCCViewer::isSliceEnabled() const {
+    return m_sliceController ? m_sliceController->isEnabled() : false;
+}
+
+SbVec3f OCCViewer::getSliceNormal() const {
+    return m_sliceController ? m_sliceController->normal() : SbVec3f(0,0,1);
+}
+
+float OCCViewer::getSliceOffset() const {
+    return m_sliceController ? m_sliceController->offset() : 0.0f;
 }
 
 void OCCViewer::setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) {
-    globalEdgeFlags.showFeatureEdges = show;
-    if (show) {
-        bool paramsChanged = !approximatelyEqual(m_lastFeatureParams.angleDeg, featureAngleDeg) ||
-                             !approximatelyEqual(m_lastFeatureParams.minLength, minLength) ||
-                             (m_lastFeatureParams.onlyConvex != onlyConvex) ||
-                             (m_lastFeatureParams.onlyConcave != onlyConcave);
-
-        if (paramsChanged) {
-            m_lastFeatureParams = {featureAngleDeg, minLength, onlyConvex, onlyConcave};
-            invalidateFeatureEdgeCache();
-            if (!m_featureEdgeRunning) {
-                startAsyncFeatureEdgeGeneration(featureAngleDeg, minLength, onlyConvex, onlyConcave);
-            }
-        } else {
-            // Params unchanged: if cache exists, just reuse
-            if (!m_featureCacheValid && !m_featureEdgeRunning) {
-                startAsyncFeatureEdgeGeneration(featureAngleDeg, minLength, onlyConvex, onlyConcave);
-            }
-        }
-    }
-    updateAllEdgeDisplays();
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        if (auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager()) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
-        }
+    if (m_edgeDisplayManager) {
+        m_edgeDisplayManager->setShowFeatureEdges(show, featureAngleDeg, minLength, onlyConvex, onlyConcave, m_meshParams);
     }
 }
 void OCCViewer::setShowMeshEdges(bool show) {
-    globalEdgeFlags.showMeshEdges = show;
-    updateAllEdgeDisplays();
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        if (auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager()) {
-            refreshManager->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
-        }
-    }
+    if (m_edgeDisplayManager) m_edgeDisplayManager->setShowMeshEdges(show, m_meshParams);
 }
 void OCCViewer::setShowHighlightEdges(bool show) {
-    globalEdgeFlags.showHighlightEdges = show;
-    updateAllEdgeDisplays();
+    if (m_edgeDisplayManager) m_edgeDisplayManager->setShowHighlightEdges(show, m_meshParams);
 }
 void OCCViewer::setShowNormalLines(bool show) {
     LOG_INF_S("Setting show normal lines to: " + std::string(show ? "true" : "false"));
-    globalEdgeFlags.showNormalLines = show;
-    updateAllEdgeDisplays();
+    if (m_edgeDisplayManager) m_edgeDisplayManager->setShowNormalLines(show, m_meshParams);
 }
 
 void OCCViewer::setShowFaceNormalLines(bool show) {
     LOG_INF_S("Setting show face normal lines to: " + std::string(show ? "true" : "false"));
-    globalEdgeFlags.showFaceNormalLines = show;
-    updateAllEdgeDisplays();
+    if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFaceNormalLines(show, m_meshParams);
 }
 
 void OCCViewer::setShowSilhouetteEdges(bool /*show*/) {
-    // Silhouette feature disabled per request. Ensure global flag is false
-    globalEdgeFlags.showSilhouetteEdges = false;
+    // Silhouette feature disabled per request
     // Turn off any existing dynamic silhouette renderers if present
-    for (auto& kv : m_silhouetteRenderers) {
-        if (kv.second) kv.second->setEnabled(false);
-    }
+    if (m_hoverManager) m_hoverManager->disableAll();
     if (m_sceneManager && m_sceneManager->getCanvas()) {
         m_sceneManager->getCanvas()->Refresh();
     }
 }
 
 void OCCViewer::toggleEdgeType(EdgeType type, bool show) {
-    switch(type) {
-        case EdgeType::Original: globalEdgeFlags.showOriginalEdges = show; break;
-        case EdgeType::Feature: globalEdgeFlags.showFeatureEdges = show; break;
-        case EdgeType::Mesh: globalEdgeFlags.showMeshEdges = show; break;
-        case EdgeType::Highlight: globalEdgeFlags.showHighlightEdges = show; break;
-        case EdgeType::NormalLine: globalEdgeFlags.showNormalLines = show; break;
-        case EdgeType::FaceNormalLine: globalEdgeFlags.showFaceNormalLines = show; break;
-        case EdgeType::Silhouette: globalEdgeFlags.showSilhouetteEdges = false; break; // force disabled
-    }
-    updateAllEdgeDisplays();
+    if (m_edgeDisplayManager) m_edgeDisplayManager->toggleEdgeType(type, show, m_meshParams);
 }
 
 bool OCCViewer::isEdgeTypeEnabled(EdgeType type) const {
+    const EdgeDisplayFlags& flags = m_edgeDisplayManager ? m_edgeDisplayManager->getFlags() : EdgeDisplayFlags{};
     switch(type) {
-        case EdgeType::Original: return globalEdgeFlags.showOriginalEdges;
-        case EdgeType::Feature: return globalEdgeFlags.showFeatureEdges;
-        case EdgeType::Mesh: return globalEdgeFlags.showMeshEdges;
-        case EdgeType::Highlight: return globalEdgeFlags.showHighlightEdges;
-        case EdgeType::NormalLine: return globalEdgeFlags.showNormalLines;
-        case EdgeType::FaceNormalLine: return globalEdgeFlags.showFaceNormalLines;
+        case EdgeType::Original: return flags.showOriginalEdges;
+        case EdgeType::Feature: return flags.showFeatureEdges;
+        case EdgeType::Mesh: return flags.showMeshEdges;
+        case EdgeType::Highlight: return flags.showHighlightEdges;
+        case EdgeType::NormalLine: return flags.showNormalLines;
+        case EdgeType::FaceNormalLine: return flags.showFaceNormalLines;
         case EdgeType::Silhouette: return false;
     }
     return false;
 }
 
 void OCCViewer::updateAllEdgeDisplays() {
-    LOG_INF_S("Updating all edge displays for " + std::to_string(m_geometries.size()) + " geometries");
-    LOG_INF_S("Global edge flags - Normal lines: " + std::string(globalEdgeFlags.showNormalLines ? "true" : "false") + 
-              ", Face normal lines: " + std::string(globalEdgeFlags.showFaceNormalLines ? "true" : "false"));
-    
-    for (auto& g : m_geometries) {
-        if (!g->edgeComponent) {
-            g->edgeComponent = std::make_unique<EdgeComponent>();
-        }
-        // Sync flags
-        g->edgeComponent->edgeFlags = globalEdgeFlags;
-
-        // Fast path: generate requested nodes per type without full rebuild
-        if (globalEdgeFlags.showOriginalEdges && g->edgeComponent->getEdgeNode(EdgeType::Original) == nullptr) {
-            g->edgeComponent->extractOriginalEdges(g->getShape());
-        }
-        // Only generate feature edges if they are enabled AND we have valid parameters
-        if (globalEdgeFlags.showFeatureEdges && m_featureCacheValid && g->edgeComponent->getEdgeNode(EdgeType::Feature) == nullptr) {
-            g->edgeComponent->extractFeatureEdges(g->getShape(), m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength,
-                                                m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave);
-        }
-        // Mesh/normal/face-normal edges: generate mesh on-demand once per geometry
-        bool needMesh = false;
-        if (globalEdgeFlags.showMeshEdges && g->edgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) needMesh = true;
-        if (globalEdgeFlags.showNormalLines && g->edgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) needMesh = true;
-        if (globalEdgeFlags.showFaceNormalLines && g->edgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) needMesh = true;
-        if (needMesh) {
-            auto& manager = RenderingToolkitAPI::getManager();
-            auto processor = manager.getGeometryProcessor("OpenCASCADE");
-            if (processor) {
-                TriangleMesh mesh = processor->convertToMesh(g->getShape(), m_meshParams);
-                if (globalEdgeFlags.showMeshEdges && g->edgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) {
-                    g->edgeComponent->extractMeshEdges(mesh);
-                }
-                if (globalEdgeFlags.showNormalLines && g->edgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) {
-                    g->edgeComponent->generateNormalLineNode(mesh, 0.5);
-                }
-                if (globalEdgeFlags.showFaceNormalLines && g->edgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) {
-                    g->edgeComponent->generateFaceNormalLineNode(mesh, 0.5);
-                }
-            }
-        }
-
-        // Attach/detach nodes as needed
-        g->updateEdgeDisplay();
-    }
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        m_sceneManager->getCanvas()->Refresh();
-        LOG_INF_S("Canvas refreshed");
-    }
+    if (m_edgeDisplayManager) m_edgeDisplayManager->updateAll(m_meshParams);
 }
 
-void OCCViewer::startAsyncFeatureEdgeGeneration(double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) {
-    if (m_featureEdgeRunning) return;
-    
-    // Debug: Log async generation start
-    wxLogDebug("OCCViewer: Starting async feature edge generation with params: angle=%.1f, minLength=%.3f, onlyConvex=%s, onlyConcave=%s", 
-               featureAngleDeg, minLength, onlyConvex ? "true" : "false", onlyConcave ? "true" : "false");
-    
-    m_featureEdgeRunning = true;
-    m_featureEdgeProgress = 0;
-    if (m_featureEdgeThread.joinable()) m_featureEdgeThread.detach();
-    m_featureEdgeThread = std::thread([this, featureAngleDeg, minLength, onlyConvex, onlyConcave]() {
-        wxLogDebug("OCCViewer: Async thread started for feature edge generation");
-        const int total = static_cast<int>(m_geometries.size());
-        wxLogDebug("OCCViewer: Total geometries to process: %d", total);
-        
-        int done = 0;
-    for (auto& g : m_geometries) {
-            if (!g) continue;
-            if (!g->edgeComponent) g->edgeComponent = std::make_unique<EdgeComponent>();
-            if (globalEdgeFlags.showFeatureEdges && g->edgeComponent->getEdgeNode(EdgeType::Feature) == nullptr) {
-                g->edgeComponent->extractFeatureEdges(g->getShape(), featureAngleDeg, minLength, onlyConvex, onlyConcave);
-            // Apply last known appearance to the freshly generated node
-            g->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, g->getEdgeColor(), g->getEdgeWidth());
-            }
-            done++;
-            m_featureEdgeProgress = static_cast<int>(static_cast<double>(done) / std::max(1, total) * 100.0);
-            
-            // Debug: Log progress updates more frequently
-            wxLogDebug("OCCViewer: Feature edge generation progress: %d/%d (%d%%)", done, total, m_featureEdgeProgress.load());
-            
-            // Add small delay to simulate real work and allow progress bar to show
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            
-            // Lightweight UI refresh pulse
-            if (m_sceneManager && m_sceneManager->getCanvas() && (done % 2 == 0)) {
-                if (auto* rm = m_sceneManager->getCanvas()->getRefreshManager()) {
-                    rm->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED);
-                }
-            }
-        }
-        wxLogDebug("OCCViewer: Async feature edge generation completed");
-        m_featureEdgeRunning = false;
-        m_lastFeatureParams = {featureAngleDeg, minLength, onlyConvex, onlyConcave};
-        m_featureCacheValid = true;
-        
-        // Force update of edge displays to ensure newly generated feature edge nodes are attached
-        updateAllEdgeDisplays();
-        
-        if (m_sceneManager && m_sceneManager->getCanvas()) {
-            if (auto* rm = m_sceneManager->getCanvas()->getRefreshManager()) {
-                rm->requestRefresh(ViewRefreshManager::RefreshReason::EDGES_TOGGLED, true);
-            }
-        }
-    });
-}
-
-void OCCViewer::invalidateFeatureEdgeCache() {
-    m_featureCacheValid = false;
-    // Clear existing feature edge nodes so they will be rebuilt on next generation
-    for (auto& g : m_geometries) {
-        if (g && g->edgeComponent) {
-            // EdgeComponent does not provide a dedicated clear for featureEdgeNode; recreate lazily by nulling it
-            // Implement by unref via replacing with nullptr if present
-            if (g->edgeComponent->getEdgeNode(EdgeType::Feature)) {
-                // We cannot directly unref here without accessors, but we can force rebuild by resetting component
-                // However, to avoid dropping other nodes, we rely on extractFeatureEdges to overwrite on next run
-            }
-        }
-    }
-}
+void OCCViewer::invalidateFeatureEdgeCache() { }

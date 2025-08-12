@@ -214,10 +214,7 @@ void ObjectTreePanel::hideSelectedObject()
     }
     
     LOG_INF_S("Hiding object: " + geometry->getName());
-    geometry->setVisible(false);
-    if (m_occViewer) {
-        m_occViewer->setGeometryVisible(geometry->getName(), false);
-    }
+    if (m_occViewer) m_occViewer->setGeometryVisible(geometry->getName(), false);
     
     // Update tree item icon
     auto it = m_occGeometryMap.find(geometry);
@@ -235,10 +232,7 @@ void ObjectTreePanel::showSelectedObject()
     }
     
     LOG_INF_S("Showing object: " + geometry->getName());
-    geometry->setVisible(true);
-    if (m_occViewer) {
-        m_occViewer->setGeometryVisible(geometry->getName(), true);
-    }
+    if (m_occViewer) m_occViewer->setGeometryVisible(geometry->getName(), true);
     
     // Update tree item icon
     auto it = m_occGeometryMap.find(geometry);
@@ -313,10 +307,17 @@ void ObjectTreePanel::onTreeItemRightClick(wxTreeEvent& event)
     if (!m_rightClickedItem.IsOk() || m_rightClickedItem == m_rootId) {
         return; // Don't show context menu for root or invalid items
     }
+    // Ensure right-click selects the item so actions operate on it
+    m_isUpdatingSelection = true;
+    m_treeCtrl->SelectItem(m_rightClickedItem);
+    m_isUpdatingSelection = false;
     
     // Show context menu
-    wxPoint point = event.GetPoint();
-    PopupMenu(m_contextMenu, point);
+    wxPoint ptTree = event.GetPoint();
+    // Convert tree-local point to this panel's client coords
+    wxPoint screenPt = m_treeCtrl->ClientToScreen(ptTree);
+    wxPoint panelPt = ScreenToClient(screenPt);
+    PopupMenu(m_contextMenu, panelPt);
 }
 
 void ObjectTreePanel::onKeyDown(wxKeyEvent& event)
@@ -385,22 +386,22 @@ void ObjectTreePanel::createContextMenu()
     m_contextMenu = new wxMenu();
     
     // Add menu items with keyboard shortcuts
-    m_contextMenu->Append(wxID_ANY, "Delete\tDel", "Delete selected object");
+    wxMenuItem* miDelete = m_contextMenu->Append(wxID_ANY, "Delete\tDel", "Delete selected object");
     m_contextMenu->AppendSeparator();
-    m_contextMenu->Append(wxID_ANY, "Hide\tCtrl+H", "Hide selected object");
-    m_contextMenu->Append(wxID_ANY, "Show\tCtrl+S", "Show selected object");
-    m_contextMenu->Append(wxID_ANY, "Toggle Visibility\tF5", "Toggle object visibility");
+    wxMenuItem* miHide = m_contextMenu->Append(wxID_ANY, "Hide\tCtrl+H", "Hide selected object");
+    wxMenuItem* miShow = m_contextMenu->Append(wxID_ANY, "Show\tCtrl+S", "Show selected object");
+    wxMenuItem* miToggle = m_contextMenu->Append(wxID_ANY, "Toggle Visibility\tF5", "Toggle object visibility");
     m_contextMenu->AppendSeparator();
-    m_contextMenu->Append(wxID_ANY, "Show All", "Show all objects");
-    m_contextMenu->Append(wxID_ANY, "Hide All", "Hide all objects");
+    wxMenuItem* miShowAll = m_contextMenu->Append(wxID_ANY, "Show All", "Show all objects");
+    wxMenuItem* miHideAll = m_contextMenu->Append(wxID_ANY, "Hide All", "Hide all objects");
     
     // Bind menu events
-    Bind(wxEVT_MENU, &ObjectTreePanel::onDeleteObject, this, m_contextMenu->FindItem("Delete\tDel"));
-    Bind(wxEVT_MENU, &ObjectTreePanel::onHideObject, this, m_contextMenu->FindItem("Hide\tCtrl+H"));
-    Bind(wxEVT_MENU, &ObjectTreePanel::onShowObject, this, m_contextMenu->FindItem("Show\tCtrl+S"));
-    Bind(wxEVT_MENU, &ObjectTreePanel::onToggleVisibility, this, m_contextMenu->FindItem("Toggle Visibility\tF5"));
-    Bind(wxEVT_MENU, &ObjectTreePanel::onShowAllObjects, this, m_contextMenu->FindItem("Show All"));
-    Bind(wxEVT_MENU, &ObjectTreePanel::onHideAllObjects, this, m_contextMenu->FindItem("Hide All"));
+    Bind(wxEVT_MENU, &ObjectTreePanel::onDeleteObject, this, miDelete->GetId());
+    Bind(wxEVT_MENU, &ObjectTreePanel::onHideObject, this, miHide->GetId());
+    Bind(wxEVT_MENU, &ObjectTreePanel::onShowObject, this, miShow->GetId());
+    Bind(wxEVT_MENU, &ObjectTreePanel::onToggleVisibility, this, miToggle->GetId());
+    Bind(wxEVT_MENU, &ObjectTreePanel::onShowAllObjects, this, miShowAll->GetId());
+    Bind(wxEVT_MENU, &ObjectTreePanel::onHideAllObjects, this, miHideAll->GetId());
 }
 
 void ObjectTreePanel::updateTreeItemIcon(wxTreeItemId itemId, bool visible)

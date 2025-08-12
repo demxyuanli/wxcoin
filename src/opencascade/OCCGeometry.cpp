@@ -162,18 +162,13 @@ void OCCGeometry::setVisible(bool visible)
 {
     if (m_visible != visible) {
         m_visible = visible;
-        
-        // Update Coin3D node visibility
+        // Update Coin3D node visibility by toggling faces display
         if (m_coinNode) {
-            // Set the node's render action based on visibility
-            if (visible) {
-                m_coinNode->renderCulling = SoSeparator::OFF;
-            } else {
-                m_coinNode->renderCulling = SoSeparator::ON;
-            }
-            
-            // Force a refresh
+            setFacesVisible(visible);
             m_coinNode->touch();
+        } else {
+            // Will be applied on next build
+            m_coinNeedsUpdate = true;
         }
     }
 }

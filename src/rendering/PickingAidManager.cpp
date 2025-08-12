@@ -172,6 +172,10 @@ void PickingAidManager::createReferenceGrid() {
     gridMaterial->transparency.setValue(0.3f);  // Less transparent for better visibility
     gridMaterial->emissiveColor.setValue(0.1f, 0.4f, 0.5f);  // Add slight glow
     m_referenceGridSeparator->addChild(gridMaterial);
+
+    // Persistent transform for scaling/translation control
+    m_referenceGridTransform = new SoTransform;
+    m_referenceGridSeparator->addChild(m_referenceGridTransform);
     
     // Create grid coordinates with finer spacing for better detail
     SoCoordinate3* gridCoords = new SoCoordinate3;
@@ -250,18 +254,20 @@ void PickingAidManager::showReferenceGrid(bool show) {
     if (!m_referenceGridSeparator) return;
     
     if (show && !m_referenceGridVisible) {
-        // Calculate dynamic scale factor based on scene bounding box size
-        float sceneSize = 0.0f;
-        if (m_sceneManager) {
-            sceneSize = m_sceneManager->getSceneBoundingBoxSize();
+        // Calculate scale factor
+        float scaleFactor = m_referenceGridScale;
+        if (m_dynamicGridScaling) {
+            float sceneSize = 0.0f;
+            if (m_sceneManager) sceneSize = m_sceneManager->getSceneBoundingBoxSize();
+            float halfExtent = sceneSize * 0.5f;
+            scaleFactor = (halfExtent > 0.0f) ? (halfExtent / 10.0f) : 1.0f;
         }
-        float halfExtent = sceneSize * 0.5f;
-        float scaleFactor = (halfExtent > 0.0f) ? (halfExtent / 10.0f) : 1.0f;
-        SoTransform* gridTransform = new SoTransform;
-        gridTransform->scaleFactor.setValue(scaleFactor, scaleFactor, 1.0f);
-        gridTransform->translation.setValue(0.0f, 0.0f, m_referenceZ);
-        m_referenceGridSeparator->insertChild(gridTransform, 0);
-        
+        // Apply transform persistently (avoid re-inserting new nodes)
+        if (m_referenceGridTransform) {
+            m_referenceGridTransform->scaleFactor.setValue(scaleFactor, scaleFactor, 1.0f);
+            m_referenceGridTransform->translation.setValue(0.0f, 0.0f, m_referenceZ);
+            m_referenceGridTransform->rotation.setValue(SbRotation::identity());
+        }
         m_sceneManager->getObjectRoot()->addChild(m_referenceGridSeparator);
         m_referenceGridVisible = true;
         LOG_INF_S("Reference grid shown at Z=" + std::to_string(m_referenceZ));
@@ -320,21 +326,23 @@ void PickingAidManager::updateReferenceGrid() {
     if (!m_referenceGridSeparator || !m_referenceGridVisible) {
         return;
     }
-    
-    // Remove the current grid from the scene
-    if (m_sceneManager && m_referenceGridVisible) {
-        m_sceneManager->getObjectRoot()->removeChild(m_referenceGridSeparator);
-        m_referenceGridVisible = false;
+    // Recompute scale based on current settings, keep orientation fixed
+    float scaleFactor = m_referenceGridScale;
+    if (m_dynamicGridScaling) {
+        float sceneSize = 0.0f;
+        if (m_sceneManager) sceneSize = m_sceneManager->getSceneBoundingBoxSize();
+        // Use monotonic non-decreasing scale to avoid shrinking with each add
+        float target = (sceneSize > 0.0f) ? (sceneSize * 0.05f) : 1.0f; // 0.05 ~ halfExtent/10
+        if (target < 0.1f) target = 0.1f;
+        if (target > 1000.0f) target = 1000.0f;
+        scaleFactor = std::max(m_referenceGridScale, target);
+        m_referenceGridScale = scaleFactor;
     }
-    
-    // Recreate the grid with updated parameters
-    if (m_referenceGridSeparator) {
-        m_referenceGridSeparator->unref();
+    if (m_referenceGridTransform) {
+        m_referenceGridTransform->scaleFactor.setValue(scaleFactor, scaleFactor, 1.0f);
+        m_referenceGridTransform->translation.setValue(0.0f, 0.0f, m_referenceZ);
+        m_referenceGridTransform->rotation.setValue(SbRotation::identity());
     }
-    createReferenceGrid();
-    
-    // Add the updated grid back to the scene
-    showReferenceGrid(true);
-    
-    LOG_INF_S("PickingAidManager: Reference grid updated");
+    if (m_canvas) m_canvas->Refresh(true);
+    LOG_INF_S("PickingAidManager: Reference grid transform updated");
 }

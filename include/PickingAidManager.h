@@ -33,6 +33,10 @@ public:
     void updatePickingAidColor(const SbVec3f& color);
     void updateReferenceGrid();
     bool isReferenceGridVisible() const { return m_referenceGridVisible; }
+    void setReferenceGridDynamicScaling(bool enable) { m_dynamicGridScaling = enable; }
+    bool isReferenceGridDynamicScaling() const { return m_dynamicGridScaling; }
+    void setReferenceGridScale(float s) { m_referenceGridScale = s; }
+    float getReferenceGridScale() const { return m_referenceGridScale; }
 
 private:
     void createPickingAids();
@@ -49,8 +53,11 @@ private:
     
     // Enhanced picking support
     float m_referenceZ;
+    float m_referenceGridScale{1.0f};
+    bool m_dynamicGridScaling{false};
     SoSeparator* m_referenceGridSeparator;
     bool m_referenceGridVisible;
+    SoTransform* m_referenceGridTransform{nullptr};
     
     void createReferenceGrid();
 };
