@@ -21,6 +21,9 @@
 #include "viewer/interfaces/ISliceApi.h"
 #include "viewer/interfaces/IExplodeApi.h"
 #include "viewer/interfaces/IViewApi.h"
+#include "viewer/interfaces/IOutlineApi.h"
+#include "viewer/OutlineDisplayManager.h"
+#include "viewer/ImageOutlinePass.h"
 #include <unordered_map>
 #include <atomic>
 #include <thread>
@@ -60,7 +63,8 @@ class OCCViewer : public wxEvtHandler,
                   public IEdgeDisplayApi,
                   public ISliceApi,
                   public IExplodeApi,
-                  public IViewApi
+                  public IViewApi,
+                  public IOutlineApi
 {
 public:
     explicit OCCViewer(SceneManager* sceneManager);
@@ -218,7 +222,12 @@ public:
     void setShowHighlightEdges(bool show) override;
     void setShowNormalLines(bool show) override;
     void setShowFaceNormalLines(bool show) override;
-    void setShowSilhouetteEdges(bool show) override;  
+    // Outline API
+    void setOutlineEnabled(bool enabled) override { if (m_outlineManager) m_outlineManager->setEnabled(enabled); }
+    bool isOutlineEnabled() const override { return m_outlineManager ? m_outlineManager->isEnabled() : false; }
+    void refreshOutlineAll() override { if (m_outlineManager) m_outlineManager->updateAll(); }
+    ImageOutlineParams getOutlineParams() const { return m_outlineManager ? m_outlineManager->getParams() : ImageOutlineParams{}; }
+    void setOutlineParams(const ImageOutlineParams& p) { if (m_outlineManager) m_outlineManager->setParams(p); }
     void toggleEdgeType(EdgeType type, bool show) override;
     bool isEdgeTypeEnabled(EdgeType type) const override;
     void updateAllEdgeDisplays() override;
@@ -344,6 +353,7 @@ private:
     std::unique_ptr<ViewUpdateService> m_viewUpdater;
     std::unique_ptr<MeshingService> m_meshingService;
     std::unique_ptr<MeshParameterController> m_meshController;
+    std::unique_ptr<OutlineDisplayManager> m_outlineManager;
 
     // Legacy draw helpers removed; edge/normal rendering is handled elsewhere
 

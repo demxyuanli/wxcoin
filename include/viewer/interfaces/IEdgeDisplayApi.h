@@ -17,11 +17,11 @@ public:
     virtual void setShowHighlightEdges(bool show) = 0;
     virtual void setShowNormalLines(bool show) = 0;
     virtual void setShowFaceNormalLines(bool show) = 0;
-    virtual void setShowSilhouetteEdges(bool show) = 0;
     virtual void toggleEdgeType(EdgeType type, bool show) = 0;
     virtual bool isEdgeTypeEnabled(EdgeType type) const = 0;
     virtual void updateAllEdgeDisplays() = 0;
     virtual void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) = 0;
 };
+
 
 

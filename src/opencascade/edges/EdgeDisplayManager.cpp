@@ -25,7 +25,6 @@ void EdgeDisplayManager::toggleEdgeType(EdgeType type, bool show, const MeshPara
         case EdgeType::Highlight: m_flags.showHighlightEdges = show; break;
         case EdgeType::NormalLine: m_flags.showNormalLines = show; break;
         case EdgeType::FaceNormalLine: m_flags.showFaceNormalLines = show; break;
-        case EdgeType::Silhouette: m_flags.showSilhouetteEdges = false; break;
     }
     updateAll(meshParams);
 }

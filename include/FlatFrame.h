@@ -32,7 +32,6 @@ enum {
     ID_Menu_OpenProject_MainFrame,
     ID_ShowUIHierarchy,
     ID_Menu_PrintLayout_MainFrame,
-    ID_VIEW_SHOWSILHOUETTEEDGES,
     ID_IMPORT_STEP,
     ID_CREATE_BOX,
     ID_CREATE_SPHERE,
@@ -58,6 +57,7 @@ enum {
     ID_SHOW_MESH_EDGES, // New: show mesh edges
     ID_SHOW_FACE_NORMALS, // New: show face normals
     ID_TOGGLE_SLICE,
+    ID_TOGGLE_OUTLINE, // New: toggle outline display
 
     ID_UNDO,
     ID_REDO,
@@ -66,6 +66,7 @@ enum {
     ID_MESH_QUALITY_DIALOG,
     ID_RENDERING_SETTINGS,
     ID_EDGE_SETTINGS,
+    ID_OUTLINE_SETTINGS,
     ID_LIGHTING_SETTINGS,
     ID_SAVE_AS,
     ID_LOD_ENABLE,

@@ -26,7 +26,7 @@
 #include "ViewIsometricListener.h"
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
-#include "ShowSilhouetteEdgesListener.h"
+// #include "ShowSilhouetteEdgesListener.h" // removed
 #include "SetTransparencyListener.h"
 #include "TextureModeDecalListener.h"
 #include "TextureModeModulateListener.h"
@@ -50,6 +50,7 @@
 #include "ExplodeAssemblyListener.h"
 #include "ExplodeConfigListener.h"
 #include "SliceToggleListener.h"
+#include "ToggleOutlineListener.h"
 #include "UndoListener.h"
 #include "RedoListener.h"
 #include "HelpAboutListener.h"
@@ -163,6 +164,8 @@ void FlatFrame::setupCommandSystem() {
     m_listenerManager->registerListener(cmd::CommandType::ShowFlatWidgetsExample, showFlatWidgetsExampleListener);
     m_listenerManager->registerListener(cmd::CommandType::ExplodeAssembly, explodeAssemblyListener);
     m_listenerManager->registerListener(cmd::CommandType::SliceToggle, sliceToggleListener);
+    auto toggleOutlineListener = std::make_shared<ToggleOutlineListener>(m_occViewer);
+    m_listenerManager->registerListener(cmd::CommandType::ToggleOutline, toggleOutlineListener);
 
     m_commandDispatcher->setUIFeedbackHandler([this](const CommandResult& result) { this->onCommandFeedback(result); });
     LOG_INF_S("Command system setup completed");

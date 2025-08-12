@@ -70,7 +70,7 @@
 #include "ViewIsometricListener.h"
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
-#include "ShowSilhouetteEdgesListener.h"
+// #include "ShowSilhouetteEdgesListener.h" // removed
 #include "SetTransparencyListener.h"
 #include "TextureModeDecalListener.h"
 #include "TextureModeModulateListener.h"
@@ -149,6 +149,8 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_VIEW_SHOW_ORIGINAL_EDGES, FlatFrame::onCommand)
     EVT_BUTTON(ID_SHOW_FEATURE_EDGES, FlatFrame::onCommand)
     EVT_BUTTON(ID_SHOW_MESH_EDGES, FlatFrame::onCommand)
+    EVT_BUTTON(ID_OUTLINE_SETTINGS, FlatFrame::onCommand)
+    EVT_BUTTON(ID_TOGGLE_OUTLINE, FlatFrame::onCommand)
 
     EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
     EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
@@ -161,7 +163,7 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_RENDER_PREVIEW_SYSTEM, FlatFrame::onCommand)
     EVT_BUTTON(ID_SHOW_FLAT_WIDGETS_EXAMPLE, FlatFrame::onCommand)
     EVT_BUTTON(wxID_ABOUT, FlatFrame::onCommand)
-    EVT_BUTTON(ID_VIEW_SHOWSILHOUETTEEDGES, FlatFrame::onCommand)
+    // EVT_BUTTON(ID_VIEW_SHOWSILHOUETTEEDGES, FlatFrame::onCommand) // removed
     EVT_BUTTON(ID_TOGGLE_SLICE, FlatFrame::onCommand)
     
     // Texture Mode Command Events
@@ -456,9 +458,7 @@ void FlatFrame::OnButtonClick(wxCommandEvent& event)
     case ID_ShowUIHierarchy:
         ShowUIHierarchy();
         break;
-    case ID_VIEW_SHOWSILHOUETTEEDGES:
-        if (m_occViewer) m_occViewer->setShowFeatureEdges(event.IsChecked());
-        break;
+    // removed silhouette entry; use ID_TOGGLE_OUTLINE instead
     case ID_VIEW_SHOW_ORIGINAL_EDGES:
         if (m_occViewer) m_occViewer->setShowOriginalEdges(event.IsChecked());
         break;
@@ -467,6 +467,9 @@ void FlatFrame::OnButtonClick(wxCommandEvent& event)
         return;
     case ID_SHOW_MESH_EDGES:
         if (m_occViewer) m_occViewer->setShowMeshEdges(event.IsChecked());
+        return;
+    case ID_TOGGLE_OUTLINE:
+        if (m_occViewer) m_occViewer->setOutlineEnabled(event.IsChecked());
         return;
     default:
         // For other buttons, let the event propagate to be handled by command system

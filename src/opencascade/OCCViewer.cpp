@@ -52,6 +52,7 @@
 #include "viewer/MeshParameterController.h"
 #include "viewer/HoverSilhouetteManager.h"
 #include "viewer/BatchOperationManager.h"
+#include "viewer/OutlineDisplayManager.h"
 
 gp_Pnt OCCViewer::getCameraPosition() const {
     if (!m_sceneManager || !m_sceneManager->getCanvas()) return gp_Pnt(0,0,0);
@@ -138,6 +139,8 @@ void OCCViewer::initializeViewer()
     m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
     // Create picking service bound to current root and node map
     m_pickingService = std::make_unique<PickingService>(m_sceneManager, m_occRoot, &m_nodeToGeom);
+    // Create outline manager (disabled by default)
+    m_outlineManager = std::make_unique<OutlineDisplayManager>(m_sceneManager, m_occRoot, &m_geometries);
     
     LOG_INF_S("OCC Viewer initialized");
 }
@@ -216,6 +219,11 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
             m_viewUpdater->refreshCanvas(false);
             LOG_INF_S(std::string("Scene bounds updated and ") + (m_preserveViewOnAdd?"view preserved":"view reset") + " after adding geometry");
         }
+    }
+
+    // Notify outline manager if exists
+    if (m_outlineManager) {
+        m_outlineManager->onGeometryAdded(geometry);
     }
     auto viewUpdateEndTime = std::chrono::high_resolution_clock::now();
     auto viewUpdateDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewUpdateEndTime - viewUpdateStartTime);
@@ -1210,14 +1218,7 @@ void OCCViewer::setShowFaceNormalLines(bool show) {
     if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFaceNormalLines(show, m_meshParams);
 }
 
-void OCCViewer::setShowSilhouetteEdges(bool /*show*/) {
-    // Silhouette feature disabled per request
-    // Turn off any existing dynamic silhouette renderers if present
-    if (m_hoverManager) m_hoverManager->disableAll();
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        m_sceneManager->getCanvas()->Refresh();
-    }
-}
+// removed deprecated setShowSilhouetteEdges
 
 void OCCViewer::toggleEdgeType(EdgeType type, bool show) {
     if (m_edgeDisplayManager) m_edgeDisplayManager->toggleEdgeType(type, show, m_meshParams);
@@ -1232,7 +1233,6 @@ bool OCCViewer::isEdgeTypeEnabled(EdgeType type) const {
         case EdgeType::Highlight: return flags.showHighlightEdges;
         case EdgeType::NormalLine: return flags.showNormalLines;
         case EdgeType::FaceNormalLine: return flags.showFaceNormalLines;
-        case EdgeType::Silhouette: return false;
     }
     return false;
 }

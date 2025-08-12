@@ -67,7 +67,7 @@
 #include "ViewIsometricListener.h"
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
-#include "ShowSilhouetteEdgesListener.h"
+// #include "ShowSilhouetteEdgesListener.h" // removed
 #include "SetTransparencyListener.h"
 #include "TextureModeDecalListener.h"
 #include "TextureModeModulateListener.h"
@@ -277,6 +277,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
     displayButtonBar->AddToggleButton(ID_SHOW_FACE_NORMALS, "Show Face Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle face normal vectors display");
     displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
     displayButtonBar->AddToggleButton(ID_TOGGLE_SLICE, "Slice", false, SVG_ICON("layout", wxSize(16, 16)), "Toggle slicing plane and drag to move");
+    displayButtonBar->AddToggleButton(ID_TOGGLE_OUTLINE, "Outline", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle geometry outline rendering");
+    displayButtonBar->AddButton(ID_OUTLINE_SETTINGS, "Outline Settings", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open outline settings");
     displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
     page3->AddPanel(displayPanel);
     m_ribbon->AddPage(page3);

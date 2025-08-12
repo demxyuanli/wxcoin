@@ -1693,11 +1693,10 @@ void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& para
     setSmoothNormals(params.showNormals);
     
     // Apply edge display types (silhouette disabled)
-    if (edgeComponent) {
+        if (edgeComponent) {
         edgeComponent->setEdgeDisplayType(EdgeType::Original, params.showOriginalEdges);
         edgeComponent->setEdgeDisplayType(EdgeType::Feature, params.showFeatureEdges);
         edgeComponent->setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
-        edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
     }
     
     // Apply subdivision settings

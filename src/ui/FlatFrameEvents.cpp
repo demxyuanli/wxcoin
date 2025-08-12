@@ -4,6 +4,7 @@
 #include "CommandType.h"
 #include "CommandListenerManager.h"
 #include "logger/Logger.h"
+#include "ui/OutlineSettingsDialog.h"
 #include <unordered_map>
 #include <wx/splitter.h>
 
@@ -80,10 +81,35 @@ void FlatFrame::OnMotion(wxMouseEvent& event)
 
 void FlatFrame::onCommand(wxCommandEvent& event) {
     auto it = kEventTable.find(event.GetId());
-    if (it == kEventTable.end()) { LOG_WRN_S("Unknown command ID: " + std::to_string(event.GetId())); return; }
+    if (it == kEventTable.end()) {
+        // Handle non-command mapped UI toggles here
+        if (event.GetId() == ID_TOGGLE_OUTLINE) {
+            // Route through command system for consistency
+            std::unordered_map<std::string, std::string> params; params["toggle"] = "true";
+            if (m_listenerManager) {
+                auto result = m_listenerManager->dispatch(cmd::CommandType::ToggleOutline, params);
+                onCommandFeedback(result);
+            } else if (m_occViewer) {
+                m_occViewer->setOutlineEnabled(!m_occViewer->isOutlineEnabled());
+            }
+            return;
+        }
+        if (event.GetId() == ID_OUTLINE_SETTINGS) {
+            // Open outline settings dialog
+            auto params = m_occViewer ? m_occViewer->getOutlineParams() : ImageOutlineParams{};
+            OutlineSettingsDialog dlg(this, params);
+            if (dlg.ShowModal() == wxID_OK) {
+                auto p = dlg.getParams();
+                if (m_occViewer) m_occViewer->setOutlineParams(p);
+            }
+            return;
+        }
+        LOG_WRN_S("Unknown command ID: " + std::to_string(event.GetId()));
+        return;
+    }
     cmd::CommandType commandType = it->second;
     std::unordered_map<std::string, std::string> parameters;
-            if (commandType == cmd::CommandType::ShowNormals || commandType == cmd::CommandType::ShowSilhouetteEdges) { parameters["toggle"] = "true"; }
+            if (commandType == cmd::CommandType::ShowNormals) { parameters["toggle"] = "true"; }
     if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
         CommandResult result = m_listenerManager->dispatch(commandType, parameters);
         onCommandFeedback(result);
@@ -106,9 +132,7 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
     if (result.commandId == cmd::to_string(cmd::CommandType::ShowNormals) && result.success && m_occViewer) {
         LOG_INF_S("Show normals state updated: " + std::string(m_occViewer->isShowNormals() ? "shown" : "hidden"));
     }
-    else if (result.commandId == cmd::to_string(cmd::CommandType::ShowSilhouetteEdges) && result.success && m_occViewer) {
-        LOG_INF_S("Show silhouette edges state updated: " + std::string(m_occViewer->isEdgeTypeEnabled(EdgeType::Silhouette) ? "shown" : "hidden"));
-    }
+    // Outline toggle handled directly; add optional feedback if needed
 
     if (m_canvas && (
             result.commandId.find("VIEW_") == 0 ||

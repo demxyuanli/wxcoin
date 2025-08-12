@@ -30,7 +30,7 @@ set(COMMANDS_SOURCES
     RedoListener.cpp
     RenderingSettingsListener.cpp
     SetTransparencyListener.cpp
-    # ShowSilhouetteEdgesListener.cpp  # disabled
+    # ShowSilhouetteEdgesListener.cpp  # removed (replaced by Outline toggle)
     ShowFaceNormalsListener.cpp
     ShowFeatureEdgesListener.cpp
     ShowMeshEdgesListener.cpp
@@ -41,6 +41,7 @@ set(COMMANDS_SOURCES
     TextureModeDecalListener.cpp
     TextureModeModulateListener.cpp
     TextureModeReplaceListener.cpp
+    ToggleOutlineListener.cpp
     UndoListener.cpp
     ViewAllListener.cpp
     ViewFrontListener.cpp
@@ -88,7 +89,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/RedoListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/SetTransparencyListener.h
-    ${CMAKE_SOURCE_DIR}/include/ShowSilhouetteEdgesListener.h
+    # ${CMAKE_SOURCE_DIR}/include/ShowSilhouetteEdgesListener.h  # removed
     ${CMAKE_SOURCE_DIR}/include/ShowFaceNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowFeatureEdgesListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowMeshEdgesListener.h
@@ -112,6 +113,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ExplodeAssemblyListener.h
     ${CMAKE_SOURCE_DIR}/include/SliceToggleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeConfigListener.h
+    ${CMAKE_SOURCE_DIR}/include/ToggleOutlineListener.h
 )
 
 # Create command static library

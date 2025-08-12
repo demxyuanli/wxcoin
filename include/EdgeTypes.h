@@ -7,8 +7,7 @@ enum class EdgeType {
     Mesh,
     Highlight,
     NormalLine,
-    FaceNormalLine,
-    Silhouette  // New: silhouette edge type
+    FaceNormalLine
 };
 
 // Edge display state structure
@@ -19,5 +18,4 @@ struct EdgeDisplayFlags {
     bool showHighlightEdges = false;
     bool showNormalLines = false;
     bool showFaceNormalLines = false;
-    bool showSilhouetteEdges = false;  // New: silhouette edge display flag
 }; 

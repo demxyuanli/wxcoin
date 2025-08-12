@@ -460,7 +460,6 @@ SoSeparator* EdgeComponent::getEdgeNode(EdgeType type) {
         case EdgeType::Highlight: return highlightEdgeNode;
         case EdgeType::NormalLine: return normalLineNode;
         case EdgeType::FaceNormalLine: return faceNormalLineNode;
-        case EdgeType::Silhouette: return silhouetteEdgeNode;
     }
     return nullptr;
 }
@@ -472,7 +471,6 @@ void EdgeComponent::setEdgeDisplayType(EdgeType type, bool show) {
         case EdgeType::Highlight: edgeFlags.showHighlightEdges = show; break;
         case EdgeType::NormalLine: edgeFlags.showNormalLines = show; break;
         case EdgeType::FaceNormalLine: edgeFlags.showFaceNormalLines = show; break;
-        case EdgeType::Silhouette: edgeFlags.showSilhouetteEdges = false; break; // force disabled
     }
 }
 bool EdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
@@ -483,7 +481,6 @@ bool EdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
         case EdgeType::Highlight: return edgeFlags.showHighlightEdges;
         case EdgeType::NormalLine: return edgeFlags.showNormalLines;
         case EdgeType::FaceNormalLine: return edgeFlags.showFaceNormalLines;
-        case EdgeType::Silhouette: return false;
     }
     return false;
 }

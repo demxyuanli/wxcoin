@@ -39,7 +39,8 @@ enum class CommandType {
     ShowNormals,
     ShowFaces,
     FixNormals,
-    ShowSilhouetteEdges,
+        // ShowSilhouetteEdges, // removed, use Outline toggle
+    ToggleOutline,
     SetTransparency,
     ToggleWireframe,
     // Removed ToggleShading - functionality not needed
@@ -115,7 +116,8 @@ inline const std::string& to_string(CommandType type) {
         {CommandType::ShowNormals, "SHOW_NORMALS"},
         {CommandType::ShowFaces, "SHOW_FACES"},
         {CommandType::FixNormals, "FIX_NORMALS"},
-        {CommandType::ShowSilhouetteEdges, "SHOW_SILHOUETTE_EDGES"},
+        // {CommandType::ShowSilhouetteEdges, "SHOW_SILHOUETTE_EDGES"},
+        {CommandType::ToggleOutline, "TOGGLE_OUTLINE"},
         {CommandType::SetTransparency, "SET_TRANSPARENCY"},
         {CommandType::ToggleWireframe, "TOGGLE_WIREFRAME"},
         // Removed ToggleShading mapping
@@ -184,7 +186,8 @@ inline CommandType from_string(const std::string& str) {
         {"SHOW_NORMALS", CommandType::ShowNormals},
         {"SHOW_FACES", CommandType::ShowFaces},
         {"FIX_NORMALS", CommandType::FixNormals},
-        {"SHOW_SILHOUETTE_EDGES", CommandType::ShowSilhouetteEdges},
+        // {"SHOW_SILHOUETTE_EDGES", CommandType::ShowSilhouetteEdges},
+        {"TOGGLE_OUTLINE", CommandType::ToggleOutline},
         {"SET_TRANSPARENCY", CommandType::SetTransparency},
         {"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
         // Removed ToggleShading reverse mapping
