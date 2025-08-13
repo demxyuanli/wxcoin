@@ -1,7 +1,10 @@
 #pragma once
 
 #include "flatui/FlatUITitledPanel.h"
-#include <wx/treectrl.h>
+#include "widgets/FlatTreeView.h"
+#include <wx/imaglist.h>
+#include <wx/artprov.h>
+#include <wx/notebook.h>
 #include <map>
 #include <vector>
 #include <memory>
@@ -48,9 +51,9 @@ public:
     void updateTreeSelectionFromViewer();
     
 private:
-    void onSelectionChanged(wxTreeEvent& event);
-    void onTreeItemActivated(wxTreeEvent& event);
-    void onTreeItemRightClick(wxTreeEvent& event);
+    // UI helpers
+    void ensurePartRoot();
+    void onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int column);
     void onKeyDown(wxKeyEvent& event);
     void onDeleteObject(wxCommandEvent& event);
     void onHideObject(wxCommandEvent& event);
@@ -60,18 +63,39 @@ private:
     void onHideAllObjects(wxCommandEvent& event);
     
     void createContextMenu();
-    void updateTreeItemIcon(wxTreeItemId itemId, bool visible);
+    void updateTreeItemIcon(std::shared_ptr<FlatTreeItem> item, bool visible);
     std::shared_ptr<OCCGeometry> getSelectedOCCGeometry();
+    void refreshActionIconsFor(std::shared_ptr<OCCGeometry> geometry);
 
-    wxTreeCtrl* m_treeCtrl;
-    wxTreeItemId m_rootId;
+    // Tabs
+    wxNotebook* m_notebook;
+    wxPanel* m_tabPanel;
+    wxPanel* m_tabHistory;
+    wxPanel* m_tabVersion;
+
+    // Main object tree (Tab 1)
+    FlatTreeView* m_treeView;
+    std::shared_ptr<FlatTreeItem> m_rootItem;
+    std::shared_ptr<FlatTreeItem> m_partRootItem; // "Part" root like FreeCAD-style hierarchy
     
     // Legacy GeometryObject support
-    std::map<GeometryObject*, wxTreeItemId> m_objectMap;
+    std::map<GeometryObject*, std::shared_ptr<FlatTreeItem>> m_objectMap;
     
     // OCCGeometry support
-    std::map<std::shared_ptr<OCCGeometry>, wxTreeItemId> m_occGeometryMap;
-    std::map<wxTreeItemId, std::shared_ptr<OCCGeometry>> m_treeItemToOCCGeometry;
+    // Map geometry -> feature item (leaf; used for selection)
+    std::map<std::shared_ptr<OCCGeometry>, std::shared_ptr<FlatTreeItem>> m_occGeometryMap; // feature leaf
+    std::map<std::shared_ptr<OCCGeometry>, std::shared_ptr<FlatTreeItem>> m_occGeometryBodyMap; // body container
+    std::map<std::shared_ptr<FlatTreeItem>, std::shared_ptr<OCCGeometry>> m_treeItemToOCCGeometry; // reverse
+
+    // Column indices for treelist actions
+    enum Columns { COL_VIS = 1, COL_DEL = 2, COL_COLOR = 3, COL_EDIT = 4 };
+
+    // Images for action columns
+    wxBitmap m_bmpEyeOpen;
+    wxBitmap m_bmpEyeClosed;
+    wxBitmap m_bmpDelete;
+    wxBitmap m_bmpColor;
+    wxBitmap m_bmpEdit;
     
     PropertyPanel* m_propertyPanel;
     OCCViewer* m_occViewer;
@@ -80,5 +104,12 @@ private:
     
     // Context menu
     wxMenu* m_contextMenu;
-    wxTreeItemId m_rightClickedItem;
+    std::shared_ptr<FlatTreeItem> m_rightClickedItem;
+    std::shared_ptr<FlatTreeItem> m_lastSelectedItem;
+
+    // History tree (Tab 2)
+    FlatTreeView* m_historyView;
+    std::shared_ptr<FlatTreeItem> m_historyRoot;
+    std::shared_ptr<FlatTreeItem> m_undoRoot;
+    std::shared_ptr<FlatTreeItem> m_redoRoot;
 };
