@@ -41,9 +41,9 @@ public:
             v = m_value.GetLong();
         }
         if (m_altIcon.IsOk() && v == 0) {
-            bmp = m_altIcon.GetBitmap(wxSize(16,16));
+            bmp = m_altIcon.GetBitmap(wxSize(12,12));
         } else if (m_icon.IsOk()) {
-            bmp = m_icon.GetBitmap(wxSize(16,16));
+            bmp = m_icon.GetBitmap(wxSize(12,12));
         }
 		if (bmp.IsOk()) {
 			int x = rect.x + (rect.width - bmp.GetWidth()) / 2;
@@ -110,6 +110,9 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
         wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
         m_tabPanel->SetSizer(sizer);
         m_treeView = new FlatTreeView(m_tabPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+        m_treeView->SetItemHeight(18);
+        m_treeView->SetIndentWidth(14);
+        m_treeView->SetDoubleBuffered(true);
         sizer->Add(m_treeView, 1, wxEXPAND | wxALL, 0);
     }
 
@@ -119,15 +122,22 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
     m_treeView->AddColumn("Color", FlatTreeColumn::ColumnType::ICON, 28);
     m_treeView->AddColumn("Edit", FlatTreeColumn::ColumnType::ICON, 28);
 
-    // Icons
-    m_bmpEyeOpen   = wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(16,16));
-    m_bmpEyeClosed = wxArtProvider::GetBitmap(wxART_CROSS_MARK, wxART_BUTTON, wxSize(16,16));
-    m_bmpDelete    = wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(16,16));
-    m_bmpColor     = wxArtProvider::GetBitmap(wxART_TIP, wxART_BUTTON, wxSize(16,16));
-    m_bmpEdit      = wxArtProvider::GetBitmap(wxART_EDIT, wxART_BUTTON, wxSize(16,16));
+    // Set SVG icons for columns (12x12 size, no text)
+    m_treeView->SetColumnSvgIcon(1, "eyeopen", wxSize(12, 12));      // Visibility column
+    m_treeView->SetColumnSvgIcon(2, "delete", wxSize(12, 12));       // Delete column
+    m_treeView->SetColumnSvgIcon(3, "palette", wxSize(12, 12));      // Color column
+    m_treeView->SetColumnSvgIcon(4, "edit", wxSize(12, 12));         // Edit column
+
+    // Icons (fallback to bitmap if SVG not available)
+    m_bmpEyeOpen   = wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(12,12));
+    m_bmpEyeClosed = wxArtProvider::GetBitmap(wxART_CROSS_MARK, wxART_BUTTON, wxSize(12,12));
+    m_bmpDelete    = wxArtProvider::GetBitmap(wxART_DELETE, wxART_BUTTON, wxSize(12,12));
+    m_bmpColor     = wxArtProvider::GetBitmap(wxART_TIP, wxART_BUTTON, wxSize(12,12));
+    m_bmpEdit      = wxArtProvider::GetBitmap(wxART_EDIT, wxART_BUTTON, wxSize(12,12));
 
     // Build root
-    m_rootItem = std::make_shared<FlatTreeItem>("Scene", FlatTreeItem::ItemType::ROOT);
+    m_rootItem = std::make_shared<FlatTreeItem>("Root", FlatTreeItem::ItemType::ROOT);
+    m_treeView->SetItemSvgIcon(m_rootItem, "folder", wxSize(12, 12));
     m_rootItem->SetExpanded(true);
     m_treeView->SetRoot(m_rootItem);
     m_partRootItem.reset();
@@ -146,6 +156,9 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
         wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
         m_tabHistory->SetSizer(sizer);
         m_historyView = new FlatTreeView(m_tabHistory, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+        m_historyView->SetItemHeight(18);
+        m_historyView->SetIndentWidth(14);
+        m_historyView->SetDoubleBuffered(true);
         // Two columns: action and info
         m_historyView->AddColumn("Action", FlatTreeColumn::ColumnType::TEXT, 120);
         m_historyView->AddColumn("Info", FlatTreeColumn::ColumnType::TEXT, 180);
@@ -248,29 +261,34 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
         return;
     }
 
-    LOG_INF_S("Adding OCCGeometry to tree: " + geometry->getName() + " (total items: " + std::to_string(m_occGeometryMap.size()) + ")");
+    LOG_DBG("Adding OCCGeometry to tree", "ObjectTreePanel");
     
-    // Ensure Part root exists
-    ensurePartRoot();
-
-    // Create hierarchy: Part -> Body -> Feature
-    wxString bodyLabel = "Body";
-    auto bodyItem = std::make_shared<FlatTreeItem>(bodyLabel, FlatTreeItem::ItemType::BODY);
-    bodyItem->SetExpanded(true);
-    m_partRootItem->AddChild(bodyItem);
-
+    // Flat hierarchy: add geometry item directly under root with a type-distinguishing icon
+    m_treeView->Freeze();
     auto featureItem = std::make_shared<FlatTreeItem>(geometry->getName(), FlatTreeItem::ItemType::FILE);
+    
+    // Set SVG icon for the tree item (12x12 size)
+    m_treeView->SetItemSvgIcon(featureItem, "file", wxSize(12, 12));
+    
+    // Set SVG icons for columns (12x12 size)
+    m_treeView->SetItemColumnSvgIcon(featureItem, 1, geometry->isVisible() ? "eyeopen" : "eyeclosed", wxSize(12, 12));
+    m_treeView->SetItemColumnSvgIcon(featureItem, 2, "delete", wxSize(12, 12));
+    m_treeView->SetItemColumnSvgIcon(featureItem, 3, "palette", wxSize(12, 12));
+    m_treeView->SetItemColumnSvgIcon(featureItem, 4, "edit", wxSize(12, 12));
+    
+    // Fallback to bitmap icons if SVG not available
+    featureItem->SetIcon(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(12,12)));
     featureItem->SetColumnIcon(1, geometry->isVisible() ? m_bmpEyeOpen : m_bmpEyeClosed);
     featureItem->SetColumnIcon(2, m_bmpDelete);
     featureItem->SetColumnIcon(3, m_bmpColor);
     featureItem->SetColumnIcon(4, m_bmpEdit);
-    bodyItem->AddChild(featureItem);
+    
+    m_rootItem->AddChild(featureItem);
+    m_treeView->Thaw();
     m_treeView->Refresh();
 
-    m_occGeometryBodyMap[geometry] = bodyItem;
     m_occGeometryMap[geometry] = featureItem;
     m_treeItemToOCCGeometry[featureItem] = geometry;
-    m_treeItemToOCCGeometry[bodyItem] = geometry;
     
     LOG_INF_S("Successfully added OCCGeometry to tree: " + geometry->getName() + " (new total: " + std::to_string(m_occGeometryMap.size()) + ")");
 }
@@ -288,7 +306,8 @@ void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
         return;
     }
 
-    LOG_INF_S("Removing OCCGeometry from tree: " + geometry->getName());
+    LOG_DBG("Removing OCCGeometry from tree", "ObjectTreePanel");
+    m_treeView->Freeze();
     auto featureItem = it->second;
     // Remove from parent
     if (featureItem && featureItem->GetParent()) {
@@ -296,16 +315,7 @@ void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
     }
     m_occGeometryMap.erase(it);
     m_treeItemToOCCGeometry.erase(featureItem);
-
-    auto bit = m_occGeometryBodyMap.find(geometry);
-    if (bit != m_occGeometryBodyMap.end()) {
-        auto bodyItem = bit->second;
-        if (bodyItem) {
-            if (bodyItem->GetParent()) bodyItem->GetParent()->RemoveChild(bodyItem);
-            m_treeItemToOCCGeometry.erase(bodyItem);
-        }
-        m_occGeometryBodyMap.erase(bit);
-    }
+    m_treeView->Thaw();
     m_treeView->Refresh();
 }
 
@@ -322,16 +332,11 @@ void ObjectTreePanel::updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometr
         return;
     }
 
-    LOG_INF_S("Updating OCCGeometry name in tree: " + geometry->getName());
-    
+    LOG_DBG("Updating OCCGeometry name in tree", "ObjectTreePanel");
+    m_treeView->Freeze();
     // Update visibility icon based on current state
     updateTreeItemIcon(it->second, geometry->isVisible());
-    
-    // Also update body icon if it exists
-    auto bit = m_occGeometryBodyMap.find(geometry);
-    if (bit != m_occGeometryBodyMap.end()) {
-        updateTreeItemIcon(bit->second, geometry->isVisible());
-    }
+    m_treeView->Thaw();
 }
 
 void ObjectTreePanel::selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
@@ -383,10 +388,7 @@ void ObjectTreePanel::hideSelectedObject()
     if (it != m_occGeometryMap.end()) {
         updateTreeItemIcon(it->second, false);
     }
-    auto bitH = m_occGeometryBodyMap.find(geometry);
-    if (bitH != m_occGeometryBodyMap.end()) {
-        updateTreeItemIcon(bitH->second, false);
-    }
+    
 }
 
 void ObjectTreePanel::showSelectedObject()
@@ -405,10 +407,7 @@ void ObjectTreePanel::showSelectedObject()
     if (it != m_occGeometryMap.end()) {
         updateTreeItemIcon(it->second, true);
     }
-    auto bitS = m_occGeometryBodyMap.find(geometry);
-    if (bitS != m_occGeometryBodyMap.end()) {
-        updateTreeItemIcon(bitS->second, true);
-    }
+    
 }
 
 void ObjectTreePanel::toggleObjectVisibility()
@@ -429,7 +428,7 @@ void ObjectTreePanel::toggleObjectVisibility()
 
 void ObjectTreePanel::showAllObjects()
 {
-    LOG_INF_S("Showing all objects");
+    LOG_DBG("Showing all objects", "ObjectTreePanel");
     if (!m_occViewer) {
         LOG_WRN_S("OCCViewer is null");
         return;
@@ -439,22 +438,20 @@ void ObjectTreePanel::showAllObjects()
     m_occViewer->showAll();
     
     // Update tree item icons
+    m_treeView->Freeze();
     auto allGeometries = m_occViewer->getAllGeometry();
     for (const auto& geometry : allGeometries) {
         auto it = m_occGeometryMap.find(geometry);
         if (it != m_occGeometryMap.end()) {
             updateTreeItemIcon(it->second, true);
         }
-        auto bit = m_occGeometryBodyMap.find(geometry);
-        if (bit != m_occGeometryBodyMap.end()) {
-            updateTreeItemIcon(bit->second, true);
-        }
     }
+    m_treeView->Thaw();
 }
 
 void ObjectTreePanel::hideAllObjects()
 {
-    LOG_INF_S("Hiding all objects");
+    LOG_DBG("Hiding all objects", "ObjectTreePanel");
     if (!m_occViewer) {
         LOG_WRN_S("OCCViewer is null");
         return;
@@ -464,17 +461,15 @@ void ObjectTreePanel::hideAllObjects()
     m_occViewer->hideAll();
     
     // Update tree item icons
+    m_treeView->Freeze();
     auto allGeometries = m_occViewer->getAllGeometry();
     for (const auto& geometry : allGeometries) {
         auto it = m_occGeometryMap.find(geometry);
         if (it != m_occGeometryMap.end()) {
             updateTreeItemIcon(it->second, false);
         }
-        auto bit = m_occGeometryBodyMap.find(geometry);
-        if (bit != m_occGeometryBodyMap.end()) {
-            updateTreeItemIcon(bit->second, false);
-        }
     }
+    m_treeView->Thaw();
 }
 
 // Event handlers
@@ -567,7 +562,13 @@ void ObjectTreePanel::createContextMenu()
 void ObjectTreePanel::updateTreeItemIcon(std::shared_ptr<FlatTreeItem> item, bool visible)
 {
     if (!item) return;
+    
+    // Update SVG icon for visibility column (12x12 size)
+    m_treeView->SetItemColumnSvgIcon(item, 1, visible ? "eyeopen" : "eyeclosed", wxSize(12, 12));
+    
+    // Fallback to bitmap icon if SVG not available
     item->SetColumnIcon(1, visible ? m_bmpEyeOpen : m_bmpEyeClosed);
+    
     m_treeView->RefreshItem(item);
 }
 
@@ -623,6 +624,7 @@ void ObjectTreePanel::setOCCViewer(OCCViewer* viewer)
 void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int column)
 {
     if (!item) return;
+    if (m_isUpdatingSelection) return;
     m_lastSelectedItem = item;
 
     // Root -> clear selection
@@ -659,8 +661,10 @@ void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int 
         }
 
         if (m_occViewer) {
+            m_isUpdatingSelection = true;
             m_occViewer->deselectAll();
             m_occViewer->setGeometrySelected(geometry->getName(), true);
+            m_isUpdatingSelection = false;
         }
         if (m_propertyPanel) m_propertyPanel->updateProperties(geometry);
         return;

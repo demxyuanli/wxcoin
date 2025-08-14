@@ -3,9 +3,11 @@
 #include <wx/dcmemory.h>
 #include <wx/dcbuffer.h>
 #include <wx/scrolwin.h>
+#include <wx/cursor.h>
 #include <algorithm>
 #include <functional>
 #include "config/FontManager.h"
+#include "config/SvgIconManager.h"
 
 // Custom events definitions
 wxDEFINE_EVENT(wxEVT_FLAT_TREE_ITEM_SELECTED, wxCommandEvent);
@@ -25,6 +27,7 @@ BEGIN_EVENT_TABLE(FlatTreeView, wxScrolledWindow)
     EVT_LEAVE_WINDOW(FlatTreeView::OnMouse)
     EVT_KEY_DOWN(FlatTreeView::OnKeyDown)
     EVT_SCROLLWIN(FlatTreeView::OnScroll)
+    EVT_ERASE_BACKGROUND(FlatTreeView::OnEraseBackground)
 END_EVENT_TABLE()
 
 // FlatTreeItem implementation
@@ -173,11 +176,12 @@ void FlatTreeColumn::SetSortable(bool sortable)
 // FlatTreeView implementation
 FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
     : wxScrolledWindow(parent, id, pos, size, style | wxBORDER_NONE)
-    , m_itemHeight(24)
-    , m_indentWidth(20)
+    , m_itemHeight(22)
+    , m_indentWidth(16)
     , m_showLines(true)
     , m_showRootLines(true)
     , m_scrollY(0)
+    , m_scrollX(0)
     , m_totalHeight(0)
     , m_needsLayout(true)
     , m_hoveredItem(nullptr)
@@ -186,6 +190,8 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
     , m_treeHScrollPos(0)
     , m_treeContentWidth(0)
     , m_useConfigFont(true)
+    , m_svgIconSize(12, 12)
+    , m_showHeaderText(false)
     , m_isResizingColumn(false)
     , m_resizingColumnIndex(-1)
     , m_resizeStartX(0)
@@ -198,8 +204,8 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
     m_selectionColor = wxColour(0, 120, 215);
     m_lineColor = wxColour(200, 200, 200);
 
-    // Add default tree column
-    AddColumn("Tree", FlatTreeColumn::ColumnType::TREE, 200);
+    // Add default tree column (default width 100)
+    AddColumn("Tree", FlatTreeColumn::ColumnType::TREE, 140);
 
     // Set background color
     SetBackgroundColour(m_backgroundColor);
@@ -447,6 +453,12 @@ void FlatTreeView::OnPaint(wxPaintEvent& event)
     DrawItems(dc);
 }
 
+void FlatTreeView::OnEraseBackground(wxEraseEvent& event)
+{
+    // Prevent default background erase to avoid flicker; we'll clear in DrawBackground
+    wxUnusedVar(event);
+}
+
 void FlatTreeView::OnSize(wxSizeEvent& event)
 {
     m_needsLayout = true;
@@ -459,6 +471,23 @@ void FlatTreeView::OnMouse(wxMouseEvent& event)
 {
     wxPoint pos = event.GetPosition();
     
+    // Update cursor over header separators
+    if (pos.y >= 0 && pos.y <= m_itemHeight) {
+        if (m_isResizingColumn) {
+            SetCursor(wxCursor(wxCURSOR_SIZEWE));
+        } else {
+            int sepIndexHover = HitTestHeaderSeparator(pos);
+            if (sepIndexHover >= 0) {
+                SetCursor(wxCursor(wxCURSOR_SIZEWE));
+            } else {
+                SetCursor(wxCursor(wxCURSOR_ARROW));
+            }
+        }
+    } else if (!m_isResizingColumn) {
+        // Restore arrow cursor when leaving header region and not resizing
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    }
+
     // Header resizing
     if (event.LeftDown()) {
         // Check if click is on header separator
@@ -467,9 +496,10 @@ void FlatTreeView::OnMouse(wxMouseEvent& event)
             if (sepIndex >= 0) {
                 m_isResizingColumn = true;
                 m_resizingColumnIndex = sepIndex;
-                m_resizeStartX = pos.x;
+                m_resizeStartX = pos.x + m_scrollX; // Apply horizontal scroll offset
                 m_initialColumnWidth = m_columns[sepIndex]->GetWidth();
                 CaptureMouse();
+                SetCursor(wxCursor(wxCURSOR_SIZEWE));
                 return;
             }
         }
@@ -478,15 +508,17 @@ void FlatTreeView::OnMouse(wxMouseEvent& event)
     if (event.LeftUp() && m_isResizingColumn) {
         m_isResizingColumn = false;
         if (HasCapture()) ReleaseMouse();
+        SetCursor(wxCursor(wxCURSOR_ARROW));
         return;
     }
 
     if (event.Dragging() && m_isResizingColumn && m_resizingColumnIndex >= 0) {
-        int dx = pos.x - m_resizeStartX;
+        int dx = (pos.x + m_scrollX) - m_resizeStartX; // Apply horizontal scroll offset
         int newWidth = std::max(40, m_initialColumnWidth + dx);
         m_columns[m_resizingColumnIndex]->SetWidth(newWidth);
         m_needsLayout = true;
         Refresh();
+        SetCursor(wxCursor(wxCURSOR_SIZEWE));
         return;
     }
 
@@ -520,6 +552,9 @@ void FlatTreeView::OnMouse(wxMouseEvent& event)
     if (event.Leaving()) {
         m_hoveredItem = nullptr;
         Refresh();
+        if (!m_isResizingColumn) {
+            SetCursor(wxCursor(wxCURSOR_ARROW));
+        }
     }
     
     event.Skip();
@@ -546,10 +581,23 @@ void FlatTreeView::OnKeyDown(wxKeyEvent& event)
 
 void FlatTreeView::OnScroll(wxScrollWinEvent& event)
 {
-    m_scrollY = GetScrollPos(wxVERTICAL) * m_itemHeight;
-    // Use full repaint to avoid ghosting of header and top scrollbar
-    Refresh();
-    RepositionTreeHScrollBar();
+    int orient = event.GetOrientation();
+    if (orient == wxVERTICAL) {
+        // Get scroll position from the scrollbar
+        int scrollPos = GetScrollPos(wxVERTICAL);
+        m_scrollY = scrollPos;
+        
+        // Repaint only content area to reduce flicker
+        RefreshContentArea();
+        RepositionTreeHScrollBar();
+    } else if (orient == wxHORIZONTAL) {
+        // Get horizontal scroll position from the scrollbar
+        int scrollPos = GetScrollPos(wxHORIZONTAL);
+        m_scrollX = scrollPos;
+        
+        // Repaint entire control for horizontal scrolling
+        Refresh();
+    }
     event.Skip();
 }
 
@@ -567,29 +615,41 @@ void FlatTreeView::DrawColumnHeaders(wxDC& dc)
     dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
     
     int y = 0;
-    int x = 0;
+    int x = -m_scrollX; // Apply horizontal scroll offset
     
     for (size_t i = 0; i < m_columns.size(); ++i) {
         if (m_columns[i]->IsVisible()) {
             dc.DrawRectangle(x, y, m_columns[i]->GetWidth(), m_itemHeight);
             
-            dc.SetTextForeground(m_textColor);
-            dc.SetFont(GetFont());
+            // Draw column icon only (no text)
+            wxString svgIconName = GetColumnSvgIconName(i);
             
-            wxString title = m_columns[i]->GetTitle();
-            wxSize textSize = dc.GetTextExtent(title);
-            
-            int textX = x + 5;
-            int textY = y + (m_itemHeight - textSize.GetHeight()) / 2;
-            
-            dc.DrawText(title, textX, textY);
+            if (!svgIconName.IsEmpty()) {
+                // Try to draw SVG icon in header
+                try {
+                    auto& iconManager = SvgIconManager::GetInstance();
+                    wxSize iconSize = m_columnSvgIconSizes[i];
+                    if (iconSize.GetWidth() <= 0 || iconSize.GetHeight() <= 0) {
+                        iconSize = wxSize(12, 12); // Default size
+                    }
+                    wxBitmap svgIcon = iconManager.GetIconBitmap(svgIconName, iconSize);
+                    if (svgIcon.IsOk()) {
+                        // Center the icon in the column header
+                        int iconX = x + (m_columns[i]->GetWidth() - iconSize.GetWidth()) / 2;
+                        int iconY = y + (m_itemHeight - iconSize.GetHeight()) / 2;
+                        dc.DrawBitmap(svgIcon, iconX, iconY, true);
+                    }
+                } catch (...) {
+                    // If SVG fails, don't draw anything in header
+                }
+            }
             
             x += m_columns[i]->GetWidth();
         }
     }
     
     // Draw bottom line
-    dc.DrawLine(0, m_itemHeight, GetClientSize().GetWidth(), m_itemHeight);
+    dc.DrawLine(-m_scrollX, m_itemHeight, GetClientSize().GetWidth() - m_scrollX, m_itemHeight);
 
     // Position top tree h-scrollbar immediately after header and keep it fixed (non-scrolled layer)
     RepositionTreeHScrollBar();
@@ -602,12 +662,16 @@ void FlatTreeView::DrawItems(wxDC& dc)
     wxSize cs = GetClientSize();
     int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
     int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+    
+    // Set clipping region for content area only
     dc.SetClippingRegion(0, headerY, cs.GetWidth(), cs.GetHeight() - headerY);
-    // With PrepareDC, logical origin is shifted up by scroll offset.
-    // Start drawing at headerY + m_scrollY so device position aligns just below header.
-    int startY = headerY + m_scrollY;
+    
+    // Calculate drawing start position
+    // m_scrollY is now in pixels, so we can use it directly
+    int startY = headerY - m_scrollY;
+    
     DrawItemRecursive(dc, m_root, startY, 0);
-
+    
     dc.DestroyClippingRegion();
 }
 
@@ -631,20 +695,27 @@ void FlatTreeView::DrawItem(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int y,
 {
     if (!item) return;
     
-    // Check if item is visible in current view (bottom bound)
-    if (y > GetClientSize().GetHeight()) {
-        return;
+    // Check if item is visible in current view
+    // y is now in content coordinates (relative to header)
+    wxSize cs = GetClientSize();
+    int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
+    int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+    
+    // Convert to screen coordinates for visibility check
+    int screenY = y + headerY;
+    if (screenY + m_itemHeight < headerY || screenY > cs.GetHeight()) {
+        return; // Item is not visible
     }
     
     // Draw selection background
     if (item->IsSelected()) {
         dc.SetBrush(wxBrush(m_selectionColor));
         dc.SetPen(wxPen(m_selectionColor));
-        dc.DrawRectangle(0, y, GetClientSize().GetWidth(), m_itemHeight);
+        dc.DrawRectangle(-m_scrollX, y, GetClientSize().GetWidth(), m_itemHeight);
     } else if (item == m_hoveredItem) {
         dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
         dc.SetPen(wxPen(wxColour(240, 240, 240)));
-        dc.DrawRectangle(0, y, GetClientSize().GetWidth(), m_itemHeight);
+        dc.DrawRectangle(-m_scrollX, y, GetClientSize().GetWidth(), m_itemHeight);
     }
     
     // Draw tree lines
@@ -653,7 +724,7 @@ void FlatTreeView::DrawItem(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int y,
     }
     
     // Draw item content for each column
-    int x = 0;
+    int x = -m_scrollX; // Apply horizontal scroll offset
     for (size_t i = 0; i < m_columns.size(); ++i) {
         if (m_columns[i]->IsVisible()) {
             int colWidth = m_columns[i]->GetWidth();
@@ -675,30 +746,50 @@ void FlatTreeView::DrawTreeColumnContent(wxDC& dc, std::shared_ptr<FlatTreeItem>
     // Calculate positions
     int indentX = x + level * m_indentWidth - m_treeHScrollPos;
     int iconX = indentX + 20; // Space for expand/collapse button
-    int textX = iconX + 20; // Space for icon
+    int textX = iconX + 14; // Space for icon (reduced from 20 to 2 pixels)
     
     // Draw expand/collapse button
     if (item->HasChildren()) {
         dc.SetPen(wxPen(m_textColor));
         dc.SetBrush(wxBrush(m_backgroundColor));
         
-        int buttonSize = 12;
+        int buttonSize = 12; // Reduced from 12 to match 12x12 icon size
         int buttonX = indentX + 4;
         int buttonY = y + (m_itemHeight - buttonSize) / 2;
         
         dc.DrawRectangle(buttonX, buttonY, buttonSize, buttonSize);
         
         // Draw plus/minus sign
-        dc.DrawLine(buttonX + 3, buttonY + buttonSize / 2, buttonX + buttonSize - 3, buttonY + buttonSize / 2);
+        dc.DrawLine(buttonX + 2, buttonY + buttonSize / 2, buttonX + buttonSize - 2, buttonY + buttonSize / 2);
         if (!item->IsExpanded()) {
-            dc.DrawLine(buttonX + buttonSize / 2, buttonY + 3, buttonX + buttonSize / 2, buttonY + buttonSize - 3);
+            dc.DrawLine(buttonX + buttonSize / 2, buttonY + 2, buttonX + buttonSize / 2, buttonY + buttonSize - 2);
         }
     }
     
-    // Draw item icon
-    if (item->GetIcon().IsOk()) {
+    // Draw item icon (SVG or bitmap)
+    wxString svgIconName = GetItemSvgIconName(item);
+    if (!svgIconName.IsEmpty()) {
+        // Try to draw SVG icon
+        try {
+            auto& iconManager = SvgIconManager::GetInstance();
+            wxBitmap svgIcon = iconManager.GetIconBitmap(svgIconName, m_svgIconSize);
+            if (svgIcon.IsOk()) {
+                int iconY = y + (m_itemHeight - m_svgIconSize.GetHeight()) / 2;
+                dc.DrawBitmap(svgIcon, iconX, iconY, true);
+            }
+        } catch (...) {
+            // Fallback to bitmap icon if SVG fails
+            if (item->GetIcon().IsOk()) {
+                wxBitmap icon = item->GetIcon();
+                int iconSize = 12; // Use 12x12 size for consistency
+                int iconY = y + (m_itemHeight - iconSize) / 2;
+                dc.DrawBitmap(icon, iconX, iconY, true);
+            }
+        }
+    } else if (item->GetIcon().IsOk()) {
+        // Draw bitmap icon
         wxBitmap icon = item->GetIcon();
-        int iconSize = 16;
+        int iconSize = 12; // Use 12x12 size for consistency
         int iconY = y + (m_itemHeight - iconSize) / 2;
         dc.DrawBitmap(icon, iconX, iconY, true);
     }
@@ -750,8 +841,31 @@ void FlatTreeView::DrawColumnContent(wxDC& dc, std::shared_ptr<FlatTreeItem> ite
             break;
         }
         case FlatTreeColumn::ColumnType::ICON: {
-            if (icon.IsOk()) {
-                int iconSize = 16;
+            // Try SVG icon first, then fallback to bitmap
+            wxString svgIconName = GetItemColumnSvgIconName(item, columnIndex);
+            if (!svgIconName.IsEmpty()) {
+                try {
+                    auto& iconManager = SvgIconManager::GetInstance();
+                    wxSize iconSize = m_columnSvgIconSizes[columnIndex];
+                    if (iconSize.GetWidth() <= 0 || iconSize.GetHeight() <= 0) {
+                        iconSize = wxSize(12, 12); // Default size
+                    }
+                    wxBitmap svgIcon = iconManager.GetIconBitmap(svgIconName, iconSize);
+                    if (svgIcon.IsOk()) {
+                        int iconY = y + (m_itemHeight - iconSize.GetHeight()) / 2;
+                        dc.DrawBitmap(svgIcon, x + (column->GetWidth() - iconSize.GetWidth()) / 2, iconY, true);
+                    }
+                } catch (...) {
+                    // Fallback to bitmap icon if SVG fails
+                    if (icon.IsOk()) {
+                        int iconSize = 12; // Use 12x12 size for consistency
+                        int iconY = y + (m_itemHeight - iconSize) / 2;
+                        dc.DrawBitmap(icon, x + (column->GetWidth() - iconSize) / 2, iconY, true);
+                    }
+                }
+            } else if (icon.IsOk()) {
+                // Draw bitmap icon
+                int iconSize = 12; // Use 12x12 size for consistency
                 int iconY = y + (m_itemHeight - iconSize) / 2;
                 dc.DrawBitmap(icon, x + (column->GetWidth() - iconSize) / 2, iconY, true);
             }
@@ -761,8 +875,8 @@ void FlatTreeView::DrawColumnContent(wxDC& dc, std::shared_ptr<FlatTreeItem> ite
             // Draw button-like appearance
             dc.SetPen(wxPen(wxColour(180, 180, 180)));
             dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
-            int buttonWidth = 60;
-            int buttonHeight = 20;
+            int buttonWidth = 24; // Reduced from 60 to match 12x12 icon size
+            int buttonHeight = 16; // Reduced from 20 to match 12x12 icon size
             int buttonX = x + (column->GetWidth() - buttonWidth) / 2;
             int buttonY = y + (m_itemHeight - buttonHeight) / 2;
             dc.DrawRectangle(buttonX, buttonY, buttonWidth, buttonHeight);
@@ -780,15 +894,15 @@ void FlatTreeView::DrawColumnContent(wxDC& dc, std::shared_ptr<FlatTreeItem> ite
             // Draw checkbox
             dc.SetPen(wxPen(m_textColor));
             dc.SetBrush(wxBrush(m_backgroundColor));
-            int checkboxSize = 16;
+            int checkboxSize = 12; // Use 12x12 size for consistency
             int checkboxX = x + (column->GetWidth() - checkboxSize) / 2;
             int checkboxY = y + (m_itemHeight - checkboxSize) / 2;
             dc.DrawRectangle(checkboxX, checkboxY, checkboxSize, checkboxSize);
             // Draw check mark if data is "true" or "1"
             if (data == "true" || data == "1") {
                 dc.SetPen(wxPen(m_textColor, 2));
-                dc.DrawLine(checkboxX + 3, checkboxY + 8, checkboxX + 6, checkboxY + 11);
-                dc.DrawLine(checkboxX + 6, checkboxY + 11, checkboxX + 12, checkboxY + 5);
+                dc.DrawLine(checkboxX + 3, checkboxY + 6, checkboxX + 5, checkboxY + 8);
+                dc.DrawLine(checkboxX + 5, checkboxY + 8, checkboxX + 9, checkboxY + 4);
             }
             break;
         }
@@ -820,16 +934,21 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
     if (!m_root) return nullptr;
     
     int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-    int y = point.y - (m_itemHeight + (barH > 0 ? barH : 0) + 1) + m_scrollY; // rows coordinates
+    int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+    
+    // Convert screen coordinates to content coordinates
+    int y = point.y - headerY + m_scrollY;
+    
     if (y < 0) return nullptr;
     
+    // Calculate item index based on pixel position
     int itemIndex = y / m_itemHeight;
     return GetItemByIndex(m_root, itemIndex);
 }
 
 int FlatTreeView::HitTestColumn(const wxPoint& point)
 {
-    int x = point.x;
+    int x = point.x + m_scrollX; // Apply horizontal scroll offset
     int currentX = 0;
     
     for (size_t i = 0; i < m_columns.size(); ++i) {
@@ -847,12 +966,13 @@ int FlatTreeView::HitTestColumn(const wxPoint& point)
 int FlatTreeView::HitTestHeaderSeparator(const wxPoint& point) const
 {
     if (point.y < 0 || point.y > m_itemHeight) return -1;
+    int x = point.x + m_scrollX; // Apply horizontal scroll offset
     int currentX = 0;
     for (size_t i = 0; i < m_columns.size(); ++i) {
         if (!m_columns[i]->IsVisible()) continue;
         currentX += m_columns[i]->GetWidth();
         // Separator area between column i and i+1 (we resize column i)
-        if (std::abs(point.x - currentX) <= m_headerResizeMargin) {
+        if (std::abs(x - currentX) <= m_headerResizeMargin) {
             return static_cast<int>(i);
         }
     }
@@ -861,15 +981,57 @@ int FlatTreeView::HitTestHeaderSeparator(const wxPoint& point) const
 
 void FlatTreeView::CalculateLayout()
 {
+    int clientW, clientH;
+    GetClientSize(&clientW, &clientH);
+    int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
+    int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+
     if (!m_root) {
         m_totalHeight = 0;
+        // Set both scrollbars to no scrolling
+        SetScrollbar(wxVERTICAL, 0, 0, 0, true);
+        SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
         return;
     }
     
     m_totalHeight = CalculateItemHeightRecursive(m_root);
-    UpdateScrollbars();
-    // Update the first-column horizontal scrollbar
-    // compute content width: simple approximation based on max depth and text widths
+    
+    // 1. Calculate vertical scrollbar for rows area (below header and top horizontal scrollbar)
+    int rowsVisible = std::max(0, clientH - headerY);
+    
+    if (m_totalHeight > rowsVisible) {
+        // Vertical scrollbar for rows only
+        int range = m_totalHeight - rowsVisible;
+        int thumb = rowsVisible;
+        int pos = std::min(m_scrollY, range);
+        SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
+    } else {
+        SetScrollbar(wxVERTICAL, 0, 0, 0, true);
+        m_scrollY = 0;
+        SetScrollPos(wxVERTICAL, 0);
+    }
+    
+    // 2. Calculate horizontal scrollbar for entire control (at bottom)
+    int totalContentWidth = 0;
+    for (const auto& column : m_columns) {
+        if (column->IsVisible()) {
+            totalContentWidth += column->GetWidth();
+        }
+    }
+    
+    if (totalContentWidth > clientW) {
+        // Horizontal scrollbar for entire control
+        int range = totalContentWidth - clientW;
+        int thumb = clientW;
+        int pos = std::min(m_scrollX, range);
+        SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
+    } else {
+        SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
+        m_scrollX = 0;
+        SetScrollPos(wxHORIZONTAL, 0);
+    }
+    
+    // 3. Update the top first-column horizontal scrollbar
     {
         wxClientDC tdc(this);
         tdc.SetFont(GetFont());
@@ -1001,10 +1163,36 @@ void FlatTreeView::UpdateScrollbars()
     int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
     int visibleHeight = clientSize.GetHeight() - (m_itemHeight + (barH > 0 ? barH : 0) + 1);
     
+    // Update vertical scrollbar
     if (m_totalHeight > visibleHeight) {
-        SetScrollbars(0, m_itemHeight, 0, (m_totalHeight + m_itemHeight - 1) / m_itemHeight);
+        // Use wxDataViewTreeCtrl style: pixel-based scrollbar
+        int range = m_totalHeight - visibleHeight;
+        int thumb = visibleHeight;
+        int pos = std::min(m_scrollY, range);
+        SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
     } else {
-        SetScrollbars(0, 0, 0, 0);
+        SetScrollbar(wxVERTICAL, 0, 0, 0, true);
+        m_scrollY = 0;
+        SetScrollPos(wxVERTICAL, 0);
+    }
+    
+    // Update horizontal scrollbar
+    int totalContentWidth = 0;
+    for (const auto& column : m_columns) {
+        if (column->IsVisible()) {
+            totalContentWidth += column->GetWidth();
+        }
+    }
+    
+    if (totalContentWidth > clientSize.GetWidth()) {
+        int range = totalContentWidth - clientSize.GetWidth();
+        int thumb = clientSize.GetWidth();
+        int pos = std::min(m_scrollX, range);
+        SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
+    } else {
+        SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
+        m_scrollX = 0;
+        SetScrollPos(wxHORIZONTAL, 0);
     }
 }
 
@@ -1070,7 +1258,7 @@ void FlatTreeView::CollectSelectedItems(std::shared_ptr<FlatTreeItem> item, std:
 void FlatTreeView::RefreshItem(std::shared_ptr<FlatTreeItem> item)
 {
     if (item) {
-        Refresh();
+        InvalidateItem(item);
     }
 }
 
@@ -1080,9 +1268,103 @@ void FlatTreeView::EnsureVisible(std::shared_ptr<FlatTreeItem> item)
     
     int itemY = CalculateItemY(item);
     if (itemY != -1) {
-        int scrollPos = itemY / m_itemHeight;
+        // Convert item Y position to scroll position
+        // itemY is relative to the content area (below header)
+        int scrollPos = itemY;
+        
+        // Ensure the item is visible in the viewport
+        wxSize clientSize = GetClientSize();
+        int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
+        int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+        int visibleHeight = clientSize.GetHeight() - headerY;
+        
+        // If item is below visible area, scroll to show it
+        if (itemY + m_itemHeight > m_scrollY + visibleHeight) {
+            scrollPos = itemY - visibleHeight + m_itemHeight;
+        }
+        // If item is above visible area, scroll to show it at top
+        else if (itemY < m_scrollY) {
+            scrollPos = itemY;
+        }
+        
+        // Set scroll position and update internal state
         SetScrollPos(wxVERTICAL, scrollPos);
-        m_scrollY = scrollPos * m_itemHeight;
+        m_scrollY = scrollPos;
         Refresh();
     }
+}
+
+void FlatTreeView::InvalidateItem(std::shared_ptr<FlatTreeItem> item)
+{
+    if (!item) return;
+    int y = CalculateItemY(item);
+    if (y == -1) { RefreshContentArea(); return; }
+    int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
+    int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+    wxRect rect(0, y, GetClientSize().GetWidth(), m_itemHeight);
+    rect.y = std::max(rect.y, headerY);
+    RefreshRect(rect, false);
+}
+
+void FlatTreeView::RefreshContentArea()
+{
+    int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
+    int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+    wxRect rect(0, headerY, GetClientSize().GetWidth(), GetClientSize().GetHeight() - headerY);
+    RefreshRect(rect, false);
+}
+
+// SVG icon support methods
+void FlatTreeView::SetSvgIcon(const wxString& iconName, const wxSize& size)
+{
+    m_svgIconName = iconName;
+    m_svgIconSize = size;
+    Refresh();
+}
+
+void FlatTreeView::SetColumnSvgIcon(int column, const wxString& iconName, const wxSize& size)
+{
+    if (column >= 0 && column < static_cast<int>(m_columns.size())) {
+        m_columnSvgIconNames[column] = iconName;
+        m_columnSvgIconSizes[column] = size;
+        Refresh();
+    }
+}
+
+void FlatTreeView::SetItemSvgIcon(std::shared_ptr<FlatTreeItem> item, const wxString& iconName, const wxSize& size)
+{
+    if (item) {
+        m_itemSvgIconNames[item] = iconName;
+        m_itemSvgIconSizes[item] = size;
+        Refresh();
+    }
+}
+
+void FlatTreeView::SetItemColumnSvgIcon(std::shared_ptr<FlatTreeItem> item, int column, const wxString& iconName, const wxSize& size)
+{
+    if (item && column >= 0 && column < static_cast<int>(m_columns.size())) {
+        auto key = std::make_pair(item, column);
+        m_itemColumnSvgIconNames[key] = iconName;
+        m_itemColumnSvgIconSizes[key] = size;
+        Refresh();
+    }
+}
+
+wxString FlatTreeView::GetColumnSvgIconName(int column) const
+{
+    auto it = m_columnSvgIconNames.find(column);
+    return it != m_columnSvgIconNames.end() ? it->second : wxEmptyString;
+}
+
+wxString FlatTreeView::GetItemSvgIconName(std::shared_ptr<FlatTreeItem> item) const
+{
+    auto it = m_itemSvgIconNames.find(item);
+    return it != m_itemSvgIconNames.end() ? it->second : wxEmptyString;
+}
+
+wxString FlatTreeView::GetItemColumnSvgIconName(std::shared_ptr<FlatTreeItem> item, int column) const
+{
+    auto key = std::make_pair(item, column);
+    auto it = m_itemColumnSvgIconNames.find(key);
+    return it != m_itemColumnSvgIconNames.end() ? it->second : wxEmptyString;
 }

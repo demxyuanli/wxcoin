@@ -354,6 +354,7 @@ private:
     std::unique_ptr<MeshingService> m_meshingService;
     std::unique_ptr<MeshParameterController> m_meshController;
     std::unique_ptr<OutlineDisplayManager> m_outlineManager;
+    std::unique_ptr<class SelectionOutlineManager> m_selectionOutline;
 
     // Legacy draw helpers removed; edge/normal rendering is handled elsewhere
 

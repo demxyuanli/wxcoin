@@ -16,6 +16,7 @@
 #include "PickingAidManager.h"
 #include "ViewRefreshManager.h"
 #include "OCCViewer.h"
+#include "utils/PerformanceBus.h"
 #include "logger/Logger.h"
 #include <map>
 #include <Inventor/nodes/SoNode.h>
@@ -364,18 +365,17 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
     auto sceneRenderEndTime = std::chrono::high_resolution_clock::now();
     auto sceneRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(sceneRenderEndTime - sceneRenderStartTime);
     
-    // Only log if render time is significant
-    if (sceneRenderDuration.count() > 16) {
-        LOG_INF_S("=== SCENE RENDER PERFORMANCE ===");
-        LOG_INF_S("Scene size: " + std::to_string(size.x) + "x" + std::to_string(size.y));
-        LOG_INF_S("Render mode: " + std::string(fastMode ? "FAST" : "QUALITY"));
-        LOG_INF_S("Viewport setup: " + std::to_string(viewportDuration.count()) + "μs");
-        LOG_INF_S("GL state setup: " + std::to_string(glSetupDuration.count()) + "μs");
-        LOG_INF_S("Coin3D scene render: " + std::to_string(coinRenderDuration.count()) + "ms");
-        LOG_INF_S("Total scene render: " + std::to_string(sceneRenderDuration.count()) + "ms");
-        LOG_INF_S("Scene render FPS: " + std::to_string(1000.0 / sceneRenderDuration.count()));
-        LOG_INF_S("=================================");
-    }
+    // Publish to PerformanceDataBus instead of logging
+    perf::ScenePerfSample s;
+    s.width = size.x;
+    s.height = size.y;
+    s.mode = fastMode ? "FAST" : "QUALITY";
+    s.viewportUs = static_cast<int>(viewportDuration.count());
+    s.glSetupUs = static_cast<int>(glSetupDuration.count());
+    s.coinSceneMs = static_cast<int>(coinRenderDuration.count());
+    s.totalSceneMs = static_cast<int>(sceneRenderDuration.count());
+    s.fps = 1000.0 / std::max(1, s.totalSceneMs);
+    perf::PerformanceBus::instance().setScene(s);
 }
 
 void SceneManager::updateAspectRatio(const wxSize& size) {

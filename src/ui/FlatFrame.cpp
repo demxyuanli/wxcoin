@@ -176,6 +176,10 @@ wxBEGIN_EVENT_TABLE(FlatFrame, FlatUIFrame) // Changed base class in macro
     EVT_BUTTON(ID_TOGGLE_CHESSBOARD_GRID, FlatFrame::onCommand)
     EVT_BUTTON(ID_EXPLODE_ASSEMBLY, FlatFrame::onCommand)
     
+    // Message output control button events
+    EVT_BUTTON(ID_MESSAGE_OUTPUT_FLOAT, FlatFrame::OnMessageOutputFloat)
+    EVT_BUTTON(ID_MESSAGE_OUTPUT_MINIMIZE, FlatFrame::OnMessageOutputMinimize)
+    EVT_BUTTON(ID_MESSAGE_OUTPUT_CLOSE, FlatFrame::OnMessageOutputClose)
     
     EVT_CLOSE(FlatFrame::onClose)
     EVT_ACTIVATE(FlatFrame::onActivate)
@@ -634,6 +638,97 @@ void FlatFrame::PrintUILayout(wxCommandEvent& event)
     
     layoutDialog->ShowModal();
     layoutDialog->Destroy();
+}
+
+// Message output control button event handlers
+void FlatFrame::OnMessageOutputFloat(wxCommandEvent& event)
+{
+    // Find the message output panel and make it float
+    if (m_messageOutput) {
+        wxWindow* msgPanel = m_messageOutput->GetParent();
+        if (msgPanel) {
+            // Create a floating frame for the message output
+            wxFrame* floatFrame = new wxFrame(this, wxID_ANY, "Message Output", 
+                                            wxDefaultPosition, wxSize(600, 400));
+            
+            // Move the message output to the floating frame
+            msgPanel->Reparent(floatFrame);
+            
+            // Set up the floating frame
+            wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+            sizer->Add(msgPanel, 1, wxEXPAND | wxALL, 5);
+            floatFrame->SetSizer(sizer);
+            
+            // Show the floating frame
+            floatFrame->Show();
+            
+            // Hide the original message output in main frame
+            msgPanel->Hide();
+            
+            SetStatusText("Message Output window is now floating", 0);
+        }
+    }
+}
+
+void FlatFrame::OnMessageOutputMinimize(wxCommandEvent& event)
+{
+    // Find the message output panel and minimize it
+    if (m_messageOutput) {
+        wxWindow* msgPanel = m_messageOutput->GetParent();
+        if (msgPanel) {
+            // Toggle visibility to simulate minimize/restore
+            if (msgPanel->IsShown()) {
+                msgPanel->Hide();
+                SetStatusText("Message Output window minimized", 0);
+            } else {
+                msgPanel->Show();
+                SetStatusText("Message Output window restored", 0);
+            }
+            
+            // Refresh layout
+            Layout();
+        }
+    }
+}
+
+void FlatFrame::OnMessageOutputClose(wxCommandEvent& event)
+{
+    // Find the message output panel and close it
+    if (m_messageOutput) {
+        wxWindow* msgPanel = m_messageOutput->GetParent();
+        if (msgPanel) {
+            // Hide the message output panel
+            msgPanel->Hide();
+            SetStatusText("Message Output window closed", 0);
+            
+            // Refresh layout
+            Layout();
+        }
+    }
+}
+
+void FlatFrame::OnKeyDown(wxKeyEvent& event)
+{
+    // Check for message output shortcuts first
+    if (event.ControlDown() && event.ShiftDown()) {
+        switch (event.GetKeyCode()) {
+            case 'F':
+            case 'f':
+                OnMessageOutputFloat(wxCommandEvent());
+                return;
+            case 'M':
+            case 'm':
+                OnMessageOutputMinimize(wxCommandEvent());
+                return;
+            case 'C':
+            case 'c':
+                OnMessageOutputClose(wxCommandEvent());
+                return;
+        }
+    }
+    
+    // Let other handlers process the event
+    event.Skip();
 }
 
 

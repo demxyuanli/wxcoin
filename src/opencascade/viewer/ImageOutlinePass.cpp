@@ -8,6 +8,8 @@
 
 #include "SceneManager.h"
 #include "Canvas.h"
+#include "logger/Logger.h"
+#include <string>
 
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoAnnotation.h>
@@ -81,9 +83,11 @@ ImageOutlinePass::ImageOutlinePass(SceneManager* sceneManager, SoSeparator* capt
     m_params.depthThreshold = 0.002f;  // Depth discontinuity threshold
     m_params.normalThreshold = 0.1f;   // Normal angle threshold
     m_params.thickness = 1.0f;         // Edge thickness multiplier (0.5 - 3.0)
+    LOG_INF("constructed", "ImageOutlinePass");
 }
 
 ImageOutlinePass::~ImageOutlinePass() {
+    LOG_INF("destructor begin", "ImageOutlinePass");
     setEnabled(false);
     
     // Clean up shader nodes
@@ -111,30 +115,42 @@ ImageOutlinePass::~ImageOutlinePass() {
     if (m_uInvProjection) { m_uInvProjection->unref(); m_uInvProjection = nullptr; }
     if (m_uInvView) { m_uInvView->unref(); m_uInvView = nullptr; }
     if (m_uDebugOutput) { m_uDebugOutput->unref(); m_uDebugOutput = nullptr; }
+    LOG_INF("destructor end", "ImageOutlinePass");
 }
+
 bool ImageOutlinePass::chooseTextureUnits() {
     GLint maxUnits = 0;
     glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxUnits);
+    LOG_DBG((std::string("GL_MAX_TEXTURE_IMAGE_UNITS=") + std::to_string(maxUnits)).c_str(), "ImageOutlinePass");
     if (maxUnits >= 2) {
         m_colorUnit = maxUnits - 1;
         m_depthUnit = maxUnits - 2;
         if (m_depthUnit < 0) { m_colorUnit = 0; m_depthUnit = 1; }
+        LOG_DBG((std::string("selected units color=") + std::to_string(m_colorUnit) + ", depth=" + std::to_string(m_depthUnit)).c_str(), "ImageOutlinePass");
         return true;
     }
     m_colorUnit = 0;
     m_depthUnit = 1;
+    LOG_WRN("fallback units color=0 depth=1", "ImageOutlinePass");
     return false;
 }
 
 void ImageOutlinePass::setEnabled(bool enabled) {
     if (m_enabled == enabled) return;
     m_enabled = enabled;
+    LOG_INF((std::string("setEnabled ") + (enabled ? "true" : "false")).c_str(), "ImageOutlinePass");
     if (m_enabled) attachOverlay(); else detachOverlay();
     if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh(false);
 }
 
 void ImageOutlinePass::setParams(const ImageOutlineParams& p) {
     m_params = p;
+    LOG_DBG((std::string("setParams depthWeight=") + std::to_string(p.depthWeight)
+        + ", normalWeight=" + std::to_string(p.normalWeight)
+        + ", depthThreshold=" + std::to_string(p.depthThreshold)
+        + ", normalThreshold=" + std::to_string(p.normalThreshold)
+        + ", edgeIntensity=" + std::to_string(p.edgeIntensity)
+        + ", thickness=" + std::to_string(p.thickness)).c_str(), "ImageOutlinePass");
     refresh();
 }
 
@@ -153,29 +169,27 @@ void ImageOutlinePass::refresh() {
         m_sceneManager->getCanvas()->GetSize(&width, &height);
         if (width > 0 && height > 0) {
             m_uResolution->value = SbVec2f(1.0f / float(width), 1.0f / float(height));
+            LOG_DBG((std::string("resolution set from viewport ") + std::to_string(width) + "x" + std::to_string(height)).c_str(), "ImageOutlinePass");
         }
         m_sceneManager->getCanvas()->Refresh(false);
     }
 
-    // Optional: update inverse matrices if camera available
-    if (m_sceneManager && m_sceneManager->getCamera()) {
-        SoCamera* cam = m_sceneManager->getCamera();
-        // Inventor doesn't directly give matrices; this is a placeholder for when they are accessible:
-        // SbMatrix proj = ... ; SbMatrix view = ... ;
-        // m_uInvProjection->value = proj.inverse();
-        // m_uInvView->value = view.inverse();
-    }
+    // Matrices update is skipped here because SoCamera does not expose the
+    // direct retrieval APIs across all Coin3D builds. The shader path below
+    // does not require these matrices in the fallback implementation.
 }
 
 void ImageOutlinePass::setDebugOutput(DebugOutput mode) {
     m_debugOutput = mode;
     if (m_uDebugOutput) m_uDebugOutput->value = static_cast<int>(mode);
+    LOG_INF((std::string("setDebugOutput ") + std::to_string(static_cast<int>(mode))).c_str(), "ImageOutlinePass");
     if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh(false);
 }
 
 void ImageOutlinePass::attachOverlay() {
     if (!m_sceneManager) return;
     if (m_overlayRoot) return; // Already attached
+    LOG_INF("attachOverlay begin", "ImageOutlinePass");
     
     SoSeparator* root = m_sceneManager->getObjectRoot();
     if (!root) {
@@ -185,6 +199,7 @@ void ImageOutlinePass::attachOverlay() {
 
     // Select texture units (avoid conflicts with rest of app)
     chooseTextureUnits();
+    LOG_DBG("texture units chosen", "ImageOutlinePass");
 
     m_overlayRoot = new SoSeparator;
     m_overlayRoot->ref();
@@ -193,6 +208,7 @@ void ImageOutlinePass::attachOverlay() {
 
     // Build shader resources
     buildShaders();
+    LOG_DBG("buildShaders done", "ImageOutlinePass");
     
     // Construct the render graph in proper order:
     
@@ -206,6 +222,7 @@ void ImageOutlinePass::attachOverlay() {
         colorBind->name = "uColorTex";
         colorBind->value = m_colorUnit;
         m_annotation->addChild(colorBind);
+        LOG_DBG("color texture bound", "ImageOutlinePass");
     }
 
     // 2. Bind depth texture to its unit, then render scene into it
@@ -218,6 +235,7 @@ void ImageOutlinePass::attachOverlay() {
         depthBind->name = "uDepthTex";
         depthBind->value = m_depthUnit;
         m_annotation->addChild(depthBind);
+        LOG_DBG("depth texture bound", "ImageOutlinePass");
     }
     
     // 3. Add shader parameters
@@ -244,18 +262,20 @@ void ImageOutlinePass::attachOverlay() {
     if (m_uDebugOutput) m_annotation->addChild(m_uDebugOutput);
     
     // 4. Apply shader program
-    if (m_program) m_annotation->addChild(m_program);
+    if (m_program) { m_annotation->addChild(m_program); LOG_DBG("shader program applied", "ImageOutlinePass"); }
     
     // 5. Render fullscreen quad
-    if (m_quadSeparator) m_annotation->addChild(m_quadSeparator);
+    if (m_quadSeparator) { m_annotation->addChild(m_quadSeparator); LOG_DBG("fullscreen quad added", "ImageOutlinePass"); }
 
     // Add to scene
     root->addChild(m_overlayRoot);
+    LOG_INF("attachOverlay end", "ImageOutlinePass");
 }
 
 void ImageOutlinePass::detachOverlay() {
     if (!m_sceneManager) return;
     if (!m_overlayRoot) return;
+    LOG_INF("detachOverlay begin", "ImageOutlinePass");
     
     SoSeparator* root = m_sceneManager->getObjectRoot();
     if (root) {
@@ -277,10 +297,13 @@ void ImageOutlinePass::detachOverlay() {
     m_overlayRoot->unref();
     m_overlayRoot = nullptr;
     m_annotation = nullptr; // Owned by m_overlayRoot, no need to unref
+    LOGINF: ;
+    LOG_INF("detachOverlay end", "ImageOutlinePass");
 }
 
 void ImageOutlinePass::buildShaders() {
     if (m_program) return;
+    LOG_INF("buildShaders begin", "ImageOutlinePass");
     
     // Create shader nodes and increase reference count
     m_program = new SoShaderProgram;
@@ -299,7 +322,7 @@ void ImageOutlinePass::buildShaders() {
         }
     )GLSL";
 
-    // Advanced edge detection shader using depth and normal information
+    // Advanced edge detection shader (fallback: no matrix/normal reconstruction)
     static const char* kFS = R"GLSL(
         varying vec2 vTexCoord;
         uniform sampler2D uColorTex;
@@ -321,7 +344,7 @@ void ImageOutlinePass::buildShaders() {
             return texture2D(tex, uv).r;
         }
         
-        // Color luminance-based Sobel (robust fallback)
+        // Color luminance-based Sobel
         float colorSobel(vec2 uv, vec2 texelSize) {
             vec2 o = texelSize * uThickness;
             vec3 tl = texture2D(uColorTex, uv + vec2(-o.x, -o.y)).rgb;
@@ -338,7 +361,7 @@ void ImageOutlinePass::buildShaders() {
             return length(vec2(gx, gy));
         }
         
-        // Sobel edge detection on depth
+        // Sobel edge detection on depth (non-linear fallback)
         float depthSobel(vec2 uv, vec2 texelSize) {
             float thickness = uThickness;
             vec2 offset = texelSize * thickness;
@@ -362,7 +385,9 @@ void ImageOutlinePass::buildShaders() {
         }
         
         // Normal-based edge detection disabled in fallback (returns 0)
-        float normalEdge(vec2 uv, vec2 texelSize) { return 0.0; }
+        float normalEdge(vec2 uv, vec2 texelSize) {
+            return 0.0;
+        }
         
         void main() {
             vec2 texelSize = uResolution; // Use actual viewport resolution
@@ -375,16 +400,14 @@ void ImageOutlinePass::buildShaders() {
             depthEdge = smoothstep(uDepthThreshold, uDepthThreshold * 2.0, depthEdge);
             
             // Normal-based edges
-            float normalE = 0.0;
+            float normalE = normalEdge(vTexCoord, texelSize);
             
             // Color-based edges
             float colorE = colorSobel(vTexCoord, texelSize);
             colorE = smoothstep(0.1, 0.3, colorE);
 
-            // Combine edges
-            float edge = clamp(colorE * (1.0 - clamp(uDepthWeight + uNormalWeight, 0.0, 1.0))
-                             + depthEdge * uDepthWeight
-                             + normalE * uNormalWeight, 0.0, 1.0);
+            // Combine edges (adjusted to not suppress color)
+            float edge = clamp(colorE * uIntensity + depthEdge * uDepthWeight + normalE * uNormalWeight, 0.0, 1.0);
             edge *= uIntensity;
             
             // Debug views
@@ -396,7 +419,7 @@ void ImageOutlinePass::buildShaders() {
                 return;
             }
 
-            // Output: darken original color based on edge strength
+            // Output: darken original color based on edge strength (no blending required)
             gl_FragColor = mix(color, vec4(0.0, 0.0, 0.0, 1.0), edge);
         }
     )GLSL";
@@ -412,6 +435,7 @@ void ImageOutlinePass::buildShaders() {
     m_fs->sourceProgram.setValue(kFS);
     m_program->shaderObject.set1Value(0, m_vs);
     m_program->shaderObject.set1Value(1, m_fs);
+    LOG_DBG("shader objects set", "ImageOutlinePass");
 
     // Create render-to-texture nodes
     m_colorTexture = new SoSceneTexture2;
@@ -421,6 +445,7 @@ void ImageOutlinePass::buildShaders() {
     m_colorTexture->type = SoSceneTexture2::RGBA8;
     m_colorTexture->wrapS = SoSceneTexture2::CLAMP;
     m_colorTexture->wrapT = SoSceneTexture2::CLAMP;
+    LOG_DBG("color RTT created", "ImageOutlinePass");
     
     m_depthTexture = new SoSceneTexture2;
     m_depthTexture->ref();
@@ -429,11 +454,13 @@ void ImageOutlinePass::buildShaders() {
     m_depthTexture->type = SoSceneTexture2::DEPTH;
     m_depthTexture->wrapS = SoSceneTexture2::CLAMP;
     m_depthTexture->wrapT = SoSceneTexture2::CLAMP;
+    LOG_DBG("depth RTT created", "ImageOutlinePass");
     
     // CRITICAL: Set scene to capture root (geometry only, no overlays)
     if (m_captureRoot) {
         m_colorTexture->scene = m_captureRoot;
         m_depthTexture->scene = m_captureRoot;
+        LOG_DBG("RTT scenes set", "ImageOutlinePass");
     }
 
     // Create texture samplers
@@ -441,6 +468,7 @@ void ImageOutlinePass::buildShaders() {
     m_colorSampler->ref();
     m_depthSampler = new SoTexture2;
     m_depthSampler->ref();
+    LOG_DBG("samplers created", "ImageOutlinePass");
     
     // Create fullscreen quad
     m_quadSeparator = new SoSeparator;
@@ -469,6 +497,7 @@ void ImageOutlinePass::buildShaders() {
     m_quadSeparator->addChild(texCoords);
     m_quadSeparator->addChild(coords);
     m_quadSeparator->addChild(face);
+    LOG_DBG("fullscreen quad built", "ImageOutlinePass");
 
     // Create shader parameters - these control the outline appearance
     
@@ -528,6 +557,5 @@ void ImageOutlinePass::buildShaders() {
     m_uDebugOutput->ref();
     m_uDebugOutput->name = "uDebugOutput";
     m_uDebugOutput->value = static_cast<int>(m_debugOutput);
+    LOG_INF("buildShaders end", "ImageOutlinePass");
 }
-
-

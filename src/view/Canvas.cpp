@@ -10,6 +10,7 @@
 #include "ObjectTreePanel.h"
 #include "logger/Logger.h"
 #include "NavigationCubeManager.h"
+#include "utils/PerformanceBus.h"
 #include "ViewRefreshManager.h"
 #include "RenderingEngine.h"
 #include "EventCoordinator.h"
@@ -184,16 +185,14 @@ void Canvas::render(bool fastMode) {
         auto renderEndTime = std::chrono::high_resolution_clock::now();
         auto renderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(renderEndTime - renderStartTime);
         
-        // Only log if render time is significant
-        if (renderDuration.count() > 16) {
-            LOG_INF_S("=== RENDERING PERFORMANCE ===");
-            LOG_INF_S("Render mode: " + std::string(fastMode ? "FAST" : "QUALITY"));
-            LOG_INF_S("Main scene: " + std::to_string(mainRenderDuration.count()) + "ms");
-            LOG_INF_S("Buffer swap: " + std::to_string(swapDuration.count()) + "ms");
-            LOG_INF_S("Total render: " + std::to_string(renderDuration.count()) + "ms");
-            LOG_INF_S("FPS: " + std::to_string(1000.0 / renderDuration.count()));
-            LOG_INF_S("=============================");
-        }
+        // Publish to PerformanceDataBus
+        perf::CanvasPerfSample c;
+        c.mode = fastMode ? "FAST" : "QUALITY";
+        c.mainSceneMs = static_cast<int>(mainRenderDuration.count());
+        c.swapMs = static_cast<int>(swapDuration.count());
+        c.totalMs = static_cast<int>(renderDuration.count());
+        c.fps = 1000.0 / std::max(1, c.totalMs);
+        perf::PerformanceBus::instance().setCanvas(c);
     }
 }
 

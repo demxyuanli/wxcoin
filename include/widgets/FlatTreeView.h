@@ -209,6 +209,20 @@ public:
     bool IsUsingConfigFont() const { return m_useConfigFont; }
     void ReloadFontFromConfig();
 
+    // SVG icon support
+    void SetSvgIcon(const wxString& iconName, const wxSize& size = wxSize(16, 16));
+    void SetColumnSvgIcon(int column, const wxString& iconName, const wxSize& size = wxSize(16, 16));
+    void SetItemSvgIcon(std::shared_ptr<FlatTreeItem> item, const wxString& iconName, const wxSize& size = wxSize(16, 16));
+    void SetItemColumnSvgIcon(std::shared_ptr<FlatTreeItem> item, int column, const wxString& iconName, const wxSize& size = wxSize(16, 16));
+    wxString GetSvgIconName() const { return m_svgIconName; }
+    wxString GetColumnSvgIconName(int column) const;
+    wxString GetItemSvgIconName(std::shared_ptr<FlatTreeItem> item) const;
+    wxString GetItemColumnSvgIconName(std::shared_ptr<FlatTreeItem> item, int column) const;
+
+    // Header display control
+    void SetShowHeaderText(bool show) { m_showHeaderText = show; Refresh(); }
+    bool IsShowingHeaderText() const { return m_showHeaderText; }
+
     // Event handlers
     void OnItemClicked(std::function<void(std::shared_ptr<FlatTreeItem>, int)> callback);
     void OnItemExpanded(std::function<void(std::shared_ptr<FlatTreeItem>)> callback);
@@ -221,6 +235,7 @@ public:
     void OnMouse(wxMouseEvent& event);
     void OnKeyDown(wxKeyEvent& event);
     void OnScroll(wxScrollWinEvent& event);
+    void OnEraseBackground(wxEraseEvent& event);
 
     // Drawing methods
     void DrawBackground(wxDC& dc);
@@ -254,6 +269,8 @@ public:
     // Utility methods
     void RefreshItem(std::shared_ptr<FlatTreeItem> item);
     void EnsureVisible(std::shared_ptr<FlatTreeItem> item);
+    void InvalidateItem(std::shared_ptr<FlatTreeItem> item);
+    void RefreshContentArea();
 
 private:
     // Data members
@@ -274,6 +291,7 @@ private:
     
     // Layout and scrolling
     int m_scrollY;
+    int m_scrollX;
     int m_totalHeight;
     bool m_needsLayout;
     
@@ -295,6 +313,16 @@ private:
     bool m_useConfigFont;
     wxFont m_customFont;
 
+    // SVG icon support
+    wxString m_svgIconName;
+    wxSize m_svgIconSize;
+    std::map<int, wxString> m_columnSvgIconNames;
+    std::map<int, wxSize> m_columnSvgIconSizes;
+    std::map<std::shared_ptr<FlatTreeItem>, wxString> m_itemSvgIconNames;
+    std::map<std::shared_ptr<FlatTreeItem>, wxSize> m_itemSvgIconSizes;
+    std::map<std::pair<std::shared_ptr<FlatTreeItem>, int>, wxString> m_itemColumnSvgIconNames;
+    std::map<std::pair<std::shared_ptr<FlatTreeItem>, int>, wxSize> m_itemColumnSvgIconSizes;
+
     // Column resizing state
     bool m_isResizingColumn;
     int m_resizingColumnIndex; // index of the column being resized (left of separator)
@@ -302,6 +330,9 @@ private:
     int m_initialColumnWidth;
     int m_headerResizeMargin; // px threshold near separator
     
+    // Header display control
+    bool m_showHeaderText;
+
     DECLARE_EVENT_TABLE()
 };
 

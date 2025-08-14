@@ -1,6 +1,8 @@
 #include "ViewRefreshManager.h"
 #include "Canvas.h"
 #include "logger/Logger.h"
+#include <wx/app.h>      // wxCallAfter
+#include <wx/thread.h>   // wxThread::IsMain
 
 wxBEGIN_EVENT_TABLE(ViewRefreshManager, wxEvtHandler)
     EVT_TIMER(wxID_ANY, ViewRefreshManager::onDebounceTimer)
@@ -25,6 +27,15 @@ ViewRefreshManager::~ViewRefreshManager() {
 
 void ViewRefreshManager::requestRefresh(RefreshReason reason, bool immediate) {
     if (!m_enabled || !m_canvas) {
+        return;
+    }
+
+    // Ensure all UI-related operations run on the main thread
+    if (!wxThread::IsMain()) {
+        this->CallAfter([this, reason, immediate]() {
+            // Re-enter on the GUI thread
+            this->requestRefresh(reason, immediate);
+        });
         return;
     }
     

@@ -31,6 +31,17 @@ public:
     // Enable/disable silhouette rendering
     void setEnabled(bool enabled);
     bool isEnabled() const;
+
+    // Appearance controls
+    void setLineWidth(float width) { if (m_drawStyle) m_drawStyle->lineWidth = width; }
+    void setLineColor(float r, float g, float b) {
+        if (m_material) {
+            m_material->diffuseColor.setValue(r, g, b);
+            m_material->ambientColor.setValue(r, g, b);
+            m_material->emissiveColor.setValue(r, g, b);
+            m_material->specularColor.setValue(r, g, b);
+        }
+    }
     
     // Enable simplified fast mode (boundary edges only, camera-independent)
     void setFastMode(bool enabled) { m_fastMode = enabled; }

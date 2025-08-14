@@ -8,6 +8,12 @@
 #include <wx/panel.h>
 #include <wx/aui/aui.h>
 #include <memory>
+#include "flatui/FlatUISystemButtons.h"
+#include "flatui/FlatUICustomControl.h"
+#include "flatui/UIHierarchyDebugger.h"
+#include "config/ThemeManager.h"  
+#include "config/SvgIconManager.h"
+#include "widgets/FlatEnhancedButton.h"
 
 // Forward declarations
 class Canvas;
@@ -90,7 +96,12 @@ enum {
     ID_RENDER_PREVIEW_SYSTEM,
     
     // Flat Widgets Example
-    ID_SHOW_FLAT_WIDGETS_EXAMPLE
+    ID_SHOW_FLAT_WIDGETS_EXAMPLE,
+    
+    // Message Output Control Buttons
+    ID_MESSAGE_OUTPUT_FLOAT,
+    ID_MESSAGE_OUTPUT_MINIMIZE,
+    ID_MESSAGE_OUTPUT_CLOSE
 };
 
 class FlatFrame : public FlatUIFrame
@@ -172,6 +183,14 @@ public:
     void OnShowUIHierarchy(wxCommandEvent& event);
     void PrintUILayout(wxCommandEvent& event);
     void OnThemeChanged(wxCommandEvent& event);
+    
+    // Message output control button event handlers
+    void OnMessageOutputFloat(wxCommandEvent& event);
+    void OnMessageOutputMinimize(wxCommandEvent& event);
+    void OnMessageOutputClose(wxCommandEvent& event);
+    
+    // Keyboard event handler
+    void OnKeyDown(wxKeyEvent& event);
     
     
     // Override OnGlobalPinStateChanged to handle main work area layout

@@ -2,6 +2,7 @@
 #include "SceneManager.h"
 #include "NavigationCubeManager.h"
 #include "logger/Logger.h"
+#include "utils/PerformanceBus.h"
 #include "config/RenderingConfig.h"
 #include <wx/msgdlg.h>
 #include <stdexcept>
@@ -131,17 +132,15 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
         auto renderEndTime = std::chrono::high_resolution_clock::now();
         auto renderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(renderEndTime - renderStartTime);
         
-        // Only log if render time is significant
-        if (renderDuration.count() > 16) {
-            LOG_INF_S("=== RENDERING ENGINE PERFORMANCE ===");
-            LOG_INF_S("GL context: " + std::to_string(contextDuration.count()) + "μs");
-            LOG_INF_S("Buffer clear: " + std::to_string(clearDuration.count()) + "μs");
-            LOG_INF_S("Viewport set: " + std::to_string(viewportDuration.count()) + "μs");
-            LOG_INF_S("Scene render: " + std::to_string(sceneDuration.count()) + "ms");
-            LOG_INF_S("Total engine render: " + std::to_string(renderDuration.count()) + "ms");
-            LOG_INF_S("Engine FPS: " + std::to_string(1000.0 / renderDuration.count()));
-            LOG_INF_S("=====================================");
-        }
+        // Publish to PerformanceDataBus
+        perf::EnginePerfSample e;
+        e.contextUs = static_cast<int>(contextDuration.count());
+        e.clearUs = static_cast<int>(clearDuration.count());
+        e.viewportUs = static_cast<int>(viewportDuration.count());
+        e.sceneMs = static_cast<int>(sceneDuration.count());
+        e.totalMs = static_cast<int>(renderDuration.count());
+        e.fps = 1000.0 / std::max(1, e.totalMs);
+        perf::PerformanceBus::instance().setEngine(e);
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Exception during render: " + std::string(e.what()));

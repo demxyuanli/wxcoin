@@ -67,7 +67,6 @@
 #include "ViewIsometricListener.h"
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
-// #include "ShowSilhouetteEdgesListener.h" // removed
 #include "SetTransparencyListener.h"
 #include "TextureModeDecalListener.h"
 #include "TextureModeModulateListener.h"
@@ -77,15 +76,25 @@
 #include "EdgeSettingsListener.h"
 #include "LightingSettingsListener.h"
 #include "CoordinateSystemVisibilityListener.h"
+#include "UndoListener.h"
+#include "RedoListener.h"
+#include "HelpAboutListener.h"
+#include "NavCubeConfigListener.h"
+#include "ZoomSpeedListener.h"
+#include "FileExitListener.h"
+#include "config/RenderingConfig.h"
 #include "ShowOriginalEdgesListener.h"
 #include "ShowFeatureEdgesListener.h"
 #include "ShowMeshEdgesListener.h"
-#include "ShowWireFrameListener.h"
-#include "ShowFaceNormalsListener.h"
+#include "renderpreview/RenderPreviewDialog.h"
 #include "RenderPreviewSystemListener.h"
 #include "ShowFlatWidgetsExampleListener.h"
+#include "widgets/FlatWidgetsExampleDialog.h"
+#include "widgets/FlatDockManager.h"
 #include "ReferenceGridToggleListener.h"
 #include "ChessboardGridToggleListener.h"
+#include "widgets/FlatMessagePanel.h"
+#include "ui/PerformancePanel.h"
 
 void FlatFrame::InitializeUI(const wxSize& size)
 {
@@ -344,43 +353,38 @@ void FlatFrame::createPanels() {
     if (m_mainSplitter) { m_mainSplitter->Destroy(); m_mainSplitter = nullptr; }
     if (m_leftSplitter) { m_leftSplitter->Destroy(); m_leftSplitter = nullptr; }
 
-    m_mainSplitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE);
-    m_mainSplitter->SetBackgroundStyle(wxBG_STYLE_PAINT);
-    m_mainSplitter->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
-    m_mainSplitter->SetDoubleBuffered(true);
-    m_mainSplitter->SetSashGravity(0.0);
-    m_mainSplitter->SetMinimumPaneSize(200);
+    // Use FlatDockManager to emulate wxAUI docking while keeping the current layout
+    auto* dock = new FlatDockManager(this);
+    mainSizer->Add(dock, 1, wxEXPAND | wxALL, 2);
 
-    m_leftSplitter = new wxSplitterWindow(m_mainSplitter, wxID_ANY);
-    m_leftSplitter->SetBackgroundStyle(wxBG_STYLE_PAINT);
-    m_leftSplitter->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
-    m_leftSplitter->SetDoubleBuffered(true);
-    m_leftSplitter->SetSashGravity(0.0);
-    m_leftSplitter->SetMinimumPaneSize(200);
+    m_objectTreePanel = new ObjectTreePanel(dock);
+    m_propertyPanel = new PropertyPanel(dock);
+    m_canvas = new Canvas(dock);
 
-    m_objectTreePanel = new ObjectTreePanel(m_leftSplitter);
-    m_propertyPanel = new PropertyPanel(m_leftSplitter);
-    m_leftSplitter->SplitHorizontally(m_objectTreePanel, m_propertyPanel);
+    // Place panes: left top tree, left bottom properties, center canvas
+    dock->AddPane(m_objectTreePanel, FlatDockManager::DockPos::LeftTop, 200);
+    dock->AddPane(m_propertyPanel, FlatDockManager::DockPos::LeftBottom);
+    dock->AddPane(m_canvas, FlatDockManager::DockPos::Center);
 
-    m_canvas = new Canvas(m_mainSplitter);
-    m_mainSplitter->SplitVertically(m_leftSplitter, m_canvas);
-    m_mainSplitter->SetSashPosition(200);
-    mainSizer->Add(m_mainSplitter, 1, wxEXPAND | wxALL, 2);
-
-    wxPanel* msgPanel = new wxPanel(this);
-    msgPanel->SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+    // Message/Performance area
+    // Message/Performance area as bottom dock
+    // Bottom message container as a simple tab: Message + Performance tabs
+    wxPanel* messagePage = new wxPanel(dock);
     wxBoxSizer* msgSizer = new wxBoxSizer(wxVERTICAL);
-    wxStaticText* msgLabel = new wxStaticText(msgPanel, wxID_ANY, "Message Output / Progress");
-    msgLabel->SetFont(CFG_DEFAULTFONT());
-    msgLabel->SetForegroundColour(CFG_COLOUR("PanelHeaderTextColour"));
-    msgSizer->Add(msgLabel, 0, wxALL | wxALIGN_CENTER, 5);
-    m_messageOutput = new wxTextCtrl(msgPanel, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 100), wxTE_READONLY | wxTE_MULTILINE | wxBORDER_SIMPLE);
-    m_messageOutput->SetFont(CFG_DEFAULTFONT());
-    m_messageOutput->SetBackgroundColour(CFG_COLOUR("SearchCtrlBgColour"));
-    m_messageOutput->SetForegroundColour(CFG_COLOUR("SearchCtrlFgColour"));
-    msgSizer->Add(m_messageOutput, 1, wxEXPAND | wxLEFT | wxRIGHT, 5);
-    msgPanel->SetSizer(msgSizer);
-    mainSizer->Add(msgPanel, 0, wxEXPAND | wxALL, 2);
+    auto* messageText = new wxTextCtrl(messagePage, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+        wxTE_READONLY | wxTE_MULTILINE | wxBORDER_NONE);
+    msgSizer->Add(messageText, 1, wxEXPAND | wxALL, 2);
+    messagePage->SetSizer(msgSizer);
+    m_messageOutput = messageText;
+
+    wxPanel* perfPage = new PerformancePanel(dock);
+    perfPage->SetMinSize(wxSize(360, 140));
+
+    // A container panel to host both pages will be created by dock manager; we just pass pages as panes
+    messagePage->SetName("Message");
+    perfPage->SetName("Performance");
+    dock->AddPane(messagePage, FlatDockManager::DockPos::Bottom, 160);
+    dock->AddPane(perfPage, FlatDockManager::DockPos::Bottom);
 
     SetSizer(mainSizer);
     Layout();

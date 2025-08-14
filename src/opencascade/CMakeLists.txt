@@ -22,6 +22,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/HoverSilhouetteManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/BatchOperationManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlineDisplayManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SelectionOutlineManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ImageOutlinePass.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeGenerationService.cpp
@@ -63,6 +64,7 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/viewer/interfaces/IViewApi.h
     ${CMAKE_SOURCE_DIR}/include/viewer/interfaces/IOutlineApi.h
     ${CMAKE_SOURCE_DIR}/include/viewer/OutlineDisplayManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/SelectionOutlineManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ImageOutlinePass.h
 )
 

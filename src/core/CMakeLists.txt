@@ -3,6 +3,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryObject.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DPIManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DPIAwareRendering.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PerformanceBus.cpp
 )
 
 set(CORE_HEADERS
@@ -10,6 +11,7 @@ set(CORE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/GeometryObject.h
     ${CMAKE_SOURCE_DIR}/include/DPIManager.h
     ${CMAKE_SOURCE_DIR}/include/DPIAwareRendering.h
+    ${CMAKE_SOURCE_DIR}/include/utils/PerformanceBus.h
 )
 
 # Create core static library

@@ -53,6 +53,7 @@
 #include "viewer/HoverSilhouetteManager.h"
 #include "viewer/BatchOperationManager.h"
 #include "viewer/OutlineDisplayManager.h"
+#include "viewer/SelectionOutlineManager.h"
 
 gp_Pnt OCCViewer::getCameraPosition() const {
     if (!m_sceneManager || !m_sceneManager->getCanvas()) return gp_Pnt(0,0,0);
@@ -110,6 +111,10 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
     // Create selection manager and object tree sync
     m_selectionManager = std::make_unique<SelectionManager>(m_sceneManager, &m_geometries, &m_selectedGeometries);
     m_objectTreeSync = std::make_unique<ObjectTreeSync>(m_sceneManager, &m_pendingObjectTreeUpdates);
+    // Create selection outline manager (geometry-layer outlines)
+    m_outlineManager = std::make_unique<OutlineDisplayManager>(m_sceneManager, m_occRoot, &m_geometries);
+    m_selectionOutline = std::make_unique<SelectionOutlineManager>(m_sceneManager, m_occRoot, &m_selectedGeometries);
+    if (m_selectionOutline) m_selectionOutline->setEnabled(true);
     // Create geometry repo and scene attachment helper
     m_geometryRepo = std::make_unique<GeometryRepository>(&m_geometries);
     m_sceneAttach = std::make_unique<SceneAttachmentService>(m_occRoot, &m_nodeToGeom);
@@ -569,6 +574,7 @@ double OCCViewer::getMeshDeflection() const
 void OCCViewer::onSelectionChanged()
 {
     if (m_selectionManager) m_selectionManager->onSelectionChanged();
+    if (m_selectionOutline && m_selectionOutline->isEnabled()) m_selectionOutline->syncToSelection();
 }
 
 void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
