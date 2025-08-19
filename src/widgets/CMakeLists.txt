@@ -12,8 +12,6 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatTreeView.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatEnhancedButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockContainer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockCaptionBar.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockFloatFrame.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatMessagePanel.cpp
 )
@@ -32,8 +30,6 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatTreeView.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatEnhancedButton.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockContainer.h
-    ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockCaptionBar.h
-    ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockFloatFrame.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockManager.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatMessagePanel.h
 )

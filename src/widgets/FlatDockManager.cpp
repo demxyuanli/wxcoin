@@ -1,6 +1,9 @@
 #include "widgets/FlatDockManager.h"
 #include <wx/settings.h>
 #include <wx/dcbuffer.h>
+#include <wx/splitter.h>
+#include <wx/dcclient.h>
+#include <wx/overlay.h>
 
 FlatDockManager::FlatDockManager(wxWindow* parent)
 	: wxPanel(parent, wxID_ANY)
@@ -35,17 +38,82 @@ FlatDockManager::FlatDockManager(wxWindow* parent)
     }
 
     Bind(wxEVT_PAINT, &FlatDockManager::OnPaint, this);
+    // Hide overlays during sash drag to avoid trails/flicker
+    if (m_mainHSplitter) {
+        m_mainHSplitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGING, [this](wxSplitterEvent& e){
+            if (m_leftTopPane) m_leftTopPane->ShowOverlay(false);
+            if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(false);
+            if (m_centerPane) m_centerPane->ShowOverlay(false);
+            if (m_bottomContainer) m_bottomContainer->ShowOverlay(false);
+            // update vertical rubber band rect and trigger minimal repaint
+            wxPoint sashScr = m_mainHSplitter->ClientToScreen(wxPoint(e.GetSashPosition(), 0));
+            int x = ScreenToClient(sashScr).x;
+            int penW = std::max(1, FromDIP(4, this));
+            int left = x - penW / 2;
+            wxRect band(left, 0, penW, GetClientSize().y);
+            if (band != m_sashBandRect) {
+                int inflate = penW + 2;
+                wxRect dirty = m_sashBandRect;
+                dirty.Inflate(inflate, inflate);
+                m_sashBandRect = band;
+                wxRect nb = band;
+                nb.Inflate(inflate, inflate);
+                dirty.Union(nb);
+                m_sashBandVisible = true;
+                RefreshRect(dirty, false);
+            }
+            e.Skip();
+        });
+        m_mainHSplitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGED, [this](wxSplitterEvent& e){
+            if (m_leftTopPane) m_leftTopPane->ShowOverlay(true);
+            if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(true);
+            if (m_centerPane) m_centerPane->ShowOverlay(true);
+            if (m_bottomContainer) m_bottomContainer->ShowOverlay(true);
+            EraseSashRubberBand();
+            e.Skip();
+        });
+    }
+    if (m_leftVSplitter) {
+        m_leftVSplitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGING, [this](wxSplitterEvent& e){
+            if (m_leftTopPane) m_leftTopPane->ShowOverlay(false);
+            if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(false);
+            // update horizontal rubber band rect and trigger minimal repaint
+            wxPoint sashScr = m_leftVSplitter->ClientToScreen(wxPoint(0, e.GetSashPosition()));
+            int y = ScreenToClient(sashScr).y;
+            int penW = std::max(1, FromDIP(4, this));
+            int top = y - penW / 2;
+            wxRect band(0, top, GetClientSize().x, penW);
+            if (band != m_sashBandRect) {
+                int inflate = penW + 2;
+                wxRect dirty = m_sashBandRect;
+                dirty.Inflate(inflate, inflate);
+                m_sashBandRect = band;
+                wxRect nb = band;
+                nb.Inflate(inflate, inflate);
+                dirty.Union(nb);
+                m_sashBandVisible = true;
+                RefreshRect(dirty, false);
+            }
+            e.Skip();
+        });
+        m_leftVSplitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGED, [this](wxSplitterEvent& e){
+            if (m_leftTopPane) m_leftTopPane->ShowOverlay(true);
+            if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(true);
+            EraseSashRubberBand();
+            e.Skip();
+        });
+    }
 }
 
 void FlatDockManager::EnsureSplitters()
 {
 	if (!m_mainHSplitter) {
-		m_mainHSplitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3D);
+		m_mainHSplitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D);
 		m_mainHSplitter->SetSashGravity(0.0);
 		m_mainHSplitter->SetMinimumPaneSize(100);
 	}
 	if (!m_leftVSplitter) {
-		m_leftVSplitter = new wxSplitterWindow(m_mainHSplitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3D);
+		m_leftVSplitter = new wxSplitterWindow(m_mainHSplitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D);
 		m_leftVSplitter->SetSashGravity(0.0);
 		m_leftVSplitter->SetMinimumPaneSize(100);
 	}
@@ -59,6 +127,10 @@ void FlatDockManager::EnsureSplitters()
     }
     if (!m_centerPane) {
         m_centerPane = new FlatDockContainer(this, m_mainHSplitter);
+        // Center: no title bar and no docking into center
+        m_centerPane->SetSystemButtonsVisible(false);
+        m_centerPane->SetDockingEnabled(false);
+        m_centerPane->SetHideTabs(true);
     }
     if (!m_bottomContainer) {
         m_bottomContainer = new FlatDockContainer(this, this);
@@ -87,8 +159,17 @@ void FlatDockManager::AddPane(wxWindow* pane, DockPos pos, int sizePx)
         m_leftBottomPane->AddPage(pane, pane->GetName().empty() ? "Pane" : pane->GetName(), true);
         break;
     case DockPos::Center:
-        pane->Reparent(m_centerPane->GetNotebook());
-        m_centerPane->AddPage(pane, pane->GetName().empty() ? "Pane" : pane->GetName(), true);
+        if (m_centerPane->IsHideTabs()) {
+            if (!m_centerPane->AddContentToHost(pane)) {
+                // Fallback
+                pane->Reparent(m_centerPane);
+                if (m_centerPane->GetSizer()) m_centerPane->GetSizer()->Add(pane, 1, wxEXPAND);
+                m_centerPane->Layout();
+            }
+        } else {
+            pane->Reparent(m_centerPane->GetNotebook());
+            m_centerPane->AddPage(pane, pane->GetName().empty() ? "Pane" : pane->GetName(), true);
+        }
         break;
     case DockPos::Bottom:
         pane->Reparent(m_bottomContainer->GetNotebook());
@@ -116,39 +197,16 @@ void FlatDockManager::ApplyPendingSizes()
 void FlatDockManager::ShowDockPreview(const wxPoint& screenPt)
 {
     if (!IsShownOnScreen()) return;
-    wxPoint client = ScreenToClient(screenPt);
-    wxRect area = GetClientRect();
-    int w = area.GetWidth();
-    int h = area.GetHeight();
-    int edge = std::max(24, std::min(w, h) / 10);
-
-    m_previewInsertIndex = -1;
-    m_previewCaretX = -1;
-    m_previewTarget = nullptr;
-
-    if (client.x <= area.GetX() + edge) {
-        m_previewTarget = m_leftTopPane;
-        m_previewRegion = DockRegion::Left;
-    } else if (client.x >= area.GetRight() - edge) {
-        m_previewTarget = m_centerPane; // right maps to center in current layout
-        m_previewRegion = DockRegion::Right;
-    } else if (client.y <= area.GetY() + edge) {
-        m_previewTarget = m_centerPane; // top maps to center until top container exists
-        m_previewRegion = DockRegion::Top;
-    } else if (client.y >= area.GetBottom() - edge) {
-        m_previewTarget = m_bottomContainer;
-        m_previewRegion = DockRegion::Bottom;
-    } else {
-        m_previewTarget = m_centerPane;
-        m_previewRegion = DockRegion::Center;
-    }
-
-    if (m_previewTarget) {
-        wxRect r = m_previewTarget->GetScreenRect();
-        m_previewRect = wxRect(ScreenToClient(r.GetTopLeft()), r.GetSize());
-        m_previewVisible = true;
-        Refresh();
-    }
+    // Prefer hovered container under cursor
+    FlatDockContainer* hovered = nullptr;
+    HitTestContainer(screenPt, 24, hovered);
+    if (!hovered) hovered = m_centerPane;
+    m_previewTarget = hovered;
+    m_previewRegion = ComputeRegionForPoint(hovered, screenPt);
+    wxRect r = hovered->GetScreenRect();
+    m_previewRect = wxRect(ScreenToClient(r.GetTopLeft()), r.GetSize());
+    m_previewVisible = true;
+    Refresh();
 }
 
 void FlatDockManager::HideDockPreview()
@@ -157,6 +215,22 @@ void FlatDockManager::HideDockPreview()
         m_previewVisible = false;
         Refresh();
     }
+}
+
+void FlatDockManager::DrawSashRubberBand(const wxRect& band)
+{
+    // no-op: drawing moved to OnPaint to avoid artifacts
+    m_sashBandRect = band;
+    m_sashBandVisible = true;
+}
+
+void FlatDockManager::EraseSashRubberBand()
+{
+    if (!m_sashBandVisible) return;
+    wxRect dirty = m_sashBandRect;
+    m_sashBandVisible = false;
+    m_sashBandRect = wxRect();
+    RefreshRect(dirty, false);
 }
 
 bool FlatDockManager::HitTestContainer(const wxPoint& screenPt, int marginPx, FlatDockContainer*& out) const
@@ -168,6 +242,87 @@ bool FlatDockManager::HitTestContainer(const wxPoint& screenPt, int marginPx, Fl
         if (auto* c = dynamic_cast<FlatDockContainer*>(w)) { out = c; return true; }
     }
     return false;
+}
+
+FlatDockManager::DockRegion FlatDockManager::ComputeRegionForPoint(FlatDockContainer* hovered, const wxPoint& screenPt) const
+{
+    if (!hovered) return DockRegion::Center;
+    wxRect r = hovered->GetScreenRect();
+    if (!r.Contains(screenPt)) return DockRegion::Center;
+    int w = r.GetWidth();
+    int h = r.GetHeight();
+    int margin = std::max(24, std::min(w, h) / 6);
+    wxRect left(r.GetX(), r.GetY(), margin, h);
+    wxRect right(r.GetRight() - margin + 1, r.GetY(), margin, h);
+    wxRect top(r.GetX(), r.GetY(), w, margin);
+    wxRect bottom(r.GetX(), r.GetBottom() - margin + 1, w, margin);
+    if (left.Contains(screenPt)) return DockRegion::Left;
+    if (right.Contains(screenPt)) return DockRegion::Right;
+    if (top.Contains(screenPt)) return DockRegion::Top;
+    if (bottom.Contains(screenPt)) return DockRegion::Bottom;
+    return DockRegion::Center;
+}
+
+bool FlatDockManager::PerformDock(wxWindow* page, const wxString& label, FlatDockContainer* hovered, DockRegion region)
+{
+    if (!page) return false;
+    EnsureSplitters();
+    // Center: insert into hovered container
+    if (!hovered) hovered = m_centerPane;
+
+    if (region == DockRegion::Center) {
+        page->Reparent(hovered->GetNotebook());
+        hovered->AcceptDraggedPage(page, label, true);
+        return true;
+    }
+
+    // Map side regions to known containers. For simplicity:
+    // Left => leftTop by default, Top => leftTop, Bottom => bottom container, Right => center
+    if (region == DockRegion::Left || region == DockRegion::Top) {
+        page->Reparent(m_leftTopPane->GetNotebook());
+        m_leftTopPane->AcceptDraggedPage(page, label, true);
+        return true;
+    }
+    if (region == DockRegion::Bottom) {
+        page->Reparent(m_bottomContainer->GetNotebook());
+        m_bottomContainer->AcceptDraggedPage(page, label, true);
+        return true;
+    }
+    if (region == DockRegion::Right) {
+        page->Reparent(m_centerPane->GetNotebook());
+        m_centerPane->AcceptDraggedPage(page, label, true);
+        return true;
+    }
+    return false;
+}
+
+void FlatDockManager::CloseContainer(FlatDockContainer* container)
+{
+    if (!container) return;
+    EnsureSplitters();
+    if (container == m_bottomContainer) {
+        // Hide bottom container area
+        m_bottomContainer->Hide();
+        Layout();
+        return;
+    }
+    if (container == m_leftTopPane || container == m_leftBottomPane) {
+        // If both left panes exist, try to unsplit and leave the other
+        if (m_leftVSplitter && m_leftVSplitter->IsSplit()) {
+            wxWindow* other = (container == m_leftTopPane) ? static_cast<wxWindow*>(m_leftBottomPane)
+                                                           : static_cast<wxWindow*>(m_leftTopPane);
+            m_leftVSplitter->Unsplit(container);
+            if (other) other->Show();
+            Layout();
+            return;
+        }
+    }
+    if (container == m_centerPane) {
+        // Center cannot be removed; hide all pages instead
+        container->Hide();
+        Layout();
+        return;
+    }
 }
 
 FlatDockContainer* FlatDockManager::FindSnapTarget(const wxPoint& screenPt, int marginPx) const
@@ -196,22 +351,6 @@ FlatDockContainer* FlatDockManager::FindSnapTarget(const wxPoint& screenPt, int 
     return m_centerPane ? m_centerPane : nullptr;
 }
 
-bool FlatDockManager::EvaluateDropTarget(const wxPoint& screenPt, FlatDockContainer*& outTarget, DockRegion& outRegion) const
-{
-    outTarget = nullptr;
-    if (!IsShownOnScreen()) return false;
-    wxPoint client = ScreenToClient(screenPt);
-    wxRect area = GetClientRect();
-    int w = area.GetWidth();
-    int h = area.GetHeight();
-    int edge = std::max(24, std::min(w, h) / 10);
-    if (client.x <= area.GetX() + edge) { outTarget = m_leftTopPane; outRegion = DockRegion::Left; return outTarget != nullptr; }
-    if (client.x >= area.GetRight() - edge) { outTarget = m_centerPane; outRegion = DockRegion::Right; return outTarget != nullptr; }
-    if (client.y <= area.GetY() + edge) { outTarget = m_centerPane; outRegion = DockRegion::Top; return outTarget != nullptr; }
-    if (client.y >= area.GetBottom() - edge) { outTarget = m_bottomContainer; outRegion = DockRegion::Bottom; return outTarget != nullptr; }
-    outTarget = m_centerPane; outRegion = DockRegion::Center; return outTarget != nullptr;
-}
-
 void FlatDockManager::SetInsertionPreview(FlatDockContainer* target, int insertIndex, const wxRect& notebookScreenRect, int caretScreenX)
 {
     if (!target) {
@@ -234,6 +373,13 @@ void FlatDockManager::OnPaint(wxPaintEvent&)
     wxAutoBufferedPaintDC dc(this);
     dc.SetBackground(wxBrush(GetBackgroundColour()));
     dc.Clear();
+    // draw sash rubber band in paint to avoid XOR/overlay artifacts
+    if (m_sashBandVisible && !m_sashBandRect.IsEmpty()) {
+        int penW = std::max(1, FromDIP(4, this));
+        dc.SetPen(wxPen(wxColour(0, 120, 215), penW));
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        dc.DrawRectangle(m_sashBandRect);
+    }
     if (m_previewVisible) {
         wxColour c(30, 144, 255, 80); // dodger blue with alpha
         dc.SetBrush(wxBrush(c));

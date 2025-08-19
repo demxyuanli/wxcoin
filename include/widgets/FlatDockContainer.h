@@ -3,12 +3,10 @@
 
 #include <wx/panel.h>
 #include <wx/notebook.h>
-
-// Forward declaration to avoid cyclic include
-class FlatDockManager;
 #include <vector>
 
 class FlatDockManager;
+class FlatEnhancedButton;
 
 // Tabbed container supporting simple drag-out/drag-in docking between containers.
 class FlatDockContainer : public wxPanel {
@@ -53,6 +51,17 @@ private:
     
     int computeInsertIndexFromLocalX(int localX) const;
 
+    wxPanel* m_tabOverlay; // overlay panel inside notebook tabbar region
+    FlatEnhancedButton* m_btnFloat;
+    FlatEnhancedButton* m_btnMaximize;
+    FlatEnhancedButton* m_btnMinimize;
+    FlatEnhancedButton* m_btnClose;
+    wxFrame* m_dragPreview;
+    bool m_dockingEnabled;
+    bool m_systemButtonsVisible;
+    bool m_hideTabs;
+    wxPanel* m_singleHost;
+
     enum : int {
         ID_CTX_CLOSE = wxID_HIGHEST + 2001,
         ID_CTX_MOVE_LEFT,
@@ -60,6 +69,35 @@ private:
         ID_CTX_MOVE_BOTTOM,
         ID_CTX_FLOAT
     };
+
+    enum : int {
+        ID_BTN_FLOAT = wxID_HIGHEST + 3001,
+        ID_BTN_MAXIMIZE,
+        ID_BTN_MINIMIZE,
+        ID_BTN_CLOSE
+    };
+
+    void OnButtonFloat(wxCommandEvent&);
+    void OnButtonMaximize(wxCommandEvent&);
+    void OnButtonMinimize(wxCommandEvent&);
+    void OnButtonClose(wxCommandEvent&);
+    void OnNotebookPageChanged(wxNotebookEvent&);
+    void OnButtonRestore(wxCommandEvent&);
+    void LayoutTabOverlay();
+    int  GetTabBarHeightApprox() const;
+
+public:
+    void SetDockingEnabled(bool enabled) { m_dockingEnabled = enabled; }
+    bool IsDockingEnabled() const { return m_dockingEnabled; }
+    void SetSystemButtonsVisible(bool visible) { m_systemButtonsVisible = visible; if (m_tabOverlay) m_tabOverlay->Show(visible); }
+    void SetHideTabs(bool hide);
+    bool IsHideTabs() const { return m_hideTabs; }
+
+    // When tabs are hidden, host content directly inside the container
+    bool AddContentToHost(wxWindow* page);
+
+    // Control overlay visibility without changing persistent flag
+    void ShowOverlay(bool show);
 
 	void BeginDrag(int pageIndex, const wxPoint& screenPos);
 	void EndDrag(const wxPoint& screenPos);

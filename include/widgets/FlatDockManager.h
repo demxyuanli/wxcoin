@@ -40,8 +40,14 @@ public:
     // Called by containers during drag to show precise insertion caret
     void SetInsertionPreview(FlatDockContainer* target, int insertIndex, const wxRect& notebookScreenRect, int caretScreenX);
 
-    // Evaluate drop target and region for a given screen point
-    bool EvaluateDropTarget(const wxPoint& screenPt, FlatDockContainer*& outTarget, DockRegion& outRegion) const;
+    // Compute five-way drop region around hovered container (wxAUI-like)
+    DockRegion ComputeRegionForPoint(FlatDockContainer* hovered, const wxPoint& screenPt) const;
+
+    // Execute docking of a page into hovered container at region. Returns true on success
+    bool PerformDock(wxWindow* page, const wxString& label, FlatDockContainer* hovered, DockRegion region);
+
+    // Close/hide a container appropriately depending on region (used by caption close button)
+    void CloseContainer(FlatDockContainer* container);
 
     // Layout persistence (minimal JSON-like string)
     wxString SaveLayout() const;
@@ -56,6 +62,8 @@ private:
 	void ApplyPendingSizes();
 	void OnPaint(wxPaintEvent&);
 	bool HitTestContainer(const wxPoint& screenPt, int marginPx, class FlatDockContainer*& out) const;
+    void DrawSashRubberBand(const wxRect& band);
+    void EraseSashRubberBand();
 
 private:
     // Root layout: vertical sizer with [topArea(mainHSplitter)] and [bottomArea]
@@ -79,6 +87,8 @@ private:
 
     // Track last owner of a page for snap-back / recycle
     std::map<wxWindow*, FlatDockContainer*> m_lastOwner;
+    bool m_sashBandVisible{false};
+    wxRect m_sashBandRect;
 };
 
 #endif // FLAT_DOCK_MANAGER_H
