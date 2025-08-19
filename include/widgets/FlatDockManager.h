@@ -62,8 +62,6 @@ private:
 	void ApplyPendingSizes();
 	void OnPaint(wxPaintEvent&);
 	bool HitTestContainer(const wxPoint& screenPt, int marginPx, class FlatDockContainer*& out) const;
-    void DrawSashRubberBand(const wxRect& band);
-    void EraseSashRubberBand();
 
 private:
     // Root layout: vertical sizer with [topArea(mainHSplitter)] and [bottomArea]
@@ -87,8 +85,6 @@ private:
 
     // Track last owner of a page for snap-back / recycle
     std::map<wxWindow*, FlatDockContainer*> m_lastOwner;
-    bool m_sashBandVisible{false};
-    wxRect m_sashBandRect;
 };
 
 #endif // FLAT_DOCK_MANAGER_H

@@ -389,7 +389,7 @@ void FlatDockContainer::BeginDrag(int pageIndex, const wxPoint& screenPos)
     wxClientDC clientdc(page);
     memdc.Blit(0, 0, sz.x, sz.y, &clientdc, 0, 0);
     memdc.SelectObject(wxNullBitmap);
-    m_dragPreview = new wxFrame(nullptr, wxID_ANY, "", screenPos, sz, wxFRAME_NO_TASKBAR | wxFRAME_FLOAT_ON_PARENT | wxSTAY_ON_TOP);
+    m_dragPreview = new wxFrame(nullptr, wxID_ANY, "", screenPos, sz, wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP);
     wxStaticBitmap* img = new wxStaticBitmap(m_dragPreview, wxID_ANY, bmp);
     wxBoxSizer* s = new wxBoxSizer(wxVERTICAL);
     s->Add(img, 1, wxEXPAND);

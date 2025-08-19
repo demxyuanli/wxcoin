@@ -14,6 +14,13 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockContainer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatMessagePanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DockGuides.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GhostWindow.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DragDropController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LayoutEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockAdapter.cpp
 )
 
 set(WIDGETS_HDRS
@@ -32,6 +39,14 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockContainer.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockManager.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatMessagePanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockManager.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockPanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/DockGuides.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/GhostWindow.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/DragDropController.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/LayoutEngine.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/DockTypes.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockAdapter.h
 )
 
 add_library(widgets STATIC ${WIDGETS_SRC} ${WIDGETS_HDRS})

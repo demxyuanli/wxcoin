@@ -91,6 +91,7 @@
 #include "ShowFlatWidgetsExampleListener.h"
 #include "widgets/FlatWidgetsExampleDialog.h"
 #include "widgets/FlatDockManager.h"
+#include "widgets/ModernDockAdapter.h"
 #include "ReferenceGridToggleListener.h"
 #include "ChessboardGridToggleListener.h"
 #include "widgets/FlatMessagePanel.h"
@@ -353,8 +354,8 @@ void FlatFrame::createPanels() {
     if (m_mainSplitter) { m_mainSplitter->Destroy(); m_mainSplitter = nullptr; }
     if (m_leftSplitter) { m_leftSplitter->Destroy(); m_leftSplitter = nullptr; }
 
-    // Use FlatDockManager to emulate wxAUI docking while keeping the current layout
-    auto* dock = new FlatDockManager(this);
+    // Use ModernDockAdapter to provide VS2022-style docking while maintaining compatibility
+    auto* dock = new ModernDockAdapter(this);
     mainSizer->Add(dock, 1, wxEXPAND | wxALL, 2);
 
     m_objectTreePanel = new ObjectTreePanel(dock);
@@ -362,9 +363,9 @@ void FlatFrame::createPanels() {
     m_canvas = new Canvas(dock);
 
     // Place panes: left top tree, left bottom properties, center canvas
-    dock->AddPane(m_objectTreePanel, FlatDockManager::DockPos::LeftTop, 200);
-    dock->AddPane(m_propertyPanel, FlatDockManager::DockPos::LeftBottom);
-    dock->AddPane(m_canvas, FlatDockManager::DockPos::Center);
+    dock->AddPane(m_objectTreePanel, ModernDockAdapter::DockPos::LeftTop, 200);
+    dock->AddPane(m_propertyPanel, ModernDockAdapter::DockPos::LeftBottom);
+    dock->AddPane(m_canvas, ModernDockAdapter::DockPos::Center);
 
     // Message/Performance area
     // Message/Performance area as bottom dock
@@ -383,8 +384,8 @@ void FlatFrame::createPanels() {
     // A container panel to host both pages will be created by dock manager; we just pass pages as panes
     messagePage->SetName("Message");
     perfPage->SetName("Performance");
-    dock->AddPane(messagePage, FlatDockManager::DockPos::Bottom, 160);
-    dock->AddPane(perfPage, FlatDockManager::DockPos::Bottom);
+    dock->AddPane(messagePage, ModernDockAdapter::DockPos::Bottom, 160);
+    dock->AddPane(perfPage, ModernDockAdapter::DockPos::Bottom);
 
     SetSizer(mainSizer);
     Layout();

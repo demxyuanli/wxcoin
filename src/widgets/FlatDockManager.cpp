@@ -2,8 +2,6 @@
 #include <wx/settings.h>
 #include <wx/dcbuffer.h>
 #include <wx/splitter.h>
-#include <wx/dcclient.h>
-#include <wx/overlay.h>
 
 FlatDockManager::FlatDockManager(wxWindow* parent)
 	: wxPanel(parent, wxID_ANY)
@@ -45,23 +43,6 @@ FlatDockManager::FlatDockManager(wxWindow* parent)
             if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(false);
             if (m_centerPane) m_centerPane->ShowOverlay(false);
             if (m_bottomContainer) m_bottomContainer->ShowOverlay(false);
-            // update vertical rubber band rect and trigger minimal repaint
-            wxPoint sashScr = m_mainHSplitter->ClientToScreen(wxPoint(e.GetSashPosition(), 0));
-            int x = ScreenToClient(sashScr).x;
-            int penW = std::max(1, FromDIP(4, this));
-            int left = x - penW / 2;
-            wxRect band(left, 0, penW, GetClientSize().y);
-            if (band != m_sashBandRect) {
-                int inflate = penW + 2;
-                wxRect dirty = m_sashBandRect;
-                dirty.Inflate(inflate, inflate);
-                m_sashBandRect = band;
-                wxRect nb = band;
-                nb.Inflate(inflate, inflate);
-                dirty.Union(nb);
-                m_sashBandVisible = true;
-                RefreshRect(dirty, false);
-            }
             e.Skip();
         });
         m_mainHSplitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGED, [this](wxSplitterEvent& e){
@@ -69,7 +50,6 @@ FlatDockManager::FlatDockManager(wxWindow* parent)
             if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(true);
             if (m_centerPane) m_centerPane->ShowOverlay(true);
             if (m_bottomContainer) m_bottomContainer->ShowOverlay(true);
-            EraseSashRubberBand();
             e.Skip();
         });
     }
@@ -77,29 +57,11 @@ FlatDockManager::FlatDockManager(wxWindow* parent)
         m_leftVSplitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGING, [this](wxSplitterEvent& e){
             if (m_leftTopPane) m_leftTopPane->ShowOverlay(false);
             if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(false);
-            // update horizontal rubber band rect and trigger minimal repaint
-            wxPoint sashScr = m_leftVSplitter->ClientToScreen(wxPoint(0, e.GetSashPosition()));
-            int y = ScreenToClient(sashScr).y;
-            int penW = std::max(1, FromDIP(4, this));
-            int top = y - penW / 2;
-            wxRect band(0, top, GetClientSize().x, penW);
-            if (band != m_sashBandRect) {
-                int inflate = penW + 2;
-                wxRect dirty = m_sashBandRect;
-                dirty.Inflate(inflate, inflate);
-                m_sashBandRect = band;
-                wxRect nb = band;
-                nb.Inflate(inflate, inflate);
-                dirty.Union(nb);
-                m_sashBandVisible = true;
-                RefreshRect(dirty, false);
-            }
             e.Skip();
         });
         m_leftVSplitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGED, [this](wxSplitterEvent& e){
             if (m_leftTopPane) m_leftTopPane->ShowOverlay(true);
             if (m_leftBottomPane) m_leftBottomPane->ShowOverlay(true);
-            EraseSashRubberBand();
             e.Skip();
         });
     }
@@ -108,12 +70,12 @@ FlatDockManager::FlatDockManager(wxWindow* parent)
 void FlatDockManager::EnsureSplitters()
 {
 	if (!m_mainHSplitter) {
-		m_mainHSplitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D);
+		m_mainHSplitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3D);
 		m_mainHSplitter->SetSashGravity(0.0);
 		m_mainHSplitter->SetMinimumPaneSize(100);
 	}
 	if (!m_leftVSplitter) {
-		m_leftVSplitter = new wxSplitterWindow(m_mainHSplitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_3D);
+		m_leftVSplitter = new wxSplitterWindow(m_mainHSplitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSP_LIVE_UPDATE | wxSP_3D);
 		m_leftVSplitter->SetSashGravity(0.0);
 		m_leftVSplitter->SetMinimumPaneSize(100);
 	}
@@ -215,22 +177,6 @@ void FlatDockManager::HideDockPreview()
         m_previewVisible = false;
         Refresh();
     }
-}
-
-void FlatDockManager::DrawSashRubberBand(const wxRect& band)
-{
-    // no-op: drawing moved to OnPaint to avoid artifacts
-    m_sashBandRect = band;
-    m_sashBandVisible = true;
-}
-
-void FlatDockManager::EraseSashRubberBand()
-{
-    if (!m_sashBandVisible) return;
-    wxRect dirty = m_sashBandRect;
-    m_sashBandVisible = false;
-    m_sashBandRect = wxRect();
-    RefreshRect(dirty, false);
 }
 
 bool FlatDockManager::HitTestContainer(const wxPoint& screenPt, int marginPx, FlatDockContainer*& out) const
@@ -373,13 +319,6 @@ void FlatDockManager::OnPaint(wxPaintEvent&)
     wxAutoBufferedPaintDC dc(this);
     dc.SetBackground(wxBrush(GetBackgroundColour()));
     dc.Clear();
-    // draw sash rubber band in paint to avoid XOR/overlay artifacts
-    if (m_sashBandVisible && !m_sashBandRect.IsEmpty()) {
-        int penW = std::max(1, FromDIP(4, this));
-        dc.SetPen(wxPen(wxColour(0, 120, 215), penW));
-        dc.SetBrush(*wxTRANSPARENT_BRUSH);
-        dc.DrawRectangle(m_sashBandRect);
-    }
     if (m_previewVisible) {
         wxColour c(30, 144, 255, 80); // dodger blue with alpha
         dc.SetBrush(wxBrush(c));
