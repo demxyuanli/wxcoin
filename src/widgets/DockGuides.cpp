@@ -216,7 +216,19 @@ void CentralDockGuides::UpdateHighlight(const wxPoint& mousePos)
     // Test which button is under mouse
     for (const auto& button : m_buttons) {
         if (button->HitTest(localPos)) {
-            newHighlight = button->GetPosition();
+            DockPosition pos = button->GetPosition();
+            // Respect enabled directions
+            bool enabled =
+                (pos == DockPosition::Center && m_enableCenter) ||
+                (pos == DockPosition::Left && m_enableLeft) ||
+                (pos == DockPosition::Right && m_enableRight) ||
+                (pos == DockPosition::Top && m_enableTop) ||
+                (pos == DockPosition::Bottom && m_enableBottom);
+            if (enabled) {
+                newHighlight = pos;
+            } else {
+                newHighlight = DockPosition::None;
+            }
             break;
         }
     }
@@ -382,31 +394,37 @@ void EdgeDockGuides::CreateEdgeButtons(const wxRect& targetRect)
     wxPoint center;
     
     // Left edge (place inside work area with padding)
-    center = wxPoint(localTarget.GetLeft() + edgePadding, localTarget.GetTop() + localTarget.height / 2);
-    center.x = std::max(center.x, buttonSize / 2);
-    center.y = std::max(buttonSize / 2, std::min(center.y, bounds.height - buttonSize / 2));
-    m_edgeButtons.push_back(std::make_unique<DockGuideButton>(
-        DockPosition::Left,
-        wxRect(center.x - buttonSize/2, center.y - buttonSize/2, buttonSize, buttonSize)
-    ));
+    if (m_enableLeft) {
+        center = wxPoint(localTarget.GetLeft() + edgePadding, localTarget.GetTop() + localTarget.height / 2);
+        center.x = std::max(center.x, buttonSize / 2);
+        center.y = std::max(buttonSize / 2, std::min(center.y, bounds.height - buttonSize / 2));
+        m_edgeButtons.push_back(std::make_unique<DockGuideButton>(
+            DockPosition::Left,
+            wxRect(center.x - buttonSize/2, center.y - buttonSize/2, buttonSize, buttonSize)
+        ));
+    }
     
     // Right edge (place inside work area with padding)
-    center = wxPoint(localTarget.GetRight() - edgePadding, localTarget.GetTop() + localTarget.height / 2);
-    center.x = std::min(center.x, bounds.width - buttonSize / 2);
-    center.y = std::max(buttonSize / 2, std::min(center.y, bounds.height - buttonSize / 2));
-    m_edgeButtons.push_back(std::make_unique<DockGuideButton>(
-        DockPosition::Right,
-        wxRect(center.x - buttonSize/2, center.y - buttonSize/2, buttonSize, buttonSize)
-    ));
+    if (m_enableRight) {
+        center = wxPoint(localTarget.GetRight() - edgePadding, localTarget.GetTop() + localTarget.height / 2);
+        center.x = std::min(center.x, bounds.width - buttonSize / 2);
+        center.y = std::max(buttonSize / 2, std::min(center.y, bounds.height - buttonSize / 2));
+        m_edgeButtons.push_back(std::make_unique<DockGuideButton>(
+            DockPosition::Right,
+            wxRect(center.x - buttonSize/2, center.y - buttonSize/2, buttonSize, buttonSize)
+        ));
+    }
     
     // Top edge (place inside work area with padding)
-    center = wxPoint(localTarget.GetLeft() + localTarget.width / 2, localTarget.GetTop() + edgePadding);
-    center.y = std::max(center.y, buttonSize / 2);
-    center.x = std::max(buttonSize / 2, std::min(center.x, bounds.width - buttonSize / 2));
-    m_edgeButtons.push_back(std::make_unique<DockGuideButton>(
-        DockPosition::Top,
-        wxRect(center.x - buttonSize/2, center.y - buttonSize/2, buttonSize, buttonSize)
-    ));
+    if (m_enableTop) {
+        center = wxPoint(localTarget.GetLeft() + localTarget.width / 2, localTarget.GetTop() + edgePadding);
+        center.y = std::max(center.y, buttonSize / 2);
+        center.x = std::max(buttonSize / 2, std::min(center.x, bounds.width - buttonSize / 2));
+        m_edgeButtons.push_back(std::make_unique<DockGuideButton>(
+            DockPosition::Top,
+            wxRect(center.x - buttonSize/2, center.y - buttonSize/2, buttonSize, buttonSize)
+        ));
+    }
     
     // Bottom edge
     center = wxPoint(localTarget.GetLeft() + localTarget.width / 2, localTarget.GetBottom() + EDGE_MARGIN / 2);
@@ -509,15 +527,23 @@ void DockGuides::ShowGuides(ModernDockPanel* target, const wxPoint& mousePos)
     m_currentTarget = target;
     m_visible = true;
     
-    // Show central guides at the center of the available work area (manager client area)
-    wxRect workRect = m_manager->GetClientRect();
-    wxPoint centerPoint = wxPoint(workRect.x + workRect.width / 2,
-                                  workRect.y + workRect.height / 2);
-    wxPoint centerPos = m_manager->ClientToScreen(centerPoint);
-    m_centralGuides->ShowAt(centerPos);
+    // Show central guides if visibility flag is true (independent of center responsiveness)
+    if (m_showCentral) {
+        wxRect workRect = m_manager->GetClientRect();
+        wxPoint centerPoint = wxPoint(workRect.x + workRect.width / 2,
+                                      workRect.y + workRect.height / 2);
+        wxPoint centerPos = m_manager->ClientToScreen(centerPoint);
+        // Apply direction mask to central guides
+        m_centralGuides->SetEnabledDirections(m_centerEnabled, m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
+        m_centralGuides->ShowAt(centerPos);
+    } else {
+        m_centralGuides->Hide();
+    }
     
     // Show edge guides around available work area (manager client area)
     m_edgeGuides->ShowForManager(m_manager);
+    // Apply enabled directions to edge guides
+    m_edgeGuides->SetEnabledDirections(m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
 }
 
 void DockGuides::HideGuides()

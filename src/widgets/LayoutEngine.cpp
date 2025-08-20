@@ -12,7 +12,8 @@ LayoutNode::LayoutNode(LayoutNodeType type, LayoutNode* parent)
       m_parent(parent),
       m_panel(nullptr),
       m_splitter(nullptr),
-      m_splitterRatio(0.5)
+      m_splitterRatio(0.5),
+      m_dockArea(DockArea::Center)
 {
 }
 
@@ -510,6 +511,8 @@ std::unique_ptr<LayoutNode> LayoutEngine::CreateSplitterNode(bool horizontal)
 
 void LayoutEngine::InsertPanelIntoTree(ModernDockPanel* panel, LayoutNode* parent, DockPosition position)
 {
+    wxUnusedVar(position); // Position is not used in current implementation
+    
     if (!panel || !parent) return;
     
     // Validate parent node is still valid
@@ -521,31 +524,146 @@ void LayoutEngine::InsertPanelIntoTree(ModernDockPanel* panel, LayoutNode* paren
     auto panelNode = CreatePanelNode(panel);
     if (!panelNode) return;
     
-    if (position == DockPosition::Center || parent->GetChildren().empty()) {
-        // Simple insertion
-        parent->AddChild(std::move(panelNode));
-    } else {
-        // Need to create splitter
-        bool needHorizontalSplit = (position == DockPosition::Top || position == DockPosition::Bottom);
-        bool needVerticalSplit = (position == DockPosition::Left || position == DockPosition::Right);
-        
-        if (needHorizontalSplit || needVerticalSplit) {
-            // Create splitter node
-            auto splitterNode = CreateSplitterNode(needHorizontalSplit);
-            
-            // Create splitter window
-            wxSplitterWindow* splitter = CreateSplitterWindow(m_manager, needHorizontalSplit);
-            splitterNode->SetSplitter(splitter);
-            
-            // Move existing children to splitter
-            if (!parent->GetChildren().empty()) {
-                // For simplification, just add new panel to splitter
-                splitterNode->AddChild(std::move(panelNode));
-            }
-            
-            parent->AddChild(std::move(splitterNode));
-        }
+    // Store dock area info in panel node for layout calculation
+    DockArea area = panel->GetDockArea();
+    panelNode->SetDockArea(area);
+    
+    // Always use OrganizeByDockAreas for IDE-style layout
+    // This ensures proper organization regardless of position
+    OrganizeByDockAreas(std::move(panelNode), parent);
+}
+
+void LayoutEngine::OrganizeByDockAreas(std::unique_ptr<LayoutNode> panelNode, LayoutNode* parent)
+{
+    if (!panelNode || !parent) return;
+    
+    DockArea newArea = panelNode->GetDockArea();
+    
+    // If this is the first panel, create main layout structure
+    if (parent->GetChildren().empty()) {
+        CreateMainLayoutStructure(parent);
     }
+    
+    // Navigate to the correct container based on our new IDE layout structure
+    // Structure: Root -> VerticalSplitter(TopWorkArea | BottomStatusBar)
+    //           TopWorkArea -> HorizontalSplitter(LeftSidebar | CenterCanvas)
+    //           BottomStatusBar -> (Message + Performance as tabs)
+    
+    if (parent->GetChildren().empty() || 
+        parent->GetChildren()[0]->GetType() != LayoutNodeType::VerticalSplitter) {
+        // Structure not ready, add to parent as fallback
+        parent->AddChild(std::move(panelNode));
+        return;
+    }
+    
+    auto& mainVSplitter = parent->GetChildren()[0];
+    if (mainVSplitter->GetChildren().size() < 2) {
+        // Structure not complete
+        parent->AddChild(std::move(panelNode));
+        return;
+    }
+    
+    auto topWorkArea = mainVSplitter->GetChildren()[0].get();
+    auto bottomStatusBar = mainVSplitter->GetChildren()[1].get();
+    
+    if (topWorkArea->GetChildren().empty() || 
+        topWorkArea->GetChildren()[0]->GetType() != LayoutNodeType::HorizontalSplitter) {
+        // Top work area structure not ready
+        parent->AddChild(std::move(panelNode));
+        return;
+    }
+    
+    auto topHSplitter = topWorkArea->GetChildren()[0].get();
+    if (topHSplitter->GetChildren().size() < 2) {
+        // Top horizontal splitter not ready
+        parent->AddChild(std::move(panelNode));
+        return;
+    }
+    
+    auto leftSidebar = topHSplitter->GetChildren()[0].get();
+    auto centerCanvas = topHSplitter->GetChildren()[1].get();
+    
+    // Now add panel to appropriate container
+    switch (newArea) {
+        case DockArea::Left:
+            // Left sidebar: should stack panels vertically (Object Tree above Properties)
+            if (leftSidebar->GetChildren().empty()) {
+                // First left panel
+                leftSidebar->AddChild(std::move(panelNode));
+            } else if (leftSidebar->GetChildren().size() == 1 && 
+                       leftSidebar->GetChildren()[0]->GetType() == LayoutNodeType::Panel) {
+                // Second left panel - create vertical splitter
+                auto existingPanel = std::move(leftSidebar->GetChildren()[0]);
+                leftSidebar->GetChildren().clear();
+                
+                auto vSplitter = CreateSplitterNode(false); // vertical splitter
+                vSplitter->AddChild(std::move(existingPanel));  // Object Tree (top)
+                vSplitter->AddChild(std::move(panelNode));      // Properties (bottom)
+                
+                leftSidebar->AddChild(std::move(vSplitter));
+            } else {
+                // Multiple panels - add to existing structure
+                leftSidebar->AddChild(std::move(panelNode));
+            }
+            break;
+            
+        case DockArea::Center:
+            // Center canvas area: Canvas should be alone here
+            centerCanvas->AddChild(std::move(panelNode));
+            break;
+            
+        case DockArea::Bottom:
+            // Bottom status bar area: Multiple panels should be in tab container
+            // All bottom panels go to the same container for tabbed display
+            bottomStatusBar->AddChild(std::move(panelNode));
+            break;
+            
+        default:
+            // Fallback for other areas
+            parent->AddChild(std::move(panelNode));
+            break;
+    }
+}
+
+void LayoutEngine::CreateMainLayoutStructure(LayoutNode* parent)
+{
+    if (!parent) return;
+    
+    // Clear existing children
+    parent->GetChildren().clear();
+    
+    // Create main VERTICAL splitter: Top Work Area | Bottom Status Bar
+    auto mainVSplitter = CreateSplitterNode(false); // vertical split
+    
+    // Create top work area container (will hold Left Sidebar + Center Canvas)
+    auto topWorkArea = std::make_unique<LayoutNode>(LayoutNodeType::Root);
+    
+    // Create bottom status bar container (will hold Message + Performance)
+    auto bottomStatusBar = std::make_unique<LayoutNode>(LayoutNodeType::Root);
+    
+    // Create horizontal splitter for top work area: Left Sidebar | Center Canvas
+    auto topHSplitter = CreateSplitterNode(true); // horizontal split
+    
+    // Create left sidebar container (will hold Object Tree + Properties)
+    auto leftSidebar = std::make_unique<LayoutNode>(LayoutNodeType::Root);
+    
+    // Create center canvas container (will hold Canvas)
+    auto centerCanvas = std::make_unique<LayoutNode>(LayoutNodeType::Root);
+    
+    // Build the structure step by step
+    // 1. Assemble top horizontal splitter
+    topHSplitter->AddChild(std::move(leftSidebar));
+    topHSplitter->AddChild(std::move(centerCanvas));
+    
+    // 2. Put horizontal splitter into top work area
+    topWorkArea->AddChild(std::move(topHSplitter));
+    
+    // 3. Assemble main vertical splitter
+    mainVSplitter->AddChild(std::move(topWorkArea));
+    mainVSplitter->AddChild(std::move(bottomStatusBar));
+    
+    // 4. Add main vertical splitter to parent
+    parent->AddChild(std::move(mainVSplitter));
 }
 
 void LayoutEngine::RemovePanelFromTree(LayoutNode* panelNode)
@@ -572,23 +690,32 @@ void LayoutEngine::CalculateNodeLayout(LayoutNode* node, const wxRect& rect)
         }
     } else if (node->GetType() == LayoutNodeType::HorizontalSplitter ||
                node->GetType() == LayoutNodeType::VerticalSplitter) {
-        // Splitter node - calculate layout for children
+        // Splitter node - calculate layout for children using splitter ratios
         CalculateSplitterLayout(node, rect);
     } else {
-        // Other node types - distribute space among children
-        if (!node->GetChildren().empty()) {
-            // Simple equal distribution for now
-            size_t childCount = node->GetChildren().size();
-            if (childCount == 1) {
-                CalculateNodeLayout(node->GetChildren()[0].get(), rect);
-            } else {
-                // Distribute horizontally
-                int childWidth = rect.width / static_cast<int>(childCount);
-                for (size_t i = 0; i < childCount; ++i) {
-                    wxRect childRect(rect.x + static_cast<int>(i) * childWidth, rect.y,
-                                   childWidth, rect.height);
-                    CalculateNodeLayout(node->GetChildren()[i].get(), childRect);
-                }
+        // Root or container nodes - handle different cases
+        auto& children = node->GetChildren();
+        if (children.empty()) {
+            return;
+        }
+        
+        if (children.size() == 1) {
+            // Single child - give it the full rect
+            CalculateNodeLayout(children[0].get(), rect);
+        } else {
+            // Multiple children - check what type of container this is
+            
+            // Special handling for main root with horizontal splitter
+            if (children.size() == 1 && children[0]->GetType() == LayoutNodeType::HorizontalSplitter) {
+                // This is the root node with main horizontal splitter
+                CalculateNodeLayout(children[0].get(), rect);
+                return;
+            }
+            
+            // For multiple panels in the same container, arrange them as tabs
+            // All panels occupy the same space (tab container behavior)
+            for (auto& child : children) {
+                CalculateNodeLayout(child.get(), rect);
             }
         }
     }
@@ -601,29 +728,49 @@ void LayoutEngine::CalculateSplitterLayout(LayoutNode* splitterNode, const wxRec
     bool isHorizontal = (splitterNode->GetType() == LayoutNodeType::HorizontalSplitter);
     double ratio = splitterNode->GetSplitterRatio();
     
+    // Set appropriate default ratios for IDE-style layout
+    if (ratio == 0.5) { // Default ratio, set IDE-appropriate values
+        if (isHorizontal) {
+            // Horizontal splitter: Top work area splitter (Left Sidebar | Center Canvas)
+            // Left sidebar should be 1/4 of width
+            ratio = 0.25;
+        } else {
+            // Vertical splitter: could be Main splitter or Left sidebar internal splitter
+            if (IsLeftSidebarSplitter(splitterNode)) {
+                // Left sidebar internal: Object Tree (top) should be larger than Properties (bottom)
+                ratio = 0.6; // Object Tree gets 60%, Properties gets 40%
+            } else {
+                // Main splitter: Top Work Area | Bottom Status Bar
+                // Top work area should be much larger than bottom status bar
+                ratio = 0.85; // Top work area gets 85%, Bottom status bar gets 15%
+            }
+        }
+        splitterNode->SetSplitterRatio(ratio);
+    }
+    
     wxRect firstRect, secondRect;
     
     if (isHorizontal) {
-        // Horizontal split (top/bottom)
-        int splitPos = static_cast<int>(rect.height * ratio);
-        firstRect = wxRect(rect.x, rect.y, rect.width, splitPos);
-        secondRect = wxRect(rect.x, rect.y + splitPos, rect.width, rect.height - splitPos);
-    } else {
-        // Vertical split (left/right)
+        // Horizontal split (left/right)
         int splitPos = static_cast<int>(rect.width * ratio);
+        splitPos = std::max(splitPos, m_minPanelSize.x);
+        splitPos = std::min(splitPos, rect.width - m_minPanelSize.x);
+        
         firstRect = wxRect(rect.x, rect.y, splitPos, rect.height);
         secondRect = wxRect(rect.x + splitPos, rect.y, rect.width - splitPos, rect.height);
+    } else {
+        // Vertical split (top/bottom)
+        int splitPos = static_cast<int>(rect.height * ratio);
+        splitPos = std::max(splitPos, m_minPanelSize.y);
+        splitPos = std::min(splitPos, rect.height - m_minPanelSize.y);
+        
+        firstRect = wxRect(rect.x, rect.y, rect.width, splitPos);
+        secondRect = wxRect(rect.x, rect.y + splitPos, rect.width, rect.height - splitPos);
     }
     
     // Apply to children
     CalculateNodeLayout(splitterNode->GetChildren()[0].get(), firstRect);
     CalculateNodeLayout(splitterNode->GetChildren()[1].get(), secondRect);
-    
-    // Update splitter window
-    if (splitterNode->GetSplitter()) {
-        splitterNode->GetSplitter()->SetSize(rect);
-        UpdateSplitterSashPosition(splitterNode);
-    }
 }
 
 void LayoutEngine::ApplyLayoutToWidgets(LayoutNode* node)
@@ -746,13 +893,114 @@ bool LayoutEngine::CanDockAtPosition(LayoutNode* target, DockPosition position) 
     return target != nullptr && position != DockPosition::None;
 }
 
+bool LayoutEngine::IsLeftSidebarSplitter(LayoutNode* splitterNode) const
+{
+    if (!splitterNode || !m_rootNode) return false;
+    
+    // Navigate the expected structure to check if this splitter is in the left sidebar
+    // Structure: Root -> VerticalSplitter(TopWorkArea | BottomStatusBar)
+    //           TopWorkArea -> HorizontalSplitter(LeftSidebar | CenterCanvas)
+    
+    // Check if we can find the main vertical splitter
+    if (m_rootNode->GetChildren().empty() || 
+        m_rootNode->GetChildren()[0]->GetType() != LayoutNodeType::VerticalSplitter) {
+        return false;
+    }
+    
+    auto& mainVSplitter = m_rootNode->GetChildren()[0];
+    if (mainVSplitter->GetChildren().size() < 2) {
+        return false;
+    }
+    
+    auto topWorkArea = mainVSplitter->GetChildren()[0].get();
+    if (topWorkArea->GetChildren().empty() || 
+        topWorkArea->GetChildren()[0]->GetType() != LayoutNodeType::HorizontalSplitter) {
+        return false;
+    }
+    
+    auto topHSplitter = topWorkArea->GetChildren()[0].get();
+    if (topHSplitter->GetChildren().size() < 2) {
+        return false;
+    }
+    
+    auto leftSidebar = topHSplitter->GetChildren()[0].get();
+    
+    // Check if the splitter is within the left sidebar hierarchy
+    return IsNodeInHierarchy(leftSidebar, splitterNode);
+}
+
+bool LayoutEngine::IsNodeInHierarchy(LayoutNode* ancestor, LayoutNode* target) const
+{
+    if (!ancestor || !target) return false;
+    if (ancestor == target) return true;
+    
+    // Recursively check children
+    for (auto& child : ancestor->GetChildren()) {
+        if (IsNodeInHierarchy(child.get(), target)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 LayoutNode* LayoutEngine::FindBestInsertionPoint(DockArea area) const
 {
-    wxUnusedVar(area);
     if (!m_rootNode) return nullptr;
     
-    // Simple implementation - return root for now
-    // Real implementation would find the best node based on area
+    // If root has no children, return root
+    if (m_rootNode->GetChildren().empty()) {
+        return m_rootNode.get();
+    }
+    
+    // Look for existing structure based on area
+    switch (area) {
+        case DockArea::Left: {
+            // Look for left sidebar in main horizontal splitter
+            if (m_rootNode->GetChildren().size() > 0 && 
+                m_rootNode->GetChildren()[0]->GetType() == LayoutNodeType::HorizontalSplitter) {
+                auto& mainSplitter = m_rootNode->GetChildren()[0];
+                if (mainSplitter->GetChildren().size() > 0) {
+                    return mainSplitter->GetChildren()[0].get(); // Left sidebar
+                }
+            }
+            break;
+        }
+        case DockArea::Center: {
+            // Look for center area in center+bottom vertical splitter
+            if (m_rootNode->GetChildren().size() > 0 && 
+                m_rootNode->GetChildren()[0]->GetType() == LayoutNodeType::HorizontalSplitter) {
+                auto& mainSplitter = m_rootNode->GetChildren()[0];
+                if (mainSplitter->GetChildren().size() > 1) {
+                    auto& centerBottom = mainSplitter->GetChildren()[1];
+                    if (centerBottom->GetType() == LayoutNodeType::VerticalSplitter &&
+                        centerBottom->GetChildren().size() > 0) {
+                        return centerBottom->GetChildren()[0].get(); // Center area
+                    }
+                }
+            }
+            break;
+        }
+        case DockArea::Bottom: {
+            // Look for bottom area in center+bottom vertical splitter
+            if (m_rootNode->GetChildren().size() > 0 && 
+                m_rootNode->GetChildren()[0]->GetType() == LayoutNodeType::HorizontalSplitter) {
+                auto& mainSplitter = m_rootNode->GetChildren()[0];
+                if (mainSplitter->GetChildren().size() > 1) {
+                    auto& centerBottom = mainSplitter->GetChildren()[1];
+                    if (centerBottom->GetType() == LayoutNodeType::VerticalSplitter &&
+                        centerBottom->GetChildren().size() > 1) {
+                        return centerBottom->GetChildren()[1].get(); // Bottom area
+                    }
+                }
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    
+    // If no specific area found, return root
     return m_rootNode.get();
 }
 

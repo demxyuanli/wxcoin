@@ -43,6 +43,13 @@ public:
     void Hide();
     void UpdateHighlight(const wxPoint& mousePos);
     DockPosition GetHighlightedPosition() const { return m_highlightedPosition; }
+    void SetEnabledDirections(bool center, bool left, bool right, bool top, bool bottom) {
+        m_enableCenter = center;
+        m_enableLeft = left;
+        m_enableRight = right;
+        m_enableTop = top;
+        m_enableBottom = bottom;
+    }
     
 protected:
     void OnPaint(wxPaintEvent& event);
@@ -58,6 +65,11 @@ private:
     std::vector<std::unique_ptr<DockGuideButton>> m_buttons;
     DockPosition m_highlightedPosition;
     wxSize m_guideSize;
+    bool m_enableCenter{true};
+    bool m_enableLeft{true};
+    bool m_enableRight{true};
+    bool m_enableTop{true};
+    bool m_enableBottom{true};
     
     static constexpr int GUIDE_SIZE = 120;
     static constexpr int BUTTON_SIZE = 24;
@@ -76,6 +88,9 @@ public:
     void Hide();
     void UpdateHighlight(const wxPoint& mousePos);
     DockPosition GetHighlightedPosition() const { return m_highlightedPosition; }
+    void SetEnabledDirections(bool left, bool right, bool top, bool bottom) {
+        m_enableLeft = left; m_enableRight = right; m_enableTop = top; m_enableBottom = bottom;
+    }
 
 protected:
     void OnPaint(wxPaintEvent& event);
@@ -90,6 +105,10 @@ private:
     ModernDockPanel* m_targetPanel;
     std::vector<std::unique_ptr<DockGuideButton>> m_edgeButtons;
     DockPosition m_highlightedPosition;
+    bool m_enableLeft{true};
+    bool m_enableRight{true};
+    bool m_enableTop{true};
+    bool m_enableBottom{true};
     
     static constexpr int EDGE_BUTTON_SIZE = 20;
     static constexpr int EDGE_MARGIN = 30;
@@ -109,6 +128,13 @@ public:
     
     DockPosition GetActivePosition() const;
     bool IsVisible() const { return m_visible; }
+    void SetEnabledDirections(bool center, bool left, bool right, bool top, bool bottom) {
+        m_centerEnabled = center; m_leftEnabled = left; m_rightEnabled = right; m_topEnabled = top; m_bottomEnabled = bottom;
+        if (m_edgeGuides) {
+            m_edgeGuides->SetEnabledDirections(left, right, top, bottom);
+        }
+    }
+    void SetCentralVisible(bool visible) { m_showCentral = visible; }
 
 private:
     ModernDockManager* m_manager;
@@ -116,6 +142,12 @@ private:
     std::unique_ptr<EdgeDockGuides> m_edgeGuides;
     ModernDockPanel* m_currentTarget;
     bool m_visible;
+    bool m_centerEnabled{true};
+    bool m_leftEnabled{true};
+    bool m_rightEnabled{true};
+    bool m_topEnabled{true};
+    bool m_bottomEnabled{true};
+    bool m_showCentral{true};
 };
 
 #endif // DOCK_GUIDES_H

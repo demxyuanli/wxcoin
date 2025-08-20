@@ -69,6 +69,12 @@ void ModernDockManager::InitializeComponents()
         
         // Show dock guides at start of drag (they stay visible throughout drag)
         if (session.sourcePanel) {
+            // Show central indicator, but disable Center/Top/Right responses
+            if (m_dockGuides) {
+                // Center responsiveness disabled, but central indicator stays visible
+                m_dockGuides->SetEnabledDirections(false, true, false, false, true);
+                m_dockGuides->SetCentralVisible(true);
+            }
             ShowDockGuides(session.sourcePanel);
         }
     });
@@ -141,6 +147,10 @@ void ModernDockManager::AddPanel(wxWindow* content, const wxString& title, DockA
     
     // Create new modern dock panel
     auto* panel = new ModernDockPanel(this, this, title);
+    
+    // Set the dock area BEFORE adding content
+    panel->SetDockArea(area);
+    
     panel->AddContent(content, title);
     
     // Add to panels collection

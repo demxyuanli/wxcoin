@@ -89,6 +89,8 @@ public:
     LayoutNode* FindPanel(ModernDockPanel* panel);
     LayoutNode* FindNodeAt(const wxPoint& pos);
     void GetAllPanels(std::vector<ModernDockPanel*>& panels);
+    void SetDockArea(DockArea area) { m_dockArea = area; }
+    DockArea GetDockArea() const { return m_dockArea; }
     
 private:
     LayoutNodeType m_type;
@@ -103,6 +105,7 @@ private:
     wxRect m_rect;
     LayoutConstraints m_constraints;
     double m_splitterRatio;             // For splitter nodes (0.0-1.0)
+    DockArea m_dockArea;                // For panel nodes
 };
 
 // Advanced layout engine with animation support
@@ -161,6 +164,8 @@ private:
     std::unique_ptr<LayoutNode> CreateSplitterNode(bool horizontal);
     void InsertPanelIntoTree(ModernDockPanel* panel, LayoutNode* parent, DockPosition position);
     void RemovePanelFromTree(LayoutNode* panelNode);
+    void OrganizeByDockAreas(std::unique_ptr<LayoutNode> panelNode, LayoutNode* parent);
+    void CreateMainLayoutStructure(LayoutNode* parent);
     
     // Layout calculation helpers
     void CalculateNodeLayout(LayoutNode* node, const wxRect& rect);
@@ -189,6 +194,8 @@ private:
     LayoutNode* FindBestInsertionPoint(DockArea area) const;
     void CleanupEmptyNodes();
     bool IsNodeValid(LayoutNode* node) const;
+    bool IsLeftSidebarSplitter(LayoutNode* splitterNode) const;
+    bool IsNodeInHierarchy(LayoutNode* ancestor, LayoutNode* target) const;
     
     ModernDockManager* m_manager;
     std::unique_ptr<LayoutNode> m_rootNode;
