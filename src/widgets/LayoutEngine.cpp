@@ -105,8 +105,9 @@ wxBEGIN_EVENT_TABLE(LayoutEngine, wxEvtHandler)
     EVT_TIMER(wxID_ANY, LayoutEngine::OnAnimationTimer)
 wxEND_EVENT_TABLE()
 
-LayoutEngine::LayoutEngine(ModernDockManager* manager)
+LayoutEngine::LayoutEngine(wxWindow* parent, IDockManager* manager)
     : wxEvtHandler(),
+      m_parent(parent),
       m_manager(manager),
       m_animationTimer(this, wxID_ANY),
       m_animationEnabled(true),
@@ -243,7 +244,7 @@ void LayoutEngine::FloatPanel(ModernDockPanel* panel)
     RemovePanel(panel);
     
     // Create floating window
-    wxFrame* floatFrame = new wxFrame(m_manager, wxID_ANY, panel->GetTitle(),
+    wxFrame* floatFrame = new wxFrame(m_parent, wxID_ANY, panel->GetTitle(),
                                      wxDefaultPosition, wxSize(400, 300),
                                      wxDEFAULT_FRAME_STYLE);
     
@@ -267,8 +268,8 @@ void LayoutEngine::RestorePanel(ModernDockPanel* panel, DockArea area)
     if (panel->IsFloating()) {
         panel->SetFloating(false);
         
-        // Reparent back to manager
-        panel->Reparent(m_manager);
+        // Reparent back to parent
+        panel->Reparent(m_parent);
         
         // Add to specified area
         AddPanel(panel, area);
@@ -322,7 +323,7 @@ void LayoutEngine::CreateSplitter(LayoutNode* parent, bool horizontal)
     if (!parent || !m_manager) return;
     
     // Create splitter window
-    wxSplitterWindow* splitter = CreateSplitterWindow(m_manager, horizontal);
+    wxSplitterWindow* splitter = CreateSplitterWindow(m_parent, horizontal);
     
     // Create splitter node
     auto splitterNode = CreateSplitterNode(horizontal);

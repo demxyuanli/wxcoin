@@ -9,6 +9,8 @@
 #include <vector>
 #include <unordered_map>
 #include "widgets/DockTypes.h"
+#include "widgets/UnifiedDockTypes.h"
+#include "widgets/IDockManager.h"
 
 // Forward declarations
 class wxGraphicsContext;
@@ -19,13 +21,8 @@ class GhostWindow;
 class DragDropController;
 class LayoutEngine;
 
-// Drag state enumeration
-enum class DragState {
-    None, Started, Active, Completing
-};
-
 // Modern dock manager with VS2022-style features
-class ModernDockManager : public wxPanel {
+class ModernDockManager : public wxPanel, public IDockManager {
 public:
     explicit ModernDockManager(wxWindow* parent);
     ~ModernDockManager() override;
@@ -37,24 +34,106 @@ public:
     
     // Drag and drop operations
     void StartDrag(ModernDockPanel* panel, const wxPoint& startPos);
-    void UpdateDrag(const wxPoint& currentPos);
     void CompleteDrag(const wxPoint& endPos);
     void CancelDrag();
     
-    // Hit testing and region detection
-    ModernDockPanel* HitTest(const wxPoint& screenPos) const;
-    DockPosition GetDockPosition(ModernDockPanel* target, const wxPoint& screenPos) const;
+
     
     // Visual feedback
     void ShowDockGuides(ModernDockPanel* target);
-    void HideDockGuides();
-    void ShowPreviewRect(const wxRect& rect, DockPosition position);
-    void HidePreviewRect();
     
     // Layout management
-    void SaveLayout();
-    void RestoreLayout();
     void OptimizeLayout();
+    
+    // IDockManager interface implementation
+    void AddPanel(wxWindow* content, const wxString& title, UnifiedDockArea area) override;
+    void RemovePanel(wxWindow* content) override;
+    void ShowPanel(wxWindow* content) override;
+    void HidePanel(wxWindow* content) override;
+    bool HasPanel(wxWindow* content) const override;
+    
+    // Layout strategy management
+    void SetLayoutStrategy(LayoutStrategy strategy) override;
+    LayoutStrategy GetLayoutStrategy() const override;
+    void SetLayoutConstraints(const LayoutConstraints& constraints) override;
+    LayoutConstraints GetLayoutConstraints() const override;
+    
+    // Layout persistence
+    void SaveLayout() override;
+    void RestoreLayout() override;
+    void ResetToDefaultLayout() override;
+    bool LoadLayoutFromFile(const wxString& filename) override;
+    bool SaveLayoutToFile(const wxString& filename) override;
+    
+    // Panel positioning and docking
+    void DockPanel(wxWindow* panel, wxWindow* target, DockPosition position) override;
+    void UndockPanel(wxWindow* panel) override;
+    void FloatPanel(wxWindow* panel) override;
+    void TabifyPanel(wxWindow* panel, wxWindow* target) override;
+    
+    // Layout information
+    wxRect GetPanelRect(wxWindow* panel) const override;
+    UnifiedDockArea GetPanelArea(wxWindow* panel) const override;
+    bool IsPanelFloating(wxWindow* panel) const override;
+    bool IsPanelDocked(wxWindow* panel) const override;
+    
+    // Visual feedback control
+    void ShowDockGuides() override;
+    void HideDockGuides() override;
+    void ShowDockGuides(wxWindow* target) override;
+    void SetDockGuideConfig(const DockGuideConfig& config) override;
+    DockGuideConfig GetDockGuideConfig() const override;
+    
+    // Preview and hit testing
+    void ShowPreviewRect(const wxRect& rect, DockPosition position) override;
+    void HidePreviewRect() override;
+    wxWindow* HitTest(const wxPoint& screenPos) const override;
+    DockPosition GetDockPosition(wxWindow* target, const wxPoint& screenPos) const override;
+    wxRect GetScreenRect() const override;
+    
+    // Event handling
+    void BindDockEvent(wxEventType eventType, 
+                       std::function<void(const DockEventData&)> handler) override;
+    void UnbindDockEvent(wxEventType eventType) override;
+    
+    // Drag and drop
+    void StartDrag(wxWindow* panel, const wxPoint& startPos) override;
+    void UpdateDrag(const wxPoint& currentPos) override;
+    void EndDrag(const wxPoint& endPos) override;
+    bool IsDragging() const override;
+    
+    // Layout tree access
+    LayoutNode* GetRootNode() const override;
+    LayoutNode* FindNode(wxWindow* panel) const override;
+    void TraverseNodes(std::function<void(LayoutNode*)> visitor) const override;
+    
+    // Utility functions
+    void RefreshLayout() override;
+    void FitLayout() override;
+    wxSize GetMinimumSize() const override;
+    wxSize GetBestSize() const override;
+    
+    // wxWidgets compatibility methods
+    wxRect GetClientRect() const override;
+    wxPoint ClientToScreen(const wxPoint& pt) const override;
+    wxPoint ScreenToClient(const wxPoint& pt) const override;
+    
+    // Configuration
+    void SetAutoSaveLayout(bool autoSave) override;
+    bool GetAutoSaveLayout() const override;
+    void SetLayoutUpdateInterval(int milliseconds) override;
+    int GetLayoutUpdateInterval() const override;
+    
+    // Statistics and debugging
+    int GetPanelCount() const override;
+    int GetContainerCount() const override;
+    int GetSplitterCount() const override;
+    wxString GetLayoutStatistics() const override;
+    void DumpLayoutTree() const override;
+    
+    // Configuration
+    void EnableLayoutCaching(bool enabled);
+    void SetLayoutUpdateMode(LayoutUpdateMode mode);
     
     // DPI support
     void OnDPIChanged(double newScale);
@@ -102,6 +181,14 @@ private:
     
     // DPI awareness
     double m_dpiScale;
+    
+    // Layout strategy and configuration
+    LayoutStrategy m_currentStrategy;
+    bool m_autoSaveLayout;
+    int m_layoutUpdateInterval;
+    bool m_layoutCachingEnabled;
+    LayoutUpdateMode m_layoutUpdateMode;
+    LayoutConstraints m_layoutConstraints;
     
     // Constants
     static constexpr int ANIMATION_STEPS = 10;

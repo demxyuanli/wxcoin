@@ -8,6 +8,8 @@
 #include <memory>
 #include <functional>
 #include "widgets/DockTypes.h"
+#include "widgets/UnifiedDockTypes.h"
+#include "widgets/IDockManager.h"
 
 class ModernDockManager;
 class ModernDockPanel;
@@ -15,16 +17,7 @@ class GhostWindow;
 class DockGuides;
 
 // Drop validation result
-struct DropValidation {
-    bool valid;
-    DockPosition position;
-    ModernDockPanel* targetPanel;
-    int insertIndex;
-    wxRect previewRect;
-    
-    DropValidation() : valid(false), position(DockPosition::None), 
-                      targetPanel(nullptr), insertIndex(-1) {}
-};
+// Note: DropValidation is now defined in UnifiedDockTypes.h
 
 // Drag session data
 struct DragSession {
@@ -47,7 +40,7 @@ struct DragSession {
 // Advanced drag and drop controller
 class DragDropController : public wxEvtHandler {
 public:
-    explicit DragDropController(ModernDockManager* manager);
+    explicit DragDropController(IDockManager* manager);
     ~DragDropController();
     
     // Drag session management
@@ -110,7 +103,7 @@ private:
     DragOperation DetermineDragOperation(const wxPoint& startPos, const wxPoint& currentPos) const;
     wxBitmap CaptureTabContent(ModernDockPanel* panel, int tabIndex) const;
     
-    ModernDockManager* m_manager;
+    IDockManager* m_manager;
     DragSession m_dragSession;
     
     // Configuration

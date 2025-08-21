@@ -6,6 +6,8 @@
 #include <wx/timer.h>
 #include <memory>
 #include "widgets/DockTypes.h"
+#include "widgets/UnifiedDockTypes.h"
+#include "widgets/IDockManager.h"
 
 class ModernDockManager;
 class ModernDockPanel;
@@ -37,7 +39,7 @@ private:
 // Central dock guides (5-way directional)
 class CentralDockGuides : public wxWindow {
 public:
-    CentralDockGuides(ModernDockManager* manager);
+    CentralDockGuides(wxWindow* parent, IDockManager* manager);
     
     void ShowAt(const wxPoint& screenPos);
     void Hide();
@@ -61,7 +63,7 @@ private:
     void RenderBackground(wxGraphicsContext* gc);
     void RenderGuideButtons(wxGraphicsContext* gc);
     
-    ModernDockManager* m_manager;
+    IDockManager* m_manager;
     std::vector<std::unique_ptr<DockGuideButton>> m_buttons;
     DockPosition m_highlightedPosition;
     wxSize m_guideSize;
@@ -81,10 +83,10 @@ private:
 // Edge dock guides (window borders)
 class EdgeDockGuides : public wxWindow {
 public:
-    EdgeDockGuides(ModernDockManager* manager);
+    EdgeDockGuides(wxWindow* parent, IDockManager* manager);
     
     void ShowForTarget(ModernDockPanel* target);
-    void ShowForManager(ModernDockManager* manager);
+    void ShowForManager(IDockManager* manager);
     void Hide();
     void UpdateHighlight(const wxPoint& mousePos);
     DockPosition GetHighlightedPosition() const { return m_highlightedPosition; }
@@ -101,7 +103,7 @@ private:
     void CreateEdgeButtons(const wxRect& targetRect);
     void RenderEdgeButton(wxGraphicsContext* gc, DockGuideButton* button, bool highlighted);
     
-    ModernDockManager* m_manager;
+    IDockManager* m_manager;
     ModernDockPanel* m_targetPanel;
     std::vector<std::unique_ptr<DockGuideButton>> m_edgeButtons;
     DockPosition m_highlightedPosition;
@@ -119,7 +121,7 @@ private:
 // Main dock guides controller
 class DockGuides {
 public:
-    DockGuides(ModernDockManager* manager);
+    DockGuides(IDockManager* manager);
     ~DockGuides();
     
     void ShowGuides(ModernDockPanel* target, const wxPoint& mousePos);
@@ -137,7 +139,7 @@ public:
     void SetCentralVisible(bool visible) { m_showCentral = visible; }
 
 private:
-    ModernDockManager* m_manager;
+    IDockManager* m_manager;
     std::unique_ptr<CentralDockGuides> m_centralGuides;
     std::unique_ptr<EdgeDockGuides> m_edgeGuides;
     ModernDockPanel* m_currentTarget;

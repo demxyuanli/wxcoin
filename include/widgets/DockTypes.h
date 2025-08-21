@@ -2,13 +2,7 @@
 #define DOCK_TYPES_H
 
 // Dock positions following VS2022 style
-enum class DockPosition {
-    None,
-    Left, Right, Top, Bottom,    // Edge docking
-    Center,                      // Tab merge
-    NewHorizontal,              // New horizontal split
-    NewVertical                 // New vertical split
-};
+// Note: DockPosition is now defined in UnifiedDockTypes.h
 
 // Dock area types
 enum class DockArea {

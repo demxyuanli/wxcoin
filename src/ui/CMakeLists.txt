@@ -2,8 +2,11 @@
 
 # Panels split
 add_library(UIPanelTree STATIC
+。..。。。
     ${CMAKE_CURRENT_SOURCE_DIR}/ObjectTreePanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatBarNotebook.cpp
     ${CMAKE_SOURCE_DIR}/include/ObjectTreePanel.h
+    ${CMAKE_SOURCE_DIR}/include/ui/FlatBarNotebook.h
 )
 target_include_directories(UIPanelTree PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
 target_link_libraries(UIPanelTree PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets ${wxWidgets_LIBRARIES})

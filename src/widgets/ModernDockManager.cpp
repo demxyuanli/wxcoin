@@ -26,7 +26,12 @@ ModernDockManager::ModernDockManager(wxWindow* parent)
       m_previewPosition(DockPosition::None),
       m_animationTimer(this),
       m_animationProgress(0.0),
-      m_dpiScale(1.0)
+      m_dpiScale(1.0),
+      m_currentStrategy(LayoutStrategy::IDE),
+      m_autoSaveLayout(true),
+      m_layoutUpdateInterval(100),
+      m_layoutCachingEnabled(true),
+      m_layoutUpdateMode(LayoutUpdateMode::Immediate)
 {
     InitializeComponents();
     
@@ -52,7 +57,7 @@ void ModernDockManager::InitializeComponents()
     m_dockGuides = std::make_unique<DockGuides>(this);
     m_ghostWindow = std::make_unique<GhostWindow>();
     m_dragController = std::make_unique<DragDropController>(this);
-    m_layoutEngine = std::make_unique<LayoutEngine>(this);
+    m_layoutEngine = std::make_unique<LayoutEngine>(this, this);
     
     // Initialize layout engine with this window as root
     m_layoutEngine->InitializeLayout(this);
@@ -231,7 +236,7 @@ void ModernDockManager::CancelDrag()
     m_dragController->CancelDrag();
 }
 
-ModernDockPanel* ModernDockManager::HitTest(const wxPoint& screenPos) const
+wxWindow* ModernDockManager::HitTest(const wxPoint& screenPos) const
 {
     // Test all visible panels using screen coordinates to avoid layout triggers
     for (const auto& [area, panels] : m_panels) {
@@ -244,7 +249,7 @@ ModernDockPanel* ModernDockManager::HitTest(const wxPoint& screenPos) const
                 screenRect = wxRect(panelScreenPos, panelSize);
                 
                 if (screenRect.Contains(screenPos)) {
-                    return panel;
+                    return panel->GetContent();
                 }
             }
         }
@@ -253,7 +258,7 @@ ModernDockPanel* ModernDockManager::HitTest(const wxPoint& screenPos) const
     return nullptr;
 }
 
-DockPosition ModernDockManager::GetDockPosition(ModernDockPanel* target, const wxPoint& screenPos) const
+DockPosition ModernDockManager::GetDockPosition(wxWindow* target, const wxPoint& screenPos) const
 {
     if (!target) return DockPosition::None;
     
@@ -302,16 +307,9 @@ void ModernDockManager::ShowDockGuides(ModernDockPanel* target)
     m_dockGuides->ShowGuides(target, wxGetMousePosition());
 }
 
-void ModernDockManager::HideDockGuides()
-{
-    if (m_dockGuides) {
-        m_dockGuides->HideGuides();
-    }
-}
-
 void ModernDockManager::ShowPreviewRect(const wxRect& rect, DockPosition position)
 {
-    wxRect clientRect = wxRect(ScreenToClient(rect.GetTopLeft()), rect.GetSize());
+    wxRect clientRect = wxRect(wxPanel::ScreenToClient(rect.GetTopLeft()), rect.GetSize());
     
     if (m_previewRect != clientRect || m_previewPosition != position) {
         m_targetPreviewRect = clientRect;
@@ -508,7 +506,7 @@ void ModernDockManager::DrawTabIcon(wxGraphicsContext* gc, const wxPoint& center
 void ModernDockManager::OnSize(wxSizeEvent& event)
 {
     if (m_layoutEngine) {
-        m_layoutEngine->UpdateLayout(GetClientRect());
+        m_layoutEngine->UpdateLayout(wxPanel::GetClientRect());
     }
     
     event.Skip();
@@ -546,7 +544,7 @@ void ModernDockManager::OnMouseMove(wxMouseEvent& event)
     inMouseMove = true;
     
     if (m_dragState != DragState::None) {
-        UpdateDrag(ClientToScreen(event.GetPosition()));
+        UpdateDrag(wxPanel::ClientToScreen(event.GetPosition()));
     }
     
     inMouseMove = false;
@@ -564,25 +562,7 @@ void ModernDockManager::OnMouseLeave(wxMouseEvent& event)
     event.Skip();
 }
 
-void ModernDockManager::SaveLayout()
-{
-    if (m_layoutEngine) {
-        wxString layoutData = m_layoutEngine->SaveLayout();
-        // Store layout data (implementation depends on requirements)
-        // Could save to registry, config file, etc.
-    }
-}
 
-void ModernDockManager::RestoreLayout()
-{
-    if (m_layoutEngine) {
-        // Load layout data from storage
-        wxString layoutData; // Load from storage
-        if (!layoutData.IsEmpty()) {
-            m_layoutEngine->LoadLayout(layoutData);
-        }
-    }
-}
 
 void ModernDockManager::OptimizeLayout()
 {
@@ -590,4 +570,461 @@ void ModernDockManager::OptimizeLayout()
         m_layoutEngine->OptimizeLayout();
     }
 }
+
+// Layout strategy management
+void ModernDockManager::SetLayoutStrategy(LayoutStrategy strategy)
+{
+    // Implementation depends on requirements
+    // For now, just store the strategy
+    m_currentStrategy = strategy;
+}
+
+LayoutStrategy ModernDockManager::GetLayoutStrategy() const
+{
+    return m_currentStrategy;
+}
+
+void ModernDockManager::SetLayoutConstraints(const LayoutConstraints& constraints)
+{
+    wxUnusedVar(constraints);
+    if (m_layoutEngine) {
+        // Pass constraints to layout engine
+        // Implementation depends on layout engine interface
+    }
+}
+
+LayoutConstraints ModernDockManager::GetLayoutConstraints() const
+{
+    // Return current constraints
+    // Implementation depends on requirements
+    return LayoutConstraints();
+}
+
+// Configuration
+void ModernDockManager::SetAutoSaveLayout(bool autoSave)
+{
+    m_autoSaveLayout = autoSave;
+}
+
+bool ModernDockManager::GetAutoSaveLayout() const
+{
+    return m_autoSaveLayout;
+}
+
+void ModernDockManager::SetLayoutUpdateInterval(int milliseconds)
+{
+    m_layoutUpdateInterval = milliseconds;
+}
+
+int ModernDockManager::GetLayoutUpdateInterval() const
+{
+    return m_layoutUpdateInterval;
+}
+
+void ModernDockManager::EnableLayoutCaching(bool enabled)
+{
+    m_layoutCachingEnabled = enabled;
+}
+
+void ModernDockManager::SetLayoutUpdateMode(LayoutUpdateMode mode)
+{
+    m_layoutUpdateMode = mode;
+}
+
+// IDockManager interface implementation
+void ModernDockManager::AddPanel(wxWindow* content, const wxString& title, UnifiedDockArea area)
+{
+    // Basic implementation - delegate to existing AddPanel method
+    DockArea dockArea = DockArea::Center; // Default
+    switch (area) {
+        case UnifiedDockArea::Left: dockArea = DockArea::Left; break;
+        case UnifiedDockArea::Right: dockArea = DockArea::Right; break;
+        case UnifiedDockArea::Top: dockArea = DockArea::Top; break;
+        case UnifiedDockArea::Bottom: dockArea = DockArea::Bottom; break;
+        case UnifiedDockArea::Center: dockArea = DockArea::Center; break;
+        case UnifiedDockArea::Tab: dockArea = DockArea::Center; break;
+    }
+    
+    // Create panel and add to appropriate area
+    auto panel = std::make_unique<ModernDockPanel>(this, content, title);
+    m_panels[dockArea].push_back(panel.get());
+    panel.release(); // Transfer ownership to m_panels
+}
+
+void ModernDockManager::RemovePanel(wxWindow* content)
+{
+    // Find and remove panel by content
+    for (auto& [area, panels] : m_panels) {
+        auto it = std::find_if(panels.begin(), panels.end(),
+            [content](ModernDockPanel* panel) {
+                return panel->GetContent() == content;
+            });
+        if (it != panels.end()) {
+            panels.erase(it);
+            break;
+        }
+    }
+}
+
+void ModernDockManager::ShowPanel(wxWindow* content)
+{
+    // Find and show panel
+    for (auto& [area, panels] : m_panels) {
+        for (auto* panel : panels) {
+            if (panel->GetContent() == content) {
+                panel->Show();
+                break;
+            }
+        }
+    }
+}
+
+void ModernDockManager::HidePanel(wxWindow* content)
+{
+    // Find and hide panel
+    for (auto& [area, panels] : m_panels) {
+        for (auto* panel : panels) {
+            if (panel->GetContent() == content) {
+                panel->Hide();
+                break;
+            }
+        }
+    }
+}
+
+bool ModernDockManager::HasPanel(wxWindow* content) const
+{
+    for (const auto& [area, panels] : m_panels) {
+        for (auto* panel : panels) {
+            if (panel->GetContent() == content) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
+
+// Layout persistence
+void ModernDockManager::ResetToDefaultLayout()
+{
+    // Reset to default layout
+    if (m_layoutEngine) {
+        m_layoutEngine->UpdateLayout();
+    }
+}
+
+bool ModernDockManager::LoadLayoutFromFile(const wxString& filename)
+{
+    wxUnusedVar(filename);
+    // Load layout from file
+    return true; // Placeholder
+}
+
+bool ModernDockManager::SaveLayoutToFile(const wxString& filename)
+{
+    wxUnusedVar(filename);
+    // Save layout to file
+    return true; // Placeholder
+}
+
+void ModernDockManager::SaveLayout()
+{
+    // Save current layout
+    if (m_layoutEngine) {
+        // Serialize layout data
+        // This is a placeholder implementation
+    }
+}
+
+void ModernDockManager::RestoreLayout()
+{
+    // Restore saved layout
+    if (m_layoutEngine) {
+        // Deserialize layout data
+        // This is a placeholder implementation
+    }
+}
+
+// Panel positioning and docking
+void ModernDockManager::DockPanel(wxWindow* panel, wxWindow* target, DockPosition position)
+{
+    wxUnusedVar(panel);
+    wxUnusedVar(target);
+    wxUnusedVar(position);
+    // Dock panel to target at position
+    // Implementation depends on requirements
+}
+
+void ModernDockManager::UndockPanel(wxWindow* panel)
+{
+    wxUnusedVar(panel);
+    // Undock panel
+    // Implementation depends on requirements
+}
+
+void ModernDockManager::FloatPanel(wxWindow* panel)
+{
+    wxUnusedVar(panel);
+    // Make panel floating
+    // Implementation depends on requirements
+}
+
+void ModernDockManager::TabifyPanel(wxWindow* panel, wxWindow* target)
+{
+    wxUnusedVar(panel);
+    wxUnusedVar(target);
+    // Add panel as tab to target
+    // Implementation depends on requirements
+}
+
+// Layout information
+wxRect ModernDockManager::GetPanelRect(wxWindow* panel) const
+{
+    // Get panel rectangle
+    for (const auto& [area, panels] : m_panels) {
+        for (auto* dockPanel : panels) {
+            if (dockPanel->GetContent() == panel) {
+                return dockPanel->GetRect();
+            }
+        }
+    }
+    return wxRect();
+}
+
+UnifiedDockArea ModernDockManager::GetPanelArea(wxWindow* panel) const
+{
+    // Get panel area
+    for (const auto& [area, panels] : m_panels) {
+        for (auto* dockPanel : panels) {
+            if (dockPanel->GetContent() == panel) {
+                switch (area) {
+                    case DockArea::Left: return UnifiedDockArea::Left;
+                    case DockArea::Right: return UnifiedDockArea::Right;
+                    case DockArea::Top: return UnifiedDockArea::Top;
+                    case DockArea::Bottom: return UnifiedDockArea::Bottom;
+                    case DockArea::Center: return UnifiedDockArea::Center;
+                    default: return UnifiedDockArea::Center;
+                }
+            }
+        }
+    }
+    return UnifiedDockArea::Center;
+}
+
+bool ModernDockManager::IsPanelFloating(wxWindow* panel) const
+{
+    wxUnusedVar(panel);
+    // Check if panel is floating
+    return false; // Placeholder
+}
+
+bool ModernDockManager::IsPanelDocked(wxWindow* panel) const
+{
+    // Check if panel is docked
+    return HasPanel(panel);
+}
+
+// Visual feedback control
+void ModernDockManager::ShowDockGuides()
+{
+    if (m_dockGuides) {
+        m_dockGuides->ShowGuides(nullptr, wxGetMousePosition());
+    }
+}
+
+void ModernDockManager::HideDockGuides()
+{
+    if (m_dockGuides) {
+        m_dockGuides->HideGuides();
+    }
+}
+
+void ModernDockManager::SetDockGuideConfig(const DockGuideConfig& config)
+{
+    wxUnusedVar(config);
+    // Set dock guide configuration
+    // Implementation depends on requirements
+}
+
+DockGuideConfig ModernDockManager::GetDockGuideConfig() const
+{
+    // Get dock guide configuration
+    return DockGuideConfig(); // Placeholder
+}
+
+// Event handling
+void ModernDockManager::BindDockEvent(wxEventType eventType, 
+                                      std::function<void(const DockEventData&)> handler)
+{
+    wxUnusedVar(eventType);
+    wxUnusedVar(handler);
+    // Bind dock event
+    // Implementation depends on requirements
+}
+
+void ModernDockManager::UnbindDockEvent(wxEventType eventType)
+{
+    wxUnusedVar(eventType);
+    // Unbind dock event
+    // Implementation depends on requirements
+}
+
+// Drag and drop
+void ModernDockManager::StartDrag(wxWindow* panel, const wxPoint& startPos)
+{
+    wxUnusedVar(panel);
+    wxUnusedVar(startPos);
+    // Start drag operation
+    // Implementation depends on requirements
+}
+
+
+
+void ModernDockManager::EndDrag(const wxPoint& endPos)
+{
+    wxUnusedVar(endPos);
+    // End drag operation
+    // Implementation depends on requirements
+}
+
+bool ModernDockManager::IsDragging() const
+{
+    return m_dragState != DragState::None;
+}
+
+// Layout tree access
+LayoutNode* ModernDockManager::GetRootNode() const
+{
+    if (m_layoutEngine) {
+        return m_layoutEngine->GetRootNode();
+    }
+    return nullptr;
+}
+
+LayoutNode* ModernDockManager::FindNode(wxWindow* panel) const
+{
+    if (m_layoutEngine) {
+        return m_layoutEngine->FindPanelNode(reinterpret_cast<ModernDockPanel*>(panel));
+    }
+    return nullptr;
+}
+
+void ModernDockManager::TraverseNodes(std::function<void(LayoutNode*)> visitor) const
+{
+    if (m_layoutEngine) {
+        auto* root = m_layoutEngine->GetRootNode();
+        if (root) {
+            visitor(root);
+        }
+    }
+}
+
+// Layout update methods
+void ModernDockManager::UpdateLayout()
+{
+    if (m_layoutEngine) {
+        m_layoutEngine->UpdateLayout(wxPanel::GetClientRect());
+    }
+}
+
+// Rectangle and coordinate conversion methods
+wxRect ModernDockManager::GetScreenRect() const
+{
+    return wxPanel::GetScreenRect();
+}
+
+wxRect ModernDockManager::GetClientRect() const
+{
+    return wxPanel::GetClientRect();
+}
+
+wxPoint ModernDockManager::ClientToScreen(const wxPoint& point) const
+{
+    return wxPanel::ClientToScreen(point);
+}
+
+wxPoint ModernDockManager::ScreenToClient(const wxPoint& point) const
+{
+    return wxPanel::ScreenToClient(point);
+}
+
+// Utility functions
+void ModernDockManager::RefreshLayout()
+{
+    if (m_layoutEngine) {
+        m_layoutEngine->UpdateLayout();
+    }
+}
+
+
+
+void ModernDockManager::FitLayout()
+{
+    if (m_layoutEngine) {
+        m_layoutEngine->UpdateLayout();
+    }
+}
+
+wxSize ModernDockManager::GetMinimumSize() const
+{
+    return wxSize(400, 300);
+}
+
+wxSize ModernDockManager::GetBestSize() const
+{
+    return GetSize();
+}
+
+// Statistics and debugging
+int ModernDockManager::GetPanelCount() const
+{
+    int count = 0;
+    for (const auto& [area, panels] : m_panels) {
+        count += panels.size();
+    }
+    return count;
+}
+
+int ModernDockManager::GetContainerCount() const
+{
+    return 0; // Placeholder
+}
+
+int ModernDockManager::GetSplitterCount() const
+{
+    return 0; // Placeholder
+}
+
+wxString ModernDockManager::GetLayoutStatistics() const
+{
+    return wxString::Format("Panels: %d, Containers: %d, Splitters: %d",
+                           GetPanelCount(), GetContainerCount(), GetSplitterCount());
+}
+
+void ModernDockManager::DumpLayoutTree() const
+{
+    // Dump layout tree for debugging
+    // Implementation depends on requirements
+}
+
+// Additional IDockManager interface methods
+void ModernDockManager::ShowDockGuides(wxWindow* target)
+{
+    if (m_dockGuides) {
+        m_dockGuides->ShowGuides(reinterpret_cast<ModernDockPanel*>(target), wxGetMousePosition());
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
 

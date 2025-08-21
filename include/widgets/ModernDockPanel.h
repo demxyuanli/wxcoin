@@ -9,10 +9,30 @@
 #include <memory>
 #include <vector>
 #include "widgets/DockTypes.h"
+#include "widgets/DockSystemButtons.h"
 
 class ModernDockManager;
 class DockTabBar;
 class DockContent;
+
+// Tab style enumeration
+enum class TabStyle {
+    DEFAULT,        // Default style with top border for active tab
+    UNDERLINE,      // Underline style for active tab
+    BUTTON,         // Button-like appearance
+    FLAT            // Completely flat, only text color changes
+};
+
+// Tab border style enumeration
+enum class TabBorderStyle {
+    SOLID,          // Solid line border
+    DASHED,         // Dashed line border
+    DOTTED,         // Dotted line border
+    DOUBLE,         // Double line border
+    GROOVE,         // Groove style border
+    RIDGE,          // Ridge style border
+    ROUNDED         // Rounded corners
+};
 
 // Modern dock panel with VS2022-style appearance
 class ModernDockPanel : public wxPanel {
@@ -32,6 +52,7 @@ public:
     // Tab management
     int GetContentCount() const;
     wxWindow* GetContent(int index) const;
+    wxWindow* GetContent() const { return GetSelectedContent(); }  // Convenience method
     wxWindow* GetSelectedContent() const;
     int GetSelectedIndex() const;
     wxString GetContentTitle(int index) const;
@@ -56,6 +77,46 @@ public:
     TabCloseMode GetTabCloseMode() const { return m_tabCloseMode; }
     void SetShowTabs(bool show);
     bool IsShowingTabs() const { return m_showTabs; }
+    
+    // Style configuration
+    void SetTabStyle(TabStyle style);
+    TabStyle GetTabStyle() const { return m_tabStyle; }
+    
+    void SetTabBorderStyle(TabBorderStyle style);
+    TabBorderStyle GetTabBorderStyle() const { return m_tabBorderStyle; }
+    
+    void SetTabCornerRadius(int radius);
+    int GetTabCornerRadius() const { return m_tabCornerRadius; }
+    
+    void SetTabBorderWidths(int top, int bottom, int left, int right);
+    void GetTabBorderWidths(int& top, int& bottom, int& left, int& right) const;
+    
+    void SetTabBorderColours(const wxColour& top, const wxColour& bottom, const wxColour& left, const wxColour& right);
+    void GetTabBorderColours(wxColour& top, wxColour& bottom, wxColour& left, wxColour& right) const;
+    
+    void SetTabPadding(int padding);
+    int GetTabPadding() const { return m_tabPadding; }
+    
+    void SetTabSpacing(int spacing);
+    int GetTabSpacing() const { return m_tabSpacing; }
+    
+    void SetTabTopMargin(int margin);
+    int GetTabTopMargin() const { return m_tabTopMargin; }
+    
+    // Font configuration
+    void SetTabFont(const wxFont& font);
+    wxFont GetTabFont() const { return m_tabFont; }
+    
+    void SetTitleFont(const wxFont& font);
+    wxFont GetTitleFont() const { return m_titleFont; }
+    
+    // System buttons management
+    void AddSystemButton(DockSystemButtonType type, const wxString& tooltip = wxEmptyString);
+    void RemoveSystemButton(DockSystemButtonType type);
+    void SetSystemButtonEnabled(DockSystemButtonType type, bool enabled);
+    void SetSystemButtonVisible(DockSystemButtonType type, bool visible);
+    void SetSystemButtonIcon(DockSystemButtonType type, const wxBitmap& icon);
+    void SetSystemButtonTooltip(DockSystemButtonType type, const wxString& tooltip);
     
     // Drag operations
     void StartDrag(int tabIndex, const wxPoint& startPos);
@@ -87,7 +148,9 @@ protected:
 
 private:
     void InitializePanel();
+    void UpdateThemeColors();
     void UpdateLayout();
+    void RenderTitleBar(wxGraphicsContext* gc);
     void RenderTabBar(wxGraphicsContext* gc);
     void RenderTab(wxGraphicsContext* gc, int index, const wxRect& rect, bool selected, bool hovered);
     void RenderCloseButton(wxGraphicsContext* gc, const wxRect& rect, bool hovered);
@@ -162,13 +225,46 @@ private:
     int m_closeButtonSize;
     int m_contentMargin;
     
-    // Colors (will be theme-aware)
+    // Style configuration
+    TabStyle m_tabStyle;
+    TabBorderStyle m_tabBorderStyle;
+    int m_tabCornerRadius;
+    int m_tabBorderTop;
+    int m_tabBorderBottom;
+    int m_tabBorderLeft;
+    int m_tabBorderRight;
+    int m_tabPadding;
+    int m_tabTopMargin;
+    
+    // Fonts
+    wxFont m_tabFont;
+    wxFont m_titleFont;
+    
+    // Colors (theme-aware)
     wxColour m_backgroundColor;
     wxColour m_tabActiveColor;
     wxColour m_tabInactiveColor;
     wxColour m_tabHoverColor;
     wxColour m_textColor;
     wxColour m_borderColor;
+    
+    // Extended colors
+    wxColour m_tabBorderTopColor;
+    wxColour m_tabBorderBottomColor;
+    wxColour m_tabBorderLeftColor;
+    wxColour m_tabBorderRightColor;
+    wxColour m_tabActiveTextColor;
+    wxColour m_tabHoverTextColor;
+    wxColour m_closeButtonNormalColor;
+    wxColour m_titleBarBgColor;
+    wxColour m_titleBarTextColor;
+    wxColour m_titleBarBorderColor;
+    
+    // Theme change handling
+    void OnThemeChanged();
+    
+    // System buttons
+    DockSystemButtons* m_systemButtons;
     
     // Constants
     static constexpr int DEFAULT_TAB_HEIGHT = 28;
@@ -177,6 +273,13 @@ private:
     static constexpr int DEFAULT_TAB_SPACING = 0;
     static constexpr int DEFAULT_CLOSE_BUTTON_SIZE = 16;
     static constexpr int DEFAULT_CONTENT_MARGIN = 2;
+    static constexpr int DEFAULT_TAB_PADDING = 8;
+    static constexpr int DEFAULT_TAB_TOP_MARGIN = 4;
+    static constexpr int DEFAULT_TAB_CORNER_RADIUS = 4;
+    static constexpr int DEFAULT_TAB_BORDER_TOP = 2;
+    static constexpr int DEFAULT_TAB_BORDER_BOTTOM = 1;
+    static constexpr int DEFAULT_TAB_BORDER_LEFT = 1;
+    static constexpr int DEFAULT_TAB_BORDER_RIGHT = 1;
     static constexpr int DRAG_THRESHOLD = 5;
     static constexpr int ANIMATION_FPS = 60;
 

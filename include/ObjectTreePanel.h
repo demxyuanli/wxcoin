@@ -4,7 +4,7 @@
 #include "widgets/FlatTreeView.h"
 #include <wx/imaglist.h>
 #include <wx/artprov.h>
-#include <wx/notebook.h>
+#include "ui/FlatBarNotebook.h"
 #include <map>
 #include <vector>
 #include <memory>
@@ -68,7 +68,7 @@ private:
     void refreshActionIconsFor(std::shared_ptr<OCCGeometry> geometry);
 
     // Tabs
-    wxNotebook* m_notebook;
+    FlatBarNotebook* m_notebook;
     wxPanel* m_tabPanel;
     wxPanel* m_tabHistory;
     wxPanel* m_tabVersion;

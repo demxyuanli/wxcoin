@@ -90,7 +90,6 @@
 #include "RenderPreviewSystemListener.h"
 #include "ShowFlatWidgetsExampleListener.h"
 #include "widgets/FlatWidgetsExampleDialog.h"
-#include "widgets/FlatDockManager.h"
 #include "widgets/ModernDockAdapter.h"
 #include "ReferenceGridToggleListener.h"
 #include "ChessboardGridToggleListener.h"

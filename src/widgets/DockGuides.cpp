@@ -2,6 +2,7 @@
 #include "widgets/ModernDockManager.h"
 #include "widgets/ModernDockPanel.h"
 #include "DPIManager.h"
+#include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 #include <cmath>
@@ -16,9 +17,17 @@ void DockGuideButton::Render(wxGraphicsContext* gc, bool highlighted, double dpi
 {
     if (!gc) return;
     
-    // Background color
-    wxColour bgColor = highlighted ? wxColour(0, 122, 204, 200) : wxColour(100, 100, 100, 150);
-    wxColour borderColor = highlighted ? wxColour(0, 122, 204) : wxColour(150, 150, 150);
+    // Background color using theme colors
+    wxColour bgColor, borderColor;
+    if (highlighted) {
+        bgColor = CFG_COLOUR("TabActiveColour");
+        bgColor.Set(bgColor.Red(), bgColor.Green(), bgColor.Blue(), 200); // Add transparency
+        borderColor = CFG_COLOUR("TabActiveColour");
+    } else {
+        bgColor = CFG_COLOUR("PanelBgColour");
+        bgColor.Set(bgColor.Red(), bgColor.Green(), bgColor.Blue(), 150); // Add transparency
+        borderColor = CFG_COLOUR("PanelBorderColour");
+    }
     
     // Draw background circle
     gc->SetBrush(wxBrush(bgColor));
@@ -36,7 +45,13 @@ void DockGuideButton::DrawGuideIcon(wxGraphicsContext* gc, bool highlighted, dou
 {
     if (!gc) return;
     
-    wxColour iconColor = highlighted ? *wxWHITE : wxColour(200, 200, 200);
+    wxColour iconColor;
+    if (highlighted) {
+        iconColor = CFG_COLOUR("PanelTextColour"); // Use theme text color for highlighted state
+    } else {
+        iconColor = CFG_COLOUR("PanelTextColour"); // Use theme text color for normal state
+        iconColor.Set(iconColor.Red(), iconColor.Green(), iconColor.Blue(), 180); // Slightly transparent
+    }
     gc->SetPen(wxPen(iconColor, static_cast<double>(2 * dpiScale)));
     gc->SetBrush(wxBrush(iconColor));
     
@@ -133,8 +148,8 @@ wxBEGIN_EVENT_TABLE(CentralDockGuides, wxWindow)
     EVT_LEAVE_WINDOW(CentralDockGuides::OnMouseLeave)
 wxEND_EVENT_TABLE()
 
-CentralDockGuides::CentralDockGuides(ModernDockManager* manager)
-    : wxWindow(manager, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
+CentralDockGuides::CentralDockGuides(wxWindow* parent, IDockManager* manager)
+    : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
                wxFRAME_SHAPED | wxBORDER_NONE | wxFRAME_NO_TASKBAR),
       m_manager(manager),
       m_highlightedPosition(DockPosition::None)
@@ -265,10 +280,11 @@ void CentralDockGuides::RenderBackground(wxGraphicsContext* gc)
 {
     if (!gc) return;
     
-    // Draw subtle background circle
-    wxColour bgColor(50, 50, 50, 100);
+    // Draw subtle background circle using theme colors
+    wxColour bgColor = CFG_COLOUR("PanelBgColour");
+    bgColor.Set(bgColor.Red(), bgColor.Green(), bgColor.Blue(), 180); // Add transparency
     gc->SetBrush(wxBrush(bgColor));
-    gc->SetPen(*wxTRANSPARENT_PEN);
+    gc->SetPen(wxPen(CFG_COLOUR("PanelBorderColour"), 1));
     
     wxPoint center(GetSize().x / 2, GetSize().y / 2);
     double radius = GetSize().x / 2.0 - 5;
@@ -309,8 +325,8 @@ wxBEGIN_EVENT_TABLE(EdgeDockGuides, wxWindow)
     EVT_LEAVE_WINDOW(EdgeDockGuides::OnMouseLeave)
 wxEND_EVENT_TABLE()
 
-EdgeDockGuides::EdgeDockGuides(ModernDockManager* manager)
-    : wxWindow(manager, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
+EdgeDockGuides::EdgeDockGuides(wxWindow* parent, IDockManager* manager)
+    : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
                wxFRAME_SHAPED | wxBORDER_NONE | wxFRAME_NO_TASKBAR),
       m_manager(manager),
       m_targetPanel(nullptr),
@@ -345,7 +361,7 @@ void EdgeDockGuides::ShowForTarget(ModernDockPanel* target)
     Raise();
 }
 
-void EdgeDockGuides::ShowForManager(ModernDockManager* manager)
+void EdgeDockGuides::ShowForManager(IDockManager* manager)
 {
     if (!manager) return;
     
@@ -505,13 +521,19 @@ void EdgeDockGuides::OnMouseLeave(wxMouseEvent& event)
 }
 
 // DockGuides main controller implementation
-DockGuides::DockGuides(ModernDockManager* manager)
+DockGuides::DockGuides(IDockManager* manager)
     : m_manager(manager),
       m_currentTarget(nullptr),
       m_visible(false)
 {
-    m_centralGuides = std::make_unique<CentralDockGuides>(manager);
-    m_edgeGuides = std::make_unique<EdgeDockGuides>(manager);
+    // Cast manager to wxWindow* since our implementations inherit from wxPanel
+    wxWindow* parentWindow = dynamic_cast<wxWindow*>(manager);
+    if (!parentWindow) {
+        throw std::runtime_error("IDockManager implementation must inherit from wxWindow");
+    }
+    
+    m_centralGuides = std::make_unique<CentralDockGuides>(parentWindow, manager);
+    m_edgeGuides = std::make_unique<EdgeDockGuides>(parentWindow, manager);
 }
 
 DockGuides::~DockGuides()
@@ -529,13 +551,30 @@ void DockGuides::ShowGuides(ModernDockPanel* target, const wxPoint& mousePos)
     
     // Show central guides if visibility flag is true (independent of center responsiveness)
     if (m_showCentral) {
-        wxRect workRect = m_manager->GetClientRect();
-        wxPoint centerPoint = wxPoint(workRect.x + workRect.width / 2,
-                                      workRect.y + workRect.height / 2);
-        wxPoint centerPos = m_manager->ClientToScreen(centerPoint);
-        // Apply direction mask to central guides
-        m_centralGuides->SetEnabledDirections(m_centerEnabled, m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
-        m_centralGuides->ShowAt(centerPos);
+        // Get actual work area from manager
+        wxWindow* managerWindow = dynamic_cast<wxWindow*>(m_manager);
+        if (managerWindow) {
+            // Get the client area of the manager window
+            wxRect clientRect = managerWindow->GetClientRect();
+            wxPoint centerPoint = wxPoint(clientRect.x + clientRect.width / 2,
+                                          clientRect.y + clientRect.height / 2);
+            
+            // Convert to screen coordinates for ShowAt method
+            wxPoint screenCenter = managerWindow->ClientToScreen(centerPoint);
+            wxPoint centerPos = screenCenter;
+            
+            // Apply direction mask to central guides
+            m_centralGuides->SetEnabledDirections(m_centerEnabled, m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
+            m_centralGuides->ShowAt(centerPos);
+        } else {
+            // Fallback to default size if manager is not a window
+            wxRect workRect(0, 0, 800, 600);
+            wxPoint centerPoint = wxPoint(workRect.x + workRect.width / 2,
+                                          workRect.y + workRect.height / 2);
+            wxPoint centerPos = centerPoint;
+            m_centralGuides->SetEnabledDirections(m_centerEnabled, m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
+            m_centralGuides->ShowAt(centerPos);
+        }
     } else {
         m_centralGuides->Hide();
     }

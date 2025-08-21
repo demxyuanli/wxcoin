@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <functional>
 #include "widgets/DockTypes.h"
+#include "widgets/UnifiedDockTypes.h"
+#include "widgets/IDockManager.h"
 
 class ModernDockManager;
 class ModernDockPanel;
@@ -19,18 +21,7 @@ enum class LayoutNodeType {
 };
 
 // Layout constraints
-struct LayoutConstraints {
-    int minWidth;
-    int minHeight;
-    int maxWidth;
-    int maxHeight;
-    double preferredRatio;
-    bool resizable;
-    
-    LayoutConstraints() : minWidth(100), minHeight(100), 
-                         maxWidth(-1), maxHeight(-1),
-                         preferredRatio(0.5), resizable(true) {}
-};
+// Note: LayoutConstraints is now defined in UnifiedDockTypes.h
 
 // Forward declaration
 class LayoutNode;
@@ -77,7 +68,10 @@ public:
     void SetRect(const wxRect& rect) { m_rect = rect; }
     wxRect GetRect() const { return m_rect; }
     void SetConstraints(const LayoutConstraints& constraints) { m_constraints = constraints; }
-    const LayoutConstraints& GetConstraints() const { return m_constraints; }
+    const LayoutConstraints& GetConstraints() const { 
+        static const LayoutConstraints defaultConstraints;
+        return m_constraints; 
+    }
     
     // Splitter management
     void SetSplitterRatio(double ratio) { m_splitterRatio = ratio; }
@@ -111,7 +105,7 @@ private:
 // Advanced layout engine with animation support
 class LayoutEngine : public wxEvtHandler {
 public:
-    explicit LayoutEngine(ModernDockManager* manager);
+    explicit LayoutEngine(wxWindow* parent, IDockManager* manager);
     ~LayoutEngine();
     
     // Layout tree management
@@ -197,7 +191,8 @@ private:
     bool IsLeftSidebarSplitter(LayoutNode* splitterNode) const;
     bool IsNodeInHierarchy(LayoutNode* ancestor, LayoutNode* target) const;
     
-    ModernDockManager* m_manager;
+    wxWindow* m_parent;
+    IDockManager* m_manager;
     std::unique_ptr<LayoutNode> m_rootNode;
     
     // Animation system

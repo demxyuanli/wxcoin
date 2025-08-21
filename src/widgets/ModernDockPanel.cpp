@@ -1,6 +1,8 @@
 #include "widgets/ModernDockPanel.h"
 #include "widgets/ModernDockManager.h"
 #include "DPIManager.h"
+#include "config/ThemeManager.h"
+#include "logger/Logger.h"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 #include <wx/menu.h>
@@ -60,16 +62,66 @@ void ModernDockPanel::InitializePanel()
     m_closeButtonSize = static_cast<int>(DEFAULT_CLOSE_BUTTON_SIZE * dpiScale);
     m_contentMargin = static_cast<int>(DEFAULT_CONTENT_MARGIN * dpiScale);
     
-    // Initialize colors (these would normally come from theme manager)
-    m_backgroundColor = wxColour(45, 45, 48);
-    m_tabActiveColor = wxColour(0, 122, 204);
-    m_tabInactiveColor = wxColour(63, 63, 70);
-    m_tabHoverColor = wxColour(28, 151, 234);
-    m_textColor = wxColour(241, 241, 241);
-    m_borderColor = wxColour(63, 63, 70);
+    // Initialize style configuration
+    m_tabStyle = TabStyle::DEFAULT;
+    m_tabBorderStyle = TabBorderStyle::SOLID;
+    m_tabCornerRadius = static_cast<int>(DEFAULT_TAB_CORNER_RADIUS * dpiScale);
+    m_tabBorderTop = static_cast<int>(DEFAULT_TAB_BORDER_TOP * dpiScale);
+    m_tabBorderBottom = static_cast<int>(DEFAULT_TAB_BORDER_BOTTOM * dpiScale);
+    m_tabBorderLeft = static_cast<int>(DEFAULT_TAB_BORDER_LEFT * dpiScale);
+    m_tabBorderRight = static_cast<int>(DEFAULT_TAB_BORDER_RIGHT * dpiScale);
+    m_tabPadding = static_cast<int>(DEFAULT_TAB_PADDING * dpiScale);
+    m_tabTopMargin = static_cast<int>(DEFAULT_TAB_TOP_MARGIN * dpiScale);
+    
+    // Initialize fonts
+    m_tabFont = CFG_FONT();
+    m_titleFont = CFG_FONT();
+    
+    // Initialize system buttons
+    m_systemButtons = new DockSystemButtons(this);
+    m_systemButtons->Show(false); // Initially hidden, will be shown in title bar
+    
+    // Initialize colors from theme manager
+    UpdateThemeColors();
     
     // Set minimum size
     SetMinSize(wxSize(m_tabMinWidth, m_tabHeight + 100));
+}
+
+void ModernDockPanel::UpdateThemeColors()
+{
+    // Get colors from theme manager
+    m_backgroundColor = CFG_COLOUR("PanelBgColour");
+    m_tabActiveColor = CFG_COLOUR("TabActiveColour");
+    m_tabInactiveColor = CFG_COLOUR("TabInactiveColour");
+    m_tabHoverColor = CFG_COLOUR("TabHoverColour");
+    m_textColor = CFG_COLOUR("PanelTextColour");
+    m_borderColor = CFG_COLOUR("PanelBorderColour");
+    
+    // Extended colors
+    m_tabBorderTopColor = CFG_COLOUR("TabBorderTopColour");
+    m_tabBorderBottomColor = CFG_COLOUR("TabBorderBottomColour");
+    m_tabBorderLeftColor = CFG_COLOUR("TabBorderLeftColour");
+    m_tabBorderRightColor = CFG_COLOUR("TabBorderRightColour");
+    m_tabActiveTextColor = CFG_COLOUR("TabActiveTextColour");
+    m_tabHoverTextColor = CFG_COLOUR("TabHoverTextColour");
+    m_closeButtonNormalColor = CFG_COLOUR("CloseButtonNormalColour");
+    m_titleBarBgColor = CFG_COLOUR("TitleBarBgColour");
+    m_titleBarTextColor = CFG_COLOUR("TitleBarTextColour");
+    m_titleBarBorderColor = CFG_COLOUR("TitleBarBorderColour");
+    
+    // Update fonts from theme
+    m_tabFont = CFG_FONT();
+    m_titleFont = CFG_FONT();
+    
+    // Refresh display when colors change
+    Refresh();
+}
+
+void ModernDockPanel::OnThemeChanged()
+{
+    // Update colors when theme changes
+    UpdateThemeColors();
 }
 
 void ModernDockPanel::AddContent(wxWindow* content, const wxString& title, const wxBitmap& icon, bool select)
@@ -341,24 +393,45 @@ void ModernDockPanel::CalculateTabLayout()
     
     if (!m_showTabs || m_contents.empty()) return;
     
-    int availableWidth = m_tabBarRect.width;
     int tabCount = static_cast<int>(m_contents.size());
     
-    // Calculate tab width
-    int tabWidth = std::max(m_tabMinWidth, 
-                           std::min(m_tabMaxWidth, availableWidth / tabCount));
+    // Calculate tab widths based on content
+    std::vector<int> tabWidths;
+    int totalTabWidth = 0;
     
-    // Create tab rectangles
+    for (const auto& content : m_contents) {
+        // Calculate text width
+        wxClientDC dc(this);
+        dc.SetFont(m_tabFont);
+        wxSize textSize = dc.GetTextExtent(content->title);
+        
+        // Tab width = text width + padding + close button (if applicable)
+        int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
+        if (m_tabCloseMode != TabCloseMode::ShowNever) {
+            tabWidth += m_closeButtonSize + 4;
+        }
+        
+        // Ensure minimum width
+        tabWidth = std::max(tabWidth, m_tabMinWidth);
+        
+        tabWidths.push_back(tabWidth);
+        totalTabWidth += tabWidth;
+    }
+    
+    // Add spacing between tabs
+    totalTabWidth += (tabCount - 1) * m_tabSpacing;
+    
+    // Create tab rectangles with 2px top margin from parent panel
     int x = 0;
     for (int i = 0; i < tabCount; ++i) {
-        wxRect tabRect(x, 0, tabWidth, m_tabHeight);
+        wxRect tabRect(x, 2, tabWidths[i], m_tabHeight); // Top margin: 2px from parent
         m_tabRects.push_back(tabRect);
         
         // Calculate close button rect
         wxRect closeRect = CalculateCloseButtonRect(tabRect);
         m_closeButtonRects.push_back(closeRect);
         
-        x += tabWidth + m_tabSpacing;
+        x += tabWidths[i] + m_tabSpacing;
     }
 }
 
@@ -386,6 +459,11 @@ void ModernDockPanel::OnPaint(wxPaintEvent& event)
     gc->SetBrush(wxBrush(m_backgroundColor));
     gc->DrawRectangle(0, 0, GetSize().x, GetSize().y);
     
+    // Render title bar with FlatBar style
+    if (!m_title.IsEmpty()) {
+        RenderTitleBar(gc);
+    }
+    
     // Render tab bar
     if (m_showTabs && !m_contents.empty()) {
         RenderTabBar(gc);
@@ -397,6 +475,59 @@ void ModernDockPanel::OnPaint(wxPaintEvent& event)
     gc->DrawRectangle(0, 0, GetSize().x, GetSize().y);
     
     delete gc;
+}
+
+void ModernDockPanel::RenderTitleBar(wxGraphicsContext* gc)
+{
+    if (!gc || m_title.IsEmpty()) return;
+    
+    // Use FlatBar-style title bar rendering
+    wxColour titleBarBgColour = CFG_COLOUR("BarBackgroundColour");
+    wxColour titleBarTextColour = CFG_COLOUR("BarActiveTextColour");
+    wxColour titleBarBorderColour = CFG_COLOUR("BarBorderColour");
+    
+    // Calculate title bar dimensions
+    int titleBarHeight = 24; // Similar to FlatBar height
+    int titleBarY = 0;
+    
+    // Draw title bar background
+    gc->SetBrush(wxBrush(titleBarBgColour));
+    gc->SetPen(*wxTRANSPARENT_PEN);
+    gc->DrawRectangle(0, titleBarY, GetSize().x, titleBarHeight);
+    
+    // Draw title bar separator line (like FlatBar)
+    gc->SetPen(wxPen(titleBarBorderColour, 1));
+    gc->StrokeLine(0, titleBarHeight, GetSize().x, titleBarHeight);
+    
+    // Draw title text
+    gc->SetFont(m_titleFont, titleBarTextColour);
+    
+    double textWidth, textHeight;
+    gc->GetTextExtent(m_title, &textWidth, &textHeight);
+    
+    int textX = 8; // Left margin
+    int textY = titleBarY + (titleBarHeight - textHeight) / 2;
+    
+    gc->DrawText(m_title, textX, textY);
+    
+    // Position system buttons on the right side of title bar
+    if (m_systemButtons) {
+        wxSize buttonSize = m_systemButtons->GetBestSize();
+        int buttonAreaWidth = buttonSize.GetWidth();
+        int buttonX = GetSize().x - buttonAreaWidth - 2; // Right margin: 2px
+        int buttonY = titleBarY + (titleBarHeight - buttonSize.GetHeight()) / 2;
+        
+        // Ensure system buttons panel has the correct size
+        m_systemButtons->SetSize(buttonSize);
+        m_systemButtons->SetPosition(wxPoint(buttonX, buttonY));
+        m_systemButtons->Show(true);
+    }
+    
+    // Update tab bar position to account for title bar
+    m_tabBarRect.y = titleBarHeight + 2; // Add 2px top margin for tabs
+    m_tabBarRect.height = GetSize().y - titleBarHeight - 2;
+    
+
 }
 
 void ModernDockPanel::RenderTabBar(wxGraphicsContext* gc)
@@ -416,28 +547,56 @@ void ModernDockPanel::RenderTab(wxGraphicsContext* gc, int index, const wxRect& 
 {
     if (!gc || index < 0 || index >= static_cast<int>(m_contents.size())) return;
     
-    // Choose tab color
-    wxColour tabColor = m_tabInactiveColor;
-    if (selected) {
-        tabColor = m_tabActiveColor;
-    } else if (hovered) {
-        tabColor = m_tabHoverColor;
-    }
-    
-    // Draw tab background
-    gc->SetBrush(wxBrush(tabColor));
-    gc->SetPen(wxPen(m_borderColor, 1));
-    gc->DrawRectangle(rect.x, rect.y, rect.width, rect.height);
-    
-    // Draw tab text
-    gc->SetFont(GetFont(), m_textColor);
-    
     const wxString& title = m_contents[index]->title;
     double textWidth, textHeight;
     gc->GetTextExtent(title, &textWidth, &textHeight);
     
-    int textX = rect.x + 8; // Left margin
-    int textY = rect.y + (rect.height - textHeight) / 2;
+    // Use FlatBar-style tab rendering
+    if (selected) {
+        // Active tab - similar to FlatBar active tab style
+        wxColour activeTabBgColour = CFG_COLOUR("BarActiveTabBgColour");
+        wxColour activeTabTextColour = CFG_COLOUR("BarActiveTextColour");
+        wxColour tabBorderTopColour = CFG_COLOUR("BarTabBorderTopColour");
+        wxColour tabBorderColour = CFG_COLOUR("BarTabBorderColour");
+        
+        // Fill background of active tab (excluding the top border)
+        gc->SetBrush(wxBrush(activeTabBgColour));
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        
+        int tabBorderTop = 2;
+        gc->DrawRectangle(rect.x, rect.y + tabBorderTop, rect.width, rect.height - tabBorderTop);
+        
+        // Draw borders like FlatBar
+        if (tabBorderTop > 0) {
+            gc->SetPen(wxPen(tabBorderTopColour, tabBorderTop));
+            gc->StrokeLine(rect.GetLeft(), rect.GetTop() + tabBorderTop / 2,
+                          rect.GetRight() + 1, rect.GetTop() + tabBorderTop / 2);
+        }
+        
+                        // Draw left and right borders
+                gc->SetPen(wxPen(tabBorderColour, 1));
+                gc->StrokeLine(rect.GetLeft(), rect.GetTop() + tabBorderTop,
+                              rect.GetLeft(), rect.GetBottom());
+                gc->StrokeLine(rect.GetRight() + 1, rect.GetTop() + tabBorderTop,
+                              rect.GetRight() + 1, rect.GetBottom()-4); // Right border: 4px inset
+        
+        // Set text color for active tab
+        gc->SetFont(m_tabFont, activeTabTextColour);
+    } else if (hovered) {
+        // Hovered tab - no background, just text color change
+        gc->SetBrush(*wxTRANSPARENT_BRUSH);
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        gc->SetFont(m_tabFont, CFG_COLOUR("BarInactiveTextColour"));
+    } else {
+        // Inactive tab - no background, no borders
+        gc->SetBrush(*wxTRANSPARENT_BRUSH);
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        gc->SetFont(m_tabFont, CFG_COLOUR("BarInactiveTextColour"));
+    }
+    
+                    // Draw tab text with FlatBar-style positioning
+                int textX = rect.x + 8; // BarTabPadding equivalent
+                int textY = rect.y + (rect.height - textHeight) / 2; // Normal vertical centering
     
     // Clip text if necessary
     int availableWidth = rect.width - 16; // Account for margins
@@ -470,13 +629,9 @@ void ModernDockPanel::RenderTab(wxGraphicsContext* gc, int index, const wxRect& 
         gc->DrawText(displayTitle, textX, textY);
     }
     
-    // Draw close button
-    bool showClose = (m_tabCloseMode == TabCloseMode::ShowAlways) ||
-                     (m_tabCloseMode == TabCloseMode::ShowOnHover && (hovered || selected));
-    
-    if (showClose && index < static_cast<int>(m_closeButtonRects.size())) {
-        bool closeHovered = (index == m_hoveredCloseIndex);
-        RenderCloseButton(gc, m_closeButtonRects[index], closeHovered);
+    // Draw close button (always visible, no hover response needed)
+    if (m_tabCloseMode != TabCloseMode::ShowNever && index < static_cast<int>(m_closeButtonRects.size())) {
+        RenderCloseButton(gc, m_closeButtonRects[index], false);
     }
 }
 
@@ -484,14 +639,20 @@ void ModernDockPanel::RenderCloseButton(wxGraphicsContext* gc, const wxRect& rec
 {
     if (!gc) return;
     
-    // Draw close button background
+    // Draw close button background using theme colors
     if (hovered) {
-        gc->SetBrush(wxBrush(wxColour(232, 17, 35))); // Red background on hover
+        wxColour hoverColor = CFG_COLOUR("CloseButtonHoverColour");
+        gc->SetBrush(wxBrush(hoverColor));
         gc->DrawRectangle(rect.x, rect.y, rect.width, rect.height);
     }
     
-    // Draw X icon
-    wxColour lineColor = hovered ? *wxWHITE : m_textColor;
+    // Draw X icon using theme colors
+    wxColour lineColor;
+    if (hovered) {
+        lineColor = CFG_COLOUR("CloseButtonTextColour");
+    } else {
+        lineColor = m_textColor; // Use panel text color for normal state
+    }
     gc->SetPen(wxPen(lineColor, 1));
     
     int margin = 4;
@@ -508,6 +669,17 @@ void ModernDockPanel::RenderCloseButton(wxGraphicsContext* gc, const wxRect& rec
 void ModernDockPanel::OnSize(wxSizeEvent& event)
 {
     UpdateLayout();
+    
+    // Update system buttons position when size changes
+    if (m_systemButtons && !m_title.IsEmpty()) {
+        int titleBarHeight = 24;
+        int buttonAreaWidth = m_systemButtons->GetBestSize().GetWidth();
+        int buttonX = GetSize().x - buttonAreaWidth - 4; // Right margin
+        int buttonY = (titleBarHeight - m_systemButtons->GetBestSize().GetHeight()) / 2;
+        
+        m_systemButtons->SetPosition(wxPoint(buttonX, buttonY));
+    }
+    
     event.Skip();
 }
 
@@ -646,6 +818,7 @@ void ModernDockPanel::OnContextMenu(wxContextMenuEvent& event)
 
 void ModernDockPanel::HandleTabClick(int tabIndex, const wxPoint& pos)
 {
+    wxUnusedVar(pos);
     if (tabIndex != m_selectedIndex) {
         SelectContent(tabIndex);
     }
@@ -656,6 +829,7 @@ void ModernDockPanel::HandleTabClick(int tabIndex, const wxPoint& pos)
 
 void ModernDockPanel::HandleTabDoubleClick(int tabIndex)
 {
+    wxUnusedVar(tabIndex);
     // Float the tab in a new window
     if (m_manager && tabIndex >= 0 && tabIndex < static_cast<int>(m_contents.size())) {
         // Implementation would create floating window
@@ -664,6 +838,7 @@ void ModernDockPanel::HandleTabDoubleClick(int tabIndex)
 
 void ModernDockPanel::HandleTabRightClick(int tabIndex, const wxPoint& pos)
 {
+    wxUnusedVar(pos);
     if (tabIndex != m_selectedIndex) {
         SelectContent(tabIndex);
     }
@@ -678,18 +853,21 @@ void ModernDockPanel::HandleCloseButtonClick(int tabIndex)
 
 void ModernDockPanel::AnimateTabInsertion(int index)
 {
+    wxUnusedVar(index);
     // Implementation for tab insertion animation
     StartAnimation(200);
 }
 
 void ModernDockPanel::AnimateTabRemoval(int index)
 {
+    wxUnusedVar(index);
     // Implementation for tab removal animation
     StartAnimation(200);
 }
 
 void ModernDockPanel::AnimateResize(const wxSize& targetSize)
 {
+    wxUnusedVar(targetSize);
     m_animationStartSize = GetSize();
     m_animationTargetSize = targetSize;
     StartAnimation(250);
@@ -722,5 +900,134 @@ void ModernDockPanel::StopAnimation()
 {
     m_animating = false;
     m_animationTimer.Stop();
+}
+
+// Style configuration methods
+void ModernDockPanel::SetTabStyle(TabStyle style)
+{
+    m_tabStyle = style;
+    Refresh();
+}
+
+void ModernDockPanel::SetTabBorderStyle(TabBorderStyle style)
+{
+    m_tabBorderStyle = style;
+    Refresh();
+}
+
+void ModernDockPanel::SetTabCornerRadius(int radius)
+{
+    m_tabCornerRadius = radius;
+    Refresh();
+}
+
+void ModernDockPanel::SetTabBorderWidths(int top, int bottom, int left, int right)
+{
+    m_tabBorderTop = top;
+    m_tabBorderBottom = bottom;
+    m_tabBorderLeft = left;
+    m_tabBorderRight = right;
+    Refresh();
+}
+
+void ModernDockPanel::GetTabBorderWidths(int& top, int& bottom, int& left, int& right) const
+{
+    top = m_tabBorderTop;
+    bottom = m_tabBorderBottom;
+    left = m_tabBorderLeft;
+    right = m_tabBorderRight;
+}
+
+void ModernDockPanel::SetTabBorderColours(const wxColour& top, const wxColour& bottom, const wxColour& left, const wxColour& right)
+{
+    m_tabBorderTopColor = top;
+    m_tabBorderBottomColor = bottom;
+    m_tabBorderLeftColor = left;
+    m_tabBorderRightColor = right;
+    Refresh();
+}
+
+void ModernDockPanel::GetTabBorderColours(wxColour& top, wxColour& bottom, wxColour& left, wxColour& right) const
+{
+    top = m_tabBorderTopColor;
+    bottom = m_tabBorderBottomColor;
+    left = m_tabBorderLeftColor;
+    right = m_tabBorderRightColor;
+}
+
+void ModernDockPanel::SetTabPadding(int padding)
+{
+    m_tabPadding = padding;
+    UpdateLayout();
+    Refresh();
+}
+
+void ModernDockPanel::SetTabSpacing(int spacing)
+{
+    m_tabSpacing = spacing;
+    UpdateLayout();
+    Refresh();
+}
+
+void ModernDockPanel::SetTabTopMargin(int margin)
+{
+    m_tabTopMargin = margin;
+    UpdateLayout();
+    Refresh();
+}
+
+void ModernDockPanel::SetTabFont(const wxFont& font)
+{
+    m_tabFont = font;
+    Refresh();
+}
+
+void ModernDockPanel::SetTitleFont(const wxFont& font)
+{
+    m_titleFont = font;
+    Refresh();
+}
+
+// System buttons management methods
+void ModernDockPanel::AddSystemButton(DockSystemButtonType type, const wxString& tooltip)
+{
+    if (m_systemButtons) {
+        m_systemButtons->AddButton(type, tooltip);
+    }
+}
+
+void ModernDockPanel::RemoveSystemButton(DockSystemButtonType type)
+{
+    if (m_systemButtons) {
+        m_systemButtons->RemoveButton(type);
+    }
+}
+
+void ModernDockPanel::SetSystemButtonEnabled(DockSystemButtonType type, bool enabled)
+{
+    if (m_systemButtons) {
+        m_systemButtons->SetButtonEnabled(type, enabled);
+    }
+}
+
+void ModernDockPanel::SetSystemButtonVisible(DockSystemButtonType type, bool visible)
+{
+    if (m_systemButtons) {
+        m_systemButtons->SetButtonVisible(type, visible);
+    }
+}
+
+void ModernDockPanel::SetSystemButtonIcon(DockSystemButtonType type, const wxBitmap& icon)
+{
+    if (m_systemButtons) {
+        m_systemButtons->SetButtonIcon(type, icon);
+    }
+}
+
+void ModernDockPanel::SetSystemButtonTooltip(DockSystemButtonType type, const wxString& tooltip)
+{
+    if (m_systemButtons) {
+        m_systemButtons->SetButtonTooltip(type, tooltip);
+    }
 }
 

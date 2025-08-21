@@ -103,7 +103,7 @@ void ModernDockAdapter::ShowDockPreview(const wxPoint& screenPt)
     // Delegate to modern dock manager
     if (m_modernManager) {
         // Convert screen point to client coordinates
-        wxPoint clientPt = m_modernManager->ScreenToClient(screenPt);
+        wxPoint clientPt = wxWindow::ScreenToClient(screenPt);
         // Modern system handles preview automatically during drag operations
     }
 }

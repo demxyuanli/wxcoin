@@ -1,4 +1,5 @@
 set(WIDGETS_SRC
+    # Flat UI Widgets (Core UI components)
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatLineEdit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatComboBox.cpp
@@ -11,19 +12,29 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsExampleDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatTreeView.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatEnhancedButton.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockContainer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/FlatDockManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatMessagePanel.cpp
+    
+    # Modern Docking System
     ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockAdapter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DockGuides.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GhostWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DragDropController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LayoutEngine.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockAdapter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DockSystemButtons.cpp
+    
+    # Layout Strategy Framework
+    ${CMAKE_CURRENT_SOURCE_DIR}/layouts/FlexibleLayoutStrategy.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/layouts/HybridLayoutStrategy.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/layouts/LayoutStrategyFactory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/layouts/LayoutStrategyTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LayoutStrategyDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LayoutOptimizer.cpp
 )
 
 set(WIDGETS_HDRS
+    # Flat UI Widgets (Core UI components)
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatButton.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatLineEdit.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatComboBox.h
@@ -36,23 +47,41 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsExampleDialog.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatTreeView.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatEnhancedButton.h
-    ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockContainer.h
-    ${CMAKE_SOURCE_DIR}/include/widgets/FlatDockManager.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatMessagePanel.h
+    
+    # Modern Docking System
     ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockManager.h
     ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockPanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockAdapter.h
     ${CMAKE_SOURCE_DIR}/include/widgets/DockGuides.h
     ${CMAKE_SOURCE_DIR}/include/widgets/GhostWindow.h
     ${CMAKE_SOURCE_DIR}/include/widgets/DragDropController.h
     ${CMAKE_SOURCE_DIR}/include/widgets/LayoutEngine.h
     ${CMAKE_SOURCE_DIR}/include/widgets/DockTypes.h
-    ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockAdapter.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/DockSystemButtons.h
+    
+    # Unified Dock Framework Interfaces
+    ${CMAKE_SOURCE_DIR}/include/widgets/UnifiedDockTypes.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/IDockManager.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/ILayoutStrategy.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/IVisualFeedback.h
+    
+    # Layout Strategies
+    ${CMAKE_SOURCE_DIR}/include/widgets/layouts/FlexibleLayoutStrategy.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/layouts/HybridLayoutStrategy.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/layouts/LayoutStrategyFactory.h
+    
+    # Layout Strategy Dialog
+    ${CMAKE_SOURCE_DIR}/include/widgets/LayoutStrategyDialog.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/LayoutOptimizer.h
 )
 
 add_library(widgets STATIC ${WIDGETS_SRC} ${WIDGETS_HDRS})
 
 target_include_directories(widgets PUBLIC
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include/widgets
+    ${CMAKE_SOURCE_DIR}/include/widgets/layouts
     ${wxWidgets_INCLUDE_DIRS}
 )
 

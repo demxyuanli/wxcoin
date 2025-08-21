@@ -6,6 +6,7 @@
 #include "Canvas.h"
 #include "logger/Logger.h"
 #include "PropertyPanel.h"
+#include "ui/FlatBarNotebook.h"
 #include <wx/imaglist.h>
 #include <wx/artprov.h>
 #include <wx/colordlg.h>
@@ -93,8 +94,8 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
     , m_contextMenu(nullptr)
 {
     LOG_INF_S("ObjectTreePanel initializing");
-    // Tabs
-    m_notebook = new wxNotebook(this, wxID_ANY);
+    // Tabs - using FlatBar-style notebook
+    m_notebook = new FlatBarNotebook(this, wxID_ANY);
     m_tabPanel = new wxPanel(m_notebook);
     m_tabHistory = new wxPanel(m_notebook);
     m_tabVersion = new wxPanel(m_notebook);
