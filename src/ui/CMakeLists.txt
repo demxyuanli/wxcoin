@@ -2,7 +2,6 @@
 
 # Panels split
 add_library(UIPanelTree STATIC
-。..。。。
     ${CMAKE_CURRENT_SOURCE_DIR}/ObjectTreePanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatBarNotebook.cpp
     ${CMAKE_SOURCE_DIR}/include/ObjectTreePanel.h

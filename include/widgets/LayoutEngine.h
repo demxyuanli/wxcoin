@@ -170,6 +170,10 @@ private:
     wxSplitterWindow* CreateSplitterWindow(wxWindow* parent, bool horizontal);
     void ConfigureSplitter(wxSplitterWindow* splitter, bool horizontal);
     void UpdateSplitterSashPosition(LayoutNode* splitterNode);
+    void UpdateSplitterChildrenLayout(LayoutNode* splitterNode);
+    void SetupSplitterPanels(LayoutNode* splitterNode);
+    wxWindow* GetChildWindow(LayoutNode* node);
+    LayoutNode* FindSplitterNode(wxSplitterWindow* splitter) const;
     
     // Animation helpers
     void InitializeTransition(LayoutTransition& transition, LayoutNode* node);

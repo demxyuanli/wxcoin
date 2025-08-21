@@ -517,7 +517,7 @@ void ModernDockPanel::RenderTitleBar(wxGraphicsContext* gc)
         int buttonX = GetSize().x - buttonAreaWidth - 2; // Right margin: 2px
         int buttonY = titleBarY + (titleBarHeight - buttonSize.GetHeight()) / 2;
         
-        // Ensure system buttons panel has the correct size
+        // Ensure system buttons panel has the correct size 
         m_systemButtons->SetSize(buttonSize);
         m_systemButtons->SetPosition(wxPoint(buttonX, buttonY));
         m_systemButtons->Show(true);

@@ -27,11 +27,15 @@ struct DockSystemButtonConfig {
     wxBitmap icon;
     wxBitmap hoverIcon;
     wxBitmap pressedIcon;
+    wxBitmap altIcon;        // Alternative icon for toggle state
+    wxBitmap altHoverIcon;   // Alternative hover icon for toggle state
+    wxBitmap altPressedIcon; // Alternative pressed icon for toggle state
     bool enabled;
     bool visible;
+    bool isToggled;          // Current toggle state
     
     DockSystemButtonConfig(DockSystemButtonType t, const wxString& tip = wxEmptyString)
-        : type(t), tooltip(tip), enabled(true), visible(true) {}
+        : type(t), tooltip(tip), enabled(true), visible(true), isToggled(false) {}
 };
 
 // System buttons panel for dock panels
@@ -48,6 +52,11 @@ public:
     void SetButtonIcon(DockSystemButtonType type, const wxBitmap& icon);
     void SetButtonTooltip(DockSystemButtonType type, const wxString& tooltip);
     
+    // Toggle functionality
+    void SetButtonToggled(DockSystemButtonType type, bool toggled);
+    bool IsButtonToggled(DockSystemButtonType type) const;
+    void ToggleButton(DockSystemButtonType type);
+    
     // Layout
     void UpdateLayout();
     wxSize GetBestSize() const;
@@ -57,9 +66,11 @@ public:
     void OnThemeChanged();
     
     // Event handling
-    void OnButtonClick(wxCommandEvent& event);
+    void OnButtonClick(wxMouseEvent& event);
     void OnButtonHover(wxMouseEvent& event);
     void OnButtonLeave(wxMouseEvent& event);
+    void OnButtonDown(wxMouseEvent& event);
+    void OnButtonUp(wxMouseEvent& event);
     
 protected:
     void OnPaint(wxPaintEvent& event);
@@ -67,15 +78,15 @@ protected:
     
 private:
     void InitializeButtons();
-    void CreateButton(DockSystemButtonType type, const wxString& tooltip);
     void RenderButton(wxGraphicsContext* gc, const wxRect& rect, const DockSystemButtonConfig& config, bool hovered, bool pressed);
     wxRect GetButtonRect(int index) const;
     int GetButtonIndex(DockSystemButtonType type) const;
     wxString GetIconName(DockSystemButtonType type) const;
+    int GetButtonAtPosition(const wxPoint& pos) const;
+    void ExecuteButtonAction(DockSystemButtonType type);
     
     ModernDockPanel* m_parent;
     std::vector<DockSystemButtonConfig> m_buttons;
-    std::vector<wxButton*> m_buttonControls;
     
     // Layout
     int m_buttonSize;
@@ -95,7 +106,7 @@ private:
     int m_pressedButtonIndex;
     
     // Constants
-    static constexpr int DEFAULT_BUTTON_SIZE = 18;  // Slightly smaller for title bar
+    static constexpr int DEFAULT_BUTTON_SIZE = 12;  // Smaller size for title bar
     static constexpr int DEFAULT_BUTTON_SPACING = 1; // Tighter spacing
     static constexpr int DEFAULT_MARGIN = 2;        // Smaller margin
     

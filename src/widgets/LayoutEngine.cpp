@@ -598,6 +598,23 @@ void LayoutEngine::OrganizeByDockAreas(std::unique_ptr<LayoutNode> panelNode, La
                 leftSidebar->GetChildren().clear();
                 
                 auto vSplitter = CreateSplitterNode(false); // vertical splitter
+                
+                // Create actual wxSplitterWindow control
+                wxSplitterWindow* splitterWidget = CreateSplitterWindow(m_parent, false);
+                vSplitter->SetSplitter(splitterWidget);
+                
+                // Reparent panels to splitter before splitting
+                if (existingPanel->GetPanel() && panelNode->GetPanel()) {
+                    // First reparent both panels to the splitter
+                    existingPanel->GetPanel()->Reparent(splitterWidget);
+                    panelNode->GetPanel()->Reparent(splitterWidget);
+                    
+                    // Now split the splitter with the reparented panels
+                    // For vertical splitter in left sidebar, we want top/bottom layout
+                    // So use SplitHorizontally (Object Tree on top, Properties on bottom)
+                    splitterWidget->SplitHorizontally(existingPanel->GetPanel(), panelNode->GetPanel());
+                }
+                
                 vSplitter->AddChild(std::move(existingPanel));  // Object Tree (top)
                 vSplitter->AddChild(std::move(panelNode));      // Properties (bottom)
                 
@@ -636,6 +653,10 @@ void LayoutEngine::CreateMainLayoutStructure(LayoutNode* parent)
     // Create main VERTICAL splitter: Top Work Area | Bottom Status Bar
     auto mainVSplitter = CreateSplitterNode(false); // vertical split
     
+    // Create actual vertical splitter control
+    wxSplitterWindow* mainVSplitterWidget = CreateSplitterWindow(m_parent, false);
+    mainVSplitter->SetSplitter(mainVSplitterWidget);
+    
     // Create top work area container (will hold Left Sidebar + Center Canvas)
     auto topWorkArea = std::make_unique<LayoutNode>(LayoutNodeType::Root);
     
@@ -644,6 +665,10 @@ void LayoutEngine::CreateMainLayoutStructure(LayoutNode* parent)
     
     // Create horizontal splitter for top work area: Left Sidebar | Center Canvas
     auto topHSplitter = CreateSplitterNode(true); // horizontal split
+    
+    // Create actual horizontal splitter control
+    wxSplitterWindow* topHSplitterWidget = CreateSplitterWindow(m_parent, true);
+    topHSplitter->SetSplitter(topHSplitterWidget);
     
     // Create left sidebar container (will hold Object Tree + Properties)
     auto leftSidebar = std::make_unique<LayoutNode>(LayoutNodeType::Root);
@@ -733,8 +758,8 @@ void LayoutEngine::CalculateSplitterLayout(LayoutNode* splitterNode, const wxRec
     if (ratio == 0.5) { // Default ratio, set IDE-appropriate values
         if (isHorizontal) {
             // Horizontal splitter: Top work area splitter (Left Sidebar | Center Canvas)
-            // Left sidebar should be 1/4 of width
-            ratio = 0.25;
+            // Left sidebar should be smaller, about 1/6 of width
+            ratio = 0.15;
         } else {
             // Vertical splitter: could be Main splitter or Left sidebar internal splitter
             if (IsLeftSidebarSplitter(splitterNode)) {
@@ -778,6 +803,28 @@ void LayoutEngine::ApplyLayoutToWidgets(LayoutNode* node)
 {
     if (!node) return;
     
+    // If this is a splitter node, ensure splitter control is properly displayed
+    if (node->GetType() == LayoutNodeType::HorizontalSplitter || 
+        node->GetType() == LayoutNodeType::VerticalSplitter) {
+        
+        if (node->GetSplitter()) {
+            wxSplitterWindow* splitter = node->GetSplitter();
+            
+            // Set splitter position and size
+            wxRect rect = node->GetRect();
+            splitter->SetSize(rect);
+            
+            // Setup splitter panels if needed
+            SetupSplitterPanels(node);
+            
+            // Ensure splitter is visible
+            splitter->Show();
+            
+            // Update splitter sash position
+            UpdateSplitterSashPosition(node);
+        }
+    }
+    
     // Apply layout recursively
     for (auto& child : node->GetChildren()) {
         ApplyLayoutToWidgets(child.get());
@@ -788,9 +835,10 @@ wxSplitterWindow* LayoutEngine::CreateSplitterWindow(wxWindow* parent, bool hori
 {
     if (!parent) return nullptr;
     
+    // Remove wxSP_NOBORDER flag to ensure splitter is visible
     wxSplitterWindow* splitter = new wxSplitterWindow(parent, wxID_ANY,
         wxDefaultPosition, wxDefaultSize,
-        wxSP_LIVE_UPDATE | wxSP_3D | wxSP_NOBORDER);
+        wxSP_PERMIT_UNSPLIT | wxSP_NOBORDER);
     
     ConfigureSplitter(splitter, horizontal);
     
@@ -799,15 +847,132 @@ wxSplitterWindow* LayoutEngine::CreateSplitterWindow(wxWindow* parent, bool hori
 
 void LayoutEngine::ConfigureSplitter(wxSplitterWindow* splitter, bool horizontal)
 {
-    wxUnusedVar(horizontal);
     if (!splitter) return;
     
     splitter->SetSashGravity(0.5);
     splitter->SetMinimumPaneSize(m_minPanelSize.x);
     
+    // Set splitter visual style - use modern methods
+    // splitter->SetSashSize(m_splitterSashSize); // Deprecated, removed
+    
     // Bind events
     splitter->Bind(wxEVT_SPLITTER_SASH_POS_CHANGED, &LayoutEngine::OnSplitterMoved, this);
     splitter->Bind(wxEVT_SPLITTER_DOUBLECLICKED, &LayoutEngine::OnSplitterDoubleClick, this);
+    
+    // Set splitter color to ensure visibility
+    splitter->SetBackgroundColour(wxColour(200, 200, 200));
+    
+    // Set splitter mode based on horizontal parameter
+    if (horizontal) {
+        splitter->SetSplitMode(wxSPLIT_VERTICAL); // Left/Right split
+    } else {
+        splitter->SetSplitMode(wxSPLIT_HORIZONTAL); // Top/Bottom split
+    }
+}
+
+void LayoutEngine::SetupSplitterPanels(LayoutNode* splitterNode)
+{
+    if (!splitterNode || !splitterNode->GetSplitter()) return;
+    if (splitterNode->GetChildren().size() != 2) return;
+    
+    wxSplitterWindow* splitter = splitterNode->GetSplitter();
+    
+    // Don't re-split if already split
+    if (splitter->IsSplit()) return;
+    
+    // Get child nodes
+    LayoutNode* firstChild = splitterNode->GetChildren()[0].get();
+    LayoutNode* secondChild = splitterNode->GetChildren()[1].get();
+    
+    wxWindow* firstWindow = GetChildWindow(firstChild);
+    wxWindow* secondWindow = GetChildWindow(secondChild);
+    
+    if (firstWindow && secondWindow) {
+        // Reparent windows to splitter
+        firstWindow->Reparent(splitter);
+        secondWindow->Reparent(splitter);
+        
+        // Split based on splitter type
+        // Note: wxWidgets naming convention:
+        // - HorizontalSplitter splits vertically (left/right)
+        // - VerticalSplitter splits horizontally (top/bottom)
+        bool isHorizontal = (splitterNode->GetType() == LayoutNodeType::HorizontalSplitter);
+        if (isHorizontal) {
+            splitter->SplitVertically(firstWindow, secondWindow); // Left/Right split
+        } else {
+            splitter->SplitHorizontally(firstWindow, secondWindow); // Top/Bottom split
+        }
+    }
+}
+
+wxWindow* LayoutEngine::GetChildWindow(LayoutNode* node)
+{
+    if (!node) return nullptr;
+    
+    // If this is a panel node, return the panel
+    if (node->GetType() == LayoutNodeType::Panel && node->GetPanel()) {
+        return node->GetPanel();
+    }
+    
+    // If this is a splitter node, return the splitter
+    if ((node->GetType() == LayoutNodeType::HorizontalSplitter || 
+         node->GetType() == LayoutNodeType::VerticalSplitter) && 
+        node->GetSplitter()) {
+        return node->GetSplitter();
+    }
+    
+    // For container nodes, create a temporary panel if it has children
+    if (!node->GetChildren().empty()) {
+        // For now, just return the first child's window
+        // In a more sophisticated implementation, you might create a container widget
+        return GetChildWindow(node->GetChildren()[0].get());
+    }
+    
+    return nullptr;
+}
+
+void LayoutEngine::UpdateSplitterChildrenLayout(LayoutNode* splitterNode)
+{
+    if (!splitterNode || !splitterNode->GetSplitter()) return;
+    if (splitterNode->GetChildren().size() != 2) return;
+    
+    wxSplitterWindow* splitter = splitterNode->GetSplitter();
+    if (!splitter->IsSplit()) return;
+    
+    // Get current splitter rect
+    wxRect splitterRect = splitterNode->GetRect();
+    
+    // Calculate new layout for children based on current sash position
+    bool isHorizontal = (splitterNode->GetType() == LayoutNodeType::HorizontalSplitter);
+    int sashPos = splitter->GetSashPosition();
+    
+    wxRect firstRect, secondRect;
+    
+    if (isHorizontal) {
+        // Horizontal splitter: left/right layout
+        int splitPos = std::max(sashPos, m_minPanelSize.x);
+        splitPos = std::min(splitPos, splitterRect.width - m_minPanelSize.x);
+        
+        firstRect = wxRect(splitterRect.x, splitterRect.y, splitPos, splitterRect.height);
+        secondRect = wxRect(splitterRect.x + splitPos, splitterRect.y, 
+                           splitterRect.width - splitPos, splitterRect.height);
+    } else {
+        // Vertical splitter: top/bottom layout
+        int splitPos = std::max(sashPos, m_minPanelSize.y);
+        splitPos = std::min(splitPos, splitterRect.height - m_minPanelSize.y);
+        
+        firstRect = wxRect(splitterRect.x, splitterRect.y, splitterRect.width, splitPos);
+        secondRect = wxRect(splitterRect.x, splitterRect.y + splitPos, 
+                           splitterRect.width, splitterRect.height - splitPos);
+    }
+    
+    // Apply new layout to children
+    CalculateNodeLayout(splitterNode->GetChildren()[0].get(), firstRect);
+    CalculateNodeLayout(splitterNode->GetChildren()[1].get(), secondRect);
+    
+    // Apply layout to widgets
+    ApplyLayoutToWidgets(splitterNode->GetChildren()[0].get());
+    ApplyLayoutToWidgets(splitterNode->GetChildren()[1].get());
 }
 
 void LayoutEngine::UpdateSplitterSashPosition(LayoutNode* splitterNode)
@@ -823,9 +988,9 @@ void LayoutEngine::UpdateSplitterSashPosition(LayoutNode* splitterNode)
     
     int sashPos;
     if (isHorizontal) {
-        sashPos = static_cast<int>(rect.height * ratio);
-    } else {
         sashPos = static_cast<int>(rect.width * ratio);
+    } else {
+        sashPos = static_cast<int>(rect.height * ratio);
     }
     
     splitter->SetSashPosition(sashPos);
@@ -1108,8 +1273,56 @@ void LayoutEngine::OnSplitterMoved(wxSplitterEvent& event)
     if (!splitter) return;
     
     // Find corresponding layout node
-    // This is a simplified implementation
+    LayoutNode* splitterNode = FindSplitterNode(splitter);
+    if (splitterNode) {
+        // Calculate new ratio
+        bool isHorizontal = (splitterNode->GetType() == LayoutNodeType::HorizontalSplitter);
+        int sashPos = splitter->GetSashPosition();
+        wxSize splitterSize = splitter->GetSize();
+        
+        double newRatio;
+        if (isHorizontal) {
+            newRatio = static_cast<double>(sashPos) / splitterSize.GetWidth();
+        } else {
+            newRatio = static_cast<double>(sashPos) / splitterSize.GetHeight();
+        }
+        
+        // Limit ratio range
+        newRatio = std::max(MIN_SPLITTER_RATIO, std::min(MAX_SPLITTER_RATIO, newRatio));
+        
+        // Update node ratio
+        splitterNode->SetSplitterRatio(newRatio);
+        
+        // Don't call UpdateLayout() here as it will override the user's manual adjustment
+        // Just mark layout as dirty for later update if needed
+        m_layoutDirty = true;
+        
+        // Update only the splitter's children layout without full recalculation
+        UpdateSplitterChildrenLayout(splitterNode);
+    }
+    
     event.Skip();
+}
+
+// Helper method to find splitter node
+LayoutNode* LayoutEngine::FindSplitterNode(wxSplitterWindow* splitter) const
+{
+    if (!splitter || !m_rootNode) return nullptr;
+    
+    std::function<LayoutNode*(LayoutNode*)> findNode = [&](LayoutNode* node) -> LayoutNode* {
+        if (node->GetSplitter() == splitter) {
+            return node;
+        }
+        
+        for (auto& child : node->GetChildren()) {
+            LayoutNode* result = findNode(child.get());
+            if (result) return result;
+        }
+        
+        return nullptr;
+    };
+    
+    return findNode(m_rootNode.get());
 }
 
 void LayoutEngine::OnSplitterDoubleClick(wxSplitterEvent& event)
