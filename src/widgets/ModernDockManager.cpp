@@ -62,6 +62,15 @@ void ModernDockManager::InitializeComponents()
     // Initialize layout engine with this window as root
     m_layoutEngine->InitializeLayout(this);
     
+    // Set initial docking restrictions: disable Center and Right areas
+    SetAreaDockingEnabled(DockArea::Center, false);
+    SetAreaDockingEnabled(DockArea::Right, false);
+    
+    // Ensure center indicator is always visible, even when center docking is disabled
+    if (m_dockGuides) {
+        m_dockGuides->SetCentralVisible(true);
+    }
+    
     // Configure drag controller callbacks
     m_dragController->SetDragStartCallback([this](const DragSession& session) {
         m_dragState = DragState::Started;
@@ -74,10 +83,16 @@ void ModernDockManager::InitializeComponents()
         
         // Show dock guides at start of drag (they stay visible throughout drag)
         if (session.sourcePanel) {
-            // Show central indicator, but disable Center/Top/Right responses
+            // Use current area restrictions instead of hardcoded values
             if (m_dockGuides) {
-                // Center responsiveness disabled, but central indicator stays visible
-                m_dockGuides->SetEnabledDirections(false, true, false, false, true);
+                bool centerEnabled = IsAreaDockingEnabled(DockArea::Center);
+                bool leftEnabled = IsAreaDockingEnabled(DockArea::Left);
+                bool rightEnabled = IsAreaDockingEnabled(DockArea::Right);
+                bool topEnabled = IsAreaDockingEnabled(DockArea::Top);
+                bool bottomEnabled = IsAreaDockingEnabled(DockArea::Bottom);
+                
+                m_dockGuides->SetEnabledDirections(centerEnabled, leftEnabled, rightEnabled, topEnabled, bottomEnabled);
+                // Center indicator should always be visible, even when center docking is disabled
                 m_dockGuides->SetCentralVisible(true);
             }
             ShowDockGuides(session.sourcePanel);
@@ -150,11 +165,58 @@ void ModernDockManager::AddPanel(wxWindow* content, const wxString& title, DockA
 {
     if (!content) return;
     
-    // Create new modern dock panel
+    // Check if we need to create a tabbed panel for Message/Performance area
+    if (area == DockArea::Bottom && (title == "Message" || title == "Performance")) {
+        // Look for existing bottom panel to add as tab
+        ModernDockPanel* existingBottomPanel = nullptr;
+        for (auto* panel : m_panels[area]) {
+            if (panel->GetTitle() == "Output" || panel->GetTitle() == "Message Output" || 
+                panel->GetContentCount() > 0) {
+                existingBottomPanel = panel;
+                break;
+            }
+        }
+        
+        if (existingBottomPanel) {
+            // Add as tab to existing panel
+            existingBottomPanel->AddContent(content, title);
+            return;
+        } else {
+            // Create new tabbed panel for Message/Performance
+            auto* panel = new ModernDockPanel(this, this, "Output");
+            panel->SetDockArea(area);
+            
+            // Apply docking restrictions based on area
+            if (area == DockArea::Center || area == DockArea::Right) {
+                panel->SetDockingEnabled(false);
+                panel->SetSystemButtonsVisible(false);
+            }
+            
+            panel->AddContent(content, title);
+            
+            // Add to panels collection
+            m_panels[area].push_back(panel);
+            
+            // Add to layout engine
+            m_layoutEngine->AddPanel(panel, area);
+            
+            // Update layout
+            m_layoutEngine->UpdateLayout();
+            return;
+        }
+    }
+    
+    // Create new modern dock panel for other cases
     auto* panel = new ModernDockPanel(this, this, title);
     
     // Set the dock area BEFORE adding content
     panel->SetDockArea(area);
+    
+    // Apply docking restrictions based on area
+    if (area == DockArea::Center || area == DockArea::Right) {
+        panel->SetDockingEnabled(false);
+        panel->SetSystemButtonsVisible(false);
+    }
     
     panel->AddContent(content, title);
     
@@ -1017,8 +1079,79 @@ void ModernDockManager::ShowDockGuides(wxWindow* target)
     }
 }
 
+// Docking control methods
+void ModernDockManager::SetPanelDockingEnabled(ModernDockPanel* panel, bool enabled)
+{
+    if (panel) {
+        panel->SetDockingEnabled(enabled);
+    }
+}
 
+void ModernDockManager::SetPanelSystemButtonsVisible(ModernDockPanel* panel, bool visible)
+{
+    if (panel) {
+        panel->SetSystemButtonsVisible(visible);
+    }
+}
 
+void ModernDockManager::SetAreaDockingEnabled(DockArea area, bool enabled)
+{
+    // Apply docking control to all panels in the specified area
+    auto it = m_panels.find(area);
+    if (it != m_panels.end()) {
+        for (auto* panel : it->second) {
+            if (panel) {
+                panel->SetDockingEnabled(enabled);
+                // Also control system buttons visibility based on docking state
+                panel->SetSystemButtonsVisible(enabled);
+            }
+        }
+    }
+    
+    // Also update dock guides to reflect the area restrictions
+    if (m_dockGuides) {
+        bool centerEnabled = true, leftEnabled = true, rightEnabled = true, topEnabled = true, bottomEnabled = true;
+        
+        // Disable specific areas based on current restrictions
+        if (!enabled) {
+            switch (area) {
+                case DockArea::Center:
+                    centerEnabled = false;
+                    break;
+                case DockArea::Left:
+                    leftEnabled = false;
+                    break;
+                case DockArea::Right:
+                    rightEnabled = false;
+                    break;
+                case DockArea::Top:
+                    topEnabled = false;
+                    break;
+                case DockArea::Bottom:
+                    bottomEnabled = false;
+                    break;
+                default:
+                    break;
+            }
+        }
+        
+        // Apply the restrictions to dock guides
+        m_dockGuides->SetEnabledDirections(centerEnabled, leftEnabled, rightEnabled, topEnabled, bottomEnabled);
+    }
+}
+
+bool ModernDockManager::IsAreaDockingEnabled(DockArea area) const
+{
+    // Check if the area has any panels and if they are enabled
+    auto it = m_panels.find(area);
+    if (it != m_panels.end() && !it->second.empty()) {
+        // Check if the first panel in the area is enabled
+        return it->second.front()->IsDockingEnabled();
+    }
+    
+    // Default to enabled if no panels in the area
+    return true;
+}
 
 
 

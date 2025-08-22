@@ -32,6 +32,12 @@ public:
     void RemovePanel(ModernDockPanel* panel);
     ModernDockPanel* FindPanel(const wxString& title) const;
     
+    // Docking control
+    void SetPanelDockingEnabled(ModernDockPanel* panel, bool enabled);
+    void SetPanelSystemButtonsVisible(ModernDockPanel* panel, bool visible);
+    void SetAreaDockingEnabled(DockArea area, bool enabled);
+    bool IsAreaDockingEnabled(DockArea area) const;
+    
     // Drag and drop operations
     void StartDrag(ModernDockPanel* panel, const wxPoint& startPos);
     void CompleteDrag(const wxPoint& endPos);

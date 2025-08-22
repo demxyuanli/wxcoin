@@ -123,6 +123,13 @@ public:
     bool IsDragging() const { return m_dragging; }
     int GetDraggedTabIndex() const { return m_draggedTabIndex; }
     
+    // Docking control
+    void SetDockingEnabled(bool enabled);
+    bool IsDockingEnabled() const { return m_dockingEnabled; }
+    
+    void SetSystemButtonsVisible(bool visible);
+    bool AreSystemButtonsVisible() const { return m_systemButtonsVisible; }
+    
     // Hit testing
     int HitTestTab(const wxPoint& pos) const;
     bool HitTestCloseButton(const wxPoint& pos, int& tabIndex) const;
@@ -150,7 +157,9 @@ private:
     void InitializePanel();
     void UpdateThemeColors();
     void UpdateLayout();
+    // Rendering methods
     void RenderTitleBar(wxGraphicsContext* gc);
+    void RenderTitleBarTabs(wxGraphicsContext* gc);
     void RenderTabBar(wxGraphicsContext* gc);
     void RenderTab(wxGraphicsContext* gc, int index, const wxRect& rect, bool selected, bool hovered);
     void RenderCloseButton(wxGraphicsContext* gc, const wxRect& rect, bool hovered);
@@ -160,6 +169,7 @@ private:
     void CalculateTabLayout();
     wxRect CalculateTabRect(int index) const;
     wxRect CalculateCloseButtonRect(const wxRect& tabRect) const;
+    wxRect CalculateTitleBarCloseButtonRect(int tabIndex) const;
     
     // Event handling
     void HandleTabClick(int tabIndex, const wxPoint& pos);
@@ -263,28 +273,33 @@ private:
     // Theme change handling
     void OnThemeChanged();
     
+    // Docking control
+    bool m_dockingEnabled;
+    bool m_systemButtonsVisible;
+    
     // System buttons
     DockSystemButtons* m_systemButtons;
     
     // Constants
-    static constexpr int DEFAULT_TAB_HEIGHT = 28;
-    static constexpr int DEFAULT_TAB_MIN_WIDTH = 60;
+    static constexpr int DEFAULT_TAB_HEIGHT = 24;
+    static constexpr int DEFAULT_TAB_MIN_WIDTH = 80;
     static constexpr int DEFAULT_TAB_MAX_WIDTH = 200;
-    static constexpr int DEFAULT_TAB_SPACING = 0;
+    static constexpr int DEFAULT_TAB_SPACING = 2;
     static constexpr int DEFAULT_CLOSE_BUTTON_SIZE = 16;
-    static constexpr int DEFAULT_CONTENT_MARGIN = 2;
-    static constexpr int DEFAULT_TAB_PADDING = 8;
-    static constexpr int DEFAULT_TAB_TOP_MARGIN = 4;
-    static constexpr int DEFAULT_TAB_CORNER_RADIUS = 4;
+    static constexpr int DEFAULT_CONTENT_MARGIN = 4;
+    static constexpr int DEFAULT_TAB_CORNER_RADIUS = 0;
     static constexpr int DEFAULT_TAB_BORDER_TOP = 2;
-    static constexpr int DEFAULT_TAB_BORDER_BOTTOM = 1;
-    static constexpr int DEFAULT_TAB_BORDER_LEFT = 1;
-    static constexpr int DEFAULT_TAB_BORDER_RIGHT = 1;
-    static constexpr int DRAG_THRESHOLD = 5;
+    static constexpr int DEFAULT_TAB_BORDER_BOTTOM = 0;
+    static constexpr int DEFAULT_TAB_BORDER_LEFT = 0;
+    static constexpr int DEFAULT_TAB_BORDER_RIGHT = 0;
+    static constexpr int DEFAULT_TAB_PADDING = 8;
+    static constexpr int DEFAULT_TAB_TOP_MARGIN = 2;
+    static constexpr int DRAG_THRESHOLD = 8; // Increased from 5 to 8 pixels
     static constexpr int ANIMATION_FPS = 60;
 
     wxDECLARE_EVENT_TABLE();
 };
 
 #endif // MODERN_DOCK_PANEL_H
+
 

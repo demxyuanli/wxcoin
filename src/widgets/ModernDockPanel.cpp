@@ -37,7 +37,9 @@ ModernDockPanel::ModernDockPanel(ModernDockManager* manager, wxWindow* parent, c
       m_animationTimer(this),
       m_animating(false),
       m_animationProgress(0.0),
-      m_animationDuration(250)
+      m_animationDuration(250),
+      m_dockingEnabled(true),
+      m_systemButtonsVisible(true)
 {
     InitializePanel();
 }
@@ -311,17 +313,17 @@ void ModernDockPanel::StartDrag(int tabIndex, const wxPoint& startPos)
 {
     if (tabIndex < 0 || tabIndex >= static_cast<int>(m_contents.size())) return;
     
-    m_dragging = true;
+    // Don't start dragging if docking is disabled
+    if (!m_dockingEnabled) return;
+    
+    // Don't start dragging immediately, just record the start position
+    // Dragging will only start when mouse moves beyond threshold
     m_draggedTabIndex = tabIndex;
     m_dragStartPos = startPos;
     m_lastMousePos = startPos;
     
-    // Notify manager to start drag operation
-    if (m_manager) {
-        m_manager->StartDrag(this, startPos);
-    }
-    
-    CaptureMouse();
+    // Don't set m_dragging = true yet, don't capture mouse yet
+    // This will be done in OnMouseMove when threshold is exceeded
 }
 
 int ModernDockPanel::HitTestTab(const wxPoint& pos) const
@@ -368,11 +370,12 @@ void ModernDockPanel::UpdateLayout()
                               size.x - 2 * m_contentMargin,
                               size.y - m_tabHeight - 2 * m_contentMargin);
     } else {
-        // No tabs, full content area
+        // No tabs, content area starts after title bar
         m_tabBarRect = wxRect();
-        m_contentRect = wxRect(m_contentMargin, m_contentMargin,
+        int titleBarHeight = 24; // Same as in RenderTitleBar
+        m_contentRect = wxRect(m_contentMargin, titleBarHeight + m_contentMargin,
                               size.x - 2 * m_contentMargin,
-                              size.y - 2 * m_contentMargin);
+                              size.y - titleBarHeight - 2 * m_contentMargin);
     }
     
     // Calculate tab layout
@@ -444,6 +447,43 @@ wxRect ModernDockPanel::CalculateCloseButtonRect(const wxRect& tabRect) const
     return wxRect(x, y, size, size);
 }
 
+wxRect ModernDockPanel::CalculateTitleBarCloseButtonRect(int tabIndex) const
+{
+    if (tabIndex < 0 || tabIndex >= static_cast<int>(m_contents.size())) return wxRect();
+    
+    // Calculate tab position in title bar (similar to RenderTitleBarTabs)
+    int x = 0;
+    for (int i = 0; i < tabIndex; ++i) {
+        wxClientDC dc(const_cast<ModernDockPanel*>(this));
+        dc.SetFont(m_tabFont);
+        wxSize textSize = dc.GetTextExtent(m_contents[i]->title);
+        int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
+        if (m_tabCloseMode != TabCloseMode::ShowNever) {
+            tabWidth += m_closeButtonSize + 4;
+        }
+        tabWidth = std::max(tabWidth, m_tabMinWidth);
+        x += tabWidth + m_tabSpacing;
+    }
+    
+    // Calculate current tab width
+    wxClientDC dc(const_cast<ModernDockPanel*>(this));
+    dc.SetFont(m_tabFont);
+    wxSize textSize = dc.GetTextExtent(m_contents[tabIndex]->title);
+    int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
+    if (m_tabCloseMode != TabCloseMode::ShowNever) {
+        tabWidth += m_closeButtonSize + 4;
+    }
+    tabWidth = std::max(tabWidth, m_tabMinWidth);
+    
+    // Calculate close button position
+    int margin = 4;
+    int size = m_closeButtonSize;
+    int closeX = x + tabWidth - margin - size;
+    int closeY = (24 - size) / 2; // Center in title bar height
+    
+    return wxRect(closeX, closeY, size, size);
+}
+
 void ModernDockPanel::OnPaint(wxPaintEvent& event)
 {
     wxAutoBufferedPaintDC dc(this);
@@ -459,13 +499,19 @@ void ModernDockPanel::OnPaint(wxPaintEvent& event)
     gc->SetBrush(wxBrush(m_backgroundColor));
     gc->DrawRectangle(0, 0, GetSize().x, GetSize().y);
     
-    // Render title bar with FlatBar style
+    // Render title bar with appropriate method based on content count
     if (!m_title.IsEmpty()) {
-        RenderTitleBar(gc);
+        if (m_contents.size() > 1) {
+            // Multiple contents - render tabs in title bar
+            RenderTitleBarTabs(gc);
+        } else {
+            // Single content - render normal title bar
+            RenderTitleBar(gc);
+        }
     }
     
-    // Render tab bar
-    if (m_showTabs && !m_contents.empty()) {
+    // Render tab bar only if we have tabs and single content
+    if (m_showTabs && m_contents.size() == 1 && !m_contents.empty()) {
         RenderTabBar(gc);
     }
     
@@ -511,7 +557,7 @@ void ModernDockPanel::RenderTitleBar(wxGraphicsContext* gc)
     gc->DrawText(m_title, textX, textY);
     
     // Position system buttons on the right side of title bar
-    if (m_systemButtons) {
+    if (m_systemButtons && m_systemButtonsVisible && m_dockingEnabled) {
         wxSize buttonSize = m_systemButtons->GetBestSize();
         int buttonAreaWidth = buttonSize.GetWidth();
         int buttonX = GetSize().x - buttonAreaWidth - 2; // Right margin: 2px
@@ -521,6 +567,9 @@ void ModernDockPanel::RenderTitleBar(wxGraphicsContext* gc)
         m_systemButtons->SetSize(buttonSize);
         m_systemButtons->SetPosition(wxPoint(buttonX, buttonY));
         m_systemButtons->Show(true);
+    } else if (m_systemButtons) {
+        // Hide system buttons if not visible or docking disabled
+        m_systemButtons->Show(false);
     }
     
     // Update tab bar position to account for title bar
@@ -528,6 +577,108 @@ void ModernDockPanel::RenderTitleBar(wxGraphicsContext* gc)
     m_tabBarRect.height = GetSize().y - titleBarHeight - 2;
     
 
+}
+
+void ModernDockPanel::RenderTitleBarTabs(wxGraphicsContext* gc)
+{
+    if (!gc || m_contents.empty()) return;
+
+    // Draw title bar background
+    wxColour titleBarBgColour = CFG_COLOUR("BarBackgroundColour");
+    gc->SetBrush(wxBrush(titleBarBgColour));
+    gc->SetPen(*wxTRANSPARENT_PEN);
+    gc->DrawRectangle(0, 0, GetSize().x, 24); // Title bar height is 24
+
+    // Draw title bar separator line (like FlatBar)
+    wxColour titleBarBorderColour = CFG_COLOUR("BarBorderColour");
+    gc->SetPen(wxPen(titleBarBorderColour, 1));
+    gc->StrokeLine(0, 24, GetSize().x, 24);
+
+    // Calculate starting X position for tabs
+    int x = 0;
+    for (size_t i = 0; i < m_contents.size(); ++i) {
+        bool selected = (static_cast<int>(i) == m_selectedIndex);
+        bool hovered = (static_cast<int>(i) == m_hoveredTabIndex);
+        
+        wxClientDC dc(this);
+        dc.SetFont(m_tabFont);
+        wxSize textSize = dc.GetTextExtent(m_contents[i]->title);
+        int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
+        if (m_tabCloseMode != TabCloseMode::ShowNever) {
+            tabWidth += m_closeButtonSize + 4;
+        }
+        tabWidth = std::max(tabWidth, m_tabMinWidth);
+
+        // Draw tab background based on selection and hover state
+        if (selected) {
+            // Active tab - similar to FlatBar active tab style
+            wxColour activeTabBgColour = CFG_COLOUR("BarActiveTabBgColour");
+            wxColour activeTabTextColour = CFG_COLOUR("BarActiveTextColour");
+            wxColour tabBorderTopColour = CFG_COLOUR("BarTabBorderTopColour");
+            wxColour tabBorderColour = CFG_COLOUR("BarTabBorderColour");
+            
+            // Fill background of active tab (excluding the top border)
+            gc->SetBrush(wxBrush(activeTabBgColour));
+            gc->SetPen(*wxTRANSPARENT_PEN);
+            
+            int tabBorderTop = 2;
+            gc->DrawRectangle(x, tabBorderTop, tabWidth, 24 - tabBorderTop);
+            
+            // Draw borders like FlatBar
+            if (tabBorderTop > 0) {
+                gc->SetPen(wxPen(tabBorderTopColour, tabBorderTop));
+                gc->StrokeLine(x, tabBorderTop / 2, x + tabWidth, tabBorderTop / 2);
+            }
+            
+            // Draw left and right borders
+            gc->SetPen(wxPen(tabBorderColour, 1));
+            gc->StrokeLine(x, tabBorderTop, x, 24);
+            gc->StrokeLine(x + tabWidth, tabBorderTop, x + tabWidth, 24);
+            
+            // Set text color for active tab
+            gc->SetFont(m_tabFont, activeTabTextColour);
+        } else if (hovered) {
+            // Hovered tab - no background, just text color change
+            gc->SetBrush(*wxTRANSPARENT_BRUSH);
+            gc->SetPen(*wxTRANSPARENT_PEN);
+            gc->SetFont(m_tabFont, CFG_COLOUR("BarInactiveTextColour"));
+        } else {
+            // Inactive tab - no background, no borders
+            gc->SetBrush(*wxTRANSPARENT_BRUSH);
+            gc->SetPen(*wxTRANSPARENT_PEN);
+            gc->SetFont(m_tabFont, CFG_COLOUR("BarInactiveTextColour"));
+        }
+
+        // Draw text
+        double textWidth, textHeight;
+        gc->GetTextExtent(m_contents[i]->title, &textWidth, &textHeight);
+        int textX = x + (tabWidth - textWidth) / 2;
+        int textY = (24 - textHeight) / 2;
+        gc->DrawText(m_contents[i]->title, textX, textY);
+
+        // Draw close button (always visible, no hover response needed)
+        if (m_tabCloseMode != TabCloseMode::ShowNever) {
+            wxRect closeRect = CalculateTitleBarCloseButtonRect(static_cast<int>(i));
+            RenderCloseButton(gc, closeRect, false);
+        }
+
+        x += tabWidth + m_tabSpacing;
+    }
+
+    // Position system buttons on the right side of title bar
+    if (m_systemButtons && m_systemButtonsVisible && m_dockingEnabled) {
+        wxSize buttonSize = m_systemButtons->GetBestSize();
+        int buttonAreaWidth = buttonSize.GetWidth();
+        int buttonX = GetSize().x - buttonAreaWidth - 2; // Right margin: 2px
+        int buttonY = (24 - buttonSize.GetHeight()) / 2;
+        
+        m_systemButtons->SetSize(buttonSize);
+        m_systemButtons->SetPosition(wxPoint(buttonX, buttonY));
+        m_systemButtons->Show(true);
+    } else if (m_systemButtons) {
+        // Hide system buttons if not visible or docking disabled
+        m_systemButtons->Show(false);
+    }
 }
 
 void ModernDockPanel::RenderTabBar(wxGraphicsContext* gc)
@@ -707,6 +858,7 @@ void ModernDockPanel::OnLeftDown(wxMouseEvent& event)
 void ModernDockPanel::OnLeftUp(wxMouseEvent& event)
 {
     if (m_dragging) {
+        // Complete drag operation
         m_dragging = false;
         m_draggedTabIndex = -1;
         
@@ -718,6 +870,10 @@ void ModernDockPanel::OnLeftUp(wxMouseEvent& event)
         if (m_manager) {
             m_manager->CompleteDrag(ClientToScreen(event.GetPosition()));
         }
+    } else if (m_draggedTabIndex >= 0) {
+        // Drag was not started (mouse didn't move beyond threshold)
+        // Just clean up the potential drag state
+        m_draggedTabIndex = -1;
     }
     
     event.Skip();
@@ -743,18 +899,30 @@ void ModernDockPanel::OnMouseMove(wxMouseEvent& event)
         // Update drag operation
         wxPoint screenPos = ClientToScreen(pos);
         
-        // Check if drag threshold exceeded
-        if (!m_dragging || 
-            (abs(screenPos.x - m_dragStartPos.x) > DRAG_THRESHOLD ||
-             abs(screenPos.y - m_dragStartPos.y) > DRAG_THRESHOLD)) {
-            
-            // Notify manager
-            if (m_manager) {
-                m_manager->UpdateDrag(screenPos);
-            }
+        // Notify manager
+        if (m_manager) {
+            m_manager->UpdateDrag(screenPos);
         }
         
         m_lastMousePos = screenPos;
+    } else if (m_draggedTabIndex >= 0) {
+        // Check if we should start dragging (mouse moved beyond threshold)
+        wxPoint screenPos = ClientToScreen(pos);
+        
+        if (abs(screenPos.x - m_dragStartPos.x) > DRAG_THRESHOLD ||
+            abs(screenPos.y - m_dragStartPos.y) > DRAG_THRESHOLD) {
+            
+            // Start dragging now
+            m_dragging = true;
+            
+            // Notify manager to start drag operation
+            if (m_manager) {
+                m_manager->StartDrag(this, screenPos);
+            }
+            
+            // Capture mouse for drag operation
+            CaptureMouse();
+        }
     } else {
         // Update hover state
         int newHoveredTab = HitTestTab(pos);
@@ -1030,4 +1198,29 @@ void ModernDockPanel::SetSystemButtonTooltip(DockSystemButtonType type, const wx
         m_systemButtons->SetButtonTooltip(type, tooltip);
     }
 }
+
+// Docking control methods
+void ModernDockPanel::SetDockingEnabled(bool enabled)
+{
+    m_dockingEnabled = enabled;
+    
+    // If docking is disabled, also disable system buttons visibility
+    if (!enabled) {
+        SetSystemButtonsVisible(false);
+    }
+}
+
+void ModernDockPanel::SetSystemButtonsVisible(bool visible)
+{
+    m_systemButtonsVisible = visible;
+    
+    // Update system buttons visibility
+    if (m_systemButtons) {
+        m_systemButtons->Show(visible && m_dockingEnabled);
+    }
+    
+    // Refresh to update display
+    Refresh();
+}
+
 
