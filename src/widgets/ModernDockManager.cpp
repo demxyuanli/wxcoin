@@ -330,7 +330,15 @@ DockPosition ModernDockManager::GetDockPosition(wxWindow* target, const wxPoint&
 {
     if (!target) return DockPosition::None;
     
-    // Calculate dock position based on mouse position relative to target panel
+    // First check if mouse is over a dock guide - this takes priority
+    if (m_dockGuides && m_dockGuides->IsVisible()) {
+        DockPosition guidePosition = m_dockGuides->GetActivePosition();
+        if (guidePosition != DockPosition::None) {
+            return guidePosition;
+        }
+    }
+    
+    // If not over a guide, calculate dock position based on mouse position relative to target panel
     wxRect targetRect;
     wxPoint targetScreenPos = target->GetScreenPosition();
     wxSize targetSize = target->GetSize();
@@ -922,6 +930,14 @@ DockGuideConfig ModernDockManager::GetDockGuideConfig() const
     return DockGuideConfig(); // Placeholder
 }
 
+ModernDockPanel* ModernDockManager::GetDockGuideTarget() const
+{
+    if (m_dockGuides) {
+        return m_dockGuides->GetCurrentTarget();
+    }
+    return nullptr;
+}
+
 // Event handling
 void ModernDockManager::BindDockEvent(wxEventType eventType, 
                                       std::function<void(const DockEventData&)> handler)
@@ -1053,6 +1069,15 @@ int ModernDockManager::GetPanelCount() const
         count += panels.size();
     }
     return count;
+}
+
+std::vector<ModernDockPanel*> ModernDockManager::GetAllPanels() const
+{
+    std::vector<ModernDockPanel*> allPanels;
+    for (const auto& [area, panels] : m_panels) {
+        allPanels.insert(allPanels.end(), panels.begin(), panels.end());
+    }
+    return allPanels;
 }
 
 int ModernDockManager::GetContainerCount() const

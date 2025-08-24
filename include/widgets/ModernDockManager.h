@@ -90,6 +90,7 @@ public:
     void ShowDockGuides(wxWindow* target) override;
     void SetDockGuideConfig(const DockGuideConfig& config) override;
     DockGuideConfig GetDockGuideConfig() const override;
+    ModernDockPanel* GetDockGuideTarget() const override;
     
     // Preview and hit testing
     void ShowPreviewRect(const wxRect& rect, DockPosition position) override;
@@ -137,6 +138,7 @@ public:
     int GetSplitterCount() const override;
     wxString GetLayoutStatistics() const override;
     void DumpLayoutTree() const override;
+    std::vector<ModernDockPanel*> GetAllPanels() const override;
     
     // Configuration
     void EnableLayoutCaching(bool enabled);

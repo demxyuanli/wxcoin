@@ -847,6 +847,13 @@ void LayoutEngine::ApplyLayoutToWidgets(LayoutNode* node)
 {
     if (!node) return;
     
+    // If this is a panel node, apply its layout
+    if (node->GetType() == LayoutNodeType::Panel && node->GetPanel()) {
+        wxRect rect = node->GetRect();
+        node->GetPanel()->SetSize(rect);
+        node->GetPanel()->Show();
+    }
+    
     // If this is a splitter node, ensure splitter control is properly displayed
     if (node->GetType() == LayoutNodeType::HorizontalSplitter || 
         node->GetType() == LayoutNodeType::VerticalSplitter) {

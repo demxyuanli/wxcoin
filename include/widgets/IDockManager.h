@@ -6,6 +6,7 @@
 #include <wx/string.h>
 #include <wx/event.h>
 #include <functional>
+#include <vector>
 
 // Forward declarations
 class LayoutNode;
@@ -54,6 +55,7 @@ public:
     virtual void ShowDockGuides(wxWindow* target) = 0;  // Overloaded version
     virtual void SetDockGuideConfig(const DockGuideConfig& config) = 0;
     virtual DockGuideConfig GetDockGuideConfig() const = 0;
+    virtual ModernDockPanel* GetDockGuideTarget() const = 0;
     
     // Preview and hit testing
     virtual void ShowPreviewRect(const wxRect& rect, DockPosition position) = 0;
@@ -102,6 +104,9 @@ public:
     virtual int GetSplitterCount() const = 0;
     virtual wxString GetLayoutStatistics() const = 0;
     virtual void DumpLayoutTree() const = 0;
+    
+    // Panel access
+    virtual std::vector<ModernDockPanel*> GetAllPanels() const = 0;
 };
 
 

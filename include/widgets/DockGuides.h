@@ -130,6 +130,7 @@ public:
     
     DockPosition GetActivePosition() const;
     bool IsVisible() const { return m_visible; }
+    ModernDockPanel* GetCurrentTarget() const { return m_currentTarget; }
     void SetEnabledDirections(bool center, bool left, bool right, bool top, bool bottom) {
         m_centerEnabled = center; m_leftEnabled = left; m_rightEnabled = right; m_topEnabled = top; m_bottomEnabled = bottom;
         if (m_edgeGuides) {
