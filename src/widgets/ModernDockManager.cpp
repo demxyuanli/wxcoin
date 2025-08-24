@@ -136,7 +136,13 @@ void ModernDockManager::InitializeComponents()
             );
             
             if (success) {
-                // Animate layout to new configuration
+                // Force layout update immediately after docking
+                m_layoutEngine->UpdateLayout();
+                
+                // Refresh the display to show changes
+                Refresh();
+                
+                // Then animate layout to new configuration
                 m_layoutEngine->AnimateLayout();
             }
         }

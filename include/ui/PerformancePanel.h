@@ -17,7 +17,7 @@ private:
 	void OnTimer(wxTimerEvent&);
 	void OnPaint(wxPaintEvent&);
 	void fetchLatest();
-	void drawBars(wxDC& dc, int x, int y, int w, int h, int vMs, int vMs2, int maxMs, const wxString& label1, const wxString& label2);
+	void drawBars(wxDC& dc, int x, int y, int w, int h, int vMs, int vMs2, int maxMs, const wxString& label1, const wxString& label2, const wxColour* colorScheme = nullptr);
     void drawCardBackground(wxDC& dc, int x, int y, int w, int h);
     void drawGrid(wxDC& dc, int x, int y, int w, int h, int maxMs);
     void drawSparkline(wxDC& dc, int x, int y, int w, int h, const std::vector<int>& hist, int maxMs, const wxColour& color);
@@ -26,6 +26,7 @@ private:
     static wxColour lerpColor(const wxColour& a, const wxColour& b, double t);
     static void chooseGradient(double ratio, wxColour& cStart, wxColour& cEnd);
     static wxColour chooseSolidColor(double ratio);
+    static bool hasEnoughContrast(const wxColour& textColor, const wxColour& bgColor);
 
 private:
 	wxTimer m_timer;

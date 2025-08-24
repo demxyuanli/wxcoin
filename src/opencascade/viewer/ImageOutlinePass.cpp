@@ -78,9 +78,9 @@ ImageOutlinePass::ImageOutlinePass(SceneManager* sceneManager, SoSeparator* capt
     : m_sceneManager(sceneManager), m_captureRoot(captureRoot) {
     // Initialize parameters with sensible defaults
     m_params.edgeIntensity = 1.0f;     // Full intensity (0.0 - 1.0)
-    m_params.depthWeight = 1.0f;       // Equal weight for depth edges (0.0 - 2.0)
+    m_params.depthWeight = 2.0f;       // Equal weight for depth edges (0.0 - 2.0)
     m_params.normalWeight = 1.0f;      // Equal weight for normal edges (0.0 - 2.0)
-    m_params.depthThreshold = 0.002f;  // Depth discontinuity threshold
+    m_params.depthThreshold = 0.0005f;  // Depth discontinuity threshold
     m_params.normalThreshold = 0.1f;   // Normal angle threshold
     m_params.thickness = 1.0f;         // Edge thickness multiplier (0.5 - 3.0)
     LOG_INF("constructed", "ImageOutlinePass");

@@ -53,14 +53,7 @@ void DockSystemButtons::InitializeButtons()
     AddButton(DockSystemButtonType::MINIMIZE, "Minimize/Maximize Panel");
     AddButton(DockSystemButtonType::CLOSE, "Close Panel");
     
-    // Debug: Log button creation
-    LOG_INF("Created " + std::to_string(m_buttons.size()) + " system buttons", "DockSystemButtons");
-    for (size_t i = 0; i < m_buttons.size(); ++i) {
-        LOG_INF("Button " + std::to_string(i) + ": " + 
-                std::to_string(static_cast<int>(m_buttons[i].type)) + 
-                " (visible: " + std::to_string(m_buttons[i].visible) + ")", "DockSystemButtons");
-    }
-    
+   
     UpdateLayout();
 }
 
@@ -99,8 +92,6 @@ void DockSystemButtons::AddButton(DockSystemButtonType type, const wxString& too
     
     // If SVG icon loading failed, use wxArtProvider as fallback
     if (!config.icon.IsOk()) {
-        LOG_INF("SVG icon loading failed for type " + std::to_string(static_cast<int>(type)) + 
-                ", using wxArtProvider fallback", "DockSystemButtons");
         
         switch (type) {
             case DockSystemButtonType::PIN:
@@ -116,10 +107,6 @@ void DockSystemButtons::AddButton(DockSystemButtonType type, const wxString& too
                 config.icon = wxArtProvider::GetBitmap(wxART_CLOSE);
                 break;
         }
-    } else {
-        LOG_INF("SVG icon loaded successfully for type " + std::to_string(static_cast<int>(type)) + 
-                ", size: " + std::to_string(config.icon.GetWidth()) + "x" + 
-                std::to_string(config.icon.GetHeight()), "DockSystemButtons");
     }
     
     // Create hover and pressed icons with theme support
@@ -228,10 +215,7 @@ void DockSystemButtons::UpdateLayout()
         panelWidth = totalWidth;
     }
     
-    // Debug: Log layout update
-    LOG_INF("UpdateLayout: " + std::to_string(m_buttons.size()) + " buttons, panel width: " + 
-            std::to_string(panelWidth) + ", total width: " + std::to_string(totalWidth), "DockSystemButtons");
-    
+   
     Refresh();
 }
 
@@ -345,19 +329,13 @@ void DockSystemButtons::OnPaint(wxPaintEvent& event)
         gc->SetPen(*wxTRANSPARENT_PEN);
         gc->DrawRectangle(0, 0, GetSize().GetWidth(), GetSize().GetHeight());
         
-        // Debug: Log paint event
-        LOG_INF("OnPaint: " + std::to_string(m_buttons.size()) + " buttons", "DockSystemButtons");
-        
+       
         // Draw buttons
         for (size_t i = 0; i < m_buttons.size(); ++i) {
             if (m_buttons[i].visible) {
                 wxRect buttonRect = GetButtonRect(i);
                 bool hovered = (static_cast<int>(i) == m_hoveredButtonIndex);
                 bool pressed = (static_cast<int>(i) == m_pressedButtonIndex);
-                
-                LOG_INF("Drawing button " + std::to_string(i) + " at rect (" + 
-                        std::to_string(buttonRect.x) + ", " + std::to_string(buttonRect.y) + 
-                        ", " + std::to_string(buttonRect.width) + ", " + std::to_string(buttonRect.height) + ")", "DockSystemButtons");
                 
                 RenderButton(gc, buttonRect, m_buttons[i], hovered, pressed);
             }
@@ -410,19 +388,9 @@ void DockSystemButtons::RenderButton(wxGraphicsContext* gc, const wxRect& rect,
         int iconX = rect.x + (rect.width - icon.GetWidth()) / 2;
         int iconY = rect.y + (rect.height - icon.GetHeight()) / 2;
         
-        LOG_INF("Drawing icon at (" + std::to_string(iconX) + ", " + std::to_string(iconY) + 
-                ") with size " + std::to_string(icon.GetWidth()) + "x" + 
-                std::to_string(icon.GetHeight()) + "), button rect: (" + 
-                std::to_string(rect.x) + ", " + std::to_string(rect.y) + ", " + 
-                std::to_string(rect.width) + ", " + std::to_string(rect.height) + 
-                "), toggled: " + std::to_string(config.isToggled), "DockSystemButtons");
-        
+       
         // Draw the actual icon
         gc->DrawBitmap(icon, iconX, iconY, icon.GetWidth(), icon.GetHeight());
-    } else {
-        LOG_INF("Icon not available for button type " + std::to_string(static_cast<int>(config.type)) + 
-                ", icon size: " + std::to_string(config.icon.GetWidth()) + "x" + 
-                std::to_string(config.icon.GetWidth()) + ")", "DockSystemButtons");
     }
 }
 
@@ -463,11 +431,7 @@ wxRect DockSystemButtons::GetButtonRect(int index) const
     
     // Move right by the number of visible buttons before this index
     x += visibleBeforeIndex * (m_buttonSize + m_buttonSpacing);
-    
-    LOG_INF("Button " + std::to_string(index) + " position: (" + 
-            std::to_string(x) + ", " + std::to_string(y) + 
-            "), visible before: " + std::to_string(visibleBeforeIndex) + 
-            ", panel width: " + std::to_string(panelWidth), "DockSystemButtons");
+
     
     return wxRect(x, y, m_buttonSize, m_buttonSize);
 }
@@ -497,28 +461,22 @@ int DockSystemButtons::GetButtonAtPosition(const wxPoint& pos) const
 
 void DockSystemButtons::ExecuteButtonAction(DockSystemButtonType type)
 {
-    // Handle button action based on type
-    LOG_INF("System button clicked: " + std::to_string(static_cast<int>(type)), "DockSystemButtons");
+
     
     // Handle toggle buttons automatically
     switch (type) {
         case DockSystemButtonType::PIN:
             // PIN toggle: pinned <-> unpinned
             ToggleButton(type);
-            LOG_INF("Toggled PIN button to state: " + 
-                    std::string(IsButtonToggled(type) ? "unpinned" : "pinned"), "DockSystemButtons");
             break;
             
         case DockSystemButtonType::MINIMIZE:
             // MIN/MAX toggle: minimize <-> maximize
             ToggleButton(type);
-            LOG_INF("Toggled MIN/MAX button to state: " + 
-                    std::string(IsButtonToggled(type) ? "maximize" : "minimize"), "DockSystemButtons");
             break;
             
         case DockSystemButtonType::CLOSE:
             // Close button is not a toggle
-            LOG_INF("Close button clicked", "DockSystemButtons");
             break;
             
         default:

@@ -358,8 +358,11 @@ void FlatFrame::createPanels() {
     mainSizer->Add(dock, 1, wxEXPAND | wxALL, 2);
 
     m_objectTreePanel = new ObjectTreePanel(dock);
+    m_objectTreePanel->SetName("Works");
     m_propertyPanel = new PropertyPanel(dock);
+    m_propertyPanel->SetName("Properties");
     m_canvas = new Canvas(dock);
+    m_canvas->SetName("Canvas");
 
     // Place panes: left top tree, left bottom properties, center canvas
     dock->AddPane(m_objectTreePanel, ModernDockAdapter::DockPos::LeftTop, 200);

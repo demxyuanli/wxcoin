@@ -566,3 +566,4 @@ panel->Bind(wxEVT_DOCK_TAB_CHANGED, &MyFrame::OnTabChanged, this);
 ---
 
 本API参考文档提供了Dock框架所有公共接口的详细说明，为开发者提供完整的API使用指南。
+

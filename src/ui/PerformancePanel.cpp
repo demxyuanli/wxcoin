@@ -2,6 +2,7 @@
 #include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include "utils/PerformanceBus.h"
+#include <cmath>
 
 PerformancePanel::PerformancePanel(wxWindow* parent)
 	: wxPanel(parent), m_timer(this)
@@ -9,6 +10,10 @@ PerformancePanel::PerformancePanel(wxWindow* parent)
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 	SetDoubleBuffered(true);
 	SetMinSize(wxSize(360, 180));
+	
+	// Set light background color
+	SetBackgroundColour(wxColour(245, 245, 245));
+	
 	Bind(wxEVT_TIMER, &PerformancePanel::OnTimer, this);
 	Bind(wxEVT_PAINT, &PerformancePanel::OnPaint, this);
 	Bind(wxEVT_ERASE_BACKGROUND, [](wxEraseEvent&){});
@@ -62,33 +67,78 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
     int cardW = (w - (cols + 1) * margin) / cols;
     int cardH = (h - (rows + 1) * margin) / rows;
 
-    // Theme colours (fallback to previous tones if theme not present)
+    // Enhanced theme colour management with automatic contrast adjustment
+    wxColour bgColor = GetBackgroundColour();
+    bool isDarkBackground = (bgColor.Red() + bgColor.Green() + bgColor.Blue()) / 3 < 128;
+    
+    // Get theme colours with fallback to high-contrast alternatives
     wxColour textStrong = CFG_COLOUR("PanelHeaderTextColour");
     wxColour textNormal = CFG_COLOUR("PanelHeaderTextColour");
     wxColour textDim = CFG_COLOUR("PanelTextColour");
-    wxColour sparkColour = CFG_COLOUR("AccentBlueColour");
-    if (!sparkColour.IsOk()) sparkColour = wxColour(66,134,244);
+    
+    // Ensure sufficient contrast for readability with brighter text colors
+    if (!textStrong.IsOk() || !hasEnoughContrast(textStrong, bgColor)) {
+        textStrong = isDarkBackground ? wxColour(255, 255, 255) : wxColour(40, 40, 40);
+    }
+    
+    if (!textNormal.IsOk() || !hasEnoughContrast(textNormal, bgColor)) {
+        textNormal = isDarkBackground ? wxColour(250, 250, 250) : wxColour(60, 60, 60);
+    }
+    
+    if (!textDim.IsOk() || !hasEnoughContrast(textDim, bgColor)) {
+        textDim = isDarkBackground ? wxColour(220, 220, 220) : wxColour(100, 100, 100);
+    }
+    
+    // Panel-specific color schemes for better visual distinction
+    wxColour sceneColors[3] = {
+        wxColour(66, 134, 244),   // Blue for Scene panel
+        wxColour(72, 201, 176),   // Green for Coin3D
+        wxColour(253, 203, 110)   // Yellow for Total
+    };
+    
+    wxColour engineColors[3] = {
+        wxColour(156, 39, 176),   // Purple for Engine panel
+        wxColour(255, 152, 0),    // Orange for Scene
+        wxColour(244, 67, 54)     // Red for Total
+    };
+    
+    wxColour canvasColors[3] = {
+        wxColour(0, 150, 136),    // Teal for Canvas panel
+        wxColour(255, 193, 7),    // Amber for Main
+        wxColour(233, 30, 99)     // Pink for Total
+    };
 
     auto drawColumn = [&](int xCard, int yCard, const char* title,
                           double fps, double v1, double v2,
                           const std::vector<int>& hist, int dynMin, int dynMax,
                           const wxString& line1, const wxString& line2,
-                          const wxString& barLabel1, const wxString& barLabel2) {
+                          const wxString& barLabel1, const wxString& barLabel2,
+                          const wxColour* colorScheme) {
         drawCardBackground(dc, xCard, yCard, cardW, cardH);
         int x = xCard + cardPad;
         int y = yCard + cardPad;
-        // Two compact text lines per column
-        if (!line1.empty()) { dc.SetTextForeground(textStrong.IsOk()?textStrong:wxColour(230,230,240)); dc.SetFont(CFG_DEFAULTFONT()); dc.DrawText(line1, x, y); y += 16; }
-        if (!line2.empty()) { dc.SetTextForeground(textDim.IsOk()?textDim:wxColour(180,180,190)); dc.SetFont(CFG_DEFAULTFONT()); dc.DrawText(line2, x, y); y += 16; }
+        // Two compact text lines per column with enhanced contrast
+        if (!line1.empty()) { 
+            dc.SetTextForeground(textStrong); 
+            dc.SetFont(CFG_DEFAULTFONT()); 
+            dc.DrawText(line1, x, y); 
+            y += 16; 
+        }
+        if (!line2.empty()) { 
+            dc.SetTextForeground(textNormal); 
+            dc.SetFont(CFG_DEFAULTFONT()); 
+            dc.DrawText(line2, x, y); 
+            y += 16; 
+        }
 
         int dynSparkMax = std::clamp(dynamicMaxFromHist(hist, v2, dynMin, dynMax), dynMin, dynMax);
-        // Sparkline with legend
-        drawSparkline(dc, x, y + 4, cardW - 2 * cardPad, sparkH, hist, dynSparkMax, sparkColour);
+        // Sparkline with legend using panel-specific primary color
+        drawSparkline(dc, x, y + 4, cardW - 2 * cardPad, sparkH, hist, dynSparkMax, colorScheme[0]);
         // legend
         int legendY = y + 4 + sparkH + 2;
-        dc.SetPen(wxPen(sparkColour, 2));
+        dc.SetPen(wxPen(colorScheme[0], 2));
         dc.DrawLine(x, legendY, x + 14, legendY);
-        dc.SetTextForeground(textDim.IsOk()?textDim:wxColour(150,150,160));
+        dc.SetTextForeground(textDim);
         dc.SetFont(CFG_DEFAULTFONT());
         dc.DrawText("Total ms (history)", x + 18, legendY - 7);
         y = legendY + 10;
@@ -99,20 +149,20 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
         int barW = cardW - 2 * cardPad;
         int maxMs = std::clamp(dynamicMaxFromHist(hist, v2, 30, 200), 30, 200);
         drawGrid(dc, x, y, barW, barAreaH, maxMs);
-        drawBars(dc, x, y, barW, barAreaH, static_cast<int>(v1), static_cast<int>(v2), maxMs, "", "");
+        drawBars(dc, x, y, barW, barAreaH, static_cast<int>(v1), static_cast<int>(v2), maxMs, "", "", colorScheme);
 
-        // Bar legend (v1/v2)
+        // Bar legend (v1/v2) using panel-specific colors
         double r1 = std::clamp(v1 / std::max(1, maxMs), 0.0, 1.0);
         double r2 = std::clamp(v2 / std::max(1, maxMs), 0.0, 1.0);
-        wxColour c1 = chooseSolidColor(r1);
-        wxColour c2 = chooseSolidColor(r2);
+        wxColour c1 = colorScheme[1];  // Use panel-specific color for first bar
+        wxColour c2 = colorScheme[2];  // Use panel-specific color for second bar
         int ly = y + barAreaH + 6;
-        dc.SetPen(wxPen(c1, 6)); dc.DrawLine(x, ly, x + 20, ly); dc.SetTextForeground(textNormal.IsOk()?textNormal:wxColour(200,200,210)); dc.DrawText(barLabel1, x + 26, ly - 10);
-        dc.SetPen(wxPen(c2, 6)); dc.DrawLine(x + 120, ly, x + 140, ly); dc.SetTextForeground(textNormal.IsOk()?textNormal:wxColour(200,200,210)); dc.DrawText(barLabel2, x + 146, ly - 10);
+        dc.SetPen(wxPen(c1, 6)); dc.DrawLine(x, ly, x + 20, ly); dc.SetTextForeground(textNormal); dc.DrawText(barLabel1, x + 26, ly - 10);
+        dc.SetPen(wxPen(c2, 6)); dc.DrawLine(x + 120, ly, x + 140, ly); dc.SetTextForeground(textNormal); dc.DrawText(barLabel2, x + 146, ly - 10);
     };
 
     // Prepare card data list
-    struct CardDef { const char* title; double fps; double v1; double v2; const std::vector<int>* hist; int dynMin; int dynMax; wxString l1; wxString l2; wxString b1; wxString b2; bool valid; };
+    struct CardDef { const char* title; double fps; double v1; double v2; const std::vector<int>* hist; int dynMin; int dynMax; wxString l1; wxString l2; wxString b1; wxString b2; bool valid; const wxColour* colors; };
     CardDef cards[3];
     // Scene
     cards[0].title = "Scene";
@@ -122,6 +172,7 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
     cards[0].l1 = cards[0].valid ? wxString::Format("FPS %.1f", m_scene->fps) : "";
     cards[0].l2 = wxString::Format("Coin3D %.0f ms  Total %.0f ms", m_dispSceneCoinMs, m_dispSceneTotalMs);
     cards[0].b1 = "Coin3D"; cards[0].b2 = "Total";
+    cards[0].colors = sceneColors;
     // Engine
     cards[1].title = "Engine";
     cards[1].valid = static_cast<bool>(m_engine);
@@ -130,6 +181,7 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
     cards[1].l1 = cards[1].valid ? wxString::Format("FPS %.1f", m_engine->fps) : "";
     cards[1].l2 = wxString::Format("Scene %.0f ms  Total %.0f ms", m_dispEngineSceneMs, m_dispEngineTotalMs);
     cards[1].b1 = "Scene"; cards[1].b2 = "Total";
+    cards[1].colors = engineColors;
     // Canvas
     cards[2].title = "Canvas";
     cards[2].valid = static_cast<bool>(m_canvas);
@@ -138,6 +190,7 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
     cards[2].l1 = cards[2].valid ? wxString::Format("FPS %.1f", m_canvas->fps) : "";
     cards[2].l2 = wxString::Format("Main %.0f ms  Total %.0f ms", m_dispCanvasMainMs, m_dispCanvasTotalMs);
     cards[2].b1 = "Main"; cards[2].b2 = "Total";
+    cards[2].colors = canvasColors;
 
     for (int i = 0; i < totalCards; ++i) {
         int row = i / cols;
@@ -147,7 +200,7 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
         if (cards[i].valid) {
             drawColumn(xCard, yCard, cards[i].title, cards[i].fps, cards[i].v1, cards[i].v2,
                        *cards[i].hist, cards[i].dynMin, cards[i].dynMax,
-                       cards[i].l1, cards[i].l2, cards[i].b1, cards[i].b2);
+                       cards[i].l1, cards[i].l2, cards[i].b1, cards[i].b2, cards[i].colors);
         } else {
             drawCardBackground(dc, xCard, yCard, cardW, cardH);
         }
@@ -155,7 +208,7 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
 }
 
 void PerformancePanel::drawBars(wxDC& dc, int x, int y, int w, int h, int vMs, int vMs2, int maxMs,
-	const wxString& label1, const wxString& label2) {
+	const wxString& label1, const wxString& label2, const wxColour* colorScheme) {
 	dc.SetPen(*wxTRANSPARENT_PEN);
 	int bw = (w - 10) / 2;
 
@@ -164,8 +217,16 @@ void PerformancePanel::drawBars(wxDC& dc, int x, int y, int w, int h, int vMs, i
 	double ratio2 = std::clamp(static_cast<double>(vMs2) / std::max(1, maxMs), 0.0, 1.0);
 	int len1 = static_cast<int>(bw * ratio1);
 	int len2 = static_cast<int>(bw * ratio2);
-	wxColour c1 = chooseSolidColor(ratio1);
-	wxColour c2 = chooseSolidColor(ratio2);
+	
+	// Use panel-specific colors if provided, otherwise fall back to default color selection
+	wxColour c1, c2;
+	if (colorScheme) {
+		c1 = colorScheme[1];  // First bar color
+		c2 = colorScheme[2];  // Second bar color
+	} else {
+		c1 = chooseSolidColor(ratio1);
+		c2 = chooseSolidColor(ratio2);
+	}
 
 	dc.SetBrush(wxBrush(c1));
 	dc.DrawRectangle(x, y + (h - thickness) / 2, len1, thickness);
@@ -175,13 +236,15 @@ void PerformancePanel::drawBars(wxDC& dc, int x, int y, int w, int h, int vMs, i
 }
 
 void PerformancePanel::drawCardBackground(wxDC& dc, int x, int y, int w, int h) {
-	dc.SetPen(wxPen(wxColour(70,70,80)));
-	dc.SetBrush(wxBrush(wxColour(40,40,50)));
+	// Dark theme card background on light panel
+	dc.SetPen(wxPen(wxColour(60, 60, 65)));
+	dc.SetBrush(wxBrush(wxColour(42, 42, 45)));
 	dc.DrawRoundedRectangle(x, y, w, h, 6);
 }
 
 void PerformancePanel::drawGrid(wxDC& dc, int x, int y, int w, int h, int maxMs) {
-	dc.SetPen(wxPen(wxColour(70,70,80)));
+	// Dark theme grid lines
+	dc.SetPen(wxPen(wxColour(63, 63, 70)));
 	for (int i = 0; i <= 4; ++i) {
 		int yy = y + h - (h * i / 4);
 		dc.DrawLine(x, yy, x + w, yy);
@@ -235,6 +298,33 @@ wxColour PerformancePanel::chooseSolidColor(double ratio) {
 	if (ratio < 0.33) return wxColour(72, 201, 176);
 	if (ratio < 0.66) return wxColour(253, 203, 110);
 	return wxColour(253, 89, 90);
+}
+
+bool PerformancePanel::hasEnoughContrast(const wxColour& textColor, const wxColour& bgColor) {
+    // Calculate relative luminance using WCAG 2.1 formula
+    // https://www.w3.org/TR/WCAG21/#contrast-minimum
+    
+    auto getLuminance = [](const wxColour& color) {
+        auto linearize = [](double value) {
+            value /= 255.0;
+            return (value <= 0.03928) ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+        };
+        
+        double r = linearize(color.Red());
+        double g = linearize(color.Green());
+        double b = linearize(color.Blue());
+        
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    
+    double luminance1 = getLuminance(textColor);
+    double luminance2 = getLuminance(bgColor);
+    
+    double lighter = std::max(luminance1, luminance2);
+    double darker = std::min(luminance1, luminance2);
+    
+    double contrastRatio = (lighter + 0.05) / (darker + 0.05);
+    return contrastRatio >= 3.0; // Relaxed contrast ratio for better visibility
 }
 
 

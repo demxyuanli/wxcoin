@@ -229,7 +229,14 @@ bool LayoutEngine::DockPanel(ModernDockPanel* panel, ModernDockPanel* target, Do
         if (!currentParent) {
             currentParent = m_rootNode.get();
         }
-        InsertPanelIntoTree(panel, currentParent, position);
+        
+        // For center docking, use the target node itself
+        if (position == DockPosition::Center) {
+            InsertPanelIntoTree(panel, targetNode, position);
+        } else {
+            // For other positions, insert relative to target's parent
+            InsertPanelIntoTree(panel, currentParent, position);
+        }
     }
     
     m_layoutDirty = true;
@@ -258,6 +265,32 @@ void LayoutEngine::FloatPanel(ModernDockPanel* panel)
     floatFrame->SetSizer(sizer);
     
     floatFrame->Show();
+}
+
+void LayoutEngine::TabifyPanel(ModernDockPanel* panel, ModernDockPanel* target)
+{
+    if (!panel || !target) return;
+    
+    // Remove panel from current location if it's already in the tree
+    RemovePanel(panel);
+    
+    // Find target node in the layout tree
+    LayoutNode* targetNode = m_rootNode->FindPanel(target);
+    if (!targetNode) return;
+    
+    // Create a new panel node for the panel to be tabified
+    auto panelNode = CreatePanelNode(panel);
+    if (!panelNode) return;
+    
+    // Set the dock area to match the target
+    panelNode->SetDockArea(targetNode->GetDockArea());
+    
+    // Add the panel as a child of the target node
+    // This will create a tabbed interface
+    targetNode->AddChild(std::move(panelNode));
+    
+    // Mark layout as dirty for recalculation
+    m_layoutDirty = true;
 }
 
 void LayoutEngine::RestorePanel(ModernDockPanel* panel, DockArea area)
@@ -512,8 +545,6 @@ std::unique_ptr<LayoutNode> LayoutEngine::CreateSplitterNode(bool horizontal)
 
 void LayoutEngine::InsertPanelIntoTree(ModernDockPanel* panel, LayoutNode* parent, DockPosition position)
 {
-    wxUnusedVar(position); // Position is not used in current implementation
-    
     if (!panel || !parent) return;
     
     // Validate parent node is still valid
@@ -529,9 +560,22 @@ void LayoutEngine::InsertPanelIntoTree(ModernDockPanel* panel, LayoutNode* paren
     DockArea area = panel->GetDockArea();
     panelNode->SetDockArea(area);
     
-    // Always use OrganizeByDockAreas for IDE-style layout
-    // This ensures proper organization regardless of position
-    OrganizeByDockAreas(std::move(panelNode), parent);
+    // Handle different dock positions
+    switch (position) {
+        case DockPosition::Left:
+        case DockPosition::Right:
+        case DockPosition::Top:
+        case DockPosition::Bottom:
+            // Insert as sibling to target with splitter
+            InsertPanelWithSplitter(std::move(panelNode), parent, position);
+            break;
+            
+        case DockPosition::Center:
+        default:
+            // Use OrganizeByDockAreas for center docking or default behavior
+            OrganizeByDockAreas(std::move(panelNode), parent);
+            break;
+    }
 }
 
 void LayoutEngine::OrganizeByDockAreas(std::unique_ptr<LayoutNode> panelNode, LayoutNode* parent)
@@ -1337,5 +1381,116 @@ void LayoutEngine::OnSplitterDoubleClick(wxSplitterEvent& event)
     }
     
     event.Skip();
+}
+
+void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode, LayoutNode* parent, DockPosition position)
+{
+    if (!panelNode || !parent) return;
+    
+    // Get the target panel from parent (assuming parent is a panel node or has panels)
+    ModernDockPanel* targetPanel = nullptr;
+    if (parent->GetType() == LayoutNodeType::Panel) {
+        targetPanel = parent->GetPanel();
+    } else {
+        // Find first panel in parent's children
+        for (auto& child : parent->GetChildren()) {
+            if (child->GetType() == LayoutNodeType::Panel) {
+                targetPanel = child->GetPanel();
+                break;
+            }
+        }
+    }
+    
+    if (!targetPanel) {
+        // Fallback to OrganizeByDockAreas if no target panel found
+        OrganizeByDockAreas(std::move(panelNode), parent);
+        return;
+    }
+    
+    // Create appropriate splitter based on position
+    bool horizontal = (position == DockPosition::Left || position == DockPosition::Right);
+    auto splitterNode = CreateSplitterNode(horizontal);
+    
+    // Create actual splitter window
+    wxSplitterWindow* splitterWidget = CreateSplitterWindow(m_parent, horizontal);
+    splitterNode->SetSplitter(splitterWidget);
+    
+    // Determine which panel goes first based on position
+    std::unique_ptr<LayoutNode> firstPanel, secondPanel;
+    
+    if (position == DockPosition::Left || position == DockPosition::Top) {
+        // New panel goes first (left/top)
+        firstPanel = std::move(panelNode);
+        secondPanel = CreatePanelNode(targetPanel);
+        
+        // Remove target panel from its current location
+        if (parent->GetType() == LayoutNodeType::Panel) {
+            // Parent is the target panel, need to restructure
+            auto grandParent = parent->GetParent();
+            if (grandParent) {
+                grandParent->RemoveChild(parent);
+                parent = grandParent;
+            }
+        } else {
+            // Remove target panel from parent
+            for (auto& child : parent->GetChildren()) {
+                if (child->GetType() == LayoutNodeType::Panel && child->GetPanel() == targetPanel) {
+                    parent->RemoveChild(child.get());
+                    break;
+                }
+            }
+        }
+    } else {
+        // New panel goes second (right/bottom)
+        firstPanel = CreatePanelNode(targetPanel);
+        secondPanel = std::move(panelNode);
+        
+        // Remove target panel from its current location
+        if (parent->GetType() == LayoutNodeType::Panel) {
+            // Parent is the target panel, need to restructure
+            auto grandParent = parent->GetParent();
+            if (grandParent) {
+                grandParent->RemoveChild(parent);
+                parent = grandParent;
+            }
+        } else {
+            // Remove target panel from parent
+            for (auto& child : parent->GetChildren()) {
+                if (child->GetType() == LayoutNodeType::Panel && child->GetPanel() == targetPanel) {
+                    parent->RemoveChild(child.get());
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Add panels to splitter
+    splitterNode->AddChild(std::move(firstPanel));
+    splitterNode->AddChild(std::move(secondPanel));
+    
+    // Add splitter to parent
+    parent->AddChild(std::move(splitterNode));
+    
+    // Reparent panels to splitter and split
+    if (splitterWidget && splitterNode->GetChildren().size() == 2) {
+        auto& firstChild = splitterNode->GetChildren()[0];
+        auto& secondChild = splitterNode->GetChildren()[1];
+        
+        if (firstChild->GetPanel() && secondChild->GetPanel()) {
+            // Ensure panels are reparented to splitter
+            firstChild->GetPanel()->Reparent(splitterWidget);
+            secondChild->GetPanel()->Reparent(splitterWidget);
+            
+            // Split the splitter
+            if (horizontal) {
+                splitterWidget->SplitVertically(firstChild->GetPanel(), secondChild->GetPanel());
+            } else {
+                splitterWidget->SplitHorizontally(firstChild->GetPanel(), secondChild->GetPanel());
+            }
+            
+            // Set initial sash position to middle
+            splitterWidget->SetSashPosition(splitterWidget->GetSize().GetWidth() / 2);
+        }
+    }
 }
 

@@ -31,6 +31,7 @@ public:
     void AddPanel(wxWindow* content, const wxString& title, DockArea area = DockArea::Center);
     void RemovePanel(ModernDockPanel* panel);
     ModernDockPanel* FindPanel(const wxString& title) const;
+    ModernDockPanel* FindDockPanel(wxWindow* content) const;
     
     // Docking control
     void SetPanelDockingEnabled(ModernDockPanel* panel, bool enabled);

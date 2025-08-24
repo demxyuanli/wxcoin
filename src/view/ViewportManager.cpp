@@ -33,18 +33,13 @@ void ViewportManager::handleSizeChange(const wxSize& size) {
         return;
     }
 
-    LOG_INF_S("ViewportManager::handleSizeChange: Handling size event: " + 
-           std::to_string(size.x) + "x" + std::to_string(size.y));
-
     if (size.x > 0 && size.y > 0) {
         updateDPISettings();
         
         if (m_renderingEngine) {
             m_renderingEngine->handleResize(size);
         }
-    } else {
-        LOG_WRN_S("ViewportManager::handleSizeChange: Skipped: Invalid size");
-    }
+    } 
 }
 
 bool ViewportManager::shouldProcessSizeEvent(const wxSize& size) {

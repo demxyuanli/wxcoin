@@ -285,7 +285,7 @@ private:
     static constexpr int DEFAULT_TAB_MIN_WIDTH = 80;
     static constexpr int DEFAULT_TAB_MAX_WIDTH = 200;
     static constexpr int DEFAULT_TAB_SPACING = 2;
-    static constexpr int DEFAULT_CLOSE_BUTTON_SIZE = 16;
+    static constexpr int DEFAULT_CLOSE_BUTTON_SIZE = 12;
     static constexpr int DEFAULT_CONTENT_MARGIN = 4;
     static constexpr int DEFAULT_TAB_CORNER_RADIUS = 0;
     static constexpr int DEFAULT_TAB_BORDER_TOP = 2;

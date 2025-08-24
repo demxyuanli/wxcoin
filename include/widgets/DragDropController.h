@@ -54,6 +54,10 @@ public:
     DragOperation GetCurrentOperation() const { return m_dragSession.operation; }
     const DragSession& GetDragSession() const { return m_dragSession; }
     
+    // Access to drag session data for docking operations
+    DropValidation GetLastValidation() const { return m_lastValidation; }
+    ModernDockPanel* GetSourcePanel() const { return m_dragSession.sourcePanel; }
+    
     // Drop validation
     DropValidation ValidateDrop(const wxPoint& pos) const;
     bool CanDropOnTarget(ModernDockPanel* target, DockPosition position) const;

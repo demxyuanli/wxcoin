@@ -168,21 +168,46 @@ void GhostWindow::CreateGhostContent(ModernDockPanel* panel)
     
     // Draw tab bar representation
     if (panel->GetContentCount() > 0) {
-        int tabHeight = 28;
+        int tabHeight = 35; // Increased height for better text readability
         memDC.SetBrush(wxBrush(wxColour(63, 63, 70)));
         memDC.DrawRectangle(0, 0, panelSize.x, tabHeight);
         
+        // Calculate tab width based on content count and panel size
+        int tabCount = panel->GetContentCount();
+        int tabWidth;
+        if (tabCount == 1) {
+            tabWidth = 150; // Fixed width for single tab
+        } else {
+            // For multiple tabs, calculate width based on panel size and tab count
+            // Ensure minimum width for readability and maximum width for aesthetics
+            int calculatedWidth = std::max(120, panelSize.x / std::max(1, tabCount));
+            tabWidth = std::min(300, calculatedWidth); // Cap at 300px max
+            
+            // Ensure minimum tab width for readability
+            if (tabWidth < 100) {
+                tabWidth = 100;
+            }
+        }
+        
         // Draw active tab
-        int tabWidth = std::min(150, panelSize.x / std::max(1, panel->GetContentCount()));
         memDC.SetBrush(wxBrush(wxColour(0, 122, 204)));
         memDC.DrawRectangle(0, 0, tabWidth, tabHeight);
         
-        // Draw tab text
+        // Draw tab text with better positioning and font
         memDC.SetTextForeground(wxColour(241, 241, 241));
+        
+        // Use a larger font for better readability
+        wxFont tabFont = wxFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+        memDC.SetFont(tabFont);
+        
         wxString title = panel->GetContentTitle(panel->GetSelectedIndex());
         if (!title.IsEmpty()) {
-            wxRect textRect(8, 0, tabWidth - 16, tabHeight);
-            memDC.DrawLabel(title, textRect, wxALIGN_CENTER_VERTICAL);
+            // Calculate text rectangle with proper margins
+            int textMargin = 8; // Adequate margin for text
+            wxRect textRect(textMargin, 0, tabWidth - 2 * textMargin, tabHeight);
+            
+            // Use both vertical and horizontal centering for better text positioning
+            memDC.DrawLabel(title, textRect, wxALIGN_CENTER_VERTICAL | wxALIGN_CENTER_HORIZONTAL);
         }
     }
     

@@ -411,7 +411,7 @@ void ModernDockPanel::CalculateTabLayout()
         // Tab width = text width + padding + close button (if applicable)
         int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
         if (m_tabCloseMode != TabCloseMode::ShowNever) {
-            tabWidth += m_closeButtonSize + 4;
+            tabWidth += m_closeButtonSize + 2; // Close button spacing: 2px
         }
         
         // Ensure minimum width
@@ -440,7 +440,7 @@ void ModernDockPanel::CalculateTabLayout()
 
 wxRect ModernDockPanel::CalculateCloseButtonRect(const wxRect& tabRect) const
 {
-    int margin = 4;
+    int margin = 2; // Right margin: 2px
     int size = m_closeButtonSize;
     int x = tabRect.GetRight() - margin - size;
     int y = tabRect.y + (tabRect.height - size) / 2;
@@ -459,7 +459,7 @@ wxRect ModernDockPanel::CalculateTitleBarCloseButtonRect(int tabIndex) const
         wxSize textSize = dc.GetTextExtent(m_contents[i]->title);
         int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
         if (m_tabCloseMode != TabCloseMode::ShowNever) {
-            tabWidth += m_closeButtonSize + 4;
+            tabWidth += m_closeButtonSize + 2; // Close button spacing: 2px
         }
         tabWidth = std::max(tabWidth, m_tabMinWidth);
         x += tabWidth + m_tabSpacing;
@@ -471,12 +471,12 @@ wxRect ModernDockPanel::CalculateTitleBarCloseButtonRect(int tabIndex) const
     wxSize textSize = dc.GetTextExtent(m_contents[tabIndex]->title);
     int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
     if (m_tabCloseMode != TabCloseMode::ShowNever) {
-        tabWidth += m_closeButtonSize + 4;
+        tabWidth += m_closeButtonSize + 2; // Close button spacing: 2px
     }
     tabWidth = std::max(tabWidth, m_tabMinWidth);
     
     // Calculate close button position
-    int margin = 4;
+    int margin = 2; // Right margin: 2px
     int size = m_closeButtonSize;
     int closeX = x + tabWidth - margin - size;
     int closeY = (24 - size) / 2; // Center in title bar height
@@ -605,7 +605,7 @@ void ModernDockPanel::RenderTitleBarTabs(wxGraphicsContext* gc)
         wxSize textSize = dc.GetTextExtent(m_contents[i]->title);
         int tabWidth = textSize.GetWidth() + m_tabPadding * 2;
         if (m_tabCloseMode != TabCloseMode::ShowNever) {
-            tabWidth += m_closeButtonSize + 4;
+            tabWidth += m_closeButtonSize + 2; // Close button spacing: 2px
         }
         tabWidth = std::max(tabWidth, m_tabMinWidth);
 
@@ -649,10 +649,10 @@ void ModernDockPanel::RenderTitleBarTabs(wxGraphicsContext* gc)
             gc->SetFont(m_tabFont, CFG_COLOUR("BarInactiveTextColour"));
         }
 
-        // Draw text
+        // Draw text - left aligned with 8px margin
         double textWidth, textHeight;
         gc->GetTextExtent(m_contents[i]->title, &textWidth, &textHeight);
-        int textX = x + (tabWidth - textWidth) / 2;
+        int textX = x + 8; // Left margin: 8px
         int textY = (24 - textHeight) / 2;
         gc->DrawText(m_contents[i]->title, textX, textY);
 
@@ -752,7 +752,7 @@ void ModernDockPanel::RenderTab(wxGraphicsContext* gc, int index, const wxRect& 
     // Clip text if necessary
     int availableWidth = rect.width - 16; // Account for margins
     if (m_tabCloseMode != TabCloseMode::ShowNever) {
-        availableWidth -= m_closeButtonSize + 4; // Account for close button
+        availableWidth -= m_closeButtonSize + 2; // Account for close button spacing: 2px
     }
     
     wxString displayTitle = title;
