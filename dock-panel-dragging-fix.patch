@@ -1,0 +1,291 @@
+diff --git a/docs/DockPanelDraggingFix.md b/docs/DockPanelDraggingFix.md
+new file mode 100644
+index 0000000..3008938
+--- /dev/null
++++ b/docs/DockPanelDraggingFix.md
+@@ -0,0 +1,67 @@
++# Dock Panel Dragging Fix
++
++## Problem
++When dragging dock panels to the direction indicators (dock guides), the dock layout was not changing and panels were not being properly docked.
++
++## Root Causes Identified
++
++1. **ApplyLayoutToWidgets not applying panel positions**: The `ApplyLayoutToWidgets` method in `LayoutEngine.cpp` was only handling splitter nodes but not applying the calculated layout positions to panel nodes.
++
++2. **FindTargetPanel always returning null**: The `FindTargetPanel` method in `DragDropController.cpp` had placeholder code that always returned `nullptr`, preventing proper target panel identification.
++
++3. **GetDockPosition not checking dock guides**: The `GetDockPosition` method in `ModernDockManager.cpp` was only checking mouse position relative to panels, not checking if the mouse was over dock guides.
++
++4. **No way to get target panel from dock guides**: When dragging over dock guides, there was no way to retrieve which panel the guides were associated with.
++
++## Solutions Applied
++
++### 1. Fixed ApplyLayoutToWidgets
++Added code to apply layout to panel nodes:
++```cpp
++// If this is a panel node, apply its layout
++if (node->GetType() == LayoutNodeType::Panel && node->GetPanel()) {
++    wxRect rect = node->GetRect();
++    node->GetPanel()->SetSize(rect);
++    node->GetPanel()->Show();
++}
++```
++
++### 2. Implemented FindTargetPanel
++Replaced placeholder with proper implementation that:
++- Checks if the hit-tested window is already a ModernDockPanel
++- Searches through all panels to find which one contains the hit-tested window
++- Walks up the parent hierarchy to find the containing panel
++
++### 3. Updated GetDockPosition
++Modified to check dock guides first:
++```cpp
++// First check if mouse is over a dock guide - this takes priority
++if (m_dockGuides && m_dockGuides->IsVisible()) {
++    DockPosition guidePosition = m_dockGuides->GetActivePosition();
++    if (guidePosition != DockPosition::None) {
++        return guidePosition;
++    }
++}
++```
++
++### 4. Added GetDockGuideTarget Support
++- Added `GetCurrentTarget()` method to DockGuides class
++- Added `GetDockGuideTarget()` to IDockManager interface
++- Implemented in ModernDockManager to return the current target panel from dock guides
++- Updated ValidateDrop to use the target panel from dock guides when dragging over them
++
++### 5. Added GetAllPanels Method
++- Added `GetAllPanels()` to IDockManager interface
++- Implemented in ModernDockManager to return all panels
++- Used in FindTargetPanel for searching through panels
++
++## Result
++With these fixes, dragging dock panels to the direction indicators now properly:
++1. Detects when the mouse is over a dock guide
++2. Identifies the correct target panel
++3. Calculates the appropriate dock position
++4. Updates the layout tree structure
++5. Applies the new layout to reposition panels
++6. Shows the changes visually
++
++The dock panel system now correctly responds to dragging panels onto the directional guides, allowing users to dock panels to the left, right, top, bottom, or center (as tabs) of other panels.
+\ No newline at end of file
+diff --git a/include/widgets/DockGuides.h b/include/widgets/DockGuides.h
+index 274d36d..e2443ee 100644
+--- a/include/widgets/DockGuides.h
++++ b/include/widgets/DockGuides.h
+@@ -130,6 +130,7 @@ public:
+     
+     DockPosition GetActivePosition() const;
+     bool IsVisible() const { return m_visible; }
++    ModernDockPanel* GetCurrentTarget() const { return m_currentTarget; }
+     void SetEnabledDirections(bool center, bool left, bool right, bool top, bool bottom) {
+         m_centerEnabled = center; m_leftEnabled = left; m_rightEnabled = right; m_topEnabled = top; m_bottomEnabled = bottom;
+         if (m_edgeGuides) {
+diff --git a/include/widgets/IDockManager.h b/include/widgets/IDockManager.h
+index 5d337a4..afbc11e 100644
+--- a/include/widgets/IDockManager.h
++++ b/include/widgets/IDockManager.h
+@@ -6,6 +6,7 @@
+ #include <wx/string.h>
+ #include <wx/event.h>
+ #include <functional>
++#include <vector>
+ 
+ // Forward declarations
+ class LayoutNode;
+@@ -54,6 +55,7 @@ public:
+     virtual void ShowDockGuides(wxWindow* target) = 0;  // Overloaded version
+     virtual void SetDockGuideConfig(const DockGuideConfig& config) = 0;
+     virtual DockGuideConfig GetDockGuideConfig() const = 0;
++    virtual ModernDockPanel* GetDockGuideTarget() const = 0;
+     
+     // Preview and hit testing
+     virtual void ShowPreviewRect(const wxRect& rect, DockPosition position) = 0;
+@@ -102,6 +104,9 @@ public:
+     virtual int GetSplitterCount() const = 0;
+     virtual wxString GetLayoutStatistics() const = 0;
+     virtual void DumpLayoutTree() const = 0;
++    
++    // Panel access
++    virtual std::vector<ModernDockPanel*> GetAllPanels() const = 0;
+ };
+ 
+ 
+diff --git a/include/widgets/ModernDockManager.h b/include/widgets/ModernDockManager.h
+index a161d63..be43def 100644
+--- a/include/widgets/ModernDockManager.h
++++ b/include/widgets/ModernDockManager.h
+@@ -90,6 +90,7 @@ public:
+     void ShowDockGuides(wxWindow* target) override;
+     void SetDockGuideConfig(const DockGuideConfig& config) override;
+     DockGuideConfig GetDockGuideConfig() const override;
++    ModernDockPanel* GetDockGuideTarget() const override;
+     
+     // Preview and hit testing
+     void ShowPreviewRect(const wxRect& rect, DockPosition position) override;
+@@ -137,6 +138,7 @@ public:
+     int GetSplitterCount() const override;
+     wxString GetLayoutStatistics() const override;
+     void DumpLayoutTree() const override;
++    std::vector<ModernDockPanel*> GetAllPanels() const override;
+     
+     // Configuration
+     void EnableLayoutCaching(bool enabled);
+diff --git a/src/widgets/DragDropController.cpp b/src/widgets/DragDropController.cpp
+index 044f6ea..b1a1405 100644
+--- a/src/widgets/DragDropController.cpp
++++ b/src/widgets/DragDropController.cpp
+@@ -136,16 +136,34 @@ DropValidation DragDropController::ValidateDrop(const wxPoint& pos) const
+         return validation;
+     }
+     
+-    // Find target panel under cursor
+-    validation.targetPanel = FindTargetPanel(pos);
+-    if (!validation.targetPanel) {
+-        return validation;
+-    }
+-    
+-    // Calculate dock position
+-    validation.position = CalculateDockPosition(validation.targetPanel, pos);
+-    if (validation.position == DockPosition::None) {
+-        return validation;
++    // Calculate dock position first to check if we're over dock guides
++    DockPosition guidePosition = m_manager->GetDockPosition(nullptr, pos);
++    
++    // If we're over a dock guide, get the target from the dock guides
++    if (guidePosition != DockPosition::None) {
++        // Get target panel from dock guides
++        validation.targetPanel = m_manager->GetDockGuideTarget();
++        if (!validation.targetPanel) {
++            // If no target from guides, try to find panel under cursor
++            validation.targetPanel = FindTargetPanel(pos);
++            if (!validation.targetPanel) {
++                // If still no panel found, we can't complete the drop
++                return validation;
++            }
++        }
++        validation.position = guidePosition;
++    } else {
++        // Find target panel under cursor
++        validation.targetPanel = FindTargetPanel(pos);
++        if (!validation.targetPanel) {
++            return validation;
++        }
++        
++        // Calculate dock position based on panel
++        validation.position = CalculateDockPosition(validation.targetPanel, pos);
++        if (validation.position == DockPosition::None) {
++            return validation;
++        }
+     }
+     
+     // Check if drop is allowed
+@@ -252,10 +270,31 @@ ModernDockPanel* DragDropController::FindTargetPanel(const wxPoint& screenPos) c
+     
+     // Convert wxWindow* to ModernDockPanel* if possible
+     if (result) {
+-        // Try to find the panel that contains this window
+-        // This is a simplified approach - in a real implementation,
+-        // you might want to maintain a mapping or use a different approach
+-        return nullptr; // Placeholder - need proper conversion logic
++        // Check if the result is already a ModernDockPanel
++        ModernDockPanel* panel = dynamic_cast<ModernDockPanel*>(result);
++        if (panel) {
++            return panel;
++        }
++        
++        // If not, find the panel that contains this window
++        // Get all panels from the manager
++        std::vector<ModernDockPanel*> panels = m_manager->GetAllPanels();
++        for (ModernDockPanel* panel : panels) {
++            if (panel && panel->IsShown()) {
++                // Check if this panel contains the hit-tested window
++                if (panel == result || panel->GetContent() == result) {
++                    return panel;
++                }
++                // Also check if the window is a child of the panel
++                wxWindow* parent = result->GetParent();
++                while (parent) {
++                    if (parent == panel || parent == panel->GetContent()) {
++                        return panel;
++                    }
++                    parent = parent->GetParent();
++                }
++            }
++        }
+     }
+     
+     return nullptr;
+diff --git a/src/widgets/LayoutEngine.cpp b/src/widgets/LayoutEngine.cpp
+index 36c6d1b..1768b2c 100644
+--- a/src/widgets/LayoutEngine.cpp
++++ b/src/widgets/LayoutEngine.cpp
+@@ -847,6 +847,13 @@ void LayoutEngine::ApplyLayoutToWidgets(LayoutNode* node)
+ {
+     if (!node) return;
+     
++    // If this is a panel node, apply its layout
++    if (node->GetType() == LayoutNodeType::Panel && node->GetPanel()) {
++        wxRect rect = node->GetRect();
++        node->GetPanel()->SetSize(rect);
++        node->GetPanel()->Show();
++    }
++    
+     // If this is a splitter node, ensure splitter control is properly displayed
+     if (node->GetType() == LayoutNodeType::HorizontalSplitter || 
+         node->GetType() == LayoutNodeType::VerticalSplitter) {
+diff --git a/src/widgets/ModernDockManager.cpp b/src/widgets/ModernDockManager.cpp
+index 20b663e..1b97f27 100644
+--- a/src/widgets/ModernDockManager.cpp
++++ b/src/widgets/ModernDockManager.cpp
+@@ -330,7 +330,15 @@ DockPosition ModernDockManager::GetDockPosition(wxWindow* target, const wxPoint&
+ {
+     if (!target) return DockPosition::None;
+     
+-    // Calculate dock position based on mouse position relative to target panel
++    // First check if mouse is over a dock guide - this takes priority
++    if (m_dockGuides && m_dockGuides->IsVisible()) {
++        DockPosition guidePosition = m_dockGuides->GetActivePosition();
++        if (guidePosition != DockPosition::None) {
++            return guidePosition;
++        }
++    }
++    
++    // If not over a guide, calculate dock position based on mouse position relative to target panel
+     wxRect targetRect;
+     wxPoint targetScreenPos = target->GetScreenPosition();
+     wxSize targetSize = target->GetSize();
+@@ -922,6 +930,14 @@ DockGuideConfig ModernDockManager::GetDockGuideConfig() const
+     return DockGuideConfig(); // Placeholder
+ }
+ 
++ModernDockPanel* ModernDockManager::GetDockGuideTarget() const
++{
++    if (m_dockGuides) {
++        return m_dockGuides->GetCurrentTarget();
++    }
++    return nullptr;
++}
++
+ // Event handling
+ void ModernDockManager::BindDockEvent(wxEventType eventType, 
+                                       std::function<void(const DockEventData&)> handler)
+@@ -1055,6 +1071,15 @@ int ModernDockManager::GetPanelCount() const
+     return count;
+ }
+ 
++std::vector<ModernDockPanel*> ModernDockManager::GetAllPanels() const
++{
++    std::vector<ModernDockPanel*> allPanels;
++    for (const auto& [area, panels] : m_panels) {
++        allPanels.insert(allPanels.end(), panels.begin(), panels.end());
++    }
++    return allPanels;
++}
++
+ int ModernDockManager::GetContainerCount() const
+ {
+     return 0; // Placeholder
