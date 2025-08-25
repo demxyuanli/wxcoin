@@ -136,6 +136,33 @@ DropValidation DragDropController::ValidateDrop(const wxPoint& pos) const
         return validation;
     }
     
+    // First check if we're dragging over dock guides - this takes priority
+    if (m_manager) {
+        ModernDockPanel* guideTarget = m_manager->GetDockGuideTarget();
+        if (guideTarget) {
+            // We're over dock guides, use the guide target and active position
+            validation.targetPanel = guideTarget;
+            validation.position = m_manager->GetDockPosition(guideTarget->GetContent(), pos);
+            
+            if (validation.position != DockPosition::None) {
+                // Check if drop is allowed
+                if (CanDropOnTarget(validation.targetPanel, validation.position)) {
+                    // Calculate preview rectangle
+                    validation.previewRect = CalculatePreviewRect(validation.targetPanel, validation.position);
+                    
+                    // Calculate insert index for tab operations
+                    if (validation.position == DockPosition::Center) {
+                        validation.insertIndex = CalculateTabInsertIndex(validation.targetPanel, pos);
+                    }
+                    
+                    validation.valid = true;
+                    return validation;
+                }
+            }
+        }
+    }
+    
+    // Fall back to normal hit testing if not over dock guides
     // Find target panel under cursor
     validation.targetPanel = FindTargetPanel(pos);
     if (!validation.targetPanel) {
@@ -252,10 +279,27 @@ ModernDockPanel* DragDropController::FindTargetPanel(const wxPoint& screenPos) c
     
     // Convert wxWindow* to ModernDockPanel* if possible
     if (result) {
-        // Try to find the panel that contains this window
-        // This is a simplified approach - in a real implementation,
-        // you might want to maintain a mapping or use a different approach
-        return nullptr; // Placeholder - need proper conversion logic
+        // First check if the result is already a ModernDockPanel
+        if (auto* panel = dynamic_cast<ModernDockPanel*>(result)) {
+            return panel;
+        }
+        
+        // If not, search through all panels to find which one contains this window
+        std::vector<ModernDockPanel*> allPanels = m_manager->GetAllPanels();
+        for (auto* panel : allPanels) {
+            if (panel->GetContent() == result) {
+                return panel;
+            }
+            
+            // Also check if the window is a child of the panel
+            wxWindow* parent = result->GetParent();
+            while (parent) {
+                if (parent == panel->GetContent()) {
+                    return panel;
+                }
+                parent = parent->GetParent();
+            }
+        }
     }
     
     return nullptr;

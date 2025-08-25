@@ -129,6 +129,7 @@ public:
     void UpdateGuides(const wxPoint& mousePos);
     
     DockPosition GetActivePosition() const;
+    ModernDockPanel* GetCurrentTarget() const { return m_currentTarget; }
     bool IsVisible() const { return m_visible; }
     void SetEnabledDirections(bool center, bool left, bool right, bool top, bool bottom) {
         m_centerEnabled = center; m_leftEnabled = left; m_rightEnabled = right; m_topEnabled = top; m_bottomEnabled = bottom;

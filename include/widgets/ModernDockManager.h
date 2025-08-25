@@ -138,6 +138,12 @@ public:
     wxString GetLayoutStatistics() const override;
     void DumpLayoutTree() const override;
     
+    // Panel collection access
+    std::vector<ModernDockPanel*> GetAllPanels() const override;
+    
+    // Dock guide target access
+    ModernDockPanel* GetDockGuideTarget() const override;
+    
     // Configuration
     void EnableLayoutCaching(bool enabled);
     void SetLayoutUpdateMode(LayoutUpdateMode mode);

@@ -136,13 +136,7 @@ void ModernDockManager::InitializeComponents()
             );
             
             if (success) {
-                // Force layout update immediately after docking
-                m_layoutEngine->UpdateLayout();
-                
-                // Refresh the display to show changes
-                Refresh();
-                
-                // Then animate layout to new configuration
+                // Animate layout to new configuration
                 m_layoutEngine->AnimateLayout();
             }
         }
@@ -329,6 +323,14 @@ wxWindow* ModernDockManager::HitTest(const wxPoint& screenPos) const
 DockPosition ModernDockManager::GetDockPosition(wxWindow* target, const wxPoint& screenPos) const
 {
     if (!target) return DockPosition::None;
+    
+    // First check if mouse is over a dock guide - this takes priority
+    if (m_dockGuides && m_dockGuides->IsVisible()) {
+        DockPosition guidePosition = m_dockGuides->GetActivePosition();
+        if (guidePosition != DockPosition::None) {
+            return guidePosition;
+        }
+    }
     
     // Calculate dock position based on mouse position relative to target panel
     wxRect targetRect;
@@ -1053,6 +1055,23 @@ int ModernDockManager::GetPanelCount() const
         count += panels.size();
     }
     return count;
+}
+
+std::vector<ModernDockPanel*> ModernDockManager::GetAllPanels() const
+{
+    std::vector<ModernDockPanel*> allPanels;
+    for (const auto& [area, panels] : m_panels) {
+        allPanels.insert(allPanels.end(), panels.begin(), panels.end());
+    }
+    return allPanels;
+}
+
+ModernDockPanel* ModernDockManager::GetDockGuideTarget() const
+{
+    if (m_dockGuides) {
+        return m_dockGuides->GetCurrentTarget();
+    }
+    return nullptr;
 }
 
 int ModernDockManager::GetContainerCount() const

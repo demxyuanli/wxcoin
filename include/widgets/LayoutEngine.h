@@ -158,10 +158,11 @@ private:
     std::unique_ptr<LayoutNode> CreatePanelNode(ModernDockPanel* panel);
     std::unique_ptr<LayoutNode> CreateSplitterNode(bool horizontal);
     void InsertPanelIntoTree(ModernDockPanel* panel, LayoutNode* parent, DockPosition position);
-    void InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode, LayoutNode* parent, DockPosition position);
     void RemovePanelFromTree(LayoutNode* panelNode);
     void OrganizeByDockAreas(std::unique_ptr<LayoutNode> panelNode, LayoutNode* parent);
     void CreateMainLayoutStructure(LayoutNode* parent);
+    void CreateTabbedInterface(LayoutNode* parent, std::unique_ptr<LayoutNode> newPanel, LayoutNode* existingPanel);
+    void CreateSplitterForPosition(LayoutNode* parent, std::unique_ptr<LayoutNode> panelNode, DockPosition position);
     
     // Layout calculation helpers
     void CalculateNodeLayout(LayoutNode* node, const wxRect& rect);

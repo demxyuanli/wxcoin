@@ -102,6 +102,12 @@ public:
     virtual int GetSplitterCount() const = 0;
     virtual wxString GetLayoutStatistics() const = 0;
     virtual void DumpLayoutTree() const = 0;
+    
+    // Panel collection access
+    virtual std::vector<ModernDockPanel*> GetAllPanels() const = 0;
+    
+    // Dock guide target access
+    virtual ModernDockPanel* GetDockGuideTarget() const = 0;
 };
 
 
