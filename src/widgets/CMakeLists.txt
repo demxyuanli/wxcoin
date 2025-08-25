@@ -31,6 +31,9 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/layouts/LayoutStrategyTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LayoutStrategyDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LayoutOptimizer.cpp
+    
+    # Smart Layout Engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/SmartLayoutEngine.cpp
 )
 
 set(WIDGETS_HDRS
@@ -74,6 +77,9 @@ set(WIDGETS_HDRS
     # Layout Strategy Dialog
     ${CMAKE_SOURCE_DIR}/include/widgets/LayoutStrategyDialog.h
     ${CMAKE_SOURCE_DIR}/include/widgets/LayoutOptimizer.h
+    
+    # Smart Layout Engine
+    ${CMAKE_SOURCE_DIR}/include/widgets/SmartLayoutEngine.h
 )
 
 add_library(widgets STATIC ${WIDGETS_SRC} ${WIDGETS_HDRS})
