@@ -1,7 +1,7 @@
-#include "../../include/widgets/LayoutEngine.h"
-#include "../../include/widgets/ModernDockManager.h"
-#include "../../include/widgets/ModernDockPanel.h"
-#include "../../include/DPIManager.h"
+#include "widgets/LayoutEngine.h"
+#include "widgets/ModernDockManager.h"
+#include "widgets/ModernDockPanel.h"
+#include "DPIManager.h"
 #include <wx/splitter.h>
 #include <wx/sizer.h>
 #include <wx/log.h>
@@ -112,7 +112,8 @@ LayoutEngine::LayoutEngine(wxWindow* parent, IDockManager* manager)
       m_manager(manager),
       m_animationTimer(this, wxID_ANY),
       m_animationEnabled(true),
-      m_layoutDirty(false)
+      m_layoutDirty(false),
+      m_delayedCleanupPending(false)
 {
     // Initialize DPI-aware sizes
     double dpiScale = DPIManager::getInstance().getDPIScale();
@@ -225,54 +226,23 @@ bool LayoutEngine::DockPanel(ModernDockPanel* panel, ModernDockPanel* target, Do
         return false;
     }
     
-    // Special handling: if panel and target share the same parent and are the only children,
-    // we need to be careful not to remove the parent when removing the panel
+    // Find panel node if it's already in the tree
     LayoutNode* panelNode = m_rootNode->FindPanel(panel);
-    bool needSpecialHandling = false;
-    if (panelNode && targetNode) {
-        LayoutNode* panelParent = panelNode->GetParent();
-        LayoutNode* targetNodeParent = targetNode->GetParent();
-        if (panelParent && panelParent == targetNodeParent && 
-            panelParent->GetChildren().size() == 2) {
-            needSpecialHandling = true;
-            wxLogDebug("DockPanel: Special handling - panel and target are siblings");
-        }
-    }
     
     // Remove panel from current location if it's already in the tree
+    // Always use RemovePanelFromTree to avoid triggering aggressive cleanup
     wxLogDebug("DockPanel: Removing panel from current location");
-    if (needSpecialHandling) {
-        // Just remove the panel node without cleanup to preserve structure
+    if (panelNode) {
         RemovePanelFromTree(panelNode);
-    } else {
-        RemovePanel(panel);
+        wxLogDebug("DockPanel: Panel removed from tree");
     }
     
     // Re-find target node in case the tree structure changed
     targetNode = m_rootNode->FindPanel(target);
     if (!targetNode) {
-        // Target was removed during cleanup, we need to recreate it
-        wxLogDebug("DockPanel: Target was removed during cleanup, recreating target panel");
-        
-        // Create a new target panel node
-        auto targetPanelNode = CreatePanelNode(target);
-        if (targetPanelNode) {
-            // Add target panel back to the saved parent
-            targetParent->AddChild(std::move(targetPanelNode));
-            
-            // Now try to insert the panel relative to the recreated target
-            targetNode = m_rootNode->FindPanel(target);
-            if (targetNode) {
-                wxLogDebug("DockPanel: Target panel recreated, inserting panel relative to it");
-                InsertPanelIntoTree(panel, targetNode, position);
-            } else {
-                wxLogDebug("DockPanel: Failed to recreate target panel, using fallback");
-                InsertPanelIntoTree(panel, targetParent, position);
-            }
-        } else {
-            wxLogDebug("DockPanel: Failed to create target panel node, using fallback");
-            InsertPanelIntoTree(panel, targetParent, position);
-        }
+        // Target was removed during cleanup, use saved parent
+        wxLogDebug("DockPanel: Target was removed during cleanup, using saved parent");
+        InsertPanelIntoTree(panel, targetParent, position);
     } else {
         // Target still exists, use its current parent
         LayoutNode* currentParent = targetNode->GetParent();
@@ -292,16 +262,13 @@ bool LayoutEngine::DockPanel(ModernDockPanel* panel, ModernDockPanel* target, Do
     
     m_layoutDirty = true;
     
-    // CRITICAL: Force immediate layout update to ensure panels are visible
-    wxLogDebug("DockPanel: Forcing immediate layout update");
-    UpdateLayout();
-    
-    // CRITICAL: Apply complete UI refresh to ensure panels are immediately visible
-    wxLogDebug("DockPanel: Applying complete UI refresh");
-    if (m_parent) {
-        m_parent->Layout();
-        m_parent->Refresh(true);  // Force full repaint including children
+    // Schedule a delayed cleanup instead of immediate cleanup
+    // This prevents aggressive cleanup from interfering with the docking operation
+    m_delayedCleanupPending = true;
+    if (m_animationTimer.IsRunning()) {
+        m_animationTimer.Stop();
     }
+    m_animationTimer.StartOnce(100); // Cleanup after 100ms
     
     wxLogDebug("DockPanel: Complete");
     return true;
@@ -393,11 +360,10 @@ void LayoutEngine::UpdateLayout(const wxRect& clientRect)
     // Apply layout to widgets
     ApplyLayoutToWidgets(m_rootNode.get());
     
-    // CRITICAL: Apply complete UI refresh to ensure all layout changes are visible
-    wxLogDebug("UpdateLayout: Applying complete UI refresh");
+    // Force refresh of the parent window to ensure all changes are visible
     if (m_parent) {
-        m_parent->Layout();
-        m_parent->Refresh(true);  // Force full repaint including children
+        m_parent->Refresh();
+        m_parent->Update();
     }
     
     m_layoutDirty = false;
@@ -665,16 +631,25 @@ void LayoutEngine::OrganizeByDockAreas(std::unique_ptr<LayoutNode> panelNode, La
     //           TopWorkArea -> HorizontalSplitter(LeftSidebar | CenterCanvas)
     //           BottomStatusBar -> (Message + Performance as tabs)
     
+    wxLogDebug("OrganizeByDockAreas: Checking structure for area %d", (int)newArea);
+    
+    if (parent->GetChildren().empty()) {
+        wxLogDebug("OrganizeByDockAreas: No children, creating main structure");
+        CreateMainLayoutStructure(parent);
+    }
+    
     if (parent->GetChildren().empty() || 
         parent->GetChildren()[0]->GetType() != LayoutNodeType::VerticalSplitter) {
-        // Structure not ready, add to parent as fallback
+        wxLogDebug("OrganizeByDockAreas: Main structure not ready, adding to parent");
         parent->AddChild(std::move(panelNode));
         return;
     }
     
     auto& mainVSplitter = parent->GetChildren()[0];
+    wxLogDebug("OrganizeByDockAreas: Main VSplitter has %d children", (int)mainVSplitter->GetChildren().size());
+    
     if (mainVSplitter->GetChildren().size() < 2) {
-        // Structure not complete
+        wxLogDebug("OrganizeByDockAreas: Main structure incomplete, adding to parent");
         parent->AddChild(std::move(panelNode));
         return;
     }
@@ -682,22 +657,29 @@ void LayoutEngine::OrganizeByDockAreas(std::unique_ptr<LayoutNode> panelNode, La
     auto topWorkArea = mainVSplitter->GetChildren()[0].get();
     auto bottomStatusBar = mainVSplitter->GetChildren()[1].get();
     
+    wxLogDebug("OrganizeByDockAreas: TopWorkArea has %d children", (int)topWorkArea->GetChildren().size());
+    
     if (topWorkArea->GetChildren().empty() || 
         topWorkArea->GetChildren()[0]->GetType() != LayoutNodeType::HorizontalSplitter) {
-        // Top work area structure not ready
+        wxLogDebug("OrganizeByDockAreas: Top work area structure not ready, adding to parent");
         parent->AddChild(std::move(panelNode));
         return;
     }
     
     auto topHSplitter = topWorkArea->GetChildren()[0].get();
+    wxLogDebug("OrganizeByDockAreas: TopHSplitter has %d children", (int)topHSplitter->GetChildren().size());
+    
     if (topHSplitter->GetChildren().size() < 2) {
-        // Top horizontal splitter not ready
+        wxLogDebug("OrganizeByDockAreas: Top horizontal splitter not ready, adding to parent");
         parent->AddChild(std::move(panelNode));
         return;
     }
     
     auto leftSidebar = topHSplitter->GetChildren()[0].get();
     auto centerCanvas = topHSplitter->GetChildren()[1].get();
+    
+    wxLogDebug("OrganizeByDockAreas: Found containers - LeftSidebar: %d children, CenterCanvas: %d children", 
+               (int)leftSidebar->GetChildren().size(), (int)centerCanvas->GetChildren().size());
     
     // Now add panel to appropriate container
     switch (newArea) {
@@ -814,16 +796,8 @@ void LayoutEngine::RemovePanelFromTree(LayoutNode* panelNode)
     LayoutNode* parent = panelNode->GetParent();
     if (!parent) return;
     
-    // IMPORTANT: Don't hide the panel immediately, just remove it from the tree
-    // The panel will be reparented to the new splitter later
-    wxLogDebug("RemovePanelFromTree: Removing panel %s from tree (keeping visible)", 
-               panelNode->GetPanel() ? panelNode->GetPanel()->GetTitle() : "null");
-    
     // Remove from parent
     parent->RemoveChild(panelNode);
-    
-    // Note: We don't call panelNode->GetPanel()->Hide() here
-    // The panel will be reparented and shown in the new location
 }
 
 void LayoutEngine::CalculateNodeLayout(LayoutNode* node, const wxRect& rect)
@@ -931,6 +905,10 @@ void LayoutEngine::ApplyLayoutToWidgets(LayoutNode* node)
         wxRect rect = node->GetRect();
         node->GetPanel()->SetSize(rect);
         node->GetPanel()->Show();
+        
+        // Force refresh of the panel to ensure proper display
+        node->GetPanel()->Refresh();
+        node->GetPanel()->Update();
     }
     
     // If this is a splitter node, ensure splitter control is properly displayed
@@ -952,6 +930,10 @@ void LayoutEngine::ApplyLayoutToWidgets(LayoutNode* node)
             
             // Update splitter sash position
             UpdateSplitterSashPosition(node);
+            
+            // Force refresh of the splitter
+            splitter->Refresh();
+            splitter->Update();
         }
     }
     
@@ -1032,6 +1014,16 @@ void LayoutEngine::SetupSplitterPanels(LayoutNode* splitterNode)
         } else {
             splitter->SplitHorizontally(firstWindow, secondWindow); // Top/Bottom split
         }
+        
+        // Force refresh of all components after reparenting
+        firstWindow->Refresh();
+        secondWindow->Refresh();
+        splitter->Refresh();
+        
+        // Ensure proper layout update
+        splitter->Layout();
+        firstWindow->Layout();
+        secondWindow->Layout();
     }
 }
 
@@ -1240,6 +1232,101 @@ bool LayoutEngine::IsNodeInHierarchy(LayoutNode* ancestor, LayoutNode* target) c
     return false;
 }
 
+bool LayoutEngine::IsMainStructureNode(LayoutNode* node) const
+{
+    if (!node || !m_rootNode) return false;
+    
+    // Check if this node is part of the main IDE layout structure
+    // Main structure: Root -> VerticalSplitter(TopWorkArea | BottomStatusBar)
+    //                TopWorkArea -> HorizontalSplitter(LeftSidebar | CenterCanvas)
+    
+    // Navigate from root to find if this node is in the main structure
+    if (m_rootNode->GetChildren().empty()) {
+        return false;
+    }
+    
+    auto& mainVSplitter = m_rootNode->GetChildren()[0];
+    if (mainVSplitter->GetType() != LayoutNodeType::VerticalSplitter) {
+        return false;
+    }
+    
+    // Check if node is the main vertical splitter
+    if (node == mainVSplitter.get()) {
+        return true;
+    }
+    
+    // Check if node is in top work area
+    if (mainVSplitter->GetChildren().size() > 0) {
+        auto& topWorkArea = mainVSplitter->GetChildren()[0];
+        if (node == topWorkArea.get()) {
+            return true;
+        }
+        
+        // Check if node is the top horizontal splitter
+        if (topWorkArea->GetChildren().size() > 0) {
+            auto& topHSplitter = topWorkArea->GetChildren()[0];
+            if (node == topHSplitter.get()) {
+                return true;
+            }
+            
+            // Check if node is in left sidebar or center canvas
+            if (topHSplitter->GetChildren().size() >= 2) {
+                auto& leftSidebar = topHSplitter->GetChildren()[0];
+                auto& centerCanvas = topHSplitter->GetChildren()[1];
+                
+                if (node == leftSidebar.get() || node == centerCanvas.get()) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    // Check if node is in bottom status bar
+    if (mainVSplitter->GetChildren().size() > 1) {
+        auto& bottomStatusBar = mainVSplitter->GetChildren()[1];
+        if (node == bottomStatusBar.get()) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+void LayoutEngine::SetPanelDockAreaByPosition(LayoutNode* panelNode, DockPosition position)
+{
+    if (!panelNode || !panelNode->GetPanel()) return;
+    
+    // Set the dock area based on the docking position
+    // This ensures the panel goes to the correct container in OrganizeByDockAreas
+    DockArea newArea;
+    
+    switch (position) {
+        case DockPosition::Left:
+            newArea = DockArea::Left;
+            break;
+        case DockPosition::Right:
+            newArea = DockArea::Right;
+            break;
+        case DockPosition::Top:
+            newArea = DockArea::Top;
+            break;
+        case DockPosition::Bottom:
+            newArea = DockArea::Bottom;
+            break;
+        case DockPosition::Center:
+        default:
+            newArea = DockArea::Center;
+            break;
+    }
+    
+    // Set the dock area on both the layout node and the panel
+    panelNode->SetDockArea(newArea);
+    panelNode->GetPanel()->SetDockArea(newArea);
+    
+    wxLogDebug("SetPanelDockAreaByPosition: Set panel %s to area %d based on position %d", 
+               panelNode->GetPanel()->GetTitle(), (int)newArea, (int)position);
+}
+
 LayoutNode* LayoutEngine::FindBestInsertionPoint(DockArea area) const
 {
     if (!m_rootNode) return nullptr;
@@ -1306,8 +1393,8 @@ void LayoutEngine::CleanupEmptyNodes()
     
     wxLogDebug("CleanupEmptyNodes: Starting cleanup");
     
-    // Remove empty splitter nodes recursively
-    // This is a simplified implementation
+    // More conservative cleanup - only remove truly empty nodes
+    // and preserve the main layout structure
     
     std::function<bool(LayoutNode*)> cleanup = [&](LayoutNode* node) -> bool {
         if (!node) return false;
@@ -1317,12 +1404,29 @@ void LayoutEngine::CleanupEmptyNodes()
         for (auto it = children.begin(); it != children.end();) {
             bool childEmpty = cleanup(it->get());
             
-            // PROTECTION: Don't remove nodes that contain panels or have valid children
-            // Only remove truly empty nodes that are not essential for the layout
-            if (childEmpty && 
-                (*it)->GetType() != LayoutNodeType::Panel &&
-                (*it)->GetType() != LayoutNodeType::Root) {
-                
+            // VERY CONSERVATIVE: Only remove nodes that are truly empty
+            // and don't have any meaningful content
+            bool shouldRemove = false;
+            
+            if (childEmpty) {
+                // Only remove if child is completely empty
+                shouldRemove = true;
+            } else if ((*it)->GetType() == LayoutNodeType::HorizontalSplitter ||
+                       (*it)->GetType() == LayoutNodeType::VerticalSplitter) {
+                // For splitters, be EXTREMELY conservative
+                // Only remove if they have 0 children AND are not part of main structure
+                if ((*it)->GetChildren().size() == 0) {
+                    // Additional check: don't remove if this might be part of main structure
+                    bool isMainStructure = IsMainStructureNode(it->get());
+                    shouldRemove = !isMainStructure;
+                }
+                // Never remove splitters with 1 or more children
+            } else if ((*it)->GetType() == LayoutNodeType::Panel) {
+                // Never remove panel nodes
+                shouldRemove = false;
+            }
+            
+            if (shouldRemove) {
                 wxLogDebug("CleanupEmptyNodes: Removing node type=%d with %d children", 
                           (int)(*it)->GetType(), (int)(*it)->GetChildren().size());
                 
@@ -1330,9 +1434,11 @@ void LayoutEngine::CleanupEmptyNodes()
                 if ((*it)->GetSplitter()) {
                     (*it)->GetSplitter()->Unsplit();
                 }
-                
                 it = children.erase(it);
             } else {
+                wxLogDebug("CleanupEmptyNodes: Keeping node type=%d with %d children (main structure: %s)", 
+                          (int)(*it)->GetType(), (int)(*it)->GetChildren().size(),
+                          IsMainStructureNode(it->get()) ? "yes" : "no");
                 ++it;
             }
         }
@@ -1410,7 +1516,22 @@ void LayoutEngine::CompleteTransition(LayoutTransition& transition)
 void LayoutEngine::OnAnimationTimer(wxTimerEvent& event)
 {
     wxUnusedVar(event);
-    UpdateTransitions();
+    
+    // Check if this is a delayed cleanup timer
+    if (m_delayedCleanupPending) {
+        // This is a delayed cleanup timer - perform conservative cleanup
+        wxLogDebug("LayoutEngine: Performing delayed cleanup");
+        m_delayedCleanupPending = false;
+        CleanupEmptyNodes();
+        
+        // Update layout after cleanup
+        if (m_manager) {
+            UpdateLayout();
+        }
+    } else if (m_layoutDirty && !m_activeTransitions.empty()) {
+        // This is a regular animation timer
+        UpdateTransitions();
+    }
 }
 
 void LayoutEngine::OnSplitterMoved(wxSplitterEvent& event)
@@ -1506,9 +1627,13 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
             insertParent = m_rootNode.get();
         }
         
-        // If insertParent is not the root and has no other children, 
-        // we should use the root to avoid creating empty intermediate containers
-        if (insertParent != m_rootNode.get() && insertParent->GetChildren().size() <= 1) {
+        // CRITICAL: Check if we're about to destroy a main structure splitter
+        // If the parent of this panel is a main structure splitter, we need to be more careful
+        if (insertParent && IsMainStructureNode(insertParent)) {
+            wxLogDebug("InsertPanelWithSplitter: insertParent is main structure, being careful");
+            // Don't use root - preserve the main structure
+            // We'll insert the new splitter as a sibling to the target panel
+        } else if (insertParent != m_rootNode.get() && insertParent->GetChildren().size() <= 1) {
             wxLogDebug("InsertPanelWithSplitter: insertParent has only 1 child, using root instead");
             insertParent = m_rootNode.get();
         }
@@ -1570,10 +1695,23 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
         // Remove target panel from its current location
         wxLogDebug("InsertPanelWithSplitter: Removing target panel %s from insertParent (Left/Top case)", 
                    targetPanel ? targetPanel->GetTitle() : "null");
+        
+        // Check if we're dealing with a main structure node
+        bool isMainStructure = insertParent && IsMainStructureNode(insertParent);
+        
         if (parent->GetType() == LayoutNodeType::Panel) {
-            // Parent is the target panel node itself
-            wxLogDebug("InsertPanelWithSplitter: Removing parent panel node");
-            insertParent->RemoveChild(parent);
+            if (isMainStructure) {
+                wxLogDebug("InsertPanelWithSplitter: insertParent is main structure, using OrganizeByDockAreas instead");
+                // Don't destroy main structure - use OrganizeByDockAreas instead
+                // But first, set the correct dock area based on position
+                SetPanelDockAreaByPosition(panelNode.get(), position);
+                OrganizeByDockAreas(std::move(panelNode), insertParent);
+                return;
+            } else {
+                // Parent is the target panel node itself
+                wxLogDebug("InsertPanelWithSplitter: Removing parent panel node");
+                insertParent->RemoveChild(parent);
+            }
         } else {
             // Remove target panel from its parent container
             wxLogDebug("InsertPanelWithSplitter: Removing target panel from container");
@@ -1594,10 +1732,23 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
         // Remove target panel from its current location
         wxLogDebug("InsertPanelWithSplitter: Removing target panel %s from insertParent (Right/Bottom case)", 
                    targetPanel ? targetPanel->GetTitle() : "null");
+        
+        // Check if we're dealing with a main structure node
+        bool isMainStructure = insertParent && IsMainStructureNode(insertParent);
+        
         if (parent->GetType() == LayoutNodeType::Panel) {
-            // Parent is the target panel node itself
-            wxLogDebug("InsertPanelWithSplitter: Removing parent panel node");
-            insertParent->RemoveChild(parent);
+            if (isMainStructure) {
+                wxLogDebug("InsertPanelWithSplitter: insertParent is main structure, using OrganizeByDockAreas instead");
+                // Don't destroy main structure - use OrganizeByDockAreas instead
+                // But first, set the correct dock area based on position
+                SetPanelDockAreaByPosition(panelNode.get(), position);
+                OrganizeByDockAreas(std::move(panelNode), insertParent);
+                return;
+            } else {
+                // Parent is the target panel node itself
+                wxLogDebug("InsertPanelWithSplitter: Removing parent panel node");
+                insertParent->RemoveChild(parent);
+            }
         } else {
             // Remove target panel from its parent container
             wxLogDebug("InsertPanelWithSplitter: Removing target panel from container");
@@ -1633,27 +1784,6 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
     wxLogDebug("InsertPanelWithSplitter: After adding splitter, insertParent has %d children", 
                (int)insertParent->GetChildren().size());
     
-    // CRITICAL: Ensure the splitter is properly integrated into the main window
-    // This is essential for the panels to be visible
-    if (m_parent && splitterWidget) {
-        // Make sure the splitter is a child of the main window
-        if (splitterWidget->GetParent() != m_parent) {
-            splitterWidget->Reparent(m_parent);
-        }
-        
-        // CRITICAL: Set splitter position and size BEFORE showing
-        // This prevents overlap with other panels
-        wxPoint targetPos = targetPanel->GetPosition();
-        wxSize targetSize = targetPanel->GetSize();
-        
-        splitterWidget->SetPosition(targetPos);
-        splitterWidget->SetSize(targetSize);
-        splitterWidget->Show();
-        
-        wxLogDebug("InsertPanelWithSplitter: Splitter integrated into main window at pos(%d,%d) size(%dx%d)", 
-                  targetPos.x, targetPos.y, targetSize.GetWidth(), targetSize.GetHeight());
-    }
-    
     // Reparent panels to splitter and split
     if (splitterWidget && firstChild && secondChild) {
         if (firstChild->GetPanel() && secondChild->GetPanel()) {
@@ -1675,36 +1805,31 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
             // Set initial sash position to middle
             splitterWidget->SetSashPosition(splitterWidget->GetSize().GetWidth() / 2);
             
-            // CRITICAL: Set minimum pane sizes to prevent panels from being compressed
-            int minPaneSize = 100;  // Minimum 100 pixels per pane
-            splitterWidget->SetMinimumPaneSize(minPaneSize);
-            wxLogDebug("InsertPanelWithSplitter: Set minimum pane size to %d", minPaneSize);
+            // Ensure splitter is visible and properly sized
+            wxLogDebug("InsertPanelWithSplitter: Setting splitter size and showing it");
             
-            // CRITICAL: Set splitter position and size to match target panel
-            wxLogDebug("InsertPanelWithSplitter: Setting splitter position and size");
+            // Get parent size and set splitter size
+            wxSize parentSize = m_parent->GetClientSize();
+            wxLogDebug("InsertPanelWithSplitter: Parent size: %dx%d", parentSize.GetWidth(), parentSize.GetHeight());
             
-            // Get target panel position and size
-            wxPoint targetPos = targetPanel->GetPosition();
-            wxSize targetSize = targetPanel->GetSize();
-            wxLogDebug("InsertPanelWithSplitter: Target panel pos: (%d,%d), size: %dx%d", 
-                      targetPos.x, targetPos.y, targetSize.GetWidth(), targetSize.GetHeight());
-            
-            // Set splitter to exact position and size of target panel
-            splitterWidget->SetPosition(targetPos);
-            splitterWidget->SetSize(targetSize);
+            // Set splitter size to parent size
+            splitterWidget->SetSize(parentSize);
             splitterWidget->Show();
-            
-            // Hide the original target panel to prevent overlap
-            targetPanel->Hide();
             
             // Ensure panels are also visible
             firstChild->GetPanel()->Show();
             secondChild->GetPanel()->Show();
             
-            wxLogDebug("InsertPanelWithSplitter: Splitter and panels shown");
+            wxLogDebug("InsertPanelWithSplitter: Splitter size set to: %dx%d", 
+                      splitterWidget->GetSize().GetWidth(), splitterWidget->GetSize().GetHeight());
             
-            // Let the layout system handle sizing and positioning
-            // Don't force manual sizing here
+            // Force layout update
+            splitterWidget->Layout();
+            m_parent->Layout();
+            
+            // Additional refresh to ensure visibility
+            splitterWidget->Refresh();
+            m_parent->Refresh();
             
             // CRITICAL: Ensure the splitter is properly integrated into the parent's layout
             // This is the key fix for making panels visible
@@ -1719,23 +1844,9 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
             // Ensure the splitter is the top-most child (if needed)
             splitterWidget->Raise();
             
-            // CRITICAL: Apply complete UI refresh to ensure panels are immediately visible
-            wxLogDebug("InsertPanelWithSplitter: Applying complete UI refresh");
-            
-            // Force complete refresh of the entire layout
-            if (m_parent) {
-                m_parent->Layout();
-                m_parent->Refresh(true);  // Force full repaint including children
-            }
-            
-            // Also refresh the splitter and its children
-            if (splitterWidget) {
-                splitterWidget->Layout();
-                splitterWidget->Refresh(true);  // Force children refresh
-            }
-            
-            wxLogDebug("InsertPanelWithSplitter: UI refresh complete");
-            
+            // Final layout and refresh
+            m_parent->Layout();
+            m_parent->Refresh();
         } else {
             wxLogDebug("InsertPanelWithSplitter: Cannot split - missing panel references");
         }

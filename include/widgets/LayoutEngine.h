@@ -198,6 +198,8 @@ private:
     bool IsNodeValid(LayoutNode* node) const;
     bool IsLeftSidebarSplitter(LayoutNode* splitterNode) const;
     bool IsNodeInHierarchy(LayoutNode* ancestor, LayoutNode* target) const;
+    bool IsMainStructureNode(LayoutNode* node) const;
+    void SetPanelDockAreaByPosition(LayoutNode* panelNode, DockPosition position);
     
     wxWindow* m_parent;
     IDockManager* m_manager;
@@ -216,6 +218,7 @@ private:
     // Layout state
     wxRect m_lastClientRect;
     bool m_layoutDirty;
+    bool m_delayedCleanupPending;
     
     // Event handlers
     void OnSplitterMoved(wxSplitterEvent& event);
