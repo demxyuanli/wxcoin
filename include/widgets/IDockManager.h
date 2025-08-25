@@ -6,6 +6,7 @@
 #include <wx/string.h>
 #include <wx/event.h>
 #include <functional>
+#include <vector>
 
 // Forward declarations
 class LayoutNode;

@@ -549,40 +549,37 @@ void DockGuides::ShowGuides(ModernDockPanel* target, const wxPoint& mousePos)
     m_currentTarget = target;
     m_visible = true;
     
-    // Show central guides if visibility flag is true (independent of center responsiveness)
-    if (m_showCentral) {
-        // Get actual work area from manager
-        wxWindow* managerWindow = dynamic_cast<wxWindow*>(m_manager);
-        if (managerWindow) {
-            // Get the client area of the manager window
-            wxRect clientRect = managerWindow->GetClientRect();
-            wxPoint centerPoint = wxPoint(clientRect.x + clientRect.width / 2,
-                                          clientRect.y + clientRect.height / 2);
-            
-            // Convert to screen coordinates for ShowAt method
-            wxPoint screenCenter = managerWindow->ClientToScreen(centerPoint);
-            wxPoint centerPos = screenCenter;
-            
-            // Apply direction mask to central guides
-            m_centralGuides->SetEnabledDirections(m_centerEnabled, m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
-            m_centralGuides->ShowAt(centerPos);
-        } else {
-            // Fallback to default size if manager is not a window
-            wxRect workRect(0, 0, 800, 600);
-            wxPoint centerPoint = wxPoint(workRect.x + workRect.width / 2,
-                                          workRect.y + workRect.height / 2);
-            wxPoint centerPos = centerPoint;
-            m_centralGuides->SetEnabledDirections(m_centerEnabled, m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
-            m_centralGuides->ShowAt(centerPos);
-        }
+    // FIXED LOGIC: Central guides should appear at the center of the target panel
+    // if it's a center panel, otherwise hide them
+    if (m_showCentral && target->GetDockArea() == DockArea::Center) {
+        // Get the target panel's center position
+        wxRect targetRect = target->GetRect();
+        wxPoint targetCenter = wxPoint(targetRect.x + targetRect.width / 2,
+                                      targetRect.y + targetRect.height / 2);
+        
+        // Convert to screen coordinates for ShowAt method
+        // Note: GetRect() returns coordinates relative to parent, so we need to convert properly
+        wxPoint screenCenter = target->GetParent()->ClientToScreen(targetCenter);
+        
+        // Apply direction mask to central guides
+        m_centralGuides->SetEnabledDirections(m_centerEnabled, m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
+        m_centralGuides->ShowAt(screenCenter);
+        
+        wxLogDebug("DockGuides: Showing central guides at center panel position - target rect: %d,%d,%dx%d, center: %d,%d, screen: %d,%d", 
+                   targetRect.x, targetRect.y, targetRect.width, targetRect.height,
+                   targetCenter.x, targetCenter.y, screenCenter.x, screenCenter.y);
     } else {
+        // Hide central guides if not targeting a center panel
         m_centralGuides->Hide();
+        wxLogDebug("DockGuides: Hiding central guides - target is not center panel (area: %d)", (int)target->GetDockArea());
     }
     
-    // Show edge guides around available work area (manager client area)
+    // Edge guides always show around the manager window borders
+    // These represent docking areas relative to the entire manager window
     m_edgeGuides->ShowForManager(m_manager);
-    // Apply enabled directions to edge guides
     m_edgeGuides->SetEnabledDirections(m_leftEnabled, m_rightEnabled, m_topEnabled, m_bottomEnabled);
+    
+    wxLogDebug("DockGuides: Showing edge guides around manager window");
 }
 
 void DockGuides::HideGuides()
