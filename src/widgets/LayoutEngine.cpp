@@ -4,6 +4,7 @@
 #include "DPIManager.h"
 #include <wx/splitter.h>
 #include <wx/sizer.h>
+#include <wx/log.h>
 #include <algorithm>
 
 // LayoutNode implementation
@@ -181,7 +182,7 @@ void LayoutEngine::RemovePanel(ModernDockPanel* panel)
     // Remove from tree
     RemovePanelFromTree(panelNode);
     
-    // Clean up empty nodes
+    // Clean up empty nodes - but be careful not to remove nodes we might need
     CleanupEmptyNodes();
     
     m_layoutDirty = true;
@@ -202,9 +203,15 @@ bool LayoutEngine::DockPanel(ModernDockPanel* panel, ModernDockPanel* target, Do
 {
     if (!panel || !target || !m_rootNode) return false;
     
+    wxLogDebug("DockPanel: panel=%s, target=%s, position=%d", 
+               panel->GetTitle(), target->GetTitle(), (int)position);
+    
     // Find target node and save parent information before removing anything
     LayoutNode* targetNode = m_rootNode->FindPanel(target);
-    if (!targetNode) return false;
+    if (!targetNode) {
+        wxLogDebug("DockPanel: Target node not found!");
+        return false;
+    }
     
     // Save target parent info before any modifications
     LayoutNode* targetParent = targetNode->GetParent();
@@ -213,15 +220,39 @@ bool LayoutEngine::DockPanel(ModernDockPanel* panel, ModernDockPanel* target, Do
     }
     
     // If panel and target are the same, do nothing
-    if (panel == target) return false;
+    if (panel == target) {
+        wxLogDebug("DockPanel: Panel and target are the same!");
+        return false;
+    }
+    
+    // Special handling: if panel and target share the same parent and are the only children,
+    // we need to be careful not to remove the parent when removing the panel
+    LayoutNode* panelNode = m_rootNode->FindPanel(panel);
+    bool needSpecialHandling = false;
+    if (panelNode && targetNode) {
+        LayoutNode* panelParent = panelNode->GetParent();
+        LayoutNode* targetNodeParent = targetNode->GetParent();
+        if (panelParent && panelParent == targetNodeParent && 
+            panelParent->GetChildren().size() == 2) {
+            needSpecialHandling = true;
+            wxLogDebug("DockPanel: Special handling - panel and target are siblings");
+        }
+    }
     
     // Remove panel from current location if it's already in the tree
-    RemovePanel(panel);
+    wxLogDebug("DockPanel: Removing panel from current location");
+    if (needSpecialHandling) {
+        // Just remove the panel node without cleanup to preserve structure
+        RemovePanelFromTree(panelNode);
+    } else {
+        RemovePanel(panel);
+    }
     
     // Re-find target node in case the tree structure changed
     targetNode = m_rootNode->FindPanel(target);
     if (!targetNode) {
         // Target was removed during cleanup, use saved parent
+        wxLogDebug("DockPanel: Target was removed during cleanup, using saved parent");
         InsertPanelIntoTree(panel, targetParent, position);
     } else {
         // Target still exists, use its current parent
@@ -230,16 +261,18 @@ bool LayoutEngine::DockPanel(ModernDockPanel* panel, ModernDockPanel* target, Do
             currentParent = m_rootNode.get();
         }
         
+        wxLogDebug("DockPanel: Inserting panel relative to target");
         // For center docking, use the target node itself
         if (position == DockPosition::Center) {
             InsertPanelIntoTree(panel, targetNode, position);
         } else {
-            // For other positions, insert relative to target's parent
-            InsertPanelIntoTree(panel, currentParent, position);
+            // For other positions, insert relative to target node
+            InsertPanelIntoTree(panel, targetNode, position);
         }
     }
     
     m_layoutDirty = true;
+    wxLogDebug("DockPanel: Complete");
     return true;
 }
 
@@ -1228,23 +1261,32 @@ void LayoutEngine::CleanupEmptyNodes()
     // Remove empty splitter nodes recursively
     // This is a simplified implementation
     
-    std::function<void(LayoutNode*)> cleanup = [&](LayoutNode* node) {
-        if (!node) return;
+    std::function<bool(LayoutNode*)> cleanup = [&](LayoutNode* node) -> bool {
+        if (!node) return false;
         
         // Clean children first
         auto& children = node->GetChildren();
         for (auto it = children.begin(); it != children.end();) {
-            cleanup(it->get());
+            bool childEmpty = cleanup(it->get());
             
-            // Remove empty splitter nodes
-            if (((*it)->GetType() == LayoutNodeType::HorizontalSplitter ||
-                 (*it)->GetType() == LayoutNodeType::VerticalSplitter) &&
-                (*it)->GetChildren().empty()) {
+            // Remove empty splitter nodes or nodes that became empty after cleanup
+            if (childEmpty || 
+                (((*it)->GetType() == LayoutNodeType::HorizontalSplitter ||
+                  (*it)->GetType() == LayoutNodeType::VerticalSplitter) &&
+                 (*it)->GetChildren().empty())) {
+                // If this is a splitter, unsplit it first
+                if ((*it)->GetSplitter()) {
+                    (*it)->GetSplitter()->Unsplit();
+                }
                 it = children.erase(it);
             } else {
                 ++it;
             }
         }
+        
+        // Return true if this node is now empty (but not if it's the root)
+        return node != m_rootNode.get() && children.empty() && 
+               node->GetType() != LayoutNodeType::Panel;
     };
     
     cleanup(m_rootNode.get());
@@ -1394,12 +1436,19 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
 {
     if (!panelNode || !parent) return;
     
-    // Get the target panel from parent (assuming parent is a panel node or has panels)
+    // Determine the actual parent to insert into and the target panel
+    LayoutNode* insertParent = parent;
     ModernDockPanel* targetPanel = nullptr;
+    
     if (parent->GetType() == LayoutNodeType::Panel) {
+        // Parent is a panel node - we need to insert at its parent level
         targetPanel = parent->GetPanel();
+        insertParent = parent->GetParent();
+        if (!insertParent) {
+            insertParent = m_rootNode.get();
+        }
     } else {
-        // Find first panel in parent's children
+        // Parent is a container - find the first panel child
         for (auto& child : parent->GetChildren()) {
             if (child->GetType() == LayoutNodeType::Panel) {
                 targetPanel = child->GetPanel();
@@ -1410,7 +1459,7 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
     
     if (!targetPanel) {
         // Fallback to OrganizeByDockAreas if no target panel found
-        OrganizeByDockAreas(std::move(panelNode), parent);
+        OrganizeByDockAreas(std::move(panelNode), insertParent);
         return;
     }
     
@@ -1432,17 +1481,13 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
         
         // Remove target panel from its current location
         if (parent->GetType() == LayoutNodeType::Panel) {
-            // Parent is the target panel, need to restructure
-            auto grandParent = parent->GetParent();
-            if (grandParent) {
-                grandParent->RemoveChild(parent);
-                parent = grandParent;
-            }
+            // Parent is the target panel node itself
+            insertParent->RemoveChild(parent);
         } else {
-            // Remove target panel from parent
-            for (auto& child : parent->GetChildren()) {
+            // Remove target panel from its parent container
+            for (auto& child : insertParent->GetChildren()) {
                 if (child->GetType() == LayoutNodeType::Panel && child->GetPanel() == targetPanel) {
-                    parent->RemoveChild(child.get());
+                    insertParent->RemoveChild(child.get());
                     break;
                 }
             }
@@ -1454,17 +1499,13 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
         
         // Remove target panel from its current location
         if (parent->GetType() == LayoutNodeType::Panel) {
-            // Parent is the target panel, need to restructure
-            auto grandParent = parent->GetParent();
-            if (grandParent) {
-                grandParent->RemoveChild(parent);
-                parent = grandParent;
-            }
+            // Parent is the target panel node itself
+            insertParent->RemoveChild(parent);
         } else {
-            // Remove target panel from parent
-            for (auto& child : parent->GetChildren()) {
+            // Remove target panel from its parent container
+            for (auto& child : insertParent->GetChildren()) {
                 if (child->GetType() == LayoutNodeType::Panel && child->GetPanel() == targetPanel) {
-                    parent->RemoveChild(child.get());
+                    insertParent->RemoveChild(child.get());
                     break;
                 }
             }
@@ -1476,7 +1517,7 @@ void LayoutEngine::InsertPanelWithSplitter(std::unique_ptr<LayoutNode> panelNode
     splitterNode->AddChild(std::move(secondPanel));
     
     // Add splitter to parent
-    parent->AddChild(std::move(splitterNode));
+    insertParent->AddChild(std::move(splitterNode));
     
     // Reparent panels to splitter and split
     if (splitterWidget && splitterNode->GetChildren().size() == 2) {
