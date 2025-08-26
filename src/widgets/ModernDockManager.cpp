@@ -582,7 +582,8 @@ void ModernDockManager::DrawTabIcon(wxGraphicsContext* gc, const wxPoint& center
 void ModernDockManager::OnSize(wxSizeEvent& event)
 {
     if (m_layoutEngine) {
-        m_layoutEngine->UpdateLayout(wxPanel::GetClientRect());
+        // Use debounced update to prevent excessive layout calculations during resize
+        m_layoutEngine->RequestLayoutUpdate();
     }
     
     event.Skip();
@@ -1010,6 +1011,13 @@ void ModernDockManager::UpdateLayout()
 {
     if (m_layoutEngine) {
         m_layoutEngine->UpdateLayout(wxPanel::GetClientRect());
+    }
+}
+
+void ModernDockManager::RequestLayoutUpdate()
+{
+    if (m_layoutEngine) {
+        m_layoutEngine->RequestLayoutUpdate();
     }
 }
 

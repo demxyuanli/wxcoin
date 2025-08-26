@@ -113,7 +113,10 @@ LayoutEngine::LayoutEngine(wxWindow* parent, IDockManager* manager)
       m_animationTimer(this, wxID_ANY),
       m_animationEnabled(true),
       m_layoutDirty(false),
-      m_delayedCleanupPending(false)
+      m_delayedCleanupPending(false),
+      m_isUpdatingLayout(false),
+      m_debounceTimer(this, wxID_ANY + 1),
+      m_pendingLayoutUpdate(false)
 {
     // Initialize DPI-aware sizes
     double dpiScale = DPIManager::getInstance().getDPIScale();
@@ -121,12 +124,18 @@ LayoutEngine::LayoutEngine(wxWindow* parent, IDockManager* manager)
                            static_cast<int>(DEFAULT_MIN_PANEL_HEIGHT * dpiScale));
     m_splitterSashSize = static_cast<int>(DEFAULT_SPLITTER_SASH_SIZE * dpiScale);
     m_defaultAnimationDuration = DEFAULT_ANIMATION_DURATION;
+    
+    // Bind debounce timer
+    Bind(wxEVT_TIMER, &LayoutEngine::OnDebounceTimer, this, m_debounceTimer.GetId());
 }
 
 LayoutEngine::~LayoutEngine()
 {
     if (m_animationTimer.IsRunning()) {
         m_animationTimer.Stop();
+    }
+    if (m_debounceTimer.IsRunning()) {
+        m_debounceTimer.Stop();
     }
 }
 
@@ -344,29 +353,39 @@ void LayoutEngine::UpdateLayout()
 {
     if (!m_manager || !m_rootNode) return;
     
-    UpdateLayout(m_manager->GetClientRect());
+    // Use debounced update to prevent excessive layout calculations
+    RequestLayoutUpdate();
 }
 
 void LayoutEngine::UpdateLayout(const wxRect& clientRect)
 {
-    if (!m_rootNode) return;
+    if (!m_rootNode || m_isUpdatingLayout) return;
+    
+    // Prevent recursive layout updates
+    m_isUpdatingLayout = true;
     
     m_lastClientRect = clientRect;
     m_rootNode->SetRect(clientRect);
     
-    // Calculate layout recursively
-    CalculateNodeLayout(m_rootNode.get(), clientRect);
-    
-    // Apply layout to widgets
-    ApplyLayoutToWidgets(m_rootNode.get());
-    
-    // Force refresh of the parent window to ensure all changes are visible
-    if (m_parent) {
-        m_parent->Refresh();
-        m_parent->Update();
+    // Only recalculate if layout is dirty or size changed significantly
+    if (m_layoutDirty || ShouldRecalculateLayout(clientRect)) {
+        // Calculate layout recursively
+        CalculateNodeLayout(m_rootNode.get(), clientRect);
+        
+        // Apply layout to widgets
+        ApplyLayoutToWidgets(m_rootNode.get());
+        
+        // Force refresh of the parent window to ensure all changes are visible
+        // Only refresh if we actually made changes
+        if (m_parent) {
+            m_parent->Refresh();
+            // Don't call Update() here as it can cause excessive redraws
+            // Let the system handle the refresh naturally
+        }
     }
     
     m_layoutDirty = false;
+    m_isUpdatingLayout = false;
 }
 
 void LayoutEngine::RecalculateLayout()
@@ -374,6 +393,42 @@ void LayoutEngine::RecalculateLayout()
     if (!m_manager) return;
     
     UpdateLayout(m_manager->GetClientRect());
+}
+
+void LayoutEngine::RequestLayoutUpdate()
+{
+    if (m_isUpdatingLayout) return;
+    
+    m_pendingLayoutUpdate = true;
+    
+    // Start debounce timer (50ms delay)
+    if (m_debounceTimer.IsRunning()) {
+        m_debounceTimer.Stop();
+    }
+    m_debounceTimer.StartOnce(50);
+}
+
+bool LayoutEngine::ShouldRecalculateLayout(const wxRect& newRect) const
+{
+    if (!m_lastClientRect.IsEmpty()) {
+        // Only recalculate if size changed significantly (more than 5 pixels)
+        int widthDiff = abs(newRect.width - m_lastClientRect.width);
+        int heightDiff = abs(newRect.height - m_lastClientRect.height);
+        
+        return (widthDiff > 5 || heightDiff > 5);
+    }
+    
+    return true; // First time calculation
+}
+
+void LayoutEngine::OnDebounceTimer(wxTimerEvent& event)
+{
+    wxUnusedVar(event);
+    
+    if (m_pendingLayoutUpdate && m_manager && m_rootNode) {
+        m_pendingLayoutUpdate = false;
+        UpdateLayout(m_manager->GetClientRect());
+    }
 }
 
 void LayoutEngine::OptimizeLayout()
@@ -1538,7 +1593,10 @@ void LayoutEngine::OnSplitterMoved(wxSplitterEvent& event)
 {
     // Update splitter ratio when user moves sash
     wxSplitterWindow* splitter = dynamic_cast<wxSplitterWindow*>(event.GetEventObject());
-    if (!splitter) return;
+    if (!splitter || m_isUpdatingLayout) {
+        event.Skip();
+        return;
+    }
     
     // Find corresponding layout node
     LayoutNode* splitterNode = FindSplitterNode(splitter);
@@ -1565,8 +1623,8 @@ void LayoutEngine::OnSplitterMoved(wxSplitterEvent& event)
         // Just mark layout as dirty for later update if needed
         m_layoutDirty = true;
         
-        // Update only the splitter's children layout without full recalculation
-        UpdateSplitterChildrenLayout(splitterNode);
+        // Use debounced update to prevent excessive calls during drag
+        RequestLayoutUpdate();
     }
     
     event.Skip();
