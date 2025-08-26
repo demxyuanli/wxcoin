@@ -80,7 +80,7 @@ void FlatUIProfileSpace::OnPaint(wxPaintEvent& evt)
     wxPaintDC dc(this);
     
     // Fill background with theme color
-    wxColour bgColor = CFG_COLOUR("BarBgColour");
+    wxColour bgColor = CFG_COLOUR("BarBackgroundColour");
     dc.SetBackground(wxBrush(bgColor));
     dc.Clear();
 }

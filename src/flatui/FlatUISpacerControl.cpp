@@ -74,7 +74,7 @@ void FlatUISpacerControl::OnPaint(wxPaintEvent& evt)
 {
     wxAutoBufferedPaintDC dc(this);
     wxSize size = GetSize();
-    wxColour bgColor = CFG_COLOUR("BarBgColour");
+    wxColour bgColor = CFG_COLOUR("BarBackgroundColour");
     dc.SetBackground(bgColor);
     dc.Clear();
     

@@ -1,4 +1,7 @@
 #include "flatui/FlatUIFunctionSpace.h"
+#include "flatui/FlatUIButtonBar.h"
+#include "flatui/FlatUIGallery.h"
+#include "flatui/FlatUIPanel.h"
 #include "config/ThemeManager.h"
 
 
@@ -8,6 +11,12 @@ FlatUIFunctionSpace::FlatUIFunctionSpace(wxWindow* parent, wxWindowID id)
       m_spaceWidth(CFG_INT("SpaceDefaulWidth"))
 {
     Bind(wxEVT_SIZE, &FlatUIFunctionSpace::OnSize, this);
+    
+    // Register theme change listener
+    auto& themeManager = ThemeManager::getInstance();
+    themeManager.addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 FlatUIFunctionSpace::~FlatUIFunctionSpace()
@@ -75,4 +84,39 @@ void FlatUIFunctionSpace::OnSize(wxSizeEvent& evt)
         m_childControl->SetSize(w, h);
     }
     evt.Skip(); // Allow other handlers for this event if any
+}
+
+void FlatUIFunctionSpace::RefreshTheme() {
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
+    
+    // Update child control if it exists
+    if (m_childControl) {
+        // Try to call RefreshTheme on child if it has one
+        wxString className = m_childControl->GetClassInfo()->GetClassName();
+        
+        if (className == "FlatUIButtonBar") {
+            FlatUIButtonBar* buttonBar = static_cast<FlatUIButtonBar*>(m_childControl);
+            buttonBar->RefreshTheme();
+        }
+        else if (className == "FlatUIGallery") {
+            FlatUIGallery* gallery = static_cast<FlatUIGallery*>(m_childControl);
+            gallery->RefreshTheme();
+        }
+        else if (className == "FlatUIPanel") {
+            FlatUIPanel* panel = static_cast<FlatUIPanel*>(m_childControl);
+            panel->RefreshTheme();
+        }
+        else {
+            // For other controls, just update basic properties
+            m_childControl->SetFont(CFG_DEFAULTFONT());
+            m_childControl->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
+            m_childControl->SetForegroundColour(CFG_COLOUR("DefaultTextColour"));
+        }
+    }
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }

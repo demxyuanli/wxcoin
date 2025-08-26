@@ -1183,12 +1183,3 @@ bool ModernDockManager::IsAreaDockingEnabled(DockArea area) const
     // Default to enabled if no panels in the area
     return true;
 }
-
-
-
-
-
-
-
-
-

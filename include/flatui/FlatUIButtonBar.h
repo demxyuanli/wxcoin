@@ -274,6 +274,9 @@ public:
     int GetTopMargin() const { return m_topMargin; }
     // Override wxControl virtual method
     wxSize DoGetBestSize() const override;
+    
+    // Theme refresh method
+    void RefreshTheme();
 };
 
 #endif // FLATUIBUTTONBAR_H

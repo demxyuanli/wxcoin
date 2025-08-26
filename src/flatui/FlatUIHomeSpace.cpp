@@ -64,7 +64,7 @@ void FlatUIHomeSpace::OnPaint(wxPaintEvent& evt)
         finalBgColorToDraw = CFG_COLOUR("HomespaceHoverBgColour");
     }
     else {
-        finalBgColorToDraw = CFG_COLOUR("BarBgColour"); // Use theme background color
+        finalBgColorToDraw = CFG_COLOUR("BarBackgroundColour"); // Use theme background color
     }
 
     // Fill the entire control area with the determined background color

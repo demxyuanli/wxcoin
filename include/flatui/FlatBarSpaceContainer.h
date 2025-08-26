@@ -84,6 +84,9 @@ private:
     // Helper methods
     int CalculateTabWidth(wxDC& dc, const wxString& label) const;
     
+    // Theme refresh method
+    void RefreshTheme();
+    
     // Component pointers
     FlatUIHomeSpace* m_homeSpace;
     FlatUISystemButtons* m_systemButtons;

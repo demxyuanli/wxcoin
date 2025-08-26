@@ -107,6 +107,9 @@ public:
     // Override batch update method
     virtual void UpdateThemeValues() override;
     
+    // Theme refresh method
+    void RefreshTheme();
+    
     // Event handlers
     void OnMouseDown(wxMouseEvent& evt);
     void OnMouseMove(wxMouseEvent& evt);

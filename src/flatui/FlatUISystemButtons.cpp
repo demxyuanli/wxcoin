@@ -97,7 +97,7 @@ void FlatUISystemButtons::PaintButton(wxDC& dc, const wxRect& rect, const wxStri
     wxColour hoverBgColour = CFG_COLOUR("DropdownHoverColour");
     wxColour hoverTextColour = CFG_COLOUR("SystemButtonHoverTextColour");
     // Use theme background color for normal state
-    wxColour normalBgColour = CFG_COLOUR("BarBgColour");
+    wxColour normalBgColour = CFG_COLOUR("BarBackgroundColour");
 
     if (isClose) {
         dc.SetBrush(hover ? CFG_COLOUR("SystemButtonCloseHoverColour") : normalBgColour);
@@ -133,7 +133,7 @@ void FlatUISystemButtons::PaintButton(wxDC& dc, const wxRect& rect, const wxStri
 void FlatUISystemButtons::OnPaint(wxPaintEvent& evt)
 {
     wxAutoBufferedPaintDC dc(this);
-    dc.SetBackground(CFG_COLOUR("BarBgColour"));
+    dc.SetBackground(CFG_COLOUR("BarBackgroundColour"));
     dc.Clear();
     
     wxSize size = GetClientSize();
@@ -177,7 +177,7 @@ void FlatUISystemButtons::OnPaint(wxPaintEvent& evt)
 void FlatUISystemButtons::PaintSvgButton(wxDC& dc, const wxRect& rect, const wxString& iconName, bool hover, bool isClose)
 {
     wxColour hoverBgColour = CFG_COLOUR("DropdownHoverColour");
-    wxColour normalBgColour = CFG_COLOUR("BarBgColour");
+    wxColour normalBgColour = CFG_COLOUR("BarBackgroundColour");
 
     if (isClose) {
         dc.SetBrush(hover ? CFG_COLOUR("SystemButtonCloseHoverColour") : normalBgColour);

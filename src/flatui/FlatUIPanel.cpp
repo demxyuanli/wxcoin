@@ -72,6 +72,12 @@ FlatUIPanel::FlatUIPanel(FlatUIPage* parent, const wxString& label, int orientat
     Bind(wxEVT_TIMER, &FlatUIPanel::OnTimer, this);
 
     RecalculateBestSize();
+    
+    // Register theme change listener
+    auto& themeManager = ThemeManager::getInstance();
+    themeManager.addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 void FlatUIPanel::OnTimer(wxTimerEvent& event)
@@ -733,4 +739,34 @@ void FlatUIPanel::OnPaint(wxPaintEvent& evt)
 
     delete gc;
     evt.Skip();
+}
+
+void FlatUIPanel::RefreshTheme() {
+    // Update all theme-based colors and settings
+    m_bgColour = GetThemeColour("ActBarBackgroundColour");
+    m_borderColour = GetThemeColour("PanelBorderColour");
+    m_headerColour = GetThemeColour("PanelHeaderColour");
+    m_headerTextColour = GetThemeColour("PanelHeaderTextColour");
+    m_headerBorderColour = GetThemeColour("PanelBorderColour");
+    
+    // Update control properties
+    SetFont(GetThemeFont());
+    SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
+    
+    // Update child controls
+    for (auto buttonBar : m_buttonBars) {
+        if (buttonBar) {
+            buttonBar->RefreshTheme();
+        }
+    }
+    
+    for (auto gallery : m_galleries) {
+        if (gallery) {
+            gallery->RefreshTheme();
+        }
+    }
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }

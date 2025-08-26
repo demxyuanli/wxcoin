@@ -43,6 +43,12 @@ FlatBarSpaceContainer::FlatBarSpaceContainer(wxWindow* parent, wxWindowID id,
     m_tabDropdown = new FlatUITabDropdown(this);
     m_tabDropdown->Hide(); // Initially hidden
     
+    // Register theme change listener
+    auto& themeManager = ThemeManager::getInstance();
+    themeManager.addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
+    
     LOG_INF("FlatBarSpaceContainer created", "BarSpaceContainer");
 }
 
@@ -749,4 +755,35 @@ std::vector<size_t> FlatBarSpaceContainer::GetVisibleTabIndices() const
 std::vector<size_t> FlatBarSpaceContainer::GetHiddenTabIndices() const
 {
     return m_hiddenTabIndices;
+}
+
+void FlatBarSpaceContainer::RefreshTheme() {
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
+    
+    // Update child components
+    if (m_homeSpace) {
+        m_homeSpace->RefreshTheme();
+    }
+    
+    if (m_systemButtons) {
+        m_systemButtons->RefreshTheme();
+    }
+    
+    if (m_functionSpace) {
+        m_functionSpace->RefreshTheme();
+    }
+    
+    if (m_profileSpace) {
+        m_profileSpace->RefreshTheme();
+    }
+    
+    if (m_tabDropdown) {
+        m_tabDropdown->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
+    }
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }

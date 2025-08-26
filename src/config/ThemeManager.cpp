@@ -311,6 +311,9 @@ void ThemeManager::removeThemeChangeListener(void* listener) {
 }
 
 void ThemeManager::notifyThemeChange() {
+    // Log the number of listeners
+    LOG_INF("Notifying theme change to " + std::to_string(m_listeners.size()) + " listeners", "ThemeManager");
+    
     // Clear SVG theme cache when theme changes
     try {
         SvgIconManager::GetInstance().ClearThemeCache();

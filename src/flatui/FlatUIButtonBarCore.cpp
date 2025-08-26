@@ -69,6 +69,12 @@ FlatUIButtonBar::FlatUIButtonBar(FlatUIPanel* parent)
     Bind(wxEVT_MOTION, &FlatUIButtonBar::OnMouseMove, this);
     Bind(wxEVT_LEAVE_WINDOW, &FlatUIButtonBar::OnMouseLeave, this);
     Bind(wxEVT_SIZE, &FlatUIButtonBar::OnSize, this);
+    
+    // Register theme change listener
+    auto& themeManager = ThemeManager::getInstance();
+    themeManager.addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 FlatUIButtonBar::~FlatUIButtonBar() {

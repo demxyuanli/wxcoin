@@ -38,6 +38,12 @@ FlatUIHomeMenu::FlatUIHomeMenu(wxWindow* parent, FlatUIFrame* eventSinkFrame)
     SetSizer(mainSizer);
 
     m_panel->Bind(wxEVT_PAINT, &FlatUIHomeMenu::OnPaint, this);
+    
+    // Register theme change listener
+    auto& themeManager = ThemeManager::getInstance();
+    themeManager.addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 FlatUIHomeMenu::~FlatUIHomeMenu()

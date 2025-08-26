@@ -122,6 +122,10 @@ private:
     int m_headerBorderRight;
     
     wxTimer m_resizeTimer;
+    
+public:
+    // Theme refresh method
+    void RefreshTheme();
 };
 
 #endif // FLATUIPANEL_H 

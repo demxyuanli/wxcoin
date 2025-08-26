@@ -42,6 +42,12 @@ FlatUIGallery::FlatUIGallery(FlatUIPanel* parent)
     Bind(wxEVT_MOTION, &FlatUIGallery::OnMouseMove, this);
     Bind(wxEVT_LEAVE_WINDOW, &FlatUIGallery::OnMouseLeave, this);
     Bind(wxEVT_SIZE, &FlatUIGallery::OnSize, this);
+    
+    // Register theme change listener
+    auto& themeManager = ThemeManager::getInstance();
+    themeManager.addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 FlatUIGallery::~FlatUIGallery()
@@ -501,4 +507,29 @@ void FlatUIGallery::UpdateThemeValues()
     SetMinSize(wxSize(targetH * 2, targetH));
     
     // Note: Don't call Refresh() here - it will be handled by the parent frame
+}
+
+void FlatUIGallery::RefreshTheme() {
+    // Update all theme-based colors and settings
+    m_itemBgColour = GetThemeColour("GalleryItemBgColour");
+    m_itemHoverBgColour = GetThemeColour("GalleryItemHoverBgColour");
+    m_itemSelectedBgColour = GetThemeColour("GalleryItemSelectedBgColour");
+    m_itemBorderColour = GetThemeColour("GalleryItemBorderColour");
+    m_galleryBgColour = GetThemeColour("ActBarBackgroundColour");
+    m_galleryBorderColour = GetThemeColour("ActBarBackgroundColour");
+    
+    // Update theme-based integer values
+    m_itemSpacing = GetThemeInt("GalleryItemSpacing");
+    m_itemPadding = GetThemeInt("GalleryItemPadding");
+    m_itemBorderWidth = GetThemeInt("GalleryItemBorderWidth");
+    m_itemCornerRadius = GetThemeInt("GalleryItemCornerRadius");
+    m_galleryBorderWidth = GetThemeInt("GalleryBorderWidth");
+    
+    // Update control properties
+    SetFont(GetThemeFont());
+    SetBackgroundColour(m_galleryBgColour);
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 }

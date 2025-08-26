@@ -108,4 +108,33 @@ void FlatUIButtonBar::SetHoverEffectsEnabled(bool enabled) {
         }
         Refresh();
     }
+}
+
+// Theme refresh method
+void FlatUIButtonBar::RefreshTheme() {
+    // Update all theme-based colors and settings
+    m_buttonBgColour = CFG_COLOUR("ActBarBackgroundColour");
+    m_buttonHoverBgColour = CFG_COLOUR("ButtonbarDefaultHoverBgColour");
+    m_buttonPressedBgColour = CFG_COLOUR("ButtonbarDefaultPressedBgColour");
+    m_buttonTextColour = CFG_COLOUR("ButtonbarDefaultTextColour");
+    m_buttonBorderColour = CFG_COLOUR("ButtonbarDefaultBorderColour");
+    m_btnBarBgColour = CFG_COLOUR("ButtonbarDefaultBgColour");
+    m_btnBarBorderColour = CFG_COLOUR("ButtonbarDefaultBorderColour");
+    
+    // Update theme-based integer values
+    m_buttonBorderWidth = CFG_INT("ButtonbarDefaultBorderWidth");
+    m_buttonCornerRadius = CFG_INT("ButtonbarDefaultCornerRadius");
+    m_buttonSpacing = CFG_INT("ButtonbarSpacing");
+    m_buttonHorizontalPadding = CFG_INT("ButtonbarHorizontalPadding");
+    m_buttonVerticalPadding = CFG_INT("ButtonbarVerticalPadding");
+    m_btnBarBorderWidth = CFG_INT("ButtonbarDefaultBorderWidth");
+    m_btnBarHorizontalMargin = CFG_INT("ButtonbarHorizontalMargin");
+    
+    // Update control properties
+    SetFont(CFG_DEFAULTFONT());
+    SetBackgroundColour(m_btnBarBgColour);
+    
+    // Force refresh
+    Refresh(true);
+    Update();
 } 

@@ -81,6 +81,12 @@ void FlatUIFrame::InitFrameStyle()
     SetBackgroundColour(CFG_COLOUR("FrameAppWorkspaceColour"));
     // m_borderThreshold is set in BorderlessFrameLogic constructor, can be overridden here if needed for FlatUIFrame
     // e.g., this->m_borderThreshold = 10; // If FlatUIFrame needs a different threshold
+    
+    // Register theme change listener
+    auto& themeManager = ThemeManager::getInstance();
+    themeManager.addThemeChangeListener(this, [this]() {
+        RefreshAllUI();
+    });
 }
 
 void FlatUIFrame::OnLeftDown(wxMouseEvent& event)
@@ -514,6 +520,8 @@ void FlatUIFrame::RefreshAllUI()
     Thaw();
     
     // Force a complete refresh of the frame
+    InvalidateBestSize();
+    Layout();
     Refresh(true);
     Update();
 }

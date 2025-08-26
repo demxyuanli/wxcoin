@@ -17,6 +17,8 @@ public:
     void SetSpaceWidth(int width);
     int GetSpaceWidth() const;
 
+    // Theme refresh method
+    void RefreshTheme();
 
 protected:
     void OnSize(wxSizeEvent& evt); // To resize the child control to fill this panel
