@@ -783,7 +783,5 @@ void FlatBarSpaceContainer::RefreshTheme() {
         m_tabDropdown->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
     }
     
-    // Force refresh
-    Refresh(true);
-    Update();
+    // Note: Refresh is handled by parent frame for performance
 }

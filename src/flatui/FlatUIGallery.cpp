@@ -529,7 +529,5 @@ void FlatUIGallery::RefreshTheme() {
     SetFont(GetThemeFont());
     SetBackgroundColour(m_galleryBgColour);
     
-    // Force refresh
-    Refresh(true);
-    Update();
+    // Note: Refresh is handled by parent frame for performance
 }

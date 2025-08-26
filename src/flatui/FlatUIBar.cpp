@@ -940,51 +940,40 @@ void FlatUIBar::RefreshTheme()
         m_barContainer->UpdateLayout();
     }
     
-    // Refresh all child components
+    // Update child components without individual refreshes for performance
     if (m_homeSpace) {
-        m_homeSpace->Refresh(true);
-        m_homeSpace->Update();
+        m_homeSpace->RefreshTheme();
     }
     if (m_functionSpace) {
-        m_functionSpace->Refresh(true);
-        m_functionSpace->Update();
+        m_functionSpace->RefreshTheme();
     }
     if (m_profileSpace) {
-        m_profileSpace->Refresh(true);
-        m_profileSpace->Update();
+        m_profileSpace->RefreshTheme();
     }
     if (m_systemButtons) {
-        m_systemButtons->Refresh(true);
-        m_systemButtons->Update();
+        m_systemButtons->RefreshTheme();
     }
     if (m_fixPanel) {
-        m_fixPanel->Refresh(true);
-        m_fixPanel->Update();
+        m_fixPanel->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
     }
     if (m_floatPanel) {
-        m_floatPanel->Refresh(true);
-        m_floatPanel->Update();
+        m_floatPanel->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
     }
     if (m_tabFunctionSpacer) {
-        m_tabFunctionSpacer->Refresh(true);
-        m_tabFunctionSpacer->Update();
+        m_tabFunctionSpacer->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
     }
     if (m_functionProfileSpacer) {
-        m_functionProfileSpacer->Refresh(true);
-        m_functionProfileSpacer->Update();
+        m_functionProfileSpacer->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
     }
     
-    // Refresh all pages
+    // Update all pages without individual refreshes
     for (size_t i = 0; i < GetPageCount(); ++i) {
         FlatUIPage* page = GetPage(i);
         if (page) {
-            page->Refresh(true);
-            page->Update();
+            page->RefreshTheme();
         }
     }
     
-    // Force refresh
-    Refresh(true);
-    Update();
+    // Note: Refresh is handled by parent frame for performance
 }
 

@@ -311,6 +311,17 @@ void ThemeManager::removeThemeChangeListener(void* listener) {
 }
 
 void ThemeManager::notifyThemeChange() {
+    // Performance optimization: Debounce rapid theme changes
+    static wxDateTime lastNotification = wxDateTime::Now();
+    wxDateTime now = wxDateTime::Now();
+    
+    // Debounce notifications (minimum 100ms between notifications)
+    if ((now - lastNotification).GetMilliseconds() < 100) {
+        LOG_DBG("Theme change notification debounced", "ThemeManager");
+        return;
+    }
+    lastNotification = now;
+    
     // Log the number of listeners
     LOG_INF("Notifying theme change to " + std::to_string(m_listeners.size()) + " listeners", "ThemeManager");
     
@@ -324,13 +335,24 @@ void ThemeManager::notifyThemeChange() {
         LOG_ERR("Unknown error clearing SVG theme cache", "ThemeManager");
     }
     
-    // Notify other listeners
+    // Batch notify all listeners with error handling
+    std::vector<void*> failedListeners;
     for (const auto& pair : m_listeners) {
         try {
             pair.second();
+        } catch (const std::exception& e) {
+            LOG_ERR("Error in theme change listener: " + std::string(e.what()), "ThemeManager");
+            failedListeners.push_back(pair.first);
         } catch (...) {
-            LOG_ERR("Error in theme change listener", "ThemeManager");
+            LOG_ERR("Unknown error in theme change listener", "ThemeManager");
+            failedListeners.push_back(pair.first);
         }
+    }
+    
+    // Remove failed listeners to prevent future errors
+    for (void* failedListener : failedListeners) {
+        m_listeners.erase(failedListener);
+        LOG_WRN("Removed failed theme change listener", "ThemeManager");
     }
 }
 

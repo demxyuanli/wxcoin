@@ -49,6 +49,9 @@ public:
     
     // Public layout update method
     void UpdateLayout();
+    
+    // Theme refresh method
+    void RefreshTheme();
 
 protected:
     // Event handlers
@@ -83,9 +86,6 @@ private:
     
     // Helper methods
     int CalculateTabWidth(wxDC& dc, const wxString& label) const;
-    
-    // Theme refresh method
-    void RefreshTheme();
     
     // Component pointers
     FlatUIHomeSpace* m_homeSpace;

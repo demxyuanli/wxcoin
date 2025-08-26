@@ -134,7 +134,5 @@ void FlatUIButtonBar::RefreshTheme() {
     SetFont(CFG_DEFAULTFONT());
     SetBackgroundColour(m_btnBarBgColour);
     
-    // Force refresh
-    Refresh(true);
-    Update();
+    // Note: Refresh is handled by parent frame for performance
 } 

@@ -116,7 +116,5 @@ void FlatUIFunctionSpace::RefreshTheme() {
         }
     }
     
-    // Force refresh
-    Refresh(true);
-    Update();
+    // Note: Refresh is handled by parent frame for performance
 }

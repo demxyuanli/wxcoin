@@ -48,6 +48,8 @@ public:
     
     // Theme and UI refresh functionality
     virtual void RefreshAllUI();
+    void BatchUpdateAllComponents();
+    void PerformAsyncThemeUpdate();
 
 protected:
     FlatUIStatusBar* m_statusBar = nullptr;

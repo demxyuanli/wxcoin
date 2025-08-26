@@ -362,25 +362,48 @@ void FlatUIFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 
 void FlatUIFrame::RefreshAllUI()
 {
-    // Show a brief progress indicator
-    wxBusyCursor busyCursor;
+    // Performance optimization: Use batch update with minimal UI blocking
+    static wxDateTime lastThemeUpdate = wxDateTime::Now();
+    wxDateTime now = wxDateTime::Now();
     
-    // Collect all theme-aware components that need refresh
-    std::vector<FlatUIThemeAware*> themeAwareComponents;
-    std::vector<wxWindow*> otherComponents;
+    // Debounce rapid theme changes (minimum 50ms between updates)
+    if ((now - lastThemeUpdate).GetMilliseconds() < 50) {
+        LOG_DBG("Theme update debounced - too soon since last update", "FlatUIFrame");
+        return;
+    }
+    lastThemeUpdate = now;
     
-    // Recursive function to collect all components
+    // Use asynchronous update for better performance
+    CallAfter([this]() {
+        PerformAsyncThemeUpdate();
+    });
+}
+
+void FlatUIFrame::PerformAsyncThemeUpdate()
+{
+    // Phase 1: Freeze UI to prevent intermediate redraws
+    Freeze();
+    
+    // Phase 2: Batch update all components without individual refreshes
+    BatchUpdateAllComponents();
+    
+    // Phase 3: Single refresh at the end
+    Thaw();
+    InvalidateBestSize();
+    Layout();
+    Refresh(true);
+    Update();
+    
+    LOG_INF("Async theme refresh completed with performance optimization", "FlatUIFrame");
+}
+
+void FlatUIFrame::BatchUpdateAllComponents()
+{
+    // Collect all components that need theme updates
+    std::vector<wxWindow*> allComponents;
     std::function<void(wxWindow*)> collectComponents = [&](wxWindow* window) {
         if (!window) return;
-        
-        // Check if the window is a theme-aware component
-        FlatUIThemeAware* themeAware = dynamic_cast<FlatUIThemeAware*>(window);
-        if (themeAware && themeAware->NeedsThemeRefresh()) {
-            themeAwareComponents.push_back(themeAware);
-        } else {
-            // For non-theme-aware components, collect for later processing
-            otherComponents.push_back(window);
-        }
+        allComponents.push_back(window);
         
         // Recursively collect all child controls
         wxWindowList& children = window->GetChildren();
@@ -389,19 +412,55 @@ void FlatUIFrame::RefreshAllUI()
         }
     };
     
-    // Phase 1: Collect all components
     collectComponents(this);
     
-    // Phase 2: Update theme values for all theme-aware components
-    for (FlatUIThemeAware* component : themeAwareComponents) {
-        component->UpdateThemeValues();
-    }
-    
-    // Phase 3: Update non-theme-aware components
-    for (wxWindow* window : otherComponents) {
+    // Batch update theme values without refreshing
+    for (wxWindow* window : allComponents) {
         wxString className = window->GetClassInfo()->GetClassName();
         
-        if (className == "wxStaticText") {
+        // Update theme-aware components
+        if (className == "FlatUIHomeMenu") {
+            FlatUIHomeMenu* homeMenu = static_cast<FlatUIHomeMenu*>(window);
+            homeMenu->RefreshTheme();
+        }
+        else if (className == "FlatUIButtonBar") {
+            FlatUIButtonBar* buttonBar = static_cast<FlatUIButtonBar*>(window);
+            buttonBar->RefreshTheme();
+        }
+        else if (className == "FlatUIPanel") {
+            FlatUIPanel* panel = static_cast<FlatUIPanel*>(window);
+            panel->RefreshTheme();
+        }
+        else if (className == "FlatUIGallery") {
+            FlatUIGallery* gallery = static_cast<FlatUIGallery*>(window);
+            gallery->RefreshTheme();
+        }
+        else if (className == "FlatUIPage") {
+            FlatUIPage* page = static_cast<FlatUIPage*>(window);
+            page->RefreshTheme();
+        }
+        else if (className == "FlatUIHomeSpace") {
+            FlatUIHomeSpace* homeSpace = static_cast<FlatUIHomeSpace*>(window);
+            homeSpace->RefreshTheme();
+        }
+        else if (className == "FlatUIProfileSpace") {
+            FlatUIProfileSpace* profileSpace = static_cast<FlatUIProfileSpace*>(window);
+            profileSpace->RefreshTheme();
+        }
+        else if (className == "FlatUISystemButtons") {
+            FlatUISystemButtons* systemButtons = static_cast<FlatUISystemButtons*>(window);
+            systemButtons->RefreshTheme();
+        }
+        else if (className == "FlatBarSpaceContainer") {
+            FlatBarSpaceContainer* container = static_cast<FlatBarSpaceContainer*>(window);
+            container->RefreshTheme();
+        }
+        else if (className == "FlatUIFunctionSpace") {
+            FlatUIFunctionSpace* funcSpace = static_cast<FlatUIFunctionSpace*>(window);
+            funcSpace->RefreshTheme();
+        }
+        // Update standard wxWidgets controls
+        else if (className == "wxStaticText") {
             window->SetForegroundColour(CFG_COLOUR("DefaultTextColour"));
         }
         else if (className == "wxTextCtrl") {
@@ -413,81 +472,23 @@ void FlatUIFrame::RefreshAllUI()
             window->SetForegroundColour(CFG_COLOUR("SearchCtrlFgColour"));
         }
         else if (className == "wxPanel") {
-                window->SetBackgroundColour(CFG_COLOUR("SearchPanelBgColour"));
-            }
+            window->SetBackgroundColour(CFG_COLOUR("SearchPanelBgColour"));
+        }
         else if (className == "wxScrolledWindow") {
-                window->SetBackgroundColour(CFG_COLOUR("SvgPanelBgColour"));
-            }
+            window->SetBackgroundColour(CFG_COLOUR("SvgPanelBgColour"));
+        }
         else if (className == "wxStaticBitmap") {
-                window->SetBackgroundColour(CFG_COLOUR("IconPanelBgColour"));
+            window->SetBackgroundColour(CFG_COLOUR("IconPanelBgColour"));
         }
-        else if (className == "wxScrolledWindow") {
-            window->SetBackgroundColour(CFG_COLOUR("ScrolledWindowBgColour"));
-        }
-        else if (className == "wxStaticText" && window->GetName() == "error") {
-                window->SetForegroundColour(CFG_COLOUR("ErrorTextColour"));
-            }
-        else if (className == "wxStaticText" && window->GetName() == "placeholder") {
-                window->SetForegroundColour(CFG_COLOUR("PlaceholderTextColour"));
-            }
-        else if (className == "wxStaticText" && window->GetName() == "default") {
-                window->SetForegroundColour(CFG_COLOUR("DefaultTextColour"));
-            }
         else if (className == "FlatUIBar") {
             window->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
-        }
-        else if (className == "FlatUIPanel") {
-            window->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
-        }
-        else if (className == "wxScrolledWindow") {
-            window->SetBackgroundColour(CFG_COLOUR("ScrolledWindowBgColour"));
-        }
-        else if (className == "FlatUIHomeMenu") {
-            // Cast to FlatUIHomeMenu and call RefreshTheme
-            FlatUIHomeMenu* homeMenu = static_cast<FlatUIHomeMenu*>(window);
-            homeMenu->RefreshTheme();
-        }
-        else if (className == "FlatUIButtonBar") {
-            // Cast to FlatUIButtonBar and call RefreshTheme
-            FlatUIButtonBar* buttonBar = static_cast<FlatUIButtonBar*>(window);
-            buttonBar->RefreshTheme();
-        }
-        else if (className == "FlatUIPanel") {
-            // Cast to FlatUIPanel and call RefreshTheme
-            FlatUIPanel* panel = static_cast<FlatUIPanel*>(window);
-            panel->RefreshTheme();
-        }
-        else if (className == "FlatUIGallery") {
-            // Cast to FlatUIGallery and call RefreshTheme
-            FlatUIGallery* gallery = static_cast<FlatUIGallery*>(window);
-            gallery->RefreshTheme();
-        }
-        else if (className == "FlatUIPage") {
-            // Cast to FlatUIPage and call RefreshTheme
-            FlatUIPage* page = static_cast<FlatUIPage*>(window);
-            page->RefreshTheme();
-        }
-        else if (className == "FlatUIHomeSpace") {
-            // Cast to FlatUIHomeSpace and call RefreshTheme
-            FlatUIHomeSpace* homeSpace = static_cast<FlatUIHomeSpace*>(window);
-            homeSpace->RefreshTheme();
-        }
-        else if (className == "FlatUIProfileSpace") {
-            // Cast to FlatUIProfileSpace and call RefreshTheme
-            FlatUIProfileSpace* profileSpace = static_cast<FlatUIProfileSpace*>(window);
-            profileSpace->RefreshTheme();
-        }
-        else if (className == "FlatUISystemButtons") {
-            // Cast to FlatUISystemButtons and call RefreshTheme
-            FlatUISystemButtons* systemButtons = static_cast<FlatUISystemButtons*>(window);
-            systemButtons->RefreshTheme();
         }
         else if (className == "FlatUITabDropdown") {
             window->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
         }
     }
     
-    // Phase 4: Update the ribbon with new theme colors
+    // Update ribbon colors
     FlatUIBar* ribbon = GetUIBar();
     if (ribbon) {
         ribbon->SetTabBorderColour(CFG_COLOUR("BarTabBorderColour"));
@@ -496,32 +497,4 @@ void FlatUIFrame::RefreshAllUI()
         ribbon->SetInactiveTabTextColour(CFG_COLOUR("BarInactiveTextColour"));
         ribbon->SetTabBorderTopColour(CFG_COLOUR("BarTabBorderTopColour"));
     }
-    
-    // Phase 5: Perform a single batch refresh to avoid flickering
-    // Freeze the frame to prevent intermediate redraws
-    Freeze();
-    
-    // Refresh all theme-aware components
-    for (FlatUIThemeAware* component : themeAwareComponents) {
-        component->Refresh(true);
-    }
-    
-    // Refresh all other components
-    for (wxWindow* window : otherComponents) {
-        window->Refresh(true);
-    }
-    
-    // Refresh the ribbon
-    if (ribbon) {
-        ribbon->Refresh(true);
-    }
-    
-    // Thaw and update the frame
-    Thaw();
-    
-    // Force a complete refresh of the frame
-    InvalidateBestSize();
-    Layout();
-    Refresh(true);
-    Update();
 }
