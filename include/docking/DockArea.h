@@ -80,10 +80,10 @@ public:
     wxString currentTabTitle() const;
     
     // Events
-    wxDECLARE_EVENT(EVT_DOCK_AREA_CURRENT_CHANGED, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_DOCK_AREA_CLOSING, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_DOCK_AREA_CLOSED, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE, wxCommandEvent);
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CURRENT_CHANGED;
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSING;
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSED;
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE;
     
 protected:
     // Internal methods
@@ -147,9 +147,9 @@ public:
     void showTabOverflowMenu();
     
     // Events
-    wxDECLARE_EVENT(EVT_TAB_CLOSE_REQUESTED, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_TAB_CURRENT_CHANGED, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_TAB_MOVED, wxCommandEvent);
+    static wxEventTypeTag<wxCommandEvent> EVT_TAB_CLOSE_REQUESTED;
+    static wxEventTypeTag<wxCommandEvent> EVT_TAB_CURRENT_CHANGED;
+    static wxEventTypeTag<wxCommandEvent> EVT_TAB_MOVED;
     
 protected:
     void onPaint(wxPaintEvent& event);
@@ -183,6 +183,8 @@ private:
     void checkTabOverflow();
     
     wxDECLARE_EVENT_TABLE();
+    
+    friend class DockArea;
 };
 
 /**
@@ -203,7 +205,7 @@ public:
     void showAutoHideButton(bool show);
     
     // Events
-    wxDECLARE_EVENT(EVT_TITLE_BAR_BUTTON_CLICKED, wxCommandEvent);
+    static wxEventTypeTag<wxCommandEvent> EVT_TITLE_BAR_BUTTON_CLICKED;
     
 protected:
     void onPaint(wxPaintEvent& event);

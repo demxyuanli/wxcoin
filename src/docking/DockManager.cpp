@@ -7,6 +7,7 @@
 #include "docking/AutoHideContainer.h"
 #include "docking/PerspectiveManager.h"
 #include <wx/xml/xml.h>
+#include <wx/sstream.h>
 #include <algorithm>
 
 namespace ads {

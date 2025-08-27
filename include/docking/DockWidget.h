@@ -62,7 +62,7 @@ public:
     virtual ~DockWidget();
 
     // Core widget management
-    void setWidget(wxWindow* widget, InsertMode insertMode = AutoScrollArea);
+    void setWidget(wxWindow* widget, InsertMode insertMode = InsertMode::AutoScrollArea);
     wxWindow* takeWidget();
     wxWindow* widget() const { return m_widget; }
     
@@ -149,11 +149,11 @@ public:
         ForceNoScrollArea
     };
 
-    // Events
-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_CLOSED, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_CLOSING, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_VISIBILITY_CHANGED, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_FEATURES_CHANGED, wxCommandEvent);
+    // Events - static members for event types
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_CLOSED;
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_CLOSING;
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_VISIBILITY_CHANGED;
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_FEATURES_CHANGED;
 
 protected:
     // Internal methods

@@ -64,8 +64,8 @@ public:
     DockArea* lastAddedDockArea() const { return m_lastAddedArea; }
     
     // Events
-    wxDECLARE_EVENT(EVT_DOCK_AREAS_ADDED, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_DOCK_AREAS_REMOVED, wxCommandEvent);
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_ADDED;
+    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_REMOVED;
     
 protected:
     // Internal layout management

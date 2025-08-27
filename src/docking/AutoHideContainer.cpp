@@ -313,7 +313,7 @@ AutoHideDockContainer::AutoHideDockContainer(DockWidget* dockWidget,
     titleSizer->Add(titleText, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 5);
     
     // Add pin button
-    wxButton* pinButton = new wxButton(titleBar, wxID_ANY, "📌", wxDefaultPosition, wxSize(20, 20));
+    wxButton* pinButton = new wxButton(titleBar, wxID_ANY, "P", wxDefaultPosition, wxSize(20, 20));
     pinButton->SetToolTip("Pin/Unpin");
     // Use a proper event handler instead of lambda for better compatibility
     pinButton->Bind(wxEVT_BUTTON, &AutoHideDockContainer::OnPinButtonClick, this);

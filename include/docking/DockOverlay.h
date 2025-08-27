@@ -53,8 +53,8 @@ public:
     virtual ~DockOverlay();
     
     // Configuration
-    void setAllowedAreas(DockWidgetAreas areas);
-    DockWidgetAreas allowedAreas() const { return m_allowedAreas; }
+    void setAllowedAreas(int areas);
+    int allowedAreas() const { return m_allowedAreas; }
     
     // Drop areas
     DockWidgetArea dropAreaUnderCursor() const;
@@ -95,7 +95,7 @@ private:
     // Member variables
     eMode m_mode;
     wxWindow* m_targetWidget;
-    DockWidgetAreas m_allowedAreas;
+    int m_allowedAreas;
     std::vector<std::unique_ptr<DockOverlayDropArea>> m_dropAreas;
     DockWidgetArea m_lastHoveredArea;
     wxColour m_frameColor;

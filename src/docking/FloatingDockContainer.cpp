@@ -10,8 +10,8 @@
 namespace ads {
 
 // Define custom events
-wxDEFINE_EVENT(FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSING, wxCommandEvent);
-wxDEFINE_EVENT(FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSED, wxCommandEvent);
+wxEventTypeTag<wxCommandEvent> FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSING("FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSING");
+wxEventTypeTag<wxCommandEvent> FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSED("FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSED");
 
 // Event table
 wxBEGIN_EVENT_TABLE(FloatingDockContainer, wxFrame)
@@ -86,7 +86,7 @@ FloatingDockContainer::FloatingDockContainer(DockWidget* dockWidget)
     
     // Add the dock widget
     if (dockWidget) {
-        addDockWidget(dockWidget, CenterDockWidgetArea);
+        addDockWidget(dockWidget);
     }
 }
 
@@ -113,12 +113,12 @@ void FloatingDockContainer::init() {
     }
 }
 
-void FloatingDockContainer::addDockWidget(DockWidget* dockWidget, DockWidgetArea area) {
+void FloatingDockContainer::addDockWidget(DockWidget* dockWidget) {
     if (!dockWidget || !m_dockContainer) {
         return;
     }
     
-    m_dockContainer->addDockWidget(area, dockWidget);
+    m_dockContainer->addDockWidget(CenterDockWidgetArea, dockWidget);
     updateWindowTitle();
 }
 
@@ -240,10 +240,11 @@ void FloatingDockContainer::setupCustomTitleBar() {
     // TODO: Implement custom title bar
 }
 
-void FloatingDockContainer::testConfigFlag(DockManagerFeature flag) const {
+bool FloatingDockContainer::testConfigFlag(DockManagerFeature flag) const {
     if (m_dockManager) {
-        m_dockManager->testConfigFlag(flag);
+        return m_dockManager->testConfigFlag(flag);
     }
+    return false;
 }
 
 void FloatingDockContainer::onClose(wxCloseEvent& event) {

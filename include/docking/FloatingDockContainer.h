@@ -16,6 +16,10 @@ class DockWidget;
 class DockArea;
 class DockManager;
 class DockContainerWidget;
+
+// Import types - these should be defined in DockManager.h
+enum DockWidgetArea : int;
+enum DockManagerFeature : int;
 class FloatingDragPreview;
 
 /**
@@ -70,8 +74,8 @@ public:
     };
     
     // Events
-    wxDECLARE_EVENT(EVT_FLOATING_CONTAINER_CLOSING, wxCommandEvent);
-    wxDECLARE_EVENT(EVT_FLOATING_CONTAINER_CLOSED, wxCommandEvent);
+    static wxEventTypeTag<wxCommandEvent> EVT_FLOATING_CONTAINER_CLOSING;
+    static wxEventTypeTag<wxCommandEvent> EVT_FLOATING_CONTAINER_CLOSED;
 
 protected:
     // Event handlers

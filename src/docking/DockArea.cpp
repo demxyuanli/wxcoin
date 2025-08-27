@@ -11,16 +11,16 @@
 namespace ads {
 
 // Define custom events
-wxDEFINE_EVENT(DockArea::EVT_DOCK_AREA_CURRENT_CHANGED, wxCommandEvent);
-wxDEFINE_EVENT(DockArea::EVT_DOCK_AREA_CLOSING, wxCommandEvent);
-wxDEFINE_EVENT(DockArea::EVT_DOCK_AREA_CLOSED, wxCommandEvent);
-wxDEFINE_EVENT(DockArea::EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE, wxCommandEvent);
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CURRENT_CHANGED("DockArea::EVT_DOCK_AREA_CURRENT_CHANGED");
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CLOSING("DockArea::EVT_DOCK_AREA_CLOSING");
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CLOSED("DockArea::EVT_DOCK_AREA_CLOSED");
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE("DockArea::EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE");
 
-wxDEFINE_EVENT(DockAreaTabBar::EVT_TAB_CLOSE_REQUESTED, wxCommandEvent);
-wxDEFINE_EVENT(DockAreaTabBar::EVT_TAB_CURRENT_CHANGED, wxCommandEvent);
-wxDEFINE_EVENT(DockAreaTabBar::EVT_TAB_MOVED, wxCommandEvent);
+wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_CLOSE_REQUESTED("DockAreaTabBar::EVT_TAB_CLOSE_REQUESTED");
+wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_CURRENT_CHANGED("DockAreaTabBar::EVT_TAB_CURRENT_CHANGED");
+wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_MOVED("DockAreaTabBar::EVT_TAB_MOVED");
 
-wxDEFINE_EVENT(DockAreaTitleBar::EVT_TITLE_BAR_BUTTON_CLICKED, wxCommandEvent);
+wxEventTypeTag<wxCommandEvent> DockAreaTitleBar::EVT_TITLE_BAR_BUTTON_CLICKED("DockAreaTitleBar::EVT_TITLE_BAR_BUTTON_CLICKED");
 
 // Event tables
 wxBEGIN_EVENT_TABLE(DockArea, wxPanel)
@@ -265,7 +265,7 @@ bool DockArea::testDockAreaFlag(DockAreaFlag flag) const {
 }
 
 void DockArea::toggleView(bool open) {
-    SetVisible(open);
+    Show(open);
 }
 
 void DockArea::setVisible(bool visible) {
@@ -780,7 +780,7 @@ void DockAreaTabBar::showTabOverflowMenu() {
     for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
         wxString title = m_tabs[i].widget->title();
         if (i == m_currentIndex) {
-            title = "▶ " + title; // Add marker for current tab
+            title = "> " + title; // Add marker for current tab
         }
         
         wxMenuItem* item = menu.Append(wxID_ANY, title);
@@ -876,7 +876,7 @@ void DockAreaTitleBar::onPinButtonClicked(wxCommandEvent& event) {
 
 void DockAreaTitleBar::createButtons() {
     // Create pin button (for auto-hide)
-    wxButton* pinButton = new wxButton(this, wxID_ANY, "📌", wxDefaultPosition, wxSize(20, 20));
+    wxButton* pinButton = new wxButton(this, wxID_ANY, "P", wxDefaultPosition, wxSize(20, 20));
     pinButton->SetToolTip("Auto-hide");
     pinButton->Bind(wxEVT_BUTTON, &DockAreaTitleBar::onPinButtonClicked, this);
     m_layout->Add(pinButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
