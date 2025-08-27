@@ -35,6 +35,11 @@ find_package(OpenCASCADE CONFIG REQUIRED)
 # 添加源代码目录
 add_subdirectory(src)
 
+# Add test directory if it exists
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test)
+    add_subdirectory(test)
+endif()
+
 # 主程序源文件
 set(MAIN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/MainApplication.cpp
