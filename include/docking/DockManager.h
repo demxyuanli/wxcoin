@@ -115,6 +115,15 @@ public:
     // Central widget
     void setCentralWidget(wxWindow* widget);
     wxWindow* centralWidget() const { return m_centralWidget; }
+    
+    // Auto-hide functionality
+    void setAutoHide(DockWidget* widget, DockWidgetArea area);
+    void restoreFromAutoHide(DockWidget* widget);
+    bool isAutoHide(DockWidget* widget) const;
+    std::vector<DockWidget*> autoHideWidgets() const;
+    
+    // Perspective management
+    class PerspectiveManager* perspectiveManager() const;
 
 protected:
     // Internal methods

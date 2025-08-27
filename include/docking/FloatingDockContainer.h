@@ -130,12 +130,16 @@ public:
     
 protected:
     void onPaint(wxPaintEvent& event);
+    void onTimer(wxTimerEvent& event);
     
 private:
     wxWindow* m_content;
     wxPoint m_dragStartPos;
     bool m_animated;
     wxBitmap m_contentBitmap;
+    wxTimer* m_animationTimer;
+    int m_fadeAlpha;
+    bool m_fadingIn;
     
     void updateContentBitmap();
     

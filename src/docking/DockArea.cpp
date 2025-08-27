@@ -31,6 +31,7 @@ wxBEGIN_EVENT_TABLE(DockAreaTabBar, wxPanel)
     EVT_LEFT_UP(DockAreaTabBar::onMouseLeftUp)
     EVT_MOTION(DockAreaTabBar::onMouseMotion)
     EVT_LEAVE_WINDOW(DockAreaTabBar::onMouseLeave)
+    EVT_SIZE(DockAreaTabBar::onSize)
 wxEND_EVENT_TABLE()
 
 wxBEGIN_EVENT_TABLE(DockAreaTitleBar, wxPanel)
@@ -405,6 +406,8 @@ DockAreaTabBar::DockAreaTabBar(DockArea* dockArea)
     , m_currentIndex(-1)
     , m_hoveredTab(-1)
     , m_draggedTab(-1)
+    , m_hasOverflow(false)
+    , m_firstVisibleTab(0)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetMinSize(wxSize(-1, 30));
@@ -424,6 +427,7 @@ void DockAreaTabBar::insertTab(int index, DockWidget* dockWidget) {
         m_tabs.insert(m_tabs.begin() + index, tab);
     }
     
+    checkTabOverflow();
     updateTabRects();
     Refresh();
 }
@@ -434,6 +438,7 @@ void DockAreaTabBar::removeTab(DockWidget* dockWidget) {
     
     if (it != m_tabs.end()) {
         m_tabs.erase(it);
+        checkTabOverflow();
         updateTabRects();
         Refresh();
     }
@@ -442,6 +447,13 @@ void DockAreaTabBar::removeTab(DockWidget* dockWidget) {
 void DockAreaTabBar::setCurrentIndex(int index) {
     if (m_currentIndex != index) {
         m_currentIndex = index;
+        
+        // Ensure current tab is visible
+        if (m_hasOverflow) {
+            checkTabOverflow();
+            updateTabRects();
+        }
+        
         Refresh();
     }
 }
@@ -462,11 +474,40 @@ void DockAreaTabBar::onPaint(wxPaintEvent& event) {
     
     // Draw tabs
     for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
+        if (m_tabs[i].rect.IsEmpty()) {
+            continue; // Skip non-visible tabs
+        }
         drawTab(dc, i);
+    }
+    
+    // Draw overflow button if needed
+    if (m_hasOverflow) {
+        dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+        dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
+        dc.DrawRectangle(m_overflowButtonRect);
+        
+        // Draw arrow down symbol
+        int centerX = m_overflowButtonRect.GetLeft() + m_overflowButtonRect.GetWidth() / 2;
+        int centerY = m_overflowButtonRect.GetTop() + m_overflowButtonRect.GetHeight() / 2;
+        
+        wxPoint arrow[3];
+        arrow[0] = wxPoint(centerX - 5, centerY - 2);
+        arrow[1] = wxPoint(centerX + 5, centerY - 2);
+        arrow[2] = wxPoint(centerX, centerY + 3);
+        
+        dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT)));
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawPolygon(3, arrow);
     }
 }
 
 void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
+    // Check if overflow button clicked
+    if (m_hasOverflow && m_overflowButtonRect.Contains(event.GetPosition())) {
+        showTabOverflowMenu();
+        return;
+    }
+    
     int tab = getTabAt(event.GetPosition());
     if (tab >= 0) {
         // Check if close button clicked
@@ -548,11 +589,29 @@ int DockAreaTabBar::getTabAt(const wxPoint& pos) {
 
 void DockAreaTabBar::updateTabRects() {
     wxSize size = GetClientSize();
-    int tabWidth = m_tabs.empty() ? 0 : size.GetWidth() / m_tabs.size();
+    const int defaultTabWidth = 120;
+    const int overflowButtonWidth = 30;
     int x = 0;
     
+    // Clear all tab rects first
     for (auto& tab : m_tabs) {
-        tab.rect = wxRect(x, 0, tabWidth, size.GetHeight());
+        tab.rect = wxRect();
+        tab.closeButtonRect = wxRect();
+    }
+    
+    // Calculate available width
+    int maxWidth = m_hasOverflow ? size.GetWidth() - overflowButtonWidth : size.GetWidth();
+    
+    // Layout visible tabs
+    for (int i = m_firstVisibleTab; i < static_cast<int>(m_tabs.size()); ++i) {
+        auto& tab = m_tabs[i];
+        
+        // Check if this tab would exceed available width
+        if (x + defaultTabWidth > maxWidth) {
+            break; // Stop laying out tabs
+        }
+        
+        tab.rect = wxRect(x, 0, defaultTabWidth, size.GetHeight());
         
         // Close button rect
         int closeSize = 16;
@@ -564,7 +623,7 @@ void DockAreaTabBar::updateTabRects() {
             closeSize
         );
         
-        x += tabWidth;
+        x += defaultTabWidth;
     }
 }
 
@@ -638,6 +697,102 @@ void DockAreaTabBar::drawTab(wxDC& dc, int index) {
     }
 }
 
+void DockAreaTabBar::onSize(wxSizeEvent& event) {
+    checkTabOverflow();
+    updateTabRects();
+    Refresh();
+    event.Skip();
+}
+
+void DockAreaTabBar::checkTabOverflow() {
+    if (m_tabs.empty()) {
+        m_hasOverflow = false;
+        m_firstVisibleTab = 0;
+        return;
+    }
+    
+    // Calculate total width needed for all tabs
+    const int tabWidth = 120;
+    const int closeButtonWidth = 20;
+    const int overflowButtonWidth = 30;
+    
+    int totalTabsWidth = 0;
+    for (const auto& tab : m_tabs) {
+        totalTabsWidth += tabWidth;
+        if (tab.widget->hasFeature(DockWidgetClosable)) {
+            totalTabsWidth += closeButtonWidth;
+        }
+    }
+    
+    int availableWidth = GetClientSize().GetWidth();
+    
+    // Check if we need overflow
+    if (totalTabsWidth > availableWidth - overflowButtonWidth) {
+        m_hasOverflow = true;
+        
+        // Reserve space for overflow button
+        m_overflowButtonRect = wxRect(
+            availableWidth - overflowButtonWidth, 0,
+            overflowButtonWidth, GetClientSize().GetHeight()
+        );
+        
+        // Ensure current tab is visible
+        if (m_currentIndex >= 0) {
+            // Calculate how many tabs can fit
+            int visibleTabsWidth = 0;
+            int visibleTabsCount = 0;
+            
+            for (int i = m_firstVisibleTab; i < static_cast<int>(m_tabs.size()); ++i) {
+                int tabWidth = 120;
+                if (m_tabs[i].widget->hasFeature(DockWidgetClosable)) {
+                    tabWidth += closeButtonWidth;
+                }
+                
+                if (visibleTabsWidth + tabWidth > availableWidth - overflowButtonWidth) {
+                    break;
+                }
+                
+                visibleTabsWidth += tabWidth;
+                visibleTabsCount++;
+            }
+            
+            // Adjust first visible tab if current tab is not visible
+            if (m_currentIndex < m_firstVisibleTab) {
+                m_firstVisibleTab = m_currentIndex;
+            } else if (m_currentIndex >= m_firstVisibleTab + visibleTabsCount) {
+                m_firstVisibleTab = m_currentIndex - visibleTabsCount + 1;
+                if (m_firstVisibleTab < 0) m_firstVisibleTab = 0;
+            }
+        }
+    } else {
+        m_hasOverflow = false;
+        m_firstVisibleTab = 0;
+    }
+}
+
+void DockAreaTabBar::showTabOverflowMenu() {
+    wxMenu menu;
+    
+    // Add all tabs to menu
+    for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
+        wxString title = m_tabs[i].widget->title();
+        if (i == m_currentIndex) {
+            title = "▶ " + title; // Add marker for current tab
+        }
+        
+        wxMenuItem* item = menu.Append(wxID_ANY, title);
+        
+        // Bind menu item to tab selection
+        menu.Bind(wxEVT_MENU, [this, i](wxCommandEvent&) {
+            setCurrentIndex(i);
+        }, item->GetId());
+    }
+    
+    // Show menu at overflow button position
+    wxPoint pos = m_overflowButtonRect.GetBottomLeft();
+    PopupMenu(&menu, pos);
+}
+
 // DockAreaTitleBar implementation
 DockAreaTitleBar::DockAreaTitleBar(DockArea* dockArea)
     : wxPanel(dockArea)
@@ -709,6 +864,18 @@ void DockAreaTitleBar::onMenuButtonClicked(wxCommandEvent& event) {
 }
 
 void DockAreaTitleBar::createButtons() {
+    // Create pin button (for auto-hide)
+    wxButton* pinButton = new wxButton(this, wxID_ANY, "📌", wxDefaultPosition, wxSize(20, 20));
+    pinButton->SetToolTip("Auto-hide");
+    pinButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        // Toggle auto-hide for current widget
+        DockWidget* currentWidget = m_dockArea->currentDockWidget();
+        if (currentWidget) {
+            currentWidget->setAutoHide(true);
+        }
+    });
+    m_layout->Add(pinButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+    
     // Create close button
     m_closeButton = new wxButton(this, wxID_ANY, "X", wxDefaultPosition, wxSize(20, 20));
     m_closeButton->Bind(wxEVT_BUTTON, &DockAreaTitleBar::onCloseButtonClicked, this);

@@ -4,6 +4,8 @@
 #include "docking/DockContainerWidget.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/DockOverlay.h"
+#include "docking/AutoHideContainer.h"
+#include "docking/PerspectiveManager.h"
 #include <wx/xml/xml.h>
 #include <algorithm>
 
@@ -18,6 +20,8 @@ public:
     std::vector<FloatingDockContainer*> floatingWidgets;
     DockOverlay* containerOverlay = nullptr;
     DockOverlay* dockAreaOverlay = nullptr;
+    AutoHideManager* autoHideManager = nullptr;
+    PerspectiveManager* perspectiveManager = nullptr;
 };
 
 DockManager::DockManager(wxWindow* parent)
@@ -36,6 +40,12 @@ DockManager::DockManager(wxWindow* parent)
     m_dockOverlay = new DockOverlay(m_containerWidget);
     d->containerOverlay = new DockOverlay(m_containerWidget, DockOverlay::ModeContainerOverlay);
     d->dockAreaOverlay = new DockOverlay(m_containerWidget, DockOverlay::ModeDockAreaOverlay);
+    
+    // Create auto-hide manager
+    d->autoHideManager = new AutoHideManager(static_cast<DockContainerWidget*>(m_containerWidget));
+    
+    // Create perspective manager
+    d->perspectiveManager = new PerspectiveManager(this);
 }
 
 DockManager::~DockManager() {
@@ -48,6 +58,12 @@ DockManager::~DockManager() {
     while (!m_floatingWidgets.empty()) {
         delete m_floatingWidgets.back();
     }
+    
+    // Delete perspective manager
+    delete d->perspectiveManager;
+    
+    // Delete auto-hide manager
+    delete d->autoHideManager;
     
     // Delete overlays
     delete m_dockOverlay;
@@ -425,6 +441,68 @@ void DockManager::onFloatingWidgetCreated(FloatingDockContainer* floatingWidget)
 
 void DockManager::onFloatingWidgetAboutToClose(FloatingDockContainer* floatingWidget) {
     unregisterFloatingWidget(floatingWidget);
+}
+
+void DockManager::setAutoHide(DockWidget* widget, DockWidgetArea area) {
+    if (!widget || !d->autoHideManager) {
+        return;
+    }
+    
+    // Remove from current location
+    if (widget->dockAreaWidget()) {
+        widget->dockAreaWidget()->removeDockWidget(widget);
+    }
+    
+    // Convert area to auto-hide location
+    AutoHideSideBarLocation location;
+    switch (area) {
+    case LeftDockWidgetArea:
+        location = SideBarLeft;
+        break;
+    case RightDockWidgetArea:
+        location = SideBarRight;
+        break;
+    case TopDockWidgetArea:
+        location = SideBarTop;
+        break;
+    case BottomDockWidgetArea:
+        location = SideBarBottom;
+        break;
+    default:
+        location = SideBarLeft; // Default
+        break;
+    }
+    
+    // Add to auto-hide
+    d->autoHideManager->addAutoHideWidget(widget, location);
+}
+
+void DockManager::restoreFromAutoHide(DockWidget* widget) {
+    if (!widget || !d->autoHideManager) {
+        return;
+    }
+    
+    d->autoHideManager->restoreDockWidget(widget);
+}
+
+bool DockManager::isAutoHide(DockWidget* widget) const {
+    if (!widget || !d->autoHideManager) {
+        return false;
+    }
+    
+    return d->autoHideManager->autoHideContainer(widget) != nullptr;
+}
+
+std::vector<DockWidget*> DockManager::autoHideWidgets() const {
+    if (!d->autoHideManager) {
+        return std::vector<DockWidget*>();
+    }
+    
+    return d->autoHideManager->autoHideWidgets();
+}
+
+PerspectiveManager* DockManager::perspectiveManager() const {
+    return d->perspectiveManager;
 }
 
 } // namespace ads

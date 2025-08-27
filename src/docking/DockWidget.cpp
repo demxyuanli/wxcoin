@@ -403,16 +403,35 @@ void DockWidget::raise() {
 }
 
 bool DockWidget::isAutoHide() const {
-    // TODO: Implement auto-hide functionality
-    return false;
+    if (!m_dockManager) {
+        return false;
+    }
+    
+    // Check if this widget is in auto-hide mode
+    // This would be tracked by the dock manager
+    return m_dockManager->isAutoHide(this);
 }
 
 void DockWidget::setAutoHide(bool enable) {
-    // TODO: Implement auto-hide functionality
+    if (!m_dockManager || !hasFeature(DockWidgetFloatable)) {
+        return;
+    }
+    
+    if (enable == isAutoHide()) {
+        return;
+    }
+    
+    if (enable) {
+        // Move to auto-hide
+        m_dockManager->setAutoHide(this, LeftDockWidgetArea); // Default to left
+    } else {
+        // Restore from auto-hide
+        m_dockManager->restoreFromAutoHide(this);
+    }
 }
 
 int DockWidget::autoHidePriority() const {
-    // TODO: Implement auto-hide functionality
+    // Priority for auto-hide tab ordering
     return 0;
 }
 

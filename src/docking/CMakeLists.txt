@@ -7,6 +7,8 @@ set(DOCKING_SOURCES
     FloatingDockContainer.cpp
     DockOverlay.cpp
     DockingIntegration.cpp
+    AutoHideContainer.cpp
+    PerspectiveManager.cpp
 )
 
 set(DOCKING_HEADERS
@@ -17,6 +19,8 @@ set(DOCKING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/docking/FloatingDockContainer.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockOverlay.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockingIntegration.h
+    ${CMAKE_SOURCE_DIR}/include/docking/AutoHideContainer.h
+    ${CMAKE_SOURCE_DIR}/include/docking/PerspectiveManager.h
 )
 
 # Create docking library

@@ -142,6 +142,10 @@ public:
     // Count
     int count() const { return static_cast<int>(m_tabs.size()); }
     
+    // Overflow menu
+    bool hasTabOverflow() const { return m_hasOverflow; }
+    void showTabOverflowMenu();
+    
     // Events
     wxDECLARE_EVENT(EVT_TAB_CLOSE_REQUESTED, wxCommandEvent);
     wxDECLARE_EVENT(EVT_TAB_CURRENT_CHANGED, wxCommandEvent);
@@ -153,6 +157,7 @@ protected:
     void onMouseLeftUp(wxMouseEvent& event);
     void onMouseMotion(wxMouseEvent& event);
     void onMouseLeave(wxMouseEvent& event);
+    void onSize(wxSizeEvent& event);
     
 private:
     struct TabInfo {
@@ -168,10 +173,14 @@ private:
     int m_hoveredTab;
     int m_draggedTab;
     wxPoint m_dragStartPos;
+    bool m_hasOverflow;
+    int m_firstVisibleTab;
+    wxRect m_overflowButtonRect;
     
     int getTabAt(const wxPoint& pos);
     void updateTabRects();
     void drawTab(wxDC& dc, int index);
+    void checkTabOverflow();
     
     wxDECLARE_EVENT_TABLE();
 };

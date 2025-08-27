@@ -313,15 +313,19 @@ void FloatingDockContainer::onMaximize(wxMaximizeEvent& event) {
 // FloatingDragPreview implementation
 wxBEGIN_EVENT_TABLE(FloatingDragPreview, wxFrame)
     EVT_PAINT(FloatingDragPreview::onPaint)
+    EVT_TIMER(wxID_ANY, FloatingDragPreview::onTimer)
 wxEND_EVENT_TABLE()
 
 FloatingDragPreview::FloatingDragPreview(DockWidget* content, wxWindow* parent)
     : wxFrame(parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
              wxFRAME_NO_TASKBAR | wxFRAME_FLOAT_ON_PARENT | wxBORDER_NONE | wxSTAY_ON_TOP)
     , m_content(content)
-    , m_animated(false)
+    , m_animated(true)
+    , m_fadeAlpha(0)
+    , m_fadingIn(false)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_animationTimer = new wxTimer(this);
     updateContentBitmap();
 }
 
@@ -329,13 +333,22 @@ FloatingDragPreview::FloatingDragPreview(DockArea* content, wxWindow* parent)
     : wxFrame(parent, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
              wxFRAME_NO_TASKBAR | wxFRAME_FLOAT_ON_PARENT | wxBORDER_NONE | wxSTAY_ON_TOP)
     , m_content(content)
-    , m_animated(false)
+    , m_animated(true)
+    , m_fadeAlpha(0)
+    , m_fadingIn(false)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
+    m_animationTimer = new wxTimer(this);
     updateContentBitmap();
 }
 
 FloatingDragPreview::~FloatingDragPreview() {
+    if (m_animationTimer) {
+        if (m_animationTimer->IsRunning()) {
+            m_animationTimer->Stop();
+        }
+        delete m_animationTimer;
+    }
 }
 
 void FloatingDragPreview::setContent(DockWidget* content) {
@@ -351,7 +364,18 @@ void FloatingDragPreview::setContent(DockArea* content) {
 void FloatingDragPreview::startDrag(const wxPoint& globalPos) {
     m_dragStartPos = globalPos;
     SetPosition(globalPos);
-    Show();
+    
+    if (m_animated) {
+        // Start fade-in animation
+        m_fadeAlpha = 0;
+        m_fadingIn = true;
+        SetTransparent(0);
+        Show();
+        m_animationTimer->Start(16); // ~60 FPS
+    } else {
+        SetTransparent(200); // 80% opacity
+        Show();
+    }
 }
 
 void FloatingDragPreview::moveFloating(const wxPoint& globalPos) {
@@ -359,6 +383,9 @@ void FloatingDragPreview::moveFloating(const wxPoint& globalPos) {
 }
 
 void FloatingDragPreview::finishDrag() {
+    if (m_animationTimer->IsRunning()) {
+        m_animationTimer->Stop();
+    }
     Hide();
 }
 
@@ -376,22 +403,75 @@ void FloatingDragPreview::updateContentBitmap() {
     }
     
     wxSize size = m_content->GetSize();
+    
+    // Create a smaller preview size if the widget is too large
+    const int maxPreviewSize = 400;
+    if (size.GetWidth() > maxPreviewSize || size.GetHeight() > maxPreviewSize) {
+        double scale = std::min(
+            static_cast<double>(maxPreviewSize) / size.GetWidth(),
+            static_cast<double>(maxPreviewSize) / size.GetHeight()
+        );
+        size.SetWidth(static_cast<int>(size.GetWidth() * scale));
+        size.SetHeight(static_cast<int>(size.GetHeight() * scale));
+    }
+    
     SetSize(size);
     
     // Create bitmap from content
     m_contentBitmap = wxBitmap(size);
     wxMemoryDC memDC(m_contentBitmap);
     
-    // Draw content
+    // Fill background
     memDC.SetBackground(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)));
     memDC.Clear();
     
-    // TODO: Render actual content
-    memDC.SetPen(*wxBLACK_PEN);
-    memDC.SetBrush(*wxTRANSPARENT_BRUSH);
-    memDC.DrawRectangle(0, 0, size.GetWidth(), size.GetHeight());
+    // Try to render actual widget content
+    if (m_content->IsShownOnScreen()) {
+        // Use wxClientDC to capture the actual widget content
+        wxClientDC sourceDC(m_content);
+        wxSize sourceSize = m_content->GetClientSize();
+        
+        // If we're scaling down, use StretchBlit
+        if (size != sourceSize) {
+            memDC.StretchBlit(0, 0, size.GetWidth(), size.GetHeight(),
+                            &sourceDC, 0, 0, sourceSize.GetWidth(), sourceSize.GetHeight());
+        } else {
+            memDC.Blit(0, 0, size.GetWidth(), size.GetHeight(), &sourceDC, 0, 0);
+        }
+    } else {
+        // Widget not visible, draw placeholder
+        memDC.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW), 2));
+        memDC.SetBrush(*wxTRANSPARENT_BRUSH);
+        memDC.DrawRectangle(1, 1, size.GetWidth() - 2, size.GetHeight() - 2);
+        
+        // Draw title if it's a DockWidget
+        DockWidget* dockWidget = dynamic_cast<DockWidget*>(m_content);
+        if (dockWidget) {
+            wxString title = dockWidget->title();
+            memDC.SetFont(GetFont());
+            memDC.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT));
+            
+            wxRect textRect(0, 0, size.GetWidth(), size.GetHeight());
+            memDC.DrawLabel(title, textRect, wxALIGN_CENTER);
+        }
+    }
     
     memDC.SelectObject(wxNullBitmap);
+    
+    // Apply transparency
+    SetTransparent(200); // 80% opacity
+}
+
+void FloatingDragPreview::onTimer(wxTimerEvent& event) {
+    if (m_fadingIn) {
+        m_fadeAlpha += 20; // Fade in over ~10 frames
+        if (m_fadeAlpha >= 200) {
+            m_fadeAlpha = 200;
+            m_fadingIn = false;
+            m_animationTimer->Stop();
+        }
+        SetTransparent(m_fadeAlpha);
+    }
 }
 
 } // namespace ads
