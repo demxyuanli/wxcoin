@@ -9,6 +9,7 @@
 #include <wx/artprov.h>
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
+#include <wx/file.h>
 
 using namespace ads;
 
@@ -68,7 +69,7 @@ void FlatFrameDocking::InitializeDockingLayout() {
     
     // Set up main panel sizer
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-    mainSizer->Add(m_dockManager, 1, wxEXPAND);
+    mainSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
     mainPanel->SetSizer(mainSizer);
     
     // Add main panel to frame
@@ -83,20 +84,14 @@ void FlatFrameDocking::InitializeDockingLayout() {
 
 void FlatFrameDocking::ConfigureDockManager() {
     // Configure dock manager features
-    m_dockManager->setConfigFlag(DockManager::OpaqueSplitterResize, true);
-    m_dockManager->setConfigFlag(DockManager::DragPreviewIsDynamic, true);
-    m_dockManager->setConfigFlag(DockManager::DragPreviewShowsContentPixmap, true);
-    m_dockManager->setConfigFlag(DockManager::DragPreviewHasWindowFrame, true);
-    m_dockManager->setConfigFlag(DockManager::DockAreaHasCloseButton, true);
-    m_dockManager->setConfigFlag(DockManager::DockAreaHasTabsMenuButton, true);
-    m_dockManager->setConfigFlag(DockManager::DockAreaHideDisabledButtons, true);
-    m_dockManager->setConfigFlag(DockManager::TabCloseButtonIsToolButton, false);
-    m_dockManager->setConfigFlag(DockManager::AllTabsHaveCloseButton, true);
+    m_dockManager->setConfigFlag(OpaqueSplitterResize, true);
+    m_dockManager->setConfigFlag(DockAreaHasCloseButton, true);
+    m_dockManager->setConfigFlag(TabCloseButtonIsToolButton, false);
+    m_dockManager->setConfigFlag(AllTabsHaveCloseButton, true);
+    m_dockManager->setConfigFlag(FocusHighlighting, true);
     
-    // Enable auto-hide feature
-    m_dockManager->setAutoHideConfigFlag(DockManager::AutoHideButtonCheckable, true);
-    m_dockManager->setAutoHideConfigFlag(DockManager::AutoHideButtonTogglesArea, true);
-    m_dockManager->setAutoHideConfigFlag(DockManager::AutoHideHasCloseButton, true);
+    // Note: Auto-hide configuration is done through the AutoHideManager
+    // which is managed internally by DockManager
 }
 
 void FlatFrameDocking::CreateDockingLayout() {
@@ -125,57 +120,57 @@ void FlatFrameDocking::CreateDockingLayout() {
 }
 
 DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
-    DockWidget* dock = new DockWidget("3D View", m_dockManager);
+    DockWidget* dock = new DockWidget("3D View");
     
     // Create canvas (OCCViewer)
-    m_canvas = new Canvas(dock);
-    dock->setWidget(m_canvas);
+    Canvas* canvas = new Canvas(dock);
+    dock->setWidget(canvas);
     
     // Configure dock widget
-    dock->setFeature(DockWidget::DockWidgetClosable, false);  // Canvas should not be closable
-    dock->setFeature(DockWidget::DockWidgetMovable, true);
-    dock->setFeature(DockWidget::DockWidgetFloatable, true);
+    dock->setFeature(DockWidgetClosable, false);  // Canvas should not be closable
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, true);
     dock->setIcon(wxArtProvider::GetIcon(wxART_NORMAL_FILE, wxART_MENU));
     
     return dock;
 }
 
 DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
-    DockWidget* dock = new DockWidget("Properties", m_dockManager);
+    DockWidget* dock = new DockWidget("Properties");
     
     // Create property panel
-    m_propertyPanel = new PropertyPanel(dock);
-    dock->setWidget(m_propertyPanel);
+    PropertyPanel* propertyPanel = new PropertyPanel(dock);
+    dock->setWidget(propertyPanel);
     
     // Configure dock widget
-    dock->setFeature(DockWidget::DockWidgetClosable, true);
-    dock->setFeature(DockWidget::DockWidgetMovable, true);
-    dock->setFeature(DockWidget::DockWidgetFloatable, true);
-    dock->setFeature(DockWidget::DockWidgetPinnable, true);  // Can be auto-hidden
+    dock->setFeature(DockWidgetClosable, true);
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, true);
+
     dock->setIcon(wxArtProvider::GetIcon(wxART_REPORT_VIEW, wxART_MENU));
     
     return dock;
 }
 
 DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
-    DockWidget* dock = new DockWidget("Object Tree", m_dockManager);
+    DockWidget* dock = new DockWidget("Object Tree");
     
     // Create object tree panel
-    m_objectTreePanel = new ObjectTreePanel(dock);
-    dock->setWidget(m_objectTreePanel);
+    ObjectTreePanel* objectTreePanel = new ObjectTreePanel(dock);
+    dock->setWidget(objectTreePanel);
     
     // Configure dock widget
-    dock->setFeature(DockWidget::DockWidgetClosable, true);
-    dock->setFeature(DockWidget::DockWidgetMovable, true);
-    dock->setFeature(DockWidget::DockWidgetFloatable, true);
-    dock->setFeature(DockWidget::DockWidgetPinnable, true);  // Can be auto-hidden
+    dock->setFeature(DockWidgetClosable, true);
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, true);
+
     dock->setIcon(wxArtProvider::GetIcon(wxART_FOLDER, wxART_MENU));
     
     return dock;
 }
 
 DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
-    DockWidget* dock = new DockWidget("Output", m_dockManager);
+    DockWidget* dock = new DockWidget("Output");
     
     // Create output text control
     wxTextCtrl* output = new wxTextCtrl(dock, wxID_ANY, wxEmptyString,
@@ -190,10 +185,10 @@ DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
     dock->setWidget(output);
     
     // Configure dock widget
-    dock->setFeature(DockWidget::DockWidgetClosable, true);
-    dock->setFeature(DockWidget::DockWidgetMovable, true);
-    dock->setFeature(DockWidget::DockWidgetFloatable, true);
-    dock->setFeature(DockWidget::DockWidgetPinnable, true);  // Can be auto-hidden
+    dock->setFeature(DockWidgetClosable, true);
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, true);
+
     dock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
     
     // Store output control for later use
@@ -203,7 +198,7 @@ DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
 }
 
 DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
-    DockWidget* dock = new DockWidget("Toolbox", m_dockManager);
+    DockWidget* dock = new DockWidget("Toolbox");
     
     // Create toolbox panel
     wxPanel* toolbox = new wxPanel(dock);
@@ -227,10 +222,10 @@ DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
     dock->setWidget(toolbox);
     
     // Configure dock widget
-    dock->setFeature(DockWidget::DockWidgetClosable, true);
-    dock->setFeature(DockWidget::DockWidgetMovable, true);
-    dock->setFeature(DockWidget::DockWidgetFloatable, true);
-    dock->setFeature(DockWidget::DockWidgetPinnable, true);  // Can be auto-hidden
+    dock->setFeature(DockWidgetClosable, true);
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, true);
+
     dock->setIcon(wxArtProvider::GetIcon(wxART_EXECUTABLE_FILE, wxART_MENU));
     
     return dock;
@@ -300,8 +295,18 @@ void FlatFrameDocking::LoadDockingLayout(const wxString& filename) {
 }
 
 void FlatFrameDocking::ResetDockingLayout() {
-    // Hide all current widgets
-    m_dockManager->hideManagerAndFloatingContainers();
+    // Remove all dock widgets
+    auto widgets = m_dockManager->dockWidgets();
+    for (auto* widget : widgets) {
+        m_dockManager->removeDockWidget(widget);
+    }
+    
+    // Clear references
+    m_propertyDock = nullptr;
+    m_objectTreeDock = nullptr;
+    m_canvasDock = nullptr;
+    m_outputDock = nullptr;
+    m_toolboxDock = nullptr;
     
     // Recreate default layout
     CreateDockingLayout();
@@ -339,7 +344,7 @@ void FlatFrameDocking::OnDockingResetLayout(wxCommandEvent& event) {
 }
 
 void FlatFrameDocking::OnDockingManagePerspectives(wxCommandEvent& event) {
-    PerspectiveDialog dlg(this, m_dockManager->perspectiveManager());
+    ads::PerspectiveDialog dlg(this, m_dockManager->perspectiveManager());
     dlg.ShowModal();
 }
 
@@ -351,7 +356,7 @@ void FlatFrameDocking::OnDockingToggleAutoHide(wxCommandEvent& event) {
             bool isAutoHide = widget->isAutoHide();
             widget->setAutoHide(!isAutoHide);
             appendMessage(wxString::Format("%s auto-hide %s", 
-                       widget->windowTitle(),
+                       widget->title(),
                        isAutoHide ? "disabled" : "enabled"));
             break;
         }
