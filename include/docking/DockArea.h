@@ -210,6 +210,7 @@ protected:
     void onCloseButtonClicked(wxCommandEvent& event);
     void onAutoHideButtonClicked(wxCommandEvent& event);
     void onMenuButtonClicked(wxCommandEvent& event);
+    void onPinButtonClicked(wxCommandEvent& event);
     
 private:
     DockArea* m_dockArea;

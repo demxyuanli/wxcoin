@@ -1,9 +1,17 @@
 #pragma once
 
 #include <wx/wx.h>
+#include <wx/timer.h>
+#include <wx/datetime.h>
+#include <wx/xml/xml.h>
+#include <wx/dialog.h>
+#include <wx/listctrl.h>
+#include <wx/toolbar.h>
+#include <wx/choice.h>
 #include <vector>
 #include <map>
 #include <memory>
+#include <functional>
 
 namespace ads {
 

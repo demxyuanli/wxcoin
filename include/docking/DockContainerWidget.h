@@ -22,6 +22,9 @@ class DockContainerWidget : public wxPanel {
 public:
     DockContainerWidget(DockManager* dockManager, wxWindow* parent);
     virtual ~DockContainerWidget();
+    
+    // Manager access  
+    DockManager* dockManager() const { return m_dockManager; }
 
     // Area management
     DockArea* addDockWidget(DockWidgetArea area, DockWidget* dockWidget, 

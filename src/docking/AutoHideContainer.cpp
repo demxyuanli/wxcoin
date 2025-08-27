@@ -2,8 +2,12 @@
 #include "docking/DockWidget.h"
 #include "docking/DockArea.h"
 #include "docking/DockContainerWidget.h"
+#include "docking/DockManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/settings.h>
+#include <wx/graphics.h>
+#include <wx/button.h>
+#include <cmath>
 
 namespace ads {
 
@@ -132,9 +136,11 @@ void AutoHideTab::OnMouseEnter(wxMouseEvent& event) {
     m_isHovered = true;
     Refresh();
     
-    // Show the dock widget
+    // Show the dock widget through the container
     AutoHideSideBar* sideBar = dynamic_cast<AutoHideSideBar*>(GetParent());
-    if (sideBar) {
+    if (sideBar && sideBar->getContainer()) {
+        // The container should have the auto-hide manager
+        // For now, just activate the tab
         sideBar->showDockWidget(m_dockWidget);
     }
     
@@ -235,15 +241,14 @@ void AutoHideSideBar::showDockWidget(DockWidget* dockWidget) {
     DockManager* dockManager = m_container->dockManager();
     if (!dockManager) return;
     
-    // Get auto-hide manager from dock manager (we'll add this)
-    // For now, we'll implement a simple show mechanism
-    
     // Activate the tab
     for (auto* tab : m_tabs) {
         tab->setActive(tab->dockWidget() == dockWidget);
     }
     
-    // TODO: Show the auto-hide container with animation
+    // Show the auto-hide container through the manager
+    // This will be called through the AutoHideManager which is owned by the container
+    // For now, we just mark the tab as active
 }
 
 void AutoHideSideBar::hideDockWidget(DockWidget* dockWidget) {
@@ -276,6 +281,7 @@ wxBEGIN_EVENT_TABLE(AutoHideDockContainer, wxPanel)
     EVT_TIMER(wxID_ANY, AutoHideDockContainer::OnTimer)
     EVT_MOUSE_CAPTURE_LOST(AutoHideDockContainer::OnMouseCaptureLost)
     EVT_KILL_FOCUS(AutoHideDockContainer::OnKillFocus)
+    EVT_BUTTON(wxID_ANY, AutoHideDockContainer::OnPinButtonClick)
 wxEND_EVENT_TABLE()
 
 AutoHideDockContainer::AutoHideDockContainer(DockWidget* dockWidget, 
@@ -309,12 +315,8 @@ AutoHideDockContainer::AutoHideDockContainer(DockWidget* dockWidget,
     // Add pin button
     wxButton* pinButton = new wxButton(titleBar, wxID_ANY, "📌", wxDefaultPosition, wxSize(20, 20));
     pinButton->SetToolTip("Pin/Unpin");
-    pinButton->Bind(wxEVT_BUTTON, [this, dockWidget](wxCommandEvent&) {
-        // Restore to normal docked state
-        if (m_container && m_container->dockManager()) {
-            // TODO: Implement restore from auto-hide
-        }
-    });
+    // Use a proper event handler instead of lambda for better compatibility
+    pinButton->Bind(wxEVT_BUTTON, &AutoHideDockContainer::OnPinButtonClick, this);
     titleSizer->Add(pinButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     
     titleBar->SetSizer(titleSizer);
@@ -377,12 +379,19 @@ void AutoHideDockContainer::OnMouseCaptureLost(wxMouseCaptureLostEvent& event) {
 
 void AutoHideDockContainer::OnKillFocus(wxFocusEvent& event) {
     // Check if focus went to a child window
-    wxWindow* focusWindow = event.GetWindow();
-    if (focusWindow && !IsDescendant(focusWindow)) {
-        // Focus went outside, hide
+    wxWindow* focusWindow = wxFindFocusDescendant(this);
+    if (!focusWindow) {
+        // Focus went outside this container, hide
         slideOut();
     }
     event.Skip();
+}
+
+void AutoHideDockContainer::OnPinButtonClick(wxCommandEvent& event) {
+    // Restore to normal docked state
+    if (m_container && m_container->dockManager()) {
+        m_container->dockManager()->restoreFromAutoHide(m_dockWidget);
+    }
 }
 
 void AutoHideDockContainer::updateAnimation() {

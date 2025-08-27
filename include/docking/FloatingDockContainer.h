@@ -3,6 +3,10 @@
 #include <wx/wx.h>
 #include <wx/frame.h>
 #include <vector>
+
+#ifndef wxByte
+typedef unsigned char wxByte;
+#endif
 #include <memory>
 
 namespace ads {

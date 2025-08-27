@@ -2,15 +2,18 @@
 
 #include <wx/wx.h>
 #include <wx/panel.h>
+#include <wx/timer.h>
 #include <vector>
 #include <memory>
-#include "DockManager.h"
+#include <map>
 
 namespace ads {
 
 // Forward declarations
+class DockManager;
 class DockWidget;
 class DockArea;
+class DockContainerWidget;
 class AutoHideTab;
 
 /**
@@ -68,6 +71,7 @@ public:
     AutoHideSideBarLocation location() const { return m_location; }
     int tabCount() const { return m_tabs.size(); }
     AutoHideTab* tab(int index) const;
+    DockContainerWidget* getContainer() const { return m_container; }
     
     void showDockWidget(DockWidget* dockWidget);
     void hideDockWidget(DockWidget* dockWidget);
@@ -110,6 +114,7 @@ protected:
     void OnTimer(wxTimerEvent& event);
     void OnMouseCaptureLost(wxMouseCaptureLostEvent& event);
     void OnKillFocus(wxFocusEvent& event);
+    void OnPinButtonClick(wxCommandEvent& event);
     
 private:
     DockWidget* m_dockWidget;

@@ -3,6 +3,9 @@
 #include "docking/DockArea.h"
 #include "docking/DockManager.h"
 #include "docking/DockContainerWidget.h"
+#include <wx/dcmemory.h>
+#include <wx/dcclient.h>
+#include <wx/dcbuffer.h>
 
 namespace ads {
 

@@ -3,6 +3,9 @@
 #include "docking/DockManager.h"
 #include "docking/DockContainerWidget.h"
 #include <wx/dcbuffer.h>
+#include <wx/settings.h>
+#include <wx/menu.h>
+#include <wx/button.h>
 #include <algorithm>
 
 namespace ads {
@@ -863,17 +866,19 @@ void DockAreaTitleBar::onMenuButtonClicked(wxCommandEvent& event) {
     // TODO: Show dock area menu
 }
 
+void DockAreaTitleBar::onPinButtonClicked(wxCommandEvent& event) {
+    // Toggle auto-hide for current widget
+    DockWidget* currentWidget = m_dockArea->currentDockWidget();
+    if (currentWidget) {
+        currentWidget->setAutoHide(true);
+    }
+}
+
 void DockAreaTitleBar::createButtons() {
     // Create pin button (for auto-hide)
     wxButton* pinButton = new wxButton(this, wxID_ANY, "📌", wxDefaultPosition, wxSize(20, 20));
     pinButton->SetToolTip("Auto-hide");
-    pinButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-        // Toggle auto-hide for current widget
-        DockWidget* currentWidget = m_dockArea->currentDockWidget();
-        if (currentWidget) {
-            currentWidget->setAutoHide(true);
-        }
-    });
+    pinButton->Bind(wxEVT_BUTTON, &DockAreaTitleBar::onPinButtonClicked, this);
     m_layout->Add(pinButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     
     // Create close button

@@ -14,6 +14,8 @@
 #include <wx/textdlg.h>
 #include <wx/dcmemory.h>
 #include <wx/dcscreen.h>
+#include <wx/artprov.h>
+#include <wx/splitter.h>
 #include <functional>
 
 namespace ads {
