@@ -8,10 +8,10 @@
 namespace ads {
 
 // Define custom events - static member initialization
-wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_CLOSED("DockWidget::EVT_DOCK_WIDGET_CLOSED");
-wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_CLOSING("DockWidget::EVT_DOCK_WIDGET_CLOSING");
-wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_VISIBILITY_CHANGED("DockWidget::EVT_DOCK_WIDGET_VISIBILITY_CHANGED");
-wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_FEATURES_CHANGED("DockWidget::EVT_DOCK_WIDGET_FEATURES_CHANGED");
+wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_CLOSED(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_CLOSING(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_VISIBILITY_CHANGED(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockWidget::EVT_DOCK_WIDGET_FEATURES_CHANGED(wxNewEventType());
 
 // Event table
 wxBEGIN_EVENT_TABLE(DockWidget, wxPanel)
@@ -76,10 +76,10 @@ void DockWidget::setWidget(wxWindow* widget, InsertMode insertMode) {
         wxWindow* contentToAdd = widget;
         
         // Handle scroll area mode
-        if (insertMode == InsertMode::AutoScrollArea || insertMode == InsertMode::ForceScrollArea) {
+        if (insertMode == AutoScrollArea || insertMode == ForceScrollArea) {
             bool needsScrollArea = false;
             
-            if (insertMode == InsertMode::ForceScrollArea) {
+            if (insertMode == ForceScrollArea) {
                 needsScrollArea = true;
             } else {
                 // Auto mode - check if widget needs scroll area

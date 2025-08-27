@@ -18,7 +18,15 @@ class DockManager;
 class DockContainerWidget;
 
 // Import types - these should be defined in DockManager.h
-enum DockWidgetArea : int;
+enum DockWidgetArea : int {
+    NoDockWidgetArea = 0x00,
+    LeftDockWidgetArea = 0x01,
+    RightDockWidgetArea = 0x02,
+    TopDockWidgetArea = 0x04,
+    BottomDockWidgetArea = 0x08,
+    CenterDockWidgetArea = 0x10,
+    AllDockAreas = LeftDockWidgetArea | RightDockWidgetArea | TopDockWidgetArea | BottomDockWidgetArea | CenterDockWidgetArea
+};
 enum DockManagerFeature : int;
 class FloatingDragPreview;
 
@@ -27,6 +35,14 @@ class FloatingDragPreview;
  */
 class FloatingDockContainer : public wxFrame {
 public:
+    // Internal state - moved here to be available for method declarations
+    enum eDragState {
+        DraggingInactive,
+        DraggingMousePressed,
+        DraggingTab,
+        DraggingFloatingWidget
+    };
+    
     FloatingDockContainer(DockManager* dockManager);
     FloatingDockContainer(DockArea* dockArea);
     FloatingDockContainer(DockWidget* dockWidget);
@@ -36,7 +52,7 @@ public:
     DockContainerWidget* dockContainer() const { return m_dockContainer; }
     
     // Widget management
-    void addDockWidget(DockWidget* dockWidget, DockWidgetArea area = CenterDockWidgetArea);
+    void addDockWidget(DockWidget* dockWidget);
     void removeDockWidget(DockWidget* dockWidget);
     
     // State
@@ -65,14 +81,6 @@ public:
     // Testing
     bool isInTitleBar(const wxPoint& pos) const;
     
-    // Internal state
-    enum eDragState {
-        DraggingInactive,
-        DraggingMousePressed,
-        DraggingTab,
-        DraggingFloatingWidget
-    };
-    
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_FLOATING_CONTAINER_CLOSING;
     static wxEventTypeTag<wxCommandEvent> EVT_FLOATING_CONTAINER_CLOSED;
@@ -89,7 +97,7 @@ protected:
     
     // Internal methods
     void setupCustomTitleBar();
-    void testConfigFlag(DockManagerFeature flag) const;
+    bool testConfigFlag(DockManagerFeature flag) const;
     
 private:
     // Private implementation

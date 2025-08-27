@@ -80,16 +80,15 @@ bool Perspective::loadFromXml(wxXmlNode* node) {
 }
 
 // PerspectiveManager implementation
-wxBEGIN_EVENT_TABLE(PerspectiveManager, wxEvtHandler)
-    EVT_TIMER(wxID_ANY, PerspectiveManager::onAutoSaveTimer)
-wxEND_EVENT_TABLE()
+// PerspectiveManager doesn't inherit from wxEvtHandler, so no event table needed
+// Timer events will be handled differently
 
 PerspectiveManager::PerspectiveManager(DockManager* dockManager)
     : m_dockManager(dockManager)
     , m_autoSaveEnabled(false)
     , m_autoSaveTimer(nullptr)
 {
-    m_autoSaveTimer = new wxTimer(this);
+    m_autoSaveTimer = new wxTimer();
 }
 
 PerspectiveManager::~PerspectiveManager() {
@@ -105,7 +104,8 @@ bool PerspectiveManager::savePerspective(const wxString& name, const wxString& d
     }
     
     // Save current state
-    wxString layoutData = m_dockManager->saveState();
+    wxString layoutData;
+    m_dockManager->saveState(layoutData);
     if (layoutData.IsEmpty()) {
         return false;
     }
@@ -580,7 +580,7 @@ void PerspectiveDialog::OnPerspectiveSelected(wxListEvent& event) {
 }
 
 void PerspectiveDialog::OnLoadPerspective(wxCommandEvent& event) {
-    long selected = m_perspectiveList->GetFirstSelected();
+    long selected = m_perspectiveList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (selected >= 0) {
         wxString name = m_perspectiveList->GetItemText(selected, 0);
         if (m_manager->loadPerspective(name)) {
@@ -608,7 +608,7 @@ void PerspectiveDialog::OnSavePerspective(wxCommandEvent& event) {
 }
 
 void PerspectiveDialog::OnDeletePerspective(wxCommandEvent& event) {
-    long selected = m_perspectiveList->GetFirstSelected();
+    long selected = m_perspectiveList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (selected >= 0) {
         wxString name = m_perspectiveList->GetItemText(selected, 0);
         
@@ -636,7 +636,7 @@ void PerspectiveDialog::OnDeletePerspective(wxCommandEvent& event) {
 }
 
 void PerspectiveDialog::OnRenamePerspective(wxCommandEvent& event) {
-    long selected = m_perspectiveList->GetFirstSelected();
+    long selected = m_perspectiveList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (selected >= 0) {
         wxString oldName = m_perspectiveList->GetItemText(selected, 0);
         
@@ -653,7 +653,7 @@ void PerspectiveDialog::OnRenamePerspective(wxCommandEvent& event) {
 }
 
 void PerspectiveDialog::OnExportPerspective(wxCommandEvent& event) {
-    long selected = m_perspectiveList->GetFirstSelected();
+    long selected = m_perspectiveList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (selected >= 0) {
         wxString name = m_perspectiveList->GetItemText(selected, 0);
         

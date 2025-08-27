@@ -11,16 +11,16 @@
 namespace ads {
 
 // Define custom events
-wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CURRENT_CHANGED("DockArea::EVT_DOCK_AREA_CURRENT_CHANGED");
-wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CLOSING("DockArea::EVT_DOCK_AREA_CLOSING");
-wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CLOSED("DockArea::EVT_DOCK_AREA_CLOSED");
-wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE("DockArea::EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE");
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CURRENT_CHANGED(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CLOSING(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_CLOSED(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockArea::EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE(wxNewEventType());
 
-wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_CLOSE_REQUESTED("DockAreaTabBar::EVT_TAB_CLOSE_REQUESTED");
-wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_CURRENT_CHANGED("DockAreaTabBar::EVT_TAB_CURRENT_CHANGED");
-wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_MOVED("DockAreaTabBar::EVT_TAB_MOVED");
+wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_CLOSE_REQUESTED(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_CURRENT_CHANGED(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockAreaTabBar::EVT_TAB_MOVED(wxNewEventType());
 
-wxEventTypeTag<wxCommandEvent> DockAreaTitleBar::EVT_TITLE_BAR_BUTTON_CLICKED("DockAreaTitleBar::EVT_TITLE_BAR_BUTTON_CLICKED");
+wxEventTypeTag<wxCommandEvent> DockAreaTitleBar::EVT_TITLE_BAR_BUTTON_CLICKED(wxNewEventType());
 
 // Event tables
 wxBEGIN_EVENT_TABLE(DockArea, wxPanel)
@@ -515,7 +515,9 @@ void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
     if (tab >= 0) {
         // Check if close button clicked
         if (m_tabs[tab].closeButtonRect.Contains(event.GetPosition())) {
-            m_dockArea->onTabCloseRequested(tab);
+            if (m_dockArea) {
+                m_dockArea->onTabCloseRequested(tab);
+            }
         } else {
             // Start dragging
             m_draggedTab = tab;
@@ -528,7 +530,9 @@ void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
                 evt.SetInt(tab);
                 ProcessWindowEvent(evt);
                 
-                m_dockArea->onCurrentTabChanged(tab);
+                if (m_dockArea) {
+                    m_dockArea->onCurrentTabChanged(tab);
+                }
             }
             
             CaptureMouse();

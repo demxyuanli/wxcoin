@@ -10,8 +10,8 @@
 namespace ads {
 
 // Define custom events
-wxEventTypeTag<wxCommandEvent> FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSING("FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSING");
-wxEventTypeTag<wxCommandEvent> FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSED("FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSED");
+wxEventTypeTag<wxCommandEvent> FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSING(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> FloatingDockContainer::EVT_FLOATING_CONTAINER_CLOSED(wxNewEventType());
 
 // Event table
 wxBEGIN_EVENT_TABLE(FloatingDockContainer, wxFrame)

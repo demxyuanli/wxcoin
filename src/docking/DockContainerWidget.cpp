@@ -7,8 +7,8 @@
 namespace ads {
 
 // Define custom events
-wxEventTypeTag<wxCommandEvent> DockContainerWidget::EVT_DOCK_AREAS_ADDED("DockContainerWidget::EVT_DOCK_AREAS_ADDED");
-wxEventTypeTag<wxCommandEvent> DockContainerWidget::EVT_DOCK_AREAS_REMOVED("DockContainerWidget::EVT_DOCK_AREAS_REMOVED");
+wxEventTypeTag<wxCommandEvent> DockContainerWidget::EVT_DOCK_AREAS_ADDED(wxNewEventType());
+wxEventTypeTag<wxCommandEvent> DockContainerWidget::EVT_DOCK_AREAS_REMOVED(wxNewEventType());
 
 // Event table
 wxBEGIN_EVENT_TABLE(DockContainerWidget, wxPanel)

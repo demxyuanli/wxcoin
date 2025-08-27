@@ -62,7 +62,7 @@ public:
     virtual ~DockWidget();
 
     // Core widget management
-    void setWidget(wxWindow* widget, InsertMode insertMode = InsertMode::AutoScrollArea);
+    void setWidget(wxWindow* widget, InsertMode insertMode = AutoScrollArea);
     wxWindow* takeWidget();
     wxWindow* widget() const { return m_widget; }
     

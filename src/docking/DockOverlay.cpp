@@ -48,7 +48,7 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
 DockOverlay::~DockOverlay() {
 }
 
-void DockOverlay::setAllowedAreas(DockWidgetAreas areas) {
+void DockOverlay::setAllowedAreas(int areas) {
     m_allowedAreas = areas;
     updateDropAreas();
 }
