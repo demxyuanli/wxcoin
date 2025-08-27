@@ -1,0 +1,128 @@
+diff --git a/include/docking/DockWidget.h b/include/docking/DockWidget.h
+index 1234567..abcdefg 100644
+--- a/include/docking/DockWidget.h
++++ b/include/docking/DockWidget.h
+@@ -62,7 +62,7 @@ public:
+     virtual ~DockWidget();
+ 
+     // Core widget management
+-    void setWidget(wxWindow* widget, InsertMode insertMode = AutoScrollArea);
++    void setWidget(wxWindow* widget, InsertMode insertMode = InsertMode::AutoScrollArea);
+     wxWindow* takeWidget();
+     wxWindow* widget() const { return m_widget; }
+     
+@@ -149,10 +149,10 @@ public:
+         ForceNoScrollArea
+     };
+ 
+-    // Events
+-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_CLOSED, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_CLOSING, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_VISIBILITY_CHANGED, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_DOCK_WIDGET_FEATURES_CHANGED, wxCommandEvent);
++    // Events - static members for event types
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_CLOSED;
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_CLOSING;
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_VISIBILITY_CHANGED;
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_FEATURES_CHANGED;
+
+ protected:
+diff --git a/include/docking/DockArea.h b/include/docking/DockArea.h
+index 1234567..abcdefg 100644
+--- a/include/docking/DockArea.h
++++ b/include/docking/DockArea.h
+@@ -80,10 +80,10 @@ public:
+     wxString currentTabTitle() const;
+     
+     // Events
+-    wxDECLARE_EVENT(EVT_DOCK_AREA_CURRENT_CHANGED, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_DOCK_AREA_CLOSING, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_DOCK_AREA_CLOSED, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE, wxCommandEvent);
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CURRENT_CHANGED;
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSING;
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSED;
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE;
+     
+ protected:
+@@ -147,9 +147,9 @@ public:
+     void showTabOverflowMenu();
+     
+     // Events
+-    wxDECLARE_EVENT(EVT_TAB_CLOSE_REQUESTED, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_TAB_CURRENT_CHANGED, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_TAB_MOVED, wxCommandEvent);
++    static wxEventTypeTag<wxCommandEvent> EVT_TAB_CLOSE_REQUESTED;
++    static wxEventTypeTag<wxCommandEvent> EVT_TAB_CURRENT_CHANGED;
++    static wxEventTypeTag<wxCommandEvent> EVT_TAB_MOVED;
+     
+ protected:
+@@ -203,7 +203,7 @@ public:
+     void showAutoHideButton(bool show);
+     
+     // Events
+-    wxDECLARE_EVENT(EVT_TITLE_BAR_BUTTON_CLICKED, wxCommandEvent);
++    static wxEventTypeTag<wxCommandEvent> EVT_TITLE_BAR_BUTTON_CLICKED;
+     
+ protected:
+diff --git a/include/docking/DockContainerWidget.h b/include/docking/DockContainerWidget.h
+index 1234567..abcdefg 100644
+--- a/include/docking/DockContainerWidget.h
++++ b/include/docking/DockContainerWidget.h
+@@ -64,8 +64,8 @@ public:
+     DockArea* lastAddedDockArea() const { return m_lastAddedArea; }
+     
+     // Events
+-    wxDECLARE_EVENT(EVT_DOCK_AREAS_ADDED, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_DOCK_AREAS_REMOVED, wxCommandEvent);
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_ADDED;
++    static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_REMOVED;
+     
+ protected:
+diff --git a/include/docking/FloatingDockContainer.h b/include/docking/FloatingDockContainer.h
+index 1234567..abcdefg 100644
+--- a/include/docking/FloatingDockContainer.h
++++ b/include/docking/FloatingDockContainer.h
+@@ -16,6 +16,10 @@ class DockWidget;
+ class DockArea;
+ class DockManager;
+ class DockContainerWidget;
++
++// Import types - these should be defined in DockManager.h
++enum DockWidgetArea : int;
++enum DockManagerFeature : int;
+ class FloatingDragPreview;
+ 
+ /**
+@@ -70,8 +74,8 @@ public:
+     };
+     
+     // Events
+-    wxDECLARE_EVENT(EVT_FLOATING_CONTAINER_CLOSING, wxCommandEvent);
+-    wxDECLARE_EVENT(EVT_FLOATING_CONTAINER_CLOSED, wxCommandEvent);
++    static wxEventTypeTag<wxCommandEvent> EVT_FLOATING_CONTAINER_CLOSING;
++    static wxEventTypeTag<wxCommandEvent> EVT_FLOATING_CONTAINER_CLOSED;
+
+ protected:
+diff --git a/include/docking/DockOverlay.h b/include/docking/DockOverlay.h
+index 1234567..abcdefg 100644
+--- a/include/docking/DockOverlay.h
++++ b/include/docking/DockOverlay.h
+@@ -53,8 +53,8 @@ public:
+     virtual ~DockOverlay();
+     
+     // Configuration
+-    void setAllowedAreas(DockWidgetAreas areas);
+-    DockWidgetAreas allowedAreas() const { return m_allowedAreas; }
++    void setAllowedAreas(int areas);
++    int allowedAreas() const { return m_allowedAreas; }
+     
+     // Drop areas
+@@ -95,7 +95,7 @@ private:
+     // Member variables
+     eMode m_mode;
+     wxWindow* m_targetWidget;
+-    DockWidgetAreas m_allowedAreas;
++    int m_allowedAreas;
+     std::vector<std::unique_ptr<DockOverlayDropArea>> m_dropAreas;
+     DockWidgetArea m_lastHoveredArea;
