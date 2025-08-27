@@ -21,8 +21,8 @@ public:
     FlatFrameDocking(const wxString& title, const wxPoint& pos, const wxSize& size);
     virtual ~FlatFrameDocking();
 
-    // Override initialization methods
-    virtual void InitializeLayout() override;
+    // Initialize docking layout
+    void InitializeDockingLayout();
     
     // Docking-specific methods
     void CreateDockingLayout();
@@ -41,9 +41,9 @@ public:
     ads::DockManager* GetDockManager() const { return m_dockManager; }
     
 protected:
-    // Override event handlers if needed
-    virtual void OnViewShowHidePanel(wxCommandEvent& event) override;
-    virtual void OnUpdateUI(wxUpdateUIEvent& event) override;
+    // Event handlers for docking
+    void OnViewShowHidePanel(wxCommandEvent& event);
+    void OnUpdateUI(wxUpdateUIEvent& event);
     
     // Menu handlers for docking features
     void OnDockingSaveLayout(wxCommandEvent& event);
@@ -62,6 +62,9 @@ private:
     ads::DockWidget* m_outputDock;
     ads::DockWidget* m_toolboxDock;
     
+    // Output control
+    wxTextCtrl* m_outputCtrl;
+    
     void CreateDockingMenus();
     void ConfigureDockManager();
     
@@ -76,5 +79,11 @@ enum {
     ID_DOCKING_MANAGE_PERSPECTIVES,
     ID_DOCKING_TOGGLE_AUTOHIDE,
     ID_DOCKING_FLOAT_ALL,
-    ID_DOCKING_DOCK_ALL
+    ID_DOCKING_DOCK_ALL,
+    
+    // View panel IDs
+    ID_VIEW_PROPERTIES,
+    ID_VIEW_OBJECT_TREE,
+    ID_VIEW_OUTPUT,
+    ID_VIEW_TOOLBOX
 };

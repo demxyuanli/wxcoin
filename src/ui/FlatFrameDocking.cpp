@@ -1,7 +1,7 @@
 #include "FlatFrameDocking.h"
 #include "Canvas.h"
-#include "ui/UIPanelProperty.h"
-#include "ui/UIPanelTree.h"
+#include "PropertyPanel.h"
+#include "ObjectTreePanel.h"
 #include "docking/DockArea.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
@@ -19,6 +19,17 @@ wxBEGIN_EVENT_TABLE(FlatFrameDocking, FlatFrame)
     EVT_MENU(ID_DOCKING_RESET_LAYOUT, FlatFrameDocking::OnDockingResetLayout)
     EVT_MENU(ID_DOCKING_MANAGE_PERSPECTIVES, FlatFrameDocking::OnDockingManagePerspectives)
     EVT_MENU(ID_DOCKING_TOGGLE_AUTOHIDE, FlatFrameDocking::OnDockingToggleAutoHide)
+    
+    // View panel events
+    EVT_MENU(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_OUTPUT, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_TOOLBOX, FlatFrameDocking::OnViewShowHidePanel)
+    
+    EVT_UPDATE_UI(ID_VIEW_PROPERTIES, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_OUTPUT, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_TOOLBOX, FlatFrameDocking::OnUpdateUI)
 wxEND_EVENT_TABLE()
 
 FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, const wxSize& size)
@@ -29,15 +40,17 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     , m_canvasDock(nullptr)
     , m_outputDock(nullptr)
     , m_toolboxDock(nullptr)
+    , m_outputCtrl(nullptr)
 {
-    // Docking system will be initialized in InitializeLayout
+    // Initialize docking system after base class construction
+    InitializeDockingLayout();
 }
 
 FlatFrameDocking::~FlatFrameDocking() {
     // DockManager will be deleted by its parent (this window)
 }
 
-void FlatFrameDocking::InitializeLayout() {
+void FlatFrameDocking::InitializeDockingLayout() {
     // Create main panel to hold the dock manager
     wxPanel* mainPanel = new wxPanel(this);
     
@@ -263,7 +276,7 @@ void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {
         file.Write(state);
         file.Close();
         
-        LogMessage("Layout saved to: " + filename);
+        appendMessage("Layout saved to: " + filename);
     } else {
         wxMessageBox("Failed to save layout file", "Error", wxOK | wxICON_ERROR);
     }
@@ -277,7 +290,7 @@ void FlatFrameDocking::LoadDockingLayout(const wxString& filename) {
         file.Close();
         
         if (m_dockManager->restoreState(state)) {
-            LogMessage("Layout loaded from: " + filename);
+            appendMessage("Layout loaded from: " + filename);
         } else {
             wxMessageBox("Failed to restore layout", "Error", wxOK | wxICON_ERROR);
         }
@@ -293,7 +306,7 @@ void FlatFrameDocking::ResetDockingLayout() {
     // Recreate default layout
     CreateDockingLayout();
     
-    LogMessage("Layout reset to default");
+    appendMessage("Layout reset to default");
 }
 
 // Event handlers
@@ -337,7 +350,7 @@ void FlatFrameDocking::OnDockingToggleAutoHide(wxCommandEvent& event) {
         if (widget->isCurrentTab()) {
             bool isAutoHide = widget->isAutoHide();
             widget->setAutoHide(!isAutoHide);
-            LogMessage(wxString::Format("%s auto-hide %s", 
+            appendMessage(wxString::Format("%s auto-hide %s", 
                        widget->windowTitle(),
                        isAutoHide ? "disabled" : "enabled"));
             break;
@@ -375,8 +388,7 @@ void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
             break;
             
         default:
-            // Call base class handler for other panels
-            FlatFrame::OnViewShowHidePanel(event);
+            // Ignore other events
             break;
     }
 }
@@ -410,8 +422,7 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
             break;
             
         default:
-            // Call base class handler
-            FlatFrame::OnUpdateUI(event);
+            // Ignore other events
             break;
     }
 }
