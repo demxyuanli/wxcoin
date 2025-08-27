@@ -58,6 +58,13 @@ enum MinimumSizeHintMode {
  */
 class DockWidget : public wxPanel {
 public:
+    // Insert modes for setWidget
+    enum InsertMode {
+        AutoScrollArea,
+        ForceScrollArea,
+        ForceNoScrollArea
+    };
+
     DockWidget(const wxString& title, wxWindow* parent = nullptr);
     virtual ~DockWidget();
 
@@ -142,13 +149,6 @@ public:
     void setObjectName(const wxString& name) { m_objectName = name; }
     wxString objectName() const { return m_objectName; }
     
-    // Insert modes for setWidget
-    enum InsertMode {
-        AutoScrollArea,
-        ForceScrollArea,
-        ForceNoScrollArea
-    };
-
     // Events - static members for event types
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_CLOSED;
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_WIDGET_CLOSING;

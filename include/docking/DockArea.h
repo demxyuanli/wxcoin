@@ -85,6 +85,9 @@ public:
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSED;
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE;
     
+    // Friend classes that need access to protected members
+    friend class DockAreaTabBar;
+    
 protected:
     // Internal methods
     void onTabCloseRequested(int index);

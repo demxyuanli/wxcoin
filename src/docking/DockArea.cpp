@@ -515,9 +515,7 @@ void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
     if (tab >= 0) {
         // Check if close button clicked
         if (m_tabs[tab].closeButtonRect.Contains(event.GetPosition())) {
-            if (m_dockArea) {
-                m_dockArea->onTabCloseRequested(tab);
-            }
+            m_dockArea->onTabCloseRequested(tab);
         } else {
             // Start dragging
             m_draggedTab = tab;
@@ -530,9 +528,7 @@ void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
                 evt.SetInt(tab);
                 ProcessWindowEvent(evt);
                 
-                if (m_dockArea) {
-                    m_dockArea->onCurrentTabChanged(tab);
-                }
+                m_dockArea->onCurrentTabChanged(tab);
             }
             
             CaptureMouse();

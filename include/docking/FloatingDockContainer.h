@@ -9,25 +9,15 @@ typedef unsigned char wxByte;
 #endif
 #include <memory>
 
+// Include DockManager.h to get enum definitions
+#include "DockManager.h"
+
 namespace ads {
 
 // Forward declarations
 class DockWidget;
 class DockArea;
-class DockManager;
 class DockContainerWidget;
-
-// Import types - these should be defined in DockManager.h
-enum DockWidgetArea : int {
-    NoDockWidgetArea = 0x00,
-    LeftDockWidgetArea = 0x01,
-    RightDockWidgetArea = 0x02,
-    TopDockWidgetArea = 0x04,
-    BottomDockWidgetArea = 0x08,
-    CenterDockWidgetArea = 0x10,
-    AllDockAreas = LeftDockWidgetArea | RightDockWidgetArea | TopDockWidgetArea | BottomDockWidgetArea | CenterDockWidgetArea
-};
-enum DockManagerFeature : int;
 class FloatingDragPreview;
 
 /**
