@@ -2,6 +2,7 @@
 #include "docking/DockWidget.h"
 #include "docking/DockManager.h"
 #include "docking/DockContainerWidget.h"
+#include "docking/FloatingDockContainer.h"
 #include <wx/dcbuffer.h>
 #include <wx/settings.h>
 #include <wx/menu.h>
@@ -580,9 +581,9 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
             
             // Get the dock widget being dragged
             DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
-            if (draggedWidget && draggedWidget->hasFeature(DockWidget::DockWidgetFloatable)) {
+            if (draggedWidget && draggedWidget->hasFeature(DockWidgetFloatable)) {
                 // Store the widget title before removing
-                wxString title = draggedWidget->windowTitle();
+                wxString title = draggedWidget->title();
                 
                 // Release mouse capture before floating
                 if (HasCapture()) {
