@@ -140,8 +140,12 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
     // For now, just add to the root splitter
     if (DockSplitter* splitter = dynamic_cast<DockSplitter*>(m_rootSplitter)) {
         if (splitter->GetWindow1() == nullptr) {
+            // Reparent the dock area to the splitter before initializing
+            dockArea->Reparent(splitter);
             splitter->Initialize(dockArea);
         } else if (splitter->GetWindow2() == nullptr) {
+            // Reparent the dock area to the splitter before splitting
+            dockArea->Reparent(splitter);
             // Split based on area
             if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
                 splitter->SplitVertically(splitter->GetWindow1(), dockArea);
@@ -150,10 +154,17 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
             }
         } else {
             // Need to create sub-splitter
-            DockSplitter* newSplitter = new DockSplitter(this);
+            DockSplitter* newSplitter = new DockSplitter(splitter);  // Create with parent splitter
             wxWindow* oldWindow = splitter->GetWindow2();
             
+            // Reparent the old window to the new splitter
+            oldWindow->Reparent(newSplitter);
+            
+            // Replace the window in the parent splitter
             splitter->ReplaceWindow(oldWindow, newSplitter);
+            
+            // Reparent the dock area to the new splitter
+            dockArea->Reparent(newSplitter);
             
             if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
                 newSplitter->SplitVertically(oldWindow, dockArea);
@@ -277,16 +288,31 @@ void DockSplitter::insertWidget(int index, wxWindow* widget, bool stretch) {
         return;
     }
     
+    // Ensure widget has this splitter as parent
+    if (widget->GetParent() != this) {
+        widget->Reparent(this);
+    }
+    
     m_widgets.insert(m_widgets.begin() + index, widget);
     updateSplitter();
 }
 
 void DockSplitter::addWidget(wxWindow* widget, bool stretch) {
+    // Ensure widget has this splitter as parent
+    if (widget->GetParent() != this) {
+        widget->Reparent(this);
+    }
+    
     m_widgets.push_back(widget);
     updateSplitter();
 }
 
 wxWindow* DockSplitter::replaceWidget(wxWindow* from, wxWindow* to) {
+    // Ensure 'to' widget has this splitter as parent
+    if (to && to->GetParent() != this) {
+        to->Reparent(this);
+    }
+    
     ReplaceWindow(from, to);
     
     auto it = std::find(m_widgets.begin(), m_widgets.end(), from);
@@ -355,6 +381,14 @@ void DockSplitter::OnSplitterSashPosChanged(wxSplitterEvent& event) {
 
 void DockSplitter::updateSplitter() {
     if (m_widgets.size() >= 2 && !IsSplit()) {
+        // Ensure both widgets have this splitter as parent
+        if (m_widgets[0]->GetParent() != this) {
+            m_widgets[0]->Reparent(this);
+        }
+        if (m_widgets[1]->GetParent() != this) {
+            m_widgets[1]->Reparent(this);
+        }
+        
         if (m_orientation == wxVERTICAL) {
             SplitVertically(m_widgets[0], m_widgets[1]);
         } else {
