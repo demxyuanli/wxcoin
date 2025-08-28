@@ -132,8 +132,12 @@ void DockContainerWidget::removeDockArea(DockArea* area) {
             otherWindow = splitter->GetWindow1();
         }
         
-        // Unsplit to remove the area
+        // First, remove the area from the splitter
         splitter->Unsplit(area);
+        
+        // Detach the area from its parent to prevent double deletion
+        area->Reparent(this);
+        area->Hide();
         
         // If the splitter now has only one child, we may need to simplify the layout
         if (otherWindow && splitter->GetParent()) {
@@ -153,7 +157,7 @@ void DockContainerWidget::removeDockArea(DockArea* area) {
                     parentSplitter->ReplaceWindow(splitter, otherWindow);
                 }
                 
-                // Destroy the now-empty splitter
+                // Now we can safely destroy the empty splitter
                 splitter->Destroy();
             } else if (splitter == m_rootSplitter && otherWindow) {
                 wxLogDebug("  -> This is the root splitter with one child");
@@ -179,7 +183,7 @@ void DockContainerWidget::removeDockArea(DockArea* area) {
     event.SetEventObject(this);
     ProcessWindowEvent(event);
     
-    // Destroy the area after we've cleaned up the layout
+    // Now safely destroy the area
     area->Destroy();
 }
 
