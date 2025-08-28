@@ -48,6 +48,11 @@ DockContainerWidget::DockContainerWidget(DockManager* dockManager, wxWindow* par
 }
 
 DockContainerWidget::~DockContainerWidget() {
+    // Clear all dock areas first to ensure proper cleanup order
+    m_dockAreas.clear();
+    
+    // The splitter and other child windows will be destroyed automatically
+    // by wxWidgets parent-child mechanism
 }
 
 DockArea* DockContainerWidget::addDockWidget(DockWidgetArea area, DockWidget* dockWidget, 

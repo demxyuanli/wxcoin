@@ -57,6 +57,9 @@ DockWidget::DockWidget(const wxString& title, wxWindow* parent)
 }
 
 DockWidget::~DockWidget() {
+    // Clear any references that might cause issues
+    m_dockArea = nullptr;
+    
     delete m_toggleViewAction;
     
     // Only notify manager if we're not being deleted by the manager itself
@@ -64,6 +67,8 @@ DockWidget::~DockWidget() {
     if (m_dockManager && !m_dockManager->dockWidgets().empty()) {
         m_dockManager->unregisterDockWidget(this);
     }
+    
+    m_dockManager = nullptr;
 }
 
 bool DockWidget::Destroy() {

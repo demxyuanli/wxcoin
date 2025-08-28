@@ -48,7 +48,18 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
 }
 
 FlatFrameDocking::~FlatFrameDocking() {
-    // DockManager will be deleted by its parent (this window)
+    // DockManager will be deleted by its parent (mainPanel)
+    // Just clear our reference
+    m_dockManager = nullptr;
+}
+
+bool FlatFrameDocking::Destroy() {
+    // Clear our reference to dock manager
+    // The actual cleanup will happen through normal parent-child destruction
+    m_dockManager = nullptr;
+    
+    // Call base class Destroy
+    return FlatFrame::Destroy();
 }
 
 void FlatFrameDocking::InitializeDockingLayout() {

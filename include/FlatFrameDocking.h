@@ -20,6 +20,9 @@ class FlatFrameDocking : public FlatFrame {
 public:
     FlatFrameDocking(const wxString& title, const wxPoint& pos, const wxSize& size);
     virtual ~FlatFrameDocking();
+    
+    // Override Destroy for proper cleanup
+    virtual bool Destroy() override;
 
     // Initialize docking layout
     void InitializeDockingLayout();
