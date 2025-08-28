@@ -603,7 +603,8 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
         
         // Get the widget being dragged
         DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
-        if (draggedWidget && m_dockArea->dockManager()) {
+        DockManager* manager = m_dockArea ? m_dockArea->dockManager() : nullptr;
+        if (draggedWidget && manager) {
             // Check for drop target
             wxPoint screenPos = ClientToScreen(event.GetPosition());
             wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
@@ -625,7 +626,7 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
             // Try to dock if we have a target
             if (targetArea) {
                 // Check overlay for drop position
-                DockOverlay* overlay = m_dockArea->dockManager()->dockAreaOverlay();
+                DockOverlay* overlay = manager->dockAreaOverlay();
                 wxLogDebug("Area overlay: %p, IsShown: %d", overlay, overlay ? overlay->IsShown() : 0);
                 
                 if (overlay && overlay->IsShown()) {
@@ -654,8 +655,8 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
             }
             
             // If not docked to a specific area, check container overlay
-            if (!docked && m_dockArea->dockManager()) {
-                DockOverlay* containerOverlay = m_dockArea->dockManager()->containerOverlay();
+            if (!docked && manager) {
+                DockOverlay* containerOverlay = manager->containerOverlay();
                 wxLogDebug("Container overlay: %p, IsShown: %d", containerOverlay, containerOverlay ? containerOverlay->IsShown() : 0);
                 
                 if (containerOverlay && containerOverlay->IsShown()) {
@@ -671,7 +672,7 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                         
                         // Add to container at specified position
                         wxLogDebug("Adding widget to container at position %d", dropArea);
-                        m_dockArea->dockManager()->addDockWidget(dropArea, draggedWidget);
+                        manager->addDockWidget(dropArea, draggedWidget);
                         docked = true;
                     }
                 }
@@ -680,6 +681,7 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
             // If not docked, create floating container
             if (!docked) {
                 wxLogDebug("Not docked - creating floating container");
+                
                 // Remove from current area if still there
                 if (draggedWidget->dockAreaWidget() == m_dockArea) {
                     m_dockArea->removeDockWidget(draggedWidget);
@@ -694,11 +696,26 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                     floatingContainer->Show();
                     floatingContainer->Raise();
                 }
+                
+                // Hide overlays using saved manager reference
+                if (manager) {
+                    DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                    if (areaOverlay) {
+                        areaOverlay->hideOverlay();
+                    }
+                    DockOverlay* containerOverlay = manager->containerOverlay();
+                    if (containerOverlay) {
+                        containerOverlay->hideOverlay();
+                    }
+                }
+                
+                // Return early since the area might be destroyed
+                return;
             }
         }
         
         // Hide any overlays that might be showing
-        if (m_dockArea->dockManager()) {
+        if (m_dockArea && m_dockArea->dockManager()) {
             DockOverlay* areaOverlay = m_dockArea->dockManager()->dockAreaOverlay();
             if (areaOverlay) {
                 areaOverlay->hideOverlay();
@@ -718,6 +735,9 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
 }
 
 void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
+    // Save manager reference at the beginning
+    DockManager* manager = m_dockArea ? m_dockArea->dockManager() : nullptr;
+    
     // Update hovered tab
     int oldHovered = m_hoveredTab;
     m_hoveredTab = getTabAt(event.GetPosition());
@@ -747,21 +767,17 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
             
             // Get the dock widget being dragged
             DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
-            if (draggedWidget && draggedWidget->hasFeature(DockWidgetMovable)) {
-                // Create drag preview first
-                DockManager* dockManager = m_dockArea->dockManager();
-                if (dockManager) {
-                    // Create a floating drag preview
-                    FloatingDragPreview* preview = new FloatingDragPreview(draggedWidget, dockManager->containerWidget());
-                    wxPoint screenPos = ClientToScreen(event.GetPosition());
-                    preview->startDrag(screenPos);
-                    
-                    // Store preview reference
-                    m_dragPreview = preview;
-                    
-                    // Mark widget as being dragged (don't actually float yet)
-                    // We'll handle the actual move on drop
-                }
+            if (draggedWidget && draggedWidget->hasFeature(DockWidgetMovable) && manager) {
+                // Create a floating drag preview
+                FloatingDragPreview* preview = new FloatingDragPreview(draggedWidget, manager->containerWidget());
+                wxPoint screenPos = ClientToScreen(event.GetPosition());
+                preview->startDrag(screenPos);
+                
+                // Store preview reference
+                m_dragPreview = preview;
+                
+                // Mark widget as being dragged (don't actually float yet)
+                // We'll handle the actual move on drop
             }
         }
         
@@ -798,34 +814,32 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
                 }
             }
             
-            if (targetArea && m_dockArea->dockManager()) {
+            if (targetArea && manager) {
                 wxLogDebug("Found target DockArea, showing overlay");
-                DockOverlay* overlay = m_dockArea->dockManager()->dockAreaOverlay();
+                DockOverlay* overlay = manager->dockAreaOverlay();
                 if (overlay) {
                     overlay->showOverlay(targetArea);
                 } else {
                     wxLogDebug("No area overlay available");
                 }
-            } else {
+            } else if (manager) {
                 // Check for container overlay
-                DockContainerWidget* container = m_dockArea->dockManager()->containerWidget() ? 
-                    dynamic_cast<DockContainerWidget*>(m_dockArea->dockManager()->containerWidget()) : nullptr;
+                DockContainerWidget* container = manager->containerWidget() ? 
+                    dynamic_cast<DockContainerWidget*>(manager->containerWidget()) : nullptr;
                     
                 if (container && container->GetScreenRect().Contains(screenPos)) {
                     wxLogDebug("Over container, showing container overlay");
-                    DockOverlay* overlay = m_dockArea->dockManager()->containerOverlay();
+                    DockOverlay* overlay = manager->containerOverlay();
                     if (overlay) {
                         overlay->showOverlay(container);
                     }
                 } else {
                     // Hide overlays if not over any target
-                    if (m_dockArea->dockManager()) {
-                        if (m_dockArea->dockManager()->dockAreaOverlay()) {
-                            m_dockArea->dockManager()->dockAreaOverlay()->hideOverlay();
-                        }
-                        if (m_dockArea->dockManager()->containerOverlay()) {
-                            m_dockArea->dockManager()->containerOverlay()->hideOverlay();
-                        }
+                    if (manager->dockAreaOverlay()) {
+                        manager->dockAreaOverlay()->hideOverlay();
+                    }
+                    if (manager->containerOverlay()) {
+                        manager->containerOverlay()->hideOverlay();
                     }
                 }
             }
