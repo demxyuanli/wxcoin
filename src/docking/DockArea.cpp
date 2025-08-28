@@ -619,10 +619,14 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
             
             bool docked = false;
             
+            wxLogDebug("DockAreaTabBar::onMouseLeftUp - targetArea: %p", targetArea);
+            
             // Try to dock if we have a target
             if (targetArea) {
                 // Check overlay for drop position
                 DockOverlay* overlay = m_dockArea->dockManager()->dockAreaOverlay();
+                wxLogDebug("Area overlay: %p, IsShown: %d", overlay, overlay ? overlay->IsShown() : 0);
+                
                 if (overlay && overlay->IsShown()) {
                     DockWidgetArea dropArea = overlay->dropAreaUnderCursor();
                     wxLogDebug("Drop area under cursor: %d", dropArea);
@@ -645,29 +649,36 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                             docked = true;
                         }
                     }
-                } else {
-                    // Check container overlay
-                    overlay = m_dockArea->dockManager()->containerOverlay();
-                    if (overlay && overlay->IsShown()) {
-                        DockWidgetArea dropArea = overlay->dropAreaUnderCursor();
-                        wxLogDebug("Container drop area under cursor: %d", dropArea);
-                        
-                        if (dropArea != InvalidDockWidgetArea) {
-                            // Remove widget from current area
-                            if (draggedWidget->dockAreaWidget() == m_dockArea) {
-                                m_dockArea->removeDockWidget(draggedWidget);
-                            }
-                            
-                            // Add to container at specified position
-                            m_dockArea->dockManager()->addDockWidget(dropArea, draggedWidget);
-                            docked = true;
+                }
+            }
+            
+            // If not docked to a specific area, check container overlay
+            if (!docked && m_dockArea->dockManager()) {
+                DockOverlay* containerOverlay = m_dockArea->dockManager()->containerOverlay();
+                wxLogDebug("Container overlay: %p, IsShown: %d", containerOverlay, containerOverlay ? containerOverlay->IsShown() : 0);
+                
+                if (containerOverlay && containerOverlay->IsShown()) {
+                    DockWidgetArea dropArea = containerOverlay->dropAreaUnderCursor();
+                    wxLogDebug("Container drop area under cursor: %d", dropArea);
+                    
+                    if (dropArea != InvalidDockWidgetArea) {
+                        // Remove widget from current area
+                        if (draggedWidget->dockAreaWidget() == m_dockArea) {
+                            wxLogDebug("Removing widget from current area");
+                            m_dockArea->removeDockWidget(draggedWidget);
                         }
+                        
+                        // Add to container at specified position
+                        wxLogDebug("Adding widget to container at position %d", dropArea);
+                        m_dockArea->dockManager()->addDockWidget(dropArea, draggedWidget);
+                        docked = true;
                     }
                 }
             }
             
             // If not docked, create floating container
             if (!docked) {
+                wxLogDebug("Not docked - creating floating container");
                 // Remove from current area if still there
                 if (draggedWidget->dockAreaWidget() == m_dockArea) {
                     m_dockArea->removeDockWidget(draggedWidget);
