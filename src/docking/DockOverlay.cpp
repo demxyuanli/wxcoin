@@ -43,6 +43,9 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     
     // Create drop areas
     createDropAreas();
+    
+    // Set initial visibility based on allowed areas
+    updateDropAreas();
 }
 
 DockOverlay::~DockOverlay() {
@@ -57,8 +60,17 @@ DockWidgetArea DockOverlay::dropAreaUnderCursor() const {
     wxPoint mousePos = wxGetMousePosition();
     wxPoint localPos = ScreenToClient(mousePos);
     
+    wxLogDebug("DockOverlay::dropAreaUnderCursor - mouse pos: %d,%d local: %d,%d", 
+        mousePos.x, mousePos.y, localPos.x, localPos.y);
+    
     for (const auto& dropArea : m_dropAreas) {
+        wxRect rect = dropArea->rect();
+        wxLogDebug("  Checking area %d: rect(%d,%d,%d,%d) visible:%d contains:%d", 
+            dropArea->area(), rect.x, rect.y, rect.width, rect.height,
+            dropArea->isVisible(), dropArea->contains(localPos));
+            
         if (dropArea->isVisible() && dropArea->contains(localPos)) {
+            wxLogDebug("  -> Found area: %d", dropArea->area());
             return dropArea->area();
         }
     }
@@ -205,10 +217,18 @@ void DockOverlay::updateDropAreaPositions() {
     int margin = 10;
     
     // Update positions for each drop area
-    for (auto& dropArea : m_dropAreas) {
-        wxRect rect = areaRect(dropArea->area());
-        dropArea.reset(new DockOverlayDropArea(dropArea->area(), rect));
+    for (size_t i = 0; i < m_dropAreas.size(); ++i) {
+        DockWidgetArea area = m_dropAreas[i]->area();
+        bool visible = m_dropAreas[i]->isVisible();
+        wxRect rect = areaRect(area);
+        
+        // Create new drop area with updated rect but preserve visibility
+        m_dropAreas[i] = std::make_unique<DockOverlayDropArea>(area, rect);
+        m_dropAreas[i]->setVisible(visible);
     }
+    
+    // Make sure allowed areas are visible
+    updateDropAreas();
 }
 
 void DockOverlay::paintDropAreas(wxDC& dc) {

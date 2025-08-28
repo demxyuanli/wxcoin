@@ -620,29 +620,64 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
             bool docked = false;
             
             // Try to dock if we have a target
-            if (targetArea && targetArea != m_dockArea) {
+            if (targetArea) {
                 // Check overlay for drop position
                 DockOverlay* overlay = m_dockArea->dockManager()->dockAreaOverlay();
                 if (overlay && overlay->IsShown()) {
                     DockWidgetArea dropArea = overlay->dropAreaUnderCursor();
+                    wxLogDebug("Drop area under cursor: %d", dropArea);
+                    
                     if (dropArea != InvalidDockWidgetArea) {
+                        // Remove widget from current area if needed
+                        if (draggedWidget->dockArea() == m_dockArea) {
+                            m_dockArea->removeDockWidget(draggedWidget);
+                        }
+                        
                         if (dropArea == CenterDockWidgetArea) {
                             // Add as tab
+                            wxLogDebug("Adding widget as tab to target area");
                             targetArea->addDockWidget(draggedWidget);
                             docked = true;
                         } else {
                             // Dock to side
+                            wxLogDebug("Docking widget to side: %d", dropArea);
                             targetArea->dockContainer()->addDockWidget(dropArea, draggedWidget, targetArea);
+                            docked = true;
+                        }
+                    }
+                } else {
+                    // Check container overlay
+                    overlay = m_dockArea->dockManager()->containerOverlay();
+                    if (overlay && overlay->IsShown()) {
+                        DockWidgetArea dropArea = overlay->dropAreaUnderCursor();
+                        wxLogDebug("Container drop area under cursor: %d", dropArea);
+                        
+                        if (dropArea != InvalidDockWidgetArea) {
+                            // Remove widget from current area
+                            if (draggedWidget->dockArea() == m_dockArea) {
+                                m_dockArea->removeDockWidget(draggedWidget);
+                            }
+                            
+                            // Add to container at specified position
+                            m_dockArea->dockManager()->addDockWidget(dropArea, draggedWidget);
                             docked = true;
                         }
                     }
                 }
             }
             
-            // If not docked, show floating container
+            // If not docked, create floating container
             if (!docked) {
+                // Remove from current area if still there
+                if (draggedWidget->dockArea() == m_dockArea) {
+                    m_dockArea->removeDockWidget(draggedWidget);
+                }
+                
+                // Set as floating
+                draggedWidget->setFloating();
+                
                 FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
-                if (floatingContainer && !floatingContainer->IsShown()) {
+                if (floatingContainer) {
                     floatingContainer->SetPosition(screenPos - wxPoint(50, 10));
                     floatingContainer->Show();
                     floatingContainer->Raise();
@@ -712,20 +747,8 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
                     // Store preview reference
                     m_dragPreview = preview;
                     
-                    // Also float the widget if not the last one
-                    if (m_dockArea->m_dockWidgets.size() > 1) {
-                        draggedWidget->setFloating();
-                        
-                        // Get the floating container
-                        FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
-                        if (floatingContainer) {
-                            // Hide the actual floating container initially
-                            floatingContainer->Hide();
-                            
-                            // Store reference for later
-                            // We'll show it when dropping
-                        }
-                    }
+                    // Mark widget as being dragged (don't actually float yet)
+                    // We'll handle the actual move on drop
                 }
             }
         }
