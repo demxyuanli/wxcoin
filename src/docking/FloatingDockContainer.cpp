@@ -363,7 +363,13 @@ void FloatingDockContainer::onMouseLeftUp(wxMouseEvent& event) {
                             // Multiple widgets - create new area with all widgets
                             DockContainerWidget* container = targetContainer;
                             if (!container) {
-                                container = targetArea ? targetArea->dockContainer() : m_dockManager->containerWidget();
+                                if (targetArea) {
+                                    container = targetArea->dockContainer();
+                                } else {
+                                    // Try to cast the manager's container widget
+                                    wxWindow* managerContainer = m_dockManager->containerWidget();
+                                    container = dynamic_cast<DockContainerWidget*>(managerContainer);
+                                }
                             }
                             
                             if (container) {
@@ -429,7 +435,8 @@ void FloatingDockContainer::onMouseMove(wxMouseEvent& event) {
                 }
             } else {
                 // Check for container drop
-                DockContainerWidget* container = m_dockManager->containerWidget();
+                wxWindow* containerWindow = m_dockManager->containerWidget();
+                DockContainerWidget* container = dynamic_cast<DockContainerWidget*>(containerWindow);
                 if (container) {
                     wxRect containerRect = container->GetScreenRect();
                     if (containerRect.Contains(mousePos)) {
