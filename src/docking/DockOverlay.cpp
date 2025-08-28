@@ -72,10 +72,29 @@ DockWidgetArea DockOverlay::showOverlay(wxWindow* target) {
         return InvalidDockWidgetArea;
     }
     
+    wxLogDebug("DockOverlay::showOverlay - target: %p", target);
+    
     m_targetWidget = target;
     updatePosition();
+    
+    wxLogDebug("DockOverlay position: %d,%d size: %dx%d", 
+        GetPosition().x, GetPosition().y, GetSize().GetWidth(), GetSize().GetHeight());
+    
     Show();
     Raise();
+    
+    // Make sure window is on top
+    SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
+    
+    // Force a paint event
+    Refresh();
+    Update();
+    
+    // Ensure minimum size
+    if (GetSize().GetWidth() < 100 || GetSize().GetHeight() < 100) {
+        SetSize(wxSize(200, 200));
+        wxLogDebug("DockOverlay: Set minimum size to 200x200");
+    }
     
     return dropAreaUnderCursor();
 }
@@ -96,6 +115,9 @@ void DockOverlay::updatePosition() {
     }
     
     wxRect rect = targetRect();
+    wxLogDebug("DockOverlay::updatePosition - target rect: %d,%d %dx%d", 
+        rect.x, rect.y, rect.width, rect.height);
+        
     SetPosition(rect.GetPosition());
     SetSize(rect.GetSize());
     
@@ -112,11 +134,17 @@ void DockOverlay::updateDropAreas() {
 
 void DockOverlay::onPaint(wxPaintEvent& event) {
     wxAutoBufferedPaintDC dc(this);
-    dc.Clear();
+    
+    // Fill with semi-transparent background for debugging
+    dc.SetBrush(wxBrush(wxColour(100, 100, 255, 30)));  // Light blue, semi-transparent
+    dc.SetPen(wxPen(wxColour(0, 0, 255), 2));
+    dc.DrawRectangle(GetClientRect());
     
     if (!m_targetWidget) {
         return;
     }
+    
+    wxLogDebug("DockOverlay::onPaint - size: %dx%d", GetSize().GetWidth(), GetSize().GetHeight());
     
     // Draw drop areas
     paintDropAreas(dc);
@@ -184,7 +212,10 @@ void DockOverlay::updateDropAreaPositions() {
 }
 
 void DockOverlay::paintDropAreas(wxDC& dc) {
+    wxLogDebug("DockOverlay::paintDropAreas - %d areas", (int)m_dropAreas.size());
+    
     for (const auto& dropArea : m_dropAreas) {
+        wxLogDebug("  Area %d visible: %d", dropArea->area(), dropArea->isVisible());
         if (dropArea->isVisible()) {
             paintDropIndicator(dc, *dropArea);
         }

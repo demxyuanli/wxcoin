@@ -415,8 +415,22 @@ void FloatingDockContainer::onMouseMove(wxMouseEvent& event) {
             wxWindow* windowUnderMouse = wxFindWindowAtPoint(mousePos);
             
             // Skip if the window under mouse is this floating container or its children
-            if (windowUnderMouse && wxGetTopLevelParent(windowUnderMouse) == this) {
-                windowUnderMouse = nullptr;
+            if (windowUnderMouse) {
+                wxWindow* topLevel = wxGetTopLevelParent(windowUnderMouse);
+                if (topLevel == this) {
+                    // Hide temporarily to find window below
+                    Hide();
+                    windowUnderMouse = wxFindWindowAtPoint(mousePos);
+                    Show();
+                    
+                    // Still check if we found something valid
+                    if (windowUnderMouse) {
+                        topLevel = wxGetTopLevelParent(windowUnderMouse);
+                        if (topLevel == this) {
+                            windowUnderMouse = nullptr;
+                        }
+                    }
+                }
             }
             
             // Check if we're over a dock area
