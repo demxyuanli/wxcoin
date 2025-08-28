@@ -629,7 +629,7 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                     
                     if (dropArea != InvalidDockWidgetArea) {
                         // Remove widget from current area if needed
-                        if (draggedWidget->dockArea() == m_dockArea) {
+                        if (draggedWidget->dockAreaWidget() == m_dockArea) {
                             m_dockArea->removeDockWidget(draggedWidget);
                         }
                         
@@ -654,7 +654,7 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                         
                         if (dropArea != InvalidDockWidgetArea) {
                             // Remove widget from current area
-                            if (draggedWidget->dockArea() == m_dockArea) {
+                            if (draggedWidget->dockAreaWidget() == m_dockArea) {
                                 m_dockArea->removeDockWidget(draggedWidget);
                             }
                             
@@ -669,7 +669,7 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
             // If not docked, create floating container
             if (!docked) {
                 // Remove from current area if still there
-                if (draggedWidget->dockArea() == m_dockArea) {
+                if (draggedWidget->dockAreaWidget() == m_dockArea) {
                     m_dockArea->removeDockWidget(draggedWidget);
                 }
                 
