@@ -3,6 +3,7 @@
 #include "docking/DockManager.h"
 #include "docking/DockContainerWidget.h"
 #include "docking/FloatingDockContainer.h"
+#include "docking/DockOverlay.h"
 #include <wx/dcbuffer.h>
 #include <wx/settings.h>
 #include <wx/menu.h>

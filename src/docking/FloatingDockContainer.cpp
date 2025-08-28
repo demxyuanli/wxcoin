@@ -3,6 +3,7 @@
 #include "docking/DockArea.h"
 #include "docking/DockManager.h"
 #include "docking/DockContainerWidget.h"
+#include "docking/DockOverlay.h"
 #include <wx/dcmemory.h>
 #include <wx/dcclient.h>
 #include <wx/dcbuffer.h>
@@ -335,7 +336,11 @@ void FloatingDockContainer::onMouseLeftUp(wxMouseEvent& event) {
                 
                 if (!widgets.empty()) {
                     DockArea* targetArea = dynamic_cast<DockArea*>(dropTarget);
-                    DockContainerWidget* targetContainer = dynamic_cast<DockContainerWidget*>(dropTarget);
+                    DockContainerWidget* targetContainer = nullptr;
+                if (!targetArea) {
+                    // Try to cast to container if not a dock area
+                    targetContainer = dynamic_cast<DockContainerWidget*>(dropTarget);
+                }
                     
                     if (targetArea && dropArea == CenterDockWidgetArea) {
                         // Add to existing dock area as tabs
@@ -352,11 +357,11 @@ void FloatingDockContainer::onMouseLeftUp(wxMouseEvent& event) {
                             if (targetContainer) {
                                 m_dockManager->addDockWidget(dropArea, widgets[0]);
                             } else if (targetArea) {
-                                targetArea->containerWidget()->addDockWidget(dropArea, widgets[0], targetArea);
+                                targetArea->dockContainer()->addDockWidget(dropArea, widgets[0], targetArea);
                             }
                         } else {
                             // Multiple widgets - create new area with all widgets
-                            DockArea* newArea = new DockArea(m_dockManager, m_dockManager->containerWidget());
+                            DockArea* newArea = new DockArea(m_dockManager, targetContainer ? targetContainer : m_dockManager->containerWidget());
                             for (auto* widget : widgets) {
                                 newArea->addDockWidget(widget);
                             }
@@ -364,7 +369,7 @@ void FloatingDockContainer::onMouseLeftUp(wxMouseEvent& event) {
                             if (targetContainer) {
                                 targetContainer->addDockArea(newArea, dropArea);
                             } else if (targetArea) {
-                                targetArea->containerWidget()->addDockAreaToContainer(dropArea, newArea);
+                                targetArea->dockContainer()->addDockAreaToContainer(dropArea, newArea);
                             }
                         }
                         
