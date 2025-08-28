@@ -111,16 +111,63 @@ void DockContainerWidget::removeDockArea(DockArea* area) {
         return;
     }
     
+    wxLogDebug("DockContainerWidget::removeDockArea - removing area %p", area);
+    
     // Remove from list
     auto it = std::find(m_dockAreas.begin(), m_dockAreas.end(), area);
     if (it != m_dockAreas.end()) {
         m_dockAreas.erase(it);
     }
     
-    // Remove from splitter
-    if (area->GetParent() == m_rootSplitter) {
-        if (wxSizer* sizer = m_rootSplitter->GetSizer()) {
-            sizer->Detach(area);
+    // Handle splitter removal properly
+    wxWindow* parent = area->GetParent();
+    if (DockSplitter* splitter = dynamic_cast<DockSplitter*>(parent)) {
+        wxLogDebug("  -> Parent is a splitter");
+        
+        // Get the other window in the splitter
+        wxWindow* otherWindow = nullptr;
+        if (splitter->GetWindow1() == area) {
+            otherWindow = splitter->GetWindow2();
+        } else if (splitter->GetWindow2() == area) {
+            otherWindow = splitter->GetWindow1();
+        }
+        
+        // Unsplit to remove the area
+        splitter->Unsplit(area);
+        
+        // If the splitter now has only one child, we may need to simplify the layout
+        if (otherWindow && splitter->GetParent()) {
+            wxWindow* splitterParent = splitter->GetParent();
+            
+            // If parent is also a splitter, replace this splitter with the remaining window
+            if (DockSplitter* parentSplitter = dynamic_cast<DockSplitter*>(splitterParent)) {
+                wxLogDebug("  -> Parent is also a splitter, simplifying layout");
+                
+                // Reparent the other window to the parent splitter
+                otherWindow->Reparent(parentSplitter);
+                
+                // Replace this splitter with the other window
+                if (parentSplitter->GetWindow1() == splitter) {
+                    parentSplitter->ReplaceWindow(splitter, otherWindow);
+                } else if (parentSplitter->GetWindow2() == splitter) {
+                    parentSplitter->ReplaceWindow(splitter, otherWindow);
+                }
+                
+                // Destroy the now-empty splitter
+                splitter->Destroy();
+            } else if (splitter == m_rootSplitter && otherWindow) {
+                wxLogDebug("  -> This is the root splitter with one child");
+                // For root splitter, just leave it with one window
+                // The splitter will handle drawing correctly
+            }
+        }
+    } else {
+        wxLogDebug("  -> Parent is not a splitter");
+        // Just detach from parent
+        if (parent) {
+            if (wxSizer* sizer = parent->GetSizer()) {
+                sizer->Detach(area);
+            }
         }
     }
     
