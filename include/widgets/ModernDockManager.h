@@ -160,7 +160,6 @@ protected:
 private:
     void InitializeComponents();
     void UpdateLayout();
-    void RequestLayoutUpdate();
     void RenderPreviewOverlay(wxGraphicsContext* gc);
     void AnimatePreviewRect();
     void DrawPositionIndicator(wxGraphicsContext* gc, const wxRect& rect, DockPosition position);

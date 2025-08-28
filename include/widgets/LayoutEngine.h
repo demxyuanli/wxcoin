@@ -125,7 +125,6 @@ public:
     void UpdateLayout(const wxRect& clientRect);
     void RecalculateLayout();
     void OptimizeLayout();
-    void RequestLayoutUpdate();
     
     // Splitter management
     void CreateSplitter(LayoutNode* parent, bool horizontal);
@@ -201,7 +200,6 @@ private:
     bool IsNodeInHierarchy(LayoutNode* ancestor, LayoutNode* target) const;
     bool IsMainStructureNode(LayoutNode* node) const;
     void SetPanelDockAreaByPosition(LayoutNode* panelNode, DockPosition position);
-    bool ShouldRecalculateLayout(const wxRect& newRect) const;
     
     wxWindow* m_parent;
     IDockManager* m_manager;
@@ -211,11 +209,6 @@ private:
     wxTimer m_animationTimer;
     std::vector<LayoutTransition> m_activeTransitions;
     bool m_animationEnabled;
-    
-    // Debounce system
-    wxTimer m_debounceTimer;
-    bool m_isUpdatingLayout;
-    bool m_pendingLayoutUpdate;
     
     // Configuration
     wxSize m_minPanelSize;
@@ -230,7 +223,6 @@ private:
     // Event handlers
     void OnSplitterMoved(wxSplitterEvent& event);
     void OnSplitterDoubleClick(wxSplitterEvent& event);
-    void OnDebounceTimer(wxTimerEvent& event);
     
     // Constants
     static constexpr int DEFAULT_MIN_PANEL_WIDTH = 150;
