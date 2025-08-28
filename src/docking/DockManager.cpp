@@ -55,14 +55,18 @@ DockManager::~DockManager() {
     m_dockWidgets.clear();
     m_dockWidgetsMap.clear();
     
-    // Now destroy the widgets using Destroy() for safe cleanup
+    // IMPORTANT: Destroy dock widgets BEFORE destroying the container
+    // This ensures widgets are cleaned up while their parent container is still valid
     for (auto* widget : widgetsToDelete) {
+        // Reparent to null first to break parent-child relationship
+        widget->Reparent(nullptr);
         widget->Destroy();
     }
     
     // Clean up floating widgets
     while (!m_floatingWidgets.empty()) {
-        delete m_floatingWidgets.back();
+        m_floatingWidgets.back()->Destroy();
+        m_floatingWidgets.pop_back();
     }
     
     // Delete perspective manager
@@ -76,8 +80,10 @@ DockManager::~DockManager() {
     delete d->containerOverlay;
     delete d->dockAreaOverlay;
     
-    // Delete container widget
-    delete m_containerWidget;
+    // Delete container widget LAST after all children are destroyed
+    if (m_containerWidget) {
+        m_containerWidget->Destroy();
+    }
 }
 
 DockArea* DockManager::addDockWidget(DockWidgetArea area, DockWidget* dockWidget, 
