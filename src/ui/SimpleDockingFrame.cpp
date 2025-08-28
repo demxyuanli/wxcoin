@@ -64,6 +64,9 @@ private:
         m_dockManager->setConfigFlag(DockAreaHasCloseButton, true);
         m_dockManager->setConfigFlag(AllTabsHaveCloseButton, true);
         m_dockManager->setConfigFlag(FocusHighlighting, true);
+        m_dockManager->setConfigFlag(DragPreviewIsDynamic, true);
+        m_dockManager->setConfigFlag(DragPreviewShowsContentPixmap, false);
+        m_dockManager->setConfigFlag(DragPreviewHasWindowFrame, true);
     }
     
     void CreateDockingLayout() {
@@ -100,6 +103,9 @@ private:
         toolList->SetSelection(0);
         
         toolDock->setWidget(toolList);
+        toolDock->setFeature(DockWidgetClosable, true);
+        toolDock->setFeature(DockWidgetMovable, true);
+        toolDock->setFeature(DockWidgetFloatable, true);
         toolDock->setIcon(wxArtProvider::GetIcon(wxART_EXECUTABLE_FILE, wxART_MENU));
         m_dockManager->addDockWidget(LeftDockWidgetArea, toolDock);
         
@@ -113,6 +119,9 @@ private:
         propGrid->Append(new wxFloatProperty("Opacity", wxPG_LABEL, 1.0));
         
         propDock->setWidget(propGrid);
+        propDock->setFeature(DockWidgetClosable, true);
+        propDock->setFeature(DockWidgetMovable, true);
+        propDock->setFeature(DockWidgetFloatable, true);
         propDock->setIcon(wxArtProvider::GetIcon(wxART_REPORT_VIEW, wxART_MENU));
         m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
         
@@ -129,6 +138,9 @@ private:
         output->SetDefaultStyle(wxTextAttr(*wxBLACK, *wxWHITE));
         
         outputDock->setWidget(output);
+        outputDock->setFeature(DockWidgetClosable, true);
+        outputDock->setFeature(DockWidgetMovable, true);
+        outputDock->setFeature(DockWidgetFloatable, true);
         outputDock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
         m_dockManager->addDockWidget(BottomDockWidgetArea, outputDock);
     }

@@ -920,11 +920,9 @@ void DockAreaTitleBar::onMenuButtonClicked(wxCommandEvent& event) {
 }
 
 void DockAreaTitleBar::onPinButtonClicked(wxCommandEvent& event) {
-    // Toggle auto-hide for current widget
-    DockWidget* currentWidget = m_dockArea->currentDockWidget();
-    if (currentWidget) {
-        currentWidget->setAutoHide(true);
-    }
+    // TODO: Auto-hide feature not yet fully implemented
+    // For now, just show a message
+    wxMessageBox("Auto-hide feature is not yet implemented", "Info", wxOK | wxICON_INFORMATION);
 }
 
 void DockAreaTitleBar::createButtons() {
