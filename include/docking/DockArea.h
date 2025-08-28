@@ -117,6 +117,7 @@ private:
     wxPanel* m_contentArea;
     wxBoxSizer* m_contentSizer;
     DockWidget* m_currentDockWidget;
+    bool m_isClosing;
     int m_currentIndex;
     DockAreaFlags m_flags;
     bool m_updateTitleBarButtons;

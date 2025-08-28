@@ -178,6 +178,9 @@ void DockContainerWidget::removeDockArea(DockArea* area) {
     wxCommandEvent event(EVT_DOCK_AREAS_REMOVED);
     event.SetEventObject(this);
     ProcessWindowEvent(event);
+    
+    // Destroy the area after we've cleaned up the layout
+    area->Destroy();
 }
 
 void DockContainerWidget::removeDockWidget(DockWidget* widget) {

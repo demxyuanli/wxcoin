@@ -65,6 +65,7 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     , m_flags(DefaultFlags)
     , m_updateTitleBarButtons(false)
     , m_menuOutdated(true)
+    , m_isClosing(false)
 {
     // Create layout
     m_layout = new wxBoxSizer(wxVERTICAL);
@@ -146,12 +147,15 @@ void DockArea::removeDockWidget(DockWidget* dockWidget) {
     
     // Close area if empty
     if (m_dockWidgets.empty()) {
-        // Schedule area cleanup after a short delay to prevent flashing
-        CallAfter([this]() {
-            if (m_dockWidgets.empty()) {
-                closeArea();
-            }
-        });
+        // Mark for deletion but don't delete immediately
+        m_isClosing = true;
+        
+        // Notify container to remove this area
+        if (m_containerWidget) {
+            m_containerWidget->removeDockArea(this);
+        }
+        
+        // The container will handle the actual destruction
     }
 }
 
@@ -340,11 +344,10 @@ void DockArea::saveState(wxString& xmlData) const {
 
 void DockArea::closeArea() {
     // Prevent recursive calls
-    static bool isClosing = false;
-    if (isClosing) {
+    if (m_isClosing) {
         return;
     }
-    isClosing = true;
+    m_isClosing = true;
     
     // Notify closing
     wxCommandEvent closingEvent(EVT_DOCK_AREA_CLOSING);
@@ -373,9 +376,7 @@ void DockArea::closeArea() {
     closedEvent.SetEventObject(this);
     ProcessWindowEvent(closedEvent);
     
-    // Destroy
-    isClosing = false;
-    Destroy();
+    // Don't call Destroy() here - the container will handle it
 }
 
 void DockArea::closeOtherAreas() {
