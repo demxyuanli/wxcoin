@@ -38,7 +38,7 @@ FloatingDockContainer::FloatingDockContainer(DockManager* dockManager)
     : wxFrame(dockManager ? dockManager->containerWidget()->GetParent() : nullptr, 
              wxID_ANY, "Floating Dock", 
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_TOOL_WINDOW)
+             wxDEFAULT_FRAME_STYLE | wxFRAME_NO_TASKBAR)
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockManager)
     , m_hasNativeTitleBar(true)
@@ -52,7 +52,7 @@ FloatingDockContainer::FloatingDockContainer(DockArea* dockArea)
     : wxFrame(dockArea && dockArea->dockManager() ? dockArea->dockManager()->containerWidget()->GetParent() : nullptr, 
              wxID_ANY, "Floating Dock", 
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_TOOL_WINDOW)
+             wxDEFAULT_FRAME_STYLE | wxFRAME_NO_TASKBAR)
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockArea ? dockArea->dockManager() : nullptr)
     , m_hasNativeTitleBar(true)
@@ -79,7 +79,7 @@ FloatingDockContainer::FloatingDockContainer(DockWidget* dockWidget)
              wxID_ANY, 
              dockWidget ? dockWidget->title() : "Floating Dock", 
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_TOOL_WINDOW)
+             wxDEFAULT_FRAME_STYLE | wxFRAME_NO_TASKBAR)
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockWidget ? dockWidget->dockManager() : nullptr)
     , m_hasNativeTitleBar(true)
@@ -111,6 +111,13 @@ void FloatingDockContainer::init() {
         setupCustomTitleBar();
     }
     
+    // Set proper window behavior
+    // Don't use wxSTAY_ON_TOP as it can cause focus issues
+    // The window will behave like a normal frame window
+    
+    // Bind close event to handle proper cleanup
+    Bind(wxEVT_CLOSE_WINDOW, &FloatingDockContainer::onClose, this);
+    
     // Register with manager
     if (m_dockManager) {
         m_dockManager->onFloatingWidgetCreated(this);
@@ -124,6 +131,12 @@ void FloatingDockContainer::addDockWidget(DockWidget* dockWidget) {
     
     m_dockContainer->addDockWidget(CenterDockWidgetArea, dockWidget);
     updateWindowTitle();
+    
+    // Make sure the window is shown after content is added
+    if (!IsShown()) {
+        Show(true);
+        Raise(); // Bring to front
+    }
 }
 
 void FloatingDockContainer::removeDockWidget(DockWidget* dockWidget) {
