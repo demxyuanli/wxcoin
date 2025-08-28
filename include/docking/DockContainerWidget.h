@@ -97,6 +97,7 @@ private:
     void addDockAreaToContainer(DockWidgetArea area, DockArea* dockArea);
     void dropDockWidget(DockWidget* widget, DockWidgetArea dropArea, DockArea* targetArea);
     DockSplitter* newSplitter(wxOrientation orientation);
+    void addDockAreaToSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
     
     friend class DockManager;
     friend class DockArea;

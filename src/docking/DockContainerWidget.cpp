@@ -173,23 +173,53 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
                 splitter->SplitHorizontally(splitter->GetWindow1(), dockArea);
             }
         } else {
-            // Need to create sub-splitter
-            DockSplitter* newSplitter = new DockSplitter(splitter);  // Create with parent splitter
-            wxWindow* oldWindow = splitter->GetWindow2();
+            wxLogDebug("  -> Both splitter windows occupied, need complex layout");
+            // Both windows are occupied, need more complex layout
+            // For now, try to find existing dock area in the desired position
+            wxWindow* targetWindow = nullptr;
             
-            // Reparent the old window to the new splitter
-            oldWindow->Reparent(newSplitter);
-            
-            // Replace the window in the parent splitter
-            splitter->ReplaceWindow(oldWindow, newSplitter);
-            
-            // Reparent the dock area to the new splitter
-            dockArea->Reparent(newSplitter);
-            
-            if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
-                newSplitter->SplitVertically(oldWindow, dockArea);
+            if (area == LeftDockWidgetArea || area == TopDockWidgetArea) {
+                targetWindow = splitter->GetWindow1();
             } else {
-                newSplitter->SplitHorizontally(oldWindow, dockArea);
+                targetWindow = splitter->GetWindow2();
+            }
+            
+            // Check if target is already a splitter
+            DockSplitter* targetSplitter = dynamic_cast<DockSplitter*>(targetWindow);
+            if (targetSplitter) {
+                wxLogDebug("  -> Target is already a splitter, recursing");
+                // Recursively add to the sub-splitter
+                addDockAreaToSplitter(targetSplitter, dockArea, area);
+            } else {
+                wxLogDebug("  -> Creating new sub-splitter");
+                // Create a new sub-splitter
+                DockSplitter* newSplitter = new DockSplitter(splitter);
+                
+                if (targetWindow) {
+                    // Reparent the old window to the new splitter
+                    targetWindow->Reparent(newSplitter);
+                    
+                    // Replace the window in the parent splitter
+                    splitter->ReplaceWindow(targetWindow, newSplitter);
+                    
+                    // Reparent the dock area to the new splitter
+                    dockArea->Reparent(newSplitter);
+                    
+                    // Split based on area
+                    if (area == LeftDockWidgetArea) {
+                        newSplitter->SplitVertically(dockArea, targetWindow);
+                    } else if (area == RightDockWidgetArea) {
+                        newSplitter->SplitVertically(targetWindow, dockArea);
+                    } else if (area == TopDockWidgetArea) {
+                        newSplitter->SplitHorizontally(dockArea, targetWindow);
+                    } else {
+                        newSplitter->SplitHorizontally(targetWindow, dockArea);
+                    }
+                } else {
+                    wxLogDebug("  -> ERROR: targetWindow is null!");
+                    // Just add to parent splitter
+                    dockArea->Reparent(splitter);
+                }
             }
         }
     }
@@ -279,6 +309,55 @@ void DockContainerWidget::dropDockArea(DockArea* dockArea, DockWidgetArea area) 
 
 void DockContainerWidget::addDockAreaToContainer(DockWidgetArea area, DockArea* dockArea) {
     addDockArea(dockArea, area);
+}
+
+void DockContainerWidget::addDockAreaToSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area) {
+    if (!splitter || !dockArea) {
+        return;
+    }
+    
+    wxLogDebug("DockContainerWidget::addDockAreaToSplitter - area: %d", area);
+    
+    if (splitter->GetWindow1() == nullptr) {
+        wxLogDebug("  -> Window1 is null, initializing");
+        dockArea->Reparent(splitter);
+        splitter->Initialize(dockArea);
+    } else if (splitter->GetWindow2() == nullptr) {
+        wxLogDebug("  -> Window2 is null, splitting");
+        dockArea->Reparent(splitter);
+        if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
+            splitter->SplitVertically(splitter->GetWindow1(), dockArea);
+        } else {
+            splitter->SplitHorizontally(splitter->GetWindow1(), dockArea);
+        }
+    } else {
+        wxLogDebug("  -> Both windows occupied, creating sub-splitter");
+        // Both windows occupied, same logic as in addDockArea
+        wxWindow* targetWindow = nullptr;
+        
+        if (area == LeftDockWidgetArea || area == TopDockWidgetArea) {
+            targetWindow = splitter->GetWindow1();
+        } else {
+            targetWindow = splitter->GetWindow2();
+        }
+        
+        if (targetWindow) {
+            DockSplitter* newSplitter = new DockSplitter(splitter);
+            targetWindow->Reparent(newSplitter);
+            splitter->ReplaceWindow(targetWindow, newSplitter);
+            dockArea->Reparent(newSplitter);
+            
+            if (area == LeftDockWidgetArea) {
+                newSplitter->SplitVertically(dockArea, targetWindow);
+            } else if (area == RightDockWidgetArea) {
+                newSplitter->SplitVertically(targetWindow, dockArea);
+            } else if (area == TopDockWidgetArea) {
+                newSplitter->SplitHorizontally(dockArea, targetWindow);
+            } else {
+                newSplitter->SplitHorizontally(targetWindow, dockArea);
+            }
+        }
+    }
 }
 
 DockSplitter* DockContainerWidget::newSplitter(wxOrientation orientation) {
