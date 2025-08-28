@@ -111,6 +111,15 @@ target_link_libraries(UIFrame PUBLIC
 )
 set_target_properties(UIFrame PROPERTIES FOLDER "UI")
 
+# Add FlatFrameDocking to UIFrame
+target_sources(UIFrame PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrameDocking.cpp
+    ${CMAKE_SOURCE_DIR}/include/FlatFrameDocking.h
+)
+
+# Add docking library dependency
+target_link_libraries(UIFrame PUBLIC docking)
+
 # Aggregator target to keep existing references working
 add_library(CADUI INTERFACE)
 target_link_libraries(CADUI INTERFACE UIFrame UIPanels UIDialogs)

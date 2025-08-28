@@ -37,7 +37,7 @@ add_subdirectory(src)
 
 # 主程序源文件
 set(MAIN_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/MainApplication.cpp
+    ${CMAKE_SOURCE_DIR}/src/MainApplicationDocking.cpp
 )
 
 # 创建可执行文件
