@@ -5,6 +5,6 @@
 
 class MainApplication : public wxApp {
 public:
-    virtual bool OnInit() = 0;
+    bool OnInit() override;
 };
 #endif // MAIN_APPLICATION_HPP
