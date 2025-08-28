@@ -114,6 +114,8 @@ private:
     DockAreaTitleBar* m_titleBar;
     DockAreaTabBar* m_tabBar;
     wxBoxSizer* m_layout;
+    wxPanel* m_contentArea;
+    wxBoxSizer* m_contentSizer;
     DockWidget* m_currentDockWidget;
     int m_currentIndex;
     DockAreaFlags m_flags;

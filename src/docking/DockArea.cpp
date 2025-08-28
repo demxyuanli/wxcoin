@@ -76,6 +76,12 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     m_tabBar = new DockAreaTabBar(this);
     m_layout->Add(m_tabBar, 0, wxEXPAND);
     
+    // Create content area (placeholder for dock widgets)
+    m_contentArea = new wxPanel(this);
+    m_contentSizer = new wxBoxSizer(wxVERTICAL);
+    m_contentArea->SetSizer(m_contentSizer);
+    m_layout->Add(m_contentArea, 1, wxEXPAND);  // Content area takes remaining space
+    
     // Register with manager
     if (m_dockManager) {
         m_dockManager->registerDockArea(this);
@@ -128,8 +134,9 @@ void DockArea::removeDockWidget(DockWidget* dockWidget) {
         }
     }
     
-    // Hide widget (but don't change parent yet - let the new container handle that)
+    // Hide widget and remove from content area
     dockWidget->Hide();
+    m_contentSizer->Detach(dockWidget);
     
     // Update UI
     updateTitleBarVisibility();
@@ -168,9 +175,10 @@ void DockArea::insertDockWidget(int index, DockWidget* dockWidget, bool activate
     // Add to tab bar
     m_tabBar->insertTab(index, dockWidget);
     
-    // Reparent widget
-    dockWidget->SetParent(this);
-    m_layout->Add(dockWidget, 1, wxEXPAND);
+    // Reparent widget to content area
+    dockWidget->Reparent(m_contentArea);
+    m_contentSizer->Add(dockWidget, 1, wxEXPAND);
+    dockWidget->Hide(); // Initially hidden until activated
     
     // Activate if requested
     if (activate) {
@@ -219,6 +227,7 @@ void DockArea::setCurrentIndex(int index) {
     if (m_currentDockWidget) {
         m_currentDockWidget->Show();
         m_currentDockWidget->SetFocus();
+        m_contentArea->Layout();
     }
     
     // Update tab bar

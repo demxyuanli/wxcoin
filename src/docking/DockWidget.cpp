@@ -120,10 +120,14 @@ void DockWidget::setWidget(wxWindow* widget, InsertMode insertMode) {
         }
         
         GetSizer()->Add(contentToAdd, 1, wxEXPAND);
-        widget->Reparent(this);
+        if (contentToAdd != widget) {
+            // Only reparent if we created a scroll area
+            widget->Reparent(contentToAdd);
+        }
     }
     
     Layout();
+    Refresh();
 }
 
 wxWindow* DockWidget::takeWidget() {
