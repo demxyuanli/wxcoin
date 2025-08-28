@@ -930,7 +930,7 @@ void DockAreaTitleBar::onPinButtonClicked(wxCommandEvent& event) {
 void DockAreaTitleBar::createButtons() {
     // Create pin button (for auto-hide)
     wxButton* pinButton = new wxButton(this, wxID_ANY, "P", wxDefaultPosition, wxSize(20, 20));
-    pinButton->SetToolTip("Auto-hide");
+    pinButton->SetToolTip("Pin/Auto-hide");
     pinButton->Bind(wxEVT_BUTTON, &DockAreaTitleBar::onPinButtonClicked, this);
     m_layout->Add(pinButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
     
