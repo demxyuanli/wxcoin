@@ -75,10 +75,12 @@ private:
         
         wxStaticText* mainText = new wxStaticText(mainPanel, wxID_ANY, 
             "This is the main view panel\nNon-closable, always displayed in center area",
-            wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
+            wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER | wxST_NO_AUTORESIZE);
         
         wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-        mainSizer->Add(mainText, 1, wxALL | wxEXPAND | wxALIGN_CENTER, 20);
+        mainSizer->AddStretchSpacer(1);
+        mainSizer->Add(mainText, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 20);
+        mainSizer->AddStretchSpacer(1);
         mainPanel->SetSizer(mainSizer);
         
         mainDock->setWidget(mainPanel);
