@@ -11,6 +11,7 @@
 #include <wx/file.h>
 #include <wx/listbox.h>
 #include <wx/propgrid/propgrid.h>
+#include <wx/propgrid/advprops.h>
 #include <wx/stattext.h>
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
@@ -108,7 +109,8 @@ private:
         propGrid->Append(new wxStringProperty("Name", wxPG_LABEL, "Object1"));
         propGrid->Append(new wxIntProperty("Width", wxPG_LABEL, 100));
         propGrid->Append(new wxIntProperty("Height", wxPG_LABEL, 100));
-        propGrid->Append(new wxColourProperty("Color", wxPG_LABEL, *wxBLUE));
+        propGrid->Append(new wxBoolProperty("Visible", wxPG_LABEL, true));
+        propGrid->Append(new wxFloatProperty("Opacity", wxPG_LABEL, 1.0));
         
         propDock->setWidget(propGrid);
         propDock->setIcon(wxArtProvider::GetIcon(wxART_REPORT_VIEW, wxART_MENU));
