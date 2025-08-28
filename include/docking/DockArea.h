@@ -176,6 +176,7 @@ private:
     int m_hoveredTab;
     int m_draggedTab;
     wxPoint m_dragStartPos;
+    bool m_dragStarted;
     bool m_hasOverflow;
     int m_firstVisibleTab;
     wxRect m_overflowButtonRect;

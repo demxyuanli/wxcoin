@@ -127,9 +127,8 @@ void DockArea::removeDockWidget(DockWidget* dockWidget) {
         }
     }
     
-    // Hide widget
+    // Hide widget (but don't change parent yet - let the new container handle that)
     dockWidget->Hide();
-    dockWidget->SetParent(nullptr);
     
     // Update UI
     updateTitleBarVisibility();
@@ -137,7 +136,12 @@ void DockArea::removeDockWidget(DockWidget* dockWidget) {
     
     // Close area if empty
     if (m_dockWidgets.empty()) {
-        closeArea();
+        // Schedule area cleanup after a short delay to prevent flashing
+        CallAfter([this]() {
+            if (m_dockWidgets.empty()) {
+                closeArea();
+            }
+        });
     }
 }
 
@@ -409,6 +413,7 @@ DockAreaTabBar::DockAreaTabBar(DockArea* dockArea)
     , m_currentIndex(-1)
     , m_hoveredTab(-1)
     , m_draggedTab(-1)
+    , m_dragStarted(false)
     , m_hasOverflow(false)
     , m_firstVisibleTab(0)
 {
@@ -542,6 +547,7 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
     }
     
     m_draggedTab = -1;
+    m_dragStarted = false;
 }
 
 void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
@@ -566,7 +572,44 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
     
     // Handle dragging
     if (m_draggedTab >= 0 && event.Dragging()) {
-        // TODO: Implement tab reordering
+        wxPoint delta = event.GetPosition() - m_dragStartPos;
+        
+        // Check if we should start floating (require minimum drag distance)
+        if (!m_dragStarted && (abs(delta.x) > 10 || abs(delta.y) > 10)) {
+            m_dragStarted = true;
+            
+            // Get the dock widget being dragged
+            DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
+            if (draggedWidget && draggedWidget->hasFeature(DockWidget::DockWidgetFloatable)) {
+                // Store the widget title before removing
+                wxString title = draggedWidget->windowTitle();
+                
+                // Release mouse capture before floating
+                if (HasCapture()) {
+                    ReleaseMouse();
+                }
+                
+                // Float the widget
+                draggedWidget->setFloating();
+                
+                // Position the floating window at mouse position
+                FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
+                if (floatingContainer) {
+                    wxPoint screenPos = ClientToScreen(event.GetPosition());
+                    floatingContainer->SetPosition(screenPos - wxPoint(50, 10));
+                    floatingContainer->SetTitle(title);
+                    
+                    // Start dragging the floating window
+                    wxMouseEvent dragEvent(wxEVT_LEFT_DOWN);
+                    dragEvent.SetPosition(wxPoint(50, 10));
+                    floatingContainer->GetEventHandler()->ProcessEvent(dragEvent);
+                }
+                
+                // Reset drag state
+                m_draggedTab = -1;
+                m_dragStarted = false;
+            }
+        }
     }
 }
 
