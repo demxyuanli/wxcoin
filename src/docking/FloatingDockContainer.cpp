@@ -35,9 +35,10 @@ public:
 
 // Constructors
 FloatingDockContainer::FloatingDockContainer(DockManager* dockManager)
-    : wxFrame(nullptr, wxID_ANY, "Floating Dock", 
+    : wxFrame(dockManager ? dockManager->containerWidget()->GetParent() : nullptr, 
+             wxID_ANY, "Floating Dock", 
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT)
+             wxDEFAULT_FRAME_STYLE | wxFRAME_TOOL_WINDOW)
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockManager)
     , m_hasNativeTitleBar(true)
@@ -48,9 +49,10 @@ FloatingDockContainer::FloatingDockContainer(DockManager* dockManager)
 }
 
 FloatingDockContainer::FloatingDockContainer(DockArea* dockArea)
-    : wxFrame(nullptr, wxID_ANY, "Floating Dock", 
+    : wxFrame(dockArea && dockArea->dockManager() ? dockArea->dockManager()->containerWidget()->GetParent() : nullptr, 
+             wxID_ANY, "Floating Dock", 
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT)
+             wxDEFAULT_FRAME_STYLE | wxFRAME_TOOL_WINDOW)
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockArea ? dockArea->dockManager() : nullptr)
     , m_hasNativeTitleBar(true)
@@ -73,9 +75,11 @@ FloatingDockContainer::FloatingDockContainer(DockArea* dockArea)
 }
 
 FloatingDockContainer::FloatingDockContainer(DockWidget* dockWidget)
-    : wxFrame(nullptr, wxID_ANY, dockWidget ? dockWidget->title() : "Floating Dock", 
+    : wxFrame(dockWidget && dockWidget->dockManager() ? dockWidget->dockManager()->containerWidget()->GetParent() : nullptr, 
+             wxID_ANY, 
+             dockWidget ? dockWidget->title() : "Floating Dock", 
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT)
+             wxDEFAULT_FRAME_STYLE | wxFRAME_TOOL_WINDOW)
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockWidget ? dockWidget->dockManager() : nullptr)
     , m_hasNativeTitleBar(true)
