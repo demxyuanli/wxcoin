@@ -5,14 +5,14 @@
 
 class HelpAboutListener : public CommandListener {
 public:
-    HelpAboutListener(wxFrame* frame);
-    ~HelpAboutListener() override = default;
+	HelpAboutListener(wxFrame* frame);
+	~HelpAboutListener() override = default;
 
-    CommandResult executeCommand(const std::string& commandType,
-                                 const std::unordered_map<std::string, std::string>& parameters) override;
-    bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override { return "HelpAboutListener"; }
+	CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	bool canHandleCommand(const std::string& commandType) const override;
+	std::string getListenerName() const override { return "HelpAboutListener"; }
 
 private:
-    wxFrame* m_frame;
-}; 
+	wxFrame* m_frame;
+};

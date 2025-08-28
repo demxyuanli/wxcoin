@@ -7,13 +7,13 @@ class NavigationController;
 
 class DefaultInputState : public InputState {
 public:
-    DefaultInputState(MouseHandler* mouseHandler, NavigationController* navigationController);
+	DefaultInputState(MouseHandler* mouseHandler, NavigationController* navigationController);
 
-    void onMouseButton(wxMouseEvent& event) override;
-    void onMouseMotion(wxMouseEvent& event) override;
-    void onMouseWheel(wxMouseEvent& event) override;
+	void onMouseButton(wxMouseEvent& event) override;
+	void onMouseMotion(wxMouseEvent& event) override;
+	void onMouseWheel(wxMouseEvent& event) override;
 
 private:
-    MouseHandler* m_mouseHandler;
-    NavigationController* m_navigationController;
-}; 
+	MouseHandler* m_mouseHandler;
+	NavigationController* m_navigationController;
+};

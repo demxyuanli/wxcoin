@@ -28,18 +28,18 @@ class UIHierarchyDebugger
 {
 public:
 
-    UIHierarchyDebugger();
+	UIHierarchyDebugger();
 
-    ~UIHierarchyDebugger();
+	~UIHierarchyDebugger();
 
-    void DebugUIHierarchy(wxWindow* window = nullptr, int depth = 0);
+	void DebugUIHierarchy(wxWindow* window = nullptr, int depth = 0);
 
-    void SetLogTextCtrl(wxTextCtrl* textCtrl);
+	void SetLogTextCtrl(wxTextCtrl* textCtrl);
 
-    void PrintUIHierarchy(wxWindow* window);
+	void PrintUIHierarchy(wxWindow* window);
 
 private:
-    wxTextCtrl* m_logTextCtrl;
-    wxLog* m_oldLog;
-    bool m_usingCustomLog;
-}; 
+	wxTextCtrl* m_logTextCtrl;
+	wxLog* m_oldLog;
+	bool m_usingCustomLog;
+};

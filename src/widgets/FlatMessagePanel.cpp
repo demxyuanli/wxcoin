@@ -4,9 +4,9 @@
 #include <wx/dcbuffer.h>
 
 wxBEGIN_EVENT_TABLE(FlatMessagePanel, wxPanel)
-	// Buttons are bound via Bind in ctor
-	EVT_PAINT(FlatMessagePanel::OnPaint)
-	EVT_SIZE(FlatMessagePanel::OnSize)
+// Buttons are bound via Bind in ctor
+EVT_PAINT(FlatMessagePanel::OnPaint)
+EVT_SIZE(FlatMessagePanel::OnSize)
 wxEND_EVENT_TABLE()
 
 FlatMessagePanel::FlatMessagePanel(wxWindow* parent, wxWindowID id, const wxString& title,
@@ -27,7 +27,7 @@ FlatMessagePanel::FlatMessagePanel(wxWindow* parent, wxWindowID id, const wxStri
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 	SetDoubleBuffered(true);
 	// Prevent default background erase to avoid flicker/black gaps
-	Bind(wxEVT_ERASE_BACKGROUND, [](wxEraseEvent&){});
+	Bind(wxEVT_ERASE_BACKGROUND, [](wxEraseEvent&) {});
 
 	wxBoxSizer* root = new wxBoxSizer(wxVERTICAL);
 	BuildHeader(root, title);
@@ -47,7 +47,8 @@ FlatMessagePanel::FlatMessagePanel(wxWindow* parent, wxWindowID id, const wxStri
 			if (m_btnMinimize) m_btnMinimize->SetFont(f);
 			if (m_btnClose) m_btnClose->SetFont(f);
 		}
-	} catch (...) {
+	}
+	catch (...) {
 		// Fallback silently if font manager unavailable
 	}
 }
@@ -88,7 +89,8 @@ void FlatMessagePanel::BuildHeader(wxSizer* parentSizer, const wxString& title)
 		if (bFloat.IsOk()) m_btnFloat->SetBitmap(bFloat);
 		if (bMin.IsOk()) m_btnMinimize->SetBitmap(bMin);
 		if (bClose.IsOk()) m_btnClose->SetBitmap(bClose);
-	} catch (...) {
+	}
+	catch (...) {
 		// Fallback: use simple labels
 		m_btnFloat->SetLabel("F");
 		m_btnMinimize->SetLabel("-");
@@ -112,7 +114,7 @@ void FlatMessagePanel::BuildHeader(wxSizer* parentSizer, const wxString& title)
 
 void FlatMessagePanel::BuildBody(wxSizer* parentSizer)
 {
-	m_splitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
+	m_splitter = new wxSplitterWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxSP_3DBORDER | wxSP_LIVE_UPDATE | wxSP_NO_XP_THEME);
 	m_splitter->SetSashGravity(0.5); // centered split by default
 	m_splitter->SetMinimumPaneSize(100);
@@ -132,7 +134,7 @@ void FlatMessagePanel::BuildBody(wxSizer* parentSizer)
 	m_leftPanel->SetSizer(leftSizer);
 
 	// Right side: scrolled window for performance panel
-	m_rightScroll = new wxScrolledWindow(m_splitter, wxID_ANY, wxDefaultPosition, wxDefaultSize, 
+	m_rightScroll = new wxScrolledWindow(m_splitter, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxVSCROLL | wxHSCROLL | wxTAB_TRAVERSAL);
 	m_rightScroll->SetScrollRate(10, 10);  // Enable both horizontal and vertical scrolling
 	m_rightScroll->SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -151,18 +153,18 @@ void FlatMessagePanel::AttachRightPanel(wxWindow* rightWidget)
 {
 	if (!m_rightScroll || !rightWidget) return;
 	m_rightWidget = rightWidget;
-	
+
 	// Reparent performance panel directly into scrolled window
 	m_rightWidget->Reparent(m_rightScroll);
-	
+
 	// Set virtual size to match the performance panel's best size
 	wxSize bestSize = m_rightWidget->GetBestSize();
 	m_rightScroll->SetVirtualSize(bestSize);
-	
+
 	// Position the panel at the top-left of scroll window
 	m_rightWidget->SetPosition(wxPoint(0, 0));
 	m_rightWidget->SetSize(bestSize);
-	
+
 	// Force refresh
 	m_rightScroll->Refresh();
 	Layout();
@@ -239,7 +241,8 @@ void FlatMessagePanel::OnMinimize(wxCommandEvent& e)
 	wxUnusedVar(e);
 	if (IsShown()) {
 		Hide();
-	} else {
+	}
+	else {
 		Show();
 	}
 	if (GetParent()) GetParent()->Layout();

@@ -5,17 +5,18 @@
 #include "OCCViewer.h"
 
 MeshParameterController::MeshParameterController(OCCViewer* viewer,
-                                                 MeshingService* mesher,
-                                                 MeshParameters* params,
-                                                 std::vector<std::shared_ptr<OCCGeometry>>* geometries)
-    : m_viewer(viewer), m_mesher(mesher), m_params(params), m_geometries(geometries) {}
+	MeshingService* mesher,
+	MeshParameters* params,
+	std::vector<std::shared_ptr<OCCGeometry>>* geometries)
+	: m_viewer(viewer), m_mesher(mesher), m_params(params), m_geometries(geometries) {
+}
 
 void MeshParameterController::setMeshDeflection(double deflection, bool remesh) {
-    if (!m_params) return;
-    if (m_params->deflection != deflection) {
-        m_params->deflection = deflection;
-        if (remesh) applyRemesh();
-    }
+	if (!m_params) return;
+	if (m_params->deflection != deflection) {
+		m_params->deflection = deflection;
+		if (remesh) applyRemesh();
+	}
 }
 
 void MeshParameterController::setSmoothingEnabled(bool enabled) { m_smoothingEnabled = enabled; applyRemesh(); }
@@ -53,11 +54,9 @@ bool MeshParameterController::isAdaptiveMeshing() const { return m_adaptiveMeshi
 bool MeshParameterController::isParallelProcessing() const { return m_parallelProcessing; }
 
 void MeshParameterController::applyRemesh() {
-    if (!m_mesher || !m_params || !m_geometries) return;
-    m_mesher->applyAndRemesh(*m_params, *m_geometries,
-        m_smoothingEnabled, m_smoothingIterations, m_smoothingStrength, m_smoothingCreaseAngle,
-        m_subdivisionEnabled, m_subdivisionLevel, m_subdivisionMethod, m_subdivisionCreaseAngle,
-        m_tessellationMethod, m_tessellationQuality, m_featurePreservation, m_adaptiveMeshing, m_parallelProcessing);
+	if (!m_mesher || !m_params || !m_geometries) return;
+	m_mesher->applyAndRemesh(*m_params, *m_geometries,
+		m_smoothingEnabled, m_smoothingIterations, m_smoothingStrength, m_smoothingCreaseAngle,
+		m_subdivisionEnabled, m_subdivisionLevel, m_subdivisionMethod, m_subdivisionCreaseAngle,
+		m_tessellationMethod, m_tessellationQuality, m_featurePreservation, m_adaptiveMeshing, m_parallelProcessing);
 }
-
-

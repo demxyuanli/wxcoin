@@ -10,26 +10,24 @@ class SoSeparator;
 
 class ExplodeController {
 public:
-    ExplodeController(SoSeparator* sceneRoot);
+	ExplodeController(SoSeparator* sceneRoot);
 
-    void setEnabled(bool enabled, double factor);
-    bool isEnabled() const { return m_enabled; }
+	void setEnabled(bool enabled, double factor);
+	bool isEnabled() const { return m_enabled; }
 
-    void setParams(ExplodeMode mode, double factor);
-    void getParams(ExplodeMode& mode, double& factor) const { mode = m_mode; factor = m_factor; }
+	void setParams(ExplodeMode mode, double factor);
+	void getParams(ExplodeMode& mode, double& factor) const { mode = m_mode; factor = m_factor; }
 
-    void apply(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
-    void clear(std::vector<std::shared_ptr<OCCGeometry>>& geometries);
-
-private:
-    void computeAndApplyOffsets(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
+	void apply(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
+	void clear(std::vector<std::shared_ptr<OCCGeometry>>& geometries);
 
 private:
-    SoSeparator* m_root{nullptr};
-    bool m_enabled{false};
-    double m_factor{1.0};
-    ExplodeMode m_mode{ExplodeMode::Radial};
-    std::unordered_map<std::string, gp_Pnt> m_originalPositions;
+	void computeAndApplyOffsets(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
+
+private:
+	SoSeparator* m_root{ nullptr };
+	bool m_enabled{ false };
+	double m_factor{ 1.0 };
+	ExplodeMode m_mode{ ExplodeMode::Radial };
+	std::unordered_map<std::string, gp_Pnt> m_originalPositions;
 };
-
-

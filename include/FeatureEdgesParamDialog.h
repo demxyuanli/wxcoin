@@ -6,23 +6,22 @@
 
 class FeatureEdgesParamDialog : public wxDialog {
 public:
-    explicit FeatureEdgesParamDialog(wxWindow* parent);
+	explicit FeatureEdgesParamDialog(wxWindow* parent);
 
-    double getAngle() const;
-    double getMinLength() const;
-    bool getOnlyConvex() const;
-    bool getOnlyConcave() const;
-    wxColour getEdgeColor() const;
-    double getEdgeWidth() const;
-    bool getEdgesOnly() const;
+	double getAngle() const;
+	double getMinLength() const;
+	bool getOnlyConvex() const;
+	bool getOnlyConcave() const;
+	wxColour getEdgeColor() const;
+	double getEdgeWidth() const;
+	bool getEdgesOnly() const;
 
 private:
-    wxTextCtrl* m_angle{nullptr};
-    wxTextCtrl* m_minLength{nullptr};
-    wxCheckBox* m_onlyConvex{nullptr};
-    wxCheckBox* m_onlyConcave{nullptr};
-    wxColourPickerCtrl* m_colorPicker{nullptr};
-    wxSpinCtrlDouble* m_edgeWidth{nullptr};
-    wxCheckBox* m_edgesOnly{nullptr};
+	wxTextCtrl* m_angle{ nullptr };
+	wxTextCtrl* m_minLength{ nullptr };
+	wxCheckBox* m_onlyConvex{ nullptr };
+	wxCheckBox* m_onlyConcave{ nullptr };
+	wxColourPickerCtrl* m_colorPicker{ nullptr };
+	wxSpinCtrlDouble* m_edgeWidth{ nullptr };
+	wxCheckBox* m_edgesOnly{ nullptr };
 };
-

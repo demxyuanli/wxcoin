@@ -7,12 +7,12 @@ class GeometryFactory;
 
 class CreateWrenchListener : public CommandListener {
 public:
-    CreateWrenchListener(MouseHandler* mouseHandler, GeometryFactory* factory);
-    CommandResult executeCommand(const std::string& commandType,
-                                 const std::unordered_map<std::string, std::string>& parameters) override;
-    bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override { return "CreateWrenchListener"; }
+	CreateWrenchListener(MouseHandler* mouseHandler, GeometryFactory* factory);
+	CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	bool canHandleCommand(const std::string& commandType) const override;
+	std::string getListenerName() const override { return "CreateWrenchListener"; }
 private:
-    MouseHandler* m_mouseHandler;
-    GeometryFactory* m_factory;
-}; 
+	MouseHandler* m_mouseHandler;
+	GeometryFactory* m_factory;
+};

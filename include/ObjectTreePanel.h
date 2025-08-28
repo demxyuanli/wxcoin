@@ -18,98 +18,98 @@ class OCCViewer;
 class ObjectTreePanel : public FlatUITitledPanel
 {
 public:
-    ObjectTreePanel(wxWindow* parent);
-    ~ObjectTreePanel();
+	ObjectTreePanel(wxWindow* parent);
+	~ObjectTreePanel();
 
-    // Legacy GeometryObject support
-    void addObject(GeometryObject* object);
-    void removeObject(GeometryObject* object);
-    void updateObjectName(GeometryObject* object);
-    
-    // OCCGeometry support
-    void addOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
-    void removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
-    void updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometry);
-    void selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
-    void deselectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
-    
-    // Object management functions
-    void deleteSelectedObject();
-    void hideSelectedObject();
-    void showSelectedObject();
-    void toggleObjectVisibility();
-    void showAllObjects();
-    void hideAllObjects();
-    
-    // Setup methods
-    void setPropertyPanel(PropertyPanel* panel);
-    void setOCCViewer(OCCViewer* viewer);
-    
-    PropertyPanel* getPropertyPanel() const { return m_propertyPanel; }
-    
-    // Public method for OCCViewer to update tree selection
-    void updateTreeSelectionFromViewer();
-    
+	// Legacy GeometryObject support
+	void addObject(GeometryObject* object);
+	void removeObject(GeometryObject* object);
+	void updateObjectName(GeometryObject* object);
+
+	// OCCGeometry support
+	void addOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
+	void removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
+	void updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometry);
+	void selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
+	void deselectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
+
+	// Object management functions
+	void deleteSelectedObject();
+	void hideSelectedObject();
+	void showSelectedObject();
+	void toggleObjectVisibility();
+	void showAllObjects();
+	void hideAllObjects();
+
+	// Setup methods
+	void setPropertyPanel(PropertyPanel* panel);
+	void setOCCViewer(OCCViewer* viewer);
+
+	PropertyPanel* getPropertyPanel() const { return m_propertyPanel; }
+
+	// Public method for OCCViewer to update tree selection
+	void updateTreeSelectionFromViewer();
+
 private:
-    // UI helpers
-    void ensurePartRoot();
-    void onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int column);
-    void onKeyDown(wxKeyEvent& event);
-    void onDeleteObject(wxCommandEvent& event);
-    void onHideObject(wxCommandEvent& event);
-    void onShowObject(wxCommandEvent& event);
-    void onToggleVisibility(wxCommandEvent& event);
-    void onShowAllObjects(wxCommandEvent& event);
-    void onHideAllObjects(wxCommandEvent& event);
-    
-    void createContextMenu();
-    void updateTreeItemIcon(std::shared_ptr<FlatTreeItem> item, bool visible);
-    std::shared_ptr<OCCGeometry> getSelectedOCCGeometry();
-    void refreshActionIconsFor(std::shared_ptr<OCCGeometry> geometry);
+	// UI helpers
+	void ensurePartRoot();
+	void onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int column);
+	void onKeyDown(wxKeyEvent& event);
+	void onDeleteObject(wxCommandEvent& event);
+	void onHideObject(wxCommandEvent& event);
+	void onShowObject(wxCommandEvent& event);
+	void onToggleVisibility(wxCommandEvent& event);
+	void onShowAllObjects(wxCommandEvent& event);
+	void onHideAllObjects(wxCommandEvent& event);
 
-    // Tabs
-    FlatBarNotebook* m_notebook;
-    wxPanel* m_tabPanel;
-    wxPanel* m_tabHistory;
-    wxPanel* m_tabVersion;
+	void createContextMenu();
+	void updateTreeItemIcon(std::shared_ptr<FlatTreeItem> item, bool visible);
+	std::shared_ptr<OCCGeometry> getSelectedOCCGeometry();
+	void refreshActionIconsFor(std::shared_ptr<OCCGeometry> geometry);
 
-    // Main object tree (Tab 1)
-    FlatTreeView* m_treeView;
-    std::shared_ptr<FlatTreeItem> m_rootItem;
-    std::shared_ptr<FlatTreeItem> m_partRootItem; // "Part" root like FreeCAD-style hierarchy
-    
-    // Legacy GeometryObject support
-    std::map<GeometryObject*, std::shared_ptr<FlatTreeItem>> m_objectMap;
-    
-    // OCCGeometry support
-    // Map geometry -> feature item (leaf; used for selection)
-    std::map<std::shared_ptr<OCCGeometry>, std::shared_ptr<FlatTreeItem>> m_occGeometryMap; // feature leaf
-    std::map<std::shared_ptr<OCCGeometry>, std::shared_ptr<FlatTreeItem>> m_occGeometryBodyMap; // body container
-    std::map<std::shared_ptr<FlatTreeItem>, std::shared_ptr<OCCGeometry>> m_treeItemToOCCGeometry; // reverse
+	// Tabs
+	FlatBarNotebook* m_notebook;
+	wxPanel* m_tabPanel;
+	wxPanel* m_tabHistory;
+	wxPanel* m_tabVersion;
 
-    // Column indices for treelist actions
-    enum Columns { COL_VIS = 1, COL_DEL = 2, COL_COLOR = 3, COL_EDIT = 4 };
+	// Main object tree (Tab 1)
+	FlatTreeView* m_treeView;
+	std::shared_ptr<FlatTreeItem> m_rootItem;
+	std::shared_ptr<FlatTreeItem> m_partRootItem; // "Part" root like FreeCAD-style hierarchy
 
-    // Images for action columns
-    wxBitmap m_bmpEyeOpen;
-    wxBitmap m_bmpEyeClosed;
-    wxBitmap m_bmpDelete;
-    wxBitmap m_bmpColor;
-    wxBitmap m_bmpEdit;
-    
-    PropertyPanel* m_propertyPanel;
-    OCCViewer* m_occViewer;
-    
-    bool m_isUpdatingSelection; // Prevent recursive updates
-    
-    // Context menu
-    wxMenu* m_contextMenu;
-    std::shared_ptr<FlatTreeItem> m_rightClickedItem;
-    std::shared_ptr<FlatTreeItem> m_lastSelectedItem;
+	// Legacy GeometryObject support
+	std::map<GeometryObject*, std::shared_ptr<FlatTreeItem>> m_objectMap;
 
-    // History tree (Tab 2)
-    FlatTreeView* m_historyView;
-    std::shared_ptr<FlatTreeItem> m_historyRoot;
-    std::shared_ptr<FlatTreeItem> m_undoRoot;
-    std::shared_ptr<FlatTreeItem> m_redoRoot;
+	// OCCGeometry support
+	// Map geometry -> feature item (leaf; used for selection)
+	std::map<std::shared_ptr<OCCGeometry>, std::shared_ptr<FlatTreeItem>> m_occGeometryMap; // feature leaf
+	std::map<std::shared_ptr<OCCGeometry>, std::shared_ptr<FlatTreeItem>> m_occGeometryBodyMap; // body container
+	std::map<std::shared_ptr<FlatTreeItem>, std::shared_ptr<OCCGeometry>> m_treeItemToOCCGeometry; // reverse
+
+	// Column indices for treelist actions
+	enum Columns { COL_VIS = 1, COL_DEL = 2, COL_COLOR = 3, COL_EDIT = 4 };
+
+	// Images for action columns
+	wxBitmap m_bmpEyeOpen;
+	wxBitmap m_bmpEyeClosed;
+	wxBitmap m_bmpDelete;
+	wxBitmap m_bmpColor;
+	wxBitmap m_bmpEdit;
+
+	PropertyPanel* m_propertyPanel;
+	OCCViewer* m_occViewer;
+
+	bool m_isUpdatingSelection; // Prevent recursive updates
+
+	// Context menu
+	wxMenu* m_contextMenu;
+	std::shared_ptr<FlatTreeItem> m_rightClickedItem;
+	std::shared_ptr<FlatTreeItem> m_lastSelectedItem;
+
+	// History tree (Tab 2)
+	FlatTreeView* m_historyView;
+	std::shared_ptr<FlatTreeItem> m_historyRoot;
+	std::shared_ptr<FlatTreeItem> m_undoRoot;
+	std::shared_ptr<FlatTreeItem> m_redoRoot;
 };

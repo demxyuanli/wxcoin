@@ -9,14 +9,14 @@ class Canvas;
 
 class FileOpenListener : public CommandListener {
 public:
-    FileOpenListener(wxFrame* frame);
-    ~FileOpenListener() override = default;
+	FileOpenListener(wxFrame* frame);
+	~FileOpenListener() override = default;
 
-    CommandResult executeCommand(const std::string& commandType,
-                                 const std::unordered_map<std::string, std::string>& parameters) override;
-    bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override { return "FileOpenListener"; }
+	CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	bool canHandleCommand(const std::string& commandType) const override;
+	std::string getListenerName() const override { return "FileOpenListener"; }
 
 private:
-    wxFrame* m_frame;
-}; 
+	wxFrame* m_frame;
+};

@@ -11,21 +11,19 @@ class SoSeparator;
 // Service that performs screen-space picking and resolves to top-level geometries
 class PickingService {
 public:
-    PickingService(SceneManager* sceneManager,
-                   SoSeparator* occRoot,
-                   const std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>>* nodeToGeom);
+	PickingService(SceneManager* sceneManager,
+		SoSeparator* occRoot,
+		const std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>>* nodeToGeom);
 
-    void setRoot(SoSeparator* occRoot);
+	void setRoot(SoSeparator* occRoot);
 
-    std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos) const;
-
-private:
-    static SoSeparator* findTopLevelSeparatorInPath(class SoPath* path, SoSeparator* occRoot);
+	std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos) const;
 
 private:
-    SceneManager* m_sceneManager{nullptr};
-    SoSeparator* m_occRoot{nullptr};
-    const std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>>* m_nodeToGeom{nullptr};
+	static SoSeparator* findTopLevelSeparatorInPath(class SoPath* path, SoSeparator* occRoot);
+
+private:
+	SceneManager* m_sceneManager{ nullptr };
+	SoSeparator* m_occRoot{ nullptr };
+	const std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>>* m_nodeToGeom{ nullptr };
 };
-
-

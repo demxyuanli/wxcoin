@@ -8,33 +8,33 @@ class SceneManager;
 
 class NavigationController {
 public:
-    NavigationController(Canvas* canvas, SceneManager* sceneManager);
-    ~NavigationController();
+	NavigationController(Canvas* canvas, SceneManager* sceneManager);
+	~NavigationController();
 
-    void handleMouseButton(wxMouseEvent& event);
-    void handleMouseMotion(wxMouseEvent& event);
-    void handleMouseWheel(wxMouseEvent& event);
+	void handleMouseButton(wxMouseEvent& event);
+	void handleMouseMotion(wxMouseEvent& event);
+	void handleMouseWheel(wxMouseEvent& event);
 
-    void viewAll();
-    void viewTop();
-    void viewFront();
-    void viewRight();
-    void viewIsometric();
+	void viewAll();
+	void viewTop();
+	void viewFront();
+	void viewRight();
+	void viewIsometric();
 
-    // Zoom speed adjustment
-    void setZoomSpeedFactor(float factor);
-    float getZoomSpeedFactor() const;
+	// Zoom speed adjustment
+	void setZoomSpeedFactor(float factor);
+	float getZoomSpeedFactor() const;
 
 private:
-    void rotateCamera(const wxPoint& currentPos, const wxPoint& lastPos);
-    void panCamera(const wxPoint& currentPos, const wxPoint& lastPos);
-    void zoomCamera(float delta);
+	void rotateCamera(const wxPoint& currentPos, const wxPoint& lastPos);
+	void panCamera(const wxPoint& currentPos, const wxPoint& lastPos);
+	void zoomCamera(float delta);
 
-    Canvas* m_canvas;
-    SceneManager* m_sceneManager;
-    bool m_isDragging;
-    wxPoint m_lastMousePos;
-    enum class DragMode { NONE, ROTATE, PAN, ZOOM };
-    DragMode m_dragMode;
-    float m_zoomSpeedFactor;  // Multiplier for mouse wheel zoom speed
+	Canvas* m_canvas;
+	SceneManager* m_sceneManager;
+	bool m_isDragging;
+	wxPoint m_lastMousePos;
+	enum class DragMode { NONE, ROTATE, PAN, ZOOM };
+	DragMode m_dragMode;
+	float m_zoomSpeedFactor;  // Multiplier for mouse wheel zoom speed
 };

@@ -13,5 +13,3 @@ NavigationCubeManager* DefaultSubsystemFactory::createNavigationCubeManager(Canv
 RenderingEngine* DefaultSubsystemFactory::createRenderingEngine(Canvas* canvas) { return new RenderingEngine(canvas); }
 EventCoordinator* DefaultSubsystemFactory::createEventCoordinator() { return new EventCoordinator(); }
 ViewportManager* DefaultSubsystemFactory::createViewportManager(Canvas* canvas) { return new ViewportManager(canvas); }
-
-

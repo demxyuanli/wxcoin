@@ -6,22 +6,22 @@
 
 // Dock area types
 enum class DockArea {
-    Left, Right, Top, Bottom, Center, Floating
+	Left, Right, Top, Bottom, Center, Floating
 };
 
 // Dock panel states
 enum class DockPanelState {
-    Normal, Maximized, Minimized, Floating, Hidden
+	Normal, Maximized, Minimized, Floating, Hidden
 };
 
 // Tab close behavior
 enum class TabCloseMode {
-    ShowAlways, ShowOnHover, ShowNever
+	ShowAlways, ShowOnHover, ShowNever
 };
 
 // Drag operation types
 enum class DragOperation {
-    None, TabReorder, TabDetach, PanelMove, PanelResize
+	None, TabReorder, TabDetach, PanelMove, PanelResize
 };
 
 #endif // DOCK_TYPES_H

@@ -7,14 +7,14 @@ class MouseHandler;
 
 class CreateBoxListener : public CommandListener {
 public:
-    explicit CreateBoxListener(MouseHandler* mouseHandler);
-    ~CreateBoxListener() override = default;
+	explicit CreateBoxListener(MouseHandler* mouseHandler);
+	~CreateBoxListener() override = default;
 
-    CommandResult executeCommand(const std::string& commandType,
-                                 const std::unordered_map<std::string, std::string>& parameters) override;
-    bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override { return "CreateBoxListener"; }
+	CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	bool canHandleCommand(const std::string& commandType) const override;
+	std::string getListenerName() const override { return "CreateBoxListener"; }
 
 private:
-    MouseHandler* m_mouseHandler;
-}; 
+	MouseHandler* m_mouseHandler;
+};

@@ -10,16 +10,16 @@ class OCCViewer;
 
 class ImportStepListener : public CommandListener {
 public:
-    ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer);
-    ~ImportStepListener() override = default;
+	ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer);
+	~ImportStepListener() override = default;
 
-    CommandResult executeCommand(const std::string& commandType,
-                                 const std::unordered_map<std::string, std::string>& parameters) override;
-    bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override { return "ImportStepListener"; }
+	CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	bool canHandleCommand(const std::string& commandType) const override;
+	std::string getListenerName() const override { return "ImportStepListener"; }
 
 private:
-    wxFrame* m_frame;
-    Canvas* m_canvas;
-    OCCViewer* m_occViewer;
-}; 
+	wxFrame* m_frame;
+	Canvas* m_canvas;
+	OCCViewer* m_occViewer;
+};

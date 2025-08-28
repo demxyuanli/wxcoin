@@ -8,16 +8,14 @@
 class FlatWidgetsExampleDialog : public wxDialog
 {
 public:
-    FlatWidgetsExampleDialog(wxWindow* parent, const wxString& title = "Flat Widgets Example");
-    virtual ~FlatWidgetsExampleDialog() = default;
+	FlatWidgetsExampleDialog(wxWindow* parent, const wxString& title = "Flat Widgets Example");
+	virtual ~FlatWidgetsExampleDialog() = default;
 
 private:
-    FlatWidgetsExample* m_examplePanel;
-    
-    void CreateControls();
-    void LayoutDialog();
+	FlatWidgetsExample* m_examplePanel;
+
+	void CreateControls();
+	void LayoutDialog();
 };
 
 #endif // FLAT_WIDGETS_EXAMPLE_DIALOG_H
-
-

@@ -51,316 +51,315 @@ class BatchOperationManager; // batch updates
 
 /**
  * @brief OpenCASCADE viewer integration
- * 
+ *
  * Manages OpenCASCADE geometry objects display in 3D scene
  */
 class OCCViewer : public wxEvtHandler,
-                  public IGeometryApi,
-                  public ISelectionApi,
-                  public IRenderModesApi,
-                  public IMeshControlApi,
-                  public ILODApi,
-                  public IEdgeDisplayApi,
-                  public ISliceApi,
-                  public IExplodeApi,
-                  public IViewApi,
-                  public IOutlineApi
+	public IGeometryApi,
+	public ISelectionApi,
+	public IRenderModesApi,
+	public IMeshControlApi,
+	public ILODApi,
+	public IEdgeDisplayApi,
+	public ISliceApi,
+	public IExplodeApi,
+	public IViewApi,
+	public IOutlineApi
 {
 public:
-    explicit OCCViewer(SceneManager* sceneManager);
-    ~OCCViewer();
+	explicit OCCViewer(SceneManager* sceneManager);
+	~OCCViewer();
 
-    // Type alias to keep backward compatibility with existing OCCViewer::ExplodeMode references
-    using ExplodeMode = ::ExplodeMode;
+	// Type alias to keep backward compatibility with existing OCCViewer::ExplodeMode references
+	using ExplodeMode = ::ExplodeMode;
 
-    // Geometry management
-    void addGeometry(std::shared_ptr<OCCGeometry> geometry) override;
-    void removeGeometry(std::shared_ptr<OCCGeometry> geometry) override;
-    void removeGeometry(const std::string& name) override;
-    void clearAll() override;
-    std::shared_ptr<OCCGeometry> findGeometry(const std::string& name) override;
-    std::vector<std::shared_ptr<OCCGeometry>> getAllGeometry() const override;
-    std::vector<std::shared_ptr<OCCGeometry>> getSelectedGeometries() const override;
+	// Geometry management
+	void addGeometry(std::shared_ptr<OCCGeometry> geometry) override;
+	void removeGeometry(std::shared_ptr<OCCGeometry> geometry) override;
+	void removeGeometry(const std::string& name) override;
+	void clearAll() override;
+	std::shared_ptr<OCCGeometry> findGeometry(const std::string& name) override;
+	std::vector<std::shared_ptr<OCCGeometry>> getAllGeometry() const override;
+	std::vector<std::shared_ptr<OCCGeometry>> getSelectedGeometries() const override;
 
-    // Batch operations for performance optimization
-    void beginBatchOperation();
-    void endBatchOperation();
-    bool isBatchOperationActive() const;
-    
-    // Batch geometry addition for better performance
-    void addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& geometries) override;
-    
-    // Deferred ObjectTree updates
-    void updateObjectTreeDeferred() override;
+	// Batch operations for performance optimization
+	void beginBatchOperation();
+	void endBatchOperation();
+	bool isBatchOperationActive() const;
 
-    // View manipulation
-    void setGeometryVisible(const std::string& name, bool visible) override;
-    void setGeometrySelected(const std::string& name, bool selected) override;
-    void setGeometryColor(const std::string& name, const Quantity_Color& color) override;
-    void setGeometryTransparency(const std::string& name, double transparency) override;
-    void hideAll() override;
-    void showAll() override;
-    void selectAll() override;
-    void deselectAll() override;
-    void setAllColor(const Quantity_Color& color);
-    void fitAll() override;
-    void fitGeometry(const std::string& name) override;
+	// Batch geometry addition for better performance
+	void addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& geometries) override;
 
-    // Picking
-    std::shared_ptr<OCCGeometry> pickGeometry(int x, int y);
+	// Deferred ObjectTree updates
+	void updateObjectTreeDeferred() override;
 
-    // Display modes
-    void setWireframeMode(bool wireframe) override;
-    void setShowEdges(bool showEdges) override;
-    void setAntiAliasing(bool enabled) override;
-    bool isWireframeMode() const override;
-    bool isShowEdges() const override;
-    bool isShowNormals() const;
+	// View manipulation
+	void setGeometryVisible(const std::string& name, bool visible) override;
+	void setGeometrySelected(const std::string& name, bool selected) override;
+	void setGeometryColor(const std::string& name, const Quantity_Color& color) override;
+	void setGeometryTransparency(const std::string& name, double transparency) override;
+	void hideAll() override;
+	void showAll() override;
+	void selectAll() override;
+	void deselectAll() override;
+	void setAllColor(const Quantity_Color& color);
+	void fitAll() override;
+	void fitGeometry(const std::string& name) override;
 
-    // Mesh quality
-    void setMeshDeflection(double deflection, bool remesh = true) override;
-    double getMeshDeflection() const override;
+	// Picking
+	std::shared_ptr<OCCGeometry> pickGeometry(int x, int y);
 
-    // LOD (Level of Detail) control
-    void setLODEnabled(bool enabled) override;
-    bool isLODEnabled() const override;
-    void setLODRoughDeflection(double deflection) override;
-    double getLODRoughDeflection() const override;
-    void setLODFineDeflection(double deflection) override;
-    double getLODFineDeflection() const override;
-    void setLODTransitionTime(int milliseconds) override;
-    int getLODTransitionTime() const override;
-    void setLODMode(bool roughMode) override;
-    bool isLODRoughMode() const override;
-    void startLODInteraction() override;
+	// Display modes
+	void setWireframeMode(bool wireframe) override;
+	void setShowEdges(bool showEdges) override;
+	void setAntiAliasing(bool enabled) override;
+	bool isWireframeMode() const override;
+	bool isShowEdges() const override;
+	bool isShowNormals() const;
 
-    // Subdivision surface control
-    void setSubdivisionEnabled(bool enabled) override;
-    bool isSubdivisionEnabled() const override;
-    void setSubdivisionLevel(int level) override;
-    int getSubdivisionLevel() const override;
-    void setSubdivisionMethod(int method) override;
-    int getSubdivisionMethod() const override;
-    void setSubdivisionCreaseAngle(double angle) override;
-    double getSubdivisionCreaseAngle() const override;
-    
-    // Mesh smoothing control
-    void setSmoothingEnabled(bool enabled) override;
-    bool isSmoothingEnabled() const override;
-    void setSmoothingMethod(int method) override;
-    int getSmoothingMethod() const override;
-    void setSmoothingIterations(int iterations) override;
-    int getSmoothingIterations() const override;
-    void setSmoothingStrength(double strength) override;
-    double getSmoothingStrength() const override;
-    void setSmoothingCreaseAngle(double angle) override;
-    double getSmoothingCreaseAngle() const override;
-    
-    // Advanced tessellation control
-    void setTessellationMethod(int method) override;
-    int getTessellationMethod() const override;
-    void setTessellationQuality(int quality) override;
-    int getTessellationQuality() const override;
-    void setFeaturePreservation(double preservation) override;
-    double getFeaturePreservation() const override;
-    void setParallelProcessing(bool enabled) override;
-    bool isParallelProcessing() const override;
-    void setAdaptiveMeshing(bool enabled) override;
-    bool isAdaptiveMeshing() const override;
+	// Mesh quality
+	void setMeshDeflection(double deflection, bool remesh = true) override;
+	double getMeshDeflection() const override;
 
-    // Callbacks
-    void onSelectionChanged();
-    void onGeometryChanged(std::shared_ptr<OCCGeometry> geometry);
+	// LOD (Level of Detail) control
+	void setLODEnabled(bool enabled) override;
+	bool isLODEnabled() const override;
+	void setLODRoughDeflection(double deflection) override;
+	double getLODRoughDeflection() const override;
+	void setLODFineDeflection(double deflection) override;
+	double getLODFineDeflection() const override;
+	void setLODTransitionTime(int milliseconds) override;
+	int getLODTransitionTime() const override;
+	void setLODMode(bool roughMode) override;
+	bool isLODRoughMode() const override;
+	void startLODInteraction() override;
 
-    // Normals display
-    void setShowNormals(bool showNormals);
-    void setNormalLength(double length);
-    void setNormalColor(const Quantity_Color& correct, const Quantity_Color& incorrect);
-    void updateNormalsDisplay();
-    
-    // View refresh
-    void requestViewRefresh() override;
-    
-   
-    // Advanced geometry creation - NEW
-    std::shared_ptr<OCCGeometry> addGeometryWithAdvancedRendering(const TopoDS_Shape& shape, const std::string& name);
-    std::shared_ptr<OCCGeometry> addBezierCurve(const std::vector<gp_Pnt>& controlPoints, const std::string& name);
-    std::shared_ptr<OCCGeometry> addBezierSurface(const std::vector<std::vector<gp_Pnt>>& controlPoints, const std::string& name);
-    std::shared_ptr<OCCGeometry> addBSplineCurve(const std::vector<gp_Pnt>& poles, const std::vector<double>& weights, const std::string& name);
-    
-    // Upgrade existing geometries - NEW
-    void upgradeGeometryToAdvanced(const std::string& name);
-    void upgradeAllGeometriesToAdvanced();
-    
-    // Mesh quality validation and debugging
-    void validateMeshParameters();
-    void logCurrentMeshSettings();
-    void compareMeshQuality(const std::string& geometryName);
-    std::string getMeshQualityReport() const;
-    void exportMeshStatistics(const std::string& filename);
-    bool verifyParameterApplication(const std::string& parameterName, double expectedValue);
-    
-    // Real-time parameter monitoring
-    void enableParameterMonitoring(bool enabled);
-    bool isParameterMonitoringEnabled() const;
-    void logParameterChange(const std::string& parameterName, double oldValue, double newValue);
-    
-    // Force mesh regeneration
-    void remeshAllGeometries();
+	// Subdivision surface control
+	void setSubdivisionEnabled(bool enabled) override;
+	bool isSubdivisionEnabled() const override;
+	void setSubdivisionLevel(int level) override;
+	int getSubdivisionLevel() const override;
+	void setSubdivisionMethod(int method) override;
+	int getSubdivisionMethod() const override;
+	void setSubdivisionCreaseAngle(double angle) override;
+	double getSubdivisionCreaseAngle() const override;
 
-    // Removed legacy display flag APIs (now handled per-geometry and via EdgeDisplayManager)
+	// Mesh smoothing control
+	void setSmoothingEnabled(bool enabled) override;
+	bool isSmoothingEnabled() const override;
+	void setSmoothingMethod(int method) override;
+	int getSmoothingMethod() const override;
+	void setSmoothingIterations(int iterations) override;
+	int getSmoothingIterations() const override;
+	void setSmoothingStrength(double strength) override;
+	double getSmoothingStrength() const override;
+	void setSmoothingCreaseAngle(double angle) override;
+	double getSmoothingCreaseAngle() const override;
 
-    // View behavior controls
-    void setPreserveViewOnAdd(bool preserve) override { m_preserveViewOnAdd = preserve; }
-    bool isPreserveViewOnAdd() const override { return m_preserveViewOnAdd; }
+	// Advanced tessellation control
+	void setTessellationMethod(int method) override;
+	int getTessellationMethod() const override;
+	void setTessellationQuality(int quality) override;
+	int getTessellationQuality() const override;
+	void setFeaturePreservation(double preservation) override;
+	double getFeaturePreservation() const override;
+	void setParallelProcessing(bool enabled) override;
+	bool isParallelProcessing() const override;
+	void setAdaptiveMeshing(bool enabled) override;
+	bool isAdaptiveMeshing() const override;
 
-    EdgeDisplayFlags globalEdgeFlags;
-    void setShowOriginalEdges(bool show) override;
-    void setShowFeatureEdges(bool show) override;
-    void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) override;
-    void setShowMeshEdges(bool show) override;
-    void setShowHighlightEdges(bool show) override;
-    void setShowNormalLines(bool show) override;
-    void setShowFaceNormalLines(bool show) override;
-    // Outline API
-    void setOutlineEnabled(bool enabled) override { if (m_outlineManager) m_outlineManager->setEnabled(enabled); }
-    bool isOutlineEnabled() const override { return m_outlineManager ? m_outlineManager->isEnabled() : false; }
-    void refreshOutlineAll() override { if (m_outlineManager) m_outlineManager->updateAll(); }
-    ImageOutlineParams getOutlineParams() const { return m_outlineManager ? m_outlineManager->getParams() : ImageOutlineParams{}; }
-    void setOutlineParams(const ImageOutlineParams& p) { if (m_outlineManager) m_outlineManager->setParams(p); }
-    void toggleEdgeType(EdgeType type, bool show) override;
-    bool isEdgeTypeEnabled(EdgeType type) const override;
-    void updateAllEdgeDisplays() override;
-    void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) override;
+	// Callbacks
+	void onSelectionChanged();
+	void onGeometryChanged(std::shared_ptr<OCCGeometry> geometry);
 
-    // Slice (clipping plane) control
-    void setSliceEnabled(bool enabled) override;
-    bool isSliceEnabled() const override;
-    void setSlicePlane(const SbVec3f& normal, float offset) override;
-    void moveSliceAlongNormal(float delta) override;
-    SbVec3f getSliceNormal() const override;
-    float getSliceOffset() const override;
+	// Normals display
+	void setShowNormals(bool showNormals);
+	void setNormalLength(double length);
+	void setNormalColor(const Quantity_Color& correct, const Quantity_Color& incorrect);
+	void updateNormalsDisplay();
 
-    // Assembly explode view
-    void setExplodeEnabled(bool enabled, double factor = 1.0) override;
-    bool isExplodeEnabled() const override { return m_explodeEnabled; }
-    void setExplodeParams(ExplodeMode mode, double factor) override;
-    void getExplodeParams(ExplodeMode& mode, double& factor) const override { mode = m_explodeMode; factor = m_explodeFactor; }
+	// View refresh
+	void requestViewRefresh() override;
 
-    // Feature edges status/progress (delegated to manager)
-    struct FeatureEdgeParams { double angleDeg{15.0}; double minLength{0.005}; bool onlyConvex{false}; bool onlyConcave{false}; };
-    bool isFeatureEdgeGenerationRunning() const { return m_edgeDisplayManager && m_edgeDisplayManager->isFeatureEdgeGenerationRunning(); }
-    int getFeatureEdgeProgress() const { return m_edgeDisplayManager ? m_edgeDisplayManager->getFeatureEdgeProgress() : 0; }
-    bool hasFeatureEdgeCache() const { return m_edgeDisplayManager ? m_edgeDisplayManager->hasFeatureEdgeCache() : false; }
-    FeatureEdgeParams getLastFeatureEdgeParams() const { return m_lastFeatureParams; }
+	// Advanced geometry creation - NEW
+	std::shared_ptr<OCCGeometry> addGeometryWithAdvancedRendering(const TopoDS_Shape& shape, const std::string& name);
+	std::shared_ptr<OCCGeometry> addBezierCurve(const std::vector<gp_Pnt>& controlPoints, const std::string& name);
+	std::shared_ptr<OCCGeometry> addBezierSurface(const std::vector<std::vector<gp_Pnt>>& controlPoints, const std::string& name);
+	std::shared_ptr<OCCGeometry> addBSplineCurve(const std::vector<gp_Pnt>& poles, const std::vector<double>& weights, const std::string& name);
 
-    gp_Pnt getCameraPosition() const override;
-    SoSeparator* getRootSeparator() const { return m_occRoot; }
+	// Upgrade existing geometries - NEW
+	void upgradeGeometryToAdvanced(const std::string& name);
+	void upgradeAllGeometriesToAdvanced();
 
-    // Hover silhouette API (screen-space driven)
-    void updateHoverSilhouetteAt(const wxPoint& screenPos);
+	// Mesh quality validation and debugging
+	void validateMeshParameters();
+	void logCurrentMeshSettings();
+	void compareMeshQuality(const std::string& geometryName);
+	std::string getMeshQualityReport() const;
+	void exportMeshStatistics(const std::string& filename);
+	bool verifyParameterApplication(const std::string& parameterName, double expectedValue);
+
+	// Real-time parameter monitoring
+	void enableParameterMonitoring(bool enabled);
+	bool isParameterMonitoringEnabled() const;
+	void logParameterChange(const std::string& parameterName, double oldValue, double newValue);
+
+	// Force mesh regeneration
+	void remeshAllGeometries();
+
+	// Removed legacy display flag APIs (now handled per-geometry and via EdgeDisplayManager)
+
+	// View behavior controls
+	void setPreserveViewOnAdd(bool preserve) override { m_preserveViewOnAdd = preserve; }
+	bool isPreserveViewOnAdd() const override { return m_preserveViewOnAdd; }
+
+	EdgeDisplayFlags globalEdgeFlags;
+	void setShowOriginalEdges(bool show) override;
+	void setShowFeatureEdges(bool show) override;
+	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) override;
+	void setShowMeshEdges(bool show) override;
+	void setShowHighlightEdges(bool show) override;
+	void setShowNormalLines(bool show) override;
+	void setShowFaceNormalLines(bool show) override;
+	// Outline API
+	void setOutlineEnabled(bool enabled) override { if (m_outlineManager) m_outlineManager->setEnabled(enabled); }
+	bool isOutlineEnabled() const override { return m_outlineManager ? m_outlineManager->isEnabled() : false; }
+	void refreshOutlineAll() override { if (m_outlineManager) m_outlineManager->updateAll(); }
+	ImageOutlineParams getOutlineParams() const { return m_outlineManager ? m_outlineManager->getParams() : ImageOutlineParams{}; }
+	void setOutlineParams(const ImageOutlineParams& p) { if (m_outlineManager) m_outlineManager->setParams(p); }
+	void toggleEdgeType(EdgeType type, bool show) override;
+	bool isEdgeTypeEnabled(EdgeType type) const override;
+	void updateAllEdgeDisplays() override;
+	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) override;
+
+	// Slice (clipping plane) control
+	void setSliceEnabled(bool enabled) override;
+	bool isSliceEnabled() const override;
+	void setSlicePlane(const SbVec3f& normal, float offset) override;
+	void moveSliceAlongNormal(float delta) override;
+	SbVec3f getSliceNormal() const override;
+	float getSliceOffset() const override;
+
+	// Assembly explode view
+	void setExplodeEnabled(bool enabled, double factor = 1.0) override;
+	bool isExplodeEnabled() const override { return m_explodeEnabled; }
+	void setExplodeParams(ExplodeMode mode, double factor) override;
+	void getExplodeParams(ExplodeMode& mode, double& factor) const override { mode = m_explodeMode; factor = m_explodeFactor; }
+
+	// Feature edges status/progress (delegated to manager)
+	struct FeatureEdgeParams { double angleDeg{ 15.0 }; double minLength{ 0.005 }; bool onlyConvex{ false }; bool onlyConcave{ false }; };
+	bool isFeatureEdgeGenerationRunning() const { return m_edgeDisplayManager && m_edgeDisplayManager->isFeatureEdgeGenerationRunning(); }
+	int getFeatureEdgeProgress() const { return m_edgeDisplayManager ? m_edgeDisplayManager->getFeatureEdgeProgress() : 0; }
+	bool hasFeatureEdgeCache() const { return m_edgeDisplayManager ? m_edgeDisplayManager->hasFeatureEdgeCache() : false; }
+	FeatureEdgeParams getLastFeatureEdgeParams() const { return m_lastFeatureParams; }
+
+	gp_Pnt getCameraPosition() const override;
+	SoSeparator* getRootSeparator() const { return m_occRoot; }
+
+	// Hover silhouette API (screen-space driven)
+	void updateHoverSilhouetteAt(const wxPoint& screenPos);
 
 private:
-    void initializeViewer();
-    void onLODTimer();
-    void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
-    static bool approximatelyEqual(double a, double b, double eps = 1e-6) { return std::abs(a - b) <= eps; }
-    void invalidateFeatureEdgeCache();
+	void initializeViewer();
+	void onLODTimer();
+	void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
+	static bool approximatelyEqual(double a, double b, double eps = 1e-6) { return std::abs(a - b) <= eps; }
+	void invalidateFeatureEdgeCache();
 
-    SceneManager* m_sceneManager;
-    SoSeparator* m_occRoot;
-    SoSeparator* m_normalRoot;
+	SceneManager* m_sceneManager;
+	SoSeparator* m_occRoot;
+	SoSeparator* m_normalRoot;
 
-    std::vector<std::shared_ptr<OCCGeometry>> m_geometries;
-    std::vector<std::shared_ptr<OCCGeometry>> m_selectedGeometries;
+	std::vector<std::shared_ptr<OCCGeometry>> m_geometries;
+	std::vector<std::shared_ptr<OCCGeometry>> m_selectedGeometries;
 
-    bool m_wireframeMode;
-    bool m_shadingMode;
-    bool m_showEdges;
-    bool m_antiAliasing;
+	bool m_wireframeMode;
+	bool m_shadingMode;
+	bool m_showEdges;
+	bool m_antiAliasing;
 
-    MeshParameters m_meshParams;
+	MeshParameters m_meshParams;
 
-    // LOD settings (controller-backed)
-    bool m_lodEnabled;
-    std::unique_ptr<LODController> m_lodController;
-    
-    // Subdivision settings
-    bool m_subdivisionEnabled;
-    int m_subdivisionLevel;
-    int m_subdivisionMethod;
-    double m_subdivisionCreaseAngle;
-    
-    // Smoothing settings
-    bool m_smoothingEnabled;
-    int m_smoothingMethod;
-    int m_smoothingIterations;
-    double m_smoothingStrength;
-    double m_smoothingCreaseAngle;
-    
-    // Advanced tessellation settings
-    int m_tessellationMethod;
-    int m_tessellationQuality;
-    double m_featurePreservation;
-    bool m_parallelProcessing;
-    bool m_adaptiveMeshing;
+	// LOD settings (controller-backed)
+	bool m_lodEnabled;
+	std::unique_ptr<LODController> m_lodController;
 
-    // Normal display settings
-    bool m_showNormals;
-    double m_normalLength;
-    Quantity_Color m_correctNormalColor;
-    Quantity_Color m_incorrectNormalColor;
+	// Subdivision settings
+	bool m_subdivisionEnabled;
+	int m_subdivisionLevel;
+	int m_subdivisionMethod;
+	double m_subdivisionCreaseAngle;
 
-    Quantity_Color m_defaultColor;
-    double m_defaultTransparency;
-    
-    // Batch operation state
-    bool m_batchOperationActive;
-    bool m_needsViewRefresh;
-    bool m_preserveViewOnAdd{true};
-    std::unique_ptr<BatchOperationManager> m_batchManager;
+	// Smoothing settings
+	bool m_smoothingEnabled;
+	int m_smoothingMethod;
+	int m_smoothingIterations;
+	double m_smoothingStrength;
+	double m_smoothingCreaseAngle;
 
-    // Performance optimization
-    bool m_meshRegenerationNeeded;
-    MeshParameters m_lastMeshParams;
-    
-    // Deferred ObjectTree updates
-    std::vector<std::shared_ptr<OCCGeometry>> m_pendingObjectTreeUpdates;
+	// Advanced tessellation settings
+	int m_tessellationMethod;
+	int m_tessellationQuality;
+	double m_featurePreservation;
+	bool m_parallelProcessing;
+	bool m_adaptiveMeshing;
 
-    // Parameter monitoring
-    bool m_parameterMonitoringEnabled;
+	// Normal display settings
+	bool m_showNormals;
+	double m_normalLength;
+	Quantity_Color m_correctNormalColor;
+	Quantity_Color m_incorrectNormalColor;
 
-    std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>> m_nodeToGeom;
-    std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos);
-    void setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry);
-    std::unique_ptr<HoverSilhouetteManager> m_hoverManager;
+	Quantity_Color m_defaultColor;
+	double m_defaultTransparency;
 
-    // Explode state (controller-backed)
-    bool m_explodeEnabled{false};
-    double m_explodeFactor{1.0};
-    ExplodeMode m_explodeMode{ExplodeMode::Radial};
-    void applyExplode();
-    void clearExplode();
+	// Batch operation state
+	bool m_batchOperationActive;
+	bool m_needsViewRefresh;
+	bool m_preserveViewOnAdd{ true };
+	std::unique_ptr<BatchOperationManager> m_batchManager;
 
-    // Slice controller (encapsulated)
-    std::unique_ptr<SliceController> m_sliceController;
-    std::unique_ptr<ExplodeController> m_explodeController;
-    std::unique_ptr<PickingService> m_pickingService;
-    std::unique_ptr<SelectionManager> m_selectionManager;
-    std::unique_ptr<ObjectTreeSync> m_objectTreeSync;
-    std::unique_ptr<GeometryRepository> m_geometryRepo;
-    std::unique_ptr<SceneAttachmentService> m_sceneAttach;
-    std::unique_ptr<ViewUpdateService> m_viewUpdater;
-    std::unique_ptr<MeshingService> m_meshingService;
-    std::unique_ptr<MeshParameterController> m_meshController;
-    std::unique_ptr<OutlineDisplayManager> m_outlineManager;
-    std::unique_ptr<class SelectionOutlineManager> m_selectionOutline;
+	// Performance optimization
+	bool m_meshRegenerationNeeded;
+	MeshParameters m_lastMeshParams;
 
-    // Legacy draw helpers removed; edge/normal rendering is handled elsewhere
+	// Deferred ObjectTree updates
+	std::vector<std::shared_ptr<OCCGeometry>> m_pendingObjectTreeUpdates;
 
-    // Feature edge parameters (cache/progress moved to manager)
-    FeatureEdgeParams m_lastFeatureParams; 
+	// Parameter monitoring
+	bool m_parameterMonitoringEnabled;
 
-    // New manager to centralize edge display
-    std::unique_ptr<EdgeDisplayManager> m_edgeDisplayManager;
+	std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>> m_nodeToGeom;
+	std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos);
+	void setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry);
+	std::unique_ptr<HoverSilhouetteManager> m_hoverManager;
+
+	// Explode state (controller-backed)
+	bool m_explodeEnabled{ false };
+	double m_explodeFactor{ 1.0 };
+	ExplodeMode m_explodeMode{ ExplodeMode::Radial };
+	void applyExplode();
+	void clearExplode();
+
+	// Slice controller (encapsulated)
+	std::unique_ptr<SliceController> m_sliceController;
+	std::unique_ptr<ExplodeController> m_explodeController;
+	std::unique_ptr<PickingService> m_pickingService;
+	std::unique_ptr<SelectionManager> m_selectionManager;
+	std::unique_ptr<ObjectTreeSync> m_objectTreeSync;
+	std::unique_ptr<GeometryRepository> m_geometryRepo;
+	std::unique_ptr<SceneAttachmentService> m_sceneAttach;
+	std::unique_ptr<ViewUpdateService> m_viewUpdater;
+	std::unique_ptr<MeshingService> m_meshingService;
+	std::unique_ptr<MeshParameterController> m_meshController;
+	std::unique_ptr<OutlineDisplayManager> m_outlineManager;
+	std::unique_ptr<class SelectionOutlineManager> m_selectionOutline;
+
+	// Legacy draw helpers removed; edge/normal rendering is handled elsewhere
+
+	// Feature edge parameters (cache/progress moved to manager)
+	FeatureEdgeParams m_lastFeatureParams;
+
+	// New manager to centralize edge display
+	std::unique_ptr<EdgeDisplayManager> m_edgeDisplayManager;
 };

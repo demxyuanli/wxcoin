@@ -7,15 +7,15 @@ class OCCViewer;
 
 class TextureModeDecalListener : public CommandListener {
 public:
-    TextureModeDecalListener(wxFrame* frame, OCCViewer* viewer);
-    virtual ~TextureModeDecalListener() = default;
+	TextureModeDecalListener(wxFrame* frame, OCCViewer* viewer);
+	virtual ~TextureModeDecalListener() = default;
 
-    virtual CommandResult executeCommand(const std::string& commandType,
-                                       const std::unordered_map<std::string, std::string>& parameters) override;
-    virtual bool canHandleCommand(const std::string& commandType) const override;
-    virtual std::string getListenerName() const override;
+	virtual CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	virtual bool canHandleCommand(const std::string& commandType) const override;
+	virtual std::string getListenerName() const override;
 
 private:
-    wxFrame* m_frame;
-    OCCViewer* m_viewer;
-}; 
+	wxFrame* m_frame;
+	OCCViewer* m_viewer;
+};

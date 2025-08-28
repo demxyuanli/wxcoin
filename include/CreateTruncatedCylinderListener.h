@@ -5,14 +5,14 @@
 
 class CreateTruncatedCylinderListener : public CommandListener {
 public:
-    explicit CreateTruncatedCylinderListener(MouseHandler* mouseHandler);
-    ~CreateTruncatedCylinderListener() override = default;
+	explicit CreateTruncatedCylinderListener(MouseHandler* mouseHandler);
+	~CreateTruncatedCylinderListener() override = default;
 
-    CommandResult executeCommand(const std::string& commandType,
-                                 const std::unordered_map<std::string, std::string>& parameters) override;
-    bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override { return "CreateTruncatedCylinderListener"; }
+	CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	bool canHandleCommand(const std::string& commandType) const override;
+	std::string getListenerName() const override { return "CreateTruncatedCylinderListener"; }
 
 private:
-    MouseHandler* m_mouseHandler;
-}; 
+	MouseHandler* m_mouseHandler;
+};

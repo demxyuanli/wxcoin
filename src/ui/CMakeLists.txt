@@ -120,6 +120,34 @@ target_sources(UIFrame PRIVATE
 # Add docking library dependency
 target_link_libraries(UIFrame PUBLIC docking)
 
+# SimpleDockingFrame executable
+add_executable(SimpleDockingFrame WIN32
+    ${CMAKE_CURRENT_SOURCE_DIR}/SimpleDockingFrame.cpp
+)
+target_include_directories(SimpleDockingFrame PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+    ${wxWidgets_INCLUDE_DIRS}
+)
+target_link_libraries(SimpleDockingFrame PUBLIC
+    UIPanels
+    UIDialogs
+    docking
+    CADCore
+    CADConfig
+    CADLogger
+    CADFlatUI
+    widgets
+    CADOCC
+    CADRendering
+    CADInput
+    NavCubeLib
+    CADCommands
+    ${wxWidgets_LIBRARIES}
+    Coin::Coin
+    ${OpenCASCADE_LIBRARIES}
+)
+set_target_properties(SimpleDockingFrame PROPERTIES FOLDER "UI")
+
 # Aggregator target to keep existing references working
 add_library(CADUI INTERFACE)
 target_link_libraries(CADUI INTERFACE UIFrame UIPanels UIDialogs)

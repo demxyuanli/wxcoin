@@ -126,19 +126,19 @@ void DockingExampleFrame::CreateDefaultWidgets() {
         "}\n"
     );
     
-    DockWidget* editorWidget = new DockWidget("Editor - main.cpp");
+    DockWidget* editorWidget = new DockWidget("Editor - main.cpp", m_dockManager->containerWidget());
     editorWidget->setWidget(mainEditor);
     editorWidget->setObjectName("MainEditor");
     
     // Create project tree
     wxTreeCtrl* projectTree = CreateProjectTree();
-    DockWidget* projectWidget = new DockWidget("Project Explorer");
+    DockWidget* projectWidget = new DockWidget("Project Explorer", m_dockManager->containerWidget());
     projectWidget->setWidget(projectTree);
     projectWidget->setObjectName("ProjectExplorer");
     
     // Create file list
     wxListCtrl* fileList = CreateFileList();
-    DockWidget* filesWidget = new DockWidget("File Browser");
+    DockWidget* filesWidget = new DockWidget("File Browser", m_dockManager->containerWidget());
     filesWidget->setWidget(fileList);
     filesWidget->setObjectName("FileBrowser");
     
@@ -150,13 +150,13 @@ void DockingExampleFrame::CreateDefaultWidgets() {
     output->SetBackgroundColour(wxColour(40, 40, 40));
     output->SetForegroundColour(wxColour(200, 200, 200));
     
-    DockWidget* outputWidget = new DockWidget("Output");
+    DockWidget* outputWidget = new DockWidget("Output", m_dockManager->containerWidget());
     outputWidget->setWidget(output);
     outputWidget->setObjectName("Output");
     
     // Create tool panel
     wxPanel* toolPanel = CreateToolPanel();
-    DockWidget* toolWidget = new DockWidget("Toolbox");
+    DockWidget* toolWidget = new DockWidget("Toolbox", m_dockManager->containerWidget());
     toolWidget->setWidget(toolPanel);
     toolWidget->setObjectName("Toolbox");
     

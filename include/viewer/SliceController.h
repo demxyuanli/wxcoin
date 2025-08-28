@@ -15,37 +15,35 @@ class SoTransform;
  */
 class SliceController {
 public:
-    SliceController(SceneManager* sceneManager, SoSeparator* root);
+	SliceController(SceneManager* sceneManager, SoSeparator* root);
 
-    void setEnabled(bool enabled);
-    bool isEnabled() const { return m_enabled; }
+	void setEnabled(bool enabled);
+	bool isEnabled() const { return m_enabled; }
 
-    void setPlane(const SbVec3f& normal, float offset);
-    void moveAlongNormal(float delta);
+	void setPlane(const SbVec3f& normal, float offset);
+	void moveAlongNormal(float delta);
 
-    SbVec3f normal() const { return m_normal; }
-    float offset() const { return m_offset; }
+	SbVec3f normal() const { return m_normal; }
+	float offset() const { return m_offset; }
 
-    // If the viewer root changes, allow re-attachment
-    void attachRoot(SoSeparator* root);
-
-private:
-    void ensureNodes();
-    void updateNodes();
-    void removeNodes();
+	// If the viewer root changes, allow re-attachment
+	void attachRoot(SoSeparator* root);
 
 private:
-    SceneManager* m_sceneManager{nullptr};
-    SoSeparator* m_root{nullptr};
+	void ensureNodes();
+	void updateNodes();
+	void removeNodes();
 
-    bool m_enabled{false};
-    SbVec3f m_normal{0,0,1};
-    float m_offset{0.0f};
+private:
+	SceneManager* m_sceneManager{ nullptr };
+	SoSeparator* m_root{ nullptr };
 
-    // Coin3D implementation nodes
-    SoClipPlane* m_clipPlane{nullptr};
-    SoSeparator* m_sliceVisual{nullptr};
-    SoTransform* m_sliceTransform{nullptr};
+	bool m_enabled{ false };
+	SbVec3f m_normal{ 0,0,1 };
+	float m_offset{ 0.0f };
+
+	// Coin3D implementation nodes
+	SoClipPlane* m_clipPlane{ nullptr };
+	SoSeparator* m_sliceVisual{ nullptr };
+	SoTransform* m_sliceTransform{ nullptr };
 };
-
-
