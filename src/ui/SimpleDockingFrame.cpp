@@ -64,9 +64,8 @@ private:
         m_dockManager->setConfigFlag(DockAreaHasCloseButton, true);
         m_dockManager->setConfigFlag(AllTabsHaveCloseButton, true);
         m_dockManager->setConfigFlag(FocusHighlighting, true);
-        m_dockManager->setConfigFlag(DragPreviewIsDynamic, true);
-        m_dockManager->setConfigFlag(DragPreviewShowsContentPixmap, false);
-        m_dockManager->setConfigFlag(DragPreviewHasWindowFrame, true);
+        m_dockManager->setConfigFlag(AlwaysShowTabs, false);
+        m_dockManager->setConfigFlag(EqualSplitOnInsertion, true);
     }
     
     void CreateDockingLayout() {

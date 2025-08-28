@@ -535,6 +535,7 @@ void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
             // Start dragging
             m_draggedTab = tab;
             m_dragStartPos = event.GetPosition();
+            wxLogDebug("Started dragging tab %d at position (%d, %d)", tab, m_dragStartPos.x, m_dragStartPos.y);
             
             // Select tab
             if (tab != m_currentIndex) {
@@ -585,7 +586,7 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
         wxPoint delta = event.GetPosition() - m_dragStartPos;
         
         // Check if we should start floating (require minimum drag distance)
-        if (!m_dragStarted && (abs(delta.x) > 10 || abs(delta.y) > 10)) {
+        if (!m_dragStarted && (abs(delta.x) > 5 || abs(delta.y) > 5)) {
             m_dragStarted = true;
             
             // Get the dock widget being dragged
