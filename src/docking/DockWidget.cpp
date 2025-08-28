@@ -57,12 +57,6 @@ DockWidget::DockWidget(const wxString& title, wxWindow* parent)
 }
 
 DockWidget::~DockWidget() {
-    // Safety: ensure we're not connected to a parent that might be freed
-    if (GetParent()) {
-        wxLogDebug("DockWidget destructor: parent still set, reparenting to nullptr");
-        Reparent(nullptr);
-    }
-    
     delete m_toggleViewAction;
     
     // Only notify manager if we're not being deleted by the manager itself
@@ -78,13 +72,9 @@ bool DockWidget::Destroy() {
         m_dockManager->unregisterDockWidget(this);
     }
     
-    // Clear parent reference to prevent accessing freed memory
+    // Clear references to prevent accessing freed memory
     m_dockManager = nullptr;
     m_dockArea = nullptr;
-    
-    // CRITICAL: Reparent to nullptr to break parent-child relationship
-    // This prevents wxWidgets from trying to access a potentially freed parent
-    Reparent(nullptr);
     
     // Call base class Destroy
     return wxPanel::Destroy();

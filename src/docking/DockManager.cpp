@@ -58,8 +58,7 @@ DockManager::~DockManager() {
     // IMPORTANT: Destroy dock widgets BEFORE destroying the container
     // This ensures widgets are cleaned up while their parent container is still valid
     for (auto* widget : widgetsToDelete) {
-        // Reparent to null first to break parent-child relationship
-        widget->Reparent(nullptr);
+        // Just destroy - the widget will handle cleanup in its destructor
         widget->Destroy();
     }
     

@@ -120,7 +120,7 @@ void FlatFrameDocking::CreateDockingLayout() {
 }
 
 DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
-    DockWidget* dock = new DockWidget("3D View");  // No parent - will be managed by DockManager
+    DockWidget* dock = new DockWidget("3D View", m_dockManager->containerWidget());
     
     // Create canvas (OCCViewer)
     Canvas* canvas = new Canvas(dock);
@@ -136,7 +136,7 @@ DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
 }
 
 DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
-    DockWidget* dock = new DockWidget("Properties");  // No parent - will be managed by DockManager
+    DockWidget* dock = new DockWidget("Properties", m_dockManager->containerWidget());
     
     // Create property panel
     PropertyPanel* propertyPanel = new PropertyPanel(dock);
@@ -153,7 +153,7 @@ DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
 }
 
 DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
-    DockWidget* dock = new DockWidget("Object Tree");  // No parent - will be managed by DockManager
+    DockWidget* dock = new DockWidget("Object Tree", m_dockManager->containerWidget());
     
     // Create object tree panel
     ObjectTreePanel* objectTreePanel = new ObjectTreePanel(dock);
@@ -170,7 +170,7 @@ DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
 }
 
 DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
-    DockWidget* dock = new DockWidget("Output");  // No parent - will be managed by DockManager
+    DockWidget* dock = new DockWidget("Output", m_dockManager->containerWidget());
     
     // Create output text control
     wxTextCtrl* output = new wxTextCtrl(dock, wxID_ANY, wxEmptyString,
@@ -198,7 +198,7 @@ DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
 }
 
 DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
-    DockWidget* dock = new DockWidget("Toolbox");  // No parent - will be managed by DockManager
+    DockWidget* dock = new DockWidget("Toolbox", m_dockManager->containerWidget());
     
     // Create toolbox panel
     wxPanel* toolbox = new wxPanel(dock);
