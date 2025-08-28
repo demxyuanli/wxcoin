@@ -92,6 +92,17 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
 }
 
 DockArea::~DockArea() {
+    wxLogDebug("DockArea::~DockArea() - destroying area %p with %d widgets", this, (int)m_dockWidgets.size());
+    
+    // Clear all dock widgets to prevent them from being destroyed
+    for (auto* widget : m_dockWidgets) {
+        if (widget) {
+            widget->setDockArea(nullptr);
+            // Don't destroy the widgets, they should be managed elsewhere
+        }
+    }
+    m_dockWidgets.clear();
+    
     // Unregister from manager
     if (m_dockManager) {
         m_dockManager->unregisterDockArea(this);
@@ -675,8 +686,15 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                             m_dockArea->removeDockWidget(draggedWidget);
                         }
                         
+                        // Verify widget is still valid
+                        if (!draggedWidget->GetParent()) {
+                            wxLogDebug("ERROR: Widget has no parent after removal!");
+                            return;
+                        }
+                        
                         // Add to container at specified position
                         wxLogDebug("Adding widget to container at position %d", dropArea);
+                        wxLogDebug("Widget ptr: %p, title: %s", draggedWidget, draggedWidget->title().c_str());
                         manager->addDockWidget(dropArea, draggedWidget);
                         docked = true;
                     }

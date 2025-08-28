@@ -57,6 +57,8 @@ DockWidget::DockWidget(const wxString& title, wxWindow* parent)
 }
 
 DockWidget::~DockWidget() {
+    wxLogDebug("DockWidget::~DockWidget() - destroying widget %p, title: %s", this, m_title.c_str());
+    
     // Clear any references that might cause issues
     m_dockArea = nullptr;
     
