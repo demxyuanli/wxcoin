@@ -66,15 +66,15 @@ private:
     }
     
     void CreateDockingLayout() {
-        // 创建示例性的dock panels
+        // Create example dock panels
         
-        // 1. 主视图 - 不可关闭的中心面板
-        DockWidget* mainDock = new DockWidget("主视图", m_dockManager->containerWidget());
+        // 1. Main View - non-closable center panel
+        DockWidget* mainDock = new DockWidget("Main View", m_dockManager->containerWidget());
         wxPanel* mainPanel = new wxPanel(mainDock);
         mainPanel->SetBackgroundColour(wxColour(240, 240, 240));
         
         wxStaticText* mainText = new wxStaticText(mainPanel, wxID_ANY, 
-            "这是主视图面板\n不可关闭，始终显示在中心区域",
+            "This is the main view panel\nNon-closable, always displayed in center area",
             wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
         
         wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
@@ -82,44 +82,44 @@ private:
         mainPanel->SetSizer(mainSizer);
         
         mainDock->setWidget(mainPanel);
-        mainDock->setFeature(DockWidgetClosable, false);  // 不可关闭
+        mainDock->setFeature(DockWidgetClosable, false);  // Non-closable
         mainDock->setIcon(wxArtProvider::GetIcon(wxART_NORMAL_FILE, wxART_MENU));
         m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
         
-        // 2. 工具面板 - 左侧
-        DockWidget* toolDock = new DockWidget("工具箱", m_dockManager->containerWidget());
+        // 2. Tool Panel - left side
+        DockWidget* toolDock = new DockWidget("Toolbox", m_dockManager->containerWidget());
         wxListBox* toolList = new wxListBox(toolDock, wxID_ANY);
-        toolList->Append("选择工具");
-        toolList->Append("移动工具");
-        toolList->Append("缩放工具");
-        toolList->Append("旋转工具");
-        toolList->Append("画笔工具");
+        toolList->Append("Select Tool");
+        toolList->Append("Move Tool");
+        toolList->Append("Scale Tool");
+        toolList->Append("Rotate Tool");
+        toolList->Append("Brush Tool");
         toolList->SetSelection(0);
         
         toolDock->setWidget(toolList);
         toolDock->setIcon(wxArtProvider::GetIcon(wxART_EXECUTABLE_FILE, wxART_MENU));
         m_dockManager->addDockWidget(LeftDockWidgetArea, toolDock);
         
-        // 3. 属性面板 - 右侧
-        DockWidget* propDock = new DockWidget("属性", m_dockManager->containerWidget());
+        // 3. Properties Panel - right side
+        DockWidget* propDock = new DockWidget("Properties", m_dockManager->containerWidget());
         wxPropertyGrid* propGrid = new wxPropertyGrid(propDock);
-        propGrid->Append(new wxStringProperty("名称", wxPG_LABEL, "对象1"));
-        propGrid->Append(new wxIntProperty("宽度", wxPG_LABEL, 100));
-        propGrid->Append(new wxIntProperty("高度", wxPG_LABEL, 100));
-        propGrid->Append(new wxColourProperty("颜色", wxPG_LABEL, *wxBLUE));
+        propGrid->Append(new wxStringProperty("Name", wxPG_LABEL, "Object1"));
+        propGrid->Append(new wxIntProperty("Width", wxPG_LABEL, 100));
+        propGrid->Append(new wxIntProperty("Height", wxPG_LABEL, 100));
+        propGrid->Append(new wxColourProperty("Color", wxPG_LABEL, *wxBLUE));
         
         propDock->setWidget(propGrid);
         propDock->setIcon(wxArtProvider::GetIcon(wxART_REPORT_VIEW, wxART_MENU));
         m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
         
-        // 4. 输出面板 - 底部
-        DockWidget* outputDock = new DockWidget("输出", m_dockManager->containerWidget());
+        // 4. Output Panel - bottom
+        DockWidget* outputDock = new DockWidget("Output", m_dockManager->containerWidget());
         wxTextCtrl* output = new wxTextCtrl(outputDock, wxID_ANY,
-                                           "欢迎使用简单停靠示例\n"
-                                           "这是一个展示基本停靠功能的示例程序\n"
-                                           "- 拖动标签页可以移动面板\n"
-                                           "- 拖动到边缘可以停靠\n"
-                                           "- 拖动到中央可以创建标签组\n",
+                                           "Welcome to Simple Docking Example\n"
+                                           "This is an example program showing basic docking features\n"
+                                           "- Drag tabs to move panels\n"
+                                           "- Drag to edges to dock\n"
+                                           "- Drag to center to create tab groups\n",
                                            wxDefaultPosition, wxDefaultSize,
                                            wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH);
         output->SetDefaultStyle(wxTextAttr(*wxBLACK, *wxWHITE));
