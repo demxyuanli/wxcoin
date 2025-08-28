@@ -64,7 +64,7 @@ private:
         m_dockManager->setConfigFlag(DockAreaHasCloseButton, true);
         m_dockManager->setConfigFlag(AllTabsHaveCloseButton, true);
         m_dockManager->setConfigFlag(FocusHighlighting, true);
-        m_dockManager->setConfigFlag(AlwaysShowTabs, false);
+        m_dockManager->setConfigFlag(AlwaysShowTabs, true);
         m_dockManager->setConfigFlag(EqualSplitOnInsertion, true);
     }
     

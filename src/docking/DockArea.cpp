@@ -304,9 +304,21 @@ void DockArea::updateTitleBarVisibility() {
     }
     
     m_titleBar->Show(visible);
-    m_tabBar->Show(m_dockWidgets.size() > 1);
+    
+    // Always show tab bar if there are widgets
+    bool showTabBar = m_dockWidgets.size() > 0;
+    if (m_dockManager && !m_dockManager->testConfigFlag(AlwaysShowTabs) && m_dockWidgets.size() == 1) {
+        showTabBar = false;
+    }
+    m_tabBar->Show(showTabBar);
+    
+    // Make sure tab rects are updated
+    if (showTabBar) {
+        m_tabBar->updateTabRects();
+    }
     
     Layout();
+    Refresh();
 }
 
 bool DockArea::isAutoHide() const {
@@ -325,14 +337,27 @@ void DockArea::saveState(wxString& xmlData) const {
 }
 
 void DockArea::closeArea() {
+    // Prevent recursive calls
+    static bool isClosing = false;
+    if (isClosing) {
+        return;
+    }
+    isClosing = true;
+    
     // Notify closing
     wxCommandEvent closingEvent(EVT_DOCK_AREA_CLOSING);
     closingEvent.SetEventObject(this);
     ProcessWindowEvent(closingEvent);
     
+    // Copy widget list to avoid modification during iteration
+    std::vector<DockWidget*> widgetsToClose = m_dockWidgets;
+    
+    // Clear the widget list first to prevent recursive closeArea calls
+    m_dockWidgets.clear();
+    
     // Close all widgets
-    while (!m_dockWidgets.empty()) {
-        DockWidget* widget = m_dockWidgets.back();
+    for (auto* widget : widgetsToClose) {
+        widget->setDockArea(nullptr);  // Clear reference first
         widget->closeDockWidget();
     }
     
@@ -347,6 +372,7 @@ void DockArea::closeArea() {
     ProcessWindowEvent(closedEvent);
     
     // Destroy
+    isClosing = false;
     Destroy();
 }
 
