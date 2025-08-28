@@ -72,6 +72,27 @@ DockArea* DockContainerWidget::addDockWidget(DockWidgetArea area, DockWidget* do
         return targetDockArea;
     }
     
+    // If we already have many areas, add as tab to avoid complex layouts
+    if (m_dockAreas.size() >= 4) {
+        wxLogDebug("  -> Too many areas (%d), adding as tab", (int)m_dockAreas.size());
+        // Find the best area to add to
+        DockArea* bestArea = nullptr;
+        
+        // Try to find an area in the same general position
+        for (auto* existingArea : m_dockAreas) {
+            if (existingArea && existingArea->GetParent()) {
+                // For now, just use the first valid area
+                bestArea = existingArea;
+                break;
+            }
+        }
+        
+        if (bestArea) {
+            bestArea->addDockWidget(dockWidget);
+            return bestArea;
+        }
+    }
+    
     // Create new dock area
     wxLogDebug("  -> Creating new dock area");
     DockArea* newDockArea = new DockArea(m_dockManager, this);
@@ -165,12 +186,24 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
             // Reparent the dock area to the splitter before splitting
             dockArea->Reparent(splitter);
             // Split based on area
+            // Ensure minimum sizes
+            splitter->GetWindow1()->SetMinSize(wxSize(100, 100));
+            dockArea->SetMinSize(wxSize(100, 100));
+            
             if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
                 wxLogDebug("    -> Splitting vertically");
-                splitter->SplitVertically(splitter->GetWindow1(), dockArea);
+                if (area == LeftDockWidgetArea) {
+                    splitter->SplitVertically(dockArea, splitter->GetWindow1());
+                } else {
+                    splitter->SplitVertically(splitter->GetWindow1(), dockArea);
+                }
             } else {
                 wxLogDebug("    -> Splitting horizontally");
-                splitter->SplitHorizontally(splitter->GetWindow1(), dockArea);
+                if (area == TopDockWidgetArea) {
+                    splitter->SplitHorizontally(dockArea, splitter->GetWindow1());
+                } else {
+                    splitter->SplitHorizontally(splitter->GetWindow1(), dockArea);
+                }
             }
         } else {
             wxLogDebug("  -> Both splitter windows occupied, need complex layout");
@@ -325,10 +358,22 @@ void DockContainerWidget::addDockAreaToSplitter(DockSplitter* splitter, DockArea
     } else if (splitter->GetWindow2() == nullptr) {
         wxLogDebug("  -> Window2 is null, splitting");
         dockArea->Reparent(splitter);
+        // Ensure minimum sizes
+        splitter->GetWindow1()->SetMinSize(wxSize(100, 100));
+        dockArea->SetMinSize(wxSize(100, 100));
+        
         if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
-            splitter->SplitVertically(splitter->GetWindow1(), dockArea);
+            if (area == LeftDockWidgetArea) {
+                splitter->SplitVertically(dockArea, splitter->GetWindow1());
+            } else {
+                splitter->SplitVertically(splitter->GetWindow1(), dockArea);
+            }
         } else {
-            splitter->SplitHorizontally(splitter->GetWindow1(), dockArea);
+            if (area == TopDockWidgetArea) {
+                splitter->SplitHorizontally(dockArea, splitter->GetWindow1());
+            } else {
+                splitter->SplitHorizontally(splitter->GetWindow1(), dockArea);
+            }
         }
     } else {
         wxLogDebug("  -> Both windows occupied, creating sub-splitter");
@@ -347,6 +392,10 @@ void DockContainerWidget::addDockAreaToSplitter(DockSplitter* splitter, DockArea
             splitter->ReplaceWindow(targetWindow, newSplitter);
             dockArea->Reparent(newSplitter);
             
+            // Ensure minimum size for both windows
+            dockArea->SetMinSize(wxSize(100, 100));
+            targetWindow->SetMinSize(wxSize(100, 100));
+            
             if (area == LeftDockWidgetArea) {
                 newSplitter->SplitVertically(dockArea, targetWindow);
             } else if (area == RightDockWidgetArea) {
@@ -356,6 +405,10 @@ void DockContainerWidget::addDockAreaToSplitter(DockSplitter* splitter, DockArea
             } else {
                 newSplitter->SplitHorizontally(targetWindow, dockArea);
             }
+            
+            // Set splitter properties
+            newSplitter->SetSashGravity(0.5);
+            newSplitter->SetMinimumPaneSize(50);
         }
     }
 }
