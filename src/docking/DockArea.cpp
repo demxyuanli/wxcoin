@@ -141,6 +141,11 @@ void DockArea::removeDockWidget(DockWidget* dockWidget) {
     dockWidget->Hide();
     m_contentSizer->Detach(dockWidget);
     
+    // Reparent to dock manager's container to keep it alive
+    if (m_dockManager && m_dockManager->containerWidget()) {
+        dockWidget->Reparent(m_dockManager->containerWidget());
+    }
+    
     // Update UI
     updateTitleBarVisibility();
     updateTabBar();
