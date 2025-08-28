@@ -134,6 +134,9 @@ public:
     void deleteDockWidget();
     void setAsCurrentTab();
     bool isCurrentTab() const;
+    
+    // Override Destroy for safe cleanup
+    virtual bool Destroy() override;
     void raise();
     
     // Auto hide

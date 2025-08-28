@@ -50,9 +50,14 @@ DockManager::DockManager(wxWindow* parent)
 }
 
 DockManager::~DockManager() {
-    // Clean up all dock widgets
-    while (!m_dockWidgets.empty()) {
-        delete m_dockWidgets.back();
+    // First, clear the dock widgets list to prevent callbacks during destruction
+    std::vector<DockWidget*> widgetsToDelete = m_dockWidgets;
+    m_dockWidgets.clear();
+    m_dockWidgetsMap.clear();
+    
+    // Now destroy the widgets using Destroy() for safe cleanup
+    for (auto* widget : widgetsToDelete) {
+        widget->Destroy();
     }
     
     // Clean up floating widgets

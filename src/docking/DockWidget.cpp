@@ -59,10 +59,25 @@ DockWidget::DockWidget(const wxString& title, wxWindow* parent)
 DockWidget::~DockWidget() {
     delete m_toggleViewAction;
     
-    // Notify manager
+    // Only notify manager if we're not being deleted by the manager itself
+    // The manager clears its lists before deleting widgets to prevent this callback
+    if (m_dockManager && !m_dockManager->dockWidgets().empty()) {
+        m_dockManager->unregisterDockWidget(this);
+    }
+}
+
+bool DockWidget::Destroy() {
+    // Remove from dock manager before destruction to prevent dangling references
     if (m_dockManager) {
         m_dockManager->unregisterDockWidget(this);
     }
+    
+    // Clear parent reference to prevent accessing freed memory
+    m_dockManager = nullptr;
+    m_dockArea = nullptr;
+    
+    // Call base class Destroy
+    return wxPanel::Destroy();
 }
 
 void DockWidget::setWidget(wxWindow* widget, InsertMode insertMode) {
@@ -373,7 +388,10 @@ void DockWidget::deleteDockWidget() {
         m_dockManager->removeDockWidget(this);
     }
     
-    delete this;
+    // Schedule for deletion to avoid immediate destruction
+    CallAfter([this]() {
+        delete this;
+    });
 }
 
 void DockWidget::setAsCurrentTab() {
