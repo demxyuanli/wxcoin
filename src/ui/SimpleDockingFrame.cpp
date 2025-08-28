@@ -67,7 +67,7 @@ private:
     
     void CreateDockingLayout() {
         // Main canvas
-        DockWidget* canvasDock = new DockWidget("3D View");
+        DockWidget* canvasDock = new DockWidget("3D View", m_dockManager->containerWidget());
         Canvas* canvas = new Canvas(canvasDock);
         canvasDock->setWidget(canvas);
         canvasDock->setFeature(DockWidgetClosable, false);
@@ -77,7 +77,7 @@ private:
         m_dockManager->addDockWidget(CenterDockWidgetArea, canvasDock);
         
         // Properties panel
-        DockWidget* propDock = new DockWidget("Properties");
+        DockWidget* propDock = new DockWidget("Properties", m_dockManager->containerWidget());
         PropertyPanel* props = new PropertyPanel(propDock);
         propDock->setWidget(props);
         propDock->setFeature(DockWidgetClosable, true);
@@ -87,7 +87,7 @@ private:
         m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
         
         // Object tree
-        DockWidget* treeDock = new DockWidget("Object Tree");
+        DockWidget* treeDock = new DockWidget("Object Tree", m_dockManager->containerWidget());
         ObjectTreePanel* tree = new ObjectTreePanel(treeDock);
         treeDock->setWidget(tree);
         treeDock->setFeature(DockWidgetClosable, true);
@@ -97,7 +97,7 @@ private:
         m_dockManager->addDockWidget(LeftDockWidgetArea, treeDock);
         
         // Output window
-        DockWidget* outputDock = new DockWidget("Output");
+        DockWidget* outputDock = new DockWidget("Output", m_dockManager->containerWidget());
         wxTextCtrl* output = new wxTextCtrl(outputDock, wxID_ANY,
                                            "Application started\nDocking initialized\n",
                                            wxDefaultPosition, wxDefaultSize,

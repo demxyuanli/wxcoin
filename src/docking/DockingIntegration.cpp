@@ -24,20 +24,20 @@ DockManager* DockingIntegration::CreateStandardCADLayout(
     dockManager->setConfigFlag(AlwaysShowTabs, false);
     
     // Create dock widgets
-    DockWidget* canvasWidget = new DockWidget("3D View");
+    DockWidget* canvasWidget = new DockWidget("3D View", dockManager->containerWidget());
     canvasWidget->setWidget(canvas);
     canvasWidget->setFeature(DockWidgetClosable, false); // Main view can't be closed
     canvasWidget->setObjectName("3DView");
     
-    DockWidget* treeWidget = new DockWidget("Object Tree");
+    DockWidget* treeWidget = new DockWidget("Object Tree", dockManager->containerWidget());
     treeWidget->setWidget(objectTree);
     treeWidget->setObjectName("ObjectTree");
     
-    DockWidget* propWidget = new DockWidget("Properties");
+    DockWidget* propWidget = new DockWidget("Properties", dockManager->containerWidget());
     propWidget->setWidget(properties);
     propWidget->setObjectName("Properties");
     
-    DockWidget* messageWidget = new DockWidget("Messages");
+    DockWidget* messageWidget = new DockWidget("Messages", dockManager->containerWidget());
     messageWidget->setWidget(messageOutput);
     messageWidget->setObjectName("Messages");
     
@@ -53,7 +53,7 @@ DockManager* DockingIntegration::CreateStandardCADLayout(
     
     // Add performance panel if provided
     if (performancePanel) {
-        DockWidget* perfWidget = new DockWidget("Performance");
+        DockWidget* perfWidget = new DockWidget("Performance", dockManager->containerWidget());
         perfWidget->setWidget(performancePanel);
         perfWidget->setObjectName("Performance");
         dockManager->addDockWidgetTabToArea(perfWidget, bottomArea);
@@ -87,7 +87,7 @@ void DockingIntegration::CreateExampleDockWidgets(DockManager* dockManager)
     
     toolPanel->SetSizer(toolSizer);
     
-    DockWidget* toolWidget = new DockWidget("Tools");
+    DockWidget* toolWidget = new DockWidget("Tools", dockManager->containerWidget());
     toolWidget->setWidget(toolPanel);
     toolWidget->setObjectName("ToolPalette");
     dockManager->addDockWidget(LeftDockWidgetArea, toolWidget);
@@ -108,7 +108,7 @@ void DockingIntegration::CreateExampleDockWidgets(DockManager* dockManager)
     item = layersList->InsertItem(2, "Construction");
     layersList->SetItem(item, 1, "No");
     
-    DockWidget* layersWidget = new DockWidget("Layers");
+    DockWidget* layersWidget = new DockWidget("Layers", dockManager->containerWidget());
     layersWidget->setWidget(layersList);
     layersWidget->setObjectName("Layers");
     dockManager->addDockWidget(RightDockWidgetArea, layersWidget);
@@ -120,7 +120,7 @@ void DockingIntegration::CreateExampleDockWidgets(DockManager* dockManager)
     console->SetBackgroundColour(wxColour(30, 30, 30));
     console->SetForegroundColour(wxColour(200, 200, 200));
     
-    DockWidget* consoleWidget = new DockWidget("Console");
+    DockWidget* consoleWidget = new DockWidget("Console", dockManager->containerWidget());
     consoleWidget->setWidget(console);
     consoleWidget->setObjectName("Console");
     dockManager->addDockWidget(BottomDockWidgetArea, consoleWidget);
@@ -130,7 +130,7 @@ void DockingIntegration::CreateExampleDockWidgets(DockManager* dockManager)
     wxTextCtrl* calcDisplay = new wxTextCtrl(calcPanel, wxID_ANY, "0",
         wxDefaultPosition, wxDefaultSize, wxTE_RIGHT | wxTE_READONLY);
     
-    DockWidget* calcWidget = new DockWidget("Calculator");
+    DockWidget* calcWidget = new DockWidget("Calculator", dockManager->containerWidget());
     calcWidget->setWidget(calcPanel);
     calcWidget->setObjectName("Calculator");
     
