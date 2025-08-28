@@ -451,6 +451,7 @@ DockAreaTabBar::DockAreaTabBar(DockArea* dockArea)
     , m_hoveredTab(-1)
     , m_draggedTab(-1)
     , m_dragStarted(false)
+    , m_dragPreview(nullptr)
     , m_hasOverflow(false)
     , m_firstVisibleTab(0)
 {
@@ -591,38 +592,36 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
     
     // Handle drop if we were dragging
     if (m_dragStarted && m_draggedTab >= 0) {
+        // Clean up drag preview
+        if (m_dragPreview) {
+            m_dragPreview->finishDrag();
+            m_dragPreview->Destroy();
+            m_dragPreview = nullptr;
+        }
+        
         // Get the widget being dragged
         DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
+        if (draggedWidget) {
+            // Check if the widget was floated
+            FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
+            if (floatingContainer && !floatingContainer->IsShown()) {
+                // Show the floating container at the current position
+                wxPoint screenPos = ClientToScreen(event.GetPosition());
+                floatingContainer->SetPosition(screenPos - wxPoint(50, 10));
+                floatingContainer->Show();
+                floatingContainer->Raise();
+            }
+        }
         
-        if (draggedWidget && m_dockArea->dockManager()) {
-            // Hide overlays
-            DockOverlay* overlay = m_dockArea->dockManager()->dockAreaOverlay();
-            if (overlay) {
-                // Get drop area from overlay
-                DockWidgetArea dropArea = overlay->dropAreaUnderCursor();
-                
-                if (dropArea != InvalidDockWidgetArea) {
-                    // Get target window
-                    wxPoint screenPos = ClientToScreen(event.GetPosition());
-                    wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
-                    DockArea* targetArea = dynamic_cast<DockArea*>(windowUnderMouse);
-                    
-                    if (targetArea) {
-                        // Perform the drop
-                        if (dropArea == CenterDockWidgetArea) {
-                            // Add to existing tab group
-                            targetArea->addDockWidget(draggedWidget);
-                        } else {
-                            // Dock to side - need to get container and split
-                            DockContainerWidget* container = targetArea->containerWidget();
-                            if (container) {
-                                container->dropDockWidget(draggedWidget, dropArea, targetArea);
-                            }
-                        }
-                    }
-                }
-                
-                overlay->hideOverlay();
+        // Hide any overlays that might be showing
+        if (m_dockArea->dockManager()) {
+            DockOverlay* areaOverlay = m_dockArea->dockManager()->dockAreaOverlay();
+            if (areaOverlay) {
+                areaOverlay->hideOverlay();
+            }
+            DockOverlay* containerOverlay = m_dockArea->dockManager()->containerOverlay();
+            if (containerOverlay) {
+                containerOverlay->hideOverlay();
             }
         }
     }
@@ -665,28 +664,44 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
             // Get the dock widget being dragged
             DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
             if (draggedWidget && draggedWidget->hasFeature(DockWidgetMovable)) {
-                // Start floating for drag preview
-                if (m_dockArea->m_dockWidgets.size() > 1) {
-                    // Only float if not the last widget in area
-                    draggedWidget->setFloating();
+                // Create drag preview first
+                DockManager* dockManager = m_dockArea->dockManager();
+                if (dockManager) {
+                    // Create a floating drag preview
+                    FloatingDragPreview* preview = new FloatingDragPreview(draggedWidget, dockManager->containerWidget());
+                    wxPoint screenPos = ClientToScreen(event.GetPosition());
+                    preview->startDrag(screenPos);
                     
-                    // Get the floating container
-                    FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
-                    if (floatingContainer) {
-                        // Position at mouse
-                        wxPoint screenPos = ClientToScreen(event.GetPosition());
-                        floatingContainer->SetPosition(screenPos - wxPoint(50, 10));
+                    // Store preview reference
+                    m_dragPreview = preview;
+                    
+                    // Also float the widget if not the last one
+                    if (m_dockArea->m_dockWidgets.size() > 1) {
+                        draggedWidget->setFloating();
                         
-                        // Start dragging the floating window
-                        floatingContainer->startDragging(wxPoint(50, 10));
+                        // Get the floating container
+                        FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
+                        if (floatingContainer) {
+                            // Hide the actual floating container initially
+                            floatingContainer->Hide();
+                            
+                            // Store reference for later
+                            // We'll show it when dropping
+                        }
                     }
                 }
             }
         }
         
         if (m_dragStarted) {
-            // Check for drop targets under mouse
             wxPoint screenPos = ClientToScreen(event.GetPosition());
+            
+            // Update drag preview position
+            if (m_dragPreview) {
+                m_dragPreview->moveFloating(screenPos);
+            }
+            
+            // Check for drop targets under mouse
             wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
             
             // Show overlay on potential drop targets
@@ -1094,6 +1109,28 @@ void DockAreaTabBar::showTabContextMenu(int tab, const wxPoint& pos) {
         );
         wxMessageBox(msg, "Docking Action", wxOK | wxICON_INFORMATION);
     }
+}
+
+wxRect DockAreaTabBar::getTabCloseRect(int index) const {
+    if (index < 0 || index >= static_cast<int>(m_tabs.size())) {
+        return wxRect();
+    }
+    
+    const TabInfo& tab = m_tabs[index];
+    return tab.closeButtonRect;
+}
+
+bool DockAreaTabBar::isOverCloseButton(int tabIndex, const wxPoint& pos) const {
+    if (tabIndex < 0 || tabIndex >= static_cast<int>(m_tabs.size())) {
+        return false;
+    }
+    
+    const TabInfo& tab = m_tabs[tabIndex];
+    if (!tab.widget->hasFeature(DockWidgetClosable)) {
+        return false;
+    }
+    
+    return tab.closeButtonRect.Contains(pos);
 }
 
 } // namespace ads

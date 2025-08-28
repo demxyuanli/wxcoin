@@ -298,12 +298,92 @@ void FloatingDockContainer::onMouseLeftDown(wxMouseEvent& event) {
 }
 
 void FloatingDockContainer::onMouseLeftUp(wxMouseEvent& event) {
+    bool wasDragging = d->isDragging;
+    
     if (d->isDragging) {
         d->isDragging = false;
         if (HasCapture()) {
             ReleaseMouse();
         }
+        
+        // Check if we should dock on mouse release
+        if (m_dockManager) {
+            wxPoint mousePos = wxGetMousePosition();
+            DockWidgetArea dropArea = InvalidDockWidgetArea;
+            wxWindow* dropTarget = nullptr;
+            
+            // Check dock area overlay first
+            DockOverlay* areaOverlay = m_dockManager->dockAreaOverlay();
+            if (areaOverlay && areaOverlay->IsShown()) {
+                dropArea = areaOverlay->dropAreaUnderCursor();
+                dropTarget = areaOverlay->targetWidget();
+            }
+            
+            // If no area overlay, check container overlay
+            if (dropArea == InvalidDockWidgetArea) {
+                DockOverlay* containerOverlay = m_dockManager->containerOverlay();
+                if (containerOverlay && containerOverlay->IsShown()) {
+                    dropArea = containerOverlay->dropAreaUnderCursor();
+                    dropTarget = containerOverlay->targetWidget();
+                }
+            }
+            
+            // Perform the drop
+            if (dropArea != InvalidDockWidgetArea && dropTarget) {
+                // Get all dock widgets from this floating container
+                std::vector<DockWidget*> widgets = dockWidgets();
+                
+                if (!widgets.empty()) {
+                    DockArea* targetArea = dynamic_cast<DockArea*>(dropTarget);
+                    DockContainerWidget* targetContainer = dynamic_cast<DockContainerWidget*>(dropTarget);
+                    
+                    if (targetArea && dropArea == CenterDockWidgetArea) {
+                        // Add to existing dock area as tabs
+                        for (auto* widget : widgets) {
+                            targetArea->addDockWidget(widget);
+                        }
+                        
+                        // Close this floating container
+                        Close();
+                    } else if (targetArea || targetContainer) {
+                        // Create new dock area at the specified location
+                        if (widgets.size() == 1) {
+                            // Single widget - add directly
+                            if (targetContainer) {
+                                m_dockManager->addDockWidget(dropArea, widgets[0]);
+                            } else if (targetArea) {
+                                targetArea->containerWidget()->addDockWidget(dropArea, widgets[0], targetArea);
+                            }
+                        } else {
+                            // Multiple widgets - create new area with all widgets
+                            DockArea* newArea = new DockArea(m_dockManager, m_dockManager->containerWidget());
+                            for (auto* widget : widgets) {
+                                newArea->addDockWidget(widget);
+                            }
+                            
+                            if (targetContainer) {
+                                targetContainer->addDockArea(newArea, dropArea);
+                            } else if (targetArea) {
+                                targetArea->containerWidget()->addDockAreaToContainer(dropArea, newArea);
+                            }
+                        }
+                        
+                        // Close this floating container
+                        Close();
+                    }
+                }
+            }
+            
+            // Hide overlays
+            if (areaOverlay) {
+                areaOverlay->hideOverlay();
+            }
+            if (m_dockManager->containerOverlay()) {
+                m_dockManager->containerOverlay()->hideOverlay();
+            }
+        }
     }
+    
     event.Skip();
 }
 
@@ -311,6 +391,52 @@ void FloatingDockContainer::onMouseMove(wxMouseEvent& event) {
     if (d->isDragging && event.Dragging()) {
         wxPoint mousePos = wxGetMousePosition();
         SetPosition(mousePos - d->dragOffset);
+        
+        // Check for drop targets while dragging
+        if (m_dockManager) {
+            wxWindow* windowUnderMouse = wxFindWindowAtPoint(mousePos);
+            
+            // Skip if the window under mouse is this floating container or its children
+            if (windowUnderMouse && wxGetTopLevelParent(windowUnderMouse) == this) {
+                windowUnderMouse = nullptr;
+            }
+            
+            // Check if we're over a dock area
+            DockArea* targetArea = nullptr;
+            wxWindow* checkWindow = windowUnderMouse;
+            while (checkWindow && !targetArea) {
+                targetArea = dynamic_cast<DockArea*>(checkWindow);
+                checkWindow = checkWindow->GetParent();
+            }
+            
+            // Show overlay on dock area
+            if (targetArea && targetArea->dockManager() == m_dockManager) {
+                DockOverlay* overlay = m_dockManager->dockAreaOverlay();
+                if (overlay) {
+                    overlay->showOverlay(targetArea);
+                }
+            } else {
+                // Check for container drop
+                DockContainerWidget* container = m_dockManager->containerWidget();
+                if (container) {
+                    wxRect containerRect = container->GetScreenRect();
+                    if (containerRect.Contains(mousePos)) {
+                        DockOverlay* overlay = m_dockManager->containerOverlay();
+                        if (overlay) {
+                            overlay->showOverlay(container);
+                        }
+                    } else {
+                        // Hide overlays if not over any target
+                        if (m_dockManager->containerOverlay()) {
+                            m_dockManager->containerOverlay()->hideOverlay();
+                        }
+                        if (m_dockManager->dockAreaOverlay()) {
+                            m_dockManager->dockAreaOverlay()->hideOverlay();
+                        }
+                    }
+                }
+            }
+        }
     }
     event.Skip();
 }

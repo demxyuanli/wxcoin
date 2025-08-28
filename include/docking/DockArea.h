@@ -181,6 +181,7 @@ private:
     int m_draggedTab;
     wxPoint m_dragStartPos;
     bool m_dragStarted;
+    class FloatingDragPreview* m_dragPreview;
     bool m_hasOverflow;
     int m_firstVisibleTab;
     wxRect m_overflowButtonRect;
@@ -189,6 +190,8 @@ private:
     void updateTabRects();
     void drawTab(wxDC& dc, int index);
     void checkTabOverflow();
+    wxRect getTabCloseRect(int index) const;
+    bool isOverCloseButton(int tabIndex, const wxPoint& pos) const;
     
     wxDECLARE_EVENT_TABLE();
     
