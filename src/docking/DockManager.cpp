@@ -516,4 +516,12 @@ PerspectiveManager* DockManager::perspectiveManager() const {
     return d->perspectiveManager;
 }
 
+DockOverlay* DockManager::dockAreaOverlay() const {
+    return d->dockAreaOverlay;
+}
+
+DockOverlay* DockManager::containerOverlay() const {
+    return d->containerOverlay;
+}
+
 } // namespace ads

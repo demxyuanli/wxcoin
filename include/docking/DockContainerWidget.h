@@ -95,6 +95,7 @@ private:
     void dropFloatingWidget(FloatingDockContainer* floatingWidget, const wxPoint& targetPos);
     void dropDockArea(DockArea* dockArea, DockWidgetArea area);
     void addDockAreaToContainer(DockWidgetArea area, DockArea* dockArea);
+    void dropDockWidget(DockWidget* widget, DockWidgetArea dropArea, DockArea* targetArea);
     DockSplitter* newSplitter(wxOrientation orientation);
     
     friend class DockManager;

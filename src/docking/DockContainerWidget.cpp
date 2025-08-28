@@ -402,4 +402,17 @@ void DockSplitter::updateSplitter() {
     }
 }
 
+void DockContainerWidget::dropDockWidget(DockWidget* widget, DockWidgetArea dropArea, DockArea* targetArea) {
+    if (!widget || !targetArea) {
+        return;
+    }
+    
+    // Create new dock area for the widget
+    DockArea* newArea = new DockArea(m_dockManager, this);
+    newArea->addDockWidget(widget);
+    
+    // Add the new area relative to target area
+    addDockAreaToContainer(dropArea, newArea);
+}
+
 } // namespace ads

@@ -54,6 +54,9 @@ public:
     // Title handling
     void updateWindowTitle();
     
+    // Drag & drop
+    void startDragging(const wxPoint& dragOffset);
+    
     // Native window handling
     void setNativeTitleBar(bool native);
     bool hasNativeTitleBar() const { return m_hasNativeTitleBar; }

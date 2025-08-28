@@ -124,6 +124,10 @@ public:
     
     // Perspective management
     class PerspectiveManager* perspectiveManager() const;
+    
+    // Overlay access for drag & drop
+    DockOverlay* dockAreaOverlay() const;
+    DockOverlay* containerOverlay() const;
 
 protected:
     // Internal methods

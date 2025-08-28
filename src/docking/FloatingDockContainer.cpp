@@ -495,4 +495,19 @@ void FloatingDragPreview::onTimer(wxTimerEvent& event) {
     }
 }
 
+void FloatingDockContainer::startDragging(const wxPoint& dragOffset) {
+    // Start dragging programmatically
+    d->isDragging = true;
+    d->dragOffset = dragOffset;
+    
+    // Capture mouse to receive all mouse events
+    if (!HasCapture()) {
+        CaptureMouse();
+    }
+    
+    // Move window to follow mouse
+    wxPoint mousePos = wxGetMousePosition();
+    SetPosition(mousePos - dragOffset);
+}
+
 } // namespace ads
