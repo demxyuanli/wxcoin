@@ -9,12 +9,12 @@
 #include <wx/artprov.h>
 #include <wx/filedlg.h>
 #include <wx/file.h>
+#include <wx/listbox.h>
+#include <wx/propgrid/propgrid.h>
+#include <wx/stattext.h>
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
 #include "docking/PerspectiveManager.h"
-#include "Canvas.h"
-#include "PropertyPanel.h"
-#include "ObjectTreePanel.h"
 
 using namespace ads;
 
@@ -66,46 +66,65 @@ private:
     }
     
     void CreateDockingLayout() {
-        // Main canvas
-        DockWidget* canvasDock = new DockWidget("3D View", m_dockManager->containerWidget());
-        Canvas* canvas = new Canvas(canvasDock);
-        canvasDock->setWidget(canvas);
-        canvasDock->setFeature(DockWidgetClosable, false);
-        canvasDock->setFeature(DockWidgetMovable, true);
-        canvasDock->setFeature(DockWidgetFloatable, true);
-        canvasDock->setIcon(wxArtProvider::GetIcon(wxART_NORMAL_FILE, wxART_MENU));
-        m_dockManager->addDockWidget(CenterDockWidgetArea, canvasDock);
+        // 创建示例性的dock panels
         
-        // Properties panel
-        DockWidget* propDock = new DockWidget("Properties", m_dockManager->containerWidget());
-        PropertyPanel* props = new PropertyPanel(propDock);
-        propDock->setWidget(props);
-        propDock->setFeature(DockWidgetClosable, true);
-        propDock->setFeature(DockWidgetMovable, true);
-        propDock->setFeature(DockWidgetFloatable, true);
+        // 1. 主视图 - 不可关闭的中心面板
+        DockWidget* mainDock = new DockWidget("主视图", m_dockManager->containerWidget());
+        wxPanel* mainPanel = new wxPanel(mainDock);
+        mainPanel->SetBackgroundColour(wxColour(240, 240, 240));
+        
+        wxStaticText* mainText = new wxStaticText(mainPanel, wxID_ANY, 
+            "这是主视图面板\n不可关闭，始终显示在中心区域",
+            wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER);
+        
+        wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+        mainSizer->Add(mainText, 1, wxALL | wxEXPAND | wxALIGN_CENTER, 20);
+        mainPanel->SetSizer(mainSizer);
+        
+        mainDock->setWidget(mainPanel);
+        mainDock->setFeature(DockWidgetClosable, false);  // 不可关闭
+        mainDock->setIcon(wxArtProvider::GetIcon(wxART_NORMAL_FILE, wxART_MENU));
+        m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
+        
+        // 2. 工具面板 - 左侧
+        DockWidget* toolDock = new DockWidget("工具箱", m_dockManager->containerWidget());
+        wxListBox* toolList = new wxListBox(toolDock, wxID_ANY);
+        toolList->Append("选择工具");
+        toolList->Append("移动工具");
+        toolList->Append("缩放工具");
+        toolList->Append("旋转工具");
+        toolList->Append("画笔工具");
+        toolList->SetSelection(0);
+        
+        toolDock->setWidget(toolList);
+        toolDock->setIcon(wxArtProvider::GetIcon(wxART_EXECUTABLE_FILE, wxART_MENU));
+        m_dockManager->addDockWidget(LeftDockWidgetArea, toolDock);
+        
+        // 3. 属性面板 - 右侧
+        DockWidget* propDock = new DockWidget("属性", m_dockManager->containerWidget());
+        wxPropertyGrid* propGrid = new wxPropertyGrid(propDock);
+        propGrid->Append(new wxStringProperty("名称", wxPG_LABEL, "对象1"));
+        propGrid->Append(new wxIntProperty("宽度", wxPG_LABEL, 100));
+        propGrid->Append(new wxIntProperty("高度", wxPG_LABEL, 100));
+        propGrid->Append(new wxColourProperty("颜色", wxPG_LABEL, *wxBLUE));
+        
+        propDock->setWidget(propGrid);
         propDock->setIcon(wxArtProvider::GetIcon(wxART_REPORT_VIEW, wxART_MENU));
         m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
         
-        // Object tree
-        DockWidget* treeDock = new DockWidget("Object Tree", m_dockManager->containerWidget());
-        ObjectTreePanel* tree = new ObjectTreePanel(treeDock);
-        treeDock->setWidget(tree);
-        treeDock->setFeature(DockWidgetClosable, true);
-        treeDock->setFeature(DockWidgetMovable, true);
-        treeDock->setFeature(DockWidgetFloatable, true);
-        treeDock->setIcon(wxArtProvider::GetIcon(wxART_FOLDER, wxART_MENU));
-        m_dockManager->addDockWidget(LeftDockWidgetArea, treeDock);
-        
-        // Output window
-        DockWidget* outputDock = new DockWidget("Output", m_dockManager->containerWidget());
+        // 4. 输出面板 - 底部
+        DockWidget* outputDock = new DockWidget("输出", m_dockManager->containerWidget());
         wxTextCtrl* output = new wxTextCtrl(outputDock, wxID_ANY,
-                                           "Application started\nDocking initialized\n",
+                                           "欢迎使用简单停靠示例\n"
+                                           "这是一个展示基本停靠功能的示例程序\n"
+                                           "- 拖动标签页可以移动面板\n"
+                                           "- 拖动到边缘可以停靠\n"
+                                           "- 拖动到中央可以创建标签组\n",
                                            wxDefaultPosition, wxDefaultSize,
-                                           wxTE_MULTILINE | wxTE_READONLY);
+                                           wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH);
+        output->SetDefaultStyle(wxTextAttr(*wxBLACK, *wxWHITE));
+        
         outputDock->setWidget(output);
-        outputDock->setFeature(DockWidgetClosable, true);
-        outputDock->setFeature(DockWidgetMovable, true);
-        outputDock->setFeature(DockWidgetFloatable, true);
         outputDock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
         m_dockManager->addDockWidget(BottomDockWidgetArea, outputDock);
     }
