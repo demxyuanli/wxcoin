@@ -337,10 +337,10 @@ void FloatingDockContainer::onMouseLeftUp(wxMouseEvent& event) {
                 if (!widgets.empty()) {
                     DockArea* targetArea = dynamic_cast<DockArea*>(dropTarget);
                     DockContainerWidget* targetContainer = nullptr;
-                if (!targetArea) {
-                    // Try to cast to container if not a dock area
-                    targetContainer = dynamic_cast<DockContainerWidget*>(dropTarget);
-                }
+                    if (!targetArea) {
+                        // Try to cast to container if not a dock area
+                        targetContainer = dynamic_cast<DockContainerWidget*>(dropTarget);
+                    }
                     
                     if (targetArea && dropArea == CenterDockWidgetArea) {
                         // Add to existing dock area as tabs
@@ -361,15 +361,22 @@ void FloatingDockContainer::onMouseLeftUp(wxMouseEvent& event) {
                             }
                         } else {
                             // Multiple widgets - create new area with all widgets
-                            DockArea* newArea = new DockArea(m_dockManager, targetContainer ? targetContainer : m_dockManager->containerWidget());
-                            for (auto* widget : widgets) {
-                                newArea->addDockWidget(widget);
+                            DockContainerWidget* container = targetContainer;
+                            if (!container) {
+                                container = targetArea ? targetArea->dockContainer() : m_dockManager->containerWidget();
                             }
                             
-                            if (targetContainer) {
-                                targetContainer->addDockArea(newArea, dropArea);
-                            } else if (targetArea) {
-                                targetArea->dockContainer()->addDockAreaToContainer(dropArea, newArea);
+                            if (container) {
+                                DockArea* newArea = new DockArea(m_dockManager, container);
+                                for (auto* widget : widgets) {
+                                    newArea->addDockWidget(widget);
+                                }
+                                
+                                if (targetContainer) {
+                                    targetContainer->addDockArea(newArea, dropArea);
+                                } else if (targetArea) {
+                                    targetArea->dockContainer()->addDockAreaToContainer(dropArea, newArea);
+                                }
                             }
                         }
                         
