@@ -33,6 +33,7 @@ wxBEGIN_EVENT_TABLE(DockAreaTabBar, wxPanel)
     EVT_PAINT(DockAreaTabBar::onPaint)
     EVT_LEFT_DOWN(DockAreaTabBar::onMouseLeftDown)
     EVT_LEFT_UP(DockAreaTabBar::onMouseLeftUp)
+    EVT_RIGHT_DOWN(DockAreaTabBar::onMouseRightDown)
     EVT_MOTION(DockAreaTabBar::onMouseMotion)
     EVT_LEAVE_WINDOW(DockAreaTabBar::onMouseLeave)
     EVT_SIZE(DockAreaTabBar::onSize)
@@ -561,7 +562,12 @@ void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
             // Start dragging
             m_draggedTab = tab;
             m_dragStartPos = event.GetPosition();
-            wxLogDebug("Started dragging tab %d at position (%d, %d)", tab, m_dragStartPos.x, m_dragStartPos.y);
+            
+            // Also handle right-click for context menu
+            if (event.RightDown()) {
+                showTabContextMenu(tab, event.GetPosition());
+                return;
+            }
             
             // Select tab
             if (tab != m_currentIndex) {
@@ -582,6 +588,34 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
     if (HasCapture()) {
         ReleaseMouse();
     }
+    
+    // Handle drop if we were dragging
+    if (m_dragStarted && m_draggedTab >= 0) {
+        // Get the widget being dragged
+        DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
+        
+        if (draggedWidget) {
+            // Find drop target
+            wxPoint screenPos = ClientToScreen(event.GetPosition());
+            wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
+            
+            // TODO: Implement actual drop logic
+            // For now, just show a message about what would happen
+            if (windowUnderMouse) {
+                wxString msg = wxString::Format(
+                    "Drop functionality not yet implemented.\n\n"
+                    "In a complete implementation, dropping here would:\n"
+                    "- On edge: dock to that side\n"
+                    "- On center: create tab group\n"
+                    "- Outside: create floating window"
+                );
+                wxMessageBox(msg, "Drag & Drop Info", wxOK | wxICON_INFORMATION);
+            }
+        }
+    }
+    
+    // Clear tooltip
+    UnsetToolTip();
     
     m_draggedTab = -1;
     m_dragStarted = false;
@@ -611,41 +645,33 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
     if (m_draggedTab >= 0 && event.Dragging()) {
         wxPoint delta = event.GetPosition() - m_dragStartPos;
         
-        // Check if we should start floating (require minimum drag distance)
+        // Check if we should start drag operation (require minimum drag distance)
         if (!m_dragStarted && (abs(delta.x) > 5 || abs(delta.y) > 5)) {
             m_dragStarted = true;
             
             // Get the dock widget being dragged
             DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
-            if (draggedWidget && draggedWidget->hasFeature(DockWidgetFloatable)) {
-                // Store the widget title before removing
-                wxString title = draggedWidget->title();
+            if (draggedWidget && draggedWidget->hasFeature(DockWidgetMovable)) {
+                // TODO: Start drag preview
+                // For now, just show a tooltip indicating drag is in progress
+                SetToolTip("Dragging... Drop on edges to dock or center to create tabs");
                 
-                // Release mouse capture before floating
-                if (HasCapture()) {
-                    ReleaseMouse();
-                }
-                
-                // Float the widget
-                draggedWidget->setFloating();
-                
-                // Position the floating window at mouse position
-                FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
-                if (floatingContainer) {
-                    wxPoint screenPos = ClientToScreen(event.GetPosition());
-                    floatingContainer->SetPosition(screenPos - wxPoint(50, 10));
-                    floatingContainer->SetTitle(title);
-                    
-                    // Start dragging the floating window
-                    wxMouseEvent dragEvent(wxEVT_LEFT_DOWN);
-                    dragEvent.SetPosition(wxPoint(50, 10));
-                    floatingContainer->GetEventHandler()->ProcessEvent(dragEvent);
-                }
-                
-                // Reset drag state
-                m_draggedTab = -1;
-                m_dragStarted = false;
+                // In a complete implementation, we would:
+                // 1. Create a drag preview window
+                // 2. Show dock overlays on potential drop targets
+                // 3. Handle drop based on position
             }
+        }
+        
+        if (m_dragStarted) {
+            // Update drag preview position
+            // TODO: Move drag preview to follow mouse
+            
+            // Check for drop targets under mouse
+            wxPoint screenPos = ClientToScreen(event.GetPosition());
+            wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
+            
+            // TODO: Show drop overlay if over valid drop target
         }
     }
 }
@@ -974,6 +1000,75 @@ void DockAreaTitleBar::createButtons() {
     m_menuButton = new wxButton(this, wxID_ANY, "v", wxDefaultPosition, wxSize(20, 20));
     m_menuButton->Bind(wxEVT_BUTTON, &DockAreaTitleBar::onMenuButtonClicked, this);
     m_layout->Add(m_menuButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+}
+
+void DockAreaTabBar::onMouseRightDown(wxMouseEvent& event) {
+    int tab = getTabAt(event.GetPosition());
+    if (tab >= 0) {
+        // Select the tab
+        if (tab != m_currentIndex) {
+            wxCommandEvent evt(EVT_TAB_CURRENT_CHANGED);
+            evt.SetEventObject(this);
+            evt.SetInt(tab);
+            ProcessWindowEvent(evt);
+            
+            m_dockArea->onCurrentTabChanged(tab);
+        }
+        
+        // Show context menu
+        showTabContextMenu(tab, event.GetPosition());
+    }
+}
+
+void DockAreaTabBar::showTabContextMenu(int tab, const wxPoint& pos) {
+    if (tab < 0 || tab >= static_cast<int>(m_tabs.size())) {
+        return;
+    }
+    
+    DockWidget* widget = m_tabs[tab].widget;
+    if (!widget) {
+        return;
+    }
+    
+    wxMenu menu;
+    
+    // Add docking options
+    wxMenu* dockMenu = new wxMenu();
+    dockMenu->Append(wxID_ANY, "Dock Left");
+    dockMenu->Append(wxID_ANY, "Dock Right");
+    dockMenu->Append(wxID_ANY, "Dock Top");
+    dockMenu->Append(wxID_ANY, "Dock Bottom");
+    menu.AppendSubMenu(dockMenu, "Dock To");
+    
+    menu.AppendSeparator();
+    
+    // Add float option
+    if (widget->hasFeature(DockWidgetFloatable)) {
+        menu.Append(wxID_ANY, "Float");
+    }
+    
+    // Add close option
+    if (widget->hasFeature(DockWidgetClosable)) {
+        menu.AppendSeparator();
+        menu.Append(wxID_ANY, "Close");
+    }
+    
+    // Show menu
+    wxPoint screenPos = ClientToScreen(pos);
+    int selection = GetPopupMenuSelectionFromUser(menu, pos);
+    
+    // Handle selection
+    if (selection != wxID_NONE) {
+        wxString itemText = menu.GetLabelText(selection);
+        
+        // For now, just show what would happen
+        wxString msg = wxString::Format(
+            "Action '%s' selected for tab '%s'.\n\n"
+            "Full docking functionality is not yet implemented.",
+            itemText, widget->title()
+        );
+        wxMessageBox(msg, "Docking Action", wxOK | wxICON_INFORMATION);
+    }
 }
 
 } // namespace ads

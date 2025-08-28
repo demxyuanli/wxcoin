@@ -150,6 +150,7 @@ public:
     // Overflow menu
     bool hasTabOverflow() const { return m_hasOverflow; }
     void showTabOverflowMenu();
+    void showTabContextMenu(int tab, const wxPoint& pos);
     
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_TAB_CLOSE_REQUESTED;
@@ -160,6 +161,7 @@ protected:
     void onPaint(wxPaintEvent& event);
     void onMouseLeftDown(wxMouseEvent& event);
     void onMouseLeftUp(wxMouseEvent& event);
+    void onMouseRightDown(wxMouseEvent& event);
     void onMouseMotion(wxMouseEvent& event);
     void onMouseLeave(wxMouseEvent& event);
     void onSize(wxSizeEvent& event);
