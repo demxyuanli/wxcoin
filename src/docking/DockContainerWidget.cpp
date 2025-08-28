@@ -57,17 +57,23 @@ DockContainerWidget::~DockContainerWidget() {
 
 DockArea* DockContainerWidget::addDockWidget(DockWidgetArea area, DockWidget* dockWidget, 
                                             DockArea* targetDockArea, int index) {
+    wxLogDebug("DockContainerWidget::addDockWidget - area: %d, widget: %p, targetArea: %p", 
+        area, dockWidget, targetDockArea);
+        
     if (!dockWidget) {
+        wxLogDebug("  -> dockWidget is null");
         return nullptr;
     }
     
     // If we have a target dock area, add to it
     if (targetDockArea) {
+        wxLogDebug("  -> Adding to existing target area");
         targetDockArea->addDockWidget(dockWidget);
         return targetDockArea;
     }
     
     // Create new dock area
+    wxLogDebug("  -> Creating new dock area");
     DockArea* newDockArea = new DockArea(m_dockManager, this);
     newDockArea->addDockWidget(dockWidget);
     
@@ -135,26 +141,35 @@ DockArea* DockContainerWidget::dockArea(int index) const {
 }
 
 void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
+    wxLogDebug("DockContainerWidget::addDockArea - area: %d, dockArea: %p", area, dockArea);
+    
     if (!dockArea) {
+        wxLogDebug("  -> dockArea is null");
         return;
     }
     
     // Add to list
     m_dockAreas.push_back(dockArea);
+    wxLogDebug("  -> Added to list, now have %d areas", (int)m_dockAreas.size());
     
     // For now, just add to the root splitter
     if (DockSplitter* splitter = dynamic_cast<DockSplitter*>(m_rootSplitter)) {
+        wxLogDebug("  -> Got root splitter: %p", splitter);
         if (splitter->GetWindow1() == nullptr) {
+            wxLogDebug("  -> Splitter window1 is null, initializing with dock area");
             // Reparent the dock area to the splitter before initializing
             dockArea->Reparent(splitter);
             splitter->Initialize(dockArea);
         } else if (splitter->GetWindow2() == nullptr) {
+            wxLogDebug("  -> Splitter window1 exists, splitting");
             // Reparent the dock area to the splitter before splitting
             dockArea->Reparent(splitter);
             // Split based on area
             if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
+                wxLogDebug("    -> Splitting vertically");
                 splitter->SplitVertically(splitter->GetWindow1(), dockArea);
             } else {
+                wxLogDebug("    -> Splitting horizontally");
                 splitter->SplitHorizontally(splitter->GetWindow1(), dockArea);
             }
         } else {

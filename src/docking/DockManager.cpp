@@ -87,7 +87,11 @@ DockManager::~DockManager() {
 
 DockArea* DockManager::addDockWidget(DockWidgetArea area, DockWidget* dockWidget, 
                                     DockArea* targetDockArea) {
+    wxLogDebug("DockManager::addDockWidget - area: %d, widget: %p, targetArea: %p", 
+        area, dockWidget, targetDockArea);
+        
     if (!dockWidget) {
+        wxLogDebug("  -> dockWidget is null");
         return nullptr;
     }
     
@@ -96,9 +100,16 @@ DockArea* DockManager::addDockWidget(DockWidgetArea area, DockWidget* dockWidget
     
     // Get the container widget
     DockContainerWidget* container = static_cast<DockContainerWidget*>(m_containerWidget);
+    wxLogDebug("  -> container: %p", container);
+    
+    if (!container) {
+        wxLogDebug("  -> container is null!");
+        return nullptr;
+    }
     
     // Add to container
     DockArea* dockArea = container->addDockWidget(area, dockWidget, targetDockArea);
+    wxLogDebug("  -> result dockArea: %p", dockArea);
     
     // Emit signal
     for (auto& callback : m_dockWidgetAddedCallbacks) {
