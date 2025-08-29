@@ -88,6 +88,7 @@ private:
 
 	// Helpers
 	bool chooseTextureUnits();
+	void updateCameraMatrices();
 
 	DebugOutput m_debugOutput{ DebugOutput::ShowEdge };
 };
