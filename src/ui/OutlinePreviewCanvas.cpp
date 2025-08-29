@@ -26,6 +26,11 @@
 #include <GL/glext.h>
 #include <sstream>
 #include <wx/log.h>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 // OpenGL function pointers
 PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers = nullptr;
@@ -125,6 +130,7 @@ EVT_ERASE_BACKGROUND(OutlinePreviewCanvas::onEraseBackground)
 EVT_LEFT_DOWN(OutlinePreviewCanvas::onMouseEvent)
 EVT_LEFT_UP(OutlinePreviewCanvas::onMouseEvent)
 EVT_MOTION(OutlinePreviewCanvas::onMouseEvent)
+EVT_LEAVE_WINDOW(OutlinePreviewCanvas::onMouseEvent)
 EVT_MOUSE_CAPTURE_LOST(OutlinePreviewCanvas::onMouseCaptureLost)
 EVT_IDLE(OutlinePreviewCanvas::onIdle)
 END_EVENT_TABLE()
@@ -374,6 +380,21 @@ void OutlinePreviewCanvas::onMouseEvent(wxMouseEvent& event) {
         }
         
         m_lastMousePos = currentPos;
+    } else if (event.Moving()) {
+        // Check which object is under mouse
+        wxPoint pos = event.GetPosition();
+        int oldHovered = m_hoveredObjectIndex;
+        m_hoveredObjectIndex = getObjectAtPosition(pos);
+        
+        if (oldHovered != m_hoveredObjectIndex) {
+            m_needsRedraw = true;
+        }
+    } else if (event.Leaving()) {
+        // Mouse left the window
+        if (m_hoveredObjectIndex != -1) {
+            m_hoveredObjectIndex = -1;
+            m_needsRedraw = true;
+        }
     }
 }
 
@@ -420,40 +441,66 @@ void OutlinePreviewCanvas::render() {
         SoGLRenderAction renderAction(viewport);
         renderAction.apply(m_sceneRoot);
         
-        // Silhouette outline rendering
-        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
+        // Hover outline rendering - only for hovered object
+        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f && m_hoveredObjectIndex >= 0) {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
             
-            // Method 1: Edge detection using polygon offset
-            // This creates clean silhouette edges without artifacts
-            
-            // First: Draw the model in black, slightly behind
-            glCullFace(GL_FRONT);
-            glDepthFunc(GL_LEQUAL);
-            glEnable(GL_CULL_FACE);
-            glPolygonMode(GL_BACK, GL_FILL);
-            glDisable(GL_LIGHTING);
-            
-            // Use polygon offset to push the black silhouette back
-            glEnable(GL_POLYGON_OFFSET_FILL);
-            float thickness = m_outlineParams.thickness;
-            glPolygonOffset(thickness * 0.5f, thickness * 2.0f);
-            
-            // Black color for outline
-            glColor3f(0.0f, 0.0f, 0.0f);
-            
-            // Draw slightly scaled version
-            glPushMatrix();
-            float scale = 1.0f + (thickness * 0.002f);
-            
-            // Find center for proper scaling
-            // For now, scale from origin - simpler and often works well
-            glScalef(scale, scale, scale);
-            
-            SoGLRenderAction blackAction(viewport);
-            blackAction.apply(m_modelRoot);
-            
-            glPopMatrix();
+            // Only render outline for the hovered object
+            if (m_modelRoot && m_hoveredObjectIndex >= 1 && 
+                m_hoveredObjectIndex < m_modelRoot->getNumChildren()) {
+                
+                // Get the specific object (skip rotation node at index 0)
+                SoNode* hoveredObject = m_modelRoot->getChild(m_hoveredObjectIndex);
+                
+                // First: Draw orange outline
+                glCullFace(GL_FRONT);
+                glDepthFunc(GL_LEQUAL);
+                glEnable(GL_CULL_FACE);
+                glPolygonMode(GL_BACK, GL_FILL);
+                glDisable(GL_LIGHTING);
+                
+                // Use polygon offset to push the silhouette back
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                float thickness = m_outlineParams.thickness;
+                glPolygonOffset(thickness * 0.5f, thickness * 2.0f);
+                
+                // Orange color for outline (1.0, 0.5, 0.0)
+                glColor3f(1.0f, 0.5f, 0.0f);
+                
+                // Draw slightly scaled version
+                glPushMatrix();
+                float scale = 1.0f + (thickness * 0.002f);
+                
+                // Apply rotation from the parent
+                if (m_modelRoot->getNumChildren() > 0) {
+                    SoRotationXYZ* rotation = static_cast<SoRotationXYZ*>(m_modelRoot->getChild(0));
+                    if (rotation) {
+                        glRotatef(rotation->angle.getValue() * 180.0f / M_PI, 0, 1, 0);
+                    }
+                }
+                
+                // Position transform based on object index
+                switch(m_hoveredObjectIndex) {
+                    case 1: glTranslatef(-2.0f, 2.0f, 0.0f); break;  // Cylinder
+                    case 2: glTranslatef(2.0f, 2.0f, 0.0f); break;   // Sphere
+                    case 3: glTranslatef(-2.0f, -2.0f, 0.0f); break; // Cube
+                    case 4: glTranslatef(2.0f, -2.0f, 0.0f); break;  // Cone
+                }
+                
+                glScalef(scale, scale, scale);
+                
+                // Create temporary separator for single object
+                SoSeparator* tempRoot = new SoSeparator;
+                tempRoot->ref();
+                tempRoot->addChild(hoveredObject);
+                
+                SoGLRenderAction outlineAction(viewport);
+                outlineAction.apply(tempRoot);
+                
+                tempRoot->unref();
+                
+                glPopMatrix();
+            }
             
             // Reset for normal rendering
             glDisable(GL_POLYGON_OFFSET_FILL);
@@ -462,7 +509,7 @@ void OutlinePreviewCanvas::render() {
             
             glPopAttrib();
             
-            // Second: Draw the normal model on top
+            // Redraw the entire scene normally
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LESS);
             
@@ -841,6 +888,26 @@ void OutlinePreviewCanvas::createQuadVAO() {
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
         glBindVertexArray(0);
     }
-    
+}
 
+int OutlinePreviewCanvas::getObjectAtPosition(const wxPoint& pos) {
+    if (!m_modelRoot || m_modelRoot->getNumChildren() < 2) {
+        return -1;
+    }
+    
+    // Simple hit test based on screen regions
+    // Since we have 4 objects arranged in a 2x2 grid
+    wxSize size = GetClientSize();
+    int halfW = size.GetWidth() / 2;
+    int halfH = size.GetHeight() / 2;
+    
+    // Determine which quadrant the mouse is in
+    // Objects in m_modelRoot: 0=rotation, 1=cylinder, 2=sphere, 3=cube, 4=cone
+    if (pos.y < halfH) {
+        // Top half
+        return (pos.x < halfW) ? 1 : 2;  // cylinder : sphere
+    } else {
+        // Bottom half
+        return (pos.x < halfW) ? 3 : 4;  // cube : cone
+    }
 }

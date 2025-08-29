@@ -37,6 +37,7 @@ private:
     
     void createBasicModels();
     void render();
+    int getObjectAtPosition(const wxPoint& pos);
     
     // FBO and shader management
     void initializeFBO(int width, int height);
@@ -78,6 +79,7 @@ private:
     // Mouse interaction
     wxPoint m_lastMousePos;
     bool m_mouseDown{ false };
+    int m_hoveredObjectIndex{ -1 };  // Index of hovered object
     
     DECLARE_EVENT_TABLE()
 };
