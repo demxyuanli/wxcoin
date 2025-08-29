@@ -265,59 +265,61 @@ void OutlinePreviewCanvas::render() {
     wxSize size = GetClientSize();
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
-    // Render with outline effect using stencil buffer method (similar to Three.js)
-    if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        // Clear stencil buffer
-        glClearStencil(0);
-        glClear(GL_STENCIL_BUFFER_BIT);
-        glEnable(GL_STENCIL_TEST);
-        
-        // Step 1: Render objects to stencil buffer
-        glStencilFunc(GL_ALWAYS, 1, 0xFF);
-        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-        glStencilMask(0xFF);
-        glDepthMask(GL_FALSE);
-        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-        
-        SoGLRenderAction stencilAction(viewport);
-        stencilAction.apply(m_modelRoot);
-        
-        // Step 2: Draw expanded version where stencil is 0
-        glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
-        glStencilMask(0x00);
-        glDepthMask(GL_TRUE);
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-        
-        // Disable depth test to ensure outline is visible
-        glDisable(GL_DEPTH_TEST);
-        
-        // Set outline color
-        glColor3f(0.0f, 0.0f, 0.0f); // Black outline
-        
-        // Render slightly larger version
-        glPushMatrix();
-        float scale = 1.0f + (m_outlineParams.thickness * 0.02f);
-        glScalef(scale, scale, scale);
-        
-        // Disable lighting for solid color
-        glDisable(GL_LIGHTING);
-        
-        SoGLRenderAction outlineAction(viewport);
-        outlineAction.apply(m_modelRoot);
-        
-        glEnable(GL_LIGHTING);
-        glPopMatrix();
-        
-        // Step 3: Draw original objects on top
-        glStencilMask(0xFF);
-        glClear(GL_STENCIL_BUFFER_BIT);
-        glDisable(GL_STENCIL_TEST);
-        glEnable(GL_DEPTH_TEST);
-    }
-    
-    // Render scene normally
+    // Render scene normally first
     SoGLRenderAction renderAction(viewport);
     renderAction.apply(m_sceneRoot);
+    
+    // Simple outline effect for preview
+    // Since we can't do proper post-processing here, we'll use a compromise:
+    // Draw object edges that are visible from the camera
+    if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        
+        // Method: Draw only the visible edges in black
+        // This creates a cleaner outline effect
+        
+        // Set up for edge rendering
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_LIGHTING);
+        glLineWidth(m_outlineParams.thickness * 1.5f);
+        
+        // Use depth buffer to ensure we only draw visible edges
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+        glDepthMask(GL_FALSE);
+        
+        // Enable line smoothing for better quality
+        glEnable(GL_LINE_SMOOTH);
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+        
+        // Set outline color
+        float intensity = m_outlineParams.edgeIntensity;
+        glColor4f(0.0f, 0.0f, 0.0f, intensity);
+        
+        // Draw object edges
+        // We use polygon offset to avoid z-fighting
+        glEnable(GL_POLYGON_OFFSET_LINE);
+        glPolygonOffset(-1.0f, -1.0f);
+        
+        // Render in line mode
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        
+        // Key insight: Only render front-facing polygons
+        // This significantly reduces internal edges
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        
+        SoGLRenderAction edgeAction(viewport);
+        edgeAction.apply(m_modelRoot);
+        
+        // Clean up
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_POLYGON_OFFSET_LINE);
+        
+        glPopAttrib();
+    }
     
     // Swap buffers
     SwapBuffers();
