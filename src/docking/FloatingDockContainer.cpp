@@ -543,7 +543,11 @@ void FloatingDragPreview::setContent(DockArea* content) {
 
 void FloatingDragPreview::startDrag(const wxPoint& globalPos) {
     m_dragStartPos = globalPos;
-    SetPosition(globalPos);
+    
+    // Offset the preview so it doesn't cover the cursor
+    wxSize size = GetSize();
+    wxPoint offset(-size.GetWidth() / 2, -20);  // Center horizontally, above cursor
+    SetPosition(globalPos + offset);
     
     if (m_animated) {
         // Start fade-in animation
@@ -559,7 +563,10 @@ void FloatingDragPreview::startDrag(const wxPoint& globalPos) {
 }
 
 void FloatingDragPreview::moveFloating(const wxPoint& globalPos) {
-    SetPosition(globalPos);
+    // Keep the same offset as in startDrag
+    wxSize size = GetSize();
+    wxPoint offset(-size.GetWidth() / 2, -20);
+    SetPosition(globalPos + offset);
 }
 
 void FloatingDragPreview::finishDrag() {

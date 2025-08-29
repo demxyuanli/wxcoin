@@ -147,12 +147,15 @@ void DockOverlay::updateDropAreas() {
 void DockOverlay::onPaint(wxPaintEvent& event) {
     wxAutoBufferedPaintDC dc(this);
     
-    // Don't fill background - keep it transparent
-    // Only draw drop indicators
-    
     if (!m_targetWidget) {
         return;
     }
+    
+    // First, draw a very subtle overlay on the target area
+    // This helps users understand which area they're hovering over
+    dc.SetBrush(wxBrush(wxColour(0, 0, 0, 20)));  // Very light black overlay
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(GetClientRect());
     
     wxLogDebug("DockOverlay::onPaint - size: %dx%d", GetSize().GetWidth(), GetSize().GetHeight());
     
@@ -247,27 +250,49 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
         // Draw preview of where the widget will be docked
         wxRect previewRect = getPreviewRect(dropArea.area());
         if (!previewRect.IsEmpty()) {
-            // Draw semi-transparent preview area
+            // Draw semi-transparent preview area with gradient effect
             dc.SetPen(wxPen(wxColour(0, 120, 215), 2));  // Blue outline
-            dc.SetBrush(wxBrush(wxColour(0, 120, 215, 50)));  // Semi-transparent blue fill
+            dc.SetBrush(wxBrush(wxColour(0, 120, 215, 60)));  // Semi-transparent blue fill
             dc.DrawRectangle(previewRect);
+            
+            // Draw inner border for better visibility
+            wxRect innerRect = previewRect;
+            innerRect.Deflate(1);
+            dc.SetPen(wxPen(wxColour(255, 255, 255, 100), 1));  // Semi-transparent white
+            dc.SetBrush(*wxTRANSPARENT_BRUSH);
+            dc.DrawRectangle(innerRect);
         }
         
-        // Draw highlighted drop indicator
-        dc.SetPen(wxPen(wxColour(0, 120, 215), 3));
+        // Draw highlighted drop indicator with glow effect
+        // Outer glow
+        wxRect glowRect = rect;
+        glowRect.Inflate(2);
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(wxColour(0, 120, 215, 40)));
+        dc.DrawRoundedRectangle(glowRect, 3);
+        
+        // Main indicator
+        dc.SetPen(wxPen(wxColour(0, 120, 215), 2));
         dc.SetBrush(wxBrush(wxColour(0, 120, 215)));
+        dc.DrawRoundedRectangle(rect, 2);
     } else {
-        // Draw normal drop indicator
-        dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW), 1));
-        dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+        // Draw normal drop indicator with modern style
+        dc.SetPen(wxPen(wxColour(128, 128, 128), 1));
+        dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
+        dc.DrawRoundedRectangle(rect, 2);
     }
     
-    // Draw drop indicator
-    dc.DrawRectangle(rect);
-    
-    // Draw direction arrow
+    // Draw direction arrow/icon
     wxPoint center(rect.x + rect.width / 2, rect.y + rect.height / 2);
-    dc.SetPen(wxPen(wxColour(255, 255, 255), 2));  // White arrow for visibility
+    
+    // Use different colors based on state
+    if (dropArea.isHighlighted()) {
+        dc.SetPen(wxPen(wxColour(255, 255, 255), 2));  // White for highlighted
+        dc.SetBrush(wxBrush(wxColour(255, 255, 255)));
+    } else {
+        dc.SetPen(wxPen(wxColour(100, 100, 100), 2));  // Gray for normal
+        dc.SetBrush(wxBrush(wxColour(100, 100, 100)));
+    }
     
     switch (dropArea.area()) {
     case TopDockWidgetArea:
@@ -291,7 +316,19 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
         dc.DrawLine(center.x + 10, center.y, center.x + 5, center.y + 5);
         break;
     case CenterDockWidgetArea:
-        dc.DrawRectangle(center.x - 8, center.y - 8, 16, 16);
+        // Draw tab icon to indicate merging as tab
+        // Tab shape
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        wxPoint tabPoints[5] = {
+            wxPoint(center.x - 10, center.y + 5),
+            wxPoint(center.x - 10, center.y - 5),
+            wxPoint(center.x - 5, center.y - 8),
+            wxPoint(center.x + 5, center.y - 8),
+            wxPoint(center.x + 10, center.y - 5)
+        };
+        dc.DrawLines(5, tabPoints);
+        dc.DrawLine(center.x + 10, center.y - 5, center.x + 10, center.y + 5);
+        dc.DrawLine(center.x + 10, center.y + 5, center.x - 10, center.y + 5);
         break;
     }
 }
