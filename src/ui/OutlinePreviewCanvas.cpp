@@ -20,6 +20,7 @@
 #include <Inventor/nodes/SoRotationXYZ.h>
 #include <Inventor/nodes/SoLightModel.h>
 #include <Inventor/actions/SoGLRenderAction.h>
+#include <Inventor/actions/SoGetBoundingBoxAction.h>
 
 #include <GL/gl.h>
 #include <GL/glext.h>
@@ -419,23 +420,54 @@ void OutlinePreviewCanvas::render() {
         SoGLRenderAction renderAction(viewport);
         renderAction.apply(m_sceneRoot);
         
-        // Simple wireframe outline
+        // Silhouette outline rendering
         if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
             
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glLineWidth(m_outlineParams.thickness * 2.0f);
+            // Method 1: Edge detection using polygon offset
+            // This creates clean silhouette edges without artifacts
+            
+            // First: Draw the model in black, slightly behind
+            glCullFace(GL_FRONT);
+            glDepthFunc(GL_LEQUAL);
+            glEnable(GL_CULL_FACE);
+            glPolygonMode(GL_BACK, GL_FILL);
             glDisable(GL_LIGHTING);
+            
+            // Use polygon offset to push the black silhouette back
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            float thickness = m_outlineParams.thickness;
+            glPolygonOffset(thickness * 0.5f, thickness * 2.0f);
+            
+            // Black color for outline
             glColor3f(0.0f, 0.0f, 0.0f);
             
-            glEnable(GL_POLYGON_OFFSET_LINE);
-            glPolygonOffset(-1.0f, -1.0f);
+            // Draw slightly scaled version
+            glPushMatrix();
+            float scale = 1.0f + (thickness * 0.002f);
             
-            renderAction.apply(m_modelRoot);
+            // Find center for proper scaling
+            // For now, scale from origin - simpler and often works well
+            glScalef(scale, scale, scale);
             
+            SoGLRenderAction blackAction(viewport);
+            blackAction.apply(m_modelRoot);
+            
+            glPopMatrix();
+            
+            // Reset for normal rendering
+            glDisable(GL_POLYGON_OFFSET_FILL);
+            glCullFace(GL_BACK);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             
             glPopAttrib();
+            
+            // Second: Draw the normal model on top
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LESS);
+            
+            SoGLRenderAction normalAction(viewport);
+            normalAction.apply(m_sceneRoot);
         }
         
         SwapBuffers();
