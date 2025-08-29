@@ -37,6 +37,15 @@ private:
     void createBasicModels();
     void render();
     
+    // FBO and shader management
+    void initializeFBO(int width, int height);
+    void cleanupFBO();
+    void initializeShaders();
+    void cleanupShaders();
+    unsigned int compileShader(const char* source, unsigned int type);
+    unsigned int createShaderProgram(const char* vertexSource, const char* fragmentSource);
+    void createQuadVAO();
+    
     wxGLContext* m_glContext{ nullptr };
     std::unique_ptr<SceneManager> m_sceneManager;
     SoSeparator* m_sceneRoot{ nullptr };
@@ -45,6 +54,22 @@ private:
     
     ImageOutlineParams m_outlineParams;
     bool m_outlineEnabled{ true };
+    
+    // FBO and texture resources
+    unsigned int m_fbo{ 0 };
+    unsigned int m_colorTexture{ 0 };
+    unsigned int m_depthTexture{ 0 };
+    unsigned int m_normalTexture{ 0 };
+    
+    // Shader programs
+    unsigned int m_normalShader{ 0 };
+    unsigned int m_outlineShader{ 0 };
+    unsigned int m_quadVAO{ 0 };
+    unsigned int m_quadVBO{ 0 };
+    
+    // FBO size
+    int m_fboWidth{ 0 };
+    int m_fboHeight{ 0 };
     
     bool m_initialized{ false };
     bool m_needsRedraw{ true };

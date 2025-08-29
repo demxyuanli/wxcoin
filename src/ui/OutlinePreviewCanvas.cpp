@@ -22,6 +22,89 @@
 #include <Inventor/actions/SoGLRenderAction.h>
 
 #include <GL/gl.h>
+#include <GL/glext.h>
+#include <sstream>
+
+// OpenGL function pointers
+PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers = nullptr;
+PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers = nullptr;
+PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer = nullptr;
+PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D = nullptr;
+PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus = nullptr;
+PFNGLCREATESHADERPROC glCreateShader = nullptr;
+PFNGLDELETESHADERPROC glDeleteShader = nullptr;
+PFNGLSHADERSOURCEPROC glShaderSource = nullptr;
+PFNGLCOMPILESHADERPROC glCompileShader = nullptr;
+PFNGLGETSHADERIVPROC glGetShaderiv = nullptr;
+PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog = nullptr;
+PFNGLCREATEPROGRAMPROC glCreateProgram = nullptr;
+PFNGLDELETEPROGRAMPROC glDeleteProgram = nullptr;
+PFNGLATTACHSHADERPROC glAttachShader = nullptr;
+PFNGLLINKPROGRAMPROC glLinkProgram = nullptr;
+PFNGLGETPROGRAMIVPROC glGetProgramiv = nullptr;
+PFNGLUSEPROGRAMPROC glUseProgram = nullptr;
+PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
+PFNGLUNIFORM1IPROC glUniform1i = nullptr;
+PFNGLUNIFORM1FPROC glUniform1f = nullptr;
+PFNGLUNIFORM2FPROC glUniform2f = nullptr;
+PFNGLGENVERTEXARRAYSPROC glGenVertexArrays = nullptr;
+PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays = nullptr;
+PFNGLBINDVERTEXARRAYPROC glBindVertexArray = nullptr;
+PFNGLGENBUFFERSPROC glGenBuffers = nullptr;
+PFNGLDELETEBUFFERSPROC glDeleteBuffers = nullptr;
+PFNGLBINDBUFFERPROC glBindBuffer = nullptr;
+PFNGLBUFFERDATAPROC glBufferData = nullptr;
+PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = nullptr;
+PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = nullptr;
+PFNGLACTIVETEXTUREPROC glActiveTexture = nullptr;
+
+// Platform specific includes for extension loading
+#ifndef _WIN32
+    #include <GL/glx.h>
+#endif
+
+// Function to load OpenGL extensions
+void loadOpenGLExtensions() {
+#ifdef _WIN32
+    #define GET_PROC(name) name = (decltype(name))wglGetProcAddress(#name)
+#else
+    #define GET_PROC(name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name)
+#endif
+    
+    GET_PROC(glGenFramebuffers);
+    GET_PROC(glDeleteFramebuffers);
+    GET_PROC(glBindFramebuffer);
+    GET_PROC(glFramebufferTexture2D);
+    GET_PROC(glCheckFramebufferStatus);
+    GET_PROC(glCreateShader);
+    GET_PROC(glDeleteShader);
+    GET_PROC(glShaderSource);
+    GET_PROC(glCompileShader);
+    GET_PROC(glGetShaderiv);
+    GET_PROC(glGetShaderInfoLog);
+    GET_PROC(glCreateProgram);
+    GET_PROC(glDeleteProgram);
+    GET_PROC(glAttachShader);
+    GET_PROC(glLinkProgram);
+    GET_PROC(glGetProgramiv);
+    GET_PROC(glUseProgram);
+    GET_PROC(glGetUniformLocation);
+    GET_PROC(glUniform1i);
+    GET_PROC(glUniform1f);
+    GET_PROC(glUniform2f);
+    GET_PROC(glGenVertexArrays);
+    GET_PROC(glDeleteVertexArrays);
+    GET_PROC(glBindVertexArray);
+    GET_PROC(glGenBuffers);
+    GET_PROC(glDeleteBuffers);
+    GET_PROC(glBindBuffer);
+    GET_PROC(glBufferData);
+    GET_PROC(glEnableVertexAttribArray);
+    GET_PROC(glVertexAttribPointer);
+    GET_PROC(glActiveTexture);
+    
+#undef GET_PROC
+}
 
 BEGIN_EVENT_TABLE(OutlinePreviewCanvas, wxGLCanvas)
 EVT_PAINT(OutlinePreviewCanvas::onPaint)
@@ -54,6 +137,10 @@ OutlinePreviewCanvas::~OutlinePreviewCanvas() {
     if (m_glContext) {
         SetCurrent(*m_glContext);
         
+        // Clean up resources
+        cleanupFBO();
+        cleanupShaders();
+        
         // Clean up scene graph
         if (m_sceneRoot) {
             m_sceneRoot->unref();
@@ -69,6 +156,13 @@ void OutlinePreviewCanvas::initializeScene() {
     // Create OpenGL context
     m_glContext = new wxGLContext(this);
     SetCurrent(*m_glContext);
+    
+    // Load OpenGL extensions
+    static bool extensionsLoaded = false;
+    if (!extensionsLoaded) {
+        loadOpenGLExtensions();
+        extensionsLoaded = true;
+    }
     
     // Create scene graph
     m_sceneRoot = new SoSeparator;
@@ -94,8 +188,10 @@ void OutlinePreviewCanvas::initializeScene() {
     // Create basic models
     createBasicModels();
     
-    // Note: We use a simplified outline rendering approach for the preview
-    // This uses wireframe rendering with polygon offset to simulate outline effect
+    // Initialize FBO and shaders for proper outline rendering
+    initializeShaders();
+    
+    // FBO will be initialized in onSize event
     
     m_initialized = true;
     m_needsRedraw = true;
@@ -204,6 +300,11 @@ void OutlinePreviewCanvas::onSize(wxSizeEvent& event) {
             perspCam->aspectRatio = float(size.GetWidth()) / float(size.GetHeight());
         }
         
+        // Reinitialize FBO with new size
+        if (size.GetWidth() > 0 && size.GetHeight() > 0) {
+            initializeFBO(size.GetWidth(), size.GetHeight());
+        }
+        
         m_needsRedraw = true;
     }
     
@@ -251,78 +352,369 @@ void OutlinePreviewCanvas::onIdle(wxIdleEvent& event) {
 
 void OutlinePreviewCanvas::render() {
     if (!m_glContext || !m_sceneRoot) return;
+    if (!m_fbo || !m_normalShader || !m_outlineShader) return;
     
     SetCurrent(*m_glContext);
-    
-    // Clear background
-    glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    // Enable depth testing
-    glEnable(GL_DEPTH_TEST);
     
     // Get viewport size
     wxSize size = GetClientSize();
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
-    // Render scene normally first
-    SoGLRenderAction renderAction(viewport);
-    renderAction.apply(m_sceneRoot);
-    
-    // Simple outline effect for preview
-    // Since we can't do proper post-processing here, we'll use a compromise:
-    // Draw object edges that are visible from the camera
     if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        // Pass 1: Render to FBO with normal shader
+        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
         
-        // Method: Draw only the visible edges in black
-        // This creates a cleaner outline effect
+        // Attach normal texture as color attachment
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_normalTexture, 0);
         
-        // Set up for edge rendering
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDisable(GL_LIGHTING);
-        glLineWidth(m_outlineParams.thickness * 1.5f);
+        glViewport(0, 0, m_fboWidth, m_fboHeight);
+        glClearColor(0.5f, 0.5f, 1.0f, 1.0f); // Default normal pointing to camera
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        // Use depth buffer to ensure we only draw visible edges
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LEQUAL);
-        glDepthMask(GL_FALSE);
+        // Use normal shader
+        glUseProgram(m_normalShader);
         
-        // Enable line smoothing for better quality
-        glEnable(GL_LINE_SMOOTH);
-        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+        // Render scene with normal shader
+        SoGLRenderAction normalAction(viewport);
+        normalAction.apply(m_sceneRoot);
         
-        // Set outline color
-        float intensity = m_outlineParams.edgeIntensity;
-        glColor4f(0.0f, 0.0f, 0.0f, intensity);
+        // Pass 2: Render scene normally to color attachment
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_colorTexture, 0);
         
-        // Draw object edges
-        // We use polygon offset to avoid z-fighting
-        glEnable(GL_POLYGON_OFFSET_LINE);
-        glPolygonOffset(-1.0f, -1.0f);
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        // Render in line mode
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glUseProgram(0); // Use default shader
         
-        // Key insight: Only render front-facing polygons
-        // This significantly reduces internal edges
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
+        // Render scene normally
+        SoGLRenderAction colorAction(viewport);
+        colorAction.apply(m_sceneRoot);
         
-        SoGLRenderAction edgeAction(viewport);
-        edgeAction.apply(m_modelRoot);
+        // Pass 3: Apply outline post-processing
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, size.GetWidth(), size.GetHeight());
         
-        // Clean up
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_POLYGON_OFFSET_LINE);
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        glPopAttrib();
+        // Use outline shader
+        glUseProgram(m_outlineShader);
+        
+        // Set uniforms
+        glUniform1i(glGetUniformLocation(m_outlineShader, "uColorTexture"), 0);
+        glUniform1i(glGetUniformLocation(m_outlineShader, "uDepthTexture"), 1);
+        glUniform1i(glGetUniformLocation(m_outlineShader, "uNormalTexture"), 2);
+        glUniform2f(glGetUniformLocation(m_outlineShader, "uResolution"), 
+                    float(m_fboWidth), float(m_fboHeight));
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uDepthThreshold"), 
+                    m_outlineParams.depthThreshold * 10.0f);
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uNormalThreshold"), 
+                    m_outlineParams.normalThreshold);
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uThickness"), 
+                    m_outlineParams.thickness);
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uIntensity"), 
+                    m_outlineParams.edgeIntensity);
+        
+        // Bind textures
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_colorTexture);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_depthTexture);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, m_normalTexture);
+        
+        // Render fullscreen quad
+        glBindVertexArray(m_quadVAO);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+        glBindVertexArray(0);
+        
+        // Cleanup
+        glUseProgram(0);
+        glActiveTexture(GL_TEXTURE0);
+    } else {
+        // No outline - just render normally
+        glViewport(0, 0, size.GetWidth(), size.GetHeight());
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        SoGLRenderAction renderAction(viewport);
+        renderAction.apply(m_sceneRoot);
     }
     
     // Swap buffers
     SwapBuffers();
     
     m_needsRedraw = false;
+}
+
+// Shader sources
+static const char* g_normalVertexShader = R"GLSL(
+#version 120
+varying vec3 vNormal;
+varying vec3 vPosition;
+
+void main() {
+    vNormal = normalize(gl_NormalMatrix * gl_Normal);
+    vPosition = (gl_ModelViewMatrix * gl_Vertex).xyz;
+    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+}
+)GLSL";
+
+static const char* g_normalFragmentShader = R"GLSL(
+#version 120
+varying vec3 vNormal;
+varying vec3 vPosition;
+
+void main() {
+    // Store normal in RGB and depth in A
+    vec3 normal = normalize(vNormal);
+    float depth = length(vPosition);
+    gl_FragColor = vec4(normal * 0.5 + 0.5, depth / 100.0);
+}
+)GLSL";
+
+static const char* g_outlineVertexShader = R"GLSL(
+#version 120
+attribute vec2 aPosition;
+varying vec2 vTexCoord;
+
+void main() {
+    vTexCoord = aPosition * 0.5 + 0.5;
+    gl_Position = vec4(aPosition, 0.0, 1.0);
+}
+)GLSL";
+
+static const char* g_outlineFragmentShader = R"GLSL(
+#version 120
+uniform sampler2D uColorTexture;
+uniform sampler2D uDepthTexture;
+uniform sampler2D uNormalTexture;
+uniform vec2 uResolution;
+uniform float uDepthThreshold;
+uniform float uNormalThreshold;
+uniform float uThickness;
+uniform float uIntensity;
+
+varying vec2 vTexCoord;
+
+float getDepth(vec2 uv) {
+    return texture2D(uDepthTexture, uv).r;
+}
+
+vec3 getNormal(vec2 uv) {
+    return texture2D(uNormalTexture, uv).rgb * 2.0 - 1.0;
+}
+
+float depthEdge(vec2 uv, vec2 texelSize) {
+    float thickness = uThickness;
+    vec2 offset = texelSize * thickness;
+    
+    float center = getDepth(uv);
+    float tl = getDepth(uv + vec2(-offset.x, -offset.y));
+    float tr = getDepth(uv + vec2(offset.x, -offset.y));
+    float bl = getDepth(uv + vec2(-offset.x, offset.y));
+    float br = getDepth(uv + vec2(offset.x, offset.y));
+    
+    float maxDiff = max(max(abs(center - tl), abs(center - tr)), 
+                       max(abs(center - bl), abs(center - br)));
+    
+    return smoothstep(0.0, uDepthThreshold, maxDiff);
+}
+
+float normalEdge(vec2 uv, vec2 texelSize) {
+    vec2 offset = texelSize * uThickness;
+    
+    vec3 center = getNormal(uv);
+    vec3 top = getNormal(uv + vec2(0.0, -offset.y));
+    vec3 right = getNormal(uv + vec2(offset.x, 0.0));
+    vec3 bottom = getNormal(uv + vec2(0.0, offset.y));
+    vec3 left = getNormal(uv + vec2(-offset.x, 0.0));
+    
+    float d1 = 1.0 - dot(center, top);
+    float d2 = 1.0 - dot(center, right);
+    float d3 = 1.0 - dot(center, bottom);
+    float d4 = 1.0 - dot(center, left);
+    
+    float maxDiff = max(max(d1, d2), max(d3, d4));
+    return smoothstep(0.0, uNormalThreshold, maxDiff);
+}
+
+void main() {
+    vec2 texelSize = 1.0 / uResolution;
+    vec4 color = texture2D(uColorTexture, vTexCoord);
+    
+    float depth = depthEdge(vTexCoord, texelSize);
+    float normal = normalEdge(vTexCoord, texelSize);
+    
+    float edge = max(depth, normal) * uIntensity;
+    edge = clamp(edge, 0.0, 1.0);
+    
+    // Apply outline
+    vec3 outlineColor = vec3(0.0, 0.0, 0.0); // Black outline
+    gl_FragColor = vec4(mix(color.rgb, outlineColor, edge), 1.0);
+}
+)GLSL";
+
+void OutlinePreviewCanvas::initializeFBO(int width, int height) {
+    // Clean up existing FBO if any
+    cleanupFBO();
+    
+    m_fboWidth = width;
+    m_fboHeight = height;
+    
+    // Generate FBO
+    glGenFramebuffers(1, &m_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    
+    // Color texture
+    glGenTextures(1, &m_colorTexture);
+    glBindTexture(GL_TEXTURE_2D, m_colorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_colorTexture, 0);
+    
+    // Depth texture
+    glGenTextures(1, &m_depthTexture);
+    glBindTexture(GL_TEXTURE_2D, m_depthTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depthTexture, 0);
+    
+    // Normal texture
+    glGenTextures(1, &m_normalTexture);
+    glBindTexture(GL_TEXTURE_2D, m_normalTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    
+    // Check FBO completeness
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        cleanupFBO();
+    }
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void OutlinePreviewCanvas::cleanupFBO() {
+    if (m_fbo) {
+        glDeleteFramebuffers(1, &m_fbo);
+        m_fbo = 0;
+    }
+    if (m_colorTexture) {
+        glDeleteTextures(1, &m_colorTexture);
+        m_colorTexture = 0;
+    }
+    if (m_depthTexture) {
+        glDeleteTextures(1, &m_depthTexture);
+        m_depthTexture = 0;
+    }
+    if (m_normalTexture) {
+        glDeleteTextures(1, &m_normalTexture);
+        m_normalTexture = 0;
+    }
+}
+
+void OutlinePreviewCanvas::initializeShaders() {
+    // Create normal shader program
+    m_normalShader = createShaderProgram(g_normalVertexShader, g_normalFragmentShader);
+    
+    // Create outline shader program
+    m_outlineShader = createShaderProgram(g_outlineVertexShader, g_outlineFragmentShader);
+    
+    // Create quad VAO for fullscreen rendering
+    createQuadVAO();
+}
+
+void OutlinePreviewCanvas::cleanupShaders() {
+    if (m_normalShader) {
+        glDeleteProgram(m_normalShader);
+        m_normalShader = 0;
+    }
+    if (m_outlineShader) {
+        glDeleteProgram(m_outlineShader);
+        m_outlineShader = 0;
+    }
+    if (m_quadVAO) {
+        glDeleteVertexArrays(1, &m_quadVAO);
+        m_quadVAO = 0;
+    }
+    if (m_quadVBO) {
+        glDeleteBuffers(1, &m_quadVBO);
+        m_quadVBO = 0;
+    }
+}
+
+unsigned int OutlinePreviewCanvas::compileShader(const char* source, unsigned int type) {
+    unsigned int shader = glCreateShader(type);
+    glShaderSource(shader, 1, &source, nullptr);
+    glCompileShader(shader);
+    
+    int success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+        glDeleteShader(shader);
+        return 0;
+    }
+    
+    return shader;
+}
+
+unsigned int OutlinePreviewCanvas::createShaderProgram(const char* vertexSource, const char* fragmentSource) {
+    unsigned int vertexShader = compileShader(vertexSource, GL_VERTEX_SHADER);
+    unsigned int fragmentShader = compileShader(fragmentSource, GL_FRAGMENT_SHADER);
+    
+    if (!vertexShader || !fragmentShader) {
+        if (vertexShader) glDeleteShader(vertexShader);
+        if (fragmentShader) glDeleteShader(fragmentShader);
+        return 0;
+    }
+    
+    unsigned int program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
+    
+    int success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glDeleteProgram(program);
+        program = 0;
+    }
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    
+    return program;
+}
+
+void OutlinePreviewCanvas::createQuadVAO() {
+    float quadVertices[] = {
+        -1.0f, -1.0f,
+         1.0f, -1.0f,
+         1.0f,  1.0f,
+        -1.0f,  1.0f
+    };
+    
+    glGenVertexArrays(1, &m_quadVAO);
+    glGenBuffers(1, &m_quadVBO);
+    
+    glBindVertexArray(m_quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+    
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    
+    glBindVertexArray(0);
 }
