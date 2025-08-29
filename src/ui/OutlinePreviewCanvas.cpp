@@ -173,11 +173,8 @@ void OutlinePreviewCanvas::createBasicModels() {
 
 void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params) {
     m_outlineParams = params;
-    if (m_outlinePass) {
-        m_outlinePass->setParams(params);
-        m_needsRedraw = true;
-        Refresh(false);
-    }
+    m_needsRedraw = true;
+    Refresh(false);
 }
 
 ImageOutlineParams OutlinePreviewCanvas::getOutlineParams() const {
