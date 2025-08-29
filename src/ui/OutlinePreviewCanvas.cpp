@@ -265,36 +265,56 @@ void OutlinePreviewCanvas::render() {
     wxSize size = GetClientSize();
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
-    // Render scene with outline effect simulation
-    // First pass: render with thick lines for outline effect
+    // Render outline effect using two-pass technique
     if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        glEnable(GL_LINE_SMOOTH);
-        glLineWidth(m_outlineParams.thickness * 2.0f);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glDepthFunc(GL_LEQUAL);
-        glEnable(GL_POLYGON_OFFSET_LINE);
-        glPolygonOffset(-1.0f, -1.0f);
+        // First pass: Render scaled-up version in black (outline)
+        glClearStencil(0);
+        glClear(GL_STENCIL_BUFFER_BIT);
+        glEnable(GL_STENCIL_TEST);
         
-        // Set outline color based on intensity
-        float intensity = m_outlineParams.edgeIntensity;
-        glColor3f(0.0f, 0.0f, 0.0f); // Black outline
+        // Configure for outline rendering
+        glStencilFunc(GL_ALWAYS, 1, 0xFF);
+        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        glStencilMask(0xFF);
         
+        // Disable lighting and use black color
+        glDisable(GL_LIGHTING);
+        glColor3f(0.0f, 0.0f, 0.0f);
+        
+        // Scale up slightly based on thickness
+        glPushMatrix();
+        float scaleFactor = 1.0f + (m_outlineParams.thickness * 0.01f * m_outlineParams.edgeIntensity);
+        
+        // Scale from object center
+        glTranslatef(0.0f, 0.0f, 0.0f);
+        glScalef(scaleFactor, scaleFactor, scaleFactor);
+        
+        // Enable backface culling to render only back faces
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_FRONT);
+        
+        // Render scaled objects
         SoGLRenderAction outlineAction(viewport);
         outlineAction.apply(m_modelRoot);
         
-        glDisable(GL_POLYGON_OFFSET_LINE);
+        glDisable(GL_CULL_FACE);
+        glPopMatrix();
+        glEnable(GL_LIGHTING);
     }
     
-    // Second pass: render filled objects
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    glDepthFunc(GL_LESS);
+    // Second pass: Render normal objects
+    if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
+        // Only render where stencil is 0 (not outline)
+        glStencilFunc(GL_ALWAYS, 0, 0xFF);
+        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+    }
     
+    // Render scene normally
     SoGLRenderAction renderAction(viewport);
     renderAction.apply(m_sceneRoot);
     
-    // Restore defaults
-    glLineWidth(1.0f);
-    glDisable(GL_LINE_SMOOTH);
+    // Disable stencil test
+    glDisable(GL_STENCIL_TEST);
     
     // Swap buffers
     SwapBuffers();
