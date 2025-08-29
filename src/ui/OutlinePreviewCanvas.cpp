@@ -18,6 +18,7 @@
 #include <Inventor/nodes/SoCylinder.h>
 #include <Inventor/nodes/SoCone.h>
 #include <Inventor/nodes/SoRotationXYZ.h>
+#include <Inventor/nodes/SoLightModel.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 
 #include <GL/gl.h>

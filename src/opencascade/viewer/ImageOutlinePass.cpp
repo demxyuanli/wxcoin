@@ -29,6 +29,8 @@
 #include <Inventor/nodes/SoTexture2.h>
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoTransform.h>
+#include <Inventor/nodes/SoLightModel.h>
+#include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/SbViewVolume.h>
 #include <Inventor/SbMatrix.h>
 #ifdef IMAGE_OUTLINE_ENABLE_GL_VALIDATION
@@ -537,20 +539,32 @@ void ImageOutlinePass::buildShaders() {
 	m_depthTexture->wrapT = SoSceneTexture2::CLAMP;
 	LOG_DBG("depth RTT created", "ImageOutlinePass");
 
-	// CRITICAL: Set scene to capture the entire scene (including camera)
-	// SoSceneTexture2 needs the complete scene graph with camera to render properly
-	if (m_sceneManager) {
-		SoSeparator* sceneRoot = m_sceneManager->getSceneRoot();
-		if (sceneRoot) {
-			m_colorTexture->scene = sceneRoot;
-			m_depthTexture->scene = sceneRoot;
-			LOG_DBG("RTT scenes set to full scene root", "ImageOutlinePass");
-		} else if (m_captureRoot) {
-			// Fallback to capture root if scene root not available
-			m_colorTexture->scene = m_captureRoot;
-			m_depthTexture->scene = m_captureRoot;
-			LOG_DBG("RTT scenes set to capture root", "ImageOutlinePass");
+	// CRITICAL: Create a scene graph that includes camera for proper rendering
+	// SoSceneTexture2 needs camera to render depth properly
+	if (m_sceneManager && m_captureRoot) {
+		// Create a temporary scene root that includes camera
+		SoSeparator* tempSceneRoot = new SoSeparator;
+		tempSceneRoot->ref();
+		
+		// Add camera from scene manager
+		SoCamera* camera = m_sceneManager->getCamera();
+		if (camera) {
+			tempSceneRoot->addChild(camera);
 		}
+		
+		// Add the capture root (geometry)
+		tempSceneRoot->addChild(m_captureRoot);
+		
+		// Set scenes for render-to-texture
+		m_colorTexture->scene = tempSceneRoot;
+		m_depthTexture->scene = tempSceneRoot;
+		
+		// Store reference for cleanup
+		m_tempSceneRoot = tempSceneRoot;
+		
+		LOG_DBG("RTT scenes set with camera and geometry", "ImageOutlinePass");
+	} else {
+		LOG_WRN("missing scene manager or capture root", "ImageOutlinePass");
 	}
 
 	// Create texture samplers
