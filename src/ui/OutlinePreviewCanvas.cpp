@@ -432,42 +432,110 @@ void OutlinePreviewCanvas::render() {
         
         glEnable(GL_DEPTH_TEST);
         
-        // First render the scene normally
-        SoGLRenderAction renderAction(viewport);
-        renderAction.apply(m_sceneRoot);
-        
-        // Simple outline rendering - just render the scene again in wireframe
+        // Outline rendering using silhouette edges
         if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
             
-            // Set up for wireframe
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glLineWidth(2.0f);
-            glEnable(GL_LINE_SMOOTH);
-            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-            
-            // Offset to prevent z-fighting
-            glEnable(GL_POLYGON_OFFSET_LINE);
-            glPolygonOffset(-1.0f, -1.0f);
-            
-            // Disable lighting for pure color
+            // Step 1: Render scaled-up black/orange silhouettes
+            glClear(GL_DEPTH_BUFFER_BIT);  // Clear depth to ensure outline is behind
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);  // Show back faces only
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             glDisable(GL_LIGHTING);
             
-            // Set color based on hover
-            if (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4) {
-                // We have a hovered object - use special coloring
-                glColor3f(1.0f, 0.5f, 0.0f);  // Orange
+            // Use slight offset to avoid z-fighting
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            glPolygonOffset(1.0f, 1.0f);
+            
+            // Render all objects slightly larger
+            glMatrixMode(GL_MODELVIEW);
+            glPushMatrix();
+            
+            // Scale from center of scene
+            float scale = 1.0f + (m_outlineParams.thickness * 0.005f);
+            glScalef(scale, scale, scale);
+            
+            // Check hover state
+            bool hasHover = (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4);
+            
+            if (hasHover) {
+                // Render non-hovered objects in black
+                for (int i = 1; i <= 4 && m_modelRoot && i < m_modelRoot->getNumChildren(); i++) {
+                    if (i == m_hoveredObjectIndex) continue;  // Skip hovered
+                    
+                    glColor3f(0.0f, 0.0f, 0.0f);  // Black
+                    
+                    // Create temp scene
+                    SoSeparator* temp = new SoSeparator;
+                    temp->ref();
+                    
+                    // Add transforms
+                    if (m_modelRoot->getNumChildren() > 0 && 
+                        m_modelRoot->getChild(0)->isOfType(SoRotationXYZ::getClassTypeId())) {
+                        temp->addChild(m_modelRoot->getChild(0));
+                    }
+                    
+                    SoTransform* trans = new SoTransform;
+                    switch(i) {
+                        case 1: trans->translation.setValue(-2.0f, 2.0f, 0.0f); break;
+                        case 2: trans->translation.setValue(2.0f, 2.0f, 0.0f); break;
+                        case 3: trans->translation.setValue(-2.0f, -2.0f, 0.0f); break;
+                        case 4: trans->translation.setValue(2.0f, -2.0f, 0.0f); break;
+                    }
+                    temp->addChild(trans);
+                    temp->addChild(m_modelRoot->getChild(i));
+                    
+                    SoGLRenderAction action(viewport);
+                    action.apply(temp);
+                    temp->unref();
+                }
+                
+                // Render hovered object in orange
+                if (m_hoveredObjectIndex <= m_modelRoot->getNumChildren()) {
+                    glColor3f(1.0f, 0.5f, 0.0f);  // Orange
+                    
+                    SoSeparator* temp = new SoSeparator;
+                    temp->ref();
+                    
+                    if (m_modelRoot->getChild(0)->isOfType(SoRotationXYZ::getClassTypeId())) {
+                        temp->addChild(m_modelRoot->getChild(0));
+                    }
+                    
+                    SoTransform* trans = new SoTransform;
+                    switch(m_hoveredObjectIndex) {
+                        case 1: trans->translation.setValue(-2.0f, 2.0f, 0.0f); break;
+                        case 2: trans->translation.setValue(2.0f, 2.0f, 0.0f); break;
+                        case 3: trans->translation.setValue(-2.0f, -2.0f, 0.0f); break;
+                        case 4: trans->translation.setValue(2.0f, -2.0f, 0.0f); break;
+                    }
+                    temp->addChild(trans);
+                    temp->addChild(m_modelRoot->getChild(m_hoveredObjectIndex));
+                    
+                    SoGLRenderAction action(viewport);
+                    action.apply(temp);
+                    temp->unref();
+                }
             } else {
-                // No hover - use black
-                glColor3f(0.0f, 0.0f, 0.0f);  // Black
+                // No hover - all black
+                glColor3f(0.0f, 0.0f, 0.0f);
+                SoGLRenderAction action(viewport);
+                action.apply(m_modelRoot);
             }
             
-            // Render the entire scene in wireframe
-            SoGLRenderAction wireAction(viewport);
-            wireAction.apply(m_sceneRoot);
+            glPopMatrix();
+            
+            // Reset state
+            glDisable(GL_POLYGON_OFFSET_FILL);
+            glCullFace(GL_BACK);
             
             glPopAttrib();
         }
+        
+        // Step 2: Render the scene normally on top
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        SoGLRenderAction renderAction(viewport);
+        renderAction.apply(m_sceneRoot);
         
         SwapBuffers();
         m_needsRedraw = false;
