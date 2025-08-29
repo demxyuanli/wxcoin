@@ -147,10 +147,8 @@ void DockOverlay::updateDropAreas() {
 void DockOverlay::onPaint(wxPaintEvent& event) {
     wxAutoBufferedPaintDC dc(this);
     
-    // Fill with semi-transparent background for debugging
-    dc.SetBrush(wxBrush(wxColour(100, 100, 255, 30)));  // Light blue, semi-transparent
-    dc.SetPen(wxPen(wxColour(0, 0, 255), 2));
-    dc.DrawRectangle(GetClientRect());
+    // Don't fill background - keep it transparent
+    // Only draw drop indicators
     
     if (!m_targetWidget) {
         return;
@@ -246,21 +244,30 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     wxRect rect = dropArea.rect();
     
     if (dropArea.isHighlighted()) {
-        // Draw highlighted drop area
-        dc.SetPen(wxPen(m_frameColor, m_frameWidth));
-        dc.SetBrush(wxBrush(m_areaColor));
+        // Draw preview of where the widget will be docked
+        wxRect previewRect = getPreviewRect(dropArea.area());
+        if (!previewRect.IsEmpty()) {
+            // Draw semi-transparent preview area
+            dc.SetPen(wxPen(wxColour(0, 120, 215), 2));  // Blue outline
+            dc.SetBrush(wxBrush(wxColour(0, 120, 215, 50)));  // Semi-transparent blue fill
+            dc.DrawRectangle(previewRect);
+        }
+        
+        // Draw highlighted drop indicator
+        dc.SetPen(wxPen(wxColour(0, 120, 215), 3));
+        dc.SetBrush(wxBrush(wxColour(0, 120, 215)));
     } else {
-        // Draw normal drop area
-        dc.SetPen(wxPen(m_frameColor, 1));
-        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        // Draw normal drop indicator
+        dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW), 1));
+        dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
     }
     
-    // Draw rectangle
+    // Draw drop indicator
     dc.DrawRectangle(rect);
     
     // Draw direction arrow
     wxPoint center(rect.x + rect.width / 2, rect.y + rect.height / 2);
-    dc.SetPen(wxPen(m_frameColor, 2));
+    dc.SetPen(wxPen(wxColour(255, 255, 255), 2));  // White arrow for visibility
     
     switch (dropArea.area()) {
     case TopDockWidgetArea:
@@ -471,6 +478,41 @@ wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {
     default:
         return wxRect();
     }
+}
+
+wxRect DockOverlay::getPreviewRect(DockWidgetArea area) const {
+    if (!m_targetWidget) {
+        return wxRect();
+    }
+    
+    wxRect clientRect = GetClientRect();
+    wxRect previewRect;
+    int splitRatio = 50; // 50% split
+    
+    switch (area) {
+    case TopDockWidgetArea:
+        previewRect = wxRect(0, 0, clientRect.width, clientRect.height * splitRatio / 100);
+        break;
+    case BottomDockWidgetArea:
+        previewRect = wxRect(0, clientRect.height * (100 - splitRatio) / 100, 
+                           clientRect.width, clientRect.height * splitRatio / 100);
+        break;
+    case LeftDockWidgetArea:
+        previewRect = wxRect(0, 0, clientRect.width * splitRatio / 100, clientRect.height);
+        break;
+    case RightDockWidgetArea:
+        previewRect = wxRect(clientRect.width * (100 - splitRatio) / 100, 0, 
+                           clientRect.width * splitRatio / 100, clientRect.height);
+        break;
+    case CenterDockWidgetArea:
+        // For center, show the entire area
+        previewRect = clientRect;
+        break;
+    default:
+        break;
+    }
+    
+    return previewRect;
 }
 
 } // namespace ads

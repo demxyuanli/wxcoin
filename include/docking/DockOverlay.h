@@ -77,6 +77,10 @@ public:
     // Mode
     eMode mode() const { return m_mode; }
     
+    // Allowed areas
+    void setAllowedAreas(int areas) { m_allowedAreas = areas; updateDropAreas(); }
+    int allowedAreas() const { return m_allowedAreas; }
+    
 protected:
     // Event handlers
     void onPaint(wxPaintEvent& event);
@@ -90,6 +94,7 @@ protected:
     void paintDropAreas(wxDC& dc);
     void paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropArea);
     wxRect dropIndicatorRect(DockWidgetArea area) const;
+    wxRect getPreviewRect(DockWidgetArea area) const;
     
 private:
     // Member variables

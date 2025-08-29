@@ -572,9 +572,52 @@ void FloatingDragPreview::finishDrag() {
 void FloatingDragPreview::onPaint(wxPaintEvent& event) {
     wxPaintDC dc(this);
     
-    if (m_contentBitmap.IsOk()) {
-        dc.DrawBitmap(m_contentBitmap, 0, 0);
+    // Get the title of the widget being dragged
+    wxString title = "Dock Widget";
+    DockWidget* dockWidget = dynamic_cast<DockWidget*>(m_content);
+    if (dockWidget) {
+        title = dockWidget->title();
+    } else {
+        DockArea* dockArea = dynamic_cast<DockArea*>(m_content);
+        if (dockArea && dockArea->currentDockWidget()) {
+            title = dockArea->currentDockWidget()->title();
+        }
     }
+    
+    // Draw a schematic representation instead of actual content
+    wxSize size = GetClientSize();
+    
+    // Background
+    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)));
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWFRAME), 2));
+    dc.DrawRectangle(0, 0, size.GetWidth(), size.GetHeight());
+    
+    // Tab bar area
+    int tabHeight = 30;
+    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+    dc.DrawRectangle(0, 0, size.GetWidth(), tabHeight);
+    
+    // Tab
+    int tabWidth = std::min(150, size.GetWidth() - 20);
+    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)));
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
+    dc.DrawRectangle(10, 5, tabWidth, tabHeight - 5);
+    
+    // Tab text
+    dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
+    dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+    wxSize textSize = dc.GetTextExtent(title);
+    int textX = 10 + (tabWidth - textSize.GetWidth()) / 2;
+    int textY = 5 + (tabHeight - 5 - textSize.GetHeight()) / 2;
+    dc.DrawText(title, textX, textY);
+    
+    // Content area hint
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT), 1, wxPENSTYLE_DOT));
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    int margin = 10;
+    dc.DrawRectangle(margin, tabHeight + margin, 
+                    size.GetWidth() - 2 * margin, 
+                    size.GetHeight() - tabHeight - 2 * margin);
 }
 
 void FloatingDragPreview::updateContentBitmap() {
@@ -582,61 +625,13 @@ void FloatingDragPreview::updateContentBitmap() {
         return;
     }
     
-    wxSize size = m_content->GetSize();
-    
-    // Create a smaller preview size if the widget is too large
-    const int maxPreviewSize = 400;
-    if (size.GetWidth() > maxPreviewSize || size.GetHeight() > maxPreviewSize) {
-        double scale = std::min(
-            static_cast<double>(maxPreviewSize) / size.GetWidth(),
-            static_cast<double>(maxPreviewSize) / size.GetHeight()
-        );
-        size.SetWidth(static_cast<int>(size.GetWidth() * scale));
-        size.SetHeight(static_cast<int>(size.GetHeight() * scale));
-    }
-    
+    // Use a fixed size for the schematic preview
+    wxSize size(200, 150);
     SetSize(size);
     
-    // Create bitmap from content
-    m_contentBitmap = wxBitmap(size);
-    wxMemoryDC memDC(m_contentBitmap);
-    
-    // Fill background
-    memDC.SetBackground(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)));
-    memDC.Clear();
-    
-    // Try to render actual widget content
-    if (m_content->IsShownOnScreen()) {
-        // Use wxClientDC to capture the actual widget content
-        wxClientDC sourceDC(m_content);
-        wxSize sourceSize = m_content->GetClientSize();
-        
-        // If we're scaling down, use StretchBlit
-        if (size != sourceSize) {
-            memDC.StretchBlit(0, 0, size.GetWidth(), size.GetHeight(),
-                            &sourceDC, 0, 0, sourceSize.GetWidth(), sourceSize.GetHeight());
-        } else {
-            memDC.Blit(0, 0, size.GetWidth(), size.GetHeight(), &sourceDC, 0, 0);
-        }
-    } else {
-        // Widget not visible, draw placeholder
-        memDC.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW), 2));
-        memDC.SetBrush(*wxTRANSPARENT_BRUSH);
-        memDC.DrawRectangle(1, 1, size.GetWidth() - 2, size.GetHeight() - 2);
-        
-        // Draw title if it's a DockWidget
-        DockWidget* dockWidget = dynamic_cast<DockWidget*>(m_content);
-        if (dockWidget) {
-            wxString title = dockWidget->title();
-            memDC.SetFont(GetFont());
-            memDC.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT));
-            
-            wxRect textRect(0, 0, size.GetWidth(), size.GetHeight());
-            memDC.DrawLabel(title, textRect, wxALIGN_CENTER);
-        }
-    }
-    
-    memDC.SelectObject(wxNullBitmap);
+    // We don't need to create a bitmap anymore since we draw directly in onPaint
+    // Just trigger a repaint
+    Refresh();
     
     // Apply transparency
     SetTransparent(200); // 80% opacity

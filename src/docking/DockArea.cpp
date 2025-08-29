@@ -871,6 +871,13 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
             DockArea* targetArea = nullptr;
             wxWindow* checkWindow = windowUnderMouse;
             
+            // First check if we're over a tab bar
+            DockAreaTabBar* targetTabBar = dynamic_cast<DockAreaTabBar*>(windowUnderMouse);
+            if (!targetTabBar && windowUnderMouse) {
+                // Check parent in case we're over a child of tab bar
+                targetTabBar = dynamic_cast<DockAreaTabBar*>(windowUnderMouse->GetParent());
+            }
+            
             // Find DockArea in parent hierarchy
             while (checkWindow && !targetArea) {
                 targetArea = dynamic_cast<DockArea*>(checkWindow);
@@ -883,7 +890,15 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
                 wxLogDebug("Found target DockArea, showing overlay");
                 DockOverlay* overlay = manager->dockAreaOverlay();
                 if (overlay) {
-                    overlay->showOverlay(targetArea);
+                    // If over tab bar, only show center drop area for tab merge
+                    if (targetTabBar && targetTabBar->GetParent() == targetArea) {
+                        wxLogDebug("Over tab bar - showing center drop area only");
+                        overlay->showOverlay(targetArea);
+                        overlay->setAllowedAreas(CenterDockWidgetArea);  // Only allow center drop
+                    } else {
+                        overlay->showOverlay(targetArea);
+                        overlay->setAllowedAreas(AllDockAreas);  // Allow all areas
+                    }
                 } else {
                     wxLogDebug("No area overlay available");
                 }
