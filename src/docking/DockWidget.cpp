@@ -340,6 +340,21 @@ bool DockWidget::closeDockWidgetInternal(bool force) {
         return false;
     }
     
+    // Check if this is the last widget in the last dock area
+    if (!force && m_dockArea) {
+        // If this area has only one widget
+        if (m_dockArea->dockWidgets().size() <= 1) {
+            // And the container has only one area
+            if (m_dockArea->dockContainer() && 
+                m_dockArea->dockContainer()->dockAreaCount() <= 1) {
+                wxLogDebug("Cannot close the last widget in the last dock area");
+                wxMessageBox("Cannot close the last widget in the last dock area", 
+                           "Warning", wxOK | wxICON_WARNING);
+                return false;
+            }
+        }
+    }
+    
     if (!force && hasFeature(CustomCloseHandling) && m_closeHandler) {
         if (!m_closeHandler()) {
             return false;

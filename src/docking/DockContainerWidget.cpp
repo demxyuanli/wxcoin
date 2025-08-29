@@ -192,6 +192,11 @@ void DockContainerWidget::removeDockArea(DockArea* area) {
     event.SetEventObject(this);
     ProcessWindowEvent(event);
     
+    // Update remaining dock area title bar button states
+    for (auto* remainingArea : m_dockAreas) {
+        remainingArea->updateTitleBarButtonStates();
+    }
+    
     // Now safely destroy the area
     area->Destroy();
 }
@@ -353,6 +358,11 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
     wxCommandEvent event(EVT_DOCK_AREAS_ADDED);
     event.SetEventObject(this);
     ProcessWindowEvent(event);
+    
+    // Update all dock area title bar button states
+    for (auto* area : m_dockAreas) {
+        area->updateTitleBarButtonStates();
+    }
 }
 
 void DockContainerWidget::splitDockArea(DockArea* dockArea, DockArea* newDockArea, 

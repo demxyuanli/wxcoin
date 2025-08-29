@@ -89,6 +89,9 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     if (m_dockManager) {
         m_dockManager->registerDockArea(this);
     }
+    
+    // Update initial button states
+    updateTitleBarButtonStates();
 }
 
 DockArea::~DockArea() {
@@ -363,6 +366,15 @@ void DockArea::closeArea() {
     if (m_isClosing) {
         return;
     }
+    
+    // Check if this is the last dock area
+    if (m_containerWidget && m_containerWidget->dockAreaCount() <= 1) {
+        wxLogDebug("Cannot close the last dock area");
+        // Optionally show a message to the user
+        wxMessageBox("Cannot close the last dock area", "Warning", wxOK | wxICON_WARNING);
+        return;
+    }
+    
     m_isClosing = true;
     
     // Notify closing
@@ -382,15 +394,15 @@ void DockArea::closeArea() {
         widget->closeDockWidget();
     }
     
-    // Remove from container
-    if (m_containerWidget) {
-        m_containerWidget->removeDockArea(this);
-    }
-    
-    // Notify closed
+    // Notify closed (before removal to ensure object is still valid)
     wxCommandEvent closedEvent(EVT_DOCK_AREA_CLOSED);
     closedEvent.SetEventObject(this);
     ProcessWindowEvent(closedEvent);
+    
+    // Remove from container (this will destroy the area)
+    if (m_containerWidget) {
+        m_containerWidget->removeDockArea(this);
+    }
     
     // Don't call Destroy() here - the container will handle it
 }
@@ -666,6 +678,21 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                             targetArea->dockContainer()->addDockWidget(dropArea, draggedWidget, targetArea);
                             docked = true;
                         }
+                        
+                        // Hide overlays before returning
+                        if (manager) {
+                            DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                            if (areaOverlay) {
+                                areaOverlay->hideOverlay();
+                            }
+                            DockOverlay* containerOverlay = manager->containerOverlay();
+                            if (containerOverlay) {
+                                containerOverlay->hideOverlay();
+                            }
+                        }
+                        
+                        // Return early since the area might be destroyed
+                        return;
                     }
                 }
             }
@@ -697,6 +724,21 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                         wxLogDebug("Widget ptr: %p, title: %s", draggedWidget, draggedWidget->title().c_str());
                         manager->addDockWidget(dropArea, draggedWidget);
                         docked = true;
+                        
+                        // Hide overlays before returning
+                        if (manager) {
+                            DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                            if (areaOverlay) {
+                                areaOverlay->hideOverlay();
+                            }
+                            DockOverlay* containerOverlay = manager->containerOverlay();
+                            if (containerOverlay) {
+                                containerOverlay->hideOverlay();
+                            }
+                        }
+                        
+                        // Return early since the area might be destroyed
+                        return;
                     }
                 }
             }
@@ -1129,6 +1171,19 @@ void DockAreaTitleBar::updateTitle() {
 
 void DockAreaTitleBar::updateButtonStates() {
     // Update button visibility based on features
+    
+    // Check if we should disable close button
+    if (m_dockArea && m_dockArea->dockContainer()) {
+        bool canClose = m_dockArea->dockContainer()->dockAreaCount() > 1;
+        m_closeButton->Enable(canClose);
+        
+        // Update tooltip
+        if (!canClose) {
+            m_closeButton->SetToolTip("Cannot close the last dock area");
+        } else {
+            m_closeButton->SetToolTip("Close this dock area");
+        }
+    }
 }
 
 void DockAreaTitleBar::showCloseButton(bool show) {
