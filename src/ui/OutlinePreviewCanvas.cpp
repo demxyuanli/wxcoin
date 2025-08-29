@@ -423,12 +423,9 @@ void OutlinePreviewCanvas::render() {
     // If FBO or shaders not ready, use simple rendering
     bool useFBO = m_fbo && m_normalShader && m_outlineShader && glGenFramebuffers && glUseProgram;
     
-    // Debug: force try FBO if shaders are created
-    if (m_normalShader && m_outlineShader) {
-        wxLogMessage("Attempting FBO render: fbo=%d, normal=%d, outline=%d", 
-                     m_fbo, m_normalShader, m_outlineShader);
-        useFBO = true;
-    }
+    // For now, disable FBO rendering to avoid issues
+    // TODO: Fix FBO implementation
+    useFBO = false;
     
     if (!useFBO) {
         // Simple fallback rendering
@@ -683,7 +680,14 @@ void main() {
 )GLSL";
 
 void OutlinePreviewCanvas::initializeFBO(int width, int height) {
-    wxLogMessage("Initializing FBO: %dx%d", width, height);
+    static int lastWidth = 0, lastHeight = 0;
+    
+    // Only log if size changed
+    if (width != lastWidth || height != lastHeight) {
+        wxLogMessage("Initializing FBO: %dx%d", width, height);
+        lastWidth = width;
+        lastHeight = height;
+    }
     
     // Clean up existing FBO if any
     cleanupFBO();
@@ -701,7 +705,12 @@ void OutlinePreviewCanvas::initializeFBO(int width, int height) {
     glGenFramebuffers(1, &m_fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
     
-    wxLogMessage("FBO created: %u", m_fbo);
+    // Only log FBO creation once
+    static bool fboLogged = false;
+    if (!fboLogged && m_fbo) {
+        wxLogMessage("FBO created: %u", m_fbo);
+        fboLogged = true;
+    }
     
     // Color texture
     glGenTextures(1, &m_colorTexture);
@@ -762,36 +771,42 @@ void OutlinePreviewCanvas::cleanupFBO() {
 }
 
 void OutlinePreviewCanvas::initializeShaders() {
-    wxLogMessage("Initializing shaders...");
+    static bool initialized = false;
+    if (!initialized) {
+        wxLogMessage("Initializing shaders...");
+        initialized = true;
+    }
     
     // Create normal shader program
     m_normalShader = createShaderProgram(g_normalVertexShader, g_normalFragmentShader);
     if (!m_normalShader) {
-        wxLogError("Failed to create normal shader");
-    } else {
-        wxLogMessage("Normal shader created: %u", m_normalShader);
+        static bool errorLogged = false;
+        if (!errorLogged) {
+            wxLogError("Failed to create normal shader");
+            errorLogged = true;
+        }
     }
     
     // Create outline shader program
     m_outlineShader = createShaderProgram(g_outlineVertexShader, g_outlineFragmentShader);
     if (!m_outlineShader) {
-        wxLogError("Failed to create outline shader");
+        static bool errorLogged = false;
+        if (!errorLogged) {
+            wxLogError("Failed to create outline shader");
+            errorLogged = true;
+        }
     } else {
-        wxLogMessage("Outline shader created: %u", m_outlineShader);
         // Bind attribute locations before linking
         if (glBindAttribLocation) {
             glUseProgram(m_outlineShader);
             glBindAttribLocation(m_outlineShader, 0, "aPosition");
             glLinkProgram(m_outlineShader);
             glUseProgram(0);
-            wxLogMessage("Bound aPosition to location 0");
         }
     }
     
     // Create quad VAO for fullscreen rendering
     createQuadVAO();
-    
-    wxLogMessage("Shaders initialized: normal=%u, outline=%u", m_normalShader, m_outlineShader);
 }
 
 void OutlinePreviewCanvas::cleanupShaders() {
