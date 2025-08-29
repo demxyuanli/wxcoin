@@ -487,116 +487,84 @@ void OutlinePreviewCanvas::render() {
         
         glEnable(GL_DEPTH_TEST);
         
-        // Outline rendering using silhouette edges
-        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-            glPushAttrib(GL_ALL_ATTRIB_BITS);
-            
-            // Step 1: Render scaled-up black/orange silhouettes
-            glClear(GL_DEPTH_BUFFER_BIT);  // Clear depth to ensure outline is behind
-            glEnable(GL_CULL_FACE);
-            glCullFace(GL_FRONT);  // Show back faces only
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-            glDisable(GL_LIGHTING);
-            
-            // Use slight offset to avoid z-fighting
-            glEnable(GL_POLYGON_OFFSET_FILL);
-            glPolygonOffset(1.0f, 1.0f);
-            
-            // Render all objects slightly larger
-            glMatrixMode(GL_MODELVIEW);
-            glPushMatrix();
-            
-            // Scale from center of scene
-            float scale = 1.0f + (m_outlineParams.thickness * 0.005f);
-            glScalef(scale, scale, scale);
-            
-            // Check hover state
-            bool hasHover = (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4);
-            
-            if (hasHover) {
-                // Render non-hovered objects in black
-                for (int i = 1; i <= 4 && m_modelRoot && i < m_modelRoot->getNumChildren(); i++) {
-                    if (i == m_hoveredObjectIndex) continue;  // Skip hovered
-                    
-                    glColor3f(m_outlineColor.Red() / 255.0f,
-                             m_outlineColor.Green() / 255.0f,
-                             m_outlineColor.Blue() / 255.0f);
-                    
-                    // Create temp scene
-                    SoSeparator* temp = new SoSeparator;
-                    temp->ref();
-                    
-                    // Add transforms
-                    if (m_modelRoot->getNumChildren() > 0 && 
-                        m_modelRoot->getChild(0)->isOfType(SoRotationXYZ::getClassTypeId())) {
-                        temp->addChild(m_modelRoot->getChild(0));
-                    }
-                    
-                    SoTransform* trans = new SoTransform;
-                    switch(i) {
-                        case 1: trans->translation.setValue(-2.0f, 2.0f, 0.0f); break;
-                        case 2: trans->translation.setValue(2.0f, 2.0f, 0.0f); break;
-                        case 3: trans->translation.setValue(-2.0f, -2.0f, 0.0f); break;
-                        case 4: trans->translation.setValue(2.0f, -2.0f, 0.0f); break;
-                    }
-                    temp->addChild(trans);
-                    temp->addChild(m_modelRoot->getChild(i));
-                    
-                    SoGLRenderAction action(viewport);
-                    action.apply(temp);
-                    temp->unref();
-                }
-                
-                // Render hovered object in orange
-                if (m_hoveredObjectIndex <= m_modelRoot->getNumChildren()) {
-                    glColor3f(m_hoverColor.Red() / 255.0f,
-                             m_hoverColor.Green() / 255.0f,
-                             m_hoverColor.Blue() / 255.0f);
-                    
-                    SoSeparator* temp = new SoSeparator;
-                    temp->ref();
-                    
-                    if (m_modelRoot->getChild(0)->isOfType(SoRotationXYZ::getClassTypeId())) {
-                        temp->addChild(m_modelRoot->getChild(0));
-                    }
-                    
-                    SoTransform* trans = new SoTransform;
-                    switch(m_hoveredObjectIndex) {
-                        case 1: trans->translation.setValue(-2.0f, 2.0f, 0.0f); break;
-                        case 2: trans->translation.setValue(2.0f, 2.0f, 0.0f); break;
-                        case 3: trans->translation.setValue(-2.0f, -2.0f, 0.0f); break;
-                        case 4: trans->translation.setValue(2.0f, -2.0f, 0.0f); break;
-                    }
-                    temp->addChild(trans);
-                    temp->addChild(m_modelRoot->getChild(m_hoveredObjectIndex));
-                    
-                    SoGLRenderAction action(viewport);
-                    action.apply(temp);
-                    temp->unref();
-                }
-            } else {
-                // No hover - use default outline color
-                glColor3f(m_outlineColor.Red() / 255.0f,
-                         m_outlineColor.Green() / 255.0f,
-                         m_outlineColor.Blue() / 255.0f);
-                SoGLRenderAction action(viewport);
-                action.apply(m_modelRoot);
-            }
-            
-            glPopMatrix();
-            
-            // Reset state
-            glDisable(GL_POLYGON_OFFSET_FILL);
-            glCullFace(GL_BACK);
-            
-            glPopAttrib();
-        }
-        
-        // Step 2: Render the scene normally on top
+        // First render the scene normally
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LESS);
         SoGLRenderAction renderAction(viewport);
         renderAction.apply(m_sceneRoot);
+        
+        // Then render the outline as wireframe overlay
+        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
+            glPushAttrib(GL_ALL_ATTRIB_BITS);
+            
+            // Setup for wireframe rendering
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glLineWidth(m_outlineParams.thickness);
+            glDisable(GL_LIGHTING);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            
+            // Enable line smoothing
+            glEnable(GL_LINE_SMOOTH);
+            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+            
+            // Use polygon offset to avoid z-fighting
+            glEnable(GL_POLYGON_OFFSET_LINE);
+            glPolygonOffset(-1.0f, -1.0f);
+            
+            // Keep depth test but allow equal depth
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+            
+            // Set color based on hover state
+            if (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4) {
+                // Draw all objects with default outline first
+                glColor4f(m_outlineColor.Red() / 255.0f,
+                         m_outlineColor.Green() / 255.0f,
+                         m_outlineColor.Blue() / 255.0f,
+                         0.5f);  // Semi-transparent
+                
+                SoGLRenderAction outlineAction(viewport);
+                outlineAction.apply(m_sceneRoot);
+                
+                // Then highlight the hovered object
+                glLineWidth(m_outlineParams.thickness * 3.0f);  // Thicker line for hover
+                glColor4f(m_hoverColor.Red() / 255.0f,
+                         m_hoverColor.Green() / 255.0f,
+                         m_hoverColor.Blue() / 255.0f,
+                         1.0f);  // Opaque
+                
+                // Render only the hovered object
+                if (m_hoveredObjectIndex < m_modelRoot->getNumChildren()) {
+                    SoSeparator* hoverScene = new SoSeparator;
+                    hoverScene->ref();
+                    hoverScene->addChild(m_camera);
+                    
+                    SoSeparator* objGroup = new SoSeparator;
+                    if (m_modelRoot->getNumChildren() > 0 && 
+                        m_modelRoot->getChild(0)->isOfType(SoRotationXYZ::getClassTypeId())) {
+                        objGroup->addChild(m_modelRoot->getChild(0));
+                    }
+                    objGroup->addChild(m_modelRoot->getChild(m_hoveredObjectIndex));
+                    hoverScene->addChild(objGroup);
+                    
+                    SoGLRenderAction hoverAction(viewport);
+                    hoverAction.apply(hoverScene);
+                    hoverScene->unref();
+                }
+            } else {
+                // No hover - render all with outline color
+                glColor4f(m_outlineColor.Red() / 255.0f,
+                         m_outlineColor.Green() / 255.0f,
+                         m_outlineColor.Blue() / 255.0f,
+                         1.0f);
+                
+                SoGLRenderAction outlineAction(viewport);
+                outlineAction.apply(m_sceneRoot);
+            }
+            
+            glPopAttrib();
+        }
         
         SwapBuffers();
         m_needsRedraw = false;
