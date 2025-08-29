@@ -81,6 +81,15 @@ void MouseHandler::handleMouseButton(wxMouseEvent& event) {
 
 
 void MouseHandler::handleMouseMotion(wxMouseEvent& event) {
+    // Update hover highlighting for OCC geometries
+    if (m_canvas) {
+        OCCViewer* occViewer = m_canvas->getOCCViewer();
+        if (occViewer && occViewer->isHoverHighlightEnabled()) {
+            wxPoint screenPos = event.GetPosition();
+            occViewer->updateHoverHighlight(screenPos);
+        }
+    }
+    
     if (m_operationMode == OperationMode::VIEW && m_navigationController) {
         m_navigationController->handleMouseMotion(event);
     } else {

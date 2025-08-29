@@ -43,6 +43,8 @@ enum class CommandType {
     ToggleWireframe,
     ToggleShading,
     ToggleEdges,
+    ToggleOutline,
+    OutlineSettings,
 
 
 
@@ -104,6 +106,8 @@ inline const std::string& to_string(CommandType type) {
             {CommandType::ToggleWireframe, "TOGGLE_WIREFRAME"},
             {CommandType::ToggleShading, "TOGGLE_SHADING"},
             {CommandType::ToggleEdges, "TOGGLE_EDGES"},
+            {CommandType::ToggleOutline, "TOGGLE_OUTLINE"},
+            {CommandType::OutlineSettings, "OUTLINE_SETTINGS"},
 
 
 
@@ -186,6 +190,8 @@ inline CommandType from_string(const std::string& str) {
             {"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
             {"TOGGLE_SHADING", CommandType::ToggleShading},
             {"TOGGLE_EDGES", CommandType::ToggleEdges},
+            {"TOGGLE_OUTLINE", CommandType::ToggleOutline},
+            {"OUTLINE_SETTINGS", CommandType::OutlineSettings},
 
 
 

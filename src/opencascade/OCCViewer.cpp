@@ -13,6 +13,9 @@
 #include "ObjectTreePanel.h"
 #include "ViewRefreshManager.h"
 #include "optimizer/PerformanceOptimizer.h"
+#include "viewer/OutlineDisplayManager.h"
+#include "viewer/HoverSilhouetteManager.h"
+#include "viewer/PickingService.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
@@ -78,7 +81,13 @@ void OCCViewer::initializeViewer()
         if (objectRoot) {
             objectRoot->addChild(m_occRoot);
             objectRoot->addChild(m_normalRoot);
-            LOG_INF_S("OCC Viewer initialized successfully");
+            
+            // Initialize outline and picking services
+            m_pickingService = std::make_unique<PickingService>(m_sceneManager, &m_geometries);
+            m_outlineManager = std::make_unique<OutlineDisplayManager>(m_sceneManager, m_occRoot, &m_geometries);
+            m_hoverManager = std::make_unique<HoverSilhouetteManager>(m_sceneManager, m_occRoot, m_pickingService.get());
+            
+            LOG_INF_S("OCC Viewer initialized successfully with outline functionality");
         } else {
             LOG_ERR_S("SceneManager object root is null, cannot initialize OCC Viewer");
             throw std::runtime_error("SceneManager object root is null");
@@ -116,6 +125,11 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
             if (canvas && canvas->getObjectTreePanel()) {
                 canvas->getObjectTreePanel()->addOCCGeometry(geometry);
             }
+        }
+        
+        // Notify outline manager about new geometry
+        if (m_outlineManager) {
+            m_outlineManager->onGeometryAdded(geometry);
         }
         
         // Auto-update scene bounds and view when geometry is added
@@ -176,6 +190,11 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
         if (canvas && canvas->getObjectTreePanel()) {
             canvas->getObjectTreePanel()->addOCCGeometry(geometry);
         }
+    }
+    
+    // Notify outline manager about new geometry
+    if (m_outlineManager) {
+        m_outlineManager->onGeometryAdded(geometry);
     }
     
     // Auto-update scene bounds and view when geometry is added
@@ -840,5 +859,86 @@ void OCCViewer::requestViewRefresh()
     if (m_sceneManager && m_sceneManager->getCanvas()) {
         Canvas* canvas = m_sceneManager->getCanvas();
         canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
+    }
+}
+
+// Outline rendering functionality
+void OCCViewer::setOutlineEnabled(bool enabled)
+{
+    if (m_outlineManager) {
+        m_outlineManager->setEnabled(enabled);
+        LOG_INF_S(std::string("Outline rendering ") + (enabled ? "enabled" : "disabled"));
+        
+        // Request view refresh to show changes
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            m_sceneManager->getCanvas()->Refresh(false);
+        }
+    }
+}
+
+bool OCCViewer::isOutlineEnabled() const
+{
+    return m_outlineManager ? m_outlineManager->isEnabled() : false;
+}
+
+void OCCViewer::setOutlineParams(const ImageOutlineParams& params)
+{
+    if (m_outlineManager) {
+        m_outlineManager->setParams(params);
+        LOG_DBG((std::string("Outline params updated: intensity=") + std::to_string(params.edgeIntensity)
+               + ", depthWeight=" + std::to_string(params.depthWeight)
+               + ", thickness=" + std::to_string(params.thickness)).c_str(), "OCCViewer");
+        
+        // Request view refresh to show changes
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            m_sceneManager->getCanvas()->Refresh(false);
+        }
+    }
+}
+
+ImageOutlineParams OCCViewer::getOutlineParams() const
+{
+    return m_outlineManager ? m_outlineManager->getParams() : ImageOutlineParams{};
+}
+
+void OCCViewer::refreshOutlines()
+{
+    if (m_outlineManager) {
+        m_outlineManager->refreshOutlineAll();
+        
+        // Request view refresh to show changes
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            m_sceneManager->getCanvas()->Refresh(false);
+        }
+    }
+}
+
+// Hover highlighting functionality
+void OCCViewer::setHoverHighlightEnabled(bool enabled)
+{
+    m_hoverHighlightEnabled = enabled;
+    
+    if (!enabled && m_hoverManager) {
+        // Disable all current hover highlights
+        m_hoverManager->disableAll();
+        
+        // Request view refresh to clear highlights
+        if (m_sceneManager && m_sceneManager->getCanvas()) {
+            m_sceneManager->getCanvas()->Refresh(false);
+        }
+    }
+    
+    LOG_INF_S(std::string("Hover highlighting ") + (enabled ? "enabled" : "disabled"));
+}
+
+bool OCCViewer::isHoverHighlightEnabled() const
+{
+    return m_hoverHighlightEnabled;
+}
+
+void OCCViewer::updateHoverHighlight(const wxPoint& screenPos)
+{
+    if (m_hoverHighlightEnabled && m_hoverManager) {
+        m_hoverManager->updateHoverSilhouetteAt(screenPos);
     }
 }

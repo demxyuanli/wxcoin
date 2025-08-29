@@ -3,6 +3,7 @@
 #include "OCCGeometry.h"
 #include "OCCMeshConverter.h"
 #include "ViewRefreshManager.h"
+#include "viewer/ImageOutlinePass.h"
 #include <vector>
 #include <memory>
 #include <wx/wx.h>
@@ -15,6 +16,9 @@
 class OCCGeometry;
 class SoSeparator;
 class SceneManager;
+class OutlineDisplayManager;
+class HoverSilhouetteManager;
+class PickingService;
 
 /**
  * @brief OpenCASCADE viewer integration
@@ -93,6 +97,18 @@ public:
     void requestViewRefresh();
     void remeshAllGeometries();
 
+    // Outline rendering
+    void setOutlineEnabled(bool enabled);
+    bool isOutlineEnabled() const;
+    void setOutlineParams(const ImageOutlineParams& params);
+    ImageOutlineParams getOutlineParams() const;
+    void refreshOutlines();
+
+    // Hover highlighting
+    void setHoverHighlightEnabled(bool enabled);
+    bool isHoverHighlightEnabled() const;
+    void updateHoverHighlight(const wxPoint& screenPos);
+
 private:
     void initializeViewer();
     void onLODTimer();
@@ -128,4 +144,10 @@ private:
 
     Quantity_Color m_defaultColor;
     double m_defaultTransparency;
+
+    // Outline and highlighting components
+    std::unique_ptr<OutlineDisplayManager> m_outlineManager;
+    std::unique_ptr<HoverSilhouetteManager> m_hoverManager;
+    std::unique_ptr<PickingService> m_pickingService;
+    bool m_hoverHighlightEnabled = true;
 };

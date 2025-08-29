@@ -7,6 +7,12 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCMeshConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryFactory.cpp
+    # Viewer module - Real-time outline and silhouette rendering
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ImageOutlinePass.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlineDisplayManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/HoverSilhouetteManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/DynamicSilhouetteRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/PickingService.cpp
 )
 
 set(OPENCASCADE_HEADERS
@@ -17,6 +23,12 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/OCCMeshConverter.h
     ${CMAKE_SOURCE_DIR}/include/STEPReader.h
     ${CMAKE_SOURCE_DIR}/include/GeometryFactory.h
+    # Viewer module headers
+    ${CMAKE_SOURCE_DIR}/include/viewer/ImageOutlinePass.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/OutlineDisplayManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/HoverSilhouetteManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/DynamicSilhouetteRenderer.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/PickingService.h
 )
 
 # Create OpenCASCADE static library
