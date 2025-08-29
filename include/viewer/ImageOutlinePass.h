@@ -90,5 +90,6 @@ private:
 	bool chooseTextureUnits();
 	void updateCameraMatrices();
 
-	DebugOutput m_debugOutput{ DebugOutput::ShowEdge };
+	DebugOutput m_debugOutput{ DebugOutput::Final };
+	SoSeparator* m_tempSceneRoot{ nullptr }; // Temporary scene root for RTT
 };

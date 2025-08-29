@@ -28,6 +28,7 @@
 #include <Inventor/nodes/SoTextureUnit.h>
 #include <Inventor/nodes/SoTexture2.h>
 #include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoTransform.h>
 #include <Inventor/SbViewVolume.h>
 #include <Inventor/SbMatrix.h>
 #ifdef IMAGE_OUTLINE_ENABLE_GL_VALIDATION
@@ -118,6 +119,10 @@ ImageOutlinePass::~ImageOutlinePass() {
 	if (m_uInvProjection) { m_uInvProjection->unref(); m_uInvProjection = nullptr; }
 	if (m_uInvView) { m_uInvView->unref(); m_uInvView = nullptr; }
 	if (m_uDebugOutput) { m_uDebugOutput->unref(); m_uDebugOutput = nullptr; }
+	
+	// Clean up temporary scene root
+	if (m_tempSceneRoot) { m_tempSceneRoot->unref(); m_tempSceneRoot = nullptr; }
+	
 	LOG_INF("destructor end", "ImageOutlinePass");
 }
 
@@ -207,6 +212,10 @@ void ImageOutlinePass::attachOverlay() {
 	m_overlayRoot->ref();
 	m_annotation = new SoAnnotation;
 	m_overlayRoot->addChild(m_annotation);
+	
+	// Add a camera-facing transform for the quad
+	auto* transform = new SoTransform;
+	m_annotation->addChild(transform);
 
 	// Build shader resources
 	buildShaders();
@@ -297,12 +306,17 @@ void ImageOutlinePass::detachOverlay() {
 	if (m_depthTexture) {
 		m_depthTexture->scene = nullptr;
 	}
+	
+	// Clean up temporary scene root
+	if (m_tempSceneRoot) {
+		m_tempSceneRoot->unref();
+		m_tempSceneRoot = nullptr;
+	}
 
 	// Properly clean up the overlay root
 	m_overlayRoot->unref();
 	m_overlayRoot = nullptr;
 	m_annotation = nullptr; // Owned by m_overlayRoot, no need to unref
-LOGINF:;
 	LOG_INF("detachOverlay end", "ImageOutlinePass");
 }
 
@@ -523,11 +537,20 @@ void ImageOutlinePass::buildShaders() {
 	m_depthTexture->wrapT = SoSceneTexture2::CLAMP;
 	LOG_DBG("depth RTT created", "ImageOutlinePass");
 
-	// CRITICAL: Set scene to capture root (geometry only, no overlays)
-	if (m_captureRoot) {
-		m_colorTexture->scene = m_captureRoot;
-		m_depthTexture->scene = m_captureRoot;
-		LOG_DBG("RTT scenes set", "ImageOutlinePass");
+	// CRITICAL: Set scene to capture the entire scene (including camera)
+	// SoSceneTexture2 needs the complete scene graph with camera to render properly
+	if (m_sceneManager) {
+		SoSeparator* sceneRoot = m_sceneManager->getSceneRoot();
+		if (sceneRoot) {
+			m_colorTexture->scene = sceneRoot;
+			m_depthTexture->scene = sceneRoot;
+			LOG_DBG("RTT scenes set to full scene root", "ImageOutlinePass");
+		} else if (m_captureRoot) {
+			// Fallback to capture root if scene root not available
+			m_colorTexture->scene = m_captureRoot;
+			m_depthTexture->scene = m_captureRoot;
+			LOG_DBG("RTT scenes set to capture root", "ImageOutlinePass");
+		}
 	}
 
 	// Create texture samplers
@@ -560,7 +583,18 @@ void ImageOutlinePass::buildShaders() {
 
 	auto* face = new SoFaceSet;
 	face->numVertices.set1Value(0, 4);
+	
+	// Disable lighting for the quad
+	auto* lightModel = new SoLightModel;
+	lightModel->model = SoLightModel::BASE_COLOR;
+	
+	// Set material to ensure visibility
+	auto* material = new SoMaterial;
+	material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	material->transparency = 0.0f;
 
+	m_quadSeparator->addChild(lightModel);
+	m_quadSeparator->addChild(material);
 	m_quadSeparator->addChild(texCoords);
 	m_quadSeparator->addChild(coords);
 	m_quadSeparator->addChild(face);
