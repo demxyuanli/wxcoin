@@ -124,6 +124,7 @@ EVT_ERASE_BACKGROUND(OutlinePreviewCanvas::onEraseBackground)
 EVT_LEFT_DOWN(OutlinePreviewCanvas::onMouseEvent)
 EVT_LEFT_UP(OutlinePreviewCanvas::onMouseEvent)
 EVT_MOTION(OutlinePreviewCanvas::onMouseEvent)
+EVT_MOUSE_CAPTURE_LOST(OutlinePreviewCanvas::onMouseCaptureLost)
 EVT_IDLE(OutlinePreviewCanvas::onIdle)
 END_EVENT_TABLE()
 
@@ -373,6 +374,12 @@ void OutlinePreviewCanvas::onMouseEvent(wxMouseEvent& event) {
         
         m_lastMousePos = currentPos;
     }
+}
+
+void OutlinePreviewCanvas::onMouseCaptureLost(wxMouseCaptureLostEvent& event) {
+    // Handle mouse capture lost
+    m_mouseDown = false;
+    // No need to call ReleaseMouse() here as the capture is already lost
 }
 
 void OutlinePreviewCanvas::onIdle(wxIdleEvent& event) {

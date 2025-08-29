@@ -32,6 +32,7 @@ private:
     void onSize(wxSizeEvent& event);
     void onEraseBackground(wxEraseEvent& event);
     void onMouseEvent(wxMouseEvent& event);
+    void onMouseCaptureLost(wxMouseCaptureLostEvent& event);
     void onIdle(wxIdleEvent& event);
     
     void createBasicModels();
