@@ -1,5 +1,6 @@
 #include "ui/OutlineSettingsDialog.h"
 #include "ui/OutlinePreviewCanvas.h"
+#include "ui/LogWindow.h"
 #include <wx/splitter.h>
 #include <wx/statline.h>
 #include <iomanip>
@@ -82,6 +83,7 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	// Buttons
 	controlSizer->AddStretchSpacer();
 	wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
+	wxButton* logBtn = new wxButton(controlPanel, wxID_ANY, "Show Log");
 	wxButton* resetBtn = new wxButton(controlPanel, wxID_ANY, "Reset");
 	wxButton* okBtn = new wxButton(controlPanel, wxID_OK, "OK");
 	wxButton* cancelBtn = new wxButton(controlPanel, wxID_CANCEL, "Cancel");
@@ -101,6 +103,11 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	
 	okBtn->Bind(wxEVT_BUTTON, &OutlineSettingsDialog::onOk, this);
 	
+	logBtn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+		LogWindow::ShowLogWindow(this);
+	});
+	
+	btnSizer->Add(logBtn, 0, wxALL, 5);
 	btnSizer->Add(resetBtn, 0, wxALL, 5);
 	btnSizer->AddStretchSpacer();
 	btnSizer->Add(okBtn, 0, wxALL, 5);

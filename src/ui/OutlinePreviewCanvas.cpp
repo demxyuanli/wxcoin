@@ -45,6 +45,7 @@ PFNGLLINKPROGRAMPROC glLinkProgram = nullptr;
 PFNGLGETPROGRAMIVPROC glGetProgramiv = nullptr;
 PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = nullptr;
 PFNGLUSEPROGRAMPROC glUseProgram = nullptr;
+PFNGLBINDATTRIBLOCATIONPROC glBindAttribLocation = nullptr;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
 PFNGLUNIFORM1IPROC glUniform1i = nullptr;
 PFNGLUNIFORM1FPROC glUniform1f = nullptr;
@@ -96,6 +97,7 @@ void loadOpenGLExtensions() {
     GET_PROC(glGetProgramiv);
     GET_PROC(glGetProgramInfoLog);
     GET_PROC(glUseProgram);
+    GET_PROC(glBindAttribLocation);
     GET_PROC(glGetUniformLocation);
     GET_PROC(glUniform1i);
     GET_PROC(glUniform1f);
@@ -595,15 +597,25 @@ void main() {
 )GLSL";
 
 void OutlinePreviewCanvas::initializeFBO(int width, int height) {
+    wxLogMessage("Initializing FBO: %dx%d", width, height);
+    
     // Clean up existing FBO if any
     cleanupFBO();
     
     m_fboWidth = width;
     m_fboHeight = height;
     
+    // Check if FBO functions are available
+    if (!glGenFramebuffers || !glBindFramebuffer) {
+        wxLogError("FBO functions not available!");
+        return;
+    }
+    
     // Generate FBO
     glGenFramebuffers(1, &m_fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
+    
+    wxLogMessage("FBO created: %u", m_fbo);
     
     // Color texture
     glGenTextures(1, &m_colorTexture);
@@ -670,18 +682,30 @@ void OutlinePreviewCanvas::initializeShaders() {
     m_normalShader = createShaderProgram(g_normalVertexShader, g_normalFragmentShader);
     if (!m_normalShader) {
         wxLogError("Failed to create normal shader");
+    } else {
+        wxLogMessage("Normal shader created: %u", m_normalShader);
     }
     
     // Create outline shader program
     m_outlineShader = createShaderProgram(g_outlineVertexShader, g_outlineFragmentShader);
     if (!m_outlineShader) {
         wxLogError("Failed to create outline shader");
+    } else {
+        wxLogMessage("Outline shader created: %u", m_outlineShader);
+        // Bind attribute locations before linking
+        if (glBindAttribLocation) {
+            glUseProgram(m_outlineShader);
+            glBindAttribLocation(m_outlineShader, 0, "aPosition");
+            glLinkProgram(m_outlineShader);
+            glUseProgram(0);
+            wxLogMessage("Bound aPosition to location 0");
+        }
     }
     
     // Create quad VAO for fullscreen rendering
     createQuadVAO();
     
-    wxLogMessage("Shaders initialized: normal=%d, outline=%d", m_normalShader, m_outlineShader);
+    wxLogMessage("Shaders initialized: normal=%u, outline=%u", m_normalShader, m_outlineShader);
 }
 
 void OutlinePreviewCanvas::cleanupShaders() {
@@ -764,6 +788,9 @@ void OutlinePreviewCanvas::createQuadVAO() {
     if (glGenVertexArrays && glBindVertexArray) {
         glGenVertexArrays(1, &m_quadVAO);
         glBindVertexArray(m_quadVAO);
+        wxLogMessage("VAO created: %u", m_quadVAO);
+    } else {
+        wxLogMessage("VAO not supported, using VBO only");
     }
     
     glGenBuffers(1, &m_quadVBO);
@@ -775,4 +802,6 @@ void OutlinePreviewCanvas::createQuadVAO() {
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
         glBindVertexArray(0);
     }
+    
+
 }
