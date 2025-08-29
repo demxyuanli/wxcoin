@@ -89,6 +89,9 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     if (m_dockManager) {
         m_dockManager->registerDockArea(this);
     }
+    
+    // Update initial button states
+    updateTitleBarButtonStates();
 }
 
 DockArea::~DockArea() {
@@ -363,6 +366,15 @@ void DockArea::closeArea() {
     if (m_isClosing) {
         return;
     }
+    
+    // Check if this is the last dock area
+    if (m_containerWidget && m_containerWidget->dockAreaCount() <= 1) {
+        wxLogDebug("Cannot close the last dock area");
+        // Optionally show a message to the user
+        wxMessageBox("Cannot close the last dock area", "Warning", wxOK | wxICON_WARNING);
+        return;
+    }
+    
     m_isClosing = true;
     
     // Notify closing
@@ -1159,6 +1171,19 @@ void DockAreaTitleBar::updateTitle() {
 
 void DockAreaTitleBar::updateButtonStates() {
     // Update button visibility based on features
+    
+    // Check if we should disable close button
+    if (m_dockArea && m_dockArea->dockContainer()) {
+        bool canClose = m_dockArea->dockContainer()->dockAreaCount() > 1;
+        m_closeButton->Enable(canClose);
+        
+        // Update tooltip
+        if (!canClose) {
+            m_closeButton->SetToolTip("Cannot close the last dock area");
+        } else {
+            m_closeButton->SetToolTip("Close this dock area");
+        }
+    }
 }
 
 void DockAreaTitleBar::showCloseButton(bool show) {
