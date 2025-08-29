@@ -435,75 +435,84 @@ void OutlinePreviewCanvas::render() {
         SoGLRenderAction renderAction(viewport);
         renderAction.apply(m_sceneRoot);
         
-        // Hover outline rendering - only for hovered object
-        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f && m_hoveredObjectIndex >= 0) {
+        // Hover outline rendering - draw outline for all objects but highlight hovered one
+        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
             
-            // Only render outline for the hovered object
-            if (m_modelRoot && m_hoveredObjectIndex >= 1 && 
-                m_hoveredObjectIndex < m_modelRoot->getNumChildren()) {
-                
-                // Get the specific object (skip rotation node at index 0)
-                SoNode* hoveredObject = m_modelRoot->getChild(m_hoveredObjectIndex);
-                
-                // First: Draw orange outline
-                glCullFace(GL_FRONT);
-                glDepthFunc(GL_LEQUAL);
-                glEnable(GL_CULL_FACE);
-                glPolygonMode(GL_BACK, GL_FILL);
-                glDisable(GL_LIGHTING);
-                
-                // Use polygon offset to push the silhouette back
-                glEnable(GL_POLYGON_OFFSET_FILL);
-                float thickness = m_outlineParams.thickness;
-                glPolygonOffset(thickness * 0.5f, thickness * 2.0f);
-                
-                // Orange color for outline (1.0, 0.5, 0.0)
-                glColor3f(1.0f, 0.5f, 0.0f);
-                
-                // Draw slightly scaled version
-                glPushMatrix();
-                float scale = 1.0f + (thickness * 0.002f);
-                
-                // Apply rotation from the parent
-                if (m_modelRoot->getNumChildren() > 0) {
-                    SoRotationXYZ* rotation = static_cast<SoRotationXYZ*>(m_modelRoot->getChild(0));
-                    if (rotation) {
-                        glRotatef(rotation->angle.getValue() * 180.0f / M_PI, 0, 1, 0);
-                    }
+            // First pass: render black silhouette for all objects
+            glCullFace(GL_FRONT);
+            glDepthFunc(GL_LEQUAL);
+            glEnable(GL_CULL_FACE);
+            glPolygonMode(GL_BACK, GL_FILL);
+            glDisable(GL_LIGHTING);
+            
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            float thickness = m_outlineParams.thickness;
+            glPolygonOffset(thickness * 0.5f, thickness * 2.0f);
+            
+            // Check if we're hovering over an object
+            bool isHovering = (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4);
+            
+            // Draw outlines for each object
+            glPushMatrix();
+            float scale = 1.0f + (thickness * 0.002f);
+            glScalef(scale, scale, scale);
+            
+            // Apply rotation if exists
+            if (m_modelRoot && m_modelRoot->getNumChildren() > 0) {
+                SoNode* firstChild = m_modelRoot->getChild(0);
+                if (firstChild->isOfType(SoRotationXYZ::getClassTypeId())) {
+                    SoRotationXYZ* rotation = static_cast<SoRotationXYZ*>(firstChild);
+                    glRotatef(rotation->angle.getValue() * 180.0f / M_PI, 0, 1, 0);
                 }
+            }
+            
+            // Render each object with appropriate color
+            for (int i = 1; i <= 4 && m_modelRoot && i < m_modelRoot->getNumChildren(); i++) {
+                glPushMatrix();
                 
-                // Position transform based on object index
-                switch(m_hoveredObjectIndex) {
+                // Position transform
+                switch(i) {
                     case 1: glTranslatef(-2.0f, 2.0f, 0.0f); break;  // Cylinder
                     case 2: glTranslatef(2.0f, 2.0f, 0.0f); break;   // Sphere
                     case 3: glTranslatef(-2.0f, -2.0f, 0.0f); break; // Cube
                     case 4: glTranslatef(2.0f, -2.0f, 0.0f); break;  // Cone
                 }
                 
-                glScalef(scale, scale, scale);
+                // Set color based on hover state
+                if (isHovering) {
+                    if (i == m_hoveredObjectIndex) {
+                        glColor3f(1.0f, 0.5f, 0.0f);  // Orange for hovered
+                    } else {
+                        glColor3f(0.0f, 0.0f, 0.0f);  // Black for others
+                    }
+                } else {
+                    glColor3f(0.0f, 0.0f, 0.0f);  // Black when no hover
+                }
                 
-                // Create temporary separator for single object
-                SoSeparator* tempRoot = new SoSeparator;
-                tempRoot->ref();
-                tempRoot->addChild(hoveredObject);
+                // Create temp scene for this object
+                SoSeparator* tempSep = new SoSeparator;
+                tempSep->ref();
+                tempSep->addChild(m_modelRoot->getChild(i));
                 
-                SoGLRenderAction outlineAction(viewport);
-                outlineAction.apply(tempRoot);
+                SoGLRenderAction action(viewport);
+                action.apply(tempSep);
                 
-                tempRoot->unref();
+                tempSep->unref();
                 
                 glPopMatrix();
             }
             
-            // Reset for normal rendering
+            glPopMatrix();
+            
+            // Reset state
             glDisable(GL_POLYGON_OFFSET_FILL);
             glCullFace(GL_BACK);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             
             glPopAttrib();
             
-            // Redraw the entire scene normally
+            // Second pass: render the scene normally on top
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LESS);
             
