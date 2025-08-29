@@ -25,9 +25,20 @@ OutlineDisplayManager::~OutlineDisplayManager() = default;
 void OutlineDisplayManager::setEnabled(bool enabled) {
 	if (m_enabled == enabled) return;
 	m_enabled = enabled;
-	if (!m_imagePass) m_imagePass = std::make_unique<ImageOutlinePass>(m_sceneManager, m_occRoot);
-	m_imagePass->setEnabled(m_enabled);
-	// Keep legacy per-geometry renderers off to avoid conflicts
+	
+	if (m_enabled && m_hoverMode) {
+		// In hover mode, don't enable global outline
+		// Outline will be enabled only for hovered geometry
+		clearAll();
+	} else if (m_enabled && !m_hoverMode) {
+		// Non-hover mode: enable outline for all geometries
+		if (!m_imagePass) m_imagePass = std::make_unique<ImageOutlinePass>(m_sceneManager, m_occRoot);
+		m_imagePass->setEnabled(true);
+	} else {
+		// Disabled: clear all outlines
+		clearAll();
+		if (m_imagePass) m_imagePass->setEnabled(false);
+	}
 }
 
 void OutlineDisplayManager::onGeometryAdded(const std::shared_ptr<OCCGeometry>& geometry) {
@@ -45,6 +56,10 @@ void OutlineDisplayManager::updateAll() {
 }
 
 void OutlineDisplayManager::clearAll() {
+	// Disable all outlines before clearing
+	for (auto& kv : m_outlineByName) {
+		if (kv.second) kv.second->setEnabled(false);
+	}
 	m_outlineByName.clear();
 }
 
@@ -85,5 +100,28 @@ ImageOutlineParams OutlineDisplayManager::getParams() const {
 void OutlineDisplayManager::refreshOutlineAll() {
 	if (m_imagePass) {
 		m_imagePass->refresh();
+	}
+}
+
+void OutlineDisplayManager::setHoveredGeometry(std::shared_ptr<OCCGeometry> geometry) {
+	if (!m_enabled || !m_hoverMode) return;
+	
+	// Clear previous hover outline
+	auto prevHovered = m_hoveredGeometry.lock();
+	if (prevHovered && prevHovered != geometry) {
+		auto it = m_outlineByName.find(prevHovered->getName());
+		if (it != m_outlineByName.end()) {
+			it->second->setEnabled(false);
+		}
+	}
+	
+	// Set new hover outline
+	m_hoveredGeometry = geometry;
+	if (geometry) {
+		ensureForGeometry(geometry);
+		auto it = m_outlineByName.find(geometry->getName());
+		if (it != m_outlineByName.end()) {
+			it->second->setEnabled(true);
+		}
 	}
 }
