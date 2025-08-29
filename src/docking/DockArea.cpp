@@ -666,6 +666,21 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                             targetArea->dockContainer()->addDockWidget(dropArea, draggedWidget, targetArea);
                             docked = true;
                         }
+                        
+                        // Hide overlays before returning
+                        if (manager) {
+                            DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                            if (areaOverlay) {
+                                areaOverlay->hideOverlay();
+                            }
+                            DockOverlay* containerOverlay = manager->containerOverlay();
+                            if (containerOverlay) {
+                                containerOverlay->hideOverlay();
+                            }
+                        }
+                        
+                        // Return early since the area might be destroyed
+                        return;
                     }
                 }
             }
@@ -697,6 +712,21 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                         wxLogDebug("Widget ptr: %p, title: %s", draggedWidget, draggedWidget->title().c_str());
                         manager->addDockWidget(dropArea, draggedWidget);
                         docked = true;
+                        
+                        // Hide overlays before returning
+                        if (manager) {
+                            DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                            if (areaOverlay) {
+                                areaOverlay->hideOverlay();
+                            }
+                            DockOverlay* containerOverlay = manager->containerOverlay();
+                            if (containerOverlay) {
+                                containerOverlay->hideOverlay();
+                            }
+                        }
+                        
+                        // Return early since the area might be destroyed
+                        return;
                     }
                 }
             }
