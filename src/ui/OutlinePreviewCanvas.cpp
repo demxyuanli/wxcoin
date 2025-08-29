@@ -69,9 +69,13 @@ PFNGLACTIVETEXTUREPROC glActiveTexture = nullptr;
 // Function to load OpenGL extensions
 void loadOpenGLExtensions() {
 #ifdef _WIN32
-    #define GET_PROC(name) name = (decltype(name))wglGetProcAddress(#name)
+    #define GET_PROC(name) name = (decltype(name))wglGetProcAddress(#name); \
+                          if (!name) name = (decltype(name))wglGetProcAddress(#name"ARB"); \
+                          if (!name) name = (decltype(name))wglGetProcAddress(#name"EXT")
 #else
-    #define GET_PROC(name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name)
+    #define GET_PROC(name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name); \
+                          if (!name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name"ARB"); \
+                          if (!name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name"EXT")
 #endif
     
     GET_PROC(glGenFramebuffers);
@@ -205,10 +209,19 @@ void OutlinePreviewCanvas::initializeScene() {
     initializeShaders();
     
     // FBO will be initialized in onSize event
+    // But try to initialize now if we have a size
+    wxSize size = GetClientSize();
+    if (size.GetWidth() > 0 && size.GetHeight() > 0) {
+        initializeFBO(size.GetWidth(), size.GetHeight());
+    }
     
     // Log OpenGL version
     const char* version = (const char*)glGetString(GL_VERSION);
+    const char* vendor = (const char*)glGetString(GL_VENDOR);
+    const char* renderer = (const char*)glGetString(GL_RENDERER);
     wxLogMessage("OpenGL version: %s", version ? version : "Unknown");
+    wxLogMessage("OpenGL vendor: %s", vendor ? vendor : "Unknown");
+    wxLogMessage("OpenGL renderer: %s", renderer ? renderer : "Unknown");
     
     m_initialized = true;
     m_needsRedraw = true;
@@ -377,7 +390,16 @@ void OutlinePreviewCanvas::render() {
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
     // If FBO or shaders not ready, use simple rendering
-    if (!m_fbo || !m_normalShader || !m_outlineShader || !glGenFramebuffers || !glUseProgram) {
+    bool useFBO = m_fbo && m_normalShader && m_outlineShader && glGenFramebuffers && glUseProgram;
+    
+    // Debug: force try FBO if shaders are created
+    if (m_normalShader && m_outlineShader) {
+        wxLogMessage("Attempting FBO render: fbo=%d, normal=%d, outline=%d", 
+                     m_fbo, m_normalShader, m_outlineShader);
+        useFBO = true;
+    }
+    
+    if (!useFBO) {
         // Simple fallback rendering
         glViewport(0, 0, size.GetWidth(), size.GetHeight());
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
