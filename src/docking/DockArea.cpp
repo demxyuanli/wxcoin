@@ -382,15 +382,15 @@ void DockArea::closeArea() {
         widget->closeDockWidget();
     }
     
-    // Remove from container
-    if (m_containerWidget) {
-        m_containerWidget->removeDockArea(this);
-    }
-    
-    // Notify closed
+    // Notify closed (before removal to ensure object is still valid)
     wxCommandEvent closedEvent(EVT_DOCK_AREA_CLOSED);
     closedEvent.SetEventObject(this);
     ProcessWindowEvent(closedEvent);
+    
+    // Remove from container (this will destroy the area)
+    if (m_containerWidget) {
+        m_containerWidget->removeDockArea(this);
+    }
     
     // Don't call Destroy() here - the container will handle it
 }
