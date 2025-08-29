@@ -71,11 +71,11 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	controlSizer->AddSpacer(20);
 	wxStaticText* desc = new wxStaticText(controlPanel, wxID_ANY, 
 		"Adjust parameters to control outline appearance.\n"
-		"• Depth Weight: Sensitivity to depth changes\n"
-		"• Normal Weight: Sensitivity to surface angle changes\n"
-		"• Thresholds: Edge detection sensitivity\n"
-		"• Intensity: Overall outline strength\n"
-		"• Thickness: Line width");
+		"- Depth Weight: Sensitivity to depth changes\n"
+		"- Normal Weight: Sensitivity to surface angle changes\n"
+		"- Thresholds: Edge detection sensitivity\n"
+		"- Intensity: Overall outline strength\n"
+		"- Thickness: Line width");
 	desc->Wrap(280);
 	controlSizer->Add(desc, 0, wxALL, 10);
 	
