@@ -432,92 +432,41 @@ void OutlinePreviewCanvas::render() {
         
         glEnable(GL_DEPTH_TEST);
         
+        // First render the scene normally
         SoGLRenderAction renderAction(viewport);
         renderAction.apply(m_sceneRoot);
         
-        // Hover outline rendering - draw outline for all objects but highlight hovered one
+        // Simple outline rendering - just render the scene again in wireframe
         if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
             
-            // First pass: render black silhouette for all objects
-            glCullFace(GL_FRONT);
-            glDepthFunc(GL_LEQUAL);
-            glEnable(GL_CULL_FACE);
-            glPolygonMode(GL_BACK, GL_FILL);
+            // Set up for wireframe
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glLineWidth(2.0f);
+            glEnable(GL_LINE_SMOOTH);
+            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+            
+            // Offset to prevent z-fighting
+            glEnable(GL_POLYGON_OFFSET_LINE);
+            glPolygonOffset(-1.0f, -1.0f);
+            
+            // Disable lighting for pure color
             glDisable(GL_LIGHTING);
             
-            glEnable(GL_POLYGON_OFFSET_FILL);
-            float thickness = m_outlineParams.thickness;
-            glPolygonOffset(thickness * 0.5f, thickness * 2.0f);
-            
-            // Check if we're hovering over an object
-            bool isHovering = (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4);
-            
-            // Draw outlines for each object
-            glPushMatrix();
-            float scale = 1.0f + (thickness * 0.002f);
-            glScalef(scale, scale, scale);
-            
-            // Apply rotation if exists
-            if (m_modelRoot && m_modelRoot->getNumChildren() > 0) {
-                SoNode* firstChild = m_modelRoot->getChild(0);
-                if (firstChild->isOfType(SoRotationXYZ::getClassTypeId())) {
-                    SoRotationXYZ* rotation = static_cast<SoRotationXYZ*>(firstChild);
-                    glRotatef(rotation->angle.getValue() * 180.0f / M_PI, 0, 1, 0);
-                }
+            // Set color based on hover
+            if (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4) {
+                // We have a hovered object - use special coloring
+                glColor3f(1.0f, 0.5f, 0.0f);  // Orange
+            } else {
+                // No hover - use black
+                glColor3f(0.0f, 0.0f, 0.0f);  // Black
             }
             
-            // Render each object with appropriate color
-            for (int i = 1; i <= 4 && m_modelRoot && i < m_modelRoot->getNumChildren(); i++) {
-                glPushMatrix();
-                
-                // Position transform
-                switch(i) {
-                    case 1: glTranslatef(-2.0f, 2.0f, 0.0f); break;  // Cylinder
-                    case 2: glTranslatef(2.0f, 2.0f, 0.0f); break;   // Sphere
-                    case 3: glTranslatef(-2.0f, -2.0f, 0.0f); break; // Cube
-                    case 4: glTranslatef(2.0f, -2.0f, 0.0f); break;  // Cone
-                }
-                
-                // Set color based on hover state
-                if (isHovering) {
-                    if (i == m_hoveredObjectIndex) {
-                        glColor3f(1.0f, 0.5f, 0.0f);  // Orange for hovered
-                    } else {
-                        glColor3f(0.0f, 0.0f, 0.0f);  // Black for others
-                    }
-                } else {
-                    glColor3f(0.0f, 0.0f, 0.0f);  // Black when no hover
-                }
-                
-                // Create temp scene for this object
-                SoSeparator* tempSep = new SoSeparator;
-                tempSep->ref();
-                tempSep->addChild(m_modelRoot->getChild(i));
-                
-                SoGLRenderAction action(viewport);
-                action.apply(tempSep);
-                
-                tempSep->unref();
-                
-                glPopMatrix();
-            }
-            
-            glPopMatrix();
-            
-            // Reset state
-            glDisable(GL_POLYGON_OFFSET_FILL);
-            glCullFace(GL_BACK);
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            // Render the entire scene in wireframe
+            SoGLRenderAction wireAction(viewport);
+            wireAction.apply(m_sceneRoot);
             
             glPopAttrib();
-            
-            // Second pass: render the scene normally on top
-            glEnable(GL_DEPTH_TEST);
-            glDepthFunc(GL_LESS);
-            
-            SoGLRenderAction normalAction(viewport);
-            normalAction.apply(m_sceneRoot);
         }
         
         SwapBuffers();
