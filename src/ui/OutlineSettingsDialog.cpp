@@ -6,12 +6,20 @@
 #include <sstream>
 
 OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlineParams& params)
-	: wxDialog(parent, wxID_ANY, "Outline Settings", wxDefaultPosition, wxSize(800, 600)), 
+	: wxDialog(parent, wxID_ANY, "Outline Settings", wxDefaultPosition, wxSize(1200, 800)), 
 	  m_params(params) {
+	
+	// Initialize extended parameters with base parameters
+	m_extParams.depthWeight = params.depthWeight;
+	m_extParams.normalWeight = params.normalWeight;
+	m_extParams.depthThreshold = params.depthThreshold;
+	m_extParams.normalThreshold = params.normalThreshold;
+	m_extParams.edgeIntensity = params.edgeIntensity;
+	m_extParams.thickness = params.thickness;
 	
 	// Create main splitter
 	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY);
-	splitter->SetMinimumPaneSize(300);
+	splitter->SetMinimumPaneSize(400);
 	
 	// Left panel - controls
 	wxPanel* controlPanel = new wxPanel(splitter);
@@ -67,6 +75,39 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	makeSlider("Thickness", 10, 400, int(params.thickness * 100), 
 	          &m_thickness, &m_thicknessLabel);
 	
+	// Color section
+	controlSizer->AddSpacer(20);
+	wxStaticText* colorTitle = new wxStaticText(controlPanel, wxID_ANY, "Color Settings");
+	wxFont colorTitleFont = colorTitle->GetFont();
+	colorTitleFont.SetWeight(wxFONTWEIGHT_BOLD);
+	colorTitle->SetFont(colorTitleFont);
+	controlSizer->Add(colorTitle, 0, wxALL | wxALIGN_CENTER, 10);
+	controlSizer->Add(new wxStaticLine(controlPanel), 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+	
+	// Helper lambda to create color picker with label
+	auto makeColorPicker = [&](const wxString& label, const wxColour& color, 
+	                          wxColourPickerCtrl** pickerPtr) {
+		wxBoxSizer* box = new wxBoxSizer(wxHORIZONTAL);
+		
+		// Label
+		wxStaticText* nameLabel = new wxStaticText(controlPanel, wxID_ANY, label);
+		nameLabel->SetMinSize(wxSize(120, -1));
+		box->Add(nameLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+		
+		// Color picker
+		*pickerPtr = new wxColourPickerCtrl(controlPanel, wxID_ANY, color, 
+		                                   wxDefaultPosition, wxSize(100, -1));
+		box->Add(*pickerPtr, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+		
+		controlSizer->Add(box, 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+	};
+	
+	// Create color pickers
+	makeColorPicker("Background", m_extParams.backgroundColor, &m_bgColorPicker);
+	makeColorPicker("Outline Color", m_extParams.outlineColor, &m_outlineColorPicker);
+	makeColorPicker("Hover Color", m_extParams.hoverColor, &m_hoverColorPicker);
+	makeColorPicker("Geometry Color", m_extParams.geometryColor, &m_geomColorPicker);
+	
 	// Description text
 	controlSizer->AddSpacer(20);
 	wxStaticText* desc = new wxStaticText(controlPanel, wxID_ANY, 
@@ -119,8 +160,10 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	previewSizer->Add(previewTitle, 0, wxALL | wxALIGN_CENTER, 10);
 	previewSizer->Add(new wxStaticLine(previewPanel), 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
 	
-	// Preview canvas
-	m_previewCanvas = new OutlinePreviewCanvas(previewPanel);
+	// Preview canvas with larger minimum size
+	m_previewCanvas = new OutlinePreviewCanvas(previewPanel, wxID_ANY, 
+	                                          wxDefaultPosition, wxSize(600, 600));
+	m_previewCanvas->SetMinSize(wxSize(500, 500));
 	previewSizer->Add(m_previewCanvas, 1, wxEXPAND | wxALL, 10);
 	
 	// Preview instructions
@@ -130,13 +173,25 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	
 	previewPanel->SetSizer(previewSizer);
 	
-	// Split the window
-	splitter->SplitVertically(controlPanel, previewPanel, 350);
+	// Split the window with more space for controls
+	splitter->SplitVertically(controlPanel, previewPanel, 450);
 	
 	// Main sizer
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 	mainSizer->Add(splitter, 1, wxEXPAND);
 	SetSizerAndFit(mainSizer);
+	
+	// Bind color picker events
+	m_bgColorPicker->Bind(wxEVT_COLOURPICKER_CHANGED, &OutlineSettingsDialog::onColorChange, this);
+	m_outlineColorPicker->Bind(wxEVT_COLOURPICKER_CHANGED, &OutlineSettingsDialog::onColorChange, this);
+	m_hoverColorPicker->Bind(wxEVT_COLOURPICKER_CHANGED, &OutlineSettingsDialog::onColorChange, this);
+	m_geomColorPicker->Bind(wxEVT_COLOURPICKER_CHANGED, &OutlineSettingsDialog::onColorChange, this);
+	
+	// Initialize preview with colors
+	m_previewCanvas->setBackgroundColor(m_extParams.backgroundColor);
+	m_previewCanvas->setOutlineColor(m_extParams.outlineColor);
+	m_previewCanvas->setHoverColor(m_extParams.hoverColor);
+	m_previewCanvas->setGeometryColor(m_extParams.geometryColor);
 	
 	// Initialize preview
 	updateLabels();
@@ -149,6 +204,24 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 void OutlineSettingsDialog::onSliderChange(wxCommandEvent& event) {
 	updateLabels();
 	updatePreview();
+	event.Skip();
+}
+
+void OutlineSettingsDialog::onColorChange(wxColourPickerEvent& event) {
+	// Update extended parameters
+	if (event.GetEventObject() == m_bgColorPicker) {
+		m_extParams.backgroundColor = m_bgColorPicker->GetColour();
+		m_previewCanvas->setBackgroundColor(m_extParams.backgroundColor);
+	} else if (event.GetEventObject() == m_outlineColorPicker) {
+		m_extParams.outlineColor = m_outlineColorPicker->GetColour();
+		m_previewCanvas->setOutlineColor(m_extParams.outlineColor);
+	} else if (event.GetEventObject() == m_hoverColorPicker) {
+		m_extParams.hoverColor = m_hoverColorPicker->GetColour();
+		m_previewCanvas->setHoverColor(m_extParams.hoverColor);
+	} else if (event.GetEventObject() == m_geomColorPicker) {
+		m_extParams.geometryColor = m_geomColorPicker->GetColour();
+		m_previewCanvas->setGeometryColor(m_extParams.geometryColor);
+	}
 	event.Skip();
 }
 
@@ -176,6 +249,14 @@ void OutlineSettingsDialog::updatePreview() {
 	m_params.normalThreshold = m_normalTh->GetValue() / 100.0f;
 	m_params.edgeIntensity = m_intensity->GetValue() / 100.0f;
 	m_params.thickness = m_thickness->GetValue() / 100.0f;
+	
+	// Sync to extended parameters
+	m_extParams.depthWeight = m_params.depthWeight;
+	m_extParams.normalWeight = m_params.normalWeight;
+	m_extParams.depthThreshold = m_params.depthThreshold;
+	m_extParams.normalThreshold = m_params.normalThreshold;
+	m_extParams.edgeIntensity = m_params.edgeIntensity;
+	m_extParams.thickness = m_params.thickness;
 	
 	// Update preview
 	if (m_previewCanvas) {

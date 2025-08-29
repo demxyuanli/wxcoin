@@ -26,6 +26,12 @@ public:
     
     // Get current parameters
     ImageOutlineParams getOutlineParams() const;
+    
+    // Color configuration
+    void setBackgroundColor(const wxColour& color) { m_bgColor = color; m_needsRedraw = true; }
+    void setOutlineColor(const wxColour& color) { m_outlineColor = color; m_needsRedraw = true; }
+    void setHoverColor(const wxColour& color) { m_hoverColor = color; m_needsRedraw = true; }
+    void setGeometryColor(const wxColour& color);
 
 private:
     void onPaint(wxPaintEvent& event);
@@ -80,6 +86,12 @@ private:
     wxPoint m_lastMousePos;
     bool m_mouseDown{ false };
     int m_hoveredObjectIndex{ -1 };  // Index of hovered object
+    
+    // Color settings
+    wxColour m_bgColor{ 51, 51, 51 };      // Dark gray background
+    wxColour m_outlineColor{ 0, 0, 0 };    // Black outline
+    wxColour m_hoverColor{ 255, 128, 0 };  // Orange hover
+    wxColour m_geomColor{ 200, 200, 200 }; // Light gray geometry
     
     DECLARE_EVENT_TABLE()
 };

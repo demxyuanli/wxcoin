@@ -235,19 +235,30 @@ void OutlinePreviewCanvas::initializeScene() {
 }
 
 void OutlinePreviewCanvas::createBasicModels() {
-    // Material for all objects
-    SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(0.7f, 0.7f, 0.7f);
-    material->specularColor.setValue(1.0f, 1.0f, 1.0f);
-    material->shininess = 0.8f;
+    // Add rotation node if it doesn't exist
+    if (m_modelRoot->getNumChildren() == 0) {
+        SoRotationXYZ* rotation = new SoRotationXYZ;
+        rotation->axis = SoRotationXYZ::Y;
+        rotation->angle = 0.0f;
+        m_modelRoot->addChild(rotation);
+    }
     
     // Create a cube
     {
         SoSeparator* cubeSep = new SoSeparator;
         SoTransform* transform = new SoTransform;
-        transform->translation.setValue(-2.0f, 0, 0);
+        transform->translation.setValue(-2.0f, 2.0f, 0);
         cubeSep->addChild(transform);
-        cubeSep->addChild(material);
+        
+        // Material with configured color
+        SoMaterial* cubeMaterial = new SoMaterial;
+        cubeMaterial->diffuseColor.setValue(m_geomColor.Red() / 255.0f,
+                                          m_geomColor.Green() / 255.0f,
+                                          m_geomColor.Blue() / 255.0f);
+        cubeMaterial->specularColor.setValue(1.0f, 1.0f, 1.0f);
+        cubeMaterial->shininess = 0.8f;
+        cubeSep->addChild(cubeMaterial);
+        
         SoCube* cube = new SoCube;
         cube->width = 1.5f;
         cube->height = 1.5f;
@@ -260,9 +271,18 @@ void OutlinePreviewCanvas::createBasicModels() {
     {
         SoSeparator* sphereSep = new SoSeparator;
         SoTransform* transform = new SoTransform;
-        transform->translation.setValue(0, 0, 0);
+        transform->translation.setValue(2.0f, 2.0f, 0);
         sphereSep->addChild(transform);
-        sphereSep->addChild(material);
+        
+        // Material with configured color
+        SoMaterial* sphereMaterial = new SoMaterial;
+        sphereMaterial->diffuseColor.setValue(m_geomColor.Red() / 255.0f,
+                                            m_geomColor.Green() / 255.0f,
+                                            m_geomColor.Blue() / 255.0f);
+        sphereMaterial->specularColor.setValue(1.0f, 1.0f, 1.0f);
+        sphereMaterial->shininess = 0.8f;
+        sphereSep->addChild(sphereMaterial);
+        
         SoSphere* sphere = new SoSphere;
         sphere->radius = 0.8f;
         sphereSep->addChild(sphere);
@@ -273,9 +293,18 @@ void OutlinePreviewCanvas::createBasicModels() {
     {
         SoSeparator* cylSep = new SoSeparator;
         SoTransform* transform = new SoTransform;
-        transform->translation.setValue(2.0f, 0, 0);
+        transform->translation.setValue(-2.0f, -2.0f, 0);
         cylSep->addChild(transform);
-        cylSep->addChild(material);
+        
+        // Material with configured color
+        SoMaterial* cylMaterial = new SoMaterial;
+        cylMaterial->diffuseColor.setValue(m_geomColor.Red() / 255.0f,
+                                         m_geomColor.Green() / 255.0f,
+                                         m_geomColor.Blue() / 255.0f);
+        cylMaterial->specularColor.setValue(1.0f, 1.0f, 1.0f);
+        cylMaterial->shininess = 0.8f;
+        cylSep->addChild(cylMaterial);
+        
         SoCylinder* cylinder = new SoCylinder;
         cylinder->radius = 0.6f;
         cylinder->height = 1.8f;
@@ -287,21 +316,25 @@ void OutlinePreviewCanvas::createBasicModels() {
     {
         SoSeparator* coneSep = new SoSeparator;
         SoTransform* transform = new SoTransform;
-        transform->translation.setValue(0, 0, -2.0f);
+        transform->translation.setValue(2.0f, -2.0f, 0);
         coneSep->addChild(transform);
-        coneSep->addChild(material);
+        
+        // Material with configured color
+        SoMaterial* coneMaterial = new SoMaterial;
+        coneMaterial->diffuseColor.setValue(m_geomColor.Red() / 255.0f,
+                                          m_geomColor.Green() / 255.0f,
+                                          m_geomColor.Blue() / 255.0f);
+        coneMaterial->specularColor.setValue(1.0f, 1.0f, 1.0f);
+        coneMaterial->shininess = 0.8f;
+        coneSep->addChild(coneMaterial);
+        
         SoCone* cone = new SoCone;
         cone->bottomRadius = 0.7f;
         cone->height = 1.5f;
         coneSep->addChild(cone);
         m_modelRoot->addChild(coneSep);
     }
-    
-    // Add rotation animation
-    SoRotationXYZ* rotation = new SoRotationXYZ;
-    rotation->axis = SoRotationXYZ::Y;
-    rotation->angle = 0.0f;
-    m_modelRoot->insertChild(rotation, 0);
+
 }
 
 void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params) {
@@ -312,6 +345,23 @@ void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params)
 
 ImageOutlineParams OutlinePreviewCanvas::getOutlineParams() const {
     return m_outlineParams;
+}
+
+void OutlinePreviewCanvas::setGeometryColor(const wxColour& color) {
+    m_geomColor = color;
+    
+    // Recreate models with new color
+    if (m_modelRoot && m_initialized) {
+        // Remove all children except the rotation node (first child)
+        while (m_modelRoot->getNumChildren() > 1) {
+            m_modelRoot->removeChild(1);
+        }
+        
+        // Recreate basic models with new color
+        createBasicModels();
+    }
+    
+    m_needsRedraw = true;
 }
 
 void OutlinePreviewCanvas::onPaint(wxPaintEvent& event) {
@@ -427,7 +477,12 @@ void OutlinePreviewCanvas::render() {
     if (!useFBO) {
         // Simple fallback rendering
         glViewport(0, 0, size.GetWidth(), size.GetHeight());
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        
+        // Use configured background color
+        glClearColor(m_bgColor.Red() / 255.0f, 
+                    m_bgColor.Green() / 255.0f, 
+                    m_bgColor.Blue() / 255.0f, 
+                    1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         glEnable(GL_DEPTH_TEST);
@@ -463,7 +518,9 @@ void OutlinePreviewCanvas::render() {
                 for (int i = 1; i <= 4 && m_modelRoot && i < m_modelRoot->getNumChildren(); i++) {
                     if (i == m_hoveredObjectIndex) continue;  // Skip hovered
                     
-                    glColor3f(0.0f, 0.0f, 0.0f);  // Black
+                    glColor3f(m_outlineColor.Red() / 255.0f,
+                             m_outlineColor.Green() / 255.0f,
+                             m_outlineColor.Blue() / 255.0f);
                     
                     // Create temp scene
                     SoSeparator* temp = new SoSeparator;
@@ -492,7 +549,9 @@ void OutlinePreviewCanvas::render() {
                 
                 // Render hovered object in orange
                 if (m_hoveredObjectIndex <= m_modelRoot->getNumChildren()) {
-                    glColor3f(1.0f, 0.5f, 0.0f);  // Orange
+                    glColor3f(m_hoverColor.Red() / 255.0f,
+                             m_hoverColor.Green() / 255.0f,
+                             m_hoverColor.Blue() / 255.0f);
                     
                     SoSeparator* temp = new SoSeparator;
                     temp->ref();
@@ -516,8 +575,10 @@ void OutlinePreviewCanvas::render() {
                     temp->unref();
                 }
             } else {
-                // No hover - all black
-                glColor3f(0.0f, 0.0f, 0.0f);
+                // No hover - use default outline color
+                glColor3f(m_outlineColor.Red() / 255.0f,
+                         m_outlineColor.Green() / 255.0f,
+                         m_outlineColor.Blue() / 255.0f);
                 SoGLRenderAction action(viewport);
                 action.apply(m_modelRoot);
             }
