@@ -24,6 +24,7 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <sstream>
+#include <wx/log.h>
 
 // OpenGL function pointers
 PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers = nullptr;
@@ -42,6 +43,7 @@ PFNGLDELETEPROGRAMPROC glDeleteProgram = nullptr;
 PFNGLATTACHSHADERPROC glAttachShader = nullptr;
 PFNGLLINKPROGRAMPROC glLinkProgram = nullptr;
 PFNGLGETPROGRAMIVPROC glGetProgramiv = nullptr;
+PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = nullptr;
 PFNGLUSEPROGRAMPROC glUseProgram = nullptr;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
 PFNGLUNIFORM1IPROC glUniform1i = nullptr;
@@ -55,6 +57,7 @@ PFNGLDELETEBUFFERSPROC glDeleteBuffers = nullptr;
 PFNGLBINDBUFFERPROC glBindBuffer = nullptr;
 PFNGLBUFFERDATAPROC glBufferData = nullptr;
 PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = nullptr;
+PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray = nullptr;
 PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = nullptr;
 PFNGLACTIVETEXTUREPROC glActiveTexture = nullptr;
 
@@ -87,6 +90,7 @@ void loadOpenGLExtensions() {
     GET_PROC(glAttachShader);
     GET_PROC(glLinkProgram);
     GET_PROC(glGetProgramiv);
+    GET_PROC(glGetProgramInfoLog);
     GET_PROC(glUseProgram);
     GET_PROC(glGetUniformLocation);
     GET_PROC(glUniform1i);
@@ -100,6 +104,7 @@ void loadOpenGLExtensions() {
     GET_PROC(glBindBuffer);
     GET_PROC(glBufferData);
     GET_PROC(glEnableVertexAttribArray);
+    GET_PROC(glDisableVertexAttribArray);
     GET_PROC(glVertexAttribPointer);
     GET_PROC(glActiveTexture);
     
@@ -162,6 +167,14 @@ void OutlinePreviewCanvas::initializeScene() {
     if (!extensionsLoaded) {
         loadOpenGLExtensions();
         extensionsLoaded = true;
+        
+        // Check critical functions
+        if (!glGenFramebuffers || !glBindFramebuffer) {
+            wxLogError("FBO functions not available");
+        }
+        if (!glCreateShader || !glUseProgram) {
+            wxLogError("Shader functions not available");
+        }
     }
     
     // Create scene graph
@@ -192,6 +205,10 @@ void OutlinePreviewCanvas::initializeScene() {
     initializeShaders();
     
     // FBO will be initialized in onSize event
+    
+    // Log OpenGL version
+    const char* version = (const char*)glGetString(GL_VERSION);
+    wxLogMessage("OpenGL version: %s", version ? version : "Unknown");
     
     m_initialized = true;
     m_needsRedraw = true;
@@ -352,13 +369,48 @@ void OutlinePreviewCanvas::onIdle(wxIdleEvent& event) {
 
 void OutlinePreviewCanvas::render() {
     if (!m_glContext || !m_sceneRoot) return;
-    if (!m_fbo || !m_normalShader || !m_outlineShader) return;
     
     SetCurrent(*m_glContext);
     
     // Get viewport size
     wxSize size = GetClientSize();
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
+    
+    // If FBO or shaders not ready, use simple rendering
+    if (!m_fbo || !m_normalShader || !m_outlineShader || !glGenFramebuffers || !glUseProgram) {
+        // Simple fallback rendering
+        glViewport(0, 0, size.GetWidth(), size.GetHeight());
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        glEnable(GL_DEPTH_TEST);
+        
+        SoGLRenderAction renderAction(viewport);
+        renderAction.apply(m_sceneRoot);
+        
+        // Simple wireframe outline
+        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
+            glPushAttrib(GL_ALL_ATTRIB_BITS);
+            
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glLineWidth(m_outlineParams.thickness * 2.0f);
+            glDisable(GL_LIGHTING);
+            glColor3f(0.0f, 0.0f, 0.0f);
+            
+            glEnable(GL_POLYGON_OFFSET_LINE);
+            glPolygonOffset(-1.0f, -1.0f);
+            
+            renderAction.apply(m_modelRoot);
+            
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            
+            glPopAttrib();
+        }
+        
+        SwapBuffers();
+        m_needsRedraw = false;
+        return;
+    }
     
     if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
         // Pass 1: Render to FBO with normal shader
@@ -402,14 +454,9 @@ void OutlinePreviewCanvas::render() {
         
         // Set uniforms
         glUniform1i(glGetUniformLocation(m_outlineShader, "uColorTexture"), 0);
-        glUniform1i(glGetUniformLocation(m_outlineShader, "uDepthTexture"), 1);
-        glUniform1i(glGetUniformLocation(m_outlineShader, "uNormalTexture"), 2);
+        glUniform1i(glGetUniformLocation(m_outlineShader, "uNormalTexture"), 1);
         glUniform2f(glGetUniformLocation(m_outlineShader, "uResolution"), 
                     float(m_fboWidth), float(m_fboHeight));
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uDepthThreshold"), 
-                    m_outlineParams.depthThreshold * 10.0f);
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uNormalThreshold"), 
-                    m_outlineParams.normalThreshold);
         glUniform1f(glGetUniformLocation(m_outlineShader, "uThickness"), 
                     m_outlineParams.thickness);
         glUniform1f(glGetUniformLocation(m_outlineShader, "uIntensity"), 
@@ -419,14 +466,25 @@ void OutlinePreviewCanvas::render() {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_colorTexture);
         glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, m_depthTexture);
-        glActiveTexture(GL_TEXTURE2);
         glBindTexture(GL_TEXTURE_2D, m_normalTexture);
         
         // Render fullscreen quad
-        glBindVertexArray(m_quadVAO);
+        if (m_quadVAO) {
+            glBindVertexArray(m_quadVAO);
+        } else {
+            // Manual vertex attribute setup if VAO not supported
+            glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+        }
+        
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-        glBindVertexArray(0);
+        
+        if (m_quadVAO) {
+            glBindVertexArray(0);
+        } else {
+            glDisableVertexAttribArray(0);
+        }
         
         // Cleanup
         glUseProgram(0);
@@ -449,32 +507,27 @@ void OutlinePreviewCanvas::render() {
 
 // Shader sources
 static const char* g_normalVertexShader = R"GLSL(
-#version 120
 varying vec3 vNormal;
 varying vec3 vPosition;
 
 void main() {
-    vNormal = normalize(gl_NormalMatrix * gl_Normal);
-    vPosition = (gl_ModelViewMatrix * gl_Vertex).xyz;
-    gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+    vNormal = gl_Normal;
+    vPosition = gl_Vertex.xyz;
+    gl_Position = ftransform();
 }
 )GLSL";
 
 static const char* g_normalFragmentShader = R"GLSL(
-#version 120
 varying vec3 vNormal;
 varying vec3 vPosition;
 
 void main() {
-    // Store normal in RGB and depth in A
     vec3 normal = normalize(vNormal);
-    float depth = length(vPosition);
-    gl_FragColor = vec4(normal * 0.5 + 0.5, depth / 100.0);
+    gl_FragColor = vec4(normal * 0.5 + 0.5, 1.0);
 }
 )GLSL";
 
 static const char* g_outlineVertexShader = R"GLSL(
-#version 120
 attribute vec2 aPosition;
 varying vec2 vTexCoord;
 
@@ -485,72 +538,36 @@ void main() {
 )GLSL";
 
 static const char* g_outlineFragmentShader = R"GLSL(
-#version 120
 uniform sampler2D uColorTexture;
-uniform sampler2D uDepthTexture;
 uniform sampler2D uNormalTexture;
 uniform vec2 uResolution;
-uniform float uDepthThreshold;
-uniform float uNormalThreshold;
 uniform float uThickness;
 uniform float uIntensity;
 
 varying vec2 vTexCoord;
 
-float getDepth(vec2 uv) {
-    return texture2D(uDepthTexture, uv).r;
-}
-
-vec3 getNormal(vec2 uv) {
-    return texture2D(uNormalTexture, uv).rgb * 2.0 - 1.0;
-}
-
-float depthEdge(vec2 uv, vec2 texelSize) {
-    float thickness = uThickness;
-    vec2 offset = texelSize * thickness;
-    
-    float center = getDepth(uv);
-    float tl = getDepth(uv + vec2(-offset.x, -offset.y));
-    float tr = getDepth(uv + vec2(offset.x, -offset.y));
-    float bl = getDepth(uv + vec2(-offset.x, offset.y));
-    float br = getDepth(uv + vec2(offset.x, offset.y));
-    
-    float maxDiff = max(max(abs(center - tl), abs(center - tr)), 
-                       max(abs(center - bl), abs(center - br)));
-    
-    return smoothstep(0.0, uDepthThreshold, maxDiff);
-}
-
-float normalEdge(vec2 uv, vec2 texelSize) {
-    vec2 offset = texelSize * uThickness;
-    
-    vec3 center = getNormal(uv);
-    vec3 top = getNormal(uv + vec2(0.0, -offset.y));
-    vec3 right = getNormal(uv + vec2(offset.x, 0.0));
-    vec3 bottom = getNormal(uv + vec2(0.0, offset.y));
-    vec3 left = getNormal(uv + vec2(-offset.x, 0.0));
-    
-    float d1 = 1.0 - dot(center, top);
-    float d2 = 1.0 - dot(center, right);
-    float d3 = 1.0 - dot(center, bottom);
-    float d4 = 1.0 - dot(center, left);
-    
-    float maxDiff = max(max(d1, d2), max(d3, d4));
-    return smoothstep(0.0, uNormalThreshold, maxDiff);
-}
-
 void main() {
     vec2 texelSize = 1.0 / uResolution;
     vec4 color = texture2D(uColorTexture, vTexCoord);
     
-    float depth = depthEdge(vTexCoord, texelSize);
-    float normal = normalEdge(vTexCoord, texelSize);
+    // Simple edge detection on normal texture
+    vec2 offset = texelSize * uThickness;
+    vec3 center = texture2D(uNormalTexture, vTexCoord).rgb;
+    vec3 top = texture2D(uNormalTexture, vTexCoord + vec2(0.0, -offset.y)).rgb;
+    vec3 right = texture2D(uNormalTexture, vTexCoord + vec2(offset.x, 0.0)).rgb;
+    vec3 bottom = texture2D(uNormalTexture, vTexCoord + vec2(0.0, offset.y)).rgb;
+    vec3 left = texture2D(uNormalTexture, vTexCoord + vec2(-offset.x, 0.0)).rgb;
     
-    float edge = max(depth, normal) * uIntensity;
+    float d1 = length(center - top);
+    float d2 = length(center - right);
+    float d3 = length(center - bottom);
+    float d4 = length(center - left);
+    
+    float edge = max(max(d1, d2), max(d3, d4)) * uIntensity * 2.0;
     edge = clamp(edge, 0.0, 1.0);
     
     // Apply outline
-    vec3 outlineColor = vec3(0.0, 0.0, 0.0); // Black outline
+    vec3 outlineColor = vec3(0.0, 0.0, 0.0);
     gl_FragColor = vec4(mix(color.rgb, outlineColor, edge), 1.0);
 }
 )GLSL";
@@ -598,6 +615,7 @@ void OutlinePreviewCanvas::initializeFBO(int width, int height) {
     // Check FBO completeness
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
+        wxLogError("FBO creation failed with status: 0x%X", status);
         cleanupFBO();
     }
     
@@ -624,14 +642,24 @@ void OutlinePreviewCanvas::cleanupFBO() {
 }
 
 void OutlinePreviewCanvas::initializeShaders() {
+    wxLogMessage("Initializing shaders...");
+    
     // Create normal shader program
     m_normalShader = createShaderProgram(g_normalVertexShader, g_normalFragmentShader);
+    if (!m_normalShader) {
+        wxLogError("Failed to create normal shader");
+    }
     
     // Create outline shader program
     m_outlineShader = createShaderProgram(g_outlineVertexShader, g_outlineFragmentShader);
+    if (!m_outlineShader) {
+        wxLogError("Failed to create outline shader");
+    }
     
     // Create quad VAO for fullscreen rendering
     createQuadVAO();
+    
+    wxLogMessage("Shaders initialized: normal=%d, outline=%d", m_normalShader, m_outlineShader);
 }
 
 void OutlinePreviewCanvas::cleanupShaders() {
@@ -663,6 +691,7 @@ unsigned int OutlinePreviewCanvas::compileShader(const char* source, unsigned in
     if (!success) {
         char infoLog[512];
         glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+        wxLogError("Shader compilation failed: %s", infoLog);
         glDeleteShader(shader);
         return 0;
     }
@@ -688,6 +717,9 @@ unsigned int OutlinePreviewCanvas::createShaderProgram(const char* vertexSource,
     int success;
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if (!success) {
+        char infoLog[512];
+        glGetProgramInfoLog(program, 512, nullptr, infoLog);
+        wxLogError("Shader program linking failed: %s", infoLog);
         glDeleteProgram(program);
         program = 0;
     }
@@ -706,15 +738,19 @@ void OutlinePreviewCanvas::createQuadVAO() {
         -1.0f,  1.0f
     };
     
-    glGenVertexArrays(1, &m_quadVAO);
-    glGenBuffers(1, &m_quadVBO);
+    // Check if VAO is supported
+    if (glGenVertexArrays && glBindVertexArray) {
+        glGenVertexArrays(1, &m_quadVAO);
+        glBindVertexArray(m_quadVAO);
+    }
     
-    glBindVertexArray(m_quadVAO);
+    glGenBuffers(1, &m_quadVBO);
     glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
     
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-    
-    glBindVertexArray(0);
+    if (m_quadVAO) {
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+        glBindVertexArray(0);
+    }
 }
