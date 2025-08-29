@@ -493,13 +493,13 @@ void OutlinePreviewCanvas::render() {
         SoGLRenderAction renderAction(viewport);
         renderAction.apply(m_sceneRoot);
         
-        // Then render the outline as wireframe overlay
-        if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
+        // Always render the outline as wireframe overlay
+        {
             glPushAttrib(GL_ALL_ATTRIB_BITS);
             
             // Setup for wireframe rendering
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            glLineWidth(m_outlineParams.thickness);
+            glLineWidth(2.0f);  // Fixed line width for visibility
             glDisable(GL_LIGHTING);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -528,7 +528,7 @@ void OutlinePreviewCanvas::render() {
                 outlineAction.apply(m_sceneRoot);
                 
                 // Then highlight the hovered object
-                glLineWidth(m_outlineParams.thickness * 3.0f);  // Thicker line for hover
+                glLineWidth(4.0f);  // Thicker fixed line width for hover
                 glColor4f(m_hoverColor.Red() / 255.0f,
                          m_hoverColor.Green() / 255.0f,
                          m_hoverColor.Blue() / 255.0f,
