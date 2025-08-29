@@ -25,7 +25,7 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <sstream>
-#include <wx/log.h>
+// #include <wx/log.h>  // Removed: no logging needed
 #include <cmath>
 
 #ifndef M_PI
@@ -182,12 +182,12 @@ void OutlinePreviewCanvas::initializeScene() {
         loadOpenGLExtensions();
         extensionsLoaded = true;
         
-        // Check critical functions
+        // Check critical functions silently
         if (!glGenFramebuffers || !glBindFramebuffer) {
-            wxLogError("FBO functions not available");
+            // FBO functions not available
         }
         if (!glCreateShader || !glUseProgram) {
-            wxLogError("Shader functions not available");
+            // Shader functions not available
         }
     }
     
@@ -225,13 +225,10 @@ void OutlinePreviewCanvas::initializeScene() {
         initializeFBO(size.GetWidth(), size.GetHeight());
     }
     
-    // Log OpenGL version
+    // Check OpenGL version (silently)
     const char* version = (const char*)glGetString(GL_VERSION);
     const char* vendor = (const char*)glGetString(GL_VENDOR);
     const char* renderer = (const char*)glGetString(GL_RENDERER);
-    wxLogMessage("OpenGL version: %s", version ? version : "Unknown");
-    wxLogMessage("OpenGL vendor: %s", vendor ? vendor : "Unknown");
-    wxLogMessage("OpenGL renderer: %s", renderer ? renderer : "Unknown");
     
     m_initialized = true;
     m_needsRedraw = true;
@@ -682,9 +679,9 @@ void main() {
 void OutlinePreviewCanvas::initializeFBO(int width, int height) {
     static int lastWidth = 0, lastHeight = 0;
     
-    // Only log if size changed
+    // Only track if size changed
     if (width != lastWidth || height != lastHeight) {
-        wxLogMessage("Initializing FBO: %dx%d", width, height);
+        // Size changed: %dx%d
         lastWidth = width;
         lastHeight = height;
     }
@@ -697,7 +694,7 @@ void OutlinePreviewCanvas::initializeFBO(int width, int height) {
     
     // Check if FBO functions are available
     if (!glGenFramebuffers || !glBindFramebuffer) {
-        wxLogError("FBO functions not available!");
+        // FBO functions not available
         return;
     }
     
@@ -705,12 +702,7 @@ void OutlinePreviewCanvas::initializeFBO(int width, int height) {
     glGenFramebuffers(1, &m_fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
     
-    // Only log FBO creation once
-    static bool fboLogged = false;
-    if (!fboLogged && m_fbo) {
-        wxLogMessage("FBO created: %u", m_fbo);
-        fboLogged = true;
-    }
+    // FBO created successfully
     
     // Color texture
     glGenTextures(1, &m_colorTexture);
@@ -744,7 +736,7 @@ void OutlinePreviewCanvas::initializeFBO(int width, int height) {
     // Check FBO completeness
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
-        wxLogError("FBO creation failed with status: 0x%X", status);
+        // FBO creation failed
         cleanupFBO();
     }
     
@@ -771,30 +763,18 @@ void OutlinePreviewCanvas::cleanupFBO() {
 }
 
 void OutlinePreviewCanvas::initializeShaders() {
-    static bool initialized = false;
-    if (!initialized) {
-        wxLogMessage("Initializing shaders...");
-        initialized = true;
-    }
+    // Initialize shaders
     
     // Create normal shader program
     m_normalShader = createShaderProgram(g_normalVertexShader, g_normalFragmentShader);
     if (!m_normalShader) {
-        static bool errorLogged = false;
-        if (!errorLogged) {
-            wxLogError("Failed to create normal shader");
-            errorLogged = true;
-        }
+        // Failed to create normal shader
     }
     
     // Create outline shader program
     m_outlineShader = createShaderProgram(g_outlineVertexShader, g_outlineFragmentShader);
     if (!m_outlineShader) {
-        static bool errorLogged = false;
-        if (!errorLogged) {
-            wxLogError("Failed to create outline shader");
-            errorLogged = true;
-        }
+        // Failed to create outline shader
     } else {
         // Bind attribute locations before linking
         if (glBindAttribLocation) {
@@ -838,7 +818,7 @@ unsigned int OutlinePreviewCanvas::compileShader(const char* source, unsigned in
     if (!success) {
         char infoLog[512];
         glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        wxLogError("Shader compilation failed: %s", infoLog);
+        // Shader compilation failed
         glDeleteShader(shader);
         return 0;
     }
@@ -866,7 +846,7 @@ unsigned int OutlinePreviewCanvas::createShaderProgram(const char* vertexSource,
     if (!success) {
         char infoLog[512];
         glGetProgramInfoLog(program, 512, nullptr, infoLog);
-        wxLogError("Shader program linking failed: %s", infoLog);
+        // Shader program linking failed
         glDeleteProgram(program);
         program = 0;
     }
@@ -889,9 +869,9 @@ void OutlinePreviewCanvas::createQuadVAO() {
     if (glGenVertexArrays && glBindVertexArray) {
         glGenVertexArrays(1, &m_quadVAO);
         glBindVertexArray(m_quadVAO);
-        wxLogMessage("VAO created: %u", m_quadVAO);
+        // VAO created
     } else {
-        wxLogMessage("VAO not supported, using VBO only");
+        // VAO not supported, using VBO only
     }
     
     glGenBuffers(1, &m_quadVBO);
