@@ -265,56 +265,59 @@ void OutlinePreviewCanvas::render() {
     wxSize size = GetClientSize();
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
-    // Render outline effect using two-pass technique
+    // Render with outline effect using stencil buffer method (similar to Three.js)
     if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        // First pass: Render scaled-up version in black (outline)
+        // Clear stencil buffer
         glClearStencil(0);
         glClear(GL_STENCIL_BUFFER_BIT);
         glEnable(GL_STENCIL_TEST);
         
-        // Configure for outline rendering
+        // Step 1: Render objects to stencil buffer
         glStencilFunc(GL_ALWAYS, 1, 0xFF);
         glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
         glStencilMask(0xFF);
+        glDepthMask(GL_FALSE);
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         
-        // Disable lighting and use black color
-        glDisable(GL_LIGHTING);
-        glColor3f(0.0f, 0.0f, 0.0f);
+        SoGLRenderAction stencilAction(viewport);
+        stencilAction.apply(m_modelRoot);
         
-        // Scale up slightly based on thickness
+        // Step 2: Draw expanded version where stencil is 0
+        glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+        glStencilMask(0x00);
+        glDepthMask(GL_TRUE);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        
+        // Disable depth test to ensure outline is visible
+        glDisable(GL_DEPTH_TEST);
+        
+        // Set outline color
+        glColor3f(0.0f, 0.0f, 0.0f); // Black outline
+        
+        // Render slightly larger version
         glPushMatrix();
-        float scaleFactor = 1.0f + (m_outlineParams.thickness * 0.01f * m_outlineParams.edgeIntensity);
+        float scale = 1.0f + (m_outlineParams.thickness * 0.02f);
+        glScalef(scale, scale, scale);
         
-        // Scale from object center
-        glTranslatef(0.0f, 0.0f, 0.0f);
-        glScalef(scaleFactor, scaleFactor, scaleFactor);
+        // Disable lighting for solid color
+        glDisable(GL_LIGHTING);
         
-        // Enable backface culling to render only back faces
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_FRONT);
-        
-        // Render scaled objects
         SoGLRenderAction outlineAction(viewport);
         outlineAction.apply(m_modelRoot);
         
-        glDisable(GL_CULL_FACE);
-        glPopMatrix();
         glEnable(GL_LIGHTING);
-    }
-    
-    // Second pass: Render normal objects
-    if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        // Only render where stencil is 0 (not outline)
-        glStencilFunc(GL_ALWAYS, 0, 0xFF);
-        glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+        glPopMatrix();
+        
+        // Step 3: Draw original objects on top
+        glStencilMask(0xFF);
+        glClear(GL_STENCIL_BUFFER_BIT);
+        glDisable(GL_STENCIL_TEST);
+        glEnable(GL_DEPTH_TEST);
     }
     
     // Render scene normally
     SoGLRenderAction renderAction(viewport);
     renderAction.apply(m_sceneRoot);
-    
-    // Disable stencil test
-    glDisable(GL_STENCIL_TEST);
     
     // Swap buffers
     SwapBuffers();
