@@ -56,6 +56,7 @@ PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
 PFNGLUNIFORM1IPROC glUniform1i = nullptr;
 PFNGLUNIFORM1FPROC glUniform1f = nullptr;
 PFNGLUNIFORM2FPROC glUniform2f = nullptr;
+PFNGLUNIFORM3FPROC glUniform3f = nullptr;
 PFNGLGENVERTEXARRAYSPROC glGenVertexArrays = nullptr;
 PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays = nullptr;
 PFNGLBINDVERTEXARRAYPROC glBindVertexArray = nullptr;
@@ -108,6 +109,7 @@ void loadOpenGLExtensions() {
     GET_PROC(glUniform1i);
     GET_PROC(glUniform1f);
     GET_PROC(glUniform2f);
+    GET_PROC(glUniform3f);
     GET_PROC(glGenVertexArrays);
     GET_PROC(glDeleteVertexArrays);
     GET_PROC(glBindVertexArray);
