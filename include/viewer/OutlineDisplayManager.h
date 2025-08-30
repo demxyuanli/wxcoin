@@ -20,6 +20,11 @@ public:
 	void setEnabled(bool enabled);
 	bool isEnabled() const { return m_enabled; }
 
+	// Hover mode support
+	void setHoverMode(bool hover) { m_hoverMode = hover; }
+	bool isHoverMode() const { return m_hoverMode; }
+	void setHoveredGeometry(std::shared_ptr<OCCGeometry> geometry);
+
 	void onGeometryAdded(const std::shared_ptr<OCCGeometry>& geometry);
 	void updateAll();
 	void clearAll();
@@ -35,6 +40,8 @@ private:
 	SoSeparator* m_occRoot;
 	std::vector<std::shared_ptr<OCCGeometry>>* m_geometries;
 	bool m_enabled{ false };
+	bool m_hoverMode{ true }; // Default to hover mode
+	std::weak_ptr<OCCGeometry> m_hoveredGeometry;
 
 	std::map<std::string, std::unique_ptr<DynamicSilhouetteRenderer>> m_outlineByName;
 

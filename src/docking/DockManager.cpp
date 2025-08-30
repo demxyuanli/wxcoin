@@ -33,52 +33,68 @@ DockManager::DockManager(wxWindow* parent)
     , m_dockOverlay(nullptr)
     , m_activeDockWidget(nullptr)
     , m_configFlags(DefaultConfig)
+    , m_dragState(DragInactive)
+    , m_lastMousePos(wxDefaultPosition)
+    , m_isProcessingDrag(false)
 {
     // Create the main container widget
     m_containerWidget = new DockContainerWidget(this, parent);
-    
-    // Create overlays for drag and drop
+
+    // Create overlays for drag and drop with better performance
     m_dockOverlay = new DockOverlay(m_containerWidget);
     d->containerOverlay = new DockOverlay(m_containerWidget, DockOverlay::ModeContainerOverlay);
     d->dockAreaOverlay = new DockOverlay(m_containerWidget, DockOverlay::ModeDockAreaOverlay);
-    
+
     // Create auto-hide manager
     d->autoHideManager = new AutoHideManager(static_cast<DockContainerWidget*>(m_containerWidget));
-    
+
     // Create perspective manager
     d->perspectiveManager = new PerspectiveManager(this);
+
+    // Initialize performance monitoring
+    m_layoutUpdateTimer = new wxTimer(this);
+    Bind(wxEVT_TIMER, &DockManager::onLayoutUpdateTimer, this, m_layoutUpdateTimer->GetId());
+
+    // Initialize performance variables
+    initializePerformanceVariables();
 }
 
 DockManager::~DockManager() {
+    // Stop any running timers
+    if (m_layoutUpdateTimer && m_layoutUpdateTimer->IsRunning()) {
+        m_layoutUpdateTimer->Stop();
+    }
+    delete m_layoutUpdateTimer;
+
     // First, clear the dock widgets list to prevent callbacks during destruction
     std::vector<DockWidget*> widgetsToDelete = m_dockWidgets;
     m_dockWidgets.clear();
     m_dockWidgetsMap.clear();
-    
+
     // IMPORTANT: Destroy dock widgets BEFORE destroying the container
     // This ensures widgets are cleaned up while their parent container is still valid
     for (auto* widget : widgetsToDelete) {
         // Just destroy - the widget will handle cleanup in its destructor
         widget->Destroy();
     }
-    
+
     // Clean up floating widgets
     while (!m_floatingWidgets.empty()) {
         m_floatingWidgets.back()->Destroy();
         m_floatingWidgets.pop_back();
     }
-    
+
     // Delete perspective manager
     delete d->perspectiveManager;
-    
+
     // Delete auto-hide manager
     delete d->autoHideManager;
-    
+
     // Delete overlays
     delete m_dockOverlay;
     delete d->containerOverlay;
     delete d->dockAreaOverlay;
-    
+
     // Delete container widget LAST after all children are destroyed
     if (m_containerWidget) {
         m_containerWidget->Destroy();
@@ -533,6 +549,122 @@ DockOverlay* DockManager::dockAreaOverlay() const {
 
 DockOverlay* DockManager::containerOverlay() const {
     return d->containerOverlay;
+}
+
+// Performance optimization methods
+void DockManager::beginBatchOperation() {
+    m_batchOperationCount++;
+    if (m_batchOperationCount == 1) {
+        // Pause layout updates during batch operations
+        if (m_layoutUpdateTimer && m_layoutUpdateTimer->IsRunning()) {
+            m_layoutUpdateTimer->Stop();
+        }
+    }
+}
+
+void DockManager::endBatchOperation() {
+    if (m_batchOperationCount > 0) {
+        m_batchOperationCount--;
+        if (m_batchOperationCount == 0) {
+            // Resume layout updates and trigger a refresh
+            updateLayout();
+        }
+    }
+}
+
+void DockManager::updateLayout() {
+    if (m_batchOperationCount > 0) {
+        // Defer layout update until batch operation completes
+        return;
+    }
+
+    if (m_containerWidget) {
+        m_containerWidget->Layout();
+        m_containerWidget->Refresh();
+    }
+}
+
+void DockManager::onLayoutUpdateTimer(wxTimerEvent& event) {
+    updateLayout();
+}
+
+// Enhanced drag and drop optimization
+void DockManager::optimizeDragOperation(DockWidget* draggedWidget) {
+    if (!draggedWidget || m_isProcessingDrag) {
+        return;
+    }
+
+    m_isProcessingDrag = true;
+
+    // Cache frequently used values
+    m_lastMousePos = wxGetMousePosition();
+
+    // Use cached window hierarchy for faster lookups
+    updateDragTargets();
+
+    m_isProcessingDrag = false;
+}
+
+void DockManager::updateDragTargets() {
+    // Cache potential drop targets to avoid repeated window hierarchy traversals
+    m_cachedDropTargets.clear();
+
+    if (m_containerWidget) {
+        collectDropTargets(m_containerWidget);
+    }
+}
+
+void DockManager::collectDropTargets(wxWindow* window) {
+    if (!window) return;
+
+    // Add dock areas and containers as potential drop targets
+    if (dynamic_cast<DockArea*>(window)) {
+        m_cachedDropTargets.push_back(window);
+    } else if (dynamic_cast<DockContainerWidget*>(window)) {
+        m_cachedDropTargets.push_back(window);
+    }
+
+    // Recursively collect from children
+    wxWindowList& children = window->GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        collectDropTargets(*it);
+    }
+}
+
+// Memory management optimization
+void DockManager::cleanupUnusedResources() {
+    // Clean up any unused floating containers
+    auto it = m_floatingWidgets.begin();
+    while (it != m_floatingWidgets.end()) {
+        FloatingDockContainer* floating = *it;
+        if (floating && floating->dockWidgets().empty()) {
+            floating->Destroy();
+            it = m_floatingWidgets.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void DockManager::optimizeMemoryUsage() {
+    cleanupUnusedResources();
+
+    // Optimize overlay rendering
+    if (d->dockAreaOverlay) {
+        d->dockAreaOverlay->optimizeRendering();
+    }
+    if (d->containerOverlay) {
+        d->containerOverlay->optimizeRendering();
+    }
+}
+
+// Initialize performance variables
+void DockManager::initializePerformanceVariables() {
+    m_batchOperationCount = 0;
+    m_isProcessingDrag = false;
+    m_dragState = DragInactive;
+    m_lastMousePos = wxDefaultPosition;
+    m_cachedDropTargets.clear();
 }
 
 } // namespace ads

@@ -43,6 +43,7 @@ EVT_RIGHT_DOWN(Canvas::onMouseEvent)
 EVT_RIGHT_UP(Canvas::onMouseEvent)
 EVT_MOTION(Canvas::onMouseEvent)
 EVT_MOUSEWHEEL(Canvas::onMouseEvent)
+EVT_LEAVE_WINDOW(Canvas::onMouseEvent)
 END_EVENT_TABLE()
 
 Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size)
@@ -238,6 +239,17 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	// Trigger LOD interaction if enabled
 	if (isInteractionEvent && m_occViewer) {
 		m_occViewer->startLODInteraction();
+	}
+	
+	// Update hover outline on mouse move
+	if (event.GetEventType() == wxEVT_MOTION && m_occViewer) {
+		wxPoint screenPos = event.GetPosition();
+		m_occViewer->updateHoverSilhouetteAt(screenPos);
+	}
+	
+	// Clear hover outline when mouse leaves window
+	if (event.GetEventType() == wxEVT_LEAVE_WINDOW && m_occViewer) {
+		m_occViewer->updateHoverSilhouetteAt(wxPoint(-1, -1)); // Invalid position to clear
 	}
 
 	// Check multi-viewport first - this should have higher priority

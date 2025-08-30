@@ -71,13 +71,17 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     m_layout = new wxBoxSizer(wxVERTICAL);
     SetSizer(m_layout);
     
-    // Create title bar
+    // Create merged title bar (combines tabs and title buttons)
+    m_mergedTitleBar = new DockAreaMergedTitleBar(this);
+    m_layout->Add(m_mergedTitleBar, 0, wxEXPAND | wxALL, 0);
+
+    // Create legacy title bar (for backward compatibility, but not used in merged mode)
     m_titleBar = new DockAreaTitleBar(this);
-    m_layout->Add(m_titleBar, 0, wxEXPAND);
+    m_titleBar->Hide(); // Hide by default in merged mode
     
-    // Create tab bar
+    // Create legacy tab bar (for backward compatibility, but not used in merged mode)
     m_tabBar = new DockAreaTabBar(this);
-    m_layout->Add(m_tabBar, 0, wxEXPAND);
+    m_tabBar->Hide(); // Hide by default in merged mode
     
     // Create content area (placeholder for dock widgets)
     m_contentArea = new wxPanel(this);
@@ -133,8 +137,12 @@ void DockArea::removeDockWidget(DockWidget* dockWidget) {
     // Remove from list
     m_dockWidgets.erase(it);
     
-    // Remove from tab bar
+    // Remove from merged title bar or tab bar
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->removeTab(dockWidget);
+    } else if (m_tabBar) {
     m_tabBar->removeTab(dockWidget);
+    }
     
     // Clear dock area reference
     dockWidget->setDockArea(nullptr);
@@ -197,8 +205,12 @@ void DockArea::insertDockWidget(int index, DockWidget* dockWidget, bool activate
     // Set dock area
     dockWidget->setDockArea(this);
     
-    // Add to tab bar
+    // Add to merged title bar or tab bar
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->insertTab(index, dockWidget);
+    } else if (m_tabBar) {
     m_tabBar->insertTab(index, dockWidget);
+    }
     
     // Reparent widget to content area
     dockWidget->Reparent(m_contentArea);
@@ -255,11 +267,19 @@ void DockArea::setCurrentIndex(int index) {
         m_contentArea->Layout();
     }
     
-    // Update tab bar
+    // Update merged title bar or tab bar
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->setCurrentIndex(index);
+    } else if (m_tabBar) {
     m_tabBar->setCurrentIndex(index);
+    }
     
-    // Update title
+    // Update title in merged title bar
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->updateTitle();
+    } else if (m_titleBar) {
     m_titleBar->updateTitle();
+    }
     
     // Notify change
     wxCommandEvent event(EVT_DOCK_AREA_CURRENT_CHANGED);
@@ -328,18 +348,33 @@ void DockArea::updateTitleBarVisibility() {
         visible = false;
     }
     
+    // In merged mode, title bar is always visible
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->Show(true);
+    } else if (m_titleBar) {
     m_titleBar->Show(visible);
+    }
     
+    // In merged mode, tab bar is part of title bar, so we don't show separate tab bar
+    if (!m_mergedTitleBar) {
     // Always show tab bar if there are widgets
     bool showTabBar = m_dockWidgets.size() > 0;
     if (m_dockManager && !m_dockManager->testConfigFlag(AlwaysShowTabs) && m_dockWidgets.size() == 1) {
         showTabBar = false;
     }
+        if (m_tabBar) {
     m_tabBar->Show(showTabBar);
+        }
     
     // Make sure tab rects are updated
-    if (showTabBar) {
+        if (showTabBar && m_tabBar) {
         m_tabBar->updateTabRects();
+        }
+    } else {
+        // In merged mode, update tab rects in merged title bar
+        if (m_mergedTitleBar) {
+            // No need to call updateTabRects here as it's called in onSize
+        }
     }
     
     Layout();
@@ -450,7 +485,11 @@ void DockArea::onTitleBarButtonClicked() {
 }
 
 void DockArea::updateTitleBarButtonStates() {
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->updateButtonStates();
+    } else if (m_titleBar) {
     m_titleBar->updateButtonStates();
+    }
 }
 
 void DockArea::updateTabBar() {
@@ -466,6 +505,12 @@ void DockArea::markTitleBarMenuOutdated() {
 }
 
 void DockArea::onSize(wxSizeEvent& event) {
+    // Force refresh of merged title bar to prevent ghosting during window resize
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->Refresh();
+        m_mergedTitleBar->Update();
+    }
+    
     event.Skip();
 }
 
@@ -996,6 +1041,11 @@ void DockAreaTabBar::drawTab(wxDC& dc, int index) {
     bool isCurrent = (index == m_currentIndex);
     bool isHovered = (index == m_hoveredTab);
     
+    // Clear the tab area first to prevent ghosting
+    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(tab.rect);
+    
     // Draw tab background
     wxColour bgColor;
     if (isCurrent) {
@@ -1153,7 +1203,823 @@ void DockAreaTabBar::showTabOverflowMenu() {
     PopupMenu(&menu, pos);
 }
 
-// DockAreaTitleBar implementation
+
+
+// Event table for DockAreaMergedTitleBar
+wxBEGIN_EVENT_TABLE(DockAreaMergedTitleBar, wxPanel)
+    EVT_PAINT(DockAreaMergedTitleBar::onPaint)
+    EVT_LEFT_DOWN(DockAreaMergedTitleBar::onMouseLeftDown)
+    EVT_LEFT_UP(DockAreaMergedTitleBar::onMouseLeftUp)
+    EVT_MOTION(DockAreaMergedTitleBar::onMouseMotion)
+    EVT_LEAVE_WINDOW(DockAreaMergedTitleBar::onMouseLeave)
+    EVT_SIZE(DockAreaMergedTitleBar::onSize)
+wxEND_EVENT_TABLE()
+
+// DockAreaMergedTitleBar implementation
+DockAreaMergedTitleBar::DockAreaMergedTitleBar(DockArea* dockArea)
+    : wxPanel(dockArea)
+    , m_dockArea(dockArea)
+    , m_currentIndex(-1)
+    , m_hoveredTab(-1)
+    , m_buttonSize(20)
+    , m_buttonSpacing(2)
+    , m_showCloseButton(true)
+    , m_showAutoHideButton(false)
+    , m_showPinButton(true)
+    , m_draggedTab(-1)
+    , m_dragStarted(false)
+    , m_dragPreview(nullptr)
+    , m_pinButtonHovered(false)
+    , m_closeButtonHovered(false)
+    , m_autoHideButtonHovered(false)
+{
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetMinSize(wxSize(-1, 30)); // Slightly taller than original to accommodate both tabs and buttons
+}
+
+DockAreaMergedTitleBar::~DockAreaMergedTitleBar() {
+    // Clean up drag preview if it exists
+    if (m_dragPreview) {
+        if (!m_dragPreview->IsBeingDeleted()) {
+            m_dragPreview->finishDrag();
+            m_dragPreview->Destroy();
+        }
+        m_dragPreview = nullptr;
+    }
+}
+
+void DockAreaMergedTitleBar::updateTitle() {
+    Refresh();
+}
+
+void DockAreaMergedTitleBar::updateButtonStates() {
+    // Update button visibility based on features
+    if (m_dockArea && m_dockArea->dockContainer()) {
+        bool canCloseArea = m_dockArea->dockContainer()->dockAreaCount() > 1;
+        m_showCloseButton = canCloseArea;
+    }
+
+    // Update tab close button visibility - hide when only one tab
+    bool hasMultipleTabs = (m_tabs.size() > 1);
+    for (auto& tab : m_tabs) {
+        tab.showCloseButton = hasMultipleTabs && tab.widget &&
+                              tab.widget->hasFeature(DockWidgetClosable);
+    }
+
+    Refresh();
+}
+
+void DockAreaMergedTitleBar::insertTab(int index, DockWidget* dockWidget) {
+    if (!dockWidget) return;
+
+    TabInfo tab;
+    tab.widget = dockWidget;
+
+    if (index < 0 || index >= static_cast<int>(m_tabs.size())) {
+        m_tabs.push_back(tab);
+    } else {
+        m_tabs.insert(m_tabs.begin() + index, tab);
+    }
+
+    updateButtonStates(); // Update button visibility after tab insertion
+    updateTabRects();
+    Refresh();
+}
+
+void DockAreaMergedTitleBar::removeTab(DockWidget* dockWidget) {
+    auto it = std::find_if(m_tabs.begin(), m_tabs.end(),
+        [dockWidget](const TabInfo& tab) { return tab.widget == dockWidget; });
+
+    if (it != m_tabs.end()) {
+        m_tabs.erase(it);
+        updateButtonStates(); // Update button visibility after tab removal
+        updateTabRects();
+        Refresh();
+    }
+}
+
+void DockAreaMergedTitleBar::setCurrentIndex(int index) {
+    if (m_currentIndex != index) {
+        m_currentIndex = index;
+        Refresh();
+    }
+}
+
+DockWidget* DockAreaMergedTitleBar::getTabWidget(int index) const {
+    if (index >= 0 && index < static_cast<int>(m_tabs.size())) {
+        return m_tabs[index].widget;
+    }
+    return nullptr;
+}
+
+void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
+    wxAutoBufferedPaintDC dc(this);
+    wxRect clientRect = GetClientRect();
+
+    // Clear the entire area first to prevent ghosting
+    dc.SetBackground(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+    dc.Clear();
+
+    // Draw background
+    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(clientRect);
+
+    // Draw bottom border
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
+    dc.DrawLine(0, clientRect.GetHeight() - 1, clientRect.GetWidth(), clientRect.GetHeight() - 1);
+
+    // Draw tabs on the left side
+    for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
+        if (!m_tabs[i].rect.IsEmpty()) {
+            drawTab(dc, i);
+        }
+    }
+
+    // Draw buttons on the right side
+    int buttonX = clientRect.GetWidth() - m_buttonSpacing;
+    int buttonCount = 0;
+
+    if (m_showAutoHideButton) {
+        buttonX -= m_buttonSize;
+        m_autoHideButtonRect = wxRect(buttonX, (clientRect.GetHeight() - m_buttonSize) / 2,
+                                     m_buttonSize, m_buttonSize);
+        drawButton(dc, m_autoHideButtonRect, "^", m_autoHideButtonHovered);
+        buttonX -= m_buttonSpacing;
+        buttonCount++;
+    }
+
+    if (m_showCloseButton) {
+        buttonX -= m_buttonSize;
+        m_closeButtonRect = wxRect(buttonX, (clientRect.GetHeight() - m_buttonSize) / 2,
+                                  m_buttonSize, m_buttonSize);
+        drawButton(dc, m_closeButtonRect, "X", m_closeButtonHovered);
+        buttonX -= m_buttonSpacing;
+        buttonCount++;
+    }
+
+    if (m_showPinButton) {
+        buttonX -= m_buttonSize;
+        m_pinButtonRect = wxRect(buttonX, (clientRect.GetHeight() - m_buttonSize) / 2,
+                                m_buttonSize, m_buttonSize);
+        drawButton(dc, m_pinButtonRect, "P", m_pinButtonHovered);
+        buttonCount++;
+    }
+}
+
+void DockAreaMergedTitleBar::onMouseLeftDown(wxMouseEvent& event) {
+    wxPoint pos = event.GetPosition();
+
+    // Check if clicked on a tab
+    int tabIndex = getTabAt(pos);
+    if (tabIndex >= 0) {
+        // Check if close button clicked - only if close button should be shown
+        if (tabIndex < static_cast<int>(m_tabs.size()) &&
+            m_tabs[tabIndex].showCloseButton &&
+            m_tabs[tabIndex].closeButtonRect.Contains(pos) &&
+            m_dockArea->dockWidget(tabIndex)->hasFeature(DockWidgetClosable)) {
+            // Handle close button click
+            m_dockArea->onTabCloseRequested(tabIndex);
+            return;
+        }
+
+        // Start dragging
+        m_draggedTab = tabIndex;
+        m_dragStartPos = event.GetPosition();
+
+        // Select tab
+        if (tabIndex != m_currentIndex) {
+            m_dockArea->setCurrentIndex(tabIndex);
+        }
+
+        // TODO: Re-enable cursor setting after fixing wxWidgets resource issues
+        // For now, focus on core drag functionality
+
+        CaptureMouse();
+        return;
+    }
+
+    // Check if clicked on a button
+    if (m_showCloseButton && m_closeButtonRect.Contains(pos)) {
+        m_dockArea->closeArea();
+    } else if (m_showAutoHideButton && m_autoHideButtonRect.Contains(pos)) {
+        // TODO: Implement auto-hide
+        wxMessageBox("Auto-hide feature not yet implemented", "Info", wxOK | wxICON_INFORMATION);
+    } else if (m_showPinButton && m_pinButtonRect.Contains(pos)) {
+        // TODO: Implement pin/unpin
+        wxMessageBox("Pin/Unpin feature not yet implemented", "Info", wxOK | wxICON_INFORMATION);
+    }
+}
+
+void DockAreaMergedTitleBar::onMouseLeftUp(wxMouseEvent& event) {
+    if (HasCapture()) {
+        ReleaseMouse();
+    }
+
+    // Handle drop if we were dragging
+    if (m_dragStarted && m_draggedTab >= 0) {
+        // Clean up drag preview
+        if (m_dragPreview) {
+            m_dragPreview->finishDrag();
+            m_dragPreview->Destroy();
+            m_dragPreview = nullptr;
+        }
+
+        // Get the widget being dragged
+        DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
+        DockManager* manager = m_dockArea ? m_dockArea->dockManager() : nullptr;
+        if (draggedWidget && manager) {
+            // Check for drop target
+            wxPoint screenPos = ClientToScreen(event.GetPosition());
+            wxWindow* windowUnderMouse = findTargetWindowUnderMouse(screenPos, m_dragPreview);
+
+            // Find target area
+            DockArea* targetArea = nullptr;
+            wxWindow* checkWindow = windowUnderMouse;
+            while (checkWindow && !targetArea) {
+                targetArea = dynamic_cast<DockArea*>(checkWindow);
+                if (!targetArea) {
+                    checkWindow = checkWindow->GetParent();
+                }
+            }
+
+            bool docked = false;
+
+            wxLogDebug("DockAreaMergedTitleBar::onMouseLeftUp - targetArea: %p", targetArea);
+
+            // Try to dock if we have a target
+            if (targetArea) {
+                // Check overlay for drop position
+                DockOverlay* overlay = manager->dockAreaOverlay();
+                wxLogDebug("Area overlay: %p, IsShown: %d", overlay, overlay ? overlay->IsShown() : 0);
+
+                if (overlay && overlay->IsShown()) {
+                    DockWidgetArea dropArea = overlay->dropAreaUnderCursor();
+                    wxLogDebug("Drop area under cursor: %d", dropArea);
+
+                    if (dropArea != InvalidDockWidgetArea) {
+                        // Remove widget from current area if needed
+                        if (draggedWidget->dockAreaWidget() == m_dockArea) {
+                            m_dockArea->removeDockWidget(draggedWidget);
+                        }
+
+                        if (dropArea == CenterDockWidgetArea) {
+                            // Add as tab - merge with existing tabs
+                            wxLogDebug("Adding widget as tab to target area (merging tabs)");
+                            targetArea->addDockWidget(draggedWidget);
+
+                            // If the target area has merged title bar, make sure the new tab becomes current
+                            if (targetArea->mergedTitleBar()) {
+                                targetArea->setCurrentDockWidget(draggedWidget);
+                            }
+
+                            docked = true;
+                        } else {
+                            // Dock to side
+                            wxLogDebug("Docking widget to side: %d", dropArea);
+                            targetArea->dockContainer()->addDockWidget(dropArea, draggedWidget, targetArea);
+                            docked = true;
+                        }
+
+                        // Hide overlays before returning
+                        if (manager) {
+                            DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                            if (areaOverlay) {
+                                areaOverlay->hideOverlay();
+                            }
+                            DockOverlay* containerOverlay = manager->containerOverlay();
+                            if (containerOverlay) {
+                                containerOverlay->hideOverlay();
+                            }
+                        }
+
+                        // Return early since the area might be destroyed
+                        return;
+                    }
+                }
+            }
+
+            // If not docked to a specific area, check container overlay
+            if (!docked && manager) {
+                DockOverlay* containerOverlay = manager->containerOverlay();
+                wxLogDebug("Container overlay: %p, IsShown: %d", containerOverlay, containerOverlay ? containerOverlay->IsShown() : 0);
+
+                if (containerOverlay && containerOverlay->IsShown()) {
+                    DockWidgetArea dropArea = containerOverlay->dropAreaUnderCursor();
+                    wxLogDebug("Container drop area under cursor: %d", dropArea);
+
+                    if (dropArea != InvalidDockWidgetArea) {
+                        // Remove widget from current area
+                        if (draggedWidget->dockAreaWidget() == m_dockArea) {
+                            wxLogDebug("Removing widget from current area");
+                            m_dockArea->removeDockWidget(draggedWidget);
+                        }
+
+                        // Verify widget is still valid
+                        if (!draggedWidget->GetParent()) {
+                            wxLogDebug("ERROR: Widget has no parent after removal!");
+                            return;
+                        }
+
+                        // Add to container at specified position
+                        wxLogDebug("Adding widget to container at position %d", dropArea);
+                        wxLogDebug("Widget ptr: %p, title: %s", draggedWidget, draggedWidget->title().c_str());
+                        manager->addDockWidget(dropArea, draggedWidget);
+                        docked = true;
+
+                        // Hide overlays before returning
+                        if (manager) {
+                            DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                            if (areaOverlay) {
+                                areaOverlay->hideOverlay();
+                            }
+                            DockOverlay* containerOverlay = manager->containerOverlay();
+                            if (containerOverlay) {
+                                containerOverlay->hideOverlay();
+                            }
+                        }
+
+                        // Return early since the area might be destroyed
+                        return;
+                    }
+                }
+            }
+
+            // If not docked, create floating container
+            if (!docked) {
+                wxLogDebug("Not docked - creating floating container");
+
+                // Remove from current area if still there
+                if (draggedWidget->dockAreaWidget() == m_dockArea) {
+                    m_dockArea->removeDockWidget(draggedWidget);
+                }
+
+                // Set as floating
+                draggedWidget->setFloating();
+
+                FloatingDockContainer* floatingContainer = draggedWidget->floatingDockContainer();
+                if (floatingContainer) {
+                    floatingContainer->SetPosition(screenPos - wxPoint(50, 10));
+                    floatingContainer->Show();
+                    floatingContainer->Raise();
+                }
+
+                // Hide overlays using saved manager reference
+                if (manager) {
+                    DockOverlay* areaOverlay = manager->dockAreaOverlay();
+                    if (areaOverlay) {
+                        areaOverlay->hideOverlay();
+                    }
+                    DockOverlay* containerOverlay = manager->containerOverlay();
+                    if (containerOverlay) {
+                        containerOverlay->hideOverlay();
+                    }
+                }
+
+                // Return early since the area might be destroyed
+                return;
+            }
+        }
+
+        // Hide any overlays that might be showing
+        if (m_dockArea && m_dockArea->dockManager()) {
+            DockOverlay* areaOverlay = m_dockArea->dockManager()->dockAreaOverlay();
+            if (areaOverlay) {
+                areaOverlay->hideOverlay();
+            }
+            DockOverlay* containerOverlay = m_dockArea->dockManager()->containerOverlay();
+            if (containerOverlay) {
+                containerOverlay->hideOverlay();
+            }
+        }
+    }
+
+    // Clear tooltip
+    UnsetToolTip();
+
+    // Reset cursor - temporarily disabled
+    // wxSetCursor(wxCursor(wxCURSOR_ARROW));
+
+    m_draggedTab = -1;
+    m_dragStarted = false;
+}
+
+void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
+    wxPoint pos = event.GetPosition();
+    int oldHoveredTab = m_hoveredTab;
+    m_hoveredTab = getTabAt(pos);
+
+    // Update tab hover states
+    for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
+        m_tabs[i].hovered = (i == m_hoveredTab);
+    }
+
+    // Update close button hover states - only if close button should be shown
+    for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
+        bool wasHovered = m_tabs[i].closeButtonHovered;
+        m_tabs[i].closeButtonHovered = (i == m_hoveredTab &&
+            m_tabs[i].showCloseButton &&
+            m_tabs[i].closeButtonRect.Contains(pos) &&
+            m_dockArea->dockWidget(i)->hasFeature(DockWidgetClosable));
+
+        if (wasHovered != m_tabs[i].closeButtonHovered) {
+            RefreshRect(m_tabs[i].closeButtonRect);
+        }
+    }
+
+    // Update button hover states
+    bool oldPinHovered = m_pinButtonHovered;
+    bool oldCloseHovered = m_closeButtonHovered;
+    bool oldAutoHideHovered = m_autoHideButtonHovered;
+
+    m_pinButtonHovered = m_showPinButton && m_pinButtonRect.Contains(pos);
+    m_closeButtonHovered = m_showCloseButton && m_closeButtonRect.Contains(pos);
+    m_autoHideButtonHovered = m_showAutoHideButton && m_autoHideButtonRect.Contains(pos);
+
+    if (oldHoveredTab != m_hoveredTab ||
+        oldPinHovered != m_pinButtonHovered ||
+        oldCloseHovered != m_closeButtonHovered ||
+        oldAutoHideHovered != m_autoHideButtonHovered) {
+        Refresh();
+    }
+
+    // Handle dragging
+    if (m_draggedTab >= 0 && event.Dragging()) {
+        wxPoint delta = event.GetPosition() - m_dragStartPos;
+
+        // Check if we should start drag operation (require minimum drag distance)
+        if (!m_dragStarted && (abs(delta.x) > 5 || abs(delta.y) > 5)) {
+            m_dragStarted = true;
+
+            // Get the dock widget being dragged
+            DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
+            if (draggedWidget && draggedWidget->hasFeature(DockWidgetMovable) && m_dockArea && m_dockArea->dockManager()) {
+                DockManager* manager = m_dockArea->dockManager();
+
+                // Create a floating drag preview
+                FloatingDragPreview* preview = new FloatingDragPreview(draggedWidget, manager->containerWidget());
+                wxPoint screenPos = ClientToScreen(event.GetPosition());
+                preview->startDrag(screenPos);
+
+                // Store preview reference
+                m_dragPreview = preview;
+
+                // Mark widget as being dragged (don't actually float yet)
+                // We'll handle the actual move on drop
+            }
+        }
+
+        if (m_dragStarted) {
+            wxPoint screenPos = ClientToScreen(event.GetPosition());
+
+            // Update drag preview position
+            if (m_dragPreview) {
+                m_dragPreview->moveFloating(screenPos);
+            }
+
+            // Check for drop targets under mouse
+            if (m_dockArea && m_dockArea->dockManager()) {
+                DockManager* manager = m_dockArea->dockManager();
+                wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
+
+                // Find target window, skipping the drag preview
+                wxWindow* targetWindow = findTargetWindowUnderMouse(screenPos, m_dragPreview);
+
+                // Show overlay on potential drop targets
+                DockArea* targetArea = nullptr;
+                wxWindow* checkWindow = targetWindow;
+
+                // First check if we're over a tab bar
+                DockAreaMergedTitleBar* targetTabBar = dynamic_cast<DockAreaMergedTitleBar*>(targetWindow);
+                if (!targetTabBar && targetWindow) {
+                    // Check parent in case we're over a child of tab bar
+                    targetTabBar = dynamic_cast<DockAreaMergedTitleBar*>(targetWindow->GetParent());
+                }
+
+                // Find DockArea in parent hierarchy
+                while (checkWindow && !targetArea) {
+                    targetArea = dynamic_cast<DockArea*>(checkWindow);
+                    if (!targetArea) {
+                        checkWindow = checkWindow->GetParent();
+                    }
+                }
+
+                // If we found a target area, check if we're specifically over its title bar
+                // This helps determine if we should merge as a tab or dock to the side
+                bool isOverTitleBar = false;
+                if (targetArea) {
+                    wxPoint targetLocalPos = targetArea->ScreenToClient(screenPos);
+                    if (targetArea->mergedTitleBar()) {
+                        wxRect titleRect = targetArea->mergedTitleBar()->GetRect();
+                        isOverTitleBar = titleRect.Contains(targetLocalPos);
+                    } else if (targetArea->tabBar()) {
+                        wxRect tabRect = targetArea->tabBar()->GetRect();
+                        isOverTitleBar = tabRect.Contains(targetLocalPos);
+                    }
+                }
+
+                if (targetArea && manager) {
+                    wxLogDebug("Found target DockArea, showing overlay");
+                    DockOverlay* overlay = manager->dockAreaOverlay();
+                    if (overlay) {
+                        // If over title bar/tab bar, prioritize tab merge
+                        if (isOverTitleBar) {
+                            wxLogDebug("Over title bar - prioritizing tab merge");
+                            overlay->showOverlay(targetArea);
+                            overlay->setAllowedAreas(CenterDockWidgetArea);  // Only allow center drop for tab merge
+
+                            // Show tooltip to indicate tab merge is possible
+                            if (m_dockArea && m_dockArea->mergedTitleBar()) {
+                                m_dockArea->mergedTitleBar()->showDragFeedback(true);
+                            }
+
+                            // Temporarily disable cursor updates
+                            // m_dockArea->mergedTitleBar()->updateDragCursor(CenterDockWidgetArea);
+                        } else {
+                            wxLogDebug("Not over title bar - showing all areas");
+                            overlay->showOverlay(targetArea);
+                            overlay->setAllowedAreas(AllDockAreas);  // Allow all areas
+
+                            // Temporarily disable cursor updates for general docking
+                            // wxSetCursor(wxCursor(wxCURSOR_SIZING));
+
+                            // Hide merge feedback
+                            if (m_dockArea && m_dockArea->mergedTitleBar()) {
+                                m_dockArea->mergedTitleBar()->showDragFeedback(false);
+                            }
+                        }
+                    } else {
+                        wxLogDebug("No area overlay available");
+                    }
+                } else if (manager) {
+                    // Check for container overlay
+                    DockContainerWidget* container = manager->containerWidget() ?
+                        dynamic_cast<DockContainerWidget*>(manager->containerWidget()) : nullptr;
+
+                    if (container && container->GetScreenRect().Contains(screenPos)) {
+                        wxLogDebug("Over container, showing container overlay");
+                        DockOverlay* overlay = manager->containerOverlay();
+                        if (overlay) {
+                            overlay->showOverlay(container);
+                        }
+                    } else {
+                        // Hide overlays if not over any target
+                        if (manager->dockAreaOverlay()) {
+                            manager->dockAreaOverlay()->hideOverlay();
+                        }
+                        if (manager->containerOverlay()) {
+                            manager->containerOverlay()->hideOverlay();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void DockAreaMergedTitleBar::onMouseLeave(wxMouseEvent& event) {
+    m_hoveredTab = -1;
+    for (auto& tab : m_tabs) {
+        tab.hovered = false;
+        tab.closeButtonHovered = false;
+    }
+
+    // Reset button hover states
+    m_pinButtonHovered = false;
+    m_closeButtonHovered = false;
+    m_autoHideButtonHovered = false;
+
+    Refresh();
+}
+
+void DockAreaMergedTitleBar::onSize(wxSizeEvent& event) {
+    updateTabRects();
+    
+    // Force complete refresh to prevent ghosting during window resize
+    Refresh();
+    Update();
+    
+    event.Skip();
+}
+
+void DockAreaMergedTitleBar::updateTabRects() {
+    wxSize size = GetClientSize();
+    int x = 5; // Left margin
+    int tabHeight = size.GetHeight() - 4; // Leave some margin
+    int tabSpacing = 2;
+
+    // Calculate available width for tabs (leave space for buttons)
+    int buttonsWidth = 0;
+    if (m_showPinButton) buttonsWidth += m_buttonSize + m_buttonSpacing;
+    if (m_showCloseButton) buttonsWidth += m_buttonSize + m_buttonSpacing;
+    if (m_showAutoHideButton) buttonsWidth += m_buttonSize + m_buttonSpacing;
+    buttonsWidth += m_buttonSpacing; // Extra margin
+
+    int availableWidth = size.GetWidth() - buttonsWidth - x;
+
+    for (size_t i = 0; i < m_tabs.size(); ++i) {
+        auto& tab = m_tabs[i];
+
+        // Simple fixed width for now (can be improved with text measurement)
+        int tabWidth = 100;
+
+        // Check if we have enough space
+        if (x + tabWidth > availableWidth) {
+            tabWidth = std::max(50, availableWidth - x - 10);
+        }
+
+        if (tabWidth > 0) {
+            tab.rect = wxRect(x, 2, tabWidth, tabHeight);
+
+            // Close button rect within tab - only if should be shown
+            if (tab.showCloseButton) {
+                int closeSize = 12;
+                tab.closeButtonRect = wxRect(
+                    tab.rect.GetRight() - closeSize - 3,
+                    tab.rect.GetTop() + (tab.rect.GetHeight() - closeSize) / 2,
+                    closeSize,
+                    closeSize
+                );
+            } else {
+                tab.closeButtonRect = wxRect(); // Empty rect means no close button
+            }
+
+            x += tabWidth + tabSpacing;
+        } else {
+            tab.rect = wxRect();
+            tab.closeButtonRect = wxRect();
+        }
+    }
+}
+
+void DockAreaMergedTitleBar::drawTab(wxDC& dc, int index) {
+    if (index < 0 || index >= static_cast<int>(m_tabs.size())) {
+        return;
+    }
+
+    const TabInfo& tab = m_tabs[index];
+    bool isCurrent = (index == m_currentIndex);
+    bool isHovered = tab.hovered;
+
+    // Clear the tab area first to prevent ghosting
+    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(tab.rect);
+
+    // Draw tab background
+    wxColour bgColor;
+    if (isCurrent) {
+        bgColor = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+    } else if (isHovered) {
+        bgColor = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT);
+    } else {
+        bgColor = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+    }
+
+    dc.SetBrush(wxBrush(bgColor));
+    dc.SetPen(isCurrent ? wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW))
+                       : *wxTRANSPARENT_PEN);
+    dc.DrawRectangle(tab.rect);
+
+    // Draw tab text
+    dc.SetTextForeground(isCurrent ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+                                  : wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT));
+
+    wxString title = tab.widget->title();
+    wxRect textRect = tab.rect;
+    textRect.Deflate(5, 0);
+
+    // Adjust text width based on whether close button is shown
+    if (tab.showCloseButton && tab.widget->hasFeature(DockWidgetClosable)) {
+        textRect.width -= 20; // Space for close button
+    }
+
+    dc.DrawLabel(title, textRect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+
+    // Draw close button if should be shown
+    if (tab.showCloseButton && tab.widget->hasFeature(DockWidgetClosable)) {
+        // Draw close button background
+        wxColour closeBgColor = wxColour(255, 255, 255, 0); // Default transparent
+        if (tab.closeButtonHovered) {
+            closeBgColor = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT);
+        }
+
+        dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT)));
+        dc.SetBrush(wxBrush(closeBgColor));
+        dc.DrawRectangle(tab.closeButtonRect);
+
+        // Draw X
+        int margin = 2;
+        dc.DrawLine(tab.closeButtonRect.GetLeft() + margin,
+                  tab.closeButtonRect.GetTop() + margin,
+                  tab.closeButtonRect.GetRight() - margin,
+                  tab.closeButtonRect.GetBottom() - margin);
+        dc.DrawLine(tab.closeButtonRect.GetRight() - margin,
+                  tab.closeButtonRect.GetTop() + margin,
+                  tab.closeButtonRect.GetLeft() + margin,
+                  tab.closeButtonRect.GetBottom() - margin);
+    }
+}
+
+void DockAreaMergedTitleBar::drawButton(wxDC& dc, const wxRect& rect, const wxString& text, bool hovered) {
+    // Clear the button area first to prevent ghosting
+    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(rect);
+
+    // Draw button background
+    wxColour bgColor = hovered ? wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT)
+                              : wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+    dc.SetBrush(wxBrush(bgColor));
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
+    dc.DrawRectangle(rect);
+
+    // Draw button text
+    dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT));
+    dc.DrawLabel(text, rect, wxALIGN_CENTER);
+}
+
+int DockAreaMergedTitleBar::getTabAt(const wxPoint& pos) const {
+    for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
+        if (m_tabs[i].rect.Contains(pos)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void DockAreaMergedTitleBar::updateDragCursor(int dropArea) {
+    // Temporarily disabled cursor setting to focus on core functionality
+    // TODO: Implement proper cursor handling later
+    wxLogDebug("Drag cursor update requested for area: %d", dropArea);
+}
+
+wxWindow* DockAreaMergedTitleBar::findTargetWindowUnderMouse(const wxPoint& screenPos, wxWindow* dragPreview) const {
+    if (!m_dockArea || !m_dockArea->dockManager()) {
+        return nullptr;
+    }
+
+    DockManager* manager = m_dockArea->dockManager();
+    const std::vector<DockArea*>& dockAreas = manager->dockAreas();
+
+    // First try to find a dock area that contains the screen position
+    for (DockArea* dockArea : dockAreas) {
+        if (dockArea && dockArea != m_dockArea) { // Skip the source dock area
+            wxRect areaRect = dockArea->GetScreenRect();
+            if (areaRect.Contains(screenPos)) {
+                // Check if we're specifically over the title bar
+                if (dockArea->mergedTitleBar()) {
+                    wxRect titleRect = dockArea->mergedTitleBar()->GetScreenRect();
+                    if (titleRect.Contains(screenPos)) {
+                        return dockArea->mergedTitleBar();
+                    }
+                }
+                // Return the dock area itself
+                return dockArea;
+            }
+        }
+    }
+
+    // If no dock area found, try the original wxFindWindowAtPoint but skip drag preview
+    wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
+    if (windowUnderMouse && dragPreview) {
+        // Check if the found window is part of the drag preview
+        wxWindow* checkWindow = windowUnderMouse;
+        while (checkWindow) {
+            if (checkWindow == dragPreview) {
+                // Found drag preview, try to find the container widget
+                if (manager->containerWidget()) {
+                    wxRect containerRect = manager->containerWidget()->GetScreenRect();
+                    if (containerRect.Contains(screenPos)) {
+                        return manager->containerWidget();
+                    }
+                }
+                return nullptr; // Can't find a suitable target
+            }
+            checkWindow = checkWindow->GetParent();
+        }
+    }
+
+    return windowUnderMouse;
+}
+
+void DockAreaMergedTitleBar::showDragFeedback(bool showMergeHint) {
+    // This method can be used to show additional visual feedback during dragging
+    // For now, we rely on cursor changes and overlay display
+    // Future enhancements could include:
+    // - Highlighting potential drop targets
+    // - Showing preview of tab merge
+    // - Displaying drag hints/tooltips
+
+    if (showMergeHint) {
+        // Set tooltip to indicate tab merge is possible
+        SetToolTip("Drop here to merge tabs");
+    } else {
+        UnsetToolTip();
+    }
+}
+
+// DockAreaTitleBar implementation (legacy)
 DockAreaTitleBar::DockAreaTitleBar(DockArea* dockArea)
     : wxPanel(dockArea)
     , m_dockArea(dockArea)

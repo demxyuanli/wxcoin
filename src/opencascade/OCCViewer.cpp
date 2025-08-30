@@ -324,8 +324,24 @@ void OCCViewer::setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry) {
 }
 
 void OCCViewer::updateHoverSilhouetteAt(const wxPoint& screenPos) {
-	if (!m_hoverManager) m_hoverManager = std::make_unique<HoverSilhouetteManager>(m_sceneManager, m_occRoot, m_pickingService.get());
-	m_hoverManager->updateHoverSilhouetteAt(screenPos);
+	// Use outline manager for hover if enabled
+	if (m_outlineManager && m_outlineManager->isEnabled() && m_outlineManager->isHoverMode()) {
+		if (m_pickingService) {
+			std::shared_ptr<OCCGeometry> geometry;
+			// Only pick if screen position is valid
+			if (screenPos.x >= 0 && screenPos.y >= 0) {
+				geometry = m_pickingService->pickGeometryAtScreen(screenPos);
+			}
+			m_outlineManager->setHoveredGeometry(geometry);
+			if (m_sceneManager && m_sceneManager->getCanvas()) {
+				m_sceneManager->getCanvas()->Refresh(false);
+			}
+		}
+	} else {
+		// Fall back to legacy hover silhouette
+		if (!m_hoverManager) m_hoverManager = std::make_unique<HoverSilhouetteManager>(m_sceneManager, m_occRoot, m_pickingService.get());
+		m_hoverManager->updateHoverSilhouetteAt(screenPos);
+	}
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::findGeometry(const std::string& name)

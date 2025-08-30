@@ -27,6 +27,12 @@
 #include <Inventor/nodes/SoShaderParameter.h>
 #include <Inventor/nodes/SoTextureUnit.h>
 #include <Inventor/nodes/SoTexture2.h>
+#include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoTransform.h>
+#include <Inventor/nodes/SoLightModel.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/SbViewVolume.h>
+#include <Inventor/SbMatrix.h>
 #ifdef IMAGE_OUTLINE_ENABLE_GL_VALIDATION
 #include <GL/gl.h>
 #endif
@@ -77,12 +83,12 @@ namespace {
 ImageOutlinePass::ImageOutlinePass(SceneManager* sceneManager, SoSeparator* captureRoot)
 	: m_sceneManager(sceneManager), m_captureRoot(captureRoot) {
 	// Initialize parameters with sensible defaults
-	m_params.edgeIntensity = 1.0f;     // Full intensity (0.0 - 1.0)
-	m_params.depthWeight = 2.0f;       // Equal weight for depth edges (0.0 - 2.0)
-	m_params.normalWeight = 1.0f;      // Equal weight for normal edges (0.0 - 2.0)
-	m_params.depthThreshold = 0.0005f;  // Depth discontinuity threshold
-	m_params.normalThreshold = 0.1f;   // Normal angle threshold
-	m_params.thickness = 1.0f;         // Edge thickness multiplier (0.5 - 3.0)
+	    m_params.edgeIntensity = 1.0f;     // Full intensity (0.0 - 1.0)
+    m_params.depthWeight = 1.5f;       // Weight for depth edges (0.0 - 2.0)
+    m_params.normalWeight = 1.0f;      // Weight for normal edges (0.0 - 2.0)
+    m_params.depthThreshold = 0.001f;  // Depth discontinuity threshold
+    m_params.normalThreshold = 0.4f;   // Normal angle threshold (adjusted for better detection)
+    m_params.thickness = 1.5f;         // Edge thickness multiplier (0.5 - 3.0)
 	LOG_INF("constructed", "ImageOutlinePass");
 }
 
@@ -115,6 +121,10 @@ ImageOutlinePass::~ImageOutlinePass() {
 	if (m_uInvProjection) { m_uInvProjection->unref(); m_uInvProjection = nullptr; }
 	if (m_uInvView) { m_uInvView->unref(); m_uInvView = nullptr; }
 	if (m_uDebugOutput) { m_uDebugOutput->unref(); m_uDebugOutput = nullptr; }
+	
+	// Clean up temporary scene root
+	if (m_tempSceneRoot) { m_tempSceneRoot->unref(); m_tempSceneRoot = nullptr; }
+	
 	LOG_INF("destructor end", "ImageOutlinePass");
 }
 
@@ -174,9 +184,8 @@ void ImageOutlinePass::refresh() {
 		m_sceneManager->getCanvas()->Refresh(false);
 	}
 
-	// Matrices update is skipped here because SoCamera does not expose the
-	// direct retrieval APIs across all Coin3D builds. The shader path below
-	// does not require these matrices in the fallback implementation.
+	// Update camera matrices
+	updateCameraMatrices();
 }
 
 void ImageOutlinePass::setDebugOutput(DebugOutput mode) {
@@ -205,6 +214,10 @@ void ImageOutlinePass::attachOverlay() {
 	m_overlayRoot->ref();
 	m_annotation = new SoAnnotation;
 	m_overlayRoot->addChild(m_annotation);
+	
+	// Add a camera-facing transform for the quad
+	auto* transform = new SoTransform;
+	m_annotation->addChild(transform);
 
 	// Build shader resources
 	buildShaders();
@@ -256,10 +269,13 @@ void ImageOutlinePass::attachOverlay() {
 		}
 		m_annotation->addChild(m_uResolution);
 	}
-	// Optional matrices (if available)
-	if (m_uInvProjection) m_annotation->addChild(m_uInvProjection);
-	if (m_uInvView) m_annotation->addChild(m_uInvView);
-	if (m_uDebugOutput) m_annotation->addChild(m_uDebugOutput);
+	    // Update camera matrices
+    updateCameraMatrices();
+    
+    // Optional matrices (if available)
+    if (m_uInvProjection) m_annotation->addChild(m_uInvProjection);
+    if (m_uInvView) m_annotation->addChild(m_uInvView);
+    if (m_uDebugOutput) m_annotation->addChild(m_uDebugOutput);
 
 	// 4. Apply shader program
 	if (m_program) { m_annotation->addChild(m_program); LOG_DBG("shader program applied", "ImageOutlinePass"); }
@@ -292,12 +308,17 @@ void ImageOutlinePass::detachOverlay() {
 	if (m_depthTexture) {
 		m_depthTexture->scene = nullptr;
 	}
+	
+	// Clean up temporary scene root
+	if (m_tempSceneRoot) {
+		m_tempSceneRoot->unref();
+		m_tempSceneRoot = nullptr;
+	}
 
 	// Properly clean up the overlay root
 	m_overlayRoot->unref();
 	m_overlayRoot = nullptr;
 	m_annotation = nullptr; // Owned by m_overlayRoot, no need to unref
-LOGINF:;
 	LOG_INF("detachOverlay end", "ImageOutlinePass");
 }
 
@@ -322,8 +343,8 @@ void ImageOutlinePass::buildShaders() {
         }
     )GLSL";
 
-	// Advanced edge detection shader (fallback: no matrix/normal reconstruction)
-	static const char* kFS = R"GLSL(
+	    // Advanced edge detection shader with Three.js-style outline
+    static const char* kFS = R"GLSL(
         varying vec2 vTexCoord;
         uniform sampler2D uColorTex;
         uniform sampler2D uDepthTex;
@@ -335,13 +356,49 @@ void ImageOutlinePass::buildShaders() {
         uniform float uNormalThreshold;
         uniform float uThickness;
         uniform vec2 uResolution; // Inverse of viewport size (1/width, 1/height)
-        uniform mat4 uInvProjection; // unused in fallback
-        uniform mat4 uInvView;       // unused in fallback
+        uniform mat4 uInvProjection;
+        uniform mat4 uInvView;
         uniform int uDebugOutput;    // 0=final, 1=color, 2=edge
 
         // Sample depth with offset
         float sampleDepth(sampler2D tex, vec2 uv) {
             return texture2D(tex, uv).r;
+        }
+        
+        // Linear depth conversion
+        float linearizeDepth(float depth) {
+            float near = 0.1;
+            float far = 1000.0;
+            return (2.0 * near) / (far + near - depth * (far - near));
+        }
+        
+        // Reconstruct world position from depth
+        vec3 getWorldPos(vec2 uv, float depth) {
+            vec4 clipPos = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+            vec4 viewPos = uInvProjection * clipPos;
+            viewPos /= viewPos.w;
+            vec4 worldPos = uInvView * viewPos;
+            return worldPos.xyz;
+        }
+        
+        // Reconstruct normal from depth
+        vec3 getNormalFromDepth(vec2 uv, vec2 texelSize) {
+            float depth = sampleDepth(uDepthTex, uv);
+            vec3 pos = getWorldPos(uv, depth);
+            
+            vec2 offsetX = vec2(texelSize.x, 0.0);
+            vec2 offsetY = vec2(0.0, texelSize.y);
+            
+            float depthX = sampleDepth(uDepthTex, uv + offsetX);
+            float depthY = sampleDepth(uDepthTex, uv + offsetY);
+            
+            vec3 posX = getWorldPos(uv + offsetX, depthX);
+            vec3 posY = getWorldPos(uv + offsetY, depthY);
+            
+            vec3 dx = posX - pos;
+            vec3 dy = posY - pos;
+            
+            return normalize(cross(dy, dx));
         }
 
         // Color luminance-based Sobel
@@ -361,54 +418,79 @@ void ImageOutlinePass::buildShaders() {
             return length(vec2(gx, gy));
         }
 
-        // Sobel edge detection on depth (non-linear fallback)
-        float depthSobel(vec2 uv, vec2 texelSize) {
-            float thickness = uThickness;
-            vec2 offset = texelSize * thickness;
-
-            // Sample 3x3 neighborhood
-            float tl = sampleDepth(uDepthTex, uv + vec2(-offset.x, -offset.y));
-            float tm = sampleDepth(uDepthTex, uv + vec2(0.0, -offset.y));
-            float tr = sampleDepth(uDepthTex, uv + vec2(offset.x, -offset.y));
-            float ml = sampleDepth(uDepthTex, uv + vec2(-offset.x, 0.0));
-            float mm = sampleDepth(uDepthTex, uv);
-            float mr = sampleDepth(uDepthTex, uv + vec2(offset.x, 0.0));
-            float bl = sampleDepth(uDepthTex, uv + vec2(-offset.x, offset.y));
-            float bm = sampleDepth(uDepthTex, uv + vec2(0.0, offset.y));
-            float br = sampleDepth(uDepthTex, uv + vec2(offset.x, offset.y));
-
-            // Sobel X and Y kernels
-            float sobelX = (tr + 2.0*mr + br) - (tl + 2.0*ml + bl);
-            float sobelY = (bl + 2.0*bm + br) - (tl + 2.0*tm + tr);
-
-            return length(vec2(sobelX, sobelY));
+        // Roberts Cross edge detection on depth (more suitable for outlines)
+        float depthEdge(vec2 uv, vec2 texelSize) {
+            vec2 offset = texelSize * uThickness;
+            
+            float center = linearizeDepth(sampleDepth(uDepthTex, uv));
+            float tl = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(-offset.x, -offset.y)));
+            float tr = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(offset.x, -offset.y)));
+            float bl = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(-offset.x, offset.y)));
+            float br = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(offset.x, offset.y)));
+            
+            // Roberts Cross operators
+            float robertsX = abs(center - br) + abs(tr - bl);
+            float robertsY = abs(tl - br) + abs(center - tr);
+            
+            float edge = sqrt(robertsX * robertsX + robertsY * robertsY);
+            
+            // Adaptive threshold based on depth
+            float adaptiveThreshold = uDepthThreshold * (1.0 + center * 10.0);
+            return smoothstep(0.0, adaptiveThreshold, edge);
         }
 
-        // Normal-based edge detection disabled in fallback (returns 0)
+        // Normal-based edge detection
         float normalEdge(vec2 uv, vec2 texelSize) {
-            return 0.0;
+            vec3 normal = getNormalFromDepth(uv, texelSize);
+            
+            vec2 offset = texelSize * uThickness;
+            vec3 normalRight = getNormalFromDepth(uv + vec2(offset.x, 0.0), texelSize);
+            vec3 normalUp = getNormalFromDepth(uv + vec2(0.0, offset.y), texelSize);
+            
+            float dotRight = dot(normal, normalRight);
+            float dotUp = dot(normal, normalUp);
+            
+            float edge = max(0.0, 1.0 - min(dotRight, dotUp));
+            return smoothstep(uNormalThreshold, uNormalThreshold * 2.0, edge);
         }
 
         void main() {
-            vec2 texelSize = uResolution; // Use actual viewport resolution
+            vec2 texelSize = uResolution;
 
             // Sample color as base
             vec4 color = texture2D(uColorTex, vTexCoord);
+            
+            // Skip processing for background (far depth)
+            float centerDepth = sampleDepth(uDepthTex, vTexCoord);
+            if (centerDepth > 0.999) {
+                gl_FragColor = color;
+                return;
+            }
 
-            // Depth-based edges
-            float depthEdge = depthSobel(vTexCoord, texelSize);
-            depthEdge = smoothstep(uDepthThreshold, uDepthThreshold * 2.0, depthEdge);
+            // Calculate edges
+            float depthE = depthEdge(vTexCoord, texelSize) * uDepthWeight;
+            float normalE = normalEdge(vTexCoord, texelSize) * uNormalWeight;
+            float colorE = colorSobel(vTexCoord, texelSize) * 0.3; // Reduced color edge weight
 
-            // Normal-based edges
-            float normalE = normalEdge(vTexCoord, texelSize);
-
-            // Color-based edges
-            float colorE = colorSobel(vTexCoord, texelSize);
-            colorE = smoothstep(0.1, 0.3, colorE);
-
-            // Combine edges (adjusted to not suppress color)
-            float edge = clamp(colorE * uIntensity + depthEdge * uDepthWeight + normalE * uNormalWeight, 0.0, 1.0);
+            // Combine edges with clamping
+            float edge = clamp(depthE + normalE + colorE, 0.0, 1.0);
             edge *= uIntensity;
+            
+            // Apply gaussian-like smoothing for better outline quality
+            if (edge > 0.1) {
+                // Sample surrounding pixels for smoothing
+                float smoothEdge = edge;
+                for (int i = -1; i <= 1; i++) {
+                    for (int j = -1; j <= 1; j++) {
+                        if (i == 0 && j == 0) continue;
+                        vec2 sampleUV = vTexCoord + vec2(float(i), float(j)) * texelSize;
+                        float sampleDepthE = depthEdge(sampleUV, texelSize) * uDepthWeight;
+                        float sampleNormalE = normalEdge(sampleUV, texelSize) * uNormalWeight;
+                        smoothEdge += (sampleDepthE + sampleNormalE) * 0.125;
+                    }
+                }
+                edge = smoothEdge;
+            }
 
             // Debug views
             if (uDebugOutput == 1) {
@@ -419,8 +501,9 @@ void ImageOutlinePass::buildShaders() {
                 return;
             }
 
-            // Output: darken original color based on edge strength (no blending required)
-            gl_FragColor = mix(color, vec4(0.0, 0.0, 0.0, 1.0), edge);
+            // Three.js style: overlay black outline on edges
+            vec3 outlineColor = vec3(0.0, 0.0, 0.0); // Black outline
+            gl_FragColor = vec4(mix(color.rgb, outlineColor, edge), color.a);
         }
     )GLSL";
 
@@ -456,11 +539,32 @@ void ImageOutlinePass::buildShaders() {
 	m_depthTexture->wrapT = SoSceneTexture2::CLAMP;
 	LOG_DBG("depth RTT created", "ImageOutlinePass");
 
-	// CRITICAL: Set scene to capture root (geometry only, no overlays)
-	if (m_captureRoot) {
-		m_colorTexture->scene = m_captureRoot;
-		m_depthTexture->scene = m_captureRoot;
-		LOG_DBG("RTT scenes set", "ImageOutlinePass");
+	// CRITICAL: Create a scene graph that includes camera for proper rendering
+	// SoSceneTexture2 needs camera to render depth properly
+	if (m_sceneManager && m_captureRoot) {
+		// Create a temporary scene root that includes camera
+		SoSeparator* tempSceneRoot = new SoSeparator;
+		tempSceneRoot->ref();
+		
+		// Add camera from scene manager
+		SoCamera* camera = m_sceneManager->getCamera();
+		if (camera) {
+			tempSceneRoot->addChild(camera);
+		}
+		
+		// Add the capture root (geometry)
+		tempSceneRoot->addChild(m_captureRoot);
+		
+		// Set scenes for render-to-texture
+		m_colorTexture->scene = tempSceneRoot;
+		m_depthTexture->scene = tempSceneRoot;
+		
+		// Store reference for cleanup
+		m_tempSceneRoot = tempSceneRoot;
+		
+		LOG_DBG("RTT scenes set with camera and geometry", "ImageOutlinePass");
+	} else {
+		LOG_WRN("missing scene manager or capture root", "ImageOutlinePass");
 	}
 
 	// Create texture samplers
@@ -493,7 +597,18 @@ void ImageOutlinePass::buildShaders() {
 
 	auto* face = new SoFaceSet;
 	face->numVertices.set1Value(0, 4);
+	
+	// Disable lighting for the quad
+	auto* lightModel = new SoLightModel;
+	lightModel->model = SoLightModel::BASE_COLOR;
+	
+	// Set material to ensure visibility
+	auto* material = new SoMaterial;
+	material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	material->transparency = 0.0f;
 
+	m_quadSeparator->addChild(lightModel);
+	m_quadSeparator->addChild(material);
 	m_quadSeparator->addChild(texCoords);
 	m_quadSeparator->addChild(coords);
 	m_quadSeparator->addChild(face);
@@ -557,5 +672,44 @@ void ImageOutlinePass::buildShaders() {
 	m_uDebugOutput->ref();
 	m_uDebugOutput->name = "uDebugOutput";
 	m_uDebugOutput->value = static_cast<int>(m_debugOutput);
-	LOG_INF("buildShaders end", "ImageOutlinePass");
+	    LOG_INF("buildShaders end", "ImageOutlinePass");
+}
+
+void ImageOutlinePass::updateCameraMatrices() {
+    if (!m_sceneManager) return;
+    SoCamera* camera = m_sceneManager->getCamera();
+    if (!camera) return;
+    
+    // Get viewport dimensions
+    SbVec2s vpSize(1920, 1080); // Default size
+    if (m_sceneManager->getCanvas()) {
+        int width, height;
+        m_sceneManager->getCanvas()->GetSize(&width, &height);
+        if (width > 0 && height > 0) {
+            vpSize = SbVec2s(width, height);
+        }
+    }
+    
+    // Get camera view volume
+    SbViewVolume viewVol = camera->getViewVolume(float(vpSize[0]) / float(vpSize[1]));
+    
+    // Get projection matrix and invert it
+    SbMatrix projMatrix = viewVol.getMatrix();
+    SbMatrix invProjMatrix = projMatrix.inverse();
+    
+    // Get view matrix (camera transformation) and invert it
+    SbMatrix viewMatrix;
+    viewMatrix.setTranslate(-camera->position.getValue());
+    SbMatrix rotMatrix;
+    camera->orientation.getValue().getValue(rotMatrix);
+    viewMatrix.multRight(rotMatrix);
+    SbMatrix invViewMatrix = viewMatrix.inverse();
+    
+    // Update shader parameters
+    if (m_uInvProjection) {
+        m_uInvProjection->value.setValue(invProjMatrix);
+    }
+    if (m_uInvView) {
+        m_uInvView->value.setValue(invViewMatrix);
+    }
 }

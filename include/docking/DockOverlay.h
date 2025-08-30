@@ -77,7 +77,12 @@ public:
     // Allowed areas
     void setAllowedAreas(int areas) { m_allowedAreas = areas; updateDropAreas(); }
     int allowedAreas() const { return m_allowedAreas; }
-    
+
+    // Performance optimization methods
+    void optimizeRendering();
+    void setRenderingOptimization(bool enabled);
+    void updateDropAreaGeometryCache();
+
 protected:
     // Event handlers
     void onPaint(wxPaintEvent& event);
@@ -92,7 +97,7 @@ protected:
     void paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropArea);
     wxRect dropIndicatorRect(DockWidgetArea area) const;
     wxRect getPreviewRect(DockWidgetArea area) const;
-    
+
 private:
     // Member variables
     eMode m_mode;
@@ -103,6 +108,10 @@ private:
     wxColour m_frameColor;
     wxColour m_areaColor;
     int m_frameWidth;
+
+    // Performance optimization variables
+    bool m_optimizedRendering;
+    std::map<DockWidgetArea, wxRect> m_cachedGeometries;
     
     // Helper methods
     wxRect targetRect() const;

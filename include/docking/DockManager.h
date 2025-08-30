@@ -129,6 +129,13 @@ public:
     DockOverlay* dockAreaOverlay() const;
     DockOverlay* containerOverlay() const;
 
+    // Performance optimization methods
+    void beginBatchOperation();
+    void endBatchOperation();
+    void updateLayout();
+    void optimizeDragOperation(DockWidget* draggedWidget);
+    void optimizeMemoryUsage();
+
 protected:
     // Internal methods
     void registerDockWidget(DockWidget* dockWidget);
@@ -137,12 +144,19 @@ protected:
     void unregisterDockArea(DockArea* dockArea);
     void registerFloatingWidget(FloatingDockContainer* floatingWidget);
     void unregisterFloatingWidget(FloatingDockContainer* floatingWidget);
-    
+
     // Event handling
     void onDockAreaCreated(DockArea* dockArea);
     void onDockAreaAboutToClose(DockArea* dockArea);
     void onFloatingWidgetCreated(FloatingDockContainer* floatingWidget);
     void onFloatingWidgetAboutToClose(FloatingDockContainer* floatingWidget);
+
+    // Performance optimization handlers
+    void onLayoutUpdateTimer(wxTimerEvent& event);
+    void updateDragTargets();
+    void collectDropTargets(wxWindow* window);
+    void cleanupUnusedResources();
+    void initializePerformanceVariables();
     
 private:
     // Private implementation
@@ -157,13 +171,29 @@ private:
     DockWidget* m_activeDockWidget;
     DockManagerFeatures m_configFlags;
     wxString m_styleSheet;
-    
+
+    // Performance optimization variables
+    wxTimer* m_layoutUpdateTimer;
+    int m_batchOperationCount;
+    bool m_isProcessingDrag;
+    wxPoint m_lastMousePos;
+    std::vector<wxWindow*> m_cachedDropTargets;
+
+    // Drag state enumeration
+    enum DragState {
+        DragInactive,
+        DragStarting,
+        DragActive,
+        DragEnding
+    };
+    DragState m_dragState;
+
     // Containers
     std::vector<DockWidget*> m_dockWidgets;
     std::vector<DockArea*> m_dockAreas;
     std::vector<FloatingDockContainer*> m_floatingWidgets;
     std::map<wxString, DockWidget*> m_dockWidgetsMap;
-    
+
     // Callbacks
     std::vector<DockWidgetCallback> m_dockWidgetAddedCallbacks;
     std::vector<DockWidgetCallback> m_dockWidgetRemovedCallbacks;

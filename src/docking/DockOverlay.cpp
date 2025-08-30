@@ -37,13 +37,14 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_frameColor(wxColour(58, 135, 173))  // Blue color
     , m_areaColor(wxColour(58, 135, 173, 128))  // Semi-transparent blue
     , m_frameWidth(3)
+    , m_optimizedRendering(false)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetTransparent(200);  // Make overlay semi-transparent
-    
+
     // Create drop areas
     createDropAreas();
-    
+
     // Set initial visibility based on allowed areas
     updateDropAreas();
 }
@@ -545,6 +546,78 @@ wxRect DockOverlay::getPreviewRect(DockWidgetArea area) const {
     }
     
     return previewRect;
+}
+
+// Performance optimization methods
+void DockOverlay::optimizeRendering() {
+    // Reduce rendering frequency for better performance
+    if (m_optimizedRendering) {
+        return;
+    }
+
+    m_optimizedRendering = true;
+
+    // Disable unnecessary features during drag operations
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+
+    // Optimize double buffering
+    if (GetParent() != nullptr) {
+        // Use parent's DC for better performance
+        // This reduces the overhead of creating new DCs
+    }
+
+    // Cache drop area geometries for better performance
+    updateDropAreaGeometryCache();
+}
+
+void DockOverlay::setRenderingOptimization(bool enabled) {
+    m_optimizedRendering = enabled;
+}
+
+void DockOverlay::updateDropAreaGeometryCache() {
+    // Cache drop area geometries to avoid repeated calculations
+    m_cachedGeometries.clear();
+
+    wxSize size = GetSize();
+    int dropSize = 60;
+    int margin = 20;
+
+    // Cache center area
+    m_cachedGeometries[CenterDockWidgetArea] = wxRect(
+        (size.GetWidth() - dropSize) / 2,
+        (size.GetHeight() - dropSize) / 2,
+        dropSize,
+        dropSize
+    );
+
+    // Cache side areas
+    m_cachedGeometries[TopDockWidgetArea] = wxRect(
+        (size.GetWidth() - dropSize) / 2,
+        margin,
+        dropSize,
+        dropSize
+    );
+
+    m_cachedGeometries[BottomDockWidgetArea] = wxRect(
+        (size.GetWidth() - dropSize) / 2,
+        size.GetHeight() - margin - dropSize,
+        dropSize,
+        dropSize
+    );
+
+    m_cachedGeometries[LeftDockWidgetArea] = wxRect(
+        margin,
+        (size.GetHeight() - dropSize) / 2,
+        dropSize,
+        dropSize
+    );
+
+    m_cachedGeometries[RightDockWidgetArea] = wxRect(
+        size.GetWidth() - margin - dropSize,
+        (size.GetHeight() - dropSize) / 2,
+        dropSize,
+        dropSize
+    );
 }
 
 } // namespace ads

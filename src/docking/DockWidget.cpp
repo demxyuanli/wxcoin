@@ -69,7 +69,7 @@ DockWidget::~DockWidget() {
     if (m_dockManager && !m_dockManager->dockWidgets().empty()) {
         m_dockManager->unregisterDockWidget(this);
     }
-    
+     
     m_dockManager = nullptr;
 }
 

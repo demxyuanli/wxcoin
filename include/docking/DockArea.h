@@ -5,6 +5,7 @@
 #include <wx/notebook.h>
 #include <vector>
 #include <memory>
+#include "DockManager.h"  // For DockWidgetArea enum
 
 namespace ads {
 
@@ -14,7 +15,10 @@ class DockManager;
 class DockContainerWidget;
 class DockAreaTabBar;
 class DockAreaTitleBar;
+// Forward declaration for merged title bar
+class DockAreaMergedTitleBar;
 class FloatingDockContainer;
+class FloatingDragPreview;
 
 // Dock area flags
 enum DockAreaFlag {
@@ -47,7 +51,10 @@ public:
     
     // Title bar
     DockAreaTitleBar* titleBar() const { return m_titleBar; }
-    
+
+    // Merged title bar (new combined tabs + buttons)
+    DockAreaMergedTitleBar* mergedTitleBar() const { return m_mergedTitleBar; }
+
     // Tab bar
     DockAreaTabBar* tabBar() const { return m_tabBar; }
     
@@ -113,6 +120,7 @@ private:
     std::vector<DockWidget*> m_dockWidgets;
     DockAreaTitleBar* m_titleBar;
     DockAreaTabBar* m_tabBar;
+    DockAreaMergedTitleBar* m_mergedTitleBar;
     wxBoxSizer* m_layout;
     wxPanel* m_contentArea;
     wxBoxSizer* m_contentSizer;
@@ -126,7 +134,87 @@ private:
     friend class DockContainerWidget;
     friend class DockWidget;
     friend class DockManager;
+    friend class DockAreaMergedTitleBar;
     
+    wxDECLARE_EVENT_TABLE();
+};
+
+/**
+ * @brief Merged title bar that combines tabs and system buttons in one row
+ */
+class DockAreaMergedTitleBar : public wxPanel {
+public:
+    DockAreaMergedTitleBar(DockArea* dockArea);
+    virtual ~DockAreaMergedTitleBar();
+
+    void updateTitle();
+    void updateButtonStates();
+    void insertTab(int index, DockWidget* dockWidget);
+    void removeTab(DockWidget* dockWidget);
+    void setCurrentIndex(int index);
+    int getTabCount() const { return static_cast<int>(m_tabs.size()); }
+    DockWidget* getTabWidget(int index) const;
+
+    void showCloseButton(bool show) { m_showCloseButton = show; Refresh(); }
+    void showAutoHideButton(bool show) { m_showAutoHideButton = show; Refresh(); }
+    void showPinButton(bool show) { m_showPinButton = show; Refresh(); }
+
+protected:
+    void onPaint(wxPaintEvent& event);
+    void onMouseLeftDown(wxMouseEvent& event);
+    void onMouseLeftUp(wxMouseEvent& event);
+    void onMouseMotion(wxMouseEvent& event);
+    void onMouseLeave(wxMouseEvent& event);
+    void onSize(wxSizeEvent& event);
+
+private:
+    struct TabInfo {
+        DockWidget* widget = nullptr;
+        wxRect rect;
+        wxRect closeButtonRect;
+        bool closeButtonHovered = false;
+        bool hovered = false;
+        bool showCloseButton = true;  // Whether to show close button for this tab
+    };
+
+    DockArea* m_dockArea;
+    std::vector<TabInfo> m_tabs;
+    int m_currentIndex;
+    int m_hoveredTab;
+    int m_buttonSize;
+    int m_buttonSpacing;
+    wxRect m_pinButtonRect;
+    wxRect m_closeButtonRect;
+    wxRect m_autoHideButtonRect;
+    bool m_showCloseButton;
+    bool m_showAutoHideButton;
+    bool m_showPinButton;
+
+    // Drag and drop support
+    int m_draggedTab;
+    wxPoint m_dragStartPos;
+    bool m_dragStarted;
+    FloatingDragPreview* m_dragPreview;
+
+    // Button hover states
+    bool m_pinButtonHovered;
+    bool m_closeButtonHovered;
+    bool m_autoHideButtonHovered;
+
+    void updateTabRects();
+    void drawTab(wxDC& dc, int index);
+    void drawButton(wxDC& dc, const wxRect& rect, const wxString& text, bool hovered);
+    int getTabAt(const wxPoint& pos) const;
+    wxRect getButtonRect(int buttonIndex) const; // 0=pin, 1=close, 2=auto hide
+
+    // Drag and drop helpers
+    bool isDraggingTab() const { return m_dragStarted && m_draggedTab >= 0; }
+    void updateDragCursor(int dropArea);
+    void showDragFeedback(bool showMergeHint = false);
+
+    // Target detection
+    wxWindow* findTargetWindowUnderMouse(const wxPoint& screenPos, wxWindow* dragPreview) const;
+
     wxDECLARE_EVENT_TABLE();
 };
 

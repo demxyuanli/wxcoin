@@ -162,12 +162,48 @@ void DockingExampleFrame::CreateDefaultWidgets() {
     
     // Add widgets to dock manager
     m_dockManager->addDockWidget(CenterDockWidgetArea, editorWidget);
-    
+
     DockArea* leftArea = m_dockManager->addDockWidget(LeftDockWidgetArea, projectWidget);
     m_dockManager->addDockWidgetTabToArea(filesWidget, leftArea);
-    
+
     m_dockManager->addDockWidget(BottomDockWidgetArea, outputWidget);
     m_dockManager->addDockWidget(RightDockWidgetArea, toolWidget);
+
+    // Demonstrate merged title bar with multiple tabs
+    wxPanel* demoPanel1 = new wxPanel(m_dockManager->containerWidget());
+    wxStaticText* demoText1 = new wxStaticText(demoPanel1, wxID_ANY, "Demo Panel 1\n\nThis demonstrates the merged title bar with tabs.");
+    wxBoxSizer* demoSizer1 = new wxBoxSizer(wxVERTICAL);
+    demoSizer1->Add(demoText1, 1, wxEXPAND | wxALL, 10);
+    demoPanel1->SetSizer(demoSizer1);
+
+    wxPanel* demoPanel2 = new wxPanel(m_dockManager->containerWidget());
+    wxStaticText* demoText2 = new wxStaticText(demoPanel2, wxID_ANY, "Demo Panel 2\n\nTabs are now displayed in the title bar with system buttons on the right.");
+    wxBoxSizer* demoSizer2 = new wxBoxSizer(wxVERTICAL);
+    demoSizer2->Add(demoText2, 1, wxEXPAND | wxALL, 10);
+    demoPanel2->SetSizer(demoSizer2);
+
+    wxPanel* demoPanel3 = new wxPanel(m_dockManager->containerWidget());
+    wxStaticText* demoText3 = new wxStaticText(demoPanel3, wxID_ANY, "Demo Panel 3\n\nClick on tabs to switch between panels.\nUse system buttons (P, X, ^) for dock operations.");
+    wxBoxSizer* demoSizer3 = new wxBoxSizer(wxVERTICAL);
+    demoSizer3->Add(demoText3, 1, wxEXPAND | wxALL, 10);
+    demoPanel3->SetSizer(demoSizer3);
+
+    DockWidget* demoWidget1 = new DockWidget("Demo 1", m_dockManager->containerWidget());
+    demoWidget1->setWidget(demoPanel1);
+    demoWidget1->setObjectName("Demo1");
+
+    DockWidget* demoWidget2 = new DockWidget("Demo 2", m_dockManager->containerWidget());
+    demoWidget2->setWidget(demoPanel2);
+    demoWidget2->setObjectName("Demo2");
+
+    DockWidget* demoWidget3 = new DockWidget("Demo 3", m_dockManager->containerWidget());
+    demoWidget3->setWidget(demoPanel3);
+    demoWidget3->setObjectName("Demo3");
+
+    // Add demo widgets with multiple tabs to showcase merged title bar
+    DockArea* demoArea = m_dockManager->addDockWidget(TopDockWidgetArea, demoWidget1);
+    m_dockManager->addDockWidgetTabToArea(demoWidget2, demoArea);
+    m_dockManager->addDockWidgetTabToArea(demoWidget3, demoArea);
 }
 
 wxTextCtrl* DockingExampleFrame::CreateTextEditor(const wxString& title) {

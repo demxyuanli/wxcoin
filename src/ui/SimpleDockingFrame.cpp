@@ -15,6 +15,7 @@
 #include <wx/stattext.h>
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
+#include "docking/DockArea.h"
 #include "docking/PerspectiveManager.h"
 
 using namespace ads;
@@ -26,6 +27,9 @@ public:
 		, m_dockManager(nullptr)
 	{
 		InitializeDocking();
+		
+		// Bind window resize event to prevent ghosting
+		Bind(wxEVT_SIZE, &SimpleDockingFrame::OnSize, this);
 	}
 
 	virtual ~SimpleDockingFrame() {
@@ -69,29 +73,35 @@ private:
     }
     
     void CreateDockingLayout() {
-        // Create example dock panels
-        
-        // 1. Main View - non-closable center panel
-        DockWidget* mainDock = new DockWidget("Main View", m_dockManager->containerWidget());
-        wxPanel* mainPanel = new wxPanel(mainDock);
-        mainPanel->SetBackgroundColour(wxColour(240, 240, 240));
-        
-        wxStaticText* mainText = new wxStaticText(mainPanel, wxID_ANY, 
-            "This is the main view panel\nNon-closable, always displayed in center area",
-            wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER | wxST_NO_AUTORESIZE);
-        
-        wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-        mainSizer->AddStretchSpacer(1);
-        mainSizer->Add(mainText, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 20);
-        mainSizer->AddStretchSpacer(1);
-        mainPanel->SetSizer(mainSizer);
-        
-        mainDock->setWidget(mainPanel);
-        mainDock->setFeature(DockWidgetClosable, false);  // Non-closable
-        mainDock->setIcon(wxArtProvider::GetIcon(wxART_NORMAL_FILE, wxART_MENU));
-        m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
-        
-        // 2. Tool Panel - left side
+        // Create a proper five-area layout with explicit positioning
+        // 
+        // +-------------------------------------+
+        // |          Menu Bar (Top)             |
+        // +-------------+-------------+---------+
+        // |             |             |         |
+        // |  Toolbox    |  Main View  |  Props  |
+        // |  (Left)     |  (Center)   |  (Right)|
+        // |             |             |         |
+        // +-------------+-------------+---------+
+        // |        Output Panel (Bottom)         |
+        // +-------------------------------------+
+
+        // Create all dock widgets first
+        DockWidget* menuDock = new DockWidget("Menu Bar", m_dockManager->containerWidget());
+        wxPanel* menuPanel = new wxPanel(menuDock);
+        menuPanel->SetBackgroundColour(wxColour(220, 220, 255));
+        wxBoxSizer* menuSizer = new wxBoxSizer(wxHORIZONTAL);
+        wxStaticText* menuText = new wxStaticText(menuPanel, wxID_ANY, "File | Edit | View | Tools | Help",
+                                                 wxDefaultPosition, wxDefaultSize, wxALIGN_LEFT);
+        menuSizer->Add(menuText, 0, wxALL | wxALIGN_CENTER_VERTICAL, 10);
+        menuSizer->AddStretchSpacer(1);
+        menuPanel->SetSizer(menuSizer);
+        menuDock->setWidget(menuPanel);
+        menuDock->setFeature(DockWidgetClosable, true);
+        menuDock->setFeature(DockWidgetMovable, true);
+        menuDock->setFeature(DockWidgetFloatable, true);
+        menuDock->setIcon(wxArtProvider::GetIcon(wxART_LIST_VIEW, wxART_MENU));
+
         DockWidget* toolDock = new DockWidget("Toolbox", m_dockManager->containerWidget());
         wxListBox* toolList = new wxListBox(toolDock, wxID_ANY);
         toolList->Append("Select Tool");
@@ -100,15 +110,27 @@ private:
         toolList->Append("Rotate Tool");
         toolList->Append("Brush Tool");
         toolList->SetSelection(0);
-        
         toolDock->setWidget(toolList);
         toolDock->setFeature(DockWidgetClosable, true);
         toolDock->setFeature(DockWidgetMovable, true);
         toolDock->setFeature(DockWidgetFloatable, true);
         toolDock->setIcon(wxArtProvider::GetIcon(wxART_EXECUTABLE_FILE, wxART_MENU));
-        m_dockManager->addDockWidget(LeftDockWidgetArea, toolDock);
-        
-        // 3. Properties Panel - right side
+
+        DockWidget* mainDock = new DockWidget("Main View", m_dockManager->containerWidget());
+        wxPanel* mainPanel = new wxPanel(mainDock);
+        mainPanel->SetBackgroundColour(wxColour(240, 240, 240));
+        wxStaticText* mainText = new wxStaticText(mainPanel, wxID_ANY,
+            "This is the main view panel\nNon-closable, always displayed in center area",
+            wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER | wxST_NO_AUTORESIZE);
+        wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+        mainSizer->AddStretchSpacer(1);
+        mainSizer->Add(mainText, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 20);
+        mainSizer->AddStretchSpacer(1);
+        mainPanel->SetSizer(mainSizer);
+        mainDock->setWidget(mainPanel);
+        mainDock->setFeature(DockWidgetClosable, false);
+        mainDock->setIcon(wxArtProvider::GetIcon(wxART_NORMAL_FILE, wxART_MENU));
+
         DockWidget* propDock = new DockWidget("Properties", m_dockManager->containerWidget());
         wxPropertyGrid* propGrid = new wxPropertyGrid(propDock);
         propGrid->Append(new wxStringProperty("Name", wxPG_LABEL, "Object1"));
@@ -116,15 +138,12 @@ private:
         propGrid->Append(new wxIntProperty("Height", wxPG_LABEL, 100));
         propGrid->Append(new wxBoolProperty("Visible", wxPG_LABEL, true));
         propGrid->Append(new wxFloatProperty("Opacity", wxPG_LABEL, 1.0));
-        
         propDock->setWidget(propGrid);
         propDock->setFeature(DockWidgetClosable, true);
         propDock->setFeature(DockWidgetMovable, true);
         propDock->setFeature(DockWidgetFloatable, true);
         propDock->setIcon(wxArtProvider::GetIcon(wxART_REPORT_VIEW, wxART_MENU));
-        m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
-        
-        // 4. Output Panel - bottom
+
         DockWidget* outputDock = new DockWidget("Output", m_dockManager->containerWidget());
         wxTextCtrl* output = new wxTextCtrl(outputDock, wxID_ANY,
                                            "Welcome to Simple Docking Example\n"
@@ -135,13 +154,43 @@ private:
                                            wxDefaultPosition, wxDefaultSize,
                                            wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH);
         output->SetDefaultStyle(wxTextAttr(*wxBLACK, *wxWHITE));
-        
         outputDock->setWidget(output);
         outputDock->setFeature(DockWidgetClosable, true);
         outputDock->setFeature(DockWidgetMovable, true);
         outputDock->setFeature(DockWidgetFloatable, true);
         outputDock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
-        m_dockManager->addDockWidget(BottomDockWidgetArea, outputDock);
+
+        // Step 1: Create Top area (Menu Bar) - this should be at the very top
+        wxLogDebug("Step 1: Creating Top area (Menu Bar)");
+        DockArea* topArea = m_dockManager->addDockWidget(TopDockWidgetArea, menuDock);
+        wxLogDebug("  -> Top area created: %p", topArea);
+
+        // Step 2: Create Left area (Toolbox) - this should be on the left side
+        wxLogDebug("Step 2: Creating Left area (Toolbox)");
+        DockArea* leftArea = m_dockManager->addDockWidget(LeftDockWidgetArea, toolDock);
+        wxLogDebug("  -> Left area created: %p", leftArea);
+
+        // Step 3: Create Right area (Properties) - this should be on the right side
+        wxLogDebug("Step 3: Creating Right area (Properties)");
+        DockArea* rightArea = m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
+        wxLogDebug("  -> Right area created: %p", rightArea);
+
+        // Step 4: Create Center area (Main View) - this should be in the center
+        wxLogDebug("Step 4: Creating Center area (Main View)");
+        DockArea* centerArea = m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
+        wxLogDebug("  -> Center area created: %p", centerArea);
+
+        // Step 5: Create Bottom area (Output) - this should be at the bottom
+        wxLogDebug("Step 5: Creating Bottom area (Output)");
+        DockArea* bottomArea = m_dockManager->addDockWidget(BottomDockWidgetArea, outputDock);
+        wxLogDebug("  -> Bottom area created: %p", bottomArea);
+
+        wxLogDebug("Layout creation complete:");
+        wxLogDebug("  Top (Menu): %p", topArea);
+        wxLogDebug("  Bottom (Output): %p", bottomArea);
+        wxLogDebug("  Left (Toolbox): %p", leftArea);
+        wxLogDebug("  Center (Main): %p", centerArea);
+        wxLogDebug("  Right (Properties): %p", rightArea);
     }
     
     void CreateMenus() {
@@ -215,6 +264,16 @@ private:
         dlg.ShowModal();
     }
     
+    void OnSize(wxSizeEvent& event) {
+        // Force refresh of dock manager to prevent ghosting during window resize
+        if (m_dockManager && m_dockManager->containerWidget()) {
+            m_dockManager->containerWidget()->Refresh();
+            m_dockManager->containerWidget()->Update();
+        }
+        
+        event.Skip();
+    }
+    
     enum {
         ID_SAVE_LAYOUT = wxID_HIGHEST + 1,
         ID_LOAD_LAYOUT,
@@ -235,6 +294,6 @@ public:
 		frame->Show(true);
 		return true;
 	}
-};
+}; 
 
-wxIMPLEMENT_APP(SimpleDockingApp);
+wxIMPLEMENT_APP(SimpleDockingApp); 
