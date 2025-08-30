@@ -28,6 +28,9 @@ public:
     // Get current parameters
     ImageOutlineParams getOutlineParams() const;
     
+    // Enable/disable outline
+    void setOutlineEnabled(bool enabled);
+    
     // Color configuration
     void setBackgroundColor(const wxColour& color) { m_bgColor = color; m_needsRedraw = true; }
     void setOutlineColor(const wxColour& color) { m_outlineColor = color; m_needsRedraw = true; }

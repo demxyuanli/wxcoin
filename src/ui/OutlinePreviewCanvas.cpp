@@ -46,6 +46,9 @@ OutlinePreviewCanvas::OutlinePreviewCanvas(wxWindow* parent, wxWindowID id,
     
     // Initialize the scene
     initializeScene();
+    
+    // Force initial paint to ensure OpenGL context is properly set up
+    Refresh(false);
 }
 
 OutlinePreviewCanvas::~OutlinePreviewCanvas() {
@@ -203,15 +206,33 @@ void OutlinePreviewCanvas::createBasicModels() {
 
 void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params) {
     m_outlineParams = params;
+    
+    // Ensure ImageOutlinePass is created
+    if (!m_outlinePass && m_sceneManager) {
+        SetCurrent(*m_glContext);
+        m_outlinePass = std::make_unique<ImageOutlinePass>(m_sceneManager.get());
+        m_outlinePass->setEnabled(m_outlineEnabled);
+    }
+    
     if (m_outlinePass) {
         m_outlinePass->setParams(params);
     }
+    
     m_needsRedraw = true;
     Refresh(false);
 }
 
 ImageOutlineParams OutlinePreviewCanvas::getOutlineParams() const {
     return m_outlineParams;
+}
+
+void OutlinePreviewCanvas::setOutlineEnabled(bool enabled) {
+    m_outlineEnabled = enabled;
+    if (m_outlinePass) {
+        m_outlinePass->setEnabled(enabled);
+    }
+    m_needsRedraw = true;
+    Refresh(false);
 }
 
 void OutlinePreviewCanvas::setGeometryColor(const wxColour& color) {
