@@ -470,9 +470,8 @@ void OutlinePreviewCanvas::render() {
     // If FBO or shaders not ready, use simple rendering
     bool useFBO = m_fbo && m_normalShader && m_outlineShader && glGenFramebuffers && glUseProgram;
     
-    // For now, disable FBO rendering to avoid issues
-    // TODO: Fix FBO implementation
-    useFBO = false;
+    // Enable FBO rendering if available
+    useFBO = (m_fbo != 0) && (m_colorTexture != 0) && (m_depthTexture != 0) && (m_outlineShader != 0);
     
     if (!useFBO) {
         // Simple fallback rendering
@@ -595,40 +594,32 @@ void OutlinePreviewCanvas::render() {
     }
     
     if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        // Pass 1: Render to FBO with normal shader
+        // Pass 1: Render scene to FBO
         glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-        
-        // Attach normal texture as color attachment
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_normalTexture, 0);
-        
         glViewport(0, 0, m_fboWidth, m_fboHeight);
-        glClearColor(0.5f, 0.5f, 1.0f, 1.0f); // Default normal pointing to camera
+        
+        // Use configured background color
+        glClearColor(m_bgColor.Red() / 255.0f, 
+                    m_bgColor.Green() / 255.0f, 
+                    m_bgColor.Blue() / 255.0f, 
+                    1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        // Use normal shader
-        glUseProgram(m_normalShader);
-        
-        // Render scene with normal shader
-        SoGLRenderAction normalAction(viewport);
-        normalAction.apply(m_sceneRoot);
-        
-        // Pass 2: Render scene normally to color attachment
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_colorTexture, 0);
-        
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        glUseProgram(0); // Use default shader
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
         
         // Render scene normally
         SoGLRenderAction colorAction(viewport);
         colorAction.apply(m_sceneRoot);
         
-        // Pass 3: Apply outline post-processing
+        // Pass 2: Apply outline post-processing
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, size.GetWidth(), size.GetHeight());
         
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClearColor(m_bgColor.Red() / 255.0f, 
+                    m_bgColor.Green() / 255.0f, 
+                    m_bgColor.Blue() / 255.0f, 
+                    1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         // Use outline shader
@@ -636,19 +627,40 @@ void OutlinePreviewCanvas::render() {
         
         // Set uniforms
         glUniform1i(glGetUniformLocation(m_outlineShader, "uColorTexture"), 0);
-        glUniform1i(glGetUniformLocation(m_outlineShader, "uNormalTexture"), 1);
+        glUniform1i(glGetUniformLocation(m_outlineShader, "uDepthTexture"), 1);
         glUniform2f(glGetUniformLocation(m_outlineShader, "uResolution"), 
                     float(m_fboWidth), float(m_fboHeight));
         glUniform1f(glGetUniformLocation(m_outlineShader, "uThickness"), 
                     m_outlineParams.thickness);
         glUniform1f(glGetUniformLocation(m_outlineShader, "uIntensity"), 
                     m_outlineParams.edgeIntensity);
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uDepthWeight"), 
+                    m_outlineParams.depthWeight);
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uNormalWeight"), 
+                    m_outlineParams.normalWeight);
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uDepthThreshold"), 
+                    m_outlineParams.depthThreshold);
+        glUniform1f(glGetUniformLocation(m_outlineShader, "uNormalThreshold"), 
+                    m_outlineParams.normalThreshold);
+        
+        // Set outline colors based on hover state
+        if (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4) {
+            glUniform3f(glGetUniformLocation(m_outlineShader, "uOutlineColor"),
+                       m_hoverColor.Red() / 255.0f,
+                       m_hoverColor.Green() / 255.0f,
+                       m_hoverColor.Blue() / 255.0f);
+        } else {
+            glUniform3f(glGetUniformLocation(m_outlineShader, "uOutlineColor"),
+                       m_outlineColor.Red() / 255.0f,
+                       m_outlineColor.Green() / 255.0f,
+                       m_outlineColor.Blue() / 255.0f);
+        }
         
         // Bind textures
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_colorTexture);
         glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, m_normalTexture);
+        glBindTexture(GL_TEXTURE_2D, m_depthTexture);
         
         // Render fullscreen quad
         if (m_quadVAO) {
@@ -721,36 +733,83 @@ void main() {
 
 static const char* g_outlineFragmentShader = R"GLSL(
 uniform sampler2D uColorTexture;
-uniform sampler2D uNormalTexture;
+uniform sampler2D uDepthTexture;
 uniform vec2 uResolution;
 uniform float uThickness;
 uniform float uIntensity;
+uniform float uDepthWeight;
+uniform float uNormalWeight;
+uniform float uDepthThreshold;
+uniform float uNormalThreshold;
+uniform vec3 uOutlineColor;
+uniform vec3 uHoverColor;
 
 varying vec2 vTexCoord;
+
+// Sample depth with offset
+float sampleDepth(vec2 uv) {
+    return texture2D(uDepthTexture, uv).r;
+}
+
+// Linear depth conversion
+float linearizeDepth(float depth) {
+    float near = 0.1;
+    float far = 1000.0;
+    return (2.0 * near) / (far + near - depth * (far - near));
+}
+
+// Roberts Cross edge detection on depth (same as ImageOutlinePass)
+float depthEdge(vec2 uv, vec2 texelSize) {
+    vec2 offset = texelSize * uThickness;
+    
+    float center = linearizeDepth(sampleDepth(uv));
+    float tl = linearizeDepth(sampleDepth(uv + vec2(-offset.x, -offset.y)));
+    float tr = linearizeDepth(sampleDepth(uv + vec2(offset.x, -offset.y)));
+    float bl = linearizeDepth(sampleDepth(uv + vec2(-offset.x, offset.y)));
+    float br = linearizeDepth(sampleDepth(uv + vec2(offset.x, offset.y)));
+    
+    // Roberts Cross operators
+    float robertsX = abs(center - br) + abs(tr - bl);
+    float robertsY = abs(tl - br) + abs(center - tr);
+    
+    float edge = sqrt(robertsX * robertsX + robertsY * robertsY);
+    
+    // Adaptive threshold based on depth
+    float adaptiveThreshold = uDepthThreshold * (1.0 + center * 10.0);
+    return smoothstep(0.0, adaptiveThreshold, edge);
+}
+
+// Normal reconstruction from depth (simplified)
+float normalEdge(vec2 uv, vec2 texelSize) {
+    vec2 offset = texelSize * uThickness;
+    
+    float center = sampleDepth(uv);
+    float right = sampleDepth(uv + vec2(offset.x, 0.0));
+    float up = sampleDepth(uv + vec2(0.0, offset.y));
+    
+    // Simple normal difference approximation
+    float dx = (right - center) * 100.0;
+    float dy = (up - center) * 100.0;
+    
+    float edge = length(vec2(dx, dy));
+    return smoothstep(0.0, uNormalThreshold, edge);
+}
 
 void main() {
     vec2 texelSize = 1.0 / uResolution;
     vec4 color = texture2D(uColorTexture, vTexCoord);
     
-    // Simple edge detection on normal texture
-    vec2 offset = texelSize * uThickness;
-    vec3 center = texture2D(uNormalTexture, vTexCoord).rgb;
-    vec3 top = texture2D(uNormalTexture, vTexCoord + vec2(0.0, -offset.y)).rgb;
-    vec3 right = texture2D(uNormalTexture, vTexCoord + vec2(offset.x, 0.0)).rgb;
-    vec3 bottom = texture2D(uNormalTexture, vTexCoord + vec2(0.0, offset.y)).rgb;
-    vec3 left = texture2D(uNormalTexture, vTexCoord + vec2(-offset.x, 0.0)).rgb;
+    // Depth-based edge detection
+    float dEdge = depthEdge(vTexCoord, texelSize) * uDepthWeight;
     
-    float d1 = length(center - top);
-    float d2 = length(center - right);
-    float d3 = length(center - bottom);
-    float d4 = length(center - left);
+    // Normal-based edge detection
+    float nEdge = normalEdge(vTexCoord, texelSize) * uNormalWeight;
     
-    float edge = max(max(d1, d2), max(d3, d4)) * uIntensity * 2.0;
-    edge = clamp(edge, 0.0, 1.0);
+    // Combine edges
+    float edge = clamp((dEdge + nEdge) * uIntensity, 0.0, 1.0);
     
-    // Apply outline
-    vec3 outlineColor = vec3(0.0, 0.0, 0.0);
-    gl_FragColor = vec4(mix(color.rgb, outlineColor, edge), 1.0);
+    // Apply outline with configured color
+    gl_FragColor = vec4(mix(color.rgb, uOutlineColor, edge), 1.0);
 }
 )GLSL";
 
