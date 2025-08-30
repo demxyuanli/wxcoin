@@ -1,129 +1,25 @@
-#ifdef _WIN32
-#define NOMINMAX
-#define _WINSOCKAPI_
-#include <windows.h>
-#endif
-
 #include "ui/OutlinePreviewCanvas.h"
 #include "SceneManager.h"
 #include "viewer/ImageOutlinePass.h"
 
 #include <Inventor/nodes/SoSeparator.h>
-#include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
+#include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTransform.h>
+#include <Inventor/nodes/SoRotationXYZ.h>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoCylinder.h>
 #include <Inventor/nodes/SoCone.h>
-#include <Inventor/nodes/SoRotationXYZ.h>
-#include <Inventor/nodes/SoLightModel.h>
 #include <Inventor/actions/SoGLRenderAction.h>
-#include <Inventor/actions/SoGetBoundingBoxAction.h>
+#include <Inventor/SbViewportRegion.h>
 
-#include <GL/gl.h>
-#include <GL/glext.h>
-#include <sstream>
-// #include <wx/log.h>  // Removed: no logging needed
-#include <cmath>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
+#ifdef __WXGTK__
+#include <gtk/gtk.h>
+#include <gdk/gdkx.h>
+#include <GL/glx.h>
 #endif
-
-// OpenGL function pointers
-PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers = nullptr;
-PFNGLDELETEFRAMEBUFFERSPROC glDeleteFramebuffers = nullptr;
-PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer = nullptr;
-PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D = nullptr;
-PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus = nullptr;
-PFNGLCREATESHADERPROC glCreateShader = nullptr;
-PFNGLDELETESHADERPROC glDeleteShader = nullptr;
-PFNGLSHADERSOURCEPROC glShaderSource = nullptr;
-PFNGLCOMPILESHADERPROC glCompileShader = nullptr;
-PFNGLGETSHADERIVPROC glGetShaderiv = nullptr;
-PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog = nullptr;
-PFNGLCREATEPROGRAMPROC glCreateProgram = nullptr;
-PFNGLDELETEPROGRAMPROC glDeleteProgram = nullptr;
-PFNGLATTACHSHADERPROC glAttachShader = nullptr;
-PFNGLLINKPROGRAMPROC glLinkProgram = nullptr;
-PFNGLGETPROGRAMIVPROC glGetProgramiv = nullptr;
-PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog = nullptr;
-PFNGLUSEPROGRAMPROC glUseProgram = nullptr;
-PFNGLBINDATTRIBLOCATIONPROC glBindAttribLocation = nullptr;
-PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation = nullptr;
-PFNGLUNIFORM1IPROC glUniform1i = nullptr;
-PFNGLUNIFORM1FPROC glUniform1f = nullptr;
-PFNGLUNIFORM2FPROC glUniform2f = nullptr;
-PFNGLUNIFORM3FPROC glUniform3f = nullptr;
-PFNGLGENVERTEXARRAYSPROC glGenVertexArrays = nullptr;
-PFNGLDELETEVERTEXARRAYSPROC glDeleteVertexArrays = nullptr;
-PFNGLBINDVERTEXARRAYPROC glBindVertexArray = nullptr;
-PFNGLGENBUFFERSPROC glGenBuffers = nullptr;
-PFNGLDELETEBUFFERSPROC glDeleteBuffers = nullptr;
-PFNGLBINDBUFFERPROC glBindBuffer = nullptr;
-PFNGLBUFFERDATAPROC glBufferData = nullptr;
-PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray = nullptr;
-PFNGLDISABLEVERTEXATTRIBARRAYPROC glDisableVertexAttribArray = nullptr;
-PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = nullptr;
-PFNGLACTIVETEXTUREPROC glActiveTexture = nullptr;
-
-// Platform specific includes for extension loading
-#ifndef _WIN32
-    #include <GL/glx.h>
-#endif
-
-// Function to load OpenGL extensions
-void loadOpenGLExtensions() {
-#ifdef _WIN32
-    #define GET_PROC(name) name = (decltype(name))wglGetProcAddress(#name); \
-                          if (!name) name = (decltype(name))wglGetProcAddress(#name"ARB"); \
-                          if (!name) name = (decltype(name))wglGetProcAddress(#name"EXT")
-#else
-    #define GET_PROC(name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name); \
-                          if (!name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name"ARB"); \
-                          if (!name) name = (decltype(name))glXGetProcAddress((const GLubyte*)#name"EXT")
-#endif
-    
-    GET_PROC(glGenFramebuffers);
-    GET_PROC(glDeleteFramebuffers);
-    GET_PROC(glBindFramebuffer);
-    GET_PROC(glFramebufferTexture2D);
-    GET_PROC(glCheckFramebufferStatus);
-    GET_PROC(glCreateShader);
-    GET_PROC(glDeleteShader);
-    GET_PROC(glShaderSource);
-    GET_PROC(glCompileShader);
-    GET_PROC(glGetShaderiv);
-    GET_PROC(glGetShaderInfoLog);
-    GET_PROC(glCreateProgram);
-    GET_PROC(glDeleteProgram);
-    GET_PROC(glAttachShader);
-    GET_PROC(glLinkProgram);
-    GET_PROC(glGetProgramiv);
-    GET_PROC(glGetProgramInfoLog);
-    GET_PROC(glUseProgram);
-    GET_PROC(glBindAttribLocation);
-    GET_PROC(glGetUniformLocation);
-    GET_PROC(glUniform1i);
-    GET_PROC(glUniform1f);
-    GET_PROC(glUniform2f);
-    GET_PROC(glUniform3f);
-    GET_PROC(glGenVertexArrays);
-    GET_PROC(glDeleteVertexArrays);
-    GET_PROC(glBindVertexArray);
-    GET_PROC(glGenBuffers);
-    GET_PROC(glDeleteBuffers);
-    GET_PROC(glBindBuffer);
-    GET_PROC(glBufferData);
-    GET_PROC(glEnableVertexAttribArray);
-    GET_PROC(glDisableVertexAttribArray);
-    GET_PROC(glVertexAttribPointer);
-    GET_PROC(glActiveTexture);
-    
-#undef GET_PROC
-}
 
 BEGIN_EVENT_TABLE(OutlinePreviewCanvas, wxGLCanvas)
 EVT_PAINT(OutlinePreviewCanvas::onPaint)
@@ -137,72 +33,45 @@ EVT_MOUSE_CAPTURE_LOST(OutlinePreviewCanvas::onMouseCaptureLost)
 EVT_IDLE(OutlinePreviewCanvas::onIdle)
 END_EVENT_TABLE()
 
-static const int s_attribs[] = {
-    WX_GL_RGBA,
-    WX_GL_DOUBLEBUFFER,
-    WX_GL_DEPTH_SIZE, 24,
-    WX_GL_STENCIL_SIZE, 8,
-    0
-};
-
-OutlinePreviewCanvas::OutlinePreviewCanvas(wxWindow* parent, wxWindowID id,
+OutlinePreviewCanvas::OutlinePreviewCanvas(wxWindow* parent, wxWindowID id, 
                                          const wxPoint& pos, const wxSize& size)
-    : wxGLCanvas(parent, id, s_attribs, pos, size, 
-                wxFULL_REPAINT_ON_RESIZE | wxBORDER_NONE) {
+    : wxGLCanvas(parent, id, nullptr, pos, size, wxWANTS_CHARS) {
     
-    // Set minimum size for preview
-    SetMinSize(wxSize(300, 300));
+    // Create OpenGL context
+    m_glContext = new wxGLContext(this);
+    
+    // Initialize scene manager
+    m_sceneManager = std::make_unique<SceneManager>();
+    m_sceneManager->setCanvas(this);
+    
+    // Initialize the scene
+    initializeScene();
 }
 
 OutlinePreviewCanvas::~OutlinePreviewCanvas() {
     if (m_glContext) {
-        SetCurrent(*m_glContext);
-        
-        // Clean up resources
-        cleanupFBO();
-        cleanupShaders();
-        
-        // Clean up scene graph
-        if (m_sceneRoot) {
-            m_sceneRoot->unref();
-        }
-        
         delete m_glContext;
+    }
+    
+    if (m_sceneRoot) {
+        m_sceneRoot->unref();
     }
 }
 
 void OutlinePreviewCanvas::initializeScene() {
-    if (m_initialized) return;
+    if (!m_glContext) return;
     
-    // Create OpenGL context
-    m_glContext = new wxGLContext(this);
     SetCurrent(*m_glContext);
     
-    // Load OpenGL extensions
-    static bool extensionsLoaded = false;
-    if (!extensionsLoaded) {
-        loadOpenGLExtensions();
-        extensionsLoaded = true;
-        
-        // Check critical functions silently
-        if (!glGenFramebuffers || !glBindFramebuffer) {
-            // FBO functions not available
-        }
-        if (!glCreateShader || !glUseProgram) {
-            // Shader functions not available
-        }
-    }
-    
-    // Create scene graph
+    // Create scene root
     m_sceneRoot = new SoSeparator;
     m_sceneRoot->ref();
     
-    // Add camera
+    // Create and setup camera
     m_camera = new SoPerspectiveCamera;
-    m_camera->position.setValue(5.0f, 5.0f, 5.0f);
-    m_camera->pointAt(SbVec3f(0, 0, 0));
+    m_camera->position.setValue(0.0f, 0.0f, 15.0f);
     m_camera->nearDistance = 0.1f;
-    m_camera->farDistance = 100.0f;
+    m_camera->farDistance = 1000.0f;
     m_sceneRoot->addChild(m_camera);
     
     // Add light
@@ -217,20 +86,14 @@ void OutlinePreviewCanvas::initializeScene() {
     // Create basic models
     createBasicModels();
     
-    // Initialize FBO and shaders for proper outline rendering
-    initializeShaders();
+    // Set the scene to the scene manager
+    m_sceneManager->setSceneGraph(m_sceneRoot);
+    m_sceneManager->setCamera(m_camera);
     
-    // FBO will be initialized in onSize event
-    // But try to initialize now if we have a size
-    wxSize size = GetClientSize();
-    if (size.GetWidth() > 0 && size.GetHeight() > 0) {
-        initializeFBO(size.GetWidth(), size.GetHeight());
-    }
-    
-    // Check OpenGL version (silently)
-    const char* version = (const char*)glGetString(GL_VERSION);
-    const char* vendor = (const char*)glGetString(GL_VENDOR);
-    const char* renderer = (const char*)glGetString(GL_RENDERER);
+    // Create and initialize ImageOutlinePass
+    m_outlinePass = std::make_unique<ImageOutlinePass>(m_sceneManager.get());
+    m_outlinePass->setEnabled(m_outlineEnabled);
+    m_outlinePass->setParams(m_outlineParams);
     
     m_initialized = true;
     m_needsRedraw = true;
@@ -336,11 +199,13 @@ void OutlinePreviewCanvas::createBasicModels() {
         coneSep->addChild(cone);
         m_modelRoot->addChild(coneSep);
     }
-
 }
 
 void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params) {
     m_outlineParams = params;
+    if (m_outlinePass) {
+        m_outlinePass->setParams(params);
+    }
     m_needsRedraw = true;
     Refresh(false);
 }
@@ -377,26 +242,13 @@ void OutlinePreviewCanvas::onPaint(wxPaintEvent& event) {
 }
 
 void OutlinePreviewCanvas::onSize(wxSizeEvent& event) {
-    if (m_glContext && m_camera) {
-        SetCurrent(*m_glContext);
-        
+    if (m_camera) {
         wxSize size = GetClientSize();
-        glViewport(0, 0, size.GetWidth(), size.GetHeight());
-        
-        // Update camera aspect ratio
-        SoPerspectiveCamera* perspCam = static_cast<SoPerspectiveCamera*>(m_camera);
-        if (perspCam && size.GetHeight() > 0) {
-            perspCam->aspectRatio = float(size.GetWidth()) / float(size.GetHeight());
-        }
-        
-        // Reinitialize FBO with new size
-        if (size.GetWidth() > 0 && size.GetHeight() > 0) {
-            initializeFBO(size.GetWidth(), size.GetHeight());
-        }
-        
-        m_needsRedraw = true;
+        float aspect = (float)size.GetWidth() / (float)size.GetHeight();
+        m_camera->aspectRatio = aspect;
     }
     
+    m_needsRedraw = true;
     event.Skip();
 }
 
@@ -415,30 +267,31 @@ void OutlinePreviewCanvas::onMouseEvent(wxMouseEvent& event) {
             ReleaseMouse();
         }
     } else if (event.Dragging() && m_mouseDown) {
-        wxPoint currentPos = event.GetPosition();
-        float dx = (currentPos.x - m_lastMousePos.x) * 0.01f;
-        float dy = (currentPos.y - m_lastMousePos.y) * 0.01f;
+        wxPoint pos = event.GetPosition();
+        int dx = pos.x - m_lastMousePos.x;
+        int dy = pos.y - m_lastMousePos.y;
         
-        // Rotate models
+        // Rotate the model
         if (m_modelRoot && m_modelRoot->getNumChildren() > 0) {
-            SoRotationXYZ* rotation = static_cast<SoRotationXYZ*>(m_modelRoot->getChild(0));
-            if (rotation) {
-                rotation->angle = rotation->angle.getValue() + dx;
-                m_needsRedraw = true;
+            SoNode* firstChild = m_modelRoot->getChild(0);
+            if (firstChild->isOfType(SoRotationXYZ::getClassTypeId())) {
+                SoRotationXYZ* rotation = (SoRotationXYZ*)firstChild;
+                rotation->angle = rotation->angle.getValue() + dx * 0.01f;
             }
         }
         
-        m_lastMousePos = currentPos;
-    } else if (event.Moving()) {
-        // Check which object is under mouse
-        wxPoint pos = event.GetPosition();
-        int oldHovered = m_hoveredObjectIndex;
-        m_hoveredObjectIndex = getObjectAtPosition(pos);
-        
-        if (oldHovered != m_hoveredObjectIndex) {
+        m_lastMousePos = pos;
+        m_needsRedraw = true;
+    } else if (event.GetEventType() == wxEVT_MOTION) {
+        // Update hover state
+        wxPoint screenPos = event.GetPosition();
+        int newHoverIndex = getObjectAtPosition(screenPos);
+        if (newHoverIndex != m_hoveredObjectIndex) {
+            m_hoveredObjectIndex = newHoverIndex;
+            // TODO: Update hover highlight in ImageOutlinePass
             m_needsRedraw = true;
         }
-    } else if (event.Leaving()) {
+    } else if (event.GetEventType() == wxEVT_LEAVE_WINDOW) {
         // Mouse left the window
         if (m_hoveredObjectIndex != -1) {
             m_hoveredObjectIndex = -1;
@@ -448,9 +301,7 @@ void OutlinePreviewCanvas::onMouseEvent(wxMouseEvent& event) {
 }
 
 void OutlinePreviewCanvas::onMouseCaptureLost(wxMouseCaptureLostEvent& event) {
-    // Handle mouse capture lost
     m_mouseDown = false;
-    // No need to call ReleaseMouse() here as the capture is already lost
 }
 
 void OutlinePreviewCanvas::onIdle(wxIdleEvent& event) {
@@ -467,581 +318,38 @@ void OutlinePreviewCanvas::render() {
     
     // Get viewport size
     wxSize size = GetClientSize();
+    
+    // Set background color
+    glClearColor(m_bgColor.Red() / 255.0f, 
+                m_bgColor.Green() / 255.0f, 
+                m_bgColor.Blue() / 255.0f, 
+                1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    // ImageOutlinePass will handle all the rendering
+    // Just render the scene normally through Coin3D
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
+    SoGLRenderAction renderAction(viewport);
+    renderAction.apply(m_sceneRoot);
     
-    // If FBO or shaders not ready, use simple rendering
-    bool useFBO = m_fbo && m_normalShader && m_outlineShader && glGenFramebuffers && glUseProgram;
-    
-    // Enable FBO rendering if available
-    useFBO = (m_fbo != 0) && (m_colorTexture != 0) && (m_depthTexture != 0) && (m_outlineShader != 0);
-    
-    if (!useFBO) {
-        // Simple fallback rendering
-        glViewport(0, 0, size.GetWidth(), size.GetHeight());
-        
-        // Use configured background color
-        glClearColor(m_bgColor.Red() / 255.0f, 
-                    m_bgColor.Green() / 255.0f, 
-                    m_bgColor.Blue() / 255.0f, 
-                    1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        glEnable(GL_DEPTH_TEST);
-        
-        // First render the scene normally
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-        SoGLRenderAction renderAction(viewport);
-        renderAction.apply(m_sceneRoot);
-        
-        // Render outline using silhouette edge detection
-        {
-            glPushAttrib(GL_ALL_ATTRIB_BITS);
-            
-            // Enable stencil test
-            glEnable(GL_STENCIL_TEST);
-            glClearStencil(0);
-            glClear(GL_STENCIL_BUFFER_BIT);
-            
-            // Pass 1: Mark object pixels in stencil buffer
-            glStencilFunc(GL_ALWAYS, 1, 0xFF);
-            glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-            glStencilMask(0xFF);
-            
-            // Disable color writes
-            glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-            
-            // Render objects to stencil
-            SoGLRenderAction stencilAction(viewport);
-            stencilAction.apply(m_sceneRoot);
-            
-            // Pass 2: Draw scaled-up version where stencil is 0
-            glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
-            glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-            glStencilMask(0x00);
-            
-            // Enable color writes
-            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-            
-            // Disable depth test for outline
-            glDisable(GL_DEPTH_TEST);
-            glDisable(GL_LIGHTING);
-            
-            // Scale up for outline
-            glMatrixMode(GL_MODELVIEW);
-            glPushMatrix();
-            glScalef(1.05f, 1.05f, 1.05f);  // 5% larger
-            
-            // Render outline based on hover state
-            if (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4) {
-                // Render all objects with default outline color
-                glColor3f(m_outlineColor.Red() / 255.0f,
-                         m_outlineColor.Green() / 255.0f,
-                         m_outlineColor.Blue() / 255.0f);
-                
-                // Render all objects except hovered one
-                for (int i = 1; i < m_modelRoot->getNumChildren(); i++) {
-                    if (i != m_hoveredObjectIndex) {
-                        SoSeparator* temp = new SoSeparator;
-                        temp->ref();
-                        if (m_modelRoot->getNumChildren() > 0 && 
-                            m_modelRoot->getChild(0)->isOfType(SoRotationXYZ::getClassTypeId())) {
-                            temp->addChild(m_modelRoot->getChild(0));
-                        }
-                        temp->addChild(m_modelRoot->getChild(i));
-                        SoGLRenderAction action(viewport);
-                        action.apply(temp);
-                        temp->unref();
-                    }
-                }
-                
-                // Render hovered object with hover color
-                glColor3f(m_hoverColor.Red() / 255.0f,
-                         m_hoverColor.Green() / 255.0f,
-                         m_hoverColor.Blue() / 255.0f);
-                
-                if (m_hoveredObjectIndex < m_modelRoot->getNumChildren()) {
-                    SoSeparator* temp = new SoSeparator;
-                    temp->ref();
-                    if (m_modelRoot->getNumChildren() > 0 && 
-                        m_modelRoot->getChild(0)->isOfType(SoRotationXYZ::getClassTypeId())) {
-                        temp->addChild(m_modelRoot->getChild(0));
-                    }
-                    temp->addChild(m_modelRoot->getChild(m_hoveredObjectIndex));
-                    SoGLRenderAction action(viewport);
-                    action.apply(temp);
-                    temp->unref();
-                }
-            } else {
-                // No hover - render all with outline color
-                glColor3f(m_outlineColor.Red() / 255.0f,
-                         m_outlineColor.Green() / 255.0f,
-                         m_outlineColor.Blue() / 255.0f);
-                
-                SoGLRenderAction outlineAction(viewport);
-                outlineAction.apply(m_modelRoot);
-            }
-            
-            glPopMatrix();
-            
-            // Disable stencil test
-            glDisable(GL_STENCIL_TEST);
-            
-            glPopAttrib();
-        }
-        
-        SwapBuffers();
-        m_needsRedraw = false;
-        return;
-    }
-    
-    if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        // Pass 1: Render scene to FBO
-        glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-        glViewport(0, 0, m_fboWidth, m_fboHeight);
-        
-        // Use configured background color
-        glClearColor(m_bgColor.Red() / 255.0f, 
-                    m_bgColor.Green() / 255.0f, 
-                    m_bgColor.Blue() / 255.0f, 
-                    1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-        
-        // Render scene normally
-        SoGLRenderAction colorAction(viewport);
-        colorAction.apply(m_sceneRoot);
-        
-        // Pass 2: Apply outline post-processing
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, size.GetWidth(), size.GetHeight());
-        
-        glClearColor(m_bgColor.Red() / 255.0f, 
-                    m_bgColor.Green() / 255.0f, 
-                    m_bgColor.Blue() / 255.0f, 
-                    1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        // Use outline shader
-        glUseProgram(m_outlineShader);
-        
-        // Set uniforms
-        glUniform1i(glGetUniformLocation(m_outlineShader, "uColorTexture"), 0);
-        glUniform1i(glGetUniformLocation(m_outlineShader, "uDepthTexture"), 1);
-        glUniform2f(glGetUniformLocation(m_outlineShader, "uResolution"), 
-                    float(m_fboWidth), float(m_fboHeight));
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uThickness"), 
-                    m_outlineParams.thickness);
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uIntensity"), 
-                    m_outlineParams.edgeIntensity);
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uDepthWeight"), 
-                    m_outlineParams.depthWeight);
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uNormalWeight"), 
-                    m_outlineParams.normalWeight);
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uDepthThreshold"), 
-                    m_outlineParams.depthThreshold);
-        glUniform1f(glGetUniformLocation(m_outlineShader, "uNormalThreshold"), 
-                    m_outlineParams.normalThreshold);
-        
-        // Set outline colors based on hover state
-        if (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4) {
-            glUniform3f(glGetUniformLocation(m_outlineShader, "uOutlineColor"),
-                       m_hoverColor.Red() / 255.0f,
-                       m_hoverColor.Green() / 255.0f,
-                       m_hoverColor.Blue() / 255.0f);
-        } else {
-            glUniform3f(glGetUniformLocation(m_outlineShader, "uOutlineColor"),
-                       m_outlineColor.Red() / 255.0f,
-                       m_outlineColor.Green() / 255.0f,
-                       m_outlineColor.Blue() / 255.0f);
-        }
-        
-        // Bind textures
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, m_colorTexture);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, m_depthTexture);
-        
-        // Render fullscreen quad
-        if (m_quadVAO) {
-            glBindVertexArray(m_quadVAO);
-        } else {
-            // Manual vertex attribute setup if VAO not supported
-            glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-        }
-        
-        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-        
-        if (m_quadVAO) {
-            glBindVertexArray(0);
-        } else {
-            glDisableVertexAttribArray(0);
-        }
-        
-        // Cleanup
-        glUseProgram(0);
-        glActiveTexture(GL_TEXTURE0);
-    } else {
-        // No outline - just render normally
-        glViewport(0, 0, size.GetWidth(), size.GetHeight());
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        SoGLRenderAction renderAction(viewport);
-        renderAction.apply(m_sceneRoot);
-    }
-    
-    // Swap buffers
     SwapBuffers();
-    
     m_needsRedraw = false;
 }
 
-// Shader sources
-static const char* g_normalVertexShader = R"GLSL(
-varying vec3 vNormal;
-varying vec3 vPosition;
-
-void main() {
-    vNormal = gl_Normal;
-    vPosition = gl_Vertex.xyz;
-    gl_Position = ftransform();
-}
-)GLSL";
-
-static const char* g_normalFragmentShader = R"GLSL(
-varying vec3 vNormal;
-varying vec3 vPosition;
-
-void main() {
-    vec3 normal = normalize(vNormal);
-    gl_FragColor = vec4(normal * 0.5 + 0.5, 1.0);
-}
-)GLSL";
-
-static const char* g_outlineVertexShader = R"GLSL(
-attribute vec2 aPosition;
-varying vec2 vTexCoord;
-
-void main() {
-    vTexCoord = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-}
-)GLSL";
-
-static const char* g_outlineFragmentShader = R"GLSL(
-uniform sampler2D uColorTexture;
-uniform sampler2D uDepthTexture;
-uniform vec2 uResolution;
-uniform float uThickness;
-uniform float uIntensity;
-uniform float uDepthWeight;
-uniform float uNormalWeight;
-uniform float uDepthThreshold;
-uniform float uNormalThreshold;
-uniform vec3 uOutlineColor;
-uniform vec3 uHoverColor;
-
-varying vec2 vTexCoord;
-
-// Sample depth with offset
-float sampleDepth(vec2 uv) {
-    return texture2D(uDepthTexture, uv).r;
-}
-
-// Linear depth conversion
-float linearizeDepth(float depth) {
-    float near = 0.1;
-    float far = 1000.0;
-    return (2.0 * near) / (far + near - depth * (far - near));
-}
-
-// Roberts Cross edge detection on depth (same as ImageOutlinePass)
-float depthEdge(vec2 uv, vec2 texelSize) {
-    vec2 offset = texelSize * uThickness;
-    
-    float center = linearizeDepth(sampleDepth(uv));
-    float tl = linearizeDepth(sampleDepth(uv + vec2(-offset.x, -offset.y)));
-    float tr = linearizeDepth(sampleDepth(uv + vec2(offset.x, -offset.y)));
-    float bl = linearizeDepth(sampleDepth(uv + vec2(-offset.x, offset.y)));
-    float br = linearizeDepth(sampleDepth(uv + vec2(offset.x, offset.y)));
-    
-    // Roberts Cross operators
-    float robertsX = abs(center - br) + abs(tr - bl);
-    float robertsY = abs(tl - br) + abs(center - tr);
-    
-    float edge = sqrt(robertsX * robertsX + robertsY * robertsY);
-    
-    // Adaptive threshold based on depth
-    float adaptiveThreshold = uDepthThreshold * (1.0 + center * 10.0);
-    return smoothstep(0.0, adaptiveThreshold, edge);
-}
-
-// Normal reconstruction from depth (simplified)
-float normalEdge(vec2 uv, vec2 texelSize) {
-    vec2 offset = texelSize * uThickness;
-    
-    float center = sampleDepth(uv);
-    float right = sampleDepth(uv + vec2(offset.x, 0.0));
-    float up = sampleDepth(uv + vec2(0.0, offset.y));
-    
-    // Simple normal difference approximation
-    float dx = (right - center) * 100.0;
-    float dy = (up - center) * 100.0;
-    
-    float edge = length(vec2(dx, dy));
-    return smoothstep(0.0, uNormalThreshold, edge);
-}
-
-void main() {
-    vec2 texelSize = 1.0 / uResolution;
-    vec4 color = texture2D(uColorTexture, vTexCoord);
-    
-    // Depth-based edge detection
-    float dEdge = depthEdge(vTexCoord, texelSize) * uDepthWeight;
-    
-    // Normal-based edge detection
-    float nEdge = normalEdge(vTexCoord, texelSize) * uNormalWeight;
-    
-    // Combine edges
-    float edge = clamp((dEdge + nEdge) * uIntensity, 0.0, 1.0);
-    
-    // Apply outline with configured color
-    gl_FragColor = vec4(mix(color.rgb, uOutlineColor, edge), 1.0);
-}
-)GLSL";
-
-void OutlinePreviewCanvas::initializeFBO(int width, int height) {
-    static int lastWidth = 0, lastHeight = 0;
-    
-    // Only track if size changed
-    if (width != lastWidth || height != lastHeight) {
-        // Size changed: %dx%d
-        lastWidth = width;
-        lastHeight = height;
-    }
-    
-    // Clean up existing FBO if any
-    cleanupFBO();
-    
-    m_fboWidth = width;
-    m_fboHeight = height;
-    
-    // Check if FBO functions are available
-    if (!glGenFramebuffers || !glBindFramebuffer) {
-        // FBO functions not available
-        return;
-    }
-    
-    // Generate FBO
-    glGenFramebuffers(1, &m_fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
-    
-    // FBO created successfully
-    
-    // Color texture
-    glGenTextures(1, &m_colorTexture);
-    glBindTexture(GL_TEXTURE_2D, m_colorTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_colorTexture, 0);
-    
-    // Depth texture
-    glGenTextures(1, &m_depthTexture);
-    glBindTexture(GL_TEXTURE_2D, m_depthTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_depthTexture, 0);
-    
-    // Normal texture
-    glGenTextures(1, &m_normalTexture);
-    glBindTexture(GL_TEXTURE_2D, m_normalTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    
-    // Check FBO completeness
-    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        // FBO creation failed
-        cleanupFBO();
-    }
-    
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void OutlinePreviewCanvas::cleanupFBO() {
-    if (m_fbo) {
-        glDeleteFramebuffers(1, &m_fbo);
-        m_fbo = 0;
-    }
-    if (m_colorTexture) {
-        glDeleteTextures(1, &m_colorTexture);
-        m_colorTexture = 0;
-    }
-    if (m_depthTexture) {
-        glDeleteTextures(1, &m_depthTexture);
-        m_depthTexture = 0;
-    }
-    if (m_normalTexture) {
-        glDeleteTextures(1, &m_normalTexture);
-        m_normalTexture = 0;
-    }
-}
-
-void OutlinePreviewCanvas::initializeShaders() {
-    // Initialize shaders
-    
-    // Create normal shader program
-    m_normalShader = createShaderProgram(g_normalVertexShader, g_normalFragmentShader);
-    if (!m_normalShader) {
-        // Failed to create normal shader
-    }
-    
-    // Create outline shader program
-    m_outlineShader = createShaderProgram(g_outlineVertexShader, g_outlineFragmentShader);
-    if (!m_outlineShader) {
-        // Failed to create outline shader
-    } else {
-        // Bind attribute locations before linking
-        if (glBindAttribLocation) {
-            glUseProgram(m_outlineShader);
-            glBindAttribLocation(m_outlineShader, 0, "aPosition");
-            glLinkProgram(m_outlineShader);
-            glUseProgram(0);
-        }
-    }
-    
-    // Create quad VAO for fullscreen rendering
-    createQuadVAO();
-}
-
-void OutlinePreviewCanvas::cleanupShaders() {
-    if (m_normalShader) {
-        glDeleteProgram(m_normalShader);
-        m_normalShader = 0;
-    }
-    if (m_outlineShader) {
-        glDeleteProgram(m_outlineShader);
-        m_outlineShader = 0;
-    }
-    if (m_quadVAO) {
-        glDeleteVertexArrays(1, &m_quadVAO);
-        m_quadVAO = 0;
-    }
-    if (m_quadVBO) {
-        glDeleteBuffers(1, &m_quadVBO);
-        m_quadVBO = 0;
-    }
-}
-
-unsigned int OutlinePreviewCanvas::compileShader(const char* source, unsigned int type) {
-    unsigned int shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-    
-    int success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        // Shader compilation failed
-        glDeleteShader(shader);
-        return 0;
-    }
-    
-    return shader;
-}
-
-unsigned int OutlinePreviewCanvas::createShaderProgram(const char* vertexSource, const char* fragmentSource) {
-    unsigned int vertexShader = compileShader(vertexSource, GL_VERTEX_SHADER);
-    unsigned int fragmentShader = compileShader(fragmentSource, GL_FRAGMENT_SHADER);
-    
-    if (!vertexShader || !fragmentShader) {
-        if (vertexShader) glDeleteShader(vertexShader);
-        if (fragmentShader) glDeleteShader(fragmentShader);
-        return 0;
-    }
-    
-    unsigned int program = glCreateProgram();
-    glAttachShader(program, vertexShader);
-    glAttachShader(program, fragmentShader);
-    glLinkProgram(program);
-    
-    int success;
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetProgramInfoLog(program, 512, nullptr, infoLog);
-        // Shader program linking failed
-        glDeleteProgram(program);
-        program = 0;
-    }
-    
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-    
-    return program;
-}
-
-void OutlinePreviewCanvas::createQuadVAO() {
-    float quadVertices[] = {
-        -1.0f, -1.0f,
-         1.0f, -1.0f,
-         1.0f,  1.0f,
-        -1.0f,  1.0f
-    };
-    
-    // Check if VAO is supported
-    if (glGenVertexArrays && glBindVertexArray) {
-        glGenVertexArrays(1, &m_quadVAO);
-        glBindVertexArray(m_quadVAO);
-        // VAO created
-    } else {
-        // VAO not supported, using VBO only
-    }
-    
-    glGenBuffers(1, &m_quadVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
-    
-    if (m_quadVAO) {
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
-        glBindVertexArray(0);
-    }
-}
-
 int OutlinePreviewCanvas::getObjectAtPosition(const wxPoint& pos) {
-    if (!m_modelRoot || m_modelRoot->getNumChildren() < 2) {
-        return -1;
-    }
-    
-    // Simple hit test based on screen regions
-    // Since we have 4 objects arranged in a 2x2 grid
+    // Simple position-based detection for demo
     wxSize size = GetClientSize();
-    int halfW = size.GetWidth() / 2;
-    int halfH = size.GetHeight() / 2;
+    int halfWidth = size.GetWidth() / 2;
+    int halfHeight = size.GetHeight() / 2;
     
     // Determine which quadrant the mouse is in
-    // Objects in m_modelRoot: 0=rotation, 1=cylinder, 2=sphere, 3=cube, 4=cone
-    if (pos.y < halfH) {
-        // Top half
-        return (pos.x < halfW) ? 1 : 2;  // cylinder : sphere
+    if (pos.x < halfWidth && pos.y < halfHeight) {
+        return 1; // Top-left: cube
+    } else if (pos.x >= halfWidth && pos.y < halfHeight) {
+        return 2; // Top-right: sphere
+    } else if (pos.x < halfWidth && pos.y >= halfHeight) {
+        return 3; // Bottom-left: cylinder
     } else {
-        // Bottom half
-        return (pos.x < halfW) ? 3 : 4;  // cube : cone
+        return 4; // Bottom-right: cone
     }
 }
