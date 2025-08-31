@@ -2,6 +2,7 @@
 
 #include <memory>
 #include "viewer/IOutlineRenderer.h"
+#include "viewer/ImageOutlinePass.h" // For ImageOutlineParams
 
 class SoSeparator;
 class SoCamera;
@@ -16,15 +17,6 @@ class SoShaderParameter1i;
 class SoShaderParameterMatrix;
 class SoTextureUnit;
 class wxGLCanvas;
-
-struct ImageOutlineParams {
-    float depthWeight = 1.0f;
-    float normalWeight = 1.0f;
-    float depthThreshold = 0.01f;
-    float normalThreshold = 0.3f;
-    float edgeIntensity = 1.0f;
-    float thickness = 1.0f;
-};
 
 // Generic ImageOutlinePass that works with any IOutlineRenderer
 class ImageOutlinePass2 {
@@ -52,7 +44,7 @@ private:
 
     IOutlineRenderer* m_renderer;
     SoSeparator* m_captureRoot;
-    SoAnnotation* m_overlayRoot;
+    SoSeparator* m_overlayRoot;
     SoSeparator* m_quadSeparator;
     SoSeparator* m_tempSceneRoot;
 

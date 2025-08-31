@@ -7,6 +7,8 @@
 #include "viewer/ImageOutlinePass2.h"
 #include "viewer/IOutlineRenderer.h"
 
+#include <wx/glcanvas.h>
+
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoAnnotation.h>
 #include <Inventor/nodes/SoDrawStyle.h>
