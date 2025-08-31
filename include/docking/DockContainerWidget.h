@@ -98,6 +98,11 @@ private:
     DockSplitter* newSplitter(wxOrientation orientation);
     void addDockAreaToSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
     
+    // New helper methods for proper 5-zone layout
+    void handleTopBottomArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void handleMiddleLayerArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    wxWindow* findOrCreateMiddleLayer(DockSplitter* rootSplitter);
+    
     friend class DockManager;
     friend class DockArea;
     friend class FloatingDockContainer;
