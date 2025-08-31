@@ -69,10 +69,7 @@ void OutlinePreviewCanvas::initializeScene() {
     
     SetCurrent(*m_glContext);
     
-    // Check GLSL support
-    if (!SoShaderProgram::isSupported(SoShaderObject::GLSL_PROGRAM)) {
-        wxLogError("GLSL shaders not supported!");
-    }
+    // Initialize OpenGL context for shaders
     
     // Create scene root
     m_sceneRoot = new SoSeparator;

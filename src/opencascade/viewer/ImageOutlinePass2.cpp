@@ -374,10 +374,8 @@ void ImageOutlinePass2::buildShaders() {
     m_program = new SoShaderProgram;
     m_program->ref();
     
-    // Check if GLSL is supported
-    if (!SoShaderProgram::isSupported(SoShaderObject::GLSL_PROGRAM)) {
-        return; // Cannot create shaders
-    }
+    // Enable shader program
+    m_program->isActive = TRUE;
     
     // Create vertex shader
     m_vs = new SoVertexShader;
