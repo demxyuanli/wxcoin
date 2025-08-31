@@ -258,6 +258,13 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
     for (auto* area : m_dockAreas) {
         area->updateTitleBarButtonStates();
     }
+    
+    // IMPORTANT: Ensure all windows in the hierarchy are visible
+    ensureAllChildrenVisible(m_rootSplitter);
+    
+    // Force a complete layout update
+    Layout();
+    Refresh();
 }
 
 void DockContainerWidget::addDockAreaSimple(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area) {
@@ -685,6 +692,22 @@ void DockContainerWidget::addDockAreaToMiddleSplitter(DockSplitter* middleSplitt
     }
 }
 
+void DockContainerWidget::ensureAllChildrenVisible(wxWindow* window) {
+    if (!window) return;
+    
+    window->Show();
+    
+    // If it's a splitter, ensure its children are visible too
+    if (DockSplitter* splitter = dynamic_cast<DockSplitter*>(window)) {
+        if (splitter->GetWindow1()) {
+            ensureAllChildrenVisible(splitter->GetWindow1());
+        }
+        if (splitter->GetWindow2()) {
+            ensureAllChildrenVisible(splitter->GetWindow2());
+        }
+    }
+}
+
 wxWindow* DockContainerWidget::findOrCreateMiddleLayer(DockSplitter* rootSplitter) {
     wxWindow* window1 = rootSplitter->GetWindow1();
     wxWindow* window2 = rootSplitter->GetWindow2();
@@ -802,23 +825,52 @@ void DockContainerWidget::restructureForTopBottom(DockSplitter* rootSplitter, Do
     wxWindow* w1 = rootSplitter->GetWindow1();
     wxWindow* w2 = rootSplitter->GetWindow2();
     
+    // Debug what we're restructuring
+    wxLogDebug("  -> w1: %p, w2: %p", w1, w2);
+    if (DockSplitter* split2 = dynamic_cast<DockSplitter*>(w2)) {
+        wxLogDebug("  -> w2 is a splitter with children: %p, %p", 
+                   split2->GetWindow1(), split2->GetWindow2());
+    }
+    
+    // Store current sash position
+    int sashPos = rootSplitter->GetSashPosition();
+    
     // Create a new splitter to hold the existing vertical content
     DockSplitter* middleSplitter = new DockSplitter(rootSplitter);
+    
+    // First unsplit the root
+    rootSplitter->Unsplit();
     
     // Move existing windows to middle splitter
     w1->Reparent(middleSplitter);
     if (w2) {
         w2->Reparent(middleSplitter);
         middleSplitter->SplitVertically(w1, w2);
-        middleSplitter->SetSashPosition(rootSplitter->GetSashPosition());
+        middleSplitter->SetSashPosition(sashPos);
+        
+        // IMPORTANT: Ensure sub-windows are visible
+        w1->Show();
+        w2->Show();
+        
+        // If w2 is a splitter, ensure its children are visible too
+        if (DockSplitter* subSplitter = dynamic_cast<DockSplitter*>(w2)) {
+            if (subSplitter->GetWindow1()) subSplitter->GetWindow1()->Show();
+            if (subSplitter->GetWindow2()) subSplitter->GetWindow2()->Show();
+            subSplitter->Show();
+        }
     } else {
         middleSplitter->Initialize(w1);
+        w1->Show();
     }
     
-    // Restructure root splitter
-    rootSplitter->Unsplit();
-    dockArea->Reparent(rootSplitter);
+    // Show the middle splitter
+    middleSplitter->Show();
     
+    // Reparent new area to root
+    dockArea->Reparent(rootSplitter);
+    dockArea->Show();
+    
+    // Set up the root splitter
     if (area == TopDockWidgetArea) {
         rootSplitter->SplitHorizontally(dockArea, middleSplitter);
         rootSplitter->SetSashPosition(150);
@@ -826,6 +878,18 @@ void DockContainerWidget::restructureForTopBottom(DockSplitter* rootSplitter, Do
         rootSplitter->SplitHorizontally(middleSplitter, dockArea);
         rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - 200);
     }
+    
+    // Force layout update
+    middleSplitter->UpdateSize();
+    rootSplitter->UpdateSize();
+    
+    // Force parent layout update
+    if (wxWindow* parent = rootSplitter->GetParent()) {
+        parent->Layout();
+        parent->Refresh();
+    }
+    
+    wxLogDebug("  -> Restructure complete");
 }
 
 void DockContainerWidget::splitDockArea(DockArea* dockArea, DockArea* newDockArea, 

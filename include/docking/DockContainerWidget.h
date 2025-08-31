@@ -113,6 +113,7 @@ private:
     void create3WaySplit(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
     void addToHorizontalLayout(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
     void restructureForTopBottom(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void ensureAllChildrenVisible(wxWindow* window);
     
     friend class DockManager;
     friend class DockArea;
