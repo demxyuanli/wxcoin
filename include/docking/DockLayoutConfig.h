@@ -7,6 +7,9 @@
 
 namespace ads {
 
+// Forward declarations
+class DockLayoutPreview;
+
 /**
  * @brief Configuration structure for dock layout
  */
