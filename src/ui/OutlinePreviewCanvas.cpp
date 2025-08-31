@@ -1,5 +1,4 @@
 #include "ui/OutlinePreviewCanvas.h"
-#include "viewer/ImageOutlinePass2.h"
 
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
@@ -7,35 +6,26 @@
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoRotationXYZ.h>
-#include <Inventor/nodes/SoShaderProgram.h>
-#include <Inventor/nodes/SoShaderObject.h>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoCylinder.h>
 #include <Inventor/nodes/SoCone.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/SbViewportRegion.h>
-#include <Inventor/nodes/SoAnnotation.h>
-#include <Inventor/nodes/SoShaderProgram.h>
-#include <Inventor/nodes/SoFragmentShader.h>
-#include <Inventor/nodes/SoVertexShader.h>
-#include <Inventor/nodes/SoSceneTexture2.h>
-#include <Inventor/nodes/SoShaderParameter.h>
 
-#ifdef __WXGTK__
-#include <gtk/gtk.h>
-#include <gdk/gdkx.h>
-#include <GL/glx.h>
+#include <GL/gl.h>
+#include <cmath>
+#include <wx/log.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
 #endif
 
 BEGIN_EVENT_TABLE(OutlinePreviewCanvas, wxGLCanvas)
 EVT_PAINT(OutlinePreviewCanvas::onPaint)
 EVT_SIZE(OutlinePreviewCanvas::onSize)
 EVT_ERASE_BACKGROUND(OutlinePreviewCanvas::onEraseBackground)
-EVT_LEFT_DOWN(OutlinePreviewCanvas::onMouseEvent)
-EVT_LEFT_UP(OutlinePreviewCanvas::onMouseEvent)
-EVT_MOTION(OutlinePreviewCanvas::onMouseEvent)
-EVT_LEAVE_WINDOW(OutlinePreviewCanvas::onMouseEvent)
+EVT_MOUSE_EVENTS(OutlinePreviewCanvas::onMouseEvent)
 EVT_MOUSE_CAPTURE_LOST(OutlinePreviewCanvas::onMouseCaptureLost)
 EVT_IDLE(OutlinePreviewCanvas::onIdle)
 END_EVENT_TABLE()
@@ -55,9 +45,7 @@ OutlinePreviewCanvas::OutlinePreviewCanvas(wxWindow* parent, wxWindowID id,
 }
 
 OutlinePreviewCanvas::~OutlinePreviewCanvas() {
-    if (m_glContext) {
-        delete m_glContext;
-    }
+    delete m_glContext;
     
     if (m_sceneRoot) {
         m_sceneRoot->unref();
@@ -69,19 +57,15 @@ void OutlinePreviewCanvas::initializeScene() {
     
     SetCurrent(*m_glContext);
     
-    // Initialize OpenGL context for shaders
-    
     // Create scene root
     m_sceneRoot = new SoSeparator;
     m_sceneRoot->ref();
     
     // Create and setup camera
-    SoPerspectiveCamera* perspCamera = new SoPerspectiveCamera;
-    perspCamera->position.setValue(0.0f, 0.0f, 15.0f);
-    perspCamera->nearDistance = 0.1f;
-    perspCamera->farDistance = 1000.0f;
-    perspCamera->heightAngle = 0.785398f; // 45 degrees
-    m_camera = perspCamera;
+    m_camera = new SoPerspectiveCamera;
+    m_camera->position.setValue(0.0f, 0.0f, 15.0f);
+    m_camera->nearDistance = 0.1f;
+    m_camera->farDistance = 1000.0f;
     m_sceneRoot->addChild(m_camera);
     
     // Add light
@@ -96,19 +80,24 @@ void OutlinePreviewCanvas::initializeScene() {
     // Create basic models
     createBasicModels();
     
-    // Temporarily disable ImageOutlinePass2 until shader issues are resolved
-    // m_outlinePass = std::make_unique<ImageOutlinePass2>(this, m_modelRoot);
-    // m_outlinePass->setEnabled(m_outlineEnabled);
-    // m_outlinePass->setParams(m_outlineParams);
-    
     m_initialized = true;
     m_needsRedraw = true;
 }
 
 void OutlinePreviewCanvas::createBasicModels() {
-    // Add rotation node if it doesn't exist
-    if (m_modelRoot->getNumChildren() == 0) {
-        SoRotationXYZ* rotation = new SoRotationXYZ;
+    // Clear existing models
+    m_modelRoot->removeAllChildren();
+    
+    // Add rotation node for animation
+    SoRotationXYZ* rotation = nullptr;
+    for (int i = 0; i < m_modelRoot->getNumChildren(); i++) {
+        if (m_modelRoot->getChild(i)->isOfType(SoRotationXYZ::getClassTypeId())) {
+            rotation = static_cast<SoRotationXYZ*>(m_modelRoot->getChild(i));
+            break;
+        }
+    }
+    if (!rotation) {
+        rotation = new SoRotationXYZ;
         rotation->axis = SoRotationXYZ::Y;
         rotation->angle = 0.0f;
         m_modelRoot->addChild(rotation);
@@ -131,9 +120,9 @@ void OutlinePreviewCanvas::createBasicModels() {
         cubeSep->addChild(cubeMaterial);
         
         SoCube* cube = new SoCube;
-        cube->width = 1.5f;
-        cube->height = 1.5f;
-        cube->depth = 1.5f;
+        cube->width = 2.0f;
+        cube->height = 2.0f;
+        cube->depth = 2.0f;
         cubeSep->addChild(cube);
         m_modelRoot->addChild(cubeSep);
     }
@@ -155,7 +144,7 @@ void OutlinePreviewCanvas::createBasicModels() {
         sphereSep->addChild(sphereMaterial);
         
         SoSphere* sphere = new SoSphere;
-        sphere->radius = 0.8f;
+        sphere->radius = 1.2f;
         sphereSep->addChild(sphere);
         m_modelRoot->addChild(sphereSep);
     }
@@ -177,8 +166,8 @@ void OutlinePreviewCanvas::createBasicModels() {
         cylSep->addChild(cylMaterial);
         
         SoCylinder* cylinder = new SoCylinder;
-        cylinder->radius = 0.6f;
-        cylinder->height = 1.8f;
+        cylinder->radius = 0.8f;
+        cylinder->height = 2.5f;
         cylSep->addChild(cylinder);
         m_modelRoot->addChild(cylSep);
     }
@@ -209,11 +198,6 @@ void OutlinePreviewCanvas::createBasicModels() {
 
 void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params) {
     m_outlineParams = params;
-    
-    // if (m_outlinePass) {
-    //     m_outlinePass->setParams(params);
-    // }
-    
     m_needsRedraw = true;
     Refresh(false);
 }
@@ -224,11 +208,6 @@ ImageOutlineParams OutlinePreviewCanvas::getOutlineParams() const {
 
 void OutlinePreviewCanvas::setOutlineEnabled(bool enabled) {
     m_outlineEnabled = enabled;
-    
-    // if (m_outlinePass) {
-    //     m_outlinePass->setEnabled(enabled);
-    // }
-    
     m_needsRedraw = true;
     Refresh(false);
 }
@@ -237,20 +216,13 @@ void OutlinePreviewCanvas::setGeometryColor(const wxColour& color) {
     m_geomColor = color;
     
     // Recreate models with new color
-    if (m_modelRoot && m_initialized) {
-        // Remove all children except the rotation node (first child)
-        while (m_modelRoot->getNumChildren() > 1) {
-            m_modelRoot->removeChild(1);
-        }
-        
-        // Recreate basic models with new color
-        createBasicModels();
-    }
+    createBasicModels();
     
     m_needsRedraw = true;
+    Refresh(false);
 }
 
-void OutlinePreviewCanvas::onPaint(wxPaintEvent& event) {
+void OutlinePreviewCanvas::onPaint(wxPaintEvent& WXUNUSED(event)) {
     wxPaintDC dc(this);
     
     if (!m_initialized) {
@@ -261,6 +233,7 @@ void OutlinePreviewCanvas::onPaint(wxPaintEvent& event) {
 }
 
 void OutlinePreviewCanvas::onSize(wxSizeEvent& event) {
+    // Update viewport
     if (m_camera) {
         wxSize size = GetClientSize();
         float aspect = (float)size.GetWidth() / (float)size.GetHeight();
@@ -271,7 +244,7 @@ void OutlinePreviewCanvas::onSize(wxSizeEvent& event) {
     event.Skip();
 }
 
-void OutlinePreviewCanvas::onEraseBackground(wxEraseEvent& event) {
+void OutlinePreviewCanvas::onEraseBackground(wxEraseEvent& WXUNUSED(event)) {
     // Do nothing to avoid flicker
 }
 
@@ -280,52 +253,52 @@ void OutlinePreviewCanvas::onMouseEvent(wxMouseEvent& event) {
         m_mouseDown = true;
         m_lastMousePos = event.GetPosition();
         CaptureMouse();
-    } else if (event.LeftUp()) {
+    }
+    else if (event.LeftUp()) {
         m_mouseDown = false;
         if (HasCapture()) {
             ReleaseMouse();
         }
-    } else if (event.Dragging() && m_mouseDown) {
-        wxPoint pos = event.GetPosition();
-        int dx = pos.x - m_lastMousePos.x;
-        int dy = pos.y - m_lastMousePos.y;
+    }
+    else if (event.Dragging() && m_mouseDown) {
+        wxPoint delta = event.GetPosition() - m_lastMousePos;
+        m_lastMousePos = event.GetPosition();
         
-        // Rotate the model
+        // Rotate model
         if (m_modelRoot && m_modelRoot->getNumChildren() > 0) {
-            SoNode* firstChild = m_modelRoot->getChild(0);
-            if (firstChild->isOfType(SoRotationXYZ::getClassTypeId())) {
-                SoRotationXYZ* rotation = (SoRotationXYZ*)firstChild;
-                rotation->angle = rotation->angle.getValue() + dx * 0.01f;
+            // Find rotation node
+            for (int i = 0; i < m_modelRoot->getNumChildren(); i++) {
+                if (m_modelRoot->getChild(i)->isOfType(SoRotationXYZ::getClassTypeId())) {
+                    SoRotationXYZ* rotation = static_cast<SoRotationXYZ*>(m_modelRoot->getChild(i));
+                    rotation->angle = rotation->angle.getValue() + delta.x * 0.01f;
+                    break;
+                }
             }
         }
         
-        m_lastMousePos = pos;
         m_needsRedraw = true;
-    } else if (event.GetEventType() == wxEVT_MOTION) {
+        Refresh(false);
+    }
+    else if (event.Moving()) {
         // Update hover state
-        wxPoint screenPos = event.GetPosition();
-        int newHoverIndex = getObjectAtPosition(screenPos);
-        if (newHoverIndex != m_hoveredObjectIndex) {
-            m_hoveredObjectIndex = newHoverIndex;
+        int prevHovered = m_hoveredObjectIndex;
+        m_hoveredObjectIndex = getObjectAtPosition(event.GetPosition());
+        
+        if (prevHovered != m_hoveredObjectIndex) {
             m_needsRedraw = true;
-        }
-    } else if (event.GetEventType() == wxEVT_LEAVE_WINDOW) {
-        // Mouse left the window
-        if (m_hoveredObjectIndex != -1) {
-            m_hoveredObjectIndex = -1;
-            m_needsRedraw = true;
+            Refresh(false);
         }
     }
 }
 
-void OutlinePreviewCanvas::onMouseCaptureLost(wxMouseCaptureLostEvent& event) {
+void OutlinePreviewCanvas::onMouseCaptureLost(wxMouseCaptureLostEvent& WXUNUSED(event)) {
     m_mouseDown = false;
 }
 
 void OutlinePreviewCanvas::onIdle(wxIdleEvent& event) {
     if (m_needsRedraw) {
         Refresh(false);
-        event.RequestMore();
+        m_needsRedraw = false;
     }
 }
 
@@ -346,74 +319,57 @@ void OutlinePreviewCanvas::render() {
     
     glEnable(GL_DEPTH_TEST);
     
-    // Update viewport region
+    // Set up viewport and render
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
-    
-    // Set up render action
     SoGLRenderAction renderAction(viewport);
-    renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
     
-    // Render the complete scene
+    // First pass: render the scene normally
     renderAction.apply(m_sceneRoot);
     
-    // Simple outline effect using fixed-function pipeline
-    if (m_outlineEnabled) {
-        renderSimpleOutline();
+    // Second pass: render outline if enabled
+    if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
+        // Use 2-pass silhouette rendering
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        
+        // Pass 1: Render back faces, scaled up, in black
+        glCullFace(GL_FRONT);
+        glEnable(GL_CULL_FACE);
+        glPolygonMode(GL_BACK, GL_FILL);
+        glDisable(GL_LIGHTING);
+        
+        // Push matrix and scale
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        
+        // Get the center of the scene
+        glTranslatef(0, 0, 0);
+        float scaleFactor = 1.0f + m_outlineParams.thickness * 0.02f;
+        glScalef(scaleFactor, scaleFactor, scaleFactor);
+        
+        // Set outline color
+        if (m_hoveredObjectIndex >= 0) {
+            // Orange for hover
+            glColor4f(m_hoverColor.Red() / 255.0f,
+                     m_hoverColor.Green() / 255.0f,
+                     m_hoverColor.Blue() / 255.0f,
+                     m_outlineParams.edgeIntensity);
+        } else {
+            // Black for normal outline
+            glColor4f(m_outlineColor.Red() / 255.0f,
+                     m_outlineColor.Green() / 255.0f,
+                     m_outlineColor.Blue() / 255.0f,
+                     m_outlineParams.edgeIntensity);
+        }
+        
+        // Render only the models (not the whole scene)
+        renderAction.apply(m_modelRoot);
+        
+        glPopMatrix();
+        glPopAttrib();
     }
     
     SwapBuffers();
     m_needsRedraw = false;
-}
-
-void OutlinePreviewCanvas::renderSimpleOutline() {
-    // Simple outline using multiple pass rendering
-    SbViewportRegion viewport(GetClientSize().GetWidth(), GetClientSize().GetHeight());
-    SoGLRenderAction renderAction(viewport);
-    
-    // Pass 1: Render scaled-up silhouette in outline color
-    glClearStencil(0);
-    glClear(GL_STENCIL_BUFFER_BIT);
-    glEnable(GL_STENCIL_TEST);
-    
-    // Mark pixels where models are rendered
-    glStencilFunc(GL_ALWAYS, 1, 0xFF);
-    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    glDepthMask(GL_FALSE);
-    
-    renderAction.apply(m_modelRoot);
-    
-    // Pass 2: Render outline where stencil is 0
-    glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
-    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_DEPTH_TEST);
-    
-    // Scale up and render in outline color
-    glPushMatrix();
-    float scale = 1.0f + m_outlineParams.thickness * 0.05f;
-    glScalef(scale, scale, scale);
-    
-    // Set outline color
-    glColor4f(m_outlineColor.Red() / 255.0f,
-              m_outlineColor.Green() / 255.0f,
-              m_outlineColor.Blue() / 255.0f,
-              m_outlineParams.edgeIntensity);
-    
-    // Render as solid color
-    glDisable(GL_LIGHTING);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    
-    renderAction.apply(m_modelRoot);
-    
-    glPopMatrix();
-    
-    // Restore state
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glDisable(GL_STENCIL_TEST);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 int OutlinePreviewCanvas::getObjectAtPosition(const wxPoint& pos) {
