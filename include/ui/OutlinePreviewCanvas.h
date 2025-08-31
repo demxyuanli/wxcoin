@@ -5,11 +5,9 @@
 #include <memory>
 #include "viewer/ImageOutlinePass.h"
 
-class SceneManager;
 class SoSeparator;
 class SoCamera;
 class SoPerspectiveCamera;
-class ImageOutlinePass;
 
 class OutlinePreviewCanvas : public wxGLCanvas {
 public:
@@ -50,8 +48,6 @@ private:
     int getObjectAtPosition(const wxPoint& pos);
     
     wxGLContext* m_glContext{ nullptr };
-    std::unique_ptr<SceneManager> m_sceneManager;
-    std::unique_ptr<ImageOutlinePass> m_outlinePass;
     SoSeparator* m_sceneRoot{ nullptr };
     SoSeparator* m_modelRoot{ nullptr };
     SoCamera* m_camera{ nullptr };
