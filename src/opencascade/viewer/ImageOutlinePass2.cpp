@@ -31,25 +31,31 @@
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoLightModel.h>
 #include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoCallback.h>
+#include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/SbViewVolume.h>
 #include <Inventor/SbMatrix.h>
 
 #include <GL/gl.h>
 
 namespace {
-    // Very simple test shaders
+    // Simplified shaders for Coin3D compatibility
     static const char* kVS = R"GLSL(
+        varying vec2 texCoord;
         void main() {
-            gl_TexCoord[0] = gl_MultiTexCoord0;
+            texCoord = gl_MultiTexCoord0.xy;
             gl_Position = ftransform();
         }
     )GLSL";
 
-    // Fragment shader - simple test
+    // Very simple fragment shader
     static const char* kFS = R"GLSL(
+        varying vec2 texCoord;
+        uniform sampler2D colorTex;
         void main() {
-            // Always output red for testing
-            gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+            vec4 color = texture2D(colorTex, texCoord);
+            // Simple edge detection - just invert colors for now
+            gl_FragColor = vec4(1.0 - color.rgb, 1.0);
         }
     )GLSL";
 }
@@ -319,7 +325,7 @@ void ImageOutlinePass2::attachOverlay() {
         annotation->addChild(m_colorTexture);
         
         auto* colorBind = new SoShaderParameter1i;
-        colorBind->name = "uColorTex";
+        colorBind->name = "colorTex";  // Match shader uniform name
         colorBind->value = m_colorUnit;
         annotation->addChild(colorBind);
     }
@@ -352,6 +358,16 @@ void ImageOutlinePass2::attachOverlay() {
     // Add shader program and quad
     if (m_program) annotation->addChild(m_program);
     if (m_quadSeparator) annotation->addChild(m_quadSeparator);
+    
+    // Add a callback to render with custom OpenGL if shaders fail
+    auto* callback = new SoCallback;
+    callback->setCallback([](void* userData, SoAction* action) {
+        if (action->isOfType(SoGLRenderAction::getClassTypeId())) {
+            auto* self = static_cast<ImageOutlinePass2*>(userData);
+            self->renderFallback();
+        }
+    }, this);
+    annotation->addChild(callback);
     
     // Attach to scene
     root->addChild(m_overlayRoot);
@@ -527,4 +543,39 @@ void ImageOutlinePass2::updateCameraMatrices() {
     // Update shader parameters
     if (m_uInvProjection) m_uInvProjection->value = invProjMatrix;
     if (m_uInvView) m_uInvView->value = invViewMatrix;
+}
+
+void ImageOutlinePass2::renderFallback() {
+    // Simple fallback rendering using fixed-function pipeline
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    
+    // Draw a colored overlay to indicate the post-processing area
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // Draw a semi-transparent overlay
+    glColor4f(1.0f, 0.0f, 0.0f, 0.1f);
+    glBegin(GL_QUADS);
+    glVertex2f(-1, -1);
+    glVertex2f( 1, -1);
+    glVertex2f( 1,  1);
+    glVertex2f(-1,  1);
+    glEnd();
+    
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    
+    glPopAttrib();
 }

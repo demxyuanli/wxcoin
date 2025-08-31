@@ -41,6 +41,7 @@ private:
     void buildShaders();
     void updateCameraMatrices();
     bool chooseTextureUnits();
+    void renderFallback();
 
     IOutlineRenderer* m_renderer;
     SoSeparator* m_captureRoot;
