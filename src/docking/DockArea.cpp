@@ -217,9 +217,12 @@ void DockArea::insertDockWidget(int index, DockWidget* dockWidget, bool activate
     m_contentSizer->Add(dockWidget, 1, wxEXPAND);
     dockWidget->Hide(); // Initially hidden until activated
     
-    // Activate if requested
-    if (activate) {
+    // Activate if requested or if this is the first widget
+    if (activate || m_dockWidgets.size() == 1) {
         setCurrentIndex(index);
+    } else if (m_currentIndex < 0 && !m_dockWidgets.empty()) {
+        // If no widget is currently active, activate the first one
+        setCurrentIndex(0);
     }
     
     // Update UI
@@ -252,8 +255,11 @@ void DockArea::setCurrentIndex(int index) {
     }
     
     // Hide old widget
-    if (m_currentDockWidget) {
-        m_currentDockWidget->Hide();
+    if (m_currentDockWidget && m_currentDockWidget->GetParent()) {
+        // Verify the widget is still valid before calling Hide()
+        if (std::find(m_dockWidgets.begin(), m_dockWidgets.end(), m_currentDockWidget) != m_dockWidgets.end()) {
+            m_currentDockWidget->Hide();
+        }
     }
     
     // Update current
@@ -261,7 +267,7 @@ void DockArea::setCurrentIndex(int index) {
     m_currentDockWidget = m_dockWidgets[index];
     
     // Show new widget
-    if (m_currentDockWidget) {
+    if (m_currentDockWidget && m_currentDockWidget->GetParent()) {
         m_currentDockWidget->Show();
         m_currentDockWidget->SetFocus();
         m_contentArea->Layout();
