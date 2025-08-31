@@ -210,8 +210,8 @@ void DockOverlay::createDropAreas() {
 
 void DockOverlay::updateDropAreaPositions() {
     wxSize size = GetClientSize();
-    int dropSize = 40;  // Size of drop indicators
-    int margin = 10;
+    int dropSize = 20;  // Size of drop indicators
+    int margin = 5;  // Reduced margin
     
     // Update positions for each drop area
     for (size_t i = 0; i < m_dropAreas.size(); ++i) {
@@ -283,9 +283,9 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
 
 void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area, const wxColour& color) {
     // Calculate icon drawing area (centered in rect)
-    int iconSize = 24;  // Icon size
-    int arrowSize = 10; // Arrow head size
-    int lineWidth = 2;
+    int iconSize = 12;  // Icon size (reduced by half)
+    int arrowSize = 5;  // Arrow head size (reduced by half)
+    int lineWidth = 1;  // Line width (reduced)
     
     wxPoint center(rect.x + rect.width / 2, rect.y + rect.height / 2);
     
@@ -356,8 +356,8 @@ void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area
     case CenterDockWidgetArea:
         {
             // Draw center indicator - four small rectangles (VS style)
-            int rectSize = 6;
-            int spacing = 2;
+            int rectSize = 3;  // Reduced by half
+            int spacing = 1;   // Reduced by half
             
             dc.SetBrush(wxBrush(color));
             
@@ -398,15 +398,15 @@ wxRect DockOverlay::targetRect() const {
 
 wxRect DockOverlay::areaRect(DockWidgetArea area) const {
     wxSize size = GetClientSize();
-    int dropSize = 60;
-    int margin = 20;
+    int dropSize = 30;
+    int margin = 10;  // Reduced margin
     
     // Different layouts for different overlay modes
     if (m_mode == ModeDockAreaOverlay) {
         // For DockArea overlay: indicators surround the center indicator
         int centerX = size.GetWidth() / 2;
         int centerY = size.GetHeight() / 2;
-        int spacing = dropSize + 10; // Space between center and surrounding indicators
+        int spacing = dropSize + 5; // Space between center and surrounding indicators (reduced)
         
         switch (area) {
         case TopDockWidgetArea:
@@ -656,8 +656,8 @@ void DockOverlay::updateDropAreaGeometryCache() {
     m_cachedGeometries.clear();
 
     wxSize size = GetSize();
-    int dropSize = 60;
-    int margin = 20;
+    int dropSize = 30;
+    int margin = 10;  // Reduced margin
 
     // Cache center area
     m_cachedGeometries[CenterDockWidgetArea] = wxRect(
