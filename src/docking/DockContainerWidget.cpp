@@ -68,9 +68,9 @@ DockArea* DockContainerWidget::addDockWidget(DockWidgetArea area, DockWidget* do
         return nullptr;
     }
     
-    // If we have a target dock area, add to it
-    if (targetDockArea) {
-        wxLogDebug("  -> Adding to existing target area");
+    // If we have a target dock area and want to dock in center, add as tab
+    if (targetDockArea && area == CenterDockWidgetArea) {
+        wxLogDebug("  -> Adding to existing target area as tab (center docking)");
         targetDockArea->addDockWidget(dockWidget);
         return targetDockArea;
     }
@@ -101,8 +101,14 @@ DockArea* DockContainerWidget::addDockWidget(DockWidgetArea area, DockWidget* do
     DockArea* newDockArea = new DockArea(m_dockManager, this);
     newDockArea->addDockWidget(dockWidget);
     
-    // Add dock area to container
-    addDockArea(newDockArea, area);
+    // If we have a target area (but not center docking), we need to split relative to it
+    if (targetDockArea && area != CenterDockWidgetArea) {
+        wxLogDebug("  -> Splitting relative to target area");
+        addDockAreaRelativeTo(newDockArea, area, targetDockArea);
+    } else {
+        // Add dock area to container (general case)
+        addDockArea(newDockArea, area);
+    }
     
     m_lastAddedArea = newDockArea;
     
@@ -708,6 +714,85 @@ void DockContainerWidget::ensureAllChildrenVisible(wxWindow* window) {
             ensureAllChildrenVisible(splitter->GetWindow2());
         }
     }
+}
+
+void DockContainerWidget::addDockAreaRelativeTo(DockArea* newArea, DockWidgetArea area, DockArea* targetArea) {
+    if (!newArea || !targetArea || !m_rootSplitter) {
+        return;
+    }
+    
+    wxLogDebug("DockContainerWidget::addDockAreaRelativeTo - area: %d, target: %p", area, targetArea);
+    
+    // Find the parent splitter of the target area
+    wxWindow* parent = targetArea->GetParent();
+    DockSplitter* parentSplitter = dynamic_cast<DockSplitter*>(parent);
+    
+    if (!parentSplitter) {
+        wxLogDebug("  -> Target area has no parent splitter, using general addDockArea");
+        addDockArea(newArea, area);
+        return;
+    }
+    
+    // Register the new area
+    m_dockAreas.push_back(newArea);
+    wxLogDebug("  -> Dock areas count after add: %d", (int)m_dockAreas.size());
+    
+    // Determine which window in the splitter is our target
+    wxWindow* window1 = parentSplitter->GetWindow1();
+    wxWindow* window2 = parentSplitter->GetWindow2();
+    bool targetIsWindow1 = (window1 == targetArea);
+    
+    // Create a new sub-splitter for the target area and new area
+    DockSplitter* subSplitter = new DockSplitter(parentSplitter);
+    
+    // Configure the sub-splitter based on docking direction
+    int sashPosition = 0;
+    switch (area) {
+    case TopDockWidgetArea:
+        subSplitter->SplitHorizontally(newArea, targetArea);
+        sashPosition = getConfiguredAreaSize(area);
+        break;
+    case BottomDockWidgetArea:
+        subSplitter->SplitHorizontally(targetArea, newArea);
+        sashPosition = subSplitter->GetSize().GetHeight() - getConfiguredAreaSize(area);
+        break;
+    case LeftDockWidgetArea:
+        subSplitter->SplitVertically(newArea, targetArea);
+        sashPosition = getConfiguredAreaSize(area);
+        break;
+    case RightDockWidgetArea:
+        subSplitter->SplitVertically(targetArea, newArea);
+        sashPosition = subSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area);
+        break;
+    default:
+        wxLogDebug("  -> Invalid docking area for relative positioning");
+        delete subSplitter;
+        return;
+    }
+    
+    // Replace the target area with the sub-splitter in the parent
+    if (targetIsWindow1) {
+        parentSplitter->ReplaceWindow(window1, subSplitter);
+    } else {
+        parentSplitter->ReplaceWindow(window2, subSplitter);
+    }
+    
+    // Set the sash position after the splitter is properly sized
+    subSplitter->SetSashPosition(sashPosition);
+    
+    // Ensure visibility
+    newArea->Show();
+    targetArea->Show();
+    subSplitter->Show();
+    
+    // Update layout
+    Layout();
+    Refresh();
+    
+    // Notify about the change
+    wxCommandEvent event(EVT_DOCK_AREAS_ADDED);
+    event.SetEventObject(this);
+    ProcessEvent(event);
 }
 
 int DockContainerWidget::getConfiguredAreaSize(DockWidgetArea area) const {

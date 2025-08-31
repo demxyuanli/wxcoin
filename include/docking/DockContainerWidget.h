@@ -37,6 +37,7 @@ public:
     
     // Splitter management
     void addDockArea(DockArea* dockArea, DockWidgetArea area = CenterDockWidgetArea);
+    void addDockAreaRelativeTo(DockArea* newArea, DockWidgetArea area, DockArea* targetArea);
     void splitDockArea(DockArea* dockArea, DockArea* newDockArea, 
                       DockWidgetArea area, int splitRatio = 50);
     
