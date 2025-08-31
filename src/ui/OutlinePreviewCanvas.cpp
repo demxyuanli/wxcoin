@@ -1,4 +1,5 @@
 #include "ui/OutlinePreviewCanvas.h"
+#include "viewer/ImageOutlinePass2.h"
 
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
@@ -88,6 +89,11 @@ void OutlinePreviewCanvas::initializeScene() {
     
     // Create basic models
     createBasicModels();
+    
+    // Create ImageOutlinePass2
+    m_outlinePass = std::make_unique<ImageOutlinePass2>(this, m_modelRoot);
+    m_outlinePass->setEnabled(m_outlineEnabled);
+    m_outlinePass->setParams(m_outlineParams);
     
     m_initialized = true;
     m_needsRedraw = true;
@@ -198,9 +204,9 @@ void OutlinePreviewCanvas::createBasicModels() {
 void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params) {
     m_outlineParams = params;
     
-    // Since we can't use ImageOutlinePass without SceneManager,
-    // we'll apply a simple outline effect using Coin3D directly
-    // This is a simplified visualization for preview purposes
+    if (m_outlinePass) {
+        m_outlinePass->setParams(params);
+    }
     
     m_needsRedraw = true;
     Refresh(false);
@@ -212,6 +218,11 @@ ImageOutlineParams OutlinePreviewCanvas::getOutlineParams() const {
 
 void OutlinePreviewCanvas::setOutlineEnabled(bool enabled) {
     m_outlineEnabled = enabled;
+    
+    if (m_outlinePass) {
+        m_outlinePass->setEnabled(enabled);
+    }
+    
     m_needsRedraw = true;
     Refresh(false);
 }
@@ -329,46 +340,10 @@ void OutlinePreviewCanvas::render() {
     
     glEnable(GL_DEPTH_TEST);
     
-    // First render the scene normally
+    // ImageOutlinePass2 will handle everything
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     SoGLRenderAction renderAction(viewport);
     renderAction.apply(m_sceneRoot);
-    
-    // Apply simplified outline effect if enabled
-    if (m_outlineEnabled && m_outlineParams.edgeIntensity > 0.01f) {
-        // Simple wireframe overlay for preview
-        glPushAttrib(GL_ALL_ATTRIB_BITS);
-        
-        // Setup for wireframe
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glLineWidth(m_outlineParams.thickness * 2.0f);
-        glDisable(GL_LIGHTING);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        
-        // Use polygon offset to avoid z-fighting
-        glEnable(GL_POLYGON_OFFSET_LINE);
-        glPolygonOffset(-1.0f, -1.0f);
-        
-        // Draw outline with appropriate color
-        if (m_hoveredObjectIndex >= 1 && m_hoveredObjectIndex <= 4) {
-            glColor4f(m_hoverColor.Red() / 255.0f,
-                     m_hoverColor.Green() / 255.0f,
-                     m_hoverColor.Blue() / 255.0f,
-                     m_outlineParams.edgeIntensity);
-        } else {
-            glColor4f(m_outlineColor.Red() / 255.0f,
-                     m_outlineColor.Green() / 255.0f,
-                     m_outlineColor.Blue() / 255.0f,
-                     m_outlineParams.edgeIntensity);
-        }
-        
-        // Render wireframe
-        SoGLRenderAction wireAction(viewport);
-        wireAction.apply(m_modelRoot);
-        
-        glPopAttrib();
-    }
     
     SwapBuffers();
     m_needsRedraw = false;

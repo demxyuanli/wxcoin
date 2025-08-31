@@ -4,12 +4,14 @@
 #include <wx/glcanvas.h>
 #include <memory>
 #include "viewer/ImageOutlinePass.h"
+#include "viewer/IOutlineRenderer.h"
 
 class SoSeparator;
 class SoCamera;
 class SoPerspectiveCamera;
+class ImageOutlinePass2;
 
-class OutlinePreviewCanvas : public wxGLCanvas {
+class OutlinePreviewCanvas : public wxGLCanvas, public IOutlineRenderer {
 public:
     OutlinePreviewCanvas(wxWindow* parent, 
                         wxWindowID id = wxID_ANY,
@@ -34,6 +36,12 @@ public:
     void setOutlineColor(const wxColour& color) { m_outlineColor = color; m_needsRedraw = true; }
     void setHoverColor(const wxColour& color) { m_hoverColor = color; m_needsRedraw = true; }
     void setGeometryColor(const wxColour& color);
+    
+    // IOutlineRenderer implementation
+    wxGLCanvas* getGLCanvas() const override { return const_cast<OutlinePreviewCanvas*>(this); }
+    SoCamera* getCamera() const override { return m_camera; }
+    SoSeparator* getSceneRoot() const override { return m_sceneRoot; }
+    void requestRedraw() override { m_needsRedraw = true; Refresh(false); }
 
 private:
     void onPaint(wxPaintEvent& event);
@@ -51,6 +59,7 @@ private:
     SoSeparator* m_sceneRoot{ nullptr };
     SoSeparator* m_modelRoot{ nullptr };
     SoCamera* m_camera{ nullptr };
+    std::unique_ptr<ImageOutlinePass2> m_outlinePass;
     
     ImageOutlineParams m_outlineParams;
     bool m_outlineEnabled{ true };
