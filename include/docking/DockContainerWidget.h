@@ -102,6 +102,7 @@ private:
     void handleTopBottomArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
     void handleMiddleLayerArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
     wxWindow* findOrCreateMiddleLayer(DockSplitter* rootSplitter);
+    void addDockAreaToMiddleSplitter(DockSplitter* middleSplitter, DockArea* dockArea, DockWidgetArea area);
     
     friend class DockManager;
     friend class DockArea;
