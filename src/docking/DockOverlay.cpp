@@ -241,7 +241,9 @@ void DockOverlay::paintDropAreas(wxDC& dc) {
 
 void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropArea) {
     wxRect rect = dropArea.rect();
+    DockWidgetArea area = dropArea.area();
     
+    // Draw background
     if (dropArea.isHighlighted()) {
         // Draw preview of where the widget will be docked
         wxRect previewRect = getPreviewRect(dropArea.area());
@@ -278,8 +280,9 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
         dc.DrawRoundedRectangle(rect, 2);
     }
     
-    // Draw direction arrow/icon
-    wxPoint center(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    // Draw direction arrow or center indicator
+    drawAreaIcon(dc, rect, area);
+}
     
     // Use different colors based on state
     if (dropArea.isHighlighted()) {
@@ -348,19 +351,43 @@ wxRect DockOverlay::areaRect(DockWidgetArea area) const {
     int dropSize = 60;
     int margin = 20;
     
-    switch (area) {
-    case TopDockWidgetArea:
-        return wxRect((size.GetWidth() - dropSize) / 2, margin, dropSize, dropSize);
-    case BottomDockWidgetArea:
-        return wxRect((size.GetWidth() - dropSize) / 2, size.GetHeight() - margin - dropSize, dropSize, dropSize);
-    case LeftDockWidgetArea:
-        return wxRect(margin, (size.GetHeight() - dropSize) / 2, dropSize, dropSize);
-    case RightDockWidgetArea:
-        return wxRect(size.GetWidth() - margin - dropSize, (size.GetHeight() - dropSize) / 2, dropSize, dropSize);
-    case CenterDockWidgetArea:
-        return wxRect((size.GetWidth() - dropSize) / 2, (size.GetHeight() - dropSize) / 2, dropSize, dropSize);
-    default:
-        return wxRect();
+    // Different layouts for different overlay modes
+    if (m_mode == ModeDockAreaOverlay) {
+        // For DockArea overlay: indicators surround the center indicator
+        int centerX = size.GetWidth() / 2;
+        int centerY = size.GetHeight() / 2;
+        int spacing = dropSize + 10; // Space between center and surrounding indicators
+        
+        switch (area) {
+        case TopDockWidgetArea:
+            return wxRect(centerX - dropSize/2, centerY - spacing - dropSize/2, dropSize, dropSize);
+        case BottomDockWidgetArea:
+            return wxRect(centerX - dropSize/2, centerY + spacing - dropSize/2, dropSize, dropSize);
+        case LeftDockWidgetArea:
+            return wxRect(centerX - spacing - dropSize/2, centerY - dropSize/2, dropSize, dropSize);
+        case RightDockWidgetArea:
+            return wxRect(centerX + spacing - dropSize/2, centerY - dropSize/2, dropSize, dropSize);
+        case CenterDockWidgetArea:
+            return wxRect(centerX - dropSize/2, centerY - dropSize/2, dropSize, dropSize);
+        default:
+            return wxRect();
+        }
+    } else {
+        // For Container overlay: indicators at edges, center in middle
+        switch (area) {
+        case TopDockWidgetArea:
+            return wxRect((size.GetWidth() - dropSize) / 2, margin, dropSize, dropSize);
+        case BottomDockWidgetArea:
+            return wxRect((size.GetWidth() - dropSize) / 2, size.GetHeight() - margin - dropSize, dropSize, dropSize);
+        case LeftDockWidgetArea:
+            return wxRect(margin, (size.GetHeight() - dropSize) / 2, dropSize, dropSize);
+        case RightDockWidgetArea:
+            return wxRect(size.GetWidth() - margin - dropSize, (size.GetHeight() - dropSize) / 2, dropSize, dropSize);
+        case CenterDockWidgetArea:
+            return wxRect((size.GetWidth() - dropSize) / 2, (size.GetHeight() - dropSize) / 2, dropSize, dropSize);
+        default:
+            return wxRect();
+        }
     }
 }
 
