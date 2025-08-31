@@ -2,6 +2,7 @@
 #include <wx/config.h>
 #include <wx/notebook.h>
 #include <wx/gbsizer.h>
+#include <wx/dcbuffer.h>
 
 namespace ads {
 

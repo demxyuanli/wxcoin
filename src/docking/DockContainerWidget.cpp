@@ -561,10 +561,10 @@ void DockContainerWidget::handleTopBottomArea(DockSplitter* rootSplitter, DockAr
     
     if (area == TopDockWidgetArea) {
         rootSplitter->SplitHorizontally(dockArea, contentSplitter);
-        rootSplitter->SetSashPosition(getConfiguredAreaSize(area))
+        rootSplitter->SetSashPosition(getConfiguredAreaSize(area));
     } else { // BottomDockWidgetArea
         rootSplitter->SplitHorizontally(contentSplitter, dockArea);
-        rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - getConfiguredAreaSize(area))
+        rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - getConfiguredAreaSize(area));
     }
 }
 
@@ -609,7 +609,7 @@ void DockContainerWidget::handleMiddleLayerArea(DockSplitter* rootSplitter, Dock
         } else if (area == RightDockWidgetArea) {
             // New area goes on the right
             newSplitter->SplitVertically(existingArea, dockArea);
-            newSplitter->SetSashPosition(newSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area))
+            newSplitter->SetSashPosition(newSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area));
         } else { // CenterDockWidgetArea
             // This is tricky - if we're adding center to an existing area,
             // we need to determine which one should be left/right

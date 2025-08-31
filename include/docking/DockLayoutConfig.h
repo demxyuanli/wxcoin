@@ -88,7 +88,7 @@ private:
     wxSpinCtrl* m_animationDurationSpin;
     
     // Preview panel
-    wxPanel* m_previewPanel;
+    DockLayoutPreview* m_previewPanel;
     
     DockLayoutConfig m_config;
     
