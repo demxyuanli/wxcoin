@@ -20,6 +20,7 @@
 #include <Inventor/nodes/SoFragmentShader.h>
 #include <Inventor/nodes/SoVertexShader.h>
 #include <Inventor/nodes/SoTextureCoordinate2.h>
+#include <Inventor/nodes/SoTextureCoordinateBinding.h>
 #include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/nodes/SoSceneTexture2.h>
 #include <Inventor/nodes/SoShaderParameter.h>
@@ -147,22 +148,25 @@ namespace {
         }
 
         void main() {
-            vec2 texelSize = uResolution;
             vec4 color = texture2D(uColorTex, vTexCoord);
             
-            float cEdge = colorSobel(vTexCoord, texelSize);
-            float dEdge = depthEdge(vTexCoord, texelSize) * uDepthWeight;
-            float nEdge = normalEdge(vTexCoord, texelSize) * uNormalWeight;
-            
-            float edge = clamp((cEdge + dEdge + nEdge) * uIntensity, 0.0, 1.0);
-            
-            vec3 outlineColor = vec3(0.0); // Black outline
-            
+            // Simple debug: just show the texture
             if (uDebugOutput == 1) {
                 gl_FragColor = color;
             } else if (uDebugOutput == 2) {
-                gl_FragColor = vec4(vec3(edge), 1.0);
+                // Show texture coordinates as colors for debugging
+                gl_FragColor = vec4(vTexCoord.x, vTexCoord.y, 0.0, 1.0);
             } else {
+                // Normal outline processing
+                vec2 texelSize = uResolution;
+                
+                float cEdge = colorSobel(vTexCoord, texelSize);
+                float dEdge = depthEdge(vTexCoord, texelSize) * uDepthWeight;
+                float nEdge = normalEdge(vTexCoord, texelSize) * uNormalWeight;
+                
+                float edge = clamp((cEdge + dEdge + nEdge) * uIntensity, 0.0, 1.0);
+                
+                vec3 outlineColor = vec3(0.0); // Black outline
                 gl_FragColor = vec4(mix(color.rgb, outlineColor, edge), color.a);
             }
         }
@@ -191,7 +195,7 @@ ImageOutlinePass2::ImageOutlinePass2(IOutlineRenderer* renderer, SoSeparator* ca
     , m_uInvView(nullptr)
     , m_uDebugOutput(nullptr)
     , m_enabled(false)
-    , m_debugOutput(DebugOutput::Final)
+    , m_debugOutput(DebugOutput::ShowEdge)
     , m_colorUnit(0)
     , m_depthUnit(1) {
     
@@ -230,17 +234,10 @@ ImageOutlinePass2::~ImageOutlinePass2() {
 }
 
 bool ImageOutlinePass2::chooseTextureUnits() {
-    GLint maxUnits = 0;
-    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxUnits);
-    if (maxUnits >= 2) {
-        m_colorUnit = maxUnits - 1;
-        m_depthUnit = maxUnits - 2;
-        if (m_depthUnit < 0) { m_colorUnit = 0; m_depthUnit = 1; }
-        return true;
-    }
+    // Use simple fixed texture units for now
     m_colorUnit = 0;
     m_depthUnit = 1;
-    return false;
+    return true;
 }
 
 void ImageOutlinePass2::setEnabled(bool enabled) {
@@ -383,6 +380,7 @@ void ImageOutlinePass2::buildShaders() {
     m_colorTexture->type = SoSceneTexture2::RGBA8;
     m_colorTexture->wrapS = SoSceneTexture2::CLAMP_TO_BORDER;
     m_colorTexture->wrapT = SoSceneTexture2::CLAMP_TO_BORDER;
+    m_colorTexture->backgroundColor = SbVec4f(0.5f, 0.5f, 0.5f, 1.0f); // Gray background for debugging
     
     // Create depth texture capture node
     m_depthTexture = new SoSceneTexture2;
@@ -469,6 +467,11 @@ void ImageOutlinePass2::buildShaders() {
     SoMaterial* material = new SoMaterial;
     material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
     m_quadSeparator->addChild(material);
+    
+    // Texture coordinate binding
+    SoTextureCoordinateBinding* texBinding = new SoTextureCoordinateBinding;
+    texBinding->value = SoTextureCoordinateBinding::PER_VERTEX;
+    m_quadSeparator->addChild(texBinding);
     
     // Texture coordinates
     SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;

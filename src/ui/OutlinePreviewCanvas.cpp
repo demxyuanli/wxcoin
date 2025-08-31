@@ -76,6 +76,7 @@ void OutlinePreviewCanvas::initializeScene() {
     m_camera->position.setValue(0.0f, 0.0f, 15.0f);
     m_camera->nearDistance = 0.1f;
     m_camera->farDistance = 1000.0f;
+    m_camera->heightAngle = 0.785398f; // 45 degrees
     m_sceneRoot->addChild(m_camera);
     
     // Add light
@@ -340,8 +341,15 @@ void OutlinePreviewCanvas::render() {
     
     glEnable(GL_DEPTH_TEST);
     
-    // ImageOutlinePass2 will handle everything
+    // Update viewport region
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
+    
+    // Refresh outline pass before rendering
+    if (m_outlinePass && m_outlineEnabled) {
+        m_outlinePass->refresh();
+    }
+    
+    // Render the scene
     SoGLRenderAction renderAction(viewport);
     renderAction.apply(m_sceneRoot);
     
