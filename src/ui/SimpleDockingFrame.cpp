@@ -268,7 +268,8 @@ private:
     }
     
     void OnConfigureLayout(wxCommandEvent&) {
-        DockLayoutConfig config = m_dockManager->getLayoutConfig();
+        const DockLayoutConfig& currentConfig = m_dockManager->getLayoutConfig();
+        DockLayoutConfig config = currentConfig;  // Make a copy
         DockLayoutConfigDialog dlg(this, config);
         
         if (dlg.ShowModal() == wxID_OK) {

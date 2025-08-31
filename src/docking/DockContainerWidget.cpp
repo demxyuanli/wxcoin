@@ -722,7 +722,7 @@ int DockContainerWidget::getConfiguredAreaSize(DockWidgetArea area) const {
         }
     }
     
-    DockLayoutConfig config = m_dockManager->getLayoutConfig();
+    const DockLayoutConfig& config = m_dockManager->getLayoutConfig();
     
     if (config.usePercentage) {
         // Calculate from percentage

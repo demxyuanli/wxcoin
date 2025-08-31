@@ -16,6 +16,7 @@ class DockArea;
 class DockSplitter;
 class FloatingDockContainer;
 class DockOverlay;
+class DockLayoutConfig;
 
 // Dock widget area flags
 enum DockWidgetArea {
@@ -76,9 +77,8 @@ public:
     bool restoreState(const wxString& xmlData);
     
     // Layout configuration
-    class DockLayoutConfig;
     void setLayoutConfig(const DockLayoutConfig& config);
-    DockLayoutConfig getLayoutConfig() const;
+    const DockLayoutConfig& getLayoutConfig() const;
     
     // Floating widgets
     FloatingDockContainer* addDockWidgetFloating(DockWidget* dockWidget);

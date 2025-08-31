@@ -679,11 +679,12 @@ void DockManager::setLayoutConfig(const DockLayoutConfig& config) {
     }
 }
 
-DockLayoutConfig DockManager::getLayoutConfig() const {
-    if (m_layoutConfig) {
-        return *m_layoutConfig;
+const DockLayoutConfig& DockManager::getLayoutConfig() const {
+    if (!m_layoutConfig) {
+        // Create a default config if not initialized
+        const_cast<DockManager*>(this)->m_layoutConfig = std::make_unique<DockLayoutConfig>();
     }
-    return DockLayoutConfig();
+    return *m_layoutConfig;
 }
 
 } // namespace ads
