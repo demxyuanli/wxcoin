@@ -104,6 +104,16 @@ private:
     wxWindow* findOrCreateMiddleLayer(DockSplitter* rootSplitter);
     void addDockAreaToMiddleSplitter(DockSplitter* middleSplitter, DockArea* dockArea, DockWidgetArea area);
     
+    // Simplified layout methods
+    void addDockAreaSimple(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void ensureTopBottomLayout(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void addToMiddleLayer(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void addToVerticalSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+    void createMiddleSplitter(DockSplitter* rootSplitter, DockArea* existingArea, DockArea* newArea, DockWidgetArea area);
+    void create3WaySplit(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+    void addToHorizontalLayout(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+    void restructureForTopBottom(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    
     friend class DockManager;
     friend class DockArea;
     friend class FloatingDockContainer;
