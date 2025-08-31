@@ -13,35 +13,37 @@ void DockContainerWidget::createFixedLayout() {
     // |          Bottom Area           |
     // +--------------------------------+
     
-    // 1. 创建主垂直分割器 (分割成上、中、下三部分)
-    DockSplitter* mainVerticalSplitter = new DockSplitter(this);
-    mainVerticalSplitter->setOrientation(wxVERTICAL);
+    // 1. 创建主分割器 (水平分割，将区域分成上、中、下三层)
+    // 注意：SplitHorizontally 是上下分割（用水平线分割）
+    DockSplitter* mainSplitter = new DockSplitter(this);
     
-    // 2. 创建中间的水平分割器 (分割成左、中、右三部分)
-    DockSplitter* middleHorizontalSplitter = new DockSplitter(mainVerticalSplitter);
-    middleHorizontalSplitter->setOrientation(wxHORIZONTAL);
+    // 2. 创建中间层的分割器 (垂直分割，将中间层分成左、中、右三列)
+    // 注意：SplitVertically 是左右分割（用垂直线分割）
+    DockSplitter* middleSplitter = new DockSplitter(mainSplitter);
     
     // 3. 创建五个占位容器
-    wxPanel* topContainer = new wxPanel(mainVerticalSplitter);
-    wxPanel* leftContainer = new wxPanel(middleHorizontalSplitter);
-    wxPanel* centerContainer = new wxPanel(middleHorizontalSplitter);
-    wxPanel* rightContainer = new wxPanel(middleHorizontalSplitter);
-    wxPanel* bottomContainer = new wxPanel(mainVerticalSplitter);
+    wxPanel* topContainer = new wxPanel(mainSplitter);
+    wxPanel* leftContainer = new wxPanel(middleSplitter);
+    wxPanel* centerContainer = new wxPanel(middleSplitter);
+    wxPanel* rightContainer = new wxPanel(middleSplitter);
+    wxPanel* bottomContainer = new wxPanel(mainSplitter);
     
-    // 4. 设置中间水平分割器
-    middleHorizontalSplitter->SplitVertically(leftContainer, centerContainer);
-    DockSplitter* rightSplitter = new DockSplitter(middleHorizontalSplitter);
-    middleHorizontalSplitter->ReplaceWindow(centerContainer, rightSplitter);
-    rightSplitter->SplitVertically(centerContainer, rightContainer);
+    // 4. 设置中间层的分割器（左中右布局）
+    // 先分割左侧和中右部分
+    DockSplitter* centerRightSplitter = new DockSplitter(middleSplitter);
+    middleSplitter->SplitVertically(leftContainer, centerRightSplitter);
+    // 再分割中间和右侧
+    centerRightSplitter->SplitVertically(centerContainer, rightContainer);
     
-    // 5. 设置主垂直分割器
-    mainVerticalSplitter->SplitHorizontally(topContainer, middleHorizontalSplitter);
-    DockSplitter* bottomSplitter = new DockSplitter(mainVerticalSplitter);
-    mainVerticalSplitter->ReplaceWindow(middleHorizontalSplitter, bottomSplitter);
-    bottomSplitter->SplitHorizontally(middleHorizontalSplitter, bottomContainer);
+    // 5. 设置主分割器（上中下布局）
+    // 先分割上部和中下部分
+    DockSplitter* middleBottomSplitter = new DockSplitter(mainSplitter);
+    mainSplitter->SplitHorizontally(topContainer, middleBottomSplitter);
+    // 再分割中间层和底部
+    middleBottomSplitter->SplitHorizontally(middleSplitter, bottomContainer);
     
     // 6. 将主分割器添加到布局
-    m_layout->Add(mainVerticalSplitter, 1, wxEXPAND);
+    m_layout->Add(mainSplitter, 1, wxEXPAND);
     
     // 7. 保存区域引用
     m_areaContainers[TopDockWidgetArea] = topContainer;
