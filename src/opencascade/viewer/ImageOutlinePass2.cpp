@@ -359,16 +359,6 @@ void ImageOutlinePass2::attachOverlay() {
     if (m_program) annotation->addChild(m_program);
     if (m_quadSeparator) annotation->addChild(m_quadSeparator);
     
-    // Add a callback to render with custom OpenGL if shaders fail
-    auto* callback = new SoCallback;
-    callback->setCallback([](void* userData, SoAction* action) {
-        if (action->isOfType(SoGLRenderAction::getClassTypeId())) {
-            auto* self = static_cast<ImageOutlinePass2*>(userData);
-            self->renderFallback();
-        }
-    }, this);
-    annotation->addChild(callback);
-    
     // Attach to scene
     root->addChild(m_overlayRoot);
 }

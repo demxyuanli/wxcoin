@@ -53,6 +53,7 @@ private:
     
     void createBasicModels();
     void render();
+    void renderSimpleOutline();
     int getObjectAtPosition(const wxPoint& pos);
     
     wxGLContext* m_glContext{ nullptr };

@@ -96,10 +96,10 @@ void OutlinePreviewCanvas::initializeScene() {
     // Create basic models
     createBasicModels();
     
-    // Create ImageOutlinePass2
-    m_outlinePass = std::make_unique<ImageOutlinePass2>(this, m_modelRoot);
-    m_outlinePass->setEnabled(m_outlineEnabled);
-    m_outlinePass->setParams(m_outlineParams);
+    // Temporarily disable ImageOutlinePass2 until shader issues are resolved
+    // m_outlinePass = std::make_unique<ImageOutlinePass2>(this, m_modelRoot);
+    // m_outlinePass->setEnabled(m_outlineEnabled);
+    // m_outlinePass->setParams(m_outlineParams);
     
     m_initialized = true;
     m_needsRedraw = true;
@@ -210,9 +210,9 @@ void OutlinePreviewCanvas::createBasicModels() {
 void OutlinePreviewCanvas::updateOutlineParams(const ImageOutlineParams& params) {
     m_outlineParams = params;
     
-    if (m_outlinePass) {
-        m_outlinePass->setParams(params);
-    }
+    // if (m_outlinePass) {
+    //     m_outlinePass->setParams(params);
+    // }
     
     m_needsRedraw = true;
     Refresh(false);
@@ -225,9 +225,9 @@ ImageOutlineParams OutlinePreviewCanvas::getOutlineParams() const {
 void OutlinePreviewCanvas::setOutlineEnabled(bool enabled) {
     m_outlineEnabled = enabled;
     
-    if (m_outlinePass) {
-        m_outlinePass->setEnabled(enabled);
-    }
+    // if (m_outlinePass) {
+    //     m_outlinePass->setEnabled(enabled);
+    // }
     
     m_needsRedraw = true;
     Refresh(false);
@@ -356,8 +356,64 @@ void OutlinePreviewCanvas::render() {
     // Render the complete scene
     renderAction.apply(m_sceneRoot);
     
+    // Simple outline effect using fixed-function pipeline
+    if (m_outlineEnabled) {
+        renderSimpleOutline();
+    }
+    
     SwapBuffers();
     m_needsRedraw = false;
+}
+
+void OutlinePreviewCanvas::renderSimpleOutline() {
+    // Simple outline using multiple pass rendering
+    SbViewportRegion viewport(GetClientSize().GetWidth(), GetClientSize().GetHeight());
+    SoGLRenderAction renderAction(viewport);
+    
+    // Pass 1: Render scaled-up silhouette in outline color
+    glClearStencil(0);
+    glClear(GL_STENCIL_BUFFER_BIT);
+    glEnable(GL_STENCIL_TEST);
+    
+    // Mark pixels where models are rendered
+    glStencilFunc(GL_ALWAYS, 1, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glDepthMask(GL_FALSE);
+    
+    renderAction.apply(m_modelRoot);
+    
+    // Pass 2: Render outline where stencil is 0
+    glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_DEPTH_TEST);
+    
+    // Scale up and render in outline color
+    glPushMatrix();
+    float scale = 1.0f + m_outlineParams.thickness * 0.05f;
+    glScalef(scale, scale, scale);
+    
+    // Set outline color
+    glColor4f(m_outlineColor.Red() / 255.0f,
+              m_outlineColor.Green() / 255.0f,
+              m_outlineColor.Blue() / 255.0f,
+              m_outlineParams.edgeIntensity);
+    
+    // Render as solid color
+    glDisable(GL_LIGHTING);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    
+    renderAction.apply(m_modelRoot);
+    
+    glPopMatrix();
+    
+    // Restore state
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glDisable(GL_STENCIL_TEST);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
 int OutlinePreviewCanvas::getObjectAtPosition(const wxPoint& pos) {
