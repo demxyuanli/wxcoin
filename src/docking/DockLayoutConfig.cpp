@@ -74,7 +74,7 @@ wxEND_EVENT_TABLE()
 // DockLayoutConfigDialog implementation
 DockLayoutConfigDialog::DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config)
     : wxDialog(parent, wxID_ANY, "Dock Layout Configuration", 
-              wxDefaultPosition, wxSize(800, 600),
+              wxDefaultPosition, wxSize(1000, 600),
               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_config(config)
 {
@@ -88,6 +88,9 @@ DockLayoutConfigDialog::DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfi
 
 void DockLayoutConfigDialog::CreateControls() {
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Create horizontal sizer for notebook and preview
+    wxBoxSizer* contentSizer = new wxBoxSizer(wxHORIZONTAL);
     
     // Create notebook for organized settings
     wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
@@ -113,10 +116,13 @@ void DockLayoutConfigDialog::CreateControls() {
     optionsPage->SetSizer(optionsSizer);
     notebook->AddPage(optionsPage, "Options");
     
-    mainSizer->Add(notebook, 1, wxEXPAND | wxALL, 5);
+    // Add notebook to left side (60% of width)
+    contentSizer->Add(notebook, 3, wxEXPAND | wxALL, 5);
     
-    // Preview panel
-    CreatePreviewPanel(this, mainSizer);
+    // Preview panel on right side (40% of width)
+    CreatePreviewPanel(this, contentSizer);
+    
+    mainSizer->Add(contentSizer, 1, wxEXPAND);
     
     // Button sizer
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -281,7 +287,7 @@ void DockLayoutConfigDialog::CreatePreviewPanel(wxWindow* parent, wxSizer* sizer
     m_previewPanel->SetConfig(m_config);
     
     previewBox->Add(m_previewPanel, 1, wxEXPAND | wxALL, 5);
-    sizer->Add(previewBox, 1, wxEXPAND | wxALL, 5);
+    sizer->Add(previewBox, 2, wxEXPAND | wxALL, 5);
 }
 
 void DockLayoutConfigDialog::OnUsePercentageChanged(wxCommandEvent& event) {
