@@ -75,6 +75,11 @@ public:
     void saveState(wxString& xmlData) const;
     bool restoreState(const wxString& xmlData);
     
+    // Layout configuration
+    class DockLayoutConfig;
+    void setLayoutConfig(const DockLayoutConfig& config);
+    DockLayoutConfig getLayoutConfig() const;
+    
     // Floating widgets
     FloatingDockContainer* addDockWidgetFloating(DockWidget* dockWidget);
     void setFloatingContainersTitle(const wxString& title);
@@ -171,6 +176,7 @@ private:
     DockWidget* m_activeDockWidget;
     DockManagerFeatures m_configFlags;
     wxString m_styleSheet;
+    std::unique_ptr<DockLayoutConfig> m_layoutConfig;
 
     // Performance optimization variables
     wxTimer* m_layoutUpdateTimer;

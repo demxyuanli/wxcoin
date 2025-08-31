@@ -114,6 +114,7 @@ private:
     void addToHorizontalLayout(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
     void restructureForTopBottom(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
     void ensureAllChildrenVisible(wxWindow* window);
+    int getConfiguredAreaSize(DockWidgetArea area) const;
     
     friend class DockManager;
     friend class DockArea;

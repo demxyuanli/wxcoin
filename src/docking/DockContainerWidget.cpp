@@ -2,6 +2,8 @@
 #include "docking/DockArea.h"
 #include "docking/DockWidget.h"
 #include "docking/FloatingDockContainer.h"
+#include "docking/DockManager.h"
+#include "docking/DockLayoutConfig.h"
 #include <algorithm>
 
 namespace ads {
@@ -289,19 +291,19 @@ void DockContainerWidget::addDockAreaSimple(DockSplitter* rootSplitter, DockArea
         if (area == LeftDockWidgetArea) {
             // Split: [Left | Existing]
             rootSplitter->SplitVertically(dockArea, window1);
-            rootSplitter->SetSashPosition(250);
+            rootSplitter->SetSashPosition(getConfiguredAreaSize(area));
         } else if (area == RightDockWidgetArea) {
             // Split: [Existing | Right]
             rootSplitter->SplitVertically(window1, dockArea);
-            rootSplitter->SetSashPosition(rootSplitter->GetSize().GetWidth() - 250);
+            rootSplitter->SetSashPosition(rootSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area));
         } else if (area == TopDockWidgetArea) {
             // Split: [Top / Existing]
             rootSplitter->SplitHorizontally(dockArea, window1);
-            rootSplitter->SetSashPosition(150);
+            rootSplitter->SetSashPosition(getConfiguredAreaSize(area));
         } else if (area == BottomDockWidgetArea) {
             // Split: [Existing / Bottom]
             rootSplitter->SplitHorizontally(window1, dockArea);
-            rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - 200);
+            rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - getConfiguredAreaSize(area));
         } else { // CenterDockWidgetArea
             rootSplitter->SplitVertically(window1, dockArea);
         }
@@ -358,7 +360,7 @@ void DockContainerWidget::addDockAreaSimple(DockSplitter* rootSplitter, DockArea
         // We want Right panel to be about 250 pixels wide
         wxSize subSize = subSplitter->GetSize();
         if (subSize.GetWidth() > 0) {
-            subSplitter->SetSashPosition(subSize.GetWidth() - 250);
+            subSplitter->SetSashPosition(subSize.GetWidth() - getConfiguredAreaSize(area));
         }
         
         // Ensure all windows are shown
@@ -469,10 +471,10 @@ void DockContainerWidget::addToVerticalSplitter(DockSplitter* splitter, DockArea
         
         if (area == LeftDockWidgetArea) {
             splitter->SplitVertically(dockArea, w1);
-            splitter->SetSashPosition(250);
+            splitter->SetSashPosition(getConfiguredAreaSize(area));
         } else if (area == RightDockWidgetArea) {
             splitter->SplitVertically(w1, dockArea);
-            splitter->SetSashPosition(splitter->GetSize().GetWidth() - 250);
+            splitter->SetSashPosition(splitter->GetSize().GetWidth() - getConfiguredAreaSize(area));
         } else { // CenterDockWidgetArea
             splitter->SplitVertically(w1, dockArea);
             splitter->SetSashPosition(splitter->GetSize().GetWidth() / 2);
@@ -499,10 +501,10 @@ void DockContainerWidget::createMiddleSplitter(DockSplitter* rootSplitter, DockA
     // Split based on area type
     if (area == LeftDockWidgetArea) {
         middleSplitter->SplitVertically(newArea, existingArea);
-        middleSplitter->SetSashPosition(250);
+        middleSplitter->SetSashPosition(getConfiguredAreaSize(area));
     } else if (area == RightDockWidgetArea) {
         middleSplitter->SplitVertically(existingArea, newArea);
-        middleSplitter->SetSashPosition(middleSplitter->GetSize().GetWidth() - 250);
+        middleSplitter->SetSashPosition(middleSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area));
     } else { // CenterDockWidgetArea
         middleSplitter->SplitVertically(existingArea, newArea);
         middleSplitter->SetSashPosition(middleSplitter->GetSize().GetWidth() / 2);
@@ -559,10 +561,10 @@ void DockContainerWidget::handleTopBottomArea(DockSplitter* rootSplitter, DockAr
     
     if (area == TopDockWidgetArea) {
         rootSplitter->SplitHorizontally(dockArea, contentSplitter);
-        rootSplitter->SetSashPosition(150); // Default top height
+        rootSplitter->SetSashPosition(getConfiguredAreaSize(area))
     } else { // BottomDockWidgetArea
         rootSplitter->SplitHorizontally(contentSplitter, dockArea);
-        rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - 200); // Default bottom height
+        rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - getConfiguredAreaSize(area))
     }
 }
 
@@ -603,11 +605,11 @@ void DockContainerWidget::handleMiddleLayerArea(DockSplitter* rootSplitter, Dock
         if (area == LeftDockWidgetArea) {
             // New area goes on the left
             newSplitter->SplitVertically(dockArea, existingArea);
-            newSplitter->SetSashPosition(250); // Default left width
+            newSplitter->SetSashPosition(getConfiguredAreaSize(area)); // Default left width
         } else if (area == RightDockWidgetArea) {
             // New area goes on the right
             newSplitter->SplitVertically(existingArea, dockArea);
-            newSplitter->SetSashPosition(newSplitter->GetSize().GetWidth() - 250); // Default right width
+            newSplitter->SetSashPosition(newSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area))
         } else { // CenterDockWidgetArea
             // This is tricky - if we're adding center to an existing area,
             // we need to determine which one should be left/right
@@ -641,10 +643,10 @@ void DockContainerWidget::addDockAreaToMiddleSplitter(DockSplitter* middleSplitt
         // Determine split based on what we're adding and what exists
         if (area == LeftDockWidgetArea) {
             middleSplitter->SplitVertically(dockArea, window1);
-            middleSplitter->SetSashPosition(250);
+            middleSplitter->SetSashPosition(getConfiguredAreaSize(area));
         } else if (area == RightDockWidgetArea) {
             middleSplitter->SplitVertically(window1, dockArea);
-            middleSplitter->SetSashPosition(middleSplitter->GetSize().GetWidth() - 250);
+            middleSplitter->SetSashPosition(middleSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area));
         } else { // CenterDockWidgetArea
             // If we're adding center and something exists, put center in the middle
             middleSplitter->SplitVertically(window1, dockArea);
@@ -670,7 +672,7 @@ void DockContainerWidget::addDockAreaToMiddleSplitter(DockSplitter* middleSplitt
         middleSplitter->Unsplit();
         dockArea->Reparent(middleSplitter);
         middleSplitter->SplitVertically(dockArea, subSplitter);
-        middleSplitter->SetSashPosition(250);
+        middleSplitter->SetSashPosition(getConfiguredAreaSize(area));
     } else if (area == RightDockWidgetArea) {
         // Move everything to the left and add new area on the right
         window1->Reparent(subSplitter);
@@ -680,7 +682,7 @@ void DockContainerWidget::addDockAreaToMiddleSplitter(DockSplitter* middleSplitt
         middleSplitter->Unsplit();
         dockArea->Reparent(middleSplitter);
         middleSplitter->SplitVertically(subSplitter, dockArea);
-        middleSplitter->SetSashPosition(middleSplitter->GetSize().GetWidth() - 250);
+        middleSplitter->SetSashPosition(middleSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area));
     } else { // CenterDockWidgetArea
         // Add in the middle - this is the most complex case
         // We'll put the new center between the existing windows
@@ -704,6 +706,47 @@ void DockContainerWidget::ensureAllChildrenVisible(wxWindow* window) {
         }
         if (splitter->GetWindow2()) {
             ensureAllChildrenVisible(splitter->GetWindow2());
+        }
+    }
+}
+
+int DockContainerWidget::getConfiguredAreaSize(DockWidgetArea area) const {
+    if (!m_dockManager) {
+        // Default sizes
+        switch (area) {
+        case TopDockWidgetArea: return 150;
+        case BottomDockWidgetArea: return 200;
+        case LeftDockWidgetArea: return 250;
+        case RightDockWidgetArea: return 250;
+        default: return 250;
+        }
+    }
+    
+    DockLayoutConfig config = m_dockManager->getLayoutConfig();
+    
+    if (config.usePercentage) {
+        // Calculate from percentage
+        wxSize containerSize = GetSize();
+        switch (area) {
+        case TopDockWidgetArea: 
+            return containerSize.GetHeight() * config.topAreaPercent / 100;
+        case BottomDockWidgetArea:
+            return containerSize.GetHeight() * config.bottomAreaPercent / 100;
+        case LeftDockWidgetArea:
+            return containerSize.GetWidth() * config.leftAreaPercent / 100;
+        case RightDockWidgetArea:
+            return containerSize.GetWidth() * config.rightAreaPercent / 100;
+        default:
+            return 250;
+        }
+    } else {
+        // Use pixel values
+        switch (area) {
+        case TopDockWidgetArea: return config.topAreaHeight;
+        case BottomDockWidgetArea: return config.bottomAreaHeight;
+        case LeftDockWidgetArea: return config.leftAreaWidth;
+        case RightDockWidgetArea: return config.rightAreaWidth;
+        default: return 250;
         }
     }
 }
@@ -790,7 +833,7 @@ void DockContainerWidget::create3WaySplit(DockSplitter* splitter, DockArea* dock
         splitter->Unsplit();
         dockArea->Reparent(splitter);
         splitter->SplitVertically(dockArea, subSplitter);
-        splitter->SetSashPosition(250);
+        splitter->SetSashPosition(getConfiguredAreaSize(area));
     } else if (area == RightDockWidgetArea) {
         // New area goes right, existing windows go to sub-splitter on left
         w1->Reparent(subSplitter);
@@ -800,7 +843,7 @@ void DockContainerWidget::create3WaySplit(DockSplitter* splitter, DockArea* dock
         splitter->Unsplit();
         dockArea->Reparent(splitter);
         splitter->SplitVertically(subSplitter, dockArea);
-        splitter->SetSashPosition(splitter->GetSize().GetWidth() - 250);
+        splitter->SetSashPosition(splitter->GetSize().GetWidth() - getConfiguredAreaSize(area));
     } else { // CenterDockWidgetArea
         // New area goes in middle
         w2->Reparent(subSplitter);
@@ -873,10 +916,10 @@ void DockContainerWidget::restructureForTopBottom(DockSplitter* rootSplitter, Do
     // Set up the root splitter
     if (area == TopDockWidgetArea) {
         rootSplitter->SplitHorizontally(dockArea, middleSplitter);
-        rootSplitter->SetSashPosition(150);
+        rootSplitter->SetSashPosition(getConfiguredAreaSize(area));
     } else { // BottomDockWidgetArea
         rootSplitter->SplitHorizontally(middleSplitter, dockArea);
-        rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - 200);
+        rootSplitter->SetSashPosition(rootSplitter->GetSize().GetHeight() - getConfiguredAreaSize(area));
     }
     
     // Force layout update

@@ -17,6 +17,7 @@
 #include "docking/DockWidget.h"
 #include "docking/DockArea.h"
 #include "docking/PerspectiveManager.h"
+#include "docking/DockLayoutConfig.h"
 
 using namespace ads;
 
@@ -207,6 +208,8 @@ private:
         viewMenu->Append(ID_RESET_LAYOUT, "Reset Layout");
         viewMenu->AppendSeparator();
         viewMenu->Append(ID_MANAGE_PERSPECTIVES, "Manage Perspectives...");
+        viewMenu->AppendSeparator();
+        viewMenu->Append(ID_CONFIGURE_LAYOUT, "Configure Layout...");
         menuBar->Append(viewMenu, "&View");
         
         SetMenuBar(menuBar);
@@ -217,6 +220,7 @@ private:
         Bind(wxEVT_MENU, &SimpleDockingFrame::OnLoadLayout, this, ID_LOAD_LAYOUT);
         Bind(wxEVT_MENU, &SimpleDockingFrame::OnResetLayout, this, ID_RESET_LAYOUT);
         Bind(wxEVT_MENU, &SimpleDockingFrame::OnManagePerspectives, this, ID_MANAGE_PERSPECTIVES);
+        Bind(wxEVT_MENU, &SimpleDockingFrame::OnConfigureLayout, this, ID_CONFIGURE_LAYOUT);
     }
     
     void OnSaveLayout(wxCommandEvent&) {
@@ -263,6 +267,21 @@ private:
         dlg.ShowModal();
     }
     
+    void OnConfigureLayout(wxCommandEvent&) {
+        DockLayoutConfig config = m_dockManager->getLayoutConfig();
+        DockLayoutConfigDialog dlg(this, config);
+        
+        if (dlg.ShowModal() == wxID_OK) {
+            config = dlg.GetConfig();
+            m_dockManager->setLayoutConfig(config);
+            
+            // Optionally, apply the configuration immediately
+            // This might require recreating the layout
+            wxMessageBox("Layout configuration saved.\nChanges will be applied on next restart.", 
+                        "Configuration", wxOK | wxICON_INFORMATION);
+        }
+    }
+    
     void OnSize(wxSizeEvent& event) {
         // Force refresh of dock manager to prevent ghosting during window resize
         if (m_dockManager && m_dockManager->containerWidget()) {
@@ -274,11 +293,12 @@ private:
     }
     
     enum {
-        ID_SAVE_LAYOUT = wxID_HIGHEST + 1,
-        ID_LOAD_LAYOUT,
-        ID_RESET_LAYOUT,
-        ID_MANAGE_PERSPECTIVES
-    };
+    ID_SAVE_LAYOUT = wxID_HIGHEST + 1,
+    ID_LOAD_LAYOUT,
+    ID_RESET_LAYOUT,
+    ID_MANAGE_PERSPECTIVES,
+    ID_CONFIGURE_LAYOUT
+};
 };
 
 // Simple test app
