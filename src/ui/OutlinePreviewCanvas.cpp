@@ -7,6 +7,8 @@
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoRotationXYZ.h>
+#include <Inventor/nodes/SoShaderProgram.h>
+#include <Inventor/nodes/SoShaderObject.h>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoCylinder.h>
@@ -66,6 +68,11 @@ void OutlinePreviewCanvas::initializeScene() {
     if (!m_glContext) return;
     
     SetCurrent(*m_glContext);
+    
+    // Check GLSL support
+    if (!SoShaderProgram::isSupported(SoShaderObject::GLSL_PROGRAM)) {
+        wxLogError("GLSL shaders not supported!");
+    }
     
     // Create scene root
     m_sceneRoot = new SoSeparator;
@@ -345,15 +352,17 @@ void OutlinePreviewCanvas::render() {
     // Update viewport region
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
-    // Render the scene first (models)
+    // Set up render action
     SoGLRenderAction renderAction(viewport);
-    renderAction.apply(m_modelRoot);
+    renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
     
-    // Then let ImageOutlinePass2 render its overlay
+    // Render everything through the scene root
+    // ImageOutlinePass2 should handle the post-processing automatically
+    renderAction.apply(m_sceneRoot);
+    
+    // Refresh outline pass parameters if needed
     if (m_outlinePass && m_outlineEnabled) {
         m_outlinePass->refresh();
-        // Render the overlay root separately
-        renderAction.apply(m_sceneRoot);
     }
     
     SwapBuffers();
