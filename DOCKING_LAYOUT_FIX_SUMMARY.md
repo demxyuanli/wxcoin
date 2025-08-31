@@ -20,18 +20,22 @@
 
 添加了新方法的声明。
 
-### 3. 调整了示例程序的 widget 添加顺序
+### 3. 调整了测试程序的 widget 添加顺序
 
-文件：`/workspace/src/docking/DockingExample.cpp`
+主要测试程序：`/workspace/src/ui/SimpleDockingFrame.cpp`
 
 调整后的添加顺序：
-1. Center (编辑器)
-2. Left (项目浏览器) 
-3. Right (工具箱)
-4. Top (Demo panels)
-5. Bottom (输出面板)
+1. Center (Main View) - 首先创建中心区域
+2. Left (Toolbox) - 创建左侧区域
+3. Right (Properties) - 创建右侧区域，这样左中右形成中间层
+4. Top (Menu Bar) - 创建顶部区域，横跨整个宽度
+5. Bottom (Output) - 创建底部区域，横跨整个宽度
 
-这个顺序更有利于创建正确的五区域布局。
+这个顺序确保了：
+- 先建立中间层的左中右结构
+- 然后添加横跨全宽的顶部和底部区域
+
+另外也调整了：`/workspace/src/docking/DockingExample.cpp` 中的类似顺序。
 
 ## 核心改进逻辑
 

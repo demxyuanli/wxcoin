@@ -160,27 +160,26 @@ private:
         outputDock->setFeature(DockWidgetFloatable, true);
         outputDock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
 
-        // Step 1: Create Top area (Menu Bar) - this should be at the very top
-        wxLogDebug("Step 1: Creating Top area (Menu Bar)");
-        DockArea* topArea = m_dockManager->addDockWidget(TopDockWidgetArea, menuDock);
-        wxLogDebug("  -> Top area created: %p", topArea);
+        // Create layout in proper order for 5-zone layout
+        // First create the center area
+        wxLogDebug("Step 1: Creating Center area (Main View)");
+        DockArea* centerArea = m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
+        wxLogDebug("  -> Center area created: %p", centerArea);
 
-        // Step 2: Create Left area (Toolbox) - this should be on the left side
+        // Then create left and right areas to establish the middle layer
         wxLogDebug("Step 2: Creating Left area (Toolbox)");
         DockArea* leftArea = m_dockManager->addDockWidget(LeftDockWidgetArea, toolDock);
         wxLogDebug("  -> Left area created: %p", leftArea);
 
-        // Step 3: Create Right area (Properties) - this should be on the right side
         wxLogDebug("Step 3: Creating Right area (Properties)");
         DockArea* rightArea = m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
         wxLogDebug("  -> Right area created: %p", rightArea);
 
-        // Step 4: Create Center area (Main View) - this should be in the center
-        wxLogDebug("Step 4: Creating Center area (Main View)");
-        DockArea* centerArea = m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
-        wxLogDebug("  -> Center area created: %p", centerArea);
+        // Finally create top and bottom areas which should span full width
+        wxLogDebug("Step 4: Creating Top area (Menu Bar)");
+        DockArea* topArea = m_dockManager->addDockWidget(TopDockWidgetArea, menuDock);
+        wxLogDebug("  -> Top area created: %p", topArea);
 
-        // Step 5: Create Bottom area (Output) - this should be at the bottom
         wxLogDebug("Step 5: Creating Bottom area (Output)");
         DockArea* bottomArea = m_dockManager->addDockWidget(BottomDockWidgetArea, outputDock);
         wxLogDebug("  -> Bottom area created: %p", bottomArea);
