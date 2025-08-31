@@ -62,9 +62,8 @@ private:
     SoFragmentShader* m_fs;
 
     // Textures
-    SoSceneTexture2* m_captureNode;
-    SoTextureUnit* m_colorSampler;
-    SoTextureUnit* m_depthSampler;
+    SoSceneTexture2* m_colorTexture;
+    SoSceneTexture2* m_depthTexture;
 
     // Shader parameters
     SoShaderParameter1f* m_uIntensity;

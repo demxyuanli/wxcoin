@@ -176,9 +176,8 @@ ImageOutlinePass2::ImageOutlinePass2(IOutlineRenderer* renderer, SoSeparator* ca
     , m_program(nullptr)
     , m_vs(nullptr)
     , m_fs(nullptr)
-    , m_captureNode(nullptr)
-    , m_colorSampler(nullptr)
-    , m_depthSampler(nullptr)
+    , m_colorTexture(nullptr)
+    , m_depthTexture(nullptr)
     , m_uIntensity(nullptr)
     , m_uDepthWeight(nullptr)
     , m_uNormalWeight(nullptr)
@@ -210,9 +209,8 @@ ImageOutlinePass2::~ImageOutlinePass2() {
     if (m_program) { m_program->unref(); m_program = nullptr; }
     if (m_vs) { m_vs->unref(); m_vs = nullptr; }
     if (m_fs) { m_fs->unref(); m_fs = nullptr; }
-    if (m_captureNode) { m_captureNode->unref(); m_captureNode = nullptr; }
-    if (m_colorSampler) { m_colorSampler->unref(); m_colorSampler = nullptr; }
-    if (m_depthSampler) { m_depthSampler->unref(); m_depthSampler = nullptr; }
+    if (m_colorTexture) { m_colorTexture->unref(); m_colorTexture = nullptr; }
+    if (m_depthTexture) { m_depthTexture->unref(); m_depthTexture = nullptr; }
     
     // Clean up shader parameters
     if (m_uIntensity) { m_uIntensity->unref(); m_uIntensity = nullptr; }
@@ -299,6 +297,45 @@ void ImageOutlinePass2::attachOverlay() {
     // Build shader resources
     buildShaders();
     
+    // Add scene capture textures
+    if (m_colorTexture) {
+        // Color texture
+        auto* texUnit0 = new SoTextureUnit;
+        texUnit0->unit = m_colorUnit;
+        annotation->addChild(texUnit0);
+        annotation->addChild(m_colorTexture);
+        
+        auto* colorBind = new SoShaderParameter1i;
+        colorBind->name = "uColorTex";
+        colorBind->value = m_colorUnit;
+        annotation->addChild(colorBind);
+    }
+    
+    if (m_depthTexture) {
+        // Depth texture
+        auto* texUnit1 = new SoTextureUnit;
+        texUnit1->unit = m_depthUnit;
+        annotation->addChild(texUnit1);
+        annotation->addChild(m_depthTexture);
+        
+        auto* depthBind = new SoShaderParameter1i;
+        depthBind->name = "uDepthTex";
+        depthBind->value = m_depthUnit;
+        annotation->addChild(depthBind);
+    }
+    
+    // Add shader parameters
+    if (m_uIntensity) annotation->addChild(m_uIntensity);
+    if (m_uDepthWeight) annotation->addChild(m_uDepthWeight);
+    if (m_uNormalWeight) annotation->addChild(m_uNormalWeight);
+    if (m_uDepthThreshold) annotation->addChild(m_uDepthThreshold);
+    if (m_uNormalThreshold) annotation->addChild(m_uNormalThreshold);
+    if (m_uThickness) annotation->addChild(m_uThickness);
+    if (m_uResolution) annotation->addChild(m_uResolution);
+    if (m_uInvProjection) annotation->addChild(m_uInvProjection);
+    if (m_uInvView) annotation->addChild(m_uInvView);
+    if (m_uDebugOutput) annotation->addChild(m_uDebugOutput);
+    
     // Add shader program and quad
     if (m_program) annotation->addChild(m_program);
     if (m_quadSeparator) annotation->addChild(m_quadSeparator);
@@ -336,13 +373,23 @@ void ImageOutlinePass2::buildShaders() {
     m_fs->sourceProgram = kFS;
     m_program->shaderObject.set1Value(1, m_fs);
     
-    // Create scene capture node
-    m_captureNode = new SoSceneTexture2;
-    m_captureNode->ref();
-    m_captureNode->transparencyFunction = SoSceneTexture2::NONE;
-    m_captureNode->size = SbVec2s(512, 512); // Will be updated dynamically
-    m_captureNode->wrapS = SoSceneTexture2::CLAMP_TO_BORDER;
-    m_captureNode->wrapT = SoSceneTexture2::CLAMP_TO_BORDER;
+    // Create color texture capture node
+    m_colorTexture = new SoSceneTexture2;
+    m_colorTexture->ref();
+    m_colorTexture->transparencyFunction = SoSceneTexture2::NONE;
+    m_colorTexture->size = SbVec2s(0, 0); // auto-size to viewport
+    m_colorTexture->type = SoSceneTexture2::RGBA8;
+    m_colorTexture->wrapS = SoSceneTexture2::CLAMP_TO_BORDER;
+    m_colorTexture->wrapT = SoSceneTexture2::CLAMP_TO_BORDER;
+    
+    // Create depth texture capture node
+    m_depthTexture = new SoSceneTexture2;
+    m_depthTexture->ref();
+    m_depthTexture->transparencyFunction = SoSceneTexture2::NONE;
+    m_depthTexture->size = SbVec2s(0, 0); // auto-size to viewport
+    m_depthTexture->type = SoSceneTexture2::DEPTH;
+    m_depthTexture->wrapS = SoSceneTexture2::CLAMP;
+    m_depthTexture->wrapT = SoSceneTexture2::CLAMP;
     
     // Create temporary scene root that includes camera and capture root
     m_tempSceneRoot = new SoSeparator;
@@ -351,7 +398,10 @@ void ImageOutlinePass2::buildShaders() {
         m_tempSceneRoot->addChild(m_renderer->getCamera());
     }
     m_tempSceneRoot->addChild(m_captureRoot);
-    m_captureNode->scene = m_tempSceneRoot;
+    
+    // Set the same scene for both textures
+    m_colorTexture->scene = m_tempSceneRoot;
+    m_depthTexture->scene = m_tempSceneRoot;
     
     // Create shader parameters
     m_uIntensity = new SoShaderParameter1f;
@@ -402,17 +452,7 @@ void ImageOutlinePass2::buildShaders() {
     m_uDebugOutput->name = "uDebugOutput";
     m_uDebugOutput->value = static_cast<int>(m_debugOutput);
     
-    // Add all parameters to program
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uIntensity);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uDepthWeight);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uNormalWeight);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uDepthThreshold);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uNormalThreshold);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uThickness);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uResolution);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uInvProjection);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uInvView);
-    m_program->parameter.set1Value(m_program->parameter.getNum(), m_uDebugOutput);
+    // Parameters will be added to the annotation node in attachOverlay()
     
     // Create fullscreen quad
     m_quadSeparator = new SoSeparator;
