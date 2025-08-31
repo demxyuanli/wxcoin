@@ -95,7 +95,7 @@ protected:
     void updateDropAreaPositions();
     void paintDropAreas(wxDC& dc);
     void paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropArea);
-    void drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area);
+    void drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area, const wxColour& color);
     wxRect dropIndicatorRect(DockWidgetArea area) const;
     wxRect getPreviewRect(DockWidgetArea area) const;
 

@@ -243,91 +243,141 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     wxRect rect = dropArea.rect();
     DockWidgetArea area = dropArea.area();
     
-    // Draw background
+    // Visual Studio style colors
+    wxColour normalBg(177, 177, 177, 200);      // Light gray with transparency
+    wxColour normalBorder(142, 142, 142);       // Darker gray border
+    wxColour highlightBg(0, 122, 204, 200);     // VS blue with transparency
+    wxColour highlightBorder(0, 122, 204);      // VS blue border
+    wxColour iconColor(70, 70, 70);             // Dark gray for icons
+    wxColour highlightIconColor(255, 255, 255); // White icons when highlighted
+    
+    // Draw preview area if highlighted
     if (dropArea.isHighlighted()) {
-        // Draw preview of where the widget will be docked
         wxRect previewRect = getPreviewRect(dropArea.area());
         if (!previewRect.IsEmpty()) {
-            // Draw semi-transparent preview area with gradient effect
-            dc.SetPen(wxPen(wxColour(0, 120, 215), 2));  // Blue outline
-            dc.SetBrush(wxBrush(wxColour(0, 120, 215, 60)));  // Semi-transparent blue fill
+            // Draw semi-transparent preview area (VS style)
+            dc.SetPen(wxPen(highlightBorder, 2));
+            dc.SetBrush(wxBrush(wxColour(0, 122, 204, 60)));  // Very transparent blue
             dc.DrawRectangle(previewRect);
-            
-            // Draw inner border for better visibility
-            wxRect innerRect = previewRect;
-            innerRect.Deflate(1);
-            dc.SetPen(wxPen(wxColour(255, 255, 255, 100), 1));  // Semi-transparent white
-            dc.SetBrush(*wxTRANSPARENT_BRUSH);
-            dc.DrawRectangle(innerRect);
         }
-        
-        // Draw highlighted drop indicator with glow effect
-        // Outer glow
-        wxRect glowRect = rect;
-        glowRect.Inflate(2);
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.SetBrush(wxBrush(wxColour(0, 120, 215, 40)));
-        dc.DrawRoundedRectangle(glowRect, 3);
-        
-        // Main indicator
-        dc.SetPen(wxPen(wxColour(0, 120, 215), 2));
-        dc.SetBrush(wxBrush(wxColour(0, 120, 215)));
-        dc.DrawRoundedRectangle(rect, 2);
-    } else {
-        // Draw normal drop indicator with modern style
-        dc.SetPen(wxPen(wxColour(128, 128, 128), 1));
-        dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
-        dc.DrawRoundedRectangle(rect, 2);
     }
     
-    // Draw direction arrow or center indicator
-    drawAreaIcon(dc, rect, area);
-}
-    
-    // Use different colors based on state
+    // Draw the indicator button (VS style)
     if (dropArea.isHighlighted()) {
-        dc.SetPen(wxPen(wxColour(255, 255, 255), 2));  // White for highlighted
-        dc.SetBrush(wxBrush(wxColour(255, 255, 255)));
+        // Highlighted state
+        dc.SetPen(wxPen(highlightBorder, 1));
+        dc.SetBrush(wxBrush(highlightBg));
     } else {
-        dc.SetPen(wxPen(wxColour(100, 100, 100), 2));  // Gray for normal
-        dc.SetBrush(wxBrush(wxColour(100, 100, 100)));
+        // Normal state
+        dc.SetPen(wxPen(normalBorder, 1));
+        dc.SetBrush(wxBrush(normalBg));
     }
     
-    switch (dropArea.area()) {
+    // Draw rounded rectangle for the button
+    dc.DrawRoundedRectangle(rect, 3);
+    
+    // Draw the icon
+    wxColour currentIconColor = dropArea.isHighlighted() ? highlightIconColor : iconColor;
+    drawAreaIcon(dc, rect, area, currentIconColor);
+}
+
+void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area, const wxColour& color) {
+    // Calculate icon drawing area (centered in rect)
+    int iconSize = 24;  // Icon size
+    int arrowSize = 10; // Arrow head size
+    int lineWidth = 2;
+    
+    wxPoint center(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    
+    dc.SetPen(wxPen(color, lineWidth));
+    dc.SetBrush(wxBrush(color));
+    
+    switch (area) {
     case TopDockWidgetArea:
-        dc.DrawLine(center.x, center.y + 10, center.x, center.y - 10);
-        dc.DrawLine(center.x, center.y - 10, center.x - 5, center.y - 5);
-        dc.DrawLine(center.x, center.y - 10, center.x + 5, center.y - 5);
+        {
+            // Draw upward arrow (VS style)
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x, center.y - iconSize/3);
+            arrow[1] = wxPoint(center.x - arrowSize/2, center.y - iconSize/3 + arrowSize);
+            arrow[2] = wxPoint(center.x + arrowSize/2, center.y - iconSize/3 + arrowSize);
+            dc.DrawPolygon(3, arrow);
+            
+            // Draw arrow shaft
+            dc.DrawLine(center.x, center.y - iconSize/3 + arrowSize/2, 
+                       center.x, center.y + iconSize/3);
+        }
         break;
+        
     case BottomDockWidgetArea:
-        dc.DrawLine(center.x, center.y - 10, center.x, center.y + 10);
-        dc.DrawLine(center.x, center.y + 10, center.x - 5, center.y + 5);
-        dc.DrawLine(center.x, center.y + 10, center.x + 5, center.y + 5);
+        {
+            // Draw downward arrow (VS style)
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x, center.y + iconSize/3);
+            arrow[1] = wxPoint(center.x - arrowSize/2, center.y + iconSize/3 - arrowSize);
+            arrow[2] = wxPoint(center.x + arrowSize/2, center.y + iconSize/3 - arrowSize);
+            dc.DrawPolygon(3, arrow);
+            
+            // Draw arrow shaft
+            dc.DrawLine(center.x, center.y + iconSize/3 - arrowSize/2, 
+                       center.x, center.y - iconSize/3);
+        }
         break;
+        
     case LeftDockWidgetArea:
-        dc.DrawLine(center.x + 10, center.y, center.x - 10, center.y);
-        dc.DrawLine(center.x - 10, center.y, center.x - 5, center.y - 5);
-        dc.DrawLine(center.x - 10, center.y, center.x - 5, center.y + 5);
+        {
+            // Draw leftward arrow (VS style)
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x - iconSize/3, center.y);
+            arrow[1] = wxPoint(center.x - iconSize/3 + arrowSize, center.y - arrowSize/2);
+            arrow[2] = wxPoint(center.x - iconSize/3 + arrowSize, center.y + arrowSize/2);
+            dc.DrawPolygon(3, arrow);
+            
+            // Draw arrow shaft
+            dc.DrawLine(center.x - iconSize/3 + arrowSize/2, center.y, 
+                       center.x + iconSize/3, center.y);
+        }
         break;
+        
     case RightDockWidgetArea:
-        dc.DrawLine(center.x - 10, center.y, center.x + 10, center.y);
-        dc.DrawLine(center.x + 10, center.y, center.x + 5, center.y - 5);
-        dc.DrawLine(center.x + 10, center.y, center.x + 5, center.y + 5);
+        {
+            // Draw rightward arrow (VS style)
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x + iconSize/3, center.y);
+            arrow[1] = wxPoint(center.x + iconSize/3 - arrowSize, center.y - arrowSize/2);
+            arrow[2] = wxPoint(center.x + iconSize/3 - arrowSize, center.y + arrowSize/2);
+            dc.DrawPolygon(3, arrow);
+            
+            // Draw arrow shaft
+            dc.DrawLine(center.x + iconSize/3 - arrowSize/2, center.y, 
+                       center.x - iconSize/3, center.y);
+        }
         break;
+        
     case CenterDockWidgetArea:
-        // Draw tab icon to indicate merging as tab
-        // Tab shape
-        dc.SetBrush(*wxTRANSPARENT_BRUSH);
-        wxPoint tabPoints[5] = {
-            wxPoint(center.x - 10, center.y + 5),
-            wxPoint(center.x - 10, center.y - 5),
-            wxPoint(center.x - 5, center.y - 8),
-            wxPoint(center.x + 5, center.y - 8),
-            wxPoint(center.x + 10, center.y - 5)
-        };
-        dc.DrawLines(5, tabPoints);
-        dc.DrawLine(center.x + 10, center.y - 5, center.x + 10, center.y + 5);
-        dc.DrawLine(center.x + 10, center.y + 5, center.x - 10, center.y + 5);
+        {
+            // Draw center indicator - four small rectangles (VS style)
+            int rectSize = 6;
+            int spacing = 2;
+            
+            dc.SetBrush(wxBrush(color));
+            
+            // Top-left
+            dc.DrawRectangle(center.x - rectSize - spacing/2, 
+                           center.y - rectSize - spacing/2, 
+                           rectSize, rectSize);
+            // Top-right
+            dc.DrawRectangle(center.x + spacing/2, 
+                           center.y - rectSize - spacing/2, 
+                           rectSize, rectSize);
+            // Bottom-left
+            dc.DrawRectangle(center.x - rectSize - spacing/2, 
+                           center.y + spacing/2, 
+                           rectSize, rectSize);
+            // Bottom-right
+            dc.DrawRectangle(center.x + spacing/2, 
+                           center.y + spacing/2, 
+                           rectSize, rectSize);
+        }
         break;
     }
 }
