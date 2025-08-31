@@ -374,9 +374,6 @@ void ImageOutlinePass2::buildShaders() {
     m_program = new SoShaderProgram;
     m_program->ref();
     
-    // Enable shader program
-    m_program->isActive = TRUE;
-    
     // Create vertex shader
     m_vs = new SoVertexShader;
     m_vs->ref();

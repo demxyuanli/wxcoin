@@ -353,13 +353,44 @@ void OutlinePreviewCanvas::render() {
     SoGLRenderAction renderAction(viewport);
     renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
     
-    // Render everything through the scene root
-    // ImageOutlinePass2 should handle the post-processing automatically
-    renderAction.apply(m_sceneRoot);
+    // First render the models
+    renderAction.apply(m_modelRoot);
     
-    // Refresh outline pass parameters if needed
+    // Test: Draw a red quad using OpenGL directly to verify rendering works
+    if (m_outlineEnabled) {
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(-1, 1, -1, 1, -1, 1);
+        
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_LIGHTING);
+        
+        // Draw a small red square in the corner
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glBegin(GL_QUADS);
+        glVertex2f(0.5f, 0.5f);
+        glVertex2f(0.9f, 0.5f);
+        glVertex2f(0.9f, 0.9f);
+        glVertex2f(0.5f, 0.9f);
+        glEnd();
+        
+        glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
+        
+        glEnable(GL_DEPTH_TEST);
+    }
+    
+    // Then render the post-processing overlay
     if (m_outlinePass && m_outlineEnabled) {
         m_outlinePass->refresh();
+        renderAction.apply(m_sceneRoot);
     }
     
     SwapBuffers();
