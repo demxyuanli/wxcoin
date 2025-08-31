@@ -72,11 +72,12 @@ void OutlinePreviewCanvas::initializeScene() {
     m_sceneRoot->ref();
     
     // Create and setup camera
-    m_camera = new SoPerspectiveCamera;
-    m_camera->position.setValue(0.0f, 0.0f, 15.0f);
-    m_camera->nearDistance = 0.1f;
-    m_camera->farDistance = 1000.0f;
-    static_cast<SoPerspectiveCamera*>(m_camera)->heightAngle = 0.785398f; // 45 degrees
+    SoPerspectiveCamera* perspCamera = new SoPerspectiveCamera;
+    perspCamera->position.setValue(0.0f, 0.0f, 15.0f);
+    perspCamera->nearDistance = 0.1f;
+    perspCamera->farDistance = 1000.0f;
+    perspCamera->heightAngle = 0.785398f; // 45 degrees
+    m_camera = perspCamera;
     m_sceneRoot->addChild(m_camera);
     
     // Add light
