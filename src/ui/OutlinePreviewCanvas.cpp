@@ -345,14 +345,16 @@ void OutlinePreviewCanvas::render() {
     // Update viewport region
     SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
     
-    // Refresh outline pass before rendering
+    // Render the scene first (models)
+    SoGLRenderAction renderAction(viewport);
+    renderAction.apply(m_modelRoot);
+    
+    // Then let ImageOutlinePass2 render its overlay
     if (m_outlinePass && m_outlineEnabled) {
         m_outlinePass->refresh();
+        // Render the overlay root separately
+        renderAction.apply(m_sceneRoot);
     }
-    
-    // Render the scene
-    SoGLRenderAction renderAction(viewport);
-    renderAction.apply(m_sceneRoot);
     
     SwapBuffers();
     m_needsRedraw = false;

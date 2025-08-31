@@ -19,6 +19,7 @@
 #include <Inventor/nodes/SoShaderProgram.h>
 #include <Inventor/nodes/SoFragmentShader.h>
 #include <Inventor/nodes/SoVertexShader.h>
+#include <Inventor/nodes/SoShaderObject.h>
 #include <Inventor/nodes/SoTextureCoordinate2.h>
 #include <Inventor/nodes/SoTextureCoordinateBinding.h>
 #include <Inventor/nodes/SoFaceSet.h>
@@ -36,17 +37,26 @@
 #include <GL/gl.h>
 
 namespace {
-    // Vertex shader - same as original
+    // Very simple test shaders
     static const char* kVS = R"GLSL(
-        varying vec2 vTexCoord;
         void main() {
-            vTexCoord = gl_MultiTexCoord0.xy;
-            gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+            gl_TexCoord[0] = gl_MultiTexCoord0;
+            gl_Position = ftransform();
         }
     )GLSL";
 
-    // Fragment shader - same as original
+    // Fragment shader - simple test
     static const char* kFS = R"GLSL(
+        void main() {
+            // Always output red for testing
+            gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        }
+    )GLSL";
+}
+
+namespace old_shaders {
+    static const char* kFS_OLD = R"GLSL(
+        #version 120
         varying vec2 vTexCoord;
         uniform sampler2D uColorTex;
         uniform sampler2D uDepthTex;
@@ -195,7 +205,7 @@ ImageOutlinePass2::ImageOutlinePass2(IOutlineRenderer* renderer, SoSeparator* ca
     , m_uInvView(nullptr)
     , m_uDebugOutput(nullptr)
     , m_enabled(false)
-    , m_debugOutput(DebugOutput::ShowEdge)
+    , m_debugOutput(DebugOutput::Final)
     , m_colorUnit(0)
     , m_depthUnit(1) {
     
@@ -293,6 +303,10 @@ void ImageOutlinePass2::attachOverlay() {
     SoAnnotation* annotation = new SoAnnotation;
     m_overlayRoot->addChild(annotation);
     
+    // Add a camera-facing transform for the quad
+    auto* transform = new SoTransform;
+    annotation->addChild(transform);
+    
     // Build shader resources
     buildShaders();
     
@@ -364,12 +378,14 @@ void ImageOutlinePass2::buildShaders() {
     m_vs = new SoVertexShader;
     m_vs->ref();
     m_vs->sourceProgram = kVS;
+    m_vs->sourceType = SoShaderObject::GLSL_PROGRAM;
     m_program->shaderObject.set1Value(0, m_vs);
     
     // Create fragment shader
     m_fs = new SoFragmentShader;
     m_fs->ref();
     m_fs->sourceProgram = kFS;
+    m_fs->sourceType = SoShaderObject::GLSL_PROGRAM;
     m_program->shaderObject.set1Value(1, m_fs);
     
     // Create color texture capture node
@@ -403,11 +419,7 @@ void ImageOutlinePass2::buildShaders() {
     m_colorTexture->scene = m_tempSceneRoot;
     m_depthTexture->scene = m_tempSceneRoot;
     
-    // Create shader parameters
-    m_uIntensity = new SoShaderParameter1f;
-    m_uIntensity->ref();
-    m_uIntensity->name = "uIntensity";
-    m_uIntensity->value = m_params.edgeIntensity;
+    // Skip shader parameters for now - just test basic shader execution
     
     m_uDepthWeight = new SoShaderParameter1f;
     m_uDepthWeight->ref();
@@ -463,10 +475,7 @@ void ImageOutlinePass2::buildShaders() {
     lightModel->model = SoLightModel::BASE_COLOR;
     m_quadSeparator->addChild(lightModel);
     
-    // White material
-    SoMaterial* material = new SoMaterial;
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
-    m_quadSeparator->addChild(material);
+    // No material - let shader handle color
     
     // Texture coordinate binding
     SoTextureCoordinateBinding* texBinding = new SoTextureCoordinateBinding;
