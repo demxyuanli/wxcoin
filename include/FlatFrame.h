@@ -7,6 +7,7 @@
 #include <wx/textctrl.h>
 #include <wx/panel.h>
 #include <wx/aui/aui.h>
+#include <wx/splitter.h>
 #include <memory>
 #include "flatui/FlatUISystemButtons.h"
 #include "flatui/FlatUICustomControl.h"
