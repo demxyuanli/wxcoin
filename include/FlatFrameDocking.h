@@ -60,7 +60,7 @@ protected:
     void OnDockingToggleAutoHide(wxCommandEvent& event);
     
     // Override base class layout events to prevent interference
-    virtual void onSize(wxSizeEvent& event) override;
+    void onSize(wxSizeEvent& event);
     
 private:
     ads::DockManager* m_dockManager;
