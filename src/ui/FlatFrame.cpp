@@ -337,9 +337,14 @@ void FlatFrame::EnsurePanelsCreated()
         }
     }
     
-    // Initialize progress timer if not already running
+    // Setup progress timer (but don't start it yet)
     if (!m_progressTimer.IsRunning()) {
         m_progressTimer.SetOwner(this);
+        
+        // Unbind any existing timer event first
+        Unbind(wxEVT_TIMER, &FlatFrame::OnProgressTimer, this, m_progressTimer.GetId());
+        
+        // Bind new timer event
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
             bool running = m_occViewer && m_occViewer->isFeatureEdgeGenerationRunning();
             bool justFinished = (!running && m_prevFeatureEdgesRunning);
@@ -351,9 +356,6 @@ void FlatFrame::EnsurePanelsCreated()
                         wxString statusMsg = wxString::Format("Feature edge generation: %d%%", p);
                         GetStatusBar()->SetStatusText(statusMsg, 1);
                     }
-                }
-                else {
-                    wxLogDebug("Progress timer: Failed to get status bar");
                 }
                 if (m_messageOutput) {
                     wxString progressMsg = wxString::Format("Feature edge generation progress: %d%%", p);
@@ -368,13 +370,19 @@ void FlatFrame::EnsurePanelsCreated()
                 if (m_featureProgressHoldTicks > 0) {
                     m_featureProgressHoldTicks--;
                 }
-                else if (GetStatusBar() && GetStatusBar()->GetFieldsCount() > 1) {
-                    GetStatusBar()->SetStatusText("", 1);
+                else {
+                    // No feature edge generation and hold time expired, stop the timer
+                    m_progressTimer.Stop();
+                    if (GetStatusBar() && GetStatusBar()->GetFieldsCount() > 1) {
+                        GetStatusBar()->SetStatusText("", 1);
+                    }
                 }
             }
             m_prevFeatureEdgesRunning = running;
-        });
-        m_progressTimer.Start(50);
+        }, m_progressTimer.GetId());
+        
+        // NOTE: Timer will be started when feature edge generation actually begins
+        // This avoids unnecessary timer events when nothing is happening
     }
 }
 

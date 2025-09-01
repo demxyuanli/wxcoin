@@ -214,9 +214,7 @@ void FlatFrameDocking::CreateDockingLayout() {
             mouseHandler->setNavigationController(navController);
         }
         
-        // Force a refresh to ensure everything is properly initialized
-        canvas->Refresh(true);
-        canvas->Update();
+        // Canvas will refresh itself when needed, no need to force it here
     }
 }
 
@@ -649,10 +647,8 @@ void FlatFrameDocking::onSize(wxSizeEvent& event) {
     // Just let the event propagate to child windows (docking system)
     event.Skip();
     
-    // Force the docking system to update if needed
-    if (m_dockManager && m_dockManager->containerWidget()) {
-        m_dockManager->containerWidget()->Refresh();
-    }
+    // NOTE: Removed Refresh() call here as it was causing performance issues
+    // The docking system will handle its own layout updates
 }
 
 wxWindow* FlatFrameDocking::GetMainWorkArea() {
