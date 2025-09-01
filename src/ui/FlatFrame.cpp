@@ -345,7 +345,7 @@ void FlatFrame::EnsurePanelsCreated()
             bool justFinished = (!running && m_prevFeatureEdgesRunning);
             
             if (running || justFinished) {
-                int p = running ? m_occViewer->getFeatureEdgeGenerationProgress() : 100;
+                int p = running ? m_occViewer->getFeatureEdgeProgress() : 100;
                 if (GetStatusBar()) {
                     if (GetStatusBar()->GetFieldsCount() > 1) {
                         wxString statusMsg = wxString::Format("Feature edge generation: %d%%", p);
