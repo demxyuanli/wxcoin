@@ -5,6 +5,7 @@
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/app.h>
+#include <wx/thread.h>
 #include "logger/Logger.h"
 #include <chrono>
 #include "FlatFrame.h"
@@ -90,6 +91,9 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				flatFrame->appendMessage(wxString::Format("Reading STEP file (%zu/%zu): %s", i + 1, filePaths.size(), filePath));
 			}
 			auto stepReadStartTime = std::chrono::high_resolution_clock::now();
+			// Process pending events before starting import to ensure UI is responsive
+			wxTheApp->ProcessPendingEvents();
+			
 			auto result = STEPReader::readSTEPFile(
 				filePath.ToStdString(), options,
 				[statusBar, flatFrame, i, &filePaths](int percent, const std::string& stage) {
@@ -98,15 +102,16 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 					int mapped = base + (int)std::round((percent / 100.0) * (next - base));
 					mapped = std::max(0, std::min(95, mapped));
 					
-					// Use CallAfter to ensure UI updates happen on the main thread
+					// Progress callback may be called from worker thread
 					if (statusBar || flatFrame) {
 						// Log progress update
 						LOG_DBG_S("STEP import progress: " + std::to_string(mapped) + "% - " + stage);
 						
-						wxTheApp->CallAfter([statusBar, flatFrame, mapped, stage]() {
+						// Check if we're on the main thread
+						if (wxThread::IsMain()) {
+							// Direct update if on main thread
 							if (statusBar) {
 								LOG_DBG_S("Setting gauge value to: " + std::to_string(mapped));
-								// Ensure progress gauge is enabled before setting value
 								statusBar->EnableProgressGauge(true);
 								statusBar->SetGaugeValue(mapped);
 								statusBar->Update();
@@ -114,7 +119,22 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 							if (flatFrame) {
 								flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
 							}
-						});
+							// Process events to keep UI responsive
+							wxTheApp->ProcessPendingEvents();
+						} else {
+							// Use CallAfter if on worker thread
+							wxTheApp->CallAfter([statusBar, flatFrame, mapped, stage]() {
+								if (statusBar) {
+									LOG_DBG_S("Setting gauge value to: " + std::to_string(mapped));
+									statusBar->EnableProgressGauge(true);
+									statusBar->SetGaugeValue(mapped);
+									statusBar->Update();
+								}
+								if (flatFrame) {
+									flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
+								}
+							});
+						}
 					}
 				}
 			);
@@ -225,11 +245,17 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			LOG_INF_S("Performance: " + std::to_string(totalGeometries / (totalImportDuration.count() / 1000.0)) + " geometries/second");
 			LOG_INF_S("=============================");
 
+			// Process any pending events before fitAll
+			wxTheApp->ProcessPendingEvents();
+			
 			// Auto-fit all geometries after import
 			if (m_occViewer) {
 				LOG_INF_S("Auto-executing fitAll after STEP import");
 				m_occViewer->fitAll();
 			}
+			
+			// Process events again after fitAll
+			wxTheApp->ProcessPendingEvents();
 
 			return CommandResult(true, "STEP files imported successfully", commandType);
 		}
