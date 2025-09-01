@@ -100,8 +100,14 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 					
 					// Use CallAfter to ensure UI updates happen on the main thread
 					if (statusBar || flatFrame) {
+						// Log progress update
+						LOG_DBG_S("STEP import progress: " + std::to_string(mapped) + "% - " + stage);
+						
 						wxTheApp->CallAfter([statusBar, flatFrame, mapped, stage]() {
 							if (statusBar) {
+								LOG_DBG_S("Setting gauge value to: " + std::to_string(mapped));
+								// Ensure progress gauge is enabled before setting value
+								statusBar->EnableProgressGauge(true);
 								statusBar->SetGaugeValue(mapped);
 								statusBar->Update();
 							}
@@ -199,7 +205,12 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				statusBar->SetStatusText(wxString::Format("Import complete: %d geometries from %d files", 
 					totalGeometries, successfulFiles), 0);
 			}
-			if (statusBar) { statusBar->SetGaugeValue(100); statusBar->EnableProgressGauge(false); }
+			if (statusBar) { 
+				statusBar->SetGaugeValue(100); 
+				// Let the progress bar stay at 100% for a moment before hiding
+				// Note: In the original code, the progress timer in FlatFrame handles hiding
+				// We should not immediately hide it here
+			}
 			if (flatFrame) { flatFrame->appendMessage("STEP import completed."); }
 
 			auto totalImportEndTime = std::chrono::high_resolution_clock::now();
@@ -236,8 +247,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			if (statusBar) {
 				statusBar->SetStatusText("Import warning: No valid geometries found", 0);
 			}
-			if (statusBar) { statusBar->SetGaugeValue(0); }
-			if (statusBar) statusBar->EnableProgressGauge(false);
+			if (statusBar) { 
+				statusBar->SetGaugeValue(0); 
+				// Don't immediately hide - let it be managed by the frame
+			}
 			return CommandResult(false, "No valid geometries found in selected files", commandType);
 		}
 	}
@@ -252,7 +265,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 		if (statusBar) {
 			statusBar->SetStatusText("Import error: " + std::string(e.what()), 0);
 		}
-		if (statusBar) { statusBar->SetGaugeValue(0); statusBar->EnableProgressGauge(false); }
+		if (statusBar) { 
+			statusBar->SetGaugeValue(0); 
+			// Don't immediately hide - let it be managed by the frame
+		}
 		return CommandResult(false, "Error importing STEP files: " + std::string(e.what()), commandType);
 	}
 }
