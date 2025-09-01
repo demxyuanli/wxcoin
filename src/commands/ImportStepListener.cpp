@@ -157,12 +157,12 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 					allGeometries.size(), (long long)geometryAddDuration.count()));
 			}
 
-			// Show performance summary
+			// Show performance summary in message panel instead of modal dialog
 			wxString performanceMsg = wxString::Format(
-				"STEP files imported successfully!\n\n"
-				"Files processed: %d/%zu\n"
-				"Total geometries: %d\n"
-				"Total import time: %.1f ms\n"
+				"STEP files imported successfully! "
+				"Files processed: %d/%zu, "
+				"Total geometries: %d, "
+				"Total import time: %.1f ms, "
 				"Performance: %.1f geometries/second",
 				successfulFiles, filePaths.size(),
 				totalGeometries,
@@ -170,9 +170,15 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				totalGeometries / (totalImportTime / 1000.0)
 			);
 
-			wxMessageDialog dialog(m_frame, performanceMsg, "Batch Import Complete",
-				wxOK | wxICON_INFORMATION);
-			dialog.ShowModal();
+			// Display in message panel and status bar instead of blocking dialog
+			if (flatFrame) {
+				flatFrame->appendMessage("=== STEP Import Complete ===");
+				flatFrame->appendMessage(performanceMsg);
+			}
+			if (statusBar) {
+				statusBar->SetStatusText(wxString::Format("Import complete: %d geometries from %d files", 
+					totalGeometries, successfulFiles), 0);
+			}
 			if (statusBar) { statusBar->SetGaugeValue(100); statusBar->EnableProgressGauge(false); }
 			if (flatFrame) { flatFrame->appendMessage("STEP import completed."); }
 
@@ -198,13 +204,18 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 		}
 		else {
 			wxString warningMsg = wxString::Format(
-				"No valid geometries found in selected files.\n\n"
-				"Files processed: %d/%zu\n"
-				"Successful files: %d",
-				filePaths.size(), filePaths.size(), successfulFiles
+				"No valid geometries found in selected files. "
+				"Files processed: %zu, Successful files: %d",
+				filePaths.size(), successfulFiles
 			);
-			wxMessageDialog dialog(m_frame, warningMsg, "Import Warning", wxOK | wxICON_WARNING);
-			dialog.ShowModal();
+			// Display warning in message panel instead of blocking dialog
+			if (flatFrame) {
+				flatFrame->appendMessage("=== STEP Import Warning ===");
+				flatFrame->appendMessage(warningMsg);
+			}
+			if (statusBar) {
+				statusBar->SetStatusText("Import warning: No valid geometries found", 0);
+			}
 			if (statusBar) { statusBar->SetGaugeValue(0); }
 			if (statusBar) statusBar->EnableProgressGauge(false);
 			return CommandResult(false, "No valid geometries found in selected files", commandType);
@@ -212,9 +223,15 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception during STEP import: " + std::string(e.what()));
-		wxMessageDialog dialog(m_frame, "Error importing STEP files: " + std::string(e.what()),
-			"Import Error", wxOK | wxICON_ERROR);
-		dialog.ShowModal();
+		// Display error in message panel instead of blocking dialog
+		wxString errorMsg = "Error importing STEP files: " + std::string(e.what());
+		if (flatFrame) {
+			flatFrame->appendMessage("=== STEP Import Error ===");
+			flatFrame->appendMessage(errorMsg);
+		}
+		if (statusBar) {
+			statusBar->SetStatusText("Import error: " + std::string(e.what()), 0);
+		}
 		if (statusBar) { statusBar->SetGaugeValue(0); statusBar->EnableProgressGauge(false); }
 		return CommandResult(false, "Error importing STEP files: " + std::string(e.what()), commandType);
 	}
