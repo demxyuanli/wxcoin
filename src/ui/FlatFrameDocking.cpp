@@ -308,11 +308,13 @@ DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
 DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
     DockWidget* dock = new DockWidget("Performance", m_dockManager->containerWidget());
     
-    // Create the real PerformancePanel as used in original code
+    // Always create a new PerformancePanel to avoid parent/sizer conflicts
+    // The original PerformancePanel might be tied to ModernDockAdapter's internal structure
     PerformancePanel* perfPanel = new PerformancePanel(dock);
     perfPanel->SetMinSize(wxSize(360, 140));
     
-    dock->setWidget(perfPanel);
+    // Use NoScrollArea mode to avoid parent/sizer conflicts
+    dock->setWidget(perfPanel, ads::DockWidget::NoScrollArea);
     
     // Configure dock widget
     dock->setFeature(DockWidgetClosable, true);
