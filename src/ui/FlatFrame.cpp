@@ -341,8 +341,7 @@ void FlatFrame::EnsurePanelsCreated()
     if (!m_progressTimer.IsRunning()) {
         m_progressTimer.SetOwner(this);
         
-        // Unbind any existing timer event first
-        Unbind(wxEVT_TIMER, &FlatFrame::OnProgressTimer, this, m_progressTimer.GetId());
+        // No need to unbind since we're using a lambda
         
         // Bind new timer event
         Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
