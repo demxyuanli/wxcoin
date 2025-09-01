@@ -102,6 +102,10 @@ private:
 	std::unique_ptr<MultiViewportManager> m_multiViewportManager;
 	bool m_multiViewportEnabled;
 	std::unique_ptr<ViewRefreshManager> m_refreshManager;
+	
+	// Mouse hover optimization
+	wxPoint m_lastHoverPos;
+	int m_hoverUpdateCounter;
 
 	DECLARE_EVENT_TABLE()
 };

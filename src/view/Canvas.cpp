@@ -51,6 +51,8 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 	, m_objectTreePanel(nullptr)
 	, m_commandManager(nullptr)
 	, m_occViewer(nullptr)
+	, m_lastHoverPos(-1, -1)
+	, m_hoverUpdateCounter(0)
 {
 	LOG_INF_S("Canvas::Canvas: Initializing");
 
@@ -204,7 +206,7 @@ void Canvas::onPaint(wxPaintEvent& event) {
 	if (m_eventCoordinator) {
 		m_eventCoordinator->handlePaintEvent(event);
 	}
-	event.Skip();
+	// Don't skip paint events to avoid unnecessary propagation
 }
 
 void Canvas::onSize(wxSizeEvent& event) {
@@ -241,10 +243,16 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 		m_occViewer->startLODInteraction();
 	}
 	
-	// Update hover outline on mouse move
+	// Update hover outline on mouse move (with throttling)
 	if (event.GetEventType() == wxEVT_MOTION && m_occViewer) {
 		wxPoint screenPos = event.GetPosition();
-		m_occViewer->updateHoverSilhouetteAt(screenPos);
+		// Only update if moved significantly or every 3rd frame
+		int distance = (screenPos - m_lastHoverPos).x * (screenPos - m_lastHoverPos).x + 
+		               (screenPos - m_lastHoverPos).y * (screenPos - m_lastHoverPos).y;
+		if (distance > 25 || ++m_hoverUpdateCounter % 3 == 0) {
+			m_occViewer->updateHoverSilhouetteAt(screenPos);
+			m_lastHoverPos = screenPos;
+		}
 	}
 	
 	// Clear hover outline when mouse leaves window

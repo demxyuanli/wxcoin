@@ -79,8 +79,12 @@ void ViewRefreshManager::performRefresh(RefreshReason reason) {
 		}
 	}
 
-	// Perform the actual refresh: force immediate redraw during interactions
-	m_canvas->render(false);
+	// Perform the actual refresh: use wxWidgets paint system
+	m_canvas->Refresh(false);
+	// If immediate update is needed, also call Update()
+	if (reason == RefreshReason::CAMERA_MOVED || reason == RefreshReason::SELECTION_CHANGED) {
+		m_canvas->Update();  // Force immediate paint for interactive operations
+	}
 
 	LOG_DBG_S("ViewRefreshManager: Refresh completed for reason: " + std::to_string(static_cast<int>(reason)));
 }
