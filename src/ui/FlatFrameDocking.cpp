@@ -5,11 +5,13 @@
 #include "docking/DockArea.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
+#include "docking/DockLayoutConfig.h"
 #include <wx/textctrl.h>
 #include <wx/artprov.h>
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/file.h>
+#include <wx/stattext.h>
 
 using namespace ads;
 
@@ -24,12 +26,16 @@ wxBEGIN_EVENT_TABLE(FlatFrameDocking, FlatFrame)
     // View panel events
     EVT_MENU(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
     EVT_MENU(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnViewShowHidePanel)
-    EVT_MENU(ID_VIEW_OUTPUT, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_MESSAGE, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_OUTPUT, FlatFrameDocking::OnViewShowHidePanel)  // Backward compatibility
     EVT_MENU(ID_VIEW_TOOLBOX, FlatFrameDocking::OnViewShowHidePanel)
     
     EVT_UPDATE_UI(ID_VIEW_PROPERTIES, FlatFrameDocking::OnUpdateUI)
     EVT_UPDATE_UI(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnUpdateUI)
-    EVT_UPDATE_UI(ID_VIEW_OUTPUT, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_MESSAGE, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_OUTPUT, FlatFrameDocking::OnUpdateUI)  // Backward compatibility
     EVT_UPDATE_UI(ID_VIEW_TOOLBOX, FlatFrameDocking::OnUpdateUI)
 wxEND_EVENT_TABLE()
 
@@ -39,7 +45,8 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     , m_propertyDock(nullptr)
     , m_objectTreeDock(nullptr)
     , m_canvasDock(nullptr)
-    , m_outputDock(nullptr)
+    , m_messageDock(nullptr)
+    , m_performanceDock(nullptr)
     , m_toolboxDock(nullptr)
     , m_outputCtrl(nullptr)
 {
@@ -101,30 +108,37 @@ void FlatFrameDocking::ConfigureDockManager() {
     m_dockManager->setConfigFlag(AllTabsHaveCloseButton, true);
     m_dockManager->setConfigFlag(FocusHighlighting, true);
     
+    // Configure default layout sizes
+    DockLayoutConfig layoutConfig;
+    layoutConfig.leftAreaWidth = 300;      // Width for object tree and properties
+    layoutConfig.bottomAreaHeight = 150;   // Height for message/performance panel
+    layoutConfig.usePercentage = false;
+    m_dockManager->setLayoutConfig(layoutConfig);
+    
     // Note: Auto-hide configuration is done through the AutoHideManager
     // which is managed internally by DockManager
 }
 
 void FlatFrameDocking::CreateDockingLayout() {
-    // Create main canvas dock widget (center)
+    // 1. Create main canvas dock widget (center)
     m_canvasDock = CreateCanvasDockWidget();
     m_dockManager->addDockWidget(CenterDockWidgetArea, m_canvasDock);
     
-    // Create object tree dock widget (left)
+    // 2. Create object tree dock widget (left-top)
     m_objectTreeDock = CreateObjectTreeDockWidget();
-    m_dockManager->addDockWidget(LeftDockWidgetArea, m_objectTreeDock);
+    DockArea* leftTopArea = m_dockManager->addDockWidget(LeftDockWidgetArea, m_objectTreeDock);
     
-    // Create property panel dock widget (right)
+    // 3. Create property panel dock widget (left-bottom) - split below object tree
     m_propertyDock = CreatePropertyDockWidget();
-    m_dockManager->addDockWidget(RightDockWidgetArea, m_propertyDock);
+    m_dockManager->addDockWidget(BottomDockWidgetArea, m_propertyDock, leftTopArea);
     
-    // Create output dock widget (bottom)
-    m_outputDock = CreateOutputDockWidget();
-    m_dockManager->addDockWidget(BottomDockWidgetArea, m_outputDock);
+    // 4. Create message dock widget (bottom) - renamed from output
+    m_messageDock = CreateMessageDockWidget();
+    DockArea* bottomArea = m_dockManager->addDockWidget(BottomDockWidgetArea, m_messageDock);
     
-    // Create toolbox dock widget (tabbed with object tree)
-    m_toolboxDock = CreateToolboxDockWidget();
-    m_dockManager->addDockWidget(CenterDockWidgetArea, m_toolboxDock, m_objectTreeDock->dockAreaWidget());
+    // 5. Create performance dock widget (bottom tab with message)
+    m_performanceDock = CreatePerformanceDockWidget();
+    m_dockManager->addDockWidget(CenterDockWidgetArea, m_performanceDock, bottomArea);
     
     // Set initial focus to canvas
     m_canvasDock->setAsCurrentTab();
@@ -180,8 +194,8 @@ DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
     return dock;
 }
 
-DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
-    DockWidget* dock = new DockWidget("Output", m_dockManager->containerWidget());
+DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
+    DockWidget* dock = new DockWidget("Message", m_dockManager->containerWidget());
     
     // Create output text control
     wxTextCtrl* output = new wxTextCtrl(dock, wxID_ANY, wxEmptyString,
@@ -204,6 +218,48 @@ DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
     
     // Store output control for later use
     m_outputCtrl = output;
+    
+    return dock;
+}
+
+DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
+    DockWidget* dock = new DockWidget("Performance", m_dockManager->containerWidget());
+    
+    // Create performance monitoring panel
+    wxPanel* perfPanel = new wxPanel(dock);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Add performance metrics display
+    wxStaticText* fpsLabel = new wxStaticText(perfPanel, wxID_ANY, "FPS: 0");
+    wxStaticText* memLabel = new wxStaticText(perfPanel, wxID_ANY, "Memory: 0 MB");
+    wxStaticText* cpuLabel = new wxStaticText(perfPanel, wxID_ANY, "CPU: 0%");
+    wxStaticText* renderTimeLabel = new wxStaticText(perfPanel, wxID_ANY, "Render Time: 0 ms");
+    wxStaticText* trianglesLabel = new wxStaticText(perfPanel, wxID_ANY, "Triangles: 0");
+    
+    // Set font for better readability
+    wxFont font = fpsLabel->GetFont();
+    font.SetFamily(wxFONTFAMILY_TELETYPE);
+    fpsLabel->SetFont(font);
+    memLabel->SetFont(font);
+    cpuLabel->SetFont(font);
+    renderTimeLabel->SetFont(font);
+    trianglesLabel->SetFont(font);
+    
+    sizer->Add(fpsLabel, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(memLabel, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(cpuLabel, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(renderTimeLabel, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(trianglesLabel, 0, wxEXPAND | wxALL, 5);
+    sizer->AddStretchSpacer();
+    
+    perfPanel->SetSizer(sizer);
+    dock->setWidget(perfPanel);
+    
+    // Configure dock widget
+    dock->setFeature(DockWidgetClosable, true);
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, false);  // Performance usually stays in bottom
+    dock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
     
     return dock;
 }
@@ -255,6 +311,16 @@ void FlatFrameDocking::CreateDockingMenus() {
         viewMenu = new wxMenu();
         menuBar->Append(viewMenu, "&View");
     }
+    
+    // Add panel visibility items
+    viewMenu->AppendCheckItem(ID_VIEW_OBJECT_TREE, "Object Tree\tCtrl+Alt+O", 
+                              "Show/hide object tree panel");
+    viewMenu->AppendCheckItem(ID_VIEW_PROPERTIES, "Properties\tCtrl+Alt+P", 
+                              "Show/hide properties panel");
+    viewMenu->AppendCheckItem(ID_VIEW_MESSAGE, "Message\tCtrl+Alt+M", 
+                              "Show/hide message output panel");
+    viewMenu->AppendCheckItem(ID_VIEW_PERFORMANCE, "Performance\tCtrl+Alt+F", 
+                              "Show/hide performance monitor panel");
     
     // Add separator before docking items
     viewMenu->AppendSeparator();
@@ -391,9 +457,16 @@ void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
             }
             break;
             
-        case ID_VIEW_OUTPUT:
-            if (m_outputDock) {
-                m_outputDock->toggleView();
+        case ID_VIEW_MESSAGE:
+        case ID_VIEW_OUTPUT:  // Backward compatibility
+            if (m_messageDock) {
+                m_messageDock->toggleView();
+            }
+            break;
+            
+        case ID_VIEW_PERFORMANCE:
+            if (m_performanceDock) {
+                m_performanceDock->toggleView();
             }
             break;
             
@@ -425,9 +498,16 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
             }
             break;
             
-        case ID_VIEW_OUTPUT:
-            if (m_outputDock) {
-                event.Check(m_outputDock->isVisible());
+        case ID_VIEW_MESSAGE:
+        case ID_VIEW_OUTPUT:  // Backward compatibility
+            if (m_messageDock) {
+                event.Check(m_messageDock->isVisible());
+            }
+            break;
+            
+        case ID_VIEW_PERFORMANCE:
+            if (m_performanceDock) {
+                event.Check(m_performanceDock->isVisible());
             }
             break;
             
