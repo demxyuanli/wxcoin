@@ -238,11 +238,9 @@ DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
         // Hide temporarily to avoid rendering issues during reparent
         canvas->Hide();
         
-        // Save the OpenGL context before reparenting
-        wxGLContext* context = nullptr;
-        if (canvas->IsShownOnScreen()) {
-            canvas->SetCurrent();
-        }
+        // Note: wxGLCanvas manages its own context internally
+        // We don't need to manually save/restore the GL context during reparenting
+        // The canvas will handle this when it's refreshed
         
         // Now reparent
         canvas->Reparent(dock);
