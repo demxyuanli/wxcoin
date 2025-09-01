@@ -36,6 +36,9 @@ public:
 	wxBoxSizer* GetMainSizer() const { return m_mainSizer; }
 	void SetStatusText(const wxString& text, int field = 0);
 	FlatUIStatusBar* GetFlatUIStatusBar() const { return m_statusBar; }
+	
+	// Override SetSizer to keep m_mainSizer in sync
+	virtual void SetSizer(wxSizer* sizer, bool deleteOld = true) override;
 
 protected:
 	wxBoxSizer* m_mainSizer = nullptr;

@@ -105,8 +105,12 @@ void FlatFrameDocking::InitializeDockingLayout() {
         }
     }
     
-    // Clear any existing sizer to start fresh
-    SetSizer(nullptr);
+    // Don't use SetSizer(nullptr) as it can break base class references
+    // Instead, get the existing sizer and clear it
+    wxSizer* oldSizer = GetSizer();
+    if (oldSizer) {
+        oldSizer->Clear(false);
+    }
     
     // Create a new main sizer for the frame
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
@@ -140,14 +144,26 @@ void FlatFrameDocking::InitializeDockingLayout() {
     // Add the work area panel to the main sizer
     mainSizer->Add(m_workAreaPanel, 1, wxEXPAND);
     
-    // Use the same status bar creation as base class
-    addStatusBar();
-    if (auto* bar = GetFlatUIStatusBar()) {
-        bar->SetFieldsCount(3);
-        bar->SetStatusText("Ready - Docking Layout Active", 0);
-        bar->EnableProgressGauge(false);
-        bar->SetGaugeRange(100);
-        bar->SetGaugeValue(0);
+    // Check if status bar already exists from base class
+    FlatUIStatusBar* statusBar = GetFlatUIStatusBar();
+    if (!statusBar) {
+        // Create FlatUIStatusBar if not already created
+        statusBar = new FlatUIStatusBar(this);
+        // Note: Don't add to sizer here, it will be handled by the frame
+    }
+    
+    // Configure status bar
+    if (statusBar) {
+        statusBar->SetFieldsCount(3);
+        statusBar->SetStatusText("Ready - Docking Layout Active", 0);
+        statusBar->EnableProgressGauge(false);
+        statusBar->SetGaugeRange(100);
+        statusBar->SetGaugeValue(0);
+        
+        // Ensure status bar is added to the main sizer at the bottom
+        if (mainSizer && !mainSizer->GetItem(statusBar)) {
+            mainSizer->Add(statusBar, 0, wxEXPAND | wxALL, 1);
+        }
     }
     
     // Force layout update
