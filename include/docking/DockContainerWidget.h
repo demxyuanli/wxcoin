@@ -37,6 +37,7 @@ public:
     
     // Splitter management
     void addDockArea(DockArea* dockArea, DockWidgetArea area = CenterDockWidgetArea);
+    void addDockAreaRelativeTo(DockArea* newArea, DockWidgetArea area, DockArea* targetArea);
     void splitDockArea(DockArea* dockArea, DockArea* newDockArea, 
                       DockWidgetArea area, int splitRatio = 50);
     
@@ -97,6 +98,24 @@ private:
     void dropDockWidget(DockWidget* widget, DockWidgetArea dropArea, DockArea* targetArea);
     DockSplitter* newSplitter(wxOrientation orientation);
     void addDockAreaToSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+    
+    // New helper methods for proper 5-zone layout
+    void handleTopBottomArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void handleMiddleLayerArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    wxWindow* findOrCreateMiddleLayer(DockSplitter* rootSplitter);
+    void addDockAreaToMiddleSplitter(DockSplitter* middleSplitter, DockArea* dockArea, DockWidgetArea area);
+    
+    // Simplified layout methods
+    void addDockAreaSimple(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void ensureTopBottomLayout(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void addToMiddleLayer(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void addToVerticalSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+    void createMiddleSplitter(DockSplitter* rootSplitter, DockArea* existingArea, DockArea* newArea, DockWidgetArea area);
+    void create3WaySplit(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+    void addToHorizontalLayout(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+    void restructureForTopBottom(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
+    void ensureAllChildrenVisible(wxWindow* window);
+    int getConfiguredAreaSize(DockWidgetArea area) const;
     
     friend class DockManager;
     friend class DockArea;

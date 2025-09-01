@@ -160,13 +160,13 @@ void DockingExampleFrame::CreateDefaultWidgets() {
     toolWidget->setWidget(toolPanel);
     toolWidget->setObjectName("Toolbox");
     
-    // Add widgets to dock manager
+    // Add widgets to dock manager in a specific order for proper 5-zone layout
+    // First add center widget
     m_dockManager->addDockWidget(CenterDockWidgetArea, editorWidget);
 
+    // Then add left and right to create the middle layer properly
     DockArea* leftArea = m_dockManager->addDockWidget(LeftDockWidgetArea, projectWidget);
     m_dockManager->addDockWidgetTabToArea(filesWidget, leftArea);
-
-    m_dockManager->addDockWidget(BottomDockWidgetArea, outputWidget);
     m_dockManager->addDockWidget(RightDockWidgetArea, toolWidget);
 
     // Demonstrate merged title bar with multiple tabs
@@ -204,6 +204,9 @@ void DockingExampleFrame::CreateDefaultWidgets() {
     DockArea* demoArea = m_dockManager->addDockWidget(TopDockWidgetArea, demoWidget1);
     m_dockManager->addDockWidgetTabToArea(demoWidget2, demoArea);
     m_dockManager->addDockWidgetTabToArea(demoWidget3, demoArea);
+    
+    // Finally add bottom which should span full width
+    m_dockManager->addDockWidget(BottomDockWidgetArea, outputWidget);
 }
 
 wxTextCtrl* DockingExampleFrame::CreateTextEditor(const wxString& title) {

@@ -9,6 +9,7 @@ set(DOCKING_SOURCES
     DockingIntegration.cpp
     AutoHideContainer.cpp
     PerspectiveManager.cpp
+    DockLayoutConfig.cpp
 )
 
 set(DOCKING_HEADERS
@@ -21,6 +22,7 @@ set(DOCKING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/docking/DockingIntegration.h
     ${CMAKE_SOURCE_DIR}/include/docking/AutoHideContainer.h
     ${CMAKE_SOURCE_DIR}/include/docking/PerspectiveManager.h
+    ${CMAKE_SOURCE_DIR}/include/docking/DockLayoutConfig.h
 )
 
 # Create docking library

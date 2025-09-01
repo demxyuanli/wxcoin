@@ -6,6 +6,7 @@
 #include "docking/DockOverlay.h"
 #include "docking/AutoHideContainer.h"
 #include "docking/PerspectiveManager.h"
+#include "docking/DockLayoutConfig.h"
 #include <wx/xml/xml.h>
 #include <wx/sstream.h>
 #include <algorithm>
@@ -50,6 +51,10 @@ DockManager::DockManager(wxWindow* parent)
 
     // Create perspective manager
     d->perspectiveManager = new PerspectiveManager(this);
+
+    // Initialize layout configuration
+    m_layoutConfig = std::make_unique<DockLayoutConfig>();
+    m_layoutConfig->LoadFromConfig();
 
     // Initialize performance monitoring
     m_layoutUpdateTimer = new wxTimer(this);
@@ -665,6 +670,21 @@ void DockManager::initializePerformanceVariables() {
     m_dragState = DragInactive;
     m_lastMousePos = wxDefaultPosition;
     m_cachedDropTargets.clear();
+}
+
+void DockManager::setLayoutConfig(const DockLayoutConfig& config) {
+    if (m_layoutConfig) {
+        *m_layoutConfig = config;
+        m_layoutConfig->SaveToConfig();
+    }
+}
+
+const DockLayoutConfig& DockManager::getLayoutConfig() const {
+    if (!m_layoutConfig) {
+        // Create a default config if not initialized
+        const_cast<DockManager*>(this)->m_layoutConfig = std::make_unique<DockLayoutConfig>();
+    }
+    return *m_layoutConfig;
 }
 
 } // namespace ads

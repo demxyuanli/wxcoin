@@ -17,6 +17,7 @@
 #include "docking/DockWidget.h"
 #include "docking/DockArea.h"
 #include "docking/PerspectiveManager.h"
+#include "docking/DockLayoutConfig.h"
 
 using namespace ads;
 
@@ -160,27 +161,26 @@ private:
         outputDock->setFeature(DockWidgetFloatable, true);
         outputDock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
 
-        // Step 1: Create Top area (Menu Bar) - this should be at the very top
-        wxLogDebug("Step 1: Creating Top area (Menu Bar)");
-        DockArea* topArea = m_dockManager->addDockWidget(TopDockWidgetArea, menuDock);
-        wxLogDebug("  -> Top area created: %p", topArea);
+        // Create layout in proper order for 5-zone layout
+        // First create the center area
+        wxLogDebug("Step 1: Creating Center area (Main View)");
+        DockArea* centerArea = m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
+        wxLogDebug("  -> Center area created: %p", centerArea);
 
-        // Step 2: Create Left area (Toolbox) - this should be on the left side
+        // Then create left and right areas to establish the middle layer
         wxLogDebug("Step 2: Creating Left area (Toolbox)");
         DockArea* leftArea = m_dockManager->addDockWidget(LeftDockWidgetArea, toolDock);
         wxLogDebug("  -> Left area created: %p", leftArea);
 
-        // Step 3: Create Right area (Properties) - this should be on the right side
         wxLogDebug("Step 3: Creating Right area (Properties)");
         DockArea* rightArea = m_dockManager->addDockWidget(RightDockWidgetArea, propDock);
         wxLogDebug("  -> Right area created: %p", rightArea);
 
-        // Step 4: Create Center area (Main View) - this should be in the center
-        wxLogDebug("Step 4: Creating Center area (Main View)");
-        DockArea* centerArea = m_dockManager->addDockWidget(CenterDockWidgetArea, mainDock);
-        wxLogDebug("  -> Center area created: %p", centerArea);
+        // Finally create top and bottom areas which should span full width
+        wxLogDebug("Step 4: Creating Top area (Menu Bar)");
+        DockArea* topArea = m_dockManager->addDockWidget(TopDockWidgetArea, menuDock);
+        wxLogDebug("  -> Top area created: %p", topArea);
 
-        // Step 5: Create Bottom area (Output) - this should be at the bottom
         wxLogDebug("Step 5: Creating Bottom area (Output)");
         DockArea* bottomArea = m_dockManager->addDockWidget(BottomDockWidgetArea, outputDock);
         wxLogDebug("  -> Bottom area created: %p", bottomArea);
@@ -208,6 +208,8 @@ private:
         viewMenu->Append(ID_RESET_LAYOUT, "Reset Layout");
         viewMenu->AppendSeparator();
         viewMenu->Append(ID_MANAGE_PERSPECTIVES, "Manage Perspectives...");
+        viewMenu->AppendSeparator();
+        viewMenu->Append(ID_CONFIGURE_LAYOUT, "Configure Layout...");
         menuBar->Append(viewMenu, "&View");
         
         SetMenuBar(menuBar);
@@ -218,6 +220,7 @@ private:
         Bind(wxEVT_MENU, &SimpleDockingFrame::OnLoadLayout, this, ID_LOAD_LAYOUT);
         Bind(wxEVT_MENU, &SimpleDockingFrame::OnResetLayout, this, ID_RESET_LAYOUT);
         Bind(wxEVT_MENU, &SimpleDockingFrame::OnManagePerspectives, this, ID_MANAGE_PERSPECTIVES);
+        Bind(wxEVT_MENU, &SimpleDockingFrame::OnConfigureLayout, this, ID_CONFIGURE_LAYOUT);
     }
     
     void OnSaveLayout(wxCommandEvent&) {
@@ -264,6 +267,22 @@ private:
         dlg.ShowModal();
     }
     
+    void OnConfigureLayout(wxCommandEvent&) {
+        const DockLayoutConfig& currentConfig = m_dockManager->getLayoutConfig();
+        DockLayoutConfig config = currentConfig;  // Make a copy
+        DockLayoutConfigDialog dlg(this, config);
+        
+        if (dlg.ShowModal() == wxID_OK) {
+            config = dlg.GetConfig();
+            m_dockManager->setLayoutConfig(config);
+            
+            // Optionally, apply the configuration immediately
+            // This might require recreating the layout
+            wxMessageBox("Layout configuration saved.\nChanges will be applied on next restart.", 
+                        "Configuration", wxOK | wxICON_INFORMATION);
+        }
+    }
+    
     void OnSize(wxSizeEvent& event) {
         // Force refresh of dock manager to prevent ghosting during window resize
         if (m_dockManager && m_dockManager->containerWidget()) {
@@ -275,11 +294,12 @@ private:
     }
     
     enum {
-        ID_SAVE_LAYOUT = wxID_HIGHEST + 1,
-        ID_LOAD_LAYOUT,
-        ID_RESET_LAYOUT,
-        ID_MANAGE_PERSPECTIVES
-    };
+    ID_SAVE_LAYOUT = wxID_HIGHEST + 1,
+    ID_LOAD_LAYOUT,
+    ID_RESET_LAYOUT,
+    ID_MANAGE_PERSPECTIVES,
+    ID_CONFIGURE_LAYOUT
+};
 };
 
 // Simple test app
