@@ -108,7 +108,7 @@ m_dockManager->addDockWidget(CenterDockWidgetArea, m_performanceDock, bottomArea
    - 底部：信息输出
 
 2. **更好的空间利用**：
-   - 左侧垂直分割适合查看对象树和编辑属性
+   - 左侧横向分割（水平分割线）适合查看对象树和编辑属性
    - 底部标签页节省空间
 
 3. **符合专业应用标准**：

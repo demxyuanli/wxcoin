@@ -180,7 +180,7 @@ void FlatFrameDocking::CreateDockingMenus() {
 ## 优势
 
 1. **清晰的三区布局**：左侧工具区、中心工作区、底部信息区
-2. **左侧垂直分割**：Object Tree 和 Properties 垂直排列，方便查看和编辑
+2. **左侧横向分割**：Object Tree 和 Properties 上下排列（水平分割线），方便查看和编辑
 3. **底部标签页**：Message 和 Performance 共享底部空间，节省屏幕空间
 4. **符合 CAD 应用习惯**：这种布局在专业 CAD/3D 应用中很常见
 
