@@ -3,6 +3,9 @@
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
 #include "ui/PerformancePanel.h"
+#include "MouseHandler.h"
+#include "NavigationController.h"
+#include "InputManager.h"
 #include "docking/DockArea.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
@@ -55,11 +58,17 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     , m_toolboxDock(nullptr)
     , m_outputCtrl(nullptr)
 {
-    // Ensure base class panels are created before we use them
-    EnsurePanelsCreated();
+    // IMPORTANT: At this point, base class has already called InitializeUI
+    // which may have created ModernDockAdapter if IsUsingDockingSystem() returned false
+    // We need to clean that up first
     
     // Initialize docking system after base class construction
     InitializeDockingLayout();
+    
+    // IMPORTANT: EnsurePanelsCreated must be called AFTER InitializeDockingLayout
+    // because InitializeDockingLayout hides existing panels from base class
+    // and we need to ensure our panels are properly created and connected
+    EnsurePanelsCreated();
 }
 
 FlatFrameDocking::~FlatFrameDocking() {
@@ -80,6 +89,8 @@ bool FlatFrameDocking::Destroy() {
 void FlatFrameDocking::InitializeDockingLayout() {
     // IMPORTANT: We need to remove/hide any panels created by the base class
     // and replace them with our docking system
+    
+    wxLogDebug("InitializeDockingLayout: Starting");
     
     // Get the ribbon from base class
     FlatUIBar* ribbon = GetUIBar();
@@ -185,25 +196,62 @@ void FlatFrameDocking::CreateDockingLayout() {
     
     // Set initial focus to canvas
     m_canvasDock->setAsCurrentTab();
+    
+    // CRITICAL: After all panels are docked, ensure Canvas has all necessary connections
+    // This is especially important if Canvas was reparented
+    Canvas* canvas = GetCanvas();
+    if (canvas && canvas->getInputManager()) {
+        // Ensure MouseHandler is connected
+        MouseHandler* mouseHandler = dynamic_cast<MouseHandler*>(canvas->getInputManager()->getMouseHandler());
+        if (!mouseHandler && GetObjectTreePanel() && GetPropertyPanel()) {
+            // Recreate MouseHandler if it's missing
+            mouseHandler = new MouseHandler(canvas, GetObjectTreePanel(), GetPropertyPanel(), canvas->getCommandManager());
+            canvas->getInputManager()->setMouseHandler(mouseHandler);
+            
+            // Also ensure NavigationController is set
+            NavigationController* navController = new NavigationController(canvas, canvas->getSceneManager());
+            canvas->getInputManager()->setNavigationController(navController);
+            mouseHandler->setNavigationController(navController);
+        }
+        
+        // Force a refresh to ensure everything is properly initialized
+        canvas->Refresh(true);
+        canvas->Update();
+    }
 }
 
 DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
     DockWidget* dock = new DockWidget("3D View", m_dockManager->containerWidget());
     
-    // Always create a new canvas to avoid OpenGL context issues with reparenting
-    // OpenGL canvases can have problems when reparented
-    Canvas* canvas = new Canvas(dock);
-    
-    // If base class has a canvas, we'll use the same managers and viewers
-    Canvas* existingCanvas = GetCanvas();
-    if (existingCanvas) {
-        // Share the important components rather than reparenting
-        canvas->setOCCViewer(existingCanvas->getOCCViewer());
-        canvas->setObjectTreePanel(existingCanvas->getObjectTreePanel());
-        canvas->setCommandManager(existingCanvas->getCommandManager());
+    // Use existing canvas from base class
+    Canvas* canvas = GetCanvas();
+    if (!canvas) {
+        // Only create new if base class doesn't have one
+        canvas = new Canvas(dock);
+    } else {
+        // For OpenGL canvas, we need to be very careful with reparenting
+        // First, ensure the canvas is not in any sizer
+        if (canvas->GetContainingSizer()) {
+            canvas->GetContainingSizer()->Detach(canvas);
+        }
         
-        // Hide the old canvas to avoid conflicts
-        existingCanvas->Hide();
+        // Hide temporarily to avoid rendering issues during reparent
+        canvas->Hide();
+        
+        // Save the OpenGL context before reparenting
+        wxGLContext* context = nullptr;
+        if (canvas->IsShownOnScreen()) {
+            canvas->SetCurrent();
+        }
+        
+        // Now reparent
+        canvas->Reparent(dock);
+        
+        // Show again after reparenting
+        canvas->Show();
+        
+        // Force a refresh to reinitialize OpenGL if needed
+        canvas->Refresh(true);
     }
     
     dock->setWidget(canvas);

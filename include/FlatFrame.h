@@ -149,6 +149,7 @@ private:
 	std::unique_ptr<CommandListenerManager> m_listenerManager;
 	bool m_isFirstActivate;
 	bool m_startupTimerFired;  // Track if startup timer has already fired
+	bool m_skipPanelCreation;  // Flag to skip panel creation for docking version
 
 	// Methods
 	void InitializeUI(const wxSize& size);
