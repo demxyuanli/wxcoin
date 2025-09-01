@@ -745,24 +745,35 @@ void DockContainerWidget::addDockAreaRelativeTo(DockArea* newArea, DockWidgetAre
     // Create a new sub-splitter for the target area and new area
     DockSplitter* subSplitter = new DockSplitter(parentSplitter);
     
+    // First, replace the target area with the sub-splitter in the parent
+    // This is important to do before reparenting to avoid wxWidgets assertions
+    if (targetIsWindow1) {
+        parentSplitter->ReplaceWindow(window1, subSplitter);
+    } else {
+        parentSplitter->ReplaceWindow(window2, subSplitter);
+    }
+    
+    // Now reparent the windows to the sub-splitter
+    targetArea->Reparent(subSplitter);
+    newArea->Reparent(subSplitter);
+    
     // Configure the sub-splitter based on docking direction
-    int sashPosition = 0;
     switch (area) {
     case TopDockWidgetArea:
         subSplitter->SplitHorizontally(newArea, targetArea);
-        sashPosition = getConfiguredAreaSize(area);
+        subSplitter->SetSashPosition(getConfiguredAreaSize(area));
         break;
     case BottomDockWidgetArea:
         subSplitter->SplitHorizontally(targetArea, newArea);
-        sashPosition = subSplitter->GetSize().GetHeight() - getConfiguredAreaSize(area);
+        // For bottom docking, we'll set the sash position later after layout
         break;
     case LeftDockWidgetArea:
         subSplitter->SplitVertically(newArea, targetArea);
-        sashPosition = getConfiguredAreaSize(area);
+        subSplitter->SetSashPosition(getConfiguredAreaSize(area));
         break;
     case RightDockWidgetArea:
         subSplitter->SplitVertically(targetArea, newArea);
-        sashPosition = subSplitter->GetSize().GetWidth() - getConfiguredAreaSize(area);
+        // For right docking, we'll set the sash position later after layout
         break;
     default:
         wxLogDebug("  -> Invalid docking area for relative positioning");
@@ -770,15 +781,18 @@ void DockContainerWidget::addDockAreaRelativeTo(DockArea* newArea, DockWidgetAre
         return;
     }
     
-    // Replace the target area with the sub-splitter in the parent
-    if (targetIsWindow1) {
-        parentSplitter->ReplaceWindow(window1, subSplitter);
-    } else {
-        parentSplitter->ReplaceWindow(window2, subSplitter);
+    // For bottom and right docking, adjust sash position after layout
+    if (area == BottomDockWidgetArea || area == RightDockWidgetArea) {
+        // Force layout to get correct sizes
+        subSplitter->Layout();
+        wxSize size = subSplitter->GetSize();
+        
+        if (area == BottomDockWidgetArea && size.GetHeight() > 0) {
+            subSplitter->SetSashPosition(size.GetHeight() - getConfiguredAreaSize(area));
+        } else if (area == RightDockWidgetArea && size.GetWidth() > 0) {
+            subSplitter->SetSashPosition(size.GetWidth() - getConfiguredAreaSize(area));
+        }
     }
-    
-    // Set the sash position after the splitter is properly sized
-    subSplitter->SetSashPosition(sashPosition);
     
     // Ensure visibility
     newArea->Show();
