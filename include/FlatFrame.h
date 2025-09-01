@@ -163,6 +163,11 @@ private:
 	// Virtual method to check if using docking system
 	virtual bool IsUsingDockingSystem() const { return false; }
 	
+	// Virtual method to get the main work area panel
+	// In non-docking version, this would be the splitter
+	// In docking version, this would be the dock container
+	virtual wxWindow* GetMainWorkArea() { return m_mainSplitter; }
+	
 	void onClose(wxCloseEvent& event);
 	void onActivate(wxActivateEvent& event);
 	void onSize(wxSizeEvent& event);

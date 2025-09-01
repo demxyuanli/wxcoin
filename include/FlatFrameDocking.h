@@ -62,8 +62,12 @@ protected:
     // Override to indicate we're using docking system
     virtual bool IsUsingDockingSystem() const override { return true; }
     
+    // Override to return our dock container as the main work area
+    virtual wxWindow* GetMainWorkArea() override;
+    
 private:
     ads::DockManager* m_dockManager;
+    wxPanel* m_workAreaPanel;
     
     // Dock widgets for main panels
     ads::DockWidget* m_propertyDock;

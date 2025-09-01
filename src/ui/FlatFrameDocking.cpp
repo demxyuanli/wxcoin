@@ -45,6 +45,7 @@ wxEND_EVENT_TABLE()
 FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, const wxSize& size)
     : FlatFrame(title, pos, size)
     , m_dockManager(nullptr)
+    , m_workAreaPanel(nullptr)
     , m_propertyDock(nullptr)
     , m_objectTreeDock(nullptr)
     , m_canvasDock(nullptr)
@@ -73,14 +74,17 @@ bool FlatFrameDocking::Destroy() {
 }
 
 void FlatFrameDocking::InitializeDockingLayout() {
-    // IMPORTANT: This completely replaces any base class layout system
-    // We create our own panel that fills the entire client area
+    // IMPORTANT: DockManager manages the main work area between FlatUIBar and StatusBar
+    // The base class handles the overall frame layout with FlatUIBar at top and StatusBar at bottom
     
-    // Create main panel to hold the dock manager (fills entire client area)
-    wxPanel* mainPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+    // First, let the base class create its UI components (FlatUIBar, etc.)
+    // This should be called in the constructor or before this method
     
-    // Create dock manager on the main panel
-    m_dockManager = new DockManager(mainPanel);
+    // Create a panel for the main work area (between FlatUIBar and StatusBar)
+    m_workAreaPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+    
+    // Create dock manager to manage the work area
+    m_dockManager = new DockManager(m_workAreaPanel);
     
     // Configure dock manager
     ConfigureDockManager();
@@ -91,24 +95,29 @@ void FlatFrameDocking::InitializeDockingLayout() {
     // Create docking-specific menus
     CreateDockingMenus();
     
-    // Set up main panel sizer
-    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-    mainSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
-    mainPanel->SetSizer(mainSizer);
+    // Set up work area panel sizer
+    wxBoxSizer* workAreaSizer = new wxBoxSizer(wxVERTICAL);
+    workAreaSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
+    m_workAreaPanel->SetSizer(workAreaSizer);
     
-    // CRITICAL: Set up frame sizer to ensure our panel is the only child
-    // This prevents any base class layout components from interfering
-    wxBoxSizer* frameSizer = new wxBoxSizer(wxVERTICAL);
-    frameSizer->Add(mainPanel, 1, wxEXPAND);
-    SetSizer(frameSizer);
+    // Get the existing sizer from the frame (if any) or create a new one
+    wxSizer* frameSizer = GetSizer();
+    if (!frameSizer) {
+        frameSizer = new wxBoxSizer(wxVERTICAL);
+        SetSizer(frameSizer);
+    }
     
-    // Force immediate layout to establish our control
-    Layout();
-    mainPanel->Layout();
+    // Add the work area panel to the frame's sizer
+    // This should be added after FlatUIBar and before StatusBar
+    frameSizer->Add(m_workAreaPanel, 1, wxEXPAND);
     
-    // Initialize status bar and other UI elements from base class
+    // Create status bar (at the bottom)
     CreateStatusBar(3);
     SetStatusText("Ready - Docking Layout Active", 0);
+    
+    // Force layout update
+    Layout();
+    m_workAreaPanel->Layout();
     
     // Ensure our docking system has focus
     if (m_canvasDock && m_canvasDock->widget()) {
@@ -551,4 +560,9 @@ void FlatFrameDocking::onSize(wxSizeEvent& event) {
     if (m_dockManager && m_dockManager->containerWidget()) {
         m_dockManager->containerWidget()->Refresh();
     }
+}
+
+wxWindow* FlatFrameDocking::GetMainWorkArea() {
+    // Return the dock container widget as the main work area
+    return m_dockManager ? m_dockManager->containerWidget() : m_workAreaPanel;
 }
