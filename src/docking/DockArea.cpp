@@ -684,6 +684,8 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
         DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
         DockManager* manager = m_dockArea ? m_dockArea->dockManager() : nullptr;
         if (draggedWidget && manager) {
+            // End batch operation when drag finishes
+            manager->endBatchOperation();
             // Check for drop target
             wxPoint screenPos = ClientToScreen(event.GetPosition());
             wxWindow* windowUnderMouse = wxFindWindowAtPoint(screenPos);
@@ -884,6 +886,9 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
             // Get the dock widget being dragged
             DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
             if (draggedWidget && draggedWidget->hasFeature(DockWidgetMovable) && manager) {
+                // Begin batch operation to prevent excessive refreshes during drag
+                manager->beginBatchOperation();
+                
                 // Create a floating drag preview
                 FloatingDragPreview* preview = new FloatingDragPreview(draggedWidget, manager->containerWidget());
                 wxPoint screenPos = ClientToScreen(event.GetPosition());

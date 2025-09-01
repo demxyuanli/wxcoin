@@ -114,6 +114,13 @@ private:
     bool m_optimizedRendering;
     std::map<DockWidgetArea, wxRect> m_cachedGeometries;
     
+    // Debounce mechanism
+    wxTimer* m_refreshTimer;
+    bool m_pendingRefresh;
+    static const int REFRESH_DEBOUNCE_MS = 16; // ~60fps
+    void onRefreshTimer(wxTimerEvent& event);
+    void requestRefresh();
+    
     // Helper methods
     wxRect targetRect() const;
     wxRect areaRect(DockWidgetArea area) const;

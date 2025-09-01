@@ -24,6 +24,7 @@ wxBEGIN_EVENT_TABLE(DockOverlay, wxFrame)
     EVT_MOTION(DockOverlay::onMouseMove)
     EVT_LEAVE_WINDOW(DockOverlay::onMouseLeave)
     EVT_ERASE_BACKGROUND(DockOverlay::onEraseBackground)
+    EVT_TIMER(wxID_ANY, DockOverlay::onRefreshTimer)
 wxEND_EVENT_TABLE()
 
 // DockOverlay implementation
@@ -38,9 +39,19 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_areaColor(wxColour(58, 135, 173, 128))  // Semi-transparent blue
     , m_frameWidth(3)
     , m_optimizedRendering(false)
+    , m_refreshTimer(nullptr)
+    , m_pendingRefresh(false)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetTransparent(200);  // Make overlay semi-transparent
+    
+    // Only use transparency if necessary for the mode
+    if (mode == ModeDockAreaOverlay) {
+        SetTransparent(240);  // Less transparent for better performance
+    }
+    // Container overlay doesn't need transparency
+
+    // Initialize refresh timer for debouncing
+    m_refreshTimer = new wxTimer(this);
 
     // Create drop areas
     createDropAreas();
@@ -50,6 +61,10 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
 }
 
 DockOverlay::~DockOverlay() {
+    if (m_refreshTimer) {
+        m_refreshTimer->Stop();
+        delete m_refreshTimer;
+    }
 }
 
 DockWidgetArea DockOverlay::dropAreaUnderCursor() const {
@@ -83,6 +98,10 @@ DockWidgetArea DockOverlay::showOverlay(wxWindow* target) {
     wxLogDebug("DockOverlay::showOverlay - target: %p", target);
     
     m_targetWidget = target;
+    
+    // Enable optimized rendering during drag operations
+    optimizeRendering();
+    
     updatePosition();
     
     wxLogDebug("DockOverlay position: %d,%d size: %dx%d", 
@@ -94,9 +113,8 @@ DockWidgetArea DockOverlay::showOverlay(wxWindow* target) {
     // Make sure window is on top
     SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
     
-    // Force a paint event
-    Refresh();
-    Update();
+    // Use debounced refresh instead of immediate refresh
+    requestRefresh();
     
     // Ensure minimum size
     if (GetSize().GetWidth() < 100 || GetSize().GetHeight() < 100) {
@@ -178,7 +196,7 @@ void DockOverlay::onMouseMove(wxMouseEvent& event) {
         }
         
         m_lastHoveredArea = hoveredArea;
-        Refresh();
+        requestRefresh(); // Use debounced refresh instead of direct Refresh()
     }
 }
 
@@ -189,7 +207,7 @@ void DockOverlay::onMouseLeave(wxMouseEvent& event) {
     }
     
     m_lastHoveredArea = InvalidDockWidgetArea;
-    Refresh();
+    requestRefresh(); // Use debounced refresh instead of direct Refresh()
 }
 
 void DockOverlay::createDropAreas() {
@@ -541,7 +559,10 @@ void DockOverlayCross::onMouseMove(wxMouseEvent& event) {
     
     if (newArea != m_hoveredArea) {
         m_hoveredArea = newArea;
-        Refresh();
+        // Only refresh the affected areas instead of the whole window
+        wxRect oldRect = areaRect(m_hoveredArea);
+        wxRect newRect = areaRect(newArea);
+        RefreshRect(oldRect.Union(newRect), false);
     }
 }
 
@@ -695,6 +716,22 @@ void DockOverlay::updateDropAreaGeometryCache() {
         dropSize,
         dropSize
     );
+}
+
+// Debounce mechanism implementation
+void DockOverlay::requestRefresh() {
+    if (!m_pendingRefresh) {
+        m_pendingRefresh = true;
+        m_refreshTimer->Start(REFRESH_DEBOUNCE_MS, wxTIMER_ONE_SHOT);
+    }
+}
+
+void DockOverlay::onRefreshTimer(wxTimerEvent& event) {
+    if (m_pendingRefresh) {
+        m_pendingRefresh = false;
+        Refresh();
+        Update();
+    }
 }
 
 } // namespace ads

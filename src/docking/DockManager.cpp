@@ -584,8 +584,16 @@ void DockManager::updateLayout() {
     }
 
     if (m_containerWidget) {
+        // Freeze/thaw to prevent intermediate repaints
+        m_containerWidget->Freeze();
+        
         m_containerWidget->Layout();
-        m_containerWidget->Refresh();
+        
+        // Only refresh the client area, not the entire window hierarchy
+        wxRect clientRect = m_containerWidget->GetClientRect();
+        m_containerWidget->RefreshRect(clientRect, false);
+        
+        m_containerWidget->Thaw();
     }
 }
 

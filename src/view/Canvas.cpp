@@ -226,7 +226,6 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
-	// Debug: log incoming mouse event
 	// Check if this is an interaction event that should trigger LOD
 	bool isInteractionEvent = false;
 	if (event.GetEventType() == wxEVT_LEFT_DOWN ||
@@ -236,13 +235,21 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 		isInteractionEvent = true;
 	}
 
+	// Skip motion events during drag operations to reduce overhead
+	static bool isDragging = false;
+	if (event.GetEventType() == wxEVT_LEFT_DOWN || event.GetEventType() == wxEVT_RIGHT_DOWN) {
+		isDragging = true;
+	} else if (event.GetEventType() == wxEVT_LEFT_UP || event.GetEventType() == wxEVT_RIGHT_UP) {
+		isDragging = false;
+	}
+
 	// Trigger LOD interaction if enabled
 	if (isInteractionEvent && m_occViewer) {
 		m_occViewer->startLODInteraction();
 	}
 	
-	// Update hover outline on mouse move
-	if (event.GetEventType() == wxEVT_MOTION && m_occViewer) {
+	// Update hover outline on mouse move (but not during drag to reduce overhead)
+	if (event.GetEventType() == wxEVT_MOTION && !isDragging && m_occViewer) {
 		wxPoint screenPos = event.GetPosition();
 		m_occViewer->updateHoverSilhouetteAt(screenPos);
 	}
@@ -256,7 +263,7 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	if (m_multiViewportEnabled && m_multiViewportManager) {
 		bool handled = m_multiViewportManager->handleMouseEvent(event);
 		if (handled) {
-			return; // Event was handled
+			return; // Event was handled, don't propagate further
 		}
 	}
 
@@ -264,10 +271,15 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	if (m_eventCoordinator) {
 		bool handled = m_eventCoordinator->handleMouseEvent(event);
 		if (handled) {
-			return; // Event was handled
+			return; // Event was handled, don't propagate further
 		}
 	}
-	event.Skip();
+	
+	// Important: Don't skip the event if it was a drag-related event
+	// This prevents unnecessary propagation to parent windows
+	if (!isDragging || (event.GetEventType() != wxEVT_MOTION)) {
+		event.Skip();
+	}
 }
 
 void Canvas::setMultiViewportEnabled(bool enabled) {
