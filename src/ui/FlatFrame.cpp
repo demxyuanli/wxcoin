@@ -202,10 +202,9 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_occViewer(nullptr),
 	m_isFirstActivate(true),
 	m_startupTimerFired(false),  // Initialize startup timer flag
-#ifndef USE_NEW_DOCKING_SYSTEM
+	m_auiManager(nullptr),
 	m_mainSplitter(nullptr),
 	m_leftSplitter(nullptr),
-#endif
 	m_commandManager(new CommandManager()),
 	m_prevFeatureEdgesRunning(false),
 	m_featureProgressHoldTicks(0)
@@ -285,6 +284,13 @@ FlatFrame::~FlatFrame()
 		}
 	}
 
+	// Clean up legacy layout components if they were created
+	if (m_auiManager) {
+		m_auiManager->UnInit();
+		delete m_auiManager;
+		m_auiManager = nullptr;
+	}
+	
 	LOG_DBG("FlatFrame destruction completed.", "FlatFrame");
 	delete m_commandManager;
 }
@@ -331,14 +337,12 @@ void FlatFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 		ribbon->Update();
 	}
 
-#ifndef USE_NEW_DOCKING_SYSTEM
-	// Force main splitter to recalculate its size and position
-	if (m_mainSplitter) {
+	// Force main splitter to recalculate its size and position (only for non-docking version)
+	if (!IsUsingDockingSystem() && m_mainSplitter) {
 		m_mainSplitter->Layout();
 		m_mainSplitter->Refresh();
 		m_mainSplitter->Update();
 	}
-#endif
 
 	// Add a deferred layout update to ensure proper space allocation after all changes
 	CallAfter([this]() {

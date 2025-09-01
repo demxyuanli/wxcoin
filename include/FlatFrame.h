@@ -130,14 +130,11 @@ private:
 	wxPanel* m_searchPanel;
 	wxPanel* m_profilePanel;
 
-#ifndef USE_NEW_DOCKING_SYSTEM
-	// Legacy layout components - not used in docking version
-	wxAuiManager m_auiManager;
-
-	// Splitters for layout
+	// Legacy layout components - only used in non-docking version
+	// NOTE: Using pointer to avoid automatic destruction issues
+	wxAuiManager* m_auiManager;
 	wxSplitterWindow* m_mainSplitter;
 	wxSplitterWindow* m_leftSplitter;
-#endif
 
 	// CAD components from MainFrame
 	Canvas* m_canvas;
@@ -163,6 +160,9 @@ private:
 	void setupCommandSystem();
 	void onCommand(wxCommandEvent& event);
 	void onCommandFeedback(const CommandResult& result);
+	// Virtual method to check if using docking system
+	virtual bool IsUsingDockingSystem() const { return false; }
+	
 	void onClose(wxCloseEvent& event);
 	void onActivate(wxActivateEvent& event);
 	void onSize(wxSizeEvent& event);

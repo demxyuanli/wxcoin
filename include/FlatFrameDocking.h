@@ -1,8 +1,5 @@
 #pragma once
 
-// Define this to prevent base class from including legacy layout components
-#define USE_NEW_DOCKING_SYSTEM
-
 #include "FlatFrame.h"
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
@@ -61,6 +58,9 @@ protected:
     
     // Override base class layout events to prevent interference
     void onSize(wxSizeEvent& event);
+    
+    // Override to indicate we're using docking system
+    virtual bool IsUsingDockingSystem() const override { return true; }
     
 private:
     ads::DockManager* m_dockManager;
