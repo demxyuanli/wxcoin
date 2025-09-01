@@ -190,18 +190,22 @@ void FlatFrameDocking::CreateDockingLayout() {
 DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
     DockWidget* dock = new DockWidget("3D View", m_dockManager->containerWidget());
     
-    // Use existing canvas from base class if available, otherwise create new
-    Canvas* canvas = GetCanvas();
-    if (!canvas) {
-        canvas = new Canvas(dock);
-    } else {
-        // Remove from existing sizer if any
-        if (canvas->GetContainingSizer()) {
-            canvas->GetContainingSizer()->Detach(canvas);
-        }
-        // Reparent existing canvas to the dock widget
-        canvas->Reparent(dock);
+    // Always create a new canvas to avoid OpenGL context issues with reparenting
+    // OpenGL canvases can have problems when reparented
+    Canvas* canvas = new Canvas(dock);
+    
+    // If base class has a canvas, we'll use the same managers and viewers
+    Canvas* existingCanvas = GetCanvas();
+    if (existingCanvas) {
+        // Share the important components rather than reparenting
+        canvas->setOCCViewer(existingCanvas->getOCCViewer());
+        canvas->setObjectTreePanel(existingCanvas->getObjectTreePanel());
+        canvas->setCommandManager(existingCanvas->getCommandManager());
+        
+        // Hide the old canvas to avoid conflicts
+        existingCanvas->Hide();
     }
+    
     dock->setWidget(canvas);
     
     // Configure dock widget

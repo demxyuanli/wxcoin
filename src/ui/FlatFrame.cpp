@@ -277,6 +277,9 @@ void FlatFrame::EnsurePanelsCreated()
         m_canvas->Hide();  // Hide until added to docking system
     }
     
+    // Note: In docking system, a new Canvas will be created to avoid OpenGL reparenting issues
+    // The new Canvas will share the OCCViewer and other managers with this one
+    
     if (!m_propertyPanel) {
         m_propertyPanel = new PropertyPanel(this);
         m_propertyPanel->SetName("Properties");
@@ -332,6 +335,46 @@ void FlatFrame::EnsurePanelsCreated()
         if (m_canvas && m_canvas->getSceneManager()) {
             m_canvas->getSceneManager()->resetView();
         }
+    }
+    
+    // Initialize progress timer if not already running
+    if (!m_progressTimer.IsRunning()) {
+        m_progressTimer.SetOwner(this);
+        Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
+            bool running = m_occViewer && m_occViewer->isFeatureEdgeGenerationRunning();
+            bool justFinished = (!running && m_prevFeatureEdgesRunning);
+            
+            if (running || justFinished) {
+                int p = running ? m_occViewer->getFeatureEdgeGenerationProgress() : 100;
+                if (GetStatusBar()) {
+                    if (GetStatusBar()->GetFieldsCount() > 1) {
+                        wxString statusMsg = wxString::Format("Feature edge generation: %d%%", p);
+                        GetStatusBar()->SetStatusText(statusMsg, 1);
+                    }
+                }
+                else {
+                    wxLogDebug("Progress timer: Failed to get status bar");
+                }
+                if (m_messageOutput) {
+                    wxString progressMsg = wxString::Format("Feature edge generation progress: %d%%", p);
+                    m_messageOutput->SetValue(progressMsg);
+                }
+                m_featureProgressHoldTicks = 4;
+            }
+            else {
+                if (justFinished && m_messageOutput) {
+                    appendMessage("Feature edge generation completed.");
+                }
+                if (m_featureProgressHoldTicks > 0) {
+                    m_featureProgressHoldTicks--;
+                }
+                else if (GetStatusBar() && GetStatusBar()->GetFieldsCount() > 1) {
+                    GetStatusBar()->SetStatusText("", 1);
+                }
+            }
+            m_prevFeatureEdgesRunning = running;
+        });
+        m_progressTimer.Start(50);
     }
 }
 
