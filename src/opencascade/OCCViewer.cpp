@@ -591,7 +591,11 @@ void OCCViewer::setMeshDeflection(double deflection, bool remesh)
 				try {
 					remeshAllGeometries();
 					lastRemeshTime = currentTime;
-					LOG_DBG_S("Remeshed all geometries with deflection: " + std::to_string(deflection));
+					// Reduce debug logging frequency
+					static int logCounter = 0;
+					if (++logCounter % 10 == 0) { // Log every 10th remesh
+						LOG_DBG_S("Remeshed all geometries with deflection: " + std::to_string(deflection));
+					}
 				}
 				catch (const std::exception& e) {
 					LOG_ERR_S("OCCViewer::setMeshDeflection: Exception during remesh: " + std::string(e.what()));
@@ -603,10 +607,13 @@ void OCCViewer::setMeshDeflection(double deflection, bool remesh)
 				}
 			}
 			else {
-				// Skip remesh if too soon after last one
-				long long timeDiff = (currentTime - lastRemeshTime).GetValue();
-				LOG_DBG_S("Remesh throttled for deflection: " + std::to_string(deflection) +
-					" (last remesh was " + std::to_string(timeDiff) + "ms ago)");
+				// Skip remesh if too soon after last one - reduce logging frequency in debug
+				static int skipLogCounter = 0;
+				if (++skipLogCounter % 50 == 0) { // Log every 50th skip
+					long long timeDiff = (currentTime - lastRemeshTime).GetValue();
+					LOG_DBG_S("Remesh throttled for deflection: " + std::to_string(deflection) +
+						" (last remesh was " + std::to_string(timeDiff) + "ms ago)");
+				}
 			}
 		}
 	}

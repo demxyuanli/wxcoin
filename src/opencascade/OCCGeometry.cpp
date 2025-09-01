@@ -16,6 +16,7 @@
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <TopoDS.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
+#include <Standard_ConstructionError.hxx>
 #include "EdgeComponent.h"
 #include "config/EdgeSettingsConfig.h"
 #include "OCCMeshConverter.h"
@@ -423,9 +424,23 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		params.inParallel != m_lastMeshParams.inParallel);
 
 	if (m_meshRegenerationNeeded || paramsChanged) {
-		buildCoinRepresentation(params);
-		m_lastMeshParams = params;
-		m_meshRegenerationNeeded = false;
+		try {
+			buildCoinRepresentation(params);
+			m_lastMeshParams = params;
+			m_meshRegenerationNeeded = false;
+		}
+		catch (const Standard_ConstructionError& e) {
+			LOG_ERR_S("Standard_ConstructionError in buildCoinRepresentation for " + m_name + ": " + std::string(e.GetMessageString()));
+			m_meshRegenerationNeeded = false; // Don't retry to avoid infinite loop
+		}
+		catch (const std::exception& e) {
+			LOG_ERR_S("Exception in buildCoinRepresentation for " + m_name + ": " + std::string(e.what()));
+			m_meshRegenerationNeeded = false; // Don't retry to avoid infinite loop
+		}
+		catch (...) {
+			LOG_ERR_S("Unknown exception in buildCoinRepresentation for " + m_name);
+			m_meshRegenerationNeeded = false; // Don't retry to avoid infinite loop
+		}
 	}
 }
 

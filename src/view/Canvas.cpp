@@ -228,7 +228,10 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
-	// Debug: log incoming mouse event
+	// Only log mouse events in debug builds for performance monitoring
+#ifdef _DEBUG
+	// Debug: log incoming mouse event for performance analysis
+#endif
 	// Check if this is an interaction event that should trigger LOD
 	// Only trigger for actual navigation operations, not simple mouse movement
 	bool isNavigationEvent = false;
@@ -282,9 +285,11 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	if (event.GetEventType() == wxEVT_MOTION && m_occViewer) {
 		wxPoint screenPos = event.GetPosition();
 		// Only update if moved significantly or every 3rd frame
-		int distance = (screenPos - m_lastHoverPos).x * (screenPos - m_lastHoverPos).x + 
-		               (screenPos - m_lastHoverPos).y * (screenPos - m_lastHoverPos).y;
-		if (distance > 25 || ++m_hoverUpdateCounter % 3 == 0) {
+		// Use squared distance to avoid expensive sqrt() call
+		int dx = screenPos.x - m_lastHoverPos.x;
+		int dy = screenPos.y - m_lastHoverPos.y;
+		int distanceSquared = dx * dx + dy * dy;
+		if (distanceSquared > 625 || ++m_hoverUpdateCounter % 3 == 0) { // 25^2 = 625
 			m_occViewer->updateHoverSilhouetteAt(screenPos);
 			m_lastHoverPos = screenPos;
 		}

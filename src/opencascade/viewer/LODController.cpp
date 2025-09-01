@@ -71,36 +71,58 @@ void LODController::onTimer(wxTimerEvent&) {
 double LODController::getAdaptiveDeflection(bool roughMode) const {
 	if (!m_viewer) return roughMode ? m_roughDeflection : m_fineDeflection;
 
-	try {
-		// Get geometry count for adaptive adjustment
-		auto geometries = m_viewer->getAllGeometry();
-		size_t geometryCount = geometries.size();
+	// Cache geometry count to avoid repeated calls in debug builds
+	static size_t cachedGeometryCount = 0;
+	static wxLongLong lastCacheTime = 0;
+	static bool roughModeCache = false;
 
-		// Adaptive adjustment based on geometry count
-		// More geometries = coarser deflection for better performance
-		double baseDeflection = roughMode ? m_roughDeflection : m_fineDeflection;
+	wxLongLong currentTime = wxGetLocalTimeMillis();
+	const int CACHE_DURATION_MS = 1000; // Cache for 1 second
 
-		if (geometryCount > 50) {
-			// For large numbers of geometries, make deflection coarser
-			double scaleFactor = std::max(1.0, geometryCount / 50.0);
-			return baseDeflection * scaleFactor;
+	// Check if we can use cached value
+	bool useCache = (currentTime - lastCacheTime < CACHE_DURATION_MS) &&
+	               (roughMode == roughModeCache);
+
+	size_t geometryCount;
+	if (useCache) {
+		geometryCount = cachedGeometryCount;
+	} else {
+		try {
+			// Get geometry count for adaptive adjustment
+			auto geometries = m_viewer->getAllGeometry();
+			geometryCount = geometries.size();
+
+			// Update cache
+			cachedGeometryCount = geometryCount;
+			lastCacheTime = currentTime;
+			roughModeCache = roughMode;
 		}
-		else if (geometryCount < 10) {
-			// For small numbers, can afford finer detail
-			return baseDeflection * 0.8;
+		catch (const std::exception& e) {
+			// If there's any exception during geometry count retrieval,
+			// fall back to default deflection values
+			LOG_WRN_S("LODController::getAdaptiveDeflection: Exception during geometry count: " + std::string(e.what()));
+			return roughMode ? m_roughDeflection : m_fineDeflection;
 		}
+		catch (...) {
+			// Handle any other exceptions (including OpenCASCADE exceptions)
+			LOG_WRN_S("LODController::getAdaptiveDeflection: Unknown exception during geometry count");
+			return roughMode ? m_roughDeflection : m_fineDeflection;
+		}
+	}
 
-		return baseDeflection;
+	// Adaptive adjustment based on geometry count
+	// More geometries = coarser deflection for better performance
+	double baseDeflection = roughMode ? m_roughDeflection : m_fineDeflection;
+
+	if (geometryCount > 50) {
+		// For large numbers of geometries, make deflection coarser
+		double scaleFactor = std::max(1.0, geometryCount / 50.0);
+		return baseDeflection * scaleFactor;
 	}
-	catch (const std::exception& e) {
-		// If there's any exception during geometry count retrieval,
-		// fall back to default deflection values
-		LOG_WRN_S("LODController::getAdaptiveDeflection: Exception during geometry count: " + std::string(e.what()));
-		return roughMode ? m_roughDeflection : m_fineDeflection;
+	else if (geometryCount < 10) {
+		// For small numbers, can afford finer detail
+		return baseDeflection * 0.8;
 	}
-	catch (...) {
-		// Handle any other exceptions (including OpenCASCADE exceptions)
-		LOG_WRN_S("LODController::getAdaptiveDeflection: Unknown exception during geometry count");
-		return roughMode ? m_roughDeflection : m_fineDeflection;
-	}
+
+	return baseDeflection;
 }
