@@ -4,6 +4,7 @@
 #include "OCCViewer.h"
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
+#include <wx/app.h>
 #include "logger/Logger.h"
 #include <chrono>
 #include "FlatFrame.h"
@@ -29,11 +30,19 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	if (flatFrame) {
 		statusBar = flatFrame->GetFlatUIStatusBar();
 		if (statusBar) {
+			LOG_INF_S("FlatUIStatusBar found, enabling progress gauge");
 			statusBar->SetGaugeRange(100);
 			statusBar->SetGaugeValue(0);
 			statusBar->EnableProgressGauge(true); // show on demand at start
+			// Force refresh to ensure visibility
+			statusBar->Refresh();
+			statusBar->Update();
+		} else {
+			LOG_WRN_S("FlatUIStatusBar not found!");
 		}
 		flatFrame->appendMessage("STEP import started...");
+	} else {
+		LOG_WRN_S("FlatFrame not found!");
 	}
 
 	// File dialog
@@ -88,8 +97,19 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 					int next = (int)std::round(((double)(i + 1) / (double)(filePaths.size() + 1)) * 100.0);
 					int mapped = base + (int)std::round((percent / 100.0) * (next - base));
 					mapped = std::max(0, std::min(95, mapped));
-					if (statusBar) statusBar->SetGaugeValue(mapped);
-					if (flatFrame) flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
+					
+					// Use CallAfter to ensure UI updates happen on the main thread
+					if (statusBar || flatFrame) {
+						wxTheApp->CallAfter([statusBar, flatFrame, mapped, stage]() {
+							if (statusBar) {
+								statusBar->SetGaugeValue(mapped);
+								statusBar->Update();
+							}
+							if (flatFrame) {
+								flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
+							}
+						});
+					}
 				}
 			);
 			auto stepReadEndTime = std::chrono::high_resolution_clock::now();

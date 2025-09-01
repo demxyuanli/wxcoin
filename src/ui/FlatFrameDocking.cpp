@@ -146,12 +146,12 @@ void FlatFrameDocking::InitializeDockingLayout() {
     // Add the work area panel to the main sizer
     mainSizer->Add(m_workAreaPanel, 1, wxEXPAND);
     
-    // Check if status bar already exists from base class
+    // Get status bar from base class (should already exist from BorderlessFrameLogic constructor)
     FlatUIStatusBar* statusBar = GetFlatUIStatusBar();
     if (!statusBar) {
-        // Create FlatUIStatusBar if not already created
+        LOG_WRN_S("FlatUIStatusBar not found in InitializeDockingLayout, this should not happen!");
+        // As a fallback, create one (though this indicates a problem in initialization order)
         statusBar = new FlatUIStatusBar(this);
-        // Note: Don't add to sizer here, it will be handled by the frame
     }
     
     // Configure status bar
