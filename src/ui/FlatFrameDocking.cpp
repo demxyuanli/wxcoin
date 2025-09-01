@@ -313,8 +313,8 @@ DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
     PerformancePanel* perfPanel = new PerformancePanel(dock);
     perfPanel->SetMinSize(wxSize(360, 140));
     
-    // Use NoScrollArea mode to avoid parent/sizer conflicts
-    dock->setWidget(perfPanel, ads::DockWidget::NoScrollArea);
+    // Use ForceNoScrollArea mode to avoid parent/sizer conflicts
+    dock->setWidget(perfPanel, ads::DockWidget::ForceNoScrollArea);
     
     // Configure dock widget
     dock->setFeature(DockWidgetClosable, true);
