@@ -37,6 +37,9 @@ wxBEGIN_EVENT_TABLE(FlatFrameDocking, FlatFrame)
     EVT_UPDATE_UI(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnUpdateUI)
     EVT_UPDATE_UI(ID_VIEW_OUTPUT, FlatFrameDocking::OnUpdateUI)  // Backward compatibility
     EVT_UPDATE_UI(ID_VIEW_TOOLBOX, FlatFrameDocking::OnUpdateUI)
+    
+    // Override base class size event to ensure docking system controls layout
+    EVT_SIZE(FlatFrameDocking::onSize)
 wxEND_EVENT_TABLE()
 
 FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, const wxSize& size)
@@ -70,8 +73,11 @@ bool FlatFrameDocking::Destroy() {
 }
 
 void FlatFrameDocking::InitializeDockingLayout() {
-    // Create main panel to hold the dock manager
-    wxPanel* mainPanel = new wxPanel(this);
+    // IMPORTANT: This completely replaces any base class layout system
+    // We create our own panel that fills the entire client area
+    
+    // Create main panel to hold the dock manager (fills entire client area)
+    wxPanel* mainPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
     
     // Create dock manager on the main panel
     m_dockManager = new DockManager(mainPanel);
@@ -90,14 +96,24 @@ void FlatFrameDocking::InitializeDockingLayout() {
     mainSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
     mainPanel->SetSizer(mainSizer);
     
-    // Add main panel to frame
+    // CRITICAL: Set up frame sizer to ensure our panel is the only child
+    // This prevents any base class layout components from interfering
     wxBoxSizer* frameSizer = new wxBoxSizer(wxVERTICAL);
     frameSizer->Add(mainPanel, 1, wxEXPAND);
     SetSizer(frameSizer);
     
+    // Force immediate layout to establish our control
+    Layout();
+    mainPanel->Layout();
+    
     // Initialize status bar and other UI elements from base class
     CreateStatusBar(3);
-    SetStatusText("Ready", 0);
+    SetStatusText("Ready - Docking Layout Active", 0);
+    
+    // Ensure our docking system has focus
+    if (m_canvasDock && m_canvasDock->widget()) {
+        m_canvasDock->widget()->SetFocus();
+    }
 }
 
 void FlatFrameDocking::ConfigureDockManager() {
@@ -521,5 +537,18 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
         default:
             // Ignore other events
             break;
+    }
+}
+
+void FlatFrameDocking::onSize(wxSizeEvent& event) {
+    // IMPORTANT: We handle our own layout through the docking system
+    // Do NOT call base class onSize which might interfere with our layout
+    
+    // Just let the event propagate to child windows (docking system)
+    event.Skip();
+    
+    // Force the docking system to update if needed
+    if (m_dockManager && m_dockManager->containerWidget()) {
+        m_dockManager->containerWidget()->Refresh();
     }
 }

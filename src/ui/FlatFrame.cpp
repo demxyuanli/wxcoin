@@ -202,8 +202,10 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_occViewer(nullptr),
 	m_isFirstActivate(true),
 	m_startupTimerFired(false),  // Initialize startup timer flag
+#ifndef USE_NEW_DOCKING_SYSTEM
 	m_mainSplitter(nullptr),
 	m_leftSplitter(nullptr),
+#endif
 	m_commandManager(new CommandManager()),
 	m_prevFeatureEdgesRunning(false),
 	m_featureProgressHoldTicks(0)
@@ -329,12 +331,14 @@ void FlatFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 		ribbon->Update();
 	}
 
+#ifndef USE_NEW_DOCKING_SYSTEM
 	// Force main splitter to recalculate its size and position
 	if (m_mainSplitter) {
 		m_mainSplitter->Layout();
 		m_mainSplitter->Refresh();
 		m_mainSplitter->Update();
 	}
+#endif
 
 	// Add a deferred layout update to ensure proper space allocation after all changes
 	CallAfter([this]() {

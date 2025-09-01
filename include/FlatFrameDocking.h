@@ -1,5 +1,8 @@
 #pragma once
 
+// Define this to prevent base class from including legacy layout components
+#define USE_NEW_DOCKING_SYSTEM
+
 #include "FlatFrame.h"
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
@@ -55,6 +58,9 @@ protected:
     void OnDockingResetLayout(wxCommandEvent& event);
     void OnDockingManagePerspectives(wxCommandEvent& event);
     void OnDockingToggleAutoHide(wxCommandEvent& event);
+    
+    // Override base class layout events to prevent interference
+    virtual void onSize(wxSizeEvent& event) override;
     
 private:
     ads::DockManager* m_dockManager;

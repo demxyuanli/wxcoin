@@ -130,11 +130,14 @@ private:
 	wxPanel* m_searchPanel;
 	wxPanel* m_profilePanel;
 
+#ifndef USE_NEW_DOCKING_SYSTEM
+	// Legacy layout components - not used in docking version
 	wxAuiManager m_auiManager;
 
 	// Splitters for layout
 	wxSplitterWindow* m_mainSplitter;
 	wxSplitterWindow* m_leftSplitter;
+#endif
 
 	// CAD components from MainFrame
 	Canvas* m_canvas;
