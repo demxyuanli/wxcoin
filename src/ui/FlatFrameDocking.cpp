@@ -74,11 +74,33 @@ bool FlatFrameDocking::Destroy() {
 }
 
 void FlatFrameDocking::InitializeDockingLayout() {
-    // IMPORTANT: DockManager manages the main work area between FlatUIBar and StatusBar
-    // The base class handles the overall frame layout with FlatUIBar at top and StatusBar at bottom
+    // IMPORTANT: We need to remove/hide any panels created by the base class
+    // and replace them with our docking system
     
-    // First, let the base class create its UI components (FlatUIBar, etc.)
-    // This should be called in the constructor or before this method
+    // Get the ribbon from base class
+    FlatUIBar* ribbon = GetUIBar();
+    
+    // Hide any existing children that might have been created by base class
+    wxWindowList& children = GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        // Keep FlatUIBar (ribbon) and status bar, hide everything else
+        if (child != ribbon && !child->IsKindOf(CLASSINFO(wxStatusBar))) {
+            child->Hide();
+        }
+    }
+    
+    // Clear any existing sizer to start fresh
+    SetSizer(nullptr);
+    
+    // Create a new main sizer for the frame
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    SetSizer(mainSizer);
+    
+    // Add the ribbon if it exists
+    if (ribbon) {
+        mainSizer->Add(ribbon, 0, wxEXPAND);
+    }
     
     // Create a panel for the main work area (between FlatUIBar and StatusBar)
     m_workAreaPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
@@ -100,18 +122,11 @@ void FlatFrameDocking::InitializeDockingLayout() {
     workAreaSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
     m_workAreaPanel->SetSizer(workAreaSizer);
     
-    // Get the existing sizer from the frame (if any) or create a new one
-    wxSizer* frameSizer = GetSizer();
-    if (!frameSizer) {
-        frameSizer = new wxBoxSizer(wxVERTICAL);
-        SetSizer(frameSizer);
-    }
+    // Add the work area panel to the main sizer
+    wxSizer* mainSizer = GetSizer();
+    mainSizer->Add(m_workAreaPanel, 1, wxEXPAND);
     
-    // Add the work area panel to the frame's sizer
-    // This should be added after FlatUIBar and before StatusBar
-    frameSizer->Add(m_workAreaPanel, 1, wxEXPAND);
-    
-    // Create status bar (at the bottom)
+    // Create status bar (at the bottom) - it will be added automatically to the frame
     CreateStatusBar(3);
     SetStatusText("Ready - Docking Layout Active", 0);
     
