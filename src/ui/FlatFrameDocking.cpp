@@ -382,7 +382,8 @@ void FlatFrameDocking::ResetDockingLayout() {
     m_propertyDock = nullptr;
     m_objectTreeDock = nullptr;
     m_canvasDock = nullptr;
-    m_outputDock = nullptr;
+    m_messageDock = nullptr;
+    m_performanceDock = nullptr;
     m_toolboxDock = nullptr;
     
     // Recreate default layout
