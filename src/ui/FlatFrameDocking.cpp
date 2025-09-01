@@ -123,7 +123,6 @@ void FlatFrameDocking::InitializeDockingLayout() {
     m_workAreaPanel->SetSizer(workAreaSizer);
     
     // Add the work area panel to the main sizer
-    wxSizer* mainSizer = GetSizer();
     mainSizer->Add(m_workAreaPanel, 1, wxEXPAND);
     
     // Create status bar (at the bottom) - it will be added automatically to the frame
