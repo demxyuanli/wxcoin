@@ -354,6 +354,14 @@ void FlatFrame::createPanels() {
 	if (m_mainSplitter) { m_mainSplitter->Destroy(); m_mainSplitter = nullptr; }
 	if (m_leftSplitter) { m_leftSplitter->Destroy(); m_leftSplitter = nullptr; }
 
+	// Skip ModernDockAdapter creation if using new docking system
+	if (IsUsingDockingSystem()) {
+		LOG_INF_S("Using new docking system, skipping ModernDockAdapter");
+		SetSizer(mainSizer);
+		Layout();
+		return;
+	}
+
 	// Use ModernDockAdapter to provide VS2022-style docking while maintaining compatibility
 	auto* dock = new ModernDockAdapter(this);
 	mainSizer->Add(dock, 1, wxEXPAND | wxALL, 2);

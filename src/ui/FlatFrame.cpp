@@ -25,6 +25,7 @@
 #include "Canvas.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
+#include "ui/PerformancePanel.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
 #include "GeometryFactory.h"
@@ -267,36 +268,70 @@ void FlatFrame::EnsurePanelsCreated()
 {
     // Create panels if they don't exist yet
     // These will be used by the docking system
+    // This code is adapted from FlatFrameInit.cpp to ensure compatibility
     
     if (!m_canvas) {
-        // Create a temporary parent for the panels
-        wxWindow* tempParent = this;
-        
-        // Create Canvas
-        m_canvas = new Canvas(tempParent);
+        // Create Canvas with proper setup
+        m_canvas = new Canvas(this);
+        m_canvas->SetName("Canvas");
         m_canvas->Hide();  // Hide until added to docking system
-        
-        // TODO: Set up canvas event handlers and connections
     }
     
     if (!m_propertyPanel) {
-        wxWindow* tempParent = this;
-        m_propertyPanel = new PropertyPanel(tempParent);
+        m_propertyPanel = new PropertyPanel(this);
+        m_propertyPanel->SetName("Properties");
         m_propertyPanel->Hide();
     }
     
     if (!m_objectTreePanel) {
-        wxWindow* tempParent = this;
-        m_objectTreePanel = new ObjectTreePanel(tempParent);
+        m_objectTreePanel = new ObjectTreePanel(this);
+        m_objectTreePanel->SetName("Works");
         m_objectTreePanel->Hide();
     }
     
     if (!m_messageOutput) {
-        wxWindow* tempParent = this;
-        m_messageOutput = new wxTextCtrl(tempParent, wxID_ANY, wxEmptyString,
+        // Create message output as it was in original code
+        m_messageOutput = new wxTextCtrl(this, wxID_ANY, "", 
                                        wxDefaultPosition, wxDefaultSize,
-                                       wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
+                                       wxTE_READONLY | wxTE_MULTILINE | wxBORDER_NONE);
         m_messageOutput->Hide();
+    }
+    
+    // Set up connections between panels (from FlatFrameInit.cpp)
+    if (m_objectTreePanel && m_propertyPanel) {
+        m_objectTreePanel->setPropertyPanel(m_propertyPanel);
+    }
+    
+    // Set up mouse handler and other connections if all panels exist
+    if (m_canvas && m_objectTreePanel && m_propertyPanel && !m_mouseHandler) {
+        m_mouseHandler = new MouseHandler(m_canvas, m_objectTreePanel, m_propertyPanel, m_commandManager);
+        m_canvas->getInputManager()->setMouseHandler(m_mouseHandler);
+        
+        NavigationController* navController = new NavigationController(m_canvas, m_canvas->getSceneManager());
+        m_canvas->getInputManager()->setNavigationController(navController);
+        m_mouseHandler->setNavigationController(navController);
+        
+        m_occViewer = new OCCViewer(m_canvas->getSceneManager());
+        m_canvas->setOCCViewer(m_occViewer);
+        m_canvas->getInputManager()->initializeStates();
+        m_canvas->setObjectTreePanel(m_objectTreePanel);
+        m_canvas->setCommandManager(m_commandManager);
+        
+        m_objectTreePanel->setOCCViewer(m_occViewer);
+        
+        if (!m_geometryFactory) {
+            m_geometryFactory = new GeometryFactory(
+                m_canvas->getSceneManager()->getObjectRoot(),
+                m_objectTreePanel,
+                m_propertyPanel,
+                m_commandManager,
+                m_occViewer
+            );
+        }
+        
+        if (m_canvas && m_canvas->getSceneManager()) {
+            m_canvas->getSceneManager()->resetView();
+        }
     }
 }
 

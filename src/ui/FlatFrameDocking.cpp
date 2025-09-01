@@ -2,6 +2,7 @@
 #include "Canvas.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
+#include "ui/PerformancePanel.h"
 #include "docking/DockArea.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
@@ -291,34 +292,10 @@ DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
 DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
     DockWidget* dock = new DockWidget("Performance", m_dockManager->containerWidget());
     
-    // Create performance monitoring panel
-    wxPanel* perfPanel = new wxPanel(dock);
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    // Create the real PerformancePanel as used in original code
+    PerformancePanel* perfPanel = new PerformancePanel(dock);
+    perfPanel->SetMinSize(wxSize(360, 140));
     
-    // Add performance metrics display
-    wxStaticText* fpsLabel = new wxStaticText(perfPanel, wxID_ANY, "FPS: 0");
-    wxStaticText* memLabel = new wxStaticText(perfPanel, wxID_ANY, "Memory: 0 MB");
-    wxStaticText* cpuLabel = new wxStaticText(perfPanel, wxID_ANY, "CPU: 0%");
-    wxStaticText* renderTimeLabel = new wxStaticText(perfPanel, wxID_ANY, "Render Time: 0 ms");
-    wxStaticText* trianglesLabel = new wxStaticText(perfPanel, wxID_ANY, "Triangles: 0");
-    
-    // Set font for better readability
-    wxFont font = fpsLabel->GetFont();
-    font.SetFamily(wxFONTFAMILY_TELETYPE);
-    fpsLabel->SetFont(font);
-    memLabel->SetFont(font);
-    cpuLabel->SetFont(font);
-    renderTimeLabel->SetFont(font);
-    trianglesLabel->SetFont(font);
-    
-    sizer->Add(fpsLabel, 0, wxEXPAND | wxALL, 5);
-    sizer->Add(memLabel, 0, wxEXPAND | wxALL, 5);
-    sizer->Add(cpuLabel, 0, wxEXPAND | wxALL, 5);
-    sizer->Add(renderTimeLabel, 0, wxEXPAND | wxALL, 5);
-    sizer->Add(trianglesLabel, 0, wxEXPAND | wxALL, 5);
-    sizer->AddStretchSpacer();
-    
-    perfPanel->SetSizer(sizer);
     dock->setWidget(perfPanel);
     
     // Configure dock widget
