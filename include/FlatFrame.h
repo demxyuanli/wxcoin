@@ -161,6 +161,8 @@ private:
 	void setupCommandSystem();
 	void onCommand(wxCommandEvent& event);
 	void onCommandFeedback(const CommandResult& result);
+	
+protected:
 	// Create CAD panels (called before docking layout)
 	void EnsurePanelsCreated();
 	
