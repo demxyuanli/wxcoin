@@ -140,9 +140,15 @@ void FlatFrameDocking::InitializeDockingLayout() {
     // Add the work area panel to the main sizer
     mainSizer->Add(m_workAreaPanel, 1, wxEXPAND);
     
-    // Create status bar (at the bottom) - it will be added automatically to the frame
-    CreateStatusBar(3);
-    SetStatusText("Ready - Docking Layout Active", 0);
+    // Use the same status bar creation as base class
+    addStatusBar();
+    if (auto* bar = GetFlatUIStatusBar()) {
+        bar->SetFieldsCount(3);
+        bar->SetStatusText("Ready - Docking Layout Active", 0);
+        bar->EnableProgressGauge(false);
+        bar->SetGaugeRange(100);
+        bar->SetGaugeValue(0);
+    }
     
     // Force layout update
     Layout();
