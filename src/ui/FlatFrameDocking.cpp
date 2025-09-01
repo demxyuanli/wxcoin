@@ -2,14 +2,21 @@
 #include "Canvas.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
+#include "ui/PerformancePanel.h"
+#include "MouseHandler.h"
+#include "NavigationController.h"
+#include "InputManager.h"
+#include "logger/Logger.h"
 #include "docking/DockArea.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
+#include "docking/DockLayoutConfig.h"
 #include <wx/textctrl.h>
 #include <wx/artprov.h>
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/file.h>
+#include <wx/stattext.h>
 
 using namespace ads;
 
@@ -24,27 +31,45 @@ wxBEGIN_EVENT_TABLE(FlatFrameDocking, FlatFrame)
     // View panel events
     EVT_MENU(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
     EVT_MENU(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnViewShowHidePanel)
-    EVT_MENU(ID_VIEW_OUTPUT, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_MESSAGE, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnViewShowHidePanel)
+    EVT_MENU(ID_VIEW_OUTPUT, FlatFrameDocking::OnViewShowHidePanel)  // Backward compatibility
     EVT_MENU(ID_VIEW_TOOLBOX, FlatFrameDocking::OnViewShowHidePanel)
     
     EVT_UPDATE_UI(ID_VIEW_PROPERTIES, FlatFrameDocking::OnUpdateUI)
     EVT_UPDATE_UI(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnUpdateUI)
-    EVT_UPDATE_UI(ID_VIEW_OUTPUT, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_MESSAGE, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnUpdateUI)
+    EVT_UPDATE_UI(ID_VIEW_OUTPUT, FlatFrameDocking::OnUpdateUI)  // Backward compatibility
     EVT_UPDATE_UI(ID_VIEW_TOOLBOX, FlatFrameDocking::OnUpdateUI)
+    
+    // Override base class size event to ensure docking system controls layout
+    EVT_SIZE(FlatFrameDocking::onSize)
 wxEND_EVENT_TABLE()
 
 FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, const wxSize& size)
     : FlatFrame(title, pos, size)
     , m_dockManager(nullptr)
+    , m_workAreaPanel(nullptr)
     , m_propertyDock(nullptr)
     , m_objectTreeDock(nullptr)
     , m_canvasDock(nullptr)
-    , m_outputDock(nullptr)
+    , m_messageDock(nullptr)
+    , m_performanceDock(nullptr)
     , m_toolboxDock(nullptr)
     , m_outputCtrl(nullptr)
 {
+    // IMPORTANT: At this point, base class has already called InitializeUI
+    // which may have created ModernDockAdapter if IsUsingDockingSystem() returned false
+    // We need to clean that up first
+    
     // Initialize docking system after base class construction
     InitializeDockingLayout();
+    
+    // IMPORTANT: EnsurePanelsCreated must be called AFTER InitializeDockingLayout
+    // because InitializeDockingLayout hides existing panels from base class
+    // and we need to ensure our panels are properly created and connected
+    EnsurePanelsCreated();
 }
 
 FlatFrameDocking::~FlatFrameDocking() {
@@ -63,11 +88,47 @@ bool FlatFrameDocking::Destroy() {
 }
 
 void FlatFrameDocking::InitializeDockingLayout() {
-    // Create main panel to hold the dock manager
-    wxPanel* mainPanel = new wxPanel(this);
+    // IMPORTANT: We need to remove/hide any panels created by the base class
+    // and replace them with our docking system
     
-    // Create dock manager on the main panel
-    m_dockManager = new DockManager(mainPanel);
+    wxLogDebug("InitializeDockingLayout: Starting");
+    
+    // Get the ribbon from base class
+    FlatUIBar* ribbon = GetUIBar();
+    
+    // Hide any existing children that might have been created by base class
+    wxWindowList& children = GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        wxWindow* child = *it;
+        // Keep FlatUIBar (ribbon) and status bar, hide everything else
+        if (child != ribbon && 
+            !child->IsKindOf(CLASSINFO(wxStatusBar)) && 
+            child != GetFlatUIStatusBar()) {
+            child->Hide();
+        }
+    }
+    
+    // Don't use SetSizer(nullptr) as it can break base class references
+    // Instead, get the existing sizer and clear it
+    wxSizer* oldSizer = GetSizer();
+    if (oldSizer) {
+        oldSizer->Clear(false);
+    }
+    
+    // Create a new main sizer for the frame
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    SetSizer(mainSizer);
+    
+    // Add the ribbon if it exists
+    if (ribbon) {
+        mainSizer->Add(ribbon, 0, wxEXPAND);
+    }
+    
+    // Create a panel for the main work area (between FlatUIBar and StatusBar)
+    m_workAreaPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+    
+    // Create dock manager to manage the work area
+    m_dockManager = new DockManager(m_workAreaPanel);
     
     // Configure dock manager
     ConfigureDockManager();
@@ -78,19 +139,47 @@ void FlatFrameDocking::InitializeDockingLayout() {
     // Create docking-specific menus
     CreateDockingMenus();
     
-    // Set up main panel sizer
-    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-    mainSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
-    mainPanel->SetSizer(mainSizer);
+    // Set up work area panel sizer
+    wxBoxSizer* workAreaSizer = new wxBoxSizer(wxVERTICAL);
+    workAreaSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
+    m_workAreaPanel->SetSizer(workAreaSizer);
     
-    // Add main panel to frame
-    wxBoxSizer* frameSizer = new wxBoxSizer(wxVERTICAL);
-    frameSizer->Add(mainPanel, 1, wxEXPAND);
-    SetSizer(frameSizer);
+    // Add the work area panel to the main sizer
+    mainSizer->Add(m_workAreaPanel, 1, wxEXPAND);
     
-    // Initialize status bar and other UI elements from base class
-    CreateStatusBar(3);
-    SetStatusText("Ready", 0);
+    // Get status bar from base class (should already exist from BorderlessFrameLogic constructor)
+    FlatUIStatusBar* statusBar = GetFlatUIStatusBar();
+    if (!statusBar) {
+        LOG_WRN_S("FlatUIStatusBar not found in InitializeDockingLayout, this should not happen!");
+        // As a fallback, create one (though this indicates a problem in initialization order)
+        statusBar = new FlatUIStatusBar(this);
+    }
+    
+    // Configure status bar
+    if (statusBar) {
+        statusBar->SetFieldsCount(3);
+        statusBar->SetStatusText("Ready - Docking Layout Active", 0);
+        statusBar->EnableProgressGauge(false);
+        statusBar->SetGaugeRange(100);
+        statusBar->SetGaugeValue(0);
+        
+        // Ensure status bar is added to the main sizer at the bottom
+        if (mainSizer && !mainSizer->GetItem(statusBar)) {
+            mainSizer->Add(statusBar, 0, wxEXPAND | wxALL, 1);
+        }
+        
+        // Ensure status bar is visible
+        statusBar->Show();
+    }
+    
+    // Force layout update
+    Layout();
+    m_workAreaPanel->Layout();
+    
+    // Ensure our docking system has focus
+    if (m_canvasDock && m_canvasDock->widget()) {
+        m_canvasDock->widget()->SetFocus();
+    }
 }
 
 void FlatFrameDocking::ConfigureDockManager() {
@@ -101,40 +190,94 @@ void FlatFrameDocking::ConfigureDockManager() {
     m_dockManager->setConfigFlag(AllTabsHaveCloseButton, true);
     m_dockManager->setConfigFlag(FocusHighlighting, true);
     
+    // Configure default layout sizes
+    DockLayoutConfig layoutConfig;
+    layoutConfig.leftAreaWidth = 300;      // Width for object tree and properties
+    layoutConfig.bottomAreaHeight = 150;   // Height for message/performance panel
+    layoutConfig.usePercentage = false;
+    m_dockManager->setLayoutConfig(layoutConfig);
+    
     // Note: Auto-hide configuration is done through the AutoHideManager
     // which is managed internally by DockManager
 }
 
 void FlatFrameDocking::CreateDockingLayout() {
-    // Create main canvas dock widget (center)
+    // 1. Create main canvas dock widget (center)
     m_canvasDock = CreateCanvasDockWidget();
     m_dockManager->addDockWidget(CenterDockWidgetArea, m_canvasDock);
     
-    // Create object tree dock widget (left)
+    // 2. Create object tree dock widget (left-top)
     m_objectTreeDock = CreateObjectTreeDockWidget();
-    m_dockManager->addDockWidget(LeftDockWidgetArea, m_objectTreeDock);
+    DockArea* leftTopArea = m_dockManager->addDockWidget(LeftDockWidgetArea, m_objectTreeDock);
     
-    // Create property panel dock widget (right)
+    // 3. Create property panel dock widget (left-bottom) - split below object tree
     m_propertyDock = CreatePropertyDockWidget();
-    m_dockManager->addDockWidget(RightDockWidgetArea, m_propertyDock);
+    m_dockManager->addDockWidget(BottomDockWidgetArea, m_propertyDock, leftTopArea);
     
-    // Create output dock widget (bottom)
-    m_outputDock = CreateOutputDockWidget();
-    m_dockManager->addDockWidget(BottomDockWidgetArea, m_outputDock);
+    // 4. Create message dock widget (bottom) - renamed from output
+    m_messageDock = CreateMessageDockWidget();
+    DockArea* bottomArea = m_dockManager->addDockWidget(BottomDockWidgetArea, m_messageDock);
     
-    // Create toolbox dock widget (tabbed with object tree)
-    m_toolboxDock = CreateToolboxDockWidget();
-    m_dockManager->addDockWidget(CenterDockWidgetArea, m_toolboxDock, m_objectTreeDock->dockAreaWidget());
+    // 5. Create performance dock widget (bottom tab with message)
+    m_performanceDock = CreatePerformanceDockWidget();
+    m_dockManager->addDockWidget(CenterDockWidgetArea, m_performanceDock, bottomArea);
     
     // Set initial focus to canvas
     m_canvasDock->setAsCurrentTab();
+    
+    // CRITICAL: After all panels are docked, ensure Canvas has all necessary connections
+    // This is especially important if Canvas was reparented
+    Canvas* canvas = GetCanvas();
+    if (canvas && canvas->getInputManager()) {
+        // Ensure MouseHandler is connected
+        MouseHandler* mouseHandler = dynamic_cast<MouseHandler*>(canvas->getInputManager()->getMouseHandler());
+        if (!mouseHandler && GetObjectTreePanel() && GetPropertyPanel()) {
+            // Recreate MouseHandler if it's missing
+            mouseHandler = new MouseHandler(canvas, GetObjectTreePanel(), GetPropertyPanel(), canvas->getCommandManager());
+            canvas->getInputManager()->setMouseHandler(mouseHandler);
+            
+            // Also ensure NavigationController is set
+            NavigationController* navController = new NavigationController(canvas, canvas->getSceneManager());
+            canvas->getInputManager()->setNavigationController(navController);
+            mouseHandler->setNavigationController(navController);
+        }
+        
+        // Canvas will refresh itself when needed, no need to force it here
+    }
 }
 
 DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
     DockWidget* dock = new DockWidget("3D View", m_dockManager->containerWidget());
     
-    // Create canvas (OCCViewer)
-    Canvas* canvas = new Canvas(dock);
+    // Use existing canvas from base class
+    Canvas* canvas = GetCanvas();
+    if (!canvas) {
+        // Only create new if base class doesn't have one
+        canvas = new Canvas(dock);
+    } else {
+        // For OpenGL canvas, we need to be very careful with reparenting
+        // First, ensure the canvas is not in any sizer
+        if (canvas->GetContainingSizer()) {
+            canvas->GetContainingSizer()->Detach(canvas);
+        }
+        
+        // Hide temporarily to avoid rendering issues during reparent
+        canvas->Hide();
+        
+        // Note: wxGLCanvas manages its own context internally
+        // We don't need to manually save/restore the GL context during reparenting
+        // The canvas will handle this when it's refreshed
+        
+        // Now reparent
+        canvas->Reparent(dock);
+        
+        // Show again after reparenting
+        canvas->Show();
+        
+        // Force a refresh to reinitialize OpenGL if needed
+        canvas->Refresh(false);  // Use false to avoid immediate repaint
+    }
+    
     dock->setWidget(canvas);
     
     // Configure dock widget
@@ -149,8 +292,18 @@ DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
 DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
     DockWidget* dock = new DockWidget("Properties", m_dockManager->containerWidget());
     
-    // Create property panel
-    PropertyPanel* propertyPanel = new PropertyPanel(dock);
+    // Use existing property panel from base class if available, otherwise create new
+    PropertyPanel* propertyPanel = GetPropertyPanel();
+    if (!propertyPanel) {
+        propertyPanel = new PropertyPanel(dock);
+    } else {
+        // Remove from existing sizer if any
+        if (propertyPanel->GetContainingSizer()) {
+            propertyPanel->GetContainingSizer()->Detach(propertyPanel);
+        }
+        // Reparent existing panel to the dock widget
+        propertyPanel->Reparent(dock);
+    }
     dock->setWidget(propertyPanel);
     
     // Configure dock widget
@@ -166,8 +319,18 @@ DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
 DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
     DockWidget* dock = new DockWidget("Object Tree", m_dockManager->containerWidget());
     
-    // Create object tree panel
-    ObjectTreePanel* objectTreePanel = new ObjectTreePanel(dock);
+    // Use existing object tree panel from base class if available, otherwise create new
+    ObjectTreePanel* objectTreePanel = GetObjectTreePanel();
+    if (!objectTreePanel) {
+        objectTreePanel = new ObjectTreePanel(dock);
+    } else {
+        // Remove from existing sizer if any
+        if (objectTreePanel->GetContainingSizer()) {
+            objectTreePanel->GetContainingSizer()->Detach(objectTreePanel);
+        }
+        // Reparent existing panel to the dock widget
+        objectTreePanel->Reparent(dock);
+    }
     dock->setWidget(objectTreePanel);
     
     // Configure dock widget
@@ -180,18 +343,28 @@ DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
     return dock;
 }
 
-DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
-    DockWidget* dock = new DockWidget("Output", m_dockManager->containerWidget());
+DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
+    DockWidget* dock = new DockWidget("Message", m_dockManager->containerWidget());
     
-    // Create output text control
-    wxTextCtrl* output = new wxTextCtrl(dock, wxID_ANY, wxEmptyString,
-                                        wxDefaultPosition, wxDefaultSize,
-                                        wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
-    
-    // Add initial content
-    output->SetDefaultStyle(wxTextAttr(*wxBLACK));
-    output->AppendText("Application started.\n");
-    output->AppendText("Docking system initialized.\n");
+    // Use existing message output from base class if available, otherwise create new
+    wxTextCtrl* output = GetMessageOutput();
+    if (!output) {
+        output = new wxTextCtrl(dock, wxID_ANY, wxEmptyString,
+                               wxDefaultPosition, wxDefaultSize,
+                               wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
+        
+        // Add initial content
+        output->SetDefaultStyle(wxTextAttr(*wxBLACK));
+        output->AppendText("Application started.\n");
+        output->AppendText("Docking system initialized.\n");
+    } else {
+        // Remove from existing sizer if any
+        if (output->GetContainingSizer()) {
+            output->GetContainingSizer()->Detach(output);
+        }
+        // Reparent existing output to the dock widget
+        output->Reparent(dock);
+    }
     
     dock->setWidget(output);
     
@@ -204,6 +377,33 @@ DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
     
     // Store output control for later use
     m_outputCtrl = output;
+    
+    return dock;
+}
+
+DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
+    DockWidget* dock = new DockWidget("Performance", m_dockManager->containerWidget());
+    
+    // Create a container panel first
+    wxPanel* container = new wxPanel(dock);
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Create PerformancePanel with the container as parent
+    PerformancePanel* perfPanel = new PerformancePanel(container);
+    perfPanel->SetMinSize(wxSize(360, 140));
+    
+    // Add performance panel to container
+    sizer->Add(perfPanel, 1, wxEXPAND);
+    container->SetSizer(sizer);
+    
+    // Set the container as the dock widget
+    dock->setWidget(container);
+    
+    // Configure dock widget
+    dock->setFeature(DockWidgetClosable, true);
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, false);  // Performance usually stays in bottom
+    dock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MENU));
     
     return dock;
 }
@@ -255,6 +455,16 @@ void FlatFrameDocking::CreateDockingMenus() {
         viewMenu = new wxMenu();
         menuBar->Append(viewMenu, "&View");
     }
+    
+    // Add panel visibility items
+    viewMenu->AppendCheckItem(ID_VIEW_OBJECT_TREE, "Object Tree\tCtrl+Alt+O", 
+                              "Show/hide object tree panel");
+    viewMenu->AppendCheckItem(ID_VIEW_PROPERTIES, "Properties\tCtrl+Alt+P", 
+                              "Show/hide properties panel");
+    viewMenu->AppendCheckItem(ID_VIEW_MESSAGE, "Message\tCtrl+Alt+M", 
+                              "Show/hide message output panel");
+    viewMenu->AppendCheckItem(ID_VIEW_PERFORMANCE, "Performance\tCtrl+Alt+F", 
+                              "Show/hide performance monitor panel");
     
     // Add separator before docking items
     viewMenu->AppendSeparator();
@@ -316,7 +526,8 @@ void FlatFrameDocking::ResetDockingLayout() {
     m_propertyDock = nullptr;
     m_objectTreeDock = nullptr;
     m_canvasDock = nullptr;
-    m_outputDock = nullptr;
+    m_messageDock = nullptr;
+    m_performanceDock = nullptr;
     m_toolboxDock = nullptr;
     
     // Recreate default layout
@@ -391,9 +602,16 @@ void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
             }
             break;
             
-        case ID_VIEW_OUTPUT:
-            if (m_outputDock) {
-                m_outputDock->toggleView();
+        case ID_VIEW_MESSAGE:
+        case ID_VIEW_OUTPUT:  // Backward compatibility
+            if (m_messageDock) {
+                m_messageDock->toggleView();
+            }
+            break;
+            
+        case ID_VIEW_PERFORMANCE:
+            if (m_performanceDock) {
+                m_performanceDock->toggleView();
             }
             break;
             
@@ -425,9 +643,16 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
             }
             break;
             
-        case ID_VIEW_OUTPUT:
-            if (m_outputDock) {
-                event.Check(m_outputDock->isVisible());
+        case ID_VIEW_MESSAGE:
+        case ID_VIEW_OUTPUT:  // Backward compatibility
+            if (m_messageDock) {
+                event.Check(m_messageDock->isVisible());
+            }
+            break;
+            
+        case ID_VIEW_PERFORMANCE:
+            if (m_performanceDock) {
+                event.Check(m_performanceDock->isVisible());
             }
             break;
             
@@ -441,4 +666,20 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
             // Ignore other events
             break;
     }
+}
+
+void FlatFrameDocking::onSize(wxSizeEvent& event) {
+    // IMPORTANT: We handle our own layout through the docking system
+    // Do NOT call base class onSize which might interfere with our layout
+    
+    // Just let the event propagate to child windows (docking system)
+    event.Skip();
+    
+    // NOTE: Removed Refresh() call here as it was causing performance issues
+    // The docking system will handle its own layout updates
+}
+
+wxWindow* FlatFrameDocking::GetMainWorkArea() {
+    // Return the dock container widget as the main work area
+    return m_dockManager ? m_dockManager->containerWidget() : m_workAreaPanel;
 }

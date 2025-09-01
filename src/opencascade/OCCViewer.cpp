@@ -580,8 +580,34 @@ void OCCViewer::setMeshDeflection(double deflection, bool remesh)
 {
 	if (m_meshParams.deflection != deflection) {
 		m_meshParams.deflection = deflection;
+
+		// Throttle remeshing to prevent excessive calls
 		if (remesh) {
-			remeshAllGeometries();
+			static wxLongLong lastRemeshTime = 0;
+			wxLongLong currentTime = wxGetLocalTimeMillis();
+			const int MIN_REMESH_INTERVAL = 200; // Minimum 200ms between remesh operations
+
+			if (currentTime - lastRemeshTime >= MIN_REMESH_INTERVAL) {
+				try {
+					remeshAllGeometries();
+					lastRemeshTime = currentTime;
+					LOG_DBG_S("Remeshed all geometries with deflection: " + std::to_string(deflection));
+				}
+				catch (const std::exception& e) {
+					LOG_ERR_S("OCCViewer::setMeshDeflection: Exception during remesh: " + std::string(e.what()));
+					// Don't update lastRemeshTime if remesh failed
+				}
+				catch (...) {
+					LOG_ERR_S("OCCViewer::setMeshDeflection: Unknown exception during remesh");
+					// Don't update lastRemeshTime if remesh failed
+				}
+			}
+			else {
+				// Skip remesh if too soon after last one
+				long long timeDiff = (currentTime - lastRemeshTime).GetValue();
+				LOG_DBG_S("Remesh throttled for deflection: " + std::to_string(deflection) +
+					" (last remesh was " + std::to_string(timeDiff) + "ms ago)");
+			}
 		}
 	}
 }

@@ -1,5 +1,8 @@
 #pragma once
 
+// Define this to prevent base class from including legacy layout components
+#define USE_NEW_DOCKING_SYSTEM
+
 #include "FlatFrame.h"
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
@@ -37,8 +40,9 @@ public:
     ads::DockWidget* CreatePropertyDockWidget();
     ads::DockWidget* CreateObjectTreeDockWidget();
     ads::DockWidget* CreateCanvasDockWidget();
-    ads::DockWidget* CreateOutputDockWidget();
-    ads::DockWidget* CreateToolboxDockWidget();
+    ads::DockWidget* CreateMessageDockWidget();
+    ads::DockWidget* CreatePerformanceDockWidget();
+    ads::DockWidget* CreateToolboxDockWidget();  // Keep for compatibility, but not used
     
     // Access to dock manager
     ads::DockManager* GetDockManager() const { return m_dockManager; }
@@ -55,15 +59,26 @@ protected:
     void OnDockingManagePerspectives(wxCommandEvent& event);
     void OnDockingToggleAutoHide(wxCommandEvent& event);
     
+    // Override base class layout events to prevent interference
+    void onSize(wxSizeEvent& event);
+    
+    // Override to indicate we're using docking system
+    virtual bool IsUsingDockingSystem() const override { return true; }
+    
+    // Override to return our dock container as the main work area
+    virtual wxWindow* GetMainWorkArea() override;
+    
 private:
     ads::DockManager* m_dockManager;
+    wxPanel* m_workAreaPanel;
     
     // Dock widgets for main panels
     ads::DockWidget* m_propertyDock;
     ads::DockWidget* m_objectTreeDock;
     ads::DockWidget* m_canvasDock;
-    ads::DockWidget* m_outputDock;
-    ads::DockWidget* m_toolboxDock;
+    ads::DockWidget* m_messageDock;      // Renamed from m_outputDock
+    ads::DockWidget* m_performanceDock;  // New performance panel
+    ads::DockWidget* m_toolboxDock;      // Keep for compatibility
     
     // Output control
     wxTextCtrl* m_outputCtrl;
@@ -87,6 +102,8 @@ enum {
     // View panel IDs
     ID_VIEW_PROPERTIES,
     ID_VIEW_OBJECT_TREE,
-    ID_VIEW_OUTPUT,
-    ID_VIEW_TOOLBOX
+    ID_VIEW_MESSAGE,
+    ID_VIEW_PERFORMANCE,
+    ID_VIEW_OUTPUT,      // Keep for backward compatibility
+    ID_VIEW_TOOLBOX      // Keep for backward compatibility
 };

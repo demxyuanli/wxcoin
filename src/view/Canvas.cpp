@@ -51,6 +51,8 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 	, m_objectTreePanel(nullptr)
 	, m_commandManager(nullptr)
 	, m_occViewer(nullptr)
+	, m_lastHoverPos(-1, -1)
+	, m_hoverUpdateCounter(0)
 {
 	LOG_INF_S("Canvas::Canvas: Initializing");
 
@@ -204,7 +206,7 @@ void Canvas::onPaint(wxPaintEvent& event) {
 	if (m_eventCoordinator) {
 		m_eventCoordinator->handlePaintEvent(event);
 	}
-	event.Skip();
+	// Don't skip paint events to avoid unnecessary propagation
 }
 
 void Canvas::onSize(wxSizeEvent& event) {
@@ -228,23 +230,64 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 void Canvas::onMouseEvent(wxMouseEvent& event) {
 	// Debug: log incoming mouse event
 	// Check if this is an interaction event that should trigger LOD
-	bool isInteractionEvent = false;
+	// Only trigger for actual navigation operations, not simple mouse movement
+	bool isNavigationEvent = false;
+	static bool wasDragging = false;
+	static wxPoint lastDragPos(-1, -1);
+
 	if (event.GetEventType() == wxEVT_LEFT_DOWN ||
 		event.GetEventType() == wxEVT_RIGHT_DOWN ||
 		event.GetEventType() == wxEVT_MOTION ||
 		event.GetEventType() == wxEVT_MOUSEWHEEL) {
-		isInteractionEvent = true;
+
+		// Only consider mouse wheel as navigation (zoom)
+		if (event.GetEventType() == wxEVT_MOUSEWHEEL) {
+			isNavigationEvent = true;
+		}
+		// For mouse motion, only trigger if we're actually dragging
+		else if (event.GetEventType() == wxEVT_MOTION) {
+			bool isDragging = event.LeftIsDown() || event.RightIsDown() || event.MiddleIsDown();
+			if (isDragging) {
+				if (!wasDragging) {
+					// Start of drag - trigger LOD
+					isNavigationEvent = true;
+					lastDragPos = event.GetPosition();
+				}
+				else {
+					// Check if moved significantly enough to be navigation
+					wxPoint currentPos = event.GetPosition();
+					int distance = (currentPos - lastDragPos).x * (currentPos - lastDragPos).x +
+					               (currentPos - lastDragPos).y * (currentPos - lastDragPos).y;
+					if (distance > 100) { // Require significant movement
+						isNavigationEvent = true;
+						lastDragPos = currentPos;
+					}
+				}
+			}
+			wasDragging = isDragging;
+		}
+		// Mouse button down events are potential navigation starts
+		else if (event.GetEventType() == wxEVT_LEFT_DOWN ||
+		         event.GetEventType() == wxEVT_RIGHT_DOWN) {
+			isNavigationEvent = true;
+		}
 	}
 
-	// Trigger LOD interaction if enabled
-	if (isInteractionEvent && m_occViewer) {
+	// Trigger LOD interaction only for actual navigation events
+	if (isNavigationEvent && m_occViewer) {
 		m_occViewer->startLODInteraction();
 	}
 	
-	// Update hover outline on mouse move
+	// Update hover outline on mouse move (with throttling)
 	if (event.GetEventType() == wxEVT_MOTION && m_occViewer) {
 		wxPoint screenPos = event.GetPosition();
-		m_occViewer->updateHoverSilhouetteAt(screenPos);
+		// Only update if moved significantly or every 3rd frame
+		int distance = (screenPos - m_lastHoverPos).x * (screenPos - m_lastHoverPos).x + 
+		               (screenPos - m_lastHoverPos).y * (screenPos - m_lastHoverPos).y;
+		if (distance > 25 || ++m_hoverUpdateCounter % 3 == 0) {
+			m_occViewer->updateHoverSilhouetteAt(screenPos);
+			m_lastHoverPos = screenPos;
+		}
 	}
 	
 	// Clear hover outline when mouse leaves window

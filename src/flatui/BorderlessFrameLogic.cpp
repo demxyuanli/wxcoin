@@ -39,6 +39,9 @@ BorderlessFrameLogic::BorderlessFrameLogic(wxWindow* parent, wxWindowID id, cons
 	m_mainSizer = new wxBoxSizer(wxVERTICAL);
 	SetSizer(m_mainSizer);
 	m_statusBar = new FlatUIStatusBar(this);
+	
+	// Note: Don't add status bar to sizer here - it will be handled by derived classes
+	// This allows derived classes to control the layout
 
 	Refresh(); // Ensure background is painted initially
 }
@@ -533,10 +536,29 @@ void BorderlessFrameLogic::SetSize(const wxSize& size)
 
 void BorderlessFrameLogic::addStatusBar()
 {
-	// Call the base wxFrame::SetSize method
-	m_mainSizer->Add(m_statusBar, 0, wxEXPAND | wxALL, 1);
+	// Ensure status bar exists and main sizer is valid
+	if (!m_statusBar) {
+		m_statusBar = new FlatUIStatusBar(this);
+	}
+	
+	// Only add to sizer if not already added
+	if (m_mainSizer && !m_mainSizer->GetItem(m_statusBar)) {
+		m_mainSizer->Add(m_statusBar, 0, wxEXPAND | wxALL, 1);
+	}
 }
 
 void BorderlessFrameLogic::SetStatusText(const wxString& text, int field) {
 	if (m_statusBar) m_statusBar->SetStatusText(text, field);
+}
+
+void BorderlessFrameLogic::SetSizer(wxSizer* sizer, bool deleteOld) {
+	// Update m_mainSizer if the new sizer is a wxBoxSizer
+	if (sizer && sizer->IsKindOf(CLASSINFO(wxBoxSizer))) {
+		m_mainSizer = static_cast<wxBoxSizer*>(sizer);
+	} else if (!sizer) {
+		m_mainSizer = nullptr;
+	}
+	
+	// Call base class implementation
+	wxFrame::SetSizer(sizer, deleteOld);
 }

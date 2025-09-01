@@ -851,6 +851,12 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
 }
 
 void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
+    // Only process events that originate from this widget
+    if (event.GetEventObject() != this) {
+        event.Skip();
+        return;
+    }
+    
     // Save manager reference at the beginning
     DockManager* manager = m_dockArea ? m_dockArea->dockManager() : nullptr;
     
@@ -870,7 +876,13 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
     }
     
     if (oldHovered != m_hoveredTab) {
-        Refresh();
+        // Only refresh the affected tab areas instead of the whole bar
+        if (oldHovered >= 0 && oldHovered < static_cast<int>(m_tabs.size())) {
+            RefreshRect(m_tabs[oldHovered].rect);
+        }
+        if (m_hoveredTab >= 0 && m_hoveredTab < static_cast<int>(m_tabs.size())) {
+            RefreshRect(m_tabs[m_hoveredTab].rect);
+        }
     }
     
     // Handle dragging
@@ -1611,6 +1623,12 @@ void DockAreaMergedTitleBar::onMouseLeftUp(wxMouseEvent& event) {
 }
 
 void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
+    // Only process events that originate from this widget
+    if (event.GetEventObject() != this) {
+        event.Skip();
+        return;
+    }
+    
     wxPoint pos = event.GetPosition();
     int oldHoveredTab = m_hoveredTab;
     m_hoveredTab = getTabAt(pos);
@@ -1646,7 +1664,24 @@ void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
         oldPinHovered != m_pinButtonHovered ||
         oldCloseHovered != m_closeButtonHovered ||
         oldAutoHideHovered != m_autoHideButtonHovered) {
-        Refresh();
+        // Use targeted refresh instead of refreshing the whole bar
+        if (oldHoveredTab != m_hoveredTab) {
+            if (oldHoveredTab >= 0 && oldHoveredTab < static_cast<int>(m_tabs.size())) {
+                RefreshRect(m_tabs[oldHoveredTab].rect);
+            }
+            if (m_hoveredTab >= 0 && m_hoveredTab < static_cast<int>(m_tabs.size())) {
+                RefreshRect(m_tabs[m_hoveredTab].rect);
+            }
+        }
+        if (oldPinHovered != m_pinButtonHovered) {
+            RefreshRect(m_pinButtonRect);
+        }
+        if (oldCloseHovered != m_closeButtonHovered) {
+            RefreshRect(m_closeButtonRect);
+        }
+        if (oldAutoHideHovered != m_autoHideButtonHovered) {
+            RefreshRect(m_autoHideButtonRect);
+        }
     }
 
     // Handle dragging

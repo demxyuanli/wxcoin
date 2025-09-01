@@ -28,6 +28,7 @@ public:
 
 private:
 	void onTimer(wxTimerEvent&);
+	double getAdaptiveDeflection(bool roughMode) const;
 
 private:
 	OCCViewer* m_viewer{ nullptr };
