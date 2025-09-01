@@ -100,7 +100,9 @@ void FlatFrameDocking::InitializeDockingLayout() {
     for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
         wxWindow* child = *it;
         // Keep FlatUIBar (ribbon) and status bar, hide everything else
-        if (child != ribbon && !child->IsKindOf(CLASSINFO(wxStatusBar))) {
+        if (child != ribbon && 
+            !child->IsKindOf(CLASSINFO(wxStatusBar)) && 
+            child != GetFlatUIStatusBar()) {
             child->Hide();
         }
     }
@@ -164,6 +166,9 @@ void FlatFrameDocking::InitializeDockingLayout() {
         if (mainSizer && !mainSizer->GetItem(statusBar)) {
             mainSizer->Add(statusBar, 0, wxEXPAND | wxALL, 1);
         }
+        
+        // Ensure status bar is visible
+        statusBar->Show();
     }
     
     // Force layout update

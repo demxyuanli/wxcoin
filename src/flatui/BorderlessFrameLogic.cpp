@@ -39,6 +39,9 @@ BorderlessFrameLogic::BorderlessFrameLogic(wxWindow* parent, wxWindowID id, cons
 	m_mainSizer = new wxBoxSizer(wxVERTICAL);
 	SetSizer(m_mainSizer);
 	m_statusBar = new FlatUIStatusBar(this);
+	
+	// Note: Don't add status bar to sizer here - it will be handled by derived classes
+	// This allows derived classes to control the layout
 
 	Refresh(); // Ensure background is painted initially
 }
