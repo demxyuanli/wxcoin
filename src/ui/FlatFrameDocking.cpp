@@ -247,7 +247,7 @@ DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
         canvas->Show();
         
         // Force a refresh to reinitialize OpenGL if needed
-        canvas->Refresh(true);
+        canvas->Refresh(false);  // Use false to avoid immediate repaint
     }
     
     dock->setWidget(canvas);
