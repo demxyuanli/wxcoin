@@ -6,6 +6,7 @@
 #include <wx/msgdlg.h>
 #include <wx/app.h>
 #include <wx/thread.h>
+#include <wx/timer.h>
 #include "logger/Logger.h"
 #include <chrono>
 #include "FlatFrame.h"
@@ -53,7 +54,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL) {
-		if (statusBar) { statusBar->SetGaugeValue(0); }
+		if (statusBar) { 
+			statusBar->SetGaugeValue(0); 
+			statusBar->EnableProgressGauge(false);
+		}
 		return CommandResult(false, "STEP import cancelled", commandType);
 	}
 
@@ -227,9 +231,18 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			}
 			if (statusBar) { 
 				statusBar->SetGaugeValue(100); 
-				// Let the progress bar stay at 100% for a moment before hiding
-				// Note: In the original code, the progress timer in FlatFrame handles hiding
-				// We should not immediately hide it here
+				// Schedule hiding the progress bar after a short delay
+				// This gives user time to see the 100% completion
+				wxTimer* hideTimer = new wxTimer();
+				hideTimer->Bind(wxEVT_TIMER, [statusBar, hideTimer](wxTimerEvent&) {
+					if (statusBar) {
+						statusBar->EnableProgressGauge(false);
+						LOG_DBG_S("Progress gauge hidden after import completion");
+					}
+					hideTimer->Stop();
+					delete hideTimer;
+				});
+				hideTimer->StartOnce(1000); // Hide after 1 second
 			}
 			if (flatFrame) { flatFrame->appendMessage("STEP import completed."); }
 
@@ -275,7 +288,8 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			}
 			if (statusBar) { 
 				statusBar->SetGaugeValue(0); 
-				// Don't immediately hide - let it be managed by the frame
+				// Hide the progress bar after showing the error
+				statusBar->EnableProgressGauge(false);
 			}
 			return CommandResult(false, "No valid geometries found in selected files", commandType);
 		}
