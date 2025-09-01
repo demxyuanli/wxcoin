@@ -21,6 +21,12 @@
 #include <TopoDS_Compound.hxx>
 #include <BRep_Builder.hxx>
 #include <Standard_Failure.hxx>
+#include <Standard_ConstructionError.hxx>
+#include <BRepCheck_Analyzer.hxx>
+#include <BRepCheck_ListOfStatus.hxx>
+#include <BRepCheck_ListIteratorOfListOfStatus.hxx>
+#include <BRepCheck_Status.hxx>
+#include <ShapeFix_Shape.hxx>
 
 // File system includes
 #include <filesystem>
@@ -201,6 +207,8 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 		std::vector<TopoDS_Shape> shapes;
 		extractShapes(shape, shapes);
 
+		LOG_INF_S("Converting " + std::to_string(shapes.size()) + " shapes to geometries for: " + baseName);
+
 		// Use parallel processing if enabled and there are multiple shapes
 		if (options.enableParallelProcessing && shapes.size() > 1) {
 			geometries = processShapesParallel(shapes, baseName, options, progress, progressStart, progressSpan);
@@ -208,12 +216,18 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 		else {
 			// Sequential processing with progress
 			size_t total = shapes.size();
+			size_t successCount = 0;
+			size_t failCount = 0;
+			
 			for (size_t i = 0; i < shapes.size(); ++i) {
 				if (!shapes[i].IsNull()) {
 					std::string name = baseName + "_" + std::to_string(i);
 					auto geometry = processSingleShape(shapes[i], name, options);
 					if (geometry) {
 						geometries.push_back(geometry);
+						successCount++;
+					} else {
+						failCount++;
 					}
 				}
 				if (progress && total > 0) {
@@ -222,7 +236,19 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 					progress(pct, "convert");
 				}
 			}
+			
+			if (failCount > 0) {
+				LOG_WRN_S("Failed to process " + std::to_string(failCount) + " out of " + 
+					std::to_string(total) + " shapes for: " + baseName);
+			}
 		}
+	}
+	catch (const Standard_ConstructionError& e) {
+		LOG_ERR_S("Construction error converting shapes: " + std::string(e.GetMessageString()));
+		LOG_ERR_S("This typically indicates invalid or degenerate geometry in the STEP file");
+	}
+	catch (const Standard_Failure& e) {
+		LOG_ERR_S("OpenCASCADE error converting shapes: " + std::string(e.GetMessageString()));
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception converting shape to geometries: " + std::string(e.what()));
@@ -259,16 +285,34 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::processShapesParallel(
 
 	// Collect results with progress
 	size_t total = futures.size();
+	size_t successCount = 0;
+	size_t failCount = 0;
+	
 	for (size_t idx = 0; idx < futures.size(); ++idx) {
-		auto geometry = futures[idx].get();
-		if (geometry) {
-			geometries.push_back(geometry);
+		try {
+			auto geometry = futures[idx].get();
+			if (geometry) {
+				geometries.push_back(geometry);
+				successCount++;
+			} else {
+				failCount++;
+			}
 		}
+		catch (const std::exception& e) {
+			LOG_ERR_S("Error in parallel shape processing: " + std::string(e.what()));
+			failCount++;
+		}
+		
 		if (progress && total > 0) {
 			int pct = progressStart + (int)std::round(((double)(idx + 1) / (double)total) * progressSpan);
 			pct = std::max(progressStart, std::min(progressStart + progressSpan, pct));
 			progress(pct, "convert");
 		}
+	}
+	
+	if (failCount > 0) {
+		LOG_WRN_S("Parallel processing: Failed " + std::to_string(failCount) + 
+			" out of " + std::to_string(total) + " shapes");
 	}
 
 	return geometries;
@@ -280,10 +324,51 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 	const OptimizationOptions& options)
 {
 	if (shape.IsNull()) {
+		LOG_WRN_S("Skipping null shape for: " + name);
 		return nullptr;
 	}
 
 	try {
+		// Validate the shape before processing
+		BRepCheck_Analyzer analyzer(shape);
+		if (!analyzer.IsValid()) {
+			LOG_WRN_S("Invalid shape detected for: " + name + ", attempting to fix...");
+			
+			// Log detailed validation results
+			BRepCheck_ListOfStatus status;
+			analyzer.Status(status);
+			for (BRepCheck_ListIteratorOfListOfStatus it(status); it.More(); it.Next()) {
+				BRepCheck_Status stat = it.Value();
+				LOG_WRN_S("  Validation issue: " + std::to_string(static_cast<int>(stat)));
+			}
+			
+			// Try to fix the shape
+			ShapeFix_Shape shapeFixer(shape);
+			shapeFixer.SetPrecision(options.precision);
+			shapeFixer.SetMaxTolerance(options.precision * 10);
+			shapeFixer.Perform();
+			
+			TopoDS_Shape fixedShape = shapeFixer.Shape();
+			if (!fixedShape.IsNull()) {
+				LOG_INF_S("Shape fixed successfully for: " + name);
+				// Continue with fixed shape
+				auto geometry = std::make_shared<OCCGeometry>(name);
+				geometry->setShape(fixedShape);
+				
+				// Set better default color for imported STEP models
+				Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+				geometry->setColor(defaultColor);
+				
+				// Remove transparency for a solid appearance
+				geometry->setTransparency(0.0);
+				
+				return geometry;
+			} else {
+				LOG_ERR_S("Failed to fix invalid shape for: " + name);
+				return nullptr;
+			}
+		}
+
 		auto geometry = std::make_shared<OCCGeometry>(name);
 		geometry->setShape(shape);
 
@@ -300,6 +385,15 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 		}
 
 		return geometry;
+	}
+	catch (const Standard_ConstructionError& e) {
+		LOG_ERR_S("Construction error processing shape " + name + ": " + std::string(e.GetMessageString()));
+		LOG_ERR_S("This often happens with degenerate or invalid geometry. Skipping this shape.");
+		return nullptr;
+	}
+	catch (const Standard_Failure& e) {
+		LOG_ERR_S("OpenCASCADE error processing shape " + name + ": " + std::string(e.GetMessageString()));
+		return nullptr;
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception processing shape " + name + ": " + std::string(e.what()));

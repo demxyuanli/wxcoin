@@ -120,7 +120,14 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				LOG_WRN_S("File " + std::to_string(i + 1) + "/" + std::to_string(filePaths.size()) +
 					" failed: " + (result.success ? "No geometries" : result.errorMessage));
 				if (flatFrame) {
-					flatFrame->appendMessage(wxString::Format("Failed to parse: %s", result.success ? "No geometries" : result.errorMessage));
+					wxString errorMsg = result.success ? "No geometries" : result.errorMessage;
+					flatFrame->appendMessage(wxString::Format("Failed to parse: %s", errorMsg));
+					
+					// Provide helpful tips for common errors
+					if (errorMsg.Contains("Construction") || errorMsg.Contains("construction")) {
+						flatFrame->appendMessage("  Tip: The file may contain invalid or degenerate geometry.");
+						flatFrame->appendMessage("  Try checking the file in the original CAD software.");
+					}
 				}
 			}
 			// Update coarse progress after each file
