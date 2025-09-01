@@ -166,7 +166,7 @@ private:
 	// Virtual method to get the main work area panel
 	// In non-docking version, this would be the splitter
 	// In docking version, this would be the dock container
-	virtual wxWindow* GetMainWorkArea() { return m_mainSplitter; }
+	virtual wxWindow* GetMainWorkArea() { return static_cast<wxWindow*>(m_mainSplitter); }
 	
 	void onClose(wxCloseEvent& event);
 	void onActivate(wxActivateEvent& event);
