@@ -161,6 +161,9 @@ private:
 	void setupCommandSystem();
 	void onCommand(wxCommandEvent& event);
 	void onCommandFeedback(const CommandResult& result);
+	// Create CAD panels (called before docking layout)
+	void EnsurePanelsCreated();
+	
 	// Virtual method to check if using docking system
 	virtual bool IsUsingDockingSystem() const { return false; }
 	
@@ -174,6 +177,12 @@ private:
 	void onSize(wxSizeEvent& event);
 
 public:
+	// Accessors for CAD components (for docking system)
+	Canvas* GetCanvas() { return m_canvas; }
+	PropertyPanel* GetPropertyPanel() { return m_propertyPanel; }
+	ObjectTreePanel* GetObjectTreePanel() { return m_objectTreePanel; }
+	wxTextCtrl* GetMessageOutput() { return m_messageOutput; }
+	
 	// Message output methods
 	void appendMessage(const wxString& message);
 

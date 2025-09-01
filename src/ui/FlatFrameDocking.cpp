@@ -54,6 +54,9 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     , m_toolboxDock(nullptr)
     , m_outputCtrl(nullptr)
 {
+    // Ensure base class panels are created before we use them
+    EnsurePanelsCreated();
+    
     // Initialize docking system after base class construction
     InitializeDockingLayout();
 }
@@ -186,8 +189,14 @@ void FlatFrameDocking::CreateDockingLayout() {
 DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
     DockWidget* dock = new DockWidget("3D View", m_dockManager->containerWidget());
     
-    // Create canvas (OCCViewer)
-    Canvas* canvas = new Canvas(dock);
+    // Use existing canvas from base class if available, otherwise create new
+    Canvas* canvas = GetCanvas();
+    if (!canvas) {
+        canvas = new Canvas(dock);
+    } else {
+        // Reparent existing canvas to the dock widget
+        canvas->Reparent(dock);
+    }
     dock->setWidget(canvas);
     
     // Configure dock widget
@@ -202,8 +211,14 @@ DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
 DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
     DockWidget* dock = new DockWidget("Properties", m_dockManager->containerWidget());
     
-    // Create property panel
-    PropertyPanel* propertyPanel = new PropertyPanel(dock);
+    // Use existing property panel from base class if available, otherwise create new
+    PropertyPanel* propertyPanel = GetPropertyPanel();
+    if (!propertyPanel) {
+        propertyPanel = new PropertyPanel(dock);
+    } else {
+        // Reparent existing panel to the dock widget
+        propertyPanel->Reparent(dock);
+    }
     dock->setWidget(propertyPanel);
     
     // Configure dock widget
@@ -219,8 +234,14 @@ DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
 DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
     DockWidget* dock = new DockWidget("Object Tree", m_dockManager->containerWidget());
     
-    // Create object tree panel
-    ObjectTreePanel* objectTreePanel = new ObjectTreePanel(dock);
+    // Use existing object tree panel from base class if available, otherwise create new
+    ObjectTreePanel* objectTreePanel = GetObjectTreePanel();
+    if (!objectTreePanel) {
+        objectTreePanel = new ObjectTreePanel(dock);
+    } else {
+        // Reparent existing panel to the dock widget
+        objectTreePanel->Reparent(dock);
+    }
     dock->setWidget(objectTreePanel);
     
     // Configure dock widget
@@ -236,15 +257,21 @@ DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
 DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
     DockWidget* dock = new DockWidget("Message", m_dockManager->containerWidget());
     
-    // Create output text control
-    wxTextCtrl* output = new wxTextCtrl(dock, wxID_ANY, wxEmptyString,
-                                        wxDefaultPosition, wxDefaultSize,
-                                        wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
-    
-    // Add initial content
-    output->SetDefaultStyle(wxTextAttr(*wxBLACK));
-    output->AppendText("Application started.\n");
-    output->AppendText("Docking system initialized.\n");
+    // Use existing message output from base class if available, otherwise create new
+    wxTextCtrl* output = GetMessageOutput();
+    if (!output) {
+        output = new wxTextCtrl(dock, wxID_ANY, wxEmptyString,
+                               wxDefaultPosition, wxDefaultSize,
+                               wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
+        
+        // Add initial content
+        output->SetDefaultStyle(wxTextAttr(*wxBLACK));
+        output->AppendText("Application started.\n");
+        output->AppendText("Docking system initialized.\n");
+    } else {
+        // Reparent existing output to the dock widget
+        output->Reparent(dock);
+    }
     
     dock->setWidget(output);
     

@@ -263,6 +263,43 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_startupTimer.StartOnce(100); // Reduced for faster startup if UI is complex
 }
 
+void FlatFrame::EnsurePanelsCreated()
+{
+    // Create panels if they don't exist yet
+    // These will be used by the docking system
+    
+    if (!m_canvas) {
+        // Create a temporary parent for the panels
+        wxWindow* tempParent = this;
+        
+        // Create Canvas
+        m_canvas = new Canvas(tempParent);
+        m_canvas->Hide();  // Hide until added to docking system
+        
+        // TODO: Set up canvas event handlers and connections
+    }
+    
+    if (!m_propertyPanel) {
+        wxWindow* tempParent = this;
+        m_propertyPanel = new PropertyPanel(tempParent);
+        m_propertyPanel->Hide();
+    }
+    
+    if (!m_objectTreePanel) {
+        wxWindow* tempParent = this;
+        m_objectTreePanel = new ObjectTreePanel(tempParent);
+        m_objectTreePanel->Hide();
+    }
+    
+    if (!m_messageOutput) {
+        wxWindow* tempParent = this;
+        m_messageOutput = new wxTextCtrl(tempParent, wxID_ANY, wxEmptyString,
+                                       wxDefaultPosition, wxDefaultSize,
+                                       wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
+        m_messageOutput->Hide();
+    }
+}
+
 FlatFrame::~FlatFrame()
 {
 	// m_homeMenu is a child window, wxWidgets handles its deletion.
