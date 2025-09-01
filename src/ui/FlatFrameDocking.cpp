@@ -6,6 +6,7 @@
 #include "MouseHandler.h"
 #include "NavigationController.h"
 #include "InputManager.h"
+#include "logger/Logger.h"
 #include "docking/DockArea.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
