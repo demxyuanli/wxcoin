@@ -195,6 +195,10 @@ DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
     if (!canvas) {
         canvas = new Canvas(dock);
     } else {
+        // Remove from existing sizer if any
+        if (canvas->GetContainingSizer()) {
+            canvas->GetContainingSizer()->Detach(canvas);
+        }
         // Reparent existing canvas to the dock widget
         canvas->Reparent(dock);
     }
@@ -217,6 +221,10 @@ DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
     if (!propertyPanel) {
         propertyPanel = new PropertyPanel(dock);
     } else {
+        // Remove from existing sizer if any
+        if (propertyPanel->GetContainingSizer()) {
+            propertyPanel->GetContainingSizer()->Detach(propertyPanel);
+        }
         // Reparent existing panel to the dock widget
         propertyPanel->Reparent(dock);
     }
@@ -240,6 +248,10 @@ DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
     if (!objectTreePanel) {
         objectTreePanel = new ObjectTreePanel(dock);
     } else {
+        // Remove from existing sizer if any
+        if (objectTreePanel->GetContainingSizer()) {
+            objectTreePanel->GetContainingSizer()->Detach(objectTreePanel);
+        }
         // Reparent existing panel to the dock widget
         objectTreePanel->Reparent(dock);
     }
@@ -270,6 +282,10 @@ DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
         output->AppendText("Application started.\n");
         output->AppendText("Docking system initialized.\n");
     } else {
+        // Remove from existing sizer if any
+        if (output->GetContainingSizer()) {
+            output->GetContainingSizer()->Detach(output);
+        }
         // Reparent existing output to the dock widget
         output->Reparent(dock);
     }
