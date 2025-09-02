@@ -9,6 +9,7 @@
 #include <chrono>
 #include "FlatFrame.h"
 #include "ImportSettingsDialog.h"
+#include "ImportProgressManager.h"
 
 ImportStepListener::ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
 	: m_frame(frame), m_canvas(canvas), m_occViewer(occViewer)
@@ -22,14 +23,33 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	const std::unordered_map<std::string, std::string>&) {
 	auto totalImportStartTime = std::chrono::high_resolution_clock::now();
 
-	// Resolve status bar and message output
-	FlatUIStatusBar* statusBar = nullptr;
-	FlatFrame* flatFrame = nullptr;
+	// Create progress manager
+	if (!m_progressManager) {
+		wxWindow* parentWindow = m_frame;
+		if (!parentWindow) {
+			parentWindow = wxTheApp->GetTopWindow();
+		}
+		
+		// Find a suitable parent panel for the progress bar
+		wxWindow* progressParent = parentWindow;
+		FlatFrame* flatFrame = dynamic_cast<FlatFrame*>(parentWindow);
+		if (flatFrame) {
+			// Try to get the status bar area or main panel
+			progressParent = flatFrame;
+		}
+		
+		m_progressManager = std::make_unique<ImportProgressManager>(progressParent);
+	}
 	
-	// Try to get FlatFrame - could be the frame itself or in docking environment
-	flatFrame = dynamic_cast<FlatFrame*>(m_frame);
+	// Initialize progress
+	m_progressManager->Reset();
+	m_progressManager->SetRange(0, 100);
+	m_progressManager->Show(true);
+	m_progressManager->SetStatusMessage("STEP import started...");
+	
+	// Get FlatFrame for message output
+	FlatFrame* flatFrame = dynamic_cast<FlatFrame*>(m_frame);
 	if (!flatFrame) {
-		// Try to find FlatFrame through the app's top window
 		wxWindow* topWindow = wxTheApp->GetTopWindow();
 		if (topWindow) {
 			flatFrame = dynamic_cast<FlatFrame*>(topWindow);
@@ -37,20 +57,7 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	}
 	
 	if (flatFrame) {
-		try {
-			statusBar = flatFrame->GetFlatUIStatusBar();
-			if (statusBar) {
-				statusBar->SetGaugeRange(100);
-				statusBar->SetGaugeValue(0);
-				statusBar->EnableProgressGauge(true); // show on demand at start
-			}
-		} catch (...) {
-			LOG_WRN_S("Failed to access status bar, continuing without progress display");
-			statusBar = nullptr;
-		}
 		flatFrame->appendMessage("STEP import started...");
-	} else {
-		LOG_WRN_S("FlatFrame not found, progress will not be displayed");
 	}
 
 	// File dialog
@@ -60,7 +67,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL) {
-		if (statusBar) { statusBar->SetGaugeValue(0); }
+		if (m_progressManager) { 
+			m_progressManager->Reset();
+			m_progressManager->Show(false);
+		}
 		return CommandResult(false, "STEP import cancelled", commandType);
 	}
 
@@ -70,7 +80,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	// Show import settings dialog
 	ImportSettingsDialog settingsDialog(m_frame);
 	if (settingsDialog.ShowModal() != wxID_OK) {
-		if (statusBar) { statusBar->SetGaugeValue(0); }
+		if (m_progressManager) { 
+			m_progressManager->Reset();
+			m_progressManager->Show(false);
+		}
 		return CommandResult(false, "STEP import cancelled", commandType);
 	}
 	
@@ -119,19 +132,20 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			auto stepReadStartTime = std::chrono::high_resolution_clock::now();
 			auto result = STEPReader::readSTEPFile(
 				filePath.ToStdString(), options,
-				[statusBar, flatFrame, i, &filePaths](int percent, const std::string& stage) {
+				[this, flatFrame, i, &filePaths](int percent, const std::string& stage) {
 					try {
 						int base = (int)std::round(((double)i / (double)(filePaths.size() + 1)) * 100.0);
 						int next = (int)std::round(((double)(i + 1) / (double)(filePaths.size() + 1)) * 100.0);
 						int mapped = base + (int)std::round((percent / 100.0) * (next - base));
 						mapped = std::max(0, std::min(95, mapped));
-						if (statusBar) {
-							try {
-								statusBar->SetGaugeValue(mapped);
-							} catch (...) {
-								// Ignore status bar errors
-							}
+						
+						// Thread-safe progress update
+						if (m_progressManager) {
+							wxString progressMsg = wxString::Format("File %zu/%zu: %s",
+								i + 1, filePaths.size(), stage.c_str());
+							m_progressManager->SetProgress(mapped, progressMsg);
 						}
+						
 						if (flatFrame) {
 							try {
 								flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
@@ -183,10 +197,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				}
 			}
 			// Update coarse progress after each file
-			if (statusBar) {
+			if (m_progressManager) {
 				int percent = (int)std::round(((double)(i + 1) / (double)totalPhases) * 100.0);
 				percent = std::max(0, std::min(95, percent)); // cap before add phase
-				statusBar->SetGaugeValue(percent);
+				m_progressManager->SetProgress(percent, wxString::Format("Processed %zu/%zu files", i + 1, filePaths.size()));
 			}
 		}
 
@@ -243,7 +257,9 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			// Add geometries
 			m_occViewer->addGeometries(allGeometries);
 			m_occViewer->endBatchOperation();
-			if (statusBar) { statusBar->SetGaugeValue(98); }
+			if (m_progressManager) { 
+				m_progressManager->SetProgress(98, "Adding geometries to scene...");
+			}
 			// Optional: request a background-style refresh to refine mesh gradually (next user action can trigger remeshAllGeometries)
 			auto geometryAddEndTime = std::chrono::high_resolution_clock::now();
 			auto geometryAddDuration = std::chrono::duration_cast<std::chrono::milliseconds>(geometryAddEndTime - geometryAddStartTime);
@@ -265,10 +281,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				totalGeometries / (totalImportTime / 1000.0)
 			);
 
-			// Ensure status bar is updated before showing dialog
-			if (statusBar) { 
-				statusBar->SetGaugeValue(100); 
-				statusBar->EnableProgressGauge(false); 
+			// Ensure progress is complete before showing dialog
+			if (m_progressManager) { 
+				m_progressManager->SetProgress(100, "Import completed!");
+				m_progressManager->Show(false);
 			}
 			if (flatFrame) { 
 				flatFrame->appendMessage("STEP import completed."); 
@@ -314,11 +330,11 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				filePaths.size(), filePaths.size(), successfulFiles
 			);
 			
-			// Ensure status bar is cleaned up
-			if (statusBar) { 
+			// Ensure progress is cleaned up
+			if (m_progressManager) { 
 				try {
-					statusBar->SetGaugeValue(0); 
-					statusBar->EnableProgressGauge(false);
+					m_progressManager->Reset();
+					m_progressManager->Show(false);
 				} catch (...) {}
 			}
 			
