@@ -815,3 +815,11 @@ void FlatFrame::OnQualityPreset(wxCommandEvent& event)
 		appendMessage("Applied Quality Preset (Alt+3)");
 	}
 }
+
+void FlatFrame::EnsurePanelsCreated()
+{
+	// Ensure panels are created if not already done
+	if (!m_canvas || !m_propertyPanel || !m_objectTreePanel) {
+		createPanels();
+	}
+}

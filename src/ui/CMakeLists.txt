@@ -65,8 +65,10 @@ set_target_properties(UIDialogEdges PROPERTIES FOLDER "UI")
 add_library(UIDialogMesh STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/MeshQualityDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TransparencyDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ImportSettingsDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
+    ${CMAKE_SOURCE_DIR}/include/ImportSettingsDialog.h
 )
 target_include_directories(UIDialogMesh PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
 target_link_libraries(UIDialogMesh PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
