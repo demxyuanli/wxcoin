@@ -452,7 +452,10 @@ DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
 }
 
 void FlatFrameDocking::CreateDockingMenus() {
-    // Get or create menu bar
+    // This method is kept for compatibility but simplified
+    // since docking options are now in the ribbon dropdown menu
+    
+    // Get or create menu bar for panel visibility shortcuts
     wxMenuBar* menuBar = GetMenuBar();
     if (!menuBar) {
         menuBar = new wxMenuBar();
@@ -469,7 +472,7 @@ void FlatFrameDocking::CreateDockingMenus() {
         menuBar->Append(viewMenu, "&View");
     }
 
-    // Add panel visibility items
+    // Only add panel visibility items with keyboard shortcuts
     viewMenu->AppendCheckItem(ID_VIEW_OBJECT_TREE, "Object Tree\tCtrl+Alt+O",
         "Show/hide object tree panel");
     viewMenu->AppendCheckItem(ID_VIEW_PROPERTIES, "Properties\tCtrl+Alt+P",
@@ -478,25 +481,6 @@ void FlatFrameDocking::CreateDockingMenus() {
         "Show/hide message output panel");
     viewMenu->AppendCheckItem(ID_VIEW_PERFORMANCE, "Performance\tCtrl+Alt+F",
         "Show/hide performance monitor panel");
-
-    // Add separator before docking items
-    viewMenu->AppendSeparator();
-
-    // Add docking menu items
-    viewMenu->Append(ID_DOCKING_SAVE_LAYOUT, "Save &Layout...\tCtrl+L",
-        "Save current docking layout");
-    viewMenu->Append(ID_DOCKING_LOAD_LAYOUT, "Load L&ayout...\tCtrl+Shift+L",
-        "Load saved docking layout");
-    viewMenu->Append(ID_DOCKING_RESET_LAYOUT, "&Reset Layout",
-        "Reset to default docking layout");
-    viewMenu->AppendSeparator();
-    viewMenu->Append(ID_DOCKING_MANAGE_PERSPECTIVES, "&Manage Perspectives...",
-        "Manage saved layout perspectives");
-    viewMenu->Append(ID_DOCKING_TOGGLE_AUTOHIDE, "Toggle &Auto-hide\tCtrl+H",
-        "Toggle auto-hide for current panel");
-    viewMenu->AppendSeparator();
-    viewMenu->Append(ID_DOCKING_CONFIGURE_LAYOUT, "&Configure Layout...",
-        "Configure dock panel sizes and layout");
 }
 
 void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {

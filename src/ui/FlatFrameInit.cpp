@@ -291,6 +291,31 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayButtonBar->AddButton(ID_OUTLINE_SETTINGS, "Outline Settings", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open outline settings");
 	displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(displayPanel);
+	
+	// Add Docking panel with dropdown menu
+	FlatUIPanel* dockingPanel = new FlatUIPanel(page3, "Docking", wxHORIZONTAL);
+	dockingPanel->SetFont(CFG_DEFAULTFONT());
+	dockingPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	dockingPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	dockingPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	dockingPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	dockingPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* dockingButtonBar = new FlatUIButtonBar(dockingPanel);
+	dockingButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	
+	// Create dropdown menu for docking options
+	wxMenu* dockingMenu = new wxMenu();
+	dockingMenu->Append(ID_DOCK_LAYOUT_CONFIG, "&Configure Layout...", "Configure dock panel sizes and layout");
+	dockingMenu->AppendSeparator();
+	dockingMenu->Append(ID_DOCKING_SAVE_LAYOUT, "&Save Layout...", "Save current docking layout");
+	dockingMenu->Append(ID_DOCKING_LOAD_LAYOUT, "&Load Layout...", "Load saved docking layout");
+	dockingMenu->Append(ID_DOCKING_RESET_LAYOUT, "&Reset Layout", "Reset to default docking layout");
+	
+	// Add dropdown button
+	dockingButtonBar->AddDropdownButton(wxID_ANY, "Layout", SVG_ICON("layout", wxSize(16, 16)), dockingMenu, "Docking layout options");
+	dockingPanel->AddButtonBar(dockingButtonBar, 0, wxEXPAND | wxALL, 5);
+	page3->AddPanel(dockingPanel);
+	
 	m_ribbon->AddPage(page3);
 
 	FlatUIPage* page4 = new FlatUIPage(m_ribbon, "Tools");
@@ -309,7 +334,6 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
 	toolsButtonBar->AddButton(ID_LIGHTING_SETTINGS, "Lighting Settings", SVG_ICON("light", wxSize(16, 16)), nullptr, "Configure scene lighting and environment settings");
 	toolsButtonBar->AddButton(ID_EDGE_SETTINGS, "Edge Settings", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Configure edge color, width and style settings");
-	toolsButtonBar->AddButton(ID_DOCK_LAYOUT_CONFIG, "Dock Layout", SVG_ICON("layout", wxSize(16, 16)), nullptr, "Configure dock panel sizes and layout");
 	toolsButtonBar->AddButton(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Open render preview system");
 	toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(toolsPanel);
