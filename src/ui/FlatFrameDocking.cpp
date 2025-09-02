@@ -497,10 +497,6 @@ void FlatFrameDocking::CreateDockingMenus() {
     viewMenu->AppendSeparator();
     viewMenu->Append(ID_DOCKING_CONFIGURE_LAYOUT, "&Configure Layout...",
         "Configure dock panel sizes and layout");
-    
-    // Debug output
-    wxLogDebug("CreateDockingMenus: Added Configure Layout menu item with ID %d", ID_DOCKING_CONFIGURE_LAYOUT);
-    wxLogDebug("CreateDockingMenus: View menu has %d items", viewMenu->GetMenuItemCount());
 }
 
 void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {
@@ -721,9 +717,5 @@ void FlatFrameDocking::RegisterDockLayoutConfigListener() {
     if (m_dockManager) {
         auto dockLayoutConfigListener = std::make_shared<DockLayoutConfigListener>(m_dockManager);
         RegisterCommandListener(cmd::CommandType::DockLayoutConfig, dockLayoutConfigListener);
-        
-        wxLogDebug("Registered DockLayoutConfigListener");
-    } else {
-        wxLogError("Unable to register DockLayoutConfigListener - DockManager not available");
     }
 }
