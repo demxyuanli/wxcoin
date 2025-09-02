@@ -7,7 +7,8 @@ wxBEGIN_EVENT_TABLE(ImportProgressManager, wxEvtHandler)
 wxEND_EVENT_TABLE()
 
 ImportProgressManager::ImportProgressManager(wxWindow* parent)
-    : m_parent(parent)
+    : wxEvtHandler()
+    , m_parent(parent)
     , m_progressBar(nullptr)
     , m_statusText(nullptr)
     , m_progressPanel(nullptr)
@@ -34,7 +35,7 @@ ImportProgressManager::ImportProgressManager(wxWindow* parent)
                                        FlatProgressBar::ProgressBarStyle::DEFAULT_STYLE);
     m_progressBar->SetShowPercentage(true);
     m_progressBar->SetShowValue(false);
-    m_progressBar->SetAnimationEnabled(true);
+    // Note: SetAnimationEnabled might not exist in current FlatProgressBar implementation
     
     sizer->Add(m_progressBar, 0, wxALL | wxEXPAND, 5);
     
@@ -102,11 +103,11 @@ void ImportProgressManager::Show(bool show)
 void ImportProgressManager::Reset()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_currentValue = m_minValue;
+    m_currentValue.store(m_minValue.load());
     m_hasPendingUpdate = false;
     
     if (wxThread::IsMain()) {
-        m_progressBar->SetValue(m_minValue);
+        m_progressBar->SetValue(m_minValue.load());
         m_statusText->SetLabel("Ready");
         m_progressPanel->Hide();
         m_progressPanel->GetParent()->Layout();
@@ -145,9 +146,9 @@ void ImportProgressManager::ApplyPendingUpdates()
             
             // Update state based on progress
             if (m_pendingUpdate.value >= m_maxValue.load()) {
-                m_progressBar->SetState(FlatProgressBar::ProgressState::COMPLETED);
+                m_progressBar->SetState(FlatProgressBar::ProgressBarState::COMPLETED);
             } else if (m_pendingUpdate.value > 0) {
-                m_progressBar->SetState(FlatProgressBar::ProgressState::IN_PROGRESS);
+                m_progressBar->SetState(FlatProgressBar::ProgressBarState::IN_PROGRESS);
             }
         }
     }

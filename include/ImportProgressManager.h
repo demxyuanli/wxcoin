@@ -1,12 +1,13 @@
 #pragma once
 
 #include <wx/wx.h>
+#include <wx/timer.h>
 #include <atomic>
 #include <mutex>
 #include <memory>
 #include "widgets/FlatProgressBar.h"
 
-class ImportProgressManager
+class ImportProgressManager : public wxEvtHandler
 {
 public:
     ImportProgressManager(wxWindow* parent);
