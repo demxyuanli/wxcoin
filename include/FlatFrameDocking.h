@@ -44,8 +44,8 @@ public:
     ads::DockManager* GetDockManager() const { return m_dockManager; }
     
     // Override virtual methods from FlatFrame
-    virtual bool IsUsingDockingSystem() const override { return true; }
-    virtual wxWindow* GetMainWorkArea() const override;
+    virtual bool IsUsingDockingSystem() const { return true; }
+    virtual wxWindow* GetMainWorkArea() const;
     
 protected:
     // Event handlers for docking
