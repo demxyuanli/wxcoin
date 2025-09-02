@@ -171,7 +171,7 @@ private:
 protected:
 	// Protected methods for derived classes
 	void EnsurePanelsCreated();
-	
+
 private:
 	void onCommand(wxCommandEvent& event);
 	void onCommandFeedback(const CommandResult& result);
