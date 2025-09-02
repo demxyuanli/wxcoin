@@ -1413,7 +1413,7 @@ void DockContainerWidget::applyLayoutConfig() {
         // Determine if window1 is top or bottom area
         bool isTopBottomLayout = false;
         for (auto* area : m_dockAreas) {
-            if (area == w1 || (DockSplitter* splitter = dynamic_cast<DockSplitter*>(w1))) {
+            if (area == w1 || dynamic_cast<DockSplitter*>(w1) != nullptr) {
                 isTopBottomLayout = true;
                 break;
             }

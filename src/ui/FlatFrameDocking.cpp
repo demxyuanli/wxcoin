@@ -605,10 +605,11 @@ void FlatFrameDocking::OnDockingConfigureLayout(wxCommandEvent& event) {
         config = dlg.GetConfig();
         m_dockManager->setLayoutConfig(config);
         
-        // Apply the configuration immediately to all containers
-        auto containers = m_dockManager->dockContainers();
-        for (auto* container : containers) {
-            container->applyLayoutConfig();
+        // Apply the configuration immediately to the main container
+        if (wxWindow* containerWidget = m_dockManager->containerWidget()) {
+            if (DockContainerWidget* container = dynamic_cast<DockContainerWidget*>(containerWidget)) {
+                container->applyLayoutConfig();
+            }
         }
         
         appendMessage("Layout configuration updated and applied");

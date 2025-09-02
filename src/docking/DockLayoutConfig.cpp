@@ -1,4 +1,5 @@
 #include "docking/DockLayoutConfig.h"
+#include "docking/DockContainerWidget.h"
 #include <wx/config.h>
 #include <wx/notebook.h>
 #include <wx/gbsizer.h>
@@ -486,10 +487,11 @@ void DockLayoutConfigDialog::ApplyToManager() {
     if (m_dockManager) {
         m_dockManager->setLayoutConfig(m_config);
         
-        // Apply to all containers
-        auto containers = m_dockManager->dockContainers();
-        for (auto* container : containers) {
-            container->applyLayoutConfig();
+        // Apply to the main container
+        if (wxWindow* containerWidget = m_dockManager->containerWidget()) {
+            if (DockContainerWidget* container = dynamic_cast<DockContainerWidget*>(containerWidget)) {
+                container->applyLayoutConfig();
+            }
         }
     }
 }

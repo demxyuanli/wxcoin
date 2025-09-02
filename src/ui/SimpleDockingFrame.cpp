@@ -276,10 +276,11 @@ private:
             config = dlg.GetConfig();
             m_dockManager->setLayoutConfig(config);
             
-            // Apply the configuration immediately to all containers
-            auto containers = m_dockManager->dockContainers();
-            for (auto* container : containers) {
-                container->applyLayoutConfig();
+            // Apply the configuration immediately to the main container
+            if (wxWindow* containerWidget = m_dockManager->containerWidget()) {
+                if (ads::DockContainerWidget* container = dynamic_cast<ads::DockContainerWidget*>(containerWidget)) {
+                    container->applyLayoutConfig();
+                }
             }
             
             SetStatusText("Layout configuration updated and applied", 0);
