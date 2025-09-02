@@ -2,16 +2,12 @@
 #include "Canvas.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
-#include "ui/PerformancePanel.h"
 #include "docking/DockArea.h"
-#include "docking/DockingIntegration.h"
 #include "EventLogger.h"
 #include <wx/msgdlg.h>
 #include <wx/artprov.h>
 #include <wx/filedlg.h>
 #include <wx/menu.h>
-#include <wx/toolbar.h>
-#include <memory>
 
 wxBEGIN_EVENT_TABLE(FlatFrameDocking, FlatFrame)
     EVT_MENU(ID_DOCKING_SAVE_LAYOUT, FlatFrameDocking::OnDockingSaveLayout)
@@ -28,10 +24,7 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
       m_dockManager(nullptr),
       m_propertyDock(nullptr),
       m_objectTreeDock(nullptr),
-      m_canvasDock(nullptr),
-      m_outputDock(nullptr),
-      m_toolboxDock(nullptr),
-      m_outputCtrl(nullptr)
+      m_canvasDock(nullptr)
 {
     // Ensure panels are created
     EnsurePanelsCreated();
@@ -74,20 +67,11 @@ void FlatFrameDocking::InitializeDockingLayout() {
 void FlatFrameDocking::ConfigureDockManager() {
     if (!m_dockManager) return;
     
-    // Enable auto-hide feature
-    m_dockManager->setConfigFlag(ads::DockManager::AutoHideFeatureEnabled, true);
-    
-    // Enable opaque splitter resize
-    m_dockManager->setConfigFlag(ads::DockManager::OpaqueSplitterResize, true);
-    
-    // Enable XML compression
-    m_dockManager->setConfigFlag(ads::DockManager::XmlCompressionEnabled, true);
-    
-    // Set proper focus highlighting
-    m_dockManager->setConfigFlag(ads::DockManager::FocusHighlighting, true);
-    
-    // Enable equal split visibility
-    m_dockManager->setConfigFlag(ads::DockManager::EqualSplitOnInsertion, true);
+    // Enable features using the correct API
+    m_dockManager->setConfigFlag(ads::DockAreaHasCloseButton, true);
+    m_dockManager->setConfigFlag(ads::DockAreaHasUndockButton, true);
+    m_dockManager->setConfigFlag(ads::ActiveTabHasCloseButton, true);
+    m_dockManager->setConfigFlag(ads::FocusHighlighting, true);
 }
 
 void FlatFrameDocking::CreateDockingLayout() {
@@ -97,7 +81,6 @@ void FlatFrameDocking::CreateDockingLayout() {
     m_canvasDock = CreateCanvasDockWidget();
     m_propertyDock = CreatePropertyDockWidget();
     m_objectTreeDock = CreateObjectTreeDockWidget();
-    m_outputDock = CreateOutputDockWidget();
     
     // Add canvas as the central widget
     if (m_canvasDock) {
@@ -113,73 +96,68 @@ void FlatFrameDocking::CreateDockingLayout() {
     if (m_propertyDock) {
         m_dockManager->addDockWidget(ads::RightDockWidgetArea, m_propertyDock);
     }
-    
-    // Add output to the bottom
-    if (m_outputDock) {
-        m_dockManager->addDockWidget(ads::BottomDockWidgetArea, m_outputDock);
-    }
 }
 
 ads::DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
-    if (!m_propertyPanel) return nullptr;
+    PropertyPanel* panel = GetPropertyPanel();
+    if (!panel) return nullptr;
     
     auto* dock = new ads::DockWidget("Properties");
-    dock->setWidget(m_propertyPanel);
+    dock->setWidget(panel);
     dock->setIcon(wxArtProvider::GetIcon(wxART_LIST_VIEW));
-    dock->setFeature(ads::DockWidget::DockWidgetClosable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetMovable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetFloatable, true);
-    dock->setMinimumSize(wxSize(200, 100));
+    dock->setFeature(ads::DockWidgetClosable, true);
+    dock->setFeature(ads::DockWidgetMovable, true);
+    dock->setFeature(ads::DockWidgetFloatable, true);
     
     return dock;
 }
 
 ads::DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
-    if (!m_objectTreePanel) return nullptr;
+    ObjectTreePanel* panel = GetObjectTreePanel();
+    if (!panel) return nullptr;
     
     auto* dock = new ads::DockWidget("Object Tree");
-    dock->setWidget(m_objectTreePanel);
+    dock->setWidget(panel);
     dock->setIcon(wxArtProvider::GetIcon(wxART_FOLDER_OPEN));
-    dock->setFeature(ads::DockWidget::DockWidgetClosable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetMovable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetFloatable, true);
-    dock->setMinimumSize(wxSize(200, 100));
+    dock->setFeature(ads::DockWidgetClosable, true);
+    dock->setFeature(ads::DockWidgetMovable, true);
+    dock->setFeature(ads::DockWidgetFloatable, true);
     
     return dock;
 }
 
 ads::DockWidget* FlatFrameDocking::CreateCanvasDockWidget() {
-    if (!m_canvas) return nullptr;
+    Canvas* canvas = GetCanvas();
+    if (!canvas) return nullptr;
     
     auto* dock = new ads::DockWidget("3D View");
-    dock->setWidget(m_canvas);
+    dock->setWidget(canvas);
     dock->setIcon(wxArtProvider::GetIcon(wxART_NORMAL_FILE));
-    dock->setFeature(ads::DockWidget::DockWidgetClosable, false);
-    dock->setMinimumSize(wxSize(300, 200));
+    dock->setFeature(ads::DockWidgetClosable, false);
     
     return dock;
 }
 
 ads::DockWidget* FlatFrameDocking::CreateOutputDockWidget() {
     // Create output control if not exists
-    if (!m_outputCtrl) {
-        m_outputCtrl = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
-                                     wxDefaultPosition, wxDefaultSize,
-                                     wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
-        m_outputCtrl->SetBackgroundColour(wxColour(30, 30, 30));
-        m_outputCtrl->SetForegroundColour(wxColour(200, 200, 200));
+    wxTextCtrl* outputCtrl = GetMessageOutput();
+    if (!outputCtrl) {
+        outputCtrl = new wxTextCtrl(this, wxID_ANY, wxEmptyString,
+                                    wxDefaultPosition, wxDefaultSize,
+                                    wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH2);
+        outputCtrl->SetBackgroundColour(wxColour(30, 30, 30));
+        outputCtrl->SetForegroundColour(wxColour(200, 200, 200));
         
         wxFont font(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
-        m_outputCtrl->SetFont(font);
+        outputCtrl->SetFont(font);
     }
     
     auto* dock = new ads::DockWidget("Output");
-    dock->setWidget(m_outputCtrl);
+    dock->setWidget(outputCtrl);
     dock->setIcon(wxArtProvider::GetIcon(wxART_INFORMATION));
-    dock->setFeature(ads::DockWidget::DockWidgetClosable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetMovable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetFloatable, true);
-    dock->setMinimumSize(wxSize(200, 100));
+    dock->setFeature(ads::DockWidgetClosable, true);
+    dock->setFeature(ads::DockWidgetMovable, true);
+    dock->setFeature(ads::DockWidgetFloatable, true);
     
     return dock;
 }
@@ -192,10 +170,9 @@ ads::DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
     auto* dock = new ads::DockWidget("Toolbox");
     dock->setWidget(toolbox);
     dock->setIcon(wxArtProvider::GetIcon(wxART_EXECUTABLE_FILE));
-    dock->setFeature(ads::DockWidget::DockWidgetClosable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetMovable, true);
-    dock->setFeature(ads::DockWidget::DockWidgetFloatable, true);
-    dock->setMinimumSize(wxSize(150, 100));
+    dock->setFeature(ads::DockWidgetClosable, true);
+    dock->setFeature(ads::DockWidgetMovable, true);
+    dock->setFeature(ads::DockWidgetFloatable, true);
     
     return dock;
 }
@@ -204,9 +181,17 @@ void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {
     if (!m_dockManager) return;
     
     try {
-        m_dockManager->savePerspective(filename.ToStdString());
-        wxMessageBox("Layout saved successfully!", "Save Layout", 
-                    wxOK | wxICON_INFORMATION, this);
+        wxString xmlData;
+        m_dockManager->saveState(xmlData);
+        
+        // Save to file
+        wxFile file(filename, wxFile::write);
+        if (file.IsOpened()) {
+            file.Write(xmlData);
+            file.Close();
+            wxMessageBox("Layout saved successfully!", "Save Layout", 
+                        wxOK | wxICON_INFORMATION, this);
+        }
     } catch (const std::exception& e) {
         wxMessageBox(wxString::Format("Failed to save layout: %s", e.what()),
                     "Error", wxOK | wxICON_ERROR, this);
@@ -217,9 +202,17 @@ void FlatFrameDocking::LoadDockingLayout(const wxString& filename) {
     if (!m_dockManager) return;
     
     try {
-        m_dockManager->loadPerspective(filename.ToStdString());
-        wxMessageBox("Layout loaded successfully!", "Load Layout", 
-                    wxOK | wxICON_INFORMATION, this);
+        wxFile file(filename, wxFile::read);
+        if (file.IsOpened()) {
+            wxString xmlData;
+            file.ReadAll(&xmlData);
+            file.Close();
+            
+            if (m_dockManager->restoreState(xmlData)) {
+                wxMessageBox("Layout loaded successfully!", "Load Layout", 
+                            wxOK | wxICON_INFORMATION, this);
+            }
+        }
     } catch (const std::exception& e) {
         wxMessageBox(wxString::Format("Failed to load layout: %s", e.what()),
                     "Error", wxOK | wxICON_ERROR, this);
@@ -229,8 +222,11 @@ void FlatFrameDocking::LoadDockingLayout(const wxString& filename) {
 void FlatFrameDocking::ResetDockingLayout() {
     if (!m_dockManager) return;
     
-    // Clear current layout
-    m_dockManager->clear();
+    // Remove all dock widgets
+    auto widgets = m_dockManager->dockWidgets();
+    for (auto* widget : widgets) {
+        m_dockManager->removeDockWidget(widget);
+    }
     
     // Recreate default layout
     CreateDockingLayout();
@@ -268,11 +264,6 @@ void FlatFrameDocking::CreateDockingMenus() {
     windowMenu->AppendCheckItem(ID_VIEW_OBJECT_TREE, "Object Tree\tF3");
     windowMenu->AppendCheckItem(ID_VIEW_OUTPUT, "Output\tF6");
     windowMenu->AppendCheckItem(ID_VIEW_TOOLBOX, "Toolbox\tF7");
-    windowMenu->AppendSeparator();
-    
-    // Add docking features
-    windowMenu->Append(ID_DOCKING_TOGGLE_AUTOHIDE, "Toggle Auto-Hide");
-    windowMenu->Append(ID_DOCKING_MANAGE_PERSPECTIVES, "Manage Perspectives...");
 }
 
 // Event handlers
@@ -333,18 +324,6 @@ void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
             }
             break;
             
-        case ID_VIEW_OUTPUT:
-            if (m_outputDock) {
-                m_outputDock->toggleView();
-            }
-            break;
-            
-        case ID_VIEW_TOOLBOX:
-            if (m_toolboxDock) {
-                m_toolboxDock->toggleView();
-            }
-            break;
-            
         default:
             // Ignore other events
             break;
@@ -364,18 +343,6 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
         case ID_VIEW_OBJECT_TREE:
             if (m_objectTreeDock) {
                 event.Check(m_objectTreeDock->isVisible());
-            }
-            break;
-            
-        case ID_VIEW_OUTPUT:
-            if (m_outputDock) {
-                event.Check(m_outputDock->isVisible());
-            }
-            break;
-            
-        case ID_VIEW_TOOLBOX:
-            if (m_toolboxDock) {
-                event.Check(m_toolboxDock->isVisible());
             }
             break;
             

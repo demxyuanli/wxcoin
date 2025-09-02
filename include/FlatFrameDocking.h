@@ -66,11 +66,6 @@ private:
     ads::DockWidget* m_propertyDock;
     ads::DockWidget* m_objectTreeDock;
     ads::DockWidget* m_canvasDock;
-    ads::DockWidget* m_outputDock;
-    ads::DockWidget* m_toolboxDock;
-    
-    // Output control
-    wxTextCtrl* m_outputCtrl;
     
     void CreateDockingMenus();
     void ConfigureDockManager();
