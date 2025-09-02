@@ -23,9 +23,6 @@
 #include <Standard_Failure.hxx>
 #include <Standard_ConstructionError.hxx>
 #include <BRepCheck_Analyzer.hxx>
-#include <BRepCheck_ListOfStatus.hxx>
-#include <BRepCheck_ListIteratorOfListOfStatus.hxx>
-#include <BRepCheck_Status.hxx>
 #include <ShapeFix_Shape.hxx>
 
 // File system includes
@@ -334,13 +331,8 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 		if (!analyzer.IsValid()) {
 			LOG_WRN_S("Invalid shape detected for: " + name + ", attempting to fix...");
 			
-			// Log detailed validation results
-			BRepCheck_ListOfStatus status;
-			analyzer.Status(status);
-			for (BRepCheck_ListIteratorOfListOfStatus it(status); it.More(); it.Next()) {
-				BRepCheck_Status stat = it.Value();
-				LOG_WRN_S("  Validation issue: " + std::to_string(static_cast<int>(stat)));
-			}
+			// Note: Detailed validation status logging removed due to API compatibility issues
+			// The analyzer.IsValid() check is sufficient for our purposes
 			
 			// Try to fix the shape
 			ShapeFix_Shape shapeFixer(shape);
