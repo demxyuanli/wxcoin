@@ -62,6 +62,7 @@ protected:
     void OnDockingResetLayout(wxCommandEvent& event);
     void OnDockingManagePerspectives(wxCommandEvent& event);
     void OnDockingToggleAutoHide(wxCommandEvent& event);
+    void OnDockingConfigureLayout(wxCommandEvent& event);
     
     // Override base class layout events to prevent interference
     void onSize(wxSizeEvent& event);
@@ -93,6 +94,7 @@ enum {
     ID_DOCKING_RESET_LAYOUT,
     ID_DOCKING_MANAGE_PERSPECTIVES,
     ID_DOCKING_TOGGLE_AUTOHIDE,
+    ID_DOCKING_CONFIGURE_LAYOUT,
     ID_DOCKING_FLOAT_ALL,
     ID_DOCKING_DOCK_ALL,
     

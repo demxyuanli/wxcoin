@@ -27,6 +27,7 @@ EVT_MENU(ID_DOCKING_LOAD_LAYOUT, FlatFrameDocking::OnDockingLoadLayout)
 EVT_MENU(ID_DOCKING_RESET_LAYOUT, FlatFrameDocking::OnDockingResetLayout)
 EVT_MENU(ID_DOCKING_MANAGE_PERSPECTIVES, FlatFrameDocking::OnDockingManagePerspectives)
 EVT_MENU(ID_DOCKING_TOGGLE_AUTOHIDE, FlatFrameDocking::OnDockingToggleAutoHide)
+EVT_MENU(ID_DOCKING_CONFIGURE_LAYOUT, FlatFrameDocking::OnDockingConfigureLayout)
 
 // View panel events
 EVT_MENU(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
@@ -188,9 +189,11 @@ void FlatFrameDocking::ConfigureDockManager() {
 
     // Configure default layout sizes
     DockLayoutConfig layoutConfig;
-    layoutConfig.leftAreaWidth = 300;      // Width for object tree and properties
-    layoutConfig.bottomAreaHeight = 150;   // Height for message/performance panel
-    layoutConfig.usePercentage = false;
+    layoutConfig.leftAreaWidth = 300;      // Width for object tree and properties (fallback)
+    layoutConfig.bottomAreaHeight = 150;   // Height for message/performance panel (fallback)
+    layoutConfig.leftAreaPercent = 20;    // 20% for left dock area
+    layoutConfig.bottomAreaPercent = 20;   // 20% for bottom dock area
+    layoutConfig.usePercentage = true;     // Use percentage-based layout
     m_dockManager->setLayoutConfig(layoutConfig);
 
     // Note: Auto-hide configuration is done through the AutoHideManager
@@ -482,6 +485,9 @@ void FlatFrameDocking::CreateDockingMenus() {
         "Manage saved layout perspectives");
     viewMenu->Append(ID_DOCKING_TOGGLE_AUTOHIDE, "Toggle &Auto-hide\tCtrl+H",
         "Toggle auto-hide for current panel");
+    viewMenu->AppendSeparator();
+    viewMenu->Append(ID_DOCKING_CONFIGURE_LAYOUT, "&Configure Layout...",
+        "Configure dock panel sizes and layout");
 }
 
 void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {
@@ -585,6 +591,27 @@ void FlatFrameDocking::OnDockingToggleAutoHide(wxCommandEvent& event) {
                 isAutoHide ? "disabled" : "enabled"));
             break;
         }
+    }
+}
+
+void FlatFrameDocking::OnDockingConfigureLayout(wxCommandEvent& event) {
+    if (!m_dockManager) return;
+    
+    const DockLayoutConfig& currentConfig = m_dockManager->getLayoutConfig();
+    DockLayoutConfig config = currentConfig;  // Make a copy
+    DockLayoutConfigDialog dlg(this, config, m_dockManager);
+    
+    if (dlg.ShowModal() == wxID_OK) {
+        config = dlg.GetConfig();
+        m_dockManager->setLayoutConfig(config);
+        
+        // Apply the configuration immediately to all containers
+        auto containers = m_dockManager->dockContainers();
+        for (auto* container : containers) {
+            container->applyLayoutConfig();
+        }
+        
+        appendMessage("Layout configuration updated and applied");
     }
 }
 

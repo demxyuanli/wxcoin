@@ -1098,6 +1098,9 @@ DockArea* DockContainerWidget::getDockAreaBySplitterChild(wxWindow* child) const
 }
 
 void DockContainerWidget::onSize(wxSizeEvent& event) {
+    // Apply layout configuration if using percentage mode
+    applyLayoutConfig();
+    
     // Force refresh of all dock areas to prevent ghosting during window resize
     for (auto* area : m_dockAreas) {
         if (area && area->mergedTitleBar()) {
@@ -1377,6 +1380,89 @@ void DockContainerWidget::dropDockWidget(DockWidget* widget, DockWidgetArea drop
     
     // Add the new area relative to target area
     addDockAreaToContainer(dropArea, newArea);
+}
+
+void DockContainerWidget::applyLayoutConfig() {
+    if (!m_dockManager || !m_rootSplitter) {
+        return;
+    }
+    
+    const DockLayoutConfig& config = m_dockManager->getLayoutConfig();
+    if (!config.usePercentage) {
+        return; // Only apply for percentage-based layouts
+    }
+    
+    // Get the current size of the container
+    wxSize containerSize = GetSize();
+    if (containerSize.GetWidth() <= 0 || containerSize.GetHeight() <= 0) {
+        return; // Invalid size
+    }
+    
+    // Apply the configuration to all splitters
+    DockSplitter* rootSplitter = dynamic_cast<DockSplitter*>(m_rootSplitter);
+    if (!rootSplitter || !rootSplitter->IsSplit()) {
+        return;
+    }
+    
+    // Update root splitter position based on its orientation
+    if (rootSplitter->GetSplitMode() == wxSPLIT_HORIZONTAL) {
+        // Horizontal split - check if it's top/bottom layout
+        wxWindow* w1 = rootSplitter->GetWindow1();
+        wxWindow* w2 = rootSplitter->GetWindow2();
+        
+        // Determine if window1 is top or bottom area
+        bool isTopBottomLayout = false;
+        for (auto* area : m_dockAreas) {
+            if (area == w1 || (DockSplitter* splitter = dynamic_cast<DockSplitter*>(w1))) {
+                isTopBottomLayout = true;
+                break;
+            }
+        }
+        
+        if (isTopBottomLayout && config.showTopArea) {
+            int topHeight = containerSize.GetHeight() * config.topAreaPercent / 100;
+            rootSplitter->SetSashPosition(topHeight);
+        } else if (config.showBottomArea) {
+            int bottomHeight = containerSize.GetHeight() * config.bottomAreaPercent / 100;
+            rootSplitter->SetSashPosition(containerSize.GetHeight() - bottomHeight);
+        }
+    } else {
+        // Vertical split - check for left/right layout
+        wxWindow* w1 = rootSplitter->GetWindow1();
+        wxWindow* w2 = rootSplitter->GetWindow2();
+        
+        // Check if we have a sub-splitter for center+right
+        if (DockSplitter* subSplitter = dynamic_cast<DockSplitter*>(w2)) {
+            // This is likely [Left | [Center | Right]] layout
+            if (config.showLeftArea) {
+                int leftWidth = containerSize.GetWidth() * config.leftAreaPercent / 100;
+                rootSplitter->SetSashPosition(leftWidth);
+            }
+            
+            // Update sub-splitter for right area
+            if (subSplitter->IsSplit() && config.showRightArea) {
+                wxSize subSize = subSplitter->GetSize();
+                if (subSize.GetWidth() > 0) {
+                    int rightWidth = subSize.GetWidth() * config.rightAreaPercent / 
+                                   (100 - config.leftAreaPercent) * 100;
+                    subSplitter->SetSashPosition(subSize.GetWidth() - rightWidth);
+                }
+            }
+        } else {
+            // Simple left/right split
+            if (config.showLeftArea) {
+                int leftWidth = containerSize.GetWidth() * config.leftAreaPercent / 100;
+                rootSplitter->SetSashPosition(leftWidth);
+            } else if (config.showRightArea) {
+                int rightWidth = containerSize.GetWidth() * config.rightAreaPercent / 100;
+                rootSplitter->SetSashPosition(containerSize.GetWidth() - rightWidth);
+            }
+        }
+    }
+    
+    // Force layout update
+    Layout();
+    Refresh();
 }
 
 } // namespace ads

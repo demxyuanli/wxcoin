@@ -270,16 +270,19 @@ private:
     void OnConfigureLayout(wxCommandEvent&) {
         const DockLayoutConfig& currentConfig = m_dockManager->getLayoutConfig();
         DockLayoutConfig config = currentConfig;  // Make a copy
-        DockLayoutConfigDialog dlg(this, config);
+        DockLayoutConfigDialog dlg(this, config, m_dockManager);
         
         if (dlg.ShowModal() == wxID_OK) {
             config = dlg.GetConfig();
             m_dockManager->setLayoutConfig(config);
             
-            // Optionally, apply the configuration immediately
-            // This might require recreating the layout
-            wxMessageBox("Layout configuration saved.\nChanges will be applied on next restart.", 
-                        "Configuration", wxOK | wxICON_INFORMATION);
+            // Apply the configuration immediately to all containers
+            auto containers = m_dockManager->dockContainers();
+            for (auto* container : containers) {
+                container->applyLayoutConfig();
+            }
+            
+            SetStatusText("Layout configuration updated and applied", 0);
         }
     }
     

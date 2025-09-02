@@ -55,7 +55,7 @@ struct DockLayoutConfig {
  */
 class DockLayoutConfigDialog : public wxDialog {
 public:
-    DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config);
+    DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config, DockManager* dockManager = nullptr);
     
     // Get the modified configuration
     DockLayoutConfig GetConfig() const { return m_config; }
@@ -94,6 +94,7 @@ private:
     DockLayoutPreview* m_previewPanel;
     
     DockLayoutConfig m_config;
+    DockManager* m_dockManager;
     
     // Methods
     void CreateControls();
@@ -110,6 +111,7 @@ private:
     
     void UpdatePreview();
     void UpdateControlStates();
+    void UpdateControlValues();
     void ApplyToManager();
     
     wxDECLARE_EVENT_TABLE();
