@@ -9,6 +9,15 @@ wxEND_EVENT_TABLE()
 
 ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
     : wxDialog(parent, wxID_ANY, "Import Settings", wxDefaultPosition, wxSize(500, 600))
+    , m_presetPanel(nullptr)
+    , m_deflectionCtrl(nullptr)
+    , m_angularDeflectionCtrl(nullptr)
+    , m_lodCheckBox(nullptr)
+    , m_parallelCheckBox(nullptr)
+    , m_adaptiveCheckBox(nullptr)
+    , m_autoOptimizeCheckBox(nullptr)
+    , m_importModeChoice(nullptr)
+    , m_previewText(nullptr)
     , m_deflection(1.0)
     , m_angularDeflection(1.0)
     , m_enableLOD(true)
@@ -32,10 +41,10 @@ ImportSettingsDialog::~ImportSettingsDialog()
 void ImportSettingsDialog::createControls()
 {
     // Preset buttons
-    wxPanel* presetPanel = new wxPanel(this);
-    wxButton* perfBtn = new wxButton(presetPanel, wxID_ANY, "[P] Performance");
-    wxButton* balBtn = new wxButton(presetPanel, wxID_ANY, "[B] Balanced");
-    wxButton* qualBtn = new wxButton(presetPanel, wxID_ANY, "[Q] Quality");
+    m_presetPanel = new wxPanel(this);
+    wxButton* perfBtn = new wxButton(m_presetPanel, wxID_ANY, "[P] Performance");
+    wxButton* balBtn = new wxButton(m_presetPanel, wxID_ANY, "[B] Balanced");
+    wxButton* qualBtn = new wxButton(m_presetPanel, wxID_ANY, "[Q] Quality");
     
     perfBtn->SetToolTip("Fast import with lower quality meshes");
     balBtn->SetToolTip("Balanced import settings");
@@ -49,7 +58,7 @@ void ImportSettingsDialog::createControls()
     presetSizer->Add(perfBtn, 0, wxALL, 5);
     presetSizer->Add(balBtn, 0, wxALL, 5);
     presetSizer->Add(qualBtn, 0, wxALL, 5);
-    presetPanel->SetSizer(presetSizer);
+    m_presetPanel->SetSizer(presetSizer);
     
     // Mesh settings
     wxStaticBox* meshBox = new wxStaticBox(this, wxID_ANY, "Mesh Settings");
@@ -119,11 +128,11 @@ void ImportSettingsDialog::layoutControls()
     // Presets
     wxStaticText* presetLabel = new wxStaticText(this, wxID_ANY, "Quick Presets:");
     mainSizer->Add(presetLabel, 0, wxALL, 10);
-    mainSizer->Add(FindWindow(wxID_ANY), 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+    mainSizer->Add(m_presetPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
     
     // Mesh settings
-    wxStaticBoxSizer* meshSizer = new wxStaticBoxSizer(
-        static_cast<wxStaticBox*>(FindWindowById(wxID_ANY)), wxVERTICAL);
+    wxStaticBox* meshBox = new wxStaticBox(this, wxID_ANY, "Mesh Settings");
+    wxStaticBoxSizer* meshSizer = new wxStaticBoxSizer(meshBox, wxVERTICAL);
     
     wxFlexGridSizer* meshGrid = new wxFlexGridSizer(2, 2, 5, 10);
     meshGrid->AddGrowableCol(1);

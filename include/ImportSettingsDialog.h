@@ -42,6 +42,7 @@ private:
     void applyPreset(double deflection, double angular, bool lod, bool parallel);
     
     // Controls
+    wxPanel* m_presetPanel;
     wxSpinCtrlDouble* m_deflectionCtrl;
     wxSpinCtrlDouble* m_angularDeflectionCtrl;
     wxCheckBox* m_lodCheckBox;
