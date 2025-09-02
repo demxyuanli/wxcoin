@@ -381,14 +381,14 @@ void FlatFrame::createPanels() {
 	messagePage->SetSizer(msgSizer);
 	m_messageOutput = messageText;
 
-	wxPanel* perfPage = new PerformancePanel(dock);
-	perfPage->SetMinSize(wxSize(360, 140));
+	m_performancePanel = new PerformancePanel(dock);
+	m_performancePanel->SetMinSize(wxSize(360, 140));
 
 	// A container panel to host both pages will be created by dock manager; we just pass pages as panes
 	messagePage->SetName("Message");
-	perfPage->SetName("Performance");
+	m_performancePanel->SetName("Performance");
 	dock->AddPane(messagePage, ModernDockAdapter::DockPos::Bottom, 160);
-	dock->AddPane(perfPage, ModernDockAdapter::DockPos::Bottom);
+	dock->AddPane(m_performancePanel, ModernDockAdapter::DockPos::Bottom);
 
 	SetSizer(mainSizer);
 	Layout();

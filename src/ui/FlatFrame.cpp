@@ -203,6 +203,7 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_homeMenu(nullptr),
 	m_searchPanel(nullptr),
 	m_profilePanel(nullptr),
+	m_performancePanel(nullptr),
 	m_canvas(nullptr),
 	m_propertyPanel(nullptr),
 	m_objectTreePanel(nullptr),
@@ -768,11 +769,12 @@ void FlatFrame::OnForceFineLoD(wxCommandEvent& event)
 void FlatFrame::OnTogglePerformanceMonitor(wxCommandEvent& event)
 {
 	// Toggle performance panel visibility
-	// TODO: Need to add m_performancePanel member and wire it up
-	appendMessage("Performance monitor toggle - feature in development");
-	
-	// For now, just log the request
-	LOG_INF_S("Performance monitor toggle requested via F12");
+	if (m_performancePanel) {
+		bool visible = m_performancePanel->IsShown();
+		m_performancePanel->Show(!visible);
+		Layout();
+		appendMessage(wxString::Format("Performance monitor %s", visible ? "hidden" : "shown"));
+	}
 }
 
 void FlatFrame::OnPerformancePreset(wxCommandEvent& event)

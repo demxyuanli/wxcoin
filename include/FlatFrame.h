@@ -138,6 +138,7 @@ private:
 	FlatUIHomeMenu* m_homeMenu;
 	wxPanel* m_searchPanel;
 	wxPanel* m_profilePanel;
+	wxPanel* m_performancePanel;  // Performance monitoring panel
 
 	wxAuiManager m_auiManager;
 
