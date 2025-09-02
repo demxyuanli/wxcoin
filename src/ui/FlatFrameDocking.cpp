@@ -30,7 +30,7 @@ EVT_MENU(ID_DOCKING_LOAD_LAYOUT, FlatFrameDocking::OnDockingLoadLayout)
 EVT_MENU(ID_DOCKING_RESET_LAYOUT, FlatFrameDocking::OnDockingResetLayout)
 EVT_MENU(ID_DOCKING_MANAGE_PERSPECTIVES, FlatFrameDocking::OnDockingManagePerspectives)
 EVT_MENU(ID_DOCKING_TOGGLE_AUTOHIDE, FlatFrameDocking::OnDockingToggleAutoHide)
-EVT_MENU(ID_DOCKING_CONFIGURE_LAYOUT, FlatFrameDocking::OnDockingConfigureLayout)
+EVT_MENU(ID_DOCK_LAYOUT_CONFIG, FlatFrameDocking::OnDockingConfigureLayout)
 
 // View panel events
 EVT_MENU(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
