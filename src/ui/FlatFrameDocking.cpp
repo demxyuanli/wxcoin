@@ -452,35 +452,9 @@ DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
 }
 
 void FlatFrameDocking::CreateDockingMenus() {
-    // This method is kept for compatibility but simplified
-    // since docking options are now in the ribbon dropdown menu
-    
-    // Get or create menu bar for panel visibility shortcuts
-    wxMenuBar* menuBar = GetMenuBar();
-    if (!menuBar) {
-        menuBar = new wxMenuBar();
-        SetMenuBar(menuBar);
-    }
-
-    wxMenu* viewMenu = nullptr;
-    int viewMenuIndex = menuBar->FindMenu("View");
-    if (viewMenuIndex != wxNOT_FOUND) {
-        viewMenu = menuBar->GetMenu(viewMenuIndex);
-    }
-    else {
-        viewMenu = new wxMenu();
-        menuBar->Append(viewMenu, "&View");
-    }
-
-    // Only add panel visibility items with keyboard shortcuts
-    viewMenu->AppendCheckItem(ID_VIEW_OBJECT_TREE, "Object Tree\tCtrl+Alt+O",
-        "Show/hide object tree panel");
-    viewMenu->AppendCheckItem(ID_VIEW_PROPERTIES, "Properties\tCtrl+Alt+P",
-        "Show/hide properties panel");
-    viewMenu->AppendCheckItem(ID_VIEW_MESSAGE, "Message\tCtrl+Alt+M",
-        "Show/hide message output panel");
-    viewMenu->AppendCheckItem(ID_VIEW_PERFORMANCE, "Performance\tCtrl+Alt+F",
-        "Show/hide performance monitor panel");
+    // Since all docking functionality is now in the ribbon's Docking page,
+    // we don't need to create any traditional menu items here.
+    // This method is kept empty for compatibility.
 }
 
 void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {
