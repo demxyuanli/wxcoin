@@ -185,16 +185,6 @@ public:
 	
 	// Keyboard shortcuts
 	void SetupKeyboardShortcuts();
-	
-	// Virtual methods for docking system
-	virtual bool IsUsingDockingSystem() const { return false; }
-	virtual wxWindow* GetMainWorkArea() const { return nullptr; }
-	
-	// Accessor methods
-	Canvas* GetCanvas() const { return m_canvas; }
-	ObjectTreePanel* GetObjectTreePanel() const { return m_objectTreePanel; }
-	PropertyPanel* GetPropertyPanel() const { return m_propertyPanel; }
-	wxTextCtrl* GetMessageOutput() const { return m_messageOutput; }
 
 	// Event handlers
 	void OnButtonClick(wxCommandEvent& event);
