@@ -2,7 +2,7 @@
 #include "Canvas.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
-#include "PerformancePanel.h"
+#include "ui/PerformancePanel.h"
 #include "docking/DockAreaTabBar.h"
 #include "docking/DockingIntegration.h"
 #include "CommonCommands.h"
