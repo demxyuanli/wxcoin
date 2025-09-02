@@ -417,40 +417,6 @@ DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
     return dock;
 }
 
-DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
-    DockWidget* dock = new DockWidget("Toolbox", m_dockManager->containerWidget());
-
-    // Create toolbox panel
-    wxPanel* toolbox = new wxPanel(dock);
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-
-    // Add tool buttons
-    wxButton* selectTool = new wxButton(toolbox, wxID_ANY, "Select");
-    wxButton* moveTool = new wxButton(toolbox, wxID_ANY, "Move");
-    wxButton* rotateTool = new wxButton(toolbox, wxID_ANY, "Rotate");
-    wxButton* scaleTool = new wxButton(toolbox, wxID_ANY, "Scale");
-    wxButton* measureTool = new wxButton(toolbox, wxID_ANY, "Measure");
-
-    sizer->Add(selectTool, 0, wxEXPAND | wxALL, 2);
-    sizer->Add(moveTool, 0, wxEXPAND | wxALL, 2);
-    sizer->Add(rotateTool, 0, wxEXPAND | wxALL, 2);
-    sizer->Add(scaleTool, 0, wxEXPAND | wxALL, 2);
-    sizer->Add(measureTool, 0, wxEXPAND | wxALL, 2);
-    sizer->AddStretchSpacer();
-
-    toolbox->SetSizer(sizer);
-    dock->setWidget(toolbox);
-
-    // Configure dock widget
-    dock->setFeature(DockWidgetClosable, true);
-    dock->setFeature(DockWidgetMovable, true);
-    dock->setFeature(DockWidgetFloatable, true);
-
-    dock->setIcon(wxArtProvider::GetIcon(wxART_EXECUTABLE_FILE, wxART_MENU));
-
-    return dock;
-}
-
 void FlatFrameDocking::CreateDockingMenus() {
     // Since all docking functionality is now in the ribbon's Docking page,
     // we don't need to create any traditional menu items here.
@@ -601,7 +567,6 @@ void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
         break;
 
     case ID_VIEW_MESSAGE:
-    case ID_VIEW_OUTPUT:  // Backward compatibility
         if (m_messageDock) {
             m_messageDock->toggleView();
         }
@@ -636,7 +601,6 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
         break;
 
     case ID_VIEW_MESSAGE:
-    case ID_VIEW_OUTPUT:  // Backward compatibility
         if (m_messageDock) {
             event.Check(m_messageDock->isVisible());
         }

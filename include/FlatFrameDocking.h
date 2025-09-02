@@ -42,7 +42,7 @@ public:
     ads::DockWidget* CreateCanvasDockWidget();
     ads::DockWidget* CreateMessageDockWidget();
     ads::DockWidget* CreatePerformanceDockWidget();
-    ads::DockWidget* CreateToolboxDockWidget();  // Keep for compatibility, but not used
+
     
     // Access to dock manager
     ads::DockManager* GetDockManager() const { return m_dockManager; }
@@ -75,7 +75,7 @@ private:
     ads::DockWidget* m_propertyDock;
     ads::DockWidget* m_objectTreeDock;
     ads::DockWidget* m_canvasDock;
-    ads::DockWidget* m_messageDock;      // Renamed from m_outputDock
+    ads::DockWidget* m_messageDock;
     ads::DockWidget* m_performanceDock;  // New performance panel
     
     // Output control
