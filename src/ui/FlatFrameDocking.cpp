@@ -3,7 +3,7 @@
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
 #include "ui/PerformancePanel.h"
-#include "docking/DockAreaTabBar.h"
+#include "docking/DockArea.h"
 #include "docking/DockingIntegration.h"
 #include "CommonCommands.h"
 #include "EventLogger.h"
