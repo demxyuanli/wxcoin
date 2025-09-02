@@ -148,7 +148,7 @@ void ImportProgressManager::ApplyPendingUpdates()
             if (m_pendingUpdate.value >= m_maxValue.load()) {
                 m_progressBar->SetState(FlatProgressBar::ProgressBarState::COMPLETED);
             } else if (m_pendingUpdate.value > 0) {
-                m_progressBar->SetState(FlatProgressBar::ProgressBarState::IN_PROGRESS);
+                m_progressBar->SetState(FlatProgressBar::ProgressBarState::DEFAULT_STATE);
             }
         }
     }
