@@ -307,6 +307,27 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 	}
 
 	LOG_INF_S("=== APPLYING MESH QUALITY SETTINGS ===");
+	
+	// Provide user-friendly feedback based on settings
+	if (m_currentDeflection >= 2.0) {
+		LOG_INF_S("💨 Performance Mode: Using very coarse mesh for maximum speed");
+		LOG_INF_S("Tip: If quality is too low, try reducing Deflection to 1.0-1.5");
+	} else if (m_currentDeflection >= 1.0) {
+		LOG_INF_S("⚡ Balanced Mode: Good balance between quality and performance");
+	} else if (m_currentDeflection >= 0.5) {
+		LOG_INF_S("🎨 Quality Mode: Using fine mesh for better visual quality");
+	} else {
+		LOG_INF_S("💎 Ultra Quality Mode: Maximum quality, may impact performance");
+		LOG_INF_S("Tip: Enable LOD for better interaction responsiveness");
+	}
+	
+	if (m_currentLODEnabled) {
+		LOG_INF_S("✓ LOD Enabled: Automatic quality adjustment during interaction");
+		LOG_INF_S("  - Rough mode: " + std::to_string(m_currentLODRoughDeflection) + 
+			" (used during mouse interaction)");
+		LOG_INF_S("  - Fine mode: " + std::to_string(m_currentLODFineDeflection) + 
+			" (used when idle)");
+	}
 
 	// Apply basic quality settings
 	m_occViewer->setMeshDeflection(m_currentDeflection, true);
