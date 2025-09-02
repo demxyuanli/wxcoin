@@ -342,7 +342,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	layoutConfigPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
 	layoutConfigPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* layoutConfigBar = new FlatUIButtonBar(layoutConfigPanel);
-	layoutConfigBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	layoutConfigBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	layoutConfigBar->AddButton(ID_DOCK_LAYOUT_CONFIG, "Configure Layout", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Configure dock panel sizes and layout");
 	layoutConfigPanel->AddButtonBar(layoutConfigBar, 0, wxEXPAND | wxALL, 5);
 	dockingPage->AddPanel(layoutConfigPanel);
@@ -356,7 +356,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	layoutMgmtPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
 	layoutMgmtPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* layoutMgmtBar = new FlatUIButtonBar(layoutMgmtPanel);
-	layoutMgmtBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	layoutMgmtBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	layoutMgmtBar->AddButton(ID_DOCKING_SAVE_LAYOUT, "Save Layout", SVG_ICON("save", wxSize(16, 16)), nullptr, "Save current docking layout");
 	layoutMgmtBar->AddButton(ID_DOCKING_LOAD_LAYOUT, "Load Layout", SVG_ICON("open", wxSize(16, 16)), nullptr, "Load saved docking layout");
 	layoutMgmtBar->AddButton(ID_DOCKING_RESET_LAYOUT, "Reset Layout", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Reset to default docking layout");
@@ -372,7 +372,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	advancedPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
 	advancedPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* advancedBar = new FlatUIButtonBar(advancedPanel);
-	advancedBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	advancedBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	advancedBar->AddButton(ID_DOCKING_MANAGE_PERSPECTIVES, "Perspectives", SVG_ICON("layers", wxSize(16, 16)), nullptr, "Manage saved layout perspectives");
 	advancedBar->AddToggleButton(ID_DOCKING_TOGGLE_AUTOHIDE, "Auto-hide", false, SVG_ICON("pin", wxSize(16, 16)), "Toggle auto-hide for current panel");
 	advancedPanel->AddButtonBar(advancedBar, 0, wxEXPAND | wxALL, 5);
@@ -387,7 +387,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	visibilityPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
 	visibilityPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* visibilityBar = new FlatUIButtonBar(visibilityPanel);
-	visibilityBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	visibilityBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	visibilityBar->AddToggleButton(ID_VIEW_OBJECT_TREE, "Object Tree", true, SVG_ICON("tree", wxSize(16, 16)), "Show/hide object tree panel");
 	visibilityBar->AddToggleButton(ID_VIEW_PROPERTIES, "Properties", true, SVG_ICON("properties", wxSize(16, 16)), "Show/hide properties panel");
 	visibilityBar->AddToggleButton(ID_VIEW_MESSAGE, "Message", true, SVG_ICON("message", wxSize(16, 16)), "Show/hide message output panel");
