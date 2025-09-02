@@ -144,6 +144,19 @@ void Canvas::showErrorDialog(const std::string& message) const {
 }
 
 void Canvas::render(bool fastMode) {
+	// Skip rendering if we're already rendering (prevents recursive calls)
+	static bool isRendering = false;
+	if (isRendering) {
+		return;
+	}
+	
+	// Guard to ensure we reset the flag
+	struct RenderGuard {
+		bool& flag;
+		RenderGuard(bool& f) : flag(f) { flag = true; }
+		~RenderGuard() { flag = false; }
+	} guard(isRendering);
+	
 	auto renderStartTime = std::chrono::high_resolution_clock::now();
 
 	if (m_renderingEngine) {
@@ -187,14 +200,16 @@ void Canvas::render(bool fastMode) {
 		auto renderEndTime = std::chrono::high_resolution_clock::now();
 		auto renderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(renderEndTime - renderStartTime);
 
-		// Publish to PerformanceDataBus
-		perf::CanvasPerfSample c;
-		c.mode = fastMode ? "FAST" : "QUALITY";
-		c.mainSceneMs = static_cast<int>(mainRenderDuration.count());
-		c.swapMs = static_cast<int>(swapDuration.count());
-		c.totalMs = static_cast<int>(renderDuration.count());
-		c.fps = 1000.0 / std::max(1, c.totalMs);
-		perf::PerformanceBus::instance().setCanvas(c);
+		// Only publish performance data if render took significant time
+		if (renderDuration.count() > 1) {
+			perf::CanvasPerfSample c;
+			c.mode = fastMode ? "FAST" : "QUALITY";
+			c.mainSceneMs = static_cast<int>(mainRenderDuration.count());
+			c.swapMs = static_cast<int>(swapDuration.count());
+			c.totalMs = static_cast<int>(renderDuration.count());
+			c.fps = 1000.0 / std::max(1, c.totalMs);
+			perf::PerformanceBus::instance().setCanvas(c);
+		}
 	}
 }
 

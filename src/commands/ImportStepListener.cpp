@@ -173,21 +173,48 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 		if (!allGeometries.empty() && m_occViewer) {
 			// Add all geometries using batch operations
 			auto geometryAddStartTime = std::chrono::high_resolution_clock::now();
-			// Temporarily use rough deflection to accelerate initial meshing
+			// Use intelligent deflection based on geometry size
 			double prevDeflection = m_occViewer->getMeshDeflection();
-			double roughDeflection = m_occViewer->getLODRoughDeflection();
-			if (roughDeflection <= 0.0) {
-				roughDeflection = 0.2; // slightly coarser for faster first frame
+			
+			// Calculate bounding box to determine appropriate deflection
+			gp_Pnt minPt, maxPt;
+			bool hasBounds = STEPReader::calculateCombinedBoundingBox(allGeometries, minPt, maxPt);
+			
+			double optimalDeflection = prevDeflection;
+			if (hasBounds) {
+				// Calculate diagonal of bounding box
+				double dx = maxPt.X() - minPt.X();
+				double dy = maxPt.Y() - minPt.Y();
+				double dz = maxPt.Z() - minPt.Z();
+				double diagonal = std::sqrt(dx*dx + dy*dy + dz*dz);
+				
+				// Use 0.1% to 0.5% of diagonal as deflection
+				// Smaller objects get finer mesh, larger objects get coarser mesh
+				if (diagonal < 10.0) {
+					optimalDeflection = diagonal * 0.001; // 0.1% for small objects
+				} else if (diagonal < 100.0) {
+					optimalDeflection = diagonal * 0.002; // 0.2% for medium objects
+				} else {
+					optimalDeflection = diagonal * 0.005; // 0.5% for large objects
+				}
+				
+				// Clamp to reasonable range
+				optimalDeflection = std::max(0.001, std::min(1.0, optimalDeflection));
+				
+				LOG_INF_S("Bounding box diagonal: " + std::to_string(diagonal) + 
+					", using deflection: " + std::to_string(optimalDeflection));
 			}
 
 			m_occViewer->beginBatchOperation();
-			m_occViewer->setMeshDeflection(roughDeflection, false);
+			m_occViewer->setMeshDeflection(optimalDeflection, false);
+			
+			// Enable LOD for better performance
+			m_occViewer->setLODEnabled(true);
+			
+			// Add geometries
 			m_occViewer->addGeometries(allGeometries);
 			m_occViewer->endBatchOperation();
 			if (statusBar) { statusBar->SetGaugeValue(98); }
-
-			// Restore previous deflection without immediate remesh to avoid long stall
-			m_occViewer->setMeshDeflection(prevDeflection, false);
 			// Optional: request a background-style refresh to refine mesh gradually (next user action can trigger remeshAllGeometries)
 			auto geometryAddEndTime = std::chrono::high_resolution_clock::now();
 			auto geometryAddDuration = std::chrono::duration_cast<std::chrono::milliseconds>(geometryAddEndTime - geometryAddStartTime);
