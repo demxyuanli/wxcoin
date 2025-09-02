@@ -291,31 +291,6 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayButtonBar->AddButton(ID_OUTLINE_SETTINGS, "Outline Settings", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open outline settings");
 	displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(displayPanel);
-	
-	// Add Docking panel with dropdown menu
-	FlatUIPanel* dockingPanel = new FlatUIPanel(page3, "Docking", wxHORIZONTAL);
-	dockingPanel->SetFont(CFG_DEFAULTFONT());
-	dockingPanel->SetPanelBorderWidths(0, 0, 0, 1);
-	dockingPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
-	dockingPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
-	dockingPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
-	dockingPanel->SetHeaderBorderWidths(0, 0, 0, 0);
-	FlatUIButtonBar* dockingButtonBar = new FlatUIButtonBar(dockingPanel);
-	dockingButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
-	
-	// Create dropdown menu for docking options
-	wxMenu* dockingMenu = new wxMenu();
-	dockingMenu->Append(ID_DOCK_LAYOUT_CONFIG, "&Configure Layout...", "Configure dock panel sizes and layout");
-	dockingMenu->AppendSeparator();
-	dockingMenu->Append(ID_DOCKING_SAVE_LAYOUT, "&Save Layout...", "Save current docking layout");
-	dockingMenu->Append(ID_DOCKING_LOAD_LAYOUT, "&Load Layout...", "Load saved docking layout");
-	dockingMenu->Append(ID_DOCKING_RESET_LAYOUT, "&Reset Layout", "Reset to default docking layout");
-	
-	// Add dropdown button
-	dockingButtonBar->AddDropdownButton(wxID_ANY, "Layout", SVG_ICON("layout", wxSize(16, 16)), dockingMenu, "Docking layout options");
-	dockingPanel->AddButtonBar(dockingButtonBar, 0, wxEXPAND | wxALL, 5);
-	page3->AddPanel(dockingPanel);
-	
 	m_ribbon->AddPage(page3);
 
 	FlatUIPage* page4 = new FlatUIPage(m_ribbon, "Tools");
@@ -354,6 +329,73 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	textureTestPanel->AddButtonBar(textureTestButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(textureTestPanel);
 	m_ribbon->AddPage(page4);
+	
+	// Add Docking page
+	FlatUIPage* dockingPage = new FlatUIPage(m_ribbon, "Docking");
+	
+	// Layout Configuration panel
+	FlatUIPanel* layoutConfigPanel = new FlatUIPanel(dockingPage, "Layout Configuration", wxHORIZONTAL);
+	layoutConfigPanel->SetFont(CFG_DEFAULTFONT());
+	layoutConfigPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	layoutConfigPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	layoutConfigPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	layoutConfigPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	layoutConfigPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* layoutConfigBar = new FlatUIButtonBar(layoutConfigPanel);
+	layoutConfigBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	layoutConfigBar->AddButton(ID_DOCK_LAYOUT_CONFIG, "Configure Layout", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Configure dock panel sizes and layout");
+	layoutConfigPanel->AddButtonBar(layoutConfigBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(layoutConfigPanel);
+	
+	// Layout Management panel
+	FlatUIPanel* layoutMgmtPanel = new FlatUIPanel(dockingPage, "Layout Management", wxHORIZONTAL);
+	layoutMgmtPanel->SetFont(CFG_DEFAULTFONT());
+	layoutMgmtPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	layoutMgmtPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	layoutMgmtPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	layoutMgmtPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	layoutMgmtPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* layoutMgmtBar = new FlatUIButtonBar(layoutMgmtPanel);
+	layoutMgmtBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	layoutMgmtBar->AddButton(ID_DOCKING_SAVE_LAYOUT, "Save Layout", SVG_ICON("save", wxSize(16, 16)), nullptr, "Save current docking layout");
+	layoutMgmtBar->AddButton(ID_DOCKING_LOAD_LAYOUT, "Load Layout", SVG_ICON("open", wxSize(16, 16)), nullptr, "Load saved docking layout");
+	layoutMgmtBar->AddButton(ID_DOCKING_RESET_LAYOUT, "Reset Layout", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Reset to default docking layout");
+	layoutMgmtPanel->AddButtonBar(layoutMgmtBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(layoutMgmtPanel);
+	
+	// Advanced Features panel
+	FlatUIPanel* advancedPanel = new FlatUIPanel(dockingPage, "Advanced Features", wxHORIZONTAL);
+	advancedPanel->SetFont(CFG_DEFAULTFONT());
+	advancedPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	advancedPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	advancedPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	advancedPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	advancedPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* advancedBar = new FlatUIButtonBar(advancedPanel);
+	advancedBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	advancedBar->AddButton(ID_DOCKING_MANAGE_PERSPECTIVES, "Perspectives", SVG_ICON("layers", wxSize(16, 16)), nullptr, "Manage saved layout perspectives");
+	advancedBar->AddToggleButton(ID_DOCKING_TOGGLE_AUTOHIDE, "Auto-hide", false, SVG_ICON("pin", wxSize(16, 16)), "Toggle auto-hide for current panel");
+	advancedPanel->AddButtonBar(advancedBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(advancedPanel);
+	
+	// Panel Visibility panel
+	FlatUIPanel* visibilityPanel = new FlatUIPanel(dockingPage, "Panel Visibility", wxHORIZONTAL);
+	visibilityPanel->SetFont(CFG_DEFAULTFONT());
+	visibilityPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	visibilityPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	visibilityPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	visibilityPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	visibilityPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* visibilityBar = new FlatUIButtonBar(visibilityPanel);
+	visibilityBar->SetDisplayStyle(ButtonDisplayStyle::ICON_AND_TEXT);
+	visibilityBar->AddToggleButton(ID_VIEW_OBJECT_TREE, "Object Tree", true, SVG_ICON("tree", wxSize(16, 16)), "Show/hide object tree panel");
+	visibilityBar->AddToggleButton(ID_VIEW_PROPERTIES, "Properties", true, SVG_ICON("properties", wxSize(16, 16)), "Show/hide properties panel");
+	visibilityBar->AddToggleButton(ID_VIEW_MESSAGE, "Message", true, SVG_ICON("message", wxSize(16, 16)), "Show/hide message output panel");
+	visibilityBar->AddToggleButton(ID_VIEW_PERFORMANCE, "Performance", true, SVG_ICON("chart", wxSize(16, 16)), "Show/hide performance monitor panel");
+	visibilityPanel->AddButtonBar(visibilityBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(visibilityPanel);
+	
+	m_ribbon->AddPage(dockingPage);
 
 	createPanels();
 	setupCommandSystem();
