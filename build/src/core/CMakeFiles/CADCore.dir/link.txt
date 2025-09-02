@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCADCore.a CMakeFiles/CADCore.dir/GeometryObject.cpp.o CMakeFiles/CADCore.dir/DPIManager.cpp.o CMakeFiles/CADCore.dir/DPIAwareRendering.cpp.o CMakeFiles/CADCore.dir/PerformanceBus.cpp.o
+/usr/bin/ranlib libCADCore.a

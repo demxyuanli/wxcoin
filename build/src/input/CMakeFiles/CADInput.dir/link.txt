@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCADInput.a CMakeFiles/CADInput.dir/InputManager.cpp.o CMakeFiles/CADInput.dir/EventCoordinator.cpp.o CMakeFiles/CADInput.dir/MouseHandler.cpp.o CMakeFiles/CADInput.dir/DefaultInputState.cpp.o CMakeFiles/CADInput.dir/PickingInputState.cpp.o
+/usr/bin/ranlib libCADInput.a

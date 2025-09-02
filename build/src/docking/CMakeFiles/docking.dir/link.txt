@@ -1,0 +1,2 @@
+/usr/bin/ar qc libdocking.a CMakeFiles/docking.dir/DockManager.cpp.o CMakeFiles/docking.dir/DockWidget.cpp.o CMakeFiles/docking.dir/DockArea.cpp.o CMakeFiles/docking.dir/DockContainerWidget.cpp.o CMakeFiles/docking.dir/FloatingDockContainer.cpp.o CMakeFiles/docking.dir/DockOverlay.cpp.o CMakeFiles/docking.dir/DockingIntegration.cpp.o CMakeFiles/docking.dir/AutoHideContainer.cpp.o CMakeFiles/docking.dir/PerspectiveManager.cpp.o CMakeFiles/docking.dir/DockLayoutConfig.cpp.o
+/usr/bin/ranlib libdocking.a

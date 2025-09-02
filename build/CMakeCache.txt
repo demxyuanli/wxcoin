@@ -226,8 +226,23 @@ CMAKE_TAPI:FILEPATH=CMAKE_TAPI-NOTFOUND
 // Studio IDE projects all commands are done without /nologo.
 CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 
+//The directory containing a CMake configuration file for Coin.
+Coin_DIR:PATH=Coin_DIR-NOTFOUND
+
+//The directory containing a CMake configuration file for OpenCASCADE.
+OpenCASCADE_DIR:PATH=OpenCASCADE_DIR-NOTFOUND
+
+//Location of wxWidgets library configuration provider binary (wx-config).
+wxWidgets_CONFIG_EXECUTABLE:FILEPATH=/usr/bin/wx-config
+
 //The directory containing a CMake configuration file for wxWidgets.
 wxWidgets_DIR:PATH=wxWidgets_DIR-NOTFOUND
+
+//Use debug build?
+wxWidgets_USE_DEBUG:BOOL=OFF
+
+//Location of wxWidgets resource file compiler binary (wxrc)
+wxWidgets_wxrc_EXECUTABLE:FILEPATH=/usr/bin/wxrc
 
 
 ########################
@@ -338,7 +353,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=1
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=17
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP
@@ -383,6 +398,8 @@ CMAKE_TAPI-ADVANCED:INTERNAL=1
 CMAKE_UNAME:INTERNAL=/usr/bin/uname
 //ADVANCED property for variable: CMAKE_VERBOSE_MAKEFILE
 CMAKE_VERBOSE_MAKEFILE-ADVANCED:INTERNAL=1
+//Details about finding wxWidgets
+FIND_PACKAGE_MESSAGE_DETAILS_wxWidgets:INTERNAL=[-L/usr/lib/x86_64-linux-gnu;-pthread;;;-lwx_gtk3u_core-3.2;-lwx_baseu-3.2;-lwx_gtk3u_gl-3.2][/usr/lib/x86_64-linux-gnu/wx/include/gtk3-unicode-3.2;/usr/include/wx-3.2][v3.2.6()]
 //linker supports push/pop state
 _CMAKE_CXX_LINKER_PUSHPOP_STATE_SUPPORTED:INTERNAL=TRUE
 //linker supports push/pop state

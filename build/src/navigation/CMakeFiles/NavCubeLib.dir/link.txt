@@ -1,0 +1,2 @@
+/usr/bin/ar qc libNavCubeLib.a CMakeFiles/NavCubeLib.dir/NavigationController.cpp.o CMakeFiles/NavCubeLib.dir/NavigationStyle.cpp.o CMakeFiles/NavCubeLib.dir/NavigationCube.cpp.o CMakeFiles/NavCubeLib.dir/NavigationCubeManager.cpp.o CMakeFiles/NavCubeLib.dir/CuteNavCube.cpp.o CMakeFiles/NavCubeLib.dir/NavigationCubeConfigDialog.cpp.o
+/usr/bin/ranlib libNavCubeLib.a

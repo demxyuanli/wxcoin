@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIDialogMesh.a CMakeFiles/UIDialogMesh.dir/MeshQualityDialog.cpp.o CMakeFiles/UIDialogMesh.dir/TransparencyDialog.cpp.o CMakeFiles/UIDialogMesh.dir/ImportSettingsDialog.cpp.o CMakeFiles/UIDialogMesh.dir/ImportProgressManager.cpp.o
+/usr/bin/ranlib libUIDialogMesh.a

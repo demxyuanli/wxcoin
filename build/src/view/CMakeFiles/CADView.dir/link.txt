@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCADView.a CMakeFiles/CADView.dir/Canvas.cpp.o CMakeFiles/CADView.dir/ViewportManager.cpp.o CMakeFiles/CADView.dir/MultiViewportManager.cpp.o CMakeFiles/CADView.dir/ViewRefreshManager.cpp.o CMakeFiles/CADView.dir/DynamicSilhouetteRenderer.cpp.o
+/usr/bin/ranlib libCADView.a

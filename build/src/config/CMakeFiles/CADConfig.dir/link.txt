@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCADConfig.a CMakeFiles/CADConfig.dir/ConfigManager.cpp.o CMakeFiles/CADConfig.dir/ThemeManager.cpp.o CMakeFiles/CADConfig.dir/SvgIconManager.cpp.o CMakeFiles/CADConfig.dir/ConstantsConfig.cpp.o CMakeFiles/CADConfig.dir/Coin3DConfig.cpp.o CMakeFiles/CADConfig.dir/LoggerConfig.cpp.o CMakeFiles/CADConfig.dir/RenderingConfig.cpp.o CMakeFiles/CADConfig.dir/EdgeSettingsConfig.cpp.o CMakeFiles/CADConfig.dir/LightingConfig.cpp.o CMakeFiles/CADConfig.dir/FontManager.cpp.o
+/usr/bin/ranlib libCADConfig.a

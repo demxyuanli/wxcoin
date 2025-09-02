@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCADLogger.a CMakeFiles/CADLogger.dir/Logger.cpp.o
+/usr/bin/ranlib libCADLogger.a

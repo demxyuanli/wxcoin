@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIDialogGeometry.a CMakeFiles/UIDialogGeometry.dir/PositionBasicDialog.cpp.o CMakeFiles/UIDialogGeometry.dir/VisualSettingsDialog.cpp.o
+/usr/bin/ranlib libUIDialogGeometry.a

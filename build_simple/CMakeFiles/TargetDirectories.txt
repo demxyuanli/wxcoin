@@ -1,0 +1,3 @@
+/workspace/build_simple/CMakeFiles/test_ui_frame.dir
+/workspace/build_simple/CMakeFiles/edit_cache.dir
+/workspace/build_simple/CMakeFiles/rebuild_cache.dir

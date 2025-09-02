@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCADRendering.a CMakeFiles/CADRendering.dir/RenderingEngine.cpp.o CMakeFiles/CADRendering.dir/SceneManager.cpp.o CMakeFiles/CADRendering.dir/CoordinateSystemRenderer.cpp.o CMakeFiles/CADRendering.dir/PickingAidManager.cpp.o CMakeFiles/CADRendering.dir/__/core/ServiceLocator.cpp.o CMakeFiles/CADRendering.dir/__/core/DefaultSubsystemFactory.cpp.o
+/usr/bin/ranlib libCADRendering.a

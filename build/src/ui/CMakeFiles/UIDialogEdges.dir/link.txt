@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIDialogEdges.a CMakeFiles/UIDialogEdges.dir/EdgeSettingsDialog.cpp.o CMakeFiles/UIDialogEdges.dir/FeatureEdgesParamDialog.cpp.o CMakeFiles/UIDialogEdges.dir/OutlineSettingsDialog.cpp.o CMakeFiles/UIDialogEdges.dir/OutlinePreviewCanvas.cpp.o
+/usr/bin/ranlib libUIDialogEdges.a

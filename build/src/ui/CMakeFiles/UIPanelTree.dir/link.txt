@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIPanelTree.a CMakeFiles/UIPanelTree.dir/ObjectTreePanel.cpp.o CMakeFiles/UIPanelTree.dir/FlatBarNotebook.cpp.o
+/usr/bin/ranlib libUIPanelTree.a

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIPanelProperty.a CMakeFiles/UIPanelProperty.dir/PropertyPanel.cpp.o
+/usr/bin/ranlib libUIPanelProperty.a

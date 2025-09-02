@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIDialogRendering.a CMakeFiles/UIDialogRendering.dir/RenderingSettingsDialog.cpp.o CMakeFiles/UIDialogRendering.dir/LightingSettingsDialog.cpp.o
+/usr/bin/ranlib libUIDialogRendering.a

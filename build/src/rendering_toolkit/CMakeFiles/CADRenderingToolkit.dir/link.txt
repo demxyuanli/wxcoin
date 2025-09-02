@@ -1,0 +1,2 @@
+/usr/bin/ar qc libCADRenderingToolkit.a CMakeFiles/CADRenderingToolkit.dir/RenderingToolkitAPI.cpp.o CMakeFiles/CADRenderingToolkit.dir/RenderConfig.cpp.o CMakeFiles/CADRenderingToolkit.dir/RenderManager.cpp.o CMakeFiles/CADRenderingToolkit.dir/RenderPluginManager.cpp.o CMakeFiles/CADRenderingToolkit.dir/OpenCASCADEProcessor.cpp.o CMakeFiles/CADRenderingToolkit.dir/Coin3DBackendImpl.cpp.o CMakeFiles/CADRenderingToolkit.dir/FrustumCuller.cpp.o CMakeFiles/CADRenderingToolkit.dir/OcclusionCuller.cpp.o
+/usr/bin/ranlib libCADRenderingToolkit.a

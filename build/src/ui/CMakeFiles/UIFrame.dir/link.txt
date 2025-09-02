@@ -1,0 +1,2 @@
+/usr/bin/ar qc libUIFrame.a CMakeFiles/UIFrame.dir/FlatFrame.cpp.o CMakeFiles/UIFrame.dir/FlatFrameInit.cpp.o CMakeFiles/UIFrame.dir/FlatFrameEvents.cpp.o CMakeFiles/UIFrame.dir/FlatFrameCommands.cpp.o CMakeFiles/UIFrame.dir/FlatFrameStatus.cpp.o CMakeFiles/UIFrame.dir/PerformancePanel.cpp.o CMakeFiles/UIFrame.dir/FlatFrameDocking.cpp.o
+/usr/bin/ranlib libUIFrame.a
