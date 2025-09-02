@@ -63,6 +63,9 @@ public:
     // Last added area
     DockArea* lastAddedDockArea() const { return m_lastAddedArea; }
     
+    // Layout configuration
+    void applyLayoutConfig();
+    
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_ADDED;
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_REMOVED;
@@ -98,7 +101,6 @@ private:
     void dropDockWidget(DockWidget* widget, DockWidgetArea dropArea, DockArea* targetArea);
     DockSplitter* newSplitter(wxOrientation orientation);
     void addDockAreaToSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
-    void applyLayoutConfig();
     
     // New helper methods for proper 5-zone layout
     void handleTopBottomArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
