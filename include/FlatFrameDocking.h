@@ -43,6 +43,10 @@ public:
     // Access to dock manager
     ads::DockManager* GetDockManager() const { return m_dockManager; }
     
+    // Override virtual methods from FlatFrame
+    virtual bool IsUsingDockingSystem() const override { return true; }
+    virtual wxWindow* GetMainWorkArea() const override;
+    
 protected:
     // Event handlers for docking
     void OnViewShowHidePanel(wxCommandEvent& event);
