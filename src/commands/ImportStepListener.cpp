@@ -4,6 +4,7 @@
 #include "OCCViewer.h"
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
+#include <wx/app.h>
 #include "logger/Logger.h"
 #include <chrono>
 #include "FlatFrame.h"
@@ -22,18 +23,33 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 
 	// Resolve status bar and message output
 	FlatUIStatusBar* statusBar = nullptr;
-	FlatFrame* flatFrame = dynamic_cast<FlatFrame*>(m_frame);
-	if (!flatFrame && m_frame) {
-		flatFrame = dynamic_cast<FlatFrame*>(wxDynamicCast(m_frame->GetParent(), wxFrame));
+	FlatFrame* flatFrame = nullptr;
+	
+	// Try to get FlatFrame - could be the frame itself or in docking environment
+	flatFrame = dynamic_cast<FlatFrame*>(m_frame);
+	if (!flatFrame) {
+		// Try to find FlatFrame through the app's top window
+		wxWindow* topWindow = wxTheApp->GetTopWindow();
+		if (topWindow) {
+			flatFrame = dynamic_cast<FlatFrame*>(topWindow);
+		}
 	}
+	
 	if (flatFrame) {
-		statusBar = flatFrame->GetFlatUIStatusBar();
-		if (statusBar) {
-			statusBar->SetGaugeRange(100);
-			statusBar->SetGaugeValue(0);
-			statusBar->EnableProgressGauge(true); // show on demand at start
+		try {
+			statusBar = flatFrame->GetFlatUIStatusBar();
+			if (statusBar) {
+				statusBar->SetGaugeRange(100);
+				statusBar->SetGaugeValue(0);
+				statusBar->EnableProgressGauge(true); // show on demand at start
+			}
+		} catch (...) {
+			LOG_WRN_S("Failed to access status bar, continuing without progress display");
+			statusBar = nullptr;
 		}
 		flatFrame->appendMessage("STEP import started...");
+	} else {
+		LOG_WRN_S("FlatFrame not found, progress will not be displayed");
 	}
 
 	// File dialog
@@ -84,12 +100,28 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			auto result = STEPReader::readSTEPFile(
 				filePath.ToStdString(), options,
 				[statusBar, flatFrame, i, &filePaths](int percent, const std::string& stage) {
-					int base = (int)std::round(((double)i / (double)(filePaths.size() + 1)) * 100.0);
-					int next = (int)std::round(((double)(i + 1) / (double)(filePaths.size() + 1)) * 100.0);
-					int mapped = base + (int)std::round((percent / 100.0) * (next - base));
-					mapped = std::max(0, std::min(95, mapped));
-					if (statusBar) statusBar->SetGaugeValue(mapped);
-					if (flatFrame) flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
+					try {
+						int base = (int)std::round(((double)i / (double)(filePaths.size() + 1)) * 100.0);
+						int next = (int)std::round(((double)(i + 1) / (double)(filePaths.size() + 1)) * 100.0);
+						int mapped = base + (int)std::round((percent / 100.0) * (next - base));
+						mapped = std::max(0, std::min(95, mapped));
+						if (statusBar) {
+							try {
+								statusBar->SetGaugeValue(mapped);
+							} catch (...) {
+								// Ignore status bar errors
+							}
+						}
+						if (flatFrame) {
+							try {
+								flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
+							} catch (...) {
+								// Ignore message append errors
+							}
+						}
+					} catch (...) {
+						// Ignore all errors in progress callback
+					}
 				}
 			);
 			auto stepReadEndTime = std::chrono::high_resolution_clock::now();
@@ -177,11 +209,26 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				totalGeometries / (totalImportTime / 1000.0)
 			);
 
-			wxMessageDialog dialog(m_frame, performanceMsg, "Batch Import Complete",
-				wxOK | wxICON_INFORMATION);
-			dialog.ShowModal();
-			if (statusBar) { statusBar->SetGaugeValue(100); statusBar->EnableProgressGauge(false); }
-			if (flatFrame) { flatFrame->appendMessage("STEP import completed."); }
+			// Ensure status bar is updated before showing dialog
+			if (statusBar) { 
+				statusBar->SetGaugeValue(100); 
+				statusBar->EnableProgressGauge(false); 
+			}
+			if (flatFrame) { 
+				flatFrame->appendMessage("STEP import completed."); 
+			}
+			
+			// Use the top-level window for the dialog to ensure it's visible
+			wxWindow* topWindow = wxTheApp->GetTopWindow();
+			if (!topWindow) {
+				topWindow = m_frame;
+			}
+			
+			// Show dialog with explicit parent and ensure it's on top
+			wxMessageDialog* dialog = new wxMessageDialog(topWindow, performanceMsg, 
+				"Batch Import Complete", wxOK | wxICON_INFORMATION | wxCENTRE);
+			dialog->ShowModal();
+			delete dialog;
 
 			auto totalImportEndTime = std::chrono::high_resolution_clock::now();
 			auto totalImportDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalImportEndTime - totalImportStartTime);
@@ -210,19 +257,52 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				"Successful files: %d",
 				filePaths.size(), filePaths.size(), successfulFiles
 			);
-			wxMessageDialog dialog(m_frame, warningMsg, "Import Warning", wxOK | wxICON_WARNING);
-			dialog.ShowModal();
-			if (statusBar) { statusBar->SetGaugeValue(0); }
-			if (statusBar) statusBar->EnableProgressGauge(false);
+			
+			// Ensure status bar is cleaned up
+			if (statusBar) { 
+				try {
+					statusBar->SetGaugeValue(0); 
+					statusBar->EnableProgressGauge(false);
+				} catch (...) {}
+			}
+			
+			// Use top-level window for dialog
+			wxWindow* topWindow = wxTheApp->GetTopWindow();
+			if (!topWindow) {
+				topWindow = m_frame;
+			}
+			
+			wxMessageDialog* dialog = new wxMessageDialog(topWindow, warningMsg, 
+				"Import Warning", wxOK | wxICON_WARNING | wxCENTRE);
+			dialog->ShowModal();
+			delete dialog;
+			
 			return CommandResult(false, "No valid geometries found in selected files", commandType);
 		}
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception during STEP import: " + std::string(e.what()));
-		wxMessageDialog dialog(m_frame, "Error importing STEP files: " + std::string(e.what()),
-			"Import Error", wxOK | wxICON_ERROR);
-		dialog.ShowModal();
-		if (statusBar) { statusBar->SetGaugeValue(0); statusBar->EnableProgressGauge(false); }
+		
+		// Ensure status bar is cleaned up
+		if (statusBar) { 
+			try {
+				statusBar->SetGaugeValue(0); 
+				statusBar->EnableProgressGauge(false);
+			} catch (...) {}
+		}
+		
+		// Use top-level window for dialog
+		wxWindow* topWindow = wxTheApp->GetTopWindow();
+		if (!topWindow) {
+			topWindow = m_frame;
+		}
+		
+		wxMessageDialog* dialog = new wxMessageDialog(topWindow, 
+			"Error importing STEP files: " + std::string(e.what()),
+			"Import Error", wxOK | wxICON_ERROR | wxCENTRE);
+		dialog->ShowModal();
+		delete dialog;
+		
 		return CommandResult(false, "Error importing STEP files: " + std::string(e.what()), commandType);
 	}
 }
