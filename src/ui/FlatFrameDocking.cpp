@@ -12,6 +12,8 @@
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
 #include "docking/DockLayoutConfig.h"
+#include "DockLayoutConfigListener.h"
+#include "CommandListenerManager.h"
 #include <wx/textctrl.h>
 #include <wx/artprov.h>
 #include <wx/filedlg.h>
@@ -68,6 +70,9 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     // because InitializeDockingLayout hides existing panels from base class
     // and we need to ensure our panels are properly created and connected
     EnsurePanelsCreated();
+    
+    // Register dock layout config listener
+    RegisterDockLayoutConfigListener();
 }
 
 FlatFrameDocking::~FlatFrameDocking() {
@@ -722,4 +727,16 @@ void FlatFrameDocking::onSize(wxSizeEvent& event) {
 wxWindow* FlatFrameDocking::GetMainWorkArea() const {
     // Return the dock container widget as the main work area
     return m_dockManager ? m_dockManager->containerWidget() : m_workAreaPanel;
+}
+
+void FlatFrameDocking::RegisterDockLayoutConfigListener() {
+    // Check if we have access to the command listener manager
+    if (m_listenerManager && m_dockManager) {
+        auto dockLayoutConfigListener = std::make_shared<DockLayoutConfigListener>(m_dockManager);
+        m_listenerManager->registerListener(cmd::CommandType::DockLayoutConfig, dockLayoutConfigListener);
+        
+        wxLogDebug("Registered DockLayoutConfigListener");
+    } else {
+        wxLogError("Unable to register DockLayoutConfigListener - missing dependencies");
+    }
 }

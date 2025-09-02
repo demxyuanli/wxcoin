@@ -54,6 +54,7 @@ set(COMMANDS_SOURCES
     ShowFlatWidgetsExampleListener.cpp
     ExplodeAssemblyListener.cpp
     SliceToggleListener.cpp
+    DockLayoutConfigListener.cpp
 )
 
 set(COMMANDS_HEADERS

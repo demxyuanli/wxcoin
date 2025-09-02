@@ -309,6 +309,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
 	toolsButtonBar->AddButton(ID_LIGHTING_SETTINGS, "Lighting Settings", SVG_ICON("light", wxSize(16, 16)), nullptr, "Configure scene lighting and environment settings");
 	toolsButtonBar->AddButton(ID_EDGE_SETTINGS, "Edge Settings", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Configure edge color, width and style settings");
+	toolsButtonBar->AddButton(ID_DOCK_LAYOUT_CONFIG, "Dock Layout", SVG_ICON("layout", wxSize(16, 16)), nullptr, "Configure dock panel sizes and layout");
 	toolsButtonBar->AddButton(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Open render preview system");
 	toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(toolsPanel);

@@ -54,6 +54,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_RENDERING_SETTINGS, cmd::CommandType::RenderingSettings},
 	{ID_EDGE_SETTINGS, cmd::CommandType::EdgeSettings},
 	{ID_LIGHTING_SETTINGS, cmd::CommandType::LightingSettings},
+	{ID_DOCK_LAYOUT_CONFIG, cmd::CommandType::DockLayoutConfig},
 	{ID_RENDER_PREVIEW_SYSTEM, cmd::CommandType::RenderPreviewSystem},
 	{ID_SHOW_FLAT_WIDGETS_EXAMPLE, cmd::CommandType::ShowFlatWidgetsExample},
 	{wxID_ABOUT, cmd::CommandType::HelpAbout}

@@ -83,6 +83,7 @@ private:
     
     void CreateDockingMenus();
     void ConfigureDockManager();
+    void RegisterDockLayoutConfigListener();
     
     wxDECLARE_EVENT_TABLE();
 };

@@ -83,6 +83,9 @@ namespace cmd {
 		// Flat Widgets Example
 		ShowFlatWidgetsExample,
 
+		// Docking
+		DockLayoutConfig,
+
 		// Sentinel
 		Unknown
 	};
@@ -149,6 +152,7 @@ namespace cmd {
 			{CommandType::HelpAbout, "HELP_ABOUT"},
 			{CommandType::RenderPreviewSystem, "RENDER_PREVIEW_SYSTEM"},
 			{CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
+			{CommandType::DockLayoutConfig, "DOCK_LAYOUT_CONFIG"},
 
 			{CommandType::Unknown, "UNKNOWN"}
 		};
@@ -216,7 +220,8 @@ namespace cmd {
 
 			{"HELP_ABOUT", CommandType::HelpAbout},
 			{"RENDER_PREVIEW_SYSTEM", CommandType::RenderPreviewSystem},
-			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample}
+			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample},
+			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig}
 		};
 		auto it = kStringToEnum.find(str);
 		return it == kStringToEnum.end() ? CommandType::Unknown : it->second;
