@@ -33,9 +33,9 @@ void ImportSettingsDialog::createControls()
 {
     // Preset buttons
     wxPanel* presetPanel = new wxPanel(this);
-    wxButton* perfBtn = new wxButton(presetPanel, wxID_ANY, "🚀 Performance");
-    wxButton* balBtn = new wxButton(presetPanel, wxID_ANY, "⚡ Balanced");
-    wxButton* qualBtn = new wxButton(presetPanel, wxID_ANY, "💎 Quality");
+    wxButton* perfBtn = new wxButton(presetPanel, wxID_ANY, "[P] Performance");
+    wxButton* balBtn = new wxButton(presetPanel, wxID_ANY, "[B] Balanced");
+    wxButton* qualBtn = new wxButton(presetPanel, wxID_ANY, "[Q] Quality");
     
     perfBtn->SetToolTip("Fast import with lower quality meshes");
     balBtn->SetToolTip("Balanced import settings");

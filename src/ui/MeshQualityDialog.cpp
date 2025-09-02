@@ -310,19 +310,19 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 	
 	// Provide user-friendly feedback based on settings
 	if (m_currentDeflection >= 2.0) {
-		LOG_INF_S("💨 Performance Mode: Using very coarse mesh for maximum speed");
+		LOG_INF_S("[PERF] Performance Mode: Using very coarse mesh for maximum speed");
 		LOG_INF_S("Tip: If quality is too low, try reducing Deflection to 1.0-1.5");
 	} else if (m_currentDeflection >= 1.0) {
-		LOG_INF_S("⚡ Balanced Mode: Good balance between quality and performance");
+		LOG_INF_S("[BALANCED] Balanced Mode: Good balance between quality and performance");
 	} else if (m_currentDeflection >= 0.5) {
-		LOG_INF_S("🎨 Quality Mode: Using fine mesh for better visual quality");
+		LOG_INF_S("[QUALITY] Quality Mode: Using fine mesh for better visual quality");
 	} else {
-		LOG_INF_S("💎 Ultra Quality Mode: Maximum quality, may impact performance");
+		LOG_INF_S("[ULTRA] Ultra Quality Mode: Maximum quality, may impact performance");
 		LOG_INF_S("Tip: Enable LOD for better interaction responsiveness");
 	}
 	
 	if (m_currentLODEnabled) {
-		LOG_INF_S("✓ LOD Enabled: Automatic quality adjustment during interaction");
+		LOG_INF_S("[OK] LOD Enabled: Automatic quality adjustment during interaction");
 		LOG_INF_S("  - Rough mode: " + std::to_string(m_currentLODRoughDeflection) + 
 			" (used during mouse interaction)");
 		LOG_INF_S("  - Fine mode: " + std::to_string(m_currentLODFineDeflection) + 
@@ -663,9 +663,9 @@ void MeshQualityDialog::createBasicQualityPage()
 	wxStaticBox* presetBox = new wxStaticBox(basicPage, wxID_ANY, "Quick Presets");
 	wxStaticBoxSizer* presetSizer = new wxStaticBoxSizer(presetBox, wxHORIZONTAL);
 	
-	wxButton* performanceBtn = new wxButton(basicPage, wxID_ANY, "🚀 Performance");
-	wxButton* balancedBtn = new wxButton(basicPage, wxID_ANY, "⚡ Balanced");
-	wxButton* qualityBtn = new wxButton(basicPage, wxID_ANY, "💎 Quality");
+	wxButton* performanceBtn = new wxButton(basicPage, wxID_ANY, "[P] Performance");
+	wxButton* balancedBtn = new wxButton(basicPage, wxID_ANY, "[B] Balanced");
+	wxButton* qualityBtn = new wxButton(basicPage, wxID_ANY, "[Q] Quality");
 	
 	performanceBtn->SetToolTip("Maximum performance: Deflection=2.0, LOD enabled");
 	balancedBtn->SetToolTip("Balanced settings: Deflection=1.0, LOD enabled");
@@ -947,7 +947,16 @@ void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled,
 	updateControls();
 	
 	// Apply immediately
-	applySettings();
+	if (m_occViewer) {
+		m_occViewer->setMeshDeflection(m_currentDeflection, true);
+		m_occViewer->setLODEnabled(m_currentLODEnabled);
+		m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
+		m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
+		m_occViewer->setParallelProcessing(m_currentParallelProcessing);
+		
+		// Trigger remesh
+		m_occViewer->remeshAllGeometries();
+	}
 	
 	// Show feedback
 	wxString msg = wxString::Format("Preset applied: Deflection=%.1f, LOD=%s", 
