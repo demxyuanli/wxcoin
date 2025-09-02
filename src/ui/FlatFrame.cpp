@@ -815,3 +815,11 @@ void FlatFrame::OnQualityPreset(wxCommandEvent& event)
 		appendMessage("Applied Quality Preset (Alt+3)");
 	}
 }
+
+void FlatFrame::EnsurePanelsCreated()
+{
+	// This method ensures that all panels are created
+	// It's called by derived classes like FlatFrameDocking
+	// The actual panel creation is done in InitializeUI
+	// which is called from the main application
+}

@@ -168,6 +168,11 @@ private:
 	// CAD methods from MainFrame
 	void createPanels();
 	void setupCommandSystem();
+protected:
+	// Protected methods for derived classes
+	void EnsurePanelsCreated();
+	
+private:
 	void onCommand(wxCommandEvent& event);
 	void onCommandFeedback(const CommandResult& result);
 	void onClose(wxCloseEvent& event);
