@@ -472,4 +472,42 @@ void FlatFrame::createPanels() {
 		bar->SetGaugeRange(100);
 		bar->SetGaugeValue(0);
 	}
+	
+	// Setup keyboard shortcuts
+	SetupKeyboardShortcuts();
+}
+
+void FlatFrame::SetupKeyboardShortcuts()
+{
+	// Create accelerator entries
+	wxAcceleratorEntry entries[] = {
+		// Mesh quality dialog
+		wxAcceleratorEntry(wxACCEL_CTRL, 'M', ID_MESH_QUALITY_DIALOG),
+		
+		// LOD controls
+		wxAcceleratorEntry(wxACCEL_NORMAL, 'L', ID_TOGGLE_LOD),
+		wxAcceleratorEntry(wxACCEL_SHIFT, 'L', ID_FORCE_ROUGH_LOD),
+		wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_SHIFT, 'L', ID_FORCE_FINE_LOD),
+		
+		// Performance monitoring
+		wxAcceleratorEntry(wxACCEL_NORMAL, WXK_F12, ID_TOGGLE_PERFORMANCE_MONITOR),
+		
+		// Quick presets (Alt + number)
+		wxAcceleratorEntry(wxACCEL_ALT, '1', ID_PERFORMANCE_PRESET),
+		wxAcceleratorEntry(wxACCEL_ALT, '2', ID_BALANCED_PRESET),
+		wxAcceleratorEntry(wxACCEL_ALT, '3', ID_QUALITY_PRESET),
+		
+		// Existing shortcuts
+		wxAcceleratorEntry(wxACCEL_CTRL, 'N', wxID_NEW),
+		wxAcceleratorEntry(wxACCEL_CTRL, 'O', wxID_OPEN),
+		wxAcceleratorEntry(wxACCEL_CTRL, 'S', wxID_SAVE),
+		wxAcceleratorEntry(wxACCEL_CTRL, 'Z', ID_UNDO),
+		wxAcceleratorEntry(wxACCEL_CTRL, 'Y', ID_REDO),
+		wxAcceleratorEntry(wxACCEL_CTRL, 'H', ID_ShowUIHierarchy)
+	};
+	
+	wxAcceleratorTable accel(sizeof(entries) / sizeof(wxAcceleratorEntry), entries);
+	SetAcceleratorTable(accel);
+	
+	LOG_INF_S("Keyboard shortcuts initialized");
 }

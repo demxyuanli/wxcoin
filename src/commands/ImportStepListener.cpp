@@ -8,6 +8,7 @@
 #include "logger/Logger.h"
 #include <chrono>
 #include "FlatFrame.h"
+#include "ImportSettingsDialog.h"
 
 ImportStepListener::ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
 	: m_frame(frame), m_canvas(canvas), m_occViewer(occViewer)
@@ -65,6 +66,25 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 
 	wxArrayString filePaths;
 	openFileDialog.GetPaths(filePaths);
+	
+	// Show import settings dialog
+	ImportSettingsDialog settingsDialog(m_frame);
+	if (settingsDialog.ShowModal() != wxID_OK) {
+		if (statusBar) { statusBar->SetGaugeValue(0); }
+		return CommandResult(false, "STEP import cancelled", commandType);
+	}
+	
+	// Get import settings
+	double meshDeflection = settingsDialog.getMeshDeflection();
+	double angularDeflection = settingsDialog.getAngularDeflection();
+	bool enableLOD = settingsDialog.isLODEnabled();
+	bool parallelProcessing = settingsDialog.isParallelProcessing();
+	bool adaptiveMeshing = settingsDialog.isAdaptiveMeshing();
+	
+	LOG_INF_S(wxString::Format("Import settings: Deflection=%.2f, Angular=%.2f, LOD=%s, Parallel=%s",
+		meshDeflection, angularDeflection, 
+		enableLOD ? "On" : "Off",
+		parallelProcessing ? "On" : "Off"));
 	auto fileDialogEndTime = std::chrono::high_resolution_clock::now();
 	auto fileDialogDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileDialogEndTime - fileDialogStartTime);
 
@@ -180,36 +200,45 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			gp_Pnt minPt, maxPt;
 			bool hasBounds = STEPReader::calculateCombinedBoundingBox(allGeometries, minPt, maxPt);
 			
-			double optimalDeflection = prevDeflection;
-			if (hasBounds) {
+			double optimalDeflection = meshDeflection; // Use user-selected deflection
+			
+			// If auto-optimize is enabled, adjust based on geometry size
+			if (settingsDialog.isAutoOptimize() && hasBounds) {
 				// Calculate diagonal of bounding box
 				double dx = maxPt.X() - minPt.X();
 				double dy = maxPt.Y() - minPt.Y();
 				double dz = maxPt.Z() - minPt.Z();
 				double diagonal = std::sqrt(dx*dx + dy*dy + dz*dz);
 				
-				// Use 0.1% to 0.5% of diagonal as deflection
-				// Smaller objects get finer mesh, larger objects get coarser mesh
+				// Adjust user's deflection based on size
+				double sizeFactor = 1.0;
 				if (diagonal < 10.0) {
-					optimalDeflection = diagonal * 0.001; // 0.1% for small objects
-				} else if (diagonal < 100.0) {
-					optimalDeflection = diagonal * 0.002; // 0.2% for medium objects
-				} else {
-					optimalDeflection = diagonal * 0.005; // 0.5% for large objects
+					sizeFactor = 0.5; // Finer for small objects
+				} else if (diagonal > 1000.0) {
+					sizeFactor = 2.0; // Coarser for very large objects
 				}
 				
-				// Clamp to reasonable range
-				optimalDeflection = std::max(0.001, std::min(1.0, optimalDeflection));
+				optimalDeflection = meshDeflection * sizeFactor;
 				
-				LOG_INF_S("Bounding box diagonal: " + std::to_string(diagonal) + 
-					", using deflection: " + std::to_string(optimalDeflection));
+				// Clamp to reasonable range
+				optimalDeflection = std::max(0.001, std::min(10.0, optimalDeflection));
+				
+				LOG_INF_S("Auto-optimization: Bounding box diagonal: " + std::to_string(diagonal) + 
+					", adjusted deflection: " + std::to_string(optimalDeflection) +
+					" (base: " + std::to_string(meshDeflection) + ")");
 			}
 
 			m_occViewer->beginBatchOperation();
 			m_occViewer->setMeshDeflection(optimalDeflection, false);
 			
-			// Enable LOD for better performance
-			m_occViewer->setLODEnabled(true);
+			// Apply user settings
+			m_occViewer->setLODEnabled(enableLOD);
+			if (parallelProcessing) {
+				m_occViewer->setParallelProcessing(true);
+			}
+			if (adaptiveMeshing) {
+				m_occViewer->setAdaptiveMeshing(true);
+			}
 			
 			// Add geometries
 			m_occViewer->addGeometries(allGeometries);

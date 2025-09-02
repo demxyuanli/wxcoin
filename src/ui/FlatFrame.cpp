@@ -181,6 +181,15 @@ EVT_BUTTON(ID_MESSAGE_OUTPUT_FLOAT, FlatFrame::OnMessageOutputFloat)
 EVT_BUTTON(ID_MESSAGE_OUTPUT_MINIMIZE, FlatFrame::OnMessageOutputMinimize)
 EVT_BUTTON(ID_MESSAGE_OUTPUT_CLOSE, FlatFrame::OnMessageOutputClose)
 
+// Performance shortcuts
+EVT_MENU(ID_TOGGLE_LOD, FlatFrame::OnToggleLOD)
+EVT_MENU(ID_FORCE_ROUGH_LOD, FlatFrame::OnForceRoughLOD)
+EVT_MENU(ID_FORCE_FINE_LOD, FlatFrame::OnForceFineLoD)
+EVT_MENU(ID_TOGGLE_PERFORMANCE_MONITOR, FlatFrame::OnTogglePerformanceMonitor)
+EVT_MENU(ID_PERFORMANCE_PRESET, FlatFrame::OnPerformancePreset)
+EVT_MENU(ID_BALANCED_PRESET, FlatFrame::OnBalancedPreset)
+EVT_MENU(ID_QUALITY_PRESET, FlatFrame::OnQualityPreset)
+
 EVT_CLOSE(FlatFrame::onClose)
 EVT_ACTIVATE(FlatFrame::onActivate)
 EVT_SIZE(FlatFrame::onSize)
@@ -728,4 +737,80 @@ void FlatFrame::OnKeyDown(wxKeyEvent& event)
 
 	// Let other handlers process the event
 	event.Skip();
+}
+
+// Performance shortcut handlers
+void FlatFrame::OnToggleLOD(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		bool lodEnabled = m_occViewer->isLODEnabled();
+		m_occViewer->setLODEnabled(!lodEnabled);
+		appendMessage(wxString::Format("LOD %s", lodEnabled ? "disabled" : "enabled"));
+	}
+}
+
+void FlatFrame::OnForceRoughLOD(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		m_occViewer->forceLODLevel(1); // Force rough level
+		appendMessage("Forced rough LOD mode");
+	}
+}
+
+void FlatFrame::OnForceFineLoD(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		m_occViewer->forceLODLevel(0); // Force fine level
+		appendMessage("Forced fine LOD mode");
+	}
+}
+
+void FlatFrame::OnTogglePerformanceMonitor(wxCommandEvent& event)
+{
+	// Toggle performance panel visibility
+	if (m_performancePanel) {
+		bool visible = m_performancePanel->IsShown();
+		m_performancePanel->Show(!visible);
+		Layout();
+		appendMessage(wxString::Format("Performance monitor %s", visible ? "hidden" : "shown"));
+	}
+}
+
+void FlatFrame::OnPerformancePreset(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		// Apply performance preset
+		m_occViewer->setMeshDeflection(2.0, true);
+		m_occViewer->setLODEnabled(true);
+		m_occViewer->setLODRoughDeflection(3.0);
+		m_occViewer->setLODFineDeflection(1.0);
+		m_occViewer->setParallelProcessing(true);
+		appendMessage("Applied Performance Preset (Alt+1)");
+	}
+}
+
+void FlatFrame::OnBalancedPreset(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		// Apply balanced preset
+		m_occViewer->setMeshDeflection(1.0, true);
+		m_occViewer->setLODEnabled(true);
+		m_occViewer->setLODRoughDeflection(1.5);
+		m_occViewer->setLODFineDeflection(0.5);
+		m_occViewer->setParallelProcessing(true);
+		appendMessage("Applied Balanced Preset (Alt+2)");
+	}
+}
+
+void FlatFrame::OnQualityPreset(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		// Apply quality preset
+		m_occViewer->setMeshDeflection(0.2, true);
+		m_occViewer->setLODEnabled(true);
+		m_occViewer->setLODRoughDeflection(0.5);
+		m_occViewer->setLODFineDeflection(0.1);
+		m_occViewer->setParallelProcessing(true);
+		appendMessage("Applied Quality Preset (Alt+3)");
+	}
 }

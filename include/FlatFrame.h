@@ -101,7 +101,16 @@ enum {
 	// Message Output Control Buttons
 	ID_MESSAGE_OUTPUT_FLOAT,
 	ID_MESSAGE_OUTPUT_MINIMIZE,
-	ID_MESSAGE_OUTPUT_CLOSE
+	ID_MESSAGE_OUTPUT_CLOSE,
+	
+	// Performance shortcuts
+	ID_TOGGLE_LOD,
+	ID_FORCE_ROUGH_LOD,
+	ID_FORCE_FINE_LOD,
+	ID_TOGGLE_PERFORMANCE_MONITOR,
+	ID_PERFORMANCE_PRESET,
+	ID_BALANCED_PRESET,
+	ID_QUALITY_PRESET
 };
 
 class FlatFrame : public FlatUIFrame
@@ -167,6 +176,9 @@ private:
 public:
 	// Message output methods
 	void appendMessage(const wxString& message);
+	
+	// Keyboard shortcuts
+	void SetupKeyboardShortcuts();
 
 	// Event handlers
 	void OnButtonClick(wxCommandEvent& event);
@@ -188,6 +200,15 @@ public:
 	void OnMessageOutputFloat(wxCommandEvent& event);
 	void OnMessageOutputMinimize(wxCommandEvent& event);
 	void OnMessageOutputClose(wxCommandEvent& event);
+	
+	// Performance shortcut handlers
+	void OnToggleLOD(wxCommandEvent& event);
+	void OnForceRoughLOD(wxCommandEvent& event);
+	void OnForceFineLoD(wxCommandEvent& event);
+	void OnTogglePerformanceMonitor(wxCommandEvent& event);
+	void OnPerformancePreset(wxCommandEvent& event);
+	void OnBalancedPreset(wxCommandEvent& event);
+	void OnQualityPreset(wxCommandEvent& event);
 
 	// Keyboard event handler
 	void OnKeyDown(wxKeyEvent& event);
