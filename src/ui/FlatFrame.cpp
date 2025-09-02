@@ -34,6 +34,7 @@
 #include "OCCViewer.h"
 #include "CommandDispatcher.h"
 #include "CommandListenerManager.h"
+#include "CommandListener.h"
 #include "MeshQualityDialog.h"
 #include "MeshQualityDialogListener.h"
 #include "RenderingSettingsListener.h"
@@ -822,4 +823,11 @@ void FlatFrame::EnsurePanelsCreated()
 	// It's called by derived classes like FlatFrameDocking
 	// The actual panel creation is done in InitializeUI
 	// which is called from the main application
+}
+
+void FlatFrame::RegisterCommandListener(cmd::CommandType commandType, std::shared_ptr<CommandListener> listener)
+{
+	if (m_listenerManager && listener) {
+		m_listenerManager->registerListener(commandType, listener);
+	}
 }

@@ -501,19 +501,6 @@ void FlatFrameDocking::CreateDockingMenus() {
     // Debug output
     wxLogDebug("CreateDockingMenus: Added Configure Layout menu item with ID %d", ID_DOCKING_CONFIGURE_LAYOUT);
     wxLogDebug("CreateDockingMenus: View menu has %d items", viewMenu->GetMenuItemCount());
-    
-    // Also add a toolbar button for easier access
-    wxToolBar* toolbar = GetToolBar();
-    if (!toolbar) {
-        toolbar = CreateToolBar(wxTB_HORIZONTAL | wxTB_FLAT | wxTB_TEXT);
-    }
-    
-    // Add configuration button to toolbar
-    toolbar->AddTool(ID_DOCKING_CONFIGURE_LAYOUT, "Layout Config",
-                    wxArtProvider::GetBitmap(wxART_PREFERENCES, wxART_TOOLBAR),
-                    "Configure dock panel sizes and layout");
-    toolbar->AddSeparator();
-    toolbar->Realize();
 }
 
 void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {
@@ -730,13 +717,13 @@ wxWindow* FlatFrameDocking::GetMainWorkArea() const {
 }
 
 void FlatFrameDocking::RegisterDockLayoutConfigListener() {
-    // Check if we have access to the command listener manager
-    if (m_listenerManager && m_dockManager) {
+    // Register the dock layout config listener using base class method
+    if (m_dockManager) {
         auto dockLayoutConfigListener = std::make_shared<DockLayoutConfigListener>(m_dockManager);
-        m_listenerManager->registerListener(cmd::CommandType::DockLayoutConfig, dockLayoutConfigListener);
+        RegisterCommandListener(cmd::CommandType::DockLayoutConfig, dockLayoutConfigListener);
         
         wxLogDebug("Registered DockLayoutConfigListener");
     } else {
-        wxLogError("Unable to register DockLayoutConfigListener - missing dependencies");
+        wxLogError("Unable to register DockLayoutConfigListener - DockManager not available");
     }
 }

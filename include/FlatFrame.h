@@ -172,6 +172,9 @@ private:
 protected:
 	// Protected methods for derived classes
 	void EnsurePanelsCreated();
+	
+	// Allow derived classes to register additional listeners
+	void RegisterCommandListener(cmd::CommandType commandType, std::shared_ptr<CommandListener> listener);
 
 private:
 	void onCommand(wxCommandEvent& event);
