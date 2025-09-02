@@ -16,6 +16,7 @@
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
 #include "docking/DockArea.h"
+#include "docking/DockContainerWidget.h"
 #include "docking/PerspectiveManager.h"
 #include "docking/DockLayoutConfig.h"
 

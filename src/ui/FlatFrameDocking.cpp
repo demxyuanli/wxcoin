@@ -8,6 +8,7 @@
 #include "InputManager.h"
 #include "logger/Logger.h"
 #include "docking/DockArea.h"
+#include "docking/DockContainerWidget.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
 #include "docking/DockLayoutConfig.h"
