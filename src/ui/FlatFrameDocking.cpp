@@ -447,9 +447,12 @@ DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
 }
 
 void FlatFrameDocking::CreateDockingMenus() {
-    // Get or create View menu
+    // Get or create menu bar
     wxMenuBar* menuBar = GetMenuBar();
-    if (!menuBar) return;
+    if (!menuBar) {
+        menuBar = new wxMenuBar();
+        SetMenuBar(menuBar);
+    }
 
     wxMenu* viewMenu = nullptr;
     int viewMenuIndex = menuBar->FindMenu("View");
@@ -489,6 +492,23 @@ void FlatFrameDocking::CreateDockingMenus() {
     viewMenu->AppendSeparator();
     viewMenu->Append(ID_DOCKING_CONFIGURE_LAYOUT, "&Configure Layout...",
         "Configure dock panel sizes and layout");
+    
+    // Debug output
+    wxLogDebug("CreateDockingMenus: Added Configure Layout menu item with ID %d", ID_DOCKING_CONFIGURE_LAYOUT);
+    wxLogDebug("CreateDockingMenus: View menu has %d items", viewMenu->GetMenuItemCount());
+    
+    // Also add a toolbar button for easier access
+    wxToolBar* toolbar = GetToolBar();
+    if (!toolbar) {
+        toolbar = CreateToolBar(wxTB_HORIZONTAL | wxTB_FLAT | wxTB_TEXT);
+    }
+    
+    // Add configuration button to toolbar
+    toolbar->AddTool(ID_DOCKING_CONFIGURE_LAYOUT, "Layout Config",
+                    wxArtProvider::GetBitmap(wxART_PREFERENCES, wxART_TOOLBAR),
+                    "Configure dock panel sizes and layout");
+    toolbar->AddSeparator();
+    toolbar->Realize();
 }
 
 void FlatFrameDocking::SaveDockingLayout(const wxString& filename) {
