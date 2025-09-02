@@ -14,6 +14,7 @@
 #include "config/ThemeManager.h"
 #include "config/SvgIconManager.h"
 #include "widgets/FlatEnhancedButton.h"
+#include "CommandType.h"
 
 // Forward declarations
 class Canvas;
@@ -25,6 +26,7 @@ class CommandManager;
 class OCCViewer;
 class CommandDispatcher;
 class CommandListenerManager;
+class CommandListener;
 struct CommandResult;
 class wxSplitterWindow;
 
