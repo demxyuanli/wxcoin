@@ -752,7 +752,7 @@ void FlatFrame::OnToggleLOD(wxCommandEvent& event)
 void FlatFrame::OnForceRoughLOD(wxCommandEvent& event)
 {
 	if (m_occViewer) {
-		m_occViewer->forceLODLevel(1); // Force rough level
+		m_occViewer->setLODMode(true); // true = rough mode
 		appendMessage("Forced rough LOD mode");
 	}
 }
@@ -760,7 +760,7 @@ void FlatFrame::OnForceRoughLOD(wxCommandEvent& event)
 void FlatFrame::OnForceFineLoD(wxCommandEvent& event)
 {
 	if (m_occViewer) {
-		m_occViewer->forceLODLevel(0); // Force fine level
+		m_occViewer->setLODMode(false); // false = fine mode
 		appendMessage("Forced fine LOD mode");
 	}
 }
@@ -768,12 +768,11 @@ void FlatFrame::OnForceFineLoD(wxCommandEvent& event)
 void FlatFrame::OnTogglePerformanceMonitor(wxCommandEvent& event)
 {
 	// Toggle performance panel visibility
-	if (m_performancePanel) {
-		bool visible = m_performancePanel->IsShown();
-		m_performancePanel->Show(!visible);
-		Layout();
-		appendMessage(wxString::Format("Performance monitor %s", visible ? "hidden" : "shown"));
-	}
+	// TODO: Need to add m_performancePanel member and wire it up
+	appendMessage("Performance monitor toggle - feature in development");
+	
+	// For now, just log the request
+	LOG_INF_S("Performance monitor toggle requested via F12");
 }
 
 void FlatFrame::OnPerformancePreset(wxCommandEvent& event)
