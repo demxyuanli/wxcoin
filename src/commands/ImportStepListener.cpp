@@ -355,11 +355,11 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception during STEP import: " + std::string(e.what()));
 		
-		// Ensure status bar is cleaned up
-		if (statusBar) { 
+		// Ensure progress is cleaned up
+		if (m_progressManager) { 
 			try {
-				statusBar->SetGaugeValue(0); 
-				statusBar->EnableProgressGauge(false);
+				m_progressManager->Reset();
+				m_progressManager->Show(false);
 			} catch (...) {}
 		}
 		
