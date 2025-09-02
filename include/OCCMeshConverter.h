@@ -37,8 +37,8 @@ public:
         bool inParallel;            // parallel computation
         
         MeshParameters() 
-            : deflection(0.1)
-            , angularDeflection(0.5)
+            : deflection(0.5)  // Increased from 0.1 for better performance
+            , angularDeflection(1.0)  // Increased from 0.5 for coarser mesh
             , relative(false)
             , inParallel(true) {}
     };

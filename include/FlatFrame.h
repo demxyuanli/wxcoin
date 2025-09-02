@@ -7,7 +7,6 @@
 #include <wx/textctrl.h>
 #include <wx/panel.h>
 #include <wx/aui/aui.h>
-#include <wx/splitter.h>
 #include <memory>
 #include "flatui/FlatUISystemButtons.h"
 #include "flatui/FlatUICustomControl.h"
@@ -102,7 +101,16 @@ enum {
 	// Message Output Control Buttons
 	ID_MESSAGE_OUTPUT_FLOAT,
 	ID_MESSAGE_OUTPUT_MINIMIZE,
-	ID_MESSAGE_OUTPUT_CLOSE
+	ID_MESSAGE_OUTPUT_CLOSE,
+	
+	// Performance shortcuts
+	ID_TOGGLE_LOD,
+	ID_FORCE_ROUGH_LOD,
+	ID_FORCE_FINE_LOD,
+	ID_TOGGLE_PERFORMANCE_MONITOR,
+	ID_PERFORMANCE_PRESET,
+	ID_BALANCED_PRESET,
+	ID_QUALITY_PRESET
 };
 
 class FlatFrame : public FlatUIFrame
@@ -130,12 +138,14 @@ private:
 	FlatUIHomeMenu* m_homeMenu;
 	wxPanel* m_searchPanel;
 	wxPanel* m_profilePanel;
+	wxPanel* m_performancePanel;  // Performance monitoring panel
 
-	// Legacy layout components - only used in non-docking version
-	// NOTE: Using pointer to avoid automatic destruction issues
-	wxAuiManager* m_auiManager;
+	wxAuiManager m_auiManager;
+
+	// Splitters for layout
 	wxSplitterWindow* m_mainSplitter;
 	wxSplitterWindow* m_leftSplitter;
+
 	// CAD components from MainFrame
 	Canvas* m_canvas;
 	PropertyPanel* m_propertyPanel;
@@ -148,7 +158,6 @@ private:
 	std::unique_ptr<CommandListenerManager> m_listenerManager;
 	bool m_isFirstActivate;
 	bool m_startupTimerFired;  // Track if startup timer has already fired
-	bool m_skipPanelCreation;  // Flag to skip panel creation for docking version
 
 	// Methods
 	void InitializeUI(const wxSize& size);
@@ -159,34 +168,33 @@ private:
 	// CAD methods from MainFrame
 	void createPanels();
 	void setupCommandSystem();
+protected:
+	// Protected methods for derived classes
+	void EnsurePanelsCreated();
+
+private:
 	void onCommand(wxCommandEvent& event);
 	void onCommandFeedback(const CommandResult& result);
-	
-protected:
-	// Create CAD panels (called before docking layout)
-	void EnsurePanelsCreated();
-	
-	// Virtual method to check if using docking system
-	virtual bool IsUsingDockingSystem() const { return false; }
-	
-	// Virtual method to get the main work area panel
-	// In non-docking version, this would be the splitter
-	// In docking version, this would be the dock container
-	virtual wxWindow* GetMainWorkArea() { return static_cast<wxWindow*>(m_mainSplitter); }
-	
 	void onClose(wxCloseEvent& event);
 	void onActivate(wxActivateEvent& event);
 	void onSize(wxSizeEvent& event);
 
 public:
-	// Accessors for CAD components (for docking system)
-	Canvas* GetCanvas() { return m_canvas; }
-	PropertyPanel* GetPropertyPanel() { return m_propertyPanel; }
-	ObjectTreePanel* GetObjectTreePanel() { return m_objectTreePanel; }
-	wxTextCtrl* GetMessageOutput() { return m_messageOutput; }
-	
 	// Message output methods
 	void appendMessage(const wxString& message);
+	
+	// Keyboard shortcuts
+	void SetupKeyboardShortcuts();
+	
+	// Virtual methods for docking system
+	virtual bool IsUsingDockingSystem() const { return false; }
+	virtual wxWindow* GetMainWorkArea() const { return nullptr; }
+	
+	// Accessor methods
+	Canvas* GetCanvas() const { return m_canvas; }
+	ObjectTreePanel* GetObjectTreePanel() const { return m_objectTreePanel; }
+	PropertyPanel* GetPropertyPanel() const { return m_propertyPanel; }
+	wxTextCtrl* GetMessageOutput() const { return m_messageOutput; }
 
 	// Event handlers
 	void OnButtonClick(wxCommandEvent& event);
@@ -208,6 +216,15 @@ public:
 	void OnMessageOutputFloat(wxCommandEvent& event);
 	void OnMessageOutputMinimize(wxCommandEvent& event);
 	void OnMessageOutputClose(wxCommandEvent& event);
+	
+	// Performance shortcut handlers
+	void OnToggleLOD(wxCommandEvent& event);
+	void OnForceRoughLOD(wxCommandEvent& event);
+	void OnForceFineLoD(wxCommandEvent& event);
+	void OnTogglePerformanceMonitor(wxCommandEvent& event);
+	void OnPerformancePreset(wxCommandEvent& event);
+	void OnBalancedPreset(wxCommandEvent& event);
+	void OnQualityPreset(wxCommandEvent& event);
 
 	// Keyboard event handler
 	void OnKeyDown(wxKeyEvent& event);

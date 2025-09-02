@@ -77,6 +77,16 @@ private:
 	void onReset(wxCommandEvent& event);
 	void onCancel(wxCommandEvent& event);
 	void onOK(wxCommandEvent& event);
+	
+	// Preset handlers
+	void onPerformancePreset(wxCommandEvent& event);
+	void onBalancedPreset(wxCommandEvent& event);
+	void onQualityPreset(wxCommandEvent& event);
+	void onCustomPreset(wxCommandEvent& event);
+	
+	// Helper methods
+	void applyPreset(double deflection, bool lodEnabled, double roughDeflection, 
+	                 double fineDeflection, bool parallelProcessing);
 
 	OCCViewer* m_occViewer;
 

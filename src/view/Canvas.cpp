@@ -51,8 +51,6 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 	, m_objectTreePanel(nullptr)
 	, m_commandManager(nullptr)
 	, m_occViewer(nullptr)
-	, m_lastHoverPos(-1, -1)
-	, m_hoverUpdateCounter(0)
 {
 	LOG_INF_S("Canvas::Canvas: Initializing");
 
@@ -146,6 +144,19 @@ void Canvas::showErrorDialog(const std::string& message) const {
 }
 
 void Canvas::render(bool fastMode) {
+	// Skip rendering if we're already rendering (prevents recursive calls)
+	static bool isRendering = false;
+	if (isRendering) {
+		return;
+	}
+	
+	// Guard to ensure we reset the flag
+	struct RenderGuard {
+		bool& flag;
+		RenderGuard(bool& f) : flag(f) { flag = true; }
+		~RenderGuard() { flag = false; }
+	} guard(isRendering);
+	
 	auto renderStartTime = std::chrono::high_resolution_clock::now();
 
 	if (m_renderingEngine) {
@@ -189,14 +200,16 @@ void Canvas::render(bool fastMode) {
 		auto renderEndTime = std::chrono::high_resolution_clock::now();
 		auto renderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(renderEndTime - renderStartTime);
 
-		// Publish to PerformanceDataBus
-		perf::CanvasPerfSample c;
-		c.mode = fastMode ? "FAST" : "QUALITY";
-		c.mainSceneMs = static_cast<int>(mainRenderDuration.count());
-		c.swapMs = static_cast<int>(swapDuration.count());
-		c.totalMs = static_cast<int>(renderDuration.count());
-		c.fps = 1000.0 / std::max(1, c.totalMs);
-		perf::PerformanceBus::instance().setCanvas(c);
+		// Only publish performance data if render took significant time
+		if (renderDuration.count() > 1) {
+			perf::CanvasPerfSample c;
+			c.mode = fastMode ? "FAST" : "QUALITY";
+			c.mainSceneMs = static_cast<int>(mainRenderDuration.count());
+			c.swapMs = static_cast<int>(swapDuration.count());
+			c.totalMs = static_cast<int>(renderDuration.count());
+			c.fps = 1000.0 / std::max(1, c.totalMs);
+			perf::PerformanceBus::instance().setCanvas(c);
+		}
 	}
 }
 
@@ -206,7 +219,7 @@ void Canvas::onPaint(wxPaintEvent& event) {
 	if (m_eventCoordinator) {
 		m_eventCoordinator->handlePaintEvent(event);
 	}
-	// Don't skip paint events to avoid unnecessary propagation
+	event.Skip();
 }
 
 void Canvas::onSize(wxSizeEvent& event) {
@@ -228,71 +241,32 @@ void Canvas::onEraseBackground(wxEraseEvent& event) {
 }
 
 void Canvas::onMouseEvent(wxMouseEvent& event) {
-	// Only log mouse events in debug builds for performance monitoring
-#ifdef _DEBUG
-	// Debug: log incoming mouse event for performance analysis
-#endif
 	// Check if this is an interaction event that should trigger LOD
-	// Only trigger for actual navigation operations, not simple mouse movement
-	bool isNavigationEvent = false;
-	static bool wasDragging = false;
-	static wxPoint lastDragPos(-1, -1);
-
+	bool isInteractionEvent = false;
 	if (event.GetEventType() == wxEVT_LEFT_DOWN ||
 		event.GetEventType() == wxEVT_RIGHT_DOWN ||
 		event.GetEventType() == wxEVT_MOTION ||
 		event.GetEventType() == wxEVT_MOUSEWHEEL) {
-
-		// Only consider mouse wheel as navigation (zoom)
-		if (event.GetEventType() == wxEVT_MOUSEWHEEL) {
-			isNavigationEvent = true;
-		}
-		// For mouse motion, only trigger if we're actually dragging
-		else if (event.GetEventType() == wxEVT_MOTION) {
-			bool isDragging = event.LeftIsDown() || event.RightIsDown() || event.MiddleIsDown();
-			if (isDragging) {
-				if (!wasDragging) {
-					// Start of drag - trigger LOD
-					isNavigationEvent = true;
-					lastDragPos = event.GetPosition();
-				}
-				else {
-					// Check if moved significantly enough to be navigation
-					wxPoint currentPos = event.GetPosition();
-					int distance = (currentPos - lastDragPos).x * (currentPos - lastDragPos).x +
-					               (currentPos - lastDragPos).y * (currentPos - lastDragPos).y;
-					if (distance > 100) { // Require significant movement
-						isNavigationEvent = true;
-						lastDragPos = currentPos;
-					}
-				}
-			}
-			wasDragging = isDragging;
-		}
-		// Mouse button down events are potential navigation starts
-		else if (event.GetEventType() == wxEVT_LEFT_DOWN ||
-		         event.GetEventType() == wxEVT_RIGHT_DOWN) {
-			isNavigationEvent = true;
-		}
+		isInteractionEvent = true;
 	}
 
-	// Trigger LOD interaction only for actual navigation events
-	if (isNavigationEvent && m_occViewer) {
+	// Skip motion events during drag operations to reduce overhead
+	static bool isDragging = false;
+	if (event.GetEventType() == wxEVT_LEFT_DOWN || event.GetEventType() == wxEVT_RIGHT_DOWN) {
+		isDragging = true;
+	} else if (event.GetEventType() == wxEVT_LEFT_UP || event.GetEventType() == wxEVT_RIGHT_UP) {
+		isDragging = false;
+	}
+
+	// Trigger LOD interaction if enabled
+	if (isInteractionEvent && m_occViewer) {
 		m_occViewer->startLODInteraction();
 	}
 	
-	// Update hover outline on mouse move (with throttling)
-	if (event.GetEventType() == wxEVT_MOTION && m_occViewer) {
+	// Update hover outline on mouse move (but not during drag to reduce overhead)
+	if (event.GetEventType() == wxEVT_MOTION && !isDragging && m_occViewer) {
 		wxPoint screenPos = event.GetPosition();
-		// Only update if moved significantly or every 3rd frame
-		// Use squared distance to avoid expensive sqrt() call
-		int dx = screenPos.x - m_lastHoverPos.x;
-		int dy = screenPos.y - m_lastHoverPos.y;
-		int distanceSquared = dx * dx + dy * dy;
-		if (distanceSquared > 625 || ++m_hoverUpdateCounter % 3 == 0) { // 25^2 = 625
-			m_occViewer->updateHoverSilhouetteAt(screenPos);
-			m_lastHoverPos = screenPos;
-		}
+		m_occViewer->updateHoverSilhouetteAt(screenPos);
 	}
 	
 	// Clear hover outline when mouse leaves window
@@ -304,7 +278,7 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	if (m_multiViewportEnabled && m_multiViewportManager) {
 		bool handled = m_multiViewportManager->handleMouseEvent(event);
 		if (handled) {
-			return; // Event was handled
+			return; // Event was handled, don't propagate further
 		}
 	}
 
@@ -312,10 +286,15 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	if (m_eventCoordinator) {
 		bool handled = m_eventCoordinator->handleMouseEvent(event);
 		if (handled) {
-			return; // Event was handled
+			return; // Event was handled, don't propagate further
 		}
 	}
-	event.Skip();
+	
+	// Important: Don't skip the event if it was a drag-related event
+	// This prevents unnecessary propagation to parent windows
+	if (!isDragging || (event.GetEventType() != wxEVT_MOTION)) {
+		event.Skip();
+	}
 }
 
 void Canvas::setMultiViewportEnabled(bool enabled) {

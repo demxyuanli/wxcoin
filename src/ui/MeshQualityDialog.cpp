@@ -307,6 +307,27 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 	}
 
 	LOG_INF_S("=== APPLYING MESH QUALITY SETTINGS ===");
+	
+	// Provide user-friendly feedback based on settings
+	if (m_currentDeflection >= 2.0) {
+		LOG_INF_S("[PERF] Performance Mode: Using very coarse mesh for maximum speed");
+		LOG_INF_S("Tip: If quality is too low, try reducing Deflection to 1.0-1.5");
+	} else if (m_currentDeflection >= 1.0) {
+		LOG_INF_S("[BALANCED] Balanced Mode: Good balance between quality and performance");
+	} else if (m_currentDeflection >= 0.5) {
+		LOG_INF_S("[QUALITY] Quality Mode: Using fine mesh for better visual quality");
+	} else {
+		LOG_INF_S("[ULTRA] Ultra Quality Mode: Maximum quality, may impact performance");
+		LOG_INF_S("Tip: Enable LOD for better interaction responsiveness");
+	}
+	
+	if (m_currentLODEnabled) {
+		LOG_INF_S("[OK] LOD Enabled: Automatic quality adjustment during interaction");
+		LOG_INF_S("  - Rough mode: " + std::to_string(m_currentLODRoughDeflection) + 
+			" (used during mouse interaction)");
+		LOG_INF_S("  - Fine mode: " + std::to_string(m_currentLODFineDeflection) + 
+			" (used when idle)");
+	}
 
 	// Apply basic quality settings
 	m_occViewer->setMeshDeflection(m_currentDeflection, true);
@@ -637,6 +658,28 @@ void MeshQualityDialog::createBasicQualityPage()
 {
 	wxPanel* basicPage = new wxPanel(m_notebook);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	
+	// Preset buttons section
+	wxStaticBox* presetBox = new wxStaticBox(basicPage, wxID_ANY, "Quick Presets");
+	wxStaticBoxSizer* presetSizer = new wxStaticBoxSizer(presetBox, wxHORIZONTAL);
+	
+	wxButton* performanceBtn = new wxButton(basicPage, wxID_ANY, "[P] Performance");
+	wxButton* balancedBtn = new wxButton(basicPage, wxID_ANY, "[B] Balanced");
+	wxButton* qualityBtn = new wxButton(basicPage, wxID_ANY, "[Q] Quality");
+	
+	performanceBtn->SetToolTip("Maximum performance: Deflection=2.0, LOD enabled");
+	balancedBtn->SetToolTip("Balanced settings: Deflection=1.0, LOD enabled");
+	qualityBtn->SetToolTip("High quality: Deflection=0.2, LOD enabled");
+	
+	performanceBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onPerformancePreset, this);
+	balancedBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onBalancedPreset, this);
+	qualityBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onQualityPreset, this);
+	
+	presetSizer->Add(performanceBtn, 0, wxALL, 5);
+	presetSizer->Add(balancedBtn, 0, wxALL, 5);
+	presetSizer->Add(qualityBtn, 0, wxALL, 5);
+	
+	sizer->Add(presetSizer, 0, wxEXPAND | wxALL, 5);
 
 	// Mesh Deflection section
 	wxStaticBox* deflectionBox = new wxStaticBox(basicPage, wxID_ANY, "Mesh Deflection");
@@ -868,4 +911,55 @@ void MeshQualityDialog::createAdvancedPage()
 	sizer->Add(tessellationSizer, 0, wxEXPAND | wxALL, 10);
 	advancedPage->SetSizer(sizer);
 	m_notebook->AddPage(advancedPage, "Advanced");
+}
+
+// Preset handlers
+void MeshQualityDialog::onPerformancePreset(wxCommandEvent& event)
+{
+	LOG_INF_S("Applying Performance Preset");
+	applyPreset(2.0, true, 3.0, 1.0, true);
+}
+
+void MeshQualityDialog::onBalancedPreset(wxCommandEvent& event)
+{
+	LOG_INF_S("Applying Balanced Preset");
+	applyPreset(1.0, true, 1.5, 0.5, true);
+}
+
+void MeshQualityDialog::onQualityPreset(wxCommandEvent& event)
+{
+	LOG_INF_S("Applying Quality Preset");
+	applyPreset(0.2, true, 0.5, 0.1, true);
+}
+
+void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled, 
+                                    double roughDeflection, double fineDeflection, 
+                                    bool parallelProcessing)
+{
+	// Update current values
+	m_currentDeflection = deflection;
+	m_currentLODEnabled = lodEnabled;
+	m_currentLODRoughDeflection = roughDeflection;
+	m_currentLODFineDeflection = fineDeflection;
+	m_currentParallelProcessing = parallelProcessing;
+	
+	// Update UI controls
+	updateControls();
+	
+	// Apply immediately
+	if (m_occViewer) {
+		m_occViewer->setMeshDeflection(m_currentDeflection, true);
+		m_occViewer->setLODEnabled(m_currentLODEnabled);
+		m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
+		m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
+		m_occViewer->setParallelProcessing(m_currentParallelProcessing);
+		
+		// Trigger remesh
+		m_occViewer->remeshAllGeometries();
+	}
+	
+	// Show feedback
+	wxString msg = wxString::Format("Preset applied: Deflection=%.1f, LOD=%s", 
+		deflection, lodEnabled ? "On" : "Off");
+	wxMessageBox(msg, "Preset Applied", wxOK | wxICON_INFORMATION);
 }

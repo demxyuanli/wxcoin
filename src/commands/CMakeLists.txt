@@ -130,6 +130,7 @@ target_link_libraries(CADCommands PUBLIC
     CADCore
     CADLogger
     CADOCC
+    UIDialogMesh
     ${wxWidgets_LIBRARIES}
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}

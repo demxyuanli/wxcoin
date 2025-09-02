@@ -272,7 +272,9 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
     
     // Force a complete layout update
     Layout();
-    Refresh();
+    // Use RefreshRect for specific areas instead of full refresh
+    wxRect dirtyRect = GetClientRect();
+    RefreshRect(dirtyRect, false);
 }
 
 void DockContainerWidget::addDockAreaSimple(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area) {

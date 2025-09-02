@@ -47,6 +47,10 @@ public:
     // Access to dock manager
     ads::DockManager* GetDockManager() const { return m_dockManager; }
     
+    // Override virtual methods from FlatFrame
+    virtual bool IsUsingDockingSystem() const override { return true; }
+    virtual wxWindow* GetMainWorkArea() const override;
+    
 protected:
     // Event handlers for docking
     void OnViewShowHidePanel(wxCommandEvent& event);
@@ -62,12 +66,6 @@ protected:
     // Override base class layout events to prevent interference
     void onSize(wxSizeEvent& event);
     
-    // Override to indicate we're using docking system
-    virtual bool IsUsingDockingSystem() const override { return true; }
-    
-    // Override to return our dock container as the main work area
-    virtual wxWindow* GetMainWorkArea() override;
-    
 private:
     ads::DockManager* m_dockManager;
     wxPanel* m_workAreaPanel;
@@ -78,7 +76,6 @@ private:
     ads::DockWidget* m_canvasDock;
     ads::DockWidget* m_messageDock;      // Renamed from m_outputDock
     ads::DockWidget* m_performanceDock;  // New performance panel
-    ads::DockWidget* m_toolboxDock;      // Keep for compatibility
     
     // Output control
     wxTextCtrl* m_outputCtrl;
@@ -102,8 +99,8 @@ enum {
     // View panel IDs
     ID_VIEW_PROPERTIES,
     ID_VIEW_OBJECT_TREE,
+    ID_VIEW_OUTPUT,
+    ID_VIEW_TOOLBOX,
     ID_VIEW_MESSAGE,
-    ID_VIEW_PERFORMANCE,
-    ID_VIEW_OUTPUT,      // Keep for backward compatibility
-    ID_VIEW_TOOLBOX      // Keep for backward compatibility
+    ID_VIEW_PERFORMANCE
 };

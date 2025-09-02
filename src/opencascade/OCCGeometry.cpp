@@ -1,6 +1,8 @@
 #include "OCCGeometry.h"
 #include "rendering/RenderingToolkitAPI.h"
 #include "logger/Logger.h"
+#include <Standard_ConstructionError.hxx>
+#include <Standard_Failure.hxx>
 #include "config/RenderingConfig.h"
 #include "rendering/GeometryProcessor.h"
 #include <limits>
@@ -107,8 +109,24 @@ OCCGeometry::~OCCGeometry()
 
 void OCCGeometry::setShape(const TopoDS_Shape& shape)
 {
-	m_shape = shape;
-	m_coinNeedsUpdate = true;
+	// Validate shape before assignment
+	if (shape.IsNull()) {
+		LOG_WRN_S("OCCGeometry::setShape called with null shape for: " + getName());
+		return;
+	}
+	
+	try {
+		m_shape = shape;
+		m_coinNeedsUpdate = true;
+	}
+	catch (const Standard_ConstructionError& e) {
+		LOG_ERR_S("Construction error in setShape for " + getName() + ": " + std::string(e.GetMessageString()));
+		throw; // Re-throw to be handled by caller
+	}
+	catch (const Standard_Failure& e) {
+		LOG_ERR_S("OpenCASCADE error in setShape for " + getName() + ": " + std::string(e.GetMessageString()));
+		throw; // Re-throw to be handled by caller
+	}
 }
 
 void OCCGeometry::setPosition(const gp_Pnt& position)

@@ -5,11 +5,11 @@
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/app.h>
-#include <wx/thread.h>
-#include <wx/timer.h>
 #include "logger/Logger.h"
 #include <chrono>
 #include "FlatFrame.h"
+#include "ImportSettingsDialog.h"
+#include "ImportProgressManager.h"
 
 ImportStepListener::ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
 	: m_frame(frame), m_canvas(canvas), m_occViewer(occViewer)
@@ -23,28 +23,41 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	const std::unordered_map<std::string, std::string>&) {
 	auto totalImportStartTime = std::chrono::high_resolution_clock::now();
 
-	// Resolve status bar and message output
-	FlatUIStatusBar* statusBar = nullptr;
-	FlatFrame* flatFrame = dynamic_cast<FlatFrame*>(m_frame);
-	if (!flatFrame && m_frame) {
-		flatFrame = dynamic_cast<FlatFrame*>(wxDynamicCast(m_frame->GetParent(), wxFrame));
-	}
-	if (flatFrame) {
-		statusBar = flatFrame->GetFlatUIStatusBar();
-		if (statusBar) {
-			LOG_INF_S("FlatUIStatusBar found, enabling progress gauge");
-			statusBar->SetGaugeRange(100);
-			statusBar->SetGaugeValue(0);
-			statusBar->EnableProgressGauge(true); // show on demand at start
-			// Force refresh to ensure visibility
-			statusBar->Refresh();
-			statusBar->Update();
-		} else {
-			LOG_WRN_S("FlatUIStatusBar not found!");
+	// Create progress manager
+	if (!m_progressManager) {
+		wxWindow* parentWindow = m_frame;
+		if (!parentWindow) {
+			parentWindow = wxTheApp->GetTopWindow();
 		}
+		
+		// Find a suitable parent panel for the progress bar
+		wxWindow* progressParent = parentWindow;
+		FlatFrame* flatFrame = dynamic_cast<FlatFrame*>(parentWindow);
+		if (flatFrame) {
+			// Try to get the status bar area or main panel
+			progressParent = flatFrame;
+		}
+		
+		m_progressManager = std::make_unique<ImportProgressManager>(progressParent);
+	}
+	
+	// Initialize progress
+	m_progressManager->Reset();
+	m_progressManager->SetRange(0, 100);
+	m_progressManager->Show(true);
+	m_progressManager->SetStatusMessage("STEP import started...");
+	
+	// Get FlatFrame for message output
+	FlatFrame* flatFrame = dynamic_cast<FlatFrame*>(m_frame);
+	if (!flatFrame) {
+		wxWindow* topWindow = wxTheApp->GetTopWindow();
+		if (topWindow) {
+			flatFrame = dynamic_cast<FlatFrame*>(topWindow);
+		}
+	}
+	
+	if (flatFrame) {
 		flatFrame->appendMessage("STEP import started...");
-	} else {
-		LOG_WRN_S("FlatFrame not found!");
 	}
 
 	// File dialog
@@ -54,15 +67,37 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL) {
-		if (statusBar) { 
-			statusBar->SetGaugeValue(0); 
-			statusBar->EnableProgressGauge(false);
+		if (m_progressManager) { 
+			m_progressManager->Reset();
+			m_progressManager->Show(false);
 		}
 		return CommandResult(false, "STEP import cancelled", commandType);
 	}
 
 	wxArrayString filePaths;
 	openFileDialog.GetPaths(filePaths);
+	
+	// Show import settings dialog
+	ImportSettingsDialog settingsDialog(m_frame);
+	if (settingsDialog.ShowModal() != wxID_OK) {
+		if (m_progressManager) { 
+			m_progressManager->Reset();
+			m_progressManager->Show(false);
+		}
+		return CommandResult(false, "STEP import cancelled", commandType);
+	}
+	
+	// Get import settings
+	double meshDeflection = settingsDialog.getMeshDeflection();
+	double angularDeflection = settingsDialog.getAngularDeflection();
+	bool enableLOD = settingsDialog.isLODEnabled();
+	bool parallelProcessing = settingsDialog.isParallelProcessing();
+	bool adaptiveMeshing = settingsDialog.isAdaptiveMeshing();
+	
+	LOG_INF_S(wxString::Format("Import settings: Deflection=%.2f, Angular=%.2f, LOD=%s, Parallel=%s",
+		meshDeflection, angularDeflection, 
+		enableLOD ? "On" : "Off",
+		parallelProcessing ? "On" : "Off"));
 	auto fileDialogEndTime = std::chrono::high_resolution_clock::now();
 	auto fileDialogDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileDialogEndTime - fileDialogStartTime);
 
@@ -95,50 +130,31 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				flatFrame->appendMessage(wxString::Format("Reading STEP file (%zu/%zu): %s", i + 1, filePaths.size(), filePath));
 			}
 			auto stepReadStartTime = std::chrono::high_resolution_clock::now();
-			// Process pending events before starting import to ensure UI is responsive
-			wxTheApp->ProcessPendingEvents();
-			
 			auto result = STEPReader::readSTEPFile(
 				filePath.ToStdString(), options,
-				[statusBar, flatFrame, i, &filePaths](int percent, const std::string& stage) {
-					int base = (int)std::round(((double)i / (double)(filePaths.size() + 1)) * 100.0);
-					int next = (int)std::round(((double)(i + 1) / (double)(filePaths.size() + 1)) * 100.0);
-					int mapped = base + (int)std::round((percent / 100.0) * (next - base));
-					mapped = std::max(0, std::min(95, mapped));
-					
-					// Progress callback may be called from worker thread
-					if (statusBar || flatFrame) {
-						// Log progress update
-						LOG_DBG_S("STEP import progress: " + std::to_string(mapped) + "% - " + stage);
+				[this, flatFrame, i, &filePaths](int percent, const std::string& stage) {
+					try {
+						int base = (int)std::round(((double)i / (double)(filePaths.size() + 1)) * 100.0);
+						int next = (int)std::round(((double)(i + 1) / (double)(filePaths.size() + 1)) * 100.0);
+						int mapped = base + (int)std::round((percent / 100.0) * (next - base));
+						mapped = std::max(0, std::min(95, mapped));
 						
-						// Check if we're on the main thread
-						if (wxThread::IsMain()) {
-							// Direct update if on main thread
-							if (statusBar) {
-								LOG_DBG_S("Setting gauge value to: " + std::to_string(mapped));
-								statusBar->EnableProgressGauge(true);
-								statusBar->SetGaugeValue(mapped);
-								statusBar->Update();
-							}
-							if (flatFrame) {
-								flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
-							}
-							// Process events to keep UI responsive
-							wxTheApp->ProcessPendingEvents();
-						} else {
-							// Use CallAfter if on worker thread
-							wxTheApp->CallAfter([statusBar, flatFrame, mapped, stage]() {
-								if (statusBar) {
-									LOG_DBG_S("Setting gauge value to: " + std::to_string(mapped));
-									statusBar->EnableProgressGauge(true);
-									statusBar->SetGaugeValue(mapped);
-									statusBar->Update();
-								}
-								if (flatFrame) {
-									flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
-								}
-							});
+						// Thread-safe progress update
+						if (m_progressManager) {
+							wxString progressMsg = wxString::Format("File %zu/%zu: %s",
+								i + 1, filePaths.size(), stage.c_str());
+							m_progressManager->SetProgress(mapped, progressMsg);
 						}
+						
+						if (flatFrame) {
+							try {
+								flatFrame->appendMessage(wxString::Format("[%d%%] Import stage: %s", mapped, stage));
+							} catch (...) {
+								// Ignore message append errors
+							}
+						}
+					} catch (...) {
+						// Ignore all errors in progress callback
 					}
 				}
 			);
@@ -170,35 +186,80 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				LOG_WRN_S("File " + std::to_string(i + 1) + "/" + std::to_string(filePaths.size()) +
 					" failed: " + (result.success ? "No geometries" : result.errorMessage));
 				if (flatFrame) {
-					flatFrame->appendMessage(wxString::Format("Failed to parse: %s", result.success ? "No geometries" : result.errorMessage));
+					wxString errorMsg = result.success ? "No geometries" : result.errorMessage;
+					flatFrame->appendMessage(wxString::Format("Failed to parse: %s", errorMsg));
+					
+					// Provide helpful tips for common errors
+					if (errorMsg.Contains("Construction") || errorMsg.Contains("construction")) {
+						flatFrame->appendMessage("  Tip: The file may contain invalid or degenerate geometry.");
+						flatFrame->appendMessage("  Try checking the file in the original CAD software.");
+					}
 				}
 			}
 			// Update coarse progress after each file
-			if (statusBar) {
+			if (m_progressManager) {
 				int percent = (int)std::round(((double)(i + 1) / (double)totalPhases) * 100.0);
 				percent = std::max(0, std::min(95, percent)); // cap before add phase
-				statusBar->SetGaugeValue(percent);
+				m_progressManager->SetProgress(percent, wxString::Format("Processed %zu/%zu files", i + 1, filePaths.size()));
 			}
 		}
 
 		if (!allGeometries.empty() && m_occViewer) {
 			// Add all geometries using batch operations
 			auto geometryAddStartTime = std::chrono::high_resolution_clock::now();
-			// Temporarily use rough deflection to accelerate initial meshing
+			// Use intelligent deflection based on geometry size
 			double prevDeflection = m_occViewer->getMeshDeflection();
-			double roughDeflection = m_occViewer->getLODRoughDeflection();
-			if (roughDeflection <= 0.0) {
-				roughDeflection = 0.2; // slightly coarser for faster first frame
+			
+			// Calculate bounding box to determine appropriate deflection
+			gp_Pnt minPt, maxPt;
+			bool hasBounds = STEPReader::calculateCombinedBoundingBox(allGeometries, minPt, maxPt);
+			
+			double optimalDeflection = meshDeflection; // Use user-selected deflection
+			
+			// If auto-optimize is enabled, adjust based on geometry size
+			if (settingsDialog.isAutoOptimize() && hasBounds) {
+				// Calculate diagonal of bounding box
+				double dx = maxPt.X() - minPt.X();
+				double dy = maxPt.Y() - minPt.Y();
+				double dz = maxPt.Z() - minPt.Z();
+				double diagonal = std::sqrt(dx*dx + dy*dy + dz*dz);
+				
+				// Adjust user's deflection based on size
+				double sizeFactor = 1.0;
+				if (diagonal < 10.0) {
+					sizeFactor = 0.5; // Finer for small objects
+				} else if (diagonal > 1000.0) {
+					sizeFactor = 2.0; // Coarser for very large objects
+				}
+				
+				optimalDeflection = meshDeflection * sizeFactor;
+				
+				// Clamp to reasonable range
+				optimalDeflection = std::max(0.001, std::min(10.0, optimalDeflection));
+				
+				LOG_INF_S("Auto-optimization: Bounding box diagonal: " + std::to_string(diagonal) + 
+					", adjusted deflection: " + std::to_string(optimalDeflection) +
+					" (base: " + std::to_string(meshDeflection) + ")");
 			}
 
 			m_occViewer->beginBatchOperation();
-			m_occViewer->setMeshDeflection(roughDeflection, false);
+			m_occViewer->setMeshDeflection(optimalDeflection, false);
+			
+			// Apply user settings
+			m_occViewer->setLODEnabled(enableLOD);
+			if (parallelProcessing) {
+				m_occViewer->setParallelProcessing(true);
+			}
+			if (adaptiveMeshing) {
+				m_occViewer->setAdaptiveMeshing(true);
+			}
+			
+			// Add geometries
 			m_occViewer->addGeometries(allGeometries);
 			m_occViewer->endBatchOperation();
-			if (statusBar) { statusBar->SetGaugeValue(98); }
-
-			// Restore previous deflection without immediate remesh to avoid long stall
-			m_occViewer->setMeshDeflection(prevDeflection, false);
+			if (m_progressManager) { 
+				m_progressManager->SetProgress(98, "Adding geometries to scene...");
+			}
 			// Optional: request a background-style refresh to refine mesh gradually (next user action can trigger remeshAllGeometries)
 			auto geometryAddEndTime = std::chrono::high_resolution_clock::now();
 			auto geometryAddDuration = std::chrono::duration_cast<std::chrono::milliseconds>(geometryAddEndTime - geometryAddStartTime);
@@ -207,12 +268,12 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 					allGeometries.size(), (long long)geometryAddDuration.count()));
 			}
 
-			// Show performance summary in message panel instead of modal dialog
+			// Show performance summary
 			wxString performanceMsg = wxString::Format(
-				"STEP files imported successfully! "
-				"Files processed: %d/%zu, "
-				"Total geometries: %d, "
-				"Total import time: %.1f ms, "
+				"STEP files imported successfully!\n\n"
+				"Files processed: %d/%zu\n"
+				"Total geometries: %d\n"
+				"Total import time: %.1f ms\n"
 				"Performance: %.1f geometries/second",
 				successfulFiles, filePaths.size(),
 				totalGeometries,
@@ -220,31 +281,26 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				totalGeometries / (totalImportTime / 1000.0)
 			);
 
-			// Display in message panel and status bar instead of blocking dialog
-			if (flatFrame) {
-				flatFrame->appendMessage("=== STEP Import Complete ===");
-				flatFrame->appendMessage(performanceMsg);
+			// Ensure progress is complete before showing dialog
+			if (m_progressManager) { 
+				m_progressManager->SetProgress(100, "Import completed!");
+				m_progressManager->Show(false);
 			}
-			if (statusBar) {
-				statusBar->SetStatusText(wxString::Format("Import complete: %d geometries from %d files", 
-					totalGeometries, successfulFiles), 0);
+			if (flatFrame) { 
+				flatFrame->appendMessage("STEP import completed."); 
 			}
-			if (statusBar) { 
-				statusBar->SetGaugeValue(100); 
-				// Schedule hiding the progress bar after a short delay
-				// This gives user time to see the 100% completion
-				wxTimer* hideTimer = new wxTimer();
-				hideTimer->Bind(wxEVT_TIMER, [statusBar, hideTimer](wxTimerEvent&) {
-					if (statusBar) {
-						statusBar->EnableProgressGauge(false);
-						LOG_DBG_S("Progress gauge hidden after import completion");
-					}
-					hideTimer->Stop();
-					delete hideTimer;
-				});
-				hideTimer->StartOnce(1000); // Hide after 1 second
+			
+			// Use the top-level window for the dialog to ensure it's visible
+			wxWindow* topWindow = wxTheApp->GetTopWindow();
+			if (!topWindow) {
+				topWindow = m_frame;
 			}
-			if (flatFrame) { flatFrame->appendMessage("STEP import completed."); }
+			
+			// Show dialog with explicit parent and ensure it's on top
+			wxMessageDialog* dialog = new wxMessageDialog(topWindow, performanceMsg, 
+				"Batch Import Complete", wxOK | wxICON_INFORMATION | wxCENTRE);
+			dialog->ShowModal();
+			delete dialog;
 
 			auto totalImportEndTime = std::chrono::high_resolution_clock::now();
 			auto totalImportDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalImportEndTime - totalImportStartTime);
@@ -258,57 +314,67 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			LOG_INF_S("Performance: " + std::to_string(totalGeometries / (totalImportDuration.count() / 1000.0)) + " geometries/second");
 			LOG_INF_S("=============================");
 
-			// Process any pending events before fitAll
-			wxTheApp->ProcessPendingEvents();
-			
 			// Auto-fit all geometries after import
 			if (m_occViewer) {
 				LOG_INF_S("Auto-executing fitAll after STEP import");
 				m_occViewer->fitAll();
 			}
-			
-			// Process events again after fitAll
-			wxTheApp->ProcessPendingEvents();
 
 			return CommandResult(true, "STEP files imported successfully", commandType);
 		}
 		else {
 			wxString warningMsg = wxString::Format(
-				"No valid geometries found in selected files. "
-				"Files processed: %zu, Successful files: %d",
-				filePaths.size(), successfulFiles
+				"No valid geometries found in selected files.\n\n"
+				"Files processed: %d/%zu\n"
+				"Successful files: %d",
+				filePaths.size(), filePaths.size(), successfulFiles
 			);
-			// Display warning in message panel instead of blocking dialog
-			if (flatFrame) {
-				flatFrame->appendMessage("=== STEP Import Warning ===");
-				flatFrame->appendMessage(warningMsg);
+			
+			// Ensure progress is cleaned up
+			if (m_progressManager) { 
+				try {
+					m_progressManager->Reset();
+					m_progressManager->Show(false);
+				} catch (...) {}
 			}
-			if (statusBar) {
-				statusBar->SetStatusText("Import warning: No valid geometries found", 0);
+			
+			// Use top-level window for dialog
+			wxWindow* topWindow = wxTheApp->GetTopWindow();
+			if (!topWindow) {
+				topWindow = m_frame;
 			}
-			if (statusBar) { 
-				statusBar->SetGaugeValue(0); 
-				// Hide the progress bar after showing the error
-				statusBar->EnableProgressGauge(false);
-			}
+			
+			wxMessageDialog* dialog = new wxMessageDialog(topWindow, warningMsg, 
+				"Import Warning", wxOK | wxICON_WARNING | wxCENTRE);
+			dialog->ShowModal();
+			delete dialog;
+			
 			return CommandResult(false, "No valid geometries found in selected files", commandType);
 		}
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception during STEP import: " + std::string(e.what()));
-		// Display error in message panel instead of blocking dialog
-		wxString errorMsg = "Error importing STEP files: " + std::string(e.what());
-		if (flatFrame) {
-			flatFrame->appendMessage("=== STEP Import Error ===");
-			flatFrame->appendMessage(errorMsg);
+		
+		// Ensure progress is cleaned up
+		if (m_progressManager) { 
+			try {
+				m_progressManager->Reset();
+				m_progressManager->Show(false);
+			} catch (...) {}
 		}
-		if (statusBar) {
-			statusBar->SetStatusText("Import error: " + std::string(e.what()), 0);
+		
+		// Use top-level window for dialog
+		wxWindow* topWindow = wxTheApp->GetTopWindow();
+		if (!topWindow) {
+			topWindow = m_frame;
 		}
-		if (statusBar) { 
-			statusBar->SetGaugeValue(0); 
-			// Don't immediately hide - let it be managed by the frame
-		}
+		
+		wxMessageDialog* dialog = new wxMessageDialog(topWindow, 
+			"Error importing STEP files: " + std::string(e.what()),
+			"Import Error", wxOK | wxICON_ERROR | wxCENTRE);
+		dialog->ShowModal();
+		delete dialog;
+		
 		return CommandResult(false, "Error importing STEP files: " + std::string(e.what()), commandType);
 	}
 }

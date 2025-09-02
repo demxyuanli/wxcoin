@@ -34,8 +34,8 @@ private:
 	OCCViewer* m_viewer{ nullptr };
 	bool m_enabled{ false };
 	bool m_roughMode{ false };
-	double m_roughDeflection{ 0.1 };
-	double m_fineDeflection{ 0.01 };
+	double m_roughDeflection{ 1.0 };  // Increased for better performance
+	double m_fineDeflection{ 0.5 };   // Increased from 0.01
 	int m_transitionMs{ 500 };
 	wxTimer m_timer;
 };

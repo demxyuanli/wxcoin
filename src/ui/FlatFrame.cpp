@@ -25,7 +25,6 @@
 #include "Canvas.h"
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
-#include "ui/PerformancePanel.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
 #include "GeometryFactory.h"
@@ -182,6 +181,15 @@ EVT_BUTTON(ID_MESSAGE_OUTPUT_FLOAT, FlatFrame::OnMessageOutputFloat)
 EVT_BUTTON(ID_MESSAGE_OUTPUT_MINIMIZE, FlatFrame::OnMessageOutputMinimize)
 EVT_BUTTON(ID_MESSAGE_OUTPUT_CLOSE, FlatFrame::OnMessageOutputClose)
 
+// Performance shortcuts
+EVT_MENU(ID_TOGGLE_LOD, FlatFrame::OnToggleLOD)
+EVT_MENU(ID_FORCE_ROUGH_LOD, FlatFrame::OnForceRoughLOD)
+EVT_MENU(ID_FORCE_FINE_LOD, FlatFrame::OnForceFineLoD)
+EVT_MENU(ID_TOGGLE_PERFORMANCE_MONITOR, FlatFrame::OnTogglePerformanceMonitor)
+EVT_MENU(ID_PERFORMANCE_PRESET, FlatFrame::OnPerformancePreset)
+EVT_MENU(ID_BALANCED_PRESET, FlatFrame::OnBalancedPreset)
+EVT_MENU(ID_QUALITY_PRESET, FlatFrame::OnQualityPreset)
+
 EVT_CLOSE(FlatFrame::onClose)
 EVT_ACTIVATE(FlatFrame::onActivate)
 EVT_SIZE(FlatFrame::onSize)
@@ -195,6 +203,7 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_homeMenu(nullptr),
 	m_searchPanel(nullptr),
 	m_profilePanel(nullptr),
+	m_performancePanel(nullptr),
 	m_canvas(nullptr),
 	m_propertyPanel(nullptr),
 	m_objectTreePanel(nullptr),
@@ -203,7 +212,6 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_occViewer(nullptr),
 	m_isFirstActivate(true),
 	m_startupTimerFired(false),  // Initialize startup timer flag
-	m_auiManager(nullptr),
 	m_mainSplitter(nullptr),
 	m_leftSplitter(nullptr),
 	m_commandManager(new CommandManager()),
@@ -264,120 +272,6 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_startupTimer.StartOnce(100); // Reduced for faster startup if UI is complex
 }
 
-void FlatFrame::EnsurePanelsCreated()
-{
-    // Create panels if they don't exist yet
-    // These will be used by the docking system
-    // This code is adapted from FlatFrameInit.cpp to ensure compatibility
-    
-    if (!m_canvas) {
-        // Create Canvas with proper setup
-        m_canvas = new Canvas(this);
-        m_canvas->SetName("Canvas");
-        m_canvas->Hide();  // Hide until added to docking system
-    }
-    
-    // Note: In docking system, a new Canvas will be created to avoid OpenGL reparenting issues
-    // The new Canvas will share the OCCViewer and other managers with this one
-    
-    if (!m_propertyPanel) {
-        m_propertyPanel = new PropertyPanel(this);
-        m_propertyPanel->SetName("Properties");
-        m_propertyPanel->Hide();
-    }
-    
-    if (!m_objectTreePanel) {
-        m_objectTreePanel = new ObjectTreePanel(this);
-        m_objectTreePanel->SetName("Works");
-        m_objectTreePanel->Hide();
-    }
-    
-    if (!m_messageOutput) {
-        // Create message output as it was in original code
-        m_messageOutput = new wxTextCtrl(this, wxID_ANY, "", 
-                                       wxDefaultPosition, wxDefaultSize,
-                                       wxTE_READONLY | wxTE_MULTILINE | wxBORDER_NONE);
-        m_messageOutput->Hide();
-    }
-    
-    // Set up connections between panels (from FlatFrameInit.cpp)
-    if (m_objectTreePanel && m_propertyPanel) {
-        m_objectTreePanel->setPropertyPanel(m_propertyPanel);
-    }
-    
-    // Set up mouse handler and other connections if all panels exist
-    if (m_canvas && m_objectTreePanel && m_propertyPanel && !m_mouseHandler) {
-        m_mouseHandler = new MouseHandler(m_canvas, m_objectTreePanel, m_propertyPanel, m_commandManager);
-        m_canvas->getInputManager()->setMouseHandler(m_mouseHandler);
-        
-        NavigationController* navController = new NavigationController(m_canvas, m_canvas->getSceneManager());
-        m_canvas->getInputManager()->setNavigationController(navController);
-        m_mouseHandler->setNavigationController(navController);
-        
-        m_occViewer = new OCCViewer(m_canvas->getSceneManager());
-        m_canvas->setOCCViewer(m_occViewer);
-        m_canvas->getInputManager()->initializeStates();
-        m_canvas->setObjectTreePanel(m_objectTreePanel);
-        m_canvas->setCommandManager(m_commandManager);
-        
-        m_objectTreePanel->setOCCViewer(m_occViewer);
-        
-        if (!m_geometryFactory) {
-            m_geometryFactory = new GeometryFactory(
-                m_canvas->getSceneManager()->getObjectRoot(),
-                m_objectTreePanel,
-                m_propertyPanel,
-                m_commandManager,
-                m_occViewer
-            );
-        }
-        
-        if (m_canvas && m_canvas->getSceneManager()) {
-            m_canvas->getSceneManager()->resetView();
-        }
-    }
-    
-    // Initialize progress timer if not already running
-    if (!m_progressTimer.IsRunning()) {
-        m_progressTimer.SetOwner(this);
-        Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
-            bool running = m_occViewer && m_occViewer->isFeatureEdgeGenerationRunning();
-            bool justFinished = (!running && m_prevFeatureEdgesRunning);
-            
-            if (running || justFinished) {
-                int p = running ? m_occViewer->getFeatureEdgeProgress() : 100;
-                if (GetStatusBar()) {
-                    if (GetStatusBar()->GetFieldsCount() > 1) {
-                        wxString statusMsg = wxString::Format("Feature edge generation: %d%%", p);
-                        GetStatusBar()->SetStatusText(statusMsg, 1);
-                    }
-                }
-                else {
-                    wxLogDebug("Progress timer: Failed to get status bar");
-                }
-                if (m_messageOutput) {
-                    wxString progressMsg = wxString::Format("Feature edge generation progress: %d%%", p);
-                    m_messageOutput->SetValue(progressMsg);
-                }
-                m_featureProgressHoldTicks = 4;
-            }
-            else {
-                if (justFinished && m_messageOutput) {
-                    appendMessage("Feature edge generation completed.");
-                }
-                if (m_featureProgressHoldTicks > 0) {
-                    m_featureProgressHoldTicks--;
-                }
-                else if (GetStatusBar() && GetStatusBar()->GetFieldsCount() > 1) {
-                    GetStatusBar()->SetStatusText("", 1);
-                }
-            }
-            m_prevFeatureEdgesRunning = running;
-        });
-        m_progressTimer.Start(50);
-    }
-}
-
 FlatFrame::~FlatFrame()
 {
 	// m_homeMenu is a child window, wxWidgets handles its deletion.
@@ -399,13 +293,6 @@ FlatFrame::~FlatFrame()
 		}
 	}
 
-	// Clean up legacy layout components if they were created
-	if (m_auiManager) {
-		m_auiManager->UnInit();
-		delete m_auiManager;
-		m_auiManager = nullptr;
-	}
-	
 	LOG_DBG("FlatFrame destruction completed.", "FlatFrame");
 	delete m_commandManager;
 }
@@ -452,8 +339,8 @@ void FlatFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 		ribbon->Update();
 	}
 
-	// Force main splitter to recalculate its size and position (only for non-docking version)
-	if (!IsUsingDockingSystem() && m_mainSplitter) {
+	// Force main splitter to recalculate its size and position
+	if (m_mainSplitter) {
 		m_mainSplitter->Layout();
 		m_mainSplitter->Refresh();
 		m_mainSplitter->Update();
@@ -851,4 +738,88 @@ void FlatFrame::OnKeyDown(wxKeyEvent& event)
 
 	// Let other handlers process the event
 	event.Skip();
+}
+
+// Performance shortcut handlers
+void FlatFrame::OnToggleLOD(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		bool lodEnabled = m_occViewer->isLODEnabled();
+		m_occViewer->setLODEnabled(!lodEnabled);
+		appendMessage(wxString::Format("LOD %s", lodEnabled ? "disabled" : "enabled"));
+	}
+}
+
+void FlatFrame::OnForceRoughLOD(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		m_occViewer->setLODMode(true); // true = rough mode
+		appendMessage("Forced rough LOD mode");
+	}
+}
+
+void FlatFrame::OnForceFineLoD(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		m_occViewer->setLODMode(false); // false = fine mode
+		appendMessage("Forced fine LOD mode");
+	}
+}
+
+void FlatFrame::OnTogglePerformanceMonitor(wxCommandEvent& event)
+{
+	// Toggle performance panel visibility
+	if (m_performancePanel) {
+		bool visible = m_performancePanel->IsShown();
+		m_performancePanel->Show(!visible);
+		Layout();
+		appendMessage(wxString::Format("Performance monitor %s", visible ? "hidden" : "shown"));
+	}
+}
+
+void FlatFrame::OnPerformancePreset(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		// Apply performance preset
+		m_occViewer->setMeshDeflection(2.0, true);
+		m_occViewer->setLODEnabled(true);
+		m_occViewer->setLODRoughDeflection(3.0);
+		m_occViewer->setLODFineDeflection(1.0);
+		m_occViewer->setParallelProcessing(true);
+		appendMessage("Applied Performance Preset (Alt+1)");
+	}
+}
+
+void FlatFrame::OnBalancedPreset(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		// Apply balanced preset
+		m_occViewer->setMeshDeflection(1.0, true);
+		m_occViewer->setLODEnabled(true);
+		m_occViewer->setLODRoughDeflection(1.5);
+		m_occViewer->setLODFineDeflection(0.5);
+		m_occViewer->setParallelProcessing(true);
+		appendMessage("Applied Balanced Preset (Alt+2)");
+	}
+}
+
+void FlatFrame::OnQualityPreset(wxCommandEvent& event)
+{
+	if (m_occViewer) {
+		// Apply quality preset
+		m_occViewer->setMeshDeflection(0.2, true);
+		m_occViewer->setLODEnabled(true);
+		m_occViewer->setLODRoughDeflection(0.5);
+		m_occViewer->setLODFineDeflection(0.1);
+		m_occViewer->setParallelProcessing(true);
+		appendMessage("Applied Quality Preset (Alt+3)");
+	}
+}
+
+void FlatFrame::EnsurePanelsCreated()
+{
+	// This method ensures that all panels are created
+	// It's called by derived classes like FlatFrameDocking
+	// The actual panel creation is done in InitializeUI
+	// which is called from the main application
 }

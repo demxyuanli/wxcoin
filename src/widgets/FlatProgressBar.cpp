@@ -271,6 +271,14 @@ bool FlatProgressBar::IsEnabled() const
 	return m_enabled;
 }
 
+void FlatProgressBar::SetState(ProgressBarState state)
+{
+	if (m_state != state) {
+		m_state = state;
+		Refresh();
+	}
+}
+
 // Missing function implementations
 wxSize FlatProgressBar::DoGetBestSize() const
 {

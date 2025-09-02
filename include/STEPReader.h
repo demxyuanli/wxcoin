@@ -126,6 +126,19 @@ public:
 	 * @return Current optimization options
 	 */
 	static OptimizationOptions getGlobalOptimizationOptions();
+	
+	/**
+	 * @brief Calculate combined bounding box of multiple geometries
+	 * @param geometries Vector of geometries
+	 * @param minPt Output minimum point
+	 * @param maxPt Output maximum point
+	 * @return true if valid bounds found
+	 */
+	static bool calculateCombinedBoundingBox(
+		const std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+		gp_Pnt& minPt,
+		gp_Pnt& maxPt
+	);
 
 private:
 	STEPReader() = delete; // Pure static class
@@ -171,18 +184,7 @@ private:
 		const OptimizationOptions& options
 	);
 
-	/**
-	 * @brief Calculate bounding box for multiple geometries efficiently
-	 * @param geometries Vector of geometries
-	 * @param minPt Output minimum point
-	 * @param maxPt Output maximum point
-	 * @return true if valid bounds found
-	 */
-	static bool calculateCombinedBoundingBox(
-		const std::vector<std::shared_ptr<OCCGeometry>>& geometries,
-		gp_Pnt& minPt,
-		gp_Pnt& maxPt
-	);
+
 
 	// Static members for caching and optimization
 	static std::unordered_map<std::string, ReadResult> s_cache;
