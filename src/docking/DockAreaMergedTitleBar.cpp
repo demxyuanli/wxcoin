@@ -30,7 +30,7 @@ DockAreaMergedTitleBar::DockAreaMergedTitleBar(DockArea* dockArea)
     , m_currentIndex(-1)
     , m_hoveredTab(-1)
     , m_buttonSize(20)
-    , m_buttonSpacing(2)
+    , m_buttonSpacing(0)  // Set to 0 as requested
     , m_showCloseButton(true)
     , m_showAutoHideButton(false)
     , m_showPinButton(true)
@@ -173,14 +173,15 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
         dc.DrawPolygon(3, arrow);
     }
 
-    // Draw buttons on the right side
-    int buttonX = clientRect.GetWidth() - m_buttonSpacing;
+    // Draw buttons on the right side with 0 margin from top, right, and bottom
+    int buttonX = clientRect.GetWidth();  // Start from right edge
+    int buttonHeight = clientRect.GetHeight() - 1;  // -1 for bottom border
+    int buttonY = 0;  // Start from top edge
     int buttonCount = 0;
 
     if (m_showAutoHideButton) {
         buttonX -= m_buttonSize;
-        m_autoHideButtonRect = wxRect(buttonX, (clientRect.GetHeight() - m_buttonSize) / 2,
-                                     m_buttonSize, m_buttonSize);
+        m_autoHideButtonRect = wxRect(buttonX, buttonY, m_buttonSize, buttonHeight);
         drawButton(dc, m_autoHideButtonRect, "^", m_autoHideButtonHovered);
         buttonX -= m_buttonSpacing;
         buttonCount++;
@@ -188,8 +189,7 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
 
     if (m_showCloseButton) {
         buttonX -= m_buttonSize;
-        m_closeButtonRect = wxRect(buttonX, (clientRect.GetHeight() - m_buttonSize) / 2,
-                                  m_buttonSize, m_buttonSize);
+        m_closeButtonRect = wxRect(buttonX, buttonY, m_buttonSize, buttonHeight);
         drawButton(dc, m_closeButtonRect, "X", m_closeButtonHovered);
         buttonX -= m_buttonSpacing;
         buttonCount++;
@@ -197,8 +197,7 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
 
     if (m_showPinButton) {
         buttonX -= m_buttonSize;
-        m_pinButtonRect = wxRect(buttonX, (clientRect.GetHeight() - m_buttonSize) / 2,
-                                m_buttonSize, m_buttonSize);
+        m_pinButtonRect = wxRect(buttonX, buttonY, m_buttonSize, buttonHeight);
         drawButton(dc, m_pinButtonRect, "P", m_pinButtonHovered);
         buttonCount++;
     }
@@ -686,10 +685,9 @@ void DockAreaMergedTitleBar::updateTabRects() {
 
     // Calculate available width for tabs (leave space for buttons)
     int buttonsWidth = 0;
-    if (m_showPinButton) buttonsWidth += style.buttonSize + m_buttonSpacing;
-    if (m_showCloseButton) buttonsWidth += style.buttonSize + m_buttonSpacing;
-    if (m_showAutoHideButton) buttonsWidth += style.buttonSize + m_buttonSpacing;
-    buttonsWidth += m_buttonSpacing; // Extra margin
+    if (m_showPinButton) buttonsWidth += style.buttonSize;
+    if (m_showCloseButton) buttonsWidth += style.buttonSize;
+    if (m_showAutoHideButton) buttonsWidth += style.buttonSize;
 
     const int overflowButtonWidth = 20; // Reduced width as requested
     int availableWidth = size.GetWidth() - buttonsWidth - x;
@@ -720,18 +718,11 @@ void DockAreaMergedTitleBar::updateTabRects() {
     }
 
     // Check if we need overflow
-    if (totalTabsWidth > availableWidth - overflowButtonWidth) {
+    if (totalTabsWidth > availableWidth - overflowButtonWidth - 4) { // -4 for min distance to button
         m_hasOverflow = true;
 
-        // Position overflow button right next to the last tab
-        int overflowButtonX = x + tabSpacing; // Position right after the last tab
-        m_overflowButtonRect = wxRect(
-            overflowButtonX, style.tabTopMargin,
-            overflowButtonWidth, style.tabHeight
-        );
-
-        // Adjust available width
-        availableWidth -= overflowButtonWidth;
+        // Adjust available width to account for overflow button and spacing
+        availableWidth -= (overflowButtonWidth + 4);
 
         // Ensure current tab is visible
         if (m_currentIndex >= 0) {
@@ -777,6 +768,7 @@ void DockAreaMergedTitleBar::updateTabRects() {
     }
 
     // Layout visible tabs
+    int lastTabEndX = 5; // Default to left margin if no tabs
     for (int i = m_firstVisibleTab; i < static_cast<int>(m_tabs.size()); ++i) {
         auto& tab = m_tabs[i];
 
@@ -814,7 +806,26 @@ void DockAreaMergedTitleBar::updateTabRects() {
             tab.closeButtonRect = wxRect(); // Empty rect means no close button
         }
 
+        lastTabEndX = tab.rect.GetRight();
         x += tabWidth + tabSpacing;
+    }
+
+    // Position overflow button if needed
+    if (m_hasOverflow) {
+        // Position overflow button 4 pixels after the last visible tab
+        // Ensure it's at least 4 pixels away from title bar buttons
+        int overflowX = lastTabEndX + 4;
+        int maxOverflowX = buttonsWidth > 0 ? (size.GetWidth() - buttonsWidth - 4) : (size.GetWidth() - 4);
+        
+        // Limit overflow button position to not overlap with title bar buttons
+        if (overflowX + overflowButtonWidth > maxOverflowX) {
+            overflowX = maxOverflowX - overflowButtonWidth;
+        }
+        
+        m_overflowButtonRect = wxRect(
+            overflowX, style.tabTopMargin,
+            overflowButtonWidth, tabHeight
+        );
     }
 }
 

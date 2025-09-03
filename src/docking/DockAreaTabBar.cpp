@@ -528,12 +528,13 @@ void DockAreaTabBar::updateTabRects() {
     }
 
     // Calculate available width
-    int maxWidth = m_hasOverflow ? size.GetWidth() - overflowButtonWidth : size.GetWidth();
+    int maxWidth = m_hasOverflow ? size.GetWidth() - overflowButtonWidth - 4 : size.GetWidth(); // -4 for min distance to button
 
     // Get style config with theme initialization
     const DockStyleConfig& style = GetDockStyleConfig();
 
     // Layout visible tabs
+    int lastTabEndX = 0;
     for (int i = m_firstVisibleTab; i < static_cast<int>(m_tabs.size()); ++i) {
         auto& tab = m_tabs[i];
 
@@ -576,7 +577,20 @@ void DockAreaTabBar::updateTabRects() {
             );
         }
 
+        lastTabEndX = tab.rect.GetRight();
         x += tabWidth + style.tabSpacing;
+    }
+
+    // Position overflow button if needed
+    if (m_hasOverflow) {
+        // Position overflow button 4 pixels after the last visible tab
+        // Use same Y position and height as tabs for alignment
+        m_overflowButtonRect = wxRect(
+            lastTabEndX + 4,
+            style.tabTopMargin,
+            overflowButtonWidth,
+            style.tabHeight
+        );
     }
 }
 
@@ -672,23 +686,7 @@ void DockAreaTabBar::checkTabOverflow() {
     if (totalTabsWidth > availableWidth - overflowButtonWidth) {
         m_hasOverflow = true;
 
-        // Position overflow button right next to the last visible tab
-        // We need to find the position after the last visible tab
-        int lastTabEndX = 0;
-        if (!m_tabs.empty()) {
-            // Find the last visible tab
-            for (int i = m_firstVisibleTab; i < static_cast<int>(m_tabs.size()); ++i) {
-                if (!m_tabs[i].rect.IsEmpty()) {
-                    lastTabEndX = m_tabs[i].rect.GetRight();
-                }
-            }
-        }
-        m_overflowButtonRect = wxRect(
-            lastTabEndX + style.tabSpacing, 0,
-            overflowButtonWidth, GetClientSize().GetHeight()
-        );
-
-        // Ensure current tab is visible
+        // Ensure current tab is visible first
         if (m_currentIndex >= 0) {
             // Calculate how many tabs can fit with adaptive widths
             int visibleTabsWidth = 0;
@@ -708,7 +706,7 @@ void DockAreaTabBar::checkTabOverflow() {
                 // Ensure minimum width
                 tabWidth = std::max(tabWidth, 60);
 
-                if (visibleTabsWidth + tabWidth > availableWidth - overflowButtonWidth) {
+                if (visibleTabsWidth + tabWidth > availableWidth - overflowButtonWidth - 4) {
                     break;
                 }
 
@@ -724,6 +722,8 @@ void DockAreaTabBar::checkTabOverflow() {
                 if (m_firstVisibleTab < 0) m_firstVisibleTab = 0;
             }
         }
+
+
     } else {
         m_hasOverflow = false;
         m_firstVisibleTab = 0;
