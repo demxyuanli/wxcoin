@@ -1,0 +1,53 @@
+# CMakeLists.txt for Enhanced Outline Preview Example
+cmake_minimum_required(VERSION 3.10)
+project(EnhancedOutlinePreview)
+
+# Find required packages
+find_package(wxWidgets REQUIRED COMPONENTS core base gl)
+find_package(Coin REQUIRED)
+find_package(OpenGL REQUIRED)
+
+# Include directories
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
+    ${wxWidgets_INCLUDE_DIRS}
+    ${Coin_INCLUDE_DIRS}
+)
+
+# Source files
+set(SOURCES
+    OutlinePreviewExample.cpp
+    EnhancedOutlinePreviewCanvas.cpp
+    EnhancedOutlineSettingsDialog.cpp
+)
+
+# Header files
+set(HEADERS
+    EnhancedOutlinePreviewCanvas.h
+    EnhancedOutlineSettingsDialog.h
+)
+
+# Create executable
+add_executable(EnhancedOutlinePreview ${SOURCES} ${HEADERS})
+
+# Link libraries
+target_link_libraries(EnhancedOutlinePreview
+    ${wxWidgets_LIBRARIES}
+    ${Coin_LIBRARIES}
+    ${OPENGL_LIBRARIES}
+)
+
+# Set properties
+if(WIN32)
+    set_property(TARGET EnhancedOutlinePreview PROPERTY WIN32_EXECUTABLE TRUE)
+endif()
+
+# Copy shaders to build directory
+file(COPY ${CMAKE_SOURCE_DIR}/src/rendering/shaders/outline_shaders.h 
+     DESTINATION ${CMAKE_BINARY_DIR}/shaders/)
+
+# Installation
+install(TARGETS EnhancedOutlinePreview DESTINATION bin)
+install(FILES ${CMAKE_SOURCE_DIR}/docs/outline_rendering_guide.md 
+        DESTINATION share/docs)
