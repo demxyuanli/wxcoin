@@ -3,19 +3,29 @@ set(DOCKING_SOURCES
     DockManager.cpp
     DockWidget.cpp
     DockArea.cpp
+    DockAreaTabBar.cpp
+    DockAreaMergedTitleBar.cpp
+    DockAreaTitleBar.cpp
+    DockStyle.cpp
+    DockSplitter.cpp
     DockContainerWidget.cpp
+    DockContainerLayout.cpp
+    DockContainerUtils.cpp
     FloatingDockContainer.cpp
     DockOverlay.cpp
     DockingIntegration.cpp
     AutoHideContainer.cpp
     PerspectiveManager.cpp
     DockLayoutConfig.cpp
+    DockLayoutConfigDialog.cpp
+    DockLayoutPreview.cpp
 )
 
 set(DOCKING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/docking/DockManager.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockWidget.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockArea.h
+    ${CMAKE_SOURCE_DIR}/include/docking/DockSplitter.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockContainerWidget.h
     ${CMAKE_SOURCE_DIR}/include/docking/FloatingDockContainer.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockOverlay.h

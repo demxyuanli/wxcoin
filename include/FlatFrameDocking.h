@@ -7,10 +7,15 @@
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
 #include "docking/PerspectiveManager.h"
+#include <wx/splitter.h>
+#include <wx/utils.h>
+#include <wx/timer.h>
+#include <cmath>
 
 namespace ads {
     class DockManager;
     class DockWidget;
+    class DockContainerWidget;
 }
 
 /**
@@ -62,6 +67,8 @@ protected:
     void OnDockingResetLayout(wxCommandEvent& event);
     void OnDockingManagePerspectives(wxCommandEvent& event);
     void OnDockingToggleAutoHide(wxCommandEvent& event);
+    void OnDockingConfigureLayout(wxCommandEvent& event);
+    void OnDockingAdjustLayout(wxCommandEvent& event);
     
     // Override base class layout events to prevent interference
     void onSize(wxSizeEvent& event);
@@ -82,25 +89,31 @@ private:
     
     void CreateDockingMenus();
     void ConfigureDockManager();
+    void RegisterDockLayoutConfigListener();
+
+    // Debug logging methods
+    void LogCurrentDockAreas(const wxString& context);
+
+    // Manual layout adjustment methods
+    void ApplyManual2080Layout(ads::DockContainerWidget* container);
+    void ApplyDynamicLayoutAdjustment(ads::DockContainerWidget* container);
+    void ApplyDynamicLayoutAdjustmentOptimized(ads::DockContainerWidget* container);
+    wxSplitterWindow* FindMainVerticalSplitter(wxWindow* window);
+    void FindAndAdjustBottomSplitters(wxWindow* window, int targetBottomHeight);
+    bool ContainsBottomPanels(wxSplitterWindow* splitter);
+    bool ContainsWidgetRecursive(wxWindow* container, ads::DockWidget* targetWidget);
+    void FindAndAdjustSplitters(wxWindow* window, int targetLeftWidth, int targetBottomHeight);
+    int AdjustVerticalSplittersRecursive(wxWindow* window, int targetLeftWidth);
+
+    // Resize handling
+    void OnResizeTimer(wxTimerEvent& event);
+    void HandleDelayedResize();
+
+private:
+    // Resize optimization members
+    wxTimer* m_resizeTimer;
+    wxSize m_pendingResizeSize;
+    bool m_resizePending;
     
     wxDECLARE_EVENT_TABLE();
-};
-
-// Additional menu IDs for docking features
-enum {
-    ID_DOCKING_SAVE_LAYOUT = wxID_HIGHEST + 2000,
-    ID_DOCKING_LOAD_LAYOUT,
-    ID_DOCKING_RESET_LAYOUT,
-    ID_DOCKING_MANAGE_PERSPECTIVES,
-    ID_DOCKING_TOGGLE_AUTOHIDE,
-    ID_DOCKING_FLOAT_ALL,
-    ID_DOCKING_DOCK_ALL,
-    
-    // View panel IDs
-    ID_VIEW_PROPERTIES,
-    ID_VIEW_OBJECT_TREE,
-    ID_VIEW_OUTPUT,
-    ID_VIEW_TOOLBOX,
-    ID_VIEW_MESSAGE,
-    ID_VIEW_PERFORMANCE
 };

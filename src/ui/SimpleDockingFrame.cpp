@@ -16,6 +16,7 @@
 #include "docking/DockManager.h"
 #include "docking/DockWidget.h"
 #include "docking/DockArea.h"
+#include "docking/DockContainerWidget.h"
 #include "docking/PerspectiveManager.h"
 #include "docking/DockLayoutConfig.h"
 
@@ -270,16 +271,20 @@ private:
     void OnConfigureLayout(wxCommandEvent&) {
         const DockLayoutConfig& currentConfig = m_dockManager->getLayoutConfig();
         DockLayoutConfig config = currentConfig;  // Make a copy
-        DockLayoutConfigDialog dlg(this, config);
+        DockLayoutConfigDialog dlg(this, config, m_dockManager);
         
         if (dlg.ShowModal() == wxID_OK) {
             config = dlg.GetConfig();
             m_dockManager->setLayoutConfig(config);
             
-            // Optionally, apply the configuration immediately
-            // This might require recreating the layout
-            wxMessageBox("Layout configuration saved.\nChanges will be applied on next restart.", 
-                        "Configuration", wxOK | wxICON_INFORMATION);
+            // Apply the configuration immediately to the main container
+            if (wxWindow* containerWidget = m_dockManager->containerWidget()) {
+                if (ads::DockContainerWidget* container = dynamic_cast<ads::DockContainerWidget*>(containerWidget)) {
+                    container->applyLayoutConfig();
+                }
+            }
+            
+            SetStatusText("Layout configuration updated and applied", 0);
         }
     }
     

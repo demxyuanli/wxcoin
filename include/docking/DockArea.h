@@ -3,9 +3,16 @@
 #include <wx/wx.h>
 #include <wx/panel.h>
 #include <wx/notebook.h>
+#include <wx/settings.h>
 #include <vector>
 #include <memory>
 #include "DockManager.h"  // For DockWidgetArea enum
+#include "config/ThemeManager.h"  // For CFG_* macros
+
+// ThemeManager macros for consistent usage across docking components
+#define DOCK_COLOUR(key) CFG_COLOUR(key)
+#define DOCK_FONT() CFG_DEFAULTFONT()
+#define DOCK_INT(key) CFG_INT(key)
 
 namespace ads {
 
@@ -19,6 +26,105 @@ class DockAreaTitleBar;
 class DockAreaMergedTitleBar;
 class FloatingDockContainer;
 class FloatingDragPreview;
+
+// Docking Styles - Similar to FlatUIBar Tab Styles
+enum class DockStyle {
+    DEFAULT,     // Default style with borders on all sides
+    UNDERLINE,   // Only bottom border, flat top
+    BUTTON,      // Raised button style
+    FLAT         // Flat style with minimal borders
+};
+
+// Style configuration for docking elements
+struct DockStyleConfig {
+    DockStyle style = DockStyle::DEFAULT;
+
+    // Border widths
+    int borderTop = 1;
+    int borderBottom = 1;
+    int borderLeft = 1;
+    int borderRight = 1;
+
+    // Colors
+    wxColour borderTopColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+    wxColour borderBottomColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+    wxColour borderLeftColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+    wxColour borderRightColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW);
+
+    // Background colors
+    wxColour backgroundColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+    wxColour activeBackgroundColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+    wxColour hoverBackgroundColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT);
+
+    // Text colors
+    wxColour textColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT);
+    wxColour activeTextColour = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
+    wxColour inactiveTextColour = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT);
+
+    // Corner radius for rounded styles
+    int cornerRadius = 0;
+
+    // Font configuration (from ThemeManager)
+    wxFont font = *wxNORMAL_FONT;
+
+    // Size configurations
+    int tabHeight = 24;           // Tab height (changed to 24)
+    int titleBarHeight = 30;      // Title bar height (changed to 30)
+    int tabTopMargin = 4;         // Tab top margin from title bar (changed to 4)
+    int tabSpacing = 4;           // Spacing between tabs (changed to 4)
+    int borderWidth = 1;          // Left/right border width
+    int buttonSize = 12;          // Button size (fixed 12x12)
+    int contentMargin = 2;        // Margin between tab content and internal controls
+
+    // Icon configuration
+    bool useSvgIcons = true;      // Whether to use SVG icons
+    wxString closeIconName = "close";
+    wxString pinIconName = "pin";
+    wxString autoHideIconName = "auto_hide";
+    wxString menuIconName = "menu";
+
+    // Set style with predefined configurations
+    void SetStyle(DockStyle newStyle) {
+        style = newStyle;
+
+        // Set common properties
+        tabTopMargin = 2;
+
+        switch (style) {
+        case DockStyle::DEFAULT:
+            borderTop = 1;
+            borderBottom = 1;
+            borderLeft = 1;
+            borderRight = 1;
+            cornerRadius = 0;
+            break;
+        case DockStyle::UNDERLINE:
+            borderTop = 0;
+            borderBottom = 2;
+            borderLeft = 0;
+            borderRight = 0;
+            cornerRadius = 0;
+            break;
+        case DockStyle::BUTTON:
+            borderTop = 1;
+            borderBottom = 1;
+            borderLeft = 1;
+            borderRight = 1;
+            cornerRadius = 3;
+            break;
+        case DockStyle::FLAT:
+            borderTop = 1;
+            borderBottom = 0;
+            borderLeft = 0;
+            borderRight = 0;
+            cornerRadius = 0;
+            break;
+        }
+    }
+
+    // Initialize with ThemeManager values
+    void InitializeFromThemeManager();
+};
 
 // Dock area flags
 enum DockAreaFlag {
@@ -91,6 +197,11 @@ public:
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSING;
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSED;
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_TAB_ABOUT_TO_CLOSE;
+
+    // Style configuration
+    static void SetDockStyle(DockStyle style);
+    static void SetDockStyleConfig(const DockStyleConfig& config);
+    static const DockStyleConfig& GetDockStyleConfig();
     
     // Friend classes that need access to protected members
     friend class DockAreaTabBar;
@@ -201,11 +312,17 @@ private:
     bool m_closeButtonHovered;
     bool m_autoHideButtonHovered;
 
+    // Overflow support
+    bool m_hasOverflow;
+    int m_firstVisibleTab;
+    wxRect m_overflowButtonRect;
+
     void updateTabRects();
     void drawTab(wxDC& dc, int index);
     void drawButton(wxDC& dc, const wxRect& rect, const wxString& text, bool hovered);
     int getTabAt(const wxPoint& pos) const;
     wxRect getButtonRect(int buttonIndex) const; // 0=pin, 1=close, 2=auto hide
+    void showTabOverflowMenu();
 
     // Drag and drop helpers
     bool isDraggingTab() const { return m_dragStarted && m_draggedTab >= 0; }
@@ -326,5 +443,17 @@ private:
     
     wxDECLARE_EVENT_TABLE();
 };
+
+// Global functions for style management
+void EnsureThemeManagerInitialized();
+const DockStyleConfig& GetDockStyleConfig();
+
+// Style helper functions
+void DrawStyledRect(wxDC& dc, const wxRect& rect, const DockStyleConfig& style,
+                   bool isActive, bool isHovered, bool isTitleBar);
+void SetStyledTextColor(wxDC& dc, const DockStyleConfig& style, bool isActive);
+void DrawCloseButton(wxDC& dc, const wxRect& rect, const DockStyleConfig& style, bool isHovered);
+void DrawSvgButton(wxDC& dc, const wxRect& rect, const wxString& iconName,
+                  const DockStyleConfig& style, bool isHovered);
 
 } // namespace ads

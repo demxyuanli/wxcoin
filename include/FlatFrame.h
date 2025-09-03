@@ -14,6 +14,7 @@
 #include "config/ThemeManager.h"
 #include "config/SvgIconManager.h"
 #include "widgets/FlatEnhancedButton.h"
+#include "CommandType.h"
 
 // Forward declarations
 class Canvas;
@@ -25,6 +26,7 @@ class CommandManager;
 class OCCViewer;
 class CommandDispatcher;
 class CommandListenerManager;
+class CommandListener;
 struct CommandResult;
 class wxSplitterWindow;
 
@@ -74,6 +76,7 @@ enum {
 	ID_EDGE_SETTINGS,
 	ID_OUTLINE_SETTINGS,
 	ID_LIGHTING_SETTINGS,
+	ID_DOCK_LAYOUT_CONFIG,
 	ID_SAVE_AS,
 	ID_LOD_ENABLE,
 	ID_LOD_CONFIG,
@@ -94,6 +97,23 @@ enum {
 
 	// Render Preview System
 	ID_RENDER_PREVIEW_SYSTEM,
+	
+    ID_DOCKING_SAVE_LAYOUT = wxID_HIGHEST + 2000,
+    ID_DOCKING_LOAD_LAYOUT,
+    ID_DOCKING_RESET_LAYOUT,
+    ID_DOCKING_MANAGE_PERSPECTIVES,
+    ID_DOCKING_TOGGLE_AUTOHIDE,
+    ID_DOCKING_CONFIGURE_LAYOUT,
+    ID_DOCKING_FLOAT_ALL,
+    ID_DOCKING_DOCK_ALL,
+    ID_DOCKING_ADJUST_LAYOUT,
+    ID_RESIZE_TIMER,
+	
+	// View panel IDs
+	ID_VIEW_OBJECT_TREE,
+	ID_VIEW_PROPERTIES,
+	ID_VIEW_MESSAGE,
+	ID_VIEW_PERFORMANCE,
 
 	// Flat Widgets Example
 	ID_SHOW_FLAT_WIDGETS_EXAMPLE,
@@ -171,6 +191,9 @@ private:
 protected:
 	// Protected methods for derived classes
 	void EnsurePanelsCreated();
+	
+	// Allow derived classes to register additional listeners
+	void RegisterCommandListener(cmd::CommandType commandType, std::shared_ptr<CommandListener> listener);
 
 private:
 	void onCommand(wxCommandEvent& event);

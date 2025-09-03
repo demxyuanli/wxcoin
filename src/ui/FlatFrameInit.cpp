@@ -329,6 +329,73 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	textureTestPanel->AddButtonBar(textureTestButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(textureTestPanel);
 	m_ribbon->AddPage(page4);
+	
+	// Add Docking page
+	FlatUIPage* dockingPage = new FlatUIPage(m_ribbon, "Docking");
+	
+	// Layout Configuration panel
+	FlatUIPanel* layoutConfigPanel = new FlatUIPanel(dockingPage, "Layout Configuration", wxHORIZONTAL);
+	layoutConfigPanel->SetFont(CFG_DEFAULTFONT());
+	layoutConfigPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	layoutConfigPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	layoutConfigPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	layoutConfigPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	layoutConfigPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* layoutConfigBar = new FlatUIButtonBar(layoutConfigPanel);
+	layoutConfigBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	layoutConfigBar->AddButton(ID_DOCK_LAYOUT_CONFIG, "Configure Layout", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Configure dock panel sizes and layout");
+	layoutConfigPanel->AddButtonBar(layoutConfigBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(layoutConfigPanel);
+	
+	// Layout Management panel
+	FlatUIPanel* layoutMgmtPanel = new FlatUIPanel(dockingPage, "Layout Management", wxHORIZONTAL);
+	layoutMgmtPanel->SetFont(CFG_DEFAULTFONT());
+	layoutMgmtPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	layoutMgmtPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	layoutMgmtPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	layoutMgmtPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	layoutMgmtPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* layoutMgmtBar = new FlatUIButtonBar(layoutMgmtPanel);
+	layoutMgmtBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	layoutMgmtBar->AddButton(ID_DOCKING_SAVE_LAYOUT, "Save Layout", SVG_ICON("save", wxSize(16, 16)), nullptr, "Save current docking layout");
+	layoutMgmtBar->AddButton(ID_DOCKING_LOAD_LAYOUT, "Load Layout", SVG_ICON("open", wxSize(16, 16)), nullptr, "Load saved docking layout");
+	layoutMgmtBar->AddButton(ID_DOCKING_RESET_LAYOUT, "Reset Layout", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Reset to default docking layout");
+	layoutMgmtPanel->AddButtonBar(layoutMgmtBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(layoutMgmtPanel);
+	
+	// Advanced Features panel
+	FlatUIPanel* advancedPanel = new FlatUIPanel(dockingPage, "Advanced Features", wxHORIZONTAL);
+	advancedPanel->SetFont(CFG_DEFAULTFONT());
+	advancedPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	advancedPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	advancedPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	advancedPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	advancedPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* advancedBar = new FlatUIButtonBar(advancedPanel);
+	advancedBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	advancedBar->AddButton(ID_DOCKING_MANAGE_PERSPECTIVES, "Perspectives", SVG_ICON("layers", wxSize(16, 16)), nullptr, "Manage saved layout perspectives");
+	advancedBar->AddToggleButton(ID_DOCKING_TOGGLE_AUTOHIDE, "Auto-hide", false, SVG_ICON("pin", wxSize(16, 16)), "Toggle auto-hide for current panel");
+	advancedPanel->AddButtonBar(advancedBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(advancedPanel);
+	
+	// Panel Visibility panel
+	FlatUIPanel* visibilityPanel = new FlatUIPanel(dockingPage, "Panel Visibility", wxHORIZONTAL);
+	visibilityPanel->SetFont(CFG_DEFAULTFONT());
+	visibilityPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	visibilityPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	visibilityPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	visibilityPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	visibilityPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* visibilityBar = new FlatUIButtonBar(visibilityPanel);
+	visibilityBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	visibilityBar->AddToggleButton(ID_VIEW_OBJECT_TREE, "Object Tree", true, SVG_ICON("tree", wxSize(16, 16)), "Show/hide object tree panel");
+	visibilityBar->AddToggleButton(ID_VIEW_PROPERTIES, "Properties", true, SVG_ICON("properties", wxSize(16, 16)), "Show/hide properties panel");
+	visibilityBar->AddToggleButton(ID_VIEW_MESSAGE, "Message", true, SVG_ICON("message", wxSize(16, 16)), "Show/hide message output panel");
+	visibilityBar->AddToggleButton(ID_VIEW_PERFORMANCE, "Performance", true, SVG_ICON("chart", wxSize(16, 16)), "Show/hide performance monitor panel");
+	visibilityPanel->AddButtonBar(visibilityBar, 0, wxEXPAND | wxALL, 5);
+	dockingPage->AddPanel(visibilityPanel);
+	
+	m_ribbon->AddPage(dockingPage);
 
 	createPanels();
 	setupCommandSystem();
@@ -348,7 +415,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
 
 void FlatFrame::createPanels() {
 	wxBoxSizer* mainSizer = GetMainSizer();
-	mainSizer->Add(m_ribbon, 0, wxEXPAND | wxALL, 1);
+	// Add ribbon with border margin to prevent covering the frame border
+	mainSizer->Add(m_ribbon, 0, wxEXPAND | wxLEFT | wxTOP | wxRIGHT, 2);
 
 	LOG_INF_S("Creating panels...");
 	if (m_mainSplitter) { m_mainSplitter->Destroy(); m_mainSplitter = nullptr; }
@@ -364,7 +432,8 @@ void FlatFrame::createPanels() {
 
 	// Use ModernDockAdapter to provide VS2022-style docking while maintaining compatibility
 	auto* dock = new ModernDockAdapter(this);
-	mainSizer->Add(dock, 1, wxEXPAND | wxALL, 2);
+	// Add dock with border margin to prevent covering the frame border
+	mainSizer->Add(dock, 1, wxEXPAND | wxLEFT | wxBOTTOM | wxRIGHT, 2);
 
 	m_objectTreePanel = new ObjectTreePanel(dock);
 	m_objectTreePanel->SetName("Works");

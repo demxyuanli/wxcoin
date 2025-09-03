@@ -17,29 +17,29 @@ struct DockLayoutConfig {
     // Default sizes for each area (in pixels or percentage)
     int topAreaHeight = 150;
     int bottomAreaHeight = 200;
-    int leftAreaWidth = 250;
+    int leftAreaWidth = 200;     // Minimum width for left area (15/85 layout)
     int rightAreaWidth = 250;
     int centerMinWidth = 400;
     int centerMinHeight = 300;
     
     // Use percentage instead of pixels
-    bool usePercentage = false;
+    bool usePercentage = true;    // Default to true for 15/85 layout
     
     // Percentage values (0-100)
-    int topAreaPercent = 20;
-    int bottomAreaPercent = 25;
-    int leftAreaPercent = 20;
-    int rightAreaPercent = 20;
+    int topAreaPercent = 0;     // No top area for clean 15/85 layout
+    int bottomAreaPercent = 20; // 20% for bottom dock area (15/85 layout)
+    int leftAreaPercent = 15;   // 15% for left dock area (15/85 layout)
+    int rightAreaPercent = 0;   // No right area for clean 15/85 layout
     
     // Minimum sizes
     int minAreaSize = 100;
     int splitterWidth = 4;
     
     // Layout options
-    bool showTopArea = true;
-    bool showBottomArea = true;
-    bool showLeftArea = true;
-    bool showRightArea = true;
+    bool showTopArea = false;     // Default to false for 20/80 layout
+    bool showBottomArea = true;   // Default to true for 20/80 layout
+    bool showLeftArea = true;     // Default to true for 20/80 layout
+    bool showRightArea = false;   // Default to false for 20/80 layout
     
     // Animation
     bool enableAnimation = true;
@@ -55,7 +55,7 @@ struct DockLayoutConfig {
  */
 class DockLayoutConfigDialog : public wxDialog {
 public:
-    DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config);
+    DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config, DockManager* dockManager = nullptr);
     
     // Get the modified configuration
     DockLayoutConfig GetConfig() const { return m_config; }
@@ -94,6 +94,7 @@ private:
     DockLayoutPreview* m_previewPanel;
     
     DockLayoutConfig m_config;
+    DockManager* m_dockManager;
     
     // Methods
     void CreateControls();
@@ -110,6 +111,7 @@ private:
     
     void UpdatePreview();
     void UpdateControlStates();
+    void UpdateControlValues();
     void ApplyToManager();
     
     wxDECLARE_EVENT_TABLE();

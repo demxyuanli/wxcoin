@@ -6,12 +6,12 @@
 #include <vector>
 #include <memory>
 #include "DockManager.h"
+#include "DockSplitter.h"
 
 namespace ads {
 // Forward declarations
 class DockArea;
 class DockWidget;
-class DockSplitter;
 class FloatingDockContainer;
 
 /**
@@ -62,6 +62,9 @@ public:
     
     // Last added area
     DockArea* lastAddedDockArea() const { return m_lastAddedArea; }
+    
+    // Layout configuration
+    void applyLayoutConfig();
     
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_ADDED;
@@ -121,47 +124,6 @@ private:
     friend class DockArea;
     friend class FloatingDockContainer;
     friend class DockWidget;
-    
-    wxDECLARE_EVENT_TABLE();
-};
-
-/**
- * @brief Custom splitter window for dock areas
- */
-class DockSplitter : public wxSplitterWindow {
-public:
-    DockSplitter(wxWindow* parent);
-    virtual ~DockSplitter();
-    
-    // Orientation
-    void setOrientation(wxOrientation orientation);
-    wxOrientation orientation() const { return m_orientation; }
-    
-    // Insert widget
-    void insertWidget(int index, wxWindow* widget, bool stretch = true);
-    void addWidget(wxWindow* widget, bool stretch = true);
-    wxWindow* replaceWidget(wxWindow* from, wxWindow* to);
-    
-    // Widget access
-    wxWindow* widget(int index) const;
-    int indexOf(wxWindow* widget) const;
-    int widgetCount() const;
-    bool hasVisibleContent() const;
-    
-    // Sizes
-    void setSizes(const std::vector<int>& sizes);
-    std::vector<int> sizes() const;
-    
-protected:
-    void OnSplitterSashPosChanging(wxSplitterEvent& event);
-    void OnSplitterSashPosChanged(wxSplitterEvent& event);
-    
-private:
-    wxOrientation m_orientation;
-    std::vector<wxWindow*> m_widgets;
-    std::vector<int> m_sizes;
-    
-    void updateSplitter();
     
     wxDECLARE_EVENT_TABLE();
 };

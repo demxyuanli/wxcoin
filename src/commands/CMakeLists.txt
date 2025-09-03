@@ -54,6 +54,7 @@ set(COMMANDS_SOURCES
     ShowFlatWidgetsExampleListener.cpp
     ExplodeAssemblyListener.cpp
     SliceToggleListener.cpp
+    DockLayoutConfigListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -114,6 +115,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/SliceToggleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeConfigListener.h
     ${CMAKE_SOURCE_DIR}/include/ToggleOutlineListener.h
+    ${CMAKE_SOURCE_DIR}/include/DockLayoutConfigListener.h
 )
 
 # Create command static library
