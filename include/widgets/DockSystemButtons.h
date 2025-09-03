@@ -108,8 +108,8 @@ private:
 
 	// Constants
 	static constexpr int DEFAULT_BUTTON_SIZE = 12;  // Smaller size for title bar
-	static constexpr int DEFAULT_BUTTON_SPACING = 1; // Tighter spacing
-	static constexpr int DEFAULT_MARGIN = 2;        // Smaller margin
+	static constexpr int DEFAULT_BUTTON_SPACING = 0; // No spacing between buttons
+	static constexpr int DEFAULT_MARGIN = 0;        // No top/right/bottom margins
 
 	wxDECLARE_EVENT_TABLE();
 };
