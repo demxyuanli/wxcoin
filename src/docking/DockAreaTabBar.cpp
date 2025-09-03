@@ -111,21 +111,8 @@ void DockAreaTabBar::onPaint(wxPaintEvent& event) {
 
     // Draw overflow button if needed
     if (m_hasOverflow) {
-        // Use the new styled drawing system for overflow button
-        DrawStyledRect(dc, m_overflowButtonRect, style, false, false, false);  // No hover effect
-
-        // Draw arrow down symbol
-        int centerX = m_overflowButtonRect.GetLeft() + m_overflowButtonRect.GetWidth() / 2;
-        int centerY = m_overflowButtonRect.GetTop() + m_overflowButtonRect.GetHeight() / 2;
-
-        wxPoint arrow[3];
-        arrow[0] = wxPoint(centerX - 4, centerY - 2);
-        arrow[1] = wxPoint(centerX + 4, centerY - 2);
-        arrow[2] = wxPoint(centerX, centerY + 2);
-
-        dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT)));
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawPolygon(3, arrow);
+        // Use SVG icon for dropdown button
+        DrawSvgButton(dc, m_overflowButtonRect, "down", style, false);  // Use "down" SVG icon
     }
 }
 
@@ -733,15 +720,25 @@ void DockAreaTabBar::checkTabOverflow() {
 void DockAreaTabBar::showTabOverflowMenu() {
     wxMenu menu;
 
+    // Get style config for theme settings
+    const DockStyleConfig& style = GetDockStyleConfig();
+    
+    // Set menu font (note: wxMenu doesn't directly support font setting,
+    // but we can set it on individual items)
+    
     // Add all tabs to menu
     for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
         wxString title = m_tabs[i].widget->title();
         if (i == m_currentIndex) {
-            title = "> " + title; // Add marker for current tab
+            title = "▶ " + title; // Use arrow indicator for current tab
         }
 
         wxMenuItem* item = menu.Append(wxID_ANY, title);
-
+        
+        // Apply font to menu item if possible
+        // Note: Font customization for menu items is limited in wxWidgets
+        // The actual appearance will depend on the system theme
+        
         // Bind menu item to tab selection - call DockArea's setCurrentIndex
         menu.Bind(wxEVT_MENU, [this, i](wxCommandEvent&) {
             if (m_dockArea) {
@@ -753,6 +750,10 @@ void DockAreaTabBar::showTabOverflowMenu() {
     // Show menu at overflow button position
     wxPoint pos = m_overflowButtonRect.GetBottomLeft();
     PopupMenu(&menu, pos);
+    
+    // Note: Standard wxMenu appearance is controlled by the system theme.
+    // For full customization, a custom popup window would be needed,
+    // but that adds significant complexity.
 }
 
 void DockAreaTabBar::onMouseRightDown(wxMouseEvent& event) {
