@@ -841,7 +841,7 @@ void EdgeComponent::generateSilhouetteEdgeNode(const TopoDS_Shape& shape, const 
 
 	if (silhouetteEdgeNode) silhouetteEdgeNode->unref();
 	SoMaterial* mat = new SoMaterial;
-	mat->diffuseColor.setValue(1.0, 1.0, 0.0);  // Yellow color for better visibility
+	mat->diffuseColor.setValue(1.0, 0.0, 0.0);  // Red color for better visibility
 	SoDrawStyle* drawStyle = new SoDrawStyle;
 	drawStyle->lineWidth = 2.0;
 	drawStyle->style = SoDrawStyle::LINES;

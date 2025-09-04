@@ -4,6 +4,7 @@
 #include "docking/FloatingDockContainer.h"
 #include "docking/DockManager.h"
 #include "docking/DockSplitter.h"
+#include "docking/DockLayoutConfig.h"
 #include <algorithm>
 
 namespace ads {
@@ -34,14 +35,23 @@ DockContainerWidget::DockContainerWidget(DockManager* dockManager, wxWindow* par
     , m_dockManager(dockManager)
     , m_floatingWidget(nullptr)
     , m_lastAddedArea(nullptr)
+    , m_layoutConfig(nullptr)
 {
     // Create layout
     m_layout = new wxBoxSizer(wxVERTICAL);
     SetSizer(m_layout);
-    
+
     // Create root splitter
     m_rootSplitter = new DockSplitter(this);
     m_layout->Add(m_rootSplitter, 1, wxEXPAND);
+
+    // Initialize layout configuration
+    if (dockManager) {
+        m_layoutConfig = std::make_unique<DockLayoutConfig>();
+        if (m_layoutConfig) {
+            m_layoutConfig->LoadFromConfig();
+        }
+    }
 }
 
 DockContainerWidget::~DockContainerWidget() {
@@ -282,7 +292,7 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
 void DockContainerWidget::onSize(wxSizeEvent& event) {
     // Apply layout configuration if using percentage mode
     applyLayoutConfig();
-    
+
     // Force refresh of all dock areas to prevent ghosting during window resize
     for (auto* area : m_dockAreas) {
         if (area && area->mergedTitleBar()) {
@@ -290,7 +300,10 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
             area->mergedTitleBar()->Update();
         }
     }
-    
+
+    // Update global docking hints if in global mode
+    updateGlobalDockingHints();
+
     event.Skip();
 }
 
@@ -299,5 +312,105 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
 
 
 
+
+// Global docking hints implementation
+void DockContainerWidget::updateGlobalDockingHints() {
+    // This method is called during resize to update any global docking hints
+    // For now, it's a placeholder for future enhancements
+
+    // In the future, this could:
+    // 1. Update screen edge detection for global docking
+    // 2. Refresh overlay positions
+    // 3. Update visual hints based on window size changes
+}
+
+void DockContainerWidget::enableGlobalDockingMode(bool enable) {
+    wxLogDebug("DockContainerWidget::enableGlobalDockingMode - enable: %d", enable);
+
+    if (enable) {
+        // Store current layout state before entering global mode
+        saveCurrentLayoutState();
+
+        // Prepare for global docking operations
+        // This might include:
+        // - Temporarily adjusting splitter proportions
+        // - Preparing overlay systems
+        // - Setting up global drop zones
+
+        wxLogDebug("Global docking mode enabled");
+    } else {
+        // Restore normal docking mode
+        restoreLayoutState();
+
+        wxLogDebug("Global docking mode disabled");
+    }
+}
+
+void DockContainerWidget::saveCurrentLayoutState() {
+    // Save current splitter positions and layout configuration
+    // This allows us to restore the layout after global docking operations
+
+    if (m_layoutConfig) {
+        m_savedLayoutConfig = std::make_unique<DockLayoutConfig>(*m_layoutConfig);
+        wxLogDebug("Layout state saved for global docking");
+    }
+}
+
+void DockContainerWidget::restoreLayoutState() {
+    // Restore previously saved layout state
+    if (m_savedLayoutConfig && m_layoutConfig) {
+        *m_layoutConfig = *m_savedLayoutConfig;
+        applyLayoutConfig();
+        wxLogDebug("Layout state restored after global docking");
+    }
+}
+
+bool DockContainerWidget::isGlobalDockingEnabled() const {
+    // Check if we're currently in global docking mode
+    // This could be determined by checking various state flags
+    return false; // Placeholder - implement based on actual state tracking
+}
+
+void DockContainerWidget::handleGlobalDockDrop(DockWidget* widget, DockWidgetArea area) {
+    wxLogDebug("DockContainerWidget::handleGlobalDockDrop - widget: %p, area: %d", widget, area);
+
+    if (!widget) {
+        wxLogDebug("  -> Invalid widget");
+        return;
+    }
+
+    // Handle global docking drop operations
+    // This is called when a widget is dropped in global docking mode
+
+    // For global docking, we typically want to:
+    // 1. Create a new dock area at the specified edge/corner
+    // 2. Add the widget to that area
+    // 3. Adjust the overall layout to accommodate the new area
+
+    switch (area) {
+    case LeftDockWidgetArea:
+    case RightDockWidgetArea:
+    case TopDockWidgetArea:
+    case BottomDockWidgetArea:
+        // Create new area at the specified edge
+        wxLogDebug("  -> Creating new area at edge: %d", area);
+        addDockWidget(area, widget);
+        break;
+
+    case CenterDockWidgetArea:
+        // For center drops in global mode, add as a new central area
+        wxLogDebug("  -> Adding to center area");
+        addDockWidget(area, widget);
+        break;
+
+    default:
+        wxLogDebug("  -> Invalid drop area for global docking");
+        break;
+    }
+
+    // Force layout update after global drop
+    Layout();
+    Refresh();
+}
 
 } // namespace ads

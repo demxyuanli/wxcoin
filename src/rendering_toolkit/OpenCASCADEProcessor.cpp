@@ -271,7 +271,7 @@ void OpenCASCADEProcessor::meshFace(const TopoDS_Shape& face, TriangleMesh& mesh
 
 	// If triangulation exists, extract it
 	if (!triangulation.IsNull()) {
-		extractTriangulation(&triangulation, &location, mesh, static_cast<int>(topoFace.Orientation()));
+		extractTriangulation(triangulation, location, mesh, topoFace.Orientation());
 	}
 	else {
 		// If no triangulation exists, create one
@@ -279,40 +279,32 @@ void OpenCASCADEProcessor::meshFace(const TopoDS_Shape& face, TriangleMesh& mesh
 			params.inParallel);
 		triangulation = BRep_Tool::Triangulation(topoFace, location);
 		if (!triangulation.IsNull()) {
-			extractTriangulation(&triangulation, &location, mesh, static_cast<int>(topoFace.Orientation()));
+			extractTriangulation(triangulation, location, mesh, topoFace.Orientation());
 		}
 	}
 }
 
-void OpenCASCADEProcessor::extractTriangulation(const void* triangulation,
-	const void* location,
-	TriangleMesh& mesh, int orientation) {
-	if (!triangulation) {
-		return;
-	}
-
-	// Cast to proper types
-	const Handle(Poly_Triangulation)& triang = *static_cast<const Handle(Poly_Triangulation)*>(triangulation);
-	const TopLoc_Location& loc = *static_cast<const TopLoc_Location*>(location);
-
-	if (triang.IsNull()) {
+void OpenCASCADEProcessor::extractTriangulation(const Handle(Poly_Triangulation)& triangulation,
+	const TopLoc_Location& location,
+	TriangleMesh& mesh, TopAbs_Orientation orientation) {
+	if (triangulation.IsNull()) {
 		return;
 	}
 
 	// Get transformation
-	gp_Trsf transform = loc.Transformation();
+	gp_Trsf transform = location.Transformation();
 
 	// Extract vertices
 	int vertexOffset = static_cast<int>(mesh.vertices.size());
 
-	for (int i = 1; i <= triang->NbNodes(); i++) {
-		gp_Pnt point = triang->Node(i);
+	for (int i = 1; i <= triangulation->NbNodes(); i++) {
+		gp_Pnt point = triangulation->Node(i);
 		point.Transform(transform);
 		mesh.vertices.push_back(point);
 	}
 
 	// Extract triangles with proper orientation handling
-	const Poly_Array1OfTriangle& triangles = triang->Triangles();
+	const Poly_Array1OfTriangle& triangles = triangulation->Triangles();
 	for (int i = triangles.Lower(); i <= triangles.Upper(); i++) {
 		int n1, n2, n3;
 		triangles.Value(i).Get(n1, n2, n3);
@@ -323,7 +315,7 @@ void OpenCASCADEProcessor::extractTriangulation(const void* triangulation,
 		int idx3 = vertexOffset + n3 - 1;
 
 		// Handle face orientation - reverse triangle winding if face is reversed
-		if (orientation == static_cast<int>(TopAbs_REVERSED)) {
+		if (orientation == TopAbs_REVERSED) {
 			mesh.triangles.push_back(idx1);
 			mesh.triangles.push_back(idx3);  // Swap n2 and n3 to reverse winding
 			mesh.triangles.push_back(idx2);

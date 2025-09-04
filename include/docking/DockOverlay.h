@@ -78,6 +78,18 @@ public:
     void setAllowedAreas(int areas) { m_allowedAreas = areas; updateDropAreas(); }
     int allowedAreas() const { return m_allowedAreas; }
 
+    // Global docking mode
+    void setGlobalMode(bool global) { m_isGlobalMode = global; updateGlobalMode(); }
+    bool isGlobalMode() const { return m_isGlobalMode; }
+
+    // Enhanced drag hints
+    void showDragHints(DockWidget* draggedWidget);
+    void updateDragHints();
+
+    // Global mode visual enhancements
+    void drawGlobalModeHints(wxDC& dc);
+    void drawGlobalModeTextHints(wxDC& dc);
+
     // Performance optimization methods
     void optimizeRendering();
     void setRenderingOptimization(bool enabled);
@@ -93,6 +105,7 @@ protected:
     // Internal methods
     void createDropAreas();
     void updateDropAreaPositions();
+    void updateGlobalMode();
     void paintDropAreas(wxDC& dc);
     void paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropArea);
     void drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area, const wxColour& color);
@@ -114,13 +127,20 @@ private:
     // Performance optimization variables
     bool m_optimizedRendering;
     std::map<DockWidgetArea, wxRect> m_cachedGeometries;
+
+    // Global docking mode variables
+    bool m_isGlobalMode;
     
-    // Debounce mechanism
+    // Enhanced debounce mechanism
     wxTimer* m_refreshTimer;
     bool m_pendingRefresh;
+    wxLongLong m_lastRefreshTime;
+    int m_refreshCount;
     static const int REFRESH_DEBOUNCE_MS = 16; // ~60fps
+    static const int MAX_REFRESHES_PER_SECOND = 30; // Limit refresh rate
     void onRefreshTimer(wxTimerEvent& event);
     void requestRefresh();
+    bool shouldRefreshNow() const;
     
     // Helper methods
     wxRect targetRect() const;

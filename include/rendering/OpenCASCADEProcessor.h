@@ -6,6 +6,9 @@
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/gp_Vec.hxx>
+#include <OpenCASCADE/Poly_Triangulation.hxx>
+#include <OpenCASCADE/TopLoc_Location.hxx>
+#include <OpenCASCADE/TopAbs_Orientation.hxx>
 
 /**
  * @brief OpenCASCADE-based geometry processor
@@ -44,8 +47,9 @@ public:
 private:
 	// Helper methods
 	void meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, const MeshParameters& params);
-	void extractTriangulation(const void* triangulation, const void* location,
-		TriangleMesh& mesh, int orientation);
+	void extractTriangulation(const Handle(Poly_Triangulation)& triangulation,
+		const TopLoc_Location& location,
+		TriangleMesh& mesh, TopAbs_Orientation orientation);
 	void subdivideTriangle(TriangleMesh& mesh, const gp_Pnt& p0, const gp_Pnt& p1,
 		const gp_Pnt& p2, int levels);
 	std::set<std::pair<int, int>> findBoundaryEdges(const TriangleMesh& mesh);

@@ -28,10 +28,10 @@ DynamicSilhouetteRenderer::DynamicSilhouetteRenderer(SoSeparator* sceneRoot)
 	m_silhouetteNode->ref();
 
 	m_material = new SoMaterial;
-	m_material->diffuseColor.setValue(1.0, 1.0, 0.0);
-	m_material->ambientColor.setValue(1.0, 1.0, 0.0);
-	m_material->emissiveColor.setValue(1.0, 1.0, 0.0);
-	m_material->specularColor.setValue(1.0, 1.0, 0.0);
+	m_material->diffuseColor.setValue(1.0, 0.0, 0.0);  // Red color for better visibility
+	m_material->ambientColor.setValue(1.0, 0.0, 0.0);
+	m_material->emissiveColor.setValue(1.0, 0.0, 0.0);
+	m_material->specularColor.setValue(1.0, 0.0, 0.0);
 
 	m_drawStyle = new SoDrawStyle;
 	m_drawStyle->lineWidth = 2.0;

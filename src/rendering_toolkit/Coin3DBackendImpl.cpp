@@ -196,6 +196,22 @@ SoIndexedFaceSet* Coin3DBackendImpl::createFaceSetNode(const TriangleMesh& mesh)
 		return nullptr;
 	}
 
+	// Validate triangle indices
+	for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+		if (i + 2 >= mesh.triangles.size()) break;
+		
+		int idx1 = mesh.triangles[i];
+		int idx2 = mesh.triangles[i + 1];
+		int idx3 = mesh.triangles[i + 2];
+		
+		if (idx1 < 0 || idx1 >= static_cast<int>(mesh.vertices.size()) ||
+			idx2 < 0 || idx2 >= static_cast<int>(mesh.vertices.size()) ||
+			idx3 < 0 || idx3 >= static_cast<int>(mesh.vertices.size())) {
+			LOG_ERR_S("Invalid triangle indices detected in createFaceSetNode");
+			return nullptr;
+		}
+	}
+
 	SoIndexedFaceSet* faceSet = new SoIndexedFaceSet;
 
 	// Set up coordinate indices
@@ -219,6 +235,12 @@ SoIndexedFaceSet* Coin3DBackendImpl::createFaceSetNode(const TriangleMesh& mesh)
 
 SoNormal* Coin3DBackendImpl::createNormalNode(const TriangleMesh& mesh) {
 	if (mesh.normals.empty()) {
+		return nullptr;
+	}
+
+	// Validate that normals size matches vertices size
+	if (mesh.normals.size() != mesh.vertices.size()) {
+		LOG_ERR_S("Normal count does not match vertex count in createNormalNode");
 		return nullptr;
 	}
 

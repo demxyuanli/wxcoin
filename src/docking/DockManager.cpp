@@ -601,7 +601,7 @@ void DockManager::onLayoutUpdateTimer(wxTimerEvent& event) {
     updateLayout();
 }
 
-// Enhanced drag and drop optimization
+// Enhanced drag and drop optimization with global docking support
 void DockManager::optimizeDragOperation(DockWidget* draggedWidget) {
     if (!draggedWidget || m_isProcessingDrag) {
         return;
@@ -615,7 +615,221 @@ void DockManager::optimizeDragOperation(DockWidget* draggedWidget) {
     // Use cached window hierarchy for faster lookups
     updateDragTargets();
 
+    // Enhanced drag state management
+    if (m_dragState == DragInactive) {
+        startDragOperation(draggedWidget);
+    } else {
+        updateDragOperation(draggedWidget);
+    }
+
     m_isProcessingDrag = false;
+}
+
+// New drag operation management methods
+void DockManager::startDragOperation(DockWidget* draggedWidget) {
+    m_dragState = DragStarted;
+
+    // Initialize drag context
+    m_dragContext.draggedWidget = draggedWidget;
+    m_dragContext.startTime = wxGetLocalTimeMillis();
+    m_dragContext.lastUpdateTime = m_dragContext.startTime;
+    m_dragContext.dragDistance = 0;
+    m_dragContext.isGlobalDocking = false;
+
+    // Enable optimized rendering
+    setOptimizedRendering(true);
+
+    // Show initial overlay hints
+    showInitialDragHints(draggedWidget);
+
+    wxLogDebug("Started drag operation for widget: %p", draggedWidget);
+}
+
+void DockManager::updateDragOperation(DockWidget* draggedWidget) {
+    // Ensure drag state is set to active
+    if (m_dragState == DragStarted) {
+        m_dragState = DragActive;
+    }
+
+    wxLongLong currentTime = wxGetLocalTimeMillis();
+    wxLongLong timeDelta = currentTime - m_dragContext.lastUpdateTime;
+
+    // Update drag distance and velocity
+    wxPoint currentPos = wxGetMousePosition();
+    wxPoint delta = currentPos - m_lastMousePos;
+    double distance = sqrt(delta.x * delta.x + delta.y * delta.y);
+    m_dragContext.dragDistance += distance;
+
+    // Update drag velocity (pixels per millisecond)
+    if (timeDelta > 0) {
+        m_dragContext.dragVelocity = distance / timeDelta.GetValue();
+    }
+
+    // Check for global docking conditions
+    checkGlobalDockingConditions();
+
+    // Update overlay positioning and hints
+    updateOverlayHints();
+
+    m_dragContext.lastUpdateTime = currentTime;
+    m_lastMousePos = currentPos;
+}
+
+void DockManager::finishDragOperation(DockWidget* draggedWidget, bool cancelled) {
+    wxLogDebug("Finishing drag operation for widget: %p, cancelled: %d", draggedWidget, cancelled);
+
+    // Hide all overlays
+    hideAllOverlays();
+
+    // Reset drag state
+    m_dragState = DragInactive;
+
+    // Disable optimized rendering
+    setOptimizedRendering(false);
+
+    // Clean up drag context
+    m_dragContext = DragContext();
+
+    // Reset cached targets
+    m_cachedDropTargets.clear();
+}
+
+void DockManager::checkGlobalDockingConditions() {
+    // Check if mouse is near screen edges for global docking
+    wxPoint mousePos = wxGetMousePosition();
+    wxRect screenRect = wxGetClientDisplayRect();
+
+    const int globalDockThreshold = 20; // pixels from edge
+
+    bool nearEdge = mousePos.x <= globalDockThreshold ||
+                    mousePos.x >= screenRect.GetWidth() - globalDockThreshold ||
+                    mousePos.y <= globalDockThreshold ||
+                    mousePos.y >= screenRect.GetHeight() - globalDockThreshold;
+
+    // Check if we've been dragging long enough and far enough for global docking
+    wxLongLong dragDuration = wxGetLocalTimeMillis() - m_dragContext.startTime;
+    bool sufficientDrag = dragDuration > 500 && m_dragContext.dragDistance > 50;
+
+    if (nearEdge && sufficientDrag && !m_dragContext.isGlobalDocking) {
+        enableGlobalDocking();
+    } else if (!nearEdge && m_dragContext.isGlobalDocking) {
+        disableGlobalDocking();
+    }
+}
+
+void DockManager::enableGlobalDocking() {
+    wxLogDebug("Enabling global docking mode");
+
+    m_dragContext.isGlobalDocking = true;
+
+    // Show global docking overlay
+    if (d->containerOverlay) {
+        d->containerOverlay->setGlobalMode(true);
+        d->containerOverlay->showOverlay(m_containerWidget);
+    }
+
+    // Hide local overlays
+    if (d->dockAreaOverlay) {
+        d->dockAreaOverlay->hideOverlay();
+    }
+}
+
+void DockManager::disableGlobalDocking() {
+    wxLogDebug("Disabling global docking mode");
+
+    m_dragContext.isGlobalDocking = false;
+
+    // Hide global overlay
+    if (d->containerOverlay) {
+        d->containerOverlay->setGlobalMode(false);
+        d->containerOverlay->hideOverlay();
+    }
+}
+
+void DockManager::showInitialDragHints(DockWidget* draggedWidget) {
+    // Show subtle hints based on drag context
+    if (d->dockAreaOverlay && draggedWidget->dockAreaWidget()) {
+        // Show area-specific hints
+        d->dockAreaOverlay->showDragHints(draggedWidget);
+    }
+}
+
+void DockManager::updateOverlayHints() {
+    // Update overlay hints based on current mouse position and drag state
+    wxPoint mousePos = wxGetMousePosition();
+
+    if (m_dragContext.isGlobalDocking) {
+        // Update global docking hints
+        if (d->containerOverlay && d->containerOverlay->IsShown()) {
+            d->containerOverlay->updatePosition();
+        }
+    } else {
+        // Update local docking hints
+        updateLocalDockingHints(mousePos);
+    }
+}
+
+void DockManager::updateLocalDockingHints(const wxPoint& mousePos) {
+    // Only show docking hints if drag operation has actually started
+    // This prevents accidental overlay display when mouse moves near dock areas
+    if (m_dragState != DragStarted && m_dragState != DragActive) {
+        wxLogDebug("DockManager::updateLocalDockingHints - Drag not started yet, skipping overlay display");
+        return;
+    }
+
+    // Find the best target area under mouse
+    DockArea* bestTargetArea = nullptr;
+    double bestDistance = std::numeric_limits<double>::max();
+
+    for (wxWindow* window : m_cachedDropTargets) {
+        if (DockArea* area = dynamic_cast<DockArea*>(window)) {
+            wxRect areaRect = area->GetScreenRect();
+            if (areaRect.Contains(mousePos)) {
+                // Mouse is directly over this area
+                bestTargetArea = area;
+                break;
+            } else {
+                // Calculate distance to area center
+                wxPoint center = areaRect.GetPosition() + wxPoint(areaRect.GetWidth()/2, areaRect.GetHeight()/2);
+                double distance = sqrt(pow(mousePos.x - center.x, 2) + pow(mousePos.y - center.y, 2));
+                if (distance < bestDistance && distance < 200) { // Within 200 pixels
+                    bestDistance = distance;
+                    bestTargetArea = area;
+                }
+            }
+        }
+    }
+
+    // Show/hide overlay for best target
+    if (bestTargetArea && bestTargetArea != m_dragContext.lastTargetArea) {
+        if (d->dockAreaOverlay) {
+            d->dockAreaOverlay->showOverlay(bestTargetArea);
+        }
+        m_dragContext.lastTargetArea = bestTargetArea;
+    } else if (!bestTargetArea && m_dragContext.lastTargetArea) {
+        if (d->dockAreaOverlay) {
+            d->dockAreaOverlay->hideOverlay();
+        }
+        m_dragContext.lastTargetArea = nullptr;
+    }
+}
+
+void DockManager::hideAllOverlays() {
+    if (d->containerOverlay) {
+        d->containerOverlay->hideOverlay();
+    }
+    if (d->dockAreaOverlay) {
+        d->dockAreaOverlay->hideOverlay();
+    }
+}
+
+void DockManager::setOptimizedRendering(bool enabled) {
+    if (d->containerOverlay) {
+        d->containerOverlay->setRenderingOptimization(enabled);
+    }
+    if (d->dockAreaOverlay) {
+        d->dockAreaOverlay->setRenderingOptimization(enabled);
+    }
 }
 
 void DockManager::updateDragTargets() {

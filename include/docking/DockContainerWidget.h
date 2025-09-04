@@ -65,6 +65,12 @@ public:
     
     // Layout configuration
     void applyLayoutConfig();
+
+    // Global docking support
+    void enableGlobalDockingMode(bool enable);
+    bool isGlobalDockingEnabled() const;
+    void handleGlobalDockDrop(DockWidget* widget, DockWidgetArea area);
+    void updateGlobalDockingHints();
     
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREAS_ADDED;
@@ -93,6 +99,7 @@ private:
     wxBoxSizer* m_layout;
     FloatingDockContainer* m_floatingWidget;
     DockArea* m_lastAddedArea;
+    std::unique_ptr<DockLayoutConfig> m_layoutConfig;
     
     // Helper methods
     void dropFloatingWidget(FloatingDockContainer* floatingWidget, const wxPoint& targetPos);
@@ -101,6 +108,11 @@ private:
     void dropDockWidget(DockWidget* widget, DockWidgetArea dropArea, DockArea* targetArea);
     DockSplitter* newSplitter(wxOrientation orientation);
     void addDockAreaToSplitter(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
+
+    // Global docking helper methods
+    void saveCurrentLayoutState();
+    void restoreLayoutState();
+    std::unique_ptr<DockLayoutConfig> m_savedLayoutConfig;
     
     // New helper methods for proper 5-zone layout
     void handleTopBottomArea(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);

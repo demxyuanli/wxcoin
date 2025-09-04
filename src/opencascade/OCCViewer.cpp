@@ -114,7 +114,8 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
 	// Create selection outline manager (geometry-layer outlines)
 	m_outlineManager = std::make_unique<OutlineDisplayManager>(m_sceneManager, m_occRoot, &m_geometries);
 	m_selectionOutline = std::make_unique<SelectionOutlineManager>(m_sceneManager, m_occRoot, &m_selectedGeometries);
-	if (m_selectionOutline) m_selectionOutline->setEnabled(true);
+	// Selection outline disabled by default to avoid unwanted red lines
+	// if (m_selectionOutline) m_selectionOutline->setEnabled(true);
 	// Create geometry repo and scene attachment helper
 	m_geometryRepo = std::make_unique<GeometryRepository>(&m_geometries);
 	m_sceneAttach = std::make_unique<SceneAttachmentService>(m_occRoot, &m_nodeToGeom);

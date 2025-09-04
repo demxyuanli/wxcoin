@@ -41,6 +41,9 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_optimizedRendering(false)
     , m_refreshTimer(nullptr)
     , m_pendingRefresh(false)
+    , m_lastRefreshTime(0)
+    , m_refreshCount(0)
+    , m_isGlobalMode(false)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
@@ -162,15 +165,34 @@ void DockOverlay::onPaint(wxPaintEvent& event) {
         return;
     }
 
-    // Global overlay background: light gray when dragging starts
-    dc.SetBrush(wxBrush(wxColour(240, 240, 240, 120)));  // Light gray background
-    dc.SetPen(*wxTRANSPARENT_PEN);
-    dc.DrawRectangle(GetClientRect());
+    // Optimized background rendering based on mode
+    if (m_isGlobalMode) {
+        // Global mode: more prominent background
+        dc.SetBrush(wxBrush(wxColour(200, 220, 240, 160)));  // Light blue background for global mode
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawRectangle(GetClientRect());
 
-    wxLogDebug("DockOverlay::onPaint - size: %dx%d", GetSize().GetWidth(), GetSize().GetHeight());
+        // Add subtle border for global mode
+        dc.SetPen(wxPen(wxColour(0, 122, 204, 200), 1));
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        dc.DrawRectangle(wxRect(0, 0, GetSize().GetWidth() - 1, GetSize().GetHeight() - 1));
+    } else {
+        // Normal mode: subtle background
+        dc.SetBrush(wxBrush(wxColour(240, 240, 240, 120)));  // Light gray background
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.DrawRectangle(GetClientRect());
+    }
+
+    wxLogDebug("DockOverlay::onPaint - size: %dx%d, global mode: %d",
+               GetSize().GetWidth(), GetSize().GetHeight(), m_isGlobalMode);
 
     // Draw drop areas with VS-style appearance
     paintDropAreas(dc);
+
+    // Draw additional hints in global mode
+    if (m_isGlobalMode) {
+        drawGlobalModeHints(dc);
+    }
 }
 
 void DockOverlay::onMouseMove(wxMouseEvent& event) {
@@ -641,6 +663,126 @@ wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {
     }
 }
 
+// Global docking mode implementation
+void DockOverlay::updateGlobalMode() {
+    if (m_isGlobalMode) {
+        // In global mode, show all areas more prominently
+        SetTransparent(240); // Less transparent for better visibility
+
+        // Enable all areas in global mode
+        m_allowedAreas = AllDockAreas;
+        updateDropAreas();
+
+        // Adjust colors for global mode
+        m_frameColor = wxColour(0, 122, 204); // More prominent blue
+        m_areaColor = wxColour(0, 122, 204, 220); // Less transparent
+
+        wxLogDebug("DockOverlay: Enabled global docking mode");
+    } else {
+        // Normal mode
+        SetTransparent(220); // Standard transparency
+
+        // Reset to default areas
+        m_allowedAreas = AllDockAreas;
+
+        // Reset colors
+        m_frameColor = wxColour(0, 122, 204);
+        m_areaColor = wxColour(0, 122, 204, 180);
+
+        wxLogDebug("DockOverlay: Disabled global docking mode");
+    }
+
+    updateDropAreaPositions();
+    requestRefresh();
+}
+
+void DockOverlay::showDragHints(DockWidget* draggedWidget) {
+    if (!draggedWidget) return;
+
+    wxLogDebug("DockOverlay::showDragHints - widget: %p", draggedWidget);
+
+    // Show contextual hints based on widget type and current layout
+    // For now, just update the overlay to show all available areas
+    updateDropAreas();
+    requestRefresh();
+}
+
+void DockOverlay::updateDragHints() {
+    // Update hints based on current drag state
+    // This could include showing preview areas, highlighting valid drop zones, etc.
+    requestRefresh();
+}
+
+// Global mode hints drawing
+void DockOverlay::drawGlobalModeHints(wxDC& dc) {
+    wxRect clientRect = GetClientRect();
+
+    // Draw screen edge indicators for global docking
+    wxColour edgeColor(0, 122, 204, 180);  // VS blue with transparency
+    dc.SetPen(wxPen(edgeColor, 2));
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+
+    const int edgeThickness = 3;
+    const int edgeOffset = 5;
+
+    // Top edge indicator
+    dc.DrawRectangle(edgeOffset, edgeOffset, clientRect.GetWidth() - 2 * edgeOffset, edgeThickness);
+
+    // Bottom edge indicator
+    dc.DrawRectangle(edgeOffset, clientRect.GetHeight() - edgeOffset - edgeThickness,
+                    clientRect.GetWidth() - 2 * edgeOffset, edgeThickness);
+
+    // Left edge indicator
+    dc.DrawRectangle(edgeOffset, edgeOffset, edgeThickness, clientRect.GetHeight() - 2 * edgeOffset);
+
+    // Right edge indicator
+    dc.DrawRectangle(clientRect.GetWidth() - edgeOffset - edgeThickness, edgeOffset,
+                    edgeThickness, clientRect.GetHeight() - 2 * edgeOffset);
+
+    // Draw center area hint with special styling for global mode
+    for (const auto& dropArea : m_dropAreas) {
+        if (dropArea->area() == CenterDockWidgetArea && dropArea->isVisible()) {
+            wxRect centerRect = dropArea->rect();
+            // Inflate center area slightly in global mode for better visibility
+            centerRect.Inflate(2);
+
+            // Draw enhanced center indicator
+            dc.SetPen(wxPen(wxColour(0, 122, 204, 220), 2));
+            dc.SetBrush(wxBrush(wxColour(0, 122, 204, 80)));
+            dc.DrawRoundedRectangle(centerRect, 6);
+
+            break;
+        }
+    }
+
+    // Draw text hints for global docking
+    drawGlobalModeTextHints(dc);
+}
+
+void DockOverlay::drawGlobalModeTextHints(wxDC& dc) {
+    if (!m_targetWidget) return;
+
+    wxRect clientRect = GetClientRect();
+    wxString hintText = "Drag to dock globally";
+    wxFont hintFont(10, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
+    dc.SetFont(hintFont);
+    dc.SetTextForeground(wxColour(80, 80, 80));
+
+    // Calculate text position (bottom center)
+    wxSize textSize = dc.GetTextExtent(hintText);
+    int textX = (clientRect.GetWidth() - textSize.GetWidth()) / 2;
+    int textY = clientRect.GetHeight() - textSize.GetHeight() - 10;
+
+    // Draw text background for better readability
+    wxRect textBgRect(textX - 5, textY - 2, textSize.GetWidth() + 10, textSize.GetHeight() + 4);
+    dc.SetBrush(wxBrush(wxColour(255, 255, 255, 200)));
+    dc.SetPen(wxPen(wxColour(200, 200, 200), 1));
+    dc.DrawRoundedRectangle(textBgRect, 3);
+
+    // Draw the hint text
+    dc.DrawText(hintText, textX, textY);
+}
+
 wxRect DockOverlay::getPreviewRect(DockWidgetArea area) const {
     if (!m_targetWidget) {
         return wxRect();
@@ -748,8 +890,25 @@ void DockOverlay::updateDropAreaGeometryCache() {
     );
 }
 
-// Debounce mechanism implementation
+// Enhanced debounce mechanism implementation
 void DockOverlay::requestRefresh() {
+    wxLongLong currentTime = wxGetLocalTimeMillis();
+
+    // Check if we're refreshing too frequently
+    if (m_lastRefreshTime > 0) {
+        wxLongLong timeSinceLastRefresh = currentTime - m_lastRefreshTime;
+        if (timeSinceLastRefresh < (1000 / MAX_REFRESHES_PER_SECOND)) {
+            // Too frequent, schedule for later
+            if (!m_pendingRefresh) {
+                m_pendingRefresh = true;
+                int delay = (1000 / MAX_REFRESHES_PER_SECOND) - timeSinceLastRefresh.GetValue();
+                m_refreshTimer->Start(std::max(delay, 1), wxTIMER_ONE_SHOT);
+            }
+            return;
+        }
+    }
+
+    // Normal refresh scheduling
     if (!m_pendingRefresh) {
         m_pendingRefresh = true;
         m_refreshTimer->Start(REFRESH_DEBOUNCE_MS, wxTIMER_ONE_SHOT);
@@ -759,9 +918,42 @@ void DockOverlay::requestRefresh() {
 void DockOverlay::onRefreshTimer(wxTimerEvent& event) {
     if (m_pendingRefresh) {
         m_pendingRefresh = false;
-        Refresh();
-        Update();
+
+        // Check if we should actually refresh (performance optimization)
+        if (shouldRefreshNow()) {
+            Refresh();
+            Update();
+            m_lastRefreshTime = wxGetLocalTimeMillis();
+            m_refreshCount++;
+        }
     }
+}
+
+bool DockOverlay::shouldRefreshNow() const {
+    // Skip refresh if overlay is not visible
+    if (!IsShown()) {
+        return false;
+    }
+
+    // Skip refresh if no target widget
+    if (!m_targetWidget) {
+        return false;
+    }
+
+    // Always refresh in global mode for better responsiveness
+    if (m_isGlobalMode) {
+        return true;
+    }
+
+    // Throttle normal mode refreshes
+    wxLongLong currentTime = wxGetLocalTimeMillis();
+    if (m_lastRefreshTime > 0) {
+        wxLongLong timeSinceLastRefresh = currentTime - m_lastRefreshTime;
+        // Allow refresh if enough time has passed
+        return timeSinceLastRefresh >= REFRESH_DEBOUNCE_MS;
+    }
+
+    return true;
 }
 
 } // namespace ads

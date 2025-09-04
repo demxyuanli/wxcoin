@@ -141,6 +141,19 @@ public:
     void optimizeDragOperation(DockWidget* draggedWidget);
     void optimizeMemoryUsage();
 
+    // Enhanced drag and drop methods
+    void startDragOperation(DockWidget* draggedWidget);
+    void updateDragOperation(DockWidget* draggedWidget);
+    void finishDragOperation(DockWidget* draggedWidget, bool cancelled = false);
+    void checkGlobalDockingConditions();
+    void enableGlobalDocking();
+    void disableGlobalDocking();
+    void showInitialDragHints(DockWidget* draggedWidget);
+    void updateOverlayHints();
+    void updateLocalDockingHints(const wxPoint& mousePos);
+    void hideAllOverlays();
+    void setOptimizedRendering(bool enabled);
+
 protected:
     // Internal methods
     void registerDockWidget(DockWidget* dockWidget);
@@ -185,14 +198,28 @@ private:
     wxPoint m_lastMousePos;
     std::vector<wxWindow*> m_cachedDropTargets;
 
-    // Drag state enumeration
+    // Enhanced drag state enumeration
     enum DragState {
         DragInactive,
-        DragStarting,
+        DragStarted,
         DragActive,
         DragEnding
     };
     DragState m_dragState;
+
+    // Drag context structure for enhanced drag management
+    struct DragContext {
+        DockWidget* draggedWidget = nullptr;
+        wxLongLong startTime = 0;
+        wxLongLong lastUpdateTime = 0;
+        double dragDistance = 0.0;
+        double dragVelocity = 0.0;
+        bool isGlobalDocking = false;
+        DockArea* lastTargetArea = nullptr;
+
+        DragContext() = default;
+    };
+    DragContext m_dragContext;
 
     // Containers
     std::vector<DockWidget*> m_dockWidgets;

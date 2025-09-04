@@ -264,15 +264,17 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	}
 	
 	// Update hover outline on mouse move (but not during drag to reduce overhead)
-	if (event.GetEventType() == wxEVT_MOTION && !isDragging && m_occViewer) {
-		wxPoint screenPos = event.GetPosition();
-		m_occViewer->updateHoverSilhouetteAt(screenPos);
-	}
+	// Disabled hover outline to avoid unwanted red lines
+	// if (event.GetEventType() == wxEVT_MOTION && !isDragging && m_occViewer) {
+	// 	wxPoint screenPos = event.GetPosition();
+	// 	m_occViewer->updateHoverSilhouetteAt(screenPos);
+	// }
 	
 	// Clear hover outline when mouse leaves window
-	if (event.GetEventType() == wxEVT_LEAVE_WINDOW && m_occViewer) {
-		m_occViewer->updateHoverSilhouetteAt(wxPoint(-1, -1)); // Invalid position to clear
-	}
+	// Disabled hover outline to avoid unwanted red lines
+	// if (event.GetEventType() == wxEVT_LEAVE_WINDOW && m_occViewer) {
+	// 	m_occViewer->updateHoverSilhouetteAt(wxPoint(-1, -1)); // Invalid position to clear
+	// }
 
 	// Check multi-viewport first - this should have higher priority
 	if (m_multiViewportEnabled && m_multiViewportManager) {

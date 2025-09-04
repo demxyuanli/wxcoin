@@ -34,6 +34,7 @@
 #include <gp_Dir.hxx>
 #include <TopLoc_Location.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
+#include <BRepBndLib.hxx>
 
 // Coin3D includes
 #include <Inventor/nodes/SoSeparator.h>
@@ -115,12 +116,48 @@ void OCCGeometry::setShape(const TopoDS_Shape& shape)
 		return;
 	}
 	
+	// Additional validation: check for degenerate geometry
+	try {
+		Bnd_Box bbox;
+		BRepBndLib::Add(shape, bbox);
+		if (bbox.IsVoid()) {
+			LOG_WRN_S("Shape has void bounding box for: " + getName() + ", skipping");
+			return;
+		}
+		
+		Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+		bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+		Standard_Real sizeX = xmax - xmin;
+		Standard_Real sizeY = ymax - ymin;
+		Standard_Real sizeZ = zmax - zmin;
+		
+		// Check for degenerate shapes (too small in all dimensions)
+		Standard_Real minSize = 1e-6; // Minimum size threshold
+		if (sizeX < minSize && sizeY < minSize && sizeZ < minSize) {
+			LOG_WRN_S("Shape is too small (degenerate) for: " + getName() + ", skipping");
+			return;
+		}
+		
+		// Check for infinite or NaN values
+		if (std::isnan(sizeX) || std::isnan(sizeY) || std::isnan(sizeZ) ||
+			std::isinf(sizeX) || std::isinf(sizeY) || std::isinf(sizeZ)) {
+			LOG_WRN_S("Shape has invalid dimensions (NaN or infinite) for: " + getName() + ", skipping");
+			return;
+		}
+	}
+	catch (const Standard_Failure& e) {
+		LOG_WRN_S("Failed to validate shape bounding box for: " + getName() + ": " + std::string(e.GetMessageString()));
+		// Continue with shape assignment despite validation failure
+	}
+	
 	try {
 		m_shape = shape;
 		m_coinNeedsUpdate = true;
+		LOG_INF_S("Successfully set shape for: " + getName());
 	}
 	catch (const Standard_ConstructionError& e) {
 		LOG_ERR_S("Construction error in setShape for " + getName() + ": " + std::string(e.GetMessageString()));
+		LOG_ERR_S("This typically indicates invalid or degenerate geometry. Shape assignment failed.");
 		throw; // Re-throw to be handled by caller
 	}
 	catch (const Standard_Failure& e) {

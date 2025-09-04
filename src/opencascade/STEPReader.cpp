@@ -24,6 +24,8 @@
 #include <Standard_ConstructionError.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <ShapeFix_Shape.hxx>
+#include <Bnd_Box.hxx>
+#include <BRepBndLib.hxx>
 
 // File system includes
 #include <filesystem>
@@ -120,12 +122,47 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 		TopoDS_Compound compound;
 		BRep_Builder builder;
 		builder.MakeCompound(compound);
+		Standard_Integer validShapes = 0;
 		for (Standard_Integer i = 1; i <= nbShapes; i++) {
 			TopoDS_Shape shape = reader.Shape(i);
 			if (!shape.IsNull()) {
-				builder.Add(compound, shape);
+				// Additional validation before adding to compound
+				try {
+					Bnd_Box bbox;
+					BRepBndLib::Add(shape, bbox);
+					if (!bbox.IsVoid()) {
+						Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
+						bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+						Standard_Real sizeX = xmax - xmin;
+						Standard_Real sizeY = ymax - ymin;
+						Standard_Real sizeZ = zmax - zmin;
+						
+						// Check for degenerate shapes
+						Standard_Real minSize = options.precision * 10;
+						if (sizeX >= minSize || sizeY >= minSize || sizeZ >= minSize) {
+							builder.Add(compound, shape);
+							validShapes++;
+						} else {
+							LOG_WRN_S("Skipping degenerate shape " + std::to_string(i) + " (size: " + 
+								std::to_string(sizeX) + "x" + std::to_string(sizeY) + "x" + std::to_string(sizeZ) + ")");
+						}
+					} else {
+						LOG_WRN_S("Skipping shape " + std::to_string(i) + " with void bounding box");
+					}
+				}
+				catch (const Standard_Failure& e) {
+					LOG_WRN_S("Failed to validate shape " + std::to_string(i) + ": " + std::string(e.GetMessageString()) + ", skipping");
+				}
 			}
 		}
+		
+		if (validShapes == 0) {
+			result.errorMessage = "No valid shapes found in STEP file after validation";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+		
+		LOG_INF_S("Added " + std::to_string(validShapes) + " valid shapes out of " + std::to_string(nbShapes) + " total shapes");
 		result.rootShape = compound;
 		if (progress) progress(45, "assemble");
 
@@ -269,13 +306,14 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::processShapesParallel(
 	std::vector<std::future<std::shared_ptr<OCCGeometry>>> futures;
 	futures.reserve(shapes.size());
 
-	// Submit tasks to thread pool
+	// Submit tasks to thread pool with proper value capture to avoid thread safety issues
 	for (size_t i = 0; i < shapes.size(); ++i) {
 		if (!shapes[i].IsNull()) {
 			std::string name = baseName + "_" + std::to_string(i);
+			// Capture by value to avoid thread safety issues with references
 			futures.push_back(std::async(std::launch::async,
-				[&shapes, i, &name, &options]() {
-					return processSingleShape(shapes[i], name, options);
+				[shape = shapes[i], name, options]() {
+					return processSingleShape(shape, name, options);
 				}));
 		}
 	}
@@ -295,8 +333,20 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::processShapesParallel(
 				failCount++;
 			}
 		}
+		catch (const Standard_ConstructionError& e) {
+			LOG_ERR_S("Construction error in parallel shape processing: " + std::string(e.GetMessageString()));
+			failCount++;
+		}
+		catch (const Standard_Failure& e) {
+			LOG_ERR_S("OpenCASCADE error in parallel shape processing: " + std::string(e.GetMessageString()));
+			failCount++;
+		}
 		catch (const std::exception& e) {
 			LOG_ERR_S("Error in parallel shape processing: " + std::string(e.what()));
+			failCount++;
+		}
+		catch (...) {
+			LOG_ERR_S("Unknown error in parallel shape processing");
 			failCount++;
 		}
 		

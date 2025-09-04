@@ -380,7 +380,29 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
         wxPoint delta = event.GetPosition() - m_dragStartPos;
 
         // Check if we should start drag operation (require minimum drag distance)
+        // AND ensure mouse is still within the tab area to prevent accidental drag triggers
         if (!m_dragStarted && (abs(delta.x) > 5 || abs(delta.y) > 5)) {
+            // Additional check: mouse must still be within the dragged tab's rectangle
+            // or within a reasonable distance from the drag start position
+            wxPoint currentPos = event.GetPosition();
+            int draggedTabIndex = m_draggedTab;
+
+            // Check if mouse is still within the tab area or close to drag start
+            bool isWithinTabArea = false;
+            if (draggedTabIndex >= 0 && draggedTabIndex < static_cast<int>(m_tabs.size())) {
+                wxRect tabRect = m_tabs[draggedTabIndex].rect;
+                // Inflate the tab rectangle slightly to allow for some tolerance
+                tabRect.Inflate(10, 10);
+                isWithinTabArea = tabRect.Contains(currentPos);
+            }
+
+            // If mouse moved outside the tab area, don't start drag
+            if (!isWithinTabArea) {
+                wxLogDebug("DockAreaTabBar::onMouseMotion - Mouse moved outside tab area, canceling drag");
+                m_draggedTab = -1; // Reset drag state
+                return;
+            }
+
             m_dragStarted = true;
 
             // Get the dock widget being dragged
