@@ -111,21 +111,8 @@ void DockAreaTabBar::onPaint(wxPaintEvent& event) {
 
     // Draw overflow button if needed
     if (m_hasOverflow) {
-        // Use the new styled drawing system for overflow button
-        DrawStyledRect(dc, m_overflowButtonRect, style, false, false, false);  // No hover effect
-
-        // Draw arrow down symbol
-        int centerX = m_overflowButtonRect.GetLeft() + m_overflowButtonRect.GetWidth() / 2;
-        int centerY = m_overflowButtonRect.GetTop() + m_overflowButtonRect.GetHeight() / 2;
-
-        wxPoint arrow[3];
-        arrow[0] = wxPoint(centerX - 4, centerY - 2);
-        arrow[1] = wxPoint(centerX + 4, centerY - 2);
-        arrow[2] = wxPoint(centerX, centerY + 2);
-
-        dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT)));
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawPolygon(3, arrow);
+        // Use SVG icon for dropdown button
+        DrawSvgButton(dc, m_overflowButtonRect, "down", style, false);  // Use "down" SVG icon
     }
 }
 
@@ -528,12 +515,13 @@ void DockAreaTabBar::updateTabRects() {
     }
 
     // Calculate available width
-    int maxWidth = m_hasOverflow ? size.GetWidth() - overflowButtonWidth : size.GetWidth();
+    int maxWidth = m_hasOverflow ? size.GetWidth() - overflowButtonWidth - 4 : size.GetWidth(); // -4 for min distance to button
 
     // Get style config with theme initialization
     const DockStyleConfig& style = GetDockStyleConfig();
 
     // Layout visible tabs
+    int lastTabEndX = 0;
     for (int i = m_firstVisibleTab; i < static_cast<int>(m_tabs.size()); ++i) {
         auto& tab = m_tabs[i];
 
@@ -576,7 +564,20 @@ void DockAreaTabBar::updateTabRects() {
             );
         }
 
+        lastTabEndX = tab.rect.GetRight();
         x += tabWidth + style.tabSpacing;
+    }
+
+    // Position overflow button if needed
+    if (m_hasOverflow) {
+        // Position overflow button 4 pixels after the last visible tab
+        // Use same Y position and height as tabs for alignment
+        m_overflowButtonRect = wxRect(
+            lastTabEndX + 4,
+            style.tabTopMargin,
+            overflowButtonWidth,
+            style.tabHeight
+        );
     }
 }
 
@@ -672,23 +673,7 @@ void DockAreaTabBar::checkTabOverflow() {
     if (totalTabsWidth > availableWidth - overflowButtonWidth) {
         m_hasOverflow = true;
 
-        // Position overflow button right next to the last visible tab
-        // We need to find the position after the last visible tab
-        int lastTabEndX = 0;
-        if (!m_tabs.empty()) {
-            // Find the last visible tab
-            for (int i = m_firstVisibleTab; i < static_cast<int>(m_tabs.size()); ++i) {
-                if (!m_tabs[i].rect.IsEmpty()) {
-                    lastTabEndX = m_tabs[i].rect.GetRight();
-                }
-            }
-        }
-        m_overflowButtonRect = wxRect(
-            lastTabEndX + style.tabSpacing, 0,
-            overflowButtonWidth, GetClientSize().GetHeight()
-        );
-
-        // Ensure current tab is visible
+        // Ensure current tab is visible first
         if (m_currentIndex >= 0) {
             // Calculate how many tabs can fit with adaptive widths
             int visibleTabsWidth = 0;
@@ -708,7 +693,7 @@ void DockAreaTabBar::checkTabOverflow() {
                 // Ensure minimum width
                 tabWidth = std::max(tabWidth, 60);
 
-                if (visibleTabsWidth + tabWidth > availableWidth - overflowButtonWidth) {
+                if (visibleTabsWidth + tabWidth > availableWidth - overflowButtonWidth - 4) {
                     break;
                 }
 
@@ -724,6 +709,8 @@ void DockAreaTabBar::checkTabOverflow() {
                 if (m_firstVisibleTab < 0) m_firstVisibleTab = 0;
             }
         }
+
+
     } else {
         m_hasOverflow = false;
         m_firstVisibleTab = 0;
@@ -733,15 +720,25 @@ void DockAreaTabBar::checkTabOverflow() {
 void DockAreaTabBar::showTabOverflowMenu() {
     wxMenu menu;
 
+    // Get style config for theme settings
+    const DockStyleConfig& style = GetDockStyleConfig();
+    
+    // Set menu font (note: wxMenu doesn't directly support font setting,
+    // but we can set it on individual items)
+    
     // Add all tabs to menu
     for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
         wxString title = m_tabs[i].widget->title();
         if (i == m_currentIndex) {
-            title = "> " + title; // Add marker for current tab
+            title = "-> " + title; // Use arrow indicator for current tab
         }
 
         wxMenuItem* item = menu.Append(wxID_ANY, title);
-
+        
+        // Apply font to menu item if possible
+        // Note: Font customization for menu items is limited in wxWidgets
+        // The actual appearance will depend on the system theme
+        
         // Bind menu item to tab selection - call DockArea's setCurrentIndex
         menu.Bind(wxEVT_MENU, [this, i](wxCommandEvent&) {
             if (m_dockArea) {
@@ -753,6 +750,10 @@ void DockAreaTabBar::showTabOverflowMenu() {
     // Show menu at overflow button position
     wxPoint pos = m_overflowButtonRect.GetBottomLeft();
     PopupMenu(&menu, pos);
+    
+    // Note: Standard wxMenu appearance is controlled by the system theme.
+    // For full customization, a custom popup window would be needed,
+    // but that adds significant complexity.
 }
 
 void DockAreaTabBar::onMouseRightDown(wxMouseEvent& event) {

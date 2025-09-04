@@ -57,7 +57,7 @@ void DrawStyledRect(wxDC& dc, const wxRect& rect, const DockStyleConfig& style,
     // For active tabs: draw 2px top line and 1px left/right borders
     if (isActive && !isTitleBar) {
         dc.SetPen(wxPen(style.borderTopColour, 2));  // 2px top line
-        dc.DrawLine(rect.GetLeft(), rect.GetTop(), rect.GetRight(), rect.GetTop());
+        dc.DrawLine(rect.GetLeft() - 1, rect.GetTop(), rect.GetRight() - 1, rect.GetTop());
 
         dc.SetPen(wxPen(style.borderLeftColour, 1));  // 1px left border
         dc.DrawLine(rect.GetLeft(), rect.GetTop(), rect.GetLeft(), rect.GetBottom());
