@@ -122,6 +122,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
 		m_homeMenu->AddSeparator();
 		m_homeMenu->AddMenuItem("Show UI &Hierarchy\tCtrl-H", ID_ShowUIHierarchy);
 		m_homeMenu->AddSeparator();
+		m_homeMenu->AddMenuItem("Test &Widgets\tCtrl-W", ID_TEST_WIDGETS);
+		m_homeMenu->AddSeparator();
 		m_homeMenu->AddMenuItem("Print Frame All wxCtr", ID_Menu_PrintLayout_MainFrame);
 		m_homeMenu->BuildMenuLayout();
 		homeSpace->SetHomeMenu(m_homeMenu);

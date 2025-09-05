@@ -67,6 +67,16 @@ public:
     void setAreaColor(const wxColour& color) { m_areaColor = color; }
     void setFrameWidth(int width) { m_frameWidth = width; }
     
+    // Configuration support
+    void loadConfiguration();
+    void setTransparency(int transparency);
+    void setBackgroundColor(const wxColour& color);
+    void setGlobalBackgroundColor(const wxColour& color);
+    void setBorderColor(const wxColour& color);
+    void setBorderWidth(int width);
+    void setCornerRadius(int radius);
+    void setRefreshDelay(int delayMs);
+    
     // Target widget
     void setTargetWidget(wxWindow* widget) { m_targetWidget = widget; }
     wxWindow* targetWidget() const { return m_targetWidget; }
@@ -89,6 +99,10 @@ public:
     // Global mode visual enhancements
     void drawGlobalModeHints(wxDC& dc);
     void drawGlobalModeTextHints(wxDC& dc);
+
+    // Direction indicators
+    void drawDirectionIndicators(wxDC& dc);
+    void drawDirectionArrow(wxDC& dc, const wxRect& rect, DockWidgetArea area);
 
     // Performance optimization methods
     void optimizeRendering();
@@ -123,6 +137,22 @@ private:
     wxColour m_frameColor;
     wxColour m_areaColor;
     int m_frameWidth;
+    
+    // Configuration variables
+    int m_transparency;
+    int m_globalTransparency;
+    wxColour m_backgroundColor;
+    wxColour m_globalBackgroundColor;
+    wxColour m_borderColor;
+    int m_borderWidth;
+    wxColour m_dropAreaNormalBg;
+    wxColour m_dropAreaNormalBorder;
+    wxColour m_dropAreaHighlightBg;
+    wxColour m_dropAreaHighlightBorder;
+    wxColour m_dropAreaIconColor;
+    wxColour m_dropAreaHighlightIconColor;
+    int m_cornerRadius;
+    int m_refreshDelay;
 
     // Performance optimization variables
     bool m_optimizedRendering;

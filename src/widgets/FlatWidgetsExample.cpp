@@ -36,7 +36,7 @@ FlatWidgetsExample::FlatWidgetsExample(wxWindow* parent)
 
 void FlatWidgetsExample::CreateWidgets()
 {
-	// 这个方法将在LayoutWidgets中调用，传入正确的父窗口
+
 }
 
 void FlatWidgetsExample::LayoutWidgets()
@@ -161,6 +161,22 @@ void FlatWidgetsExample::LayoutWidgets()
 		FlatProgressBar::ProgressBarStyle::STRIPED);
 	m_stripedProgressBar->SetShowPercentage(true);
 
+	// Create modern style progress bars
+	m_modernLinearProgressBar = new FlatProgressBar(scrolledWindow, wxID_ANY, 45, 0, 100,
+		wxDefaultPosition, wxSize(250, 25),
+		FlatProgressBar::ProgressBarStyle::MODERN_LINEAR);
+	m_modernLinearProgressBar->SetShowPercentage(true);
+	m_modernLinearProgressBar->SetTextFollowProgress(true);
+	m_modernLinearProgressBar->SetCornerRadius(12);
+
+	m_modernCircularProgressBar = new FlatProgressBar(scrolledWindow, wxID_ANY, 75, 0, 100,
+		wxDefaultPosition, wxSize(100, 100),
+		FlatProgressBar::ProgressBarStyle::MODERN_CIRCULAR);
+	m_modernCircularProgressBar->SetShowPercentage(true);
+	m_modernCircularProgressBar->SetShowCircularText(true);
+	m_modernCircularProgressBar->SetCircularSize(80);
+	m_modernCircularProgressBar->SetCircularThickness(8);
+
 	// Create FlatSwitch examples
 	m_normalSwitch = new FlatSwitch(scrolledWindow, wxID_ANY, false,
 		wxDefaultPosition, wxDefaultSize,
@@ -274,6 +290,15 @@ void FlatWidgetsExample::LayoutWidgets()
 	progressBarRow->Add(m_indeterminateProgressBar, 0, wxEXPAND | wxBOTTOM, 10);
 	progressBarRow->Add(new wxStaticText(scrolledWindow, wxID_ANY, "Striped Progress Bar:"), 0, wxBOTTOM, 2);
 	progressBarRow->Add(m_stripedProgressBar, 0, wxEXPAND | wxBOTTOM, 10);
+	
+	// Modern style progress bars
+	progressBarRow->Add(new wxStaticText(scrolledWindow, wxID_ANY, "Modern Linear Progress Bar (Text Following):"), 0, wxBOTTOM, 2);
+	progressBarRow->Add(m_modernLinearProgressBar, 0, wxEXPAND | wxBOTTOM, 10);
+	
+	wxBoxSizer* circularRow = new wxBoxSizer(wxHORIZONTAL);
+	circularRow->Add(new wxStaticText(scrolledWindow, wxID_ANY, "Modern Circular Progress Bar:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+	circularRow->Add(m_modernCircularProgressBar, 0, wxALIGN_CENTER_VERTICAL);
+	progressBarRow->Add(circularRow, 0, wxEXPAND | wxBOTTOM, 10);
 
 	progressBarSizer->Add(progressBarRow, 0, wxEXPAND);
 

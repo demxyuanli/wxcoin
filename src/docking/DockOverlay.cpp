@@ -3,6 +3,7 @@
 #include "docking/DockArea.h"
 #include "docking/DockContainerWidget.h"
 #include <wx/dcbuffer.h>
+#include "config/ThemeManager.h"
 
 namespace ads {
 
@@ -38,6 +39,20 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_frameColor(wxColour(0, 122, 204))  // VS blue color
     , m_areaColor(wxColour(0, 122, 204, 180))  // VS blue with better transparency
     , m_frameWidth(2)
+    , m_transparency(220)
+    , m_globalTransparency(240)
+    , m_backgroundColor(wxColour(240, 240, 240, 120))
+    , m_globalBackgroundColor(wxColour(200, 220, 240, 160))
+    , m_borderColor(wxColour(0, 122, 204))
+    , m_borderWidth(2)
+    , m_dropAreaNormalBg(wxColour(255, 255, 255, 220))
+    , m_dropAreaNormalBorder(wxColour(217, 217, 217))
+    , m_dropAreaHighlightBg(wxColour(0, 122, 204, 240))
+    , m_dropAreaHighlightBorder(wxColour(0, 122, 204))
+    , m_dropAreaIconColor(wxColour(96, 96, 96))
+    , m_dropAreaHighlightIconColor(wxColour(255, 255, 255))
+    , m_cornerRadius(4)
+    , m_refreshDelay(16)
     , m_optimizedRendering(false)
     , m_refreshTimer(nullptr)
     , m_pendingRefresh(false)
@@ -47,8 +62,11 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
-    // VS-style transparency - more transparent for better UX
-    SetTransparent(220);  // More transparent than before for VS-like appearance
+    // Load configuration from config file
+    loadConfiguration();
+
+    // Set transparency based on configuration
+    SetTransparent(m_transparency);
 
     // Initialize refresh timer for debouncing
     m_refreshTimer = new wxTimer(this);
@@ -168,17 +186,17 @@ void DockOverlay::onPaint(wxPaintEvent& event) {
     // Optimized background rendering based on mode
     if (m_isGlobalMode) {
         // Global mode: more prominent background
-        dc.SetBrush(wxBrush(wxColour(200, 220, 240, 160)));  // Light blue background for global mode
+        dc.SetBrush(wxBrush(m_globalBackgroundColor));
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.DrawRectangle(GetClientRect());
 
         // Add subtle border for global mode
-        dc.SetPen(wxPen(wxColour(0, 122, 204, 200), 1));
+        dc.SetPen(wxPen(wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 200), m_borderWidth));
         dc.SetBrush(*wxTRANSPARENT_BRUSH);
         dc.DrawRectangle(wxRect(0, 0, GetSize().GetWidth() - 1, GetSize().GetHeight() - 1));
     } else {
         // Normal mode: subtle background
-        dc.SetBrush(wxBrush(wxColour(240, 240, 240, 120)));  // Light gray background
+        dc.SetBrush(wxBrush(m_backgroundColor));
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.DrawRectangle(GetClientRect());
     }
@@ -186,13 +204,16 @@ void DockOverlay::onPaint(wxPaintEvent& event) {
     wxLogDebug("DockOverlay::onPaint - size: %dx%d, global mode: %d",
                GetSize().GetWidth(), GetSize().GetHeight(), m_isGlobalMode);
 
-    // Draw drop areas with VS-style appearance
+    // Draw drop areas with VS-style appearance (without direction indicators)
     paintDropAreas(dc);
 
     // Draw additional hints in global mode
     if (m_isGlobalMode) {
         drawGlobalModeHints(dc);
     }
+
+    // Draw direction indicators on top of everything else
+    drawDirectionIndicators(dc);
 }
 
 void DockOverlay::onMouseMove(wxMouseEvent& event) {
@@ -279,45 +300,42 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     wxRect rect = dropArea.rect();
     DockWidgetArea area = dropArea.area();
 
-    // Visual Studio 2022 style colors
-    wxColour normalBg(255, 255, 255, 220);       // Clean white background with transparency
-    wxColour normalBorder(217, 217, 217);         // Light gray border
-    wxColour highlightBg(0, 122, 204, 240);       // VS blue with good opacity
-    wxColour highlightBorder(0, 122, 204);        // VS blue border
-    wxColour iconColor(96, 96, 96);               // Medium gray for icons
-    wxColour highlightIconColor(255, 255, 255);   // White icons when highlighted
+    // Use configured colors
+    wxColour normalBg = m_dropAreaNormalBg;
+    wxColour normalBorder = m_dropAreaNormalBorder;
+    wxColour highlightBg = m_dropAreaHighlightBg;
+    wxColour highlightBorder = m_dropAreaHighlightBorder;
+    wxColour iconColor = m_dropAreaIconColor;
+    wxColour highlightIconColor = m_dropAreaHighlightIconColor;
 
-    // Draw the indicator button with VS-style appearance
+    // Draw the indicator button with configured appearance
     if (dropArea.isHighlighted()) {
-        // Highlighted state - VS blue theme
-        dc.SetPen(wxPen(highlightBorder, 2));      // Thicker border when highlighted
+        // Highlighted state
+        dc.SetPen(wxPen(highlightBorder, m_borderWidth));
         dc.SetBrush(wxBrush(highlightBg));
     } else {
-        // Normal state - clean and subtle
+        // Normal state
         dc.SetPen(wxPen(normalBorder, 1));
         dc.SetBrush(wxBrush(normalBg));
     }
 
-    // Draw rounded rectangle with VS-style corner radius
-    dc.DrawRoundedRectangle(rect, 4);
+    // Draw rounded rectangle with configured corner radius
+    dc.DrawRoundedRectangle(rect, m_cornerRadius);
 
-    // Draw subtle inner shadow for depth (VS style)
+    // Draw subtle inner shadow for depth
     if (!dropArea.isHighlighted()) {
         wxRect innerRect = rect;
         innerRect.Deflate(1);
         dc.SetPen(wxPen(wxColour(240, 240, 240), 1));
         dc.SetBrush(*wxTRANSPARENT_BRUSH);
-        dc.DrawRoundedRectangle(innerRect, 3);
+        dc.DrawRoundedRectangle(innerRect, m_cornerRadius - 1);
     }
 
     // Draw the icon
     wxColour currentIconColor = dropArea.isHighlighted() ? highlightIconColor : iconColor;
     drawAreaIcon(dc, rect, area, currentIconColor);
 
-    // Draw preview area if highlighted (VS-style preview)
-    if (dropArea.isHighlighted()) {
-        drawPreviewArea(dc, dropArea.area(), true);  // Direction indicator preview
-    }
+    // Note: Direction indicators are now drawn separately in drawDirectionIndicators()
 }
 
 void DockOverlay::drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectionIndicator) {
@@ -329,26 +347,31 @@ void DockOverlay::drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectio
     wxColour previewBorder, previewFill;
 
     if (isDirectionIndicator) {
-        // Purple with gray border for direction indicator preview
-        previewBorder = wxColour(169, 169, 169);      // Gray border
-        previewFill = wxColour(147, 112, 219, 100);    // Purple fill with transparency
+        // Enhanced direction indicator colors for better visibility
+        previewBorder = wxColour(255, 255, 255, 200);      // Bright white border for contrast
+        previewFill = wxColour(0, 122, 204, 150);          // Bright blue fill with good opacity
     } else {
         // Light green colors for target area preview
         previewBorder = wxColour(144, 238, 144);      // Light green border
         previewFill = wxColour(144, 238, 144, 90);    // Light green fill with transparency
     }
 
-    // Draw preview rectangle
-    dc.SetPen(wxPen(previewBorder, 2));
+    // Draw preview rectangle with enhanced visibility
+    dc.SetPen(wxPen(previewBorder, 3));  // Thicker border for direction indicators
     dc.SetBrush(wxBrush(previewFill));
     dc.DrawRectangle(previewRect);
 
     // Add a subtle inner highlight for depth
     wxRect innerRect = previewRect;
-    innerRect.Deflate(1);
-    dc.SetPen(wxPen(wxColour(255, 255, 255, 120), 1));
+    innerRect.Deflate(2);
+    dc.SetPen(wxPen(wxColour(255, 255, 255, 180), 1));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.DrawRectangle(innerRect);
+
+    // Add direction arrow for better clarity
+    if (isDirectionIndicator) {
+        drawDirectionArrow(dc, previewRect, area);
+    }
 }
 
 void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area, const wxColour& color) {
@@ -667,27 +690,27 @@ wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {
 void DockOverlay::updateGlobalMode() {
     if (m_isGlobalMode) {
         // In global mode, show all areas more prominently
-        SetTransparent(240); // Less transparent for better visibility
+        SetTransparent(m_globalTransparency); // Use configured global transparency
 
         // Enable all areas in global mode
         m_allowedAreas = AllDockAreas;
         updateDropAreas();
 
         // Adjust colors for global mode
-        m_frameColor = wxColour(0, 122, 204); // More prominent blue
-        m_areaColor = wxColour(0, 122, 204, 220); // Less transparent
+        m_frameColor = m_borderColor; // Use configured border color
+        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 220); // Less transparent
 
         wxLogDebug("DockOverlay: Enabled global docking mode");
     } else {
         // Normal mode
-        SetTransparent(220); // Standard transparency
+        SetTransparent(m_transparency); // Use configured normal transparency
 
         // Reset to default areas
         m_allowedAreas = AllDockAreas;
 
         // Reset colors
-        m_frameColor = wxColour(0, 122, 204);
-        m_areaColor = wxColour(0, 122, 204, 180);
+        m_frameColor = m_borderColor;
+        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 180);
 
         wxLogDebug("DockOverlay: Disabled global docking mode");
     }
@@ -954,6 +977,171 @@ bool DockOverlay::shouldRefreshNow() const {
     }
 
     return true;
+}
+
+// Configuration methods implementation
+void DockOverlay::loadConfiguration() {
+    // Load configuration from ThemeManager
+    auto& themeManager = ThemeManager::getInstance();
+    
+    // Load transparency settings with fallback defaults
+    int overlayTransparency = themeManager.getInt("OverlayTransparency");
+    m_transparency = (overlayTransparency > 0) ? overlayTransparency : 220;
+    
+    int globalTransparency = themeManager.getInt("GlobalModeTransparency");
+    m_globalTransparency = (globalTransparency > 0) ? globalTransparency : 240;
+    
+    // Load background colors with fallback defaults
+    wxColour bgColor = themeManager.getColour("BackgroundColour");
+    m_backgroundColor = bgColor.IsOk() ? bgColor : wxColour(240, 240, 240, 120);
+    
+    wxColour globalBgColor = themeManager.getColour("GlobalBackgroundColour");
+    m_globalBackgroundColor = globalBgColor.IsOk() ? globalBgColor : wxColour(200, 220, 240, 160);
+    
+    // Load border settings with fallback defaults
+    wxColour borderColor = themeManager.getColour("BorderColour");
+    m_borderColor = borderColor.IsOk() ? borderColor : wxColour(0, 122, 204);
+    
+    int borderWidth = themeManager.getInt("BorderWidth");
+    m_borderWidth = (borderWidth > 0) ? borderWidth : 2;
+    
+    // Load drop area colors with fallback defaults
+    wxColour normalBg = themeManager.getColour("DropAreaNormalBgColour");
+    m_dropAreaNormalBg = normalBg.IsOk() ? normalBg : wxColour(255, 255, 255, 220);
+    
+    wxColour normalBorder = themeManager.getColour("DropAreaNormalBorderColour");
+    m_dropAreaNormalBorder = normalBorder.IsOk() ? normalBorder : wxColour(217, 217, 217);
+    
+    wxColour highlightBg = themeManager.getColour("DropAreaHighlightBgColour");
+    m_dropAreaHighlightBg = highlightBg.IsOk() ? highlightBg : wxColour(0, 122, 204, 240);
+    
+    wxColour highlightBorder = themeManager.getColour("DropAreaHighlightBorderColour");
+    m_dropAreaHighlightBorder = highlightBorder.IsOk() ? highlightBorder : wxColour(0, 122, 204);
+    
+    // Load icon colors with fallback defaults
+    wxColour iconColor = themeManager.getColour("DropAreaIconColour");
+    m_dropAreaIconColor = iconColor.IsOk() ? iconColor : wxColour(96, 96, 96);
+    
+    wxColour highlightIconColor = themeManager.getColour("DropAreaHighlightIconColour");
+    m_dropAreaHighlightIconColor = highlightIconColor.IsOk() ? highlightIconColor : wxColour(255, 255, 255);
+    
+    // Load other settings with fallback defaults
+    int cornerRadius = themeManager.getInt("CornerRadius");
+    m_cornerRadius = (cornerRadius > 0) ? cornerRadius : 4;
+    
+    int refreshDelay = themeManager.getInt("RefreshDelay");
+    m_refreshDelay = (refreshDelay > 0) ? refreshDelay : 16;
+    
+    // Update frame color and area color to match border color
+    m_frameColor = m_borderColor;
+    m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 180);
+    
+    // Debug output
+    wxLogDebug("DockOverlay configuration loaded - Transparency: %d, Global: %d, BorderWidth: %d, CornerRadius: %d", 
+               m_transparency, m_globalTransparency, m_borderWidth, m_cornerRadius);
+}
+
+void DockOverlay::setTransparency(int transparency) {
+    m_transparency = transparency;
+    SetTransparent(transparency);
+}
+
+void DockOverlay::setBackgroundColor(const wxColour& color) {
+    m_backgroundColor = color;
+}
+
+void DockOverlay::setGlobalBackgroundColor(const wxColour& color) {
+    m_globalBackgroundColor = color;
+}
+
+void DockOverlay::setBorderColor(const wxColour& color) {
+    m_borderColor = color;
+    m_frameColor = color;
+    m_areaColor = wxColour(color.Red(), color.Green(), color.Blue(), 180);
+}
+
+void DockOverlay::setBorderWidth(int width) {
+    m_borderWidth = width;
+}
+
+void DockOverlay::setCornerRadius(int radius) {
+    m_cornerRadius = radius;
+}
+
+void DockOverlay::setRefreshDelay(int delayMs) {
+    m_refreshDelay = delayMs;
+}
+
+// Draw direction indicators on top of everything else
+void DockOverlay::drawDirectionIndicators(wxDC& dc) {
+    // Only draw direction indicators for highlighted drop areas
+    for (const auto& dropArea : m_dropAreas) {
+        if (dropArea->isVisible() && dropArea->isHighlighted()) {
+            drawPreviewArea(dc, dropArea->area(), true);  // Direction indicator preview
+        }
+    }
+}
+
+// Draw direction arrow in the preview area
+void DockOverlay::drawDirectionArrow(wxDC& dc, const wxRect& rect, DockWidgetArea area) {
+    wxPoint center(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    int arrowSize = 8;
+    int lineWidth = 3;
+    
+    dc.SetPen(wxPen(wxColour(255, 255, 255), lineWidth));
+    dc.SetBrush(wxBrush(wxColour(255, 255, 255)));
+    
+    switch (area) {
+    case TopDockWidgetArea:
+        {
+            // Draw upward arrow
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x, center.y - arrowSize);
+            arrow[1] = wxPoint(center.x - arrowSize/2, center.y);
+            arrow[2] = wxPoint(center.x + arrowSize/2, center.y);
+            dc.DrawPolygon(3, arrow);
+        }
+        break;
+    case BottomDockWidgetArea:
+        {
+            // Draw downward arrow
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x, center.y + arrowSize);
+            arrow[1] = wxPoint(center.x - arrowSize/2, center.y);
+            arrow[2] = wxPoint(center.x + arrowSize/2, center.y);
+            dc.DrawPolygon(3, arrow);
+        }
+        break;
+    case LeftDockWidgetArea:
+        {
+            // Draw leftward arrow
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x - arrowSize, center.y);
+            arrow[1] = wxPoint(center.x, center.y - arrowSize/2);
+            arrow[2] = wxPoint(center.x, center.y + arrowSize/2);
+            dc.DrawPolygon(3, arrow);
+        }
+        break;
+    case RightDockWidgetArea:
+        {
+            // Draw rightward arrow
+            wxPoint arrow[3];
+            arrow[0] = wxPoint(center.x + arrowSize, center.y);
+            arrow[1] = wxPoint(center.x, center.y - arrowSize/2);
+            arrow[2] = wxPoint(center.x, center.y + arrowSize/2);
+            dc.DrawPolygon(3, arrow);
+        }
+        break;
+    case CenterDockWidgetArea:
+        {
+            // Draw center indicator (square)
+            wxRect square(center.x - arrowSize/2, center.y - arrowSize/2, arrowSize, arrowSize);
+            dc.DrawRectangle(square);
+        }
+        break;
+    default:
+        break;
+    }
 }
 
 } // namespace ads

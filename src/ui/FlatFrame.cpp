@@ -11,6 +11,7 @@
 #include "flatui/FlatUISystemButtons.h"
 #include "flatui/FlatUICustomControl.h"
 #include "flatui/UIHierarchyDebugger.h"
+#include "widgets/FlatWidgetsExampleDialog.h"
 #include "config/ThemeManager.h"
 #include "config/SvgIconManager.h"
 #include <wx/display.h>
@@ -265,6 +266,7 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	eventManager.bindMenuEvent(this, &FlatFrame::OnMenuNewProject, ID_Menu_NewProject_MainFrame);
 	eventManager.bindMenuEvent(this, &FlatFrame::OnMenuOpenProject, ID_Menu_OpenProject_MainFrame);
 	eventManager.bindMenuEvent(this, &FlatFrame::OnShowUIHierarchy, ID_ShowUIHierarchy);
+	eventManager.bindMenuEvent(this, &FlatFrame::OnTestWidgets, ID_TEST_WIDGETS);
 	eventManager.bindMenuEvent(this, &FlatFrame::PrintUILayout, ID_Menu_PrintLayout_MainFrame);
 	eventManager.bindMenuEvent(this, &FlatFrame::OnMenuExit, wxID_EXIT);
 
@@ -604,6 +606,21 @@ void FlatFrame::OnToggleProfileSpace(wxCommandEvent& event)
 void FlatFrame::OnShowUIHierarchy(wxCommandEvent& event)
 {
 	ShowUIHierarchy();
+}
+
+void FlatFrame::OnTestWidgets(wxCommandEvent& event)
+{
+	ShowTestWidgets();
+}
+
+void FlatFrame::ShowTestWidgets()
+{
+	// Create the widgets example dialog with tabs
+	FlatWidgetsExampleDialog* testDialog = new FlatWidgetsExampleDialog(this, "Test Widgets");
+	
+	// Show the dialog
+	testDialog->ShowModal();
+	delete testDialog;
 }
 
 void FlatFrame::ShowUIHierarchy()

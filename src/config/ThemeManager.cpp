@@ -143,15 +143,67 @@ void ThemeManager::loadSizeConfigurations(ThemeProfile& theme) {
 	// Load size configurations from various sections
 	std::vector<std::string> sizeSections = {
 		"BarSizes", "ButtonBarSizes", "Separators", "Icons",
-		"GallerySizes", "PanelSizes", "HomeSpace", "HomeMenu"
+		"GallerySizes", "PanelSizes", "HomeSpace", "HomeMenu", "DragOverlay"
 	};
 
 	for (const auto& section : sizeSections) {
 		auto keys = m_configManager->getKeys(section);
 		for (const auto& key : keys) {
-			int value = m_configManager->getInt(section, key, 0);
-			if (value != 0) {
-				theme.integers[key] = value;
+			if (section == "DragOverlay") {
+				// Special handling for DragOverlay section
+				std::string value = m_configManager->getString(section, key, "");
+				if (!value.empty()) {
+					// Check if this is a color configuration (contains commas)
+					if (value.find(',') != std::string::npos) {
+						// This is a color configuration with theme values
+						std::vector<std::string> themeValues = splitString(value, ';');
+						if (themeValues.size() >= 3) {
+							// Parse each theme's color value
+							wxColour defaultColor = parseColour(themeValues[0]);
+							wxColour darkColor = parseColour(themeValues[1]);
+							wxColour blueColor = parseColour(themeValues[2]);
+
+							// Store in the current theme based on theme name
+							if (theme.name == "default" && defaultColor.IsOk()) {
+								theme.colours[key] = defaultColor;
+							} else if (theme.name == "dark" && darkColor.IsOk()) {
+								theme.colours[key] = darkColor;
+							} else if (theme.name == "blue" && blueColor.IsOk()) {
+								theme.colours[key] = blueColor;
+							}
+						}
+					} else if (value.find(';') != std::string::npos) {
+						// This is an integer configuration with theme values (e.g., "220;200;240")
+						std::vector<std::string> themeValues = splitString(value, ';');
+						if (themeValues.size() >= 3) {
+							// Parse each theme's integer value
+							int defaultInt = std::stoi(themeValues[0]);
+							int darkInt = std::stoi(themeValues[1]);
+							int blueInt = std::stoi(themeValues[2]);
+
+							// Store in the current theme based on theme name
+							if (theme.name == "default") {
+								theme.integers[key] = defaultInt;
+							} else if (theme.name == "dark") {
+								theme.integers[key] = darkInt;
+							} else if (theme.name == "blue") {
+								theme.integers[key] = blueInt;
+							}
+						}
+					} else {
+						// This is a simple integer configuration
+						int intValue = m_configManager->getInt(section, key, 0);
+						if (intValue != 0) {
+							theme.integers[key] = intValue;
+						}
+					}
+				}
+			} else {
+				// Regular integer configuration
+				int value = m_configManager->getInt(section, key, 0);
+				if (value != 0) {
+					theme.integers[key] = value;
+				}
 			}
 		}
 	}

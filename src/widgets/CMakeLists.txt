@@ -10,6 +10,10 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatRadioButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsExample.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsExampleDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsButtonsPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsInputsPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsSelectionPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsProgressPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatTreeView.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatEnhancedButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatMessagePanel.cpp
@@ -45,6 +49,10 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatRadioButton.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsExample.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsExampleDialog.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsButtonsPanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsInputsPanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsSelectionPanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsProgressPanel.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatTreeView.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatEnhancedButton.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatMessagePanel.h

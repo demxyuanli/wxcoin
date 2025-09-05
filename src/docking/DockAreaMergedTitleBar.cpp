@@ -502,7 +502,7 @@ void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
 
         // Check if we should start drag operation (require minimum drag distance)
         // AND ensure mouse is still within the tab area to prevent accidental drag triggers
-        if (!m_dragStarted && (abs(delta.x) > 5 || abs(delta.y) > 5)) {
+        if (!m_dragStarted && (abs(delta.x) > 15 || abs(delta.y) > 15)) {
             // Additional check: mouse must still be within the dragged tab's rectangle
             // or within a reasonable distance from the drag start position
             wxPoint currentPos = event.GetPosition();

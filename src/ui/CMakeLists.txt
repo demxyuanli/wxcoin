@@ -66,11 +66,9 @@ set(UIDialogMesh_SOURCES
     MeshQualityDialog.cpp
     TransparencyDialog.cpp
     ImportSettingsDialog.cpp
-    ImportProgressManager.cpp
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
     ${CMAKE_SOURCE_DIR}/include/ImportSettingsDialog.h
-    ${CMAKE_SOURCE_DIR}/include/ImportProgressManager.h
 )
 
 add_library(UIDialogMesh STATIC ${UIDialogMesh_SOURCES})

@@ -20,7 +20,9 @@ public:
 		DEFAULT_STYLE,  // Normal progress bar
 		INDETERMINATE,  // Indeterminate progress bar
 		CIRCULAR,       // Circular progress bar
-		STRIPED         // Striped progress bar
+		STRIPED,        // Striped progress bar
+		MODERN_LINEAR,  // Modern linear progress bar with text following
+		MODERN_CIRCULAR // Modern circular progress bar
 	};
 
 	// Progress bar states
@@ -115,6 +117,19 @@ public:
 	void SetAnimated(bool animated);
 	bool IsAnimated() const;
 
+	// Modern style properties
+	void SetTextFollowProgress(bool follow);
+	bool IsTextFollowProgress() const;
+	
+	void SetCircularSize(int size);
+	int GetCircularSize() const;
+	
+	void SetCircularThickness(int thickness);
+	int GetCircularThickness() const;
+	
+	void SetShowCircularText(bool show);
+	bool IsShowCircularText() const;
+
 	// State management
 	void SetEnabled(bool enabled);
 	bool IsEnabled() const;
@@ -140,6 +155,16 @@ protected:
 	void DrawStripes(wxDC& dc, const wxRect& rect);
 	void DrawCircularProgress(wxDC& dc);
 	void DrawProgressBar(wxDC& dc);
+	
+	// Modern style drawing methods
+	void DrawModernLinearProgress(wxDC& dc);
+	void DrawModernCircularProgress(wxDC& dc);
+	void DrawTextFollowingProgress(wxDC& dc, const wxRect& progressRect);
+	
+	// Additional drawing methods for different styles
+	void DrawDefaultProgress(wxDC& dc);
+	void DrawIndeterminateProgress(wxDC& dc);
+	void DrawStripedProgress(wxDC& dc);
 
 	// Helper methods
 	void UpdateAnimation();
@@ -188,6 +213,12 @@ private:
 	bool m_showLabel;
 	bool m_striped;
 	bool m_animated;
+	
+	// Modern style options
+	bool m_textFollowProgress;
+	int m_circularSize;
+	int m_circularThickness;
+	bool m_showCircularText;
 
 	// Animation
 	wxTimer m_animationTimer;
@@ -204,6 +235,8 @@ private:
 	static const int DEFAULT_BORDER_WIDTH = 1;
 	static const int DEFAULT_ANIMATION_INTERVAL = 50;
 	static const int DEFAULT_BAR_HEIGHT = 20;
+	static const int DEFAULT_CIRCULAR_SIZE = 80;
+	static const int DEFAULT_CIRCULAR_THICKNESS = 6;
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_NO_COPY_CLASS(FlatProgressBar);

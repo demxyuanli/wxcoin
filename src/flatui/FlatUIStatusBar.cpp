@@ -1,4 +1,5 @@
 #include "flatui/FlatUIStatusBar.h"
+#include "logger/Logger.h"
 
 wxBEGIN_EVENT_TABLE(FlatUIStatusBar, FlatUIThemeAware)
 EVT_PAINT(FlatUIStatusBar::OnPaint)
@@ -15,6 +16,14 @@ FlatUIStatusBar::FlatUIStatusBar(wxWindow* parent, wxWindowID id)
 	// Create flat progress bar; keep hidden by default
 	m_progress = new FlatProgressBar(this, wxID_ANY, 0, 0, 100, wxDefaultPosition, wxSize(140, 16));
 	m_progress->SetShowPercentage(true);
+	m_progress->SetShowValue(false); // Don't show raw value, only percentage
+	m_progress->SetCornerRadius(8); // Make it more rounded
+	m_progress->SetBorderWidth(1); // Add border for better visibility
+	// Set more visible colors
+	m_progress->SetBackgroundColor(wxColour(240, 240, 240)); // Light gray background
+	m_progress->SetProgressColor(wxColour(0, 120, 215)); // Blue progress color
+	m_progress->SetBorderColor(wxColour(200, 200, 200)); // Gray border
+	m_progress->SetTextColor(wxColour(0, 0, 0)); // Black text
 	m_progress->Hide();
 }
 
@@ -97,7 +106,15 @@ void FlatUIStatusBar::LayoutChildren() {
 
 void FlatUIStatusBar::EnableProgressGauge(bool enable) {
 	if (!m_progress) return;
-	if (enable) m_progress->Show(); else m_progress->Hide();
+	if (enable) {
+		m_progress->Show();
+		m_progress->SetValue(0); // Reset to 0
+		m_progress->Refresh();
+		LOG_INF_S("Progress gauge enabled");
+	} else {
+		m_progress->Hide();
+		LOG_INF_S("Progress gauge disabled");
+	}
 	LayoutChildren();
 	Refresh();
 }
@@ -107,5 +124,11 @@ void FlatUIStatusBar::SetGaugeRange(int range) {
 }
 
 void FlatUIStatusBar::SetGaugeValue(int value) {
-	if (m_progress) m_progress->SetValue(value);
+	if (m_progress) {
+		m_progress->SetValue(value);
+		// Force refresh to ensure progress is visible
+		m_progress->Refresh();
+		// Debug log
+		LOG_INF_S(wxString::Format("StatusBar progress set to: %d", value));
+	}
 }

@@ -7,7 +7,7 @@
 
 class Canvas;
 class OCCViewer;
-class ImportProgressManager;
+class FlatUIStatusBar;
 
 class ImportStepListener : public CommandListener {
 public:
@@ -23,5 +23,5 @@ private:
 	wxFrame* m_frame;
 	Canvas* m_canvas;
 	OCCViewer* m_occViewer;
-	std::unique_ptr<ImportProgressManager> m_progressManager;
+	FlatUIStatusBar* m_statusBar;
 };

@@ -50,6 +50,8 @@ private:
 	FlatProgressBar* m_normalProgressBar;
 	FlatProgressBar* m_indeterminateProgressBar;
 	FlatProgressBar* m_stripedProgressBar;
+	FlatProgressBar* m_modernLinearProgressBar;
+	FlatProgressBar* m_modernCircularProgressBar;
 
 	FlatSwitch* m_normalSwitch;
 	FlatSwitch* m_roundSwitch;
