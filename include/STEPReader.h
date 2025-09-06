@@ -10,6 +10,7 @@
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/TopoDS_Compound.hxx>
 #include "OCCGeometry.h"
+#include "GeometryReader.h"
 
 /**
  * @brief STEP file reader for importing CAD models
@@ -17,9 +18,20 @@
  * Provides functionality to read STEP files and convert them to OCCGeometry objects
  * with optimized performance through parallel processing and caching
  */
-class STEPReader {
+class STEPReader : public GeometryReader {
 public:
 	using ProgressCallback = std::function<void(int /*percent*/, const std::string& /*stage*/)>;
+	
+	// GeometryReader interface implementation
+	ReadResult readFile(const std::string& filePath,
+		const OptimizationOptions& options = OptimizationOptions(),
+		ProgressCallback progress = nullptr) override;
+	
+	bool isValidFile(const std::string& filePath) const override;
+	std::vector<std::string> getSupportedExtensions() const override;
+	std::string getFormatName() const override;
+	std::string getFileFilter() const override;
+	
 	/**
 	 * @brief Result structure for STEP file reading
 	 */
@@ -31,20 +43,6 @@ public:
 		double importTime; // Time taken for import in milliseconds
 
 		ReadResult() : success(false), importTime(0.0) {}
-	};
-
-	/**
-	 * @brief Optimization options for STEP import
-	 */
-	struct OptimizationOptions {
-		bool enableParallelProcessing = true;
-		bool enableShapeAnalysis = false; // Disable by default for speed
-		bool enableCaching = true;
-		bool enableBatchOperations = true;
-		int maxThreads = 4;
-		double precision = 0.01;
-
-		OptimizationOptions() = default;
 	};
 
 	/**
@@ -70,12 +68,6 @@ public:
 	 * @return true if file has .step or .stp extension
 	 */
 	static bool isSTEPFile(const std::string& filePath);
-
-	/**
-	 * @brief Get supported file extensions
-	 * @return Vector of supported extensions
-	 */
-	static std::vector<std::string> getSupportedExtensions();
 
 	/**
 	 * @brief Convert a TopoDS_Shape to OCCGeometry objects with optimization
@@ -140,8 +132,10 @@ public:
 		gp_Pnt& maxPt
 	);
 
+public:
+	STEPReader() = default;
+	
 private:
-	STEPReader() = delete; // Pure static class
 
 	/**
 	 * @brief Initialize the STEP reader (if needed)

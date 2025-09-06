@@ -1,6 +1,7 @@
 #include "ImportStepListener.h"
 #include "CommandDispatcher.h"
 #include "STEPReader.h"
+#include "GeometryReader.h"
 #include "OCCViewer.h"
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
@@ -53,13 +54,15 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	}
 
 	if (flatFrame) {
-		flatFrame->appendMessage("STEP import started...");
+		flatFrame->appendMessage("Geometry import started...");
 	}
 
-	// File dialog
+	// File dialog with all supported formats
 	auto fileDialogStartTime = std::chrono::high_resolution_clock::now();
-	wxFileDialog openFileDialog(m_frame, "Import STEP Files", "", "",
-		"STEP files (*.step;*.stp)|*.step;*.stp|All files (*.*)|*.*",
+	std::string fileFilter = GeometryReaderFactory::getAllSupportedFileFilter();
+
+	wxFileDialog openFileDialog(m_frame, "Import Geometry Files", "", "",
+		fileFilter.c_str(),
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 
 	if (openFileDialog.ShowModal() == wxID_CANCEL) {
@@ -80,7 +83,7 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			m_statusBar->EnableProgressGauge(false);
 			m_statusBar->SetStatusText("Ready", 0);
 		}
-		return CommandResult(false, "STEP import cancelled", commandType);
+		return CommandResult(false, "Geometry import cancelled", commandType);
 	}
 
 	// Get import settings
@@ -97,21 +100,14 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	auto fileDialogEndTime = std::chrono::high_resolution_clock::now();
 	auto fileDialogDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileDialogEndTime - fileDialogStartTime);
 
-	LOG_INF_S("=== BATCH STEP IMPORT START ===");
+	LOG_INF_S("=== BATCH GEOMETRY IMPORT START ===");
 	LOG_INF_S("Files selected: " + std::to_string(filePaths.size()) + ", Dialog time: " + std::to_string(fileDialogDuration.count()) + "ms");
 	if (flatFrame) {
 		flatFrame->appendMessage(wxString::Format("Files selected: %zu", filePaths.size()));
 	}
 
 	try {
-		// Setup optimization options
-		STEPReader::OptimizationOptions options;
-		options.enableParallelProcessing = true;
-		options.enableShapeAnalysis = false;
-		options.enableCaching = true;
-		options.enableBatchOperations = true;
-		options.maxThreads = std::thread::hardware_concurrency();
-		options.precision = 0.01;
+		// Setup optimization options will be created per reader below
 
 		// Process all selected files
 		std::vector<std::shared_ptr<OCCGeometry>> allGeometries;
@@ -122,12 +118,38 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 
 		for (size_t i = 0; i < filePaths.size(); ++i) {
 			const wxString& filePath = filePaths[i];
-			if (flatFrame) {
-				flatFrame->appendMessage(wxString::Format("Reading STEP file (%zu/%zu): %s", i + 1, filePaths.size(), filePath));
+			std::string filePathStr = filePath.ToStdString();
+
+			// Get appropriate reader for this file
+			auto reader = GeometryReaderFactory::getReaderForFile(filePathStr);
+			if (!reader) {
+				LOG_ERR_S("No suitable reader found for file: " + filePathStr);
+				if (flatFrame) {
+					flatFrame->appendMessage(wxString::Format("Unsupported file format: %s", filePath));
+				}
+				continue;
 			}
+
+			std::string formatName = reader->getFormatName();
+			if (flatFrame) {
+				flatFrame->appendMessage(wxString::Format("Reading %s file (%d/%d): %s",
+					formatName, static_cast<int>(i + 1), static_cast<int>(filePaths.size()), filePath));
+			}
+
 			auto stepReadStartTime = std::chrono::high_resolution_clock::now();
-			auto result = STEPReader::readSTEPFile(
-				filePath.ToStdString(), options,
+
+			// Create optimization options for the reader
+			GeometryReader::OptimizationOptions readerOptions;
+			readerOptions.enableParallelProcessing = parallelProcessing;
+			readerOptions.enableShapeAnalysis = adaptiveMeshing;
+			readerOptions.enableCaching = true;
+			readerOptions.enableBatchOperations = true;
+			readerOptions.maxThreads = std::thread::hardware_concurrency();
+			readerOptions.precision = 0.01;
+			readerOptions.meshDeflection = meshDeflection;
+			readerOptions.angularDeflection = angularDeflection;
+
+			auto result = reader->readFile(filePathStr, readerOptions,
 				[this, flatFrame, i, &filePaths](int percent, const std::string& stage) {
 					try {
 						int base = (int)std::round(((double)i / (double)(filePaths.size() + 1)) * 100.0);
@@ -137,16 +159,14 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 
 						// Update status bar progress
 						if (m_statusBar) {
-							wxString progressMsg = wxString::Format("File %zu/%zu: %s",
-								i + 1, filePaths.size(), stage.c_str());
+							wxString progressMsg = wxString::Format("File %d/%d: %s",
+								static_cast<int>(i + 1), static_cast<int>(filePaths.size()), stage.c_str());
 							m_statusBar->SetGaugeValue(mapped);
 							m_statusBar->SetStatusText(progressMsg, 0);
 							// Force UI update
 							m_statusBar->Refresh();
 							wxYield(); // Allow UI to update
-							
-							// Debug log
-							LOG_INF_S(wxString::Format("Progress update: %d%% - %s", mapped, stage));
+
 							
 							// Small delay to make progress visible
 							wxMilliSleep(50);
@@ -209,7 +229,8 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				int percent = (int)std::round(((double)(i + 1) / (double)totalPhases) * 100.0);
 				percent = std::max(0, std::min(95, percent)); // cap before add phase
 				m_statusBar->SetGaugeValue(percent);
-				m_statusBar->SetStatusText(wxString::Format("Processed %zu/%zu files", i + 1, filePaths.size()), 0);
+				m_statusBar->SetStatusText(wxString::Format("Processed %d/%d files",
+					static_cast<int>(i + 1), static_cast<int>(filePaths.size())), 0);
 				// Force UI update
 				m_statusBar->Refresh();
 				wxYield(); // Allow UI to update
@@ -219,7 +240,8 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			if (flatFrame) {
 				int percent = (int)std::round(((double)(i + 1) / (double)totalPhases) * 100.0);
 				percent = std::max(0, std::min(95, percent)); // cap before add phase
-				flatFrame->appendMessage(wxString::Format("[%d%%] Processed %zu/%zu files", percent, i + 1, filePaths.size()));
+				flatFrame->appendMessage(wxString::Format("[%d%%] Processed %d/%d files", percent,
+					static_cast<int>(i + 1), static_cast<int>(filePaths.size())));
 			}
 		}
 
@@ -360,14 +382,14 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				m_occViewer->fitAll(); 
 			}
 
-			return CommandResult(true, "STEP files imported successfully", commandType);
+			return CommandResult(true, "Geometry files imported successfully", commandType);
 		}
 		else {
 			wxString warningMsg = wxString::Format(
 				"No valid geometries found in selected files.\n\n"
-				"Files processed: %d/%zu\n"
-				"Successful files: %d", 
-				filePaths.size(), filePaths.size(), successfulFiles
+				"Files processed: %zu/%zu\n"
+				"Successful files: %d",
+				static_cast<size_t>(filePaths.size()), static_cast<size_t>(filePaths.size()), successfulFiles
 			); 
 
 			// Ensure progress is cleaned up

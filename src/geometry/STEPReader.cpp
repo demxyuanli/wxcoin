@@ -40,6 +40,42 @@
 // Add include at top
 #include <XCAFApp_Application.hxx>
 
+// GeometryReader interface implementation
+GeometryReader::ReadResult STEPReader::readFile(const std::string& filePath,
+	const OptimizationOptions& options,
+	ProgressCallback progress)
+{
+	ReadResult result = readSTEPFile(filePath, options, progress);
+	GeometryReader::ReadResult baseResult;
+	baseResult.success = result.success;
+	baseResult.errorMessage = result.errorMessage;
+	baseResult.geometries = result.geometries;
+	baseResult.rootShape = result.rootShape;
+	baseResult.importTime = result.importTime;
+	baseResult.formatName = "STEP";
+	return baseResult;
+}
+
+bool STEPReader::isValidFile(const std::string& filePath) const
+{
+	return isSTEPFile(filePath);
+}
+
+std::vector<std::string> STEPReader::getSupportedExtensions() const
+{
+	return { ".step", ".stp" };
+}
+
+std::string STEPReader::getFormatName() const
+{
+	return "STEP";
+}
+
+std::string STEPReader::getFileFilter() const
+{
+	return "STEP files (*.step;*.stp)|*.step;*.stp";
+}
+
 // Static member initialization
 std::unordered_map<std::string, STEPReader::ReadResult> STEPReader::s_cache;
 std::mutex STEPReader::s_cacheMutex;
@@ -214,11 +250,6 @@ bool STEPReader::isSTEPFile(const std::string& filePath)
 	std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
 	return extension == ".step" || extension == ".stp";
-}
-
-std::vector<std::string> STEPReader::getSupportedExtensions()
-{
-	return { "*.step", "*.stp", "*.STEP", "*.STP" };
 }
 
 std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(

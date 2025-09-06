@@ -62,6 +62,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # 链接所有模块库
 target_link_libraries(${PROJECT_NAME} PRIVATE
     CADUI          # UI模块（包含所有其他模块的依赖）
+    CADGeometry    # Geometry模块
     wx::core
     wx::base
     Coin::Coin

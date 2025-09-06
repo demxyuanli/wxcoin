@@ -616,8 +616,11 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 
 	std::vector<gp_Pnt> points;
 	std::vector<int32_t> indices;
+	std::vector<float> colors; // Store colors for each line
 	int pointIndex = 0;
 	int normalCount = 0;
+	int correctNormalCount = 0;
+	int incorrectNormalCount = 0;
 
 	for (size_t i = 0; i < mesh.vertices.size() && i < mesh.normals.size(); ++i) {
 		const gp_Pnt& v = mesh.vertices[i];
@@ -631,18 +634,45 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 			indices.push_back(pointIndex++);
 			indices.push_back(pointIndex++);
 			indices.push_back(SO_END_LINE_INDEX);
+			
+			// Check if normal direction is correct (pointing outward)
+			// For most meshes, outward normals should have positive Z component
+			// or follow right-hand rule with triangle vertices
+			bool isCorrectDirection = true;
+			
+			// Simple heuristic: check if normal points outward based on Z component
+			// This can be enhanced with more sophisticated checks
+			if (n.Z() < 0) {
+				isCorrectDirection = false;
+			}
+			
+			// Add color for this line (RGB values)
+			if (isCorrectDirection) {
+				colors.push_back(0.0f);  // R - Green for correct normals
+				colors.push_back(1.0f);  // G
+				colors.push_back(0.0f);  // B
+				correctNormalCount++;
+			} else {
+				colors.push_back(1.0f);  // R - Red for incorrect normals
+				colors.push_back(0.0f);  // G
+				colors.push_back(0.0f);  // B
+				incorrectNormalCount++;
+			}
+			
 			normalCount++;
 		}
 	}
 
 	LOG_INF_S("Generated " + std::to_string(normalCount) + " normal lines from " +
 		std::to_string(mesh.vertices.size()) + " vertices");
+	LOG_INF_S("Correct normals: " + std::to_string(correctNormalCount) + 
+		", Incorrect normals: " + std::to_string(incorrectNormalCount));
 
 	if (normalLineNode) normalLineNode->unref();
 
-	// Create material for normal lines
+	// Create material for normal lines (base color - will be overridden by per-vertex colors)
 	SoMaterial* mat = new SoMaterial;
-	mat->diffuseColor.setValue(0.5, 0, 0.5); // Purple
+	mat->diffuseColor.setValue(0.5, 0, 0.5); // Purple (fallback)
 
 	// Create coordinates
 	SoCoordinate3* coords = new SoCoordinate3;
@@ -651,6 +681,14 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 		coords->point.set1Value(i, points[i].X(), points[i].Y(), points[i].Z());
 	}
 
+	// Create color node for per-vertex coloring
+	SoMaterialBinding* matBinding = new SoMaterialBinding;
+	matBinding->value = SoMaterialBinding::PER_VERTEX;
+
+	// Create material array for colors
+	SoMaterial* colorMat = new SoMaterial;
+	colorMat->diffuseColor.setValues(0, colors.size() / 3, reinterpret_cast<const float(*)[3]>(colors.data()));
+
 	// Create line set
 	SoIndexedLineSet* lineSet = new SoIndexedLineSet;
 	lineSet->coordIndex.setValues(0, indices.size(), indices.data());
@@ -658,7 +696,9 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 	// Create separator and add all components
 	normalLineNode = new SoSeparator;
 	normalLineNode->ref();
-	normalLineNode->addChild(mat);
+	normalLineNode->addChild(mat); // Base material
+	normalLineNode->addChild(matBinding); // Per-vertex binding
+	normalLineNode->addChild(colorMat); // Color array
 	normalLineNode->addChild(coords);
 	normalLineNode->addChild(lineSet);
 }
@@ -669,8 +709,11 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 
 	std::vector<gp_Pnt> points;
 	std::vector<int32_t> indices;
+	std::vector<float> colors; // Store colors for each line
 	int pointIndex = 0;
 	int faceNormalCount = 0;
+	int correctFaceNormalCount = 0;
+	int incorrectFaceNormalCount = 0;
 
 	// Calculate face normals for each triangle
 	for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
@@ -694,7 +737,7 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 				(p1.Z() + p2.Z() + p3.Z()) / 3.0
 			);
 
-			// Calculate face normal
+			// Calculate face normal using right-hand rule
 			gp_Vec v1(p1, p2);
 			gp_Vec v2(p1, p3);
 			gp_Vec faceNormal = v1.Crossed(v2);
@@ -703,6 +746,15 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 			double normalLength = faceNormal.Magnitude();
 			if (normalLength > 0.001) {
 				faceNormal.Scale(1.0 / normalLength);
+
+				// Check if face normal direction is correct (pointing outward)
+				// For most meshes, outward normals should have positive Z component
+				bool isCorrectDirection = true;
+				
+				// Simple heuristic: check if normal points outward based on Z component
+				if (faceNormal.Z() < 0) {
+					isCorrectDirection = false;
+				}
 
 				// Create line from face center to normal direction
 				gp_Pnt normalEnd(
@@ -716,6 +768,20 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 				indices.push_back(pointIndex++);
 				indices.push_back(pointIndex++);
 				indices.push_back(SO_END_LINE_INDEX);
+				
+				// Add color for this line (RGB values)
+				if (isCorrectDirection) {
+					colors.push_back(0.0f);  // R - Green for correct normals
+					colors.push_back(1.0f);  // G
+					colors.push_back(0.0f);  // B
+					correctFaceNormalCount++;
+				} else {
+					colors.push_back(1.0f);  // R - Red for incorrect normals
+					colors.push_back(0.0f);  // G
+					colors.push_back(0.0f);  // B
+					incorrectFaceNormalCount++;
+				}
+				
 				faceNormalCount++;
 			}
 		}
@@ -723,12 +789,14 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 
 	LOG_INF_S("Generated " + std::to_string(faceNormalCount) + " face normal lines from " +
 		std::to_string(mesh.triangles.size() / 3) + " triangles");
+	LOG_INF_S("Correct face normals: " + std::to_string(correctFaceNormalCount) + 
+		", Incorrect face normals: " + std::to_string(incorrectFaceNormalCount));
 
 	if (faceNormalLineNode) faceNormalLineNode->unref();
 
-	// Create material for face normal lines
+	// Create material for face normal lines (base color - will be overridden by per-vertex colors)
 	SoMaterial* mat = new SoMaterial;
-	mat->diffuseColor.setValue(0, 0.5, 0.5); // Cyan
+	mat->diffuseColor.setValue(0, 0.5, 0.5); // Cyan (fallback)
 
 	// Create coordinates
 	SoCoordinate3* coords = new SoCoordinate3;
@@ -737,6 +805,14 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 		coords->point.set1Value(i, points[i].X(), points[i].Y(), points[i].Z());
 	}
 
+	// Create color node for per-vertex coloring
+	SoMaterialBinding* matBinding = new SoMaterialBinding;
+	matBinding->value = SoMaterialBinding::PER_VERTEX;
+
+	// Create material array for colors
+	SoMaterial* colorMat = new SoMaterial;
+	colorMat->diffuseColor.setValues(0, colors.size() / 3, reinterpret_cast<const float(*)[3]>(colors.data()));
+
 	// Create line set
 	SoIndexedLineSet* lineSet = new SoIndexedLineSet;
 	lineSet->coordIndex.setValues(0, indices.size(), indices.data());
@@ -744,7 +820,9 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 	// Create separator and add all components
 	faceNormalLineNode = new SoSeparator;
 	faceNormalLineNode->ref();
-	faceNormalLineNode->addChild(mat);
+	faceNormalLineNode->addChild(mat); // Base material
+	faceNormalLineNode->addChild(matBinding); // Per-vertex binding
+	faceNormalLineNode->addChild(colorMat); // Color array
 	faceNormalLineNode->addChild(coords);
 	faceNormalLineNode->addChild(lineSet);
 }

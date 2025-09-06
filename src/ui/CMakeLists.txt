@@ -109,6 +109,7 @@ target_link_libraries(UIFrame PUBLIC
     CADInput
     NavCubeLib
     CADOCC
+    CADGeometry
     CADCommands
     RenderPreview
     CADFlatUI
@@ -146,6 +147,7 @@ target_link_libraries(SimpleDockingFrame PUBLIC
     CADFlatUI
     widgets
     CADOCC
+    CADGeometry
     CADRendering
     CADInput
     NavCubeLib

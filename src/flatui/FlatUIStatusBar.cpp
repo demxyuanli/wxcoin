@@ -128,7 +128,5 @@ void FlatUIStatusBar::SetGaugeValue(int value) {
 		m_progress->SetValue(value);
 		// Force refresh to ensure progress is visible
 		m_progress->Refresh();
-		// Debug log
-		LOG_INF_S(wxString::Format("StatusBar progress set to: %d", value));
 	}
 }
