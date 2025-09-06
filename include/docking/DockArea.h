@@ -83,6 +83,12 @@ struct DockStyleConfig {
     wxString autoHideIconName = "auto_hide";
     wxString menuIconName = "menu";
 
+    // Pattern decoration configuration
+    wxColour patternDotColour = wxColour(180, 180, 180, 120); // Pattern dot color with transparency
+    int patternWidth = 3;          // Pattern width in pixels
+    int patternHeight = 5;         // Pattern height in pixels
+    int patternSpacing = 0;        // Spacing between patterns (0 = no spacing)
+
     // Set style with predefined configurations
     void SetStyle(DockStyle newStyle) {
         style = newStyle;
@@ -320,6 +326,7 @@ private:
     void updateTabRects();
     void drawTab(wxDC& dc, int index);
     void drawButton(wxDC& dc, const wxRect& rect, const wxString& text, bool hovered);
+    void drawTitleBarPattern(wxDC& dc, const wxRect& rect);
     int getTabAt(const wxPoint& pos) const;
     wxRect getButtonRect(int buttonIndex) const; // 0=pin, 1=close, 2=auto hide
     void showTabOverflowMenu();
@@ -440,6 +447,7 @@ private:
     wxBoxSizer* m_layout;
     
     void createButtons();
+    void drawTitleBarPattern(wxDC& dc, const wxRect& rect);
     
     wxDECLARE_EVENT_TABLE();
 };

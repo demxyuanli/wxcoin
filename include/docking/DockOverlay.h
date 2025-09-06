@@ -13,6 +13,7 @@ namespace ads {
 class DockWidget;
 class DockArea;
 class DockContainerWidget;
+class FloatingDragPreview;
 
 /**
  * @brief Drop area for dock overlay
@@ -98,6 +99,11 @@ public:
 
     // Global mode visual enhancements
     void drawGlobalModeHints(wxDC& dc);
+    
+    // Drag preview callback
+    void setDragPreviewCallback(std::function<void(DockWidgetArea, const wxSize&)> callback) { 
+        m_dragPreviewCallback = callback; 
+    }
     void drawGlobalModeTextHints(wxDC& dc);
 
     // Direction indicators
@@ -157,6 +163,9 @@ private:
     // Performance optimization variables
     bool m_optimizedRendering;
     std::map<DockWidgetArea, wxRect> m_cachedGeometries;
+    
+    // Drag preview callback
+    std::function<void(DockWidgetArea, const wxSize&)> m_dragPreviewCallback;
 
     // Global docking mode variables
     bool m_isGlobalMode;

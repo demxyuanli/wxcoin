@@ -189,6 +189,17 @@ void DockStyleConfig::InitializeFromThemeManager() {
         if (tabTopMargin <= 0) tabTopMargin = 4;  // Default to 4 as specified
 
         titleBarHeight = DOCK_INT("TitleBarHeight");  // Use specific title bar height
+        
+        // Pattern decoration configuration from theme
+        patternDotColour = DOCK_COLOUR("PatternDotColour");
+        patternWidth = DOCK_INT("PatternWidth");
+        patternHeight = DOCK_INT("PatternHeight");
+        patternSpacing = DOCK_INT("PatternSpacing");
+        
+        // Set defaults if not configured in theme
+        if (patternWidth <= 0) patternWidth = 3;
+        if (patternHeight <= 0) patternHeight = 5;
+        if (patternSpacing < 0) patternSpacing = 0;
         if (titleBarHeight <= 0) titleBarHeight = 30;  // Default to 30 as specified
 
         borderWidth = DOCK_INT("BorderWidth");  // Use specific border width

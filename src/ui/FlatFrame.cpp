@@ -652,7 +652,7 @@ void FlatFrame::ShowUIHierarchy()
 void FlatFrame::PrintUILayout(wxCommandEvent& event)
 {
 	// Create a debug dialog to show UI layout details
-	wxDialog* layoutDialog = new wxDialog(this, wxID_ANY, "UI Layout Details",
+	wxDialog* layoutDialog = new wxDialog(nullptr, wxID_ANY, "UI Layout Details",
 		wxDefaultPosition, wxSize(600, 400));
 
 	wxTextCtrl* layoutText = new wxTextCtrl(layoutDialog, wxID_ANY, "",
@@ -668,7 +668,7 @@ void FlatFrame::PrintUILayout(wxCommandEvent& event)
 	layoutDialog->SetSizer(sizer);
 
 	wxLog* oldLog = wxLog::SetActiveTarget(new wxLogTextCtrl(layoutText));
-	LogUILayout(this);
+	LogUILayout();
 	wxLog::SetActiveTarget(oldLog);
 	if (oldLog != wxLog::GetActiveTarget()) {
 		delete oldLog;

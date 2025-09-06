@@ -398,10 +398,18 @@ void DockArea::closeArea() {
 
     // Check if this is the last dock area
     if (m_containerWidget && m_containerWidget->dockAreaCount() <= 1) {
-        wxLogDebug("Cannot close the last dock area");
-        // Optionally show a message to the user
-        wxMessageBox("Cannot close the last dock area", "Warning", wxOK | wxICON_WARNING);
-        return;
+        // Allow closing if this is in a floating container (close floating window)
+        bool isFloating = false;
+        if (FloatingDockContainer* floatingWidget = m_containerWidget->floatingWidget()) {
+            isFloating = true;
+        }
+        
+        if (!isFloating) {
+            wxLogDebug("Cannot close the last dock area");
+            // Optionally show a message to the user
+            wxMessageBox("Cannot close the last dock area", "Warning", wxOK | wxICON_WARNING);
+            return;
+        }
     }
 
     m_isClosing = true;

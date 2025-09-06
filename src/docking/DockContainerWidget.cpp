@@ -210,6 +210,13 @@ void DockContainerWidget::removeDockArea(DockArea* area) {
         remainingArea->updateTitleBarButtonStates();
     }
     
+    // Check if this is a floating container and it's now empty
+    if (m_floatingWidget && m_dockAreas.empty()) {
+        // Close the floating window
+        m_floatingWidget->Close();
+        return; // Don't destroy the area, the floating window will handle cleanup
+    }
+    
     // Now safely destroy the area
     area->Destroy();
 }

@@ -22,6 +22,7 @@ class FloatingDragPreview;
 
 /**
  * @brief Container for floating dock widgets
+ * Uses DockArea's title bar as window title bar
  */
 class FloatingDockContainer : public wxFrame {
 public:
@@ -111,7 +112,7 @@ private:
     friend class DockManager;
     friend class DockArea;
     friend class DockWidget;
-    
+
     wxDECLARE_EVENT_TABLE();
 };
 
@@ -133,6 +134,10 @@ public:
     void moveFloating(const wxPoint& globalPos);
     void finishDrag();
     
+    // Size management
+    void setPreviewSize(DockWidgetArea area, const wxSize& targetSize);
+    void resetToDefaultSize();
+    
     // State
     bool isAnimated() const { return m_animated; }
     void setAnimated(bool animated) { m_animated = animated; }
@@ -149,8 +154,12 @@ private:
     wxTimer* m_animationTimer;
     int m_fadeAlpha;
     bool m_fadingIn;
+    wxSize m_defaultSize;
+    wxSize m_currentSize;
+    DockWidgetArea m_currentArea;
     
     void updateContentBitmap();
+    wxSize calculatePreviewSize(DockWidgetArea area, const wxSize& targetSize) const;
     
     wxDECLARE_EVENT_TABLE();
 };

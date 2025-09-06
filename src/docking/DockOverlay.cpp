@@ -59,6 +59,7 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_lastRefreshTime(0)
     , m_refreshCount(0)
     , m_isGlobalMode(false)
+    , m_dragPreviewCallback(nullptr)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
 
@@ -232,6 +233,25 @@ void DockOverlay::onMouseMove(wxMouseEvent& event) {
     if (hoveredArea != m_lastHoveredArea) {
         for (auto& dropArea : m_dropAreas) {
             dropArea->setHighlighted(dropArea->area() == hoveredArea);
+        }
+        
+        // Notify drag preview to change size if callback is set
+        if (m_dragPreviewCallback && hoveredArea != InvalidDockWidgetArea) {
+            wxRect targetRect = getPreviewRect(hoveredArea);
+            wxLogDebug("DockOverlay::onMouseMove - hoveredArea=%d, targetRect=(%d,%d,%d,%d)", 
+                      hoveredArea, targetRect.x, targetRect.y, targetRect.width, targetRect.height);
+            if (!targetRect.IsEmpty()) {
+                wxLogDebug("Calling drag preview callback with size %dx%d", targetRect.GetWidth(), targetRect.GetHeight());
+                m_dragPreviewCallback(hoveredArea, targetRect.GetSize());
+            } else {
+                wxLogDebug("Target rect is empty, not calling callback");
+            }
+        } else if (m_dragPreviewCallback && hoveredArea == InvalidDockWidgetArea) {
+            // Reset to default size when not hovering over any area
+            wxLogDebug("Resetting drag preview to default size");
+            m_dragPreviewCallback(InvalidDockWidgetArea, wxSize());
+        } else {
+            wxLogDebug("No drag preview callback set");
         }
         
         m_lastHoveredArea = hoveredArea;

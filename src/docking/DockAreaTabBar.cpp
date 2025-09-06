@@ -468,6 +468,20 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
                 wxLogDebug("Found target DockArea, showing overlay");
                 DockOverlay* overlay = manager->dockAreaOverlay();
                 if (overlay) {
+                    // Set drag preview callback to update preview size
+                    if (m_dragPreview) {
+                        overlay->setDragPreviewCallback([this](DockWidgetArea area, const wxSize& size) {
+                            wxLogDebug("Drag preview callback: area=%d, size=%dx%d", area, size.GetWidth(), size.GetHeight());
+                            if (area != InvalidDockWidgetArea && size.GetWidth() > 0 && size.GetHeight() > 0) {
+                                wxLogDebug("Setting preview size to %dx%d for area %d", size.GetWidth(), size.GetHeight(), area);
+                                m_dragPreview->setPreviewSize(area, size);
+                            } else {
+                                wxLogDebug("Resetting to default size");
+                                m_dragPreview->resetToDefaultSize();
+                            }
+                        });
+                    }
+                    
                     // If over tab bar, only show center drop area for tab merge
                     if (targetTabBar && targetTabBar->GetParent() == targetArea) {
                         wxLogDebug("Over tab bar - showing center drop area only");

@@ -83,6 +83,9 @@ void DockAreaTitleBar::onPaint(wxPaintEvent& event) {
     // Draw styled background using new style system
     wxRect rect(0, 0, GetClientSize().GetWidth(), style.titleBarHeight);
     DrawStyledRect(dc, rect, style, false, false, true);  // Title bar with bottom border
+    
+    // Draw decorative pattern on title bar
+    drawTitleBarPattern(dc, rect);
 }
 
 void DockAreaTitleBar::onCloseButtonClicked(wxCommandEvent& event) {
@@ -183,6 +186,89 @@ void DockAreaTitleBar::createButtons() {
             }
         } catch (...) {}
     }
+}
+
+void DockAreaTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
+    // Draw decorative horizontal dot bar between title and buttons
+    // Create a 3x5 pixel dot pattern decoration in the middle area
+    
+    // Save current pen and brush
+    wxPen oldPen = dc.GetPen();
+    wxBrush oldBrush = dc.GetBrush();
+    
+    // Calculate the position for the decoration bar
+    // Find the rightmost title text and leftmost button to position the bar between them
+    int leftX = 0;
+    int rightX = rect.width;
+    
+    // Find rightmost title text position
+    if (m_titleLabel && m_titleLabel->IsShown()) {
+        wxRect titleRect = m_titleLabel->GetRect();
+        leftX = std::max(leftX, titleRect.GetRight());
+    }
+    
+    // Find leftmost button position
+    if (m_menuButton && m_menuButton->IsShown()) {
+        wxRect buttonRect = m_menuButton->GetRect();
+        rightX = std::min(rightX, buttonRect.GetLeft());
+    }
+    if (m_autoHideButton && m_autoHideButton->IsShown()) {
+        wxRect buttonRect = m_autoHideButton->GetRect();
+        rightX = std::min(rightX, buttonRect.GetLeft());
+    }
+    if (m_closeButton && m_closeButton->IsShown()) {
+        wxRect buttonRect = m_closeButton->GetRect();
+        rightX = std::min(rightX, buttonRect.GetLeft());
+    }
+    
+    // Add some margin
+    leftX += 8;   // 8px margin from title
+    rightX -= 8;  // 8px margin from buttons
+    
+    // Only draw if there's enough space
+    if (rightX > leftX + 20) {
+        // Get style config with theme initialization
+        const DockStyleConfig& style = GetDockStyleConfig();
+        
+        // Set dot pattern colors from theme
+        wxColour dotColor = style.patternDotColour;
+        
+        // Set pen and brush for dots
+        dc.SetPen(wxPen(dotColor, 1));
+        dc.SetBrush(wxBrush(dotColor));
+        
+        // Pattern parameters from theme configuration
+        int patternWidth = style.patternWidth;   // Pattern width from theme
+        int patternHeight = style.patternHeight; // Pattern height from theme
+        int dotSize = 1;        // 1 pixel dots
+        
+        // Calculate vertical center position
+        int centerY = rect.y + (rect.height - patternHeight) / 2;
+        
+        // Draw horizontal tiling pattern across the available space (no spacing)
+        int currentX = leftX;
+        int patternCount = 0;
+        
+        while (currentX + patternWidth <= rightX) {
+            // Draw the 3 specific dots in 3x3 pattern at current position
+            // Top-left dot (position 0,0)
+            dc.DrawCircle(currentX, centerY, dotSize);
+            
+            // Bottom-left dot (position 0,2)
+            dc.DrawCircle(currentX, centerY + 2, dotSize);
+            
+            // Right-middle dot (position 2,1)
+            dc.DrawCircle(currentX + 2, centerY + 1, dotSize);
+            
+            // Move to next pattern position (no spacing)
+            currentX += patternWidth;
+            patternCount++;
+        }
+    }
+    
+    // Restore original pen and brush
+    dc.SetPen(oldPen);
+    dc.SetBrush(oldBrush);
 }
 
 } // namespace ads

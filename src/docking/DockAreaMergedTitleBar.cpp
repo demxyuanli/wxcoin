@@ -65,7 +65,16 @@ void DockAreaMergedTitleBar::updateTitle() {
 void DockAreaMergedTitleBar::updateButtonStates() {
     // Update button visibility based on features
     if (m_dockArea && m_dockArea->dockContainer()) {
-        bool canCloseArea = m_dockArea->dockContainer()->dockAreaCount() > 1;
+        // Check if this dock area is in a floating container
+        bool isFloating = false;
+        if (FloatingDockContainer* floatingWidget = m_dockArea->dockContainer()->floatingWidget()) {
+            isFloating = true;
+        }
+        
+        // Show close button if:
+        // 1. Multiple dock areas (normal docked behavior)
+        // 2. Single dock area in floating window (close floating window)
+        bool canCloseArea = m_dockArea->dockContainer()->dockAreaCount() > 1 || isFloating;
         m_showCloseButton = canCloseArea;
     }
 
@@ -143,6 +152,11 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
     dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.DrawRectangle(clientRect);
+
+    // Draw decorative pattern on title bar
+    wxLogDebug("DockAreaMergedTitleBar::onPaint - Drawing pattern on rect: %dx%d at (%d,%d)", 
+               clientRect.width, clientRect.height, clientRect.x, clientRect.y);
+    drawTitleBarPattern(dc, clientRect);
 
     // Draw bottom border
     dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
@@ -1001,6 +1015,93 @@ void DockAreaMergedTitleBar::showDragFeedback(bool showMergeHint) {
     } else {
         UnsetToolTip();
     }
+}
+
+void DockAreaMergedTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
+    // Draw decorative horizontal dot bar between tabs and buttons
+    // Create a 3x5 pixel dot pattern decoration in the middle area
+    
+    wxLogDebug("DockAreaMergedTitleBar::drawTitleBarPattern - Drawing horizontal dot bar on rect: %dx%d at (%d,%d)", 
+               rect.width, rect.height, rect.x, rect.y);
+    
+    // Save current pen and brush
+    wxPen oldPen = dc.GetPen();
+    wxBrush oldBrush = dc.GetBrush();
+    
+    // Calculate the position for the decoration bar
+    // Find the rightmost tab and leftmost button to position the bar between them
+    int leftX = 0;
+    int rightX = rect.width;
+    
+    // Find rightmost tab position
+    for (const auto& tab : m_tabs) {
+        if (!tab.rect.IsEmpty()) {
+            leftX = std::max(leftX, tab.rect.GetRight());
+        }
+    }
+    
+    // Find leftmost button position
+    if (m_showAutoHideButton && !m_autoHideButtonRect.IsEmpty()) {
+        rightX = std::min(rightX, m_autoHideButtonRect.GetLeft());
+    }
+    if (m_showPinButton && !m_pinButtonRect.IsEmpty()) {
+        rightX = std::min(rightX, m_pinButtonRect.GetLeft());
+    }
+    if (m_showCloseButton && !m_closeButtonRect.IsEmpty()) {
+        rightX = std::min(rightX, m_closeButtonRect.GetLeft());
+    }
+    
+    // Add some margin
+    leftX += 8;   // 8px margin from tabs
+    rightX -= 8;  // 8px margin from buttons
+    
+    // Only draw if there's enough space
+    if (rightX > leftX + 20) {
+        // Get style config with theme initialization
+        const DockStyleConfig& style = GetDockStyleConfig();
+        
+        // Set dot pattern colors from theme
+        wxColour dotColor = style.patternDotColour;
+        
+        // Set pen and brush for dots
+        dc.SetPen(wxPen(dotColor, 1));
+        dc.SetBrush(wxBrush(dotColor));
+        
+        // Pattern parameters from theme configuration
+        int patternWidth = style.patternWidth;   // Pattern width from theme
+        int patternHeight = style.patternHeight; // Pattern height from theme
+        int dotSize = 1;        // 1 pixel dots
+        
+        // Calculate vertical center position
+        int centerY = rect.y + (rect.height - patternHeight) / 2;
+        
+        // Draw horizontal tiling pattern across the available space (no spacing)
+        int currentX = leftX;
+        int patternCount = 0;
+        
+        while (currentX + patternWidth <= rightX) {
+            // Draw the 3 specific dots in 3x3 pattern at current position
+            // Top-left dot (position 0,0)
+            dc.DrawCircle(currentX, centerY, dotSize);
+            
+            // Bottom-left dot (position 0,2)
+            dc.DrawCircle(currentX, centerY + 2, dotSize);
+            
+            // Right-middle dot (position 2,1)
+            dc.DrawCircle(currentX + 2, centerY + 1, dotSize);
+            
+            // Move to next pattern position (no spacing)
+            currentX += patternWidth;
+            patternCount++;
+        }
+        
+        wxLogDebug("DockAreaMergedTitleBar::drawTitleBarPattern - Drawing tiling pattern from x=%d to x=%d, patterns=%d", 
+                   leftX, rightX, patternCount);
+    }
+    
+    // Restore original pen and brush
+    dc.SetPen(oldPen);
+    dc.SetBrush(oldBrush);
 }
 
 } // namespace ads

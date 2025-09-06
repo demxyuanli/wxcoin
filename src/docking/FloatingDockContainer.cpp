@@ -36,13 +36,13 @@ public:
 
 // Constructors
 FloatingDockContainer::FloatingDockContainer(DockManager* dockManager)
-    : wxFrame(dockManager ? dockManager->containerWidget()->GetParent() : nullptr, 
-             wxID_ANY, "Floating Dock", 
+    : wxFrame(dockManager ? dockManager->containerWidget()->GetParent() : nullptr,
+             wxID_ANY, "Floating Dock",
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_NO_TASKBAR)
+             wxFRAME_NO_TASKBAR | wxBORDER_NONE) // No system title bar
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockManager)
-    , m_hasNativeTitleBar(true)
+    , m_hasNativeTitleBar(false) // Use DockArea's title bar
     , m_dragState(DraggingInactive)
     , m_dragPreview(nullptr)
 {
@@ -50,13 +50,13 @@ FloatingDockContainer::FloatingDockContainer(DockManager* dockManager)
 }
 
 FloatingDockContainer::FloatingDockContainer(DockArea* dockArea)
-    : wxFrame(dockArea && dockArea->dockManager() ? dockArea->dockManager()->containerWidget()->GetParent() : nullptr, 
-             wxID_ANY, "Floating Dock", 
+    : wxFrame(dockArea && dockArea->dockManager() ? dockArea->dockManager()->containerWidget()->GetParent() : nullptr,
+             wxID_ANY, "Floating Dock",
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_NO_TASKBAR)
+             wxFRAME_NO_TASKBAR | wxBORDER_NONE) // No system title bar
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockArea ? dockArea->dockManager() : nullptr)
-    , m_hasNativeTitleBar(true)
+    , m_hasNativeTitleBar(false) // Use DockArea's title bar
     , m_dragState(DraggingInactive)
     , m_dragPreview(nullptr)
 {
@@ -72,18 +72,26 @@ FloatingDockContainer::FloatingDockContainer(DockArea* dockArea)
         // Add to floating container
         m_dockContainer->addDockArea(dockArea, CenterDockWidgetArea);
         dockArea->Reparent(m_dockContainer);
+        
+        // Ensure proper layout after adding content
+        m_dockContainer->Layout();
+        Layout();
+        Refresh();
+        
+        // Update window title
+        updateWindowTitle();
     }
 }
 
 FloatingDockContainer::FloatingDockContainer(DockWidget* dockWidget)
-    : wxFrame(dockWidget && dockWidget->dockManager() ? dockWidget->dockManager()->containerWidget()->GetParent() : nullptr, 
-             wxID_ANY, 
-             dockWidget ? dockWidget->title() : "Floating Dock", 
+    : wxFrame(dockWidget && dockWidget->dockManager() ? dockWidget->dockManager()->containerWidget()->GetParent() : nullptr,
+             wxID_ANY,
+             dockWidget ? dockWidget->title() : "Floating Dock",
              wxDefaultPosition, wxSize(400, 300),
-             wxDEFAULT_FRAME_STYLE | wxFRAME_NO_TASKBAR)
+             wxFRAME_NO_TASKBAR | wxBORDER_NONE) // No system title bar
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockWidget ? dockWidget->dockManager() : nullptr)
-    , m_hasNativeTitleBar(true)
+    , m_hasNativeTitleBar(false) // Use DockArea's title bar
     , m_dragState(DraggingInactive)
     , m_dragPreview(nullptr)
 {
@@ -106,19 +114,27 @@ void FloatingDockContainer::init() {
     // Create dock container
     m_dockContainer = new DockContainerWidget(m_dockManager, this);
     m_dockContainer->setFloatingWidget(this);
+
+    // Set up layout to make dock container fill the entire window
+    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    sizer->Add(m_dockContainer, 1, wxEXPAND);
+    SetSizer(sizer);
+
+    // Ensure dock container is properly sized and visible
+    m_dockContainer->Show(true);
+    m_dockContainer->SetMinSize(wxSize(200, 150)); // Set minimum size
     
-    // Setup custom title bar if needed
-    if (!m_hasNativeTitleBar) {
-        setupCustomTitleBar();
-    }
-    
+    // Force layout update
+    Layout();
+    Refresh();
+
     // Set proper window behavior
     // Don't use wxSTAY_ON_TOP as it can cause focus issues
     // The window will behave like a normal frame window
-    
+
     // Bind close event to handle proper cleanup
     Bind(wxEVT_CLOSE_WINDOW, &FloatingDockContainer::onClose, this);
-    
+
     // Register with manager
     if (m_dockManager) {
         m_dockManager->onFloatingWidgetCreated(this);
@@ -132,6 +148,11 @@ void FloatingDockContainer::addDockWidget(DockWidget* dockWidget) {
     
     m_dockContainer->addDockWidget(CenterDockWidgetArea, dockWidget);
     updateWindowTitle();
+    
+    // Ensure proper layout after adding content
+    m_dockContainer->Layout();
+    Layout();
+    Refresh();
     
     // Make sure the window is shown after content is added
     if (!IsShown()) {
@@ -199,20 +220,8 @@ void FloatingDockContainer::updateWindowTitle() {
 }
 
 void FloatingDockContainer::setNativeTitleBar(bool native) {
-    if (m_hasNativeTitleBar == native) {
-        return;
-    }
-    
-    m_hasNativeTitleBar = native;
-    
-    if (native) {
-        // Use native title bar
-        SetWindowStyleFlag(wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT);
-    } else {
-        // Use custom title bar
-        SetWindowStyleFlag(wxFRAME_NO_TASKBAR | wxFRAME_FLOAT_ON_PARENT | wxBORDER_NONE);
-        setupCustomTitleBar();
-    }
+    // Always use DockArea's title bar now
+    m_hasNativeTitleBar = false;
 }
 
 void FloatingDockContainer::saveState(wxString& xmlData) const {
@@ -244,19 +253,18 @@ void FloatingDockContainer::finishDragging() {
 }
 
 bool FloatingDockContainer::isInTitleBar(const wxPoint& pos) const {
-    if (m_hasNativeTitleBar) {
-        // For native title bar, check if in top area
-        wxRect titleRect(0, 0, GetSize().GetWidth(), 30);
-        return titleRect.Contains(ScreenToClient(pos));
-    } else {
-        // TODO: Check custom title bar
-        return false;
+    // Check if we're in DockArea's title bar
+    if (m_dockContainer && m_dockContainer->dockAreaCount() > 0) {
+        DockArea* area = m_dockContainer->dockArea(0);
+        if (area && area->titleBar()) {
+            wxPoint clientPos = ScreenToClient(pos);
+            wxRect titleRect = area->titleBar()->GetRect();
+            return titleRect.Contains(clientPos);
+        }
     }
+    return false;
 }
 
-void FloatingDockContainer::setupCustomTitleBar() {
-    // TODO: Implement custom title bar
-}
 
 bool FloatingDockContainer::testConfigFlag(DockManagerFeature flag) const {
     if (m_dockManager) {
@@ -503,6 +511,9 @@ FloatingDragPreview::FloatingDragPreview(DockWidget* content, wxWindow* parent)
     , m_animated(true)
     , m_fadeAlpha(0)
     , m_fadingIn(false)
+    , m_defaultSize(200, 150)
+    , m_currentSize(200, 150)
+    , m_currentArea(InvalidDockWidgetArea)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     m_animationTimer = new wxTimer(this);
@@ -516,6 +527,9 @@ FloatingDragPreview::FloatingDragPreview(DockArea* content, wxWindow* parent)
     , m_animated(true)
     , m_fadeAlpha(0)
     , m_fadingIn(false)
+    , m_defaultSize(200, 150)
+    , m_currentSize(200, 150)
+    , m_currentArea(InvalidDockWidgetArea)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     m_animationTimer = new wxTimer(this);
@@ -574,6 +588,78 @@ void FloatingDragPreview::finishDrag() {
         m_animationTimer->Stop();
     }
     Hide();
+}
+
+void FloatingDragPreview::setPreviewSize(DockWidgetArea area, const wxSize& targetSize) {
+    wxLogDebug("FloatingDragPreview::setPreviewSize called: area=%d, targetSize=%dx%d", area, targetSize.GetWidth(), targetSize.GetHeight());
+    
+    if (area == m_currentArea && targetSize == m_currentSize) {
+        wxLogDebug("No change needed, same area and size");
+        return; // No change needed
+    }
+    
+    m_currentArea = area;
+    m_currentSize = calculatePreviewSize(area, targetSize);
+    
+    wxLogDebug("Calculated preview size: %dx%d", m_currentSize.GetWidth(), m_currentSize.GetHeight());
+    
+    // Update window size
+    SetSize(m_currentSize);
+    
+    // Update position to maintain cursor offset
+    wxPoint mousePos = wxGetMousePosition();
+    wxPoint offset(-m_currentSize.GetWidth() / 2, -20);
+    SetPosition(mousePos + offset);
+    
+    // Trigger repaint
+    Refresh();
+    
+    wxLogDebug("Preview window updated to size %dx%d", m_currentSize.GetWidth(), m_currentSize.GetHeight());
+}
+
+void FloatingDragPreview::resetToDefaultSize() {
+    if (m_currentSize == m_defaultSize) {
+        return; // No change needed
+    }
+    
+    m_currentArea = InvalidDockWidgetArea;
+    m_currentSize = m_defaultSize;
+    
+    // Update window size
+    SetSize(m_currentSize);
+    
+    // Update position to maintain cursor offset
+    wxPoint mousePos = wxGetMousePosition();
+    wxPoint offset(-m_currentSize.GetWidth() / 2, -20);
+    SetPosition(mousePos + offset);
+    
+    // Trigger repaint
+    Refresh();
+}
+
+wxSize FloatingDragPreview::calculatePreviewSize(DockWidgetArea area, const wxSize& targetSize) const {
+    // Calculate preview size based on dock area type
+    switch (area) {
+    case TopDockWidgetArea:
+    case BottomDockWidgetArea:
+        // Horizontal areas - use target width, but limit height
+        return wxSize(std::min(targetSize.GetWidth(), 400), 
+                     std::min(targetSize.GetHeight() / 3, 150));
+                     
+    case LeftDockWidgetArea:
+    case RightDockWidgetArea:
+        // Vertical areas - use target height, but limit width
+        return wxSize(std::min(targetSize.GetWidth() / 3, 150),
+                     std::min(targetSize.GetHeight(), 300));
+                     
+    case CenterDockWidgetArea:
+        // Center area - use target size with limits
+        return wxSize(std::min(targetSize.GetWidth(), 400),
+                     std::min(targetSize.GetHeight(), 300));
+                     
+    default:
+        return m_defaultSize;
+    }
 }
 
 void FloatingDragPreview::onPaint(wxPaintEvent& event) {
@@ -656,16 +742,22 @@ void FloatingDragPreview::onTimer(wxTimerEvent& event) {
     }
 }
 
+void FloatingDockContainer::setupCustomTitleBar() {
+    // TODO: Implement custom title bar for FloatingDockContainer
+    // This method is called when switching to custom title bar mode
+    // For now, this is a placeholder implementation
+}
+
 void FloatingDockContainer::startDragging(const wxPoint& dragOffset) {
     // Start dragging programmatically
     d->isDragging = true;
     d->dragOffset = dragOffset;
-    
+
     // Capture mouse to receive all mouse events
     if (!HasCapture()) {
         CaptureMouse();
     }
-    
+
     // Move window to follow mouse
     wxPoint mousePos = wxGetMousePosition();
     SetPosition(mousePos - dragOffset);

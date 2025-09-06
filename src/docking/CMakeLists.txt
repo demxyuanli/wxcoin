@@ -12,6 +12,7 @@ set(DOCKING_SOURCES
     DockContainerLayout.cpp
     DockContainerUtils.cpp
     FloatingDockContainer.cpp
+    FloatingDockFrame.cpp
     DockOverlay.cpp
     DockingIntegration.cpp
     AutoHideContainer.cpp
@@ -28,6 +29,7 @@ set(DOCKING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/docking/DockSplitter.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockContainerWidget.h
     ${CMAKE_SOURCE_DIR}/include/docking/FloatingDockContainer.h
+    ${CMAKE_SOURCE_DIR}/include/docking/FloatingDockFrame.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockOverlay.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockingIntegration.h
     ${CMAKE_SOURCE_DIR}/include/docking/AutoHideContainer.h
