@@ -140,8 +140,12 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
     // For now, just add to the root splitter
     if (DockSplitter* splitter = dynamic_cast<DockSplitter*>(m_rootSplitter)) {
         if (splitter->GetWindow1() == nullptr) {
+            // Reparent dockArea to splitter before calling Initialize
+            dockArea->Reparent(splitter);
             splitter->Initialize(dockArea);
         } else if (splitter->GetWindow2() == nullptr) {
+            // Reparent dockArea to splitter before splitting
+            dockArea->Reparent(splitter);
             // Split based on area
             if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
                 splitter->SplitVertically(splitter->GetWindow1(), dockArea);
@@ -154,6 +158,10 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
             wxWindow* oldWindow = splitter->GetWindow2();
             
             splitter->ReplaceWindow(oldWindow, newSplitter);
+            
+            // Reparent both windows to newSplitter before splitting
+            oldWindow->Reparent(newSplitter);
+            dockArea->Reparent(newSplitter);
             
             if (area == LeftDockWidgetArea || area == RightDockWidgetArea) {
                 newSplitter->SplitVertically(oldWindow, dockArea);
