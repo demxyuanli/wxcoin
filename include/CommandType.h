@@ -8,216 +8,222 @@
 // This ensures compile-time safety and centralized management.
 
 namespace cmd {
+	// clang-format off
+	enum class CommandType {
+		// File
+		FileNew,
+		FileOpen,
+		FileSave,
+		FileSaveAs,
+		ImportSTEP,
+		FileExit,
 
-// clang-format off
-enum class CommandType {
-    // File
-    FileNew,
-    FileOpen,
-    FileSave,
-    FileSaveAs,
-    ImportSTEP,
-    FileExit,
+		// Geometry creation
+		CreateBox,
+		CreateSphere,
+		CreateCylinder,
+		CreateCone,
+		CreateTorus,
+		CreateTruncatedCylinder,
+		CreateWrench,
 
-    // Geometry creation
-    CreateBox,
-    CreateSphere,
-    CreateCylinder,
-    CreateCone,
-    CreateTorus,
-    CreateTruncatedCylinder,
-    CreateWrench,
+		// View
+		ViewAll,
+		ViewTop,
+		ViewFront,
+		ViewRight,
+		ViewIsometric,
 
-    // View
-    ViewAll,
-    ViewTop,
-    ViewFront,
-    ViewRight,
-    ViewIsometric,
+		// Viewer toggles / actions
+		ShowNormals,
+		ShowFaces,
+		FixNormals,
+		// ShowSilhouetteEdges, // removed, use Outline toggle
+		ToggleOutline,
+		SetTransparency,
+		ToggleWireframe,
+		// Removed ToggleShading - functionality not needed
+		ToggleEdges,
+		ShowOriginalEdges,
+		ShowFeatureEdges, // New: show feature edges
+		ShowMeshEdges, // New: show mesh edges
+		ShowFaceNormals, // New: show face normals
 
-    // Viewer toggles / actions
-    ShowNormals,
-    FixNormals,
-    ShowEdges,
-    SetTransparency,
-    ToggleWireframe,
-    ToggleShading,
-    ToggleEdges,
+		// Texture modes
+		TextureModeDecal,
+		TextureModeModulate,
+		TextureModeReplace,
+		TextureModeBlend,
 
+		// Assembly
+		ExplodeAssembly,
+		// Slice
+		SliceToggle,
+		// Edit
+		Undo,
+		Redo,
 
+		// Navigation / settings
+		NavCubeConfig,
+		ZoomSpeed,
+		MeshQualityDialog,
+		RenderingSettings,
+		EdgeSettings,
+		LightingSettings,
+		ToggleCoordinateSystem,
+		ToggleReferenceGrid,
+		ToggleChessboardGrid,
 
-    // Edit
-    Undo,
-    Redo,
+		// Help
+		HelpAbout,
 
-    // Navigation / settings
-    NavCubeConfig,
-    ZoomSpeed,
-    MeshQualityDialog,
-    RenderingSettings,
+		// Render Preview
+		RenderPreviewSystem,
 
-    // Help
-    HelpAbout,
+		// Flat Widgets Example
+		ShowFlatWidgetsExample,
 
-    // Refresh operations
-    RefreshView,
-    RefreshScene,
-    RefreshObject,
-    RefreshMaterial,
-    RefreshGeometry,
-    RefreshUI,
+		// Docking
+		DockLayoutConfig,
 
-    // Sentinel
-    Unknown
-};
-// clang-format on
+		// Sentinel
+		Unknown
+	};
+	// clang-format on
 
-// Convert enum to string (the legacy command identifier)
-inline const std::string& to_string(CommandType type) {
-    try {
-        static const std::unordered_map<CommandType, std::string> kEnumToString{
-            {CommandType::FileNew, "FILE_NEW"},
-            {CommandType::FileOpen, "FILE_OPEN"},
-            {CommandType::FileSave, "FILE_SAVE"},
-            {CommandType::FileSaveAs, "FILE_SAVE_AS"},
-            {CommandType::ImportSTEP, "IMPORT_STEP"},
-            {CommandType::FileExit, "FILE_EXIT"},
+	// Convert enum to string (the legacy command identifier)
+	inline const std::string& to_string(CommandType type) {
+		static const std::unordered_map<CommandType, std::string> kEnumToString{
+			{CommandType::FileNew, "FILE_NEW"},
+			{CommandType::FileOpen, "FILE_OPEN"},
+			{CommandType::FileSave, "FILE_SAVE"},
+			{CommandType::FileSaveAs, "FILE_SAVE_AS"},
+			{CommandType::ImportSTEP, "IMPORT_STEP"},
+			{CommandType::FileExit, "FILE_EXIT"},
 
-            {CommandType::CreateBox, "CREATE_BOX"},
-            {CommandType::CreateSphere, "CREATE_SPHERE"},
-            {CommandType::CreateCylinder, "CREATE_CYLINDER"},
-            {CommandType::CreateCone, "CREATE_CONE"},
-            {CommandType::CreateTorus, "CREATE_TORUS"},
-            {CommandType::CreateTruncatedCylinder, "CREATE_TRUNCATED_CYLINDER"},
-            {CommandType::CreateWrench, "CREATE_WRENCH"},
+			{CommandType::CreateBox, "CREATE_BOX"},
+			{CommandType::CreateSphere, "CREATE_SPHERE"},
+			{CommandType::CreateCylinder, "CREATE_CYLINDER"},
+			{CommandType::CreateCone, "CREATE_CONE"},
+			{CommandType::CreateTorus, "CREATE_TORUS"},
+			{CommandType::CreateTruncatedCylinder, "CREATE_TRUNCATED_CYLINDER"},
+			{CommandType::CreateWrench, "CREATE_WRENCH"},
 
-            {CommandType::ViewAll, "VIEW_ALL"},
-            {CommandType::ViewTop, "VIEW_TOP"},
-            {CommandType::ViewFront, "VIEW_FRONT"},
-            {CommandType::ViewRight, "VIEW_RIGHT"},
-            {CommandType::ViewIsometric, "VIEW_ISOMETRIC"},
+			{CommandType::ViewAll, "VIEW_ALL"},
+			{CommandType::ViewTop, "VIEW_TOP"},
+			{CommandType::ViewFront, "VIEW_FRONT"},
+			{CommandType::ViewRight, "VIEW_RIGHT"},
+			{CommandType::ViewIsometric, "VIEW_ISOMETRIC"},
 
-            {CommandType::ShowNormals, "SHOW_NORMALS"},
-            {CommandType::FixNormals, "FIX_NORMALS"},
-            {CommandType::ShowEdges, "SHOW_EDGES"},
-            {CommandType::SetTransparency, "SET_TRANSPARENCY"},
-            {CommandType::ToggleWireframe, "TOGGLE_WIREFRAME"},
-            {CommandType::ToggleShading, "TOGGLE_SHADING"},
-            {CommandType::ToggleEdges, "TOGGLE_EDGES"},
+			{CommandType::ShowNormals, "SHOW_NORMALS"},
+			{CommandType::ShowFaces, "SHOW_FACES"},
+			{CommandType::FixNormals, "FIX_NORMALS"},
+			// {CommandType::ShowSilhouetteEdges, "SHOW_SILHOUETTE_EDGES"},
+			{CommandType::ToggleOutline, "TOGGLE_OUTLINE"},
+			{CommandType::SetTransparency, "SET_TRANSPARENCY"},
+			{CommandType::ToggleWireframe, "TOGGLE_WIREFRAME"},
+			// Removed ToggleShading mapping
+			{CommandType::ToggleEdges, "TOGGLE_EDGES"},
+			{CommandType::ShowOriginalEdges, "SHOW_ORIGINAL_EDGES"},
+			{CommandType::ShowFeatureEdges, "SHOW_FEATURE_EDGES"},
+			{CommandType::ShowMeshEdges, "SHOW_MESH_EDGES"},
+			{CommandType::ShowFaceNormals, "SHOW_FACE_NORMALS"},
 
+			{CommandType::TextureModeDecal, "TEXTURE_MODE_DECAL"},
+			{CommandType::TextureModeModulate, "TEXTURE_MODE_MODULATE"},
+			{CommandType::TextureModeReplace, "TEXTURE_MODE_REPLACE"},
+			{CommandType::TextureModeBlend, "TEXTURE_MODE_BLEND"},
+			{CommandType::ExplodeAssembly, "EXPLODE_ASSEMBLY"},
+			{CommandType::SliceToggle, "SLICE_TOGGLE"},
 
+			{CommandType::Undo, "UNDO"},
+			{CommandType::Redo, "REDO"},
 
-            {CommandType::Undo, "UNDO"},
-            {CommandType::Redo, "REDO"},
+			{CommandType::NavCubeConfig, "NAV_CUBE_CONFIG"},
+			{CommandType::ZoomSpeed, "ZOOM_SPEED"},
+			{CommandType::MeshQualityDialog, "MESH_QUALITY_DIALOG"},
+			{CommandType::RenderingSettings, "RENDERING_SETTINGS"},
+			{CommandType::EdgeSettings, "EDGE_SETTINGS"},
+			{CommandType::LightingSettings, "LIGHTING_SETTINGS"},
+			{CommandType::ToggleCoordinateSystem, "TOGGLE_COORDINATE_SYSTEM"},
+			{CommandType::ToggleReferenceGrid, "TOGGLE_REFERENCE_GRID"},
+			{CommandType::ToggleChessboardGrid, "TOGGLE_CHESSBOARD_GRID"},
 
-            {CommandType::NavCubeConfig, "NAV_CUBE_CONFIG"},
-            {CommandType::ZoomSpeed, "ZOOM_SPEED"},
-            {CommandType::MeshQualityDialog, "MESH_QUALITY_DIALOG"},
-            {CommandType::RenderingSettings, "RENDERING_SETTINGS"},
+			{CommandType::HelpAbout, "HELP_ABOUT"},
+			{CommandType::RenderPreviewSystem, "RENDER_PREVIEW_SYSTEM"},
+			{CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
+			{CommandType::DockLayoutConfig, "DOCK_LAYOUT_CONFIG"},
 
-            {CommandType::HelpAbout, "HELP_ABOUT"},
+			{CommandType::Unknown, "UNKNOWN"}
+		};
+		auto it = kEnumToString.find(type);
+		return it != kEnumToString.end() ? it->second : kEnumToString.at(CommandType::Unknown);
+	}
 
-            {CommandType::RefreshView, "REFRESH_VIEW"},
-            {CommandType::RefreshScene, "REFRESH_SCENE"},
-            {CommandType::RefreshObject, "REFRESH_OBJECT"},
-            {CommandType::RefreshMaterial, "REFRESH_MATERIAL"},
-            {CommandType::RefreshGeometry, "REFRESH_GEOMETRY"},
-            {CommandType::RefreshUI, "REFRESH_UI"},
+	// Convert legacy string identifier to enum; returns Unknown if not found
+	inline CommandType from_string(const std::string& str) {
+		static const std::unordered_map<std::string, CommandType> kStringToEnum{
+			{"FILE_NEW", CommandType::FileNew},
+			{"FILE_OPEN", CommandType::FileOpen},
+			{"FILE_SAVE", CommandType::FileSave},
+			{"FILE_SAVE_AS", CommandType::FileSaveAs},
+			{"IMPORT_STEP", CommandType::ImportSTEP},
+			{"FILE_EXIT", CommandType::FileExit},
 
-            {CommandType::Unknown, "UNKNOWN"}
-        };
-        
-        // Check if the static map is still valid
-        if (kEnumToString.empty()) {
-            static const std::string fallback = "UNKNOWN";
-            return fallback;
-        }
-        
-        auto it = kEnumToString.find(type);
-        if (it != kEnumToString.end()) {
-            return it->second;
-        }
-        
-        // Fallback to Unknown
-        auto unknownIt = kEnumToString.find(CommandType::Unknown);
-        if (unknownIt != kEnumToString.end()) {
-            return unknownIt->second;
-        }
-        
-        // Last resort fallback
-        static const std::string fallback = "UNKNOWN";
-        return fallback;
-    } catch (...) {
-        // Return a safe fallback string if the static map is corrupted
-        static const std::string fallback = "UNKNOWN";
-        return fallback;
-    }
-}
+			{"CREATE_BOX", CommandType::CreateBox},
+			{"CREATE_SPHERE", CommandType::CreateSphere},
+			{"CREATE_CYLINDER", CommandType::CreateCylinder},
+			{"CREATE_CONE", CommandType::CreateCone},
+			{"CREATE_TORUS", CommandType::CreateTorus},
+			{"CREATE_TRUNCATED_CYLINDER", CommandType::CreateTruncatedCylinder},
+			{"CREATE_WRENCH", CommandType::CreateWrench},
 
-// Convert legacy string identifier to enum; returns Unknown if not found
-inline CommandType from_string(const std::string& str) {
-    try {
-        static const std::unordered_map<std::string, CommandType> kStringToEnum{
-            {"FILE_NEW", CommandType::FileNew},
-            {"FILE_OPEN", CommandType::FileOpen},
-            {"FILE_SAVE", CommandType::FileSave},
-            {"FILE_SAVE_AS", CommandType::FileSaveAs},
-            {"IMPORT_STEP", CommandType::ImportSTEP},
-            {"FILE_EXIT", CommandType::FileExit},
+			{"VIEW_ALL", CommandType::ViewAll},
+			{"VIEW_TOP", CommandType::ViewTop},
+			{"VIEW_FRONT", CommandType::ViewFront},
+			{"VIEW_RIGHT", CommandType::ViewRight},
+			{"VIEW_ISOMETRIC", CommandType::ViewIsometric},
 
-            {"CREATE_BOX", CommandType::CreateBox},
-            {"CREATE_SPHERE", CommandType::CreateSphere},
-            {"CREATE_CYLINDER", CommandType::CreateCylinder},
-            {"CREATE_CONE", CommandType::CreateCone},
-            {"CREATE_TORUS", CommandType::CreateTorus},
-            {"CREATE_TRUNCATED_CYLINDER", CommandType::CreateTruncatedCylinder},
-            {"CREATE_WRENCH", CommandType::CreateWrench},
+			{"SHOW_NORMALS", CommandType::ShowNormals},
+			{"SHOW_FACES", CommandType::ShowFaces},
+			{"FIX_NORMALS", CommandType::FixNormals},
+			// {"SHOW_SILHOUETTE_EDGES", CommandType::ShowSilhouetteEdges},
+			{"TOGGLE_OUTLINE", CommandType::ToggleOutline},
+			{"SET_TRANSPARENCY", CommandType::SetTransparency},
+			{"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
+			// Removed ToggleShading reverse mapping
+			{"TOGGLE_EDGES", CommandType::ToggleEdges},
+			{"SHOW_ORIGINAL_EDGES", CommandType::ShowOriginalEdges},
+			{"SHOW_FEATURE_EDGES", CommandType::ShowFeatureEdges},
+			{"SHOW_MESH_EDGES", CommandType::ShowMeshEdges},
+			{"SHOW_FACE_NORMALS", CommandType::ShowFaceNormals},
 
-            {"VIEW_ALL", CommandType::ViewAll},
-            {"VIEW_TOP", CommandType::ViewTop},
-            {"VIEW_FRONT", CommandType::ViewFront},
-            {"VIEW_RIGHT", CommandType::ViewRight},
-            {"VIEW_ISOMETRIC", CommandType::ViewIsometric},
+			{"TEXTURE_MODE_DECAL", CommandType::TextureModeDecal},
+			{"TEXTURE_MODE_MODULATE", CommandType::TextureModeModulate},
+			{"TEXTURE_MODE_REPLACE", CommandType::TextureModeReplace},
+			{"TEXTURE_MODE_BLEND", CommandType::TextureModeBlend},
+			{"EXPLODE_ASSEMBLY", CommandType::ExplodeAssembly},
+			{"SLICE_TOGGLE", CommandType::SliceToggle},
 
-            {"SHOW_NORMALS", CommandType::ShowNormals},
-            {"FIX_NORMALS", CommandType::FixNormals},
-            {"SHOW_EDGES", CommandType::ShowEdges},
-            {"SET_TRANSPARENCY", CommandType::SetTransparency},
-            {"TOGGLE_WIREFRAME", CommandType::ToggleWireframe},
-            {"TOGGLE_SHADING", CommandType::ToggleShading},
-            {"TOGGLE_EDGES", CommandType::ToggleEdges},
+			{"UNDO", CommandType::Undo},
+			{"REDO", CommandType::Redo},
 
+			{"NAV_CUBE_CONFIG", CommandType::NavCubeConfig},
+			{"ZOOM_SPEED", CommandType::ZoomSpeed},
+			{"MESH_QUALITY_DIALOG", CommandType::MeshQualityDialog},
+			{"RENDERING_SETTINGS", CommandType::RenderingSettings},
+			{"EDGE_SETTINGS", CommandType::EdgeSettings},
+			{"LIGHTING_SETTINGS", CommandType::LightingSettings},
+			{"TOGGLE_COORDINATE_SYSTEM", CommandType::ToggleCoordinateSystem},
+			{"TOGGLE_REFERENCE_GRID", CommandType::ToggleReferenceGrid},
+			{"TOGGLE_CHESSBOARD_GRID", CommandType::ToggleChessboardGrid},
 
-
-            {"UNDO", CommandType::Undo},
-            {"REDO", CommandType::Redo},
-
-            {"NAV_CUBE_CONFIG", CommandType::NavCubeConfig},
-            {"ZOOM_SPEED", CommandType::ZoomSpeed},
-            {"MESH_QUALITY_DIALOG", CommandType::MeshQualityDialog},
-            {"RENDERING_SETTINGS", CommandType::RenderingSettings},
-
-            {"HELP_ABOUT", CommandType::HelpAbout},
-
-            {"REFRESH_VIEW", CommandType::RefreshView},
-            {"REFRESH_SCENE", CommandType::RefreshScene},
-            {"REFRESH_OBJECT", CommandType::RefreshObject},
-            {"REFRESH_MATERIAL", CommandType::RefreshMaterial},
-            {"REFRESH_GEOMETRY", CommandType::RefreshGeometry},
-            {"REFRESH_UI", CommandType::RefreshUI}
-        };
-        
-        // Check if the static map is still valid
-        if (kStringToEnum.empty()) {
-            return CommandType::Unknown;
-        }
-        
-        auto it = kStringToEnum.find(str);
-        return it == kStringToEnum.end() ? CommandType::Unknown : it->second;
-    } catch (...) {
-        // Return Unknown if the static map is corrupted
-        return CommandType::Unknown;
-    }
-}
-
+			{"HELP_ABOUT", CommandType::HelpAbout},
+			{"RENDER_PREVIEW_SYSTEM", CommandType::RenderPreviewSystem},
+			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample},
+			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig}
+		};
+		auto it = kStringToEnum.find(str);
+		return it == kStringToEnum.end() ? CommandType::Unknown : it->second;
+	}
 } // namespace cmd 

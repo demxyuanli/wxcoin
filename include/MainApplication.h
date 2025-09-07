@@ -2,24 +2,9 @@
 #define MAIN_APPLICATION_HPP
 
 #include <wx/wx.h>
-#include <memory>
-
-// Forward declarations
-class UnifiedRefreshSystem;
-class CommandDispatcher;
 
 class MainApplication : public wxApp {
 public:
-    bool OnInit() override;
-    ~MainApplication();
-    
-private:
-    // Global application services
-    static std::unique_ptr<UnifiedRefreshSystem> s_unifiedRefreshSystem;
-    static std::unique_ptr<CommandDispatcher> s_commandDispatcher;
-    
-    // Initialize and shutdown global services
-    bool initializeGlobalServices();
-    void shutdownGlobalServices();
+    virtual bool OnInit() = 0;
 };
 #endif // MAIN_APPLICATION_HPP

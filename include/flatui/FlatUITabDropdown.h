@@ -12,49 +12,49 @@ class FlatUIBar;
 class FlatUITabDropdown : public wxPanel
 {
 public:
-    FlatUITabDropdown(wxWindow* parent, wxWindowID id = wxID_ANY,
-                     const wxPoint& pos = wxDefaultPosition,
-                     const wxSize& size = wxDefaultSize,
-                     long style = 0);
-    virtual ~FlatUITabDropdown();
+	FlatUITabDropdown(wxWindow* parent, wxWindowID id = wxID_ANY,
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = 0);
+	virtual ~FlatUITabDropdown();
 
-    // Menu management
-    void UpdateHiddenTabs(const std::vector<size_t>& hiddenIndices);
-    void ClearMenu();
-    
-    // Visibility control
-    void ShowDropdown(bool show = true);
-    void HideDropdown() { ShowDropdown(false); }
-    bool IsDropdownShown() const;
-    
-    // Position and size
-    void SetDropdownRect(const wxRect& rect);
-    wxRect GetDropdownRect() const { return m_dropdownRect; }
-    
-    // Parent bar reference
-    void SetParentBar(FlatUIBar* parentBar) { m_parentBar = parentBar; }
-    FlatUIBar* GetParentBar() const { return m_parentBar; }
+	// Menu management
+	void UpdateHiddenTabs(const std::vector<size_t>& hiddenIndices);
+	void ClearMenu();
 
-    // Override for best size calculation
-    virtual wxSize DoGetBestSize() const override;
+	// Visibility control
+	void ShowDropdown(bool show = true);
+	void HideDropdown() { ShowDropdown(false); }
+	bool IsDropdownShown() const;
+
+	// Position and size
+	void SetDropdownRect(const wxRect& rect);
+	wxRect GetDropdownRect() const { return m_dropdownRect; }
+
+	// Parent bar reference
+	void SetParentBar(FlatUIBar* parentBar) { m_parentBar = parentBar; }
+	FlatUIBar* GetParentBar() const { return m_parentBar; }
+
+	// Override for best size calculation
+	virtual wxSize DoGetBestSize() const override;
 
 protected:
-    // Event handlers
-    void OnDropdownSelection(wxCommandEvent& event);
+	// Event handlers
+	void OnDropdownSelection(wxCommandEvent& event);
 
 private:
-    // Setup custom dropdown
-    void SetupCustomDropdown();
-    void UpdateDropdownItems();
-    void ApplyCustomStyling();
-    
-    // Member variables
-    FlatUIBar* m_parentBar;
-    CustomDropDown* m_customDropdown;
-    std::vector<size_t> m_hiddenTabIndices;
-    wxRect m_dropdownRect;
+	// Setup custom dropdown
+	void SetupCustomDropdown();
+	void UpdateDropdownItems();
+	void ApplyCustomStyling();
 
-    wxDECLARE_EVENT_TABLE();
+	// Member variables
+	FlatUIBar* m_parentBar;
+	CustomDropDown* m_customDropdown;
+	std::vector<size_t> m_hiddenTabIndices;
+	wxRect m_dropdownRect;
+
+	wxDECLARE_EVENT_TABLE();
 };
 
 #endif // FLATUI_TAB_DROPDOWN_H 

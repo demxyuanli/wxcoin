@@ -8,33 +8,33 @@
 
 class Logger {
 public:
-    enum class LogLevel { INF, DBG, WRN, ERR };
+	enum class LogLevel { INF, DBG, WRN, ERR };
 
-    static Logger& getLogger();
-    void SetOutputCtrl(wxTextCtrl* ctrl);
-    void Log(LogLevel level, const std::string& message, const std::string& context = "", 
-             const std::string& file = "", int line = 0);
+	static Logger& getLogger();
+	void SetOutputCtrl(wxTextCtrl* ctrl);
+	void Log(LogLevel level, const std::string& message, const std::string& context = "",
+		const std::string& file = "", int line = 0);
 
-    // Helper methods for wxString conversion
-    void LogWx(LogLevel level, const wxString& message, const wxString& context = wxEmptyString,
-        const std::string& file = "", int line = 0) {
-        Log(level, message.ToStdString(), context.ToStdString(), file, line);
-    }
-    void Shutdown();
-    void SetLogLevels(const std::set<LogLevel>& levels, bool isSingleLevel); // Set allowed log levels
-    bool ShouldLog(LogLevel level) const; // Check if a level should be logged
+	// Helper methods for wxString conversion
+	void LogWx(LogLevel level, const wxString& message, const wxString& context = wxEmptyString,
+		const std::string& file = "", int line = 0) {
+		Log(level, message.ToStdString(), context.ToStdString(), file, line);
+	}
+	void Shutdown();
+	void SetLogLevels(const std::set<LogLevel>& levels, bool isSingleLevel); // Set allowed log levels
+	bool ShouldLog(LogLevel level) const; // Check if a level should be logged
 
 private:
-    Logger();
-    ~Logger();
-    Logger(const Logger&) = delete;
-    Logger& operator=(const Logger&) = delete;
+	Logger();
+	~Logger();
+	Logger(const Logger&) = delete;
+	Logger& operator=(const Logger&) = delete;
 
-    std::ofstream logFile;
-    wxTextCtrl* logCtrl;
-    bool isShuttingDown = false;
-    std::set<LogLevel> allowedLogLevels; // Set of allowed log levels
-    bool isSingleLevelMode = false; // True for single-level mode (log level and above)
+	std::ofstream logFile;
+	wxTextCtrl* logCtrl;
+	bool isShuttingDown = false;
+	std::set<LogLevel> allowedLogLevels; // Set of allowed log levels
+	bool isSingleLevelMode = false; // True for single-level mode (log level and above)
 };
 
 // Macros that explicitly use std::string conversion

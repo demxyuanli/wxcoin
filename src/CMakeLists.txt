@@ -13,36 +13,55 @@ add_subdirectory(config)
 # 4. OpenCASCADE module (depends on core module)
 add_subdirectory(opencascade)
 
-# 5. Commands module (depends on core and occ)
+# 5. Geometry module (depends on core, logger, and occ modules)
+add_subdirectory(geometry)
+
+# 6. Commands module (depends on core and occ)
 add_subdirectory(commands)
 
-# 6. Optimizer module (depends on core, logger, commands, and occ)
-add_subdirectory(optimizer)
-
-# 7. Rendering module (depends on core module)
+# 6. Rendering module (depends on core module)
 add_subdirectory(rendering)
 
-# 8. Input module (depends on core module)
+# 6.2. View module (depends on rendering)
+add_subdirectory(view)
+
+# 6.5. Rendering Toolkit module (depends on core, logger, config modules)
+add_subdirectory(rendering_toolkit)
+
+# 7. Input module (depends on core module)
 add_subdirectory(input)
 
-# 9. Navigation module (depends on core and rendering modules)
+# 8. Navigation module (depends on core and rendering modules)
 add_subdirectory(navigation)
 
-# 10. FlatUI module (depends on core and config modules)
+# 9. FlatUI module (depends on core and config modules)
 add_subdirectory(flatui)
 
-# 11. UI module (depends on all other modules)
+# 9.5. Widgets module (depends on core and config modules)
+add_subdirectory(widgets)
+
+# 9.6. Docking module (depends on core module)
+add_subdirectory(docking)
+
+# 10. UI module (depends on all other modules)
 add_subdirectory(ui)
+add_subdirectory(renderpreview)
 
 # Set module folder structure (for IDE organization)
 set_target_properties(CADCore PROPERTIES FOLDER "Modules")
 set_target_properties(CADLogger PROPERTIES FOLDER "Modules")
 set_target_properties(CADConfig PROPERTIES FOLDER "Modules")
 set_target_properties(CADOCC PROPERTIES FOLDER "Modules")
+set_target_properties(CADGeometry PROPERTIES FOLDER "Modules")
 set_target_properties(CADCommands PROPERTIES FOLDER "Modules")
-set_target_properties(optimizer PROPERTIES FOLDER "Modules")
 set_target_properties(CADRendering PROPERTIES FOLDER "Modules")
+set_target_properties(CADView PROPERTIES FOLDER "Modules")
+set_target_properties(CADRenderingToolkit PROPERTIES FOLDER "Modules")
 set_target_properties(CADInput PROPERTIES FOLDER "Modules")
 set_target_properties(NavCubeLib PROPERTIES FOLDER "Modules")
 set_target_properties(CADFlatUI PROPERTIES FOLDER "Modules")
-set_target_properties(CADUI PROPERTIES FOLDER "Modules") 
+set_target_properties(widgets PROPERTIES FOLDER "Modules")
+set_target_properties(docking PROPERTIES FOLDER "Modules")
+set_target_properties(UIPanels PROPERTIES FOLDER "Modules")
+set_target_properties(UIDialogs PROPERTIES FOLDER "Modules")
+set_target_properties(UIFrame PROPERTIES FOLDER "Modules")

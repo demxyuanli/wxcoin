@@ -37,16 +37,24 @@ add_subdirectory(src)
 
 # 主程序源文件
 set(MAIN_SOURCES
-    ${CMAKE_SOURCE_DIR}/src/MainApplication.cpp
-    ${CMAKE_SOURCE_DIR}/src/GlobalServices.cpp
+    ${CMAKE_SOURCE_DIR}/src/MainApplicationDocking.cpp
 )
 
 # 创建可执行文件
-add_executable(${PROJECT_NAME} WIN32 ${MAIN_SOURCES})
+if(WIN32)
+    # Windows 资源文件
+    set(RESOURCE_FILES
+        ${CMAKE_SOURCE_DIR}/resources/app.rc
+    )
+    add_executable(${PROJECT_NAME} WIN32 ${MAIN_SOURCES} ${RESOURCE_FILES})
+else()
+    add_executable(${PROJECT_NAME} ${MAIN_SOURCES})
+endif()
 
 # 设置头文件目录
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${wxWidgets_INCLUDE_DIRS}
 )
 
 
@@ -54,6 +62,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # 链接所有模块库
 target_link_libraries(${PROJECT_NAME} PRIVATE
     CADUI          # UI模块（包含所有其他模块的依赖）
+    CADGeometry    # Geometry模块
     wx::core
     wx::base
     Coin::Coin
@@ -75,6 +84,12 @@ if(MSVC)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         LINK_FLAGS "/SUBSYSTEM:WINDOWS"
     )
+
+    # Windows 资源编译设置
+    if(WIN32)
+        # 确保资源编译器能够找到 wxWidgets 头文件
+        set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I\"${wxWidgets_INCLUDE_DIRS}\"")
+    endif()
         # 复制 config 目录及其所有子目录和文件到目标目录
     set(CONFIG_SOURCE_DIR "${CMAKE_SOURCE_DIR}/config")
     set(TARGET_DIR $<TARGET_FILE_DIR:${PROJECT_NAME}>)

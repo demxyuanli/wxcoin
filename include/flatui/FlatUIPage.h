@@ -13,35 +13,37 @@ class FlatUIPanel;
 class FlatUIPage : public wxControl
 {
 public:
-    // Constructor takes a wxWindow* parent 
-    FlatUIPage(wxWindow* parent, const wxString& label);
-    virtual ~FlatUIPage();
+	// Constructor takes a wxWindow* parent
+	FlatUIPage(wxWindow* parent, const wxString& label);
+	virtual ~FlatUIPage();
 
-    void InitializeLayout();
+	void InitializeLayout();
 
-    void AddPanel(FlatUIPanel* panel);
+	void AddPanel(FlatUIPanel* panel);
 
-    wxString GetLabel() const { return m_label; }
-    
-    wxVector<FlatUIPanel*>& GetPanels() { return m_panels; }
-    const wxVector<FlatUIPanel*>& GetPanels() const { return m_panels; }
+	wxString GetLabel() const { return m_label; }
 
-    void SetActive(bool active) { m_isActive = active; }
-    bool IsActive() const { return m_isActive; }
-    void RecalculatePageHeight(); // Declare the method
+	wxVector<FlatUIPanel*>& GetPanels() { return m_panels; }
+	const wxVector<FlatUIPanel*>& GetPanels() const { return m_panels; }
 
-    void OnPaint(wxPaintEvent& evt);
-    void OnSize(wxSizeEvent& evt);
+	void SetActive(bool active) { m_isActive = active; }
+	bool IsActive() const { return m_isActive; }
+	void RecalculatePageHeight(); // Declare the method
 
-    void UpdateLayout();
+	void OnPaint(wxPaintEvent& evt);
+	void OnSize(wxSizeEvent& evt);
+
+	// Theme refresh method
+	void RefreshTheme();
+
+	void UpdateLayout();
 
 private:
 
-    wxString m_label;
-    wxVector<FlatUIPanel*> m_panels;
-    wxBoxSizer* m_sizer;
-    bool m_isActive; 
-
+	wxString m_label;
+	wxVector<FlatUIPanel*> m_panels;
+	wxBoxSizer* m_sizer;
+	bool m_isActive;
 };
 
 #endif // FLATUIPAGE_H 

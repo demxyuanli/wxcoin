@@ -1,24 +1,22 @@
 #include <wx/wx.h>
+#include <wx/display.h>
 #include <cstdio>  
 #include <string>
+#include <algorithm>
 #include "MainApplication.h"
 #include "config/ConfigManager.h"
 #include "config/LoggerConfig.h"
 #include "config/ConstantsConfig.h"
 #include "logger/Logger.h"
 #include "FlatFrame.h"
-#include "UnifiedRefreshSystem.h"
-#include "CommandDispatcher.h"
-#include "GlobalServices.h"
-#include "optimizer/PerformanceOptimizer.h"
+#include "rendering/RenderingToolkitAPI.h"
+#include "interfaces/ISubsystemFactory.h"
+#include "interfaces/DefaultSubsystemFactory.h"
+#include "interfaces/ServiceLocator.h"
+#include "config/FontManager.h" // Include FontManager
 #include <Inventor/SoDB.h>
 #include <Inventor/SoInput.h>
 #include <Inventor/nodes/SoSeparator.h>
-
-// Static member definitions
-std::unique_ptr<UnifiedRefreshSystem> MainApplication::s_unifiedRefreshSystem = nullptr;
-
-std::unique_ptr<CommandDispatcher> MainApplication::s_commandDispatcher = nullptr;
 
 bool MainApplication::OnInit()
 {
@@ -31,6 +29,22 @@ bool MainApplication::OnInit()
         return false;
     }
     
+    // Initialize rendering toolkit
+    try {
+        if (!RenderingToolkitAPI::initialize()) {
+            wxMessageBox("Failed to initialize rendering toolkit", "Initialization Error", wxOK | wxICON_ERROR);
+            return false;
+        }
+        LOG_INF("Rendering toolkit initialized successfully", "MainApplication");
+    } catch (const std::exception& e) {
+        wxMessageBox("Failed to initialize rendering toolkit: " + wxString(e.what()), "Initialization Error", wxOK | wxICON_ERROR);
+        return false;
+    }
+    
+    // Set default subsystem factory (can be replaced by tests or other compositions)
+    static DefaultSubsystemFactory s_factory;
+    ServiceLocator::setFactory(&s_factory);
+
     ConfigManager& cm = ConfigManager::getInstance();
     // Try to initialize with config/config.ini first
     if (!cm.initialize("")) {
@@ -41,20 +55,34 @@ bool MainApplication::OnInit()
         }
     }
     ConstantsConfig::getInstance().initialize(cm);
-    
-    LOG_INF("Starting application", "MainApplication");
 
-    // Initialize global services before creating any UI
-    if (!initializeGlobalServices()) {
-        wxMessageBox("Failed to initialize global services", "Initialization Error", wxOK | wxICON_ERROR);
+    // Initialize FontManager after ConfigManager
+    FontManager& fm = FontManager::getInstance();
+    if (!fm.initialize("config/config.ini")) { // Pass the path to config.ini
+        wxMessageBox("Failed to initialize font manager", "Initialization Error", wxOK | wxICON_ERROR);
         return false;
     }
     
+    LOG_INF("Starting application", "MainApplication");
+
+    
     std::string titleStr = cm.getString("MainApplication", "MainFrameTitle", "FlatUI Demo");
     wxString title(titleStr);
-    std::string sizeStr = cm.getString("MainApplication", "MainFrameSize", "1200,700");
-    int fw = 1200, fh = 700;
-    sscanf(sizeStr.c_str(), "%d,%d", &fw, &fh); 
+    
+    // Calculate window size based on 80% of screen size, minimum 1200x700
+    wxDisplay display;
+    wxRect screenRect = display.GetGeometry();
+    int screenWidth = screenRect.GetWidth();
+    int screenHeight = screenRect.GetHeight();
+    
+    // Calculate 80% of screen size
+    int fw = static_cast<int>(screenWidth * 0.8);
+    int fh = static_cast<int>(screenHeight * 0.8);
+    
+    // Ensure minimum size of 1200x700
+    fw = std::max(fw, 1200);
+    fh = std::max(fh, 700);
+    
     wxSize fsize(fw, fh);
     FlatFrame* frame = new FlatFrame(title, wxDefaultPosition, fsize);
     std::string posStr = cm.getString("MainApplication", "MainFramePosition", "Center");
@@ -74,63 +102,6 @@ bool MainApplication::OnInit()
     frame->Show(true);
 
     return true;
-}
-
-bool MainApplication::initializeGlobalServices()
-{
-    LOG_INF("Initializing global services", "MainApplication");
-    
-    try {
-        // Create command dispatcher first
-        s_commandDispatcher = std::make_unique<CommandDispatcher>();
-        LOG_INF("Command dispatcher created", "MainApplication");
-        
-        // Create unified refresh system (initially without Canvas/OCCViewer/SceneManager)
-        // These will be set later when UI components are created
-        s_unifiedRefreshSystem = std::make_unique<UnifiedRefreshSystem>(nullptr, nullptr, nullptr);
-        LOG_INF("Unified refresh system created", "MainApplication");
-        
-        // Initialize the refresh system with command dispatcher
-        s_unifiedRefreshSystem->initialize(s_commandDispatcher.get());
-        LOG_INF("Unified refresh system initialized", "MainApplication");
-        
-        // Register services with GlobalServices
-        GlobalServices::SetCommandDispatcher(s_commandDispatcher.get());
-        GlobalServices::SetRefreshSystem(s_unifiedRefreshSystem.get());
-        LOG_INF("Global services registered", "MainApplication");
-        
-        return true;
-    } catch (const std::exception& e) {
-        LOG_ERR("Failed to initialize global services: " + std::string(e.what()), "MainApplication");
-        return false;
-    }
-}
-
-void MainApplication::shutdownGlobalServices()
-{
-    LOG_INF("Shutting down global services", "MainApplication");
-    
-    // Clean up performance optimizer first
-    cleanupGlobalOptimizer();
-    
-    // Clear global services registry first
-    GlobalServices::Clear();
-    
-    if (s_unifiedRefreshSystem) {
-        s_unifiedRefreshSystem->shutdown();
-        s_unifiedRefreshSystem.reset();
-    }
-    
-    if (s_commandDispatcher) {
-        s_commandDispatcher.reset();
-    }
-    
-    LOG_INF("Global services shutdown completed", "MainApplication");
-}
-
-MainApplication::~MainApplication()
-{
-    shutdownGlobalServices();
 }
 
 wxIMPLEMENT_APP(MainApplication);

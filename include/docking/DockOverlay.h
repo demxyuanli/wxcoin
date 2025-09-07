@@ -1,0 +1,228 @@
+#pragma once
+
+#include <wx/wx.h>
+#include <wx/frame.h>
+#include <wx/dcbuffer.h>
+#include <vector>
+#include <memory>
+#include "DockManager.h"
+
+namespace ads {
+
+// Forward declarations
+class DockWidget;
+class DockArea;
+class DockContainerWidget;
+class FloatingDragPreview;
+
+/**
+ * @brief Drop area for dock overlay
+ */
+class DockOverlayDropArea {
+public:
+    DockOverlayDropArea(DockWidgetArea area, const wxRect& rect);
+    ~DockOverlayDropArea();
+    
+    DockWidgetArea area() const { return m_area; }
+    wxRect rect() const { return m_rect; }
+    bool contains(const wxPoint& pos) const { return m_rect.Contains(pos); }
+    
+    void setVisible(bool visible) { m_visible = visible; }
+    bool isVisible() const { return m_visible; }
+    
+    void setHighlighted(bool highlighted) { m_highlighted = highlighted; }
+    bool isHighlighted() const { return m_highlighted; }
+    
+private:
+    DockWidgetArea m_area;
+    wxRect m_rect;
+    bool m_visible;
+    bool m_highlighted;
+};
+
+/**
+ * @brief Overlay shown during drag and drop operations
+ */
+class DockOverlay : public wxFrame {
+public:
+    enum eMode {
+        ModeDockAreaOverlay,
+        ModeContainerOverlay
+    };
+    
+    DockOverlay(wxWindow* parent, eMode mode = ModeDockAreaOverlay);
+    virtual ~DockOverlay();
+    
+    
+    // Drop areas
+    DockWidgetArea dropAreaUnderCursor() const;
+    DockWidgetArea showOverlay(wxWindow* target);
+    void hideOverlay();
+    
+    // Update position
+    void updatePosition();
+    void updateDropAreas();
+    
+    // Paint configuration
+    void setFrameColor(const wxColour& color) { m_frameColor = color; }
+    void setAreaColor(const wxColour& color) { m_areaColor = color; }
+    void setFrameWidth(int width) { m_frameWidth = width; }
+    
+    // Configuration support
+    void loadConfiguration();
+    void setTransparency(int transparency);
+    void setBackgroundColor(const wxColour& color);
+    void setGlobalBackgroundColor(const wxColour& color);
+    void setBorderColor(const wxColour& color);
+    void setBorderWidth(int width);
+    void setCornerRadius(int radius);
+    void setRefreshDelay(int delayMs);
+    
+    // Target widget
+    void setTargetWidget(wxWindow* widget) { m_targetWidget = widget; }
+    wxWindow* targetWidget() const { return m_targetWidget; }
+    
+    // Mode
+    eMode mode() const { return m_mode; }
+    
+    // Allowed areas
+    void setAllowedAreas(int areas) { m_allowedAreas = areas; updateDropAreas(); }
+    int allowedAreas() const { return m_allowedAreas; }
+
+    // Global docking mode
+    void setGlobalMode(bool global) { m_isGlobalMode = global; updateGlobalMode(); }
+    bool isGlobalMode() const { return m_isGlobalMode; }
+
+    // Enhanced drag hints
+    void showDragHints(DockWidget* draggedWidget);
+    void updateDragHints();
+
+    // Global mode visual enhancements
+    void drawGlobalModeHints(wxDC& dc);
+    
+    // Drag preview callback
+    void setDragPreviewCallback(std::function<void(DockWidgetArea, const wxSize&)> callback) { 
+        m_dragPreviewCallback = callback; 
+    }
+    void drawGlobalModeTextHints(wxDC& dc);
+
+    // Direction indicators
+    void drawDirectionIndicators(wxDC& dc);
+    void drawDirectionArrow(wxDC& dc, const wxRect& rect, DockWidgetArea area);
+
+    // Performance optimization methods
+    void optimizeRendering();
+    void setRenderingOptimization(bool enabled);
+    void updateDropAreaGeometryCache();
+
+protected:
+    // Event handlers
+    void onPaint(wxPaintEvent& event);
+    void onMouseMove(wxMouseEvent& event);
+    void onMouseLeave(wxMouseEvent& event);
+    void onEraseBackground(wxEraseEvent& event) {}
+    
+    // Internal methods
+    void createDropAreas();
+    void updateDropAreaPositions();
+    void updateGlobalMode();
+    void paintDropAreas(wxDC& dc);
+    void paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropArea);
+    void drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area, const wxColour& color);
+    void drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectionIndicator = false);
+    wxRect dropIndicatorRect(DockWidgetArea area) const;
+    wxRect getPreviewRect(DockWidgetArea area) const;
+
+private:
+    // Member variables
+    eMode m_mode;
+    wxWindow* m_targetWidget;
+    int m_allowedAreas;
+    std::vector<std::unique_ptr<DockOverlayDropArea>> m_dropAreas;
+    DockWidgetArea m_lastHoveredArea;
+    wxColour m_frameColor;
+    wxColour m_areaColor;
+    int m_frameWidth;
+    
+    // Configuration variables
+    int m_transparency;
+    int m_globalTransparency;
+    wxColour m_backgroundColor;
+    wxColour m_globalBackgroundColor;
+    wxColour m_borderColor;
+    int m_borderWidth;
+    wxColour m_dropAreaNormalBg;
+    wxColour m_dropAreaNormalBorder;
+    wxColour m_dropAreaHighlightBg;
+    wxColour m_dropAreaHighlightBorder;
+    wxColour m_dropAreaIconColor;
+    wxColour m_dropAreaHighlightIconColor;
+    int m_cornerRadius;
+    int m_refreshDelay;
+
+    // Performance optimization variables
+    bool m_optimizedRendering;
+    std::map<DockWidgetArea, wxRect> m_cachedGeometries;
+    
+    // Drag preview callback
+    std::function<void(DockWidgetArea, const wxSize&)> m_dragPreviewCallback;
+
+    // Global docking mode variables
+    bool m_isGlobalMode;
+    
+    // Enhanced debounce mechanism
+    wxTimer* m_refreshTimer;
+    bool m_pendingRefresh;
+    wxLongLong m_lastRefreshTime;
+    int m_refreshCount;
+    static const int REFRESH_DEBOUNCE_MS = 16; // ~60fps
+    static const int MAX_REFRESHES_PER_SECOND = 30; // Limit refresh rate
+    void onRefreshTimer(wxTimerEvent& event);
+    void requestRefresh();
+    bool shouldRefreshNow() const;
+    
+    // Helper methods
+    wxRect targetRect() const;
+    wxRect areaRect(DockWidgetArea area) const;
+    wxBitmap createDropIndicatorBitmap(DockWidgetArea area, int size);
+    
+    wxDECLARE_EVENT_TABLE();
+};
+
+/**
+ * @brief Cross overlay for container drop areas
+ */
+class DockOverlayCross : public wxWindow {
+public:
+    DockOverlayCross(DockOverlay* overlay);
+    virtual ~DockOverlayCross();
+    
+    // Update based on cursor position
+    void updatePosition();
+    DockWidgetArea cursorLocation() const;
+    
+    // Configuration
+    void setIconSize(int size) { m_iconSize = size; }
+    int iconSize() const { return m_iconSize; }
+    
+    void setIconColor(const wxColour& color) { m_iconColor = color; }
+    wxColour iconColor() const { return m_iconColor; }
+    
+protected:
+    void onPaint(wxPaintEvent& event);
+    void onMouseMove(wxMouseEvent& event);
+    
+private:
+    DockOverlay* m_overlay;
+    int m_iconSize;
+    wxColour m_iconColor;
+    DockWidgetArea m_hoveredArea;
+    
+    void drawCrossIcon(wxDC& dc);
+    void drawAreaIndicator(wxDC& dc, DockWidgetArea area);
+    wxRect areaRect(DockWidgetArea area) const;
+    
+    wxDECLARE_EVENT_TABLE();
+};
+
+} // namespace ads

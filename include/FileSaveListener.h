@@ -7,14 +7,14 @@
 
 class FileSaveListener : public CommandListener {
 public:
-    explicit FileSaveListener(wxFrame* frame);
-    ~FileSaveListener() override = default;
+	explicit FileSaveListener(wxFrame* frame);
+	~FileSaveListener() override = default;
 
-    CommandResult executeCommand(const std::string& commandType,
-                                 const std::unordered_map<std::string, std::string>& parameters) override;
-    bool canHandleCommand(const std::string& commandType) const override;
-    std::string getListenerName() const override { return "FileSaveListener"; }
+	CommandResult executeCommand(const std::string& commandType,
+		const std::unordered_map<std::string, std::string>& parameters) override;
+	bool canHandleCommand(const std::string& commandType) const override;
+	std::string getListenerName() const override { return "FileSaveListener"; }
 
 private:
-    wxFrame* m_frame;
-}; 
+	wxFrame* m_frame;
+};

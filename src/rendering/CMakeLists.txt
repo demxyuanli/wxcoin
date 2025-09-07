@@ -1,30 +1,28 @@
 # Rendering module - rendering engine and scene management
 set(RENDERING_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Canvas.cpp
+    # moved to CADView: ${CMAKE_CURRENT_SOURCE_DIR}/Canvas.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingEngine.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ViewportManager.cpp
+    # moved to CADView: ${CMAKE_CURRENT_SOURCE_DIR}/ViewportManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SceneManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoordinateSystemRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PickingAidManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/MultiViewportManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ViewRefreshManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/UnifiedRefreshSystem.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LODManager.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/PerformanceMonitor.cpp
+    # moved to CADView: ${CMAKE_CURRENT_SOURCE_DIR}/MultiViewportManager.cpp
+    # moved to CADView: ${CMAKE_CURRENT_SOURCE_DIR}/ViewRefreshManager.cpp
+    # moved to CADView: ${CMAKE_CURRENT_SOURCE_DIR}/DynamicSilhouetteRenderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/ServiceLocator.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/DefaultSubsystemFactory.cpp
 )
 
 set(RENDERING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/Canvas.h
     ${CMAKE_SOURCE_DIR}/include/RenderingEngine.h
-    ${CMAKE_SOURCE_DIR}/include/ViewportManager.h
+    # moved to CADView: ${CMAKE_SOURCE_DIR}/include/ViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/SceneManager.h
     ${CMAKE_SOURCE_DIR}/include/CoordinateSystemRenderer.h
     ${CMAKE_SOURCE_DIR}/include/PickingAidManager.h
-    ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
-    ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
-    ${CMAKE_SOURCE_DIR}/include/UnifiedRefreshSystem.h
-    ${CMAKE_SOURCE_DIR}/include/LODManager.h
-    ${CMAKE_SOURCE_DIR}/include/PerformanceMonitor.h
+    # moved to CADView: ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
+    # moved to CADView: ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
+    # moved to CADView: ${CMAKE_SOURCE_DIR}/include/DynamicSilhouetteRenderer.h
 )
 
 # Create rendering static library
@@ -42,8 +40,6 @@ target_link_libraries(CADRendering PUBLIC
     CADCore
     CADOCC
     CADLogger
-    CADCommands
-    NavCubeLib
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )

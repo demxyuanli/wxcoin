@@ -6,12 +6,12 @@
 
 class LoggerConfig {
 public:
-    static LoggerConfig& getInstance();
-    void initialize(ConfigManager& configManager);
+	static LoggerConfig& getInstance();
+	void initialize(ConfigManager& configManager);
 
 private:
-    LoggerConfig() = default;
-    void configureLoggerLevels(const std::string& logLevelStr);
+	LoggerConfig() = default;
+	void configureLoggerLevels(const std::string& logLevelStr);
 };
 
 #endif // LOGGER_CONFIG_H

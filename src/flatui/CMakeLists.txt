@@ -33,8 +33,10 @@ set(FLATUI_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIUnpinButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BorderlessFrameLogic.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CustomDropDown.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/UIHierarchyDebugger.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatBarSpaceContainer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUIStatusBar.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatUITitledPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/UIHierarchyDebugger.cpp
 )
 
 set(FLATUI_HEADERS
@@ -68,6 +70,9 @@ set(FLATUI_HEADERS
     ${CMAKE_SOURCE_DIR}/include/flatui/CustomDropDown.h
     ${CMAKE_SOURCE_DIR}/include/flatui/UIHierarchyDebugger.h
     ${CMAKE_SOURCE_DIR}/include/flatui/FlatBarSpaceContainer.h
+    ${CMAKE_SOURCE_DIR}/include/flatui/FlatUIStatusBar.h
+    ${CMAKE_SOURCE_DIR}/include/flatui/FlatUITitledPanel.h
+    ${CMAKE_SOURCE_DIR}/include/flatui/FlatUIThemeAware.h
 )
 
 # Create FlatUI static library
