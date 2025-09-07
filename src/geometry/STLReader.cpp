@@ -429,7 +429,7 @@ TopoDS_Shape STLReader::createShapeFromSTLData(
                 for (size_t i = startIdx; i < endIdx; ++i) {
                     const auto& triangle = triangles[i];
                     
-                    // Check STL triangle normal direction
+                    // Check STL triangle normal validity
                     if (triangle.normal.Magnitude() > 1e-6) {
                         batchStats[batchIdx][0]++; // trianglesWithValidNormals
                         
@@ -446,9 +446,9 @@ TopoDS_Shape STLReader::createShapeFromSTLData(
                         // Check if STL normal points away from origin (outward)
                         double dotProduct = triangle.normal.Dot(centerToOrigin);
                         if (dotProduct > 0) {
-                            batchStats[batchIdx][1]++; // correctNormals
+                            batchStats[batchIdx][1]++; // correctNormals (outward)
                         } else {
-                            batchStats[batchIdx][2]++; // incorrectNormals
+                            batchStats[batchIdx][2]++; // incorrectNormals (inward)
                         }
                     } else {
                         batchStats[batchIdx][3]++; // trianglesWithInvalidNormals
@@ -557,7 +557,39 @@ TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
                 double dotProduct = calculatedNormal.Dot(triangle.normal);
                 
                 // If dot product is negative, the face is oriented incorrectly
+                // We need to reverse the face to make the normal point outward
                 if (dotProduct < 0) {
+                    face.Reverse();
+                }
+            }
+        } else {
+            // If no valid normal in STL, ensure face points outward
+            // Calculate face normal from vertices
+            gp_Vec edge1(triangle.vertices[1].X() - triangle.vertices[0].X(),
+                        triangle.vertices[1].Y() - triangle.vertices[0].Y(),
+                        triangle.vertices[1].Z() - triangle.vertices[0].Z());
+            gp_Vec edge2(triangle.vertices[2].X() - triangle.vertices[0].X(),
+                        triangle.vertices[2].Y() - triangle.vertices[0].Y(),
+                        triangle.vertices[2].Z() - triangle.vertices[0].Z());
+            gp_Vec calculatedNormal = edge1.Crossed(edge2);
+            
+            if (calculatedNormal.Magnitude() > 1e-6) {
+                calculatedNormal.Normalize();
+                
+                // Calculate triangle center
+                gp_Pnt triangleCenter(
+                    (triangle.vertices[0].X() + triangle.vertices[1].X() + triangle.vertices[2].X()) / 3.0,
+                    (triangle.vertices[0].Y() + triangle.vertices[1].Y() + triangle.vertices[2].Y()) / 3.0,
+                    (triangle.vertices[0].Z() + triangle.vertices[1].Z() + triangle.vertices[2].Z()) / 3.0
+                );
+                
+                // Calculate vector from triangle center to origin
+                gp_Vec centerToOrigin(-triangleCenter.X(), -triangleCenter.Y(), -triangleCenter.Z());
+                
+                // Check if calculated normal points away from origin (outward)
+                double dotProduct = calculatedNormal.Dot(centerToOrigin);
+                if (dotProduct < 0) {
+                    // Normal points inward, reverse the face
                     face.Reverse();
                 }
             }
