@@ -653,14 +653,20 @@ void OCCViewer::setShowNormals(bool showNormals)
 void OCCViewer::setNormalLength(double length)
 {
 	m_normalLength = length;
-	updateNormalsDisplay();
+	// Force regeneration of normal lines with new length
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->updateAll(m_meshParams);
+	}
 }
 
 void OCCViewer::setNormalColor(const Quantity_Color& correct, const Quantity_Color& incorrect)
 {
 	m_correctNormalColor = correct;
 	m_incorrectNormalColor = incorrect;
-	updateNormalsDisplay();
+	// Force regeneration of normal lines with new colors
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->updateAll(m_meshParams);
+	}
 }
 
 void OCCViewer::updateNormalsDisplay()

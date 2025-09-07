@@ -26,6 +26,10 @@
 #include <ShapeFix_Shape.hxx>
 #include <Bnd_Box.hxx>
 #include <BRepBndLib.hxx>
+#include <BRepTools.hxx>
+#include <GeomLProp_SLProps.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopoDS.hxx>
 
 // File system includes
 #include <filesystem>
@@ -118,35 +122,49 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 		initialize();
 		if (progress) progress(5, "initialize");
 
-		// Use optimized STEP reader settings
+		// Use standard STEP reader settings following OpenCASCADE best practices
 		STEPControl_Reader reader;
+		
+		// Set precision mode and value
 		Interface_Static::SetIVal("read.precision.mode", 1);
 		Interface_Static::SetRVal("read.precision.val", options.precision);
-
-		// Set additional optimization parameters
-		Interface_Static::SetIVal("read.step.optimize", 1);
-		Interface_Static::SetIVal("read.step.fast_mode", 1);
-
+		
+		// Disable aggressive optimizations that might cause issues
+		Interface_Static::SetIVal("read.step.optimize", 0);
+		Interface_Static::SetIVal("read.step.fast_mode", 0);
+		
+		// Enable comprehensive reading
+		Interface_Static::SetIVal("read.step.nonmanifold", 1);
+		Interface_Static::SetIVal("read.step.face", 1);
+		Interface_Static::SetIVal("read.step.surface_curve", 1);
+		
+		// Read the file
 		IFSelect_ReturnStatus status = reader.ReadFile(filePath.c_str());
-
+		
 		if (status != IFSelect_RetDone) {
-			result.errorMessage = "Failed to read STEP file: " + filePath;
+			result.errorMessage = "Failed to read STEP file: " + filePath + 
+				" (Status: " + std::to_string(static_cast<int>(status)) + ")";
 			LOG_ERR_S(result.errorMessage);
 			return result;
 		}
 		if (progress) progress(20, "read");
 
-		// Transfer shapes
+		// Check for transferable roots
 		Standard_Integer nbRoots = reader.NbRootsForTransfer();
 		if (nbRoots == 0) {
 			result.errorMessage = "No transferable entities found in STEP file";
 			LOG_ERR_S(result.errorMessage);
 			return result;
 		}
+		
+		LOG_INF_S("Found " + std::to_string(nbRoots) + " transferable roots");
 
+		// Transfer all roots
 		reader.TransferRoots();
 		Standard_Integer nbShapes = reader.NbShapes();
 		if (progress) progress(35, "transfer");
+		
+		LOG_INF_S("Transferred " + std::to_string(nbShapes) + " shapes");
 
 		if (nbShapes == 0) {
 			result.errorMessage = "No shapes could be transferred from STEP file";
@@ -154,52 +172,35 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 			return result;
 		}
 
-		// Create compound shape containing all shapes
-		TopoDS_Compound compound;
-		BRep_Builder builder;
-		builder.MakeCompound(compound);
-		Standard_Integer validShapes = 0;
-		for (Standard_Integer i = 1; i <= nbShapes; i++) {
-			TopoDS_Shape shape = reader.Shape(i);
-			if (!shape.IsNull()) {
-				// Additional validation before adding to compound
-				try {
-					Bnd_Box bbox;
-					BRepBndLib::Add(shape, bbox);
-					if (!bbox.IsVoid()) {
-						Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-						bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-						Standard_Real sizeX = xmax - xmin;
-						Standard_Real sizeY = ymax - ymin;
-						Standard_Real sizeZ = zmax - zmin;
-						
-						// Check for degenerate shapes
-						Standard_Real minSize = options.precision * 10;
-						if (sizeX >= minSize || sizeY >= minSize || sizeZ >= minSize) {
-							builder.Add(compound, shape);
-							validShapes++;
-						} else {
-							LOG_WRN_S("Skipping degenerate shape " + std::to_string(i) + " (size: " + 
-								std::to_string(sizeX) + "x" + std::to_string(sizeY) + "x" + std::to_string(sizeZ) + ")");
-						}
-					} else {
-						LOG_WRN_S("Skipping shape " + std::to_string(i) + " with void bounding box");
-					}
-				}
-				catch (const Standard_Failure& e) {
-					LOG_WRN_S("Failed to validate shape " + std::to_string(i) + ": " + std::string(e.GetMessageString()) + ", skipping");
+		// Handle single shape or multiple shapes
+		if (nbShapes == 1) {
+			// Single shape - use it directly
+			result.rootShape = reader.Shape(1);
+			LOG_INF_S("Using single shape directly");
+		} else {
+			// Multiple shapes - create compound
+			TopoDS_Compound compound;
+			BRep_Builder builder;
+			builder.MakeCompound(compound);
+			
+			Standard_Integer validShapes = 0;
+			for (Standard_Integer i = 1; i <= nbShapes; i++) {
+				TopoDS_Shape shape = reader.Shape(i);
+				if (!shape.IsNull()) {
+					builder.Add(compound, shape);
+					validShapes++;
 				}
 			}
+			
+			if (validShapes == 0) {
+				result.errorMessage = "No valid shapes found in STEP file";
+				LOG_ERR_S(result.errorMessage);
+				return result;
+			}
+			
+			LOG_INF_S("Created compound with " + std::to_string(validShapes) + " shapes");
+			result.rootShape = compound;
 		}
-		
-		if (validShapes == 0) {
-			result.errorMessage = "No valid shapes found in STEP file after validation";
-			LOG_ERR_S(result.errorMessage);
-			return result;
-		}
-		
-		LOG_INF_S("Added " + std::to_string(validShapes) + " valid shapes out of " + std::to_string(nbShapes) + " total shapes");
-		result.rootShape = compound;
 		if (progress) progress(45, "assemble");
 
 		// Convert to geometry objects with optimization
@@ -442,8 +443,11 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 			}
 		}
 
+		// Apply normal direction consistency fix
+		TopoDS_Shape consistentShape = ensureConsistentNormalDirections(shape, name);
+		
 		auto geometry = std::make_shared<OCCGeometry>(name);
-		geometry->setShape(shape);
+		geometry->setShape(consistentShape);
 
 		// Set better default color for imported STEP models
 		Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
@@ -714,5 +718,171 @@ double STEPReader::scaleGeometriesToReasonableSize(
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception scaling geometries: " + std::string(e.what()));
 		return 1.0;
+	}
+}
+
+TopoDS_Shape STEPReader::ensureConsistentNormalDirections(const TopoDS_Shape& shape, const std::string& name)
+{
+	if (shape.IsNull()) {
+		return shape;
+	}
+
+	try {
+		// Calculate overall bounding box to determine object center
+		Bnd_Box bbox;
+		BRepBndLib::Add(shape, bbox);
+
+		if (bbox.IsVoid()) {
+			LOG_WRN_S("Cannot determine bounding box for shape: " + name);
+			return shape;
+		}
+
+		Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
+		bbox.Get(xMin, yMin, zMin, xMax, yMax, zMax);
+
+		// Calculate object center
+		gp_Pnt objectCenter(
+			(xMin + xMax) / 2.0,
+			(yMin + yMax) / 2.0,
+			(zMin + zMax) / 2.0
+		);
+
+		LOG_INF_S("Object center for " + name + ": (" +
+			std::to_string(objectCenter.X()) + ", " +
+			std::to_string(objectCenter.Y()) + ", " +
+			std::to_string(objectCenter.Z()) + ")");
+
+		// Process each face to ensure consistent normal directions
+		std::vector<TopoDS_Face> originalFaces;
+		std::vector<TopoDS_Face> correctedFaces;
+
+		for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+			TopoDS_Face face = TopoDS::Face(exp.Current());
+			originalFaces.push_back(face);
+		}
+
+		LOG_INF_S("Processing " + std::to_string(originalFaces.size()) + " faces for normal consistency");
+
+		int reversedCount = 0;
+		int processedCount = 0;
+
+		for (const TopoDS_Face& face : originalFaces) {
+			TopoDS_Face correctedFace = face;
+
+			// Get face center
+			Bnd_Box faceBox;
+			BRepBndLib::Add(face, faceBox);
+
+			if (!faceBox.IsVoid()) {
+				Standard_Real fxMin, fyMin, fzMin, fxMax, fyMax, fzMax;
+				faceBox.Get(fxMin, fyMin, fzMin, fxMax, fyMax, fzMax);
+
+				gp_Pnt faceCenter(
+					(fxMin + fxMax) / 2.0,
+					(fyMin + fyMax) / 2.0,
+					(fzMin + fzMax) / 2.0
+				);
+
+				// Calculate face normal at center
+				Handle(Geom_Surface) surface = BRep_Tool::Surface(face);
+				if (!surface.IsNull()) {
+					// Get UV parameters at face center
+					Standard_Real uMin, uMax, vMin, vMax;
+					BRepTools::UVBounds(face, uMin, uMax, vMin, vMax);
+
+					Standard_Real uMid = (uMin + uMax) / 2.0;
+					Standard_Real vMid = (vMin + vMax) / 2.0;
+
+					// Get normal at face center
+					GeomLProp_SLProps props(surface, uMid, vMid, 1, 1e-6);
+					if (props.IsNormalDefined()) {
+						gp_Vec faceNormal = props.Normal();
+
+						// Apply face orientation
+						if (face.Orientation() == TopAbs_REVERSED) {
+							faceNormal.Reverse();
+						}
+
+						// Calculate vector from object center to face center
+						// This is more accurate than center to center
+						gp_Vec centerToFace(
+							faceCenter.X() - objectCenter.X(),
+							faceCenter.Y() - objectCenter.Y(),
+							faceCenter.Z() - objectCenter.Z()
+						);
+
+						// Normalize the direction vector
+						if (centerToFace.Magnitude() > 1e-6) {
+							centerToFace.Normalize();
+
+							// Check if normal points outward (away from object center)
+							// A positive dot product means the normal points in the same direction as centerToFace
+							// which means it points outward from the center
+							double dotProduct = faceNormal.Dot(centerToFace);
+
+							if (dotProduct < 0) {
+								// Normal points inward, reverse the face
+								correctedFace.Reverse();
+								reversedCount++;
+							}
+						}
+						processedCount++;
+					}
+				}
+			}
+
+			correctedFaces.push_back(correctedFace);
+		}
+
+		LOG_INF_S("Processed " + std::to_string(processedCount) + " faces, reversed " +
+			std::to_string(reversedCount) + " faces for consistent normals");
+
+		// Rebuild the shape with corrected faces
+		if (shape.ShapeType() == TopAbs_COMPOUND) {
+			TopoDS_Compound compound;
+			BRep_Builder builder;
+			builder.MakeCompound(compound);
+
+			// Add all solids from original shape
+			for (TopExp_Explorer exp(shape, TopAbs_SOLID); exp.More(); exp.Next()) {
+				builder.Add(compound, exp.Current());
+			}
+
+			// Add all shells from original shape
+			for (TopExp_Explorer exp(shape, TopAbs_SHELL); exp.More(); exp.Next()) {
+				builder.Add(compound, exp.Current());
+			}
+
+			// Add corrected faces
+			for (const TopoDS_Face& face : correctedFaces) {
+				builder.Add(compound, face);
+			}
+
+			// Add any other shapes that might exist
+			for (TopExp_Explorer exp(shape, TopAbs_SHAPE); exp.More(); exp.Next()) {
+				TopAbs_ShapeEnum shapeType = exp.Current().ShapeType();
+				if (shapeType != TopAbs_SOLID && shapeType != TopAbs_SHELL && shapeType != TopAbs_FACE) {
+					builder.Add(compound, exp.Current());
+				}
+			}
+
+			return compound;
+		} else if (shape.ShapeType() == TopAbs_SOLID) {
+			// For solids, we need to rebuild the solid with corrected faces
+			// This is more complex and might require ShapeFix operations
+			// For now, return the original solid with a warning
+			LOG_WRN_S("Solid shape normal correction not fully implemented, using original shape");
+			return shape;
+		} else {
+			// For single shapes, return the first corrected face if it's a single face
+			if (correctedFaces.size() == 1) {
+				return correctedFaces[0];
+			}
+			return shape;
+		}
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Exception ensuring consistent normal directions: " + std::string(e.what()));
+		return shape;
 	}
 }

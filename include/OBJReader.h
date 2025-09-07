@@ -148,7 +148,8 @@ private:
         const std::vector<Vertex>& vertices,
         const std::vector<int>& faceIndices,
         const std::vector<Vertex>& normals,
-        const std::vector<int>& normalIndices
+        const std::vector<int>& normalIndices,
+        const gp_Pnt& modelCenter
     );
 
     /**

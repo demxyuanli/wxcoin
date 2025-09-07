@@ -408,43 +408,81 @@ TopoDS_Shape STLReader::createShapeFromSTLData(
         int trianglesWithValidNormals = 0;
         int trianglesWithInvalidNormals = 0;
 
+        // Calculate model center for better normal direction analysis
+        gp_Pnt modelCenter(0, 0, 0);
+        int validTrianglesForCenter = 0;
+
+        // Quick pass to calculate approximate model center
+        for (const auto& triangle : triangles) {
+            if (triangle.normal.Magnitude() > 1e-6) {
+                gp_Pnt triangleCenter(
+                    (triangle.vertices[0].X() + triangle.vertices[1].X() + triangle.vertices[2].X()) / 3.0,
+                    (triangle.vertices[0].Y() + triangle.vertices[1].Y() + triangle.vertices[2].Y()) / 3.0,
+                    (triangle.vertices[0].Z() + triangle.vertices[1].Z() + triangle.vertices[2].Z()) / 3.0
+                );
+                modelCenter.SetX(modelCenter.X() + triangleCenter.X());
+                modelCenter.SetY(modelCenter.Y() + triangleCenter.Y());
+                modelCenter.SetZ(modelCenter.Z() + triangleCenter.Z());
+                validTrianglesForCenter++;
+            }
+        }
+
+        if (validTrianglesForCenter > 0) {
+            modelCenter.SetX(modelCenter.X() / validTrianglesForCenter);
+            modelCenter.SetY(modelCenter.Y() / validTrianglesForCenter);
+            modelCenter.SetZ(modelCenter.Z() / validTrianglesForCenter);
+            LOG_INF_S("Calculated model center for normal analysis: (" +
+                     std::to_string(modelCenter.X()) + ", " +
+                     std::to_string(modelCenter.Y()) + ", " +
+                     std::to_string(modelCenter.Z()) + ")");
+        } else {
+            // Fallback to origin if center calculation fails
+            LOG_WRN_S("Could not calculate model center, using origin (0,0,0) for normal analysis");
+        }
+
         // Process triangles in parallel batches
         const size_t batchSize = (triangles.size() < 1000) ? triangles.size() : 1000;
         const size_t numBatches = (triangles.size() + batchSize - 1) / batchSize;
-        
+
         std::vector<std::vector<TopoDS_Face>> batchFaces(numBatches);
         std::vector<std::vector<int>> batchStats(numBatches);
-        
+
         // Process batches in parallel
         std::vector<std::future<void>> futures;
         
         for (size_t batchIdx = 0; batchIdx < numBatches; ++batchIdx) {
-            futures.push_back(std::async(std::launch::async, [&, batchIdx]() {
+            futures.push_back(std::async(std::launch::async, [&, batchIdx, modelCenter]() {
                 size_t startIdx = batchIdx * batchSize;
                 size_t endIdx = (startIdx + batchSize < triangles.size()) ? startIdx + batchSize : triangles.size();
-                
+
                 batchFaces[batchIdx].reserve(endIdx - startIdx);
                 batchStats[batchIdx].resize(5, 0); // 5 counters
-                
+
                 for (size_t i = startIdx; i < endIdx; ++i) {
                     const auto& triangle = triangles[i];
-                    
+
                     // Check STL triangle normal validity
                     if (triangle.normal.Magnitude() > 1e-6) {
                         batchStats[batchIdx][0]++; // trianglesWithValidNormals
-                        
+
                         // Calculate triangle center
                         gp_Pnt triangleCenter(
                             (triangle.vertices[0].X() + triangle.vertices[1].X() + triangle.vertices[2].X()) / 3.0,
                             (triangle.vertices[0].Y() + triangle.vertices[1].Y() + triangle.vertices[2].Y()) / 3.0,
                             (triangle.vertices[0].Z() + triangle.vertices[1].Z() + triangle.vertices[2].Z()) / 3.0
                         );
-                        
-                        // Calculate vector from triangle center to origin
-                        gp_Vec centerToOrigin(-triangleCenter.X(), -triangleCenter.Y(), -triangleCenter.Z());
-                        
-                        // Check if STL normal points away from origin (outward)
-                        double dotProduct = triangle.normal.Dot(centerToOrigin);
+
+                        // Calculate vector from model center to triangle center
+                        // This gives us the direction from center to the triangle surface
+                        gp_Vec centerToTriangle(
+                            triangleCenter.X() - modelCenter.X(),
+                            triangleCenter.Y() - modelCenter.Y(),
+                            triangleCenter.Z() - modelCenter.Z()
+                        );
+
+                        // Check if the normal points in the same direction as centerToTriangle
+                        // A positive dot product means the normal points outward from the model center
+                        double dotProduct = triangle.normal.Dot(centerToTriangle);
                         if (dotProduct > 0) {
                             batchStats[batchIdx][1]++; // correctNormals (outward)
                         } else {
@@ -454,7 +492,7 @@ TopoDS_Shape STLReader::createShapeFromSTLData(
                         batchStats[batchIdx][3]++; // trianglesWithInvalidNormals
                     }
 
-                    TopoDS_Face faceShape = createFaceFromTriangle(triangle);
+                    TopoDS_Face faceShape = createFaceFromTriangle(triangle, modelCenter);
                     if (!faceShape.IsNull()) {
                         batchFaces[batchIdx].push_back(faceShape);
                         batchStats[batchIdx][4]++; // validFaces
@@ -482,14 +520,69 @@ TopoDS_Shape STLReader::createShapeFromSTLData(
             }
         }
 
-        // Output normal statistics (reduced logging)
-        LOG_INF_S("STL processed: " + std::to_string(triangles.size()) + " triangles, " + 
-                 std::to_string(validFaces) + " valid faces");
-        
-        if (correctNormals + incorrectNormals > 0) {
-            double correctPercentage = (static_cast<double>(correctNormals) / (correctNormals + incorrectNormals)) * 100.0;
-            LOG_INF_S("Normal correctness: " + std::to_string(correctPercentage) + "%");
+        // Enhanced normal statistics and diagnostics for STL
+        LOG_INF_S("=== STL Normal Analysis Report ===");
+        LOG_INF_S("File: " + baseName);
+        LOG_INF_S("Total triangles in file: " + std::to_string(triangles.size()));
+        LOG_INF_S("Valid faces created: " + std::to_string(validFaces));
+        LOG_INF_S("Failed face creation: " + std::to_string(triangles.size() - validFaces));
+
+        // Normal analysis
+        LOG_INF_S("--- Normal Analysis ---");
+        LOG_INF_S("Triangles with valid normals: " + std::to_string(trianglesWithValidNormals));
+        LOG_INF_S("Triangles with invalid/missing normals: " + std::to_string(trianglesWithInvalidNormals));
+
+        int totalNormalsAnalyzed = correctNormals + incorrectNormals;
+        LOG_INF_S("Normals analyzed for direction: " + std::to_string(totalNormalsAnalyzed));
+        LOG_INF_S("Normals pointing outward: " + std::to_string(correctNormals));
+        LOG_INF_S("Normals pointing inward: " + std::to_string(incorrectNormals));
+
+        if (totalNormalsAnalyzed > 0) {
+            double correctPercentage = (static_cast<double>(correctNormals) / totalNormalsAnalyzed) * 100.0;
+            LOG_INF_S("Normal direction correctness: " + std::to_string(correctPercentage) + "%");
+
+            // Provide diagnostic feedback
+            if (correctPercentage < 60.0) {
+                LOG_WRN_S("WARNING: Low normal direction correctness (" + std::to_string(correctPercentage) +
+                         "%). This may indicate:");
+                LOG_WRN_S("  - Incorrect vertex winding order in STL file");
+                LOG_WRN_S("  - Flipped triangles (inverted orientation)");
+                LOG_WRN_S("  - STL file exported with incorrect normal calculations");
+                LOG_WRN_S("  Consider checking the source STL file or the export settings.");
+            } else if (correctPercentage < 85.0) {
+                LOG_INF_S("NOTICE: Moderate normal direction correctness (" + std::to_string(correctPercentage) +
+                         "%). Some triangles may need orientation correction.");
+            } else {
+                LOG_INF_S("GOOD: High normal direction correctness (" + std::to_string(correctPercentage) +
+                         "%). Triangle orientations appear consistent.");
+            }
+        } else if (trianglesWithValidNormals > 0) {
+            LOG_WRN_S("Normals exist but direction analysis failed. This may indicate:");
+            LOG_WRN_S("  - All triangles are degenerate (zero area)");
+            LOG_WRN_S("  - Model center calculation failed");
+            LOG_WRN_S("  - All triangles lie on the same plane");
+        } else {
+            LOG_WRN_S("No valid normals found in STL file. This may indicate:");
+            LOG_WRN_S("  - STL file lacks normal information");
+            LOG_WRN_S("  - ASCII STL without normal definitions");
+            LOG_WRN_S("  - Corrupted or incomplete STL file");
         }
+
+        // Quality metrics
+        LOG_INF_S("--- Quality Metrics ---");
+        if (triangles.size() > 0) {
+            double faceCreationRate = (static_cast<double>(validFaces) / triangles.size()) * 100.0;
+            LOG_INF_S("Triangle processing success rate: " + std::to_string(faceCreationRate) + "%");
+
+            if (faceCreationRate < 95.0) {
+                LOG_WRN_S("WARNING: Some triangles failed to process. Check for:");
+                LOG_WRN_S("  - Degenerate triangles (vertices too close)");
+                LOG_WRN_S("  - Invalid triangle data");
+                LOG_WRN_S("  - Memory or processing errors");
+            }
+        }
+
+        LOG_INF_S("===================================");
 
         if (validFaces == 0) {
             LOG_ERR_S("No valid faces could be created from STL data");
@@ -512,7 +605,7 @@ TopoDS_Shape STLReader::createShapeFromSTLData(
     }
 }
 
-TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
+TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle, const gp_Pnt& modelCenter)
 {
     try {
         // Create polygon from triangle vertices
@@ -521,14 +614,14 @@ TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
         polygon.Add(triangle.vertices[1]);
         polygon.Add(triangle.vertices[2]);
         polygon.Close();
-        
+
         if (!polygon.IsDone()) {
             return TopoDS_Face();
         }
 
         // Create wire from polygon
         TopoDS_Wire wire = polygon.Wire();
-        
+
         // Create face from wire
         BRepBuilderAPI_MakeFace faceMaker(wire);
 
@@ -549,13 +642,13 @@ TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
                         triangle.vertices[2].Y() - triangle.vertices[0].Y(),
                         triangle.vertices[2].Z() - triangle.vertices[0].Z());
             gp_Vec calculatedNormal = edge1.Crossed(edge2);
-            
+
             if (calculatedNormal.Magnitude() > 1e-6) {
                 calculatedNormal.Normalize();
-                
+
                 // Check if normals are consistent
                 double dotProduct = calculatedNormal.Dot(triangle.normal);
-                
+
                 // If dot product is negative, the face is oriented incorrectly
                 // We need to reverse the face to make the normal point outward
                 if (dotProduct < 0) {
@@ -563,7 +656,7 @@ TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
                 }
             }
         } else {
-            // If no valid normal in STL, ensure face points outward
+            // If no valid normal in STL, ensure face points outward using model center
             // Calculate face normal from vertices
             gp_Vec edge1(triangle.vertices[1].X() - triangle.vertices[0].X(),
                         triangle.vertices[1].Y() - triangle.vertices[0].Y(),
@@ -572,25 +665,35 @@ TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
                         triangle.vertices[2].Y() - triangle.vertices[0].Y(),
                         triangle.vertices[2].Z() - triangle.vertices[0].Z());
             gp_Vec calculatedNormal = edge1.Crossed(edge2);
-            
+
             if (calculatedNormal.Magnitude() > 1e-6) {
                 calculatedNormal.Normalize();
-                
+
                 // Calculate triangle center
                 gp_Pnt triangleCenter(
                     (triangle.vertices[0].X() + triangle.vertices[1].X() + triangle.vertices[2].X()) / 3.0,
                     (triangle.vertices[0].Y() + triangle.vertices[1].Y() + triangle.vertices[2].Y()) / 3.0,
                     (triangle.vertices[0].Z() + triangle.vertices[1].Z() + triangle.vertices[2].Z()) / 3.0
                 );
-                
-                // Calculate vector from triangle center to origin
-                gp_Vec centerToOrigin(-triangleCenter.X(), -triangleCenter.Y(), -triangleCenter.Z());
-                
-                // Check if calculated normal points away from origin (outward)
-                double dotProduct = calculatedNormal.Dot(centerToOrigin);
-                if (dotProduct < 0) {
-                    // Normal points inward, reverse the face
-                    face.Reverse();
+
+                // Calculate vector from model center to triangle center
+                // This gives us the direction from center to the triangle surface
+                gp_Vec centerToTriangle(
+                    triangleCenter.X() - modelCenter.X(),
+                    triangleCenter.Y() - modelCenter.Y(),
+                    triangleCenter.Z() - modelCenter.Z()
+                );
+
+                // Normalize the direction vector
+                if (centerToTriangle.Magnitude() > 1e-6) {
+                    centerToTriangle.Normalize();
+
+                    // Check if calculated normal points in the same direction as centerToTriangle (outward)
+                    double dotProduct = calculatedNormal.Dot(centerToTriangle);
+                    if (dotProduct < 0) {
+                        // Normal points inward, reverse the face
+                        face.Reverse();
+                    }
                 }
             }
         }
@@ -601,6 +704,12 @@ TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
         // Reduced logging for performance
         return TopoDS_Face();
     }
+}
+
+// Backward compatibility function that uses origin as fallback
+TopoDS_Face STLReader::createFaceFromTriangle(const Triangle& triangle)
+{
+    return createFaceFromTriangle(triangle, gp_Pnt(0, 0, 0));
 }
 
 bool STLReader::readBinaryData(std::ifstream& file, void* data, size_t size)

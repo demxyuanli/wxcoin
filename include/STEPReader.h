@@ -178,6 +178,17 @@ private:
 		const OptimizationOptions& options
 	);
 
+	/**
+	 * @brief Ensure consistent normal directions for all faces
+	 * @param shape The shape to process
+	 * @param name Name for logging
+	 * @return Shape with consistent normal directions
+	 */
+	static TopoDS_Shape ensureConsistentNormalDirections(
+		const TopoDS_Shape& shape,
+		const std::string& name
+	);
+
 
 
 	// Static members for caching and optimization

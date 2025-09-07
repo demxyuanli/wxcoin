@@ -636,15 +636,12 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 			indices.push_back(SO_END_LINE_INDEX);
 			
 			// Check if normal direction is correct (pointing outward)
-			// For most meshes, outward normals should have positive Z component
-			// or follow right-hand rule with triangle vertices
-			bool isCorrectDirection = true;
+			// Calculate vector from vertex to origin
+			gp_Vec vertexToOrigin(-v.X(), -v.Y(), -v.Z());
 			
-			// Simple heuristic: check if normal points outward based on Z component
-			// This can be enhanced with more sophisticated checks
-			if (n.Z() < 0) {
-				isCorrectDirection = false;
-			}
+			// Check if normal points away from origin (outward)
+			double dotProduct = n.Dot(vertexToOrigin);
+			bool isCorrectDirection = (dotProduct > 0);
 			
 			// Add color for this line (RGB values)
 			if (isCorrectDirection) {
@@ -748,13 +745,12 @@ void EdgeComponent::generateFaceNormalLineNode(const TriangleMesh& mesh, double 
 				faceNormal.Scale(1.0 / normalLength);
 
 				// Check if face normal direction is correct (pointing outward)
-				// For most meshes, outward normals should have positive Z component
-				bool isCorrectDirection = true;
+				// Calculate vector from face center to origin
+				gp_Vec centerToOrigin(-faceCenter.X(), -faceCenter.Y(), -faceCenter.Z());
 				
-				// Simple heuristic: check if normal points outward based on Z component
-				if (faceNormal.Z() < 0) {
-					isCorrectDirection = false;
-				}
+				// Check if face normal points away from origin (outward)
+				double dotProduct = faceNormal.Dot(centerToOrigin);
+				bool isCorrectDirection = (dotProduct > 0);
 
 				// Create line from face center to normal direction
 				gp_Pnt normalEnd(

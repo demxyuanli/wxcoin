@@ -773,11 +773,11 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 			// Generate normal/face-normal lines when requested
 			if (edgeComponent->edgeFlags.showNormalLines) {
 				LOG_INF_S("Generating normal line node for geometry: " + m_name);
-				edgeComponent->generateNormalLineNode(mesh, 0.5);
+				edgeComponent->generateNormalLineNode(mesh, 0.5); // Use default length for now
 			}
 			if (edgeComponent->edgeFlags.showFaceNormalLines) {
 				LOG_INF_S("Generating face normal line node for geometry: " + m_name);
-				edgeComponent->generateFaceNormalLineNode(mesh, 0.5);
+				edgeComponent->generateFaceNormalLineNode(mesh, 0.5); // Use default length for now
 			}
 		}
 		else {

@@ -154,6 +154,14 @@ private:
     TopoDS_Face createFaceFromTriangle(const Triangle& triangle);
 
     /**
+     * @brief Create a face from triangle with model center for better normal orientation
+     * @param triangle Triangle data
+     * @param modelCenter Center point of the model for normal direction analysis
+     * @return TopoDS_Face or null shape if creation fails
+     */
+    TopoDS_Face createFaceFromTriangle(const Triangle& triangle, const gp_Pnt& modelCenter);
+
+    /**
      * @brief Read binary data from file
      * @param file Input file stream
      * @param data Pointer to data buffer

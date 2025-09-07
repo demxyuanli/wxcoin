@@ -353,6 +353,37 @@ TopoDS_Shape OBJReader::createShapeFromOBJData(
         int facesWithExplicitNormals = 0;
         int facesWithCalculatedNormals = 0;
 
+        // Calculate model center for better normal direction analysis
+        gp_Pnt modelCenter(0, 0, 0);
+        int validVerticesForCenter = 0;
+
+        // Quick pass to calculate approximate model center
+        for (const auto& face : faces) {
+            if (face.vertexIndices.size() >= 3) {
+                // Use first vertex of each face for center calculation
+                int vertexIdx = face.vertexIndices[0];
+                if (vertexIdx >= 0 && vertexIdx < static_cast<int>(vertices.size())) {
+                    const Vertex& v = vertices[vertexIdx];
+                    modelCenter.SetX(modelCenter.X() + v.x);
+                    modelCenter.SetY(modelCenter.Y() + v.y);
+                    modelCenter.SetZ(modelCenter.Z() + v.z);
+                    validVerticesForCenter++;
+                }
+            }
+        }
+
+        if (validVerticesForCenter > 0) {
+            modelCenter.SetX(modelCenter.X() / validVerticesForCenter);
+            modelCenter.SetY(modelCenter.Y() / validVerticesForCenter);
+            modelCenter.SetZ(modelCenter.Z() / validVerticesForCenter);
+            LOG_INF_S("Calculated model center for OBJ normal analysis: (" +
+                     std::to_string(modelCenter.X()) + ", " +
+                     std::to_string(modelCenter.Y()) + ", " +
+                     std::to_string(modelCenter.Z()) + ")");
+        } else {
+            LOG_WRN_S("Could not calculate model center for OBJ, using origin (0,0,0)");
+        }
+
         for (const auto& face : faces) {
             if (face.vertexIndices.size() < 3) {
                 continue;
@@ -406,11 +437,16 @@ TopoDS_Shape OBJReader::createShapeFromOBJData(
                         faceCenter.SetY(faceCenter.Y() / face.vertexIndices.size());
                         faceCenter.SetZ(faceCenter.Z() / face.vertexIndices.size());
                         
-                        // Calculate vector from face center to origin
-                        gp_Vec centerToOrigin(-faceCenter.X(), -faceCenter.Y(), -faceCenter.Z());
-                        
-                        // Check if normal points away from origin (outward)
-                        double dotProduct = computedNormal.Dot(centerToOrigin);
+                        // Calculate vector from model center to face center
+                        // This gives us the direction from center to the face surface
+                        gp_Vec centerToFace(
+                            faceCenter.X() - modelCenter.X(),
+                            faceCenter.Y() - modelCenter.Y(),
+                            faceCenter.Z() - modelCenter.Z()
+                        );
+
+                        // Check if normal points in the same direction as centerToFace (outward)
+                        double dotProduct = computedNormal.Dot(centerToFace);
                         if (dotProduct > 0) {
                             correctNormals++;
                         } else {
@@ -420,28 +456,79 @@ TopoDS_Shape OBJReader::createShapeFromOBJData(
                 }
             }
 
-            TopoDS_Shape faceShape = createFaceFromVertices(vertices, face.vertexIndices, normals, face.normalIndices);
+            TopoDS_Shape faceShape = createFaceFromVertices(vertices, face.vertexIndices, normals, face.normalIndices, modelCenter);
             if (!faceShape.IsNull()) {
                 builder.Add(compound, faceShape);
                 validFaces++;
             }
         }
 
-        // Output normal statistics
-        LOG_INF_S("=== OBJ Normal Statistics ===");
-        LOG_INF_S("Total faces processed: " + std::to_string(faces.size()));
+        // Enhanced normal statistics and diagnostics
+        LOG_INF_S("=== OBJ Normal Analysis Report ===");
+        LOG_INF_S("File: " + baseName);
+        LOG_INF_S("Total faces in file: " + std::to_string(faces.size()));
         LOG_INF_S("Valid faces created: " + std::to_string(validFaces));
-        LOG_INF_S("Faces with explicit normals: " + std::to_string(facesWithExplicitNormals));
+        LOG_INF_S("Failed face creation: " + std::to_string(faces.size() - validFaces));
+
+        // Normal source analysis
+        LOG_INF_S("--- Normal Source Analysis ---");
+        LOG_INF_S("Faces with explicit normals (vn): " + std::to_string(facesWithExplicitNormals));
         LOG_INF_S("Faces with calculated normals: " + std::to_string(facesWithCalculatedNormals));
-        LOG_INF_S("Total normals analyzed: " + std::to_string(correctNormals + incorrectNormals));
-        LOG_INF_S("Correct normals (outward): " + std::to_string(correctNormals));
-        LOG_INF_S("Incorrect normals (inward): " + std::to_string(incorrectNormals));
-        
-        if (correctNormals + incorrectNormals > 0) {
-            double correctPercentage = (static_cast<double>(correctNormals) / (correctNormals + incorrectNormals)) * 100.0;
-            LOG_INF_S("Normal correctness: " + std::to_string(correctPercentage) + "%");
+        LOG_INF_S("Faces without normals: " + std::to_string(faces.size() - facesWithExplicitNormals - facesWithCalculatedNormals));
+
+        // Normal direction analysis
+        LOG_INF_S("--- Normal Direction Analysis ---");
+        int totalNormalsAnalyzed = correctNormals + incorrectNormals;
+        LOG_INF_S("Total normals analyzed: " + std::to_string(totalNormalsAnalyzed));
+        LOG_INF_S("Normals pointing outward: " + std::to_string(correctNormals));
+        LOG_INF_S("Normals pointing inward: " + std::to_string(incorrectNormals));
+
+        if (totalNormalsAnalyzed > 0) {
+            double correctPercentage = (static_cast<double>(correctNormals) / totalNormalsAnalyzed) * 100.0;
+            LOG_INF_S("Normal correctness ratio: " + std::to_string(correctPercentage) + "%");
+
+            // Provide diagnostic feedback
+            if (correctPercentage < 50.0) {
+                LOG_WRN_S("WARNING: Low normal correctness ratio (" + std::to_string(correctPercentage) +
+                         "%). This may indicate:");
+                LOG_WRN_S("  - Incorrect winding order in OBJ file");
+                LOG_WRN_S("  - Inconsistent normal definitions");
+                LOG_WRN_S("  - Geometry with complex topology");
+                LOG_WRN_S("  Consider checking the source OBJ file or enabling normal auto-correction.");
+            } else if (correctPercentage < 80.0) {
+                LOG_INF_S("NOTICE: Moderate normal correctness ratio (" + std::to_string(correctPercentage) +
+                         "%). Some faces may need orientation correction.");
+            } else {
+                LOG_INF_S("GOOD: High normal correctness ratio (" + std::to_string(correctPercentage) +
+                         "%). Face orientations appear consistent.");
+            }
+        } else {
+            LOG_WRN_S("No normals were analyzed. This may indicate:");
+            LOG_WRN_S("  - OBJ file lacks normal definitions (vn statements)");
+            LOG_WRN_S("  - All faces are degenerate or invalid");
+            LOG_WRN_S("  - Normal calculation failed for all faces");
         }
-        LOG_INF_S("=============================");
+
+        // Additional quality metrics
+        LOG_INF_S("--- Quality Metrics ---");
+        if (faces.size() > 0) {
+            double faceCreationRate = (static_cast<double>(validFaces) / faces.size()) * 100.0;
+            LOG_INF_S("Face creation success rate: " + std::to_string(faceCreationRate) + "%");
+
+            if (faceCreationRate < 90.0) {
+                LOG_WRN_S("WARNING: Low face creation success rate. Check for:");
+                LOG_WRN_S("  - Degenerate triangles (zero area)");
+                LOG_WRN_S("  - Invalid vertex indices");
+                LOG_WRN_S("  - Corrupted OBJ file data");
+            }
+        }
+
+        if (facesWithExplicitNormals > 0 && facesWithCalculatedNormals > 0) {
+            LOG_INF_S("MIXED: File contains both explicit and calculated normals");
+            LOG_INF_S("This may indicate incomplete normal definitions in the source file.");
+        }
+
+        LOG_INF_S("=====================================");
 
         if (validFaces == 0) {
             LOG_ERR_S("No valid faces could be created from OBJ data");
@@ -468,7 +555,8 @@ TopoDS_Shape OBJReader::createFaceFromVertices(
     const std::vector<Vertex>& vertices,
     const std::vector<int>& faceIndices,
     const std::vector<Vertex>& normals,
-    const std::vector<int>& normalIndices)
+    const std::vector<int>& normalIndices,
+    const gp_Pnt& modelCenter)
 {
     try {
         if (faceIndices.size() < 3) {
@@ -556,11 +644,8 @@ TopoDS_Shape OBJReader::createFaceFromVertices(
             }
         }
         
-        // Check face orientation and reverse if needed
+        // Check face orientation and ensure normal points outward
         if (hasValidNormal) {
-            // Use a more robust method: check if the face vertices are ordered counter-clockwise
-            // when viewed from the outside. This is the standard for most 3D formats.
-            
             if (faceIndices.size() >= 3) {
                 const Vertex& v0 = vertices[faceIndices[0]];
                 const Vertex& v1 = vertices[faceIndices[1]];
@@ -569,17 +654,60 @@ TopoDS_Shape OBJReader::createFaceFromVertices(
                 // Calculate the cross product of the first two edges
                 gp_Vec edge1(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
                 gp_Vec edge2(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
-                gp_Vec crossProduct = edge1.Crossed(edge2);
+                gp_Vec calculatedNormal = edge1.Crossed(edge2);
                 
-                if (crossProduct.Magnitude() > 1e-6) {
-                    crossProduct.Normalize();
+                if (calculatedNormal.Magnitude() > 1e-6) {
+                    calculatedNormal.Normalize();
                     
-                    // Check if the calculated normal matches the expected normal
-                    double dotProduct = crossProduct.Dot(faceNormal);
+                    // Check if the calculated normal matches the provided normal
+                    double dotProduct = calculatedNormal.Dot(faceNormal);
                     
                     // If dot product is negative, the face vertices are ordered clockwise
                     // and we need to reverse the face
                     if (dotProduct < 0) {
+                        face.Reverse();
+                    }
+                }
+            }
+        } else {
+            // If no valid normal provided, ensure face points outward
+            if (faceIndices.size() >= 3) {
+                const Vertex& v0 = vertices[faceIndices[0]];
+                const Vertex& v1 = vertices[faceIndices[1]];
+                const Vertex& v2 = vertices[faceIndices[2]];
+                
+                // Calculate face normal from vertices
+                gp_Vec edge1(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+                gp_Vec edge2(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+                gp_Vec calculatedNormal = edge1.Crossed(edge2);
+                
+                if (calculatedNormal.Magnitude() > 1e-6) {
+                    calculatedNormal.Normalize();
+                    
+                    // Calculate face center
+                    gp_Pnt faceCenter(0, 0, 0);
+                    for (int index : faceIndices) {
+                        if (index >= 0 && index < static_cast<int>(vertices.size())) {
+                            const Vertex& v = vertices[index];
+                            faceCenter = gp_Pnt(faceCenter.X() + v.x, faceCenter.Y() + v.y, faceCenter.Z() + v.z);
+                        }
+                    }
+                    faceCenter = gp_Pnt(faceCenter.X() / faceIndices.size(), 
+                                      faceCenter.Y() / faceIndices.size(), 
+                                      faceCenter.Z() / faceIndices.size());
+                    
+                    // Calculate vector from model center to face center
+                    // This gives us the direction from center to the face surface
+                    gp_Vec centerToFace(
+                        faceCenter.X() - modelCenter.X(),
+                        faceCenter.Y() - modelCenter.Y(),
+                        faceCenter.Z() - modelCenter.Z()
+                    );
+
+                    // Check if calculated normal points in the same direction as centerToFace (outward)
+                    double dotProduct = calculatedNormal.Dot(centerToFace);
+                    if (dotProduct < 0) {
+                        // Normal points inward, reverse the face
                         face.Reverse();
                     }
                 }
