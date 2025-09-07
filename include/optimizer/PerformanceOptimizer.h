@@ -131,14 +131,14 @@ public:
     };
     
     struct MeshCacheEntry {
-        OCCMeshConverter::TriangleMesh mesh;
+        TriangleMesh mesh;
         std::chrono::steady_clock::time_point timestamp;
         size_t accessCount;
         
         MeshCacheEntry() 
             : timestamp(std::chrono::steady_clock::now()), accessCount(0) {}
         
-        MeshCacheEntry(const OCCMeshConverter::TriangleMesh& m) 
+        MeshCacheEntry(const TriangleMesh& m) 
             : mesh(m), timestamp(std::chrono::steady_clock::now()), accessCount(1) {}
     };
 
@@ -189,18 +189,18 @@ public:
                                     std::function<TopoDS_Shape()> creator);
     
     // Get or create mesh with caching
-    OCCMeshConverter::TriangleMesh getOrCreateMesh(const TopoDS_Shape& shape, 
-                                                  const OCCMeshConverter::MeshParameters& params,
-                                                  std::function<OCCMeshConverter::TriangleMesh()> creator);
+    TriangleMesh getOrCreateMesh(const TopoDS_Shape& shape, 
+                                const OCCMeshConverter::MeshParameters& params,
+                                std::function<TriangleMesh()> creator);
     
     // Parallel geometry creation
     std::future<TopoDS_Shape> createGeometryAsync(const GeometryKey& key,
                                                  std::function<TopoDS_Shape()> creator);
     
     // Parallel mesh creation
-    std::future<OCCMeshConverter::TriangleMesh> createMeshAsync(const TopoDS_Shape& shape,
-                                                               const OCCMeshConverter::MeshParameters& params,
-                                                               std::function<OCCMeshConverter::TriangleMesh()> creator);
+    std::future<TriangleMesh> createMeshAsync(const TopoDS_Shape& shape,
+                                             const OCCMeshConverter::MeshParameters& params,
+                                             std::function<TriangleMesh()> creator);
     
     // Cache management
     void clearCache();

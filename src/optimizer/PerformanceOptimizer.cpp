@@ -261,9 +261,9 @@ TopoDS_Shape GeometryComputationCache::getOrCreateGeometry(const GeometryKey& ke
     return shape;
 }
 
-OCCMeshConverter::TriangleMesh GeometryComputationCache::getOrCreateMesh(const TopoDS_Shape& shape, 
-                                                                        const OCCMeshConverter::MeshParameters& params,
-                                                                        std::function<OCCMeshConverter::TriangleMesh()> creator) {
+TriangleMesh GeometryComputationCache::getOrCreateMesh(const TopoDS_Shape& shape, 
+                                                      const OCCMeshConverter::MeshParameters& params,
+                                                      std::function<TriangleMesh()> creator) {
     size_t hash = computeMeshHash(shape, params);
     
     {
@@ -306,9 +306,9 @@ std::future<TopoDS_Shape> GeometryComputationCache::createGeometryAsync(const Ge
     });
 }
 
-std::future<OCCMeshConverter::TriangleMesh> GeometryComputationCache::createMeshAsync(const TopoDS_Shape& shape,
-                                                                                     const OCCMeshConverter::MeshParameters& params,
-                                                                                     std::function<OCCMeshConverter::TriangleMesh()> creator) {
+std::future<TriangleMesh> GeometryComputationCache::createMeshAsync(const TopoDS_Shape& shape,
+                                                                   const OCCMeshConverter::MeshParameters& params,
+                                                                   std::function<TriangleMesh()> creator) {
     return m_threadPool->enqueue([this, shape, params, creator]() {
         return getOrCreateMesh(shape, params, creator);
     });

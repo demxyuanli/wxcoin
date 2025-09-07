@@ -19,6 +19,9 @@ add_subdirectory(geometry)
 # 6. Commands module (depends on core and occ)
 add_subdirectory(commands)
 
+# 6.1. Optimizer module (depends on core, logger, commands, and occ)
+add_subdirectory(optimizer)
+
 # 6. Rendering module (depends on core module)
 add_subdirectory(rendering)
 
@@ -54,6 +57,7 @@ set_target_properties(CADConfig PROPERTIES FOLDER "Modules")
 set_target_properties(CADOCC PROPERTIES FOLDER "Modules")
 set_target_properties(CADGeometry PROPERTIES FOLDER "Modules")
 set_target_properties(CADCommands PROPERTIES FOLDER "Modules")
+set_target_properties(optimizer PROPERTIES FOLDER "Modules")
 set_target_properties(CADRendering PROPERTIES FOLDER "Modules")
 set_target_properties(CADView PROPERTIES FOLDER "Modules")
 set_target_properties(CADRenderingToolkit PROPERTIES FOLDER "Modules")
