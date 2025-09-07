@@ -151,7 +151,7 @@ private:
      * @param triangle Triangle data
      * @return TopoDS_Face or null shape if creation fails
      */
-    TopoDS_Shape createFaceFromTriangle(const Triangle& triangle);
+    TopoDS_Face createFaceFromTriangle(const Triangle& triangle);
 
     /**
      * @brief Read binary data from file
