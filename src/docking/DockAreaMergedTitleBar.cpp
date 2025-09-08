@@ -9,6 +9,7 @@
 #include "config/SvgIconManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/menu.h>
+#include <wx/graphics.h>
 #include <algorithm>
 
 namespace ads {
@@ -1023,16 +1024,38 @@ void DockAreaMergedTitleBar::drawTab(wxDC& dc, int index) {
             
         case TabPosition::Left:
         case TabPosition::Right:
-            // Vertical tabs - rotate text
+            // Vertical tabs - draw rotated text using wxGraphicsContext
             textRect.Deflate(0, textPadding);
             if (isCurrent && tab.showCloseButton && tab.widget->hasFeature(DockWidgetClosable)) {
                 textRect.height -= style.buttonSize;
             }
             
-            // For vertical tabs, we need to draw text rotated
-            dc.SetTextRotation(90); // Rotate 90 degrees clockwise
-            dc.DrawLabel(title, textRect, wxALIGN_CENTER);
-            dc.SetTextRotation(0); // Reset rotation
+            // For vertical tabs, draw text rotated using wxGraphicsContext
+            wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+            if (gc) {
+                // Use the same text color as horizontal tabs
+                wxColour textColor = isCurrent ? style.activeTextColour : style.textColour;
+                gc->SetFont(dc.GetFont(), textColor);
+                
+                // Calculate text position (center of the tab)
+                wxDouble textX = textRect.GetLeft() + textRect.GetWidth() / 2.0;
+                wxDouble textY = textRect.GetTop() + textRect.GetHeight() / 2.0;
+                
+                // Rotate 90 degrees clockwise for vertical text
+                gc->PushState();
+                gc->Translate(textX, textY);
+                gc->Rotate(wxDegToRad(90.0));
+                gc->Translate(-textX, -textY);
+                
+                // Draw the text
+                gc->DrawText(title, textX, textY);
+                
+                gc->PopState();
+                delete gc;
+            } else {
+                // Fallback: draw horizontal text if graphics context is not available
+                dc.DrawLabel(title, textRect, wxALIGN_CENTER);
+            }
             break;
     }
 

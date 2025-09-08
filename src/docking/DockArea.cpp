@@ -573,7 +573,7 @@ void DockArea::updateLayoutForTabPosition() {
             }
             break;
             
-        case TabPosition::Left:
+        case TabPosition::Left: {
             // Left: title bar + horizontal layout with tab bar on left (independent mode)
             m_layout->SetOrientation(wxVERTICAL);
             m_layout->Add(m_titleBar, 0, wxEXPAND | wxALL, 0);
@@ -589,8 +589,9 @@ void DockArea::updateLayoutForTabPosition() {
                 m_titleBar->Show();
             }
             break;
+        }
             
-        case TabPosition::Right:
+        case TabPosition::Right: {
             // Right: title bar + horizontal layout with tab bar on right (independent mode)
             m_layout->SetOrientation(wxVERTICAL);
             m_layout->Add(m_titleBar, 0, wxEXPAND | wxALL, 0);
@@ -606,6 +607,7 @@ void DockArea::updateLayoutForTabPosition() {
                 m_titleBar->Show();
             }
             break;
+        }
     }
 }
 
