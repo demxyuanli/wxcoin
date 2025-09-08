@@ -8,6 +8,8 @@ public:
 
 	virtual void setMeshDeflection(double deflection, bool remesh = true) = 0;
 	virtual double getMeshDeflection() const = 0;
+	virtual void setAngularDeflection(double deflection, bool remesh = true) = 0;
+	virtual double getAngularDeflection() const = 0;
 
 	virtual void setSubdivisionEnabled(bool enabled) = 0;
 	virtual bool isSubdivisionEnabled() const = 0;

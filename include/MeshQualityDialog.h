@@ -35,6 +35,8 @@ private:
 	// Basic quality event handlers
 	void onDeflectionSlider(wxCommandEvent& event);
 	void onDeflectionSpinCtrl(wxSpinDoubleEvent& event);
+	void onAngularDeflectionSlider(wxCommandEvent& event);
+	void onAngularDeflectionSpinCtrl(wxSpinDoubleEvent& event);
 	void onLODEnable(wxCommandEvent& event);
 	void onLODRoughDeflectionSlider(wxCommandEvent& event);
 	void onLODRoughDeflectionSpinCtrl(wxSpinDoubleEvent& event);
@@ -96,6 +98,8 @@ private:
 	// Basic quality controls
 	wxSlider* m_deflectionSlider;
 	wxSpinCtrlDouble* m_deflectionSpinCtrl;
+	wxSlider* m_angularDeflectionSlider;
+	wxSpinCtrlDouble* m_angularDeflectionSpinCtrl;
 	wxCheckBox* m_lodEnableCheckBox;
 	wxSlider* m_lodRoughDeflectionSlider;
 	wxSpinCtrlDouble* m_lodRoughDeflectionSpinCtrl;
@@ -133,6 +137,7 @@ private:
 
 	// Current parameter values
 	double m_currentDeflection;
+	double m_currentAngularDeflection;
 	bool m_currentLODEnabled;
 	double m_currentLODRoughDeflection;
 	double m_currentLODFineDeflection;

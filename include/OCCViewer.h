@@ -120,6 +120,8 @@ public:
 	// Mesh quality
 	void setMeshDeflection(double deflection, bool remesh = true) override;
 	double getMeshDeflection() const override;
+	void setAngularDeflection(double deflection, bool remesh = true) override;
+	double getAngularDeflection() const override;
 
 	// LOD (Level of Detail) control
 	void setLODEnabled(bool enabled) override;
@@ -177,6 +179,14 @@ public:
 	void setNormalLength(double length);
 	void setNormalColor(const Quantity_Color& correct, const Quantity_Color& incorrect);
 	void updateNormalsDisplay();
+	
+	// Enhanced normal consistency tools
+	void setNormalConsistencyMode(bool enabled);
+	bool isNormalConsistencyModeEnabled() const;
+	void setNormalDebugMode(bool enabled);
+	bool isNormalDebugModeEnabled() const;
+	void refreshNormalDisplay();
+	void toggleNormalDisplay();
 
 	// View refresh
 	void requestViewRefresh() override;
@@ -309,6 +319,10 @@ private:
 	double m_normalLength;
 	Quantity_Color m_correctNormalColor;
 	Quantity_Color m_incorrectNormalColor;
+	
+	// Normal consistency settings
+	bool m_normalConsistencyMode;
+	bool m_normalDebugMode;
 
 	Quantity_Color m_defaultColor;
 	double m_defaultTransparency;

@@ -2,12 +2,14 @@
 
 #include "CommandListener.h"
 #include "CommandType.h"
+#include "ImportStatisticsDialog.h"
 #include <memory>
 #include <wx/frame.h>
 
 class Canvas;
 class OCCViewer;
 class FlatUIStatusBar;
+class OCCGeometry;
 
 class ImportStepListener : public CommandListener {
 public:
@@ -24,4 +26,7 @@ private:
 	Canvas* m_canvas;
 	OCCViewer* m_occViewer;
 	FlatUIStatusBar* m_statusBar;
+
+	// Helper function to collect detailed geometry information
+	void collectGeometryDetails(std::shared_ptr<OCCGeometry>& geometry, ImportFileStatistics& fileStat);
 };

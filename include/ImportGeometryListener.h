@@ -3,8 +3,10 @@
 #include "CommandListener.h"
 #include "CommandType.h"
 #include "GeometryReader.h"
+#include "ImportStatisticsDialog.h"
 #include <memory>
 #include <wx/frame.h>
+#include <chrono>
 
 class Canvas;
 class OCCViewer;
@@ -42,6 +44,23 @@ private:
     CommandResult importFiles(std::unique_ptr<GeometryReader> reader,
         const std::vector<std::string>& filePaths,
         const GeometryReader::OptimizationOptions& options);
+
+    /**
+     * @brief Import files with detailed statistics collection
+     * @param reader Geometry reader to use
+     * @param filePaths Vector of file paths to import
+     * @param options Import options
+     * @param overallStats Statistics to update
+     * @param formatName Format name for statistics
+     * @param allGeometries Output vector to accumulate geometries
+     * @return Command result
+     */
+    CommandResult importFilesWithStats(std::unique_ptr<GeometryReader> reader,
+        const std::vector<std::string>& filePaths,
+        const GeometryReader::OptimizationOptions& options,
+        ImportOverallStatistics& overallStats,
+        const std::string& formatName,
+        std::vector<std::shared_ptr<OCCGeometry>>& allGeometries);
 
     /**
      * @brief Show import settings dialog

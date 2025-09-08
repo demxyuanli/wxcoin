@@ -78,6 +78,8 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
 	m_normalLength(0.5),
 	m_correctNormalColor(1.0, 0.0, 0.0, Quantity_TOC_RGB),
 	m_incorrectNormalColor(0.0, 1.0, 0.0, Quantity_TOC_RGB),
+	m_normalConsistencyMode(true),
+	m_normalDebugMode(false),
 	m_defaultColor(0.7, 0.7, 0.7, Quantity_TOC_RGB),
 	m_defaultTransparency(0.0),
 	m_lodEnabled(false),
@@ -625,6 +627,54 @@ double OCCViewer::getMeshDeflection() const
 	return m_meshParams.deflection;
 }
 
+void OCCViewer::setAngularDeflection(double deflection, bool remesh)
+{
+	if (m_meshParams.angularDeflection != deflection) {
+		m_meshParams.angularDeflection = deflection;
+
+		// Throttle remeshing to prevent excessive calls
+		if (remesh) {
+			static wxLongLong lastRemeshTime = 0;
+			wxLongLong currentTime = wxGetLocalTimeMillis();
+			const int MIN_REMESH_INTERVAL = 200; // Minimum 200ms between remesh operations
+
+			if (currentTime - lastRemeshTime >= MIN_REMESH_INTERVAL) {
+				try {
+					remeshAllGeometries();
+					lastRemeshTime = currentTime;
+					// Reduce debug logging frequency
+					static int logCounter = 0;
+					if (++logCounter % 10 == 0) { // Log every 10th remesh
+						LOG_DBG_S("Remeshed all geometries with angular deflection: " + std::to_string(deflection));
+					}
+				}
+				catch (const std::exception& e) {
+					LOG_ERR_S("OCCViewer::setAngularDeflection: Exception during remesh: " + std::string(e.what()));
+					// Don't update lastRemeshTime if remesh failed
+				}
+				catch (...) {
+					LOG_ERR_S("OCCViewer::setAngularDeflection: Unknown exception during remesh");
+					// Don't update lastRemeshTime if remesh failed
+				}
+			}
+			else {
+				// Skip remesh if too soon after last one - reduce logging frequency in debug
+				static int skipLogCounter = 0;
+				if (++skipLogCounter % 50 == 0) { // Log every 50th skip
+					long long timeDiff = (currentTime - lastRemeshTime).GetValue();
+					LOG_DBG_S("Remesh throttled for angular deflection: " + std::to_string(deflection) +
+						" (last remesh was " + std::to_string(timeDiff) + "ms ago)");
+				}
+			}
+		}
+	}
+}
+
+double OCCViewer::getAngularDeflection() const
+{
+	return m_meshParams.angularDeflection;
+}
+
 void OCCViewer::onSelectionChanged()
 {
 	if (m_selectionManager) m_selectionManager->onSelectionChanged();
@@ -673,6 +723,71 @@ void OCCViewer::updateNormalsDisplay()
 {
 	// This function is no longer needed as m_normalRoot is removed.
 	// The normal display logic is now handled by the EdgeComponent.
+}
+
+// Enhanced normal consistency tools
+void OCCViewer::setNormalConsistencyMode(bool enabled)
+{
+	m_normalConsistencyMode = enabled;
+	LOG_INF_S("Normal consistency mode " + std::string(enabled ? "enabled" : "disabled"));
+	
+	// Apply to all geometries
+	for (auto& geometry : m_geometries) {
+		if (geometry) {
+			// Force regeneration with consistency mode
+			geometry->regenerateMesh(m_meshParams);
+		}
+	}
+	
+	// Refresh view
+	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
+}
+
+bool OCCViewer::isNormalConsistencyModeEnabled() const
+{
+	return m_normalConsistencyMode;
+}
+
+void OCCViewer::setNormalDebugMode(bool enabled)
+{
+	m_normalDebugMode = enabled;
+	LOG_INF_S("Normal debug mode " + std::string(enabled ? "enabled" : "disabled"));
+	
+	// Toggle normal display based on debug mode
+	setShowNormals(enabled);
+	
+	// Update normal colors for debug visualization
+	if (enabled) {
+		setNormalColor(
+			Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB),  // Green for correct
+			Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB)   // Red for incorrect
+		);
+	}
+}
+
+bool OCCViewer::isNormalDebugModeEnabled() const
+{
+	return m_normalDebugMode;
+}
+
+void OCCViewer::refreshNormalDisplay()
+{
+	LOG_INF_S("Refreshing normal display");
+	
+	// Force regeneration of all normal lines
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->updateAll(m_meshParams);
+	}
+	
+	// Refresh view
+	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
+}
+
+void OCCViewer::toggleNormalDisplay()
+{
+	bool currentState = isShowNormals();
+	setShowNormals(!currentState);
+	LOG_INF_S("Normal display toggled to: " + std::string(!currentState ? "ON" : "OFF"));
 }
 
 void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
@@ -1076,9 +1191,22 @@ void OCCViewer::validateMeshParameters()
 	// Validate basic mesh parameters
 	LOG_INF_S("Basic Mesh Settings:");
 	LOG_INF_S("  - Deflection: " + std::to_string(m_meshParams.deflection));
-	LOG_INF_S("  - Angular Deflection: " + std::to_string(m_meshParams.angularDeflection));
+	LOG_INF_S("  - Angular Deflection: " + std::to_string(m_meshParams.angularDeflection) +
+		" (controls curve approximation - lower = smoother curves)");
 	LOG_INF_S("  - Relative: " + std::string(m_meshParams.relative ? "true" : "false"));
 	LOG_INF_S("  - In Parallel: " + std::string(m_meshParams.inParallel ? "true" : "false"));
+
+	// Add recommendations for curve-surface fitting
+	if (m_meshParams.angularDeflection > 2.0) {
+		LOG_WRN_S("Angular deflection is large - curves may appear faceted");
+		LOG_INF_S("  Recommendation: Reduce angular deflection to < 1.0 for smoother curves");
+	} else if (m_meshParams.angularDeflection < 0.5) {
+		LOG_INF_S("Angular deflection is small - curves will be very smooth");
+		if (m_meshParams.deflection > 0.5) {
+			LOG_WRN_S("  Warning: Large deflection with small angular deflection may cause fitting issues");
+			LOG_INF_S("  Recommendation: Reduce mesh deflection or increase angular deflection");
+		}
+	}
 
 	LOG_INF_S("=== VALIDATION COMPLETE ===");
 }
@@ -1161,6 +1289,11 @@ bool OCCViewer::verifyParameterApplication(const std::string& parameterName, dou
 	else if (parameterName == "smoothing_iterations") {
 		bool matches = (m_smoothingIterations == static_cast<int>(expectedValue));
 		LOG_INF_S("Smoothing iterations verification: " + std::string(matches ? "PASS" : "FAIL"));
+		return matches;
+	}
+	else if (parameterName == "angular_deflection") {
+		bool matches = std::abs(m_meshParams.angularDeflection - expectedValue) < 1e-6;
+		LOG_INF_S("Angular deflection verification: " + std::string(matches ? "PASS" : "FAIL"));
 		return matches;
 	}
 	// Add more parameter checks as needed

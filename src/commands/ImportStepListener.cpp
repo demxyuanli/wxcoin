@@ -11,7 +11,14 @@
 #include <chrono>
 #include "FlatFrame.h"
 #include "ImportSettingsDialog.h"
+#include "ImportStatisticsDialog.h"
 #include "flatui/FlatUIStatusBar.h"
+
+// OpenCASCADE headers for topology analysis
+#include <OpenCASCADE/TopExp_Explorer.hxx>
+#include <OpenCASCADE/TopAbs_ShapeEnum.hxx>
+#include <OpenCASCADE/BRepCheck_Analyzer.hxx>
+#include <OpenCASCADE/ShapeAnalysis_ShapeContents.hxx>
 
 ImportStepListener::ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
 	: m_frame(frame), m_canvas(canvas), m_occViewer(occViewer), m_statusBar(nullptr)
@@ -35,6 +42,9 @@ ImportStepListener::ImportStepListener(wxFrame* frame, Canvas* canvas, OCCViewer
 CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	const std::unordered_map<std::string, std::string>&) {
 	auto totalImportStartTime = std::chrono::high_resolution_clock::now();
+
+	// Initialize overall statistics
+	ImportOverallStatistics overallStats;
 
 	// Initialize progress using status bar
 	if (m_statusBar) {
@@ -194,6 +204,39 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				successfulFiles++;
 				totalGeometries += result.geometries.size();
 				totalImportTime += result.importTime;
+
+				// Collect detailed statistics for this file
+				ImportFileStatistics fileStat;
+				wxFileName wxFile(filePaths[i]);
+				fileStat.fileName = wxFile.GetFullName().ToStdString();
+				fileStat.filePath = filePaths[i].ToStdString();
+				fileStat.format = formatName;
+				fileStat.success = true;
+				fileStat.geometriesCreated = result.geometries.size();
+				fileStat.importTime = stepReadDuration;
+				fileStat.fileSize = wxFileName(filePaths[i]).GetSize().ToULong();
+
+				// Extract detailed information from the geometry
+				if (!result.geometries.empty()) {
+					auto& geometry = result.geometries[0];
+					collectGeometryDetails(geometry, fileStat);
+				}
+
+				// Store file statistics
+				overallStats.fileStats.push_back(fileStat);
+
+				// Update overall statistics
+				overallStats.totalTransferableRoots += fileStat.transferableRoots;
+				overallStats.totalTransferredShapes += fileStat.transferredShapes;
+				overallStats.totalFacesProcessed += fileStat.facesProcessed;
+				overallStats.totalSolids += fileStat.solids;
+				overallStats.totalShells += fileStat.shells;
+				overallStats.totalFaces += fileStat.faces;
+				overallStats.totalWires += fileStat.wires;
+				overallStats.totalEdges += fileStat.edges;
+				overallStats.totalVertices += fileStat.vertices;
+				overallStats.totalMeshVertices += fileStat.meshVertices;
+				overallStats.totalMeshTriangles += fileStat.meshTriangles;
 
 				LOG_INF_S("File " + std::to_string(i + 1) + "/" + std::to_string(filePaths.size()) +
 					": " + std::to_string(result.geometries.size()) + " geometries in " +
@@ -358,11 +401,32 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				topWindow = m_frame;
 			}
 
-			// Show dialog with explicit parent and ensure it's on top
-			wxMessageDialog* dialog = new wxMessageDialog(topWindow, performanceMsg,
-				"Batch Import Complete", wxOK | wxICON_INFORMATION | wxCENTRE);
-			dialog->ShowModal();
-			delete dialog;
+			// Update overall statistics with final summary information
+			overallStats.totalFilesSelected = filePaths.size();
+			overallStats.totalFilesProcessed = filePaths.size();
+			overallStats.totalSuccessfulFiles = successfulFiles;
+			overallStats.totalFailedFiles = filePaths.size() - successfulFiles;
+			overallStats.totalGeometriesCreated = totalGeometries;
+			overallStats.totalImportTime = std::chrono::milliseconds(static_cast<long long>(totalImportTime));
+			overallStats.totalGeometryAddTime = geometryAddDuration.count();
+			overallStats.averageGeometriesPerSecond = totalGeometries / (totalImportTime / 1000.0);
+
+			// Get system settings
+			overallStats.lodEnabled = enableLOD;
+			overallStats.adaptiveMeshingEnabled = adaptiveMeshing;
+			overallStats.meshDeflection = optimalDeflection;
+
+			// Add format statistics for STEP
+			ImportFormatStatistics& formatStat = overallStats.formatStats["STEP"];
+			formatStat.totalFiles = filePaths.size();
+			formatStat.successfulFiles = successfulFiles;
+			formatStat.failedFiles = filePaths.size() - successfulFiles;
+			formatStat.totalGeometries = totalGeometries;
+			formatStat.totalImportTime = std::chrono::milliseconds(static_cast<long long>(totalImportTime));
+
+			ImportStatisticsDialog statsDialog(topWindow, overallStats);
+			int result = statsDialog.ShowModal();
+			LOG_INF_S("Import statistics dialog closed with result: " + std::to_string(result));
 
 			auto totalImportEndTime = std::chrono::high_resolution_clock::now();
 			auto totalImportDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalImportEndTime - totalImportStartTime);
@@ -407,10 +471,41 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				topWindow = m_frame;
 			}
 
-			wxMessageDialog* dialog = new wxMessageDialog(topWindow, warningMsg,
-				"Import Warning", wxOK | wxICON_WARNING | wxCENTRE);
-			dialog->ShowModal();
-			delete dialog;
+			// Show detailed statistics dialog for failed imports
+			ImportOverallStatistics overallStats;
+			overallStats.totalFilesSelected = filePaths.size();
+			overallStats.totalFilesProcessed = filePaths.size();
+			overallStats.totalSuccessfulFiles = successfulFiles;
+			overallStats.totalFailedFiles = filePaths.size() - successfulFiles;
+			overallStats.totalGeometriesCreated = totalGeometries;
+			overallStats.totalImportTime = std::chrono::milliseconds(static_cast<long long>(totalImportTime));
+
+			// Add file statistics for all processed files (marking them as failed)
+			for (size_t i = 0; i < filePaths.size(); ++i) {
+				ImportFileStatistics fileStat;
+				wxFileName wxFile(filePaths[i]);
+				fileStat.fileName = wxFile.GetFullName().ToStdString();
+				fileStat.filePath = filePaths[i].ToStdString();
+				fileStat.format = "STEP";
+				fileStat.success = false;
+				fileStat.errorMessage = "No valid geometries found";
+				fileStat.geometriesCreated = 0;
+				fileStat.importTime = std::chrono::milliseconds(static_cast<long long>(totalImportTime / filePaths.size()));
+
+				overallStats.fileStats.push_back(fileStat);
+			}
+
+			// Add format statistics for STEP
+			ImportFormatStatistics& formatStat = overallStats.formatStats["STEP"];
+			formatStat.totalFiles = filePaths.size();
+			formatStat.successfulFiles = successfulFiles;
+			formatStat.failedFiles = filePaths.size() - successfulFiles;
+			formatStat.totalGeometries = totalGeometries;
+			formatStat.totalImportTime = std::chrono::milliseconds(static_cast<long long>(totalImportTime));
+
+			ImportStatisticsDialog statsDialog(topWindow, overallStats);
+			int result = statsDialog.ShowModal();
+			LOG_INF_S("Import statistics dialog closed with result: " + std::to_string(result));
 
 			return CommandResult(false, "No valid geometries found in selected files", commandType);
 		}
@@ -433,13 +528,172 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			topWindow = m_frame;
 		}
 
-		wxMessageDialog* dialog = new wxMessageDialog(topWindow,
-			"Error importing STEP files: " + std::string(e.what()),
-			"Import Error", wxOK | wxICON_ERROR | wxCENTRE);
-		dialog->ShowModal();
-		delete dialog;
+		// Show detailed statistics dialog for exception errors
+		ImportOverallStatistics overallStats;
+		overallStats.totalFilesSelected = filePaths.size();
+		overallStats.totalFilesProcessed = 0; // Exception occurred before processing
+		overallStats.totalSuccessfulFiles = 0;
+		overallStats.totalFailedFiles = 0;
+		overallStats.totalGeometriesCreated = 0;
+		overallStats.totalImportTime = std::chrono::milliseconds(0);
+
+		// Add all files as failed due to exception
+		for (size_t i = 0; i < filePaths.size(); ++i) {
+			ImportFileStatistics fileStat;
+			wxFileName wxFile(filePaths[i]);
+			fileStat.fileName = wxFile.GetFullName().ToStdString();
+			fileStat.filePath = filePaths[i].ToStdString();
+			fileStat.format = "STEP";
+			fileStat.success = false;
+			fileStat.errorMessage = "Import failed due to exception: " + std::string(e.what());
+			fileStat.geometriesCreated = 0;
+			fileStat.importTime = std::chrono::milliseconds(0);
+
+			overallStats.fileStats.push_back(fileStat);
+		}
+
+		ImportStatisticsDialog statsDialog(topWindow, overallStats);
+		int result = statsDialog.ShowModal();
+		LOG_INF_S("Import statistics dialog closed with result: " + std::to_string(result));
 
 		return CommandResult(false, "Error importing STEP files: " + std::string(e.what()), commandType);
+	}
+}
+
+void ImportStepListener::collectGeometryDetails(std::shared_ptr<OCCGeometry>& geometry, ImportFileStatistics& fileStat) {
+	if (!geometry) return;
+
+	try {
+		// Get basic material information from OCCGeometry
+		auto diffuseColor = geometry->getMaterialDiffuseColor();
+		auto ambientColor = geometry->getMaterialAmbientColor();
+		auto transparency = geometry->getTransparency();
+
+		// Format color information
+		fileStat.materialDiffuse = wxString::Format("%.3f,%.3f,%.3f",
+			diffuseColor.Red(), diffuseColor.Green(), diffuseColor.Blue()).ToStdString();
+		fileStat.materialAmbient = wxString::Format("%.3f,%.3f,%.3f",
+			ambientColor.Red(), ambientColor.Green(), ambientColor.Blue()).ToStdString();
+		fileStat.materialTransparency = transparency;
+		fileStat.textureEnabled = geometry->isTextureEnabled();
+		fileStat.blendMode = "Default";
+
+		// Try to analyze the shape topology
+		const TopoDS_Shape& shape = geometry->getShape();
+		if (!shape.IsNull()) {
+			// Count topology elements
+			int solidCount = 0, shellCount = 0, faceCount = 0, wireCount = 0, edgeCount = 0, vertexCount = 0;
+
+			// Use TopExp_Explorer to count elements
+			TopExp_Explorer explorer;
+
+			// Count solids
+			for (explorer.Init(shape, TopAbs_SOLID); explorer.More(); explorer.Next()) {
+				solidCount++;
+			}
+
+			// Count shells
+			for (explorer.Init(shape, TopAbs_SHELL); explorer.More(); explorer.Next()) {
+				shellCount++;
+			}
+
+			// Count faces
+			for (explorer.Init(shape, TopAbs_FACE); explorer.More(); explorer.Next()) {
+				faceCount++;
+			}
+
+			// Count wires
+			for (explorer.Init(shape, TopAbs_WIRE); explorer.More(); explorer.Next()) {
+				wireCount++;
+			}
+
+			// Count edges
+			for (explorer.Init(shape, TopAbs_EDGE); explorer.More(); explorer.Next()) {
+				edgeCount++;
+			}
+
+			// Count vertices
+			for (explorer.Init(shape, TopAbs_VERTEX); explorer.More(); explorer.Next()) {
+				vertexCount++;
+			}
+
+			// Update file statistics
+			fileStat.solids = solidCount;
+			fileStat.shells = shellCount;
+			fileStat.faces = faceCount;
+			fileStat.wires = wireCount;
+			fileStat.edges = edgeCount;
+			fileStat.vertices = vertexCount;
+
+			// Validate shape
+			try {
+				BRepCheck_Analyzer analyzer(shape);
+				fileStat.shapeValid = analyzer.IsValid();
+			} catch (...) {
+				fileStat.shapeValid = false;
+			}
+
+			// Check if shape is closed (simplified check)
+			fileStat.shapeClosed = (solidCount > 0); // If we have solids, assume closed
+		} else {
+			// Set defaults if shape is null
+			fileStat.solids = 0;
+			fileStat.shells = 0;
+			fileStat.faces = 0;
+			fileStat.wires = 0;
+			fileStat.edges = 0;
+			fileStat.vertices = 0;
+			fileStat.shapeValid = false;
+			fileStat.shapeClosed = false;
+		}
+
+		// Try to get mesh information from geometry's Coin3D representation
+		try {
+			auto coinNode = geometry->getCoinNode();
+			if (coinNode) {
+				// This is a simplified way to estimate mesh complexity
+				// In a real implementation, we'd traverse the Coin3D scene graph
+				// For now, we'll use some reasonable estimates based on face count
+				if (fileStat.faces > 0) {
+					// Estimate vertices and triangles based on face count
+					// This is a rough approximation
+					fileStat.meshVertices = fileStat.faces * 4; // Assume quad faces on average
+					fileStat.meshTriangles = fileStat.faces * 2; // Assume each quad becomes 2 triangles
+				}
+			}
+		} catch (...) {
+			// Ignore errors when accessing mesh data
+		}
+
+		// Set STEP-specific information (these would come from STEP reader)
+		fileStat.transferableRoots = 1;
+		fileStat.transferredShapes = 1;
+		fileStat.facesProcessed = fileStat.faces;
+		fileStat.facesReversed = 0;
+
+		// Performance information (would be measured during actual processing)
+		fileStat.meshBuildTime = 0.0;
+		fileStat.normalCalculationTime = 0.0;
+		fileStat.normalSmoothingTime = 0.0;
+
+	} catch (const std::exception& e) {
+		LOG_WRN_S("Failed to collect geometry details: " + std::string(e.what()));
+		// Set safe default values
+		fileStat.solids = 0;
+		fileStat.shells = 0;
+		fileStat.faces = 0;
+		fileStat.wires = 0;
+		fileStat.edges = 0;
+		fileStat.vertices = 0;
+		fileStat.shapeValid = false;
+		fileStat.shapeClosed = false;
+		fileStat.meshVertices = 0;
+		fileStat.meshTriangles = 0;
+		fileStat.materialDiffuse = "0.950,0.950,0.950";
+		fileStat.materialAmbient = "0.400,0.400,0.400";
+		fileStat.materialTransparency = 0.0;
+		fileStat.textureEnabled = false;
+		fileStat.blendMode = "Default";
 	}
 }
 

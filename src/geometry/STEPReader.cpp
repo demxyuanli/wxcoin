@@ -765,6 +765,8 @@ TopoDS_Shape STEPReader::ensureConsistentNormalDirections(const TopoDS_Shape& sh
 
 		int reversedCount = 0;
 		int processedCount = 0;
+		int correctCount = 0;
+		int incorrectCount = 0;
 
 		for (const TopoDS_Face& face : originalFaces) {
 			TopoDS_Face correctedFace = face;
@@ -824,6 +826,9 @@ TopoDS_Shape STEPReader::ensureConsistentNormalDirections(const TopoDS_Shape& sh
 								// Normal points inward, reverse the face
 								correctedFace.Reverse();
 								reversedCount++;
+								incorrectCount++;
+							} else {
+								correctCount++;
 							}
 						}
 						processedCount++;
@@ -836,6 +841,8 @@ TopoDS_Shape STEPReader::ensureConsistentNormalDirections(const TopoDS_Shape& sh
 
 		LOG_INF_S("Processed " + std::to_string(processedCount) + " faces, reversed " +
 			std::to_string(reversedCount) + " faces for consistent normals");
+		LOG_INF_S("Normal consistency: " + std::to_string(correctCount) + " correct, " + 
+			std::to_string(incorrectCount) + " corrected");
 
 		// Rebuild the shape with corrected faces
 		if (shape.ShapeType() == TopAbs_COMPOUND) {

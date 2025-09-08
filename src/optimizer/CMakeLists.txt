@@ -1,5 +1,8 @@
 set(OPTIMIZER_SOURCES
     PerformanceOptimizer.cpp
+    OptimizedCommandDispatcher.cpp
+    OptimizedGeometryCache.cpp
+    OptimizedGeometryManager.cpp
 )
 
 set(OPTIMIZER_TEST_SOURCES
@@ -8,6 +11,9 @@ set(OPTIMIZER_TEST_SOURCES
 
 set(OPTIMIZER_HEADERS
     ${CMAKE_SOURCE_DIR}/include/optimizer/PerformanceOptimizer.h
+    ${CMAKE_SOURCE_DIR}/include/optimizer/OptimizedCommandDispatcher.h
+    ${CMAKE_SOURCE_DIR}/include/optimizer/OptimizedGeometryCache.h
+    ${CMAKE_SOURCE_DIR}/include/optimizer/OptimizedGeometryManager.h
 )
 
 # Create optimizer library

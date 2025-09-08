@@ -5,7 +5,6 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCShapeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCBrepConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCMeshConverter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/STEPImportOptimizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeComponent.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SliceController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ExplodeController.cpp
@@ -33,7 +32,6 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/OCCViewer.h
     ${CMAKE_SOURCE_DIR}/include/OCCShapeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/OCCBrepConverter.h
-    ${CMAKE_SOURCE_DIR}/include/STEPImportOptimizer.h
     ${CMAKE_SOURCE_DIR}/include/viewer/SliceController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ExplodeController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ExplodeTypes.h

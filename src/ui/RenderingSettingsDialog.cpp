@@ -60,6 +60,12 @@ RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* oc
 	m_smoothNormals = shadingSettings.smoothNormals;
 	m_wireframeWidth = shadingSettings.wireframeWidth;
 	m_pointSize = shadingSettings.pointSize;
+	
+	// Initialize normal consistency settings
+	m_enableNormalConsistency = shadingSettings.enableNormalConsistency;
+	m_autoFixNormals = shadingSettings.autoFixNormals;
+	m_showNormalDebug = shadingSettings.showNormalDebug;
+	m_normalConsistencyThreshold = shadingSettings.normalConsistencyThreshold;
 
 	m_displayMode = displaySettings.displayMode;
 	m_showEdges = displaySettings.showEdges;
@@ -106,6 +112,7 @@ void RenderingSettingsDialog::createControls()
 	createTexturePage();
 	createBlendPage();
 	// Removed createShadingPage call - functionality not needed
+	createNormalConsistencyPage();
 	createDisplayPage();
 	createQualityPage();
 	createShadowPage();
@@ -380,6 +387,90 @@ void RenderingSettingsDialog::createBlendPage()
 	m_blendPage->SetSizer(blendSizer);
 
 	m_notebook->AddPage(m_blendPage, "Blend");
+}
+
+void RenderingSettingsDialog::createNormalConsistencyPage()
+{
+	m_shadingPage = new wxPanel(m_notebook);
+
+	// Enable normal consistency checkbox
+	m_enableNormalConsistencyCheckbox = new wxCheckBox(m_shadingPage, wxID_ANY, "Enable Normal Consistency");
+	m_enableNormalConsistencyCheckbox->SetValue(m_enableNormalConsistency);
+
+	// Auto fix normals checkbox
+	m_autoFixNormalsCheckbox = new wxCheckBox(m_shadingPage, wxID_ANY, "Auto Fix Normal Directions");
+	m_autoFixNormalsCheckbox->SetValue(m_autoFixNormals);
+
+	// Show normal debug checkbox
+	m_showNormalDebugCheckbox = new wxCheckBox(m_shadingPage, wxID_ANY, "Show Normal Debug Visualization");
+	m_showNormalDebugCheckbox->SetValue(m_showNormalDebug);
+
+	// Normal consistency threshold slider
+	m_normalConsistencyThresholdSlider = new wxSlider(m_shadingPage, wxID_ANY,
+		static_cast<int>(m_normalConsistencyThreshold * 100), 1, 50,
+		wxDefaultPosition, wxSize(200, -1));
+	m_normalConsistencyThresholdLabel = new wxStaticText(m_shadingPage, wxID_ANY,
+		wxString::Format("%.2f", m_normalConsistencyThreshold));
+
+	// Smooth normals checkbox
+	m_smoothNormalsCheckbox = new wxCheckBox(m_shadingPage, wxID_ANY, "Smooth Normals");
+	m_smoothNormalsCheckbox->SetValue(m_smoothNormals);
+
+	// Wireframe width slider
+	m_wireframeWidthSlider = new wxSlider(m_shadingPage, wxID_ANY,
+		static_cast<int>(m_wireframeWidth * 10), 1, 50,
+		wxDefaultPosition, wxSize(200, -1));
+	m_wireframeWidthLabel = new wxStaticText(m_shadingPage, wxID_ANY,
+		wxString::Format("%.1f", m_wireframeWidth));
+
+	// Point size slider
+	m_pointSizeSlider = new wxSlider(m_shadingPage, wxID_ANY,
+		static_cast<int>(m_pointSize * 10), 1, 100,
+		wxDefaultPosition, wxSize(200, -1));
+	m_pointSizeLabel = new wxStaticText(m_shadingPage, wxID_ANY,
+		wxString::Format("%.1f", m_pointSize));
+
+	// Layout normal consistency page
+	wxBoxSizer* normalSizer = new wxBoxSizer(wxVERTICAL);
+	wxFlexGridSizer* gridSizer = new wxFlexGridSizer(7, 2, 10, 10);
+	gridSizer->AddGrowableCol(1);
+
+	// Normal consistency section
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Normal Consistency:"), 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(m_enableNormalConsistencyCheckbox, 0, wxEXPAND);
+
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Auto Fix:"), 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(m_autoFixNormalsCheckbox, 0, wxEXPAND);
+
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Debug Visualization:"), 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(m_showNormalDebugCheckbox, 0, wxEXPAND);
+
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Consistency Threshold:"), 0, wxALIGN_CENTER_VERTICAL);
+	wxBoxSizer* thresholdSizer = new wxBoxSizer(wxHORIZONTAL);
+	thresholdSizer->Add(m_normalConsistencyThresholdSlider, 1, wxEXPAND | wxRIGHT, 5);
+	thresholdSizer->Add(m_normalConsistencyThresholdLabel, 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(thresholdSizer, 0, wxEXPAND);
+
+	// Shading section
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Smooth Normals:"), 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(m_smoothNormalsCheckbox, 0, wxEXPAND);
+
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Wireframe Width:"), 0, wxALIGN_CENTER_VERTICAL);
+	wxBoxSizer* wireframeSizer = new wxBoxSizer(wxHORIZONTAL);
+	wireframeSizer->Add(m_wireframeWidthSlider, 1, wxEXPAND | wxRIGHT, 5);
+	wireframeSizer->Add(m_wireframeWidthLabel, 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(wireframeSizer, 0, wxEXPAND);
+
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Point Size:"), 0, wxALIGN_CENTER_VERTICAL);
+	wxBoxSizer* pointSizer = new wxBoxSizer(wxHORIZONTAL);
+	pointSizer->Add(m_pointSizeSlider, 1, wxEXPAND | wxRIGHT, 5);
+	pointSizer->Add(m_pointSizeLabel, 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(pointSizer, 0, wxEXPAND);
+
+	normalSizer->Add(gridSizer, 1, wxEXPAND | wxALL, 10);
+	m_shadingPage->SetSizer(normalSizer);
+
+	m_notebook->AddPage(m_shadingPage, "Normal Consistency");
 }
 
 // Removed createShadingPage method - functionality not needed
@@ -743,7 +834,14 @@ void RenderingSettingsDialog::bindEvents()
 	m_cullFaceCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onCullFaceCheckbox, this);
 	m_alphaThresholdSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onAlphaThresholdSlider, this);
 
-	// Shading events (page removed) - skip binding non-existent controls
+	// Normal consistency events
+	m_enableNormalConsistencyCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onEnableNormalConsistencyCheckbox, this);
+	m_autoFixNormalsCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onAutoFixNormalsCheckbox, this);
+	m_showNormalDebugCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onShowNormalDebugCheckbox, this);
+	m_normalConsistencyThresholdSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onNormalConsistencyThresholdSlider, this);
+	m_smoothNormalsCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &RenderingSettingsDialog::onSmoothNormalsCheckbox, this);
+	m_wireframeWidthSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onWireframeWidthSlider, this);
+	m_pointSizeSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &RenderingSettingsDialog::onPointSizeSlider, this);
 
 	// Display events
 	m_displayModeChoice->Bind(wxEVT_COMMAND_CHOICE_SELECTED, &RenderingSettingsDialog::onDisplayModeChoice, this);
@@ -995,6 +1093,28 @@ void RenderingSettingsDialog::onPointSizeSlider(wxCommandEvent& event)
 	m_pointSizeLabel->SetLabel(wxString::Format("%.1f", m_pointSize));
 }
 
+// Normal consistency events
+void RenderingSettingsDialog::onEnableNormalConsistencyCheckbox(wxCommandEvent& event)
+{
+	m_enableNormalConsistency = m_enableNormalConsistencyCheckbox->GetValue();
+}
+
+void RenderingSettingsDialog::onAutoFixNormalsCheckbox(wxCommandEvent& event)
+{
+	m_autoFixNormals = m_autoFixNormalsCheckbox->GetValue();
+}
+
+void RenderingSettingsDialog::onShowNormalDebugCheckbox(wxCommandEvent& event)
+{
+	m_showNormalDebug = m_showNormalDebugCheckbox->GetValue();
+}
+
+void RenderingSettingsDialog::onNormalConsistencyThresholdSlider(wxCommandEvent& event)
+{
+	m_normalConsistencyThreshold = static_cast<double>(m_normalConsistencyThresholdSlider->GetValue()) / 100.0;
+	m_normalConsistencyThresholdLabel->SetLabel(wxString::Format("%.2f", m_normalConsistencyThreshold));
+}
+
 // Display events
 void RenderingSettingsDialog::onDisplayModeChoice(wxCommandEvent& event)
 {
@@ -1213,6 +1333,10 @@ void RenderingSettingsDialog::applySettings()
 	shadingSettings.smoothNormals = m_smoothNormals;
 	shadingSettings.wireframeWidth = m_wireframeWidth;
 	shadingSettings.pointSize = m_pointSize;
+	shadingSettings.enableNormalConsistency = m_enableNormalConsistency;
+	shadingSettings.autoFixNormals = m_autoFixNormals;
+	shadingSettings.showNormalDebug = m_showNormalDebug;
+	shadingSettings.normalConsistencyThreshold = m_normalConsistencyThreshold;
 	config.setShadingSettings(shadingSettings);
 
 	// Update display settings
@@ -1317,6 +1441,10 @@ void RenderingSettingsDialog::resetToDefaults()
 	m_smoothNormals = shadingSettings.smoothNormals;
 	m_wireframeWidth = shadingSettings.wireframeWidth;
 	m_pointSize = shadingSettings.pointSize;
+	m_enableNormalConsistency = shadingSettings.enableNormalConsistency;
+	m_autoFixNormals = shadingSettings.autoFixNormals;
+	m_showNormalDebug = shadingSettings.showNormalDebug;
+	m_normalConsistencyThreshold = shadingSettings.normalConsistencyThreshold;
 
 	m_displayMode = displaySettings.displayMode;
 	m_showEdges = displaySettings.showEdges;
@@ -1367,6 +1495,18 @@ void RenderingSettingsDialog::resetToDefaults()
 	updateColorButton(m_lightDiffuseColorButton, quantityColorToWxColour(m_lightDiffuseColor));
 	updateColorButton(m_lightSpecularColorButton, quantityColorToWxColour(m_lightSpecularColor));
 	updateColorButton(m_textureColorButton, quantityColorToWxColour(m_textureColor));
+
+	// Update normal consistency controls
+	m_enableNormalConsistencyCheckbox->SetValue(m_enableNormalConsistency);
+	m_autoFixNormalsCheckbox->SetValue(m_autoFixNormals);
+	m_showNormalDebugCheckbox->SetValue(m_showNormalDebug);
+	m_normalConsistencyThresholdSlider->SetValue(static_cast<int>(m_normalConsistencyThreshold * 100));
+	m_normalConsistencyThresholdLabel->SetLabel(wxString::Format("%.2f", m_normalConsistencyThreshold));
+	m_smoothNormalsCheckbox->SetValue(m_smoothNormals);
+	m_wireframeWidthSlider->SetValue(static_cast<int>(m_wireframeWidth * 10));
+	m_wireframeWidthLabel->SetLabel(wxString::Format("%.1f", m_wireframeWidth));
+	m_pointSizeSlider->SetValue(static_cast<int>(m_pointSize * 10));
+	m_pointSizeLabel->SetLabel(wxString::Format("%.1f", m_pointSize));
 
 	// Update controls
 	updateControls();

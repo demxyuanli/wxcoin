@@ -1,4 +1,4 @@
-#include "OptimizedGeometryCache.h"
+#include "optimizer/OptimizedGeometryCache.h"
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
@@ -63,7 +63,6 @@ OptimizedGeometryCache::OptimizedGeometryCache(size_t maxCacheSize)
     : m_maxCacheSize(maxCacheSize), m_threadPool(std::thread::hardware_concurrency()) {
 }
 
-OptimizedGeometryCache::~OptimizedGeometryCache() = default;
 
 std::shared_ptr<CachedGeometry> OptimizedGeometryCache::getGeometry(const GeometryKey& key) const {
     std::shared_lock<std::shared_mutex> lock(m_cacheMutex);
@@ -119,8 +118,8 @@ std::string OptimizedGeometryCache::getCacheStats() const {
     // Memory usage estimation
     size_t totalMemory = 0;
     for (const auto& [key, geometry] : m_cache) {
-        totalMemory += geometry->mesh.vertices.size() * sizeof(float) * 3;
-        totalMemory += geometry->mesh.indices.size() * sizeof(uint32_t);
+        totalMemory += geometry->mesh.vertices.size() * sizeof(gp_Pnt);
+        totalMemory += geometry->mesh.triangles.size() * sizeof(int);
     }
     
     oss << "  Estimated memory usage: " << (totalMemory / 1024 / 1024) << " MB\n";
@@ -192,7 +191,6 @@ OptimizedShapeBuilder::OptimizedShapeBuilder()
     : m_cache(std::make_unique<OptimizedGeometryCache>(1000)) {
 }
 
-OptimizedShapeBuilder::~OptimizedShapeBuilder() = default;
 
 TopoDS_Shape OptimizedShapeBuilder::createBox(double width, double height, double depth, const gp_Pnt& position) {
     GeometryKey key = createGeometryKey("box", {width, height, depth});

@@ -57,6 +57,9 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 	, m_currentFeaturePreservation(0.5)
 	, m_currentParallelProcessing(true)
 	, m_currentAdaptiveMeshing(false)
+	, m_angularDeflectionSlider(nullptr)
+	, m_angularDeflectionSpinCtrl(nullptr)
+	, m_currentAngularDeflection(1.0)
 {
 	if (!m_occViewer) {
 		LOG_ERR_S("OCCViewer is null in MeshQualityDialog");
@@ -65,6 +68,7 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 
 	// Load current values from OCCViewer
 	m_currentDeflection = m_occViewer->getMeshDeflection();
+	m_currentAngularDeflection = m_occViewer->getAngularDeflection();
 	m_currentLODEnabled = m_occViewer->isLODEnabled();
 	m_currentLODRoughDeflection = m_occViewer->getLODRoughDeflection();
 	m_currentLODFineDeflection = m_occViewer->getLODFineDeflection();
@@ -96,11 +100,13 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 	updateControls();
 
 	m_deflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onDeflectionSpinCtrl, this);
+	m_angularDeflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onAngularDeflectionSpinCtrl, this);
 	m_lodRoughDeflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onLODRoughDeflectionSpinCtrl, this);
 	m_lodFineDeflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onLODFineDeflectionSpinCtrl, this);
 	m_lodTransitionTimeSpinCtrl->Bind(wxEVT_SPINCTRL, &MeshQualityDialog::onLODTransitionTimeSpinCtrl, this);
 
 	m_deflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onDeflectionSlider, this);
+	m_angularDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onAngularDeflectionSlider, this);
 	m_lodRoughDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onLODRoughDeflectionSlider, this);
 	m_lodFineDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onLODFineDeflectionSlider, this);
 	m_lodTransitionTimeSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onLODTransitionTimeSlider, this);
@@ -154,6 +160,8 @@ void MeshQualityDialog::bindEvents()
 	// Basic quality events
 	m_deflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onDeflectionSlider, this);
 	m_deflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onDeflectionSpinCtrl, this);
+	m_angularDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onAngularDeflectionSlider, this);
+	m_angularDeflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onAngularDeflectionSpinCtrl, this);
 	m_lodEnableCheckBox->Bind(wxEVT_CHECKBOX, &MeshQualityDialog::onLODEnable, this);
 	m_lodRoughDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onLODRoughDeflectionSlider, this);
 	m_lodRoughDeflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onLODRoughDeflectionSpinCtrl, this);
@@ -331,6 +339,7 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 
 	// Apply basic quality settings
 	m_occViewer->setMeshDeflection(m_currentDeflection, true);
+	m_occViewer->setAngularDeflection(m_currentAngularDeflection, true);
 	m_occViewer->setLODEnabled(m_currentLODEnabled);
 	m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
 	m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
@@ -564,6 +573,7 @@ void MeshQualityDialog::onValidate(wxCommandEvent& event)
 
 	// Verify specific parameters
 	bool deflectionOK = m_occViewer->verifyParameterApplication("deflection", m_currentDeflection);
+	bool angularDeflectionOK = m_occViewer->verifyParameterApplication("angular_deflection", m_currentAngularDeflection);
 	bool subdivisionLevelOK = m_occViewer->verifyParameterApplication("subdivision_level", m_currentSubdivisionLevel);
 	bool smoothingIterationsOK = m_occViewer->verifyParameterApplication("smoothing_iterations", m_currentSmoothingIterations);
 
@@ -577,6 +587,8 @@ void MeshQualityDialog::onValidate(wxCommandEvent& event)
 	result += "Basic Parameters:\n";
 	result += "  Deflection: " + std::string(deflectionOK ? " PASS" : " FAIL") +
 		" (Expected: " + std::to_string(m_currentDeflection) + ")\n";
+	result += "  Angular Deflection: " + std::string(angularDeflectionOK ? " PASS" : " FAIL") +
+		" (Expected: " + std::to_string(m_currentAngularDeflection) + ")\n";
 
 	result += "\nSubdivision Parameters:\n";
 	result += "  Enabled: " + std::string(subdivisionEnabledOK ? " PASS" : " FAIL") +
@@ -595,10 +607,11 @@ void MeshQualityDialog::onValidate(wxCommandEvent& event)
 		" (Expected: " + std::string(m_currentAdaptiveMeshing ? "true" : "false") + ")\n";
 
 	// Count total results
-	int totalChecks = 6;
-	int passedChecks = (deflectionOK ? 1 : 0) + (subdivisionLevelOK ? 1 : 0) +
-		(smoothingIterationsOK ? 1 : 0) + (subdivisionEnabledOK ? 1 : 0) +
-		(smoothingEnabledOK ? 1 : 0) + (adaptiveMeshingOK ? 1 : 0);
+	int totalChecks = 7;
+	int passedChecks = (deflectionOK ? 1 : 0) + (angularDeflectionOK ? 1 : 0) +
+		(subdivisionLevelOK ? 1 : 0) + (smoothingIterationsOK ? 1 : 0) +
+		(subdivisionEnabledOK ? 1 : 0) + (smoothingEnabledOK ? 1 : 0) +
+		(adaptiveMeshingOK ? 1 : 0);
 
 	result += "\n=== SUMMARY ===\n";
 	result += "Passed: " + std::to_string(passedChecks) + "/" + std::to_string(totalChecks) + " checks\n";
@@ -699,6 +712,25 @@ void MeshQualityDialog::createBasicQualityPage()
 	deflectionSizer->Add(m_deflectionSlider, 0, wxEXPAND | wxALL, 5);
 	deflectionSizer->Add(m_deflectionSpinCtrl, 0, wxALIGN_CENTER | wxALL, 5);
 	sizer->Add(deflectionSizer, 0, wxEXPAND | wxALL, 10);
+
+	// Angular Deflection section
+	wxStaticBox* angularBox = new wxStaticBox(basicPage, wxID_ANY, "Angular Deflection");
+	wxStaticBoxSizer* angularSizer = new wxStaticBoxSizer(angularBox, wxVERTICAL);
+
+	angularSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Angular deflection controls curve approximation (lower = smoother curves):"), 0, wxALL, 5);
+
+	m_angularDeflectionSlider = new wxSlider(basicPage, wxID_ANY,
+		static_cast<int>(m_currentAngularDeflection * 1000), 100, 5000,
+		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+
+	m_angularDeflectionSpinCtrl = new wxSpinCtrlDouble(basicPage, wxID_ANY,
+		wxString::Format("%.3f", m_currentAngularDeflection),
+		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
+		0.1, 5.0, m_currentAngularDeflection, 0.01);
+
+	angularSizer->Add(m_angularDeflectionSlider, 0, wxEXPAND | wxALL, 5);
+	angularSizer->Add(m_angularDeflectionSpinCtrl, 0, wxALIGN_CENTER | wxALL, 5);
+	sizer->Add(angularSizer, 0, wxEXPAND | wxALL, 10);
 
 	// LOD section
 	wxStaticBox* lodBox = new wxStaticBox(basicPage, wxID_ANY, "Level of Detail (LOD)");
@@ -917,23 +949,26 @@ void MeshQualityDialog::createAdvancedPage()
 void MeshQualityDialog::onPerformancePreset(wxCommandEvent& event)
 {
 	LOG_INF_S("Applying Performance Preset");
+	m_currentAngularDeflection = 2.0; // Larger angular deflection for performance
 	applyPreset(2.0, true, 3.0, 1.0, true);
 }
 
 void MeshQualityDialog::onBalancedPreset(wxCommandEvent& event)
 {
 	LOG_INF_S("Applying Balanced Preset");
+	m_currentAngularDeflection = 1.0; // Medium angular deflection for balance
 	applyPreset(1.0, true, 1.5, 0.5, true);
 }
 
 void MeshQualityDialog::onQualityPreset(wxCommandEvent& event)
 {
 	LOG_INF_S("Applying Quality Preset");
+	m_currentAngularDeflection = 0.5; // Small angular deflection for quality
 	applyPreset(0.2, true, 0.5, 0.1, true);
 }
 
-void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled, 
-                                    double roughDeflection, double fineDeflection, 
+void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled,
+                                    double roughDeflection, double fineDeflection,
                                     bool parallelProcessing)
 {
 	// Update current values
@@ -942,24 +977,48 @@ void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled,
 	m_currentLODRoughDeflection = roughDeflection;
 	m_currentLODFineDeflection = fineDeflection;
 	m_currentParallelProcessing = parallelProcessing;
-	
+
+	// Update UI controls for angular deflection
+	if (m_angularDeflectionSlider) {
+		m_angularDeflectionSlider->SetValue(static_cast<int>(m_currentAngularDeflection * 1000));
+	}
+	if (m_angularDeflectionSpinCtrl) {
+		m_angularDeflectionSpinCtrl->SetValue(m_currentAngularDeflection);
+	}
+
 	// Update UI controls
 	updateControls();
-	
+
 	// Apply immediately
 	if (m_occViewer) {
 		m_occViewer->setMeshDeflection(m_currentDeflection, true);
+		m_occViewer->setAngularDeflection(m_currentAngularDeflection, true);
 		m_occViewer->setLODEnabled(m_currentLODEnabled);
 		m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
 		m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
 		m_occViewer->setParallelProcessing(m_currentParallelProcessing);
-		
+
 		// Trigger remesh
 		m_occViewer->remeshAllGeometries();
 	}
-	
+
 	// Show feedback
-	wxString msg = wxString::Format("Preset applied: Deflection=%.1f, LOD=%s", 
-		deflection, lodEnabled ? "On" : "Off");
+	wxString msg = wxString::Format("Preset applied: Deflection=%.1f, Angular=%.1f, LOD=%s",
+		deflection, m_currentAngularDeflection, lodEnabled ? "On" : "Off");
 	wxMessageBox(msg, "Preset Applied", wxOK | wxICON_INFORMATION);
+}
+
+// Angular Deflection event handlers
+void MeshQualityDialog::onAngularDeflectionSlider(wxCommandEvent& event)
+{
+	double value = static_cast<double>(m_angularDeflectionSlider->GetValue()) / 1000.0;
+	m_angularDeflectionSpinCtrl->SetValue(value);
+	m_currentAngularDeflection = value;
+}
+
+void MeshQualityDialog::onAngularDeflectionSpinCtrl(wxSpinDoubleEvent& event)
+{
+	double value = m_angularDeflectionSpinCtrl->GetValue();
+	m_angularDeflectionSlider->SetValue(static_cast<int>(value * 1000));
+	m_currentAngularDeflection = value;
 }

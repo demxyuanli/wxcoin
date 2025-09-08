@@ -1,4 +1,4 @@
-#include "OptimizedCommandDispatcher.h"
+#include "optimizer/OptimizedCommandDispatcher.h"
 #include "CommandListener.h"
 #include <algorithm>
 #include <sstream>
@@ -27,7 +27,7 @@ OptimizedCommandDispatcher::OptimizedCommandDispatcher() {
         {"VIEW_ISOMETRIC", static_cast<uint32_t>(cmd::CommandType::ViewIsometric)},
         {"SHOW_NORMALS", static_cast<uint32_t>(cmd::CommandType::ShowNormals)},
         {"FIX_NORMALS", static_cast<uint32_t>(cmd::CommandType::FixNormals)},
-        {"SHOW_EDGES", static_cast<uint32_t>(cmd::CommandType::ShowEdges)},
+        {"TOGGLE_EDGES", static_cast<uint32_t>(cmd::CommandType::ToggleEdges)},
         {"SET_TRANSPARENCY", static_cast<uint32_t>(cmd::CommandType::SetTransparency)},
         {"UNDO", static_cast<uint32_t>(cmd::CommandType::Undo)},
         {"REDO", static_cast<uint32_t>(cmd::CommandType::Redo)},
@@ -35,17 +35,10 @@ OptimizedCommandDispatcher::OptimizedCommandDispatcher() {
         {"ZOOM_SPEED", static_cast<uint32_t>(cmd::CommandType::ZoomSpeed)},
         {"MESH_QUALITY_DIALOG", static_cast<uint32_t>(cmd::CommandType::MeshQualityDialog)},
         {"RENDERING_SETTINGS", static_cast<uint32_t>(cmd::CommandType::RenderingSettings)},
-        {"HELP_ABOUT", static_cast<uint32_t>(cmd::CommandType::HelpAbout)},
-        {"REFRESH_VIEW", static_cast<uint32_t>(cmd::CommandType::RefreshView)},
-        {"REFRESH_SCENE", static_cast<uint32_t>(cmd::CommandType::RefreshScene)},
-        {"REFRESH_OBJECT", static_cast<uint32_t>(cmd::CommandType::RefreshObject)},
-        {"REFRESH_MATERIAL", static_cast<uint32_t>(cmd::CommandType::RefreshMaterial)},
-        {"REFRESH_GEOMETRY", static_cast<uint32_t>(cmd::CommandType::RefreshGeometry)},
-        {"REFRESH_UI", static_cast<uint32_t>(cmd::CommandType::RefreshUI)}
+        {"HELP_ABOUT", static_cast<uint32_t>(cmd::CommandType::HelpAbout)}
     };
 }
 
-OptimizedCommandDispatcher::~OptimizedCommandDispatcher() = default;
 
 void OptimizedCommandDispatcher::registerListener(uint32_t commandId, std::shared_ptr<CommandListener> listener) {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
@@ -75,18 +68,18 @@ CommandResult OptimizedCommandDispatcher::dispatchCommand(uint32_t commandId, co
     auto it = m_listeners.find(commandId);
     
     if (it == m_listeners.end()) {
-        return CommandResult(false, "No handler found for command ID: " + std::to_string(commandId), commandId);
+        return CommandResult(false, "No handler found for command ID: " + std::to_string(commandId), commandIdToString(commandId));
     }
     
     // Execute all listeners for this command
     for (auto& listener : it->second) {
-        auto result = listener->executeCommand(commandId, parameters);
+        auto result = listener->executeCommand(commandIdToString(commandId), parameters);
         if (!result.success) {
             return result;
         }
     }
-    
-    return CommandResult(true, "Command executed successfully", commandId);
+
+    return CommandResult(true, "Command executed successfully", commandIdToString(commandId));
 }
 
 CommandResult OptimizedCommandDispatcher::dispatchCommand(cmd::CommandType commandType, const CommandParameters& parameters) {
@@ -107,7 +100,7 @@ std::vector<CommandResult> OptimizedCommandDispatcher::dispatchCommands(
         
         auto it = m_listeners.find(commandId);
         if (it == m_listeners.end()) {
-            results.emplace_back(false, "No handler found for command ID: " + std::to_string(commandId), commandId);
+            results.emplace_back(false, "No handler found for command ID: " + std::to_string(commandId), commandIdToString(commandId));
             continue;
         }
         
@@ -116,15 +109,15 @@ std::vector<CommandResult> OptimizedCommandDispatcher::dispatchCommands(
         
         // Execute all listeners for this command
         for (auto& listener : it->second) {
-            auto result = listener->executeCommand(commandId, parameters);
+            auto result = listener->executeCommand(commandIdToString(commandId), parameters);
             if (!result.success) {
                 success = false;
                 message = result.message;
                 break;
             }
         }
-        
-        results.emplace_back(success, message, commandId);
+
+        results.emplace_back(success, message, commandIdToString(commandId));
     }
     
     return results;
@@ -202,5 +195,23 @@ void OptimizedCommandDispatcher::updatePerformanceStats(bool cacheHit) const {
         m_cacheHits++;
     } else {
         m_cacheMisses++;
+    }
+}
+
+std::string OptimizedCommandDispatcher::commandIdToString(uint32_t commandId) const {
+    // Try to find in cache first
+    std::shared_lock<std::shared_mutex> lock(m_mutex);
+    for (const auto& [str, id] : m_stringToIdCache) {
+        if (id == commandId) {
+            return str;
+        }
+    }
+
+    // Fallback to enum conversion
+    try {
+        cmd::CommandType cmdType = static_cast<cmd::CommandType>(commandId);
+        return cmd::to_string(cmdType);
+    } catch (...) {
+        return "UNKNOWN_COMMAND_" + std::to_string(commandId);
     }
 } 

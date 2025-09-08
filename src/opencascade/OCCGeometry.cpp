@@ -569,12 +569,25 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 	else {
 		// Convert Quantity_Color to 0-1 range for Coin3D
 		Standard_Real r, g, b;
+		
+		// Enhanced ambient color for better lighting consistency
+		// Increase ambient intensity to reduce dependency on normal direction
 		m_materialAmbientColor.Values(r, g, b, Quantity_TOC_RGB);
-		material->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+		material->ambientColor.setValue(
+			static_cast<float>(r * 1.5),  // Increase ambient by 50%
+			static_cast<float>(g * 1.5),
+			static_cast<float>(b * 1.5)
+		);
 
+		// Slightly reduce diffuse to balance with increased ambient
 		m_materialDiffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-		material->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+		material->diffuseColor.setValue(
+			static_cast<float>(r * 0.8),  // Reduce diffuse by 20%
+			static_cast<float>(g * 0.8),
+			static_cast<float>(b * 0.8)
+		);
 
+		// Keep specular unchanged for highlights
 		m_materialSpecularColor.Values(r, g, b, Quantity_TOC_RGB);
 		material->specularColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
 
@@ -587,9 +600,10 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 		material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
 
 		LOG_INF_S("Material set for " + m_name + " - ambient: " +
-			std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) +
-			" diffuse: " + std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) +
-			" shininess: " + std::to_string(m_materialShininess) + " transparency: " + std::to_string(m_transparency));
+			std::to_string(r * 1.5) + "," + std::to_string(g * 1.5) + "," + std::to_string(b * 1.5) +
+			" diffuse: " + std::to_string(r * 0.8) + "," + std::to_string(g * 0.8) + "," + std::to_string(b * 0.8) +
+			" shininess: " + std::to_string(m_materialShininess) + " transparency: " + std::to_string(m_transparency) +
+			" (enhanced ambient for consistent lighting)");
 	}
 	m_coinNode->addChild(material);
 
@@ -1535,18 +1549,19 @@ void OCCGeometry::updateMaterialForLighting()
 
 			// Adjust material properties for better lighting response
 			if (!m_wireframeMode) {
-				// Enhance ambient component for better lighting visibility
+				// Enhanced ambient component for better lighting consistency
+				// Increase ambient intensity to reduce dependency on normal direction
 				Standard_Real r, g, b;
 				m_materialAmbientColor.Values(r, g, b, Quantity_TOC_RGB);
-				material->ambientColor.setValue(static_cast<float>(r * 1.2),
-					static_cast<float>(g * 1.2),
-					static_cast<float>(b * 1.2));
+				material->ambientColor.setValue(static_cast<float>(r * 1.5),
+					static_cast<float>(g * 1.5),
+					static_cast<float>(b * 1.5));
 
-				// Ensure diffuse component is properly set
+				// Slightly reduce diffuse to balance with increased ambient
 				m_materialDiffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-				material->diffuseColor.setValue(static_cast<float>(r),
-					static_cast<float>(g),
-					static_cast<float>(b));
+				material->diffuseColor.setValue(static_cast<float>(r * 0.8),
+					static_cast<float>(g * 0.8),
+					static_cast<float>(b * 0.8));
 
 				// Enhance specular component for better lighting highlights
 				m_materialSpecularColor.Values(r, g, b, Quantity_TOC_RGB);
@@ -1557,7 +1572,7 @@ void OCCGeometry::updateMaterialForLighting()
 				// Adjust shininess for better lighting response
 				material->shininess.setValue(static_cast<float>(m_materialShininess / 100.0));
 
-				LOG_INF_S("Updated material for lighting response: " + m_name);
+				LOG_INF_S("Updated material for lighting response: " + m_name + " (enhanced ambient for consistent lighting)");
 			}
 			break;
 		}

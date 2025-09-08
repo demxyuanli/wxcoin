@@ -19,8 +19,8 @@ public:
 		double transparency;
 
 		MaterialSettings()
-			: ambientColor(0.4, 0.4, 0.4, Quantity_TOC_RGB)
-			, diffuseColor(0.95, 0.95, 0.95, Quantity_TOC_RGB)  // Bright white for better visibility
+			: ambientColor(0.6, 0.6, 0.6, Quantity_TOC_RGB)  // Increased ambient for better consistency
+			, diffuseColor(0.8, 0.8, 0.8, Quantity_TOC_RGB)  // Slightly reduced diffuse
 			, specularColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
 			, shininess(30.0)
 			, transparency(0.0)
@@ -46,11 +46,11 @@ public:
 		double ambientIntensity;
 
 		LightingSettings()
-			: ambientColor(0.5, 0.5, 0.5, Quantity_TOC_RGB)
+			: ambientColor(0.7, 0.7, 0.7, Quantity_TOC_RGB)  // Increased ambient light
 			, diffuseColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
 			, specularColor(1.0, 1.0, 1.0, Quantity_TOC_RGB)
 			, intensity(1.0)
-			, ambientIntensity(0.6)
+			, ambientIntensity(0.8)  // Increased ambient intensity
 		{
 		}
 	};
@@ -124,12 +124,22 @@ public:
 		bool smoothNormals;
 		double wireframeWidth;
 		double pointSize;
+		
+		// Normal consistency settings
+		bool enableNormalConsistency;
+		bool autoFixNormals;
+		bool showNormalDebug;
+		double normalConsistencyThreshold;
 
 		ShadingSettings()
 			: shadingMode(ShadingMode::Smooth)
 			, smoothNormals(true)
 			, wireframeWidth(1.0)
 			, pointSize(2.0)
+			, enableNormalConsistency(true)
+			, autoFixNormals(true)
+			, showNormalDebug(false)
+			, normalConsistencyThreshold(0.1)
 		{
 		}
 	};
