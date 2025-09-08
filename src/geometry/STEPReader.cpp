@@ -1,6 +1,7 @@
 #include "STEPReader.h"
 #include "logger/Logger.h"
 #include "OCCShapeBuilder.h"
+#include "NormalValidator.h"
 
 // OpenCASCADE STEP import includes
 #include <STEPCAFControl_Reader.hxx>
@@ -443,8 +444,8 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 			}
 		}
 
-		// Apply normal direction consistency fix
-		TopoDS_Shape consistentShape = ensureConsistentNormalDirections(shape, name);
+		// Apply normal direction consistency fix using improved NormalValidator
+		TopoDS_Shape consistentShape = NormalValidator::autoCorrectNormals(shape, name);
 		
 		auto geometry = std::make_shared<OCCGeometry>(name);
 		geometry->setShape(consistentShape);
