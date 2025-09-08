@@ -132,6 +132,14 @@ struct DockStyleConfig {
     void InitializeFromThemeManager();
 };
 
+// Tab position enumeration
+enum class TabPosition {
+    Top,        // Tabs at top (merged with title bar)
+    Bottom,     // Tabs at bottom (independent title bar)
+    Left,       // Tabs at left (independent title bar)
+    Right       // Tabs at right (independent title bar)
+};
+
 // Dock area flags
 enum DockAreaFlag {
     HideSingleWidgetTitleBar = 0x0001,
@@ -169,6 +177,10 @@ public:
 
     // Tab bar
     DockAreaTabBar* tabBar() const { return m_tabBar; }
+    
+    // Tab position management
+    void setTabPosition(TabPosition position);
+    TabPosition tabPosition() const { return m_tabPosition; }
     
     // Features and flags
     void setDockAreaFlags(DockAreaFlags flags);
@@ -221,6 +233,7 @@ protected:
     void updateTabBar();
     void internalSetCurrentDockWidget(DockWidget* dockWidget);
     void markTitleBarMenuOutdated();
+    void updateLayoutForTabPosition();
     
     // Event handlers
     void onSize(wxSizeEvent& event);
@@ -247,6 +260,7 @@ private:
     DockAreaFlags m_flags;
     bool m_updateTitleBarButtons;
     bool m_menuOutdated;
+    TabPosition m_tabPosition;
     
     friend class DockContainerWidget;
     friend class DockWidget;
@@ -275,6 +289,10 @@ public:
     void showCloseButton(bool show) { m_showCloseButton = show; Refresh(); }
     void showAutoHideButton(bool show) { m_showAutoHideButton = show; Refresh(); }
     void showPinButton(bool show) { m_showPinButton = show; Refresh(); }
+    
+    // Tab position support
+    void setTabPosition(TabPosition position);
+    TabPosition tabPosition() const { return m_tabPosition; }
 
 protected:
     void onPaint(wxPaintEvent& event);
@@ -322,6 +340,9 @@ private:
     bool m_hasOverflow;
     int m_firstVisibleTab;
     wxRect m_overflowButtonRect;
+    
+    // Tab position support
+    TabPosition m_tabPosition;
 
     void updateTabRects();
     void drawTab(wxDC& dc, int index);
@@ -330,6 +351,17 @@ private:
     int getTabAt(const wxPoint& pos) const;
     wxRect getButtonRect(int buttonIndex) const; // 0=pin, 1=close, 2=auto hide
     void showTabOverflowMenu();
+    
+    // Tab layout helpers
+    void updateHorizontalTabRects(const wxSize& size, const DockStyleConfig& style, 
+                                  int tabSpacing, int textPadding, bool isTop);
+    void updateVerticalTabRects(const wxSize& size, const DockStyleConfig& style, 
+                               int tabSpacing, int textPadding, bool isLeft);
+    
+    // Button drawing helpers
+    void drawButtons(wxDC& dc, const wxRect& clientRect);
+    void drawHorizontalButtons(wxDC& dc, const wxRect& clientRect, const DockStyleConfig& style);
+    void drawVerticalButtons(wxDC& dc, const wxRect& clientRect, const DockStyleConfig& style);
 
     // Drag and drop helpers
     bool isDraggingTab() const { return m_dragStarted && m_draggedTab >= 0; }

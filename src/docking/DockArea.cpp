@@ -54,6 +54,7 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     , m_updateTitleBarButtons(false)
     , m_menuOutdated(true)
     , m_isClosing(false)
+    , m_tabPosition(TabPosition::Top)
 {
     // Create layout
     m_layout = new wxBoxSizer(wxVERTICAL);
@@ -520,6 +521,92 @@ void DockArea::onSize(wxSizeEvent& event) {
 
 void DockArea::onClose(wxCloseEvent& event) {
     closeArea();
+}
+
+void DockArea::setTabPosition(TabPosition position) {
+    if (m_tabPosition == position) {
+        return;
+    }
+    
+    m_tabPosition = position;
+    
+    // Update merged title bar tab position
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->setTabPosition(position);
+    }
+    
+    // Update layout based on tab position
+    updateLayoutForTabPosition();
+    
+    // Update UI
+    updateTitleBarVisibility();
+    updateTabBar();
+    Layout();
+}
+
+void DockArea::updateLayoutForTabPosition() {
+    // Remove all items from layout
+    m_layout->Clear(false);
+    
+    // Create appropriate layout based on tab position
+    switch (m_tabPosition) {
+        case TabPosition::Top:
+            // Top: merged title bar + content area (merged mode)
+            m_layout->SetOrientation(wxVERTICAL);
+            m_layout->Add(m_mergedTitleBar, 0, wxEXPAND | wxALL, 0);
+            m_layout->Add(m_contentArea, 1, wxEXPAND);
+            // Hide separate title bar in merged mode
+            if (m_titleBar) {
+                m_titleBar->Hide();
+            }
+            break;
+            
+        case TabPosition::Bottom:
+            // Bottom: title bar + content area + tab bar (independent mode)
+            m_layout->SetOrientation(wxVERTICAL);
+            m_layout->Add(m_titleBar, 0, wxEXPAND | wxALL, 0);
+            m_layout->Add(m_contentArea, 1, wxEXPAND);
+            m_layout->Add(m_mergedTitleBar, 0, wxEXPAND | wxALL, 0);
+            // Show separate title bar and hide merged title bar buttons
+            if (m_titleBar) {
+                m_titleBar->Show();
+            }
+            break;
+            
+        case TabPosition::Left:
+            // Left: title bar + horizontal layout with tab bar on left (independent mode)
+            m_layout->SetOrientation(wxVERTICAL);
+            m_layout->Add(m_titleBar, 0, wxEXPAND | wxALL, 0);
+            
+            // Create horizontal layout for content and tabs
+            wxBoxSizer* horizontalSizer = new wxBoxSizer(wxHORIZONTAL);
+            horizontalSizer->Add(m_mergedTitleBar, 0, wxEXPAND | wxALL, 0);
+            horizontalSizer->Add(m_contentArea, 1, wxEXPAND);
+            m_layout->Add(horizontalSizer, 1, wxEXPAND);
+            
+            // Show separate title bar and hide merged title bar buttons
+            if (m_titleBar) {
+                m_titleBar->Show();
+            }
+            break;
+            
+        case TabPosition::Right:
+            // Right: title bar + horizontal layout with tab bar on right (independent mode)
+            m_layout->SetOrientation(wxVERTICAL);
+            m_layout->Add(m_titleBar, 0, wxEXPAND | wxALL, 0);
+            
+            // Create horizontal layout for content and tabs
+            wxBoxSizer* horizontalSizer2 = new wxBoxSizer(wxHORIZONTAL);
+            horizontalSizer2->Add(m_contentArea, 1, wxEXPAND);
+            horizontalSizer2->Add(m_mergedTitleBar, 0, wxEXPAND | wxALL, 0);
+            m_layout->Add(horizontalSizer2, 1, wxEXPAND);
+            
+            // Show separate title bar and hide merged title bar buttons
+            if (m_titleBar) {
+                m_titleBar->Show();
+            }
+            break;
+    }
 }
 
 } // namespace ads
