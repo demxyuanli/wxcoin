@@ -203,14 +203,30 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
                     wxLogDebug("Drop area under cursor: %d", dropArea);
 
                     if (dropArea != InvalidDockWidgetArea) {
-                        // Remove widget from current area if needed
-                        if (draggedWidget->dockAreaWidget() == m_dockArea) {
-                            m_dockArea->removeDockWidget(draggedWidget);
-                        }
-
                         if (dropArea == CenterDockWidgetArea) {
                             // Add as tab
                             wxLogDebug("Adding widget as tab to target area");
+                            
+                            // Sync tab position with target area
+                            TabPosition targetTabPosition = targetArea->tabPosition();
+                            wxLogDebug("Target area tab position: %d", static_cast<int>(targetTabPosition));
+                            
+                            // Get source area before removing widget
+                            DockArea* sourceArea = draggedWidget->dockAreaWidget();
+                            
+                            // Remove widget from current area if needed
+                            if (sourceArea && sourceArea != targetArea) {
+                                sourceArea->removeDockWidget(draggedWidget);
+                                
+                                // Sync source area tab position with target area
+                                if (sourceArea->tabPosition() != targetTabPosition) {
+                                    wxLogDebug("Syncing source area tab position from %d to %d", 
+                                              static_cast<int>(sourceArea->tabPosition()), 
+                                              static_cast<int>(targetTabPosition));
+                                    sourceArea->setTabPosition(targetTabPosition);
+                                }
+                            }
+                            
                             targetArea->addDockWidget(draggedWidget);
                             docked = true;
                         } else {
