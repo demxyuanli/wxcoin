@@ -25,11 +25,19 @@ enum DockWidgetFeature {
     DockWidgetForceCloseWithArea = 0x40,
     NoTab = 0x80,
     DeleteContentOnClose = 0x100,
-    
+    DockWidgetPositionLocked = 0x200,  // Position locked - cannot be moved
+
     DefaultDockWidgetFeatures = DockWidgetClosable | DockWidgetMovable | DockWidgetFloatable | DockWidgetFocusable,
     AllDockWidgetFeatures = DefaultDockWidgetFeatures | DockWidgetDeleteOnClose | CustomCloseHandling,
     DockWidgetAlwaysCloseAndDelete = DockWidgetForceCloseWithArea | DockWidgetDeleteOnClose,
     NoDockWidgetFeatures = 0x00
+};
+
+// Dock widget orientation preferences
+enum DockWidgetOrientation {
+    OrientationAuto,      // Auto-detect based on position
+    OrientationHorizontal, // Prefer horizontal layout
+    OrientationVertical    // Prefer vertical layout
 };
 
 typedef int DockWidgetFeatures;
@@ -85,6 +93,14 @@ public:
     void setFeature(DockWidgetFeature flag, bool on);
     DockWidgetFeatures features() const { return m_features; }
     bool hasFeature(DockWidgetFeature flag) const;
+
+    // Position locking
+    void setPositionLocked(bool locked) { setFeature(DockWidgetPositionLocked, locked); }
+    bool isPositionLocked() const { return hasFeature(DockWidgetPositionLocked); }
+
+    // Orientation preferences
+    void setOrientation(DockWidgetOrientation orientation) { m_orientation = orientation; }
+    DockWidgetOrientation orientation() const { return m_orientation; }
     
     // Manager access
     DockManager* dockManager() const { return m_dockManager; }
@@ -197,6 +213,7 @@ private:
     ToggleViewActionMode m_toggleViewActionMode;
     std::function<bool()> m_closeHandler;
     void* m_userData;
+    DockWidgetOrientation m_orientation;
     
     friend class DockManager;
     friend class DockArea;

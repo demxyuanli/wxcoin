@@ -44,7 +44,9 @@ DockWidget::DockWidget(const wxString& title, wxWindow* parent)
     , m_closed(false)
     , m_tabIndex(-1)
     , m_toggleViewActionMode(ActionModeToggle)
+    , m_closeHandler(nullptr)
     , m_userData(nullptr)
+    , m_orientation(OrientationAuto)
 {
     SetName(title);
     

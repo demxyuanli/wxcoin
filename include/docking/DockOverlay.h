@@ -55,7 +55,7 @@ public:
     
     
     // Drop areas
-    DockWidgetArea dropAreaUnderCursor() const;
+    DockWidgetArea dropAreaUnderCursor();
     DockWidgetArea showOverlay(wxWindow* target);
     void hideOverlay();
     
@@ -185,6 +185,7 @@ private:
     wxRect targetRect() const;
     wxRect areaRect(DockWidgetArea area) const;
     wxBitmap createDropIndicatorBitmap(DockWidgetArea area, int size);
+    bool isMouseOverIcon(const wxPoint& mousePos, const wxRect& buttonRect, DockWidgetArea area);
     
     wxDECLARE_EVENT_TABLE();
 };

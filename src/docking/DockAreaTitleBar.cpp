@@ -17,6 +17,12 @@ wxEND_EVENT_TABLE()
 DockAreaTitleBar::DockAreaTitleBar(DockArea* dockArea)
     : wxPanel(dockArea)
     , m_dockArea(dockArea)
+    , m_titleLabel(nullptr)
+    , m_closeButton(nullptr)
+    , m_autoHideButton(nullptr)
+    , m_menuButton(nullptr)
+    , m_pinButton(nullptr)
+    , m_layout(nullptr)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetMinSize(wxSize(-1, 25));
@@ -32,13 +38,26 @@ DockAreaTitleBar::DockAreaTitleBar(DockArea* dockArea)
     // Create buttons
     createButtons();
 
-    updateTitle();
+    // Note: updateTitle() is deferred to avoid race conditions during construction
+    // It will be called later when the object is fully initialized
 }
 
 DockAreaTitleBar::~DockAreaTitleBar() {
+    // Clear pointers to prevent access after destruction
+    m_titleLabel = nullptr;
+    m_closeButton = nullptr;
+    m_autoHideButton = nullptr;
+    m_menuButton = nullptr;
+    m_pinButton = nullptr;
+    m_layout = nullptr;
+    m_dockArea = nullptr;
 }
 
 void DockAreaTitleBar::updateTitle() {
+    if (!m_dockArea || !m_titleLabel) {
+        return;
+    }
+    
     wxString title = m_dockArea->currentTabTitle();
     m_titleLabel->SetLabel(title);
     Layout();
@@ -46,9 +65,12 @@ void DockAreaTitleBar::updateTitle() {
 
 void DockAreaTitleBar::updateButtonStates() {
     // Update button visibility based on features
+    if (!m_dockArea || !m_closeButton) {
+        return;
+    }
 
     // Check if we should disable close button
-    if (m_dockArea && m_dockArea->dockContainer()) {
+    if (m_dockArea->dockContainer()) {
         bool canClose = m_dockArea->dockContainer()->dockAreaCount() > 1;
         m_closeButton->Enable(canClose);
 
@@ -62,13 +84,17 @@ void DockAreaTitleBar::updateButtonStates() {
 }
 
 void DockAreaTitleBar::showCloseButton(bool show) {
-    m_closeButton->Show(show);
-    Layout();
+    if (m_closeButton) {
+        m_closeButton->Show(show);
+        Layout();
+    }
 }
 
 void DockAreaTitleBar::showAutoHideButton(bool show) {
-    m_autoHideButton->Show(show);
-    Layout();
+    if (m_autoHideButton) {
+        m_autoHideButton->Show(show);
+        Layout();
+    }
 }
 
 void DockAreaTitleBar::onPaint(wxPaintEvent& event) {
@@ -89,7 +115,9 @@ void DockAreaTitleBar::onPaint(wxPaintEvent& event) {
 }
 
 void DockAreaTitleBar::onCloseButtonClicked(wxCommandEvent& event) {
-    m_dockArea->closeArea();
+    if (m_dockArea) {
+        m_dockArea->closeArea();
+    }
 }
 
 void DockAreaTitleBar::onAutoHideButtonClicked(wxCommandEvent& event) {
@@ -111,12 +139,12 @@ void DockAreaTitleBar::createButtons() {
     const DockStyleConfig& style = GetDockStyleConfig();
 
     // Create pin button (for auto-hide) - borderless with SVG icon
-    wxButton* pinButton = new wxButton(this, wxID_ANY, "", wxDefaultPosition,
+    m_pinButton = new wxButton(this, wxID_ANY, "", wxDefaultPosition,
                                       wxSize(12, 12));  // Fixed 12x12 size
     // Remove tool tip - no hover hints as specified
-    pinButton->SetWindowStyle(wxBORDER_NONE); // No border
-    pinButton->Bind(wxEVT_BUTTON, &DockAreaTitleBar::onPinButtonClicked, this);
-    m_layout->Add(pinButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
+    m_pinButton->SetWindowStyle(wxBORDER_NONE); // No border
+    m_pinButton->Bind(wxEVT_BUTTON, &DockAreaTitleBar::onPinButtonClicked, this);
+    m_layout->Add(m_pinButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
 
     // Set pin button icon
     if (style.useSvgIcons) {
@@ -124,7 +152,7 @@ void DockAreaTitleBar::createButtons() {
             wxBitmap pinIcon = SvgIconManager::GetInstance().GetIconBitmap(
                 style.pinIconName, wxSize(style.buttonSize, style.buttonSize));
             if (pinIcon.IsOk()) {
-                pinButton->SetBitmap(pinIcon);
+                m_pinButton->SetBitmap(pinIcon);
             }
         } catch (...) {}
     }
@@ -208,6 +236,10 @@ void DockAreaTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
     }
     
     // Find leftmost button position
+    if (m_pinButton && m_pinButton->IsShown()) {
+        wxRect buttonRect = m_pinButton->GetRect();
+        rightX = std::min(rightX, buttonRect.GetLeft());
+    }
     if (m_menuButton && m_menuButton->IsShown()) {
         wxRect buttonRect = m_menuButton->GetRect();
         rightX = std::min(rightX, buttonRect.GetLeft());

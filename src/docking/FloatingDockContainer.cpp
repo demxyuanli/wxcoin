@@ -128,9 +128,10 @@ void FloatingDockContainer::init() {
     Layout();
     Refresh();
 
-    // Set proper window behavior
-    // Don't use wxSTAY_ON_TOP as it can cause focus issues
-    // The window will behave like a normal frame window
+    // Set proper window behavior for always-on-top
+    SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
+    Raise(); // Ensure it's on top immediately
+    SetFocus(); // Ensure focus for proper z-order
 
     // Bind close event to handle proper cleanup
     Bind(wxEVT_CLOSE_WINDOW, &FloatingDockContainer::onClose, this);
@@ -155,10 +156,9 @@ void FloatingDockContainer::addDockWidget(DockWidget* dockWidget) {
     Refresh();
     
     // Make sure the window is shown after content is added
-    if (!IsShown()) {
-        Show(true);
-        Raise(); // Bring to front
-    }
+    Show(true);
+    Raise(); // Always bring to front to ensure it's on top
+    SetFocus(); // Ensure focus for proper z-order
 }
 
 void FloatingDockContainer::removeDockWidget(DockWidget* dockWidget) {
@@ -417,6 +417,9 @@ void FloatingDockContainer::onMouseMove(wxMouseEvent& event) {
     if (d->isDragging && event.Dragging()) {
         wxPoint mousePos = wxGetMousePosition();
         SetPosition(mousePos - d->dragOffset);
+
+        // Ensure window stays on top during dragging
+        Raise();
         
         // Check for drop targets while dragging
         if (m_dockManager) {

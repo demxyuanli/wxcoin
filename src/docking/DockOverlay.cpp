@@ -66,8 +66,8 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     // Load configuration from config file
     loadConfiguration();
 
-    // Set transparency based on configuration
-    SetTransparent(m_transparency);
+    // Set transparency based on configuration - make it more visible for testing
+    SetTransparent(180);  // Less transparent for better visibility
 
     // Initialize refresh timer for debouncing
     m_refreshTimer = new wxTimer(this);
@@ -86,26 +86,49 @@ DockOverlay::~DockOverlay() {
     }
 }
 
-DockWidgetArea DockOverlay::dropAreaUnderCursor() const {
+DockWidgetArea DockOverlay::dropAreaUnderCursor() {
     wxPoint mousePos = wxGetMousePosition();
     wxPoint localPos = ScreenToClient(mousePos);
-    
-    wxLogDebug("DockOverlay::dropAreaUnderCursor - mouse pos: %d,%d local: %d,%d", 
+
+    wxLogDebug("DockOverlay::dropAreaUnderCursor - mouse pos: %d,%d local: %d,%d",
         mousePos.x, mousePos.y, localPos.x, localPos.y);
-    
+
+    // Track which areas should be highlighted
+    std::vector<DockWidgetArea> areasToHighlight;
+
     for (const auto& dropArea : m_dropAreas) {
         wxRect rect = dropArea->rect();
-        wxLogDebug("  Checking area %d: rect(%d,%d,%d,%d) visible:%d contains:%d", 
+        bool isMouseOver = dropArea->isVisible() && isMouseOverIcon(localPos, dropArea->rect(), dropArea->area());
+        wxLogDebug("  Area %d: rect(%d,%d,%d,%d) visible:%d mouseOver:%d",
             dropArea->area(), rect.x, rect.y, rect.width, rect.height,
-            dropArea->isVisible(), dropArea->contains(localPos));
-            
-        if (dropArea->isVisible() && dropArea->contains(localPos)) {
-            wxLogDebug("  -> Found area: %d", dropArea->area());
-            return dropArea->area();
+            dropArea->isVisible(), isMouseOver);
+
+        if (isMouseOver) {
+            areasToHighlight.push_back(dropArea->area());
         }
     }
-    
-    return InvalidDockWidgetArea;
+
+    // Update highlights for all areas independently
+    bool needsRefresh = false;
+    for (auto& dropArea : m_dropAreas) {
+        bool shouldHighlight = std::find(areasToHighlight.begin(), areasToHighlight.end(), dropArea->area()) != areasToHighlight.end();
+        bool wasHighlighted = dropArea->isHighlighted();
+
+        if (shouldHighlight != wasHighlighted) {
+            dropArea->setHighlighted(shouldHighlight);
+            wxLogDebug("  Area %d: highlight changed %d -> %d", dropArea->area(), wasHighlighted, shouldHighlight);
+            needsRefresh = true;
+        }
+    }
+
+    // Refresh only if highlights changed
+    if (needsRefresh) {
+        wxLogDebug("DockOverlay::dropAreaUnderCursor - Highlights changed, refreshing");
+        Refresh(); // Force immediate refresh for hover feedback
+    }
+
+    // Return the primary hovered area (first one found, if any)
+    return areasToHighlight.empty() ? InvalidDockWidgetArea : areasToHighlight[0];
 }
 
 DockWidgetArea DockOverlay::showOverlay(wxWindow* target) {
@@ -128,9 +151,16 @@ DockWidgetArea DockOverlay::showOverlay(wxWindow* target) {
     
     Show();
     Raise();
-    
+
     // Make sure window is on top
     SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
+
+    // Additional z-order management for global mode
+    if (m_isGlobalMode) {
+        // In global mode, ensure we stay on top of all other windows
+        SetFocus(); // This helps with z-order on some platforms
+        wxLogDebug("DockOverlay::showOverlay - Global mode: ensuring topmost with focus");
+    }
     
     // Use debounced refresh instead of immediate refresh
     requestRefresh();
@@ -218,44 +248,33 @@ void DockOverlay::onPaint(wxPaintEvent& event) {
 }
 
 void DockOverlay::onMouseMove(wxMouseEvent& event) {
-    DockWidgetArea hoveredArea = InvalidDockWidgetArea;
     wxPoint pos = event.GetPosition();
-    
-    // Find hovered drop area
-    for (auto& dropArea : m_dropAreas) {
-        if (dropArea->isVisible() && dropArea->contains(pos)) {
-            hoveredArea = dropArea->area();
-            break;
-        }
+
+    // In global mode, ensure we stay on top during mouse interaction
+    if (m_isGlobalMode) {
+        Raise(); // Re-raise to ensure topmost during interaction
     }
-    
-    // Update highlights
-    if (hoveredArea != m_lastHoveredArea) {
-        for (auto& dropArea : m_dropAreas) {
-            dropArea->setHighlighted(dropArea->area() == hoveredArea);
-        }
-        
-        // Notify drag preview to change size if callback is set
-        if (m_dragPreviewCallback && hoveredArea != InvalidDockWidgetArea) {
-            wxRect targetRect = getPreviewRect(hoveredArea);
-            wxLogDebug("DockOverlay::onMouseMove - hoveredArea=%d, targetRect=(%d,%d,%d,%d)", 
-                      hoveredArea, targetRect.x, targetRect.y, targetRect.width, targetRect.height);
-            if (!targetRect.IsEmpty()) {
-                wxLogDebug("Calling drag preview callback with size %dx%d", targetRect.GetWidth(), targetRect.GetHeight());
-                m_dragPreviewCallback(hoveredArea, targetRect.GetSize());
-            } else {
-                wxLogDebug("Target rect is empty, not calling callback");
-            }
-        } else if (m_dragPreviewCallback && hoveredArea == InvalidDockWidgetArea) {
-            // Reset to default size when not hovering over any area
-            wxLogDebug("Resetting drag preview to default size");
-            m_dragPreviewCallback(InvalidDockWidgetArea, wxSize());
+
+    // Use the same logic as dropAreaUnderCursor for consistency
+    DockWidgetArea hoveredArea = dropAreaUnderCursor();
+
+    // Handle drag preview callback
+    if (m_dragPreviewCallback && hoveredArea != InvalidDockWidgetArea) {
+        wxRect targetRect = getPreviewRect(hoveredArea);
+        wxLogDebug("DockOverlay::onMouseMove - hoveredArea=%d, targetRect=(%d,%d,%d,%d)",
+                  hoveredArea, targetRect.x, targetRect.y, targetRect.width, targetRect.height);
+        if (!targetRect.IsEmpty()) {
+            wxLogDebug("Calling drag preview callback with size %dx%d", targetRect.GetWidth(), targetRect.GetHeight());
+            m_dragPreviewCallback(hoveredArea, targetRect.GetSize());
         } else {
-            wxLogDebug("No drag preview callback set");
+            wxLogDebug("Target rect is empty, not calling callback");
         }
-        
-        m_lastHoveredArea = hoveredArea;
-        requestRefresh(); // Use debounced refresh instead of direct Refresh()
+    } else if (m_dragPreviewCallback && hoveredArea == InvalidDockWidgetArea) {
+        // Reset to default size when not hovering over any area
+        wxLogDebug("Resetting drag preview to default size");
+        m_dragPreviewCallback(InvalidDockWidgetArea, wxSize());
+    } else {
+        wxLogDebug("No drag preview callback set");
     }
 }
 
@@ -266,7 +285,7 @@ void DockOverlay::onMouseLeave(wxMouseEvent& event) {
     }
     
     m_lastHoveredArea = InvalidDockWidgetArea;
-    requestRefresh(); // Use debounced refresh instead of direct Refresh()
+    Refresh(); // Force immediate refresh for hover feedback
 }
 
 void DockOverlay::createDropAreas() {
@@ -320,6 +339,9 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     wxRect rect = dropArea.rect();
     DockWidgetArea area = dropArea.area();
 
+    wxLogDebug("DockOverlay::paintDropIndicator - Area %d: rect(%d,%d,%d,%d) highlighted:%d", 
+               area, rect.x, rect.y, rect.width, rect.height, dropArea.isHighlighted());
+
     // Use configured colors
     wxColour normalBg = m_dropAreaNormalBg;
     wxColour normalBorder = m_dropAreaNormalBorder;
@@ -330,11 +352,13 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
 
     // Draw the indicator button with configured appearance
     if (dropArea.isHighlighted()) {
-        // Highlighted state
-        dc.SetPen(wxPen(highlightBorder, m_borderWidth));
+        // Highlighted state - use red border for better visual feedback
+        wxLogDebug("DockOverlay::paintDropIndicator - Drawing highlighted area %d with RED border", area);
+        dc.SetPen(wxPen(wxColour(255, 0, 0), m_borderWidth + 1));  // Red border, slightly thicker
         dc.SetBrush(wxBrush(highlightBg));
     } else {
         // Normal state
+        wxLogDebug("DockOverlay::paintDropIndicator - Drawing normal area %d", area);
         dc.SetPen(wxPen(normalBorder, 1));
         dc.SetBrush(wxBrush(normalBg));
     }
@@ -369,11 +393,11 @@ void DockOverlay::drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectio
     if (isDirectionIndicator) {
         // Enhanced direction indicator colors for better visibility
         previewBorder = wxColour(255, 255, 255, 200);      // Bright white border for contrast
-        previewFill = wxColour(0, 122, 204, 150);          // Bright blue fill with good opacity
+        previewFill = wxColour(0, 122, 204, 77);           // Bright blue fill with 30% opacity
     } else {
-        // Light green colors for target area preview
-        previewBorder = wxColour(144, 238, 144);      // Light green border
-        previewFill = wxColour(144, 238, 144, 90);    // Light green fill with transparency
+        // Strong contrast colors for target area preview
+        previewBorder = wxColour(255, 0, 0, 220);     // Bright red border for high contrast
+        previewFill = wxColour(255, 0, 0, 120);       // Bright red fill with good visibility
     }
 
     // Draw preview rectangle with enhanced visibility
@@ -389,9 +413,10 @@ void DockOverlay::drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectio
     dc.DrawRectangle(innerRect);
 
     // Add direction arrow for better clarity
-    if (isDirectionIndicator) {
-        drawDirectionArrow(dc, previewRect, area);
-    }
+    // Removed: Red arrows are no longer needed for direction indicators
+    // if (isDirectionIndicator) {
+    //     drawDirectionArrow(dc, previewRect, area);
+    // }
 }
 
 void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area, const wxColour& color) {
@@ -402,8 +427,20 @@ void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area
 
     wxPoint center(rect.x + rect.width / 2, rect.y + rect.height / 2);
 
-    dc.SetPen(wxPen(color, lineWidth));
-    dc.SetBrush(wxBrush(color));
+    // Check if this area is currently hovered for red feedback
+    bool isHovered = false;
+    for (const auto& dropArea : m_dropAreas) {
+        if (dropArea->area() == area && dropArea->isHighlighted()) {
+            isHovered = true;
+            break;
+        }
+    }
+
+    // Use red color for hovered areas, otherwise use the provided color
+    wxColour iconColor = isHovered ? wxColour(255, 0, 0) : color;  // Red for hovered, original color otherwise
+
+    dc.SetPen(wxPen(iconColor, lineWidth));
+    dc.SetBrush(wxBrush(iconColor));
 
     switch (area) {
     case TopDockWidgetArea:
@@ -653,9 +690,13 @@ void DockOverlayCross::onMouseMove(wxMouseEvent& event) {
     DockWidgetArea newArea = cursorLocation();
     
     if (newArea != m_hoveredArea) {
+        DockWidgetArea oldArea = m_hoveredArea;  // Store the old area before updating
         m_hoveredArea = newArea;
+        
+        wxLogDebug("DockOverlayCross::onMouseMove - Area changed from %d to %d", oldArea, newArea);
+        
         // Only refresh the affected areas instead of the whole window
-        wxRect oldRect = areaRect(m_hoveredArea);
+        wxRect oldRect = areaRect(oldArea);
         wxRect newRect = areaRect(newArea);
         RefreshRect(oldRect.Union(newRect), false);
     }
@@ -676,8 +717,10 @@ void DockOverlayCross::drawAreaIndicator(wxDC& dc, DockWidgetArea area) {
     wxRect rect = areaRect(area);
     
     if (m_hoveredArea == area) {
-        dc.SetPen(wxPen(m_iconColor, 2));
-        dc.SetBrush(wxBrush(m_iconColor));
+        // Use red color for hovered areas
+        wxLogDebug("DockOverlayCross::drawAreaIndicator - Drawing RED hovered area %d", area);
+        dc.SetPen(wxPen(wxColour(255, 0, 0), 3));  // Red border, thicker for better visibility
+        dc.SetBrush(wxBrush(wxColour(255, 0, 0, 100)));  // Red fill with transparency
     } else {
         dc.SetPen(wxPen(m_iconColor, 1));
         dc.SetBrush(*wxTRANSPARENT_BRUSH);
@@ -720,7 +763,12 @@ void DockOverlay::updateGlobalMode() {
         m_frameColor = m_borderColor; // Use configured border color
         m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 220); // Less transparent
 
-        wxLogDebug("DockOverlay: Enabled global docking mode");
+        // Ensure overlay stays on top in global mode
+        SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
+        Raise();
+        SetFocus(); // Ensure focus for proper z-order
+
+        wxLogDebug("DockOverlay: Enabled global docking mode - ensuring topmost");
     } else {
         // Normal mode
         SetTransparent(m_transparency); // Use configured normal transparency
@@ -1108,8 +1156,20 @@ void DockOverlay::drawDirectionArrow(wxDC& dc, const wxRect& rect, DockWidgetAre
     int arrowSize = 8;
     int lineWidth = 3;
     
-    dc.SetPen(wxPen(wxColour(255, 255, 255), lineWidth));
-    dc.SetBrush(wxBrush(wxColour(255, 255, 255)));
+    // Check if this area is currently hovered for red feedback
+    bool isHovered = false;
+    for (const auto& dropArea : m_dropAreas) {
+        if (dropArea->area() == area && dropArea->isHighlighted()) {
+            isHovered = true;
+            break;
+        }
+    }
+    
+    // Use red color for hovered areas, white otherwise
+    wxColour arrowColor = isHovered ? wxColour(255, 0, 0) : wxColour(255, 255, 255);
+    
+    dc.SetPen(wxPen(arrowColor, lineWidth));
+    dc.SetBrush(wxBrush(arrowColor));
     
     switch (area) {
     case TopDockWidgetArea:
@@ -1164,4 +1224,11 @@ void DockOverlay::drawDirectionArrow(wxDC& dc, const wxRect& rect, DockWidgetAre
     }
 }
 
+bool DockOverlay::isMouseOverIcon(const wxPoint& mousePos, const wxRect& buttonRect, DockWidgetArea area) {
+    // For direction indicators, we want to respond immediately when mouse enters the button area
+    // Use the entire button rectangle for easier detection
+    return buttonRect.Contains(mousePos);
+}
+
 } // namespace ads
+
