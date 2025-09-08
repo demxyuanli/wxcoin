@@ -36,9 +36,20 @@ DockAreaTitleBar::DockAreaTitleBar(DockArea* dockArea)
 }
 
 DockAreaTitleBar::~DockAreaTitleBar() {
+    // Clear pointers to prevent access after destruction
+    m_titleLabel = nullptr;
+    m_closeButton = nullptr;
+    m_autoHideButton = nullptr;
+    m_menuButton = nullptr;
+    m_layout = nullptr;
+    m_dockArea = nullptr;
 }
 
 void DockAreaTitleBar::updateTitle() {
+    if (!m_dockArea || !m_titleLabel) {
+        return;
+    }
+    
     wxString title = m_dockArea->currentTabTitle();
     m_titleLabel->SetLabel(title);
     Layout();
@@ -46,9 +57,12 @@ void DockAreaTitleBar::updateTitle() {
 
 void DockAreaTitleBar::updateButtonStates() {
     // Update button visibility based on features
+    if (!m_dockArea || !m_closeButton) {
+        return;
+    }
 
     // Check if we should disable close button
-    if (m_dockArea && m_dockArea->dockContainer()) {
+    if (m_dockArea->dockContainer()) {
         bool canClose = m_dockArea->dockContainer()->dockAreaCount() > 1;
         m_closeButton->Enable(canClose);
 
@@ -62,13 +76,17 @@ void DockAreaTitleBar::updateButtonStates() {
 }
 
 void DockAreaTitleBar::showCloseButton(bool show) {
-    m_closeButton->Show(show);
-    Layout();
+    if (m_closeButton) {
+        m_closeButton->Show(show);
+        Layout();
+    }
 }
 
 void DockAreaTitleBar::showAutoHideButton(bool show) {
-    m_autoHideButton->Show(show);
-    Layout();
+    if (m_autoHideButton) {
+        m_autoHideButton->Show(show);
+        Layout();
+    }
 }
 
 void DockAreaTitleBar::onPaint(wxPaintEvent& event) {
@@ -89,7 +107,9 @@ void DockAreaTitleBar::onPaint(wxPaintEvent& event) {
 }
 
 void DockAreaTitleBar::onCloseButtonClicked(wxCommandEvent& event) {
-    m_dockArea->closeArea();
+    if (m_dockArea) {
+        m_dockArea->closeArea();
+    }
 }
 
 void DockAreaTitleBar::onAutoHideButtonClicked(wxCommandEvent& event) {
