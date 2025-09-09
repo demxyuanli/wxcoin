@@ -628,12 +628,26 @@ void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int 
 {
 	if (!item) return;
 	if (m_isUpdatingSelection) return;
+	
+	// Clear previous selection
+	if (m_lastSelectedItem) {
+		m_lastSelectedItem->SetSelected(false);
+	}
+	
+	// Set new selection
 	m_lastSelectedItem = item;
+	item->SetSelected(true);
 
 	// Root -> clear selection
 	if (item == m_rootItem) {
 		if (m_propertyPanel) m_propertyPanel->clearProperties();
 		if (m_occViewer) m_occViewer->deselectAll();
+		// Clear tree selection
+		if (m_lastSelectedItem) {
+			m_lastSelectedItem->SetSelected(false);
+			m_lastSelectedItem.reset();
+		}
+		m_treeView->Refresh();
 		return;
 	}
 
@@ -672,6 +686,9 @@ void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int 
 		if (m_propertyPanel) m_propertyPanel->updateProperties(geometry);
 		return;
 	}
+	
+	// Refresh tree view to show selection changes
+	m_treeView->Refresh();
 }
 
 // Legacy dataview activation handler removed after integration with FlatTreeView
@@ -685,6 +702,10 @@ void ObjectTreePanel::updateTreeSelectionFromViewer()
 
 	m_isUpdatingSelection = true;
 
+	// Clear previous selection
+	if (m_lastSelectedItem) {
+		m_lastSelectedItem->SetSelected(false);
+	}
 	m_lastSelectedItem.reset();
 
 	// Select geometries that are selected in viewer
@@ -697,6 +718,7 @@ void ObjectTreePanel::updateTreeSelectionFromViewer()
 		auto it = m_occGeometryMap.find(geometry);
 		if (it != m_occGeometryMap.end()) {
 			m_lastSelectedItem = it->second;
+			m_lastSelectedItem->SetSelected(true);
 			LOG_INF_S("Selected tree item for geometry: " + geometry->getName());
 		}
 		else {
@@ -708,4 +730,5 @@ void ObjectTreePanel::updateTreeSelectionFromViewer()
 	}
 
 	m_isUpdatingSelection = false;
+	m_treeView->Refresh();
 }

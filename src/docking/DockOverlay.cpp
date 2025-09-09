@@ -37,17 +37,17 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_allowedAreas(AllDockAreas)
     , m_lastHoveredArea(InvalidDockWidgetArea)
     , m_frameColor(wxColour(0, 122, 204))  // VS blue color
-    , m_areaColor(wxColour(0, 122, 204, 180))  // VS blue with better transparency
+    , m_areaColor(wxColour(0, 122, 204, 51))  // VS blue with 20% transparency
     , m_frameWidth(2)
-    , m_transparency(220)
-    , m_globalTransparency(240)
-    , m_backgroundColor(wxColour(240, 240, 240, 120))
-    , m_globalBackgroundColor(wxColour(200, 220, 240, 160))
+    , m_transparency(51)
+    , m_globalTransparency(51)
+    , m_backgroundColor(wxColour(240, 240, 240, 51))
+    , m_globalBackgroundColor(wxColour(200, 220, 240, 51))
     , m_borderColor(wxColour(0, 122, 204))
     , m_borderWidth(2)
-    , m_dropAreaNormalBg(wxColour(255, 255, 255, 220))
+    , m_dropAreaNormalBg(wxColour(255, 255, 255, 51))
     , m_dropAreaNormalBorder(wxColour(217, 217, 217))
-    , m_dropAreaHighlightBg(wxColour(0, 122, 204, 240))
+    , m_dropAreaHighlightBg(wxColour(0, 122, 204, 51))
     , m_dropAreaHighlightBorder(wxColour(0, 122, 204))
     , m_dropAreaIconColor(wxColour(96, 96, 96))
     , m_dropAreaHighlightIconColor(wxColour(255, 255, 255))
@@ -66,8 +66,8 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     // Load configuration from config file
     loadConfiguration();
 
-    // Set transparency based on configuration - make it more visible for testing
-    SetTransparent(180);  // Less transparent for better visibility
+    // Set transparency based on configuration - 20% transparency
+    SetTransparent(51);  // 20% transparency
 
     // Initialize refresh timer for debouncing
     m_refreshTimer = new wxTimer(this);
@@ -761,7 +761,7 @@ void DockOverlay::updateGlobalMode() {
 
         // Adjust colors for global mode
         m_frameColor = m_borderColor; // Use configured border color
-        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 220); // Less transparent
+        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 51); // 20% transparency
 
         // Ensure overlay stays on top in global mode
         SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
@@ -778,7 +778,7 @@ void DockOverlay::updateGlobalMode() {
 
         // Reset colors
         m_frameColor = m_borderColor;
-        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 180);
+        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 51);
 
         wxLogDebug("DockOverlay: Disabled global docking mode");
     }
@@ -1052,19 +1052,19 @@ void DockOverlay::loadConfiguration() {
     // Load configuration from ThemeManager
     auto& themeManager = ThemeManager::getInstance();
     
-    // Load transparency settings with fallback defaults
+    // Load transparency settings with fallback defaults (20% transparency)
     int overlayTransparency = themeManager.getInt("OverlayTransparency");
-    m_transparency = (overlayTransparency > 0) ? overlayTransparency : 220;
+    m_transparency = (overlayTransparency > 0) ? overlayTransparency : 51;
     
     int globalTransparency = themeManager.getInt("GlobalModeTransparency");
-    m_globalTransparency = (globalTransparency > 0) ? globalTransparency : 240;
+    m_globalTransparency = (globalTransparency > 0) ? globalTransparency : 51;
     
-    // Load background colors with fallback defaults
+    // Load background colors with fallback defaults (20% transparency)
     wxColour bgColor = themeManager.getColour("BackgroundColour");
-    m_backgroundColor = bgColor.IsOk() ? bgColor : wxColour(240, 240, 240, 120);
+    m_backgroundColor = bgColor.IsOk() ? bgColor : wxColour(240, 240, 240, 51);
     
     wxColour globalBgColor = themeManager.getColour("GlobalBackgroundColour");
-    m_globalBackgroundColor = globalBgColor.IsOk() ? globalBgColor : wxColour(200, 220, 240, 160);
+    m_globalBackgroundColor = globalBgColor.IsOk() ? globalBgColor : wxColour(200, 220, 240, 51);
     
     // Load border settings with fallback defaults
     wxColour borderColor = themeManager.getColour("BorderColour");
@@ -1073,15 +1073,15 @@ void DockOverlay::loadConfiguration() {
     int borderWidth = themeManager.getInt("BorderWidth");
     m_borderWidth = (borderWidth > 0) ? borderWidth : 2;
     
-    // Load drop area colors with fallback defaults
+    // Load drop area colors with fallback defaults (20% transparency)
     wxColour normalBg = themeManager.getColour("DropAreaNormalBgColour");
-    m_dropAreaNormalBg = normalBg.IsOk() ? normalBg : wxColour(255, 255, 255, 220);
+    m_dropAreaNormalBg = normalBg.IsOk() ? normalBg : wxColour(255, 255, 255, 51);
     
     wxColour normalBorder = themeManager.getColour("DropAreaNormalBorderColour");
     m_dropAreaNormalBorder = normalBorder.IsOk() ? normalBorder : wxColour(217, 217, 217);
     
     wxColour highlightBg = themeManager.getColour("DropAreaHighlightBgColour");
-    m_dropAreaHighlightBg = highlightBg.IsOk() ? highlightBg : wxColour(0, 122, 204, 240);
+    m_dropAreaHighlightBg = highlightBg.IsOk() ? highlightBg : wxColour(0, 122, 204, 51);
     
     wxColour highlightBorder = themeManager.getColour("DropAreaHighlightBorderColour");
     m_dropAreaHighlightBorder = highlightBorder.IsOk() ? highlightBorder : wxColour(0, 122, 204);
@@ -1102,7 +1102,7 @@ void DockOverlay::loadConfiguration() {
     
     // Update frame color and area color to match border color
     m_frameColor = m_borderColor;
-    m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 180);
+    m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 51);
     
     // Debug output
     wxLogDebug("DockOverlay configuration loaded - Transparency: %d, Global: %d, BorderWidth: %d, CornerRadius: %d", 
@@ -1125,7 +1125,7 @@ void DockOverlay::setGlobalBackgroundColor(const wxColour& color) {
 void DockOverlay::setBorderColor(const wxColour& color) {
     m_borderColor = color;
     m_frameColor = color;
-    m_areaColor = wxColour(color.Red(), color.Green(), color.Blue(), 180);
+    m_areaColor = wxColour(color.Red(), color.Green(), color.Blue(), 51);
 }
 
 void DockOverlay::setBorderWidth(int width) {

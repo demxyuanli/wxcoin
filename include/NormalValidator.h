@@ -91,7 +91,6 @@ public:
      */
     static bool isNormalOutward(const TopoDS_Face& face, const gp_Pnt& shapeCenter);
 
-private:
     /**
      * @brief Analyze a single face normal
      * @param face The face to analyze
@@ -99,7 +98,8 @@ private:
      * @return true if face has valid normal
      */
     static bool analyzeFaceNormal(const TopoDS_Face& face, const gp_Pnt& shapeCenter);
-    
+
+private:
     /**
      * @brief Get detailed face normal information
      * @param face The face to analyze

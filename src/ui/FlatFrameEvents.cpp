@@ -30,6 +30,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_VIEW_ISOMETRIC, cmd::CommandType::ViewIsometric},
 	{ID_SHOW_NORMALS, cmd::CommandType::ShowNormals},
 	{ID_FIX_NORMALS, cmd::CommandType::FixNormals},
+	{ID_NORMAL_FIX_DIALOG, cmd::CommandType::NormalFixDialog},
 	{ID_SET_TRANSPARENCY, cmd::CommandType::SetTransparency},
 	{ID_TOGGLE_WIREFRAME, cmd::CommandType::ToggleWireframe},
 	{ID_TOGGLE_EDGES, cmd::CommandType::ToggleEdges},

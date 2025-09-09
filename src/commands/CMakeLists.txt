@@ -28,6 +28,7 @@ set(COMMANDS_SOURCES
     LightingSettingsListener.cpp
     MeshQualityDialogListener.cpp
     NavCubeConfigListener.cpp
+    NormalFixDialogListener.cpp
     RedoListener.cpp
     RenderingSettingsListener.cpp
     SetTransparencyListener.cpp
@@ -89,6 +90,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/LightingSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialogListener.h
     ${CMAKE_SOURCE_DIR}/include/NavCubeConfigListener.h
+    ${CMAKE_SOURCE_DIR}/include/NormalFixDialogListener.h
     ${CMAKE_SOURCE_DIR}/include/RedoListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/SetTransparencyListener.h

@@ -82,6 +82,7 @@ public:
 protected:
     // Event handlers
     void onClose(wxCloseEvent& event);
+    void onPaint(wxPaintEvent& event);
     void onMouseLeftDown(wxMouseEvent& event);
     void onMouseLeftUp(wxMouseEvent& event);
     void onMouseMove(wxMouseEvent& event);

@@ -38,6 +38,7 @@ namespace cmd {
 		ShowNormals,
 		ShowFaces,
 		FixNormals,
+		NormalFixDialog,
 		// ShowSilhouetteEdges, // removed, use Outline toggle
 		ToggleOutline,
 		SetTransparency,

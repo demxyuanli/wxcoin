@@ -142,6 +142,7 @@ EVT_BUTTON(ID_VIEW_ISOMETRIC, FlatFrame::onCommand)
 EVT_BUTTON(ID_SHOW_NORMALS, FlatFrame::onCommand)
 EVT_BUTTON(ID_SHOW_FACE_NORMALS, FlatFrame::onCommand)
 EVT_BUTTON(ID_FIX_NORMALS, FlatFrame::onCommand)
+EVT_BUTTON(ID_NORMAL_FIX_DIALOG, FlatFrame::onCommand)
 EVT_BUTTON(ID_SET_TRANSPARENCY, FlatFrame::onCommand)
 EVT_BUTTON(ID_TOGGLE_WIREFRAME, FlatFrame::onCommand)
 // Removed Toggle Shading event handler

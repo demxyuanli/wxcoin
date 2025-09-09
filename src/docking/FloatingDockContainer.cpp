@@ -4,6 +4,7 @@
 #include "docking/DockManager.h"
 #include "docking/DockContainerWidget.h"
 #include "docking/DockOverlay.h"
+#include "config/ThemeManager.h"
 #include <wx/dcmemory.h>
 #include <wx/dcclient.h>
 #include <wx/dcbuffer.h>
@@ -17,6 +18,7 @@ wxEventTypeTag<wxCommandEvent> FloatingDockContainer::EVT_FLOATING_CONTAINER_CLO
 // Event table
 wxBEGIN_EVENT_TABLE(FloatingDockContainer, wxFrame)
     EVT_CLOSE(FloatingDockContainer::onClose)
+    EVT_PAINT(FloatingDockContainer::onPaint)
     EVT_LEFT_DOWN(FloatingDockContainer::onMouseLeftDown)
     EVT_LEFT_UP(FloatingDockContainer::onMouseLeftUp)
     EVT_MOTION(FloatingDockContainer::onMouseMove)
@@ -52,7 +54,7 @@ FloatingDockContainer::FloatingDockContainer(DockManager* dockManager)
 FloatingDockContainer::FloatingDockContainer(DockArea* dockArea)
     : wxFrame(dockArea && dockArea->dockManager() ? dockArea->dockManager()->containerWidget()->GetParent() : nullptr,
              wxID_ANY, "Floating Dock",
-             wxDefaultPosition, wxSize(400, 300),
+             wxDefaultPosition, dockArea ? dockArea->GetSize() : wxSize(400, 300),
              wxFRAME_NO_TASKBAR | wxBORDER_NONE) // No system title bar
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockArea ? dockArea->dockManager() : nullptr)
@@ -87,7 +89,7 @@ FloatingDockContainer::FloatingDockContainer(DockWidget* dockWidget)
     : wxFrame(dockWidget && dockWidget->dockManager() ? dockWidget->dockManager()->containerWidget()->GetParent() : nullptr,
              wxID_ANY,
              dockWidget ? dockWidget->title() : "Floating Dock",
-             wxDefaultPosition, wxSize(400, 300),
+             wxDefaultPosition, dockWidget ? dockWidget->GetSize() : wxSize(400, 300),
              wxFRAME_NO_TASKBAR | wxBORDER_NONE) // No system title bar
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockWidget ? dockWidget->dockManager() : nullptr)
@@ -111,6 +113,9 @@ FloatingDockContainer::~FloatingDockContainer() {
 }
 
 void FloatingDockContainer::init() {
+    // Set background style for custom drawing
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    
     // Create dock container
     m_dockContainer = new DockContainerWidget(m_dockManager, this);
     m_dockContainer->setFloatingWidget(this);
@@ -514,8 +519,8 @@ FloatingDragPreview::FloatingDragPreview(DockWidget* content, wxWindow* parent)
     , m_animated(true)
     , m_fadeAlpha(0)
     , m_fadingIn(false)
-    , m_defaultSize(200, 150)
-    , m_currentSize(200, 150)
+    , m_defaultSize(content ? content->GetSize() : wxSize(200, 150))
+    , m_currentSize(content ? content->GetSize() : wxSize(200, 150))
     , m_currentArea(InvalidDockWidgetArea)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -530,8 +535,8 @@ FloatingDragPreview::FloatingDragPreview(DockArea* content, wxWindow* parent)
     , m_animated(true)
     , m_fadeAlpha(0)
     , m_fadingIn(false)
-    , m_defaultSize(200, 150)
-    , m_currentSize(200, 150)
+    , m_defaultSize(content ? content->GetSize() : wxSize(200, 150))
+    , m_currentSize(content ? content->GetSize() : wxSize(200, 150))
     , m_currentArea(InvalidDockWidgetArea)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -561,9 +566,9 @@ void FloatingDragPreview::setContent(DockArea* content) {
 void FloatingDragPreview::startDrag(const wxPoint& globalPos) {
     m_dragStartPos = globalPos;
     
-    // Offset the preview so it doesn't cover the cursor
+    // Offset the preview so mouse is positioned at the tab area
     wxSize size = GetSize();
-    wxPoint offset(-size.GetWidth() / 2, -20);  // Center horizontally, above cursor
+    wxPoint offset(-40, -15);  // Mouse at tab position (40, 15)
     SetPosition(globalPos + offset);
     
     if (m_animated) {
@@ -582,7 +587,7 @@ void FloatingDragPreview::startDrag(const wxPoint& globalPos) {
 void FloatingDragPreview::moveFloating(const wxPoint& globalPos) {
     // Keep the same offset as in startDrag
     wxSize size = GetSize();
-    wxPoint offset(-size.GetWidth() / 2, -20);
+    wxPoint offset(-40, -15);
     SetPosition(globalPos + offset);
 }
 
@@ -611,7 +616,7 @@ void FloatingDragPreview::setPreviewSize(DockWidgetArea area, const wxSize& targ
     
     // Update position to maintain cursor offset
     wxPoint mousePos = wxGetMousePosition();
-    wxPoint offset(-m_currentSize.GetWidth() / 2, -20);
+    wxPoint offset(-40, -15);
     SetPosition(mousePos + offset);
     
     // Trigger repaint
@@ -633,7 +638,7 @@ void FloatingDragPreview::resetToDefaultSize() {
     
     // Update position to maintain cursor offset
     wxPoint mousePos = wxGetMousePosition();
-    wxPoint offset(-m_currentSize.GetWidth() / 2, -20);
+    wxPoint offset(-40, -15);
     SetPosition(mousePos + offset);
     
     // Trigger repaint
@@ -721,8 +726,13 @@ void FloatingDragPreview::updateContentBitmap() {
         return;
     }
     
-    // Use a fixed size for the schematic preview
-    wxSize size(200, 150);
+    // Use the actual size of the content for the preview
+    wxSize size = m_content->GetSize();
+    if (size.GetWidth() <= 0 || size.GetHeight() <= 0) {
+        // Fallback to default size if content size is invalid
+        size = wxSize(200, 150);
+    }
+    
     SetSize(size);
     
     // We don't need to create a bitmap anymore since we draw directly in onPaint
@@ -764,6 +774,25 @@ void FloatingDockContainer::startDragging(const wxPoint& dragOffset) {
     // Move window to follow mouse
     wxPoint mousePos = wxGetMousePosition();
     SetPosition(mousePos - dragOffset);
+}
+
+void FloatingDockContainer::onPaint(wxPaintEvent& event) {
+    wxAutoBufferedPaintDC dc(this);
+    
+    // Get border color from theme management system
+    auto& themeManager = ThemeManager::getInstance();
+    wxColour borderColor = themeManager.getColour("BorderColour");
+    
+    // If theme color is not available, use fallback
+    if (!borderColor.IsOk()) {
+        borderColor = wxColour(170, 170, 170); // Default light gray border
+    }
+    
+    // Draw 1-pixel border around the entire window
+    wxSize size = GetClientSize();
+    dc.SetPen(wxPen(borderColor, 1));
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+    dc.DrawRectangle(0, 0, size.GetWidth() - 1, size.GetHeight() - 1);
 }
 
 } // namespace ads

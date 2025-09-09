@@ -156,6 +156,11 @@ void DockArea::removeDockWidget(DockWidget* dockWidget) {
             // Select next widget
             int newIndex = std::min(index, static_cast<int>(m_dockWidgets.size()) - 1);
             setCurrentIndex(newIndex);
+            // Force immediate refresh to ensure content is visible during drag operations
+            if (m_contentArea) {
+                m_contentArea->Refresh();
+                m_contentArea->Update();
+            }
         } else {
             m_currentDockWidget = nullptr;
             m_currentIndex = -1;
@@ -274,6 +279,12 @@ void DockArea::setCurrentIndex(int index) {
         m_currentDockWidget->Show();
         m_currentDockWidget->SetFocus();
         m_contentArea->Layout();
+        // Force refresh to ensure widget content is properly displayed
+        m_currentDockWidget->Refresh();
+        // Additional refresh for content area to ensure proper display
+        m_contentArea->Refresh();
+        // Force immediate update to prevent display issues during drag operations
+        m_contentArea->Update();
     }
 
     // Update merged title bar or tab bar

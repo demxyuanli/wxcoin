@@ -270,7 +270,7 @@ void DockAreaMergedTitleBar::onMouseLeftUp(wxMouseEvent& event) {
         ReleaseMouse();
     }
 
-    // Handle drop if we were dragging
+    // Handle drop if we were actually dragging (not just clicked)
     if (m_dragStarted && m_draggedTab >= 0) {
         // Clean up drag preview
         if (m_dragPreview) {
@@ -471,6 +471,7 @@ void DockAreaMergedTitleBar::onMouseLeftUp(wxMouseEvent& event) {
     // Reset cursor - temporarily disabled
     // wxSetCursor(wxCursor(wxCURSOR_ARROW));
 
+    // Always reset drag state, even if drag didn't start
     m_draggedTab = -1;
     m_dragStarted = false;
 }
@@ -549,7 +550,7 @@ void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
 
         // Check if we should start drag operation (require minimum drag distance)
         // AND ensure mouse is still within the tab area to prevent accidental drag triggers
-        if (!m_dragStarted && (abs(delta.x) > 15 || abs(delta.y) > 15)) {
+        if (!m_dragStarted && (abs(delta.x) > 10 || abs(delta.y) > 10)) {
             // Additional check: mouse must still be within the dragged tab's rectangle
             // or within a reasonable distance from the drag start position
             wxPoint currentPos = event.GetPosition();

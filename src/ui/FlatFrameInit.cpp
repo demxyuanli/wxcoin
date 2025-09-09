@@ -288,6 +288,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
 	displayButtonBar->AddToggleButton(ID_SHOW_FACE_NORMALS, "Show Face Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle face normal vectors display");
 	displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
+	displayButtonBar->AddButton(ID_NORMAL_FIX_DIALOG, "Normal Fix Dialog", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open normal fix settings dialog");
 	displayButtonBar->AddToggleButton(ID_TOGGLE_SLICE, "Slice", false, SVG_ICON("layout", wxSize(16, 16)), "Toggle slicing plane and drag to move");
 	displayButtonBar->AddToggleButton(ID_TOGGLE_OUTLINE, "Outline", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle geometry outline rendering");
 	displayButtonBar->AddButton(ID_OUTLINE_SETTINGS, "Outline Settings", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open outline settings");

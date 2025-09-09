@@ -333,20 +333,14 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
 	// Add material node with custom properties
 	SoMaterial* material = new SoMaterial;
 	if (selected) {
-		// Selected geometry - use highlight color but keep custom properties
-		Standard_Real r, g, b;
-		diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-		material->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-
-		ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-		material->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-
-		specularColor.Values(r, g, b, Quantity_TOC_RGB);
-		material->specularColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-
-		material->shininess.setValue(static_cast<float>(shininess));
-		material->transparency.setValue(static_cast<float>(transparency));
-		material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);  // No emission for selected
+		// Selected geometry - use bright highlight color for better visibility
+		// Use bright yellow/orange color for selection highlight
+		material->diffuseColor.setValue(1.0f, 0.8f, 0.0f);  // Bright yellow
+		material->ambientColor.setValue(0.3f, 0.3f, 0.0f);   // Darker yellow ambient
+		material->specularColor.setValue(1.0f, 1.0f, 0.5f); // Bright specular
+		material->shininess.setValue(0.8f);                 // High shininess for highlight
+		material->transparency.setValue(0.0f);              // No transparency for selected
+		material->emissiveColor.setValue(0.2f, 0.2f, 0.0f); // Slight emission for glow effect
 	}
 	else {
 		// Use custom material properties including emissive color

@@ -26,6 +26,7 @@
 #include "ViewIsometricListener.h"
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
+#include "NormalFixDialogListener.h"
 // #include "ShowSilhouetteEdgesListener.h" // removed
 #include "SetTransparencyListener.h"
 #include "TextureModeDecalListener.h"
@@ -86,6 +87,7 @@ void FlatFrame::setupCommandSystem() {
 	auto viewIsoListener = std::make_shared<ViewIsometricListener>(m_canvas->getInputManager()->getNavigationController());
 	auto showNormalsListener = std::make_shared<ShowNormalsListener>(m_occViewer);
 	auto fixNormalsListener = std::make_shared<FixNormalsListener>(m_occViewer);
+	auto normalFixDialogListener = std::make_shared<NormalFixDialogListener>(this, m_occViewer);
 	auto setTransparencyListener = std::make_shared<SetTransparencyListener>(this, m_occViewer);
 	auto viewModeListener = std::make_shared<ViewModeListener>(m_occViewer);
 	auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer);
@@ -101,6 +103,7 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::ViewIsometric, viewIsoListener);
 	m_listenerManager->registerListener(cmd::CommandType::ShowNormals, showNormalsListener);
 	m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
+	m_listenerManager->registerListener(cmd::CommandType::NormalFixDialog, normalFixDialogListener);
 	m_listenerManager->registerListener(cmd::CommandType::SetTransparency, setTransparencyListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleEdges, viewModeListener);
 	m_listenerManager->registerListener(cmd::CommandType::ShowOriginalEdges, showOriginalEdgesListener);
