@@ -666,7 +666,7 @@ wxSize FloatingDragPreview::calculatePreviewSize(DockWidgetArea area, const wxSi
 }
 
 void FloatingDragPreview::onPaint(wxPaintEvent& event) {
-    wxPaintDC dc(this);
+    wxAutoBufferedPaintDC dc(this);
     
     // Get the title of the widget being dragged
     wxString title = "Dock Widget";

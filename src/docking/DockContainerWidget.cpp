@@ -300,13 +300,8 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
     // Apply layout configuration if using percentage mode
     applyLayoutConfig();
 
-    // Force refresh of all dock areas to prevent ghosting during window resize
-    for (auto* area : m_dockAreas) {
-        if (area && area->mergedTitleBar()) {
-            area->mergedTitleBar()->Refresh();
-            area->mergedTitleBar()->Update();
-        }
-    }
+    // Note: Individual dock areas will handle their own refresh with debounce
+    // No need to force refresh all areas here as it causes performance issues
 
     // Update global docking hints if in global mode
     updateGlobalDockingHints();

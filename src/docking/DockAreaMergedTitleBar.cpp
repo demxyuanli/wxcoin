@@ -22,6 +22,7 @@ wxBEGIN_EVENT_TABLE(DockAreaMergedTitleBar, wxPanel)
     EVT_MOTION(DockAreaMergedTitleBar::onMouseMotion)
     EVT_LEAVE_WINDOW(DockAreaMergedTitleBar::onMouseLeave)
     EVT_SIZE(DockAreaMergedTitleBar::onSize)
+    EVT_TIMER(wxID_ANY, DockAreaMergedTitleBar::onResizeRefreshTimer)
 wxEND_EVENT_TABLE()
 
 // DockAreaMergedTitleBar implementation
@@ -46,9 +47,15 @@ DockAreaMergedTitleBar::DockAreaMergedTitleBar(DockArea* dockArea)
     , m_hasOverflow(false)
     , m_firstVisibleTab(0)
     , m_tabPosition(TabPosition::Top)
+    , m_resizeRefreshTimer(nullptr)
+    , m_pendingRefresh(false)
+    , m_refreshFlags(0)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetMinSize(wxSize(-1, 30)); // Slightly taller than original to accommodate both tabs and buttons
+
+    // Enable double buffering for smoother rendering
+    SetDoubleBuffered(true);
 }
 
 DockAreaMergedTitleBar::~DockAreaMergedTitleBar() {
@@ -60,10 +67,19 @@ DockAreaMergedTitleBar::~DockAreaMergedTitleBar() {
         }
         m_dragPreview = nullptr;
     }
+
+    // Clean up resize refresh timer
+    if (m_resizeRefreshTimer) {
+        if (m_resizeRefreshTimer->IsRunning()) {
+            m_resizeRefreshTimer->Stop();
+        }
+        delete m_resizeRefreshTimer;
+        m_resizeRefreshTimer = nullptr;
+    }
 }
 
 void DockAreaMergedTitleBar::updateTitle() {
-    Refresh();
+    scheduleRefresh(RefreshTabs);
 }
 
 void DockAreaMergedTitleBar::updateButtonStates() {
@@ -89,7 +105,7 @@ void DockAreaMergedTitleBar::updateButtonStates() {
                               tab.widget->hasFeature(DockWidgetClosable);
     }
 
-    Refresh();
+    scheduleRefresh(RefreshButtons);
 }
 
 void DockAreaMergedTitleBar::insertTab(int index, DockWidget* dockWidget) {
@@ -106,7 +122,7 @@ void DockAreaMergedTitleBar::insertTab(int index, DockWidget* dockWidget) {
 
     updateButtonStates(); // Update button visibility after tab insertion
     updateTabRects();
-    Refresh();
+    scheduleRefresh(RefreshTabs);
 }
 
 void DockAreaMergedTitleBar::removeTab(DockWidget* dockWidget) {
@@ -117,7 +133,7 @@ void DockAreaMergedTitleBar::removeTab(DockWidget* dockWidget) {
         m_tabs.erase(it);
         updateButtonStates(); // Update button visibility after tab removal
         updateTabRects();
-        Refresh();
+        scheduleRefresh(RefreshTabs);
     }
 }
 
@@ -130,7 +146,7 @@ void DockAreaMergedTitleBar::setCurrentIndex(int index) {
             updateTabRects();
         }
 
-        Refresh();
+        scheduleRefresh(RefreshTabs);
     }
 }
 
@@ -151,6 +167,13 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
     // Clear the entire area first to prevent ghosting
     dc.SetBackground(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
     dc.Clear();
+
+    // Reset pending refresh flag since we're painting now
+    if (m_pendingRefresh) {
+        m_pendingRefresh = false;
+        m_refreshFlags = 0;
+        Unbind(wxEVT_IDLE, &DockAreaMergedTitleBar::onIdleRefresh, this);
+    }
 
     // Draw background
     dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
@@ -694,9 +717,18 @@ void DockAreaMergedTitleBar::onMouseLeave(wxMouseEvent& event) {
 void DockAreaMergedTitleBar::onSize(wxSizeEvent& event) {
     updateTabRects();
 
-    // Force complete refresh to prevent ghosting during window resize
-    Refresh();
-    Update();
+    // Use deferred refresh to prevent excessive redraws during resize
+    if (!m_resizeRefreshTimer) {
+        m_resizeRefreshTimer = new wxTimer(this);
+    }
+
+    // Cancel any pending refresh
+    if (m_resizeRefreshTimer->IsRunning()) {
+        m_resizeRefreshTimer->Stop();
+    }
+
+    // Schedule refresh with debounce delay
+    m_resizeRefreshTimer->Start(50, wxTIMER_ONE_SHOT); // 50ms debounce
 
     event.Skip();
 }
@@ -1320,7 +1352,7 @@ void DockAreaMergedTitleBar::setTabPosition(TabPosition position) {
     
     // Update tab rectangles and refresh
     updateTabRects();
-    Refresh();
+    scheduleRefresh(RefreshAll);
 }
 
 void DockAreaMergedTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
@@ -1411,6 +1443,36 @@ void DockAreaMergedTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
     // Restore original pen and brush
     dc.SetPen(oldPen);
     dc.SetBrush(oldBrush);
+}
+
+void DockAreaMergedTitleBar::scheduleRefresh(unsigned int flags) {
+    m_refreshFlags |= flags;
+
+    if (!m_pendingRefresh) {
+        m_pendingRefresh = true;
+        // Use idle time to perform refresh for better responsiveness
+        Bind(wxEVT_IDLE, &DockAreaMergedTitleBar::onIdleRefresh, this);
+    }
+}
+
+void DockAreaMergedTitleBar::performRefresh() {
+    if (m_refreshFlags != 0) {
+        Refresh();
+        m_refreshFlags = 0;
+        m_pendingRefresh = false;
+        Unbind(wxEVT_IDLE, &DockAreaMergedTitleBar::onIdleRefresh, this);
+    }
+}
+
+void DockAreaMergedTitleBar::onIdleRefresh(wxIdleEvent& event) {
+    performRefresh();
+    event.Skip();
+}
+
+void DockAreaMergedTitleBar::onResizeRefreshTimer(wxTimerEvent& event) {
+    // Perform the deferred refresh after resize debounce period
+    Refresh();
+    Update();
 }
 
 } // namespace ads

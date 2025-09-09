@@ -367,7 +367,7 @@ namespace ads {
 	}
 
 	void AutoHideDockContainer::OnPaint(wxPaintEvent& event) {
-		wxPaintDC dc(this);
+		wxAutoBufferedPaintDC dc(this);
 		// Additional painting if needed
 	}
 

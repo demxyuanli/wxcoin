@@ -309,6 +309,8 @@ protected:
     void onMouseLeave(wxMouseEvent& event);
     void onSize(wxSizeEvent& event);
     void onLockButtonClicked();
+    void onResizeRefreshTimer(wxTimerEvent& event);
+    void onIdleRefresh(wxIdleEvent& event);
 
 private:
     struct TabInfo {
@@ -355,7 +357,24 @@ private:
     // Tab position support
     TabPosition m_tabPosition;
 
+    // Resize refresh timer for performance optimization
+    wxTimer* m_resizeRefreshTimer;
+
+    // Smart refresh system for performance optimization
+    bool m_pendingRefresh;
+    unsigned int m_refreshFlags;
+
+    // Refresh flags
+    enum RefreshFlag {
+        RefreshTabs = 0x01,
+        RefreshButtons = 0x02,
+        RefreshBackground = 0x04,
+        RefreshAll = RefreshTabs | RefreshButtons | RefreshBackground
+    };
+
     void updateTabRects();
+    void scheduleRefresh(unsigned int flags = RefreshAll);
+    void performRefresh();
     void drawTab(wxDC& dc, int index);
     void drawButton(wxDC& dc, const wxRect& rect, const wxString& text, bool hovered);
     void drawTitleBarPattern(wxDC& dc, const wxRect& rect);

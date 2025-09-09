@@ -526,11 +526,9 @@ void DockArea::markTitleBarMenuOutdated() {
 }
 
 void DockArea::onSize(wxSizeEvent& event) {
-    // Force refresh of merged title bar to prevent ghosting during window resize
-    if (m_mergedTitleBar) {
-        m_mergedTitleBar->Refresh();
-        m_mergedTitleBar->Update();
-    }
+    // Defer refresh to prevent excessive redraws during resize
+    // The merged title bar will handle its own refresh with debounce
+    // No need to force refresh here as it causes performance issues
 
     event.Skip();
 }
