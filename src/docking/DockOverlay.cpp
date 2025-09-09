@@ -61,13 +61,17 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_isGlobalMode(false)
     , m_dragPreviewCallback(nullptr)
 {
-    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    // TEMPORARILY CHANGED FOR TESTING - SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetBackgroundStyle(wxBG_STYLE_COLOUR);
+    
+    // Set opaque background color for testing
+    SetBackgroundColour(wxColour(255, 255, 255, 255));  // Solid white background
 
     // Load configuration from config file
     loadConfiguration();
 
     // Set transparency based on configuration - 20% transparency
-    SetTransparent(51);  // 20% transparency
+    // TEMPORARILY DISABLED FOR TESTING - SetTransparent(51);  // 20% transparency
 
     // Initialize refresh timer for debouncing
     m_refreshTimer = new wxTimer(this);
@@ -342,13 +346,10 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     wxLogDebug("DockOverlay::paintDropIndicator - Area %d: rect(%d,%d,%d,%d) highlighted:%d", 
                area, rect.x, rect.y, rect.width, rect.height, dropArea.isHighlighted());
 
-    // Create a memory DC for opaque button rendering
-    wxBitmap buttonBitmap(rect.width, rect.height);
-    wxMemoryDC memDC(buttonBitmap);
-    
-    // Clear the bitmap with white background (fully opaque)
-    memDC.SetBackground(*wxWHITE_BRUSH);
-    memDC.Clear();
+    // Force opaque rendering by drawing a solid white background first
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));  // Solid white background
+    dc.DrawRoundedRectangle(rect, m_cornerRadius);
     
     // Use configured colors - Force fully opaque colors for buttons
     wxColour normalBg = wxColour(m_dropAreaNormalBg.Red(), m_dropAreaNormalBg.Green(), m_dropAreaNormalBg.Blue(), 255);
@@ -362,37 +363,32 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     if (dropArea.isHighlighted()) {
         // Highlighted state - use red border for better visual feedback
         wxLogDebug("DockOverlay::paintDropIndicator - Drawing highlighted area %d with RED border", area);
-        memDC.SetPen(wxPen(wxColour(255, 0, 0, 255), m_borderWidth + 1));  // Red border, fully opaque
-        memDC.SetBrush(wxBrush(wxColour(highlightBg.Red(), highlightBg.Green(), highlightBg.Blue(), 255)));  // Force opaque
+        dc.SetPen(wxPen(wxColour(255, 0, 0, 255), m_borderWidth + 1));  // Red border, fully opaque
+        dc.SetBrush(wxBrush(wxColour(highlightBg.Red(), highlightBg.Green(), highlightBg.Blue(), 255)));  // Force opaque
     } else {
         // Normal state
         wxLogDebug("DockOverlay::paintDropIndicator - Drawing normal area %d", area);
-        memDC.SetPen(wxPen(wxColour(normalBorder.Red(), normalBorder.Green(), normalBorder.Blue(), 255), 1));  // Force opaque
-        memDC.SetBrush(wxBrush(wxColour(normalBg.Red(), normalBg.Green(), normalBg.Blue(), 255)));  // Force opaque
+        dc.SetPen(wxPen(wxColour(normalBorder.Red(), normalBorder.Green(), normalBorder.Blue(), 255), 1));  // Force opaque
+        dc.SetBrush(wxBrush(wxColour(normalBg.Red(), normalBg.Green(), normalBg.Blue(), 255)));  // Force opaque
     }
 
     // Draw rounded rectangle with configured corner radius
-    wxRect buttonRect(0, 0, rect.width, rect.height);
-    memDC.DrawRoundedRectangle(buttonRect, m_cornerRadius);
+    dc.DrawRoundedRectangle(rect, m_cornerRadius);
 
     // Draw subtle inner shadow for depth
     if (!dropArea.isHighlighted()) {
-        wxRect innerRect = buttonRect;
+        wxRect innerRect = rect;
         innerRect.Deflate(1);
-        memDC.SetPen(wxPen(wxColour(240, 240, 240, 255), 1));
-        memDC.SetBrush(*wxTRANSPARENT_BRUSH);
-        memDC.DrawRoundedRectangle(innerRect, m_cornerRadius - 1);
+        dc.SetPen(wxPen(wxColour(240, 240, 240, 255), 1));
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        dc.DrawRoundedRectangle(innerRect, m_cornerRadius - 1);
     }
 
     // Draw the icon - Force opaque icon color
     wxColour currentIconColor = dropArea.isHighlighted() ? 
         wxColour(highlightIconColor.Red(), highlightIconColor.Green(), highlightIconColor.Blue(), 255) : 
         wxColour(iconColor.Red(), iconColor.Green(), iconColor.Blue(), 255);
-    drawAreaIcon(memDC, buttonRect, area, currentIconColor);
-
-    // Blit the opaque button to the main DC
-    memDC.SelectObject(wxNullBitmap);
-    dc.DrawBitmap(buttonBitmap, rect.x, rect.y, true);
+    drawAreaIcon(dc, rect, area, currentIconColor);
 
     // Note: Direction indicators are now drawn separately in drawDirectionIndicators()
 }
@@ -649,7 +645,8 @@ DockOverlayCross::DockOverlayCross(DockOverlay* overlay)
     , m_iconColor(wxColour(58, 135, 173))
     , m_hoveredArea(InvalidDockWidgetArea)
 {
-    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    // TEMPORARILY CHANGED FOR TESTING - SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetBackgroundStyle(wxBG_STYLE_COLOUR);
     SetSize(m_iconSize * 5, m_iconSize * 5);
 }
 
@@ -731,31 +728,22 @@ void DockOverlayCross::drawCrossIcon(wxDC& dc) {
 void DockOverlayCross::drawAreaIndicator(wxDC& dc, DockWidgetArea area) {
     wxRect rect = areaRect(area);
     
-    // Create a memory DC for opaque button rendering
-    wxBitmap buttonBitmap(rect.width, rect.height);
-    wxMemoryDC memDC(buttonBitmap);
-    
-    // Clear the bitmap with white background (fully opaque)
-    memDC.SetBackground(*wxWHITE_BRUSH);
-    memDC.Clear();
-    
-    wxRect buttonRect(0, 0, rect.width, rect.height);
+    // Force opaque rendering by drawing a solid white background first
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));  // Solid white background
+    dc.DrawRectangle(rect);
     
     if (m_hoveredArea == area) {
         // Use red color for hovered areas
         wxLogDebug("DockOverlayCross::drawAreaIndicator - Drawing RED hovered area %d", area);
-        memDC.SetPen(wxPen(wxColour(255, 0, 0, 255), 3));  // Red border, thicker for better visibility
-        memDC.SetBrush(wxBrush(wxColour(255, 0, 0, 255)));  // Red fill, fully opaque
+        dc.SetPen(wxPen(wxColour(255, 0, 0, 255), 3));  // Red border, thicker for better visibility
+        dc.SetBrush(wxBrush(wxColour(255, 0, 0, 255)));  // Red fill, fully opaque
     } else {
-        memDC.SetPen(wxPen(wxColour(m_iconColor.Red(), m_iconColor.Green(), m_iconColor.Blue(), 255), 1));
-        memDC.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));  // White fill for non-hovered areas
+        dc.SetPen(wxPen(wxColour(m_iconColor.Red(), m_iconColor.Green(), m_iconColor.Blue(), 255), 1));
+        dc.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));  // White fill for non-hovered areas
     }
     
-    memDC.DrawRectangle(buttonRect);
-    
-    // Blit the opaque button to the main DC
-    memDC.SelectObject(wxNullBitmap);
-    dc.DrawBitmap(buttonBitmap, rect.x, rect.y, true);
+    dc.DrawRectangle(rect);
 }
 
 wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {
@@ -782,7 +770,7 @@ wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {
 void DockOverlay::updateGlobalMode() {
     if (m_isGlobalMode) {
         // In global mode, show all areas more prominently
-        SetTransparent(m_globalTransparency); // Use configured global transparency
+        // TEMPORARILY DISABLED FOR TESTING - SetTransparent(m_globalTransparency); // Use configured global transparency
 
         // Enable all areas in global mode
         m_allowedAreas = AllDockAreas;
@@ -800,7 +788,7 @@ void DockOverlay::updateGlobalMode() {
         wxLogDebug("DockOverlay: Enabled global docking mode - ensuring topmost");
     } else {
         // Normal mode
-        SetTransparent(m_transparency); // Use configured normal transparency
+        // TEMPORARILY DISABLED FOR TESTING - SetTransparent(m_transparency); // Use configured normal transparency
 
         // Reset to default areas
         m_allowedAreas = AllDockAreas;
@@ -948,7 +936,8 @@ void DockOverlay::optimizeRendering() {
     m_optimizedRendering = true;
 
     // Disable unnecessary features during drag operations
-    SetBackgroundStyle(wxBG_STYLE_PAINT);
+    // TEMPORARILY CHANGED FOR TESTING - SetBackgroundStyle(wxBG_STYLE_PAINT);
+    SetBackgroundStyle(wxBG_STYLE_COLOUR);
 
     // Optimize double buffering
     if (GetParent() != nullptr) {
@@ -1140,7 +1129,7 @@ void DockOverlay::loadConfiguration() {
 
 void DockOverlay::setTransparency(int transparency) {
     m_transparency = transparency;
-    SetTransparent(transparency);
+    // TEMPORARILY DISABLED FOR TESTING - SetTransparent(transparency);
 }
 
 void DockOverlay::setBackgroundColor(const wxColour& color) {
