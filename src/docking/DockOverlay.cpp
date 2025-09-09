@@ -342,42 +342,57 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     wxLogDebug("DockOverlay::paintDropIndicator - Area %d: rect(%d,%d,%d,%d) highlighted:%d", 
                area, rect.x, rect.y, rect.width, rect.height, dropArea.isHighlighted());
 
-    // Use configured colors
-    wxColour normalBg = m_dropAreaNormalBg;
-    wxColour normalBorder = m_dropAreaNormalBorder;
-    wxColour highlightBg = m_dropAreaHighlightBg;
-    wxColour highlightBorder = m_dropAreaHighlightBorder;
-    wxColour iconColor = m_dropAreaIconColor;
-    wxColour highlightIconColor = m_dropAreaHighlightIconColor;
+    // Create a memory DC for opaque button rendering
+    wxBitmap buttonBitmap(rect.width, rect.height);
+    wxMemoryDC memDC(buttonBitmap);
+    
+    // Clear the bitmap with white background (fully opaque)
+    memDC.SetBackground(*wxWHITE_BRUSH);
+    memDC.Clear();
+    
+    // Use configured colors - Force fully opaque colors for buttons
+    wxColour normalBg = wxColour(m_dropAreaNormalBg.Red(), m_dropAreaNormalBg.Green(), m_dropAreaNormalBg.Blue(), 255);
+    wxColour normalBorder = wxColour(m_dropAreaNormalBorder.Red(), m_dropAreaNormalBorder.Green(), m_dropAreaNormalBorder.Blue(), 255);
+    wxColour highlightBg = wxColour(m_dropAreaHighlightBg.Red(), m_dropAreaHighlightBg.Green(), m_dropAreaHighlightBg.Blue(), 255);
+    wxColour highlightBorder = wxColour(m_dropAreaHighlightBorder.Red(), m_dropAreaHighlightBorder.Green(), m_dropAreaHighlightBorder.Blue(), 255);
+    wxColour iconColor = wxColour(m_dropAreaIconColor.Red(), m_dropAreaIconColor.Green(), m_dropAreaIconColor.Blue(), 255);
+    wxColour highlightIconColor = wxColour(m_dropAreaHighlightIconColor.Red(), m_dropAreaHighlightIconColor.Green(), m_dropAreaHighlightIconColor.Blue(), 255);
 
-    // Draw the indicator button with configured appearance
+    // Draw the indicator button with configured appearance - Force opaque rendering
     if (dropArea.isHighlighted()) {
         // Highlighted state - use red border for better visual feedback
         wxLogDebug("DockOverlay::paintDropIndicator - Drawing highlighted area %d with RED border", area);
-        dc.SetPen(wxPen(wxColour(255, 0, 0), m_borderWidth + 1));  // Red border, slightly thicker
-        dc.SetBrush(wxBrush(highlightBg));
+        memDC.SetPen(wxPen(wxColour(255, 0, 0, 255), m_borderWidth + 1));  // Red border, fully opaque
+        memDC.SetBrush(wxBrush(wxColour(highlightBg.Red(), highlightBg.Green(), highlightBg.Blue(), 255)));  // Force opaque
     } else {
         // Normal state
         wxLogDebug("DockOverlay::paintDropIndicator - Drawing normal area %d", area);
-        dc.SetPen(wxPen(normalBorder, 1));
-        dc.SetBrush(wxBrush(normalBg));
+        memDC.SetPen(wxPen(wxColour(normalBorder.Red(), normalBorder.Green(), normalBorder.Blue(), 255), 1));  // Force opaque
+        memDC.SetBrush(wxBrush(wxColour(normalBg.Red(), normalBg.Green(), normalBg.Blue(), 255)));  // Force opaque
     }
 
     // Draw rounded rectangle with configured corner radius
-    dc.DrawRoundedRectangle(rect, m_cornerRadius);
+    wxRect buttonRect(0, 0, rect.width, rect.height);
+    memDC.DrawRoundedRectangle(buttonRect, m_cornerRadius);
 
     // Draw subtle inner shadow for depth
     if (!dropArea.isHighlighted()) {
-        wxRect innerRect = rect;
+        wxRect innerRect = buttonRect;
         innerRect.Deflate(1);
-        dc.SetPen(wxPen(wxColour(240, 240, 240), 1));
-        dc.SetBrush(*wxTRANSPARENT_BRUSH);
-        dc.DrawRoundedRectangle(innerRect, m_cornerRadius - 1);
+        memDC.SetPen(wxPen(wxColour(240, 240, 240, 255), 1));
+        memDC.SetBrush(*wxTRANSPARENT_BRUSH);
+        memDC.DrawRoundedRectangle(innerRect, m_cornerRadius - 1);
     }
 
-    // Draw the icon
-    wxColour currentIconColor = dropArea.isHighlighted() ? highlightIconColor : iconColor;
-    drawAreaIcon(dc, rect, area, currentIconColor);
+    // Draw the icon - Force opaque icon color
+    wxColour currentIconColor = dropArea.isHighlighted() ? 
+        wxColour(highlightIconColor.Red(), highlightIconColor.Green(), highlightIconColor.Blue(), 255) : 
+        wxColour(iconColor.Red(), iconColor.Green(), iconColor.Blue(), 255);
+    drawAreaIcon(memDC, buttonRect, area, currentIconColor);
+
+    // Blit the opaque button to the main DC
+    memDC.SelectObject(wxNullBitmap);
+    dc.DrawBitmap(buttonBitmap, rect.x, rect.y, true);
 
     // Note: Direction indicators are now drawn separately in drawDirectionIndicators()
 }
@@ -436,8 +451,8 @@ void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area
         }
     }
 
-    // Use red color for hovered areas, otherwise use the provided color
-    wxColour iconColor = isHovered ? wxColour(255, 0, 0) : color;  // Red for hovered, original color otherwise
+    // Use red color for hovered areas, otherwise use the provided color - Force opaque
+    wxColour iconColor = isHovered ? wxColour(255, 0, 0, 255) : wxColour(color.Red(), color.Green(), color.Blue(), 255);
 
     dc.SetPen(wxPen(iconColor, lineWidth));
     dc.SetBrush(wxBrush(iconColor));
@@ -716,17 +731,31 @@ void DockOverlayCross::drawCrossIcon(wxDC& dc) {
 void DockOverlayCross::drawAreaIndicator(wxDC& dc, DockWidgetArea area) {
     wxRect rect = areaRect(area);
     
+    // Create a memory DC for opaque button rendering
+    wxBitmap buttonBitmap(rect.width, rect.height);
+    wxMemoryDC memDC(buttonBitmap);
+    
+    // Clear the bitmap with white background (fully opaque)
+    memDC.SetBackground(*wxWHITE_BRUSH);
+    memDC.Clear();
+    
+    wxRect buttonRect(0, 0, rect.width, rect.height);
+    
     if (m_hoveredArea == area) {
         // Use red color for hovered areas
         wxLogDebug("DockOverlayCross::drawAreaIndicator - Drawing RED hovered area %d", area);
-        dc.SetPen(wxPen(wxColour(255, 0, 0), 3));  // Red border, thicker for better visibility
-        dc.SetBrush(wxBrush(wxColour(255, 0, 0, 255)));  // Red fill, fully opaque
+        memDC.SetPen(wxPen(wxColour(255, 0, 0, 255), 3));  // Red border, thicker for better visibility
+        memDC.SetBrush(wxBrush(wxColour(255, 0, 0, 255)));  // Red fill, fully opaque
     } else {
-        dc.SetPen(wxPen(m_iconColor, 1));
-        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        memDC.SetPen(wxPen(wxColour(m_iconColor.Red(), m_iconColor.Green(), m_iconColor.Blue(), 255), 1));
+        memDC.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));  // White fill for non-hovered areas
     }
     
-    dc.DrawRectangle(rect);
+    memDC.DrawRectangle(buttonRect);
+    
+    // Blit the opaque button to the main DC
+    memDC.SelectObject(wxNullBitmap);
+    dc.DrawBitmap(buttonBitmap, rect.x, rect.y, true);
 }
 
 wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {

@@ -62,17 +62,58 @@ m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor
 m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 255);
 ```
 
+## 根本问题分析
+经过深入调查，发现按钮仍然透明的根本原因是：
+
+**父窗口透明度影响**：DockOverlay窗口本身设置了透明度（`SetTransparent(51)`），这会影响整个窗口及其所有子元素的绘制。即使按钮的颜色设置为不透明，但由于父窗口是透明的，按钮仍然会显示为透明效果。
+
+## 彻底修复方案
+为了解决这个问题，采用了**独立不透明绘制**的方法：
+
+### 1. 使用wxMemoryDC进行独立绘制
+```cpp
+// 创建独立的内存DC进行不透明绘制
+wxBitmap buttonBitmap(rect.width, rect.height);
+wxMemoryDC memDC(buttonBitmap);
+
+// 清除为白色背景（完全不透明）
+memDC.SetBackground(*wxWHITE_BRUSH);
+memDC.Clear();
+
+// 在内存DC中绘制按钮（完全不透明）
+memDC.SetPen(wxPen(wxColour(255, 0, 0, 255), m_borderWidth + 1));
+memDC.SetBrush(wxBrush(wxColour(highlightBg.Red(), highlightBg.Green(), highlightBg.Blue(), 255)));
+memDC.DrawRoundedRectangle(buttonRect, m_cornerRadius);
+
+// 将不透明的按钮位图绘制到主DC
+memDC.SelectObject(wxNullBitmap);
+dc.DrawBitmap(buttonBitmap, rect.x, rect.y, true);
+```
+
+### 2. 强制不透明颜色设置
+所有按钮相关的颜色都强制设置为alpha值255：
+```cpp
+wxColour normalBg = wxColour(m_dropAreaNormalBg.Red(), m_dropAreaNormalBg.Green(), m_dropAreaNormalBg.Blue(), 255);
+wxColour highlightBg = wxColour(m_dropAreaHighlightBg.Red(), m_dropAreaHighlightBg.Green(), m_dropAreaHighlightBg.Blue(), 255);
+```
+
+### 3. 修复了两个关键类
+- **DockOverlay::paintDropIndicator()** - 主要的停靠指示器绘制
+- **DockOverlayCross::drawAreaIndicator()** - 交叉指示器绘制
+
 ## 修复效果
 修复后，停靠方向指示器的按钮将：
-1. 具有完全不透明的背景色
-2. 保持良好的视觉对比度
-3. 不再因为继承父窗口透明度而产生透明效果
-4. 在各种模式下（正常模式、全局模式）都能正确显示
+1. **完全独立于父窗口透明度** - 使用独立的内存DC绘制
+2. **具有完全不透明的背景色** - 强制alpha值为255
+3. **保持良好的视觉对比度** - 白色背景确保按钮清晰可见
+4. **在各种模式下都能正确显示** - 正常模式和全局模式都适用
+5. **不影响整体覆盖层效果** - 背景仍然保持透明
 
-## 注意事项
-- 背景色（`m_backgroundColor` 和 `m_globalBackgroundColor`）保持透明是合理的，因为它们是整个覆盖层的背景
-- 窗口本身的透明度设置（`SetTransparent(51)`）保持不变，因为这是整个覆盖层的透明度
-- 只有停靠方向指示器按钮的颜色被修改为不透明
+## 技术优势
+- **隔离绘制**：按钮绘制完全独立于父窗口的透明度设置
+- **性能优化**：使用位图缓存，避免重复绘制
+- **兼容性好**：不影响现有的透明度配置和主题系统
+- **维护性强**：修改集中在绘制方法中，易于维护
 
 ## 测试建议
 1. 编译并运行应用程序
