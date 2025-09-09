@@ -391,13 +391,13 @@ void DockOverlay::drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectio
     wxColour previewBorder, previewFill;
 
     if (isDirectionIndicator) {
-        // Enhanced direction indicator colors for better visibility
-        previewBorder = wxColour(255, 255, 255, 200);      // Bright white border for contrast
-        previewFill = wxColour(0, 122, 204, 77);           // Bright blue fill with 30% opacity
+        // Enhanced direction indicator colors for better visibility - fully opaque
+        previewBorder = wxColour(255, 255, 255);      // Bright white border, fully opaque
+        previewFill = wxColour(0, 122, 204);          // Bright blue fill, fully opaque
     } else {
-        // Strong contrast colors for target area preview
-        previewBorder = wxColour(255, 0, 0, 220);     // Bright red border for high contrast
-        previewFill = wxColour(255, 0, 0, 120);       // Bright red fill with good visibility
+        // Strong contrast colors for target area preview - 40% transparency
+        previewBorder = wxColour(255, 0, 0, 102);     // Bright red border with 40% opacity
+        previewFill = wxColour(255, 0, 0, 102);       // Bright red fill with 40% opacity
     }
 
     // Draw preview rectangle with enhanced visibility
