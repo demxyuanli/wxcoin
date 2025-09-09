@@ -31,6 +31,7 @@ private:
 	void createSubdivisionPage();
 	void createSmoothingPage();
 	void createAdvancedPage();
+	void createSurfaceSmoothingPresetsPage();
 
 	// Basic quality event handlers
 	void onDeflectionSlider(wxCommandEvent& event);
@@ -44,6 +45,7 @@ private:
 	void onLODFineDeflectionSpinCtrl(wxSpinDoubleEvent& event);
 	void onLODTransitionTimeSlider(wxCommandEvent& event);
 	void onLODTransitionTimeSpinCtrl(wxSpinEvent& event);
+	void onRealTimePreviewToggle(wxCommandEvent& event);
 
 	// Subdivision event handlers
 	void onSubdivisionEnable(wxCommandEvent& event);
@@ -86,9 +88,22 @@ private:
 	void onQualityPreset(wxCommandEvent& event);
 	void onCustomPreset(wxCommandEvent& event);
 	
+	// Surface smoothing preset handlers
+	void onCoarseSurfacePreset(wxCommandEvent& event);
+	void onStandardSurfacePreset(wxCommandEvent& event);
+	void onSmoothSurfacePreset(wxCommandEvent& event);
+	void onFineSurfacePreset(wxCommandEvent& event);
+	void onUltraFineSurfacePreset(wxCommandEvent& event);
+	void onCustomSurfacePreset(wxCommandEvent& event);
+	
 	// Helper methods
 	void applyPreset(double deflection, bool lodEnabled, double roughDeflection, 
 	                 double fineDeflection, bool parallelProcessing);
+	void applySurfacePreset(double deflection, double angularDeflection,
+		bool subdivisionEnabled, int subdivisionLevel,
+		bool smoothingEnabled, int smoothingIterations, double smoothingStrength,
+		bool lodEnabled, double lodFineDeflection, double lodRoughDeflection,
+		int tessellationQuality, double featurePreservation, double smoothingCreaseAngle);
 
 	OCCViewer* m_occViewer;
 
@@ -134,6 +149,9 @@ private:
 	wxSpinCtrlDouble* m_featurePreservationSpinCtrl;
 	wxCheckBox* m_parallelProcessingCheckBox;
 	wxCheckBox* m_adaptiveMeshingCheckBox;
+	
+	// Real-time preview control
+	wxCheckBox* m_realTimePreviewCheckBox;
 
 	// Current parameter values
 	double m_currentDeflection;
@@ -142,6 +160,9 @@ private:
 	double m_currentLODRoughDeflection;
 	double m_currentLODFineDeflection;
 	int m_currentLODTransitionTime;
+	
+	// Real-time preview control
+	bool m_enableRealTimePreview;
 
 	// Subdivision parameters
 	bool m_currentSubdivisionEnabled;
