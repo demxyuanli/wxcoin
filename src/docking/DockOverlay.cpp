@@ -37,7 +37,7 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_allowedAreas(AllDockAreas)
     , m_lastHoveredArea(InvalidDockWidgetArea)
     , m_frameColor(wxColour(0, 122, 204))  // VS blue color
-    , m_areaColor(wxColour(0, 122, 204, 51))  // VS blue with 20% transparency
+    , m_areaColor(wxColour(0, 122, 204, 255))  // VS blue, fully opaque
     , m_frameWidth(2)
     , m_transparency(51)
     , m_globalTransparency(51)
@@ -45,9 +45,9 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_globalBackgroundColor(wxColour(200, 220, 240, 51))
     , m_borderColor(wxColour(0, 122, 204))
     , m_borderWidth(2)
-    , m_dropAreaNormalBg(wxColour(255, 255, 255, 51))
+    , m_dropAreaNormalBg(wxColour(255, 255, 255, 255))
     , m_dropAreaNormalBorder(wxColour(217, 217, 217))
-    , m_dropAreaHighlightBg(wxColour(0, 122, 204, 51))
+    , m_dropAreaHighlightBg(wxColour(0, 122, 204, 255))
     , m_dropAreaHighlightBorder(wxColour(0, 122, 204))
     , m_dropAreaIconColor(wxColour(96, 96, 96))
     , m_dropAreaHighlightIconColor(wxColour(255, 255, 255))
@@ -396,8 +396,8 @@ void DockOverlay::drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectio
         previewFill = wxColour(0, 122, 204);          // Bright blue fill, fully opaque
     } else {
         // Strong contrast colors for target area preview - 40% transparency
-        previewBorder = wxColour(255, 0, 0, 102);     // Bright red border with 40% opacity
-        previewFill = wxColour(255, 0, 0, 102);       // Bright red fill with 40% opacity
+        previewBorder = wxColour(255, 0, 0, 255);     // Bright red border, fully opaque
+        previewFill = wxColour(255, 0, 0, 255);       // Bright red fill, fully opaque
     }
 
     // Draw preview rectangle with enhanced visibility
@@ -408,7 +408,7 @@ void DockOverlay::drawPreviewArea(wxDC& dc, DockWidgetArea area, bool isDirectio
     // Add a subtle inner highlight for depth
     wxRect innerRect = previewRect;
     innerRect.Deflate(2);
-    dc.SetPen(wxPen(wxColour(255, 255, 255, 180), 1));
+    dc.SetPen(wxPen(wxColour(255, 255, 255, 255), 1));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     dc.DrawRectangle(innerRect);
 
@@ -720,7 +720,7 @@ void DockOverlayCross::drawAreaIndicator(wxDC& dc, DockWidgetArea area) {
         // Use red color for hovered areas
         wxLogDebug("DockOverlayCross::drawAreaIndicator - Drawing RED hovered area %d", area);
         dc.SetPen(wxPen(wxColour(255, 0, 0), 3));  // Red border, thicker for better visibility
-        dc.SetBrush(wxBrush(wxColour(255, 0, 0, 100)));  // Red fill with transparency
+        dc.SetBrush(wxBrush(wxColour(255, 0, 0, 255)));  // Red fill, fully opaque
     } else {
         dc.SetPen(wxPen(m_iconColor, 1));
         dc.SetBrush(*wxTRANSPARENT_BRUSH);
@@ -761,7 +761,7 @@ void DockOverlay::updateGlobalMode() {
 
         // Adjust colors for global mode
         m_frameColor = m_borderColor; // Use configured border color
-        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 51); // 20% transparency
+        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 255); // Fully opaque
 
         // Ensure overlay stays on top in global mode
         SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
@@ -778,7 +778,7 @@ void DockOverlay::updateGlobalMode() {
 
         // Reset colors
         m_frameColor = m_borderColor;
-        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 51);
+        m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 255);
 
         wxLogDebug("DockOverlay: Disabled global docking mode");
     }
@@ -809,7 +809,7 @@ void DockOverlay::drawGlobalModeHints(wxDC& dc) {
     wxRect clientRect = GetClientRect();
 
     // Draw screen edge indicators for global docking
-    wxColour edgeColor(0, 122, 204, 180);  // VS blue with transparency
+    wxColour edgeColor(0, 122, 204, 255);  // VS blue, fully opaque
     dc.SetPen(wxPen(edgeColor, 2));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
@@ -838,8 +838,8 @@ void DockOverlay::drawGlobalModeHints(wxDC& dc) {
             centerRect.Inflate(2);
 
             // Draw enhanced center indicator
-            dc.SetPen(wxPen(wxColour(0, 122, 204, 220), 2));
-            dc.SetBrush(wxBrush(wxColour(0, 122, 204, 80)));
+            dc.SetPen(wxPen(wxColour(0, 122, 204, 255), 2));
+            dc.SetBrush(wxBrush(wxColour(0, 122, 204, 255)));
             dc.DrawRoundedRectangle(centerRect, 6);
 
             break;
@@ -866,7 +866,7 @@ void DockOverlay::drawGlobalModeTextHints(wxDC& dc) {
 
     // Draw text background for better readability
     wxRect textBgRect(textX - 5, textY - 2, textSize.GetWidth() + 10, textSize.GetHeight() + 4);
-    dc.SetBrush(wxBrush(wxColour(255, 255, 255, 200)));
+    dc.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));
     dc.SetPen(wxPen(wxColour(200, 200, 200), 1));
     dc.DrawRoundedRectangle(textBgRect, 3);
 
@@ -1075,13 +1075,13 @@ void DockOverlay::loadConfiguration() {
     
     // Load drop area colors with fallback defaults (20% transparency)
     wxColour normalBg = themeManager.getColour("DropAreaNormalBgColour");
-    m_dropAreaNormalBg = normalBg.IsOk() ? normalBg : wxColour(255, 255, 255, 51);
+    m_dropAreaNormalBg = normalBg.IsOk() ? normalBg : wxColour(255, 255, 255, 255);
     
     wxColour normalBorder = themeManager.getColour("DropAreaNormalBorderColour");
     m_dropAreaNormalBorder = normalBorder.IsOk() ? normalBorder : wxColour(217, 217, 217);
     
     wxColour highlightBg = themeManager.getColour("DropAreaHighlightBgColour");
-    m_dropAreaHighlightBg = highlightBg.IsOk() ? highlightBg : wxColour(0, 122, 204, 51);
+    m_dropAreaHighlightBg = highlightBg.IsOk() ? highlightBg : wxColour(0, 122, 204, 255);
     
     wxColour highlightBorder = themeManager.getColour("DropAreaHighlightBorderColour");
     m_dropAreaHighlightBorder = highlightBorder.IsOk() ? highlightBorder : wxColour(0, 122, 204);
@@ -1102,7 +1102,7 @@ void DockOverlay::loadConfiguration() {
     
     // Update frame color and area color to match border color
     m_frameColor = m_borderColor;
-    m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 51);
+    m_areaColor = wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 255);
     
     // Debug output
     wxLogDebug("DockOverlay configuration loaded - Transparency: %d, Global: %d, BorderWidth: %d, CornerRadius: %d", 
@@ -1125,7 +1125,7 @@ void DockOverlay::setGlobalBackgroundColor(const wxColour& color) {
 void DockOverlay::setBorderColor(const wxColour& color) {
     m_borderColor = color;
     m_frameColor = color;
-    m_areaColor = wxColour(color.Red(), color.Green(), color.Blue(), 51);
+    m_areaColor = wxColour(color.Red(), color.Green(), color.Blue(), 255);
 }
 
 void DockOverlay::setBorderWidth(int width) {
