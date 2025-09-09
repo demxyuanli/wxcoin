@@ -30,7 +30,7 @@ public:
 
 // Constructor
 DockWidget::DockWidget(const wxString& title, wxWindow* parent)
-    : wxPanel(parent)
+    : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE)
     , d(std::make_unique<Private>(this))
     , m_dockManager(nullptr)
     , m_dockArea(nullptr)

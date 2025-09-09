@@ -779,20 +779,7 @@ void FloatingDockContainer::startDragging(const wxPoint& dragOffset) {
 void FloatingDockContainer::onPaint(wxPaintEvent& event) {
     wxAutoBufferedPaintDC dc(this);
     
-    // Get border color from theme management system
-    auto& themeManager = ThemeManager::getInstance();
-    wxColour borderColor = themeManager.getColour("BorderColour");
-    
-    // If theme color is not available, use fallback
-    if (!borderColor.IsOk()) {
-        borderColor = wxColour(170, 170, 170); // Default light gray border
-    }
-    
-    // Draw 1-pixel border around the entire window
-    wxSize size = GetClientSize();
-    dc.SetPen(wxPen(borderColor, 1));
-    dc.SetBrush(*wxTRANSPARENT_BRUSH);
-    dc.DrawRectangle(0, 0, size.GetWidth() - 1, size.GetHeight() - 1);
+    // No border drawing - floating dock container is borderless
 }
 
 } // namespace ads

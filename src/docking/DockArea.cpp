@@ -73,7 +73,7 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     m_tabBar->Hide(); // Hide by default in merged mode
 
     // Create content area (placeholder for dock widgets)
-    m_contentArea = new wxPanel(this);
+    m_contentArea = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
     m_contentSizer = new wxBoxSizer(wxVERTICAL);
     m_contentArea->SetSizer(m_contentSizer);
     m_layout->Add(m_contentArea, 1, wxEXPAND);  // Content area takes remaining space
