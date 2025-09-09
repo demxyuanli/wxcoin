@@ -11,7 +11,7 @@ CommandResult FixNormalsListener::executeCommand(const std::string& commandType,
 	
 	try {
 		// Get all geometries from the viewer
-		auto geometries = m_viewer->getAllGeometries();
+		auto geometries = m_viewer->getAllGeometry();
 		if (geometries.empty()) {
 			return CommandResult(false, "No geometries found to fix", commandType);
 		}
@@ -37,7 +37,7 @@ CommandResult FixNormalsListener::executeCommand(const std::string& commandType,
 		}
 		
 		// Refresh the viewer to show changes
-		m_viewer->refresh();
+		m_viewer->requestViewRefresh();
 		
 		LOG_INF_S("Normal correction completed: " + std::to_string(correctedCount) + "/" + std::to_string(totalCount) + " geometries processed");
 		

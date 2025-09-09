@@ -48,7 +48,7 @@ CommandResult ShowNormalsListener::executeCommand(const std::string& commandType
         }
         
         // Get all geometries
-        auto geometries = m_viewer->getAllGeometries();
+        auto geometries = m_viewer->getAllGeometry();
         if (geometries.empty()) {
             return CommandResult(false, "No geometries found to visualize", commandType);
         }
@@ -77,7 +77,7 @@ CommandResult ShowNormalsListener::executeCommand(const std::string& commandType
         }
         
         // Refresh viewer
-        m_viewer->refresh();
+        m_viewer->requestViewRefresh();
         
         std::string message = "Normal visualization created for " + std::to_string(processedCount) + 
                             " geometries (" + std::to_string(totalNormals) + " total faces, " +
@@ -107,10 +107,10 @@ void ShowNormalsListener::createNormalVisualization(std::shared_ptr<OCCGeometry>
     if (shape.IsNull()) return;
     
     try {
-        // Calculate shape center
+        // Calculate shape center using public method
         gp_Pnt shapeCenter = NormalValidator::calculateShapeCenter(shape);
         
-        // Create visualization geometry for normals
+        // Get face center and normal information
         std::vector<gp_Pnt> normalPoints;
         std::vector<gp_Pnt> normalEndPoints;
         std::vector<int> correctIndices;

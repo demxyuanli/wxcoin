@@ -76,7 +76,6 @@ public:
      */
     static double getNormalQualityScore(const TopoDS_Shape& shape);
 
-private:
     /**
      * @brief Calculate the center point of a shape
      * @param shape The shape to analyze
@@ -84,6 +83,15 @@ private:
      */
     static gp_Pnt calculateShapeCenter(const TopoDS_Shape& shape);
     
+    /**
+     * @brief Check if a face normal points outward
+     * @param face The face to check
+     * @param shapeCenter Center of the shape
+     * @return true if normal points outward
+     */
+    static bool isNormalOutward(const TopoDS_Face& face, const gp_Pnt& shapeCenter);
+
+private:
     /**
      * @brief Analyze a single face normal
      * @param face The face to analyze
@@ -116,17 +124,17 @@ private:
     static TopoDS_Shape correctFaceNormals(const TopoDS_Shape& shape, const gp_Pnt& shapeCenter, const std::string& shapeName);
     
     /**
-     * @brief Check if a face normal points outward
-     * @param face The face to check
-     * @param shapeCenter Center of the shape
-     * @return true if normal points outward
-     */
-    static bool isNormalOutward(const TopoDS_Face& face, const gp_Pnt& shapeCenter);
-    
-    /**
      * @brief Reverse a face orientation
      * @param face The face to reverse
      * @return Reversed face
      */
     static TopoDS_Face reverseFace(const TopoDS_Face& face);
+    
+    /**
+     * @brief Rebuild shape with corrected faces
+     * @param originalShape The original shape
+     * @param correctedFaces Vector of corrected faces
+     * @return Rebuilt shape
+     */
+    static TopoDS_Shape rebuildShapeWithCorrectedFaces(const TopoDS_Shape& originalShape, const std::vector<TopoDS_Face>& correctedFaces);
 };
