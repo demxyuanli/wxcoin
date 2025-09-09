@@ -61,17 +61,13 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     , m_isGlobalMode(false)
     , m_dragPreviewCallback(nullptr)
 {
-    // TEMPORARILY CHANGED FOR TESTING - SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetBackgroundStyle(wxBG_STYLE_COLOUR);
-    
-    // Set opaque background color for testing
-    SetBackgroundColour(wxColour(255, 255, 255, 255));  // Solid white background
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
 
     // Load configuration from config file
     loadConfiguration();
 
     // Set transparency based on configuration - 20% transparency
-    // TEMPORARILY DISABLED FOR TESTING - SetTransparent(51);  // 20% transparency
+    SetTransparent(51);  // 20% transparency
 
     // Initialize refresh timer for debouncing
     m_refreshTimer = new wxTimer(this);
@@ -212,7 +208,7 @@ void DockOverlay::updateDropAreas() {
 }
 
 void DockOverlay::onPaint(wxPaintEvent& event) {
-    wxAutoBufferedPaintDC dc(this);
+    wxPaintDC dc(this);
 
     if (!m_targetWidget) {
         return;
@@ -346,6 +342,10 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
     wxLogDebug("DockOverlay::paintDropIndicator - Area %d: rect(%d,%d,%d,%d) highlighted:%d", 
                area, rect.x, rect.y, rect.width, rect.height, dropArea.isHighlighted());
 
+    // Save current logical function and set to COPY for opaque rendering
+    wxRasterOperationMode oldMode = dc.GetLogicalFunction();
+    dc.SetLogicalFunction(wxCOPY);
+
     // Force opaque rendering by drawing a solid white background first
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));  // Solid white background
@@ -389,6 +389,9 @@ void DockOverlay::paintDropIndicator(wxDC& dc, const DockOverlayDropArea& dropAr
         wxColour(highlightIconColor.Red(), highlightIconColor.Green(), highlightIconColor.Blue(), 255) : 
         wxColour(iconColor.Red(), iconColor.Green(), iconColor.Blue(), 255);
     drawAreaIcon(dc, rect, area, currentIconColor);
+
+    // Restore logical function
+    dc.SetLogicalFunction(oldMode);
 
     // Note: Direction indicators are now drawn separately in drawDirectionIndicators()
 }
@@ -645,8 +648,7 @@ DockOverlayCross::DockOverlayCross(DockOverlay* overlay)
     , m_iconColor(wxColour(58, 135, 173))
     , m_hoveredArea(InvalidDockWidgetArea)
 {
-    // TEMPORARILY CHANGED FOR TESTING - SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetBackgroundStyle(wxBG_STYLE_COLOUR);
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetSize(m_iconSize * 5, m_iconSize * 5);
 }
 
@@ -692,7 +694,7 @@ DockWidgetArea DockOverlayCross::cursorLocation() const {
 }
 
 void DockOverlayCross::onPaint(wxPaintEvent& event) {
-    wxAutoBufferedPaintDC dc(this);
+    wxPaintDC dc(this);
     dc.Clear();
     
     drawCrossIcon(dc);
@@ -728,6 +730,10 @@ void DockOverlayCross::drawCrossIcon(wxDC& dc) {
 void DockOverlayCross::drawAreaIndicator(wxDC& dc, DockWidgetArea area) {
     wxRect rect = areaRect(area);
     
+    // Save current logical function and set to COPY for opaque rendering
+    wxRasterOperationMode oldMode = dc.GetLogicalFunction();
+    dc.SetLogicalFunction(wxCOPY);
+    
     // Force opaque rendering by drawing a solid white background first
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.SetBrush(wxBrush(wxColour(255, 255, 255, 255)));  // Solid white background
@@ -744,6 +750,9 @@ void DockOverlayCross::drawAreaIndicator(wxDC& dc, DockWidgetArea area) {
     }
     
     dc.DrawRectangle(rect);
+    
+    // Restore logical function
+    dc.SetLogicalFunction(oldMode);
 }
 
 wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {
@@ -770,7 +779,7 @@ wxRect DockOverlayCross::areaRect(DockWidgetArea area) const {
 void DockOverlay::updateGlobalMode() {
     if (m_isGlobalMode) {
         // In global mode, show all areas more prominently
-        // TEMPORARILY DISABLED FOR TESTING - SetTransparent(m_globalTransparency); // Use configured global transparency
+        SetTransparent(m_globalTransparency); // Use configured global transparency
 
         // Enable all areas in global mode
         m_allowedAreas = AllDockAreas;
@@ -788,7 +797,7 @@ void DockOverlay::updateGlobalMode() {
         wxLogDebug("DockOverlay: Enabled global docking mode - ensuring topmost");
     } else {
         // Normal mode
-        // TEMPORARILY DISABLED FOR TESTING - SetTransparent(m_transparency); // Use configured normal transparency
+        SetTransparent(m_transparency); // Use configured normal transparency
 
         // Reset to default areas
         m_allowedAreas = AllDockAreas;
@@ -936,8 +945,7 @@ void DockOverlay::optimizeRendering() {
     m_optimizedRendering = true;
 
     // Disable unnecessary features during drag operations
-    // TEMPORARILY CHANGED FOR TESTING - SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetBackgroundStyle(wxBG_STYLE_COLOUR);
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
 
     // Optimize double buffering
     if (GetParent() != nullptr) {
@@ -1129,7 +1137,7 @@ void DockOverlay::loadConfiguration() {
 
 void DockOverlay::setTransparency(int transparency) {
     m_transparency = transparency;
-    // TEMPORARILY DISABLED FOR TESTING - SetTransparent(transparency);
+    SetTransparent(transparency);
 }
 
 void DockOverlay::setBackgroundColor(const wxColour& color) {
