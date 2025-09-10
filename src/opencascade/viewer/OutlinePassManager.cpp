@@ -166,9 +166,9 @@ void OutlinePassManager::enableDebugVisualization(bool enabled) {
     m_debugVisualization = enabled;
     
     if (enabled) {
-        setDebugMode(static_cast<int>(OutlineDebugMode::ShowEdgeMask));
+        setDebugMode(OutlineDebugMode::ShowEdges);
     } else {
-        setDebugMode(static_cast<int>(OutlineDebugMode::Final));
+        setDebugMode(OutlineDebugMode::None);
     }
 }
 

@@ -4,11 +4,6 @@
 #include "Canvas.h"
 #include "logger/Logger.h"
 
-#ifdef _WIN32
-#define NOMINMAX
-#include <windows.h>
-#endif
-
 #include <Inventor/SoPath.h>
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbColor.h>
@@ -25,10 +20,10 @@
 #include <Inventor/nodes/SoTextureCoordinate2.h>
 #include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoSelection.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/SbViewportRegion.h>
 
-#include <GL/gl.h>
 #include <cmath>
 #include <algorithm>
 
@@ -55,22 +50,12 @@ out vec4 FragColor;
 
 uniform sampler2D uColorTex;
 uniform sampler2D uDepthTex;
-uniform sampler2D uNormalTex;
-uniform sampler2D uSelectionTex;
-
 uniform float uDepthWeight;
 uniform float uNormalWeight;
 uniform float uColorWeight;
 uniform float uEdgeIntensity;
 uniform float uThickness;
 uniform vec3 uOutlineColor;
-uniform vec3 uSelectedColor;
-uniform vec3 uHoverColor;
-uniform vec3 uGlowColor;
-uniform float uGlowStrength;
-uniform float uGlowRadius;
-uniform int uDownsampleFactor;
-uniform int uEnableEarlyCulling;
 
 vec2 texelSize = 1.0 / textureSize(uDepthTex, 0);
 
@@ -87,75 +72,15 @@ float depthEdge(vec2 uv, vec2 texelSize) {
     return sqrt(gx * gx + gy * gy);
 }
 
-// Normal-based edge detection
-float normalEdge(vec2 uv, vec2 texelSize) {
-    vec3 n1 = texture(uNormalTex, uv + vec2(-texelSize.x, 0)).rgb;
-    vec3 n2 = texture(uNormalTex, uv + vec2(texelSize.x, 0)).rgb;
-    vec3 n3 = texture(uNormalTex, uv + vec2(0, -texelSize.y)).rgb;
-    vec3 n4 = texture(uNormalTex, uv + vec2(0, texelSize.y)).rgb;
-    
-    float edgeX = length(n1 - n2);
-    float edgeY = length(n3 - n4);
-    
-    return max(edgeX, edgeY);
-}
-
-// Color luminance-based Sobel
-float colorSobel(vec2 uv, vec2 texelSize) {
-    vec3 tl = texture(uColorTex, uv + vec2(-texelSize.x, -texelSize.y)).rgb;
-    vec3 tm = texture(uColorTex, uv + vec2(0, -texelSize.y)).rgb;
-    vec3 tr = texture(uColorTex, uv + vec2(texelSize.x, -texelSize.y)).rgb;
-    vec3 ml = texture(uColorTex, uv + vec2(-texelSize.x, 0)).rgb;
-    vec3 mm = texture(uColorTex, uv).rgb;
-    vec3 mr = texture(uColorTex, uv + vec2(texelSize.x, 0)).rgb;
-    vec3 bl = texture(uColorTex, uv + vec2(-texelSize.x, texelSize.y)).rgb;
-    vec3 bm = texture(uColorTex, uv + vec2(0, texelSize.y)).rgb;
-    vec3 br = texture(uColorTex, uv + vec2(texelSize.x, texelSize.y)).rgb;
-    
-    // Convert to luminance
-    float tlL = dot(tl, vec3(0.299, 0.587, 0.114));
-    float tmL = dot(tm, vec3(0.299, 0.587, 0.114));
-    float trL = dot(tr, vec3(0.299, 0.587, 0.114));
-    float mlL = dot(ml, vec3(0.299, 0.587, 0.114));
-    float mmL = dot(mm, vec3(0.299, 0.587, 0.114));
-    float mrL = dot(mr, vec3(0.299, 0.587, 0.114));
-    float blL = dot(bl, vec3(0.299, 0.587, 0.114));
-    float bmL = dot(bm, vec3(0.299, 0.587, 0.114));
-    float brL = dot(br, vec3(0.299, 0.587, 0.114));
-    
-    float gx = (trL + 2.0 * mrL + brL) - (tlL + 2.0 * mlL + blL);
-    float gy = (blL + 2.0 * bmL + brL) - (tlL + 2.0 * tmL + trL);
-    
-    return sqrt(gx * gx + gy * gy);
-}
-
 void main() {
     vec4 color = texture(uColorTex, vTexCoord);
-    vec4 selection = texture(uSelectionTex, vTexCoord);
     
     // Calculate edges
     float depthE = depthEdge(vTexCoord, texelSize) * uDepthWeight;
-    float normalE = normalEdge(vTexCoord, texelSize) * uNormalWeight;
-    float colorE = colorSobel(vTexCoord, texelSize) * uColorWeight;
-    
-    float edge = clamp(depthE + normalE + colorE, 0.0, 1.0);
-    
-    // Determine outline color based on selection
-    vec3 outlineColor = uOutlineColor;
-    if (selection.r > 0.5) {
-        outlineColor = uSelectedColor;
-    } else if (selection.g > 0.5) {
-        outlineColor = uHoverColor;
-    }
-    
-    // Apply glow effect
-    if (uGlowStrength > 0.0) {
-        vec3 glow = uGlowColor * uGlowStrength;
-        outlineColor = mix(outlineColor, glow, 0.5);
-    }
+    float edge = clamp(depthE, 0.0, 1.0);
     
     // Mix outline with original color
-    vec3 finalColor = mix(color.rgb, outlineColor, edge * uEdgeIntensity);
+    vec3 finalColor = mix(color.rgb, uOutlineColor, edge * uEdgeIntensity);
     
     FragColor = vec4(finalColor, color.a);
 }
@@ -187,8 +112,6 @@ EnhancedOutlinePass::~EnhancedOutlinePass() {
     if (m_quadFaces) { m_quadFaces->unref(); m_quadFaces = nullptr; }
     if (m_colorTexture) { m_colorTexture->unref(); m_colorTexture = nullptr; }
     if (m_depthTexture) { m_depthTexture->unref(); m_depthTexture = nullptr; }
-    if (m_normalTexture) { m_normalTexture->unref(); m_normalTexture = nullptr; }
-    if (m_selectionTexture) { m_selectionTexture->unref(); m_selectionTexture = nullptr; }
     
     // Clean up shader parameters
     if (m_uDepthWeight) { m_uDepthWeight->unref(); m_uDepthWeight = nullptr; }
@@ -197,13 +120,6 @@ EnhancedOutlinePass::~EnhancedOutlinePass() {
     if (m_uEdgeIntensity) { m_uEdgeIntensity->unref(); m_uEdgeIntensity = nullptr; }
     if (m_uThickness) { m_uThickness->unref(); m_uThickness = nullptr; }
     if (m_uOutlineColor) { m_uOutlineColor->unref(); m_uOutlineColor = nullptr; }
-    if (m_uSelectedColor) { m_uSelectedColor->unref(); m_uSelectedColor = nullptr; }
-    if (m_uHoverColor) { m_uHoverColor->unref(); m_uHoverColor = nullptr; }
-    if (m_uGlowColor) { m_uGlowColor->unref(); m_uGlowColor = nullptr; }
-    if (m_uGlowStrength) { m_uGlowStrength->unref(); m_uGlowStrength = nullptr; }
-    if (m_uGlowRadius) { m_uGlowRadius->unref(); m_uGlowRadius = nullptr; }
-    if (m_uDownsampleFactor) { m_uDownsampleFactor->unref(); m_uDownsampleFactor = nullptr; }
-    if (m_uEnableEarlyCulling) { m_uEnableEarlyCulling->unref(); m_uEnableEarlyCulling = nullptr; }
     
     if (m_tempSceneRoot) { m_tempSceneRoot->unref(); m_tempSceneRoot = nullptr; }
     
@@ -292,6 +208,12 @@ void EnhancedOutlinePass::setCustomOutlineCallback(OutlineCallback callback) {
 int EnhancedOutlinePass::extractObjectIdFromPath(SoPath* path) {
     if (!path) return -1;
     return path->getLength() % 1000; // Simple implementation
+}
+
+void EnhancedOutlinePass::setSelectionRoot(SoSelection* selectionRoot) {
+    // Store selection root for later use
+    // This is a placeholder implementation
+    LOG_INF("setSelectionRoot called", "EnhancedOutlinePass");
 }
 
 void EnhancedOutlinePass::attachOverlay() {
@@ -407,16 +329,16 @@ void EnhancedOutlinePass::setupTextures() {
     m_colorTexture = new SoSceneTexture2;
     m_colorTexture->ref();
     m_colorTexture->size.setValue(SbVec2s(0, 0)); // auto-size
-    m_colorTexture->wrapS = SoSceneTexture2::CLAMP_TO_EDGE;
-    m_colorTexture->wrapT = SoSceneTexture2::CLAMP_TO_EDGE;
+    m_colorTexture->wrapS = SoSceneTexture2::REPEAT;
+    m_colorTexture->wrapT = SoSceneTexture2::REPEAT;
     m_colorTexture->type = SoSceneTexture2::RGBA8;
     m_colorTexture->scene = m_captureRoot;
     
     m_depthTexture = new SoSceneTexture2;
     m_depthTexture->ref();
     m_depthTexture->size.setValue(SbVec2s(0, 0)); // auto-size
-    m_depthTexture->wrapS = SoSceneTexture2::CLAMP_TO_EDGE;
-    m_depthTexture->wrapT = SoSceneTexture2::CLAMP_TO_EDGE;
+    m_depthTexture->wrapS = SoSceneTexture2::REPEAT;
+    m_depthTexture->wrapT = SoSceneTexture2::REPEAT;
     m_depthTexture->type = SoSceneTexture2::DEPTH;
     m_depthTexture->scene = m_captureRoot;
     
@@ -431,42 +353,36 @@ void EnhancedOutlinePass::updateShaderParameters() {
         m_uDepthWeight = new SoShaderParameter1f;
         m_uDepthWeight->ref();
         m_uDepthWeight->name = "uDepthWeight";
-        m_program->parameter.set1Value(0, m_uDepthWeight);
     }
     
     if (!m_uNormalWeight) {
         m_uNormalWeight = new SoShaderParameter1f;
         m_uNormalWeight->ref();
         m_uNormalWeight->name = "uNormalWeight";
-        m_program->parameter.set1Value(1, m_uNormalWeight);
     }
     
     if (!m_uColorWeight) {
         m_uColorWeight = new SoShaderParameter1f;
         m_uColorWeight->ref();
         m_uColorWeight->name = "uColorWeight";
-        m_program->parameter.set1Value(2, m_uColorWeight);
     }
     
     if (!m_uEdgeIntensity) {
         m_uEdgeIntensity = new SoShaderParameter1f;
         m_uEdgeIntensity->ref();
         m_uEdgeIntensity->name = "uEdgeIntensity";
-        m_program->parameter.set1Value(3, m_uEdgeIntensity);
     }
     
     if (!m_uThickness) {
         m_uThickness = new SoShaderParameter1f;
         m_uThickness->ref();
         m_uThickness->name = "uThickness";
-        m_program->parameter.set1Value(4, m_uThickness);
     }
     
     if (!m_uOutlineColor) {
         m_uOutlineColor = new SoShaderParameter3f;
         m_uOutlineColor->ref();
         m_uOutlineColor->name = "uOutlineColor";
-        m_program->parameter.set1Value(5, m_uOutlineColor);
     }
     
     // Update parameter values

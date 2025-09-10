@@ -29,6 +29,7 @@ class SoTextureCoordinate2;
 class SoFaceSet;
 class SoTexture2;
 class SoCamera;
+class SoSelection;
 
 // Extended outline parameters
 struct EnhancedOutlineParams : public ImageOutlineParams {
@@ -37,10 +38,12 @@ struct EnhancedOutlineParams : public ImageOutlineParams {
     SbColor selectedColor{0.0f, 0.5f, 1.0f}; // Blue for selected
     SbColor hoverColor{1.0f, 0.5f, 0.0f};    // Orange for hover
     SbColor glowColor{1.0f, 1.0f, 0.0f};     // Yellow glow
+    SbColor backgroundColor{1.0f, 1.0f, 1.0f}; // Background color
     
     // Glow effects
     float glowStrength = 0.0f; // 0.0 - 1.0
     float glowRadius = 2.0f;   // Pixel radius for blur
+    float glowIntensity = 0.0f; // Glow intensity
     
     // Selection and hover
     bool enableSelectionOutline = true;
@@ -53,6 +56,13 @@ struct EnhancedOutlineParams : public ImageOutlineParams {
     int downsampleFactor = 1; // 1 = full resolution, 2 = half, etc.
     bool enableEarlyCulling = true;
     bool enableMultiSample = false;
+    
+    // Additional parameters
+    float colorWeight = 0.3f; // Color edge detection weight
+    float colorThreshold = 0.1f; // Color threshold
+    bool adaptiveThreshold = true; // Adaptive thresholding
+    float smoothingFactor = 1.0f; // Smoothing factor
+    float backgroundFade = 0.0f; // Background fade
     
     // Debug settings
     bool showDebugInfo = false;
@@ -120,6 +130,9 @@ public:
     
     // Helper method for extracting object ID from path
     int extractObjectIdFromPath(SoPath* path);
+    
+    // Selection root management
+    void setSelectionRoot(SoSelection* selectionRoot);
 
 private:
     // Core rendering pipeline
