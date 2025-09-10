@@ -30,10 +30,6 @@
 #include <chrono>
 #include <thread>
 
-// Static member initialization
-std::unordered_map<std::string, OBJReader::ReadResult> OBJReader::s_cache;
-std::mutex OBJReader::s_cacheMutex;
-
 OBJReader::ReadResult OBJReader::readFile(const std::string& filePath,
     const OptimizationOptions& options,
     ProgressCallback progress)
@@ -56,16 +52,6 @@ OBJReader::ReadResult OBJReader::readFile(const std::string& filePath,
             result.errorMessage = "File is not an OBJ file: " + filePath;
             LOG_ERR_S(result.errorMessage);
             return result;
-        }
-
-        // Check cache if enabled
-        if (options.enableCaching) {
-            std::lock_guard<std::mutex> lock(s_cacheMutex);
-            auto cacheIt = s_cache.find(filePath);
-            if (cacheIt != s_cache.end()) {
-                result = cacheIt->second;
-                return result;
-            }
         }
 
         if (progress) progress(10, "Parsing OBJ file");
@@ -114,17 +100,19 @@ OBJReader::ReadResult OBJReader::readFile(const std::string& filePath,
             return result;
         }
 
+        // Apply normal processing if enabled
+        if (options.enableNormalProcessing) {
+            LOG_INF_S("Normal processing enabled for OBJ import");
+            // Note: OBJ files already have normal processing built into createShapeFromOBJData
+        } else {
+            LOG_INF_S("Normal processing disabled for OBJ import");
+        }
+
         LOG_INF_S("OBJ OCCGeometry created successfully");
 
         result.geometries.push_back(geometry);
         result.rootShape = shape;
         result.success = true;
-
-        // Cache result if enabled
-        if (options.enableCaching) {
-            std::lock_guard<std::mutex> lock(s_cacheMutex);
-            s_cache[filePath] = result;
-        }
 
         auto totalEndTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);

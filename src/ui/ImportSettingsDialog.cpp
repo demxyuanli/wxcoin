@@ -8,7 +8,7 @@ wxBEGIN_EVENT_TABLE(ImportSettingsDialog, wxDialog)
 wxEND_EVENT_TABLE()
 
 ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
-    : wxDialog(parent, wxID_ANY, "Import Settings", wxDefaultPosition, wxSize(500, 600))
+    : wxDialog(parent, wxID_ANY, "Import Settings", wxDefaultPosition, wxSize(600, 600))
     , m_presetPanel(nullptr)
     , m_deflectionCtrl(nullptr)
     , m_angularDeflectionCtrl(nullptr)
@@ -16,6 +16,7 @@ ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
     , m_parallelCheckBox(nullptr)
     , m_adaptiveCheckBox(nullptr)
     , m_autoOptimizeCheckBox(nullptr)
+    , m_normalProcessingCheckBox(nullptr)  // New: Initialize normal processing checkbox
     , m_importModeChoice(nullptr)
     , m_previewText(nullptr)
     , m_deflection(1.0)
@@ -24,6 +25,7 @@ ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
     , m_parallelProcessing(true)
     , m_adaptiveMeshing(false)
     , m_autoOptimize(true)
+    , m_normalProcessing(false)  // Changed: Default to disabled
     , m_importMode(0)
 {
     createControls();
@@ -31,7 +33,7 @@ ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
     bindEvents();
     
     // Apply default balanced preset
-    applyPreset(1.0, 1.0, true, true);
+    applyPreset(1.0, 1.0, true, true, false);  // Changed: Default to disabled
 }
 
 ImportSettingsDialog::~ImportSettingsDialog()
@@ -40,45 +42,50 @@ ImportSettingsDialog::~ImportSettingsDialog()
 
 void ImportSettingsDialog::createControls()
 {
-    // Preset buttons
+    // Preset buttons - more compact
     m_presetPanel = new wxPanel(this);
-    wxButton* perfBtn = new wxButton(m_presetPanel, wxID_ANY, "[P] Performance");
-    wxButton* balBtn = new wxButton(m_presetPanel, wxID_ANY, "[B] Balanced");
-    wxButton* qualBtn = new wxButton(m_presetPanel, wxID_ANY, "[Q] Quality");
+    wxButton* perfBtn = new wxButton(m_presetPanel, wxID_ANY, "Performance");
+    wxButton* balBtn = new wxButton(m_presetPanel, wxID_ANY, "Balanced");
+    wxButton* qualBtn = new wxButton(m_presetPanel, wxID_ANY, "Quality");
     
     perfBtn->SetToolTip("Fast import with lower quality meshes");
     balBtn->SetToolTip("Balanced import settings");
     qualBtn->SetToolTip("High quality import, slower processing");
+    
+    // Style buttons
+    perfBtn->SetMinSize(wxSize(80, 28));
+    balBtn->SetMinSize(wxSize(80, 28));
+    qualBtn->SetMinSize(wxSize(80, 28));
     
     perfBtn->Bind(wxEVT_BUTTON, &ImportSettingsDialog::onPresetPerformance, this);
     balBtn->Bind(wxEVT_BUTTON, &ImportSettingsDialog::onPresetBalanced, this);
     qualBtn->Bind(wxEVT_BUTTON, &ImportSettingsDialog::onPresetQuality, this);
     
     wxBoxSizer* presetSizer = new wxBoxSizer(wxHORIZONTAL);
-    presetSizer->Add(perfBtn, 0, wxALL, 5);
-    presetSizer->Add(balBtn, 0, wxALL, 5);
-    presetSizer->Add(qualBtn, 0, wxALL, 5);
+    presetSizer->Add(perfBtn, 0, wxALL, 3);
+    presetSizer->Add(balBtn, 0, wxALL, 3);
+    presetSizer->Add(qualBtn, 0, wxALL, 3);
     m_presetPanel->SetSizer(presetSizer);
     
     // Mesh settings
     wxStaticBox* meshBox = new wxStaticBox(this, wxID_ANY, "Mesh Settings");
     
     m_deflectionCtrl = new wxSpinCtrlDouble(this, wxID_ANY, "1.0",
-        wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
+        wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS,
         0.01, 10.0, 1.0, 0.1);
     
     m_angularDeflectionCtrl = new wxSpinCtrlDouble(this, wxID_ANY, "1.0",
-        wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
+        wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS,
         0.1, 5.0, 1.0, 0.1);
     
     // Performance options
     wxStaticBox* perfBox = new wxStaticBox(this, wxID_ANY, "Performance Options");
     
-    m_lodCheckBox = new wxCheckBox(this, wxID_ANY, "Enable Level of Detail (LOD)");
+    m_lodCheckBox = new wxCheckBox(this, wxID_ANY, "Enable LOD");
     m_lodCheckBox->SetValue(true);
     m_lodCheckBox->SetToolTip("Automatically adjust mesh quality during interaction");
     
-    m_parallelCheckBox = new wxCheckBox(this, wxID_ANY, "Use Parallel Processing");
+    m_parallelCheckBox = new wxCheckBox(this, wxID_ANY, "Parallel Processing");
     m_parallelCheckBox->SetValue(true);
     m_parallelCheckBox->SetToolTip("Use multiple CPU cores for faster import");
     
@@ -86,9 +93,13 @@ void ImportSettingsDialog::createControls()
     m_adaptiveCheckBox->SetValue(false);
     m_adaptiveCheckBox->SetToolTip("Adjust mesh density based on curvature");
     
-    m_autoOptimizeCheckBox = new wxCheckBox(this, wxID_ANY, "Auto-optimize for size");
+    m_autoOptimizeCheckBox = new wxCheckBox(this, wxID_ANY, "Auto-optimize");
     m_autoOptimizeCheckBox->SetValue(true);
     m_autoOptimizeCheckBox->SetToolTip("Automatically adjust settings based on model size");
+    
+    m_normalProcessingCheckBox = new wxCheckBox(this, wxID_ANY, "Normal Processing");
+    m_normalProcessingCheckBox->SetValue(false);  // Changed: Default to disabled
+    m_normalProcessingCheckBox->SetToolTip("Fix face normal directions for consistent rendering");
     
     // Import mode
     wxStaticBox* modeBox = new wxStaticBox(this, wxID_ANY, "Import Mode");
@@ -102,12 +113,7 @@ void ImportSettingsDialog::createControls()
     m_importModeChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, modes);
     m_importModeChoice->SetSelection(0);
     
-    // Preview text
-    m_previewText = new wxStaticText(this, wxID_ANY, 
-        "Current settings: Balanced mode\n"
-        "Expected performance: Good\n"
-        "Mesh quality: Medium");
-    m_previewText->SetForegroundColour(wxColour(0, 128, 0));
+    // Preview text will be created in layoutControls() to avoid parent window issues
 }
 
 void ImportSettingsDialog::layoutControls()
@@ -116,75 +122,126 @@ void ImportSettingsDialog::layoutControls()
     
     // Title
     wxStaticText* title = new wxStaticText(this, wxID_ANY, 
-        "Configure import settings for optimal performance");
+        "Configure Import Settings");
     wxFont titleFont = title->GetFont();
-    titleFont.SetPointSize(titleFont.GetPointSize() + 2);
+    titleFont.SetPointSize(titleFont.GetPointSize() + 3);
     titleFont.SetWeight(wxFONTWEIGHT_BOLD);
     title->SetFont(titleFont);
     
-    mainSizer->Add(title, 0, wxALL | wxALIGN_CENTER, 10);
-    mainSizer->Add(new wxStaticLine(this), 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+    mainSizer->Add(title, 0, wxALL | wxALIGN_CENTER, 8);
+    mainSizer->Add(new wxStaticLine(this), 0, wxEXPAND | wxLEFT | wxRIGHT, 15);
+    
+    // Create a horizontal layout for better space utilization
+    wxBoxSizer* contentSizer = new wxBoxSizer(wxHORIZONTAL);
+    
+    // Left column
+    wxBoxSizer* leftColumn = new wxBoxSizer(wxVERTICAL);
     
     // Presets
     wxStaticText* presetLabel = new wxStaticText(this, wxID_ANY, "Quick Presets:");
-    mainSizer->Add(presetLabel, 0, wxALL, 10);
-    mainSizer->Add(m_presetPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 10);
+    wxFont labelFont = presetLabel->GetFont();
+    labelFont.SetWeight(wxFONTWEIGHT_BOLD);
+    presetLabel->SetFont(labelFont);
+    leftColumn->Add(presetLabel, 0, wxALL, 5);
+    leftColumn->Add(m_presetPanel, 0, wxEXPAND | wxALL, 5);
     
-    // Mesh settings
-    wxStaticBox* meshBox = new wxStaticBox(this, wxID_ANY, "Mesh Settings");
+    // Mesh settings - more compact
+    wxStaticBox* meshBox = new wxStaticBox(this, wxID_ANY, "Mesh Quality");
     wxStaticBoxSizer* meshSizer = new wxStaticBoxSizer(meshBox, wxVERTICAL);
     
-    wxFlexGridSizer* meshGrid = new wxFlexGridSizer(2, 2, 5, 10);
+    wxFlexGridSizer* meshGrid = new wxFlexGridSizer(2, 2, 3, 8);
     meshGrid->AddGrowableCol(1);
     
-    meshGrid->Add(new wxStaticText(this, wxID_ANY, "Mesh Deflection:"), 
+    meshGrid->Add(new wxStaticText(this, wxID_ANY, "Deflection:"), 
         0, wxALIGN_CENTER_VERTICAL);
     meshGrid->Add(m_deflectionCtrl, 1, wxEXPAND);
     
-    meshGrid->Add(new wxStaticText(this, wxID_ANY, "Angular Deflection:"), 
+    meshGrid->Add(new wxStaticText(this, wxID_ANY, "Angular:"), 
         0, wxALIGN_CENTER_VERTICAL);
     meshGrid->Add(m_angularDeflectionCtrl, 1, wxEXPAND);
     
-    meshSizer->Add(meshGrid, 0, wxEXPAND | wxALL, 10);
+    meshSizer->Add(meshGrid, 0, wxEXPAND | wxALL, 8);
     
     wxStaticText* deflectionHelp = new wxStaticText(this, wxID_ANY,
-        "Lower values = higher quality, slower import\n"
-        "Higher values = lower quality, faster import");
-    deflectionHelp->SetForegroundColour(wxColour(128, 128, 128));
-    meshSizer->Add(deflectionHelp, 0, wxALL, 10);
+        "Lower = higher quality, slower\nHigher = lower quality, faster");
+    deflectionHelp->SetForegroundColour(wxColour(100, 100, 100));
+    wxFont helpFont = deflectionHelp->GetFont();
+    helpFont.SetPointSize(helpFont.GetPointSize() - 1);
+    deflectionHelp->SetFont(helpFont);
+    meshSizer->Add(deflectionHelp, 0, wxALL, 5);
     
-    mainSizer->Add(meshSizer, 0, wxEXPAND | wxALL, 10);
+    leftColumn->Add(meshSizer, 0, wxEXPAND | wxALL, 5);
     
-    // Performance options
-    wxStaticBoxSizer* perfSizer = new wxStaticBoxSizer(
-        new wxStaticBox(this, wxID_ANY, "Performance Options"), wxVERTICAL);
+    // Performance options - more compact
+    wxStaticBox* perfBox = new wxStaticBox(this, wxID_ANY, "Performance");
+    wxStaticBoxSizer* perfSizer = new wxStaticBoxSizer(perfBox, wxVERTICAL);
     
-    perfSizer->Add(m_lodCheckBox, 0, wxALL, 5);
-    perfSizer->Add(m_parallelCheckBox, 0, wxALL, 5);
-    perfSizer->Add(m_adaptiveCheckBox, 0, wxALL, 5);
-    perfSizer->Add(m_autoOptimizeCheckBox, 0, wxALL, 5);
+    perfSizer->Add(m_lodCheckBox, 0, wxALL, 3);
+    perfSizer->Add(m_parallelCheckBox, 0, wxALL, 3);
+    perfSizer->Add(m_adaptiveCheckBox, 0, wxALL, 3);
+    perfSizer->Add(m_autoOptimizeCheckBox, 0, wxALL, 3);
+    perfSizer->Add(m_normalProcessingCheckBox, 0, wxALL, 3);
     
-    mainSizer->Add(perfSizer, 0, wxEXPAND | wxALL, 10);
+    leftColumn->Add(perfSizer, 0, wxEXPAND | wxALL, 5);
+    
+    // Right column
+    wxBoxSizer* rightColumn = new wxBoxSizer(wxVERTICAL);
     
     // Import mode
-    wxStaticBoxSizer* modeSizer = new wxStaticBoxSizer(
-        new wxStaticBox(this, wxID_ANY, "Import Mode"), wxVERTICAL);
+    wxStaticBox* modeBox = new wxStaticBox(this, wxID_ANY, "Import Mode");
+    wxStaticBoxSizer* modeSizer = new wxStaticBoxSizer(modeBox, wxVERTICAL);
     
-    modeSizer->Add(m_importModeChoice, 0, wxEXPAND | wxALL, 10);
+    modeSizer->Add(m_importModeChoice, 0, wxEXPAND | wxALL, 8);
     
-    mainSizer->Add(modeSizer, 0, wxEXPAND | wxALL, 10);
+    rightColumn->Add(modeSizer, 0, wxEXPAND | wxALL, 5);
     
-    // Preview
+    // Preview - enhanced
     wxStaticBox* previewBox = new wxStaticBox(this, wxID_ANY, "Settings Preview");
     wxStaticBoxSizer* previewSizer = new wxStaticBoxSizer(previewBox, wxVERTICAL);
-    previewSizer->Add(m_previewText, 0, wxEXPAND | wxALL, 10);
     
-    mainSizer->Add(previewSizer, 0, wxEXPAND | wxALL, 10);
+    // Add a background panel for better visual separation
+    wxPanel* previewPanel = new wxPanel(this);
+    previewPanel->SetBackgroundColour(wxColour(248, 248, 248));
     
-    // Buttons
+    // Create preview text with correct parent window
+    m_previewText = new wxStaticText(previewPanel, wxID_ANY, 
+        "Current settings: Balanced mode\n"
+        "Expected performance: Good\n"
+        "Mesh quality: Medium");
+    m_previewText->SetForegroundColour(wxColour(0, 150, 0));
+    
+    // Set font for preview text
+    wxFont previewFont = m_previewText->GetFont();
+    previewFont.SetPointSize(previewFont.GetPointSize() + 1);
+    m_previewText->SetFont(previewFont);
+    
+    // Add a border to the preview panel
+    wxBoxSizer* previewPanelSizer = new wxBoxSizer(wxVERTICAL);
+    previewPanelSizer->Add(m_previewText, 0, wxEXPAND | wxALL, 12);
+    previewPanel->SetSizer(previewPanelSizer);
+    
+    previewSizer->Add(previewPanel, 1, wxEXPAND | wxALL, 5);
+    
+    rightColumn->Add(previewSizer, 1, wxEXPAND | wxALL, 5);
+    
+    // Add columns to content sizer
+    contentSizer->Add(leftColumn, 0, wxEXPAND | wxALL, 8);
+    contentSizer->Add(rightColumn, 1, wxEXPAND | wxALL, 8);
+    
+    mainSizer->Add(contentSizer, 1, wxEXPAND | wxALL, 5);
+    
+    // Buttons - centered at bottom
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(new wxButton(this, wxID_OK, "OK"), 0, wxALL, 5);
-    buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxALL, 5);
+    wxButton* okBtn = new wxButton(this, wxID_OK, "OK");
+    wxButton* cancelBtn = new wxButton(this, wxID_CANCEL, "Cancel");
+    
+    // Style buttons
+    okBtn->SetDefault();
+    okBtn->SetMinSize(wxSize(80, 30));
+    cancelBtn->SetMinSize(wxSize(80, 30));
+    
+    buttonSizer->Add(okBtn, 0, wxALL, 5);
+    buttonSizer->Add(cancelBtn, 0, wxALL, 5);
     
     mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
     
@@ -203,52 +260,58 @@ void ImportSettingsDialog::bindEvents()
 void ImportSettingsDialog::onPresetPerformance(wxCommandEvent& event)
 {
     LOG_INF_S("Applying Performance preset for import");
-    applyPreset(2.0, 2.0, true, true);
+    applyPreset(2.0, 2.0, true, true, false);  // Performance: disable normal processing for speed
     m_importModeChoice->SetSelection(1); // Preview mode
 }
 
 void ImportSettingsDialog::onPresetBalanced(wxCommandEvent& event)
 {
     LOG_INF_S("Applying Balanced preset for import");
-    applyPreset(1.0, 1.0, true, true);
+    applyPreset(1.0, 1.0, true, true, false);  // Balanced: disable normal processing by default
     m_importModeChoice->SetSelection(0); // Standard mode
 }
 
 void ImportSettingsDialog::onPresetQuality(wxCommandEvent& event)
 {
     LOG_INF_S("Applying Quality preset for import");
-    applyPreset(0.2, 0.5, true, true);
+    applyPreset(0.2, 0.5, true, true, true);  // Quality: enable normal processing for best quality
     m_importModeChoice->SetSelection(2); // High quality mode
 }
 
 void ImportSettingsDialog::applyPreset(double deflection, double angular, 
-                                       bool lod, bool parallel)
+                                       bool lod, bool parallel, bool normalProcessing)
 {
     m_deflectionCtrl->SetValue(deflection);
     m_angularDeflectionCtrl->SetValue(angular);
     m_lodCheckBox->SetValue(lod);
     m_parallelCheckBox->SetValue(parallel);
+    m_normalProcessingCheckBox->SetValue(normalProcessing);
     
-    // Update preview
+    // Update preview with enhanced formatting
     wxString preview;
+    wxColour previewColor;
+    
     if (deflection >= 2.0) {
         preview = "Current settings: Performance mode\n"
                   "Expected performance: Very fast\n"
                   "Mesh quality: Low (suitable for preview)";
-        m_previewText->SetForegroundColour(wxColour(255, 128, 0));
+        previewColor = wxColour(255, 140, 0); // Orange
     } else if (deflection >= 1.0) {
         preview = "Current settings: Balanced mode\n"
                   "Expected performance: Good\n"
                   "Mesh quality: Medium";
-        m_previewText->SetForegroundColour(wxColour(0, 128, 0));
+        previewColor = wxColour(0, 150, 0); // Green
     } else {
         preview = "Current settings: Quality mode\n"
                   "Expected performance: Slower\n"
                   "Mesh quality: High (suitable for analysis)";
-        m_previewText->SetForegroundColour(wxColour(0, 0, 255));
+        previewColor = wxColour(0, 100, 200); // Blue
     }
     
-    m_previewText->SetLabel(preview);
+    if (m_previewText) {
+        m_previewText->SetLabel(preview);
+        m_previewText->SetForegroundColour(previewColor);
+    }
 }
 
 void ImportSettingsDialog::onDeflectionChange(wxSpinDoubleEvent& event)
@@ -257,8 +320,9 @@ void ImportSettingsDialog::onDeflectionChange(wxSpinDoubleEvent& event)
     double angular = m_angularDeflectionCtrl->GetValue();
     bool lod = m_lodCheckBox->GetValue();
     bool parallel = m_parallelCheckBox->GetValue();
+    bool normalProcessing = m_normalProcessingCheckBox->GetValue();
     
-    applyPreset(deflection, angular, lod, parallel);
+    applyPreset(deflection, angular, lod, parallel, normalProcessing);
 }
 
 void ImportSettingsDialog::onOK(wxCommandEvent& event)
@@ -270,6 +334,7 @@ void ImportSettingsDialog::onOK(wxCommandEvent& event)
     m_parallelProcessing = m_parallelCheckBox->GetValue();
     m_adaptiveMeshing = m_adaptiveCheckBox->GetValue();
     m_autoOptimize = m_autoOptimizeCheckBox->GetValue();
+    m_normalProcessing = m_normalProcessingCheckBox->GetValue();  // New: Save normal processing setting
     m_importMode = m_importModeChoice->GetSelection();
     
     LOG_INF_S(wxString::Format("Import settings saved: Deflection=%.2f, LOD=%s",

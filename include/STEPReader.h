@@ -97,29 +97,6 @@ public:
 	);
 
 	/**
-	 * @brief Clear the import cache
-	 */
-	static void clearCache();
-
-	/**
-	 * @brief Get cache statistics
-	 * @return String with cache statistics
-	 */
-	static std::string getCacheStats();
-
-	/**
-	 * @brief Set global optimization options
-	 * @param options New optimization options
-	 */
-	static void setGlobalOptimizationOptions(const OptimizationOptions& options);
-
-	/**
-	 * @brief Get current global optimization options
-	 * @return Current optimization options
-	 */
-	static OptimizationOptions getGlobalOptimizationOptions();
-	
-	/**
 	 * @brief Calculate combined bounding box of multiple geometries
 	 * @param geometries Vector of geometries
 	 * @param minPt Output minimum point
@@ -191,9 +168,7 @@ private:
 
 
 
-	// Static members for caching and optimization
-	static std::unordered_map<std::string, ReadResult> s_cache;
-	static std::mutex s_cacheMutex;
-	static OptimizationOptions s_globalOptions;
+
+	// Static members
 	static bool s_initialized;
 };

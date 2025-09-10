@@ -8,11 +8,11 @@
 #include "EdgeComponent.h"
 #include "rendering/RenderingToolkitAPI.h"
 
-bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& geom) {
+bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& geom, double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width) {
 	if (!geom) return false;
 	if (!geom->edgeComponent) geom->edgeComponent = std::make_unique<EdgeComponent>();
 	if (geom->edgeComponent->getEdgeNode(EdgeType::Original) != nullptr) return false;
-	geom->edgeComponent->extractOriginalEdges(geom->getShape());
+	geom->edgeComponent->extractOriginalEdges(geom->getShape(), samplingDensity, minLength, showLinesOnly, color, width);
 	return true;
 }
 

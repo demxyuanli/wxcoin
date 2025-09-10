@@ -168,9 +168,6 @@ std::vector<std::pair<std::string, STEPImportOptimizer::ImportStats>> STEPImport
 	for (const auto& profile : s_profiles) {
 		LOG_INF_S("Benchmarking profile: " + profile.name);
 
-		// Clear cache before each benchmark
-		STEPReader::clearCache();
-
 		auto result = STEPReader::readSTEPFile(filePath, profile.options);
 
 		ImportStats stats;

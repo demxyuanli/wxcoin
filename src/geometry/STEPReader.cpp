@@ -4,19 +4,8 @@
 #include "NormalValidator.h"
 
 // OpenCASCADE STEP import includes
-#include <STEPCAFControl_Reader.hxx>
 #include <STEPControl_Reader.hxx>
 #include <Interface_Static.hxx>
-#include <XSControl_WorkSession.hxx>
-#include <XSControl_TransferReader.hxx>
-#include <Transfer_TransientProcess.hxx>
-#include <APIHeaderSection_MakeHeader.hxx>
-#include <TDocStd_Document.hxx>
-#include <XCAFDoc_DocumentTool.hxx>
-#include <XCAFDoc_ShapeTool.hxx>
-#include <XCAFDoc_ColorTool.hxx>
-#include <TDF_LabelSequence.hxx>
-#include <TDF_Label.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS_Builder.hxx>
 #include <TopoDS_Compound.hxx>
@@ -36,14 +25,9 @@
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
-#include <climits>
-#include <cfloat>
 #include <chrono>
 #include <thread>
 #include <execution>
-
-// Add include at top
-#include <XCAFApp_Application.hxx>
 
 // GeometryReader interface implementation
 GeometryReader::ReadResult STEPReader::readFile(const std::string& filePath,
@@ -82,9 +66,6 @@ std::string STEPReader::getFileFilter() const
 }
 
 // Static member initialization
-std::unordered_map<std::string, STEPReader::ReadResult> STEPReader::s_cache;
-std::mutex STEPReader::s_cacheMutex;
-STEPReader::OptimizationOptions STEPReader::s_globalOptions;
 bool STEPReader::s_initialized = false;
 
 STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
@@ -107,16 +88,6 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 			result.errorMessage = "File is not a STEP file: " + filePath;
 			LOG_ERR_S(result.errorMessage);
 			return result;
-		}
-
-		// Check cache if enabled
-		if (options.enableCaching) {
-			std::lock_guard<std::mutex> lock(s_cacheMutex);
-			auto cacheIt = s_cache.find(filePath);
-			if (cacheIt != s_cache.end()) {
-				result = cacheIt->second;
-				return result;
-			}
 		}
 
 		// Initialize STEP reader
@@ -213,12 +184,6 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 			double scaleFactor = scaleGeometriesToReasonableSize(result.geometries);
 		}
 		if (progress) progress(92, "postprocess");
-
-		// Cache result if enabled
-		if (options.enableCaching) {
-			std::lock_guard<std::mutex> lock(s_cacheMutex);
-			s_cache[filePath] = result;
-		}
 
 		result.success = true;
 
@@ -444,11 +409,17 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 			}
 		}
 
-		// Apply normal direction consistency fix using improved NormalValidator
-		TopoDS_Shape consistentShape = NormalValidator::autoCorrectNormals(shape, name);
+		// Apply normal direction consistency fix only if enabled
+		TopoDS_Shape processedShape = shape;
+		if (options.enableNormalProcessing) {
+			processedShape = NormalValidator::autoCorrectNormals(shape, name);
+			LOG_INF_S("Applied normal processing for: " + name);
+		} else {
+			LOG_INF_S("Skipped normal processing for: " + name);
+		}
 		
 		auto geometry = std::make_shared<OCCGeometry>(name);
-		geometry->setShape(consistentShape);
+		geometry->setShape(processedShape);
 
 		// Set better default color for imported STEP models
 		Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
@@ -535,29 +506,7 @@ void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_
 	}
 }
 
-void STEPReader::clearCache()
-{
-	std::lock_guard<std::mutex> lock(s_cacheMutex);
-	s_cache.clear();
-	LOG_INF_S("STEP import cache cleared");
-}
 
-std::string STEPReader::getCacheStats()
-{
-	std::lock_guard<std::mutex> lock(s_cacheMutex);
-	return "Cache entries: " + std::to_string(s_cache.size());
-}
-
-void STEPReader::setGlobalOptimizationOptions(const OptimizationOptions& options)
-{
-	s_globalOptions = options;
-	LOG_INF_S("Global STEP optimization options updated");
-}
-
-STEPReader::OptimizationOptions STEPReader::getGlobalOptimizationOptions()
-{
-	return s_globalOptions;
-}
 
 bool STEPReader::calculateCombinedBoundingBox(
 	const std::vector<std::shared_ptr<OCCGeometry>>& geometries,

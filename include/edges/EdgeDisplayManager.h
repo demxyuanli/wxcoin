@@ -44,6 +44,9 @@ public:
 
 	// Appearance
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly);
+	
+	// Original edges parameters
+	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width);
 
 private:
 	SceneManager* m_sceneManager{ nullptr };
@@ -56,4 +59,14 @@ private:
 	std::thread m_featureEdgeThread;
 	FeatureEdgeParams m_lastFeatureParams{};
 	bool m_featureCacheValid{ false };
+	
+	// Original edges parameters
+	struct OriginalEdgeParams { 
+		double samplingDensity{ 80.0 }; 
+		double minLength{ 0.01 }; 
+		bool showLinesOnly{ false }; 
+		Quantity_Color color{ 1.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default red
+		double width{ 1.0 }; 
+	};
+	OriginalEdgeParams m_originalEdgeParams{};
 };

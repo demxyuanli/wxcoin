@@ -160,8 +160,4 @@ private:
      */
     bool parseMTLFile(const std::string& mtlFilePath,
         std::unordered_map<std::string, Material>& materials);
-
-    // Static members for caching
-    static std::unordered_map<std::string, ReadResult> s_cache;
-    static std::mutex s_cacheMutex;
 };

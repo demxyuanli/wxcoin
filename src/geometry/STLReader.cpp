@@ -34,10 +34,6 @@
 #include <future>
 #include <numeric>
 
-// Static member initialization
-std::unordered_map<std::string, STLReader::ReadResult> STLReader::s_cache;
-std::mutex STLReader::s_cacheMutex;
-
 STLReader::ReadResult STLReader::readFile(const std::string& filePath,
     const OptimizationOptions& options,
     ProgressCallback progress)
@@ -60,16 +56,6 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
             result.errorMessage = "File is not an STL file: " + filePath;
             LOG_ERR_S(result.errorMessage);
             return result;
-        }
-
-        // Check cache if enabled
-        if (options.enableCaching) {
-            std::lock_guard<std::mutex> lock(s_cacheMutex);
-            auto cacheIt = s_cache.find(filePath);
-            if (cacheIt != s_cache.end()) {
-                result = cacheIt->second;
-                return result;
-            }
         }
 
         if (progress) progress(10, "Detecting STL format");
@@ -132,17 +118,19 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
             return result;
         }
 
+        // Apply normal processing if enabled
+        if (options.enableNormalProcessing) {
+            LOG_INF_S("Normal processing enabled for STL import");
+            // Note: STL files already have normal processing built into createShapeFromSTLData
+        } else {
+            LOG_INF_S("Normal processing disabled for STL import");
+        }
+
         LOG_INF_S("STL OCCGeometry created successfully");
 
         result.geometries.push_back(geometry);
         result.rootShape = shape;
         result.success = true;
-
-        // Cache result if enabled
-        if (options.enableCaching) {
-            std::lock_guard<std::mutex> lock(s_cacheMutex);
-            s_cache[filePath] = result;
-        }
 
         auto totalEndTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);

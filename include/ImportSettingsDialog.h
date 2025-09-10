@@ -23,6 +23,7 @@ public:
     bool isParallelProcessing() const { return m_parallelProcessing; }
     bool isAdaptiveMeshing() const { return m_adaptiveMeshing; }
     bool isAutoOptimize() const { return m_autoOptimize; }
+    bool isNormalProcessing() const { return m_normalProcessing; }  // New: Normal processing control
     int getImportMode() const { return m_importMode; }
     
 private:
@@ -39,7 +40,7 @@ private:
     void onDeflectionChange(wxSpinDoubleEvent& event);
     
     // Apply preset values
-    void applyPreset(double deflection, double angular, bool lod, bool parallel);
+    void applyPreset(double deflection, double angular, bool lod, bool parallel, bool normalProcessing);
     
     // Controls
     wxPanel* m_presetPanel;
@@ -49,6 +50,7 @@ private:
     wxCheckBox* m_parallelCheckBox;
     wxCheckBox* m_adaptiveCheckBox;
     wxCheckBox* m_autoOptimizeCheckBox;
+    wxCheckBox* m_normalProcessingCheckBox;  // New: Normal processing checkbox
     wxChoice* m_importModeChoice;
     wxStaticText* m_previewText;
     
@@ -59,6 +61,7 @@ private:
     bool m_parallelProcessing;
     bool m_adaptiveMeshing;
     bool m_autoOptimize;
+    bool m_normalProcessing;  // New: Normal processing setting
     int m_importMode;
     
     wxDECLARE_EVENT_TABLE();

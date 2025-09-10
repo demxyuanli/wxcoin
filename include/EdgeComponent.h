@@ -18,7 +18,7 @@ public:
     EdgeComponent();
     ~EdgeComponent();
 
-    void extractOriginalEdges(const TopoDS_Shape& shape);
+    void extractOriginalEdges(const TopoDS_Shape& shape, double samplingDensity = 80.0, double minLength = 0.01, bool showLinesOnly = false, const Quantity_Color& color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB), double width = 1.0);
     void extractFeatureEdges(const TopoDS_Shape& shape, double featureAngle, double minLength, bool onlyConvex, bool onlyConcave);
     void extractMeshEdges(const TriangleMesh& mesh);
     void generateAllEdgeNodes();

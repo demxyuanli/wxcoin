@@ -297,31 +297,46 @@ TopoDS_Shape NormalValidator::correctFaceNormals(const TopoDS_Shape& shape, cons
     try {
         LOG_INF_S("Correcting face normals for: " + shapeName);
         
-        std::vector<TopoDS_Face> correctedFaces;
+        // Use ShapeFix_Shape to fix the shape
+        ShapeFix_Shape shapeFixer(shape);
+        shapeFixer.SetPrecision(1e-6);
+        shapeFixer.SetMaxTolerance(1e-3);
+        
+        // Perform the fix
+        shapeFixer.Perform();
+        
+        TopoDS_Shape fixedShape = shapeFixer.Shape();
+        if (fixedShape.IsNull()) {
+            LOG_WRN_S("ShapeFix failed for: " + shapeName + ", using original shape");
+            return shape;
+        }
+        
+        // Count how many faces were actually corrected by comparing orientations
         int correctedCount = 0;
         int totalFaces = 0;
-
-        // Process each face
-        for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
-            TopoDS_Face face = TopoDS::Face(exp.Current());
+        
+        // Compare original and fixed shapes to count corrections
+        TopExp_Explorer origExp(shape, TopAbs_FACE);
+        TopExp_Explorer fixedExp(fixedShape, TopAbs_FACE);
+        
+        while (origExp.More() && fixedExp.More()) {
+            TopoDS_Face origFace = TopoDS::Face(origExp.Current());
+            TopoDS_Face fixedFace = TopoDS::Face(fixedExp.Current());
             totalFaces++;
-
-            // Check if normal points outward
-            if (!isNormalOutward(face, shapeCenter)) {
-                // Reverse the face
-                TopoDS_Face reversedFace = reverseFace(face);
-                correctedFaces.push_back(reversedFace);
+            
+            // Check if orientation changed
+            if (origFace.Orientation() != fixedFace.Orientation()) {
                 correctedCount++;
-            } else {
-                correctedFaces.push_back(face);
             }
+            
+            origExp.Next();
+            fixedExp.Next();
         }
 
         LOG_INF_S("Corrected " + std::to_string(correctedCount) + " out of " + 
                  std::to_string(totalFaces) + " faces for: " + shapeName);
 
-        // Rebuild the shape with corrected faces
-        return rebuildShapeWithCorrectedFaces(shape, correctedFaces);
+        return fixedShape;
 
     } catch (const std::exception& e) {
         LOG_ERR_S("Exception correcting face normals for " + shapeName + ": " + std::string(e.what()));
@@ -417,19 +432,8 @@ TopoDS_Face NormalValidator::reverseFace(const TopoDS_Face& face) {
 }
 
 TopoDS_Shape NormalValidator::rebuildShapeWithCorrectedFaces(const TopoDS_Shape& originalShape, const std::vector<TopoDS_Face>& correctedFaces) {
-    if (originalShape.IsNull()) {
-        return originalShape;
-    }
-
-    try {
-        // For now, return the original shape
-        // In a full implementation, we would rebuild the shape with corrected faces
-        // This is complex because we need to maintain the topological structure
-        LOG_INF_S("Shape rebuilding with corrected faces (placeholder implementation)");
-        return originalShape;
-
-    } catch (const std::exception& e) {
-        LOG_ERR_S("Exception rebuilding shape: " + std::string(e.what()));
-        return originalShape;
-    }
+    // This function is no longer needed as we handle shape rebuilding directly in correctFaceNormals
+    // Return the original shape as a fallback
+    LOG_INF_S("rebuildShapeWithCorrectedFaces called but not used in new implementation");
+    return originalShape;
 }

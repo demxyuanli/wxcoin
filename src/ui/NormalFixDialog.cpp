@@ -30,6 +30,7 @@ EVT_LISTBOX(wxID_ANY, NormalFixDialog::onGeometrySelectionChanged)
 EVT_CHECKBOX(wxID_ANY, NormalFixDialog::onSettingsChanged)
 EVT_SPINCTRLDOUBLE(wxID_ANY, NormalFixDialog::onSpinCtrlChanged)
 EVT_COMMAND_SCROLL(wxID_ANY, NormalFixDialog::onSliderChanged)
+EVT_BUTTON(ID_PREVIEW_NORMALS, NormalFixDialog::onPreviewNormals)
 EVT_BUTTON(wxID_APPLY, NormalFixDialog::onApply)
 EVT_BUTTON(wxID_OK, NormalFixDialog::onOK)
 EVT_BUTTON(wxID_CANCEL, NormalFixDialog::onCancel)
@@ -72,7 +73,7 @@ void NormalFixDialog::createControls() {
     wxPanel* buttonPanel = new wxPanel(this);
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     
-    m_previewButton = new wxButton(buttonPanel, wxID_ANY, "Preview Normals");
+    m_previewButton = new wxButton(buttonPanel, ID_PREVIEW_NORMALS, "Preview Normals");
     m_applyButton = new wxButton(buttonPanel, wxID_APPLY, "Apply Fix");
     m_okButton = new wxButton(buttonPanel, wxID_OK, "OK");
     m_cancelButton = new wxButton(buttonPanel, wxID_CANCEL, "Cancel");
@@ -120,22 +121,35 @@ void NormalFixDialog::createInfoPage() {
     
     sizer->Add(infoSizer, 0, wxEXPAND | wxALL, 5);
     
-    // Normal details grid
-    wxStaticText* detailsLabel = new wxStaticText(m_infoPage, wxID_ANY, "Normal Details:");
-    sizer->Add(detailsLabel, 0, wxALL, 5);
+    // Normal statistics
+    wxStaticBoxSizer* statsSizer = new wxStaticBoxSizer(wxVERTICAL, m_infoPage, "Normal Statistics");
     
-    m_normalDetails = new wxGrid(m_infoPage, wxID_ANY);
-    m_normalDetails->CreateGrid(0, 4);
-    m_normalDetails->SetColLabelValue(0, "Face Index");
-    m_normalDetails->SetColLabelValue(1, "Normal Direction");
-    m_normalDetails->SetColLabelValue(2, "Quality");
-    m_normalDetails->SetColLabelValue(3, "Status");
-    m_normalDetails->SetColSize(0, 80);
-    m_normalDetails->SetColSize(1, 120);
-    m_normalDetails->SetColSize(2, 80);
-    m_normalDetails->SetColSize(3, 100);
+    m_correctFacesCount = new wxStaticText(m_infoPage, wxID_ANY, "Correct Faces: 0");
+    m_incorrectFacesCount = new wxStaticText(m_infoPage, wxID_ANY, "Incorrect Faces: 0");
+    m_noNormalFacesCount = new wxStaticText(m_infoPage, wxID_ANY, "No Normal Faces: 0");
+    m_qualityScore = new wxStaticText(m_infoPage, wxID_ANY, "Quality Score: 0.0%");
     
-    sizer->Add(m_normalDetails, 1, wxEXPAND | wxALL, 5);
+    statsSizer->Add(m_correctFacesCount, 0, wxALL, 2);
+    statsSizer->Add(m_incorrectFacesCount, 0, wxALL, 2);
+    statsSizer->Add(m_noNormalFacesCount, 0, wxALL, 2);
+    statsSizer->Add(m_qualityScore, 0, wxALL, 2);
+    
+    sizer->Add(statsSizer, 0, wxEXPAND | wxALL, 5);
+    
+    // Fix comparison statistics
+    wxStaticBoxSizer* comparisonSizer = new wxStaticBoxSizer(wxVERTICAL, m_infoPage, "Fix Comparison");
+    
+    m_preFixCorrectFaces = new wxStaticText(m_infoPage, wxID_ANY, "Before Fix - Correct Faces: N/A");
+    m_preFixIncorrectFaces = new wxStaticText(m_infoPage, wxID_ANY, "Before Fix - Incorrect Faces: N/A");
+    m_preFixQualityScore = new wxStaticText(m_infoPage, wxID_ANY, "Before Fix - Quality Score: N/A");
+    m_improvementInfo = new wxStaticText(m_infoPage, wxID_ANY, "Improvement: N/A");
+    
+    comparisonSizer->Add(m_preFixCorrectFaces, 0, wxALL, 2);
+    comparisonSizer->Add(m_preFixIncorrectFaces, 0, wxALL, 2);
+    comparisonSizer->Add(m_preFixQualityScore, 0, wxALL, 2);
+    comparisonSizer->Add(m_improvementInfo, 0, wxALL, 2);
+    
+    sizer->Add(comparisonSizer, 0, wxEXPAND | wxALL, 5);
     
     m_infoPage->SetSizer(sizer);
 }
@@ -168,7 +182,7 @@ void NormalFixDialog::createSettingsPage() {
     // Normal visualization settings
     wxStaticBoxSizer* visualSizer = new wxStaticBoxSizer(wxVERTICAL, m_settingsPage, "Normal Visualization");
     
-    m_showNormalsCheck = new wxCheckBox(m_settingsPage, wxID_ANY, "Show normal vectors");
+    m_showNormalsCheck = new wxCheckBox(m_settingsPage, wxID_ANY, "Show face normal vectors");
     m_showNormalsCheck->SetValue(m_settings.showNormals);
     
     wxBoxSizer* lengthSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -216,15 +230,15 @@ void NormalFixDialog::createPreviewPage() {
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     
     wxStaticText* previewLabel = new wxStaticText(m_previewPage, wxID_ANY, 
-                                                 "Preview normal vectors before applying fixes:");
+                                                 "Preview face normal vectors before applying fixes:");
     sizer->Add(previewLabel, 0, wxALL, 5);
     
     m_previewStatus = new wxStaticText(m_previewPage, wxID_ANY, "No preview generated yet");
     sizer->Add(m_previewStatus, 0, wxALL, 5);
     
     wxStaticText* noteLabel = new wxStaticText(m_previewPage, wxID_ANY, 
-                                             "Note: Preview will show normal vectors as arrows. "
-                                             "Green arrows indicate correct normals, red arrows indicate incorrect normals.");
+                                             "Note: Preview will show face normal vectors as arrows. "
+                                             "Green arrows indicate correct face normals, red arrows indicate incorrect face normals.");
     noteLabel->Wrap(400);
     sizer->Add(noteLabel, 0, wxALL, 5);
     
@@ -260,6 +274,14 @@ void NormalFixDialog::updateNormalInfo() {
         m_faceCount->SetLabel("Face Count: 0");
         m_normalQuality->SetLabel("Normal Quality: 0.0%");
         m_normalStatus->SetLabel("Status: Unknown");
+        m_correctFacesCount->SetLabel("Correct Faces: 0");
+        m_incorrectFacesCount->SetLabel("Incorrect Faces: 0");
+        m_noNormalFacesCount->SetLabel("No Normal Faces: 0");
+        m_qualityScore->SetLabel("Quality Score: 0.0%");
+        m_preFixCorrectFaces->SetLabel("Before Fix - Correct Faces: N/A");
+        m_preFixIncorrectFaces->SetLabel("Before Fix - Incorrect Faces: N/A");
+        m_preFixQualityScore->SetLabel("Before Fix - Quality Score: N/A");
+        m_improvementInfo->SetLabel("Improvement: N/A");
         return;
     }
     
@@ -279,6 +301,14 @@ void NormalFixDialog::updateNormalInfo() {
             m_faceCount->SetLabel("Face Count: 0");
             m_normalQuality->SetLabel("Normal Quality: 0.0%");
             m_normalStatus->SetLabel("Status: Invalid Shape");
+            m_correctFacesCount->SetLabel("Correct Faces: 0");
+            m_incorrectFacesCount->SetLabel("Incorrect Faces: 0");
+            m_noNormalFacesCount->SetLabel("No Normal Faces: 0");
+            m_qualityScore->SetLabel("Quality Score: 0.0%");
+            m_preFixCorrectFaces->SetLabel("Before Fix - Correct Faces: N/A");
+            m_preFixIncorrectFaces->SetLabel("Before Fix - Incorrect Faces: N/A");
+            m_preFixQualityScore->SetLabel("Before Fix - Quality Score: N/A");
+            m_improvementInfo->SetLabel("Improvement: N/A");
             return;
         }
         
@@ -290,6 +320,14 @@ void NormalFixDialog::updateNormalInfo() {
         m_faceCount->SetLabel("Face Count: Error");
         m_normalQuality->SetLabel("Normal Quality: Error");
         m_normalStatus->SetLabel("Status: Analysis Failed");
+        m_correctFacesCount->SetLabel("Correct Faces: Error");
+        m_incorrectFacesCount->SetLabel("Incorrect Faces: Error");
+        m_noNormalFacesCount->SetLabel("No Normal Faces: Error");
+        m_qualityScore->SetLabel("Quality Score: Error");
+        m_preFixCorrectFaces->SetLabel("Before Fix - Correct Faces: N/A");
+        m_preFixIncorrectFaces->SetLabel("Before Fix - Incorrect Faces: N/A");
+        m_preFixQualityScore->SetLabel("Before Fix - Quality Score: N/A");
+        m_improvementInfo->SetLabel("Improvement: N/A");
     }
 }
 
@@ -302,9 +340,6 @@ void NormalFixDialog::analyzeFaceNormals(const TopoDS_Shape& shape, const std::s
     int incorrectFaces = 0;
     int noNormalFaces = 0;
     
-    // Clear and prepare the grid
-    m_normalDetails->ClearGrid();
-    
     // Analyze each face
     for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
         TopoDS_Face face = TopoDS::Face(exp.Current());
@@ -312,43 +347,16 @@ void NormalFixDialog::analyzeFaceNormals(const TopoDS_Shape& shape, const std::s
         
         // Analyze this face
         bool hasNormal = NormalValidator::analyzeFaceNormal(face, shapeCenter);
-        bool isCorrect = false;
-        std::string normalDirection = "Unknown";
-        std::string status = "Unknown";
         
         if (hasNormal) {
-            isCorrect = NormalValidator::isNormalOutward(face, shapeCenter);
+            bool isCorrect = NormalValidator::isNormalOutward(face, shapeCenter);
             if (isCorrect) {
                 correctFaces++;
-                status = "Correct";
-                normalDirection = "Outward";
             } else {
                 incorrectFaces++;
-                status = "Incorrect";
-                normalDirection = "Inward";
             }
         } else {
             noNormalFaces++;
-            status = "No Normal";
-            normalDirection = "N/A";
-        }
-        
-        // Add row to grid
-        m_normalDetails->AppendRows(1);
-        int rowIndex = totalFaces - 1;
-        
-        m_normalDetails->SetCellValue(rowIndex, 0, wxString::Format("%d", rowIndex));
-        m_normalDetails->SetCellValue(rowIndex, 1, normalDirection);
-        m_normalDetails->SetCellValue(rowIndex, 2, wxString::Format("%.1f%%", hasNormal ? (isCorrect ? 100.0 : 0.0) : 0.0));
-        m_normalDetails->SetCellValue(rowIndex, 3, status);
-        
-        // Set cell colors based on status
-        if (status == "Correct") {
-            m_normalDetails->SetCellBackgroundColour(rowIndex, 3, wxColour(200, 255, 200)); // Light green
-        } else if (status == "Incorrect") {
-            m_normalDetails->SetCellBackgroundColour(rowIndex, 3, wxColour(255, 200, 200)); // Light red
-        } else {
-            m_normalDetails->SetCellBackgroundColour(rowIndex, 3, wxColour(255, 255, 200)); // Light yellow
         }
     }
     
@@ -366,14 +374,104 @@ void NormalFixDialog::analyzeFaceNormals(const TopoDS_Shape& shape, const std::s
         m_normalStatus->SetLabel("Status: Poor");
     }
     
-    // Refresh the grid
-    m_normalDetails->Refresh();
+    // Update statistics
+    m_correctFacesCount->SetLabel(wxString::Format("Correct Faces: %d", correctFaces));
+    m_incorrectFacesCount->SetLabel(wxString::Format("Incorrect Faces: %d", incorrectFaces));
+    m_noNormalFacesCount->SetLabel(wxString::Format("No Normal Faces: %d", noNormalFaces));
+    m_qualityScore->SetLabel(wxString::Format("Quality Score: %.1f%%", qualityScore * 100));
+    
+    // Update comparison statistics if we have pre-fix data
+    if (m_preFixStats.hasData) {
+        m_preFixCorrectFaces->SetLabel(wxString::Format("Before Fix - Correct Faces: %d", m_preFixStats.correctFaces));
+        m_preFixIncorrectFaces->SetLabel(wxString::Format("Before Fix - Incorrect Faces: %d", m_preFixStats.incorrectFaces));
+        m_preFixQualityScore->SetLabel(wxString::Format("Before Fix - Quality Score: %.1f%%", m_preFixStats.qualityScore * 100));
+        
+        // Calculate improvement
+        double improvement = qualityScore - m_preFixStats.qualityScore;
+        if (improvement > 0) {
+            m_improvementInfo->SetLabel(wxString::Format("Improvement: +%.1f%%", improvement * 100));
+        } else if (improvement < 0) {
+            m_improvementInfo->SetLabel(wxString::Format("Improvement: %.1f%%", improvement * 100));
+        } else {
+            m_improvementInfo->SetLabel("Improvement: No change");
+        }
+    }
     
     LOG_INF_S("Face analysis completed for " + shapeName + ": " + 
              std::to_string(totalFaces) + " faces, " + 
              std::to_string(correctFaces) + " correct, " + 
              std::to_string(incorrectFaces) + " incorrect, " + 
              std::to_string(noNormalFaces) + " no normals");
+}
+
+void NormalFixDialog::saveCurrentStatistics() {
+    if (!m_viewer) return;
+    
+    int selection = m_geometryList->GetSelection();
+    if (selection == wxNOT_FOUND) {
+        m_preFixStats.hasData = false;
+        return;
+    }
+    
+    wxString geometryName = m_geometryList->GetString(selection);
+    auto geometry = m_viewer->findGeometry(geometryName.ToStdString());
+    
+    if (!geometry) {
+        m_preFixStats.hasData = false;
+        return;
+    }
+    
+    try {
+        const TopoDS_Shape& shape = geometry->getShape();
+        if (shape.IsNull()) {
+            m_preFixStats.hasData = false;
+            return;
+        }
+        
+        // Calculate shape center for normal direction analysis
+        gp_Pnt shapeCenter = NormalValidator::calculateShapeCenter(shape);
+        
+        int totalFaces = 0;
+        int correctFaces = 0;
+        int incorrectFaces = 0;
+        int noNormalFaces = 0;
+        
+        // Analyze each face
+        for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+            TopoDS_Face face = TopoDS::Face(exp.Current());
+            totalFaces++;
+            
+            // Analyze this face
+            bool hasNormal = NormalValidator::analyzeFaceNormal(face, shapeCenter);
+            
+            if (hasNormal) {
+                bool isCorrect = NormalValidator::isNormalOutward(face, shapeCenter);
+                if (isCorrect) {
+                    correctFaces++;
+                } else {
+                    incorrectFaces++;
+                }
+            } else {
+                noNormalFaces++;
+            }
+        }
+        
+        // Save statistics
+        m_preFixStats.correctFaces = correctFaces;
+        m_preFixStats.incorrectFaces = incorrectFaces;
+        m_preFixStats.noNormalFaces = noNormalFaces;
+        m_preFixStats.qualityScore = totalFaces > 0 ? static_cast<double>(correctFaces) / totalFaces : 0.0;
+        m_preFixStats.hasData = true;
+        
+        LOG_INF_S("Pre-fix statistics saved: " + std::to_string(correctFaces) + " correct, " + 
+                 std::to_string(incorrectFaces) + " incorrect, " + 
+                 std::to_string(noNormalFaces) + " no normals, quality: " + 
+                 std::to_string(m_preFixStats.qualityScore * 100) + "%");
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Error saving pre-fix statistics: " + std::string(e.what()));
+        m_preFixStats.hasData = false;
+    }
 }
 
 void NormalFixDialog::onGeometrySelectionChanged(wxCommandEvent& event) {
@@ -440,16 +538,16 @@ void NormalFixDialog::onPreviewNormals(wxCommandEvent& event) {
         return;
     }
     
-    // Toggle normal display
+    // Toggle face normal display
     bool showNormals = m_showNormalsCheck->GetValue();
     if (showNormals) {
-        // Enable normal display
-        m_viewer->setShowNormals(true);
-        m_previewStatus->SetLabel("Normal vectors displayed for: " + geometryName);
+        // Enable face normal display
+        m_viewer->setShowFaceNormalLines(true);
+        m_previewStatus->SetLabel("Face normal vectors displayed for: " + geometryName);
     } else {
-        // Disable normal display
-        m_viewer->setShowNormals(false);
-        m_previewStatus->SetLabel("Normal vectors hidden");
+        // Disable face normal display
+        m_viewer->setShowFaceNormalLines(false);
+        m_previewStatus->SetLabel("Face normal vectors hidden");
     }
     
     // Refresh the viewer
@@ -485,6 +583,25 @@ void NormalFixDialog::onApply(wxCommandEvent& event) {
         return;
     }
     
+    // Check if current selected geometry will be processed
+    bool currentGeometryProcessed = false;
+    int selection = m_geometryList->GetSelection();
+    std::string currentGeometryName;
+    if (selection != wxNOT_FOUND) {
+        currentGeometryName = m_geometryList->GetString(selection).ToStdString();
+    }
+    
+    // Save current statistics before fix (for comparison) only if current geometry will be processed
+    if (!currentGeometryName.empty()) {
+        for (const auto& geometry : geometries) {
+            if (geometry && geometry->getName() == currentGeometryName) {
+                currentGeometryProcessed = true;
+                saveCurrentStatistics();
+                break;
+            }
+        }
+    }
+    
     // Apply normal correction
     int correctedCount = 0;
     int totalCount = geometries.size();
@@ -498,13 +615,25 @@ void NormalFixDialog::onApply(wxCommandEvent& event) {
         // Check if correction is needed based on quality threshold
         if (m_settings.autoCorrect) {
             double quality = NormalValidator::getNormalQualityScore(originalShape);
+            LOG_INF_S("Geometry " + geometry->getName() + " quality score: " + std::to_string(quality));
+            
             if (quality < m_settings.qualityThreshold) {
+                LOG_INF_S("Applying normal correction to: " + geometry->getName());
+                
                 // Apply normal correction
                 TopoDS_Shape correctedShape = NormalValidator::autoCorrectNormals(originalShape, geometry->getName());
+                
+                // Verify the correction worked
+                double newQuality = NormalValidator::getNormalQualityScore(correctedShape);
+                LOG_INF_S("After correction, quality score: " + std::to_string(newQuality));
                 
                 // Update the geometry with corrected shape
                 geometry->setShape(correctedShape);
                 correctedCount++;
+                
+                LOG_INF_S("Successfully corrected normals for: " + geometry->getName());
+            } else {
+                LOG_INF_S("Geometry " + geometry->getName() + " already has good normals (quality: " + std::to_string(quality) + ")");
             }
         }
     }
@@ -516,8 +645,10 @@ void NormalFixDialog::onApply(wxCommandEvent& event) {
     wxString message = wxString::Format("Normal fix applied to %d out of %d geometries", correctedCount, totalCount);
     wxMessageBox(message, "Normal Fix Complete", wxOK | wxICON_INFORMATION);
     
-    // Update geometry info to reflect changes
-    updateGeometryInfo();
+    // Update current geometry info to reflect changes only if current geometry was processed
+    if (currentGeometryProcessed) {
+        updateNormalInfo();
+    }
 }
 
 void NormalFixDialog::onOK(wxCommandEvent& event) {

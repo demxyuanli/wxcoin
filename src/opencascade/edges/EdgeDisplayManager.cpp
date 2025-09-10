@@ -9,6 +9,7 @@
 #include "EdgeComponent.h"
 #include "edges/EdgeGenerationService.h"
 #include "edges/EdgeRenderApplier.h"
+#include "logger/Logger.h"
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "ViewRefreshManager.h"
@@ -58,6 +59,19 @@ void EdgeDisplayManager::setShowHighlightEdges(bool show, const MeshParameters& 
 void EdgeDisplayManager::setShowNormalLines(bool show, const MeshParameters& meshParams) { m_flags.showNormalLines = show; updateAll(meshParams); }
 void EdgeDisplayManager::setShowFaceNormalLines(bool show, const MeshParameters& meshParams) { m_flags.showFaceNormalLines = show; updateAll(meshParams); }
 
+void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width) {
+	m_originalEdgeParams.samplingDensity = samplingDensity;
+	m_originalEdgeParams.minLength = minLength;
+	m_originalEdgeParams.showLinesOnly = showLinesOnly;
+	m_originalEdgeParams.color = color;
+	m_originalEdgeParams.width = width;
+	
+	LOG_INF_S("Original edges parameters set in EdgeDisplayManager: density=" + std::to_string(samplingDensity) + 
+		", minLength=" + std::to_string(minLength) + 
+		", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
+		", width=" + std::to_string(width));
+}
+
 void EdgeDisplayManager::updateAll(const MeshParameters& meshParams) {
 	if (!m_geometries) return;
 	EdgeGenerationService generator;
@@ -68,7 +82,8 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams) {
 		g->edgeComponent->edgeFlags = m_flags;
 
 		if (m_flags.showOriginalEdges) {
-			generator.ensureOriginalEdges(g);
+			generator.ensureOriginalEdges(g, m_originalEdgeParams.samplingDensity, m_originalEdgeParams.minLength, 
+				m_originalEdgeParams.showLinesOnly, m_originalEdgeParams.color, m_originalEdgeParams.width);
 		}
 		bool needMesh = false;
 		if (m_flags.showMeshEdges && g->edgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) needMesh = true;

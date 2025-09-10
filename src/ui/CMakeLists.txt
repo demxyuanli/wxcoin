@@ -49,11 +49,13 @@ set_target_properties(UIDialogRendering PROPERTIES FOLDER "UI")
 add_library(UIDialogEdges STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FeatureEdgesParamDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/OriginalEdgesParamDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OutlineSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OutlinePreviewCanvas.cpp
 
     ${CMAKE_SOURCE_DIR}/include/EdgeSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/FeatureEdgesParamDialog.h
+    ${CMAKE_SOURCE_DIR}/include/OriginalEdgesParamDialog.h
     ${CMAKE_SOURCE_DIR}/include/ui/OutlineSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/ui/OutlinePreviewCanvas.h
 

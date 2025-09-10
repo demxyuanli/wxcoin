@@ -333,14 +333,14 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
 	// Add material node with custom properties
 	SoMaterial* material = new SoMaterial;
 	if (selected) {
-		// Selected geometry - use bright highlight color for better visibility
-		// Use bright yellow/orange color for selection highlight
-		material->diffuseColor.setValue(1.0f, 0.8f, 0.0f);  // Bright yellow
-		material->ambientColor.setValue(0.3f, 0.3f, 0.0f);   // Darker yellow ambient
-		material->specularColor.setValue(1.0f, 1.0f, 0.5f); // Bright specular
+		// Selected geometry - use light orange color for better visibility
+		// Use light orange color for selection highlight
+		material->diffuseColor.setValue(1.0f, 0.7f, 0.3f);  // Light orange
+		material->ambientColor.setValue(0.4f, 0.3f, 0.1f);   // Darker orange ambient
+		material->specularColor.setValue(1.0f, 0.8f, 0.4f); // Light orange specular
 		material->shininess.setValue(0.8f);                 // High shininess for highlight
 		material->transparency.setValue(0.0f);              // No transparency for selected
-		material->emissiveColor.setValue(0.2f, 0.2f, 0.0f); // Slight emission for glow effect
+		material->emissiveColor.setValue(0.2f, 0.15f, 0.05f); // Slight orange emission for glow effect
 	}
 	else {
 		// Use custom material properties including emissive color

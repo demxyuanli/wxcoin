@@ -9,7 +9,7 @@ class EdgeGenerationService {
 public:
 	EdgeGenerationService() = default;
 
-	bool ensureOriginalEdges(std::shared_ptr<OCCGeometry>& geom);
+	bool ensureOriginalEdges(std::shared_ptr<OCCGeometry>& geom, double samplingDensity = 80.0, double minLength = 0.01, bool showLinesOnly = false, const Quantity_Color& color = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), double width = 1.0);
 	bool ensureFeatureEdges(std::shared_ptr<OCCGeometry>& geom,
 		double featureAngleDeg,
 		double minLength,

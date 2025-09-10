@@ -24,6 +24,11 @@ class OCCGeometry;
 // Forward declarations
 class TopoDS_Shape;
 
+// Button IDs
+enum {
+    ID_PREVIEW_NORMALS = wxID_HIGHEST + 1
+};
+
 /**
  * @brief Dialog for normal fixing parameters and geometry information
  */
@@ -59,6 +64,7 @@ private:
     void updateNormalInfo();
     void updateSettings();
     void analyzeFaceNormals(const TopoDS_Shape& shape, const std::string& shapeName);
+    void saveCurrentStatistics();
     void onGeometrySelectionChanged(wxCommandEvent& event);
     void onSettingsChanged(wxCommandEvent& event);
     void onSpinCtrlChanged(wxSpinDoubleEvent& event);
@@ -83,7 +89,14 @@ private:
     wxStaticText* m_faceCount;
     wxStaticText* m_normalQuality;
     wxStaticText* m_normalStatus;
-    wxGrid* m_normalDetails;
+    wxStaticText* m_correctFacesCount;
+    wxStaticText* m_incorrectFacesCount;
+    wxStaticText* m_noNormalFacesCount;
+    wxStaticText* m_qualityScore;
+    wxStaticText* m_preFixCorrectFaces;
+    wxStaticText* m_preFixIncorrectFaces;
+    wxStaticText* m_preFixQualityScore;
+    wxStaticText* m_improvementInfo;
     
     // Settings page controls
     wxCheckBox* m_autoCorrectCheck;
@@ -108,6 +121,16 @@ private:
     
     // Current settings
     NormalFixSettings m_settings;
+    
+    // Statistics before fix (for comparison)
+    struct PreFixStats {
+        int correctFaces = 0;
+        int incorrectFaces = 0;
+        int noNormalFaces = 0;
+        double qualityScore = 0.0;
+        bool hasData = false;
+    };
+    PreFixStats m_preFixStats;
     
     DECLARE_EVENT_TABLE()
 };

@@ -225,6 +225,7 @@ public:
 
 	EdgeDisplayFlags globalEdgeFlags;
 	void setShowOriginalEdges(bool show) override;
+	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width);
 	void setShowFeatureEdges(bool show) override;
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) override;
 	void setShowMeshEdges(bool show) override;
@@ -323,6 +324,13 @@ private:
 	// Normal consistency settings
 	bool m_normalConsistencyMode;
 	bool m_normalDebugMode;
+
+	// Original edges parameters
+	double m_originalEdgesSamplingDensity = 80.0;
+	double m_originalEdgesMinLength = 0.01;
+	bool m_originalEdgesShowLinesOnly = false;
+	wxColour m_originalEdgesColor = wxColour(255, 255, 255);
+	double m_originalEdgesWidth = 1.0;
 
 	Quantity_Color m_defaultColor;
 	double m_defaultTransparency;

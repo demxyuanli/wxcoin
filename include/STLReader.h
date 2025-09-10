@@ -169,8 +169,4 @@ private:
      * @return true if read successful
      */
     bool readBinaryData(std::ifstream& file, void* data, size_t size);
-
-    // Static members for caching
-    static std::unordered_map<std::string, ReadResult> s_cache;
-    static std::mutex s_cacheMutex;
 };

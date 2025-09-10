@@ -39,6 +39,7 @@ public:
         bool enableShapeAnalysis = false;
         bool enableCaching = true;
         bool enableBatchOperations = true;
+        bool enableNormalProcessing = false;  // Changed: Default to disabled
         int maxThreads = 4;
         double precision = 0.01;
         double meshDeflection = 0.1;

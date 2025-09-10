@@ -48,12 +48,16 @@ EdgeComponent::~EdgeComponent() {
 	if (silhouetteEdgeNode) silhouetteEdgeNode->unref();
 }
 
-void EdgeComponent::extractOriginalEdges(const TopoDS_Shape& shape) {
+void EdgeComponent::extractOriginalEdges(const TopoDS_Shape& shape, double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width) {
 	std::vector<gp_Pnt> points;
 	std::vector<int32_t> indices;
 	int pointIndex = 0;
 
-	LOG_INF_S("Extracting original edges from shape");
+	LOG_INF_S("Extracting original edges from shape with sampling density: " + std::to_string(samplingDensity) + 
+		", min length: " + std::to_string(minLength) + 
+		", lines only: " + std::string(showLinesOnly ? "true" : "false") +
+		", color: (" + std::to_string(color.Red()) + ", " + std::to_string(color.Green()) + ", " + std::to_string(color.Blue()) + ")" +
+		", width: " + std::to_string(width));
 
 	for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
 		TopoDS_Edge edge = TopoDS::Edge(exp.Current());
@@ -65,19 +69,40 @@ void EdgeComponent::extractOriginalEdges(const TopoDS_Shape& shape) {
 			BRepAdaptor_Curve adaptor(edge);
 			GeomAbs_CurveType curveType = adaptor.GetType();
 
+			// Check minimum length filter
+			gp_Pnt startPoint = curve->Value(first);
+			gp_Pnt endPoint = curve->Value(last);
+			double edgeLength = startPoint.Distance(endPoint);
+			
+			// For closed curves, use approximate arc length
+			if (edgeLength < minLength) {
+				Standard_Real curveLength = last - first;
+				int numSamples = std::max(8, static_cast<int>(curveLength * 50));
+				numSamples = std::min(numSamples, 100);
+				double approximateLength = 0.0;
+				gp_Pnt prev = curve->Value(first);
+				for (int i = 1; i <= numSamples; ++i) {
+					Standard_Real t = first + (last - first) * i / numSamples;
+					gp_Pnt cur = curve->Value(t);
+					approximateLength += prev.Distance(cur);
+					prev = cur;
+				}
+				if (approximateLength < minLength) {
+					continue; // Skip this edge
+				}
+			}
+
 			std::vector<gp_Pnt> edgePoints;
 
-			if (curveType == GeomAbs_Line) {
-				// For lines, just use start and end points
-				gp_Pnt startPoint = curve->Value(first);
-				gp_Pnt endPoint = curve->Value(last);
+			if (curveType == GeomAbs_Line || showLinesOnly) {
+				// For lines or when lines-only mode is enabled, just use start and end points
 				edgePoints.push_back(startPoint);
 				edgePoints.push_back(endPoint);
 			}
 			else {
-				// For curves, use moderate sampling; dense sampling will be applied only on-demand
+				// For curves, use adaptive sampling based on density parameter
 				Standard_Real curveLength = last - first;
-				int numSamples = std::max(32, static_cast<int>(curveLength * 80));
+				int numSamples = std::max(8, static_cast<int>(curveLength * samplingDensity));
 				numSamples = std::min(numSamples, 200);
 
 				for (int i = 0; i <= numSamples; ++i) {
@@ -105,13 +130,13 @@ void EdgeComponent::extractOriginalEdges(const TopoDS_Shape& shape) {
 
 	if (originalEdgeNode) originalEdgeNode->unref();
 
-	// Create material for original edges
+	// Create material for original edges with custom color
 	SoMaterial* mat = new SoMaterial;
-	mat->diffuseColor.setValue(1, 1, 1); // White
+	mat->diffuseColor.setValue(color.Red(), color.Green(), color.Blue());
 
-	// Create draw style for lines
+	// Create draw style for lines with custom width
 	SoDrawStyle* drawStyle = new SoDrawStyle;
-	drawStyle->lineWidth = 1.0f; // Normal line width
+	drawStyle->lineWidth = static_cast<float>(width);
 
 	// Create coordinates
 	SoCoordinate3* coords = new SoCoordinate3;
@@ -134,6 +159,9 @@ void EdgeComponent::extractOriginalEdges(const TopoDS_Shape& shape) {
 	// Store the separator as originalEdgeNode for proper display management
 	originalEdgeNode = sep;
 	originalEdgeNode->ref();
+
+	LOG_INF_S("Original edge extraction complete: " + std::to_string(points.size()) + " points, " +
+		std::to_string(indices.size() / 3) + " line segments");
 }
 void EdgeComponent::extractFeatureEdges(const TopoDS_Shape& shape, double featureAngle, double minLength, bool onlyConvex, bool onlyConcave) {
 	std::vector<gp_Pnt> points;
