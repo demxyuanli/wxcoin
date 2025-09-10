@@ -4,7 +4,12 @@
 #include <wx/dc.h>
 #include <wx/dcclient.h>
 #include <wx/colour.h>
+#include <wx/timer.h>
+#include <wx/event.h>
 #include <memory>
+#include <chrono>
+#include <vector>
+#include <map>
 #include "viewer/EnhancedOutlinePass.h"
 
 class SoSeparator;
@@ -18,69 +23,71 @@ class SceneManager;
  * - 实时参数调整预览
  * - 多种调试模式
  * - 性能监控
- * - 交互式模型操作
- * - 选择状态模拟
+ * - 交互式模型选择
+ * - 自动旋转和动画
  */
 class EnhancedOutlinePreviewCanvas : public wxGLCanvas {
 public:
     EnhancedOutlinePreviewCanvas(wxWindow* parent, wxWindowID id = wxID_ANY,
                                 const wxPoint& pos = wxDefaultPosition,
-                                const wxSize& size = wxDefaultSize);
+                                const wxSize& size = wxDefaultSize,
+                                long style = wxWANTS_CHARS);
     ~EnhancedOutlinePreviewCanvas();
-    
-    // Parameter management
+
+    // 参数更新
     void updateOutlineParams(const EnhancedOutlineParams& params);
     EnhancedOutlineParams getOutlineParams() const;
-    
+
     void updateSelectionConfig(const SelectionOutlineConfig& config);
     SelectionOutlineConfig getSelectionConfig() const;
-    
-    // Debug and visualization
+
+    // 调试模式
     void setDebugMode(OutlineDebugMode mode);
     OutlineDebugMode getDebugMode() const;
-    
+
+    // 性能模式
     void setPerformanceMode(bool enabled);
     void setQualityMode(bool enabled);
     void setBalancedMode();
-    
-    // Color management
+
+    // 颜色设置
     void setBackgroundColor(const wxColour& color);
     void setOutlineColor(const wxColour& color);
     void setGlowColor(const wxColour& color);
     void setGeometryColor(const wxColour& color);
     void setHoverColor(const wxColour& color);
     void setSelectionColor(const wxColour& color);
-    
-    // Selection simulation
+
+    // 选择管理
     void setSelectedObjects(const std::vector<int>& objects);
     void setHoveredObject(int objectId);
     void clearSelection();
     void clearHover();
-    
-    // Performance monitoring
+
+    // 性能信息
     struct PerformanceInfo {
         float frameTime{ 0.0f };
         float averageFrameTime{ 0.0f };
         int frameCount{ 0 };
-        bool isOptimized{ false };
         std::string performanceMode{ "Balanced" };
+        bool isOptimized{ false };
     };
     
     PerformanceInfo getPerformanceInfo() const;
-    
-    // Preview control
+
+    // 预览控制
     void setPreviewEnabled(bool enabled);
     void setAutoRotate(bool enabled);
     void setRotationSpeed(float speed);
-    
-    // Model management
+
+    // 模型管理
     void addPreviewModel(const wxString& name, SoSeparator* model);
     void removePreviewModel(const wxString& name);
     void setActiveModel(const wxString& name);
     wxArrayString getAvailableModels() const;
 
-private:
-    void initializeScene();
+protected:
+    // 事件处理
     void onPaint(wxPaintEvent& event);
     void onSize(wxSizeEvent& event);
     void onEraseBackground(wxEraseEvent& event);
@@ -88,67 +95,79 @@ private:
     void onMouseCaptureLost(wxMouseCaptureLostEvent& event);
     void onIdle(wxIdleEvent& event);
     void onTimer(wxTimerEvent& event);
-    
+
+private:
+    // 初始化
+    void initializeScene();
     void createBasicModels();
     void createAdvancedModels();
+
+    // 渲染
     void render();
     void updatePerformanceStats();
     void logPerformanceInfo();
-    
-    // Model interaction
+
+    // 交互
     int getObjectAtPosition(const wxPoint& pos);
     void updateObjectSelection();
     void simulateSelectionState();
-    
-    // Scene management
+
+    // OpenGL上下文
     wxGLContext* m_glContext{ nullptr };
+
+    // Coin3D场景
     SoSeparator* m_sceneRoot{ nullptr };
     SoSeparator* m_modelRoot{ nullptr };
     SoCamera* m_camera{ nullptr };
-    
-    // Outline system
+
+    // 轮廓渲染
     std::unique_ptr<EnhancedOutlinePass> m_outlinePass;
+    OutlinePassManager::OutlineMode m_currentMode{ OutlinePassManager::OutlineMode::EnhancedOutline };
+
+    // 颜色设置
+    wxColour m_bgColor{ 240, 240, 240 };
+    wxColour m_outlineColor{ 0, 0, 0 };
+    wxColour m_glowColor{ 255, 255, 0 };
+    wxColour m_geomColor{ 200, 200, 200 };
+    wxColour m_hoverColor{ 255, 128, 0 };
+    wxColour m_selectionColor{ 0, 128, 255 };
+
+    // 选择状态
+    std::vector<int> m_selectedObjects;
+    int m_hoveredObject{ -1 };
+
+    // 性能监控
+    bool m_performanceMode{ false };
+    bool m_qualityMode{ false };
+    wxTimer* m_performanceTimer{ nullptr };
+    std::chrono::high_resolution_clock::time_point m_lastFrameTime;
+    std::vector<float> m_frameTimes;
+
+    // 交互状态
+    bool m_mouseDown{ false };
+    wxPoint m_lastMousePos;
+    bool m_autoRotate{ false };
+    float m_rotationSpeed{ 1.0f };
+
+    // 场景管理
     SceneManager* m_sceneManager{ nullptr };
     
     // Parameters
     EnhancedOutlineParams m_outlineParams;
     SelectionOutlineConfig m_selectionConfig;
-    OutlineDebugMode m_debugMode{ OutlineDebugMode::Final };
+    OutlineDebugMode m_debugMode{ OutlineDebugMode::None };
     
     // State management
     bool m_initialized{ false };
     bool m_needsRedraw{ true };
     bool m_previewEnabled{ true };
-    bool m_autoRotate{ false };
-    float m_rotationSpeed{ 1.0f };
-    
-    // Mouse interaction
-    bool m_mouseDown{ false };
-    wxPoint m_lastMousePos;
-    int m_hoveredObject{ -1 };
-    std::vector<int> m_selectedObjects;
-    
-    // Colors
-    wxColour m_bgColor{ 51, 51, 51 };
-    wxColour m_outlineColor{ 0, 0, 0 };
-    wxColour m_glowColor{ 255, 255, 0 };
-    wxColour m_geomColor{ 200, 200, 200 };
-    wxColour m_hoverColor{ 255, 128, 0 };
-    wxColour m_selectionColor{ 255, 0, 0 };
     
     // Performance monitoring
     PerformanceInfo m_performanceInfo;
-    std::chrono::high_resolution_clock::time_point m_lastFrameTime;
-    std::vector<float> m_frameTimes;
-    wxTimer* m_performanceTimer{ nullptr };
     
     // Model management
     std::map<wxString, SoSeparator*> m_previewModels;
     wxString m_activeModel;
-    
-    // Performance modes
-    bool m_performanceMode{ false };
-    bool m_qualityMode{ false };
-    
+
     DECLARE_EVENT_TABLE()
 };

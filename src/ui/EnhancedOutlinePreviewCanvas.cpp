@@ -12,7 +12,6 @@
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoCylinder.h>
 #include <Inventor/nodes/SoCone.h>
-#include <Inventor/nodes/SoTorus.h>
 #include <Inventor/nodes/SoText3.h>
 #include <Inventor/nodes/SoFont.h>
 #include <Inventor/nodes/SoSelection.h>
@@ -229,31 +228,6 @@ void EnhancedOutlinePreviewCanvas::createBasicModels() {
 }
 
 void EnhancedOutlinePreviewCanvas::createAdvancedModels() {
-    // Create a torus
-    {
-        SoSeparator* torusSep = new SoSeparator;
-        torusSep->ref();
-        
-        SoTransform* transform = new SoTransform;
-        transform->translation.setValue(0.0f, 0.0f, 0);
-        torusSep->addChild(transform);
-        
-        SoMaterial* material = new SoMaterial;
-        material->diffuseColor.setValue(m_geomColor.Red() / 255.0f,
-                                      m_geomColor.Green() / 255.0f,
-                                      m_geomColor.Blue() / 255.0f);
-        material->specularColor.setValue(1.0f, 1.0f, 1.0f);
-        material->shininess = 0.8f;
-        torusSep->addChild(material);
-        
-        SoTorus* torus = new SoTorus;
-        torus->majorRadius = 2.0f;
-        torus->minorRadius = 0.5f;
-        torusSep->addChild(torus);
-        
-        m_previewModels["Torus"] = torusSep;
-    }
-    
     // Create a complex model (multiple objects)
     {
         SoSeparator* complexSep = new SoSeparator;
