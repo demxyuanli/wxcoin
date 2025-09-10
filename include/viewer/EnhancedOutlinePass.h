@@ -3,6 +3,9 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <string>
+#include <map>
+#include <chrono>
 
 class SceneManager;
 class SoSeparator;
@@ -142,6 +145,9 @@ public:
     // Callback system for custom outline logic
     using OutlineCallback = std::function<float(const SbVec3f& worldPos, const SbVec3f& normal, int objectId)>;
     void setCustomOutlineCallback(OutlineCallback callback);
+    
+    // Helper method for extracting object ID from path
+    int extractObjectIdFromPath(SoPath* path);
 
 private:
     // Core rendering pipeline

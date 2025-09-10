@@ -42,9 +42,9 @@ bool OutlinePassManager::isEnabled() const {
 void OutlinePassManager::setOutlineMode(OutlineMode mode) {
     if (m_currentMode == mode) return;
     
-    LOG_INF(("Switching outline mode to " + 
-             (mode == OutlineMode::Legacy ? "Legacy" : "Enhanced")).c_str(), 
-            "OutlinePassManager");
+    std::string modeStr = "Switching outline mode to " + 
+                         (mode == OutlineMode::Legacy ? "Legacy" : "Enhanced");
+    LOG_INF(modeStr.c_str(), "OutlinePassManager");
     
     // Disable current mode
     if (m_currentMode == OutlineMode::Legacy && m_legacyPass) {

@@ -13,7 +13,6 @@
 #include <Inventor/nodes/SoCylinder.h>
 #include <Inventor/nodes/SoCone.h>
 #include <Inventor/nodes/SoTorus.h>
-#include <Inventor/nodes/SoCone.h>
 #include <Inventor/nodes/SoText3.h>
 #include <Inventor/nodes/SoFont.h>
 #include <Inventor/nodes/SoSelection.h>

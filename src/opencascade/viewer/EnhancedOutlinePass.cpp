@@ -3,6 +3,7 @@
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "logger/Logger.h"
+#include <Inventor/SoPath.h>
 
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoAnnotation.h>
@@ -292,11 +293,11 @@ EnhancedOutlinePass::EnhancedOutlinePass(SceneManager* sceneManager, SoSeparator
     m_params = EnhancedOutlineParams();
     m_selectionConfig = SelectionOutlineConfig();
     
-    logInfo("EnhancedOutlinePass constructed");
+    LOG_INF("EnhancedOutlinePass constructed", "EnhancedOutlinePass");
 }
 
 EnhancedOutlinePass::~EnhancedOutlinePass() {
-    logInfo("EnhancedOutlinePass destructor begin");
+    LOG_INF("EnhancedOutlinePass destructor begin", "EnhancedOutlinePass");
     
     setEnabled(false);
     cleanupFBO();
@@ -340,14 +341,14 @@ EnhancedOutlinePass::~EnhancedOutlinePass() {
     
     if (m_tempSceneRoot) { m_tempSceneRoot->unref(); m_tempSceneRoot = nullptr; }
     
-    logInfo("EnhancedOutlinePass destructor end");
+    LOG_INF("EnhancedOutlinePass destructor end", "EnhancedOutlinePass");
 }
 
 void EnhancedOutlinePass::setEnabled(bool enabled) {
     if (m_enabled == enabled) return;
     
     m_enabled = enabled;
-    logInfo("setEnabled " + std::string(enabled ? "true" : "false"));
+    LOG_INF((std::string("setEnabled ") + (enabled ? "true" : "false")).c_str(), "EnhancedOutlinePass");
     
     if (m_enabled) {
         attachOverlay();
@@ -363,11 +364,11 @@ void EnhancedOutlinePass::setEnabled(bool enabled) {
 void EnhancedOutlinePass::setParams(const EnhancedOutlineParams& params) {
     m_params = params;
     
-    logInfo("setParams - depthWeight: " + std::to_string(params.depthWeight) +
+    LOG_INF((std::string("setParams - depthWeight: ") + std::to_string(params.depthWeight) +
             ", normalWeight: " + std::to_string(params.normalWeight) +
             ", colorWeight: " + std::to_string(params.colorWeight) +
             ", edgeIntensity: " + std::to_string(params.edgeIntensity) +
-            ", thickness: " + std::to_string(params.thickness));
+            ", thickness: " + std::to_string(params.thickness)).c_str(), "EnhancedOutlinePass");
     
     refresh();
 }
@@ -400,13 +401,16 @@ void EnhancedOutlinePass::updateSelectionState() {
         }
     }
     
-    logInfo("updateSelectionState - " + std::to_string(m_selectedObjects.size()) + " objects selected");
+    LOG_INF((std::string("updateSelectionState - ") + std::to_string(m_selectedObjects.size()) + " objects selected").c_str(), "EnhancedOutlinePass");
 }
 
 int EnhancedOutlinePass::extractObjectIdFromPath(SoPath* path) {
     // This is a placeholder implementation
     // You need to implement this based on your object ID system
-    return -1;
+    if (!path) return -1;
+    
+    // For now, return a simple hash of the path length
+    return path->getLength() % 1000;
 }
 
 void EnhancedOutlinePass::setHoveredObject(int objectId) {
@@ -472,11 +476,11 @@ void EnhancedOutlinePass::setCustomOutlineCallback(OutlineCallback callback) {
 void EnhancedOutlinePass::attachOverlay() {
     if (!m_sceneManager || m_overlayRoot) return;
     
-    logInfo("attachOverlay begin");
+    LOG_INF("attachOverlay begin", "EnhancedOutlinePass");
     
     SoSeparator* root = m_sceneManager->getObjectRoot();
     if (!root) {
-        logError("No object root found");
+        LOG_ERR("No object root found", "EnhancedOutlinePass");
         return;
     }
     
@@ -602,7 +606,7 @@ void EnhancedOutlinePass::detachOverlay() {
 void EnhancedOutlinePass::buildShaders() {
     if (m_program) return;
     
-    logInfo("buildShaders begin");
+    LOG_INF("buildShaders begin", "EnhancedOutlinePass");
     
     // Create shader nodes
     m_program = new SoShaderProgram;
@@ -621,13 +625,13 @@ void EnhancedOutlinePass::buildShaders() {
     m_program->shaderObject.set1Value(0, m_vs);
     m_program->shaderObject.set1Value(1, m_fs);
     
-    logInfo("buildShaders end");
+    LOG_INF("buildShaders end", "EnhancedOutlinePass");
 }
 
 void EnhancedOutlinePass::buildGeometry() {
     if (m_quadSeparator) return;
     
-    logInfo("buildGeometry begin");
+    LOG_INF("buildGeometry begin", "EnhancedOutlinePass");
     
     // Create fullscreen quad
     m_quadSeparator = new SoSeparator;
@@ -682,11 +686,11 @@ void EnhancedOutlinePass::buildGeometry() {
     face->numVertices.set1Value(0, 4);
     m_quadSeparator->addChild(face);
     
-    logInfo("buildGeometry end");
+    LOG_INF("buildGeometry end", "EnhancedOutlinePass");
 }
 
 void EnhancedOutlinePass::setupTextures() {
-    logInfo("setupTextures begin");
+    LOG_INF("setupTextures begin", "EnhancedOutlinePass");
     
     // Create render-to-texture nodes
     m_colorTexture = new SoSceneTexture2;
@@ -744,7 +748,7 @@ void EnhancedOutlinePass::setupTextures() {
         m_tempSceneRoot = tempSceneRoot;
     }
     
-    logInfo("setupTextures end");
+    LOG_INF("setupTextures end", "EnhancedOutlinePass");
 }
 
 void EnhancedOutlinePass::updateShaderParameters() {
@@ -988,23 +992,11 @@ bool EnhancedOutlinePass::chooseTextureUnits() {
     m_normalUnit = 2;
     m_selectionUnit = 3;
     
-    logWarning("Using fallback texture units");
+    LOG_WRN("Using fallback texture units", "EnhancedOutlinePass");
     return false;
 }
 
 void EnhancedOutlinePass::cleanupFBO() {
     // Cleanup is handled by Coin3D's reference counting
     // No explicit OpenGL cleanup needed
-}
-
-void EnhancedOutlinePass::logInfo(const std::string& message) {
-    LOG_INF(message.c_str(), "EnhancedOutlinePass");
-}
-
-void EnhancedOutlinePass::logWarning(const std::string& message) {
-    LOG_WRN(message.c_str(), "EnhancedOutlinePass");
-}
-
-void EnhancedOutlinePass::logError(const std::string& message) {
-    LOG_ERR(message.c_str(), "EnhancedOutlinePass");
 }
