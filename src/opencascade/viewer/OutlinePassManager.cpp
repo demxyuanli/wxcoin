@@ -70,11 +70,8 @@ void OutlinePassManager::setOutlineMode(OutlineMode mode) {
     }
 }
 
-OutlinePassManager::OutlineMode OutlinePassManager::getOutlineMode() const {
-    return m_currentMode;
-}
-
 void OutlinePassManager::setLegacyParams(const ImageOutlineParams& params) {
+    m_legacyParams = params;
     if (m_legacyPass) {
         m_legacyPass->setParams(params);
     }
@@ -84,10 +81,11 @@ ImageOutlineParams OutlinePassManager::getLegacyParams() const {
     if (m_legacyPass) {
         return m_legacyPass->getParams();
     }
-    return ImageOutlineParams();
+    return m_legacyParams;
 }
 
 void OutlinePassManager::setEnhancedParams(const EnhancedOutlineParams& params) {
+    m_enhancedParams = params;
     if (m_enhancedPass) {
         m_enhancedPass->setParams(params);
     }
@@ -97,10 +95,11 @@ EnhancedOutlineParams OutlinePassManager::getEnhancedParams() const {
     if (m_enhancedPass) {
         return m_enhancedPass->getParams();
     }
-    return EnhancedOutlineParams();
+    return m_enhancedParams;
 }
 
 void OutlinePassManager::setSelectionRoot(SoSelection* selectionRoot) {
+    m_selectionRoot = selectionRoot;
     if (m_enhancedPass) {
         m_enhancedPass->setSelectionRoot(selectionRoot);
     }
@@ -131,6 +130,7 @@ void OutlinePassManager::clearHover() {
 }
 
 void OutlinePassManager::setEnabled(bool enabled) {
+    m_enabled = enabled;
     std::string enabledStr = enabled ? "true" : "false";
     LOG_INF(("setEnabled " + enabledStr).c_str(), "OutlinePassManager");
     
@@ -228,9 +228,49 @@ void OutlinePassManager::refresh() {
 
 void OutlinePassManager::forceUpdate() {
     if (m_currentMode == OutlineMode::Legacy && m_legacyPass) {
-        m_legacyPass->forceUpdate();
+        m_legacyPass->refresh();
     } else if (m_currentMode == OutlineMode::Enhanced && m_enhancedPass) {
         m_enhancedPass->forceUpdate();
+    }
+}
+
+OutlinePassManager::PerformanceStats OutlinePassManager::getPerformanceStats() const {
+    return m_performanceStats;
+}
+
+void OutlinePassManager::initializePasses() {
+    // Initialize passes as needed
+}
+
+void OutlinePassManager::migrateLegacyToEnhanced() {
+    // Migrate parameters from legacy to enhanced
+    if (m_legacyPass && m_enhancedPass) {
+        ImageOutlineParams legacyParams = m_legacyPass->getParams();
+        EnhancedOutlineParams enhancedParams;
+        
+        // Copy basic parameters
+        enhancedParams.depthWeight = legacyParams.depthWeight;
+        enhancedParams.normalWeight = legacyParams.normalWeight;
+        enhancedParams.edgeIntensity = legacyParams.edgeIntensity;
+        enhancedParams.thickness = legacyParams.thickness;
+        
+        m_enhancedPass->setParams(enhancedParams);
+    }
+}
+
+void OutlinePassManager::migrateEnhancedToLegacy() {
+    // Migrate parameters from enhanced to legacy
+    if (m_enhancedPass && m_legacyPass) {
+        EnhancedOutlineParams enhancedParams = m_enhancedPass->getParams();
+        ImageOutlineParams legacyParams;
+        
+        // Copy basic parameters
+        legacyParams.depthWeight = enhancedParams.depthWeight;
+        legacyParams.normalWeight = enhancedParams.normalWeight;
+        legacyParams.edgeIntensity = enhancedParams.edgeIntensity;
+        legacyParams.thickness = enhancedParams.thickness;
+        
+        m_legacyPass->setParams(legacyParams);
     }
 }
 

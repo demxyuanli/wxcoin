@@ -3,23 +3,16 @@
 #include "viewer/EnhancedOutlinePass.h"
 #include "viewer/ImageOutlinePass.h"
 #include <memory>
+#include <vector>
 
 class SceneManager;
 class SoSeparator;
 class SoSelection;
 
-/**
- * OutlinePassManager - 统一的轮廓渲染管理器
- * 
- * 这个类提供了对轮廓渲染功能的统一管理，支持：
- * - 在原始ImageOutlinePass和增强版EnhancedOutlinePass之间切换
- * - 参数迁移和兼容性处理
- * - 统一的API接口
- * - 性能监控和优化建议
- */
 class OutlinePassManager {
 public:
     enum class OutlineMode {
+        Disabled,   // 禁用轮廓渲染
         Legacy,     // 使用原始的ImageOutlinePass
         Enhanced    // 使用增强的EnhancedOutlinePass
     };
@@ -44,7 +37,9 @@ public:
 
     // 选择管理
     void setSelectionRoot(SoSelection* selectionRoot);
+    void setSelectedObjects(const std::vector<int>& objectIds);
     void setHoveredObject(int objectId);
+    void clearSelection();
     void clearHover();
 
     // 性能优化
@@ -81,7 +76,7 @@ private:
     SoSeparator* m_captureRoot;
     SoSelection* m_selectionRoot;
 
-    OutlineMode m_currentMode{ OutlineMode::Enhanced };
+    OutlineMode m_currentMode{ OutlineMode::Disabled };
     bool m_enabled{ false };
     bool m_performanceMode{ false };
     bool m_qualityMode{ false };
