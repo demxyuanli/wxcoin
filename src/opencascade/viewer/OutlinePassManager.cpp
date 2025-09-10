@@ -321,13 +321,13 @@ void OutlinePassManager::logPerformanceInfo() {
     std::string mode = m_performanceMode ? "Performance" : 
                       (m_qualityMode ? "Quality" : "Balanced");
     
-    LOG_INF(("Performance settings updated: " + mode + " mode").c_str(), 
-            "OutlinePassManager");
+    std::string message = "Performance settings updated: " + mode + " mode";
+    LOG_INF(message.c_str(), "OutlinePassManager");
     
     if (m_enhancedPass) {
         EnhancedOutlineParams params = m_enhancedPass->getParams();
-        LOG_DBG(("Current settings - smoothing: " + std::to_string(params.smoothingFactor) +
-                ", glow: " + std::to_string(params.glowIntensity)).c_str(), 
-                "OutlinePassManager");
+        std::string settingsMsg = "Current settings - smoothing: " + std::to_string(params.smoothingFactor) +
+                                 ", glow: " + std::to_string(params.glowIntensity);
+        LOG_DBG(settingsMsg.c_str(), "OutlinePassManager");
     }
 }

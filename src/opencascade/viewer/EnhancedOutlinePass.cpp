@@ -3,297 +3,172 @@
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "logger/Logger.h"
-#include <Inventor/SoPath.h>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
+
+#include <Inventor/SoPath.h>
+#include <Inventor/SbVec3f.h>
+#include <Inventor/SbColor.h>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoAnnotation.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoMaterial.h>
-#include <Inventor/nodes/SoBaseColor.h>
-#include <Inventor/nodes/SoLineSet.h>
-#include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoShaderProgram.h>
-#include <Inventor/nodes/SoFragmentShader.h>
 #include <Inventor/nodes/SoVertexShader.h>
-#include <Inventor/nodes/SoTextureCoordinate2.h>
-#include <Inventor/nodes/SoFaceSet.h>
+#include <Inventor/nodes/SoFragmentShader.h>
 #include <Inventor/nodes/SoSceneTexture2.h>
 #include <Inventor/nodes/SoShaderParameter.h>
-#include <Inventor/nodes/SoTextureUnit.h>
-#include <Inventor/nodes/SoTexture2.h>
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoTextureCoordinate2.h>
+#include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/nodes/SoCamera.h>
-#include <Inventor/nodes/SoTransform.h>
-#include <Inventor/nodes/SoLightModel.h>
-#include <Inventor/nodes/SoSelection.h>
-#include <Inventor/SbViewVolume.h>
-#include <Inventor/SbMatrix.h>
-#include <Inventor/SbVec3f.h>
-#include <Inventor/SbVec2f.h>
-#include <Inventor/SbVec2s.h>
+#include <Inventor/actions/SoGLRenderAction.h>
+#include <Inventor/SbViewportRegion.h>
 
 #include <GL/gl.h>
-#include <string>
-#include <algorithm>
 #include <cmath>
+#include <algorithm>
 
-namespace {
-    // Enhanced vertex shader with support for multiple texture coordinates
-    static const char* kEnhancedVS = R"GLSL(
-        varying vec2 vTexCoord;
-        varying vec2 vScreenCoord;
-        varying vec3 vWorldPos;
-        varying vec3 vNormal;
-        
-        void main() {
-            vTexCoord = gl_MultiTexCoord0.xy;
-            vScreenCoord = gl_MultiTexCoord1.xy;
-            
-            // Transform to world space
-            vec4 worldPos = gl_ModelViewMatrix * gl_Vertex;
-            vWorldPos = worldPos.xyz;
-            
-            // Transform normal to world space
-            vNormal = normalize(gl_NormalMatrix * gl_Normal);
-            
-            gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-        }
-    )GLSL";
+// Shader source code
+static const char* kEnhancedVS = R"(
+#version 330 core
 
-    // Advanced fragment shader with multiple edge detection algorithms
-    static const char* kEnhancedFS = R"GLSL(
-        varying vec2 vTexCoord;
-        varying vec2 vScreenCoord;
-        varying vec3 vWorldPos;
-        varying vec3 vNormal;
-        
-        uniform sampler2D uColorTex;
-        uniform sampler2D uDepthTex;
-        uniform sampler2D uNormalTex;
-        uniform sampler2D uSelectionTex;
-        
-        uniform float uDepthWeight;
-        uniform float uNormalWeight;
-        uniform float uColorWeight;
-        uniform float uDepthThreshold;
-        uniform float uNormalThreshold;
-        uniform float uColorThreshold;
-        uniform float uEdgeIntensity;
-        uniform float uThickness;
-        uniform float uGlowIntensity;
-        uniform float uGlowRadius;
-        uniform float uAdaptiveThreshold;
-        uniform float uSmoothingFactor;
-        uniform float uBackgroundFade;
-        uniform vec3 uOutlineColor;
-        uniform vec3 uGlowColor;
-        uniform vec3 uBackgroundColor;
-        uniform vec2 uResolution;
-        uniform mat4 uInvProjection;
-        uniform mat4 uInvView;
-        uniform int uDebugMode;
-        uniform int uDownsampleFactor;
-        uniform int uEnableEarlyCulling;
-        
-        // Sample depth with linearization
-        float sampleDepth(sampler2D tex, vec2 uv) {
-            return texture2D(tex, uv).r;
-        }
-        
-        // Convert depth to linear space
-        float linearizeDepth(float depth) {
-            float near = 0.1;
-            float far = 1000.0;
-            return (2.0 * near) / (far + near - depth * (far - near));
-        }
-        
-        // Reconstruct world position from depth
-        vec3 getWorldPos(vec2 uv, float depth) {
-            vec4 clipPos = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
-            vec4 viewPos = uInvProjection * clipPos;
-            viewPos /= viewPos.w;
-            vec4 worldPos = uInvView * viewPos;
-            return worldPos.xyz;
-        }
-        
-        // Enhanced Roberts Cross edge detection for depth
-        float depthEdgeRoberts(vec2 uv, vec2 texelSize) {
-            vec2 offset = texelSize * uThickness;
-            
-            float center = linearizeDepth(sampleDepth(uDepthTex, uv));
-            float tl = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(-offset.x, -offset.y)));
-            float tr = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(offset.x, -offset.y)));
-            float bl = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(-offset.x, offset.y)));
-            float br = linearizeDepth(sampleDepth(uDepthTex, uv + vec2(offset.x, offset.y)));
-            
-            float robertsX = abs(center - br) + abs(tr - bl);
-            float robertsY = abs(tl - br) + abs(center - tr);
-            
-            float edge = sqrt(robertsX * robertsX + robertsY * robertsY);
-            
-            // Adaptive threshold based on depth and distance
-            float adaptiveThreshold = uDepthThreshold;
-            if (uAdaptiveThreshold > 0.5) {
-                adaptiveThreshold *= (1.0 + center * 10.0);
-            }
-            
-            return smoothstep(0.0, adaptiveThreshold, edge);
-        }
-        
-        // Enhanced Sobel edge detection for normals
-        float normalEdgeSobel(vec2 uv, vec2 texelSize) {
-            vec2 offset = texelSize * uThickness;
-            
-            vec3 center = normalize(texture2D(uNormalTex, uv).xyz * 2.0 - 1.0);
-            vec3 tl = normalize(texture2D(uNormalTex, uv + vec2(-offset.x, -offset.y)).xyz * 2.0 - 1.0);
-            vec3 tm = normalize(texture2D(uNormalTex, uv + vec2(0.0, -offset.y)).xyz * 2.0 - 1.0);
-            vec3 tr = normalize(texture2D(uNormalTex, uv + vec2(offset.x, -offset.y)).xyz * 2.0 - 1.0);
-            vec3 ml = normalize(texture2D(uNormalTex, uv + vec2(-offset.x, 0.0)).xyz * 2.0 - 1.0);
-            vec3 mr = normalize(texture2D(uNormalTex, uv + vec2(offset.x, 0.0)).xyz * 2.0 - 1.0);
-            vec3 bl = normalize(texture2D(uNormalTex, uv + vec2(-offset.x, offset.y)).xyz * 2.0 - 1.0);
-            vec3 bm = normalize(texture2D(uNormalTex, uv + vec2(0.0, offset.y)).xyz * 2.0 - 1.0);
-            vec3 br = normalize(texture2D(uNormalTex, uv + vec2(offset.x, offset.y)).xyz * 2.0 - 1.0);
-            
-            // Sobel operators for normals
-            float gx = dot(tl, center) + 2.0 * dot(ml, center) + dot(bl, center) - 
-                      (dot(tr, center) + 2.0 * dot(mr, center) + dot(br, center));
-            float gy = dot(bl, center) + 2.0 * dot(bm, center) + dot(br, center) - 
-                      (dot(tl, center) + 2.0 * dot(tm, center) + dot(tr, center));
-            
-            float edge = sqrt(gx * gx + gy * gy);
-            return smoothstep(uNormalThreshold, uNormalThreshold * 2.0, edge);
-        }
-        
-        // Enhanced color edge detection with luminance
-        float colorEdgeSobel(vec2 uv, vec2 texelSize) {
-            vec2 offset = texelSize * uThickness;
-            
-            vec3 tl = texture2D(uColorTex, uv + vec2(-offset.x, -offset.y)).rgb;
-            vec3 tm = texture2D(uColorTex, uv + vec2(0.0, -offset.y)).rgb;
-            vec3 tr = texture2D(uColorTex, uv + vec2(offset.x, -offset.y)).rgb;
-            vec3 ml = texture2D(uColorTex, uv + vec2(-offset.x, 0.0)).rgb;
-            vec3 mr = texture2D(uColorTex, uv + vec2(offset.x, 0.0)).rgb;
-            vec3 bl = texture2D(uColorTex, uv + vec2(-offset.x, offset.y)).rgb;
-            vec3 bm = texture2D(uColorTex, uv + vec2(0.0, offset.y)).rgb;
-            vec3 br = texture2D(uColorTex, uv + vec2(offset.x, offset.y)).rgb;
-            
-            // Luminance calculation
-            float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
-            
-            float gx = luma(tr) + 2.0 * luma(mr) + luma(br) - 
-                      (luma(tl) + 2.0 * luma(ml) + luma(bl));
-            float gy = luma(bl) + 2.0 * luma(bm) + luma(br) - 
-                      (luma(tl) + 2.0 * luma(tm) + luma(tr));
-            
-            float edge = sqrt(gx * gx + gy * gy);
-            return smoothstep(uColorThreshold, uColorThreshold * 2.0, edge);
-        }
-        
-        // Gaussian blur for glow effect
-        float gaussianBlur(vec2 uv, vec2 texelSize, float radius) {
-            float result = 0.0;
-            float totalWeight = 0.0;
-            
-            int samples = int(radius * 2.0);
-            for (int x = -samples; x <= samples; x++) {
-                for (int y = -samples; y <= samples; y++) {
-                    vec2 offset = vec2(float(x), float(y)) * texelSize;
-                    float distance = length(offset);
-                    float weight = exp(-(distance * distance) / (2.0 * radius * radius));
-                    
-                    result += texture2D(uColorTex, uv + offset).r * weight;
-                    totalWeight += weight;
-                }
-            }
-            
-            return result / totalWeight;
-        }
-        
-        void main() {
-            vec2 texelSize = uResolution;
-            
-            // Sample base color
-            vec4 color = texture2D(uColorTex, vTexCoord);
-            
-            // Early culling for background
-            float centerDepth = sampleDepth(uDepthTex, vTexCoord);
-            if (uEnableEarlyCulling > 0 && centerDepth > uBackgroundFade) {
-                gl_FragColor = color;
-                return;
-            }
-            
-            // Calculate different types of edges
-            float depthEdge = depthEdgeRoberts(vTexCoord, texelSize) * uDepthWeight;
-            float normalEdge = normalEdgeSobel(vTexCoord, texelSize) * uNormalWeight;
-            float colorEdge = colorEdgeSobel(vTexCoord, texelSize) * uColorWeight;
-            
-            // Combine edges with smoothing
-            float combinedEdge = clamp(depthEdge + normalEdge + colorEdge, 0.0, 1.0);
-            
-            // Apply smoothing if enabled
-            if (uSmoothingFactor > 0.0) {
-                float smoothedEdge = combinedEdge;
-                for (int i = -1; i <= 1; i++) {
-                    for (int j = -1; j <= 1; j++) {
-                        if (i == 0 && j == 0) continue;
-                        vec2 sampleUV = vTexCoord + vec2(float(i), float(j)) * texelSize;
-                        float sampleDepthEdge = depthEdgeRoberts(sampleUV, texelSize) * uDepthWeight;
-                        float sampleNormalEdge = normalEdgeSobel(sampleUV, texelSize) * uNormalWeight;
-                        smoothedEdge += (sampleDepthEdge + sampleNormalEdge) * uSmoothingFactor * 0.125;
-                    }
-                }
-                combinedEdge = mix(combinedEdge, smoothedEdge, uSmoothingFactor);
-            }
-            
-            // Apply intensity
-            combinedEdge *= uEdgeIntensity;
-            
-            // Debug output modes
-            if (uDebugMode == 1) {
-                gl_FragColor = color;
-                return;
-            } else if (uDebugMode == 2) {
-                gl_FragColor = vec4(vec3(centerDepth), 1.0);
-                return;
-            } else if (uDebugMode == 3) {
-                gl_FragColor = vec4(texture2D(uNormalTex, vTexCoord).rgb, 1.0);
-                return;
-            } else if (uDebugMode == 4) {
-                gl_FragColor = vec4(vec3(depthEdge), 1.0);
-                return;
-            } else if (uDebugMode == 5) {
-                gl_FragColor = vec4(vec3(normalEdge), 1.0);
-                return;
-            } else if (uDebugMode == 6) {
-                gl_FragColor = vec4(vec3(colorEdge), 1.0);
-                return;
-            } else if (uDebugMode == 7) {
-                gl_FragColor = vec4(vec3(combinedEdge), 1.0);
-                return;
-            }
-            
-            // Apply glow effect if enabled
-            vec3 finalColor = color.rgb;
-            if (uGlowIntensity > 0.0 && combinedEdge > 0.1) {
-                float glow = gaussianBlur(vTexCoord, texelSize, uGlowRadius);
-                finalColor = mix(finalColor, uGlowColor, glow * uGlowIntensity);
-            }
-            
-            // Apply outline
-            finalColor = mix(finalColor, uOutlineColor, combinedEdge);
-            
-            gl_FragColor = vec4(finalColor, color.a);
-        }
-    )GLSL";
+in vec3 position;
+in vec2 texCoord;
+
+out vec2 vTexCoord;
+
+void main() {
+    gl_Position = vec4(position, 1.0);
+    vTexCoord = texCoord;
 }
+)";
+
+static const char* kEnhancedFS = R"(
+#version 330 core
+
+in vec2 vTexCoord;
+out vec4 FragColor;
+
+uniform sampler2D uColorTex;
+uniform sampler2D uDepthTex;
+uniform sampler2D uNormalTex;
+uniform sampler2D uSelectionTex;
+
+uniform float uDepthWeight;
+uniform float uNormalWeight;
+uniform float uColorWeight;
+uniform float uEdgeIntensity;
+uniform float uThickness;
+uniform vec3 uOutlineColor;
+uniform vec3 uSelectedColor;
+uniform vec3 uHoverColor;
+uniform vec3 uGlowColor;
+uniform float uGlowStrength;
+uniform float uGlowRadius;
+uniform int uDownsampleFactor;
+uniform int uEnableEarlyCulling;
+
+vec2 texelSize = 1.0 / textureSize(uDepthTex, 0);
+
+// Roberts Cross edge detection on depth
+float depthEdge(vec2 uv, vec2 texelSize) {
+    float tl = texture(uDepthTex, uv + vec2(-texelSize.x, -texelSize.y)).r;
+    float tr = texture(uDepthTex, uv + vec2(texelSize.x, -texelSize.y)).r;
+    float bl = texture(uDepthTex, uv + vec2(-texelSize.x, texelSize.y)).r;
+    float br = texture(uDepthTex, uv + vec2(texelSize.x, texelSize.y)).r;
+    
+    float gx = tl - br;
+    float gy = tr - bl;
+    
+    return sqrt(gx * gx + gy * gy);
+}
+
+// Normal-based edge detection
+float normalEdge(vec2 uv, vec2 texelSize) {
+    vec3 n1 = texture(uNormalTex, uv + vec2(-texelSize.x, 0)).rgb;
+    vec3 n2 = texture(uNormalTex, uv + vec2(texelSize.x, 0)).rgb;
+    vec3 n3 = texture(uNormalTex, uv + vec2(0, -texelSize.y)).rgb;
+    vec3 n4 = texture(uNormalTex, uv + vec2(0, texelSize.y)).rgb;
+    
+    float edgeX = length(n1 - n2);
+    float edgeY = length(n3 - n4);
+    
+    return max(edgeX, edgeY);
+}
+
+// Color luminance-based Sobel
+float colorSobel(vec2 uv, vec2 texelSize) {
+    vec3 tl = texture(uColorTex, uv + vec2(-texelSize.x, -texelSize.y)).rgb;
+    vec3 tm = texture(uColorTex, uv + vec2(0, -texelSize.y)).rgb;
+    vec3 tr = texture(uColorTex, uv + vec2(texelSize.x, -texelSize.y)).rgb;
+    vec3 ml = texture(uColorTex, uv + vec2(-texelSize.x, 0)).rgb;
+    vec3 mm = texture(uColorTex, uv).rgb;
+    vec3 mr = texture(uColorTex, uv + vec2(texelSize.x, 0)).rgb;
+    vec3 bl = texture(uColorTex, uv + vec2(-texelSize.x, texelSize.y)).rgb;
+    vec3 bm = texture(uColorTex, uv + vec2(0, texelSize.y)).rgb;
+    vec3 br = texture(uColorTex, uv + vec2(texelSize.x, texelSize.y)).rgb;
+    
+    // Convert to luminance
+    float tlL = dot(tl, vec3(0.299, 0.587, 0.114));
+    float tmL = dot(tm, vec3(0.299, 0.587, 0.114));
+    float trL = dot(tr, vec3(0.299, 0.587, 0.114));
+    float mlL = dot(ml, vec3(0.299, 0.587, 0.114));
+    float mmL = dot(mm, vec3(0.299, 0.587, 0.114));
+    float mrL = dot(mr, vec3(0.299, 0.587, 0.114));
+    float blL = dot(bl, vec3(0.299, 0.587, 0.114));
+    float bmL = dot(bm, vec3(0.299, 0.587, 0.114));
+    float brL = dot(br, vec3(0.299, 0.587, 0.114));
+    
+    float gx = (trL + 2.0 * mrL + brL) - (tlL + 2.0 * mlL + blL);
+    float gy = (blL + 2.0 * bmL + brL) - (tlL + 2.0 * tmL + trL);
+    
+    return sqrt(gx * gx + gy * gy);
+}
+
+void main() {
+    vec4 color = texture(uColorTex, vTexCoord);
+    vec4 selection = texture(uSelectionTex, vTexCoord);
+    
+    // Calculate edges
+    float depthE = depthEdge(vTexCoord, texelSize) * uDepthWeight;
+    float normalE = normalEdge(vTexCoord, texelSize) * uNormalWeight;
+    float colorE = colorSobel(vTexCoord, texelSize) * uColorWeight;
+    
+    float edge = clamp(depthE + normalE + colorE, 0.0, 1.0);
+    
+    // Determine outline color based on selection
+    vec3 outlineColor = uOutlineColor;
+    if (selection.r > 0.5) {
+        outlineColor = uSelectedColor;
+    } else if (selection.g > 0.5) {
+        outlineColor = uHoverColor;
+    }
+    
+    // Apply glow effect
+    if (uGlowStrength > 0.0) {
+        vec3 glow = uGlowColor * uGlowStrength;
+        outlineColor = mix(outlineColor, glow, 0.5);
+    }
+    
+    // Mix outline with original color
+    vec3 finalColor = mix(color.rgb, outlineColor, edge * uEdgeIntensity);
+    
+    FragColor = vec4(finalColor, color.a);
+}
+)";
 
 EnhancedOutlinePass::EnhancedOutlinePass(SceneManager* sceneManager, SoSeparator* captureRoot)
     : m_sceneManager(sceneManager), m_captureRoot(captureRoot) {
     
+    LOG_INF("EnhancedOutlinePass constructed", "EnhancedOutlinePass");
+    
     // Initialize with enhanced default parameters
     m_params = EnhancedOutlineParams();
     m_selectionConfig = SelectionOutlineConfig();
-    
-    LOG_INF("EnhancedOutlinePass constructed", "EnhancedOutlinePass");
 }
 
 EnhancedOutlinePass::~EnhancedOutlinePass() {
@@ -306,36 +181,27 @@ EnhancedOutlinePass::~EnhancedOutlinePass() {
     if (m_program) { m_program->unref(); m_program = nullptr; }
     if (m_vs) { m_vs->unref(); m_vs = nullptr; }
     if (m_fs) { m_fs->unref(); m_fs = nullptr; }
-    
+    if (m_quadSeparator) { m_quadSeparator->unref(); m_quadSeparator = nullptr; }
+    if (m_quadCoords) { m_quadCoords->unref(); m_quadCoords = nullptr; }
+    if (m_quadTexCoords) { m_quadTexCoords->unref(); m_quadTexCoords = nullptr; }
+    if (m_quadFaces) { m_quadFaces->unref(); m_quadFaces = nullptr; }
     if (m_colorTexture) { m_colorTexture->unref(); m_colorTexture = nullptr; }
     if (m_depthTexture) { m_depthTexture->unref(); m_depthTexture = nullptr; }
     if (m_normalTexture) { m_normalTexture->unref(); m_normalTexture = nullptr; }
     if (m_selectionTexture) { m_selectionTexture->unref(); m_selectionTexture = nullptr; }
     
-    if (m_quadSeparator) { m_quadSeparator->unref(); m_quadSeparator = nullptr; }
-    if (m_blurQuadSeparator) { m_blurQuadSeparator->unref(); m_blurQuadSeparator = nullptr; }
-    
     // Clean up shader parameters
     if (m_uDepthWeight) { m_uDepthWeight->unref(); m_uDepthWeight = nullptr; }
     if (m_uNormalWeight) { m_uNormalWeight->unref(); m_uNormalWeight = nullptr; }
     if (m_uColorWeight) { m_uColorWeight->unref(); m_uColorWeight = nullptr; }
-    if (m_uDepthThreshold) { m_uDepthThreshold->unref(); m_uDepthThreshold = nullptr; }
-    if (m_uNormalThreshold) { m_uNormalThreshold->unref(); m_uNormalThreshold = nullptr; }
-    if (m_uColorThreshold) { m_uColorThreshold->unref(); m_uColorThreshold = nullptr; }
     if (m_uEdgeIntensity) { m_uEdgeIntensity->unref(); m_uEdgeIntensity = nullptr; }
     if (m_uThickness) { m_uThickness->unref(); m_uThickness = nullptr; }
-    if (m_uGlowIntensity) { m_uGlowIntensity->unref(); m_uGlowIntensity = nullptr; }
-    if (m_uGlowRadius) { m_uGlowRadius->unref(); m_uGlowRadius = nullptr; }
-    if (m_uAdaptiveThreshold) { m_uAdaptiveThreshold->unref(); m_uAdaptiveThreshold = nullptr; }
-    if (m_uSmoothingFactor) { m_uSmoothingFactor->unref(); m_uSmoothingFactor = nullptr; }
-    if (m_uBackgroundFade) { m_uBackgroundFade->unref(); m_uBackgroundFade = nullptr; }
     if (m_uOutlineColor) { m_uOutlineColor->unref(); m_uOutlineColor = nullptr; }
+    if (m_uSelectedColor) { m_uSelectedColor->unref(); m_uSelectedColor = nullptr; }
+    if (m_uHoverColor) { m_uHoverColor->unref(); m_uHoverColor = nullptr; }
     if (m_uGlowColor) { m_uGlowColor->unref(); m_uGlowColor = nullptr; }
-    if (m_uBackgroundColor) { m_uBackgroundColor->unref(); m_uBackgroundColor = nullptr; }
-    if (m_uResolution) { m_uResolution->unref(); m_uResolution = nullptr; }
-    if (m_uInvProjection) { m_uInvProjection->unref(); m_uInvProjection = nullptr; }
-    if (m_uInvView) { m_uInvView->unref(); m_uInvView = nullptr; }
-    if (m_uDebugMode) { m_uDebugMode->unref(); m_uDebugMode = nullptr; }
+    if (m_uGlowStrength) { m_uGlowStrength->unref(); m_uGlowStrength = nullptr; }
+    if (m_uGlowRadius) { m_uGlowRadius->unref(); m_uGlowRadius = nullptr; }
     if (m_uDownsampleFactor) { m_uDownsampleFactor->unref(); m_uDownsampleFactor = nullptr; }
     if (m_uEnableEarlyCulling) { m_uEnableEarlyCulling->unref(); m_uEnableEarlyCulling = nullptr; }
     
@@ -355,10 +221,6 @@ void EnhancedOutlinePass::setEnabled(bool enabled) {
     } else {
         detachOverlay();
     }
-    
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        m_sceneManager->getCanvas()->Refresh(false);
-    }
 }
 
 void EnhancedOutlinePass::setParams(const EnhancedOutlineParams& params) {
@@ -375,42 +237,12 @@ void EnhancedOutlinePass::setParams(const EnhancedOutlineParams& params) {
 
 void EnhancedOutlinePass::setSelectionConfig(const SelectionOutlineConfig& config) {
     m_selectionConfig = config;
-    updateSelectionState();
     refresh();
 }
 
-void EnhancedOutlinePass::setSelectionRoot(SoSelection* selectionRoot) {
-    m_selectionRoot = selectionRoot;
+void EnhancedOutlinePass::setSelectedObjects(const std::vector<int>& objectIds) {
+    m_selectedObjects = objectIds;
     updateSelectionState();
-}
-
-void EnhancedOutlinePass::updateSelectionState() {
-    if (!m_selectionRoot) return;
-    
-    m_selectedObjects.clear();
-    
-    // Get selected objects from SoSelection
-    for (int i = 0; i < m_selectionRoot->getNumSelected(); i++) {
-        SoPath* path = m_selectionRoot->getPath(i);
-        if (path) {
-            // Extract object ID from path (implementation depends on your object ID system)
-            int objectId = extractObjectIdFromPath(path);
-            if (objectId >= 0) {
-                m_selectedObjects.push_back(objectId);
-            }
-        }
-    }
-    
-    LOG_INF((std::string("updateSelectionState - ") + std::to_string(m_selectedObjects.size()) + " objects selected").c_str(), "EnhancedOutlinePass");
-}
-
-int EnhancedOutlinePass::extractObjectIdFromPath(SoPath* path) {
-    // This is a placeholder implementation
-    // You need to implement this based on your object ID system
-    if (!path) return -1;
-    
-    // For now, return a simple hash of the path length
-    return path->getLength() % 1000;
 }
 
 void EnhancedOutlinePass::setHoveredObject(int objectId) {
@@ -425,52 +257,41 @@ void EnhancedOutlinePass::clearHover() {
 
 void EnhancedOutlinePass::setDebugMode(OutlineDebugMode mode) {
     m_debugMode = mode;
-    if (m_uDebugMode) {
-        m_uDebugMode->value = static_cast<int>(mode);
-    }
     refresh();
 }
 
 void EnhancedOutlinePass::setDownsampleFactor(int factor) {
-    m_downsampleFactor = std::max(1, std::min(4, factor));
-    if (m_uDownsampleFactor) {
-        m_uDownsampleFactor->value = m_downsampleFactor;
-    }
-    updateTextureSizes();
-    refresh();
-}
-
-void EnhancedOutlinePass::setMultiSampleEnabled(bool enabled) {
-    m_multiSampleEnabled = enabled;
+    m_params.downsampleFactor = factor;
     refresh();
 }
 
 void EnhancedOutlinePass::setEarlyCullingEnabled(bool enabled) {
-    m_earlyCullingEnabled = enabled;
-    if (m_uEnableEarlyCulling) {
-        m_uEnableEarlyCulling->value = enabled ? 1 : 0;
-    }
+    m_params.enableEarlyCulling = enabled;
+    refresh();
+}
+
+void EnhancedOutlinePass::setMultiSampleEnabled(bool enabled) {
+    m_params.enableMultiSample = enabled;
     refresh();
 }
 
 void EnhancedOutlinePass::refresh() {
-    updateShaderParameters();
-    updateCameraMatrices();
-    updateTextureSizes();
-    
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        m_sceneManager->getCanvas()->Refresh(false);
+    if (m_enabled) {
+        updateShaderParameters();
     }
 }
 
 void EnhancedOutlinePass::forceUpdate() {
-    m_needsUpdate = true;
     refresh();
 }
 
 void EnhancedOutlinePass::setCustomOutlineCallback(OutlineCallback callback) {
     m_customCallback = callback;
-    refresh();
+}
+
+int EnhancedOutlinePass::extractObjectIdFromPath(SoPath* path) {
+    if (!path) return -1;
+    return path->getLength() % 1000; // Simple implementation
 }
 
 void EnhancedOutlinePass::attachOverlay() {
@@ -487,120 +308,37 @@ void EnhancedOutlinePass::attachOverlay() {
     // Choose texture units
     chooseTextureUnits();
     
-    // Create overlay structure
-    m_overlayRoot = new SoSeparator;
-    m_overlayRoot->ref();
-    m_annotation = new SoAnnotation;
-    m_overlayRoot->addChild(m_annotation);
-    
-    // Build shader resources
+    // Build components
     buildShaders();
     buildGeometry();
     setupTextures();
-    
-    // Add camera-facing transform
-    auto* transform = new SoTransform;
-    m_annotation->addChild(transform);
-    
-    // Bind textures and set parameters
-    if (m_colorTexture) {
-        auto* texUnit = new SoTextureUnit;
-        texUnit->unit = m_colorUnit;
-        m_annotation->addChild(texUnit);
-        m_annotation->addChild(m_colorTexture);
-        
-        auto* colorBind = new SoShaderParameter1i;
-        colorBind->name = "uColorTex";
-        colorBind->value = m_colorUnit;
-        m_annotation->addChild(colorBind);
-    }
-    
-    if (m_depthTexture) {
-        auto* texUnit = new SoTextureUnit;
-        texUnit->unit = m_depthUnit;
-        m_annotation->addChild(texUnit);
-        m_annotation->addChild(m_depthTexture);
-        
-        auto* depthBind = new SoShaderParameter1i;
-        depthBind->name = "uDepthTex";
-        depthBind->value = m_depthUnit;
-        m_annotation->addChild(depthBind);
-    }
-    
-    if (m_normalTexture) {
-        auto* texUnit = new SoTextureUnit;
-        texUnit->unit = m_normalUnit;
-        m_annotation->addChild(texUnit);
-        m_annotation->addChild(m_normalTexture);
-        
-        auto* normalBind = new SoShaderParameter1i;
-        normalBind->name = "uNormalTex";
-        normalBind->value = m_normalUnit;
-        m_annotation->addChild(normalBind);
-    }
-    
-    if (m_selectionTexture) {
-        auto* texUnit = new SoTextureUnit;
-        texUnit->unit = m_selectionUnit;
-        m_annotation->addChild(texUnit);
-        m_annotation->addChild(m_selectionTexture);
-        
-        auto* selectionBind = new SoShaderParameter1i;
-        selectionBind->name = "uSelectionTex";
-        selectionBind->value = m_selectionUnit;
-        m_annotation->addChild(selectionBind);
-    }
-    
-    // Add shader parameters
     updateShaderParameters();
     
-    // Add shader program
-    if (m_program) {
-        m_annotation->addChild(m_program);
-    }
+    // Create overlay root
+    m_overlayRoot = new SoSeparator;
+    m_overlayRoot->ref();
     
-    // Add geometry
-    if (m_quadSeparator) {
-        m_annotation->addChild(m_quadSeparator);
-    }
+    // Add annotation for post-processing
+    SoAnnotation* annotation = new SoAnnotation;
+    annotation->addChild(m_program);
+    annotation->addChild(m_quadSeparator);
+    m_overlayRoot->addChild(annotation);
     
-    // Add to scene
+    // Attach to scene
     root->addChild(m_overlayRoot);
     
-    logInfo("attachOverlay end");
+    LOG_INF("attachOverlay end", "EnhancedOutlinePass");
 }
 
 void EnhancedOutlinePass::detachOverlay() {
-    if (!m_sceneManager || !m_overlayRoot) return;
-    
-    logInfo("detachOverlay begin");
-    
-    SoSeparator* root = m_sceneManager->getObjectRoot();
-    if (root) {
-        int idx = root->findChild(m_overlayRoot);
-        if (idx >= 0) {
-            root->removeChild(idx);
+    if (m_overlayRoot && m_sceneManager) {
+        SoSeparator* root = m_sceneManager->getObjectRoot();
+        if (root) {
+            root->removeChild(m_overlayRoot);
         }
+        m_overlayRoot->unref();
+        m_overlayRoot = nullptr;
     }
-    
-    // Clear scene references
-    if (m_colorTexture) m_colorTexture->scene = nullptr;
-    if (m_depthTexture) m_depthTexture->scene = nullptr;
-    if (m_normalTexture) m_normalTexture->scene = nullptr;
-    if (m_selectionTexture) m_selectionTexture->scene = nullptr;
-    
-    // Clean up temporary scene root
-    if (m_tempSceneRoot) {
-        m_tempSceneRoot->unref();
-        m_tempSceneRoot = nullptr;
-    }
-    
-    // Clean up overlay root
-    m_overlayRoot->unref();
-    m_overlayRoot = nullptr;
-    m_annotation = nullptr;
-    
-    logInfo("detachOverlay end");
 }
 
 void EnhancedOutlinePass::buildShaders() {
@@ -616,10 +354,8 @@ void EnhancedOutlinePass::buildShaders() {
     m_fs = new SoFragmentShader;
     m_fs->ref();
     
-    // Set shader sources
-    m_vs->sourceType = SoShaderObject::GLSL_PROGRAM;
+    // Set shader source
     m_vs->sourceProgram.setValue(kEnhancedVS);
-    m_fs->sourceType = SoShaderObject::GLSL_PROGRAM;
     m_fs->sourceProgram.setValue(kEnhancedFS);
     
     m_program->shaderObject.set1Value(0, m_vs);
@@ -637,54 +373,29 @@ void EnhancedOutlinePass::buildGeometry() {
     m_quadSeparator = new SoSeparator;
     m_quadSeparator->ref();
     
-    // Disable lighting
-    auto* lightModel = new SoLightModel;
-    lightModel->model = SoLightModel::BASE_COLOR;
-    m_quadSeparator->addChild(lightModel);
-    
-    // Set material
-    auto* material = new SoMaterial;
-    material->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
-    material->transparency = 0.0f;
-    m_quadSeparator->addChild(material);
+    // Coordinates
+    m_quadCoords = new SoCoordinate3;
+    m_quadCoords->ref();
+    m_quadCoords->point.set1Value(0, -1.0f, -1.0f, 0.0f);
+    m_quadCoords->point.set1Value(1, 1.0f, -1.0f, 0.0f);
+    m_quadCoords->point.set1Value(2, 1.0f, 1.0f, 0.0f);
+    m_quadCoords->point.set1Value(3, -1.0f, 1.0f, 0.0f);
+    m_quadSeparator->addChild(m_quadCoords);
     
     // Texture coordinates
-    auto* texCoords = new SoTextureCoordinate2;
-    SbVec2f uvs[] = {
-        SbVec2f(0.0f, 0.0f),
-        SbVec2f(1.0f, 0.0f),
-        SbVec2f(1.0f, 1.0f),
-        SbVec2f(0.0f, 1.0f)
-    };
-    texCoords->point.setValues(0, 4, uvs);
-    m_quadSeparator->addChild(texCoords);
-    
-    // Additional texture coordinates for screen space
-    auto* screenTexCoords = new SoTextureCoordinate2;
-    SbVec2f screenUVs[] = {
-        SbVec2f(0.0f, 0.0f),
-        SbVec2f(1.0f, 0.0f),
-        SbVec2f(1.0f, 1.0f),
-        SbVec2f(0.0f, 1.0f)
-    };
-    screenTexCoords->point.setValues(0, 4, screenUVs);
-    m_quadSeparator->addChild(screenTexCoords);
-    
-    // Vertex coordinates
-    auto* coords = new SoCoordinate3;
-    SbVec3f vertices[] = {
-        SbVec3f(-1.0f, -1.0f, 0.0f),
-        SbVec3f(1.0f, -1.0f, 0.0f),
-        SbVec3f(1.0f,  1.0f, 0.0f),
-        SbVec3f(-1.0f,  1.0f, 0.0f)
-    };
-    coords->point.setValues(0, 4, vertices);
-    m_quadSeparator->addChild(coords);
+    m_quadTexCoords = new SoTextureCoordinate2;
+    m_quadTexCoords->ref();
+    m_quadTexCoords->point.set1Value(0, 0.0f, 0.0f);
+    m_quadTexCoords->point.set1Value(1, 1.0f, 0.0f);
+    m_quadTexCoords->point.set1Value(2, 1.0f, 1.0f);
+    m_quadTexCoords->point.set1Value(3, 0.0f, 1.0f);
+    m_quadSeparator->addChild(m_quadTexCoords);
     
     // Face set
-    auto* face = new SoFaceSet;
-    face->numVertices.set1Value(0, 4);
-    m_quadSeparator->addChild(face);
+    m_quadFaces = new SoFaceSet;
+    m_quadFaces->ref();
+    m_quadFaces->numVertices.set1Value(0, 4);
+    m_quadSeparator->addChild(m_quadFaces);
     
     LOG_INF("buildGeometry end", "EnhancedOutlinePass");
 }
@@ -696,57 +407,18 @@ void EnhancedOutlinePass::setupTextures() {
     m_colorTexture = new SoSceneTexture2;
     m_colorTexture->ref();
     m_colorTexture->size.setValue(SbVec2s(0, 0)); // auto-size
-    m_colorTexture->transparencyFunction = SoSceneTexture2::NONE;
+    m_colorTexture->wrapS = SoSceneTexture2::CLAMP_TO_EDGE;
+    m_colorTexture->wrapT = SoSceneTexture2::CLAMP_TO_EDGE;
     m_colorTexture->type = SoSceneTexture2::RGBA8;
-    m_colorTexture->wrapS = SoSceneTexture2::CLAMP;
-    m_colorTexture->wrapT = SoSceneTexture2::CLAMP;
+    m_colorTexture->scene = m_captureRoot;
     
     m_depthTexture = new SoSceneTexture2;
     m_depthTexture->ref();
     m_depthTexture->size.setValue(SbVec2s(0, 0)); // auto-size
-    m_depthTexture->transparencyFunction = SoSceneTexture2::NONE;
+    m_depthTexture->wrapS = SoSceneTexture2::CLAMP_TO_EDGE;
+    m_depthTexture->wrapT = SoSceneTexture2::CLAMP_TO_EDGE;
     m_depthTexture->type = SoSceneTexture2::DEPTH;
-    m_depthTexture->wrapS = SoSceneTexture2::CLAMP;
-    m_depthTexture->wrapT = SoSceneTexture2::CLAMP;
-    
-    m_normalTexture = new SoSceneTexture2;
-    m_normalTexture->ref();
-    m_normalTexture->size.setValue(SbVec2s(0, 0)); // auto-size
-    m_normalTexture->transparencyFunction = SoSceneTexture2::NONE;
-    m_normalTexture->type = SoSceneTexture2::RGBA8;
-    m_normalTexture->wrapS = SoSceneTexture2::CLAMP;
-    m_normalTexture->wrapT = SoSceneTexture2::CLAMP;
-    
-    m_selectionTexture = new SoSceneTexture2;
-    m_selectionTexture->ref();
-    m_selectionTexture->size.setValue(SbVec2s(0, 0)); // auto-size
-    m_selectionTexture->transparencyFunction = SoSceneTexture2::NONE;
-    m_selectionTexture->type = SoSceneTexture2::RGBA8;
-    m_selectionTexture->wrapS = SoSceneTexture2::CLAMP;
-    m_selectionTexture->wrapT = SoSceneTexture2::CLAMP;
-    
-    // Create temporary scene root for RTT
-    if (m_sceneManager && m_captureRoot) {
-        SoSeparator* tempSceneRoot = new SoSeparator;
-        tempSceneRoot->ref();
-        
-        // Add camera
-        SoCamera* camera = m_sceneManager->getCamera();
-        if (camera) {
-            tempSceneRoot->addChild(camera);
-        }
-        
-        // Add capture root
-        tempSceneRoot->addChild(m_captureRoot);
-        
-        // Set scenes for RTT
-        m_colorTexture->scene = tempSceneRoot;
-        m_depthTexture->scene = tempSceneRoot;
-        m_normalTexture->scene = tempSceneRoot;
-        m_selectionTexture->scene = tempSceneRoot;
-        
-        m_tempSceneRoot = tempSceneRoot;
-    }
+    m_depthTexture->scene = m_captureRoot;
     
     LOG_INF("setupTextures end", "EnhancedOutlinePass");
 }
@@ -759,234 +431,61 @@ void EnhancedOutlinePass::updateShaderParameters() {
         m_uDepthWeight = new SoShaderParameter1f;
         m_uDepthWeight->ref();
         m_uDepthWeight->name = "uDepthWeight";
+        m_program->parameter.set1Value(0, m_uDepthWeight);
     }
-    m_uDepthWeight->value = m_params.depthWeight;
     
     if (!m_uNormalWeight) {
         m_uNormalWeight = new SoShaderParameter1f;
         m_uNormalWeight->ref();
         m_uNormalWeight->name = "uNormalWeight";
+        m_program->parameter.set1Value(1, m_uNormalWeight);
     }
-    m_uNormalWeight->value = m_params.normalWeight;
     
     if (!m_uColorWeight) {
         m_uColorWeight = new SoShaderParameter1f;
         m_uColorWeight->ref();
         m_uColorWeight->name = "uColorWeight";
+        m_program->parameter.set1Value(2, m_uColorWeight);
     }
-    m_uColorWeight->value = m_params.colorWeight;
-    
-    if (!m_uDepthThreshold) {
-        m_uDepthThreshold = new SoShaderParameter1f;
-        m_uDepthThreshold->ref();
-        m_uDepthThreshold->name = "uDepthThreshold";
-    }
-    m_uDepthThreshold->value = m_params.depthThreshold;
-    
-    if (!m_uNormalThreshold) {
-        m_uNormalThreshold = new SoShaderParameter1f;
-        m_uNormalThreshold->ref();
-        m_uNormalThreshold->name = "uNormalThreshold";
-    }
-    m_uNormalThreshold->value = m_params.normalThreshold;
-    
-    if (!m_uColorThreshold) {
-        m_uColorThreshold = new SoShaderParameter1f;
-        m_uColorThreshold->ref();
-        m_uColorThreshold->name = "uColorThreshold";
-    }
-    m_uColorThreshold->value = m_params.colorThreshold;
     
     if (!m_uEdgeIntensity) {
         m_uEdgeIntensity = new SoShaderParameter1f;
         m_uEdgeIntensity->ref();
         m_uEdgeIntensity->name = "uEdgeIntensity";
+        m_program->parameter.set1Value(3, m_uEdgeIntensity);
     }
-    m_uEdgeIntensity->value = m_params.edgeIntensity;
     
     if (!m_uThickness) {
         m_uThickness = new SoShaderParameter1f;
         m_uThickness->ref();
         m_uThickness->name = "uThickness";
+        m_program->parameter.set1Value(4, m_uThickness);
     }
-    m_uThickness->value = m_params.thickness;
-    
-    if (!m_uGlowIntensity) {
-        m_uGlowIntensity = new SoShaderParameter1f;
-        m_uGlowIntensity->ref();
-        m_uGlowIntensity->name = "uGlowIntensity";
-    }
-    m_uGlowIntensity->value = m_params.glowIntensity;
-    
-    if (!m_uGlowRadius) {
-        m_uGlowRadius = new SoShaderParameter1f;
-        m_uGlowRadius->ref();
-        m_uGlowRadius->name = "uGlowRadius";
-    }
-    m_uGlowRadius->value = m_params.glowRadius;
-    
-    if (!m_uAdaptiveThreshold) {
-        m_uAdaptiveThreshold = new SoShaderParameter1f;
-        m_uAdaptiveThreshold->ref();
-        m_uAdaptiveThreshold->name = "uAdaptiveThreshold";
-    }
-    m_uAdaptiveThreshold->value = m_params.adaptiveThreshold;
-    
-    if (!m_uSmoothingFactor) {
-        m_uSmoothingFactor = new SoShaderParameter1f;
-        m_uSmoothingFactor->ref();
-        m_uSmoothingFactor->name = "uSmoothingFactor";
-    }
-    m_uSmoothingFactor->value = m_params.smoothingFactor;
-    
-    if (!m_uBackgroundFade) {
-        m_uBackgroundFade = new SoShaderParameter1f;
-        m_uBackgroundFade->ref();
-        m_uBackgroundFade->name = "uBackgroundFade";
-    }
-    m_uBackgroundFade->value = m_params.backgroundFade;
     
     if (!m_uOutlineColor) {
         m_uOutlineColor = new SoShaderParameter3f;
         m_uOutlineColor->ref();
         m_uOutlineColor->name = "uOutlineColor";
-    }
-    m_uOutlineColor->value = SbVec3f(m_params.outlineColor[0], m_params.outlineColor[1], m_params.outlineColor[2]);
-    
-    if (!m_uGlowColor) {
-        m_uGlowColor = new SoShaderParameter3f;
-        m_uGlowColor->ref();
-        m_uGlowColor->name = "uGlowColor";
-    }
-    m_uGlowColor->value = SbVec3f(m_params.glowColor[0], m_params.glowColor[1], m_params.glowColor[2]);
-    
-    if (!m_uBackgroundColor) {
-        m_uBackgroundColor = new SoShaderParameter3f;
-        m_uBackgroundColor->ref();
-        m_uBackgroundColor->name = "uBackgroundColor";
-    }
-    m_uBackgroundColor->value = SbVec3f(m_params.backgroundColor[0], m_params.backgroundColor[1], m_params.backgroundColor[2]);
-    
-    if (!m_uResolution) {
-        m_uResolution = new SoShaderParameter2f;
-        m_uResolution->ref();
-        m_uResolution->name = "uResolution";
+        m_program->parameter.set1Value(5, m_uOutlineColor);
     }
     
-    if (!m_uInvProjection) {
-        m_uInvProjection = new SoShaderParameterMatrix;
-        m_uInvProjection->ref();
-        m_uInvProjection->name = "uInvProjection";
-    }
-    
-    if (!m_uInvView) {
-        m_uInvView = new SoShaderParameterMatrix;
-        m_uInvView->ref();
-        m_uInvView->name = "uInvView";
-    }
-    
-    if (!m_uDebugMode) {
-        m_uDebugMode = new SoShaderParameter1i;
-        m_uDebugMode->ref();
-        m_uDebugMode->name = "uDebugMode";
-    }
-    m_uDebugMode->value = static_cast<int>(m_debugMode);
-    
-    if (!m_uDownsampleFactor) {
-        m_uDownsampleFactor = new SoShaderParameter1i;
-        m_uDownsampleFactor->ref();
-        m_uDownsampleFactor->name = "uDownsampleFactor";
-    }
-    m_uDownsampleFactor->value = m_downsampleFactor;
-    
-    if (!m_uEnableEarlyCulling) {
-        m_uEnableEarlyCulling = new SoShaderParameter1i;
-        m_uEnableEarlyCulling->ref();
-        m_uEnableEarlyCulling->name = "uEnableEarlyCulling";
-    }
-    m_uEnableEarlyCulling->value = m_earlyCullingEnabled ? 1 : 0;
-    
-    // Update resolution
-    if (m_sceneManager && m_sceneManager->getCanvas()) {
-        int width, height;
-        m_sceneManager->getCanvas()->GetSize(&width, &height);
-        if (width > 0 && height > 0) {
-            m_uResolution->value = SbVec2f(1.0f / float(width), 1.0f / float(height));
-        }
-    }
+    // Update parameter values
+    m_uDepthWeight->value = m_params.depthWeight;
+    m_uNormalWeight->value = m_params.normalWeight;
+    m_uColorWeight->value = m_params.colorWeight;
+    m_uEdgeIntensity->value = m_params.edgeIntensity;
+    m_uThickness->value = m_params.thickness;
+    m_uOutlineColor->value = m_params.outlineColor;
 }
 
-void EnhancedOutlinePass::updateCameraMatrices() {
-    if (!m_sceneManager) return;
-    
-    SoCamera* camera = m_sceneManager->getCamera();
-    if (!camera) return;
-    
-    // Get viewport dimensions
-    SbVec2s vpSize(1920, 1080);
-    if (m_sceneManager->getCanvas()) {
-        int width, height;
-        m_sceneManager->getCanvas()->GetSize(&width, &height);
-        if (width > 0 && height > 0) {
-            vpSize = SbVec2s(width, height);
-        }
-    }
-    
-    // Get projection matrix and invert it
-    SbViewVolume viewVol = camera->getViewVolume(float(vpSize[0]) / float(vpSize[1]));
-    SbMatrix projMatrix = viewVol.getMatrix();
-    SbMatrix invProjMatrix = projMatrix.inverse();
-    
-    // Get view matrix and invert it
-    SbMatrix viewMatrix;
-    viewMatrix.setTranslate(-camera->position.getValue());
-    SbMatrix rotMatrix;
-    camera->orientation.getValue().getValue(rotMatrix);
-    viewMatrix.multRight(rotMatrix);
-    SbMatrix invViewMatrix = viewMatrix.inverse();
-    
-    // Update shader parameters
-    if (m_uInvProjection) {
-        m_uInvProjection->value.setValue(invProjMatrix);
-    }
-    if (m_uInvView) {
-        m_uInvView->value.setValue(invViewMatrix);
-    }
-}
-
-void EnhancedOutlinePass::updateTextureSizes() {
-    if (!m_sceneManager || !m_sceneManager->getCanvas()) return;
-    
-    int width, height;
-    m_sceneManager->getCanvas()->GetSize(&width, &height);
-    
-    if (width > 0 && height > 0) {
-        // Apply downsampling
-        width /= m_downsampleFactor;
-        height /= m_downsampleFactor;
-        
-        SbVec2s size(width, height);
-        
-        if (m_colorTexture) m_colorTexture->size.setValue(size);
-        if (m_depthTexture) m_depthTexture->size.setValue(size);
-        if (m_normalTexture) m_normalTexture->size.setValue(size);
-        if (m_selectionTexture) m_selectionTexture->size.setValue(size);
-    }
+void EnhancedOutlinePass::updateSelectionState() {
+    // Update selection state in outline pass
+    // This would need to be implemented based on your object ID system
+    LOG_INF((std::string("updateSelectionState - ") + std::to_string(m_selectedObjects.size()) + " objects selected").c_str(), "EnhancedOutlinePass");
 }
 
 bool EnhancedOutlinePass::chooseTextureUnits() {
-    GLint maxUnits = 0;
-    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxUnits);
-    
-    if (maxUnits >= 4) {
-        m_colorUnit = maxUnits - 1;
-        m_depthUnit = maxUnits - 2;
-        m_normalUnit = maxUnits - 3;
-        m_selectionUnit = maxUnits - 4;
-        return true;
-    }
-    
-    // Fallback
+    // Choose available texture units
     m_colorUnit = 0;
     m_depthUnit = 1;
     m_normalUnit = 2;
