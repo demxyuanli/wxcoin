@@ -4,6 +4,11 @@
 #include "Canvas.h"
 #include "logger/Logger.h"
 
+// Include Windows headers before any OpenGL headers
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <Inventor/SoPath.h>
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbColor.h>

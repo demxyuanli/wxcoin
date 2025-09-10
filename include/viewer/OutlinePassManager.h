@@ -53,7 +53,7 @@ public:
     void setBalancedMode();
 
     // 调试功能
-    void setDebugMode(int mode);
+    void setDebugMode(OutlineDebugMode mode);
     void enableDebugVisualization(bool enabled);
 
     // 刷新和更新
