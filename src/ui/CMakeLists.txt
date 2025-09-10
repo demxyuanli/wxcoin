@@ -51,19 +51,15 @@ add_library(UIDialogEdges STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/FeatureEdgesParamDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OutlineSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OutlinePreviewCanvas.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/EnhancedOutlineSettingsDialog.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/EnhancedOutlinePreviewCanvas.cpp
 
     ${CMAKE_SOURCE_DIR}/include/EdgeSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/FeatureEdgesParamDialog.h
     ${CMAKE_SOURCE_DIR}/include/ui/OutlineSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/ui/OutlinePreviewCanvas.h
-    ${CMAKE_SOURCE_DIR}/include/ui/EnhancedOutlineSettingsDialog.h
-    ${CMAKE_SOURCE_DIR}/include/ui/EnhancedOutlinePreviewCanvas.h
 
 )
 target_include_directories(UIDialogEdges PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADOCC CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
 set_target_properties(UIDialogEdges PROPERTIES FOLDER "UI")
 
 set(UIDialogMesh_SOURCES

@@ -22,8 +22,6 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlineDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SelectionOutlineManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ImageOutlinePass.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/EnhancedOutlinePass.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlinePassManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeGenerationService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderApplier.cpp
@@ -64,8 +62,6 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/viewer/OutlineDisplayManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/SelectionOutlineManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ImageOutlinePass.h
-    ${CMAKE_SOURCE_DIR}/include/viewer/EnhancedOutlinePass.h
-    ${CMAKE_SOURCE_DIR}/include/viewer/OutlinePassManager.h
 )
 
 # Create OpenCASCADE static library
