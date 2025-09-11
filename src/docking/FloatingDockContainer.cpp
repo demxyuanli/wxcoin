@@ -78,7 +78,10 @@ FloatingDockContainer::FloatingDockContainer(DockArea* dockArea)
         // Ensure proper layout after adding content
         m_dockContainer->Layout();
         Layout();
-        Refresh();
+        
+        // Use RefreshRect for better performance
+        wxRect clientRect = GetClientRect();
+        RefreshRect(clientRect, false);
         
         // Update window title
         updateWindowTitle();
@@ -131,7 +134,10 @@ void FloatingDockContainer::init() {
     
     // Force layout update
     Layout();
-    Refresh();
+    
+    // Use RefreshRect for better performance
+    wxRect clientRect = GetClientRect();
+    RefreshRect(clientRect, false);
 
     // Set proper window behavior for always-on-top
     SetWindowStyleFlag(GetWindowStyleFlag() | wxSTAY_ON_TOP);
@@ -158,7 +164,10 @@ void FloatingDockContainer::addDockWidget(DockWidget* dockWidget) {
     // Ensure proper layout after adding content
     m_dockContainer->Layout();
     Layout();
-    Refresh();
+    
+    // Use RefreshRect for better performance
+    wxRect clientRect = GetClientRect();
+    RefreshRect(clientRect, false);
     
     // Make sure the window is shown after content is added
     Show(true);

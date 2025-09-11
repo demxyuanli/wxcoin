@@ -124,6 +124,21 @@ void DockSplitter::OnSplitterSashPosChanged(wxSplitterEvent& event) {
     // Update sizes
     m_sizes = sizes();
 
+    // Notify parent DockContainerWidget that user has adjusted layout
+    wxWindow* current = GetParent();
+    DockContainerWidget* container = nullptr;
+    
+    while (current && !container) {
+        container = dynamic_cast<DockContainerWidget*>(current);
+        if (!container) {
+            current = current->GetParent();
+        }
+    }
+    
+    if (container) {
+        container->markUserAdjustedLayout();
+    }
+
     // Force refresh of all child windows after splitter position change
     if (GetWindow1()) {
         GetWindow1()->Refresh();

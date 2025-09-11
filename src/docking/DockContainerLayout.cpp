@@ -871,6 +871,22 @@ void DockContainerWidget::applyLayoutConfig() {
         return; // Invalid size
     }
 
+    // Cache check to avoid unnecessary recalculations
+    static wxSize lastContainerSize;
+    static DockLayoutConfig lastConfig;
+    static bool lastConfigValid = false;
+    
+    if (lastConfigValid && 
+        lastContainerSize == containerSize && 
+        lastConfig == config) {
+        return; // No changes, skip recalculation
+    }
+    
+    // Update cache
+    lastContainerSize = containerSize;
+    lastConfig = config;
+    lastConfigValid = true;
+
     // Apply the configuration to all splitters
     DockSplitter* rootSplitter = dynamic_cast<DockSplitter*>(m_rootSplitter);
     if (!rootSplitter || !rootSplitter->IsSplit()) {
@@ -933,9 +949,144 @@ void DockContainerWidget::applyLayoutConfig() {
         }
     }
 
-    // Force layout update
+    // Use deferred layout update to avoid excessive refreshes
+    if (!m_layoutUpdateTimer) {
+        m_layoutUpdateTimer = new wxTimer(this);
+        Bind(wxEVT_TIMER, &DockContainerWidget::onLayoutUpdateTimer, this, m_layoutUpdateTimer->GetId());
+    }
+
+    // Cancel any pending layout update
+    if (m_layoutUpdateTimer->IsRunning()) {
+        m_layoutUpdateTimer->Stop();
+    }
+
+    // Schedule layout update with debounce delay
+    m_layoutUpdateTimer->Start(8, wxTIMER_ONE_SHOT); // ~120fps debounce
+}
+
+void DockContainerWidget::applyProportionalResize(const wxSize& oldSize, const wxSize& newSize) {
+    if (oldSize.GetWidth() <= 0 || oldSize.GetHeight() <= 0 || 
+        newSize.GetWidth() <= 0 || newSize.GetHeight() <= 0) {
+        return;
+    }
+    
+    // Calculate scale factors
+    double scaleX = static_cast<double>(newSize.GetWidth()) / oldSize.GetWidth();
+    double scaleY = static_cast<double>(newSize.GetHeight()) / oldSize.GetHeight();
+    
+    // Apply proportional scaling to all cached splitter ratios
+    for (auto& ratio : m_splitterRatios) {
+        if (!ratio.isValid || !ratio.splitter) {
+            continue;
+        }
+        
+        DockSplitter* splitter = dynamic_cast<DockSplitter*>(ratio.splitter);
+        if (!splitter || !splitter->IsSplit()) {
+            continue;
+        }
+        
+        // Calculate new position based on scale factor
+        wxSize splitterSize = splitter->GetSize();
+        int newPosition;
+        
+        if (splitter->GetSplitMode() == wxSPLIT_VERTICAL) {
+            // Vertical splitter - scale horizontally
+            newPosition = static_cast<int>(ratio.ratio * splitterSize.GetWidth());
+        } else {
+            // Horizontal splitter - scale vertically
+            newPosition = static_cast<int>(ratio.ratio * splitterSize.GetHeight());
+        }
+        
+        // Ensure position is within valid range
+        int minSize = splitter->GetMinimumPaneSize();
+        int maxPosition = (splitter->GetSplitMode() == wxSPLIT_VERTICAL) ? 
+                         splitterSize.GetWidth() - minSize : 
+                         splitterSize.GetHeight() - minSize;
+        
+        newPosition = std::max(minSize, std::min(newPosition, maxPosition));
+        
+        // Apply new position
+        splitter->SetSashPosition(newPosition);
+    }
+    
+    // Update layout without full refresh
     Layout();
-    Refresh();
+    
+    // Use RefreshRect for better performance
+    wxRect dirtyRect = GetClientRect();
+    RefreshRect(dirtyRect, false);
+}
+
+void DockContainerWidget::cacheSplitterRatios() {
+    m_splitterRatios.clear();
+    
+    // Recursively collect all splitters and their ratios
+    collectSplitterRatios(m_rootSplitter);
+    
+    wxLogDebug("DockContainerWidget::cacheSplitterRatios - cached %d splitter ratios", 
+               static_cast<int>(m_splitterRatios.size()));
+}
+
+void DockContainerWidget::collectSplitterRatios(wxWindow* window) {
+    if (!window) {
+        return;
+    }
+    
+    DockSplitter* splitter = dynamic_cast<DockSplitter*>(window);
+    if (splitter && splitter->IsSplit()) {
+        SplitterRatio ratio;
+        ratio.splitter = splitter;
+        ratio.isValid = true;
+        
+        // Calculate current ratio
+        wxSize splitterSize = splitter->GetSize();
+        int sashPosition = splitter->GetSashPosition();
+        
+        if (splitter->GetSplitMode() == wxSPLIT_VERTICAL) {
+            // Vertical splitter
+            if (splitterSize.GetWidth() > 0) {
+                ratio.ratio = static_cast<double>(sashPosition) / splitterSize.GetWidth();
+            } else {
+                ratio.ratio = 0.5; // Default to center
+            }
+        } else {
+            // Horizontal splitter
+            if (splitterSize.GetHeight() > 0) {
+                ratio.ratio = static_cast<double>(sashPosition) / splitterSize.GetHeight();
+            } else {
+                ratio.ratio = 0.5; // Default to center
+            }
+        }
+        
+        // Ensure ratio is within valid range
+        ratio.ratio = std::max(0.1, std::min(0.9, ratio.ratio));
+        
+        m_splitterRatios.push_back(ratio);
+        
+        wxLogDebug("Cached splitter ratio: %.3f (position: %d, size: %dx%d)", 
+                   ratio.ratio, sashPosition, splitterSize.GetWidth(), splitterSize.GetHeight());
+    }
+    
+    // Recursively process child windows
+    wxWindowList& children = window->GetChildren();
+    for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
+        collectSplitterRatios(*it);
+    }
+}
+
+void DockContainerWidget::restoreSplitterRatios() {
+    // This function can be used to restore ratios after layout changes
+    // For now, we'll just recache the current ratios
+    cacheSplitterRatios();
+}
+
+void DockContainerWidget::markUserAdjustedLayout() {
+    m_hasUserAdjustedLayout = true;
+    
+    // Cache current splitter ratios when user adjusts layout
+    cacheSplitterRatios();
+    
+    wxLogDebug("DockContainerWidget::markUserAdjustedLayout - User adjusted layout, cached ratios");
 }
 
 } // namespace ads

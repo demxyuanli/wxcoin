@@ -279,10 +279,15 @@ void DockArea::setCurrentIndex(int index) {
         m_currentDockWidget->Show();
         m_currentDockWidget->SetFocus();
         m_contentArea->Layout();
-        // Force refresh to ensure widget content is properly displayed
-        m_currentDockWidget->Refresh();
+        
+        // Use RefreshRect for better performance instead of full refresh
+        wxRect widgetRect = m_currentDockWidget->GetRect();
+        m_currentDockWidget->RefreshRect(widgetRect, false);
+        
         // Additional refresh for content area to ensure proper display
-        m_contentArea->Refresh();
+        wxRect contentRect = m_contentArea->GetRect();
+        m_contentArea->RefreshRect(contentRect, false);
+        
         // Force immediate update to prevent display issues during drag operations
         m_contentArea->Update();
     }

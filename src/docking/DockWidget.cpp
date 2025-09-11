@@ -131,7 +131,10 @@ void DockWidget::setWidget(wxWindow* widget, InsertMode insertMode) {
     }
     
     Layout();
-    Refresh();
+    
+    // Use RefreshRect for better performance
+    wxRect clientRect = GetClientRect();
+    RefreshRect(clientRect, false);
 }
 
 wxWindow* DockWidget::takeWidget() {

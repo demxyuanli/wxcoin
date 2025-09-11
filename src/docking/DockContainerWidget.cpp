@@ -16,6 +16,7 @@ wxEventTypeTag<wxCommandEvent> DockContainerWidget::EVT_DOCK_AREAS_REMOVED(wxNew
 // Event table
 wxBEGIN_EVENT_TABLE(DockContainerWidget, wxPanel)
     EVT_SIZE(DockContainerWidget::onSize)
+    EVT_TIMER(wxID_ANY, DockContainerWidget::onResizeTimer)
 wxEND_EVENT_TABLE()
 
 // Private implementation
@@ -36,6 +37,10 @@ DockContainerWidget::DockContainerWidget(DockManager* dockManager, wxWindow* par
     , m_floatingWidget(nullptr)
     , m_lastAddedArea(nullptr)
     , m_layoutConfig(nullptr)
+    , m_resizeTimer(nullptr)
+    , m_layoutUpdateTimer(nullptr)
+    , m_lastContainerSize(wxSize(0, 0))
+    , m_hasUserAdjustedLayout(false)
 {
     // Create layout
     m_layout = new wxBoxSizer(wxVERTICAL);
@@ -296,15 +301,53 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
 
 
 
-void DockContainerWidget::onSize(wxSizeEvent& event) {
+void DockContainerWidget::onResizeTimer(wxTimerEvent& event) {
     // Apply layout configuration if using percentage mode
     applyLayoutConfig();
-
+    
     // Note: Individual dock areas will handle their own refresh with debounce
     // No need to force refresh all areas here as it causes performance issues
+}
+
+void DockContainerWidget::onLayoutUpdateTimer(wxTimerEvent& event) {
+    // Perform the actual layout update and refresh
+    Layout();
+    
+    // Use RefreshRect for specific areas instead of full refresh for better performance
+    wxRect dirtyRect = GetClientRect();
+    RefreshRect(dirtyRect, false);
+}
+
+void DockContainerWidget::onSize(wxSizeEvent& event) {
+    wxSize newSize = event.GetSize();
+    
+    // Use proportional resize if we have cached ratios and user has adjusted layout
+    if (m_hasUserAdjustedLayout && m_lastContainerSize.GetWidth() > 0 && m_lastContainerSize.GetHeight() > 0) {
+        applyProportionalResize(m_lastContainerSize, newSize);
+        m_lastContainerSize = newSize;
+        event.Skip();
+        return;
+    }
+    
+    // Use debounced layout update to prevent excessive recalculations during resize
+    if (!m_resizeTimer) {
+        m_resizeTimer = new wxTimer(this);
+        Bind(wxEVT_TIMER, &DockContainerWidget::onResizeTimer, this, m_resizeTimer->GetId());
+    }
+
+    // Cancel any pending layout update
+    if (m_resizeTimer->IsRunning()) {
+        m_resizeTimer->Stop();
+    }
+
+    // Schedule layout update with debounce delay
+    m_resizeTimer->Start(16, wxTIMER_ONE_SHOT); // ~60fps debounce
 
     // Update global docking hints if in global mode
     updateGlobalDockingHints();
+    
+    // Cache the new size for next resize
+    m_lastContainerSize = newSize;
 
     event.Skip();
 }
