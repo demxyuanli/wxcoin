@@ -62,6 +62,7 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/viewer/OutlineDisplayManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/SelectionOutlineManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ImageOutlinePass.h
+
 )
 
 # Create OpenCASCADE static library

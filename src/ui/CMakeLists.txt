@@ -59,9 +59,10 @@ add_library(UIDialogEdges STATIC
     ${CMAKE_SOURCE_DIR}/include/ui/OutlineSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/ui/OutlinePreviewCanvas.h
 
+
 )
 target_include_directories(UIDialogEdges PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADOCC CADFlatUI widgets ${wxWidgets_LIBRARIES})
 set_target_properties(UIDialogEdges PROPERTIES FOLDER "UI")
 
 set(UIDialogMesh_SOURCES
