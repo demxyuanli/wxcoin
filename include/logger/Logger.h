@@ -31,6 +31,7 @@ private:
 	Logger& operator=(const Logger&) = delete;
 
 	std::ofstream logFile;
+	std::string logFileName; // Store the log file name with timestamp
 	wxTextCtrl* logCtrl;
 	bool isShuttingDown = false;
 	std::set<LogLevel> allowedLogLevels; // Set of allowed log levels

@@ -23,8 +23,16 @@ public:
     bool isParallelProcessing() const { return m_parallelProcessing; }
     bool isAdaptiveMeshing() const { return m_adaptiveMeshing; }
     bool isAutoOptimize() const { return m_autoOptimize; }
-    bool isNormalProcessing() const { return m_normalProcessing; }  // New: Normal processing control
+    bool isNormalProcessing() const { return m_normalProcessing; }
     int getImportMode() const { return m_importMode; }
+    
+    // New tessellation settings
+    bool isFineTessellationEnabled() const { return m_enableFineTessellation; }
+    double getTessellationDeflection() const { return m_tessellationDeflection; }
+    double getTessellationAngle() const { return m_tessellationAngle; }
+    int getTessellationMinPoints() const { return m_tessellationMinPoints; }
+    int getTessellationMaxPoints() const { return m_tessellationMaxPoints; }
+    bool isAdaptiveTessellationEnabled() const { return m_enableAdaptiveTessellation; }
     
 private:
     void createControls();
@@ -50,9 +58,17 @@ private:
     wxCheckBox* m_parallelCheckBox;
     wxCheckBox* m_adaptiveCheckBox;
     wxCheckBox* m_autoOptimizeCheckBox;
-    wxCheckBox* m_normalProcessingCheckBox;  // New: Normal processing checkbox
+    wxCheckBox* m_normalProcessingCheckBox;
     wxChoice* m_importModeChoice;
     wxStaticText* m_previewText;
+    
+    // New tessellation controls
+    wxCheckBox* m_fineTessellationCheckBox;
+    wxSpinCtrlDouble* m_tessellationDeflectionCtrl;
+    wxSpinCtrlDouble* m_tessellationAngleCtrl;
+    wxSpinCtrl* m_tessellationMinPointsCtrl;
+    wxSpinCtrl* m_tessellationMaxPointsCtrl;
+    wxCheckBox* m_adaptiveTessellationCheckBox;
     
     // Settings
     double m_deflection;
@@ -61,8 +77,16 @@ private:
     bool m_parallelProcessing;
     bool m_adaptiveMeshing;
     bool m_autoOptimize;
-    bool m_normalProcessing;  // New: Normal processing setting
+    bool m_normalProcessing;
     int m_importMode;
+    
+    // New tessellation settings
+    bool m_enableFineTessellation;
+    double m_tessellationDeflection;
+    double m_tessellationAngle;
+    int m_tessellationMinPoints;
+    int m_tessellationMaxPoints;
+    bool m_enableAdaptiveTessellation;
     
     wxDECLARE_EVENT_TABLE();
 };

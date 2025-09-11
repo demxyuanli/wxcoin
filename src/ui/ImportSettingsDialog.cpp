@@ -8,7 +8,7 @@ wxBEGIN_EVENT_TABLE(ImportSettingsDialog, wxDialog)
 wxEND_EVENT_TABLE()
 
 ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
-    : wxDialog(parent, wxID_ANY, "Import Settings", wxDefaultPosition, wxSize(600, 600))
+    : wxDialog(parent, wxID_ANY, "Import Settings", wxDefaultPosition, wxSize(700, 700))
     , m_presetPanel(nullptr)
     , m_deflectionCtrl(nullptr)
     , m_angularDeflectionCtrl(nullptr)
@@ -16,17 +16,29 @@ ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
     , m_parallelCheckBox(nullptr)
     , m_adaptiveCheckBox(nullptr)
     , m_autoOptimizeCheckBox(nullptr)
-    , m_normalProcessingCheckBox(nullptr)  // New: Initialize normal processing checkbox
+    , m_normalProcessingCheckBox(nullptr)
     , m_importModeChoice(nullptr)
     , m_previewText(nullptr)
+    , m_fineTessellationCheckBox(nullptr)
+    , m_tessellationDeflectionCtrl(nullptr)
+    , m_tessellationAngleCtrl(nullptr)
+    , m_tessellationMinPointsCtrl(nullptr)
+    , m_tessellationMaxPointsCtrl(nullptr)
+    , m_adaptiveTessellationCheckBox(nullptr)
     , m_deflection(1.0)
     , m_angularDeflection(1.0)
     , m_enableLOD(true)
     , m_parallelProcessing(true)
     , m_adaptiveMeshing(false)
     , m_autoOptimize(true)
-    , m_normalProcessing(false)  // Changed: Default to disabled
+    , m_normalProcessing(false)
     , m_importMode(0)
+    , m_enableFineTessellation(true)
+    , m_tessellationDeflection(0.01)
+    , m_tessellationAngle(0.1)
+    , m_tessellationMinPoints(3)
+    , m_tessellationMaxPoints(100)
+    , m_enableAdaptiveTessellation(true)
 {
     createControls();
     layoutControls();
@@ -98,8 +110,37 @@ void ImportSettingsDialog::createControls()
     m_autoOptimizeCheckBox->SetToolTip("Automatically adjust settings based on model size");
     
     m_normalProcessingCheckBox = new wxCheckBox(this, wxID_ANY, "Normal Processing");
-    m_normalProcessingCheckBox->SetValue(false);  // Changed: Default to disabled
+    m_normalProcessingCheckBox->SetValue(false);
     m_normalProcessingCheckBox->SetToolTip("Fix face normal directions for consistent rendering");
+    
+    // New tessellation controls
+    m_fineTessellationCheckBox = new wxCheckBox(this, wxID_ANY, "Fine Tessellation");
+    m_fineTessellationCheckBox->SetValue(true);
+    m_fineTessellationCheckBox->SetToolTip("Enable fine tessellation for smooth surfaces");
+    
+    m_tessellationDeflectionCtrl = new wxSpinCtrlDouble(this, wxID_ANY, "0.01",
+        wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS,
+        0.001, 1.0, 0.01, 0.001);
+    m_tessellationDeflectionCtrl->SetToolTip("Surface deflection - smaller = smoother");
+    
+    m_tessellationAngleCtrl = new wxSpinCtrlDouble(this, wxID_ANY, "0.1",
+        wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS,
+        0.01, 1.0, 0.1, 0.01);
+    m_tessellationAngleCtrl->SetToolTip("Angular deflection - smaller = more triangles");
+    
+    m_tessellationMinPointsCtrl = new wxSpinCtrl(this, wxID_ANY, "3",
+        wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS,
+        2, 20, 3);
+    m_tessellationMinPointsCtrl->SetToolTip("Minimum points per edge");
+    
+    m_tessellationMaxPointsCtrl = new wxSpinCtrl(this, wxID_ANY, "100",
+        wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS,
+        10, 500, 100);
+    m_tessellationMaxPointsCtrl->SetToolTip("Maximum points per edge");
+    
+    m_adaptiveTessellationCheckBox = new wxCheckBox(this, wxID_ANY, "Adaptive Tessellation");
+    m_adaptiveTessellationCheckBox->SetValue(true);
+    m_adaptiveTessellationCheckBox->SetToolTip("Adjust tessellation based on surface curvature");
     
     // Import mode
     wxStaticBox* modeBox = new wxStaticBox(this, wxID_ANY, "Import Mode");
@@ -183,6 +224,45 @@ void ImportSettingsDialog::layoutControls()
     perfSizer->Add(m_normalProcessingCheckBox, 0, wxALL, 3);
     
     leftColumn->Add(perfSizer, 0, wxEXPAND | wxALL, 5);
+    
+    // Tessellation settings - new section
+    wxStaticBox* tessellationBox = new wxStaticBox(this, wxID_ANY, "Surface Tessellation");
+    wxStaticBoxSizer* tessellationSizer = new wxStaticBoxSizer(tessellationBox, wxVERTICAL);
+    
+    tessellationSizer->Add(m_fineTessellationCheckBox, 0, wxALL, 3);
+    tessellationSizer->Add(m_adaptiveTessellationCheckBox, 0, wxALL, 3);
+    
+    // Tessellation parameters grid
+    wxFlexGridSizer* tessellationGrid = new wxFlexGridSizer(4, 2, 3, 8);
+    tessellationGrid->AddGrowableCol(1);
+    
+    tessellationGrid->Add(new wxStaticText(this, wxID_ANY, "Deflection:"), 
+        0, wxALIGN_CENTER_VERTICAL);
+    tessellationGrid->Add(m_tessellationDeflectionCtrl, 1, wxEXPAND);
+    
+    tessellationGrid->Add(new wxStaticText(this, wxID_ANY, "Angle:"), 
+        0, wxALIGN_CENTER_VERTICAL);
+    tessellationGrid->Add(m_tessellationAngleCtrl, 1, wxEXPAND);
+    
+    tessellationGrid->Add(new wxStaticText(this, wxID_ANY, "Min Points:"), 
+        0, wxALIGN_CENTER_VERTICAL);
+    tessellationGrid->Add(m_tessellationMinPointsCtrl, 1, wxEXPAND);
+    
+    tessellationGrid->Add(new wxStaticText(this, wxID_ANY, "Max Points:"), 
+        0, wxALIGN_CENTER_VERTICAL);
+    tessellationGrid->Add(m_tessellationMaxPointsCtrl, 1, wxEXPAND);
+    
+    tessellationSizer->Add(tessellationGrid, 0, wxEXPAND | wxALL, 8);
+    
+    wxStaticText* tessellationHelp = new wxStaticText(this, wxID_ANY,
+        "Fine tessellation creates smoother surfaces\nSmaller values = better quality, slower");
+    tessellationHelp->SetForegroundColour(wxColour(100, 100, 100));
+    wxFont tessellationHelpFont = tessellationHelp->GetFont();
+    tessellationHelpFont.SetPointSize(tessellationHelpFont.GetPointSize() - 1);
+    tessellationHelp->SetFont(tessellationHelpFont);
+    tessellationSizer->Add(tessellationHelp, 0, wxALL, 5);
+    
+    leftColumn->Add(tessellationSizer, 0, wxEXPAND | wxALL, 5);
     
     // Right column
     wxBoxSizer* rightColumn = new wxBoxSizer(wxVERTICAL);
@@ -287,6 +367,33 @@ void ImportSettingsDialog::applyPreset(double deflection, double angular,
     m_parallelCheckBox->SetValue(parallel);
     m_normalProcessingCheckBox->SetValue(normalProcessing);
     
+    // Apply tessellation presets based on deflection
+    if (deflection >= 2.0) {
+        // Performance mode - basic tessellation
+        m_fineTessellationCheckBox->SetValue(false);
+        m_tessellationDeflectionCtrl->SetValue(0.1);
+        m_tessellationAngleCtrl->SetValue(0.5);
+        m_tessellationMinPointsCtrl->SetValue(3);
+        m_tessellationMaxPointsCtrl->SetValue(20);
+        m_adaptiveTessellationCheckBox->SetValue(false);
+    } else if (deflection >= 1.0) {
+        // Balanced mode - good tessellation
+        m_fineTessellationCheckBox->SetValue(true);
+        m_tessellationDeflectionCtrl->SetValue(0.01);
+        m_tessellationAngleCtrl->SetValue(0.1);
+        m_tessellationMinPointsCtrl->SetValue(3);
+        m_tessellationMaxPointsCtrl->SetValue(100);
+        m_adaptiveTessellationCheckBox->SetValue(true);
+    } else {
+        // Quality mode - fine tessellation
+        m_fineTessellationCheckBox->SetValue(true);
+        m_tessellationDeflectionCtrl->SetValue(0.005);
+        m_tessellationAngleCtrl->SetValue(0.05);
+        m_tessellationMinPointsCtrl->SetValue(5);
+        m_tessellationMaxPointsCtrl->SetValue(200);
+        m_adaptiveTessellationCheckBox->SetValue(true);
+    }
+    
     // Update preview with enhanced formatting
     wxString preview;
     wxColour previewColor;
@@ -334,11 +441,19 @@ void ImportSettingsDialog::onOK(wxCommandEvent& event)
     m_parallelProcessing = m_parallelCheckBox->GetValue();
     m_adaptiveMeshing = m_adaptiveCheckBox->GetValue();
     m_autoOptimize = m_autoOptimizeCheckBox->GetValue();
-    m_normalProcessing = m_normalProcessingCheckBox->GetValue();  // New: Save normal processing setting
+    m_normalProcessing = m_normalProcessingCheckBox->GetValue();
     m_importMode = m_importModeChoice->GetSelection();
     
-    LOG_INF_S(wxString::Format("Import settings saved: Deflection=%.2f, LOD=%s",
-        m_deflection, m_enableLOD ? "On" : "Off"));
+    // Save new tessellation settings
+    m_enableFineTessellation = m_fineTessellationCheckBox->GetValue();
+    m_tessellationDeflection = m_tessellationDeflectionCtrl->GetValue();
+    m_tessellationAngle = m_tessellationAngleCtrl->GetValue();
+    m_tessellationMinPoints = m_tessellationMinPointsCtrl->GetValue();
+    m_tessellationMaxPoints = m_tessellationMaxPointsCtrl->GetValue();
+    m_enableAdaptiveTessellation = m_adaptiveTessellationCheckBox->GetValue();
+    
+    LOG_INF_S(wxString::Format("Import settings saved: Deflection=%.2f, LOD=%s, FineTessellation=%s",
+        m_deflection, m_enableLOD ? "On" : "Off", m_enableFineTessellation ? "On" : "Off"));
     
     EndModal(wxID_OK);
 }

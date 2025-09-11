@@ -65,6 +65,13 @@ public:
     
     // Layout configuration
     void applyLayoutConfig();
+    void applyProportionalResize(const wxSize& oldSize, const wxSize& newSize);
+    void cacheSplitterRatios();
+    void restoreSplitterRatios();
+    void markUserAdjustedLayout();
+    
+    // Helper for collecting splitter ratios
+    void collectSplitterRatios(wxWindow* window);
 
     // Global docking support
     void enableGlobalDockingMode(bool enable);
@@ -86,6 +93,8 @@ protected:
     // Event handlers
     void onSize(wxSizeEvent& event);
     void onDockAreaDestroyed(wxWindowDestroyEvent& event);
+    void onResizeTimer(wxTimerEvent& event);
+    void onLayoutUpdateTimer(wxTimerEvent& event);
     
 private:
     // Private implementation details
@@ -100,6 +109,18 @@ private:
     FloatingDockContainer* m_floatingWidget;
     DockArea* m_lastAddedArea;
     std::unique_ptr<DockLayoutConfig> m_layoutConfig;
+    wxTimer* m_resizeTimer;
+    wxTimer* m_layoutUpdateTimer;
+    
+    // Proportional resize support
+    struct SplitterRatio {
+        wxWindow* splitter;
+        double ratio; // 0.0 to 1.0
+        bool isValid;
+    };
+    std::vector<SplitterRatio> m_splitterRatios;
+    wxSize m_lastContainerSize;
+    bool m_hasUserAdjustedLayout;
     
     // Helper methods
     void dropFloatingWidget(FloatingDockContainer* floatingWidget, const wxPoint& targetPos);

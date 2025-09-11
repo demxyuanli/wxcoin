@@ -28,8 +28,6 @@
 #include <XCAFDoc_MaterialTool.hxx>
 #include <TDataStd_Name.hxx>
 #include <TCollection_AsciiString.hxx>
-#include <StepData_StepModel.hxx>
-#include <StepRepr_RepresentationItem.hxx>
 
 // File system includes
 #include <filesystem>

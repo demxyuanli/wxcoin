@@ -18,18 +18,17 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS.hxx>
 
-// STEP metadata includes
-#include <STEPCAFControl_Reader.hxx>
-#include <XCAFApp_Application.hxx>
-#include <TDF_Label.hxx>
-#include <TDF_LabelSequence.hxx>
-#include <XCAFDoc_ShapeTool.hxx>
-#include <XCAFDoc_ColorTool.hxx>
-#include <XCAFDoc_MaterialTool.hxx>
-#include <TDataStd_Name.hxx>
-#include <TCollection_AsciiString.hxx>
+// STEP metadata includes - simplified for basic functionality
 #include <StepData_StepModel.hxx>
 #include <StepRepr_RepresentationItem.hxx>
+#include <TCollection_HAsciiString.hxx>
+#include <StepVisual_Colour.hxx>
+#include <StepVisual_ColourRgb.hxx>
+#include <StepVisual_SurfaceStyleUsage.hxx>
+#include <StepVisual_StyledItem.hxx>
+
+// Tessellation includes for smooth surfaces
+#include <BRepMesh_IncrementalMesh.hxx>
 
 // File system includes
 #include <filesystem>
@@ -102,16 +101,29 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 		initialize();
 		if (progress) progress(5, "initialize");
 
-		// Use standard STEP reader settings following FreeCAD approach
+		// Use enhanced STEP reader settings for smooth surfaces
 		STEPControl_Reader reader;
 		
-		// Set basic precision mode
+		// Set precision mode with fine tessellation
 		Interface_Static::SetIVal("read.precision.mode", 1);
 		Interface_Static::SetRVal("read.precision.val", options.precision);
 		
-		// Use default OCCT settings for better compatibility
-		Interface_Static::SetIVal("read.step.optimize", 1);
-		Interface_Static::SetIVal("read.step.fast_mode", 1);
+		// Configure tessellation parameters for smooth surfaces
+		if (options.enableFineTessellation) {
+			Interface_Static::SetRVal("mesh.deflection", options.tessellationDeflection);
+			Interface_Static::SetRVal("mesh.angular_deflection", options.tessellationAngle);
+			Interface_Static::SetIVal("mesh.minimum_points", options.tessellationMinPoints);
+			Interface_Static::SetIVal("mesh.maximum_points", options.tessellationMaxPoints);
+			
+			// Enable adaptive tessellation if requested
+			if (options.enableAdaptiveTessellation) {
+				Interface_Static::SetIVal("mesh.adaptive", 1);
+			}
+		}
+		
+		// Use balanced settings for better surface quality
+		Interface_Static::SetIVal("read.step.optimize", 0);  // Disable aggressive optimization
+		Interface_Static::SetIVal("read.step.fast_mode", 0); // Disable fast mode for better quality
 		
 		// Read the file
 		IFSelect_ReturnStatus status = reader.ReadFile(filePath.c_str());
@@ -189,7 +201,19 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 
 		// Convert to geometry objects with simplified processing
 		std::string baseName = std::filesystem::path(filePath).stem().string();
-		result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 70, 25);
+		result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 70, 15);
+
+		// Apply fine tessellation for smooth surfaces
+		if (!result.geometries.empty() && options.enableFineTessellation) {
+			applyFineTessellation(result.geometries, options);
+		}
+		if (progress) progress(80, "tessellation");
+
+		// Apply colors to geometries for assembly visualization
+		if (!result.geometries.empty()) {
+			applyColorsToGeometries(result.geometries, result.entityMetadata, result.assemblyStructure);
+		}
+		if (progress) progress(85, "colors");
 
 		// Apply automatic scaling to make geometries reasonable size
 		if (!result.geometries.empty()) {
@@ -254,31 +278,31 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 		LOG_INF_S("Converting " + std::to_string(shapes.size()) + " shapes to geometries for: " + baseName);
 
 		// Sequential processing with progress (simplified from parallel)
-		size_t total = shapes.size();
-		size_t successCount = 0;
-		size_t failCount = 0;
-		
-		for (size_t i = 0; i < shapes.size(); ++i) {
-			if (!shapes[i].IsNull()) {
-				std::string name = baseName + "_" + std::to_string(i);
-				auto geometry = processSingleShape(shapes[i], name, options);
-				if (geometry) {
-					geometries.push_back(geometry);
-					successCount++;
-				} else {
-					failCount++;
+			size_t total = shapes.size();
+			size_t successCount = 0;
+			size_t failCount = 0;
+			
+			for (size_t i = 0; i < shapes.size(); ++i) {
+				if (!shapes[i].IsNull()) {
+					std::string name = baseName + "_" + std::to_string(i);
+					auto geometry = processSingleShape(shapes[i], name, options);
+					if (geometry) {
+						geometries.push_back(geometry);
+						successCount++;
+					} else {
+						failCount++;
+					}
+				}
+				if (progress && total > 0) {
+					int pct = progressStart + (int)std::round(((double)(i + 1) / (double)total) * progressSpan);
+					pct = std::max(progressStart, std::min(progressStart + progressSpan, pct));
+					progress(pct, "convert");
 				}
 			}
-			if (progress && total > 0) {
-				int pct = progressStart + (int)std::round(((double)(i + 1) / (double)total) * progressSpan);
-				pct = std::max(progressStart, std::min(progressStart + progressSpan, pct));
-				progress(pct, "convert");
-			}
-		}
-		
-		if (failCount > 0) {
-			LOG_WRN_S("Failed to process " + std::to_string(failCount) + " out of " + 
-				std::to_string(total) + " shapes for: " + baseName);
+			
+			if (failCount > 0) {
+				LOG_WRN_S("Failed to process " + std::to_string(failCount) + " out of " + 
+					std::to_string(total) + " shapes for: " + baseName);
 		}
 	}
 	catch (const Standard_ConstructionError& e) {
@@ -307,7 +331,7 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 
 	try {
 		// Use OCCT raw shape without active fixing (simplified approach)
-		auto geometry = std::make_shared<OCCGeometry>(name);
+				auto geometry = std::make_shared<OCCGeometry>(name);
 		geometry->setShape(shape);
 
 		// Set default color for imported STEP models
@@ -352,6 +376,34 @@ void STEPReader::initialize()
 	// Set precision
 	Interface_Static::SetRVal("read.precision.val", 0.01);
 	Interface_Static::SetIVal("read.precision.mode", 1);
+	
+	// Enhanced surface and curve tessellation settings for smooth display
+	// These settings improve the quality of surface tessellation similar to FreeCAD
+	
+	// Enable fine surface curve tessellation
+	Interface_Static::SetIVal("read.surfacecurve.3d", 1);
+	Interface_Static::SetIVal("read.surfacecurve.2d", 1);
+	
+	// Set tessellation parameters for smooth surfaces
+	Interface_Static::SetRVal("read.maxprecision.mode", 1);
+	Interface_Static::SetRVal("read.maxprecision.val", 0.001);
+	
+	// Enable comprehensive surface reading
+	Interface_Static::SetIVal("read.step.face", 1);
+	Interface_Static::SetIVal("read.step.surface_curve", 1);
+	Interface_Static::SetIVal("read.step.curve_2d", 1);
+	
+	// Enable advanced surface processing
+	Interface_Static::SetIVal("read.step.surface", 1);
+	Interface_Static::SetIVal("read.step.geometric_curve", 1);
+	
+	// Set mesh generation parameters for better visualization
+	Interface_Static::SetRVal("mesh.deflection", 0.01);
+	Interface_Static::SetRVal("mesh.angular_deflection", 0.1);
+	Interface_Static::SetIVal("mesh.minimum_points", 3);
+	Interface_Static::SetIVal("mesh.maximum_points", 100);
+	
+	LOG_INF_S("Enhanced STEP reader initialized with fine tessellation settings");
 }
 
 void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_Shape>& shapes)
@@ -430,6 +482,9 @@ std::vector<STEPReader::STEPEntityInfo> STEPReader::readSTEPMetadata(
 						info.name = name->ToCString();
 					}
 				}
+
+				// Try to extract color information
+				extractColorFromEntity(entity, info);
 				
 				metadata.push_back(info);
 			}
@@ -470,6 +525,7 @@ STEPReader::STEPAssemblyInfo STEPReader::buildAssemblyStructure(
 				component.name = "Component_" + std::to_string(i);
 				component.type = "SHAPE";
 				component.entityId = i;
+				component.shapeIndex = i - 1; // Convert to 0-based index
 				
 				assemblyInfo.components.push_back(component);
 			}
@@ -531,23 +587,23 @@ bool STEPReader::calculateCombinedBoundingBox(
 	bool hasValidBounds = false;
 
 	// Sequential processing for simplicity
-	for (const auto& geometry : geometries) {
-		if (!geometry || geometry->getShape().IsNull()) {
-			continue;
-		}
+		for (const auto& geometry : geometries) {
+			if (!geometry || geometry->getShape().IsNull()) {
+				continue;
+			}
 
-		gp_Pnt localMin, localMax;
-		OCCShapeBuilder::getBoundingBox(geometry->getShape(), localMin, localMax);
+			gp_Pnt localMin, localMax;
+			OCCShapeBuilder::getBoundingBox(geometry->getShape(), localMin, localMax);
 
-		if (localMin.X() < minPt.X()) minPt.SetX(localMin.X());
-		if (localMin.Y() < minPt.Y()) minPt.SetY(localMin.Y());
-		if (localMin.Z() < minPt.Z()) minPt.SetZ(localMin.Z());
+			if (localMin.X() < minPt.X()) minPt.SetX(localMin.X());
+			if (localMin.Y() < minPt.Y()) minPt.SetY(localMin.Y());
+			if (localMin.Z() < minPt.Z()) minPt.SetZ(localMin.Z());
 
-		if (localMax.X() > maxPt.X()) maxPt.SetX(localMax.X());
-		if (localMax.Y() > maxPt.Y()) maxPt.SetY(localMax.Y());
-		if (localMax.Z() > maxPt.Z()) maxPt.SetZ(localMax.Z());
+			if (localMax.X() > maxPt.X()) maxPt.SetX(localMax.X());
+			if (localMax.Y() > maxPt.Y()) maxPt.SetY(localMax.Y());
+			if (localMax.Z() > maxPt.Z()) maxPt.SetZ(localMax.Z());
 
-		hasValidBounds = true;
+			hasValidBounds = true;
 	}
 
 	return hasValidBounds;
@@ -598,19 +654,19 @@ double STEPReader::scaleGeometriesToReasonableSize(
 		}
 
 		// Apply scaling sequentially for simplicity
-		for (auto& geometry : geometries) {
-			if (!geometry || geometry->getShape().IsNull()) {
-				continue;
-			}
+			for (auto& geometry : geometries) {
+				if (!geometry || geometry->getShape().IsNull()) {
+					continue;
+				}
 
-			TopoDS_Shape scaledShape = OCCShapeBuilder::scale(
-				geometry->getShape(),
-				gp_Pnt(0, 0, 0),
-				scaleFactor
-			);
+				TopoDS_Shape scaledShape = OCCShapeBuilder::scale(
+					geometry->getShape(),
+					gp_Pnt(0, 0, 0),
+					scaleFactor
+				);
 
-			if (!scaledShape.IsNull()) {
-				geometry->setShape(scaledShape);
+				if (!scaledShape.IsNull()) {
+					geometry->setShape(scaledShape);
 			}
 		}
 
@@ -619,5 +675,192 @@ double STEPReader::scaleGeometriesToReasonableSize(
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception scaling geometries: " + std::string(e.what()));
 		return 1.0;
+	}
+}
+
+void STEPReader::extractColorFromEntity(
+	const Handle(Standard_Transient)& entity,
+	STEPEntityInfo& info)
+{
+	try {
+		// Try to extract color from styled item
+		Handle(StepVisual_StyledItem) styledItem = 
+			Handle(StepVisual_StyledItem)::DownCast(entity);
+		
+		if (!styledItem.IsNull()) {
+			// Get the styles
+			const Handle(StepVisual_HArray1OfPresentationStyleAssignment)& styles = 
+				styledItem->Styles();
+			
+			if (!styles.IsNull() && styles->Length() > 0) {
+				// For now, use a simple approach to extract color
+				// This is a simplified implementation - in practice, 
+				// color extraction from STEP files can be quite complex
+				info.hasColor = true;
+				info.color = Quantity_Color(0.7, 0.7, 0.7, Quantity_TOC_RGB); // Default gray
+			}
+		}
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Exception extracting color from entity: " + std::string(e.what()));
+	}
+}
+
+std::vector<Quantity_Color> STEPReader::generateDistinctColors(int componentCount)
+{
+	std::vector<Quantity_Color> colors;
+	colors.reserve(componentCount);
+
+	// Predefined distinct colors for assembly components
+	std::vector<Quantity_Color> predefinedColors = {
+		Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+		Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+		Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+		Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+		Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+		Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+		Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+		Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+		Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+		Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+		Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+		Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+		Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+		Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+		Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+	};
+
+	// Use predefined colors first
+	for (int i = 0; i < componentCount && i < (int)predefinedColors.size(); i++) {
+		colors.push_back(predefinedColors[i]);
+	}
+
+	// Generate additional colors if needed
+	if (componentCount > (int)predefinedColors.size()) {
+		for (int i = predefinedColors.size(); i < componentCount; i++) {
+			// Generate colors using HSV color space for better distribution
+			double hue = (double)(i - predefinedColors.size()) / (componentCount - predefinedColors.size());
+			double saturation = 0.8;
+			double value = 0.9;
+			
+			// Convert HSV to RGB
+			double c = value * saturation;
+			double x = c * (1.0 - std::abs(std::fmod(hue * 6.0, 2.0) - 1.0));
+			double m = value - c;
+			
+			double r, g, b;
+			if (hue < 1.0/6.0) {
+				r = c; g = x; b = 0;
+			} else if (hue < 2.0/6.0) {
+				r = x; g = c; b = 0;
+			} else if (hue < 3.0/6.0) {
+				r = 0; g = c; b = x;
+			} else if (hue < 4.0/6.0) {
+				r = 0; g = x; b = c;
+			} else if (hue < 5.0/6.0) {
+				r = x; g = 0; b = c;
+			} else {
+				r = c; g = 0; b = x;
+			}
+			
+			colors.push_back(Quantity_Color(r + m, g + m, b + m, Quantity_TOC_RGB));
+		}
+	}
+
+	return colors;
+}
+
+void STEPReader::applyColorsToGeometries(
+	std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+	const std::vector<STEPEntityInfo>& entityMetadata,
+	const STEPAssemblyInfo& assemblyInfo)
+{
+	if (geometries.empty()) {
+		return;
+	}
+
+	try {
+		// Generate distinct colors for components
+		std::vector<Quantity_Color> distinctColors = generateDistinctColors(geometries.size());
+		
+		// Apply colors to geometries
+		for (size_t i = 0; i < geometries.size(); i++) {
+			if (geometries[i]) {
+				Quantity_Color colorToUse;
+				bool hasCustomColor = false;
+				
+				// Try to find color from entity metadata
+				for (const auto& entity : entityMetadata) {
+					if (entity.shapeIndex == (int)i && entity.hasColor) {
+						colorToUse = entity.color;
+						hasCustomColor = true;
+						break;
+					}
+				}
+				
+				// Use distinct color if no custom color found
+				if (!hasCustomColor && i < distinctColors.size()) {
+					colorToUse = distinctColors[i];
+				} else if (!hasCustomColor) {
+					// Fallback to default color
+					colorToUse = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+				}
+				
+				geometries[i]->setColor(colorToUse);
+				geometries[i]->setTransparency(0.0);
+				
+				LOG_INF_S("Applied color to geometry " + std::to_string(i) + 
+					": R=" + std::to_string(colorToUse.Red()) + 
+					" G=" + std::to_string(colorToUse.Green()) + 
+					" B=" + std::to_string(colorToUse.Blue()));
+			}
+		}
+		
+		LOG_INF_S("Applied colors to " + std::to_string(geometries.size()) + " geometries");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Exception applying colors to geometries: " + std::string(e.what()));
+	}
+}
+
+void STEPReader::applyFineTessellation(
+	std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+	const OptimizationOptions& options)
+{
+	if (geometries.empty()) {
+		return;
+	}
+
+	try {
+		LOG_INF_S("Applying fine tessellation to " + std::to_string(geometries.size()) + " geometries");
+		
+		for (auto& geometry : geometries) {
+			if (!geometry || geometry->getShape().IsNull()) {
+				continue;
+			}
+
+			TopoDS_Shape shape = geometry->getShape();
+			
+			// Create incremental mesh for fine tessellation
+			BRepMesh_IncrementalMesh mesh(shape, 
+				options.tessellationDeflection,
+				Standard_False,  // Relative deflection
+				options.tessellationAngle,
+				Standard_True);  // In parallel
+			
+			// Perform the meshing
+			mesh.Perform();
+			
+			if (mesh.IsDone()) {
+				LOG_INF_S("Fine tessellation completed for geometry: " + geometry->getName());
+			} else {
+				LOG_WRN_S("Fine tessellation failed for geometry: " + geometry->getName());
+			}
+		}
+		
+		LOG_INF_S("Fine tessellation completed for all geometries");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Exception applying fine tessellation: " + std::string(e.what()));
 	}
 }

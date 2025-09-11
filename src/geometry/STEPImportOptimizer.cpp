@@ -216,7 +216,13 @@ void STEPImportOptimizer::initializeProfiles()
 	precisionOpts.enableBatchOperations = false;
 	precisionOpts.maxThreads = 1;
 	precisionOpts.precision = 0.001;
-	s_profiles.emplace_back("precision", precisionOpts, "High precision, detailed analysis");
+	precisionOpts.enableFineTessellation = true;
+	precisionOpts.tessellationDeflection = 0.005;  // Very fine tessellation
+	precisionOpts.tessellationAngle = 0.05;        // Very smooth surfaces
+	precisionOpts.tessellationMinPoints = 5;
+	precisionOpts.tessellationMaxPoints = 200;
+	precisionOpts.enableAdaptiveTessellation = true;
+	s_profiles.emplace_back("precision", precisionOpts, "High precision, detailed analysis, smooth surfaces");
 
 	// Balanced profile - for medium files
 	STEPReader::OptimizationOptions balancedOpts;
@@ -226,7 +232,13 @@ void STEPImportOptimizer::initializeProfiles()
 	balancedOpts.enableBatchOperations = true;
 	balancedOpts.maxThreads = std::thread::hardware_concurrency();
 	balancedOpts.precision = 0.01;
-	s_profiles.emplace_back("balanced", balancedOpts, "Balanced speed and quality");
+	balancedOpts.enableFineTessellation = true;
+	balancedOpts.tessellationDeflection = 0.01;   // Good tessellation
+	balancedOpts.tessellationAngle = 0.1;         // Smooth surfaces
+	balancedOpts.tessellationMinPoints = 3;
+	balancedOpts.tessellationMaxPoints = 100;
+	balancedOpts.enableAdaptiveTessellation = true;
+	s_profiles.emplace_back("balanced", balancedOpts, "Balanced speed and quality, smooth surfaces");
 
 	// Speed profile - for large files
 	STEPReader::OptimizationOptions speedOpts;
@@ -236,7 +248,13 @@ void STEPImportOptimizer::initializeProfiles()
 	speedOpts.enableBatchOperations = true;
 	speedOpts.maxThreads = std::thread::hardware_concurrency();
 	speedOpts.precision = 0.1;
-	s_profiles.emplace_back("speed", speedOpts, "Maximum speed, basic quality");
+	speedOpts.enableFineTessellation = true;
+	speedOpts.tessellationDeflection = 0.05;   // Basic tessellation
+	speedOpts.tessellationAngle = 0.2;         // Acceptable surfaces
+	speedOpts.tessellationMinPoints = 3;
+	speedOpts.tessellationMaxPoints = 50;
+	speedOpts.enableAdaptiveTessellation = false;
+	s_profiles.emplace_back("speed", speedOpts, "Maximum speed, basic quality, acceptable surfaces");
 
 	// Ultra-fast profile - for very large files
 	STEPReader::OptimizationOptions ultraFastOpts;
@@ -246,7 +264,13 @@ void STEPImportOptimizer::initializeProfiles()
 	ultraFastOpts.enableBatchOperations = true;
 	ultraFastOpts.maxThreads = std::thread::hardware_concurrency();
 	ultraFastOpts.precision = 0.5;
-	s_profiles.emplace_back("ultra-fast", ultraFastOpts, "Ultra-fast import, minimal memory usage");
+	ultraFastOpts.enableFineTessellation = false;  // Disable for speed
+	ultraFastOpts.tessellationDeflection = 0.1;   // Coarse tessellation
+	ultraFastOpts.tessellationAngle = 0.5;        // Basic surfaces
+	ultraFastOpts.tessellationMinPoints = 3;
+	ultraFastOpts.tessellationMaxPoints = 20;
+	ultraFastOpts.enableAdaptiveTessellation = false;
+	s_profiles.emplace_back("ultra-fast", ultraFastOpts, "Ultra-fast import, minimal memory usage, basic surfaces");
 
 	s_profilesInitialized = true;
 	LOG_INF_S("STEP optimization profiles initialized");

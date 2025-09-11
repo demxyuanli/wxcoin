@@ -44,6 +44,14 @@ public:
         double precision = 0.01;
         double meshDeflection = 0.1;
         double angularDeflection = 0.1;
+        
+        // Fine tessellation options for smooth surfaces
+        bool enableFineTessellation = true;
+        double tessellationDeflection = 0.01;  // Smaller = smoother surfaces
+        double tessellationAngle = 0.1;       // Smaller = more triangles
+        int tessellationMinPoints = 3;        // Minimum points per edge
+        int tessellationMaxPoints = 100;      // Maximum points per edge
+        bool enableAdaptiveTessellation = true; // Adaptive based on curvature
 
         OptimizationOptions() = default;
     };

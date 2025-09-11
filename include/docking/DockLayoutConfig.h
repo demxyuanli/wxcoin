@@ -48,6 +48,33 @@ struct DockLayoutConfig {
     // Save/Load
     void SaveToConfig();
     void LoadFromConfig();
+    
+    // Comparison operators for caching
+    bool operator==(const DockLayoutConfig& other) const {
+        return topAreaHeight == other.topAreaHeight &&
+               bottomAreaHeight == other.bottomAreaHeight &&
+               leftAreaWidth == other.leftAreaWidth &&
+               rightAreaWidth == other.rightAreaWidth &&
+               centerMinWidth == other.centerMinWidth &&
+               centerMinHeight == other.centerMinHeight &&
+               usePercentage == other.usePercentage &&
+               topAreaPercent == other.topAreaPercent &&
+               bottomAreaPercent == other.bottomAreaPercent &&
+               leftAreaPercent == other.leftAreaPercent &&
+               rightAreaPercent == other.rightAreaPercent &&
+               minAreaSize == other.minAreaSize &&
+               splitterWidth == other.splitterWidth &&
+               showTopArea == other.showTopArea &&
+               showBottomArea == other.showBottomArea &&
+               showLeftArea == other.showLeftArea &&
+               showRightArea == other.showRightArea &&
+               enableAnimation == other.enableAnimation &&
+               animationDuration == other.animationDuration;
+    }
+    
+    bool operator!=(const DockLayoutConfig& other) const {
+        return !(*this == other);
+    }
 };
 
 /**

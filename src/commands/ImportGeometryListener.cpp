@@ -425,6 +425,15 @@ bool ImportGeometryListener::showImportSettingsDialog(GeometryReader* reader,
     options.enableBatchOperations = true;
     options.maxThreads = std::thread::hardware_concurrency();
     options.precision = 0.01;
+    options.enableNormalProcessing = settingsDialog.isNormalProcessing();
+    
+    // Map new tessellation settings
+    options.enableFineTessellation = settingsDialog.isFineTessellationEnabled();
+    options.tessellationDeflection = settingsDialog.getTessellationDeflection();
+    options.tessellationAngle = settingsDialog.getTessellationAngle();
+    options.tessellationMinPoints = settingsDialog.getTessellationMinPoints();
+    options.tessellationMaxPoints = settingsDialog.getTessellationMaxPoints();
+    options.enableAdaptiveTessellation = settingsDialog.isAdaptiveTessellationEnabled();
 
     return true;
 }

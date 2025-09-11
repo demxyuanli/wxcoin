@@ -102,6 +102,17 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	bool enableLOD = settingsDialog.isLODEnabled();
 	bool parallelProcessing = settingsDialog.isParallelProcessing();
 	bool adaptiveMeshing = settingsDialog.isAdaptiveMeshing();
+	bool autoOptimize = settingsDialog.isAutoOptimize();
+	bool normalProcessing = settingsDialog.isNormalProcessing();
+	int importMode = settingsDialog.getImportMode();
+	
+	// Get new tessellation settings
+	bool enableFineTessellation = settingsDialog.isFineTessellationEnabled();
+	double tessellationDeflection = settingsDialog.getTessellationDeflection();
+	double tessellationAngle = settingsDialog.getTessellationAngle();
+	int tessellationMinPoints = settingsDialog.getTessellationMinPoints();
+	int tessellationMaxPoints = settingsDialog.getTessellationMaxPoints();
+	bool enableAdaptiveTessellation = settingsDialog.isAdaptiveTessellationEnabled();
 
 	LOG_INF_S(wxString::Format("Import settings: Deflection=%.2f, Angular=%.2f, LOD=%s, Parallel=%s",
 		meshDeflection, angularDeflection,
@@ -158,6 +169,15 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			readerOptions.precision = 0.01;
 			readerOptions.meshDeflection = meshDeflection;
 			readerOptions.angularDeflection = angularDeflection;
+			readerOptions.enableNormalProcessing = normalProcessing;
+			
+			// Set new tessellation options
+			readerOptions.enableFineTessellation = enableFineTessellation;
+			readerOptions.tessellationDeflection = tessellationDeflection;
+			readerOptions.tessellationAngle = tessellationAngle;
+			readerOptions.tessellationMinPoints = tessellationMinPoints;
+			readerOptions.tessellationMaxPoints = tessellationMaxPoints;
+			readerOptions.enableAdaptiveTessellation = enableAdaptiveTessellation;
 
 			auto result = reader->readFile(filePathStr, readerOptions,
 				[this, flatFrame, i, &filePaths](int percent, const std::string& stage) {

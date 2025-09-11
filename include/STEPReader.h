@@ -9,8 +9,13 @@
 #include <functional>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/TopoDS_Compound.hxx>
+#include <OpenCASCADE/Quantity_Color.hxx>
 #include "OCCGeometry.h"
 #include "GeometryReader.h"
+
+// Forward declarations
+class STEPControl_Reader;
+template<typename T> class Handle;
 
 /**
  * @brief STEP file reader for importing CAD models
@@ -33,6 +38,35 @@ public:
 	std::string getFileFilter() const override;
 	
 	/**
+	 * @brief STEP entity metadata structure
+	 */
+	struct STEPEntityInfo {
+		std::string name;
+		std::string type;
+		Quantity_Color color;
+		bool hasColor;
+		std::string material;
+		std::string description;
+		int entityId;
+		int shapeIndex; // Index in the transferred shapes
+		
+		STEPEntityInfo() : hasColor(false), entityId(0), shapeIndex(-1) {}
+	};
+
+	/**
+	 * @brief STEP assembly structure
+	 */
+	struct STEPAssemblyInfo {
+		std::string name;
+		std::string type;
+		std::vector<STEPEntityInfo> components;
+		std::vector<STEPAssemblyInfo> subAssemblies;
+		TopoDS_Shape shape;
+		
+		STEPAssemblyInfo() {}
+	};
+
+	/**
 	 * @brief Result structure for STEP file reading
 	 */
 	struct ReadResult {
@@ -41,6 +75,8 @@ public:
 		std::vector<std::shared_ptr<OCCGeometry>> geometries;
 		TopoDS_Shape rootShape;
 		double importTime; // Time taken for import in milliseconds
+		std::vector<STEPEntityInfo> entityMetadata;
+		STEPAssemblyInfo assemblyStructure;
 
 		ReadResult() : success(false), importTime(0.0) {}
 	};
@@ -156,14 +192,71 @@ private:
 	);
 
 	/**
-	 * @brief Ensure consistent normal directions for all faces
-	 * @param shape The shape to process
-	 * @param name Name for logging
-	 * @return Shape with consistent normal directions
+	 * @brief Read STEP file metadata (colors, materials, names)
+	 * @param reader The STEP reader instance
+	 * @return Vector of entity metadata
 	 */
-	static TopoDS_Shape ensureConsistentNormalDirections(
-		const TopoDS_Shape& shape,
-		const std::string& name
+	static std::vector<STEPEntityInfo> readSTEPMetadata(
+		const STEPControl_Reader& reader
+	);
+
+	/**
+	 * @brief Build assembly structure from STEP file
+	 * @param reader The STEP reader instance
+	 * @return Assembly structure information
+	 */
+	static STEPAssemblyInfo buildAssemblyStructure(
+		const STEPControl_Reader& reader
+	);
+
+	/**
+	 * @brief Extract entity information from STEP model
+	 * @param reader The STEP reader instance
+	 * @param entityId Entity ID in STEP file
+	 * @return Entity information
+	 */
+	static STEPEntityInfo extractEntityInfo(
+		const STEPControl_Reader& reader,
+		int entityId
+	);
+
+	/**
+	 * @brief Generate distinct colors for assembly components
+	 * @param componentCount Number of components
+	 * @return Vector of distinct colors
+	 */
+	static std::vector<Quantity_Color> generateDistinctColors(int componentCount);
+
+	/**
+	 * @brief Apply colors to geometries based on entity metadata
+	 * @param geometries Vector of geometries to color
+	 * @param entityMetadata Vector of entity metadata
+	 * @param assemblyInfo Assembly structure information
+	 */
+	static void applyColorsToGeometries(
+		std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+		const std::vector<STEPEntityInfo>& entityMetadata,
+		const STEPAssemblyInfo& assemblyInfo
+	);
+
+	/**
+	 * @brief Extract color information from STEP entity
+	 * @param entity The STEP entity
+	 * @param info Entity info to update with color
+	 */
+	static void extractColorFromEntity(
+		const Handle(Standard_Transient)& entity,
+		STEPEntityInfo& info
+	);
+
+	/**
+	 * @brief Apply fine tessellation to geometries for smooth surfaces
+	 * @param geometries Vector of geometries to tessellate
+	 * @param options Tessellation options
+	 */
+	static void applyFineTessellation(
+		std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+		const OptimizationOptions& options
 	);
 
 

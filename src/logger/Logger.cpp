@@ -5,19 +5,24 @@
 #include <filesystem>
 
 Logger::Logger() : logCtrl(nullptr) {
-	logFile.open("app.log", std::ios::out | std::ios::app);
+	// Generate log file name with timestamp
+	std::time_t now = std::time(nullptr);
+	std::tm* timeinfo = std::localtime(&now);
+	char timestamp[20];
+	std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", timeinfo);
+	logFileName = "app_" + std::string(timestamp) + ".log";
+
+	logFile.open(logFileName, std::ios::out | std::ios::trunc);
 	if (!logFile.is_open()) {
-		std::cerr << "Error: Failed to open log file 'app.log'" << std::endl;
+		std::cerr << "Error: Failed to open log file '" << logFileName << "'" << std::endl;
 		throw std::runtime_error("Failed to open log file");
 	}
 	allowedLogLevels = { LogLevel::ERR, LogLevel::WRN, LogLevel::DBG, LogLevel::INF };
 
-	std::time_t now = std::time(nullptr);
-	std::tm* timeinfo = std::localtime(&now);
-	char timestamp[20];
-	std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
+	char displayTimestamp[20];
+	std::strftime(displayTimestamp, sizeof(displayTimestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
 
-	logFile << "[" << timestamp << "] [INF] [Logger] Logger initialized, output file: app.log" << std::endl;
+	logFile << "[" << displayTimestamp << "] [INF] [Logger] Logger initialized, output file: " << logFileName << std::endl;
 	logFile.flush();
 }
 
@@ -80,9 +85,9 @@ void Logger::Log(LogLevel level, const std::string& message, const std::string& 
 	if (!ShouldLog(level)) return; // Skip if level is not allowed
 
 	if (!logFile.is_open()) {
-		logFile.open("app.log", std::ios::out | std::ios::app);
+		logFile.open(logFileName, std::ios::out | std::ios::app);
 		if (!logFile.is_open()) {
-			std::cerr << "Error: Failed to open log file for writing" << std::endl;
+			std::cerr << "Error: Failed to open log file '" << logFileName << "' for writing" << std::endl;
 			return;
 		}
 	}
