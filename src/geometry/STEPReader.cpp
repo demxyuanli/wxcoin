@@ -30,12 +30,26 @@
 #include <TCollection_AsciiString.hxx>
 #include <StepData_StepModel.hxx>
 #include <StepRepr_RepresentationItem.hxx>
+#include <TDocStd_Document.hxx>
+#include <XCAFDoc_DocumentTool.hxx>
+#include <XCAFDoc_ColorType.hxx>
+#include <Geom_Surface.hxx>
+#include <Geom_Plane.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <BRep_Tool.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopoDS_Compound.hxx>
+#include <BRep_Builder.hxx>
 
 // File system includes
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <string>
+#include <locale>
+#include <codecvt>
 
 // GeometryReader interface implementation
 GeometryReader::ReadResult STEPReader::readFile(const std::string& filePath,
@@ -75,6 +89,262 @@ std::string STEPReader::getFileFilter() const
 
 // Static member initialization
 bool STEPReader::s_initialized = false;
+
+// Helper function to safely convert ExtendedString to std::string
+static std::string safeConvertExtendedString(const TCollection_ExtendedString& extStr) {
+	try {
+		// First try direct conversion
+		TCollection_AsciiString asciiStr(extStr);
+		const char* cStr = asciiStr.ToCString();
+		if (cStr != nullptr) {
+			std::string result(cStr);
+			// Check if the result contains only printable ASCII characters
+			bool isValid = true;
+			for (char c : result) {
+				if (c < 32 || c > 126) { // Not printable ASCII
+					isValid = false;
+					break;
+				}
+			}
+			if (isValid && !result.empty()) {
+				return result;
+			}
+		}
+	} catch (const std::exception& e) {
+		LOG_WRN_S("ExtendedString conversion failed: " + std::string(e.what()));
+	}
+	
+	// Fallback: convert character by character, keeping only ASCII
+	std::string result;
+	const Standard_ExtString extCStr = extStr.ToExtString();
+	if (extCStr != nullptr) {
+		for (int i = 0; extCStr[i] != 0; i++) {
+			wchar_t wc = extCStr[i];
+			if (wc >= 32 && wc <= 126) { // Printable ASCII range
+				result += static_cast<char>(wc);
+			}
+		}
+	}
+	
+	return result.empty() ? "UnnamedComponent" : result;
+}
+
+// Forward declarations
+static void decomposeByFaceGroups(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes);
+static bool areFacesSimilar(const TopoDS_Face& face1, const TopoDS_Face& face2);
+
+// Helper function to decompose a shape into sub-shapes using FreeCAD-like strategy
+static void decomposeShape(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes) {
+	subShapes.clear();
+	
+	try {
+		// Strategy 1: Try to decompose into solids first (most common case)
+		for (TopExp_Explorer exp(shape, TopAbs_SOLID); exp.More(); exp.Next()) {
+			subShapes.push_back(exp.Current());
+		}
+		
+		// Strategy 2: If no solids found, try shells
+		if (subShapes.empty()) {
+			for (TopExp_Explorer exp(shape, TopAbs_SHELL); exp.More(); exp.Next()) {
+				subShapes.push_back(exp.Current());
+			}
+		}
+		
+		// Strategy 3: If still no sub-shapes, try to decompose by face groups
+		if (subShapes.empty()) {
+			decomposeByFaceGroups(shape, subShapes);
+		}
+		
+		// Strategy 4: If still empty, try faces (for very complex shapes)
+		if (subShapes.empty()) {
+			for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+				subShapes.push_back(exp.Current());
+			}
+		}
+		
+		// Strategy 5: If still empty, use the original shape
+		if (subShapes.empty()) {
+			subShapes.push_back(shape);
+		}
+		
+		LOG_INF_S("Shape decomposition result: " + std::to_string(subShapes.size()) + " sub-shapes");
+	} catch (const std::exception& e) {
+		LOG_WRN_S("Failed to decompose shape: " + std::string(e.what()));
+		subShapes.push_back(shape);
+	}
+}
+
+// Helper function to decompose by face groups (FreeCAD-like approach)
+static void decomposeByFaceGroups(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes) {
+	try {
+		// Group faces by geometric properties
+		std::vector<std::vector<TopoDS_Face>> faceGroups;
+		std::vector<TopoDS_Face> currentGroup;
+		
+		// Collect all faces
+		std::vector<TopoDS_Face> allFaces;
+		for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+			allFaces.push_back(TopoDS::Face(exp.Current()));
+		}
+		
+		if (allFaces.empty()) {
+			return;
+		}
+		
+		// Group faces by surface type and normal direction
+		for (const auto& face : allFaces) {
+			if (currentGroup.empty()) {
+				currentGroup.push_back(face);
+			} else {
+				// Check if this face belongs to the current group
+				bool belongsToGroup = false;
+				for (const auto& groupFace : currentGroup) {
+					if (areFacesSimilar(face, groupFace)) {
+						belongsToGroup = true;
+						break;
+					}
+				}
+				
+				if (belongsToGroup) {
+					currentGroup.push_back(face);
+				} else {
+					// Start a new group
+					faceGroups.push_back(currentGroup);
+					currentGroup.clear();
+					currentGroup.push_back(face);
+				}
+			}
+		}
+		
+		// Add the last group
+		if (!currentGroup.empty()) {
+			faceGroups.push_back(currentGroup);
+		}
+		
+		// Convert face groups to shapes
+		for (const auto& group : faceGroups) {
+			if (group.size() > 0) {
+				// Create a compound from the face group
+				TopoDS_Compound compound;
+				BRep_Builder builder;
+				builder.MakeCompound(compound);
+				
+				for (const auto& face : group) {
+					builder.Add(compound, face);
+				}
+				
+				subShapes.push_back(compound);
+			}
+		}
+		
+		LOG_INF_S("Face group decomposition: " + std::to_string(faceGroups.size()) + " groups");
+	} catch (const std::exception& e) {
+		LOG_WRN_S("Face group decomposition failed: " + std::string(e.what()));
+	}
+}
+
+// Helper function to check if two faces are similar (for grouping)
+static bool areFacesSimilar(const TopoDS_Face& face1, const TopoDS_Face& face2) {
+	try {
+		// Get surface types
+		Handle(Geom_Surface) surf1 = BRep_Tool::Surface(face1);
+		Handle(Geom_Surface) surf2 = BRep_Tool::Surface(face2);
+		
+		if (surf1.IsNull() || surf2.IsNull()) {
+			return false;
+		}
+		
+		// Check if surfaces are of the same type
+		if (surf1->DynamicType() != surf2->DynamicType()) {
+			return false;
+		}
+		
+		// For planes, check if they are parallel
+		if (surf1->DynamicType() == STANDARD_TYPE(Geom_Plane)) {
+			Handle(Geom_Plane) plane1 = Handle(Geom_Plane)::DownCast(surf1);
+			Handle(Geom_Plane) plane2 = Handle(Geom_Plane)::DownCast(surf2);
+			
+			if (!plane1.IsNull() && !plane2.IsNull()) {
+				gp_Dir normal1 = plane1->Axis().Direction();
+				gp_Dir normal2 = plane2->Axis().Direction();
+				
+				// Check if normals are parallel (within tolerance)
+				double dotProduct = normal1.Dot(normal2);
+				return std::abs(dotProduct) > 0.9; // 90% parallel
+			}
+		}
+		
+		// For cylinders, check if they have similar axis
+		if (surf1->DynamicType() == STANDARD_TYPE(Geom_CylindricalSurface)) {
+			Handle(Geom_CylindricalSurface) cyl1 = Handle(Geom_CylindricalSurface)::DownCast(surf1);
+			Handle(Geom_CylindricalSurface) cyl2 = Handle(Geom_CylindricalSurface)::DownCast(surf2);
+			
+			if (!cyl1.IsNull() && !cyl2.IsNull()) {
+				gp_Dir axis1 = cyl1->Axis().Direction();
+				gp_Dir axis2 = cyl2->Axis().Direction();
+				
+				double dotProduct = axis1.Dot(axis2);
+				return std::abs(dotProduct) > 0.9; // 90% parallel
+			}
+		}
+		
+		return false;
+	} catch (const std::exception& e) {
+		LOG_WRN_S("Face similarity check failed: " + std::string(e.what()));
+		return false;
+	}
+}
+
+// Helper function to process a single component
+static void processComponent(const TopoDS_Shape& shape, const std::string& componentName, 
+	int componentIndex, std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+	std::vector<STEPReader::STEPEntityInfo>& entityMetadata) {
+	
+	// Generate distinct colors for components
+	static std::vector<Quantity_Color> distinctColors = {
+		Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+		Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+		Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+		Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+		Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+		Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+		Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+		Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+		Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+		Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+		Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+		Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+		Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+		Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+		Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+	};
+	
+	// Use distinct color for each component
+	Quantity_Color color = distinctColors[componentIndex % distinctColors.size()];
+	
+	// Create geometry object
+	auto geometry = std::make_shared<OCCGeometry>(componentName);
+	geometry->setShape(shape);
+	geometry->setColor(color);
+	geometry->setTransparency(0.0);
+
+	// Create entity info
+	STEPReader::STEPEntityInfo entityInfo;
+	entityInfo.name = componentName;
+	entityInfo.type = "COMPONENT";
+	entityInfo.color = color;
+	entityInfo.hasColor = true;
+	entityInfo.entityId = componentIndex;
+	entityInfo.shapeIndex = componentIndex;
+
+	geometries.push_back(geometry);
+	entityMetadata.push_back(entityInfo);
+
+	LOG_INF_S("Created colored component: " + componentName + 
+		" (R=" + std::to_string(color.Red()) + 
+		" G=" + std::to_string(color.Green()) + 
+		" B=" + std::to_string(color.Blue()) + ")");
+}
 
 STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 	const OptimizationOptions& options,
@@ -187,9 +457,40 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 			LOG_WRN_S("Failed to read metadata: " + std::string(e.what()));
 		}
 
-		// Convert to geometry objects with simplified processing
-		std::string baseName = std::filesystem::path(filePath).stem().string();
-		result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 70, 25);
+		// Use STEPCAFControl_Reader for advanced color and assembly information
+		bool cafSuccess = false;
+		try {
+			LOG_INF_S("Attempting to read STEP file with CAF reader: " + filePath);
+			ReadResult cafResult = readSTEPFileWithCAF(filePath, options, progress);
+			if (cafResult.success && !cafResult.geometries.empty()) {
+				// Use CAF results if successful
+				result.geometries = cafResult.geometries;
+				result.entityMetadata = cafResult.entityMetadata;
+				result.assemblyStructure = cafResult.assemblyStructure;
+				cafSuccess = true;
+				LOG_INF_S("Successfully read STEP file with CAF reader, found " + 
+					std::to_string(result.geometries.size()) + " colored components");
+				
+				// Log color information for debugging
+				for (size_t i = 0; i < result.geometries.size(); i++) {
+					Quantity_Color color = result.geometries[i]->getColor();
+					LOG_INF_S("Component " + std::to_string(i) + " color: R=" + 
+						std::to_string(color.Red()) + " G=" + std::to_string(color.Green()) + 
+						" B=" + std::to_string(color.Blue()));
+				}
+			} else {
+				LOG_WRN_S("CAF reader failed: " + (cafResult.errorMessage.empty() ? "Unknown error" : cafResult.errorMessage));
+				LOG_WRN_S("Falling back to standard reader");
+			}
+		} catch (const std::exception& e) {
+			LOG_WRN_S("CAF reader exception: " + std::string(e.what()));
+		}
+
+		// Convert to geometry objects with simplified processing (fallback if CAF failed)
+		if (!cafSuccess) {
+			std::string baseName = std::filesystem::path(filePath).stem().string();
+			result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 70, 25);
+		}
 
 		// Apply automatic scaling to make geometries reasonable size
 		if (!result.geometries.empty()) {
@@ -310,9 +611,31 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 		auto geometry = std::make_shared<OCCGeometry>(name);
 		geometry->setShape(shape);
 
-		// Set default color for imported STEP models
-		Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-		geometry->setColor(defaultColor);
+		// Set distinct color for imported STEP models based on name hash
+		static std::vector<Quantity_Color> distinctColors = {
+			Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+			Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+			Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+			Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+			Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+			Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+			Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+			Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+			Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+			Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+			Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+			Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+			Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+			Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+			Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+		};
+		
+		// Generate color index based on name hash for consistent coloring
+		std::hash<std::string> hasher;
+		size_t hashValue = hasher(name);
+		size_t colorIndex = hashValue % distinctColors.size();
+		Quantity_Color componentColor = distinctColors[colorIndex];
+		geometry->setColor(componentColor);
 
 		// Remove transparency for a solid appearance
 		geometry->setTransparency(0.0);
@@ -620,4 +943,250 @@ double STEPReader::scaleGeometriesToReasonableSize(
 		LOG_ERR_S("Exception scaling geometries: " + std::string(e.what()));
 		return 1.0;
 	}
+}
+
+STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePath,
+	const OptimizationOptions& options,
+	ProgressCallback progress)
+{
+	auto totalStartTime = std::chrono::high_resolution_clock::now();
+	ReadResult result;
+
+	try {
+		// Check if file exists
+		if (!std::filesystem::exists(filePath)) {
+			result.errorMessage = "File does not exist: " + filePath;
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		// Check file extension
+		if (!isSTEPFile(filePath)) {
+			result.errorMessage = "File is not a STEP file: " + filePath;
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		if (progress) progress(5, "initialize CAF");
+
+		// Create XCAF application
+		Handle(XCAFApp_Application) app = XCAFApp_Application::GetApplication();
+		if (app.IsNull()) {
+			result.errorMessage = "Failed to create XCAF application";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		// Create document
+		Handle(TDocStd_Document) doc;
+		app->NewDocument("MDTV-XCAF", doc);
+		if (doc.IsNull()) {
+			result.errorMessage = "Failed to create XCAF document";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		if (progress) progress(10, "create document");
+
+		// Create STEPCAFControl_Reader
+		STEPCAFControl_Reader cafReader;
+		cafReader.SetColorMode(true);
+		cafReader.SetNameMode(true);
+		cafReader.SetMatMode(true);
+		cafReader.SetGDTMode(true);
+		cafReader.SetLayerMode(true);
+
+		// Read the file
+		IFSelect_ReturnStatus status = cafReader.ReadFile(filePath.c_str());
+		if (status != IFSelect_RetDone) {
+			result.errorMessage = "Failed to read STEP file with CAF: " + filePath + 
+				" (Status: " + std::to_string(static_cast<int>(status)) + ")";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		if (progress) progress(30, "read CAF");
+
+		// Transfer all roots
+		cafReader.Transfer(doc);
+		if (progress) progress(50, "transfer CAF");
+
+		// Get shape tool and color tool
+		Handle(XCAFDoc_ShapeTool) shapeTool = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
+		Handle(XCAFDoc_ColorTool) colorTool = XCAFDoc_DocumentTool::ColorTool(doc->Main());
+		Handle(XCAFDoc_MaterialTool) materialTool = XCAFDoc_DocumentTool::MaterialTool(doc->Main());
+
+		if (shapeTool.IsNull()) {
+			result.errorMessage = "Failed to get shape tool from CAF document";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		// Get all free shapes (top-level shapes)
+		TDF_LabelSequence freeShapes;
+		shapeTool->GetFreeShapes(freeShapes);
+
+		if (freeShapes.Length() == 0) {
+			result.errorMessage = "No free shapes found in CAF document";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		LOG_INF_S("Found " + std::to_string(freeShapes.Length()) + " free shapes in CAF document");
+
+		if (progress) progress(60, "extract shapes");
+
+		// Process each free shape
+		std::string baseName = std::filesystem::path(filePath).stem().string();
+		int componentIndex = 0;
+		
+		LOG_INF_S("Processing " + std::to_string(freeShapes.Length()) + " components with distinct colors");
+		
+		// If only one component, try to decompose it into sub-components for better visualization
+		bool tryDecomposition = (freeShapes.Length() == 1);
+		if (tryDecomposition) {
+			LOG_INF_S("Single component detected, attempting decomposition for better color visualization");
+		}
+
+		for (int i = 1; i <= freeShapes.Length(); i++) {
+			TDF_Label label = freeShapes.Value(i);
+			
+			// Get shape from label
+			TopoDS_Shape shape = shapeTool->GetShape(label);
+			if (shape.IsNull()) {
+				continue;
+			}
+
+			// For single component, try to decompose into sub-shapes for better visualization
+			if (tryDecomposition && freeShapes.Length() == 1) {
+				std::vector<TopoDS_Shape> subShapes;
+				decomposeShape(shape, subShapes);
+				
+				if (subShapes.size() > 1) {
+					LOG_INF_S("Decomposed single component into " + std::to_string(subShapes.size()) + " sub-components");
+					
+					// Process each sub-shape with different colors
+					for (size_t j = 0; j < subShapes.size(); j++) {
+						processComponent(subShapes[j], baseName + "_Part_" + std::to_string(j), 
+							componentIndex, result.geometries, result.entityMetadata);
+						componentIndex++;
+					}
+					continue; // Skip the original single component processing
+				}
+			}
+
+			// Get name from label
+			std::string componentName = baseName + "_Component_" + std::to_string(componentIndex);
+			Handle(TDataStd_Name) nameAttr;
+			if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
+				TCollection_ExtendedString extStr = nameAttr->Get();
+				// Convert ExtendedString to std::string safely
+				std::string convertedName = safeConvertExtendedString(extStr);
+				if (!convertedName.empty() && convertedName != "UnnamedComponent") {
+					componentName = convertedName;
+				}
+			}
+
+			// Get color from label
+			Quantity_Color color;
+			bool hasColor = false;
+			if (!colorTool.IsNull()) {
+				hasColor = colorTool->GetColor(label, XCAFDoc_ColorGen, color) ||
+						   colorTool->GetColor(label, XCAFDoc_ColorSurf, color) ||
+						   colorTool->GetColor(label, XCAFDoc_ColorCurv, color);
+			}
+
+			// Always generate distinct colors for better visualization (override any existing color)
+			// Generate distinct colors for components
+			static std::vector<Quantity_Color> distinctColors = {
+				Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+				Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+				Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+				Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+				Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+				Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+				Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+				Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+				Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+				Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+				Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+				Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+				Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+				Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+				Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+			};
+			
+			// Use distinct color for each component (override any existing color for better visualization)
+			color = distinctColors[componentIndex % distinctColors.size()];
+			hasColor = true;
+			
+			LOG_INF_S("Assigned color to component " + std::to_string(componentIndex) + 
+				" (" + componentName + "): R=" + std::to_string(color.Red()) + 
+				" G=" + std::to_string(color.Green()) + " B=" + std::to_string(color.Blue()));
+
+			// Create geometry object
+			auto geometry = std::make_shared<OCCGeometry>(componentName);
+			geometry->setShape(shape);
+			geometry->setColor(color);
+			geometry->setTransparency(0.0);
+
+			// Create entity info
+			STEPEntityInfo entityInfo;
+			entityInfo.name = componentName;
+			entityInfo.type = "COMPONENT";
+			entityInfo.color = color;
+			entityInfo.hasColor = hasColor;
+			entityInfo.entityId = componentIndex;
+			entityInfo.shapeIndex = componentIndex;
+
+			result.geometries.push_back(geometry);
+			result.entityMetadata.push_back(entityInfo);
+
+			LOG_INF_S("Created colored component: " + componentName + 
+				" (R=" + std::to_string(color.Red()) + 
+				" G=" + std::to_string(color.Green()) + 
+				" B=" + std::to_string(color.Blue()) + ")");
+
+			componentIndex++;
+		}
+
+		if (progress) progress(80, "process components");
+
+		// Build assembly structure
+		result.assemblyStructure.name = baseName;
+		result.assemblyStructure.type = "ASSEMBLY";
+		for (const auto& entity : result.entityMetadata) {
+			result.assemblyStructure.components.push_back(entity);
+		}
+
+		// Apply automatic scaling
+		if (!result.geometries.empty()) {
+			double scaleFactor = scaleGeometriesToReasonableSize(result.geometries);
+			LOG_INF_S("Applied scaling factor: " + std::to_string(scaleFactor));
+		}
+
+		if (progress) progress(95, "postprocess");
+
+		result.success = true;
+
+		// Calculate total import time
+		auto totalEndTime = std::chrono::high_resolution_clock::now();
+		auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
+		result.importTime = static_cast<double>(totalDuration.count());
+
+		LOG_INF_S("CAF import completed successfully: " + std::to_string(result.geometries.size()) + 
+			" colored components in " + std::to_string(result.importTime) + "ms");
+
+		if (progress) progress(100, "done");
+	}
+	catch (const Standard_Failure& e) {
+		result.errorMessage = "OpenCASCADE CAF exception: " + std::string(e.GetMessageString());
+		LOG_ERR_S(result.errorMessage);
+	}
+	catch (const std::exception& e) {
+		result.errorMessage = "Exception reading STEP file with CAF: " + std::string(e.what());
+		LOG_ERR_S(result.errorMessage);
+	}
+
+	return result;
 }
