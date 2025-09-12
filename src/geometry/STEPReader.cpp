@@ -32,6 +32,7 @@
 #include <StepRepr_RepresentationItem.hxx>
 #include <TDocStd_Document.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
+#include <XCAFDoc_ColorType.hxx>
 
 // File system includes
 #include <filesystem>
@@ -753,7 +754,7 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 			std::string componentName = baseName + "_Component_" + std::to_string(componentIndex);
 			Handle(TDataStd_Name) nameAttr;
 			if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
-				componentName = nameAttr->Get();
+				componentName = nameAttr->Get().ToCString();
 			}
 
 			// Get color from label
