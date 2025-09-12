@@ -82,6 +82,45 @@ std::string STEPReader::getFileFilter() const
 // Static member initialization
 bool STEPReader::s_initialized = false;
 
+// Helper function to safely convert ExtendedString to std::string
+static std::string safeConvertExtendedString(const TCollection_ExtendedString& extStr) {
+	try {
+		// First try direct conversion
+		TCollection_AsciiString asciiStr(extStr);
+		const char* cStr = asciiStr.ToCString();
+		if (cStr != nullptr) {
+			std::string result(cStr);
+			// Check if the result contains only printable ASCII characters
+			bool isValid = true;
+			for (char c : result) {
+				if (c < 32 || c > 126) { // Not printable ASCII
+					isValid = false;
+					break;
+				}
+			}
+			if (isValid && !result.empty()) {
+				return result;
+			}
+		}
+	} catch (const std::exception& e) {
+		LOG_WRN_S("ExtendedString conversion failed: " + std::string(e.what()));
+	}
+	
+	// Fallback: convert character by character, keeping only ASCII
+	std::string result;
+	const Standard_ExtString extCStr = extStr.ToExtString();
+	if (extCStr != nullptr) {
+		for (int i = 0; extCStr[i] != 0; i++) {
+			wchar_t wc = extCStr[i];
+			if (wc >= 32 && wc <= 126) { // Printable ASCII range
+				result += static_cast<char>(wc);
+			}
+		}
+	}
+	
+	return result.empty() ? "UnnamedComponent" : result;
+}
+
 STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 	const OptimizationOptions& options,
 	ProgressCallback progress)
@@ -792,9 +831,11 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 			Handle(TDataStd_Name) nameAttr;
 			if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
 				TCollection_ExtendedString extStr = nameAttr->Get();
-				// Convert ExtendedString to std::string using AsciiString as bridge
-				TCollection_AsciiString asciiStr(extStr);
-				componentName = asciiStr.ToCString();
+				// Convert ExtendedString to std::string safely
+				std::string convertedName = safeConvertExtendedString(extStr);
+				if (!convertedName.empty() && convertedName != "UnnamedComponent") {
+					componentName = convertedName;
+				}
 			}
 
 			// Get color from label
