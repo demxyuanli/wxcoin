@@ -10,6 +10,7 @@
 #include "Canvas.h"
 #include "OCCGeometry.h"
 #include "DynamicSilhouetteRenderer.h"
+#include "config/SelectionColorConfig.h"
 #include "logger/Logger.h"
 
 #include <Inventor/nodes/SoSeparator.h>
@@ -18,6 +19,16 @@ SelectionOutlineManager::SelectionOutlineManager(SceneManager* sceneManager,
 	SoSeparator* occRoot,
 	std::vector<std::shared_ptr<OCCGeometry>>* selectedGeometries)
 	: m_sceneManager(sceneManager), m_occRoot(occRoot), m_selectedGeometries(selectedGeometries) {
+	
+	// Initialize outline style from configuration
+	if (SelectionColorConfig::getInstance().isInitialized()) {
+		float r, g, b;
+		SelectionColorConfig::getInstance().getSelectedOutlineColor(r, g, b);
+		m_style.r = r;
+		m_style.g = g;
+		m_style.b = b;
+		m_style.lineWidth = SelectionColorConfig::getInstance().getSelectedOutlineWidth();
+	}
 }
 
 SelectionOutlineManager::~SelectionOutlineManager() = default;

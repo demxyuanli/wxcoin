@@ -86,7 +86,16 @@ private:
 	void onPerformancePreset(wxCommandEvent& event);
 	void onBalancedPreset(wxCommandEvent& event);
 	void onQualityPreset(wxCommandEvent& event);
+	void onUltraQualityPreset(wxCommandEvent& event);
+	void onGamingPreset(wxCommandEvent& event);
+	void onCADPreset(wxCommandEvent& event);
+	void onRenderingPreset(wxCommandEvent& event);
 	void onCustomPreset(wxCommandEvent& event);
+	
+	// Parameter dependency and linking
+	void updateParameterDependencies(const std::string& parameter, double value);
+	void syncAllUI();
+	void forceImmediateVisualUpdate();
 	
 	// Surface smoothing preset handlers
 	void onCoarseSurfacePreset(wxCommandEvent& event);

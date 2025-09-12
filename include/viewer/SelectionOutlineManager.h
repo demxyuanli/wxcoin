@@ -13,7 +13,7 @@ class DynamicSilhouetteRenderer;
 
 struct SelectionOutlineStyle {
 	float lineWidth{ 2.0f };
-	float r{ 1.0f }, g{ 0.6f }, b{ 0.0f };
+	float r{ 1.0f }, g{ 1.0f }, b{ 0.6f };  // Light yellow outline
 };
 
 class SelectionOutlineManager {

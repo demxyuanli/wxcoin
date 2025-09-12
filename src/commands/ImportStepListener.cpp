@@ -10,7 +10,6 @@
 #include "logger/Logger.h"
 #include <chrono>
 #include "FlatFrame.h"
-#include "ImportSettingsDialog.h"
 #include "ImportStatisticsDialog.h"
 #include "flatui/FlatUIStatusBar.h"
 
@@ -86,33 +85,24 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	wxArrayString filePaths;
 	openFileDialog.GetPaths(filePaths);
 
-	// Show import settings dialog
-	ImportSettingsDialog settingsDialog(m_frame);
-	if (settingsDialog.ShowModal() != wxID_OK) {
-		if (m_statusBar) {
-			m_statusBar->EnableProgressGauge(false);
-			m_statusBar->SetStatusText("Ready", 0);
-		}
-		return CommandResult(false, "Geometry import cancelled", commandType);
-	}
-
-	// Get import settings
-	double meshDeflection = settingsDialog.getMeshDeflection();
-	double angularDeflection = settingsDialog.getAngularDeflection();
-	bool enableLOD = settingsDialog.isLODEnabled();
-	bool parallelProcessing = settingsDialog.isParallelProcessing();
-	bool adaptiveMeshing = settingsDialog.isAdaptiveMeshing();
-	bool autoOptimize = settingsDialog.isAutoOptimize();
-	bool normalProcessing = settingsDialog.isNormalProcessing();
-	int importMode = settingsDialog.getImportMode();
+	// Use balanced default settings for import (no dialog needed)
+	// Balanced preset: Good balance between quality and performance
+	double meshDeflection = 1.0;          // Balanced mesh precision
+	double angularDeflection = 1.0;       // Balanced curve approximation
+	bool enableLOD = true;                // Enable LOD for better interaction
+	bool parallelProcessing = true;       // Enable parallel processing
+	bool adaptiveMeshing = false;         // Disable adaptive meshing for consistency
+	bool autoOptimize = true;             // Enable auto optimization
+	bool normalProcessing = false;        // Disable normal processing for performance
+	int importMode = 0;                   // Standard import mode
 	
-	// Get new tessellation settings
-	bool enableFineTessellation = settingsDialog.isFineTessellationEnabled();
-	double tessellationDeflection = settingsDialog.getTessellationDeflection();
-	double tessellationAngle = settingsDialog.getTessellationAngle();
-	int tessellationMinPoints = settingsDialog.getTessellationMinPoints();
-	int tessellationMaxPoints = settingsDialog.getTessellationMaxPoints();
-	bool enableAdaptiveTessellation = settingsDialog.isAdaptiveTessellationEnabled();
+	// Tessellation settings for balanced quality
+	bool enableFineTessellation = true;   // Enable fine tessellation
+	double tessellationDeflection = 0.01; // Fine tessellation precision
+	double tessellationAngle = 0.1;       // Tessellation angle
+	int tessellationMinPoints = 3;        // Minimum tessellation points
+	int tessellationMaxPoints = 100;      // Maximum tessellation points
+	bool enableAdaptiveTessellation = true; // Enable adaptive tessellation
 
 	LOG_INF_S(wxString::Format("Import settings: Deflection=%.2f, Angular=%.2f, LOD=%s, Parallel=%s",
 		meshDeflection, angularDeflection,
@@ -122,9 +112,10 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	auto fileDialogDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileDialogEndTime - fileDialogStartTime);
 
 	LOG_INF_S("=== BATCH GEOMETRY IMPORT START ===");
-	LOG_INF_S("Files selected: " + std::to_string(filePaths.size()) + ", Dialog time: " + std::to_string(fileDialogDuration.count()) + "ms");
+	LOG_INF_S("Files selected: " + std::to_string(filePaths.size()) + ", Using balanced default settings");
+	LOG_INF_S("Balanced settings applied: Deflection=1.0, Angular=1.0, LOD=On, Parallel=On");
 	if (flatFrame) {
-		flatFrame->appendMessage(wxString::Format("Files selected: %zu", filePaths.size()));
+		flatFrame->appendMessage(wxString::Format("Files selected: %zu, using balanced quality settings", filePaths.size()));
 	}
 
 	try {
@@ -321,7 +312,7 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			double optimalDeflection = meshDeflection; // Use user-selected deflection
 
 			// If auto-optimize is enabled, adjust based on geometry size
-			if (settingsDialog.isAutoOptimize() && hasBounds) {
+			if (autoOptimize && hasBounds) {
 				// Calculate diagonal of bounding box
 				double dx = maxPt.X() - minPt.X();
 				double dy = maxPt.Y() - minPt.Y();

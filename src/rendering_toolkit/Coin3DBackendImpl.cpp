@@ -1,6 +1,7 @@
 #include "rendering/Coin3DBackend.h"
 #include "rendering/OpenCASCADEProcessor.h"
 #include "logger/Logger.h"
+#include "config/SelectionColorConfig.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
@@ -333,14 +334,39 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
 	// Add material node with custom properties
 	SoMaterial* material = new SoMaterial;
 	if (selected) {
-		// Selected geometry - use light orange color for better visibility
-		// Use light orange color for selection highlight
-		material->diffuseColor.setValue(1.0f, 0.7f, 0.3f);  // Light orange
-		material->ambientColor.setValue(0.4f, 0.3f, 0.1f);   // Darker orange ambient
-		material->specularColor.setValue(1.0f, 0.8f, 0.4f); // Light orange specular
-		material->shininess.setValue(0.8f);                 // High shininess for highlight
-		material->transparency.setValue(0.0f);              // No transparency for selected
-		material->emissiveColor.setValue(0.2f, 0.15f, 0.05f); // Slight orange emission for glow effect
+		// Selected geometry - use colors from configuration
+		if (SelectionColorConfig::getInstance().isInitialized()) {
+			float r, g, b;
+			
+			// Use diffuse color from config
+			SelectionColorConfig::getInstance().getSelectedGeometryDiffuseColor(r, g, b);
+			material->diffuseColor.setValue(r, g, b);
+			
+			// Use ambient color from config
+			SelectionColorConfig::getInstance().getSelectedGeometryAmbientColor(r, g, b);
+			material->ambientColor.setValue(r, g, b);
+			
+			// Use specular color from config
+			SelectionColorConfig::getInstance().getSelectedGeometrySpecularColor(r, g, b);
+			material->specularColor.setValue(r, g, b);
+			
+			// Use emissive color from config
+			SelectionColorConfig::getInstance().getSelectedGeometryEmissiveColor(r, g, b);
+			material->emissiveColor.setValue(r, g, b);
+			
+			// Use transparency and shininess from config
+			material->transparency.setValue(SelectionColorConfig::getInstance().getSelectedGeometryTransparency());
+			material->shininess.setValue(SelectionColorConfig::getInstance().getSelectedGeometryShininess());
+		}
+		else {
+			// Fallback to default light yellow color if config not available
+			material->diffuseColor.setValue(1.0f, 1.0f, 0.6f);  // Light yellow
+			material->ambientColor.setValue(0.4f, 0.4f, 0.2f);   // Darker yellow ambient
+			material->specularColor.setValue(1.0f, 1.0f, 0.7f); // Light yellow specular
+			material->shininess.setValue(0.8f);                 // High shininess for highlight
+			material->transparency.setValue(0.0f);              // No transparency for selected
+			material->emissiveColor.setValue(0.2f, 0.2f, 0.1f); // Slight yellow emission for glow effect
+		}
 	}
 	else {
 		// Use custom material properties including emissive color

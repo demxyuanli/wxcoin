@@ -255,10 +255,8 @@ void MeshQualityDialog::onDeflectionSlider(wxCommandEvent& event)
 	m_deflectionSpinCtrl->SetValue(value);
 	m_currentDeflection = value;
 	
-	// Real-time preview for better user experience
-	if (m_occViewer && m_enableRealTimePreview) {
-		m_occViewer->setMeshDeflection(value, true);
-	}
+	// Update UI only, no real-time application
+	updateParameterDependencies("deflection", value);
 }
 
 void MeshQualityDialog::onDeflectionSpinCtrl(wxSpinDoubleEvent& event)
@@ -267,10 +265,8 @@ void MeshQualityDialog::onDeflectionSpinCtrl(wxSpinDoubleEvent& event)
 	m_deflectionSlider->SetValue(static_cast<int>(value * 1000));
 	m_currentDeflection = value;
 	
-	// Real-time preview for better user experience
-	if (m_occViewer && m_enableRealTimePreview) {
-		m_occViewer->setMeshDeflection(value, true);
-	}
+	// Update UI only, no real-time application
+	updateParameterDependencies("deflection", value);
 }
 
 void MeshQualityDialog::onLODEnable(wxCommandEvent& event)
@@ -357,9 +353,10 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 			" (used when idle)");
 	}
 
-	// Apply basic quality settings
-	m_occViewer->setMeshDeflection(m_currentDeflection, true);
-	m_occViewer->setAngularDeflection(m_currentAngularDeflection, true);
+	// Apply all settings without triggering individual remesh operations
+	// This avoids throttling issues and ensures all parameters are applied together
+	m_occViewer->setMeshDeflection(m_currentDeflection, false);  // Don't remesh yet
+	m_occViewer->setAngularDeflection(m_currentAngularDeflection, false);  // Don't remesh yet
 	m_occViewer->setLODEnabled(m_currentLODEnabled);
 	m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
 	m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
@@ -385,19 +382,53 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 	m_occViewer->setParallelProcessing(m_currentParallelProcessing);
 	m_occViewer->setAdaptiveMeshing(m_currentAdaptiveMeshing);
 
-	// Force remesh all geometries with new parameters
-	LOG_INF_S("Forcing mesh regeneration with new parameters...");
+	// Force complete remesh with all new parameters
+	LOG_INF_S("Forcing complete mesh regeneration with all new parameters...");
+	LOG_INF_S("Parameters: Deflection=" + std::to_string(m_currentDeflection) + 
+		", Angular=" + std::to_string(m_currentAngularDeflection) +
+		", Subdivision=" + std::string(m_currentSubdivisionEnabled ? "On" : "Off") +
+		", Smoothing=" + std::string(m_currentSmoothingEnabled ? "On" : "Off"));
+	
+	// Use a small delay to ensure all parameter changes are processed
+	wxMilliSleep(50);
 	m_occViewer->remeshAllGeometries();
+	
+	// Force view refresh to ensure changes are visible
+	m_occViewer->requestViewRefresh();
+	
+	// Additional refresh mechanisms to ensure parameter changes are visible
+	wxYield(); // Allow UI to process
+	wxMilliSleep(100); // Give time for remesh to complete
+	
+	// Force another refresh to ensure low-resolution changes are visible
+	m_occViewer->requestViewRefresh();
 
 	// Validate parameters were applied
 	m_occViewer->validateMeshParameters();
 
 	LOG_INF_S("=== MESH QUALITY SETTINGS APPLIED SUCCESSFULLY ===");
 
-	// Show success message
-	wxMessageBox("Mesh quality settings have been applied successfully!\n\n"
-		"Check the log for detailed information about the applied parameters.",
-		"Settings Applied", wxOK | wxICON_INFORMATION);
+	// Force immediate visual update for resolution changes
+	forceImmediateVisualUpdate();
+
+	// Show success message with current parameters
+	wxString successMsg = wxString::Format(
+		"Mesh quality settings have been applied successfully!\n\n"
+		"Current parameters:\n"
+		"- Mesh Deflection: %.3f\n"
+		"- Angular Deflection: %.3f\n"
+		"- LOD: %s\n"
+		"- Subdivision: %s\n"
+		"- Smoothing: %s\n\n"
+		"Check the log for detailed information.",
+		m_currentDeflection,
+		m_currentAngularDeflection,
+		m_currentLODEnabled ? "Enabled" : "Disabled",
+		m_currentSubdivisionEnabled ? "Enabled" : "Disabled",
+		m_currentSmoothingEnabled ? "Enabled" : "Disabled"
+	);
+	
+	wxMessageBox(successMsg, "Settings Applied", wxOK | wxICON_INFORMATION);
 }
 
 void MeshQualityDialog::onReset(wxCommandEvent& event)
@@ -699,23 +730,41 @@ void MeshQualityDialog::createBasicQualityPage()
 	wxStaticBox* presetBox = new wxStaticBox(basicPage, wxID_ANY, "Quick Presets");
 	wxStaticBoxSizer* presetSizer = new wxStaticBoxSizer(presetBox, wxVERTICAL);
 	
+	// Create preset buttons with expanded options
 	wxButton* performanceBtn = new wxButton(basicPage, wxID_ANY, "[P] Performance");
 	wxButton* balancedBtn = new wxButton(basicPage, wxID_ANY, "[B] Balanced");
 	wxButton* qualityBtn = new wxButton(basicPage, wxID_ANY, "[Q] Quality");
+	wxButton* ultraBtn = new wxButton(basicPage, wxID_ANY, "[U] Ultra");
+	wxButton* gamingBtn = new wxButton(basicPage, wxID_ANY, "[G] Gaming");
+	wxButton* cadBtn = new wxButton(basicPage, wxID_ANY, "[C] CAD");
+	wxButton* renderBtn = new wxButton(basicPage, wxID_ANY, "[R] Render");
 	
-	performanceBtn->SetToolTip("Maximum performance: Deflection=2.0, LOD enabled");
-	balancedBtn->SetToolTip("Balanced settings: Deflection=1.0, LOD enabled");
-	qualityBtn->SetToolTip("High quality: Deflection=0.2, LOD enabled");
+	performanceBtn->SetToolTip("Maximum performance: Deflection=2.0, LOD enabled, no subdivision");
+	balancedBtn->SetToolTip("Balanced settings: Deflection=1.0, LOD enabled, light smoothing");
+	qualityBtn->SetToolTip("High quality: Deflection=0.5, LOD enabled, subdivision enabled");
+	ultraBtn->SetToolTip("Ultra quality: Deflection=0.2, advanced features, maximum smoothness");
+	gamingBtn->SetToolTip("Gaming optimized: Deflection=1.2, fast LOD, optimized for real-time");
+	cadBtn->SetToolTip("CAD precision: Deflection=0.3, high accuracy, feature preservation");
+	renderBtn->SetToolTip("Rendering quality: Deflection=0.1, maximum subdivision, photorealistic");
 	
 	performanceBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onPerformancePreset, this);
 	balancedBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onBalancedPreset, this);
 	qualityBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onQualityPreset, this);
+	ultraBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onUltraQualityPreset, this);
+	gamingBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onGamingPreset, this);
+	cadBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onCADPreset, this);
+	renderBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onRenderingPreset, this);
 	
-	wxBoxSizer* presetButtonSizer = new wxBoxSizer(wxVERTICAL);
-	presetButtonSizer->Add(performanceBtn, 0, wxEXPAND | wxALL, 2);
-	presetButtonSizer->Add(balancedBtn, 0, wxEXPAND | wxALL, 2);
-	presetButtonSizer->Add(qualityBtn, 0, wxEXPAND | wxALL, 2);
-	presetSizer->Add(presetButtonSizer, 0, wxEXPAND);
+	// Create grid layout for preset buttons
+	wxGridSizer* presetGridSizer = new wxGridSizer(2, 4, 3, 3);
+	presetGridSizer->Add(performanceBtn, 0, wxEXPAND | wxALL, 2);
+	presetGridSizer->Add(balancedBtn, 0, wxEXPAND | wxALL, 2);
+	presetGridSizer->Add(qualityBtn, 0, wxEXPAND | wxALL, 2);
+	presetGridSizer->Add(ultraBtn, 0, wxEXPAND | wxALL, 2);
+	presetGridSizer->Add(gamingBtn, 0, wxEXPAND | wxALL, 2);
+	presetGridSizer->Add(cadBtn, 0, wxEXPAND | wxALL, 2);
+	presetGridSizer->Add(renderBtn, 0, wxEXPAND | wxALL, 2);
+	presetSizer->Add(presetGridSizer, 0, wxEXPAND);
 	
 	// Preview options (right side)
 	wxStaticBox* previewBox = new wxStaticBox(basicPage, wxID_ANY, "Preview");
@@ -1143,7 +1192,83 @@ void MeshQualityDialog::onQualityPreset(wxCommandEvent& event)
 {
 	LOG_INF_S("Applying Quality Preset");
 	m_currentAngularDeflection = 0.5; // Small angular deflection for quality
-	applyPreset(0.2, true, 0.5, 0.1, true);
+	applyPreset(0.5, true, 0.6, 0.3, true);
+}
+
+void MeshQualityDialog::onUltraQualityPreset(wxCommandEvent& event)
+{
+	LOG_INF_S("Applying Ultra Quality Preset");
+	m_currentAngularDeflection = 0.3; // Very small angular deflection for ultra quality
+	applyPreset(0.2, true, 0.4, 0.1, true);
+	
+	// Enable advanced features for ultra quality
+	m_currentSubdivisionEnabled = true;
+	m_currentSubdivisionLevel = 3;
+	m_currentSmoothingEnabled = true;
+	m_currentSmoothingIterations = 4;
+	m_currentSmoothingStrength = 0.8;
+	m_currentTessellationQuality = 4;
+	m_currentFeaturePreservation = 0.9;
+	m_currentAdaptiveMeshing = true;
+	
+	syncAllUI();
+}
+
+void MeshQualityDialog::onGamingPreset(wxCommandEvent& event)
+{
+	LOG_INF_S("Applying Gaming Preset");
+	m_currentAngularDeflection = 0.8; // Balanced for gaming performance
+	applyPreset(1.2, true, 1.8, 0.6, true);
+	
+	// Gaming-optimized settings
+	m_currentSubdivisionEnabled = false; // Disable for performance
+	m_currentSmoothingEnabled = true;    // Light smoothing for visual appeal
+	m_currentSmoothingIterations = 1;
+	m_currentSmoothingStrength = 0.4;
+	m_currentTessellationQuality = 2;
+	m_currentFeaturePreservation = 0.6;
+	m_currentLODTransitionTime = 200;    // Fast LOD transitions
+	
+	syncAllUI();
+}
+
+void MeshQualityDialog::onCADPreset(wxCommandEvent& event)
+{
+	LOG_INF_S("Applying CAD Preset");
+	m_currentAngularDeflection = 0.4; // High precision for CAD
+	applyPreset(0.3, true, 0.6, 0.15, true);
+	
+	// CAD-optimized settings for precision
+	m_currentSubdivisionEnabled = false; // Keep original geometry intact
+	m_currentSmoothingEnabled = false;   // No smoothing for accuracy
+	m_currentTessellationQuality = 3;
+	m_currentFeaturePreservation = 1.0;  // Maximum feature preservation
+	m_currentAdaptiveMeshing = false;    // Consistent meshing
+	m_currentParallelProcessing = true;  // Use parallel processing
+	
+	syncAllUI();
+}
+
+void MeshQualityDialog::onRenderingPreset(wxCommandEvent& event)
+{
+	LOG_INF_S("Applying Rendering Preset");
+	m_currentAngularDeflection = 0.2; // Very high precision for rendering
+	applyPreset(0.1, false, 0.2, 0.05, true); // Disable LOD for consistent quality
+	
+	// Rendering-optimized settings for photorealistic output
+	m_currentSubdivisionEnabled = true;
+	m_currentSubdivisionLevel = 4;
+	m_currentSubdivisionMethod = 0; // Catmull-Clark for smooth surfaces
+	m_currentSmoothingEnabled = true;
+	m_currentSmoothingIterations = 5;
+	m_currentSmoothingStrength = 0.9;
+	m_currentSmoothingCreaseAngle = 20.0; // Preserve sharp edges
+	m_currentTessellationQuality = 5;
+	m_currentTessellationMethod = 2; // Curvature-based tessellation
+	m_currentFeaturePreservation = 1.0;
+	m_currentAdaptiveMeshing = true;
+	
+	syncAllUI();
 }
 
 void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled,
@@ -1165,26 +1290,13 @@ void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled,
 		m_angularDeflectionSpinCtrl->SetValue(m_currentAngularDeflection);
 	}
 
-	// Update UI controls
-	updateControls();
-
-	// Apply immediately
-	if (m_occViewer) {
-		m_occViewer->setMeshDeflection(m_currentDeflection, true);
-		m_occViewer->setAngularDeflection(m_currentAngularDeflection, true);
-		m_occViewer->setLODEnabled(m_currentLODEnabled);
-		m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
-		m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
-		m_occViewer->setParallelProcessing(m_currentParallelProcessing);
-
-		// Trigger remesh
-		m_occViewer->remeshAllGeometries();
-	}
+	// Update UI controls only, no immediate application
+	syncAllUI();
 
 	// Show feedback
-	wxString msg = wxString::Format("Preset applied: Deflection=%.1f, Angular=%.1f, LOD=%s",
+	wxString msg = wxString::Format("Preset configured: Deflection=%.1f, Angular=%.1f, LOD=%s\n\nClick Apply to apply these settings.",
 		deflection, m_currentAngularDeflection, lodEnabled ? "On" : "Off");
-	wxMessageBox(msg, "Preset Applied", wxOK | wxICON_INFORMATION);
+	wxMessageBox(msg, "Preset Configured", wxOK | wxICON_INFORMATION);
 }
 
 // Angular Deflection event handlers
@@ -1282,11 +1394,11 @@ void MeshQualityDialog::applySurfacePreset(double deflection, double angularDefl
 	// Update UI controls
 	updateControls();
 	
-	// Apply to OCCViewer
+	// Apply to OCCViewer (preset application - no immediate remesh)
 	if (m_occViewer) {
-		// Basic quality settings
-		m_occViewer->setMeshDeflection(m_currentDeflection, true);
-		m_occViewer->setAngularDeflection(m_currentAngularDeflection, true);
+		// Basic quality settings (no remesh during preset configuration)
+		m_occViewer->setMeshDeflection(m_currentDeflection, false);
+		m_occViewer->setAngularDeflection(m_currentAngularDeflection, false);
 		m_occViewer->setLODEnabled(m_currentLODEnabled);
 		m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
 		m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
@@ -1312,8 +1424,7 @@ void MeshQualityDialog::applySurfacePreset(double deflection, double angularDefl
 		m_occViewer->setParallelProcessing(m_currentParallelProcessing);
 		m_occViewer->setAdaptiveMeshing(m_currentAdaptiveMeshing);
 		
-		// Trigger remesh
-		m_occViewer->remeshAllGeometries();
+		// Note: No immediate remesh - user must click Apply to apply preset
 	}
 	
 	// Show detailed feedback
@@ -1333,4 +1444,133 @@ void MeshQualityDialog::applySurfacePreset(double deflection, double angularDefl
 	wxMessageBox(msg, "Surface Preset Applied", wxOK | wxICON_INFORMATION);
 	
 	LOG_INF_S("Surface preset applied successfully");
+}
+
+// Parameter dependency and linking implementation
+void MeshQualityDialog::updateParameterDependencies(const std::string& parameter, double value)
+{
+	if (parameter == "deflection") {
+		// Auto-adjust LOD parameters based on deflection
+		if (value >= 1.5) {
+			// High deflection -> use more aggressive LOD
+			m_currentLODRoughDeflection = std::min(value * 1.5, 2.0);
+			m_currentLODFineDeflection = std::min(value * 0.8, 1.0);
+		} else if (value <= 0.3) {
+			// Low deflection -> use subtle LOD
+			m_currentLODRoughDeflection = std::max(value * 2.0, 0.6);
+			m_currentLODFineDeflection = std::max(value * 0.5, 0.1);
+		} else {
+			// Medium deflection -> balanced LOD
+			m_currentLODRoughDeflection = value * 1.2;
+			m_currentLODFineDeflection = value * 0.6;
+		}
+		
+		// Auto-adjust angular deflection based on mesh deflection
+		if (value >= 1.0) {
+			m_currentAngularDeflection = 1.0 + (value - 1.0) * 0.5;
+		} else {
+			m_currentAngularDeflection = 1.0 - (1.0 - value) * 0.3;
+		}
+		
+		// Auto-adjust subdivision and smoothing based on deflection
+		if (value >= 1.5) {
+			m_currentSubdivisionEnabled = false;
+			m_currentSmoothingEnabled = false;
+		} else if (value <= 0.5) {
+			m_currentSubdivisionEnabled = true;
+			m_currentSmoothingEnabled = true;
+			m_currentSubdivisionLevel = value <= 0.2 ? 3 : 2;
+			m_currentSmoothingIterations = value <= 0.2 ? 3 : 2;
+		}
+		
+		// Update UI controls
+		syncAllUI();
+	}
+}
+
+void MeshQualityDialog::syncAllUI()
+{
+	// Update all UI controls with current values
+	if (m_deflectionSlider) {
+		m_deflectionSlider->SetValue(static_cast<int>(m_currentDeflection * 1000));
+	}
+	if (m_deflectionSpinCtrl) {
+		m_deflectionSpinCtrl->SetValue(m_currentDeflection);
+	}
+	if (m_angularDeflectionSlider) {
+		m_angularDeflectionSlider->SetValue(static_cast<int>(m_currentAngularDeflection * 1000));
+	}
+	if (m_angularDeflectionSpinCtrl) {
+		m_angularDeflectionSpinCtrl->SetValue(m_currentAngularDeflection);
+	}
+	if (m_lodEnableCheckBox) {
+		m_lodEnableCheckBox->SetValue(m_currentLODEnabled);
+	}
+	if (m_lodRoughDeflectionSlider) {
+		m_lodRoughDeflectionSlider->SetValue(static_cast<int>(m_currentLODRoughDeflection * 1000));
+	}
+	if (m_lodRoughDeflectionSpinCtrl) {
+		m_lodRoughDeflectionSpinCtrl->SetValue(m_currentLODRoughDeflection);
+	}
+	if (m_lodFineDeflectionSlider) {
+		m_lodFineDeflectionSlider->SetValue(static_cast<int>(m_currentLODFineDeflection * 1000));
+	}
+	if (m_lodFineDeflectionSpinCtrl) {
+		m_lodFineDeflectionSpinCtrl->SetValue(m_currentLODFineDeflection);
+	}
+	if (m_subdivisionEnableCheckBox) {
+		m_subdivisionEnableCheckBox->SetValue(m_currentSubdivisionEnabled);
+	}
+	if (m_subdivisionLevelSlider) {
+		m_subdivisionLevelSlider->SetValue(m_currentSubdivisionLevel);
+	}
+	if (m_subdivisionLevelSpinCtrl) {
+		m_subdivisionLevelSpinCtrl->SetValue(m_currentSubdivisionLevel);
+	}
+	if (m_smoothingEnableCheckBox) {
+		m_smoothingEnableCheckBox->SetValue(m_currentSmoothingEnabled);
+	}
+	if (m_smoothingIterationsSlider) {
+		m_smoothingIterationsSlider->SetValue(m_currentSmoothingIterations);
+	}
+	if (m_smoothingIterationsSpinCtrl) {
+		m_smoothingIterationsSpinCtrl->SetValue(m_currentSmoothingIterations);
+	}
+	
+	// Update control states
+	updateControls();
+}
+
+void MeshQualityDialog::forceImmediateVisualUpdate()
+{
+	if (!m_occViewer) return;
+	
+	LOG_INF_S("Forcing immediate visual update for resolution changes...");
+	
+	// Multiple refresh strategies to ensure visibility
+	try {
+		// 1. Force immediate remesh without throttling
+		m_occViewer->remeshAllGeometries();
+		
+		// 2. Multiple view refresh requests
+		for (int i = 0; i < 3; i++) {
+			m_occViewer->requestViewRefresh();
+			wxYield();
+			wxMilliSleep(10);
+		}
+		
+		// 3. Force display mode refresh
+		bool currentWireframe = m_occViewer->isWireframeMode();
+		m_occViewer->setWireframeMode(!currentWireframe);
+		wxYield();
+		m_occViewer->setWireframeMode(currentWireframe);
+		
+		// 4. Final refresh
+		m_occViewer->requestViewRefresh();
+		
+		LOG_INF_S("Immediate visual update completed");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Error during immediate visual update: " + std::string(e.what()));
+	}
 }

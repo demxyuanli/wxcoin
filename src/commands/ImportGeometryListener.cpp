@@ -16,7 +16,6 @@
 #include <chrono>
 #include <filesystem>
 #include "FlatFrame.h"
-#include "ImportSettingsDialog.h"
 #include "flatui/FlatUIStatusBar.h"
 
 ImportGeometryListener::ImportGeometryListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
@@ -172,12 +171,9 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
                 continue;
             }
 
-            // Show import settings dialog
+            // Use balanced default settings for import (no dialog needed)
             GeometryReader::OptimizationOptions options;
-            if (!showImportSettingsDialog(reader.get(), options)) {
-                cleanupProgress();
-                return CommandResult(false, "Import cancelled by user", commandType);
-            }
+            setupBalancedImportOptions(options);
 
             // Import files for this format
             auto formatStartTime = std::chrono::high_resolution_clock::now();
@@ -406,36 +402,29 @@ CommandResult ImportGeometryListener::importFilesWithStats(std::unique_ptr<Geome
     }
 }
 
-bool ImportGeometryListener::showImportSettingsDialog(GeometryReader* reader, 
-    GeometryReader::OptimizationOptions& options)
+void ImportGeometryListener::setupBalancedImportOptions(GeometryReader::OptimizationOptions& options)
 {
-    // For now, use the existing ImportSettingsDialog
-    // In the future, this could be made format-specific
-    ImportSettingsDialog settingsDialog(m_frame);
-    if (settingsDialog.ShowModal() != wxID_OK) {
-        return false;
-    }
-
-    // Map settings to optimization options
-    options.meshDeflection = settingsDialog.getMeshDeflection();
-    options.angularDeflection = settingsDialog.getAngularDeflection();
-    options.enableParallelProcessing = settingsDialog.isParallelProcessing();
-    options.enableShapeAnalysis = settingsDialog.isAdaptiveMeshing();
-    options.enableCaching = true;
-    options.enableBatchOperations = true;
+    // Use balanced default settings for optimal import performance and quality
+    // Balanced preset: Good balance between quality and performance
+    options.meshDeflection = 1.0;          // Balanced mesh precision
+    options.angularDeflection = 1.0;       // Balanced curve approximation
+    options.enableParallelProcessing = true; // Enable parallel processing
+    options.enableShapeAnalysis = false;    // Disable adaptive meshing for consistency
+    options.enableCaching = true;           // Enable caching for better performance
+    options.enableBatchOperations = true;   // Enable batch operations
     options.maxThreads = std::thread::hardware_concurrency();
-    options.precision = 0.01;
-    options.enableNormalProcessing = settingsDialog.isNormalProcessing();
+    options.precision = 0.01;              // Standard precision
+    options.enableNormalProcessing = false; // Disable normal processing for performance
     
-    // Map new tessellation settings
-    options.enableFineTessellation = settingsDialog.isFineTessellationEnabled();
-    options.tessellationDeflection = settingsDialog.getTessellationDeflection();
-    options.tessellationAngle = settingsDialog.getTessellationAngle();
-    options.tessellationMinPoints = settingsDialog.getTessellationMinPoints();
-    options.tessellationMaxPoints = settingsDialog.getTessellationMaxPoints();
-    options.enableAdaptiveTessellation = settingsDialog.isAdaptiveTessellationEnabled();
-
-    return true;
+    // Tessellation settings for balanced quality
+    options.enableFineTessellation = true;   // Enable fine tessellation
+    options.tessellationDeflection = 0.01;   // Fine tessellation precision
+    options.tessellationAngle = 0.1;         // Tessellation angle
+    options.tessellationMinPoints = 3;       // Minimum tessellation points
+    options.tessellationMaxPoints = 100;     // Maximum tessellation points
+    options.enableAdaptiveTessellation = true; // Enable adaptive tessellation
+    
+    LOG_INF_S("Balanced import settings applied: Deflection=1.0, Angular=1.0, Parallel=On");
 }
 
 void ImportGeometryListener::updateProgress(int percent, const std::string& message, void* flatFrame)

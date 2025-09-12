@@ -63,13 +63,10 @@ private:
         std::vector<std::shared_ptr<OCCGeometry>>& allGeometries);
 
     /**
-     * @brief Show import settings dialog
-     * @param reader Reader to get settings for
-     * @param options Output options
-     * @return true if user confirmed, false if cancelled
+     * @brief Setup balanced default import options
+     * @param options Output options with balanced settings
      */
-    bool showImportSettingsDialog(GeometryReader* reader, 
-        GeometryReader::OptimizationOptions& options);
+    void setupBalancedImportOptions(GeometryReader::OptimizationOptions& options);
 
     /**
      * @brief Update progress in status bar and message panel

@@ -1,6 +1,7 @@
 #include "EdgeComponent.h"
 #include "EdgeTypes.h"
 #include "logger/Logger.h"
+#include "config/SelectionColorConfig.h"
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
@@ -624,7 +625,14 @@ void EdgeComponent::generateHighlightEdgeNode() {
 
 	// Create material for highlight edges
 	SoMaterial* mat = new SoMaterial;
-	mat->diffuseColor.setValue(1, 0, 0); // Red
+	if (SelectionColorConfig::getInstance().isInitialized()) {
+		float r, g, b;
+		SelectionColorConfig::getInstance().getSelectedHighlightEdgeColor(r, g, b);
+		mat->diffuseColor.setValue(r, g, b);
+	}
+	else {
+		mat->diffuseColor.setValue(1.0f, 1.0f, 0.6f); // Fallback to light yellow
+	}
 
 	// Create empty line set for now
 	SoIndexedLineSet* lineSet = new SoIndexedLineSet;
