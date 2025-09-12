@@ -223,6 +223,10 @@ public:
 	void SetShowHeaderText(bool show) { m_showHeaderText = show; Refresh(); }
 	bool IsShowingHeaderText() const { return m_showHeaderText; }
 
+	// Scrollbar control
+	void SetAlwaysShowScrollbars(bool alwaysShow) { m_alwaysShowScrollbars = alwaysShow; Refresh(); }
+	bool IsAlwaysShowingScrollbars() const { return m_alwaysShowScrollbars; }
+
 	// Event handlers
 	void OnItemClicked(std::function<void(std::shared_ptr<FlatTreeItem>, int)> callback);
 	void OnItemExpanded(std::function<void(std::shared_ptr<FlatTreeItem>)> callback);
@@ -332,6 +336,9 @@ private:
 
 	// Header display control
 	bool m_showHeaderText;
+
+	// Scrollbar control
+	bool m_alwaysShowScrollbars;
 
 	DECLARE_EVENT_TABLE()
 };

@@ -175,7 +175,7 @@ void FlatTreeColumn::SetSortable(bool sortable)
 
 // FlatTreeView implementation
 FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
-	: wxScrolledWindow(parent, id, pos, size, style | wxBORDER_NONE)
+	: wxScrolledWindow(parent, id, pos, size, style | wxBORDER_NONE | wxVSCROLL | wxHSCROLL)
 	, m_itemHeight(22)
 	, m_indentWidth(16)
 	, m_showLines(true)
@@ -197,6 +197,7 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	, m_resizeStartX(0)
 	, m_initialColumnWidth(0)
 	, m_headerResizeMargin(4)
+	, m_alwaysShowScrollbars(true)
 {
 	// Set default colors
 	m_backgroundColor = wxColour(255, 255, 255);
@@ -213,8 +214,8 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 	SetDoubleBuffered(true);
 
-	// Enable scrolling
-	SetScrollRate(0, m_itemHeight);
+	// Enable scrolling with pixel-based scrolling
+	SetScrollRate(1, 1);
 
 	// Independent horizontal scrollbar for first column
 	m_treeHScrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
@@ -375,7 +376,7 @@ std::vector<std::shared_ptr<FlatTreeItem>> FlatTreeView::GetSelectedItems() cons
 void FlatTreeView::SetItemHeight(int height)
 {
 	m_itemHeight = height;
-	SetScrollRate(0, m_itemHeight);
+	SetScrollRate(1, 1); // Use pixel-based scrolling
 	m_needsLayout = true;
 	Refresh();
 }
@@ -1000,9 +1001,16 @@ void FlatTreeView::CalculateLayout()
 
 	if (!m_root) {
 		m_totalHeight = 0;
-		// Set both scrollbars to no scrolling
-		SetScrollbar(wxVERTICAL, 0, 0, 0, true);
-		SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
+		// Set both scrollbars to show but with zero range
+		int rowsVisible = std::max(0, clientH - headerY);
+		
+		if (m_alwaysShowScrollbars) {
+			SetScrollbar(wxVERTICAL, 0, rowsVisible, 0, true);
+			SetScrollbar(wxHORIZONTAL, 0, clientW, 0, true);
+		} else {
+			SetScrollbar(wxVERTICAL, 0, 0, 0, true);
+			SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
+		}
 		return;
 	}
 
@@ -1017,6 +1025,12 @@ void FlatTreeView::CalculateLayout()
 		int thumb = rowsVisible;
 		int pos = std::min(m_scrollY, range);
 		SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
+	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxVERTICAL, 0, rowsVisible, m_totalHeight, true);
+		m_scrollY = 0;
+		SetScrollPos(wxVERTICAL, 0);
 	}
 	else {
 		SetScrollbar(wxVERTICAL, 0, 0, 0, true);
@@ -1038,6 +1052,12 @@ void FlatTreeView::CalculateLayout()
 		int thumb = clientW;
 		int pos = std::min(m_scrollX, range);
 		SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
+	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxHORIZONTAL, 0, clientW, totalContentWidth, true);
+		m_scrollX = 0;
+		SetScrollPos(wxHORIZONTAL, 0);
 	}
 	else {
 		SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
@@ -1187,6 +1207,12 @@ void FlatTreeView::UpdateScrollbars()
 		int pos = std::min(m_scrollY, range);
 		SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
 	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxVERTICAL, 0, visibleHeight, m_totalHeight, true);
+		m_scrollY = 0;
+		SetScrollPos(wxVERTICAL, 0);
+	}
 	else {
 		SetScrollbar(wxVERTICAL, 0, 0, 0, true);
 		m_scrollY = 0;
@@ -1206,6 +1232,12 @@ void FlatTreeView::UpdateScrollbars()
 		int thumb = clientSize.GetWidth();
 		int pos = std::min(m_scrollX, range);
 		SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
+	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxHORIZONTAL, 0, clientSize.GetWidth(), totalContentWidth, true);
+		m_scrollX = 0;
+		SetScrollPos(wxHORIZONTAL, 0);
 	}
 	else {
 		SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
