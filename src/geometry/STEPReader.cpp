@@ -758,17 +758,9 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 			Handle(TDataStd_Name) nameAttr;
 			if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
 				TCollection_ExtendedString extStr = nameAttr->Get();
-				// Convert ExtendedString to std::string (assuming ASCII characters)
-				const Standard_ExtString extCStr = extStr.ToExtString();
-				if (extCStr != nullptr) {
-					std::wstring wstr(extCStr);
-					componentName.clear();
-					for (wchar_t wc : wstr) {
-						if (wc < 128) { // ASCII range
-							componentName += static_cast<char>(wc);
-						}
-					}
-				}
+				// Convert ExtendedString to std::string using AsciiString as bridge
+				TCollection_AsciiString asciiStr(extStr);
+				componentName = asciiStr.ToCString();
 			}
 
 			// Get color from label

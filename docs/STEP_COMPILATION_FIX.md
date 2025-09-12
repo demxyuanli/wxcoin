@@ -29,18 +29,10 @@ componentName = nameAttr->Get();
 // 第一次尝试（仍然错误）
 componentName = nameAttr->Get().ToCString();  // TCollection_ExtendedString没有ToCString方法
 
-// 最终修复
+// 最终修复（使用TCollection_AsciiString作为桥梁）
 TCollection_ExtendedString extStr = nameAttr->Get();
-const Standard_ExtString extCStr = extStr.ToExtString();
-if (extCStr != nullptr) {
-    std::wstring wstr(extCStr);
-    componentName.clear();
-    for (wchar_t wc : wstr) {
-        if (wc < 128) { // ASCII range
-            componentName += static_cast<char>(wc);
-        }
-    }
-}
+TCollection_AsciiString asciiStr(extStr);
+componentName = asciiStr.ToCString();
 ```
 
 ### 2. 添加必要的头文件
@@ -67,16 +59,8 @@ if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
 // 修复后
 if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
     TCollection_ExtendedString extStr = nameAttr->Get();
-    const Standard_ExtString extCStr = extStr.ToExtString();
-    if (extCStr != nullptr) {
-        std::wstring wstr(extCStr);
-        componentName.clear();
-        for (wchar_t wc : wstr) {
-            if (wc < 128) { // ASCII range
-                componentName += static_cast<char>(wc);
-            }
-        }
-    }
+    TCollection_AsciiString asciiStr(extStr);
+    componentName = asciiStr.ToCString();
 }
 ```
 
@@ -103,16 +87,8 @@ OpenCASCADE使用自己的字符串类型系统：
 ```cpp
 // 从TCollection_ExtendedString转换（正确方法）
 TCollection_ExtendedString extStr = nameAttr->Get();
-const Standard_ExtString extCStr = extStr.ToExtString();
-if (extCStr != nullptr) {
-    std::wstring wstr(extCStr);
-    std::string str;
-    for (wchar_t wc : wstr) {
-        if (wc < 128) { // ASCII range
-            str += static_cast<char>(wc);
-        }
-    }
-}
+TCollection_AsciiString asciiStr(extStr);
+std::string str = asciiStr.ToCString();
 
 // 从TCollection_HAsciiString转换（这个方法仍然有效）
 if (!asciiString.IsNull()) {
