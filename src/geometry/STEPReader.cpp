@@ -129,6 +129,10 @@ static std::string safeConvertExtendedString(const TCollection_ExtendedString& e
 	return result.empty() ? "UnnamedComponent" : result;
 }
 
+// Forward declarations
+static void decomposeByFaceGroups(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes);
+static bool areFacesSimilar(const TopoDS_Face& face1, const TopoDS_Face& face2);
+
 // Helper function to decompose a shape into sub-shapes using FreeCAD-like strategy
 static void decomposeShape(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes) {
 	subShapes.clear();
