@@ -26,9 +26,6 @@ wxFont DPIManager::getScaledFont(const wxFont& baseFont) const {
 	wxFont scaledFont = baseFont;
 	scaledFont.SetPointSize(scaledSize);
 
-	LOG_DBG_S("DPIManager: Scaled font from " + std::to_string(baseFont.GetPointSize()) +
-		" to " + std::to_string(scaledSize) + " points");
-
 	return scaledFont;
 }
 
@@ -110,7 +107,6 @@ std::shared_ptr<DPIManager::TextureInfo> DPIManager::getOrCreateScaledTexture(
 
 	auto it = m_textureCache.find(cacheKey);
 	if (it != m_textureCache.end()) {
-		LOG_DBG_S("DPIManager: Using cached texture: " + cacheKey);
 		return it->second;
 	}
 

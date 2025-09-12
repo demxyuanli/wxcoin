@@ -534,11 +534,9 @@ void FlatFrame::OnStartupTimer(wxTimerEvent& event)
 
 	// Additional safety check - ensure timer is actually running
 	if (!m_startupTimer.IsRunning()) {
-		LOG_DBG_S("Startup timer not running, ignoring event");
 		return;
 	}
 
-	LOG_DBG_S("Startup timer executing - first time only");
 	m_startupTimerFired = true;
 
 	// Example: Forcing a refresh on the first page of the ribbon

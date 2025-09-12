@@ -8,6 +8,7 @@
 #include "InputManager.h"
 #include "logger/Logger.h"
 #include "docking/DockArea.h"
+#include "docking/DockWidget.h"
 #include "docking/DockContainerWidget.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
@@ -509,6 +510,21 @@ DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
 
     // Store output control for later use
     m_outputCtrl = output;
+    
+    // IMPORTANT: Update base class m_messageOutput pointer for appendMessage() compatibility
+    // This ensures that appendMessage() works correctly in docking mode
+    m_messageOutput = output;
+    
+    // Bind close event to clear m_messageOutput when dock is closed
+    dock->Bind(DockWidget::EVT_DOCK_WIDGET_CLOSED, [this](wxCommandEvent& event) {
+        DockWidget* closedWidget = static_cast<DockWidget*>(event.GetEventObject());
+        if (closedWidget == m_messageDock) {
+            // Clear the message output pointer when message dock is closed
+            m_messageOutput = nullptr;
+            m_outputCtrl = nullptr;
+            wxLogDebug("Message dock closed, cleared m_messageOutput pointer");
+        }
+    });
 
     return dock;
 }

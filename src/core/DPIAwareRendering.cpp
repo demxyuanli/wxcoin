@@ -7,16 +7,11 @@ void DPIAwareRendering::setDPIAwareLineWidth(float baseWidth) {
 	float scaledWidth = DPIManager::getInstance().getScaledLineWidth(baseWidth);
 	glLineWidth(scaledWidth);
 
-	LOG_DBG_S("DPIAwareRendering: Set OpenGL line width from " +
-		std::to_string(baseWidth) + " to " + std::to_string(scaledWidth));
 }
 
 void DPIAwareRendering::setDPIAwarePointSize(float baseSize) {
 	float scaledSize = DPIManager::getInstance().getScaledPointSize(baseSize);
 	glPointSize(scaledSize);
-
-	LOG_DBG_S("DPIAwareRendering: Set OpenGL point size from " +
-		std::to_string(baseSize) + " to " + std::to_string(scaledSize));
 }
 
 void DPIAwareRendering::configureDPIAwareDrawStyle(SoDrawStyle* drawStyle,
@@ -34,10 +29,6 @@ void DPIAwareRendering::configureDPIAwareDrawStyle(SoDrawStyle* drawStyle,
 
 	drawStyle->lineWidth = scaledLineWidth;
 	drawStyle->pointSize = scaledPointSize;
-
-	LOG_DBG_S("DPIAwareRendering: Configured DrawStyle - LineWidth: " +
-		std::to_string(baseLineWidth) + " -> " + std::to_string(scaledLineWidth) +
-		", PointSize: " + std::to_string(basePointSize) + " -> " + std::to_string(scaledPointSize));
 }
 
 void DPIAwareRendering::updateDrawStyleDPI(SoDrawStyle* drawStyle,
@@ -58,9 +49,6 @@ SoDrawStyle* DPIAwareRendering::createDPIAwareCoordinateLineStyle(float baseWidt
 
 	configureDPIAwareDrawStyle(style, baseWidth, 1.0f);
 
-	LOG_DBG_S("DPIAwareRendering: Created DPI-aware coordinate line style with base width " +
-		std::to_string(baseWidth));
-
 	return style;
 }
 
@@ -75,10 +63,6 @@ SoDrawStyle* DPIAwareRendering::createDPIAwareGeometryStyle(float baseWidth, boo
 	}
 
 	configureDPIAwareDrawStyle(style, baseWidth, 1.0f);
-
-	LOG_DBG_S("DPIAwareRendering: Created DPI-aware geometry style - " +
-		std::string(filled ? "filled" : "wireframe") +
-		" with base width " + std::to_string(baseWidth));
 
 	return style;
 }

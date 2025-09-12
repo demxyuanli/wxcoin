@@ -497,13 +497,11 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 
 	SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
 	if (!pickedPoint) {
-		LOG_DBG_S("CuteNavCube::pickRegion: No point picked");
 		return "";
 	}
 
 	SoPath* pickedPath = pickedPoint->getPath();
 	if (!pickedPath || pickedPath->getLength() == 0) {
-		LOG_DBG_S("CuteNavCube::pickRegion: Picked point has no valid path.");
 		return "";
 	}
 
@@ -520,7 +518,6 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 		}
 	}
 
-	LOG_DBG_S("CuteNavCube::pickRegion: No specific face region identified.");
 	return "";
 }
 
@@ -538,7 +535,6 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 		m_isDragging = true;
 		m_lastMousePos = currentPos;
 		dragStartPos = currentPos; // Capture position at the start of a potential drag/click
-		LOG_DBG_S("CuteNavCube::handleMouseEvent: LeftDown at (" + std::to_string(currentPos[0]) + ", " + std::to_string(currentPos[1]) + ")");
 	}
 	else if (event.LeftUp()) {
 		if (m_isDragging) {
@@ -554,19 +550,11 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 				// Invert Y-coordinate for picking, as OpenGL's origin is bottom-left.
 				SbVec2s pickPos(currentPos[0], static_cast<short>(viewportSize.y - currentPos[1]));
 
-				LOG_DBG_S("CuteNavCube::handleMouseEvent: Click detected. Picking at (" + std::to_string(pickPos[0]) + ", " + std::to_string(pickPos[1]) + ")");
-
 				std::string region = pickRegion(pickPos, viewportSize);
 				if (!region.empty() && m_viewChangeCallback) {
 					m_viewChangeCallback(region);
 					LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked, switched to view: " + region);
 				}
-				else {
-					LOG_DBG_S("CuteNavCube::handleMouseEvent: Click did not hit a main face.");
-				}
-			}
-			else {
-				LOG_DBG_S("CuteNavCube::handleMouseEvent: Drag gesture ended, distance: " + std::to_string(distance));
 			}
 		}
 	}

@@ -143,7 +143,6 @@ void TransparencyDialog::applyTransparency()
 		// Apply transparency to all selected geometries
 		for (const auto& geometry : m_selectedGeometries) {
 			if (geometry) {
-				LOG_DBG_S("Setting transparency for geometry: " + geometry->getName());
 				m_occViewer->setGeometryTransparency(geometry->getName(), m_currentTransparency);
 
 				// Verify the transparency was set
@@ -153,7 +152,6 @@ void TransparencyDialog::applyTransparency()
 		}
 
 		// Force refresh the view to show changes immediately
-		LOG_DBG_S("Requesting view refresh after transparency change");
 		m_occViewer->requestViewRefresh();
 
 		// Additional force refresh by calling parent frame's refresh if available
@@ -162,7 +160,6 @@ void TransparencyDialog::applyTransparency()
 			if (parent->GetName() == "Canvas" || parent->IsKindOf(wxCLASSINFO(wxGLCanvas))) {
 				parent->Refresh();
 				parent->Update();
-				LOG_DBG_S("Found and refreshed Canvas parent");
 				break;
 			}
 			parent = parent->GetParent();

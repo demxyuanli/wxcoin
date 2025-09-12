@@ -33,5 +33,8 @@ void FlatFrame::appendMessage(const wxString& message) {
 		currentText += message;
 		m_messageOutput->SetValue(currentText);
 		m_messageOutput->ShowPosition(m_messageOutput->GetLastPosition());
+	} else {
+		// Fallback: use status bar if message output is not available
+		SetStatusText(message, 0);
 	}
 }

@@ -132,7 +132,6 @@ void NavigationCubeManager::handleDPIChange() {
 	// We just ensure it's redrawn and its position is updated on next size event.
 	m_canvas->Refresh(true);
 
-	LOG_DBG_S("NavigationCubeManager: Handled DPI change, margins updated.");
 }
 
 void NavigationCubeManager::setEnabled(bool enabled) {
@@ -233,7 +232,6 @@ void NavigationCubeManager::syncMainCameraToCube() {
 
 	if (mainCamDistanceToOrigin < 1e-3) {
 		mainCamDistanceToOrigin = 10.0f;
-		LOG_DBG_S("NavigationCubeManager::syncMainCameraToCube: Main camera at origin, using default distance for orbit.");
 	}
 
 	SbVec3f navCamPos = navCamera->position.getValue();

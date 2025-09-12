@@ -265,7 +265,6 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
 		return;
 	}
 
-	LOG_DBG("Adding OCCGeometry to tree", "ObjectTreePanel");
 
 	// Flat hierarchy: add geometry item directly under root with a type-distinguishing icon
 	m_treeView->Freeze();
@@ -294,7 +293,6 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
 	m_occGeometryMap[geometry] = featureItem;
 	m_treeItemToOCCGeometry[featureItem] = geometry;
 
-	LOG_INF_S("Successfully added OCCGeometry to tree: " + geometry->getName() + " (new total: " + std::to_string(m_occGeometryMap.size()) + ")");
 }
 
 void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
@@ -336,7 +334,6 @@ void ObjectTreePanel::updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometr
 		return;
 	}
 
-	LOG_DBG("Updating OCCGeometry name in tree", "ObjectTreePanel");
 	m_treeView->Freeze();
 	// Update visibility icon based on current state
 	updateTreeItemIcon(it->second, geometry->isVisible());

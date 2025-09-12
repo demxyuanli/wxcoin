@@ -151,7 +151,6 @@ public:
 private:
 	// UI components
 	FlatUIBar* m_ribbon;
-	wxTextCtrl* m_messageOutput;
 	wxTimer m_progressTimer;
 	wxTimer m_startupTimer;  // Add startup timer as member variable
 	bool m_prevFeatureEdgesRunning = false; // track running state edge
@@ -180,6 +179,10 @@ private:
 	std::unique_ptr<CommandListenerManager> m_listenerManager;
 	bool m_isFirstActivate;
 	bool m_startupTimerFired;  // Track if startup timer has already fired
+
+protected:
+	// Protected members accessible to derived classes
+	wxTextCtrl* m_messageOutput;  // Message output control - accessible to derived classes
 
 	// Methods
 	void InitializeUI(const wxSize& size);
