@@ -33,6 +33,14 @@
 #include <TDocStd_Document.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
 #include <XCAFDoc_ColorType.hxx>
+#include <Geom_Surface.hxx>
+#include <Geom_Plane.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <BRep_Tool.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopoDS_Compound.hxx>
+#include <BRep_Builder.hxx>
 
 // File system includes
 #include <filesystem>
@@ -121,37 +129,165 @@ static std::string safeConvertExtendedString(const TCollection_ExtendedString& e
 	return result.empty() ? "UnnamedComponent" : result;
 }
 
-// Helper function to decompose a shape into sub-shapes
+// Helper function to decompose a shape into sub-shapes using FreeCAD-like strategy
 static void decomposeShape(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes) {
 	subShapes.clear();
 	
 	try {
-		// Try to decompose into solids first
+		// Strategy 1: Try to decompose into solids first (most common case)
 		for (TopExp_Explorer exp(shape, TopAbs_SOLID); exp.More(); exp.Next()) {
 			subShapes.push_back(exp.Current());
 		}
 		
-		// If no solids found, try shells
+		// Strategy 2: If no solids found, try shells
 		if (subShapes.empty()) {
 			for (TopExp_Explorer exp(shape, TopAbs_SHELL); exp.More(); exp.Next()) {
 				subShapes.push_back(exp.Current());
 			}
 		}
 		
-		// If still no sub-shapes, try faces (for very complex shapes)
+		// Strategy 3: If still no sub-shapes, try to decompose by face groups
+		if (subShapes.empty()) {
+			decomposeByFaceGroups(shape, subShapes);
+		}
+		
+		// Strategy 4: If still empty, try faces (for very complex shapes)
 		if (subShapes.empty()) {
 			for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
 				subShapes.push_back(exp.Current());
 			}
 		}
 		
-		// If still empty, use the original shape
+		// Strategy 5: If still empty, use the original shape
 		if (subShapes.empty()) {
 			subShapes.push_back(shape);
 		}
+		
+		LOG_INF_S("Shape decomposition result: " + std::to_string(subShapes.size()) + " sub-shapes");
 	} catch (const std::exception& e) {
 		LOG_WRN_S("Failed to decompose shape: " + std::string(e.what()));
 		subShapes.push_back(shape);
+	}
+}
+
+// Helper function to decompose by face groups (FreeCAD-like approach)
+static void decomposeByFaceGroups(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes) {
+	try {
+		// Group faces by geometric properties
+		std::vector<std::vector<TopoDS_Face>> faceGroups;
+		std::vector<TopoDS_Face> currentGroup;
+		
+		// Collect all faces
+		std::vector<TopoDS_Face> allFaces;
+		for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+			allFaces.push_back(TopoDS::Face(exp.Current()));
+		}
+		
+		if (allFaces.empty()) {
+			return;
+		}
+		
+		// Group faces by surface type and normal direction
+		for (const auto& face : allFaces) {
+			if (currentGroup.empty()) {
+				currentGroup.push_back(face);
+			} else {
+				// Check if this face belongs to the current group
+				bool belongsToGroup = false;
+				for (const auto& groupFace : currentGroup) {
+					if (areFacesSimilar(face, groupFace)) {
+						belongsToGroup = true;
+						break;
+					}
+				}
+				
+				if (belongsToGroup) {
+					currentGroup.push_back(face);
+				} else {
+					// Start a new group
+					faceGroups.push_back(currentGroup);
+					currentGroup.clear();
+					currentGroup.push_back(face);
+				}
+			}
+		}
+		
+		// Add the last group
+		if (!currentGroup.empty()) {
+			faceGroups.push_back(currentGroup);
+		}
+		
+		// Convert face groups to shapes
+		for (const auto& group : faceGroups) {
+			if (group.size() > 0) {
+				// Create a compound from the face group
+				TopoDS_Compound compound;
+				BRep_Builder builder;
+				builder.MakeCompound(compound);
+				
+				for (const auto& face : group) {
+					builder.Add(compound, face);
+				}
+				
+				subShapes.push_back(compound);
+			}
+		}
+		
+		LOG_INF_S("Face group decomposition: " + std::to_string(faceGroups.size()) + " groups");
+	} catch (const std::exception& e) {
+		LOG_WRN_S("Face group decomposition failed: " + std::string(e.what()));
+	}
+}
+
+// Helper function to check if two faces are similar (for grouping)
+static bool areFacesSimilar(const TopoDS_Face& face1, const TopoDS_Face& face2) {
+	try {
+		// Get surface types
+		Handle(Geom_Surface) surf1 = BRep_Tool::Surface(face1);
+		Handle(Geom_Surface) surf2 = BRep_Tool::Surface(face2);
+		
+		if (surf1.IsNull() || surf2.IsNull()) {
+			return false;
+		}
+		
+		// Check if surfaces are of the same type
+		if (surf1->DynamicType() != surf2->DynamicType()) {
+			return false;
+		}
+		
+		// For planes, check if they are parallel
+		if (surf1->DynamicType() == STANDARD_TYPE(Geom_Plane)) {
+			Handle(Geom_Plane) plane1 = Handle(Geom_Plane)::DownCast(surf1);
+			Handle(Geom_Plane) plane2 = Handle(Geom_Plane)::DownCast(surf2);
+			
+			if (!plane1.IsNull() && !plane2.IsNull()) {
+				gp_Dir normal1 = plane1->Axis().Direction();
+				gp_Dir normal2 = plane2->Axis().Direction();
+				
+				// Check if normals are parallel (within tolerance)
+				double dotProduct = normal1.Dot(normal2);
+				return std::abs(dotProduct) > 0.9; // 90% parallel
+			}
+		}
+		
+		// For cylinders, check if they have similar axis
+		if (surf1->DynamicType() == STANDARD_TYPE(Geom_CylindricalSurface)) {
+			Handle(Geom_CylindricalSurface) cyl1 = Handle(Geom_CylindricalSurface)::DownCast(surf1);
+			Handle(Geom_CylindricalSurface) cyl2 = Handle(Geom_CylindricalSurface)::DownCast(surf2);
+			
+			if (!cyl1.IsNull() && !cyl2.IsNull()) {
+				gp_Dir axis1 = cyl1->Axis().Direction();
+				gp_Dir axis2 = cyl2->Axis().Direction();
+				
+				double dotProduct = axis1.Dot(axis2);
+				return std::abs(dotProduct) > 0.9; // 90% parallel
+			}
+		}
+		
+		return false;
+	} catch (const std::exception& e) {
+		LOG_WRN_S("Face similarity check failed: " + std::string(e.what()));
+		return false;
 	}
 }
 
