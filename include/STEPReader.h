@@ -92,6 +92,17 @@ public:
 		ProgressCallback progress = nullptr);
 
 	/**
+	 * @brief Read a STEP file using STEPCAFControl_Reader for color and assembly support
+	 * @param filePath Path to the STEP file
+	 * @param options Optimization options
+	 * @param progress Progress callback
+	 * @return ReadResult containing success status and geometry objects with colors
+	 */
+	static ReadResult readSTEPFileWithCAF(const std::string& filePath,
+		const OptimizationOptions& options = OptimizationOptions(),
+		ProgressCallback progress = nullptr);
+
+	/**
 	 * @brief Read a STEP file and return a single compound shape
 	 * @param filePath Path to the STEP file
 	 * @return TopoDS_Shape containing all geometry from the file

@@ -30,6 +30,8 @@
 #include <TCollection_AsciiString.hxx>
 #include <StepData_StepModel.hxx>
 #include <StepRepr_RepresentationItem.hxx>
+#include <TDocStd_Document.hxx>
+#include <XCAFDoc_DocumentTool.hxx>
 
 // File system includes
 #include <filesystem>
@@ -187,9 +189,30 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 			LOG_WRN_S("Failed to read metadata: " + std::string(e.what()));
 		}
 
-		// Convert to geometry objects with simplified processing
-		std::string baseName = std::filesystem::path(filePath).stem().string();
-		result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 70, 25);
+		// Use STEPCAFControl_Reader for advanced color and assembly information
+		bool cafSuccess = false;
+		try {
+			ReadResult cafResult = readSTEPFileWithCAF(filePath, options, progress);
+			if (cafResult.success && !cafResult.geometries.empty()) {
+				// Use CAF results if successful
+				result.geometries = cafResult.geometries;
+				result.entityMetadata = cafResult.entityMetadata;
+				result.assemblyStructure = cafResult.assemblyStructure;
+				cafSuccess = true;
+				LOG_INF_S("Successfully read STEP file with CAF reader, found " + 
+					std::to_string(result.geometries.size()) + " colored components");
+			} else {
+				LOG_WRN_S("CAF reader failed, falling back to standard reader");
+			}
+		} catch (const std::exception& e) {
+			LOG_WRN_S("CAF reader exception: " + std::string(e.what()));
+		}
+
+		// Convert to geometry objects with simplified processing (fallback if CAF failed)
+		if (!cafSuccess) {
+			std::string baseName = std::filesystem::path(filePath).stem().string();
+			result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 70, 25);
+		}
 
 		// Apply automatic scaling to make geometries reasonable size
 		if (!result.geometries.empty()) {
@@ -620,4 +643,216 @@ double STEPReader::scaleGeometriesToReasonableSize(
 		LOG_ERR_S("Exception scaling geometries: " + std::string(e.what()));
 		return 1.0;
 	}
+}
+
+STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePath,
+	const OptimizationOptions& options,
+	ProgressCallback progress)
+{
+	auto totalStartTime = std::chrono::high_resolution_clock::now();
+	ReadResult result;
+
+	try {
+		// Check if file exists
+		if (!std::filesystem::exists(filePath)) {
+			result.errorMessage = "File does not exist: " + filePath;
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		// Check file extension
+		if (!isSTEPFile(filePath)) {
+			result.errorMessage = "File is not a STEP file: " + filePath;
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		if (progress) progress(5, "initialize CAF");
+
+		// Create XCAF application
+		Handle(XCAFApp_Application) app = XCAFApp_Application::GetApplication();
+		if (app.IsNull()) {
+			result.errorMessage = "Failed to create XCAF application";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		// Create document
+		Handle(TDocStd_Document) doc;
+		app->NewDocument("MDTV-XCAF", doc);
+		if (doc.IsNull()) {
+			result.errorMessage = "Failed to create XCAF document";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		if (progress) progress(10, "create document");
+
+		// Create STEPCAFControl_Reader
+		STEPCAFControl_Reader cafReader;
+		cafReader.SetColorMode(true);
+		cafReader.SetNameMode(true);
+		cafReader.SetMatMode(true);
+		cafReader.SetGDTMode(true);
+		cafReader.SetLayerMode(true);
+
+		// Read the file
+		IFSelect_ReturnStatus status = cafReader.ReadFile(filePath.c_str());
+		if (status != IFSelect_RetDone) {
+			result.errorMessage = "Failed to read STEP file with CAF: " + filePath + 
+				" (Status: " + std::to_string(static_cast<int>(status)) + ")";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		if (progress) progress(30, "read CAF");
+
+		// Transfer all roots
+		cafReader.Transfer(doc);
+		if (progress) progress(50, "transfer CAF");
+
+		// Get shape tool and color tool
+		Handle(XCAFDoc_ShapeTool) shapeTool = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
+		Handle(XCAFDoc_ColorTool) colorTool = XCAFDoc_DocumentTool::ColorTool(doc->Main());
+		Handle(XCAFDoc_MaterialTool) materialTool = XCAFDoc_DocumentTool::MaterialTool(doc->Main());
+
+		if (shapeTool.IsNull()) {
+			result.errorMessage = "Failed to get shape tool from CAF document";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		// Get all free shapes (top-level shapes)
+		TDF_LabelSequence freeShapes;
+		shapeTool->GetFreeShapes(freeShapes);
+
+		if (freeShapes.Length() == 0) {
+			result.errorMessage = "No free shapes found in CAF document";
+			LOG_ERR_S(result.errorMessage);
+			return result;
+		}
+
+		LOG_INF_S("Found " + std::to_string(freeShapes.Length()) + " free shapes in CAF document");
+
+		if (progress) progress(60, "extract shapes");
+
+		// Process each free shape
+		std::string baseName = std::filesystem::path(filePath).stem().string();
+		int componentIndex = 0;
+
+		for (int i = 1; i <= freeShapes.Length(); i++) {
+			TDF_Label label = freeShapes.Value(i);
+			
+			// Get shape from label
+			TopoDS_Shape shape = shapeTool->GetShape(label);
+			if (shape.IsNull()) {
+				continue;
+			}
+
+			// Get name from label
+			std::string componentName = baseName + "_Component_" + std::to_string(componentIndex);
+			Handle(TDataStd_Name) nameAttr;
+			if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
+				componentName = nameAttr->Get();
+			}
+
+			// Get color from label
+			Quantity_Color color;
+			bool hasColor = false;
+			if (!colorTool.IsNull()) {
+				hasColor = colorTool->GetColor(label, XCAFDoc_ColorGen, color) ||
+						   colorTool->GetColor(label, XCAFDoc_ColorSurf, color) ||
+						   colorTool->GetColor(label, XCAFDoc_ColorCurv, color);
+			}
+
+			// If no color found, generate a distinct color
+			if (!hasColor) {
+				// Generate distinct colors for components
+				static std::vector<Quantity_Color> distinctColors = {
+					Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+					Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+					Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+					Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+					Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+					Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+					Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+					Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+					Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+					Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+					Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+					Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+					Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+					Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+					Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+				};
+				
+				color = distinctColors[componentIndex % distinctColors.size()];
+				hasColor = true;
+			}
+
+			// Create geometry object
+			auto geometry = std::make_shared<OCCGeometry>(componentName);
+			geometry->setShape(shape);
+			geometry->setColor(color);
+			geometry->setTransparency(0.0);
+
+			// Create entity info
+			STEPEntityInfo entityInfo;
+			entityInfo.name = componentName;
+			entityInfo.type = "COMPONENT";
+			entityInfo.color = color;
+			entityInfo.hasColor = hasColor;
+			entityInfo.entityId = componentIndex;
+			entityInfo.shapeIndex = componentIndex;
+
+			result.geometries.push_back(geometry);
+			result.entityMetadata.push_back(entityInfo);
+
+			LOG_INF_S("Created colored component: " + componentName + 
+				" (R=" + std::to_string(color.Red()) + 
+				" G=" + std::to_string(color.Green()) + 
+				" B=" + std::to_string(color.Blue()) + ")");
+
+			componentIndex++;
+		}
+
+		if (progress) progress(80, "process components");
+
+		// Build assembly structure
+		result.assemblyStructure.name = baseName;
+		result.assemblyStructure.type = "ASSEMBLY";
+		for (const auto& entity : result.entityMetadata) {
+			result.assemblyStructure.components.push_back(entity);
+		}
+
+		// Apply automatic scaling
+		if (!result.geometries.empty()) {
+			double scaleFactor = scaleGeometriesToReasonableSize(result.geometries);
+			LOG_INF_S("Applied scaling factor: " + std::to_string(scaleFactor));
+		}
+
+		if (progress) progress(95, "postprocess");
+
+		result.success = true;
+
+		// Calculate total import time
+		auto totalEndTime = std::chrono::high_resolution_clock::now();
+		auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
+		result.importTime = static_cast<double>(totalDuration.count());
+
+		LOG_INF_S("CAF import completed successfully: " + std::to_string(result.geometries.size()) + 
+			" colored components in " + std::to_string(result.importTime) + "ms");
+
+		if (progress) progress(100, "done");
+	}
+	catch (const Standard_Failure& e) {
+		result.errorMessage = "OpenCASCADE CAF exception: " + std::string(e.GetMessageString());
+		LOG_ERR_S(result.errorMessage);
+	}
+	catch (const std::exception& e) {
+		result.errorMessage = "Exception reading STEP file with CAF: " + std::string(e.what());
+		LOG_ERR_S(result.errorMessage);
+	}
+
+	return result;
 }
