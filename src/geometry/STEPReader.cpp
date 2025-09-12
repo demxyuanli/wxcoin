@@ -196,6 +196,7 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 		// Use STEPCAFControl_Reader for advanced color and assembly information
 		bool cafSuccess = false;
 		try {
+			LOG_INF_S("Attempting to read STEP file with CAF reader: " + filePath);
 			ReadResult cafResult = readSTEPFileWithCAF(filePath, options, progress);
 			if (cafResult.success && !cafResult.geometries.empty()) {
 				// Use CAF results if successful
@@ -205,8 +206,17 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 				cafSuccess = true;
 				LOG_INF_S("Successfully read STEP file with CAF reader, found " + 
 					std::to_string(result.geometries.size()) + " colored components");
+				
+				// Log color information for debugging
+				for (size_t i = 0; i < result.geometries.size(); i++) {
+					Quantity_Color color = result.geometries[i]->getColor();
+					LOG_INF_S("Component " + std::to_string(i) + " color: R=" + 
+						std::to_string(color.Red()) + " G=" + std::to_string(color.Green()) + 
+						" B=" + std::to_string(color.Blue()));
+				}
 			} else {
-				LOG_WRN_S("CAF reader failed, falling back to standard reader");
+				LOG_WRN_S("CAF reader failed: " + (cafResult.errorMessage.empty() ? "Unknown error" : cafResult.errorMessage));
+				LOG_WRN_S("Falling back to standard reader");
 			}
 		} catch (const std::exception& e) {
 			LOG_WRN_S("CAF reader exception: " + std::string(e.what()));
@@ -337,9 +347,31 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 		auto geometry = std::make_shared<OCCGeometry>(name);
 		geometry->setShape(shape);
 
-		// Set default color for imported STEP models
-		Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-		geometry->setColor(defaultColor);
+		// Set distinct color for imported STEP models based on name hash
+		static std::vector<Quantity_Color> distinctColors = {
+			Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+			Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+			Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+			Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+			Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+			Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+			Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+			Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+			Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+			Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+			Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+			Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+			Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+			Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+			Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+		};
+		
+		// Generate color index based on name hash for consistent coloring
+		std::hash<std::string> hasher;
+		size_t hashValue = hasher(name);
+		size_t colorIndex = hashValue % distinctColors.size();
+		Quantity_Color componentColor = distinctColors[colorIndex];
+		geometry->setColor(componentColor);
 
 		// Remove transparency for a solid appearance
 		geometry->setTransparency(0.0);
@@ -743,6 +775,8 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 		// Process each free shape
 		std::string baseName = std::filesystem::path(filePath).stem().string();
 		int componentIndex = 0;
+		
+		LOG_INF_S("Processing " + std::to_string(freeShapes.Length()) + " components with distinct colors");
 
 		for (int i = 1; i <= freeShapes.Length(); i++) {
 			TDF_Label label = freeShapes.Value(i);
@@ -772,30 +806,33 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 						   colorTool->GetColor(label, XCAFDoc_ColorCurv, color);
 			}
 
-			// If no color found, generate a distinct color
-			if (!hasColor) {
-				// Generate distinct colors for components
-				static std::vector<Quantity_Color> distinctColors = {
-					Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
-					Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
-					Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
-					Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
-					Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
-					Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
-					Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
-					Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
-					Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
-					Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
-					Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
-					Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
-					Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
-					Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
-					Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
-				};
-				
-				color = distinctColors[componentIndex % distinctColors.size()];
-				hasColor = true;
-			}
+			// Always generate distinct colors for better visualization (override any existing color)
+			// Generate distinct colors for components
+			static std::vector<Quantity_Color> distinctColors = {
+				Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+				Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+				Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+				Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+				Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+				Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+				Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+				Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+				Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+				Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+				Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+				Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+				Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+				Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+				Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+			};
+			
+			// Use distinct color for each component (override any existing color for better visualization)
+			color = distinctColors[componentIndex % distinctColors.size()];
+			hasColor = true;
+			
+			LOG_INF_S("Assigned color to component " + std::to_string(componentIndex) + 
+				" (" + componentName + "): R=" + std::to_string(color.Red()) + 
+				" G=" + std::to_string(color.Green()) + " B=" + std::to_string(color.Blue()));
 
 			// Create geometry object
 			auto geometry = std::make_shared<OCCGeometry>(componentName);
