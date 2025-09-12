@@ -216,6 +216,7 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 
 	// Enable scrolling with pixel-based scrolling
 	SetScrollRate(1, 1);
+	EnableScrolling(true, true); // Enable both horizontal and vertical scrolling
 
 	// Independent horizontal scrollbar for first column
 	m_treeHScrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_HORIZONTAL);
@@ -234,6 +235,7 @@ void FlatTreeView::SetRoot(std::shared_ptr<FlatTreeItem> root)
 {
 	m_root = root;
 	m_needsLayout = true;
+	UpdateScrollbars(); // Update scrollbars when root changes
 	Refresh();
 }
 
@@ -242,6 +244,7 @@ void FlatTreeView::AddItem(std::shared_ptr<FlatTreeItem> parent, std::shared_ptr
 	if (parent && child) {
 		parent->AddChild(child);
 		m_needsLayout = true;
+		UpdateScrollbars(); // Update scrollbars when items are added
 		Refresh();
 	}
 }
@@ -251,6 +254,7 @@ void FlatTreeView::RemoveItem(std::shared_ptr<FlatTreeItem> item)
 	if (item && item->GetParent()) {
 		item->GetParent()->RemoveChild(item);
 		m_needsLayout = true;
+		UpdateScrollbars(); // Update scrollbars when items are removed
 		Refresh();
 	}
 }
@@ -259,6 +263,7 @@ void FlatTreeView::Clear()
 {
 	m_root.reset();
 	m_needsLayout = true;
+	UpdateScrollbars(); // Update scrollbars when cleared
 	Refresh();
 }
 
@@ -286,6 +291,8 @@ void FlatTreeView::SetColumnWidth(int column, int width)
 {
 	if (column >= 0 && column < static_cast<int>(m_columns.size())) {
 		m_columns[column]->SetWidth(width);
+		m_needsLayout = true;
+		UpdateScrollbars(); // Update scrollbars when column width changes
 		Refresh();
 	}
 }
@@ -311,6 +318,7 @@ void FlatTreeView::ExpandItem(std::shared_ptr<FlatTreeItem> item, bool expand)
 	if (item && item->HasChildren()) {
 		item->SetExpanded(expand);
 		m_needsLayout = true;
+		UpdateScrollbars(); // Update scrollbars when items are expanded/collapsed
 		Refresh();
 
 		if (expand && m_itemExpandedCallback) {
@@ -327,6 +335,7 @@ void FlatTreeView::ExpandAll()
 	if (m_root) {
 		ExpandAllRecursive(m_root);
 		m_needsLayout = true;
+		UpdateScrollbars(); // Update scrollbars when all items are expanded
 		Refresh();
 	}
 }
@@ -336,6 +345,7 @@ void FlatTreeView::CollapseAll()
 	if (m_root) {
 		CollapseAllRecursive(m_root);
 		m_needsLayout = true;
+		UpdateScrollbars(); // Update scrollbars when all items are collapsed
 		Refresh();
 	}
 }
@@ -378,6 +388,7 @@ void FlatTreeView::SetItemHeight(int height)
 	m_itemHeight = height;
 	SetScrollRate(1, 1); // Use pixel-based scrolling
 	m_needsLayout = true;
+	UpdateScrollbars(); // Update scrollbars when item height changes
 	Refresh();
 }
 
@@ -466,6 +477,7 @@ void FlatTreeView::OnSize(wxSizeEvent& event)
 	m_needsLayout = true;
 	Refresh();
 	RepositionTreeHScrollBar();
+	UpdateScrollbars(); // Force update scrollbars on size change
 	event.Skip();
 }
 
@@ -1004,6 +1016,9 @@ void FlatTreeView::CalculateLayout()
 		// Set both scrollbars to show but with zero range
 		int rowsVisible = std::max(0, clientH - headerY);
 		
+		// Set virtual size to zero
+		SetVirtualSize(0, 0);
+		
 		if (m_alwaysShowScrollbars) {
 			SetScrollbar(wxVERTICAL, 0, rowsVisible, 0, true);
 			SetScrollbar(wxHORIZONTAL, 0, clientW, 0, true);
@@ -1015,6 +1030,20 @@ void FlatTreeView::CalculateLayout()
 	}
 
 	m_totalHeight = CalculateItemHeightRecursive(m_root);
+
+	// Calculate total content width
+	int totalContentWidth = 0;
+	for (const auto& column : m_columns) {
+		if (column->IsVisible()) {
+			totalContentWidth += column->GetWidth();
+		}
+	}
+
+	// Set virtual size for wxScrolledWindow
+	SetVirtualSize(totalContentWidth, m_totalHeight);
+	
+	// Call FitInside to ensure proper scrolling behavior
+	FitInside();
 
 	// 1. Calculate vertical scrollbar for rows area (below header and top horizontal scrollbar)
 	int rowsVisible = std::max(0, clientH - headerY);
@@ -1039,13 +1068,6 @@ void FlatTreeView::CalculateLayout()
 	}
 
 	// 2. Calculate horizontal scrollbar for entire control (at bottom)
-	int totalContentWidth = 0;
-	for (const auto& column : m_columns) {
-		if (column->IsVisible()) {
-			totalContentWidth += column->GetWidth();
-		}
-	}
-
 	if (totalContentWidth > clientW) {
 		// Horizontal scrollbar for entire control
 		int range = totalContentWidth - clientW;
@@ -1199,6 +1221,20 @@ void FlatTreeView::UpdateScrollbars()
 	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 	int visibleHeight = clientSize.GetHeight() - (m_itemHeight + (barH > 0 ? barH : 0) + 1);
 
+	// Calculate total content width
+	int totalContentWidth = 0;
+	for (const auto& column : m_columns) {
+		if (column->IsVisible()) {
+			totalContentWidth += column->GetWidth();
+		}
+	}
+
+	// Set virtual size for wxScrolledWindow
+	SetVirtualSize(totalContentWidth, m_totalHeight);
+	
+	// Call FitInside to ensure proper scrolling behavior
+	FitInside();
+
 	// Update vertical scrollbar
 	if (m_totalHeight > visibleHeight) {
 		// Use wxDataViewTreeCtrl style: pixel-based scrollbar
@@ -1220,13 +1256,6 @@ void FlatTreeView::UpdateScrollbars()
 	}
 
 	// Update horizontal scrollbar
-	int totalContentWidth = 0;
-	for (const auto& column : m_columns) {
-		if (column->IsVisible()) {
-			totalContentWidth += column->GetWidth();
-		}
-	}
-
 	if (totalContentWidth > clientSize.GetWidth()) {
 		int range = totalContentWidth - clientSize.GetWidth();
 		int thumb = clientSize.GetWidth();
