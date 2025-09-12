@@ -121,6 +121,91 @@ static std::string safeConvertExtendedString(const TCollection_ExtendedString& e
 	return result.empty() ? "UnnamedComponent" : result;
 }
 
+// Helper function to decompose a shape into sub-shapes
+static void decomposeShape(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& subShapes) {
+	subShapes.clear();
+	
+	try {
+		// Try to decompose into solids first
+		for (TopExp_Explorer exp(shape, TopAbs_SOLID); exp.More(); exp.Next()) {
+			subShapes.push_back(exp.Current());
+		}
+		
+		// If no solids found, try shells
+		if (subShapes.empty()) {
+			for (TopExp_Explorer exp(shape, TopAbs_SHELL); exp.More(); exp.Next()) {
+				subShapes.push_back(exp.Current());
+			}
+		}
+		
+		// If still no sub-shapes, try faces (for very complex shapes)
+		if (subShapes.empty()) {
+			for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+				subShapes.push_back(exp.Current());
+			}
+		}
+		
+		// If still empty, use the original shape
+		if (subShapes.empty()) {
+			subShapes.push_back(shape);
+		}
+	} catch (const std::exception& e) {
+		LOG_WRN_S("Failed to decompose shape: " + std::string(e.what()));
+		subShapes.push_back(shape);
+	}
+}
+
+// Helper function to process a single component
+static void processComponent(const TopoDS_Shape& shape, const std::string& componentName, 
+	int componentIndex, std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+	std::vector<STEPReader::STEPEntityInfo>& entityMetadata) {
+	
+	// Generate distinct colors for components
+	static std::vector<Quantity_Color> distinctColors = {
+		Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red
+		Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB), // Green
+		Quantity_Color(0.0, 0.0, 1.0, Quantity_TOC_RGB), // Blue
+		Quantity_Color(1.0, 1.0, 0.0, Quantity_TOC_RGB), // Yellow
+		Quantity_Color(1.0, 0.0, 1.0, Quantity_TOC_RGB), // Magenta
+		Quantity_Color(0.0, 1.0, 1.0, Quantity_TOC_RGB), // Cyan
+		Quantity_Color(1.0, 0.5, 0.0, Quantity_TOC_RGB), // Orange
+		Quantity_Color(0.5, 0.0, 1.0, Quantity_TOC_RGB), // Purple
+		Quantity_Color(0.0, 0.5, 0.0, Quantity_TOC_RGB), // Dark Green
+		Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Gray
+		Quantity_Color(1.0, 0.5, 0.5, Quantity_TOC_RGB), // Light Red
+		Quantity_Color(0.5, 1.0, 0.5, Quantity_TOC_RGB), // Light Green
+		Quantity_Color(0.5, 0.5, 1.0, Quantity_TOC_RGB), // Light Blue
+		Quantity_Color(1.0, 1.0, 0.5, Quantity_TOC_RGB), // Light Yellow
+		Quantity_Color(1.0, 0.5, 1.0, Quantity_TOC_RGB), // Light Magenta
+	};
+	
+	// Use distinct color for each component
+	Quantity_Color color = distinctColors[componentIndex % distinctColors.size()];
+	
+	// Create geometry object
+	auto geometry = std::make_shared<OCCGeometry>(componentName);
+	geometry->setShape(shape);
+	geometry->setColor(color);
+	geometry->setTransparency(0.0);
+
+	// Create entity info
+	STEPReader::STEPEntityInfo entityInfo;
+	entityInfo.name = componentName;
+	entityInfo.type = "COMPONENT";
+	entityInfo.color = color;
+	entityInfo.hasColor = true;
+	entityInfo.entityId = componentIndex;
+	entityInfo.shapeIndex = componentIndex;
+
+	geometries.push_back(geometry);
+	entityMetadata.push_back(entityInfo);
+
+	LOG_INF_S("Created colored component: " + componentName + 
+		" (R=" + std::to_string(color.Red()) + 
+		" G=" + std::to_string(color.Green()) + 
+		" B=" + std::to_string(color.Blue()) + ")");
+}
+
 STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 	const OptimizationOptions& options,
 	ProgressCallback progress)
@@ -816,6 +901,12 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 		int componentIndex = 0;
 		
 		LOG_INF_S("Processing " + std::to_string(freeShapes.Length()) + " components with distinct colors");
+		
+		// If only one component, try to decompose it into sub-components for better visualization
+		bool tryDecomposition = (freeShapes.Length() == 1);
+		if (tryDecomposition) {
+			LOG_INF_S("Single component detected, attempting decomposition for better color visualization");
+		}
 
 		for (int i = 1; i <= freeShapes.Length(); i++) {
 			TDF_Label label = freeShapes.Value(i);
@@ -824,6 +915,24 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 			TopoDS_Shape shape = shapeTool->GetShape(label);
 			if (shape.IsNull()) {
 				continue;
+			}
+
+			// For single component, try to decompose into sub-shapes for better visualization
+			if (tryDecomposition && freeShapes.Length() == 1) {
+				std::vector<TopoDS_Shape> subShapes;
+				decomposeShape(shape, subShapes);
+				
+				if (subShapes.size() > 1) {
+					LOG_INF_S("Decomposed single component into " + std::to_string(subShapes.size()) + " sub-components");
+					
+					// Process each sub-shape with different colors
+					for (size_t j = 0; j < subShapes.size(); j++) {
+						processComponent(subShapes[j], baseName + "_Part_" + std::to_string(j), 
+							componentIndex, result.geometries, result.entityMetadata);
+						componentIndex++;
+					}
+					continue; // Skip the original single component processing
+				}
 			}
 
 			// Get name from label
