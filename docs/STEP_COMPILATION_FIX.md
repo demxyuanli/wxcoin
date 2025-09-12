@@ -26,23 +26,38 @@ componentName = nameAttr->Get();  // 错误：类型不匹配
 // 修复前
 componentName = nameAttr->Get();
 
-// 修复后  
-componentName = nameAttr->Get().ToCString();
+// 第一次尝试（仍然错误）
+componentName = nameAttr->Get().ToCString();  // TCollection_ExtendedString没有ToCString方法
+
+// 最终修复
+TCollection_ExtendedString extStr = nameAttr->Get();
+const Standard_ExtString extCStr = extStr.ToExtString();
+if (extCStr != nullptr) {
+    std::wstring wstr(extCStr);
+    componentName.clear();
+    for (wchar_t wc : wstr) {
+        if (wc < 128) { // ASCII range
+            componentName += static_cast<char>(wc);
+        }
+    }
+}
 ```
 
 ### 2. 添加必要的头文件
 
-添加颜色类型定义的头文件：
+添加字符串转换所需的头文件：
 
 ```cpp
-#include <XCAFDoc_ColorType.hxx>
+#include <string>
+#include <locale>
+#include <codecvt>
 ```
 
 ## 修复详情
 
 ### 文件：`src/geometry/STEPReader.cpp`
 
-**第756行修复：**
+**第756-772行修复：**
 ```cpp
 // 修复前
 if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
@@ -51,13 +66,26 @@ if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
 
 // 修复后
 if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
-    componentName = nameAttr->Get().ToCString();  // 正确转换
+    TCollection_ExtendedString extStr = nameAttr->Get();
+    const Standard_ExtString extCStr = extStr.ToExtString();
+    if (extCStr != nullptr) {
+        std::wstring wstr(extCStr);
+        componentName.clear();
+        for (wchar_t wc : wstr) {
+            if (wc < 128) { // ASCII range
+                componentName += static_cast<char>(wc);
+            }
+        }
+    }
 }
 ```
 
 **添加头文件：**
 ```cpp
 #include <XCAFDoc_ColorType.hxx>  // 新增，用于颜色类型定义
+#include <string>                 // 新增，用于字符串处理
+#include <locale>                 // 新增，用于字符转换
+#include <codecvt>                // 新增，用于编码转换
 ```
 
 ## 技术说明
@@ -73,18 +101,28 @@ OpenCASCADE使用自己的字符串类型系统：
 ### 正确的转换方法
 
 ```cpp
-// 从TCollection_ExtendedString转换
-std::string str = extendedString.ToCString();
+// 从TCollection_ExtendedString转换（正确方法）
+TCollection_ExtendedString extStr = nameAttr->Get();
+const Standard_ExtString extCStr = extStr.ToExtString();
+if (extCStr != nullptr) {
+    std::wstring wstr(extCStr);
+    std::string str;
+    for (wchar_t wc : wstr) {
+        if (wc < 128) { // ASCII range
+            str += static_cast<char>(wc);
+        }
+    }
+}
 
-// 从TCollection_HAsciiString转换
+// 从TCollection_HAsciiString转换（这个方法仍然有效）
 if (!asciiString.IsNull()) {
     std::string str = asciiString->ToCString();
 }
 
-// 从TDataStd_Name转换
+// 从TDataStd_Name转换（使用上面的ExtendedString方法）
 Handle(TDataStd_Name) nameAttr;
 if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
-    std::string str = nameAttr->Get().ToCString();
+    // 使用ExtendedString转换方法
 }
 ```
 

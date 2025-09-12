@@ -39,6 +39,9 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <string>
+#include <locale>
+#include <codecvt>
 
 // GeometryReader interface implementation
 GeometryReader::ReadResult STEPReader::readFile(const std::string& filePath,
@@ -754,7 +757,18 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 			std::string componentName = baseName + "_Component_" + std::to_string(componentIndex);
 			Handle(TDataStd_Name) nameAttr;
 			if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
-				componentName = nameAttr->Get().ToCString();
+				TCollection_ExtendedString extStr = nameAttr->Get();
+				// Convert ExtendedString to std::string (assuming ASCII characters)
+				const Standard_ExtString extCStr = extStr.ToExtString();
+				if (extCStr != nullptr) {
+					std::wstring wstr(extCStr);
+					componentName.clear();
+					for (wchar_t wc : wstr) {
+						if (wc < 128) { // ASCII range
+							componentName += static_cast<char>(wc);
+						}
+					}
+				}
 			}
 
 			// Get color from label
