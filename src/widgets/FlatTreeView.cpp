@@ -673,7 +673,7 @@ void FlatTreeView::DrawItems(wxDC& dc)
 	dc.SetClippingRegion(0, headerY, cs.GetWidth(), cs.GetHeight() - headerY);
 
 	// Calculate drawing start position
-	// m_scrollY is now in pixels, so we can use it directly
+	// Content should start from headerY position, then offset by scroll
 	int startY = headerY - m_scrollY;
 
 	DrawItemRecursive(dc, m_root, startY, 0);
@@ -702,14 +702,13 @@ void FlatTreeView::DrawItem(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int y,
 	if (!item) return;
 
 	// Check if item is visible in current view
-	// y is now in content coordinates (relative to header)
+	// y is now in screen coordinates (already includes header offset)
 	wxSize cs = GetClientSize();
 	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
 
-	// Convert to screen coordinates for visibility check
-	int screenY = y + headerY;
-	if (screenY + m_itemHeight < headerY || screenY > cs.GetHeight()) {
+	// y is already in screen coordinates, check visibility directly
+	if (y + m_itemHeight < headerY || y > cs.GetHeight()) {
 		return; // Item is not visible
 	}
 
@@ -948,6 +947,9 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
 	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
 
+	// Check if point is in header area
+	if (point.y < headerY) return nullptr;
+
 	// Convert screen coordinates to content coordinates
 	int y = point.y - headerY + m_scrollY;
 
@@ -1146,7 +1148,7 @@ int FlatTreeView::CalculateItemY(std::shared_ptr<FlatTreeItem> item)
 {
 	if (!item) return 0;
 
-	int y = m_itemHeight + 1; // Start below headers
+	int y = 0; // Start from beginning of content area
 
 	return CalculateItemYRecursive(m_root, item, y);
 }
@@ -1286,9 +1288,8 @@ void FlatTreeView::EnsureVisible(std::shared_ptr<FlatTreeItem> item)
 
 	int itemY = CalculateItemY(item);
 	if (itemY != -1) {
-		// Convert item Y position to scroll position
-		// itemY is relative to the content area (below header)
-		int scrollPos = itemY;
+		// itemY is now relative to the content area (starting from 0)
+		int scrollPos = m_scrollY;
 
 		// Ensure the item is visible in the viewport
 		wxSize clientSize = GetClientSize();
@@ -1319,7 +1320,9 @@ void FlatTreeView::InvalidateItem(std::shared_ptr<FlatTreeItem> item)
 	if (y == -1) { RefreshContentArea(); return; }
 	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
-	wxRect rect(0, y, GetClientSize().GetWidth(), m_itemHeight);
+	// Convert content Y to screen Y
+	int screenY = y + headerY - m_scrollY;
+	wxRect rect(0, screenY, GetClientSize().GetWidth(), m_itemHeight);
 	rect.y = std::max(rect.y, headerY);
 	RefreshRect(rect, false);
 }

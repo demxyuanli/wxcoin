@@ -28,7 +28,7 @@ if(DEFINED wxWidgets_ROOT_DIR)
 endif()
 
 # 查找依赖
-find_package(wxWidgets CONFIG REQUIRED)
+find_package(wxWidgets REQUIRED COMPONENTS core base)
 find_package(Coin CONFIG REQUIRED)
 find_package(OpenCASCADE CONFIG REQUIRED)
 
