@@ -513,7 +513,7 @@ void FlatTreeView::OnMouse(wxMouseEvent& event)
 			if (sepIndex >= 0) {
 				m_isResizingColumn = true;
 				m_resizingColumnIndex = sepIndex;
-				m_resizeStartX = pos.x + m_scrollX; // Apply horizontal scroll offset
+				m_resizeStartX = pos.x; // No manual scroll offset - wxScrolledWindow handles this automatically
 				m_initialColumnWidth = m_columns[sepIndex]->GetWidth();
 				CaptureMouse();
 				SetCursor(wxCursor(wxCURSOR_SIZEWE));
@@ -530,7 +530,7 @@ void FlatTreeView::OnMouse(wxMouseEvent& event)
 	}
 
 	if (event.Dragging() && m_isResizingColumn && m_resizingColumnIndex >= 0) {
-		int dx = (pos.x + m_scrollX) - m_resizeStartX; // Apply horizontal scroll offset
+		int dx = pos.x - m_resizeStartX; // No manual scroll offset - wxScrolledWindow handles this automatically
 		int newWidth = std::max(40, m_initialColumnWidth + dx);
 		m_columns[m_resizingColumnIndex]->SetWidth(newWidth);
 		m_needsLayout = true;
@@ -590,6 +590,30 @@ void FlatTreeView::OnKeyDown(wxKeyEvent& event)
 			ExpandItem(m_lastClickedItem, !m_lastClickedItem->IsExpanded());
 		}
 		break;
+	case WXK_UP:
+		// Scroll up
+		ScrollLines(-1);
+		break;
+	case WXK_DOWN:
+		// Scroll down
+		ScrollLines(1);
+		break;
+	case WXK_PAGEUP:
+		// Page up
+		ScrollPages(-1);
+		break;
+	case WXK_PAGEDOWN:
+		// Page down
+		ScrollPages(1);
+		break;
+	case WXK_HOME:
+		// Scroll to top
+		Scroll(0, 0);
+		break;
+	case WXK_END:
+		// Scroll to bottom
+		Scroll(0, GetScrollRange(wxVERTICAL));
+		break;
 	default:
 		event.Skip();
 		break;
@@ -598,24 +622,9 @@ void FlatTreeView::OnKeyDown(wxKeyEvent& event)
 
 void FlatTreeView::OnScroll(wxScrollWinEvent& event)
 {
-	int orient = event.GetOrientation();
-	if (orient == wxVERTICAL) {
-		// Get scroll position from the scrollbar
-		int scrollPos = GetScrollPos(wxVERTICAL);
-		m_scrollY = scrollPos;
-
-		// Repaint only content area to reduce flicker
-		RefreshContentArea();
-		RepositionTreeHScrollBar();
-	}
-	else if (orient == wxHORIZONTAL) {
-		// Get horizontal scroll position from the scrollbar
-		int scrollPos = GetScrollPos(wxHORIZONTAL);
-		m_scrollX = scrollPos;
-
-		// Repaint entire control for horizontal scrolling
-		Refresh();
-	}
+	// Let wxScrolledWindow handle the scrolling automatically
+	// Just refresh the display
+	Refresh();
 	event.Skip();
 }
 
@@ -633,7 +642,7 @@ void FlatTreeView::DrawColumnHeaders(wxDC& dc)
 	dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
 
 	int y = 0;
-	int x = -m_scrollX; // Apply horizontal scroll offset
+	int x = 0; // No manual scroll offset - wxScrolledWindow handles this automatically
 
 	for (size_t i = 0; i < m_columns.size(); ++i) {
 		if (m_columns[i]->IsVisible()) {
@@ -668,7 +677,7 @@ void FlatTreeView::DrawColumnHeaders(wxDC& dc)
 	}
 
 	// Draw bottom line
-	dc.DrawLine(-m_scrollX, m_itemHeight, GetClientSize().GetWidth() - m_scrollX, m_itemHeight);
+	dc.DrawLine(0, m_itemHeight, GetClientSize().GetWidth(), m_itemHeight);
 
 	// Position top tree h-scrollbar immediately after header and keep it fixed (non-scrolled layer)
 	RepositionTreeHScrollBar();
@@ -685,9 +694,9 @@ void FlatTreeView::DrawItems(wxDC& dc)
 	// Set clipping region for content area only
 	dc.SetClippingRegion(0, headerY, cs.GetWidth(), cs.GetHeight() - headerY);
 
-	// Calculate drawing start position
-	// m_scrollY is now in pixels, so we can use it directly
-	int startY = headerY - m_scrollY;
+	// Use wxScrolledWindow's automatic scrolling - no need for manual offset calculation
+	// The PrepareDC call in OnPaint already handles the scrolling transformation
+	int startY = headerY;
 
 	DrawItemRecursive(dc, m_root, startY, 0);
 
@@ -730,12 +739,12 @@ void FlatTreeView::DrawItem(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int y,
 	if (item->IsSelected()) {
 		dc.SetBrush(wxBrush(m_selectionColor));
 		dc.SetPen(wxPen(m_selectionColor));
-		dc.DrawRectangle(-m_scrollX, y, GetClientSize().GetWidth(), m_itemHeight);
+		dc.DrawRectangle(0, y, GetClientSize().GetWidth(), m_itemHeight);
 	}
 	else if (item == m_hoveredItem) {
 		dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
 		dc.SetPen(wxPen(wxColour(240, 240, 240)));
-		dc.DrawRectangle(-m_scrollX, y, GetClientSize().GetWidth(), m_itemHeight);
+		dc.DrawRectangle(0, y, GetClientSize().GetWidth(), m_itemHeight);
 	}
 
 	// Draw tree lines
@@ -744,7 +753,7 @@ void FlatTreeView::DrawItem(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int y,
 	}
 
 	// Draw item content for each column
-	int x = -m_scrollX; // Apply horizontal scroll offset
+	int x = 0; // No manual scroll offset - wxScrolledWindow handles this automatically
 	for (size_t i = 0; i < m_columns.size(); ++i) {
 		if (m_columns[i]->IsVisible()) {
 			int colWidth = m_columns[i]->GetWidth();
@@ -961,8 +970,9 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
 	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
 
-	// Convert screen coordinates to content coordinates
-	int y = point.y - headerY + m_scrollY;
+	// Convert screen coordinates to logical coordinates using wxScrolledWindow's mechanism
+	wxPoint logicalPoint = CalcUnscrolledPosition(point);
+	int y = logicalPoint.y - headerY;
 
 	if (y < 0) return nullptr;
 
@@ -973,7 +983,9 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
 
 int FlatTreeView::HitTestColumn(const wxPoint& point)
 {
-	int x = point.x + m_scrollX; // Apply horizontal scroll offset
+	// Convert screen coordinates to logical coordinates using wxScrolledWindow's mechanism
+	wxPoint logicalPoint = CalcUnscrolledPosition(point);
+	int x = logicalPoint.x;
 	int currentX = 0;
 
 	for (size_t i = 0; i < m_columns.size(); ++i) {
@@ -991,7 +1003,9 @@ int FlatTreeView::HitTestColumn(const wxPoint& point)
 int FlatTreeView::HitTestHeaderSeparator(const wxPoint& point) const
 {
 	if (point.y < 0 || point.y > m_itemHeight) return -1;
-	int x = point.x + m_scrollX; // Apply horizontal scroll offset
+	// Convert screen coordinates to logical coordinates using wxScrolledWindow's mechanism
+	wxPoint logicalPoint = CalcUnscrolledPosition(point);
+	int x = logicalPoint.x;
 	int currentX = 0;
 	for (size_t i = 0; i < m_columns.size(); ++i) {
 		if (!m_columns[i]->IsVisible()) continue;
@@ -1013,19 +1027,9 @@ void FlatTreeView::CalculateLayout()
 
 	if (!m_root) {
 		m_totalHeight = 0;
-		// Set both scrollbars to show but with zero range
-		int rowsVisible = std::max(0, clientH - headerY);
-		
-		// Set virtual size to zero
+		// Set virtual size to zero and let wxScrolledWindow handle scrollbars
 		SetVirtualSize(0, 0);
-		
-		if (m_alwaysShowScrollbars) {
-			SetScrollbar(wxVERTICAL, 0, rowsVisible, 0, true);
-			SetScrollbar(wxHORIZONTAL, 0, clientW, 0, true);
-		} else {
-			SetScrollbar(wxVERTICAL, 0, 0, 0, true);
-			SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
-		}
+		FitInside();
 		return;
 	}
 
@@ -1039,53 +1043,11 @@ void FlatTreeView::CalculateLayout()
 		}
 	}
 
-	// Set virtual size for wxScrolledWindow
+	// Set virtual size for wxScrolledWindow - let it handle scrollbars automatically
 	SetVirtualSize(totalContentWidth, m_totalHeight);
 	
 	// Call FitInside to ensure proper scrolling behavior
 	FitInside();
-
-	// 1. Calculate vertical scrollbar for rows area (below header and top horizontal scrollbar)
-	int rowsVisible = std::max(0, clientH - headerY);
-
-	if (m_totalHeight > rowsVisible) {
-		// Vertical scrollbar for rows only
-		int range = m_totalHeight - rowsVisible;
-		int thumb = rowsVisible;
-		int pos = std::min(m_scrollY, range);
-		SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
-	}
-	else if (m_alwaysShowScrollbars) {
-		// Always show scrollbar, but with zero range when not needed
-		SetScrollbar(wxVERTICAL, 0, rowsVisible, m_totalHeight, true);
-		m_scrollY = 0;
-		SetScrollPos(wxVERTICAL, 0);
-	}
-	else {
-		SetScrollbar(wxVERTICAL, 0, 0, 0, true);
-		m_scrollY = 0;
-		SetScrollPos(wxVERTICAL, 0);
-	}
-
-	// 2. Calculate horizontal scrollbar for entire control (at bottom)
-	if (totalContentWidth > clientW) {
-		// Horizontal scrollbar for entire control
-		int range = totalContentWidth - clientW;
-		int thumb = clientW;
-		int pos = std::min(m_scrollX, range);
-		SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
-	}
-	else if (m_alwaysShowScrollbars) {
-		// Always show scrollbar, but with zero range when not needed
-		SetScrollbar(wxHORIZONTAL, 0, clientW, totalContentWidth, true);
-		m_scrollX = 0;
-		SetScrollPos(wxHORIZONTAL, 0);
-	}
-	else {
-		SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
-		m_scrollX = 0;
-		SetScrollPos(wxHORIZONTAL, 0);
-	}
 
 	// 3. Update the top first-column horizontal scrollbar
 	{
@@ -1229,50 +1191,11 @@ void FlatTreeView::UpdateScrollbars()
 		}
 	}
 
-	// Set virtual size for wxScrolledWindow
+	// Set virtual size for wxScrolledWindow - let it handle scrollbars automatically
 	SetVirtualSize(totalContentWidth, m_totalHeight);
 	
 	// Call FitInside to ensure proper scrolling behavior
 	FitInside();
-
-	// Update vertical scrollbar
-	if (m_totalHeight > visibleHeight) {
-		// Use wxDataViewTreeCtrl style: pixel-based scrollbar
-		int range = m_totalHeight - visibleHeight;
-		int thumb = visibleHeight;
-		int pos = std::min(m_scrollY, range);
-		SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
-	}
-	else if (m_alwaysShowScrollbars) {
-		// Always show scrollbar, but with zero range when not needed
-		SetScrollbar(wxVERTICAL, 0, visibleHeight, m_totalHeight, true);
-		m_scrollY = 0;
-		SetScrollPos(wxVERTICAL, 0);
-	}
-	else {
-		SetScrollbar(wxVERTICAL, 0, 0, 0, true);
-		m_scrollY = 0;
-		SetScrollPos(wxVERTICAL, 0);
-	}
-
-	// Update horizontal scrollbar
-	if (totalContentWidth > clientSize.GetWidth()) {
-		int range = totalContentWidth - clientSize.GetWidth();
-		int thumb = clientSize.GetWidth();
-		int pos = std::min(m_scrollX, range);
-		SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
-	}
-	else if (m_alwaysShowScrollbars) {
-		// Always show scrollbar, but with zero range when not needed
-		SetScrollbar(wxHORIZONTAL, 0, clientSize.GetWidth(), totalContentWidth, true);
-		m_scrollX = 0;
-		SetScrollPos(wxHORIZONTAL, 0);
-	}
-	else {
-		SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
-		m_scrollX = 0;
-		SetScrollPos(wxHORIZONTAL, 0);
-	}
 }
 
 std::shared_ptr<FlatTreeItem> FlatTreeView::GetItemByIndex(std::shared_ptr<FlatTreeItem> item, int& index)
@@ -1347,29 +1270,24 @@ void FlatTreeView::EnsureVisible(std::shared_ptr<FlatTreeItem> item)
 
 	int itemY = CalculateItemY(item);
 	if (itemY != -1) {
-		// Convert item Y position to scroll position
-		// itemY is relative to the content area (below header)
-		int scrollPos = itemY;
-
-		// Ensure the item is visible in the viewport
+		// Use wxScrolledWindow's Scroll method to ensure item is visible
 		wxSize clientSize = GetClientSize();
 		int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 		int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
 		int visibleHeight = clientSize.GetHeight() - headerY;
 
+		// Calculate scroll position to make item visible
+		int currentScrollY = GetScrollPos(wxVERTICAL);
+		
 		// If item is below visible area, scroll to show it
-		if (itemY + m_itemHeight > m_scrollY + visibleHeight) {
-			scrollPos = itemY - visibleHeight + m_itemHeight;
+		if (itemY + m_itemHeight > currentScrollY + visibleHeight) {
+			int scrollPos = itemY - visibleHeight + m_itemHeight;
+			Scroll(0, scrollPos);
 		}
 		// If item is above visible area, scroll to show it at top
-		else if (itemY < m_scrollY) {
-			scrollPos = itemY;
+		else if (itemY < currentScrollY) {
+			Scroll(0, itemY);
 		}
-
-		// Set scroll position and update internal state
-		SetScrollPos(wxVERTICAL, scrollPos);
-		m_scrollY = scrollPos;
-		Refresh();
 	}
 }
 
