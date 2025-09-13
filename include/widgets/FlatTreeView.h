@@ -7,6 +7,7 @@
 #include <wx/scrolbar.h>
 #include <wx/bitmap.h>
 #include <wx/dc.h>
+#include <wx/timer.h>
 #include <vector>
 #include <memory>
 #include <functional>
@@ -223,6 +224,10 @@ public:
 	void SetShowHeaderText(bool show) { m_showHeaderText = show; Refresh(); }
 	bool IsShowingHeaderText() const { return m_showHeaderText; }
 
+	// Scrollbar control
+	void SetAlwaysShowScrollbars(bool alwaysShow) { m_alwaysShowScrollbars = alwaysShow; Refresh(); }
+	bool IsAlwaysShowingScrollbars() const { return m_alwaysShowScrollbars; }
+
 	// Event handlers
 	void OnItemClicked(std::function<void(std::shared_ptr<FlatTreeItem>, int)> callback);
 	void OnItemExpanded(std::function<void(std::shared_ptr<FlatTreeItem>)> callback);
@@ -236,6 +241,7 @@ public:
 	void OnKeyDown(wxKeyEvent& event);
 	void OnScroll(wxScrollWinEvent& event);
 	void OnEraseBackground(wxEraseEvent& event);
+	void OnScrollbarUpdateTimer(wxTimerEvent& event);
 
 	// Drawing methods
 	void DrawBackground(wxDC& dc);
@@ -332,6 +338,12 @@ private:
 
 	// Header display control
 	bool m_showHeaderText;
+
+	// Scrollbar control
+	bool m_alwaysShowScrollbars;
+	bool m_pendingScrollbarUpdate;
+	bool m_deferScrollbarUpdate;
+	wxTimer* m_scrollbarUpdateTimer;
 
 	DECLARE_EVENT_TABLE()
 };

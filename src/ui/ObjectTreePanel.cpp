@@ -117,6 +117,7 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 		m_treeView->SetItemHeight(18);
 		m_treeView->SetIndentWidth(14);
 		m_treeView->SetDoubleBuffered(true);
+		m_treeView->SetAlwaysShowScrollbars(true); // Enable scrollbars
 		sizer->Add(m_treeView, 1, wxEXPAND | wxALL, 0);
 	}
 
@@ -163,6 +164,7 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 		m_historyView->SetItemHeight(18);
 		m_historyView->SetIndentWidth(14);
 		m_historyView->SetDoubleBuffered(true);
+		m_historyView->SetAlwaysShowScrollbars(true); // Enable scrollbars
 		// Two columns: action and info
 		m_historyView->AddColumn("Action", FlatTreeColumn::ColumnType::TEXT, 120);
 		m_historyView->AddColumn("Info", FlatTreeColumn::ColumnType::TEXT, 180);
