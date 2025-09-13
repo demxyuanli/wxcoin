@@ -461,7 +461,8 @@ void FlatTreeView::OnPaint(wxPaintEvent& event)
 
 	DrawBackground(dc);
 	DrawColumnHeaders(dc);
-	// Prepare DC for scrolled drawing of rows
+	
+	// Prepare DC for scrolled drawing of content only
 	PrepareDC(dc);
 	DrawItems(dc);
 }
@@ -650,7 +651,7 @@ void FlatTreeView::DrawColumnHeaders(wxDC& dc)
 	dc.SetBrush(wxBrush(wxColour(240, 240, 240)));
 
 	int y = 0;
-	int x = 0; // No manual scroll offset - wxScrolledWindow handles this automatically
+	int x = 0; // Start from left edge
 
 	for (size_t i = 0; i < m_columns.size(); ++i) {
 		if (m_columns[i]->IsVisible()) {
@@ -702,8 +703,8 @@ void FlatTreeView::DrawItems(wxDC& dc)
 	// Set clipping region for content area only
 	dc.SetClippingRegion(0, headerY, cs.GetWidth(), cs.GetHeight() - headerY);
 
-	// Use wxScrolledWindow's automatic scrolling - no need for manual offset calculation
-	// The PrepareDC call in OnPaint already handles the scrolling transformation
+	// Start drawing from the top of the content area
+	// PrepareDC has already applied the scroll transformation
 	int startY = headerY;
 
 	DrawItemRecursive(dc, m_root, startY, 0);
@@ -732,14 +733,13 @@ void FlatTreeView::DrawItem(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int y,
 	if (!item) return;
 
 	// Check if item is visible in current view
-	// y is now in content coordinates (relative to header)
+	// Since PrepareDC has already applied scroll transformation, we can use simpler visibility check
 	wxSize cs = GetClientSize();
 	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
 
-	// Convert to screen coordinates for visibility check
-	int screenY = y + headerY;
-	if (screenY + m_itemHeight < headerY || screenY > cs.GetHeight()) {
+	// Simple visibility check - if item is outside the visible area, skip it
+	if (y + m_itemHeight < headerY || y > cs.GetHeight()) {
 		return; // Item is not visible
 	}
 
