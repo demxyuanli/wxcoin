@@ -622,8 +622,16 @@ void FlatTreeView::OnKeyDown(wxKeyEvent& event)
 
 void FlatTreeView::OnScroll(wxScrollWinEvent& event)
 {
-	// Let wxScrolledWindow handle the scrolling automatically
-	// Just refresh the display
+	// Update our internal scroll state for hit testing and other calculations
+	int orient = event.GetOrientation();
+	if (orient == wxVERTICAL) {
+		m_scrollY = GetScrollPos(wxVERTICAL);
+	}
+	else if (orient == wxHORIZONTAL) {
+		m_scrollX = GetScrollPos(wxHORIZONTAL);
+	}
+	
+	// Refresh the display
 	Refresh();
 	event.Skip();
 }
@@ -1027,9 +1035,20 @@ void FlatTreeView::CalculateLayout()
 
 	if (!m_root) {
 		m_totalHeight = 0;
-		// Set virtual size to zero and let wxScrolledWindow handle scrollbars
+		// Set both scrollbars to show but with zero range
+		int rowsVisible = std::max(0, clientH - headerY);
+		
+		// Set virtual size to zero
 		SetVirtualSize(0, 0);
 		FitInside();
+		
+		if (m_alwaysShowScrollbars) {
+			SetScrollbar(wxVERTICAL, 0, rowsVisible, 0, true);
+			SetScrollbar(wxHORIZONTAL, 0, clientW, 0, true);
+		} else {
+			SetScrollbar(wxVERTICAL, 0, 0, 0, true);
+			SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
+		}
 		return;
 	}
 
@@ -1043,11 +1062,53 @@ void FlatTreeView::CalculateLayout()
 		}
 	}
 
-	// Set virtual size for wxScrolledWindow - let it handle scrollbars automatically
+	// Set virtual size for wxScrolledWindow
 	SetVirtualSize(totalContentWidth, m_totalHeight);
 	
 	// Call FitInside to ensure proper scrolling behavior
 	FitInside();
+
+	// 1. Calculate vertical scrollbar for rows area (below header and top horizontal scrollbar)
+	int rowsVisible = std::max(0, clientH - headerY);
+
+	if (m_totalHeight > rowsVisible) {
+		// Vertical scrollbar for rows only
+		int range = m_totalHeight - rowsVisible;
+		int thumb = rowsVisible;
+		int pos = std::min(m_scrollY, range);
+		SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
+	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxVERTICAL, 0, rowsVisible, m_totalHeight, true);
+		m_scrollY = 0;
+		SetScrollPos(wxVERTICAL, 0);
+	}
+	else {
+		SetScrollbar(wxVERTICAL, 0, 0, 0, true);
+		m_scrollY = 0;
+		SetScrollPos(wxVERTICAL, 0);
+	}
+
+	// 2. Calculate horizontal scrollbar for entire control (at bottom)
+	if (totalContentWidth > clientW) {
+		// Horizontal scrollbar for entire control
+		int range = totalContentWidth - clientW;
+		int thumb = clientW;
+		int pos = std::min(m_scrollX, range);
+		SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
+	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxHORIZONTAL, 0, clientW, totalContentWidth, true);
+		m_scrollX = 0;
+		SetScrollPos(wxHORIZONTAL, 0);
+	}
+	else {
+		SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
+		m_scrollX = 0;
+		SetScrollPos(wxHORIZONTAL, 0);
+	}
 
 	// 3. Update the top first-column horizontal scrollbar
 	{
@@ -1191,11 +1252,50 @@ void FlatTreeView::UpdateScrollbars()
 		}
 	}
 
-	// Set virtual size for wxScrolledWindow - let it handle scrollbars automatically
+	// Set virtual size for wxScrolledWindow
 	SetVirtualSize(totalContentWidth, m_totalHeight);
 	
 	// Call FitInside to ensure proper scrolling behavior
 	FitInside();
+
+	// Update vertical scrollbar
+	if (m_totalHeight > visibleHeight) {
+		// Use wxDataViewTreeCtrl style: pixel-based scrollbar
+		int range = m_totalHeight - visibleHeight;
+		int thumb = visibleHeight;
+		int pos = std::min(m_scrollY, range);
+		SetScrollbar(wxVERTICAL, pos, thumb, m_totalHeight, true);
+	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxVERTICAL, 0, visibleHeight, m_totalHeight, true);
+		m_scrollY = 0;
+		SetScrollPos(wxVERTICAL, 0);
+	}
+	else {
+		SetScrollbar(wxVERTICAL, 0, 0, 0, true);
+		m_scrollY = 0;
+		SetScrollPos(wxVERTICAL, 0);
+	}
+
+	// Update horizontal scrollbar
+	if (totalContentWidth > clientSize.GetWidth()) {
+		int range = totalContentWidth - clientSize.GetWidth();
+		int thumb = clientSize.GetWidth();
+		int pos = std::min(m_scrollX, range);
+		SetScrollbar(wxHORIZONTAL, pos, thumb, totalContentWidth, true);
+	}
+	else if (m_alwaysShowScrollbars) {
+		// Always show scrollbar, but with zero range when not needed
+		SetScrollbar(wxHORIZONTAL, 0, clientSize.GetWidth(), totalContentWidth, true);
+		m_scrollX = 0;
+		SetScrollPos(wxHORIZONTAL, 0);
+	}
+	else {
+		SetScrollbar(wxHORIZONTAL, 0, 0, 0, true);
+		m_scrollX = 0;
+		SetScrollPos(wxHORIZONTAL, 0);
+	}
 }
 
 std::shared_ptr<FlatTreeItem> FlatTreeView::GetItemByIndex(std::shared_ptr<FlatTreeItem> item, int& index)
