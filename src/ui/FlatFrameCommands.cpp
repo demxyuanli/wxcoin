@@ -11,7 +11,7 @@
 #include "FileOpenListener.h"
 #include "FileSaveListener.h"
 #include "FileSaveAsListener.h"
-#include "ImportStepListener.h"
+#include "ImportGeometryListener.h"
 #include "CreateBoxListener.h"
 #include "CreateSphereListener.h"
 #include "CreateCylinderListener.h"
@@ -125,12 +125,12 @@ void FlatFrame::setupCommandSystem() {
 	auto fileOpenListener = std::make_shared<FileOpenListener>(this);
 	auto fileSaveListener = std::make_shared<FileSaveListener>(this);
 	auto fileSaveAsListener = std::make_shared<FileSaveAsListener>(this);
-	auto importStepListener = std::make_shared<ImportStepListener>(this, m_canvas, m_occViewer);
+	auto importGeometryListener = std::make_shared<ImportGeometryListener>(this, m_canvas, m_occViewer);
 	m_listenerManager->registerListener(cmd::CommandType::FileNew, fileNewListener);
 	m_listenerManager->registerListener(cmd::CommandType::FileOpen, fileOpenListener);
 	m_listenerManager->registerListener(cmd::CommandType::FileSave, fileSaveListener);
 	m_listenerManager->registerListener(cmd::CommandType::FileSaveAs, fileSaveAsListener);
-	m_listenerManager->registerListener(cmd::CommandType::ImportSTEP, importStepListener);
+	m_listenerManager->registerListener(cmd::CommandType::ImportSTEP, importGeometryListener);
 
 	auto undoListener = std::make_shared<UndoListener>(m_commandManager, m_canvas);
 	auto redoListener = std::make_shared<RedoListener>(m_commandManager, m_canvas);

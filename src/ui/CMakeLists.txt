@@ -61,6 +61,8 @@ add_library(UIDialogEdges STATIC
 
 
 )
+
+
 target_include_directories(UIDialogEdges PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
 target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADOCC CADFlatUI widgets ${wxWidgets_LIBRARIES})
 set_target_properties(UIDialogEdges PROPERTIES FOLDER "UI")
@@ -71,11 +73,13 @@ set(UIDialogMesh_SOURCES
     ImportSettingsDialog.cpp
     ImportStatisticsDialog.cpp
     NormalFixDialog.cpp
+    GeometryDecompositionDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
     ${CMAKE_SOURCE_DIR}/include/ImportSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/ImportStatisticsDialog.h
     ${CMAKE_SOURCE_DIR}/include/NormalFixDialog.h
+    ${CMAKE_SOURCE_DIR}/include/GeometryDecompositionDialog.h
 )
 
 add_library(UIDialogMesh STATIC ${UIDialogMesh_SOURCES})

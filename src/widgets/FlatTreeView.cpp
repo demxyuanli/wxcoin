@@ -1446,9 +1446,7 @@ wxString FlatTreeView::GetItemColumnSvgIconName(std::shared_ptr<FlatTreeItem> it
 	auto key = std::make_pair(item, column);
 	auto it = m_itemColumnSvgIconNames.find(key);
 	return it != m_itemColumnSvgIconNames.end() ? it->second : wxEmptyString;
-}
-
-void FlatTreeView::OnScrollbarUpdateTimer(wxTimerEvent& event)
+}void FlatTreeView::OnScrollbarUpdateTimer(wxTimerEvent& event)
 {
 	wxUnusedVar(event);
 	
@@ -1459,3 +1457,4 @@ void FlatTreeView::OnScrollbarUpdateTimer(wxTimerEvent& event)
 	Refresh();
 	
 }
+

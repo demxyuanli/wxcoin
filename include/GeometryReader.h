@@ -32,6 +32,43 @@ public:
     };
 
     /**
+     * @brief Decomposition level for geometry components
+     */
+    enum class DecompositionLevel {
+        NO_DECOMPOSITION,  // No decomposition - single component
+        SHAPE_LEVEL,       // Decompose to shape level (top level)
+        SOLID_LEVEL,       // Decompose to solid level
+        SHELL_LEVEL,       // Decompose to shell level
+        FACE_LEVEL,        // Decompose to face level
+        MAX_LEVELS         // Keep this last for iteration
+    };
+
+    /**
+     * @brief Color scheme for decomposed components
+     */
+    enum class ColorScheme {
+        DISTINCT_COLORS,      // Cool blue-gray tones with good contrast
+        WARM_COLORS,          // Warm beige and brown tones
+        RAINBOW,              // Rainbow spectrum colors
+        MONOCHROME_BLUE,      // Various shades of blue
+        MONOCHROME_GREEN,     // Various shades of green
+        MONOCHROME_GRAY,      // Various shades of gray
+        MAX_SCHEMES           // Keep this last for iteration
+    };
+
+    /**
+     * @brief Geometry decomposition options
+     */
+    struct DecompositionOptions {
+        bool enableDecomposition = false;
+        DecompositionLevel level = DecompositionLevel::NO_DECOMPOSITION;
+        ColorScheme colorScheme = ColorScheme::DISTINCT_COLORS;
+        bool useConsistentColoring = true;  // Use hash-based consistent coloring
+
+        DecompositionOptions() = default;
+    };
+
+    /**
      * @brief Optimization options for geometry import
      */
     struct OptimizationOptions {
@@ -44,7 +81,7 @@ public:
         double precision = 0.01;
         double meshDeflection = 0.1;
         double angularDeflection = 0.1;
-        
+
         // Fine tessellation options for smooth surfaces
         bool enableFineTessellation = true;
         double tessellationDeflection = 0.01;  // Smaller = smoother surfaces
@@ -52,6 +89,9 @@ public:
         int tessellationMinPoints = 3;        // Minimum points per edge
         int tessellationMaxPoints = 100;      // Maximum points per edge
         bool enableAdaptiveTessellation = true; // Adaptive based on curvature
+
+        // Geometry decomposition options
+        DecompositionOptions decomposition;
 
         OptimizationOptions() = default;
     };

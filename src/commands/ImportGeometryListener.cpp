@@ -8,6 +8,7 @@
 #include "BREPReader.h"
 #include "XTReader.h"
 #include "OCCViewer.h"
+#include "GeometryDecompositionDialog.h"
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/app.h>
@@ -20,6 +21,7 @@
 
 ImportGeometryListener::ImportGeometryListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
     : m_frame(frame), m_canvas(canvas), m_occViewer(occViewer), m_statusBar(nullptr)
+    , m_decompositionOptions()
 {
     if (!m_frame) {
         LOG_ERR_S("ImportGeometryListener: frame pointer is null");
@@ -134,6 +136,28 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
         return CommandResult(false, "No supported geometry files found", commandType);
     }
 
+    // Check if we have non-mesh formats that might benefit from decomposition
+    bool hasNonMeshFormats = false;
+    for (const auto& formatGroup : filesByFormat) {
+        const std::string& formatName = formatGroup.first;
+        if (formatName == "STEP" || formatName == "IGES" || formatName == "BREP") {
+            hasNonMeshFormats = true;
+            break;
+        }
+    }
+
+    // Show geometry decomposition dialog for non-mesh formats
+    if (hasNonMeshFormats) {
+        GeometryDecompositionDialog dialog(m_frame, m_decompositionOptions);
+        if (dialog.ShowModal() == wxID_OK) {
+            LOG_INF_S("Geometry decomposition configured: enabled=" +
+                std::string(m_decompositionOptions.enableDecomposition ? "true" : "false") +
+                ", level=" + std::to_string(static_cast<int>(m_decompositionOptions.level)));
+        } else {
+            LOG_INF_S("Geometry decomposition dialog cancelled, using default settings");
+        }
+    }
+
     auto fileDialogEndTime = std::chrono::high_resolution_clock::now();
     auto fileDialogDuration = std::chrono::duration_cast<std::chrono::milliseconds>(fileDialogEndTime - fileDialogStartTime);
 
@@ -165,15 +189,18 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             }
 
             // Get reader for this format
-            auto reader = GeometryReaderFactory::getReaderForExtension(formatFiles[0]);
+            auto reader = GeometryReaderFactory::getReaderForFile(formatFiles[0]);
             if (!reader) {
-                LOG_ERR_S("Failed to get reader for format: " + formatName);
+                LOG_ERR_S("Failed to get reader for format: " + formatName + ", file: " + formatFiles[0]);
                 continue;
             }
 
             // Use balanced default settings for import (no dialog needed)
             GeometryReader::OptimizationOptions options;
             setupBalancedImportOptions(options);
+
+            // Apply decomposition options
+            options.decomposition = m_decompositionOptions;
 
             // Import files for this format
             auto formatStartTime = std::chrono::high_resolution_clock::now();

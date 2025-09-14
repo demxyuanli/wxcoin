@@ -33,6 +33,7 @@ private:
     Canvas* m_canvas;
     OCCViewer* m_occViewer;
     FlatUIStatusBar* m_statusBar;
+    GeometryReader::DecompositionOptions m_decompositionOptions;
 
     /**
      * @brief Import files using the specified reader
