@@ -4,6 +4,11 @@
 #include <iomanip>
 #include <regex>
 
+// Define UNREFERENCED_PARAMETER if not already defined
+#ifndef UNREFERENCED_PARAMETER
+#define UNREFERENCED_PARAMETER(P) ((void)(P))
+#endif
+
 OptimizedGeometryManager::OptimizedGeometryManager() 
     : m_wireframeMode(false), m_shadingMode(true), m_showEdges(false), 
       m_showNormals(false), m_antiAliasing(true), m_lodEnabled(true),
