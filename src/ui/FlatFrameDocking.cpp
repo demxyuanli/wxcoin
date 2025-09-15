@@ -13,6 +13,7 @@
 #include "docking/FloatingDockContainer.h"
 #include "docking/AutoHideContainer.h"
 #include "docking/DockLayoutConfig.h"
+#include "docking/DockResizeMonitor.h"
 #include "DockLayoutConfigListener.h"
 #include "CommandListenerManager.h"
 #include <wx/textctrl.h>
@@ -759,32 +760,42 @@ void FlatFrameDocking::OnResizeTimer(wxTimerEvent& event) {
 }
 
 void FlatFrameDocking::HandleDelayedResize() {
-    wxLogDebug("HandleDelayedResize: Processing resize for cached size %dx%d",
-               m_pendingResizeSize.x, m_pendingResizeSize.y);
-
     if (!m_dockManager || !m_dockManager->containerWidget()) {
         return;
     }
 
-    // Verify the current size matches our cached size (to avoid unnecessary adjustments)
+    // Get current size
     wxSize currentSize = m_dockManager->containerWidget()->GetSize();
 
-    // Only proceed if the current size matches our cached pending size
-    // This ensures we only adjust once when the resize has actually finished
-    if (std::abs(currentSize.x - m_pendingResizeSize.x) <= 5 &&
-        std::abs(currentSize.y - m_pendingResizeSize.y) <= 5) {
-
-        wxLogDebug("HandleDelayedResize: Size matches cached size, applying layout adjustment");
-
-        if (ads::DockContainerWidget* container = dynamic_cast<ads::DockContainerWidget*>(m_dockManager->containerWidget())) {
-            ApplyDynamicLayoutAdjustmentOptimized(container);
-        }
-
-        wxLogDebug("HandleDelayedResize: Layout adjustment completed");
-    } else {
-        wxLogDebug("HandleDelayedResize: Size changed during timer (%dx%d vs %dx%d), skipping adjustment",
-                   currentSize.x, currentSize.y, m_pendingResizeSize.x, m_pendingResizeSize.y);
+    // Only proceed if size is stable (within 5px tolerance)
+    if (std::abs(currentSize.x - m_pendingResizeSize.x) > 5 ||
+        std::abs(currentSize.y - m_pendingResizeSize.y) > 5) {
+        return;
     }
+
+    // Apply optimized layout adjustment
+    if (ads::DockContainerWidget* container = dynamic_cast<ads::DockContainerWidget*>(m_dockManager->containerWidget())) {
+        // Monitor layout calculation
+        ads::DockResizeMonitor::getInstance().beginLayoutCalculation();
+        
+        // Freeze container to prevent flicker during adjustment
+        container->Freeze();
+        
+        // Apply layout adjustment
+        ApplyDynamicLayoutAdjustmentOptimized(container);
+        
+        // Thaw and refresh
+        container->Thaw();
+        
+        // Use RefreshRect for specific areas instead of full refresh
+        container->RefreshRect(container->GetClientRect(), false);
+        
+        // End layout monitoring
+        ads::DockResizeMonitor::getInstance().endLayoutCalculation();
+    }
+    
+    // End resize monitoring
+    ads::DockResizeMonitor::getInstance().endResize(currentSize);
 }
 
 void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
@@ -857,31 +868,36 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
 }
 
 void FlatFrameDocking::onSize(wxSizeEvent& event) {
-    // IMPORTANT: We handle our own layout through the docking system
-    // Do NOT call base class onSize which might interfere with our layout
-
+    // Optimized resize handling with performance monitoring
+    
     // Let the event propagate to child windows first
     event.Skip();
 
-    // Use timer-based approach to avoid multiple layout adjustments during resize
-    if (m_dockManager && m_dockManager->containerWidget() && m_resizeTimer) {
-        wxSize newSize = m_dockManager->containerWidget()->GetSize();
+    // Early exit if no dock manager
+    if (!m_dockManager || !m_dockManager->containerWidget()) {
+        return;
+    }
 
-        // Only process if size is reasonable (avoid tiny sizes during initialization)
-        if (newSize.x > 200 && newSize.y > 150) {
-            // Cache the new size for delayed processing
-            m_pendingResizeSize = newSize;
-            m_resizePending = true;
+    wxSize newSize = m_dockManager->containerWidget()->GetSize();
+    
+    // Skip if size hasn't actually changed or is too small
+    if (newSize == m_pendingResizeSize || newSize.x < 200 || newSize.y < 150) {
+        return;
+    }
 
-            // Start/restart the timer (200ms delay to wait for resize to finish)
-            if (m_resizeTimer->IsRunning()) {
-                m_resizeTimer->Stop();
-            }
-            m_resizeTimer->Start(200, wxTIMER_ONE_SHOT);
+    // Start performance monitoring if this is the first resize event
+    if (!m_resizePending) {
+        ads::DockResizeMonitor::getInstance().startResize(m_pendingResizeSize);
+    }
 
-            wxLogDebug("onSize: Resize detected (%dx%d), timer started for delayed adjustment",
-                       newSize.x, newSize.y);
-        }
+    // Use shorter timer for more responsive resize (50ms instead of 200ms)
+    if (m_resizeTimer) {
+        m_pendingResizeSize = newSize;
+        m_resizePending = true;
+
+        // Cancel existing timer and start new one
+        m_resizeTimer->Stop();
+        m_resizeTimer->Start(50, wxTIMER_ONE_SHOT);
     }
 }
 
@@ -1077,41 +1093,65 @@ void FlatFrameDocking::ApplyDynamicLayoutAdjustmentOptimized(ads::DockContainerW
     }
 
     // Calculate target sizes based on current container dimensions
-    int targetLeftWidth = (containerSize.x * config.leftAreaPercent) / 100;
+    int targetLeftWidth = std::max(200, (containerSize.x * config.leftAreaPercent) / 100);
     int targetBottomHeight = (containerSize.y * config.bottomAreaPercent) / 100;
 
-    // Ensure left area minimum width of 200px (cannot be compressed)
-    if (targetLeftWidth < 200) {
-        targetLeftWidth = 200;
-        wxLogDebug("ApplyDynamicLayoutAdjustmentOptimized: Enforcing minimum left width of 200px");
+    // Cache the main splitter to avoid repeated searches
+    static wxSplitterWindow* cachedMainSplitter = nullptr;
+    static wxWindow* cachedContainer = nullptr;
+    
+    // Invalidate cache if container changed
+    if (cachedContainer != container) {
+        cachedMainSplitter = nullptr;
+        cachedContainer = container;
     }
-
-    // Only proceed if we have reasonable target sizes
-    if (targetLeftWidth <= 0) {
-        return;
+    
+    // Find or use cached main splitter
+    wxSplitterWindow* mainSplitter = cachedMainSplitter;
+    if (!mainSplitter) {
+        mainSplitter = FindMainVerticalSplitter(container);
+        cachedMainSplitter = mainSplitter;
     }
-
-    // Single efficient approach: directly adjust the main vertical splitter
-    wxSplitterWindow* mainSplitter = FindMainVerticalSplitter(container);
+    
     if (mainSplitter) {
-        // Set minimum pane size to enforce 200px minimum width for left panel
-        mainSplitter->SetMinimumPaneSize(200);
-        wxLogDebug("ApplyDynamicLayoutAdjustmentOptimized: Set minimum pane size to 200px");
-
-        // Update sash position
-        mainSplitter->SetSashPosition(targetLeftWidth);
+        // Only adjust if position changed significantly (>5 pixels)
+        int currentPos = mainSplitter->GetSashPosition();
+        if (std::abs(currentPos - targetLeftWidth) > 5) {
+            // Monitor splitter adjustment
+            ads::DockResizeMonitor::getInstance().beginSplitterAdjustment();
+            
+            mainSplitter->SetMinimumPaneSize(200);
+            mainSplitter->SetSashPosition(targetLeftWidth);
+            
+            ads::DockResizeMonitor::getInstance().endSplitterAdjustment();
+        }
     }
 
-    // Adjust bottom splitters if needed
+    // Adjust bottom splitters only if needed
     if (config.showBottomArea && targetBottomHeight > 0) {
-        FindAndAdjustBottomSplitters(container, targetBottomHeight);
+        // Use a more efficient bottom splitter search
+        wxWindow* bottomArea = nullptr;
+        for (auto* area : container->dockAreas()) {
+            if ((m_messageDock && area == m_messageDock->dockAreaWidget()) || (m_performanceDock && area == m_performanceDock->dockAreaWidget())){
+                bottomArea = area->GetParent();
+                break;
+            }
+        }
+        
+        if (bottomArea) {
+            wxSplitterWindow* bottomSplitter = dynamic_cast<wxSplitterWindow*>(bottomArea);
+            if (bottomSplitter && bottomSplitter->GetSplitMode() == wxSPLIT_HORIZONTAL) {
+                int targetPos = bottomSplitter->GetSize().GetHeight() - targetBottomHeight;
+                int currentPos = bottomSplitter->GetSashPosition();
+                if (std::abs(currentPos - targetPos) > 5) {
+                    bottomSplitter->SetSashPosition(targetPos);
+                }
+            }
+        }
     }
 
-    // Single layout update at the end
+    // Skip layout if not needed
     container->Layout();
-
-    // Optional: Update visual appearance
-    container->Refresh();
 }
 
 void FlatFrameDocking::ApplyDynamicLayoutAdjustment(ads::DockContainerWidget* container) {

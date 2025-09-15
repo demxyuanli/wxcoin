@@ -307,14 +307,22 @@ void DockContainerWidget::addDockArea(DockArea* dockArea, DockWidgetArea area) {
 
 
 void DockContainerWidget::onResizeTimer(wxTimerEvent& event) {
-    // Apply layout configuration if using percentage mode
-    applyLayoutConfig();
+    // Optimized resize timer handler
     
-    // Note: Individual dock areas will handle their own refresh with debounce
-    // No need to force refresh all areas here as it causes performance issues
-
-    // Clear resizing flag after debounce fires and we apply config
-    m_isResizing = false;
+    // Only apply layout if still resizing
+    if (m_isResizing) {
+        // Apply layout configuration efficiently
+        applyLayoutConfig();
+        
+        // Clear resizing flag
+        m_isResizing = false;
+        
+        // Unfreeze if we were frozen
+        if (m_isResizeFreezeActive) {
+            Thaw();
+            m_isResizeFreezeActive = false;
+        }
+    }
 }
 
 void DockContainerWidget::onLayoutUpdateTimer(wxTimerEvent& event) {
@@ -341,6 +349,12 @@ void DockContainerWidget::onLayoutUpdateTimer(wxTimerEvent& event) {
 void DockContainerWidget::onSize(wxSizeEvent& event) {
     wxSize newSize = event.GetSize();
     
+    // Quick exit if size hasn't changed
+    if (newSize == m_lastContainerSize) {
+        event.Skip();
+        return;
+    }
+    
     // Use proportional resize if we have cached ratios and user has adjusted layout
     if (m_hasUserAdjustedLayout && m_lastContainerSize.GetWidth() > 0 && m_lastContainerSize.GetHeight() > 0) {
         // Rebuild ratios to avoid dangling splitter pointers after structural changes
@@ -351,14 +365,10 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
         return;
     }
     
-    // Mark resizing and freeze early to avoid flicker while dragging the frame sash
+    // Optimized resize handling - avoid excessive Freeze/Thaw
     m_isResizing = true;
-    if (!m_isResizeFreezeActive) {
-        Freeze();
-        m_isResizeFreezeActive = true;
-    }
 
-    // Use debounced layout update to prevent excessive recalculations during resize
+    // Initialize timer if needed
     if (!m_resizeTimer) {
         m_resizeTimer = new wxTimer(this);
         Bind(wxEVT_TIMER, &DockContainerWidget::onResizeTimer, this, m_resizeTimer->GetId());
@@ -369,8 +379,8 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
         m_resizeTimer->Stop();
     }
 
-    // Schedule layout update with slightly lower rate to cut CPU usage
-    m_resizeTimer->Start(24, wxTIMER_ONE_SHOT); // ~40-50fps debounce
+    // Schedule layout update with optimized timing (16ms for ~60fps)
+    m_resizeTimer->Start(16, wxTIMER_ONE_SHOT);
 
     // Update global docking hints if in global mode
     updateGlobalDockingHints();

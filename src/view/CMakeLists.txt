@@ -2,6 +2,7 @@
 
 set(CADVIEW_SOURCES
     ${CMAKE_SOURCE_DIR}/src/view/Canvas.cpp
+    ${CMAKE_SOURCE_DIR}/src/view/CanvasOptimized.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/MultiViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewRefreshManager.cpp
@@ -9,6 +10,8 @@ set(CADVIEW_SOURCES
 )
 
 set(CADVIEW_HEADERS
+    ${CMAKE_SOURCE_DIR}/include/Canvas.h
+    ${CMAKE_SOURCE_DIR}/include/view/CanvasOptimized.h
     ${CMAKE_SOURCE_DIR}/include/ViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
