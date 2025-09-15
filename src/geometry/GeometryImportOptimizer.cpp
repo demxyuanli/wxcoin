@@ -6,7 +6,6 @@
 #include <sstream>
 #include <algorithm>
 #include <numeric>
-#include <execution>
 #include <thread>
 #include <future>
 #include <cstring>
