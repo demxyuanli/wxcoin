@@ -6,6 +6,29 @@
 
 懒得写Readme，就让AI写一个吧
 
+先放效果
+
+GUI布局，支持Fluen Ribbon风格
+
+<img width="1195" height="797" alt="image" src="https://github.com/user-attachments/assets/ec5384b3-ccff-4242-b480-2bc7734ff49d" />
+
+导入几何，可对几何按照Shape->Solid->shell->face分级分解和配色
+
+<img width="1198" height="799" alt="image" src="https://github.com/user-attachments/assets/16d7b5c2-1a5a-4abd-8a54-02f6d4143ba8" />
+
+导入的几何按照Faces进行分解，显示了Feature 边
+<img width="1199" height="799" alt="image" src="https://github.com/user-attachments/assets/c361d534-13b3-4934-9e75-200efa15a788" />
+
+导入的几何显示原边Origin Edge
+<img width="1196" height="797" alt="image" src="https://github.com/user-attachments/assets/c7172ea4-8d53-4ccf-be9e-08ad4e6572f0" />
+
+界面支持Theme管理，可以选择dark，light配色，有些控件尚未自定义完全，所以显示的控件未按theme变化
+<img width="1197" height="803" alt="image" src="https://github.com/user-attachments/assets/38158b39-1fe9-474f-bfe6-3743e9df24d0" />
+
+支持docking停靠系统，可以拖拽实现各种停靠和标签合并
+<img width="1197" height="795" alt="image" src="https://github.com/user-attachments/assets/a564d951-41b4-4c4e-b254-9f1121a83b89" />
+
+
 # CAD Navigator (wxcoin)
 
 基于 wxWidgets、Coin3D 和 OpenCASCADE 技术构建的现代 3D CAD 应用程序。该应用程序提供了全面的 CAD 导航和可视化系统，具有先进的停靠界面和渲染功能。
