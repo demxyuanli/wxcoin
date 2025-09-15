@@ -542,6 +542,7 @@ std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findPattern(cons
 }
 
 std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByType(const std::string& type) const {
+    UNREFERENCED_PARAMETER(type);
     // Implementation would use type index
     // For now, return empty result
     return {};
@@ -549,6 +550,9 @@ std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByType(const
 
 std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByPropertyRange(
     const std::string& property, double minValue, double maxValue) const {
+    UNREFERENCED_PARAMETER(property);
+    UNREFERENCED_PARAMETER(minValue);
+    UNREFERENCED_PARAMETER(maxValue);
     
     // Implementation would search by property range
     return {};
@@ -572,6 +576,8 @@ std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByBoundingBo
 
 std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByDistance(
     const gp_Pnt& center, double maxDistance) const {
+    UNREFERENCED_PARAMETER(center);
+    UNREFERENCED_PARAMETER(maxDistance);
     
     std::vector<std::shared_ptr<OCCGeometry>> result;
     
@@ -589,6 +595,7 @@ std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByDistance(
 
 std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::advancedSearch(
     const std::unordered_map<std::string, std::string>& criteria) {
+    UNREFERENCED_PARAMETER(criteria);
     
     // Implementation would perform advanced search with multiple criteria
     return {};
@@ -623,6 +630,9 @@ double GeometrySearchEngine::calculateDistance(const gp_Pnt& p1, const gp_Pnt& p
 
 bool GeometrySearchEngine::isInBoundingBox(const std::shared_ptr<OCCGeometry>& geometry, 
                                           const gp_Pnt& minPoint, const gp_Pnt& maxPoint) const {
+    UNREFERENCED_PARAMETER(geometry);
+    UNREFERENCED_PARAMETER(minPoint);
+    UNREFERENCED_PARAMETER(maxPoint);
     // Implementation would check if geometry is within bounding box
     return true; // Placeholder
 }
@@ -665,32 +675,49 @@ void GeometryBatchProcessor::batchSetSelected(const std::vector<std::string>& na
 }
 
 void GeometryBatchProcessor::batchTranslate(const std::vector<std::string>& names, const gp_Vec& translation) {
+    UNREFERENCED_PARAMETER(names);
+    UNREFERENCED_PARAMETER(translation);
     // Implementation would translate geometries
 }
 
 void GeometryBatchProcessor::batchRotate(const std::vector<std::string>& names, const gp_Pnt& center, 
                                         const gp_Dir& axis, double angle) {
+    UNREFERENCED_PARAMETER(names);
+    UNREFERENCED_PARAMETER(center);
+    UNREFERENCED_PARAMETER(axis);
+    UNREFERENCED_PARAMETER(angle);
     // Implementation would rotate geometries
 }
 
 void GeometryBatchProcessor::batchScale(const std::vector<std::string>& names, const gp_Pnt& center, double factor) {
+    UNREFERENCED_PARAMETER(names);
+    UNREFERENCED_PARAMETER(center);
+    UNREFERENCED_PARAMETER(factor);
     // Implementation would scale geometries
 }
 
 void GeometryBatchProcessor::batchRemesh(const std::vector<std::string>& names, 
                                         const OCCMeshConverter::MeshParameters& params) {
+    UNREFERENCED_PARAMETER(names);
+    UNREFERENCED_PARAMETER(params);
     // Implementation would remesh geometries
 }
 
 void GeometryBatchProcessor::batchUpdateLOD(const std::vector<std::string>& names, bool roughMode) {
+    UNREFERENCED_PARAMETER(names);
+    UNREFERENCED_PARAMETER(roughMode);
     // Implementation would update LOD for geometries
 }
 
 void GeometryBatchProcessor::batchExportToSTL(const std::vector<std::string>& names, const std::string& directory) {
+    UNREFERENCED_PARAMETER(names);
+    UNREFERENCED_PARAMETER(directory);
     // Implementation would export geometries to STL
 }
 
 void GeometryBatchProcessor::batchExportToOBJ(const std::vector<std::string>& names, const std::string& directory) {
+    UNREFERENCED_PARAMETER(names);
+    UNREFERENCED_PARAMETER(directory);
     // Implementation would export geometries to OBJ
 }
 

@@ -364,10 +364,15 @@ CommandResult ImportGeometryListener::importFiles(std::unique_ptr<GeometryReader
     const std::vector<std::string>& filePaths,
     const GeometryReader::OptimizationOptions& options)
 {
+    // Convert to enhanced options
+    GeometryImportOptimizer::EnhancedOptions enhancedOptions;
+    // Copy base options
+    static_cast<GeometryReader::OptimizationOptions&>(enhancedOptions) = options;
+    
     // Initialize statistics and geometries vector
     ImportOverallStatistics dummyStats;
     std::vector<std::shared_ptr<OCCGeometry>> dummyGeometries;
-    return importFilesWithStats(std::move(reader), filePaths, options, dummyStats, "", dummyGeometries);
+    return importFilesWithStats(std::move(reader), filePaths, enhancedOptions, dummyStats, "", dummyGeometries);
 }
 
 CommandResult ImportGeometryListener::importFilesWithStats(std::unique_ptr<GeometryReader> reader,
