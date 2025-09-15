@@ -509,7 +509,7 @@ void GeometryImportOptimizer::applyProgressiveLoading(
         if (!geometry || geometry->getShape().IsNull()) continue;
         
         // Store original shape as highest quality LOD
-        geometry->setLODEnabled(true);
+        geometry->setEnableLOD(true);
         
         // Generate lower quality LODs based on distance thresholds
         for (int i = 0; i < 4; ++i) {

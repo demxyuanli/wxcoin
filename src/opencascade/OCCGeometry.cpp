@@ -822,7 +822,7 @@ void OCCGeometry::addLODLevel(double distance, double deflection) {
 }
 
 int OCCGeometry::getLODLevel(double viewDistance) const {
-    if (!m_lodEnabled || m_lodLevels.empty()) {
+    if (!m_enableLOD || m_lodLevels.empty()) {
         return 0;
     }
     

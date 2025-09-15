@@ -239,9 +239,7 @@ public:
 	int getAssemblyLevel() const { return m_assemblyLevel; }
 	void setAssemblyLevel(int level) { m_assemblyLevel = level; }
 	
-	// LOD (Level of Detail) support
-	void setLODEnabled(bool enable) { m_lodEnabled = enable; }
-	bool isLODEnabled() const { return m_lodEnabled; }
+	// LOD (Level of Detail) support - additional methods
 	void addLODLevel(double distance, double deflection);
 	int getLODLevel(double viewDistance) const;
 	
@@ -347,7 +345,6 @@ protected:
 	int m_assemblyLevel{0};
 	
 	// LOD support
-	bool m_lodEnabled{false};
 	std::vector<std::pair<double, double>> m_lodLevels; // distance, deflection pairs
 };
 
