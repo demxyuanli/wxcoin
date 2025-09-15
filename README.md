@@ -19,7 +19,7 @@ GUI布局，支持Fluen Ribbon风格
 导入的几何按照Faces进行分解，显示了Feature 边
 <img width="1199" height="799" alt="image" src="https://github.com/user-attachments/assets/c361d534-13b3-4934-9e75-200efa15a788" />
 
-导入的几何显示原边Origin Edge
+对导入几何进行了网格加密，以显示更光滑的渲染效果，同时显示原边Origin Edge展示边和面的贴合程度
 <img width="1196" height="797" alt="image" src="https://github.com/user-attachments/assets/c7172ea4-8d53-4ccf-be9e-08ad4e6572f0" />
 
 界面支持Theme管理，可以选择dark，light配色，有些控件尚未自定义完全，所以显示的控件未按theme变化
