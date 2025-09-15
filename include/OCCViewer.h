@@ -256,6 +256,8 @@ public:
 	bool isExplodeEnabled() const override { return m_explodeEnabled; }
 	void setExplodeParams(ExplodeMode mode, double factor) override;
 	void getExplodeParams(ExplodeMode& mode, double& factor) const override { mode = m_explodeMode; factor = m_explodeFactor; }
+	void setExplodeParamsAdvanced(const ExplodeParams& params) override;
+	ExplodeParams getExplodeParamsAdvanced() const override { return m_explodeParams; }
 
 	// Feature edges status/progress (delegated to manager)
 	struct FeatureEdgeParams { double angleDeg{ 15.0 }; double minLength{ 0.005 }; bool onlyConvex{ false }; bool onlyConcave{ false }; };
@@ -360,6 +362,7 @@ private:
 	bool m_explodeEnabled{ false };
 	double m_explodeFactor{ 1.0 };
 	ExplodeMode m_explodeMode{ ExplodeMode::Radial };
+	ExplodeParams m_explodeParams{};
 	void applyExplode();
 	void clearExplode();
 

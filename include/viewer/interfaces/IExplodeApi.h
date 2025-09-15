@@ -10,4 +10,8 @@ public:
 	virtual bool isExplodeEnabled() const = 0;
 	virtual void setExplodeParams(ExplodeMode mode, double factor) = 0;
 	virtual void getExplodeParams(ExplodeMode& mode, double& factor) const = 0;
+
+	// Advanced API (non-breaking addition)
+	virtual void setExplodeParamsAdvanced(const ExplodeParams& params) = 0;
+	virtual ExplodeParams getExplodeParamsAdvanced() const = 0;
 };

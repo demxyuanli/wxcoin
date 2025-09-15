@@ -235,6 +235,10 @@ public:
 	bool isEdgeDisplayTypeEnabled(EdgeType type) const;
 	void updateEdgeDisplay();
 
+	// Assembly level for hierarchical explode
+	int getAssemblyLevel() const { return m_assemblyLevel; }
+	void setAssemblyLevel(int level) { m_assemblyLevel = level; }
+
 private:
 	void createWireframeRepresentation(const MeshParameters& params);
 
@@ -328,6 +332,9 @@ protected:
 
 	// Material tracking
 	bool m_materialExplicitlySet; // Flag to track if material has been explicitly set
+
+	// Assembly level
+	int m_assemblyLevel{0};
 };
 
 /**

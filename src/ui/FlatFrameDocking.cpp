@@ -14,6 +14,7 @@
 #include "docking/AutoHideContainer.h"
 #include "docking/DockLayoutConfig.h"
 #include "docking/DockResizeMonitor.h"
+#include "docking/DockLayoutCache.h"
 #include "DockLayoutConfigListener.h"
 #include "CommandListenerManager.h"
 #include <wx/textctrl.h>
@@ -778,14 +779,19 @@ void FlatFrameDocking::HandleDelayedResize() {
         // Monitor layout calculation
         ads::DockResizeMonitor::getInstance().beginLayoutCalculation();
         
-        // Freeze container to prevent flicker during adjustment
-        container->Freeze();
+        // Try to use cached layout first
+        bool usedCache = ads::DockLayoutCache::getInstance().applyCachedLayout(
+            "main_layout", container, currentSize);
         
-        // Apply layout adjustment
-        ApplyDynamicLayoutAdjustmentOptimized(container);
-        
-        // Thaw and refresh
-        container->Thaw();
+        if (!usedCache) {
+            // Cache miss - use traditional layout
+            container->Freeze();
+            ApplyDynamicLayoutAdjustmentOptimized(container);
+            container->Thaw();
+            
+            // Cache the result for next time
+            ads::DockLayoutCache::getInstance().cacheCurrentLayout("main_layout", container);
+        }
         
         // Use RefreshRect for specific areas instead of full refresh
         container->RefreshRect(container->GetClientRect(), false);
@@ -1132,9 +1138,13 @@ void FlatFrameDocking::ApplyDynamicLayoutAdjustmentOptimized(ads::DockContainerW
         // Use a more efficient bottom splitter search
         wxWindow* bottomArea = nullptr;
         for (auto* area : container->dockAreas()) {
-            if ((m_messageDock && area == m_messageDock->dockAreaWidget()) || (m_performanceDock && area == m_performanceDock->dockAreaWidget())){
-                bottomArea = area->GetParent();
-                break;
+            if (area) {
+                // Check if this area contains our message or performance dock
+                if ((m_messageDock && area == m_messageDock->dockAreaWidget()) ||
+                    (m_performanceDock && area == m_performanceDock->dockAreaWidget())) {
+                    bottomArea = area->GetParent();
+                    break;
+                }
             }
         }
         

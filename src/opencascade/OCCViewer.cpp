@@ -1373,8 +1373,24 @@ void OCCViewer::setExplodeEnabled(bool enabled, double factor) {
 void OCCViewer::setExplodeParams(ExplodeMode mode, double factor) {
 	m_explodeMode = mode;
 	m_explodeFactor = factor;
+	m_explodeParams.primaryMode = mode;
+	m_explodeParams.baseFactor = factor;
 	if (!m_explodeController) m_explodeController = std::make_unique<ExplodeController>(m_occRoot);
 	m_explodeController->setParams(mode, factor);
+	if (m_explodeEnabled) {
+		applyExplode();
+		if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
+	}
+}
+
+void OCCViewer::setExplodeParamsAdvanced(const ExplodeParams& params) {
+	m_explodeParams = params;
+	// Map to legacy fields for backward compatibility
+	m_explodeMode = params.primaryMode;
+	m_explodeFactor = params.baseFactor;
+	if (!m_explodeController) m_explodeController = std::make_unique<ExplodeController>(m_occRoot);
+	// Reuse simple controller params; controller will read advanced params via viewer when needed (future)
+	m_explodeController->setParams(m_explodeMode, m_explodeFactor);
 	if (m_explodeEnabled) {
 		applyExplode();
 		if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();

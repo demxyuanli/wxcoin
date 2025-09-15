@@ -1389,8 +1389,8 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 			return palette[componentIndex % palette.size()];
 		};
 
-		std::function<void(const TDF_Label&, const TopLoc_Location&)> processLabel =
-			[&](const TDF_Label& label, const TopLoc_Location& parentLoc) {
+		std::function<void(const TDF_Label&, const TopLoc_Location&, int)> processLabel =
+			[&](const TDF_Label& label, const TopLoc_Location& parentLoc, int level) {
 				TopLoc_Location ownLoc = shapeTool->GetLocation(label);
 				TopLoc_Location globLoc = parentLoc * ownLoc;
 
@@ -1398,17 +1398,28 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 					TDF_LabelSequence children;
 					shapeTool->GetComponents(label, children);
 					for (int k = 1; k <= children.Length(); ++k) {
-						processLabel(children.Value(k), globLoc);
+						processLabel(children.Value(k), globLoc, level + 1);
 					}
 					return;
 				}
 
 				if (!shapeTool->IsShape(label)) return;
 
-				TopoDS_Shape shape = shapeTool->GetShape(label);
+				// Resolve referenced shape (instance) and compose full location
+				TDF_Label srcLabel = label;
+				TopLoc_Location srcLoc; // identity by default
+				if (shapeTool->IsReference(label)) {
+					TDF_Label referred;
+					if (shapeTool->GetReferredShape(label, referred)) {
+						srcLabel = referred;
+						srcLoc = shapeTool->GetLocation(srcLabel);
+					}
+				}
+
+				TopoDS_Shape shape = shapeTool->GetShape(srcLabel);
 				if (shape.IsNull()) return;
-				TopoDS_Shape located = shape;
-				if (!globLoc.IsIdentity()) located = shape.Moved(globLoc);
+				TopLoc_Location finalLoc = globLoc * srcLoc;
+				TopoDS_Shape located = finalLoc.IsIdentity() ? shape : shape.Moved(finalLoc);
 
 				std::string compName = baseName + "_Component_" + std::to_string(componentIndex);
 				Handle(TDataStd_Name) nameAttr;
@@ -1417,6 +1428,15 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 					std::string converted = safeConvertExtendedString(extStr);
 					if (!converted.empty() && converted != "UnnamedComponent") compName = converted;
 				}
+				// Fallback: try name on referenced/origin label
+				if (compName == baseName + "_Component_" + std::to_string(componentIndex)) {
+					Handle(TDataStd_Name) refNameAttr;
+					if (srcLabel.FindAttribute(TDataStd_Name::GetID(), refNameAttr)) {
+						TCollection_ExtendedString extStr = refNameAttr->Get();
+						std::string converted = safeConvertExtendedString(extStr);
+						if (!converted.empty() && converted != "UnnamedComponent") compName = converted;
+					}
+				}
 
 				Quantity_Color cafColor;
 				bool hasCafColor = false;
@@ -1424,6 +1444,12 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 					hasCafColor = colorTool->GetColor(label, XCAFDoc_ColorGen, cafColor) ||
 								   colorTool->GetColor(label, XCAFDoc_ColorSurf, cafColor) ||
 								   colorTool->GetColor(label, XCAFDoc_ColorCurv, cafColor);
+					// Fallback: try color on referenced/origin label
+					if (!hasCafColor) {
+						hasCafColor = colorTool->GetColor(srcLabel, XCAFDoc_ColorGen, cafColor) ||
+									   colorTool->GetColor(srcLabel, XCAFDoc_ColorSurf, cafColor) ||
+									   colorTool->GetColor(srcLabel, XCAFDoc_ColorCurv, cafColor);
+					}
 				}
 
 				auto parts = decomposeByLevelUsingTopo(located, options.decomposition.level);
@@ -1460,6 +1486,7 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 					geom->setShape(part);
 					geom->setColor(color);
 					geom->setTransparency(0.0);
+					geom->setAssemblyLevel(level);
 					result.geometries.push_back(geom);
 
 					STEPEntityInfo info;
@@ -1477,7 +1504,7 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 			};
 
 		for (int i = 1; i <= freeShapes.Length(); ++i) {
-			processLabel(freeShapes.Value(i), TopLoc_Location());
+			processLabel(freeShapes.Value(i), TopLoc_Location(), 0);
 		}
 
 		if (progress) progress(80, "process components");

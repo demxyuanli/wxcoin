@@ -28,8 +28,10 @@ set_target_properties(UIPanels PROPERTIES FOLDER "UI")
 add_library(UIDialogGeometry STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/PositionBasicDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VisualSettingsDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExplodeConfigDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/PositionBasicDialog.h
     ${CMAKE_SOURCE_DIR}/include/VisualSettingsDialog.h
+    ${CMAKE_SOURCE_DIR}/include/ExplodeConfigDialog.h
     ${CMAKE_SOURCE_DIR}/include/GeometryDialogTypes.h
 )
 target_include_directories(UIDialogGeometry PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
