@@ -43,9 +43,8 @@ private:
     std::chrono::steady_clock::time_point m_lastResizeTime;
     wxTimer* m_highQualityTimer{nullptr};
     
-    // Quality settings
-    int m_lowQualityAntiAliasing{0};  // No AA during resize
-    int m_highQualityAntiAliasing{4}; // Full AA when static
+    // Note: Since RenderingEngine doesn't expose quality settings,
+    // we use the fastMode parameter of render() method instead
     
     void onHighQualityTimer(wxTimerEvent& event);
     

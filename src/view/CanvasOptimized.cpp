@@ -1,27 +1,25 @@
 #include "view/CanvasOptimized.h"
 #include "RenderingEngine.h"
+#include "SceneManager.h"
 #include "logger/Logger.h"
 #include <wx/dcclient.h>
 
 wxBEGIN_EVENT_TABLE(CanvasOptimized, Canvas)
-    EVT_PAINT(CanvasOptimized::onPaint)
-    EVT_SIZE(CanvasOptimized::onSize)
     EVT_TIMER(wxID_ANY, CanvasOptimized::onHighQualityTimer)
 wxEND_EVENT_TABLE()
 
 CanvasOptimized::CanvasOptimized(wxWindow* parent, wxWindowID id, 
                                  const wxPoint& pos, const wxSize& size,
                                  long style, const wxString& name)
-    : Canvas(parent, id, pos, size, style, name)
+    : Canvas(parent, id, pos, size)  // Canvas only takes 5 parameters
     , m_lastResizeTime(std::chrono::steady_clock::now())
 {
     // Initialize high quality render timer
     m_highQualityTimer = new wxTimer(this);
     
-    // Store original antialiasing setting
-    if (m_renderingEngine) {
-        m_highQualityAntiAliasing = m_renderingEngine->getAntiAliasing();
-    }
+    // Bind our own event handlers with higher priority
+    Bind(wxEVT_SIZE, &CanvasOptimized::onSize, this);
+    Bind(wxEVT_PAINT, &CanvasOptimized::onPaint, this);
 }
 
 CanvasOptimized::~CanvasOptimized() {
@@ -34,18 +32,22 @@ CanvasOptimized::~CanvasOptimized() {
 }
 
 void CanvasOptimized::onPaint(wxPaintEvent& event) {
-    if (!m_progressiveRenderingEnabled) {
-        // Use standard painting if progressive rendering is disabled
-        Canvas::onPaint(event);
+    if (!m_progressiveRenderingEnabled || !m_isResizing) {
+        // Use normal rendering
+        wxPaintDC dc(this);
+        render(false);
         return;
     }
     
-    // Progressive rendering logic
-    if (m_isResizing) {
-        renderLowQuality();
-    } else {
-        renderHighQuality();
-    }
+    // Use fast rendering during resize
+    wxPaintDC dc(this);
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    render(true);  // Fast mode
+    auto end = std::chrono::high_resolution_clock::now();
+    
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    LOG_DBG_S("Fast render during resize: " + std::to_string(duration) + "ms");
 }
 
 void CanvasOptimized::onSize(wxSizeEvent& event) {
@@ -62,71 +64,24 @@ void CanvasOptimized::onSize(wxSizeEvent& event) {
     // Schedule high quality render after resize stabilizes
     scheduleHighQualityRender();
     
-    // Call base class handler
-    Canvas::onSize(event);
+    // Update size
+    RenderingEngine* engine = getRenderingEngine();
+    if (engine) {
+        engine->handleResize(event.GetSize());
+    }
+    
+    // Trigger repaint
+    Refresh(false);
 }
 
 void CanvasOptimized::renderLowQuality() {
-    wxPaintDC dc(this);
-    
-    if (!m_renderingEngine || !m_sceneManager) {
-        return;
-    }
-    
-    // Temporarily disable antialiasing for fast rendering
-    int originalAA = m_renderingEngine->getAntiAliasing();
-    m_renderingEngine->setAntiAliasing(m_lowQualityAntiAliasing);
-    
-    // Disable expensive features during resize
-    bool originalShadows = m_renderingEngine->getShadowsEnabled();
-    bool originalReflections = m_renderingEngine->getReflectionsEnabled();
-    
-    m_renderingEngine->setShadowsEnabled(false);
-    m_renderingEngine->setReflectionsEnabled(false);
-    
-    // Render with reduced quality
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    m_renderingEngine->beginFrame();
-    m_sceneManager->render();
-    m_renderingEngine->endFrame();
-    SwapBuffers();
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
-    // Log performance
-    LOG_DBG_S("Low quality render: " + std::to_string(duration) + "ms");
-    
-    // Restore settings
-    m_renderingEngine->setAntiAliasing(originalAA);
-    m_renderingEngine->setShadowsEnabled(originalShadows);
-    m_renderingEngine->setReflectionsEnabled(originalReflections);
+    // Simply use fast mode rendering
+    render(true);
 }
 
 void CanvasOptimized::renderHighQuality() {
-    wxPaintDC dc(this);
-    
-    if (!m_renderingEngine || !m_sceneManager) {
-        return;
-    }
-    
-    // Ensure high quality settings
-    m_renderingEngine->setAntiAliasing(m_highQualityAntiAliasing);
-    
-    // Standard high quality render
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    m_renderingEngine->beginFrame();
-    m_sceneManager->render();
-    m_renderingEngine->endFrame();
-    SwapBuffers();
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
-    // Log performance
-    LOG_DBG_S("High quality render: " + std::to_string(duration) + "ms");
+    // Use normal quality rendering
+    render(false);
     
     // Clear flags
     m_isResizing = false;
