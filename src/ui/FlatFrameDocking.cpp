@@ -1132,9 +1132,13 @@ void FlatFrameDocking::ApplyDynamicLayoutAdjustmentOptimized(ads::DockContainerW
         // Use a more efficient bottom splitter search
         wxWindow* bottomArea = nullptr;
         for (auto* area : container->dockAreas()) {
-            if (area && (area == m_messageDock || area == m_performanceDock)) {
-                bottomArea = area->GetParent();
-                break;
+            if (area) {
+                // Check if this area contains our message or performance dock
+                if ((m_messageDock && area == m_messageDock->dockAreaWidget()) ||
+                    (m_performanceDock && area == m_performanceDock->dockAreaWidget())) {
+                    bottomArea = area->GetParent();
+                    break;
+                }
             }
         }
         
