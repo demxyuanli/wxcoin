@@ -1,6 +1,7 @@
 #include "OCCGeometry.h"
 #include "rendering/RenderingToolkitAPI.h"
 #include "logger/Logger.h"
+#include <algorithm>
 #include <Standard_ConstructionError.hxx>
 #include <Standard_Failure.hxx>
 #include "config/RenderingConfig.h"
@@ -811,6 +812,46 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 			LOG_INF_S("Skipping edge generation for geometry (edge display disabled): " + m_name);
 		}
 	}
+}
+
+void OCCGeometry::addLODLevel(double distance, double deflection) {
+    m_lodLevels.push_back({distance, deflection});
+    // Sort by distance
+    std::sort(m_lodLevels.begin(), m_lodLevels.end(),
+        [](const auto& a, const auto& b) { return a.first < b.first; });
+}
+
+int OCCGeometry::getLODLevel(double viewDistance) const {
+    if (!m_lodEnabled || m_lodLevels.empty()) {
+        return 0;
+    }
+    
+    for (size_t i = 0; i < m_lodLevels.size(); ++i) {
+        if (viewDistance <= m_lodLevels[i].first) {
+            return static_cast<int>(i);
+        }
+    }
+    
+    return static_cast<int>(m_lodLevels.size() - 1);
+}
+
+void OCCGeometry::releaseTemporaryData() {
+    // Release any cached tessellation data that can be regenerated
+    if (m_coinNode) {
+        // Keep the node but release large data structures if possible
+        // This would require more detailed management of Coin3D data
+    }
+}
+
+void OCCGeometry::optimizeMemory() {
+    // Optimize internal data structures
+    // This could include:
+    // - Compacting vectors
+    // - Releasing unused memory
+    // - Optimizing OpenCASCADE shape representations
+    
+    // For now, just ensure vectors are sized appropriately
+    m_lodLevels.shrink_to_fit();
 }
 
 void OCCGeometry::createWireframeRepresentation(const MeshParameters& params)
