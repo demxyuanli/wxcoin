@@ -165,7 +165,6 @@ bool DockContainerOptimized::shouldSkipLayout() const {
     return false;
 }
 
-// Helper method to efficiently adjust splitters
 void DockContainerOptimized::adjustSplitterEfficient(DockSplitter* splitter, 
                                                     int targetLeftWidth, 
                                                     int targetBottomHeight) {

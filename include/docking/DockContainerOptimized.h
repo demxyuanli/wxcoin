@@ -23,6 +23,7 @@ protected:
     void updateLayoutIncremental();
     void schedulePaintRegions();
     bool shouldSkipLayout() const;
+    void adjustSplitterEfficient(DockSplitter* splitter, int targetLeftWidth, int targetBottomHeight);
     
 private:
     // Performance tracking

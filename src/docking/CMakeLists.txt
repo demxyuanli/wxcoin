@@ -11,6 +11,7 @@ set(DOCKING_SOURCES
     DockContainerWidget.cpp
     DockContainerLayout.cpp
     DockContainerUtils.cpp
+    DockContainerOptimized.cpp
     FloatingDockContainer.cpp
     FloatingDockFrame.cpp
     DockOverlay.cpp
@@ -20,6 +21,7 @@ set(DOCKING_SOURCES
     DockLayoutConfig.cpp
     DockLayoutConfigDialog.cpp
     DockLayoutPreview.cpp
+    DockResizeMonitor.cpp
 )
 
 set(DOCKING_HEADERS
@@ -28,6 +30,7 @@ set(DOCKING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/docking/DockArea.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockSplitter.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockContainerWidget.h
+    ${CMAKE_SOURCE_DIR}/include/docking/DockContainerOptimized.h
     ${CMAKE_SOURCE_DIR}/include/docking/FloatingDockContainer.h
     ${CMAKE_SOURCE_DIR}/include/docking/FloatingDockFrame.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockOverlay.h
@@ -35,6 +38,7 @@ set(DOCKING_HEADERS
     ${CMAKE_SOURCE_DIR}/include/docking/AutoHideContainer.h
     ${CMAKE_SOURCE_DIR}/include/docking/PerspectiveManager.h
     ${CMAKE_SOURCE_DIR}/include/docking/DockLayoutConfig.h
+    ${CMAKE_SOURCE_DIR}/include/docking/DockResizeMonitor.h
 )
 
 # Create docking library
