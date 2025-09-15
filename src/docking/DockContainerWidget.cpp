@@ -41,10 +41,15 @@ DockContainerWidget::DockContainerWidget(DockManager* dockManager, wxWindow* par
     , m_layoutUpdateTimer(nullptr)
     , m_lastContainerSize(wxSize(0, 0))
     , m_hasUserAdjustedLayout(false)
+    , m_isResizeFreezeActive(false)
+    , m_isResizing(false)
 {
     // Create layout
     m_layout = new wxBoxSizer(wxVERTICAL);
     SetSizer(m_layout);
+
+    // Enable double buffering for smoother resize repaint
+    SetDoubleBuffered(true);
 
     // Create root splitter
     m_rootSplitter = new DockSplitter(this);
@@ -307,15 +312,30 @@ void DockContainerWidget::onResizeTimer(wxTimerEvent& event) {
     
     // Note: Individual dock areas will handle their own refresh with debounce
     // No need to force refresh all areas here as it causes performance issues
+
+    // Clear resizing flag after debounce fires and we apply config
+    m_isResizing = false;
 }
 
 void DockContainerWidget::onLayoutUpdateTimer(wxTimerEvent& event) {
     // Perform the actual layout update and refresh
+    // Coalesce painting during final layout
+    if (!m_isResizeFreezeActive) {
+        Freeze();
+        m_isResizeFreezeActive = true;
+    }
+
     Layout();
     
     // Use RefreshRect for specific areas instead of full refresh for better performance
     wxRect dirtyRect = GetClientRect();
     RefreshRect(dirtyRect, false);
+
+    // Thaw once after coalesced updates
+    if (m_isResizeFreezeActive) {
+        Thaw();
+        m_isResizeFreezeActive = false;
+    }
 }
 
 void DockContainerWidget::onSize(wxSizeEvent& event) {
@@ -323,12 +343,21 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
     
     // Use proportional resize if we have cached ratios and user has adjusted layout
     if (m_hasUserAdjustedLayout && m_lastContainerSize.GetWidth() > 0 && m_lastContainerSize.GetHeight() > 0) {
+        // Rebuild ratios to avoid dangling splitter pointers after structural changes
+        cacheSplitterRatios();
         applyProportionalResize(m_lastContainerSize, newSize);
         m_lastContainerSize = newSize;
         event.Skip();
         return;
     }
     
+    // Mark resizing and freeze early to avoid flicker while dragging the frame sash
+    m_isResizing = true;
+    if (!m_isResizeFreezeActive) {
+        Freeze();
+        m_isResizeFreezeActive = true;
+    }
+
     // Use debounced layout update to prevent excessive recalculations during resize
     if (!m_resizeTimer) {
         m_resizeTimer = new wxTimer(this);
@@ -340,8 +369,8 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
         m_resizeTimer->Stop();
     }
 
-    // Schedule layout update with debounce delay
-    m_resizeTimer->Start(16, wxTIMER_ONE_SHOT); // ~60fps debounce
+    // Schedule layout update with slightly lower rate to cut CPU usage
+    m_resizeTimer->Start(24, wxTIMER_ONE_SHOT); // ~40-50fps debounce
 
     // Update global docking hints if in global mode
     updateGlobalDockingHints();

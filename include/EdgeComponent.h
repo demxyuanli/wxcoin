@@ -10,6 +10,7 @@
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include "EdgeTypes.h"
 #include "rendering/GeometryProcessor.h"
+#include <mutex>
 
 class EdgeComponent {
 public:
@@ -46,6 +47,7 @@ private:
     SoSeparator* normalLineNode = nullptr;
     SoSeparator* faceNormalLineNode = nullptr;
     SoSeparator* silhouetteEdgeNode = nullptr;  // New: silhouette edge node
+    mutable std::mutex m_nodeMutex;
 
 public:
     // Friend class to allow OCCViewer access to silhouetteEdgeNode

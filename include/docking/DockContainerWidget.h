@@ -62,6 +62,8 @@ public:
     
     // Last added area
     DockArea* lastAddedDockArea() const { return m_lastAddedArea; }
+    // Resize state
+    bool isResizeInProgress() const { return m_isResizing; }
     
     // Layout configuration
     void applyLayoutConfig();
@@ -121,6 +123,9 @@ private:
     std::vector<SplitterRatio> m_splitterRatios;
     wxSize m_lastContainerSize;
     bool m_hasUserAdjustedLayout;
+    // Resize coalescing
+    bool m_isResizeFreezeActive;
+    bool m_isResizing;
     
     // Helper methods
     void dropFloatingWidget(FloatingDockContainer* floatingWidget, const wxPoint& targetPos);

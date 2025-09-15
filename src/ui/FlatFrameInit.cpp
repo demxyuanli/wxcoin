@@ -252,6 +252,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	FlatUIButtonBar* assemblyButtonBar = new FlatUIButtonBar(assemblyPanel);
 	assemblyButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	assemblyButtonBar->AddToggleButton(ID_EXPLODE_ASSEMBLY, "Explode", false, SVG_ICON("expand", wxSize(16, 16)), "Toggle exploded view for assemblies");
+	// Extra: we will open a small slider when explode is active
 	// Remove separate config button to match requirement: clicking Explode opens config first
 	assemblyPanel->AddButtonBar(assemblyButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(assemblyPanel);

@@ -60,6 +60,9 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
     m_layout = new wxBoxSizer(wxVERTICAL);
     SetSizer(m_layout);
 
+    // Enable double buffering to avoid flicker during container resize
+    SetDoubleBuffered(true);
+
     // Create merged title bar (combines tabs and title buttons)
     m_mergedTitleBar = new DockAreaMergedTitleBar(this);
     m_layout->Add(m_mergedTitleBar, 0, wxEXPAND | wxALL, 0);
@@ -542,10 +545,7 @@ void DockArea::markTitleBarMenuOutdated() {
 }
 
 void DockArea::onSize(wxSizeEvent& event) {
-    // Defer refresh to prevent excessive redraws during resize
-    // The merged title bar will handle its own refresh with debounce
-    // No need to force refresh here as it causes performance issues
-
+    // Avoid heavy work here; let parent container coalesce updates
     event.Skip();
 }
 

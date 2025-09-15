@@ -116,6 +116,24 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 	if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
 		CommandResult result = m_listenerManager->dispatch(commandType, parameters);
 		onCommandFeedback(result);
+		// If explode state toggled on, show inline slider to adjust factor in real-time
+		if (commandType == cmd::CommandType::ExplodeAssembly && m_occViewer) {
+			if (m_occViewer->isExplodeEnabled()) {
+				// Create a lightweight modeless slider window
+				wxDialog* sliderDlg = new wxDialog(this, wxID_ANY, "Explode Factor", wxDefaultPosition, wxSize(260, 80), wxDEFAULT_DIALOG_STYLE | wxSTAY_ON_TOP);
+				wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+				ExplodeMode tmpMode; double tmpFactor; m_occViewer->getExplodeParams(tmpMode, tmpFactor);
+				wxSlider* slider = new wxSlider(sliderDlg, wxID_ANY, int(tmpFactor * 100), 1, 1000);
+				sizer->Add(slider, 1, wxEXPAND | wxALL, 6);
+				sliderDlg->SetSizerAndFit(sizer);
+				slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent& e) {
+					double f = std::max(0.01, e.GetInt() / 100.0);
+					m_occViewer->setExplodeEnabled(true, f);
+				});
+				sliderDlg->Bind(wxEVT_CLOSE_WINDOW, [this, sliderDlg](wxCloseEvent&){ sliderDlg->Destroy(); });
+				sliderDlg->Show();
+			}
+		}
 	}
 	else {
 		SetStatusText("Error: No listener registered", 0);

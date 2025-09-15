@@ -37,6 +37,9 @@ DockAreaTabBar::DockAreaTabBar(DockArea* dockArea)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetMinSize(wxSize(-1, 30));
+
+    // Improve visual smoothness on resize
+    SetDoubleBuffered(true);
 }
 
 DockAreaTabBar::~DockAreaTabBar() {
@@ -684,9 +687,10 @@ void DockAreaTabBar::drawTab(wxDC& dc, int index) {
 }
 
 void DockAreaTabBar::onSize(wxSizeEvent& event) {
+    // Cheap work now; actual repaint is coalesced by parent/container
     checkTabOverflow();
     updateTabRects();
-    Refresh();
+    Refresh(false);
     event.Skip();
 }
 

@@ -180,10 +180,16 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.DrawRectangle(clientRect);
 
-    // Draw decorative pattern on title bar
-    wxLogDebug("DockAreaMergedTitleBar::onPaint - Drawing pattern on rect: %dx%d at (%d,%d)", 
-               clientRect.width, clientRect.height, clientRect.x, clientRect.y);
-    drawTitleBarPattern(dc, clientRect);
+    // Draw decorative pattern on title bar (skip during active resize)
+    bool skipHeavyDecor = false;
+    if (m_dockArea && m_dockArea->dockContainer()) {
+        if (DockContainerWidget* c = m_dockArea->dockContainer()) {
+            skipHeavyDecor = c->isResizeInProgress();
+        }
+    }
+    if (!skipHeavyDecor) {
+        drawTitleBarPattern(dc, clientRect);
+    }
 
     // Draw bottom border
     dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
@@ -1360,8 +1366,7 @@ void DockAreaMergedTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
     // Draw decorative horizontal dot bar between tabs and buttons
     // Create a 3x5 pixel dot pattern decoration in the middle area
     
-    wxLogDebug("DockAreaMergedTitleBar::drawTitleBarPattern - Drawing horizontal dot bar on rect: %dx%d at (%d,%d)", 
-               rect.width, rect.height, rect.x, rect.y);
+    // Reduced logging to avoid paint-time overhead
     
     // Save current pen and brush
     wxPen oldPen = dc.GetPen();
@@ -1437,8 +1442,7 @@ void DockAreaMergedTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
             patternCount++;
         }
         
-        wxLogDebug("DockAreaMergedTitleBar::drawTitleBarPattern - Drawing tiling pattern from x=%d to x=%d, patterns=%d", 
-                   leftX, rightX, patternCount);
+        // Reduced logging to avoid paint-time overhead
     }
     
     // Restore original pen and brush

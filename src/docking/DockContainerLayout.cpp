@@ -981,7 +981,20 @@ void DockContainerWidget::applyProportionalResize(const wxSize& oldSize, const w
         }
         
         DockSplitter* splitter = dynamic_cast<DockSplitter*>(ratio.splitter);
-        if (!splitter || !splitter->IsSplit()) {
+        if (!splitter) {
+            continue;
+        }
+        // Extra safety: skip if window being destroyed or detached
+        if (splitter->IsBeingDeleted()) {
+            continue;
+        }
+        if (!splitter->GetParent()) {
+            continue;
+        }
+        if (!splitter->GetWindow1() || !splitter->GetWindow2()) {
+            continue;
+        }
+        if (!splitter->IsSplit()) {
             continue;
         }
         
@@ -999,9 +1012,10 @@ void DockContainerWidget::applyProportionalResize(const wxSize& oldSize, const w
         
         // Ensure position is within valid range
         int minSize = splitter->GetMinimumPaneSize();
+        if (minSize < 1) minSize = 1;
         int maxPosition = (splitter->GetSplitMode() == wxSPLIT_VERTICAL) ? 
-                         splitterSize.GetWidth() - minSize : 
-                         splitterSize.GetHeight() - minSize;
+                         std::max(2, splitterSize.GetWidth() - minSize) : 
+                         std::max(2, splitterSize.GetHeight() - minSize);
         
         newPosition = std::max(minSize, std::min(newPosition, maxPosition));
         
@@ -1034,6 +1048,10 @@ void DockContainerWidget::collectSplitterRatios(wxWindow* window) {
     
     DockSplitter* splitter = dynamic_cast<DockSplitter*>(window);
     if (splitter && splitter->IsSplit()) {
+        if (splitter->IsBeingDeleted()) {
+            // Skip dead splitters
+            return;
+        }
         SplitterRatio ratio;
         ratio.splitter = splitter;
         ratio.isValid = true;
@@ -1059,7 +1077,7 @@ void DockContainerWidget::collectSplitterRatios(wxWindow* window) {
         }
         
         // Ensure ratio is within valid range
-        ratio.ratio = std::max(0.1, std::min(0.9, ratio.ratio));
+        ratio.ratio = std::max(0.05, std::min(0.95, ratio.ratio));
         
         m_splitterRatios.push_back(ratio);
         

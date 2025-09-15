@@ -117,20 +117,22 @@ void EdgeDisplayManager::startAsyncFeatureEdgeGeneration(double featureAngleDeg,
 			if (!g) continue;
 			if (!g->edgeComponent) g->edgeComponent = std::make_unique<EdgeComponent>();
 			if (m_flags.showFeatureEdges && g->edgeComponent->getEdgeNode(EdgeType::Feature) == nullptr) {
+				// Worker thread: compute feature edge geometry only
 				g->edgeComponent->extractFeatureEdges(g->getShape(), m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave);
-				EdgeRenderApplier applier;
-				applier.applyFeatureAppearance(g, g->getEdgeColor(), g->getEdgeWidth(), false);
-				applier.applyFlagsAndAttach(g, m_flags);
 			}
 			done++;
 			m_featureEdgeProgress = static_cast<int>(static_cast<double>(done) / std::max(1, total) * 100.0);
-			if (m_sceneManager && m_sceneManager->getCanvas() && (done % 2 == 0)) {
-				if (auto* rm = m_sceneManager->getCanvas()->getRefreshManager()) rm->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED);
-			}
 		}
 		m_featureEdgeRunning = false;
 		m_featureCacheValid = true;
-		updateAll(meshParams);
+		// Back to UI thread to apply appearance/attach and refresh
+		if (m_sceneManager && m_sceneManager->getCanvas()) {
+			m_sceneManager->getCanvas()->CallAfter([this, meshParams]() {
+				updateAll(meshParams);
+			});
+		} else {
+			updateAll(meshParams);
+		}
 		});
 }
 
@@ -147,7 +149,10 @@ void EdgeDisplayManager::applyFeatureEdgeAppearance(const Quantity_Color& color,
 		g->setFacesVisible(!edgesOnly);
 		if (g->edgeComponent) {
 			g->edgeComponent->edgeFlags = m_flags;
-			g->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width);
+			// Guard in case feature node not built yet
+			if (g->edgeComponent->getEdgeNode(EdgeType::Feature)) {
+				g->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width);
+			}
 			g->updateEdgeDisplay();
 		}
 	}

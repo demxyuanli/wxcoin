@@ -601,20 +601,25 @@ void EdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
 }
 
 void EdgeComponent::applyAppearanceToEdgeNode(EdgeType type, const Quantity_Color& color, double width) {
+	std::lock_guard<std::mutex> lock(m_nodeMutex);
 	SoSeparator* node = getEdgeNode(type);
 	if (!node) return;
 
 	// Update material color if present
-	for (int i = 0; i < node->getNumChildren(); ++i) {
-		SoMaterial* mat = dynamic_cast<SoMaterial*>(node->getChild(i));
-		if (mat) {
+	const int childCount = node->getNumChildren();
+	if (childCount <= 0) return;
+	for (int i = 0; i < childCount; ++i) {
+		SoNode* child = node->getChild(i);
+		if (!child) continue;
+		if (SoMaterial* mat = dynamic_cast<SoMaterial*>(child)) {
 			Standard_Real r, g, b;
 			color.Values(r, g, b, Quantity_TOC_RGB);
 			mat->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+			continue;
 		}
-		SoDrawStyle* style = dynamic_cast<SoDrawStyle*>(node->getChild(i));
-		if (style) {
+		if (SoDrawStyle* style = dynamic_cast<SoDrawStyle*>(child)) {
 			style->lineWidth = static_cast<float>(std::max(0.1, std::min(10.0, width)));
+			continue;
 		}
 	}
 }

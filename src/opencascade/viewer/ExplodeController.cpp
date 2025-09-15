@@ -26,11 +26,21 @@ void ExplodeController::setParams(ExplodeMode mode, double factor) {
 
 void ExplodeController::apply(const std::vector<std::shared_ptr<OCCGeometry>>& geometries) {
 	if (!m_enabled || geometries.size() <= 1) return;
-	// Store originals once when applying
-	m_originalPositions.clear();
-	for (auto& g : geometries) {
-		if (!g) continue;
-		m_originalPositions[g->getName()] = g->getPosition();
+	// Store originals only once; on subsequent apply calls, reset to originals to avoid cumulative offsets
+	if (m_originalPositions.empty()) {
+		for (auto& g : geometries) {
+			if (!g) continue;
+			m_originalPositions[g->getName()] = g->getPosition();
+		}
+	}
+	else {
+		for (auto& g : geometries) {
+			if (!g) continue;
+			auto it = m_originalPositions.find(g->getName());
+			if (it != m_originalPositions.end()) {
+				g->setPosition(it->second);
+			}
+		}
 	}
 	computeAndApplyOffsets(geometries);
 }
@@ -97,6 +107,24 @@ void ExplodeController::computeAndApplyOffsets(const std::vector<std::shared_ptr
 			dir = gp_Vec(0, 0, sign);
 			break;
 		}
+        case ExplodeMode::StackX: {
+            // Order by X and push apart along +X by index
+            dir = gp_Vec(1, 0, 0);
+            break;
+        }
+        case ExplodeMode::StackY: {
+            dir = gp_Vec(0, 1, 0);
+            break;
+        }
+        case ExplodeMode::StackZ: {
+            dir = gp_Vec(0, 0, 1);
+            break;
+        }
+        case ExplodeMode::Diagonal: {
+            dir = gp_Vec(1, 1, 1);
+            dir.Normalize();
+            break;
+        }
 		}
 		gp_Pnt newPos(pos.X() + dir.X() * baseOffset, pos.Y() + dir.Y() * baseOffset, pos.Z() + dir.Z() * baseOffset);
 		g->setPosition(newPos);

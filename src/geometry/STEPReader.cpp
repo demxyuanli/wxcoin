@@ -43,6 +43,7 @@
 #include <BRep_Builder.hxx>
 #include <GProp_GProps.hxx>
 #include <BRepGProp.hxx>
+#include <TopLoc_Location.hxx>
 
 // File system includes
 #include <filesystem>
@@ -52,6 +53,7 @@
 #include <string>
 #include <locale>
 #include <codecvt>
+#include <functional>
 
 // GeometryReader interface implementation
 GeometryReader::ReadResult STEPReader::readFile(const std::string& filePath,
@@ -129,6 +131,100 @@ static std::string safeConvertExtendedString(const TCollection_ExtendedString& e
 	}
 	
 	return result.empty() ? "UnnamedComponent" : result;
+}
+
+// Palette helper for decomposition coloring
+static std::vector<Quantity_Color> getPaletteForScheme(GeometryReader::ColorScheme scheme) {
+	using CS = GeometryReader::ColorScheme;
+	switch (scheme) {
+	case CS::WARM_COLORS:
+		// High-contrast warm palette (reds/oranges/yellows with large luminance gaps)
+		return {
+			Quantity_Color(0.90, 0.12, 0.14, Quantity_TOC_RGB), // strong red
+			Quantity_Color(1.00, 0.45, 0.00, Quantity_TOC_RGB), // vivid orange
+			Quantity_Color(0.99, 0.76, 0.07, Quantity_TOC_RGB), // bright yellow
+			Quantity_Color(0.60, 0.00, 0.00, Quantity_TOC_RGB), // dark red
+			Quantity_Color(0.95, 0.30, 0.55, Quantity_TOC_RGB), // pink
+			Quantity_Color(0.70, 0.35, 0.00, Quantity_TOC_RGB)  // brownish orange
+		};
+	case CS::RAINBOW:
+		// Saturated rainbow with perceptual spacing
+		return {
+			Quantity_Color(0.90, 0.12, 0.14, Quantity_TOC_RGB), // red
+			Quantity_Color(1.00, 0.50, 0.00, Quantity_TOC_RGB), // orange
+			Quantity_Color(0.99, 0.76, 0.07, Quantity_TOC_RGB), // yellow
+			Quantity_Color(0.20, 0.70, 0.00, Quantity_TOC_RGB), // green
+			Quantity_Color(0.00, 0.65, 0.75, Quantity_TOC_RGB), // cyan
+			Quantity_Color(0.12, 0.47, 0.71, Quantity_TOC_RGB), // blue
+			Quantity_Color(0.42, 0.24, 0.60, Quantity_TOC_RGB)  // purple
+		};
+	case CS::MONOCHROME_BLUE:
+		// Wide-spread blues from dark to light
+		return {
+			Quantity_Color(0.10, 0.18, 0.30, Quantity_TOC_RGB),
+			Quantity_Color(0.12, 0.47, 0.71, Quantity_TOC_RGB),
+			Quantity_Color(0.17, 0.63, 0.88, Quantity_TOC_RGB),
+			Quantity_Color(0.40, 0.76, 1.00, Quantity_TOC_RGB),
+			Quantity_Color(0.70, 0.86, 1.00, Quantity_TOC_RGB)
+		};
+	case CS::MONOCHROME_GREEN:
+		// Wide-spread greens from dark to light
+		return {
+			Quantity_Color(0.05, 0.30, 0.10, Quantity_TOC_RGB),
+			Quantity_Color(0.20, 0.60, 0.20, Quantity_TOC_RGB),
+			Quantity_Color(0.33, 0.75, 0.29, Quantity_TOC_RGB),
+			Quantity_Color(0.60, 0.85, 0.35, Quantity_TOC_RGB),
+			Quantity_Color(0.80, 0.93, 0.60, Quantity_TOC_RGB)
+		};
+	case CS::MONOCHROME_GRAY:
+		// High-contrast grays
+		return {
+			Quantity_Color(0.15, 0.15, 0.15, Quantity_TOC_RGB),
+			Quantity_Color(0.35, 0.35, 0.35, Quantity_TOC_RGB),
+			Quantity_Color(0.55, 0.55, 0.55, Quantity_TOC_RGB),
+			Quantity_Color(0.75, 0.75, 0.75, Quantity_TOC_RGB),
+			Quantity_Color(0.90, 0.90, 0.90, Quantity_TOC_RGB)
+		};
+	case CS::DISTINCT_COLORS:
+	default:
+		// High-contrast categorical palette (inspired by Tableau/Tol)
+		return {
+			Quantity_Color(0.12, 0.47, 0.71, Quantity_TOC_RGB), // blue
+			Quantity_Color(1.00, 0.50, 0.05, Quantity_TOC_RGB), // orange
+			Quantity_Color(0.17, 0.63, 0.17, Quantity_TOC_RGB), // green
+			Quantity_Color(0.84, 0.15, 0.16, Quantity_TOC_RGB), // red
+			Quantity_Color(0.58, 0.40, 0.74, Quantity_TOC_RGB), // purple
+			Quantity_Color(0.55, 0.34, 0.29, Quantity_TOC_RGB), // brown
+			Quantity_Color(0.89, 0.47, 0.76, Quantity_TOC_RGB), // pink
+			Quantity_Color(0.50, 0.50, 0.50, Quantity_TOC_RGB), // gray
+			Quantity_Color(0.74, 0.74, 0.13, Quantity_TOC_RGB), // olive
+			Quantity_Color(0.09, 0.75, 0.81, Quantity_TOC_RGB), // cyan
+			Quantity_Color(0.35, 0.31, 0.64, Quantity_TOC_RGB), // indigo
+			Quantity_Color(0.95, 0.90, 0.25, Quantity_TOC_RGB)  // bright yellow
+		};
+	}
+}
+
+static std::vector<TopoDS_Shape> decomposeByLevelUsingTopo(const TopoDS_Shape& shape, GeometryReader::DecompositionLevel level) {
+	std::vector<TopoDS_Shape> out;
+	if (shape.IsNull()) return out;
+	using DL = GeometryReader::DecompositionLevel;
+	if (level == DL::NO_DECOMPOSITION || level == DL::SHAPE_LEVEL) {
+		out.push_back(shape);
+		return out;
+	}
+	TopAbs_ShapeEnum target = TopAbs_SHAPE;
+	switch (level) {
+	case DL::SOLID_LEVEL: target = TopAbs_SOLID; break;
+	case DL::SHELL_LEVEL: target = TopAbs_SHELL; break;
+	case DL::FACE_LEVEL: target = TopAbs_FACE; break;
+	default: target = TopAbs_SHAPE; break;
+	}
+	for (TopExp_Explorer exp(shape, target); exp.More(); exp.Next()) {
+		out.push_back(exp.Current());
+	}
+	if (out.empty()) out.push_back(shape);
+	return out;
 }
 
 // Forward declarations
@@ -1278,130 +1374,115 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 
 		if (progress) progress(60, "extract shapes");
 
-		// Process each free shape
+		// Traverse assembly tree and build components with proper locations
 		std::string baseName = std::filesystem::path(filePath).stem().string();
+		auto palette = getPaletteForScheme(options.decomposition.colorScheme);
+		std::hash<std::string> hasher;
 		int componentIndex = 0;
-		
-		LOG_INF_S("Processing " + std::to_string(freeShapes.Length()) + " components with distinct colors");
-		
-		// If only one component, try to decompose it into sub-components for better visualization
-		bool tryDecomposition = (freeShapes.Length() == 1);
-		if (tryDecomposition) {
-			LOG_INF_S("Single component detected, attempting decomposition for better color visualization");
-		}
 
-		for (int i = 1; i <= freeShapes.Length(); i++) {
-			TDF_Label label = freeShapes.Value(i);
-			
-			// Get shape from label
-			TopoDS_Shape shape = shapeTool->GetShape(label);
-			if (shape.IsNull()) {
-				continue;
+		auto makeColorForName = [&](const std::string& name, const Quantity_Color* cafColor) -> Quantity_Color {
+			if (options.decomposition.useConsistentColoring) {
+				size_t idx = hasher(name) % palette.size();
+				return palette[idx];
 			}
+			if (cafColor) return *cafColor;
+			return palette[componentIndex % palette.size()];
+		};
 
-			LOG_INF_S("Processing component " + std::to_string(i) + ", shape type: " + std::to_string(shape.ShapeType()));
+		std::function<void(const TDF_Label&, const TopLoc_Location&)> processLabel =
+			[&](const TDF_Label& label, const TopLoc_Location& parentLoc) {
+				TopLoc_Location ownLoc = shapeTool->GetLocation(label);
+				TopLoc_Location globLoc = parentLoc * ownLoc;
 
-			// For single component, try to decompose into sub-shapes for better visualization
-			if (tryDecomposition && freeShapes.Length() == 1) {
-				std::vector<TopoDS_Shape> subShapes;
-				
-				// Use FreeCAD-like decomposition strategy for better results
-				LOG_INF_S("Using FreeCAD-like decomposition for single component");
-				decomposeShapeFreeCADLike(shape, subShapes);
-				
-				if (subShapes.size() > 1) {
-					LOG_INF_S("Decomposed single component into " + std::to_string(subShapes.size()) + " sub-components");
-					
-					// Process each sub-shape with different colors
-					for (size_t j = 0; j < subShapes.size(); j++) {
-						processComponent(subShapes[j], baseName + "_Part_" + std::to_string(j), 
-							componentIndex, result.geometries, result.entityMetadata);
-						componentIndex++;
+				if (shapeTool->IsAssembly(label)) {
+					TDF_LabelSequence children;
+					shapeTool->GetComponents(label, children);
+					for (int k = 1; k <= children.Length(); ++k) {
+						processLabel(children.Value(k), globLoc);
 					}
-					continue; // Skip the original single component processing
-				} else {
-					LOG_INF_S("FreeCAD-like decomposition resulted in single component, using original");
+					return;
 				}
-			}
 
-			// Get name from label
-			std::string componentName = baseName + "_Component_" + std::to_string(componentIndex);
-			Handle(TDataStd_Name) nameAttr;
-			if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
-				TCollection_ExtendedString extStr = nameAttr->Get();
-				// Convert ExtendedString to std::string safely
-				std::string convertedName = safeConvertExtendedString(extStr);
-				if (!convertedName.empty() && convertedName != "UnnamedComponent") {
-					componentName = convertedName;
+				if (!shapeTool->IsShape(label)) return;
+
+				TopoDS_Shape shape = shapeTool->GetShape(label);
+				if (shape.IsNull()) return;
+				TopoDS_Shape located = shape;
+				if (!globLoc.IsIdentity()) located = shape.Moved(globLoc);
+
+				std::string compName = baseName + "_Component_" + std::to_string(componentIndex);
+				Handle(TDataStd_Name) nameAttr;
+				if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
+					TCollection_ExtendedString extStr = nameAttr->Get();
+					std::string converted = safeConvertExtendedString(extStr);
+					if (!converted.empty() && converted != "UnnamedComponent") compName = converted;
 				}
-			}
 
-			// Get color from label
-			Quantity_Color color;
-			bool hasColor = false;
-			if (!colorTool.IsNull()) {
-				hasColor = colorTool->GetColor(label, XCAFDoc_ColorGen, color) ||
-						   colorTool->GetColor(label, XCAFDoc_ColorSurf, color) ||
-						   colorTool->GetColor(label, XCAFDoc_ColorCurv, color);
-			}
+				Quantity_Color cafColor;
+				bool hasCafColor = false;
+				if (!colorTool.IsNull()) {
+					hasCafColor = colorTool->GetColor(label, XCAFDoc_ColorGen, cafColor) ||
+								   colorTool->GetColor(label, XCAFDoc_ColorSurf, cafColor) ||
+								   colorTool->GetColor(label, XCAFDoc_ColorCurv, cafColor);
+				}
 
-			// Always generate distinct colors for better visualization (override any existing color)
-			// Generate distinct colors for components (cool tones and muted)
-			static std::vector<Quantity_Color> distinctColors = {
-				Quantity_Color(0.4, 0.5, 0.6, Quantity_TOC_RGB), // Cool Blue-Gray
-				Quantity_Color(0.3, 0.5, 0.7, Quantity_TOC_RGB), // Steel Blue
-				Quantity_Color(0.2, 0.4, 0.6, Quantity_TOC_RGB), // Deep Blue
-				Quantity_Color(0.4, 0.6, 0.7, Quantity_TOC_RGB), // Light Blue-Gray
-				Quantity_Color(0.3, 0.6, 0.5, Quantity_TOC_RGB), // Teal
-				Quantity_Color(0.2, 0.5, 0.4, Quantity_TOC_RGB), // Dark Teal
-				Quantity_Color(0.5, 0.4, 0.6, Quantity_TOC_RGB), // Cool Purple
-				Quantity_Color(0.4, 0.3, 0.5, Quantity_TOC_RGB), // Muted Purple
-				Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Neutral Gray
-				Quantity_Color(0.4, 0.4, 0.4, Quantity_TOC_RGB), // Dark Gray
-				Quantity_Color(0.6, 0.5, 0.4, Quantity_TOC_RGB), // Cool Beige
-				Quantity_Color(0.5, 0.6, 0.5, Quantity_TOC_RGB), // Cool Green-Gray
-				Quantity_Color(0.3, 0.4, 0.5, Quantity_TOC_RGB), // Slate Blue
-				Quantity_Color(0.4, 0.5, 0.4, Quantity_TOC_RGB), // Cool Green
-				Quantity_Color(0.6, 0.4, 0.5, Quantity_TOC_RGB), // Cool Rose
+				auto parts = decomposeByLevelUsingTopo(located, options.decomposition.level);
+				// Heuristic component detection when decomposition yields a single part
+				if (options.decomposition.enableDecomposition && parts.size() == 1) {
+					std::vector<TopoDS_Shape> heuristics;
+					// 1) Try shell grouping (multi-shell solids)
+					decomposeByShellGroups(located, heuristics);
+					if (heuristics.size() <= 1) {
+						// 2) FreeCAD-like strategy (solids>shells>features)
+						heuristics.clear();
+						decomposeShapeFreeCADLike(located, heuristics);
+					}
+					if (heuristics.size() <= 1) {
+						// 3) Geometric features grouping (planes/cylinders etc.)
+						heuristics.clear();
+						decomposeByGeometricFeatures(located, heuristics);
+					}
+					if (heuristics.size() <= 1) {
+						// 4) Connectivity-based grouping (last resort)
+						heuristics.clear();
+						decomposeByConnectivity(located, heuristics);
+					}
+					if (heuristics.size() > 1) {
+						parts = std::move(heuristics);
+					}
+				}
+				int localIdx = 0;
+				for (const auto& part : parts) {
+					std::string partName = parts.size() > 1 ? (compName + "_Part_" + std::to_string(localIdx)) : compName;
+					Quantity_Color color = makeColorForName(partName, hasCafColor ? &cafColor : nullptr);
+
+					auto geom = std::make_shared<OCCGeometry>(partName);
+					geom->setShape(part);
+					geom->setColor(color);
+					geom->setTransparency(0.0);
+					result.geometries.push_back(geom);
+
+					STEPEntityInfo info;
+					info.name = partName;
+					info.type = "COMPONENT";
+					info.color = color;
+					info.hasColor = true;
+					info.entityId = componentIndex;
+					info.shapeIndex = componentIndex;
+					result.entityMetadata.push_back(info);
+
+					componentIndex++;
+					localIdx++;
+				}
 			};
-			
-			// Use distinct color for each component (override any existing color for better visualization)
-			color = distinctColors[componentIndex % distinctColors.size()];
-			hasColor = true;
-			
-			LOG_INF_S("Assigned color to component " + std::to_string(componentIndex) + 
-				" (" + componentName + "): R=" + std::to_string(color.Red()) + 
-				" G=" + std::to_string(color.Green()) + " B=" + std::to_string(color.Blue()));
 
-			// Create geometry object
-			auto geometry = std::make_shared<OCCGeometry>(componentName);
-			geometry->setShape(shape);
-			geometry->setColor(color);
-			geometry->setTransparency(0.0);
-
-			// Create entity info
-			STEPEntityInfo entityInfo;
-			entityInfo.name = componentName;
-			entityInfo.type = "COMPONENT";
-			entityInfo.color = color;
-			entityInfo.hasColor = hasColor;
-			entityInfo.entityId = componentIndex;
-			entityInfo.shapeIndex = componentIndex;
-
-			result.geometries.push_back(geometry);
-			result.entityMetadata.push_back(entityInfo);
-
-			LOG_INF_S("Created colored component: " + componentName + 
-				" (R=" + std::to_string(color.Red()) + 
-				" G=" + std::to_string(color.Green()) + 
-				" B=" + std::to_string(color.Blue()) + ")");
-
-			componentIndex++;
+		for (int i = 1; i <= freeShapes.Length(); ++i) {
+			processLabel(freeShapes.Value(i), TopLoc_Location());
 		}
 
 		if (progress) progress(80, "process components");
 
-		// Build assembly structure
+		// Build assembly structure summary
 		result.assemblyStructure.name = baseName;
 		result.assemblyStructure.type = "ASSEMBLY";
 		for (const auto& entity : result.entityMetadata) {

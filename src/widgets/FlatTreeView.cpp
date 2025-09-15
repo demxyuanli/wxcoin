@@ -665,9 +665,8 @@ void FlatTreeView::OnScroll(wxScrollWinEvent& event)
 		m_scrollX = GetScrollPos(wxHORIZONTAL);
 	}
 	
-	// Only refresh the content area, not the entire control to avoid triggering layout
-	// Use a simple refresh without triggering layout calculations
-	Refresh(false);
+	// Only refresh the content area to avoid header flicker
+	RefreshContentArea();
 	event.Skip();
 }
 
@@ -734,8 +733,15 @@ void FlatTreeView::DrawItems(wxDC& dc)
 	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
 	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
 
-	// Set clipping region for content area only
-	dc.SetClippingRegion(0, headerY, cs.GetWidth(), cs.GetHeight() - headerY);
+	// Compute current vertical scroll in pixels
+	// Adjust clip by current scroll so that device clip top stays at headerY
+	int viewStartX = 0, viewStartY = 0;
+	GetViewStart(&viewStartX, &viewStartY);
+	int ppuX = 1, ppuY = 1;
+	GetScrollPixelsPerUnit(&ppuX, &ppuY);
+	int scrollXPixels = viewStartX * ppuX;
+	int scrollYPixels = viewStartY * ppuY;
+	dc.SetClippingRegion(scrollXPixels, headerY + scrollYPixels, cs.GetWidth(), cs.GetHeight() - headerY);
 
 	// Start drawing from the top of the content area
 	// PrepareDC has already applied the scroll transformation
