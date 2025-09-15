@@ -1,6 +1,7 @@
 #include "docking/DockContainerOptimized.h"
 #include "docking/DockArea.h"
 #include "docking/DockSplitter.h"
+#include "docking/DockLayoutConfig.h"
 #include "logger/Logger.h"
 #include <wx/dcbuffer.h>
 

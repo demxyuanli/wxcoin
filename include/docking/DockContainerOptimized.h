@@ -16,7 +16,7 @@ public:
 
 protected:
     // Override resize handling for better performance
-    virtual void onSize(wxSizeEvent& event) override;
+    void onSize(wxSizeEvent& event);
     
     // New optimized methods
     void processResize();

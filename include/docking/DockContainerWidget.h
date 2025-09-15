@@ -98,6 +98,12 @@ protected:
     void onResizeTimer(wxTimerEvent& event);
     void onLayoutUpdateTimer(wxTimerEvent& event);
     
+protected:
+    // Protected members for derived classes
+    std::vector<DockArea*> m_dockAreas;
+    wxWindow* m_rootSplitter;
+    std::unique_ptr<DockLayoutConfig> m_layoutConfig;
+    
 private:
     // Private implementation details
     class Private;
@@ -105,12 +111,9 @@ private:
     
     // Member variables
     DockManager* m_dockManager;
-    std::vector<DockArea*> m_dockAreas;
-    wxWindow* m_rootSplitter;
     wxBoxSizer* m_layout;
     FloatingDockContainer* m_floatingWidget;
     DockArea* m_lastAddedArea;
-    std::unique_ptr<DockLayoutConfig> m_layoutConfig;
     wxTimer* m_resizeTimer;
     wxTimer* m_layoutUpdateTimer;
     

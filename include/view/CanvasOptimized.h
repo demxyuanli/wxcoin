@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Canvas.h"
+#include <wx/timer.h>
 #include <atomic>
 #include <chrono>
 
@@ -24,8 +25,8 @@ public:
 
 protected:
     // Override paint event for optimized rendering
-    virtual void onPaint(wxPaintEvent& event) override;
-    virtual void onSize(wxSizeEvent& event) override;
+    void onPaint(wxPaintEvent& event);
+    void onSize(wxSizeEvent& event);
     
     // Progressive rendering methods
     void renderLowQuality();

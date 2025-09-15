@@ -1,5 +1,5 @@
 #include "view/CanvasOptimized.h"
-#include "rendering/RenderingEngine.h"
+#include "RenderingEngine.h"
 #include "logger/Logger.h"
 #include <wx/dcclient.h>
 
