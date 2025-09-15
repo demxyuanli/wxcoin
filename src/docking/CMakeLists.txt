@@ -22,6 +22,8 @@ set(DOCKING_SOURCES
     DockLayoutConfigDialog.cpp
     DockLayoutPreview.cpp
     DockResizeMonitor.cpp
+    DockLayoutCache.cpp
+    SmartLayoutStrategy.cpp
 )
 
 set(DOCKING_HEADERS
