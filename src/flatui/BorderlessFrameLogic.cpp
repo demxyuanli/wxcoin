@@ -36,8 +36,11 @@ BorderlessFrameLogic::BorderlessFrameLogic(wxWindow* parent, wxWindowID id, cons
 	m_eventFilter = new BorderlessFrameLogicEventFilter(this);
 	this->PushEventHandler(m_eventFilter);
 
+	// Create outer sizer to reserve 1px padding around all content (avoid covering frame border)
+	m_outerSizer = new wxBoxSizer(wxVERTICAL);
 	m_mainSizer = new wxBoxSizer(wxVERTICAL);
-	SetSizer(m_mainSizer);
+	m_outerSizer->Add(m_mainSizer, 1, wxEXPAND | wxALL, 1);
+	wxFrame::SetSizer(m_outerSizer);
 	m_statusBar = new FlatUIStatusBar(this);
 	
 	// Note: Don't add status bar to sizer here - it will be handled by derived classes
@@ -500,7 +503,6 @@ void BorderlessFrameLogic::OnPaint(wxPaintEvent& event)
 	dc.DrawLine(0, 0, 0, sz.y);
 	dc.DrawLine(sz.x - 1, 0, sz.x - 1, sz.y);
 
-	event.Skip();
 }
 
 void BorderlessFrameLogic::UpdateMinSizeBasedOnBarContent()
@@ -552,13 +554,39 @@ void BorderlessFrameLogic::SetStatusText(const wxString& text, int field) {
 }
 
 void BorderlessFrameLogic::SetSizer(wxSizer* sizer, bool deleteOld) {
-	// Update m_mainSizer if the new sizer is a wxBoxSizer
-	if (sizer && sizer->IsKindOf(CLASSINFO(wxBoxSizer))) {
-		m_mainSizer = static_cast<wxBoxSizer*>(sizer);
-	} else if (!sizer) {
-		m_mainSizer = nullptr;
+	// Ensure outer sizer exists and remains the root to keep a 1px padding border
+	if (!m_outerSizer) {
+		m_outerSizer = new wxBoxSizer(wxVERTICAL);
+		wxFrame::SetSizer(m_outerSizer, false);
 	}
-	
-	// Call base class implementation
-	wxFrame::SetSizer(sizer, deleteOld);
+
+	if (sizer) {
+		// If the same sizer is already set, just ensure it's attached once
+		if (sizer == m_mainSizer) {
+			m_outerSizer->Detach(sizer); // no-op if not attached
+			m_outerSizer->Add(sizer, 1, wxEXPAND | wxALL, 1);
+		}
+		else {
+			// Detach any previously attached inner sizer without deleting it
+			if (m_mainSizer) {
+				m_outerSizer->Detach(m_mainSizer);
+			}
+			// Also detach the incoming sizer if it is already attached
+			m_outerSizer->Detach(sizer);
+			// Track main content sizer safely using RTTI
+			m_mainSizer = dynamic_cast<wxBoxSizer*>(sizer);
+			// Embed provided sizer inside the outer sizer with 1px padding
+			m_outerSizer->Add(sizer, 1, wxEXPAND | wxALL, 1);
+		}
+	}
+	else {
+		// If null passed, detach current inner content sizer but keep outer as root
+		if (m_mainSizer) {
+			m_outerSizer->Detach(m_mainSizer);
+			m_mainSizer = nullptr;
+		}
+	}
+
+	// Keep outer as the only top-level sizer; never delete it here
+	wxFrame::SetSizer(m_outerSizer, false);
 }

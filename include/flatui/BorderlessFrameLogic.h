@@ -42,6 +42,7 @@ public:
 
 protected:
 	wxBoxSizer* m_mainSizer = nullptr;
+	wxBoxSizer* m_outerSizer = nullptr;
 	FlatUIStatusBar* m_statusBar = nullptr;
 	// Core mouse event handlers for dragging and resizing
 	virtual void OnLeftDown(wxMouseEvent& event);
