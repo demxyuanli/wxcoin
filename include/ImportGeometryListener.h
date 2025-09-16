@@ -3,6 +3,7 @@
 #include "CommandListener.h"
 #include "CommandType.h"
 #include "GeometryReader.h"
+#include "GeometryImportOptimizer.h"
 #include "ImportStatisticsDialog.h"
 #include <memory>
 #include <wx/frame.h>
@@ -50,7 +51,7 @@ private:
      * @brief Import files with detailed statistics collection
      * @param reader Geometry reader to use
      * @param filePaths Vector of file paths to import
-     * @param options Import options
+     * @param options Enhanced import options
      * @param overallStats Statistics to update
      * @param formatName Format name for statistics
      * @param allGeometries Output vector to accumulate geometries
@@ -58,7 +59,7 @@ private:
      */
     CommandResult importFilesWithStats(std::unique_ptr<GeometryReader> reader,
         const std::vector<std::string>& filePaths,
-        const GeometryReader::OptimizationOptions& options,
+        const GeometryImportOptimizer::EnhancedOptions& options,
         ImportOverallStatistics& overallStats,
         const std::string& formatName,
         std::vector<std::shared_ptr<OCCGeometry>>& allGeometries);
@@ -68,6 +69,12 @@ private:
      * @param options Output options with balanced settings
      */
     void setupBalancedImportOptions(GeometryReader::OptimizationOptions& options);
+    
+    /**
+     * @brief Setup balanced default import options for enhanced options
+     * @param options Output enhanced options with balanced settings
+     */
+    void setupBalancedImportOptions(GeometryImportOptimizer::EnhancedOptions& options);
 
     /**
      * @brief Update progress in status bar and message panel

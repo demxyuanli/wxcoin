@@ -1021,31 +1021,51 @@ void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_
 		return;
 	}
 
+	// Pre-allocate vector for better performance
+	shapes.reserve(1000); // Reasonable initial capacity
+
 	// If it's a compound, extract its children
 	if (compound.ShapeType() == TopAbs_COMPOUND) {
-		for (TopExp_Explorer exp(compound, TopAbs_SOLID); exp.More(); exp.Next()) {
-			shapes.push_back(exp.Current());
+		// Count shapes first for better memory allocation
+		int solidCount = 0, shellCount = 0, faceCount = 0;
+		for (TopExp_Explorer counter(compound, TopAbs_SOLID); counter.More(); counter.Next()) {
+			solidCount++;
 		}
-
-		// If no solids found, try shells
-		if (shapes.empty()) {
-			for (TopExp_Explorer exp(compound, TopAbs_SHELL); exp.More(); exp.Next()) {
+		
+		if (solidCount > 0) {
+			shapes.reserve(solidCount);
+			for (TopExp_Explorer exp(compound, TopAbs_SOLID); exp.More(); exp.Next()) {
 				shapes.push_back(exp.Current());
 			}
-		}
-
-		// If no shells found, try faces
-		if (shapes.empty()) {
-			for (TopExp_Explorer exp(compound, TopAbs_FACE); exp.More(); exp.Next()) {
-				shapes.push_back(exp.Current());
+		} else {
+			// If no solids found, try shells
+			for (TopExp_Explorer counter(compound, TopAbs_SHELL); counter.More(); counter.Next()) {
+				shellCount++;
 			}
-		}
-
-		// If still no shapes found, try any sub-shapes
-		if (shapes.empty()) {
-			for (TopExp_Explorer exp(compound, TopAbs_SHAPE); exp.More(); exp.Next()) {
-				if (exp.Current().ShapeType() != TopAbs_COMPOUND) {
+			
+			if (shellCount > 0) {
+				shapes.reserve(shellCount);
+				for (TopExp_Explorer exp(compound, TopAbs_SHELL); exp.More(); exp.Next()) {
 					shapes.push_back(exp.Current());
+				}
+			} else {
+				// If no shells found, try faces
+				for (TopExp_Explorer counter(compound, TopAbs_FACE); counter.More(); counter.Next()) {
+					faceCount++;
+				}
+				
+				if (faceCount > 0) {
+					shapes.reserve(faceCount);
+					for (TopExp_Explorer exp(compound, TopAbs_FACE); exp.More(); exp.Next()) {
+						shapes.push_back(exp.Current());
+					}
+				} else {
+					// If still no shapes found, try any sub-shapes
+					for (TopExp_Explorer exp(compound, TopAbs_SHAPE); exp.More(); exp.Next()) {
+						if (exp.Current().ShapeType() != TopAbs_COMPOUND) {
+							shapes.push_back(exp.Current());
+						}
+					}
 				}
 			}
 		}
@@ -1054,6 +1074,9 @@ void STEPReader::extractShapes(const TopoDS_Shape& compound, std::vector<TopoDS_
 		// It's a single shape
 		shapes.push_back(compound);
 	}
+	
+	// Shrink to fit to release unused memory
+	shapes.shrink_to_fit();
 }
 
 std::vector<STEPReader::STEPEntityInfo> STEPReader::readSTEPMetadata(

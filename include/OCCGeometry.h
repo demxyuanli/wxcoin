@@ -238,6 +238,14 @@ public:
 	// Assembly level for hierarchical explode
 	int getAssemblyLevel() const { return m_assemblyLevel; }
 	void setAssemblyLevel(int level) { m_assemblyLevel = level; }
+	
+	// LOD (Level of Detail) support - additional methods
+	void addLODLevel(double distance, double deflection);
+	int getLODLevel(double viewDistance) const;
+	
+	// Memory optimization
+	void releaseTemporaryData();
+	void optimizeMemory();
 
 private:
 	void createWireframeRepresentation(const MeshParameters& params);
@@ -335,6 +343,9 @@ protected:
 
 	// Assembly level
 	int m_assemblyLevel{0};
+	
+	// LOD support
+	std::vector<std::pair<double, double>> m_lodLevels; // distance, deflection pairs
 };
 
 /**

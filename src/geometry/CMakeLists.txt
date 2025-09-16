@@ -6,6 +6,7 @@ set(GEOMETRY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPImportOptimizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GeometryImportOptimizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/IGESReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OBJReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STLReader.cpp
@@ -19,6 +20,8 @@ set(GEOMETRY_HEADERS
     ${CMAKE_SOURCE_DIR}/include/GeometryReader.h
     ${CMAKE_SOURCE_DIR}/include/STEPReader.h
     ${CMAKE_SOURCE_DIR}/include/STEPImportOptimizer.h
+    ${CMAKE_SOURCE_DIR}/include/GeometryImportOptimizer.h
+    ${CMAKE_SOURCE_DIR}/include/FastSTEPReader.h
     ${CMAKE_SOURCE_DIR}/include/IGESReader.h
     ${CMAKE_SOURCE_DIR}/include/OBJReader.h
     ${CMAKE_SOURCE_DIR}/include/STLReader.h

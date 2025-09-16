@@ -230,6 +230,8 @@ public:
 
 private:
     const OptimizedGeometryManager& m_manager;
+    // Index: type -> list of geometry names
+    std::unordered_map<std::string, std::vector<std::string>> m_typeIndex;
 
     // Internal helper methods
     bool matchesPattern(const std::string& text, const std::string& pattern) const;

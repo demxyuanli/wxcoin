@@ -9,6 +9,7 @@
 #include "XTReader.h"
 #include "OCCViewer.h"
 #include "GeometryDecompositionDialog.h"
+#include "GeometryImportOptimizer.h"
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/app.h>
@@ -195,16 +196,35 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
                 continue;
             }
 
-            // Use balanced default settings for import (no dialog needed)
-            GeometryReader::OptimizationOptions options;
-            setupBalancedImportOptions(options);
-
+            // Use enhanced optimization options
+            GeometryImportOptimizer::EnhancedOptions enhancedOptions;
+            
+            // Configure threading based on file count and size
+            enhancedOptions.threading.maxThreads = std::thread::hardware_concurrency();
+            enhancedOptions.threading.enableParallelReading = true;
+            enhancedOptions.threading.enableParallelParsing = true;
+            enhancedOptions.threading.enableParallelTessellation = true;
+            enhancedOptions.threading.useMemoryMapping = true;
+            
+            // Configure progressive loading for better responsiveness
+            enhancedOptions.progressive.enabled = true;
+            enhancedOptions.progressive.streamLargeFiles = true;
+            
+            // Enable caching for repeated imports
+            enhancedOptions.enableCache = true;
+            
+            // Copy balanced settings
+            setupBalancedImportOptions(enhancedOptions);
+            
             // Apply decomposition options
-            options.decomposition = m_decompositionOptions;
+            enhancedOptions.decomposition = m_decompositionOptions;
+            
+            // Enable profiling for performance monitoring
+            GeometryImportOptimizer::enableProfiling(true);
 
             // Import files for this format
             auto formatStartTime = std::chrono::high_resolution_clock::now();
-            auto result = importFilesWithStats(std::move(reader), formatFiles, options, overallStats, formatName, allGeometries);
+            auto result = importFilesWithStats(std::move(reader), formatFiles, enhancedOptions, overallStats, formatName, allGeometries);
             auto formatEndTime = std::chrono::high_resolution_clock::now();
 
             if (result.success) {
@@ -344,15 +364,20 @@ CommandResult ImportGeometryListener::importFiles(std::unique_ptr<GeometryReader
     const std::vector<std::string>& filePaths,
     const GeometryReader::OptimizationOptions& options)
 {
+    // Convert to enhanced options
+    GeometryImportOptimizer::EnhancedOptions enhancedOptions;
+    // Copy base options
+    static_cast<GeometryReader::OptimizationOptions&>(enhancedOptions) = options;
+    
     // Initialize statistics and geometries vector
     ImportOverallStatistics dummyStats;
     std::vector<std::shared_ptr<OCCGeometry>> dummyGeometries;
-    return importFilesWithStats(std::move(reader), filePaths, options, dummyStats, "", dummyGeometries);
+    return importFilesWithStats(std::move(reader), filePaths, enhancedOptions, dummyStats, "", dummyGeometries);
 }
 
 CommandResult ImportGeometryListener::importFilesWithStats(std::unique_ptr<GeometryReader> reader,
     const std::vector<std::string>& filePaths,
-    const GeometryReader::OptimizationOptions& options,
+    const GeometryImportOptimizer::EnhancedOptions& options,
     ImportOverallStatistics& overallStats,
     const std::string& formatName,
     std::vector<std::shared_ptr<OCCGeometry>>& allGeometries)
@@ -361,52 +386,119 @@ CommandResult ImportGeometryListener::importFilesWithStats(std::unique_ptr<Geome
         int successfulFiles = 0;
         size_t totalFileSize = 0;
 
-        for (size_t i = 0; i < filePaths.size(); ++i) {
-            const std::string& filePath = filePaths[i];
-
-            // Create file statistics
-            ImportFileStatistics fileStat;
-            fileStat.filePath = filePath;
-            wxFileName wxFile(filePath);
-            fileStat.fileName = wxFile.GetFullName().ToStdString();
-            fileStat.format = formatName.empty() ? "Unknown" : formatName;
-
-            // Get file size
-            try {
-                std::filesystem::path fsPath(filePath.c_str());
-                if (std::filesystem::exists(fsPath)) {
-                    fileStat.fileSize = std::filesystem::file_size(fsPath);
-                    totalFileSize += fileStat.fileSize;
+        // Use batch optimization for multiple files
+        if (filePaths.size() > 1 && options.threading.enableParallelReading) {
+            LOG_INF_S("Using batch optimization for " + std::to_string(filePaths.size()) + " files");
+            
+            // Progress callback for batch import
+            auto batchProgress = [this](size_t current, size_t total, const std::string& file) {
+                int percent = static_cast<int>((100.0 * current) / total);
+                std::string msg = "Processing file " + std::to_string(current) + "/" + 
+                                 std::to_string(total) + ": " + std::filesystem::path(file).filename().string();
+                updateProgress(percent, msg, nullptr);
+            };
+            
+            // Import all files in parallel
+            auto results = GeometryImportOptimizer::importBatchOptimized(filePaths, options, batchProgress);
+            
+            // Process results
+            for (size_t i = 0; i < results.size(); ++i) {
+                const auto& result = results[i];
+                const std::string& filePath = filePaths[i];
+                
+                // Create file statistics
+                ImportFileStatistics fileStat;
+                fileStat.filePath = filePath;
+                wxFileName wxFile(filePath);
+                fileStat.fileName = wxFile.GetFullName().ToStdString();
+                fileStat.format = formatName.empty() ? "Unknown" : formatName;
+                
+                // Get file size
+                try {
+                    std::filesystem::path fsPath(filePath.c_str());
+                    if (std::filesystem::exists(fsPath)) {
+                        fileStat.fileSize = std::filesystem::file_size(fsPath);
+                        totalFileSize += fileStat.fileSize;
+                    }
+                } catch (const std::exception&) {
+                    fileStat.fileSize = 0;
                 }
-            } catch (const std::exception&) {
-                fileStat.fileSize = 0;
+                
+                fileStat.importTime = std::chrono::milliseconds(static_cast<long long>(result.importTime));
+                
+                if (result.success && !result.geometries.empty()) {
+                    allGeometries.insert(allGeometries.end(), result.geometries.begin(), result.geometries.end());
+                    fileStat.success = true;
+                    fileStat.geometriesCreated = result.geometries.size();
+                    successfulFiles++;
+                } else {
+                    fileStat.success = false;
+                    fileStat.errorMessage = result.errorMessage;
+                    fileStat.geometriesCreated = 0;
+                }
+                
+                // Add to overall statistics
+                overallStats.fileStats.push_back(fileStat);
+                overallStats.totalGeometriesCreated += fileStat.geometriesCreated;
+                overallStats.totalFileSize += fileStat.fileSize;
             }
+        } else {
+            // Single file or sequential processing
+            for (size_t i = 0; i < filePaths.size(); ++i) {
+                const std::string& filePath = filePaths[i];
 
-            auto fileStartTime = std::chrono::high_resolution_clock::now();
+                // Create file statistics
+                ImportFileStatistics fileStat;
+                fileStat.filePath = filePath;
+                wxFileName wxFile(filePath);
+                fileStat.fileName = wxFile.GetFullName().ToStdString();
+                fileStat.format = formatName.empty() ? "Unknown" : formatName;
 
-            auto result = reader->readFile(filePath, options,
-                [this, i, &filePaths](int percent, const std::string& stage) {
-                    updateProgress(percent, stage, nullptr);
-                });
+                // Get file size
+                try {
+                    std::filesystem::path fsPath(filePath.c_str());
+                    if (std::filesystem::exists(fsPath)) {
+                        fileStat.fileSize = std::filesystem::file_size(fsPath);
+                        totalFileSize += fileStat.fileSize;
+                    }
+                } catch (const std::exception&) {
+                    fileStat.fileSize = 0;
+                }
 
-            auto fileEndTime = std::chrono::high_resolution_clock::now();
-            fileStat.importTime = std::chrono::duration_cast<std::chrono::milliseconds>(fileEndTime - fileStartTime);
+                // Estimate import time for progress
+                double estimatedTime = GeometryImportOptimizer::estimateImportTime(filePath);
+                if (estimatedTime > 0 && m_statusBar) {
+                    m_statusBar->SetStatusText(wxString::Format("Importing %s (estimated: %.1fs)", 
+                        wxFile.GetFullName(), estimatedTime / 1000.0), 0);
+                }
 
-            if (result.success && !result.geometries.empty()) {
-                allGeometries.insert(allGeometries.end(), result.geometries.begin(), result.geometries.end());
-                fileStat.success = true;
-                fileStat.geometriesCreated = result.geometries.size();
-                successfulFiles++;
-            } else {
-                fileStat.success = false;
-                fileStat.errorMessage = result.errorMessage;
-                fileStat.geometriesCreated = 0;
+                auto fileStartTime = std::chrono::high_resolution_clock::now();
+
+                // Use optimized import
+                auto result = GeometryImportOptimizer::importOptimized(filePath, options,
+                    [this, i, &filePaths](int percent, const std::string& stage) {
+                        updateProgress(percent, stage, nullptr);
+                    });
+
+                auto fileEndTime = std::chrono::high_resolution_clock::now();
+                fileStat.importTime = std::chrono::duration_cast<std::chrono::milliseconds>(fileEndTime - fileStartTime);
+
+                if (result.success && !result.geometries.empty()) {
+                    allGeometries.insert(allGeometries.end(), result.geometries.begin(), result.geometries.end());
+                    fileStat.success = true;
+                    fileStat.geometriesCreated = result.geometries.size();
+                    successfulFiles++;
+                } else {
+                    fileStat.success = false;
+                    fileStat.errorMessage = result.errorMessage;
+                    fileStat.geometriesCreated = 0;
+                }
+
+                // Add to overall statistics
+                overallStats.fileStats.push_back(fileStat);
+                overallStats.totalGeometriesCreated += fileStat.geometriesCreated;
+                overallStats.totalFileSize += fileStat.fileSize;
             }
-
-            // Add to overall statistics
-            overallStats.fileStats.push_back(fileStat);
-            overallStats.totalGeometriesCreated += fileStat.geometriesCreated;
-            overallStats.totalFileSize += fileStat.fileSize;
         }
 
         // Update format statistics
@@ -419,6 +511,9 @@ CommandResult ImportGeometryListener::importFilesWithStats(std::unique_ptr<Geome
             formatStat.totalGeometries += allGeometries.size();
             formatStat.totalFileSize += totalFileSize;
         }
+
+        // Log performance report
+        LOG_INF_S("\n" + GeometryImportOptimizer::getPerformanceReport());
 
         return CommandResult(successfulFiles > 0,
             "Imported " + std::to_string(successfulFiles) + "/" + std::to_string(filePaths.size()) + " files",
@@ -452,6 +547,48 @@ void ImportGeometryListener::setupBalancedImportOptions(GeometryReader::Optimiza
     options.enableAdaptiveTessellation = true; // Enable adaptive tessellation
     
     LOG_INF_S("Balanced import settings applied: Deflection=1.0, Angular=1.0, Parallel=On");
+}
+
+void ImportGeometryListener::setupBalancedImportOptions(GeometryImportOptimizer::EnhancedOptions& options)
+{
+    // Copy base optimization options
+    setupBalancedImportOptions(static_cast<GeometryReader::OptimizationOptions&>(options));
+    
+    // Set enhanced threading options
+    options.threading.maxThreads = std::thread::hardware_concurrency();
+    options.threading.enableParallelReading = true;
+    options.threading.enableParallelParsing = true;
+    options.threading.enableParallelTessellation = true;
+    options.threading.useMemoryMapping = true;
+    options.threading.chunkSize = 2 * 1024 * 1024; // 2MB chunks
+    
+    // Configure progressive loading for smooth interaction
+    options.progressive.enabled = true;
+    options.progressive.lodDistances[0] = 10.0;   // Very close - highest quality
+    options.progressive.lodDistances[1] = 50.0;   // Close - high quality
+    options.progressive.lodDistances[2] = 100.0;  // Medium distance - balanced
+    options.progressive.lodDistances[3] = 500.0;  // Far - low quality
+    options.progressive.lodDeflections[0] = 0.1;  // Highest quality deflection
+    options.progressive.lodDeflections[1] = 0.5;  // High quality
+    options.progressive.lodDeflections[2] = 1.0;  // Balanced
+    options.progressive.lodDeflections[3] = 2.0;  // Low quality
+    options.progressive.streamLargeFiles = true;
+    options.progressive.streamThreshold = 50 * 1024 * 1024; // 50MB
+    
+    // Enable caching for repeated imports
+    options.enableCache = true;
+    options.maxCacheSize = 512 * 1024 * 1024; // 512MB cache
+    
+    // Enable prefetching for smaller files
+    options.enablePrefetch = true;
+    
+    // Enable compression for cache storage
+    options.enableCompression = false; // Disabled for now, can be implemented later
+    
+    // GPU acceleration disabled by default (requires additional setup)
+    options.enableGPUAcceleration = false;
+    
+    LOG_INF_S("Enhanced import settings applied with multi-threading and progressive loading");
 }
 
 void ImportGeometryListener::updateProgress(int percent, const std::string& message, void* flatFrame)
