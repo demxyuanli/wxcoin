@@ -307,6 +307,8 @@ protected:
     void onMouseLeftUp(wxMouseEvent& event);
     void onMouseMotion(wxMouseEvent& event);
     void onMouseLeave(wxMouseEvent& event);
+    void onMouseEnter(wxMouseEvent& event);
+    void onSetCursor(wxSetCursorEvent& event);
     void onSize(wxSizeEvent& event);
     void onLockButtonClicked();
     void onResizeRefreshTimer(wxTimerEvent& event);
@@ -440,6 +442,8 @@ protected:
     void onMouseRightDown(wxMouseEvent& event);
     void onMouseMotion(wxMouseEvent& event);
     void onMouseLeave(wxMouseEvent& event);
+    void onMouseEnter(wxMouseEvent& event);
+    void onSetCursor(wxSetCursorEvent& event);
     void onSize(wxSizeEvent& event);
     
 private:

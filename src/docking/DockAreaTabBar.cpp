@@ -9,6 +9,7 @@
 #include "config/SvgIconManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/menu.h>
+#include <wx/cursor.h>
 #include <algorithm>
 
 namespace ads {
@@ -21,6 +22,8 @@ wxBEGIN_EVENT_TABLE(DockAreaTabBar, wxPanel)
     EVT_RIGHT_DOWN(DockAreaTabBar::onMouseRightDown)
     EVT_MOTION(DockAreaTabBar::onMouseMotion)
     EVT_LEAVE_WINDOW(DockAreaTabBar::onMouseLeave)
+    EVT_ENTER_WINDOW(DockAreaTabBar::onMouseEnter)
+    EVT_SET_CURSOR(DockAreaTabBar::onSetCursor)
     EVT_SIZE(DockAreaTabBar::onSize)
 wxEND_EVENT_TABLE()
 
@@ -364,6 +367,9 @@ void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {
 
     m_draggedTab = -1;
     m_dragStarted = false;
+
+    // Restore default cursor after drag ends
+    SetCursor(wxCursor(wxCURSOR_ARROW));
 }
 
 void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
@@ -401,6 +407,17 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
         }
     }
 
+    // Update cursor for hover/drag state
+    if (m_dragStarted) {
+        SetCursor(wxCursor(wxCURSOR_SIZING)); // Grab-like cursor while dragging
+    } else if (m_hasOverflow && m_overflowButtonRect.Contains(event.GetPosition())) {
+        SetCursor(wxCursor(wxCURSOR_ARROW)); // Keep default over overflow button
+    } else if (m_hoveredTab >= 0) {
+        SetCursor(wxCursor(wxCURSOR_HAND)); // Hand over tab labels
+    } else {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    }
+
     // Handle dragging
     if (m_draggedTab >= 0 && event.Dragging()) {
         wxPoint delta = event.GetPosition() - m_dragStartPos;
@@ -430,6 +447,9 @@ void DockAreaTabBar::onMouseMotion(wxMouseEvent& event) {
             }
 
             m_dragStarted = true;
+
+            // Switch cursor when drag starts
+            SetCursor(wxCursor(wxCURSOR_SIZING));
 
             // Get the dock widget being dragged
             DockWidget* draggedWidget = m_dockArea->dockWidget(m_draggedTab);
@@ -554,6 +574,35 @@ void DockAreaTabBar::onMouseLeave(wxMouseEvent& event) {
     }
 
     Refresh();
+
+    // Restore default cursor when leaving tab bar
+    SetCursor(wxCursor(wxCURSOR_ARROW));
+}
+
+// Ensure cursor stays updated when system queries cursor
+void DockAreaTabBar::onSetCursor(wxSetCursorEvent& event) {
+    if (m_dragStarted) {
+        SetCursor(wxCursor(wxCURSOR_SIZING));
+        event.Skip(false);
+        return;
+    }
+    if (m_hoveredTab >= 0) {
+        SetCursor(wxCursor(wxCURSOR_HAND));
+        event.Skip(false);
+        return;
+    }
+    SetCursor(wxCursor(wxCURSOR_ARROW));
+    event.Skip(false);
+}
+
+void DockAreaTabBar::onMouseEnter(wxMouseEvent& event) {
+    // Update cursor immediately upon entering
+    if (m_hoveredTab >= 0) {
+        SetCursor(wxCursor(wxCURSOR_HAND));
+    } else {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    }
+    event.Skip();
 }
 
 int DockAreaTabBar::getTabAt(const wxPoint& pos) {
@@ -911,3 +960,4 @@ bool DockAreaTabBar::isOverCloseButton(int tabIndex, const wxPoint& pos) const {
 }
 
 } // namespace ads
+

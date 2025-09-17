@@ -10,6 +10,7 @@
 #include <wx/dcbuffer.h>
 #include <wx/menu.h>
 #include <wx/graphics.h>
+#include <wx/cursor.h>
 #include <algorithm>
 
 namespace ads {
@@ -21,6 +22,8 @@ wxBEGIN_EVENT_TABLE(DockAreaMergedTitleBar, wxPanel)
     EVT_LEFT_UP(DockAreaMergedTitleBar::onMouseLeftUp)
     EVT_MOTION(DockAreaMergedTitleBar::onMouseMotion)
     EVT_LEAVE_WINDOW(DockAreaMergedTitleBar::onMouseLeave)
+    EVT_ENTER_WINDOW(DockAreaMergedTitleBar::onMouseEnter)
+    EVT_SET_CURSOR(DockAreaMergedTitleBar::onSetCursor)
     EVT_SIZE(DockAreaMergedTitleBar::onSize)
     EVT_TIMER(wxID_ANY, DockAreaMergedTitleBar::onResizeRefreshTimer)
 wxEND_EVENT_TABLE()
@@ -244,6 +247,9 @@ void DockAreaMergedTitleBar::onMouseLeftDown(wxMouseEvent& event) {
         // Start dragging
         m_draggedTab = tabIndex;
         m_dragStartPos = event.GetPosition();
+
+        // Indicate drag start with grab-like cursor
+        SetCursor(wxCursor(wxCURSOR_SIZING));
 
         // Select tab
         if (tabIndex != m_currentIndex) {
@@ -474,8 +480,8 @@ void DockAreaMergedTitleBar::onMouseLeftUp(wxMouseEvent& event) {
     // Clear tooltip
     UnsetToolTip();
 
-    // Reset cursor - temporarily disabled
-    // wxSetCursor(wxCursor(wxCURSOR_ARROW));
+    // Restore default cursor after drag ends
+    SetCursor(wxCursor(wxCURSOR_ARROW));
 
     // Always reset drag state, even if drag didn't start
     m_draggedTab = -1;
@@ -548,6 +554,25 @@ void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
         if (oldLockHovered != m_lockButtonHovered) {
             RefreshRect(m_lockButtonRect);
         }
+    }
+
+    // Update cursor for hover/drag state
+    if (m_dragStarted) {
+        SetCursor(wxCursor(wxCURSOR_SIZING));
+    } else if (m_hasOverflow && m_overflowButtonRect.Contains(pos)) {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    } else if (m_hoveredTab >= 0) {
+        SetCursor(wxCursor(wxCURSOR_HAND));
+    } else if (m_showCloseButton && m_closeButtonRect.Contains(pos)) {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    } else if (m_showPinButton && m_pinButtonRect.Contains(pos)) {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    } else if (m_showAutoHideButton && m_autoHideButtonRect.Contains(pos)) {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    } else if (m_showLockButton && m_lockButtonRect.Contains(pos)) {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    } else {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
     }
 
     // Handle dragging
@@ -719,6 +744,35 @@ void DockAreaMergedTitleBar::onMouseLeave(wxMouseEvent& event) {
     m_autoHideButtonHovered = false;
 
     Refresh();
+
+    // Restore default cursor when leaving title bar
+    SetCursor(wxCursor(wxCURSOR_ARROW));
+}
+
+// Ensure cursor stays updated when system queries cursor
+void DockAreaMergedTitleBar::onSetCursor(wxSetCursorEvent& event) {
+    if (m_dragStarted) {
+        SetCursor(wxCursor(wxCURSOR_SIZING));
+        event.Skip(false);
+        return;
+    }
+    if (m_hoveredTab >= 0) {
+        SetCursor(wxCursor(wxCURSOR_HAND));
+        event.Skip(false);
+        return;
+    }
+    SetCursor(wxCursor(wxCURSOR_ARROW));
+    event.Skip(false);
+}
+
+void DockAreaMergedTitleBar::onMouseEnter(wxMouseEvent& event) {
+    // Update cursor immediately upon entering
+    if (m_hoveredTab >= 0) {
+        SetCursor(wxCursor(wxCURSOR_HAND));
+    } else {
+        SetCursor(wxCursor(wxCURSOR_ARROW));
+    }
+    event.Skip();
 }
 
 void DockAreaMergedTitleBar::onSize(wxSizeEvent& event) {
