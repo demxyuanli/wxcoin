@@ -10,6 +10,7 @@
 #include <wx/menu.h> // For wxMenu
 #include "config/SvgIconManager.h"
 #include "config/ThemeManager.h"
+#include "logger/Logger.h" // For LOG_DBG and LOG_INF macros
 
 wxBEGIN_EVENT_TABLE(FlatUIHomeMenu, wxPopupTransientWindow)
 EVT_MOTION(FlatUIHomeMenu::OnMouseMotion)
@@ -69,6 +70,7 @@ void FlatUIHomeMenu::BuildMenuLayout()
 	for (const auto& itemInfo : m_menuItems) {
 		if (itemInfo.isSeparator) {
 			wxPanel* separator = new wxPanel(m_panel, wxID_ANY, wxDefaultPosition, wxSize(CFG_INT("HomeMenuWidth") - 10, 1));
+			separator->SetName("HomeMenuSeparator");
 			separator->SetBackgroundColour(CFG_COLOUR("BarTabBorderColour"));
 			m_itemSizer->Add(separator, 0, wxALIGN_CENTER_HORIZONTAL | wxTOP | wxBOTTOM, (CFG_INT("HomeMenuSeparatorHeight") - 1) / 2);
 		}
@@ -84,11 +86,11 @@ void FlatUIHomeMenu::BuildMenuLayout()
 			wxStaticText* st = new wxStaticText(itemPanel, itemInfo.id, itemInfo.text);
 			st->SetFont(CFG_DEFAULTFONT());
 			st->SetForegroundColour(CFG_COLOUR("MenuTextColour"));
-			hsizer->Add(st, 1, wxLEFT | wxEXPAND, 5);
+			hsizer->Add(st, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 5);
 			itemPanel->SetSizer(hsizer);
 
 			m_itemSizer->Add(itemPanel, 0, wxEXPAND | wxALL, 2);
-			itemPanel->SetMinSize(wxSize(CFG_INT("HomeMenuWidth"), CFG_INT("HomeMenuHeight")));
+			itemPanel->SetMinSize(wxSize(CFG_INT("HomeMenuWidth"), CFG_INT("HomeMenuItemHeight")));
 
 			itemPanel->Bind(wxEVT_LEFT_DOWN, [this, item_id = itemInfo.id](wxMouseEvent& event) {
 				if (item_id == wxID_EXIT) {
@@ -116,6 +118,7 @@ void FlatUIHomeMenu::BuildMenuLayout()
 	if (hasDynamicItems) {
 		// Add a separator if there were dynamic items and we're about to add fixed ones
 		wxPanel* separator = new wxPanel(m_panel, wxID_ANY, wxDefaultPosition, wxSize(CFG_INT("HomeMenuWidth") - 10, 1));
+		separator->SetName("HomeMenuSeparator");
 		separator->SetBackgroundColour(CFG_COLOUR("BarTabBorderColour"));
 		// Add a bit more vertical margin for this separator
 		m_itemSizer->Add(separator, 0, wxALIGN_CENTER_HORIZONTAL | wxTOP | wxBOTTOM, CFG_INT("HomeMenuSeparatorHeight"));
@@ -138,11 +141,11 @@ void FlatUIHomeMenu::BuildMenuLayout()
 		wxStaticText* st = new wxStaticText(itemPanel, id, text);
 		st->SetFont(CFG_DEFAULTFONT());
 		st->SetForegroundColour(CFG_COLOUR("MenuTextColour"));
-		hsizer->Add(st, 1, wxLEFT | wxEXPAND, 5);
+		hsizer->Add(st, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 5);
 		itemPanel->SetSizer(hsizer);
 
 		m_itemSizer->Add(itemPanel, 0, wxEXPAND | wxALL, 2);
-		itemPanel->SetMinSize(wxSize(CFG_INT("HomeMenuWidth"), CFG_INT("HomeMenuHeight")));
+		itemPanel->SetMinSize(wxSize(CFG_INT("HomeMenuWidth"), CFG_INT("HomeMenuItemHeight")));
 
 		itemPanel->Bind(wxEVT_LEFT_DOWN, [this, item_id = id, itemPanel](wxMouseEvent& event) {
 			if (item_id == ID_THEME_MENU) {
@@ -170,6 +173,7 @@ void FlatUIHomeMenu::BuildMenuLayout()
 
 	auto addFixedSeparatorToSizer = [&]() {
 		wxPanel* separator = new wxPanel(m_panel, wxID_ANY, wxDefaultPosition, wxSize(CFG_INT("HomeMenuWidth") - 10, 1));
+		separator->SetName("HomeMenuSeparator");
 		separator->SetBackgroundColour(CFG_COLOUR("BarTabBorderColour"));
 		m_itemSizer->Add(separator, 0, wxALIGN_CENTER_HORIZONTAL | wxTOP | wxBOTTOM, (CFG_INT("HomeMenuSeparatorHeight") - 1) / 2);
 		};
@@ -405,23 +409,53 @@ void FlatUIHomeMenu::RefreshTheme()
 	if (m_panel) {
 		m_panel->SetBackgroundColour(CFG_COLOUR("PrimaryContentBgColour"));
 
-		// Update all child panels and text colors
-		wxWindowList& children = m_panel->GetChildren();
-		for (wxWindow* child : children) {
-			if (child->GetClassInfo()->GetClassName() == wxString("wxPanel")) {
-				// Skip separator panels (they have specific colors)
-				if (child->GetSize().GetHeight() == 1) {
-					child->SetBackgroundColour(CFG_COLOUR("BarTabBorderColour"));
+		// Recursive function to update all child windows
+		std::function<void(wxWindow*)> updateChildrenTheme = [&](wxWindow* window) {
+			if (!window) return;
+			
+			wxString className = window->GetClassInfo()->GetClassName();
+			
+			if (className == wxString("wxPanel")) {
+				// Check if this is a separator by name or height
+				wxString windowName = window->GetName();
+				if (windowName == "HomeMenuSeparator" || window->GetSize().GetHeight() == 1) {
+					wxColour separatorColor = CFG_COLOUR("BarTabBorderColour");
+					window->SetBackgroundColour(separatorColor);
+					window->Show(true); // Ensure separator is visible
+					window->Refresh(true);
+					window->Update();
+					// Force immediate paint
+					window->SetBackgroundStyle(wxBG_STYLE_COLOUR);
+					LOG_DBG("Updated HomeMenu separator ('" + windowName.ToStdString() + "') background to: " + 
+						std::to_string(separatorColor.Red()) + "," + 
+						std::to_string(separatorColor.Green()) + "," + 
+						std::to_string(separatorColor.Blue()), "FlatUIHomeMenu");
 				}
 				else {
-					child->SetBackgroundColour(CFG_COLOUR("PrimaryContentBgColour"));
+					window->SetBackgroundColour(CFG_COLOUR("PrimaryContentBgColour"));
+					window->Refresh(true);
 				}
 			}
-			else if (child->GetClassInfo()->GetClassName() == wxString("wxStaticText")) {
-				wxStaticText* text = static_cast<wxStaticText*>(child);
+			else if (className == wxString("wxStaticText")) {
+				wxStaticText* text = static_cast<wxStaticText*>(window);
 				text->SetForegroundColour(CFG_COLOUR("MenuTextColour"));
+				text->SetFont(CFG_DEFAULTFONT());
+				text->Refresh(true);
 			}
-		}
+			else if (className == wxString("wxStaticBitmap")) {
+				// Refresh bitmap to ensure it's properly displayed
+				window->Refresh(true);
+			}
+			
+			// Recursively update all children
+			wxWindowList& children = window->GetChildren();
+			for (wxWindow* child : children) {
+				updateChildrenTheme(child);
+			}
+		};
+
+		// Update all children recursively
+		updateChildrenTheme(m_panel);
 
 		m_panel->Refresh(true);
 		m_panel->Update();
@@ -429,4 +463,5 @@ void FlatUIHomeMenu::RefreshTheme()
 
 	Refresh(true);
 	Update();
+	LOG_INF("Home menu theme refresh completed", "FlatUIHomeMenu");
 }

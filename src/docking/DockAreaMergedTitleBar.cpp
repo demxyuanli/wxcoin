@@ -176,9 +176,11 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
     // Get style config with theme initialization
     const DockStyleConfig& style = GetDockStyleConfig();
 
-    // Clear the entire area first to prevent ghosting
-    dc.SetBackground(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
-    dc.Clear();
+    // Clear background with themed colour to match dark theme
+    wxColour bg = CFG_COLOUR("DockTitleBarBgColour");
+    dc.SetBrush(wxBrush(bg));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(clientRect);
 
     // Reset pending refresh flag since we're painting now
     if (m_pendingRefresh) {
@@ -187,10 +189,7 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
         Unbind(wxEVT_IDLE, &DockAreaMergedTitleBar::onIdleRefresh, this);
     }
 
-    // Draw background
-    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
-    dc.SetPen(*wxTRANSPARENT_PEN);
-    dc.DrawRectangle(clientRect);
+    // Background already drawn above
 
     // Draw decorative pattern on title bar (skip during active resize)
     bool skipHeavyDecor = false;
@@ -203,8 +202,8 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
         drawTitleBarPattern(dc, clientRect);
     }
 
-    // Draw bottom border
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
+    // Draw bottom border using themed colour
+    dc.SetPen(wxPen(CFG_COLOUR("TabBorderBottomColour")));
     dc.DrawLine(0, clientRect.GetHeight() - 1, clientRect.GetWidth(), clientRect.GetHeight() - 1);
 
     // Draw tabs on the left side
@@ -842,7 +841,8 @@ void DockAreaMergedTitleBar::updateHorizontalTabRects(const wxSize& size, const 
                                                       int tabSpacing, int textPadding, bool isTop) {
     int x = 5; // Left margin
     int tabHeight = style.tabHeight;
-    int tabY = isTop ? style.tabTopMargin : (size.GetHeight() - style.tabTopMargin - tabHeight);
+    // Place tabs flush to title bar bottom: top margin 0 for top position
+    int tabY = isTop ? 0 : (size.GetHeight() - style.tabTopMargin - tabHeight);
 
     // Calculate available width for tabs (leave space for buttons)
     int buttonsWidth = 0;
@@ -939,7 +939,8 @@ void DockAreaMergedTitleBar::updateHorizontalTabRects(const wxSize& size, const 
         }
 
         lastTabEndX = tab.rect.GetRight();
-        x += tabWidth + tabSpacing;
+        // Bottom spacing 0; keep horizontal spacing from style
+        x += tabWidth + style.tabSpacing;
     }
 
     // Position overflow button
@@ -1477,32 +1478,21 @@ void DockAreaMergedTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
         dc.SetPen(wxPen(dotColor, 1));
         dc.SetBrush(wxBrush(dotColor));
         
-        // Pattern parameters from theme configuration
-        int patternWidth = style.patternWidth;   // Pattern width from theme
-        int patternHeight = style.patternHeight; // Pattern height from theme
-        int dotSize = 1;        // 1 pixel dots
-        
-        // Calculate vertical center position
-        int centerY = rect.y + (rect.height - patternHeight) / 2;
-        
-        // Draw horizontal tiling pattern across the available space (no spacing)
+        // Fixed 3x3 unit pattern and zero spacing
+        const int unitWidth = 3;
+        const int unitHeight = 3;
+        const int dotSize = 1;
+
+        // Vertically center the 3px-high pattern
+        int centerY = rect.y + (rect.height - unitHeight) / 2;
+
+        // Tile horizontally with zero spacing
         int currentX = leftX;
-        int patternCount = 0;
-        
-        while (currentX + patternWidth <= rightX) {
-            // Draw the 3 specific dots in 3x3 pattern at current position
-            // Top-left dot (position 0,0)
+        while (currentX + unitWidth <= rightX) {
             dc.DrawCircle(currentX, centerY, dotSize);
-            
-            // Bottom-left dot (position 0,2)
             dc.DrawCircle(currentX, centerY + 2, dotSize);
-            
-            // Right-middle dot (position 2,1)
             dc.DrawCircle(currentX + 2, centerY + 1, dotSize);
-            
-            // Move to next pattern position (no spacing)
-            currentX += patternWidth;
-            patternCount++;
+            currentX += unitWidth; // zero spacing
         }
         
         // Reduced logging to avoid paint-time overhead

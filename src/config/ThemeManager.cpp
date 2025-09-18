@@ -143,7 +143,8 @@ void ThemeManager::loadSizeConfigurations(ThemeProfile& theme) {
 	// Load size configurations from various sections
 	std::vector<std::string> sizeSections = {
 		"BarSizes", "ButtonBarSizes", "Separators", "Icons",
-		"GallerySizes", "PanelSizes", "HomeSpace", "HomeMenu", "DragOverlay"
+		"GallerySizes", "PanelSizes", "HomeSpace", "HomeMenu", "DragOverlay",
+		"DockArea", "ActBar", "ButtonBar"
 	};
 
 	for (const auto& section : sizeSections) {
@@ -249,6 +250,10 @@ bool ThemeManager::setCurrentTheme(const std::string& themeName) {
 	}
 
 	m_currentTheme = themeName;
+
+	// Clear SVG icon cache to ensure icons are re-rendered with new theme colors
+	SvgIconManager::GetInstance().ClearThemeCache();
+	LOG_DBG("Cleared SVG icon cache for theme change", "ThemeManager");
 
 	// Save current theme to config
 	if (m_configManager) {

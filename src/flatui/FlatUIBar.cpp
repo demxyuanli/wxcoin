@@ -101,9 +101,6 @@ FlatUIBar::FlatUIBar(wxWindow* parent, wxWindowID id, const wxPoint& pos, const 
 		RefreshTheme();
 		});
 
-	SetBarTopMargin(0);
-	SetBarBottomMargin(0);
-
 	// Create the main container first
 	m_barContainer = new FlatBarSpaceContainer(this, wxID_ANY);
 	m_barContainer->SetName("BarSpaceContainer");

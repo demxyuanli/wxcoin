@@ -115,9 +115,14 @@ void DockAreaTitleBar::onPaint(wxPaintEvent& event) {
     // Set font from ThemeManager
     dc.SetFont(style.font);
 
-    // Draw styled background using new style system
+    // Draw themed background (avoid system colours to support dark theme)
     wxRect rect(0, 0, GetClientSize().GetWidth(), style.titleBarHeight);
-    DrawStyledRect(dc, rect, style, false, false, true);  // Title bar with bottom border
+    dc.SetBrush(wxBrush(CFG_COLOUR("DockTitleBarBgColour")));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(rect);
+    // Bottom border
+    dc.SetPen(wxPen(CFG_COLOUR("TabBorderBottomColour"), 1));
+    dc.DrawLine(rect.GetLeft(), rect.GetBottom() - 1, rect.GetRight(), rect.GetBottom() - 1);
     
     // Draw decorative pattern on title bar
     drawTitleBarPattern(dc, rect);
@@ -278,32 +283,24 @@ void DockAreaTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
         dc.SetPen(wxPen(dotColor, 1));
         dc.SetBrush(wxBrush(dotColor));
         
-        // Pattern parameters from theme configuration
-        int patternWidth = style.patternWidth;   // Pattern width from theme
-        int patternHeight = style.patternHeight; // Pattern height from theme
-        int dotSize = 1;        // 1 pixel dots
-        
-        // Calculate vertical center position
-        int centerY = rect.y + (rect.height - patternHeight) / 2;
-        
-        // Draw horizontal tiling pattern across the available space (no spacing)
+        // Fixed 3x3 unit pattern and zero spacing for consistent appearance
+        const int unitWidth = 3;
+        const int unitHeight = 3;
+        const int dotSize = 1;  // 1px dots
+
+        // Vertically center the actual 3px-high pattern
+        int centerY = rect.y + (rect.height - unitHeight) / 2;
+
+        // Tile horizontally with zero spacing
         int currentX = leftX;
-        int patternCount = 0;
-        
-        while (currentX + patternWidth <= rightX) {
-            // Draw the 3 specific dots in 3x3 pattern at current position
-            // Top-left dot (position 0,0)
+        while (currentX + unitWidth <= rightX) {
+            // Top-left
             dc.DrawCircle(currentX, centerY, dotSize);
-            
-            // Bottom-left dot (position 0,2)
+            // Bottom-left
             dc.DrawCircle(currentX, centerY + 2, dotSize);
-            
-            // Right-middle dot (position 2,1)
+            // Right-middle
             dc.DrawCircle(currentX + 2, centerY + 1, dotSize);
-            
-            // Move to next pattern position (no spacing)
-            currentX += patternWidth;
-            patternCount++;
+            currentX += unitWidth; // zero spacing
         }
     }
     

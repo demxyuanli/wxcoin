@@ -161,10 +161,12 @@ const DockStyleConfig& GetDockStyleConfig() {
 void DockStyleConfig::InitializeFromThemeManager() {
     // Use standard ThemeManager macros consistent with the rest of the project
     try {
-        // Update colors from existing theme configuration
-        // Use appropriate existing colors for docking elements
-        backgroundColour = DOCK_COLOUR("MainBackgroundColour");
-        activeBackgroundColour = DOCK_COLOUR("SecondaryBackgroundColour");
+        // Update colors from theme (dock-specific keys)
+        // Background of tab bar/title bar is handled by callers, but keep a sane default
+        backgroundColour = DOCK_COLOUR("DockTabBarBgColour");
+        // Active tab background should use docking specific colour
+        activeBackgroundColour = DOCK_COLOUR("DockTabActiveBgColour");
+        // Hover colour from generic highlight
         hoverBackgroundColour = DOCK_COLOUR("HighlightColour");
 
         // Use border colors from theme (use specific tab border colors)
@@ -173,10 +175,10 @@ void DockStyleConfig::InitializeFromThemeManager() {
         borderLeftColour = DOCK_COLOUR("TabBorderLeftColour");
         borderRightColour = DOCK_COLOUR("TabBorderRightColour");
 
-        // Use text colors from theme
-        textColour = DOCK_COLOUR("DefaultTextColour");
-        activeTextColour = DOCK_COLOUR("DefaultTextColour");
-        inactiveTextColour = DOCK_COLOUR("DefaultTextColour");
+        // Use docking specific text colours
+        textColour = DOCK_COLOUR("DockTabTextColour");
+        activeTextColour = DOCK_COLOUR("DockTabActiveTextColour");
+        inactiveTextColour = DOCK_COLOUR("DockTabTextColour");
 
         // Update font from theme
         font = DOCK_FONT();

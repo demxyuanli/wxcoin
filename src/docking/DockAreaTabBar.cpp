@@ -111,9 +111,12 @@ void DockAreaTabBar::onPaint(wxPaintEvent& event) {
     // Get style config with theme initialization
     const DockStyleConfig& style = GetDockStyleConfig();
 
-    // Clear background
-    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
-    dc.Clear();
+    // Clear background using themed colour (DockTabBarBgColour)
+    // Do not use system colours to ensure dark theme consistency
+    wxColour tabBarBg = CFG_COLOUR("DockTabBarBgColour");
+    dc.SetBrush(wxBrush(tabBarBg));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(GetClientRect());
 
     // Draw tabs
     for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
