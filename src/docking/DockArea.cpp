@@ -6,6 +6,7 @@
 #include "docking/DockContainerWidget.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/DockOverlay.h"
+#include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/settings.h>
 #include <wx/menu.h>
@@ -88,10 +89,18 @@ DockArea::DockArea(DockManager* dockManager, DockContainerWidget* parent)
 
     // Update initial button states
     updateTitleBarButtonStates();
+
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 DockArea::~DockArea() {
     wxLogDebug("DockArea::~DockArea() - destroying area %p with %d widgets", this, (int)m_dockWidgets.size());
+
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 
     // Clear all dock widgets to prevent them from being destroyed
     for (auto* widget : m_dockWidgets) {
@@ -645,6 +654,31 @@ void DockArea::updateLayoutForTabPosition() {
             break;
         }
     }
+}
+
+void DockArea::RefreshTheme() {
+    // Apply theme colors to content area
+    if (m_contentArea) {
+        m_contentArea->SetBackgroundColour(CFG_COLOUR("DockAreaContentBgColour"));
+    }
+
+    // Refresh child components that support theme
+    if (m_mergedTitleBar) {
+        m_mergedTitleBar->RefreshTheme();
+    }
+    if (m_titleBar) {
+        m_titleBar->RefreshTheme();
+    }
+    if (m_tabBar) {
+        m_tabBar->RefreshTheme();
+    }
+
+    // Apply theme colors to this component
+    SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
+
+    // Refresh the display
+    Refresh(true);
+    Update();
 }
 
 } // namespace ads

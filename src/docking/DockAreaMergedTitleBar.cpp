@@ -7,6 +7,7 @@
 #include "docking/FloatingDockContainer.h"
 #include "docking/DockOverlay.h"
 #include "config/SvgIconManager.h"
+#include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/menu.h>
 #include <wx/graphics.h>
@@ -59,9 +60,17 @@ DockAreaMergedTitleBar::DockAreaMergedTitleBar(DockArea* dockArea)
 
     // Enable double buffering for smoother rendering
     SetDoubleBuffered(true);
+
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 DockAreaMergedTitleBar::~DockAreaMergedTitleBar() {
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
+
     // Clean up drag preview if it exists
     if (m_dragPreview) {
         if (!m_dragPreview->IsBeingDeleted()) {
@@ -1531,6 +1540,15 @@ void DockAreaMergedTitleBar::onIdleRefresh(wxIdleEvent& event) {
 void DockAreaMergedTitleBar::onResizeRefreshTimer(wxTimerEvent& event) {
     // Perform the deferred refresh after resize debounce period
     Refresh();
+    Update();
+}
+
+void DockAreaMergedTitleBar::RefreshTheme() {
+    // Apply theme colors to background
+    SetBackgroundColour(CFG_COLOUR("DockTitleBarBgColour"));
+
+    // Refresh the display to apply new theme colors
+    Refresh(true);
     Update();
 }
 

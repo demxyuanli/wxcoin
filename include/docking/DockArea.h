@@ -216,6 +216,9 @@ public:
     // Title
     wxString currentTabTitle() const;
     
+    // Theme support
+    void RefreshTheme();
+    
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CURRENT_CHANGED;
     static wxEventTypeTag<wxCommandEvent> EVT_DOCK_AREA_CLOSING;
@@ -300,6 +303,9 @@ public:
     // Tab position support
     void setTabPosition(TabPosition position);
     TabPosition tabPosition() const { return m_tabPosition; }
+
+    // Theme support
+    void RefreshTheme();
 
 protected:
     void onPaint(wxPaintEvent& event);
@@ -430,6 +436,9 @@ public:
     void showTabOverflowMenu();
     void showTabContextMenu(int tab, const wxPoint& pos);
     
+    // Theme support
+    void RefreshTheme();
+    
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_TAB_CLOSE_REQUESTED;
     static wxEventTypeTag<wxCommandEvent> EVT_TAB_CURRENT_CHANGED;
@@ -494,6 +503,9 @@ public:
     void updateButtonStates();
     void showCloseButton(bool show);
     void showAutoHideButton(bool show);
+    
+    // Theme support
+    void RefreshTheme();
     
     // Events
     static wxEventTypeTag<wxCommandEvent> EVT_TITLE_BAR_BUTTON_CLICKED;

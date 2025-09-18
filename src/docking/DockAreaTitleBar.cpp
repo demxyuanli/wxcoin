@@ -3,6 +3,7 @@
 #include "docking/DockArea.h"
 #include "docking/DockContainerWidget.h"
 #include "config/SvgIconManager.h"
+#include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/button.h>
 
@@ -40,9 +41,17 @@ DockAreaTitleBar::DockAreaTitleBar(DockArea* dockArea)
 
     // Note: updateTitle() is deferred to avoid race conditions during construction
     // It will be called later when the object is fully initialized
+
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 DockAreaTitleBar::~DockAreaTitleBar() {
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
+
     // Clear pointers to prevent access after destruction
     m_titleLabel = nullptr;
     m_closeButton = nullptr;
@@ -301,6 +310,20 @@ void DockAreaTitleBar::drawTitleBarPattern(wxDC& dc, const wxRect& rect) {
     // Restore original pen and brush
     dc.SetPen(oldPen);
     dc.SetBrush(oldBrush);
+}
+
+void DockAreaTitleBar::RefreshTheme() {
+    // Apply theme colors to background
+    SetBackgroundColour(CFG_COLOUR("DockTitleBarBgColour"));
+
+    // Update title label color if it exists
+    if (m_titleLabel) {
+        m_titleLabel->SetForegroundColour(CFG_COLOUR("DockTitleBarTextColour"));
+    }
+
+    // Refresh the display to apply new theme colors
+    Refresh(true);
+    Update();
 }
 
 } // namespace ads

@@ -7,6 +7,7 @@
 #include "docking/FloatingDockContainer.h"
 #include "docking/DockOverlay.h"
 #include "config/SvgIconManager.h"
+#include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/menu.h>
 #include <wx/cursor.h>
@@ -43,9 +44,16 @@ DockAreaTabBar::DockAreaTabBar(DockArea* dockArea)
 
     // Improve visual smoothness on resize
     SetDoubleBuffered(true);
+
+    // Register theme change listener
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 DockAreaTabBar::~DockAreaTabBar() {
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void DockAreaTabBar::insertTab(int index, DockWidget* dockWidget) {
@@ -957,6 +965,15 @@ bool DockAreaTabBar::isOverCloseButton(int tabIndex, const wxPoint& pos) const {
     }
 
     return tab.closeButtonRect.Contains(pos);
+}
+
+void DockAreaTabBar::RefreshTheme() {
+    // Apply theme colors to background
+    SetBackgroundColour(CFG_COLOUR("DockTabBarBgColour"));
+
+    // Refresh the display to apply new theme colors
+    Refresh(true);
+    Update();
 }
 
 } // namespace ads

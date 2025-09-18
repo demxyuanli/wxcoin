@@ -309,19 +309,11 @@ void FlatUIFrame::OnThemeChanged(wxCommandEvent& event)
 	auto& themeManager = ThemeManager::getInstance();
 	themeManager.saveCurrentTheme();
 
-	// Perform comprehensive UI refresh with debouncing
-	static wxDateTime lastThemeChange = wxDateTime::Now();
-	wxDateTime now = wxDateTime::Now();
+	// Remove frame-level debouncing since ThemeManager already handles debouncing
+	// This prevents double-debouncing which can cause theme changes to be missed
+	LOG_INF("Processing theme change event for theme: " + themeName.ToStdString(), "FlatUIFrame");
 
-	// Debounce theme changes - ignore if less than 100ms since last change
-	if ((now - lastThemeChange).GetMilliseconds() < 100) {
-		LOG_DBG("Theme change debounced - too soon since last change", "FlatUIFrame");
-		return;
-	}
-
-	lastThemeChange = now;
-
-	// Perform comprehensive UI refresh
+	// Perform comprehensive UI refresh without additional debouncing
 	RefreshAllUI();
 
 	event.Skip();
@@ -363,24 +355,15 @@ void FlatUIFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 
 void FlatUIFrame::RefreshAllUI()
 {
-	// Performance optimization: Use batch update with minimal UI blocking
-	static wxDateTime lastThemeUpdate = wxDateTime::Now();
-	wxDateTime now = wxDateTime::Now();
+	// Synchronous update to ensure proper timing and avoid race conditions
+	// ThemeManager already handles debouncing, so no need for additional debouncing here
+	LOG_INF("Starting comprehensive UI refresh for theme change", "FlatUIFrame");
 
-	// Debounce rapid theme changes (minimum 50ms between updates)
-	if ((now - lastThemeUpdate).GetMilliseconds() < 50) {
-		LOG_DBG("Theme update debounced - too soon since last update", "FlatUIFrame");
-		return;
-	}
-	lastThemeUpdate = now;
-
-	// Use asynchronous update for better performance
-	CallAfter([this]() {
-		PerformAsyncThemeUpdate();
-		});
+	// Perform immediate synchronous update for better reliability
+	PerformSyncThemeUpdate();
 }
 
-void FlatUIFrame::PerformAsyncThemeUpdate()
+void FlatUIFrame::PerformSyncThemeUpdate()
 {
 	// Phase 1: Freeze UI to prevent intermediate redraws
 	Freeze();
@@ -391,11 +374,11 @@ void FlatUIFrame::PerformAsyncThemeUpdate()
 	// Phase 3: Single refresh at the end
 	Thaw();
 	InvalidateBestSize();
-	Layout();
+	Layout(); // Restored Layout() call - duplicate processing issues have been fixed
 	Refresh(true);
 	Update();
 
-	LOG_INF("Async theme refresh completed with performance optimization", "FlatUIFrame");
+	LOG_INF("Synchronous theme refresh completed", "FlatUIFrame");
 }
 
 void FlatUIFrame::BatchUpdateAllComponents()
@@ -419,46 +402,101 @@ void FlatUIFrame::BatchUpdateAllComponents()
 	for (wxWindow* window : allComponents) {
 		wxString className = window->GetClassInfo()->GetClassName();
 
-		// Update theme-aware components
+		// Check if component implements FlatUIThemeAware (automatic theme handling)
+		FlatUIThemeAware* themeAware = dynamic_cast<FlatUIThemeAware*>(window);
+		if (themeAware) {
+			// Skip components that inherit from FlatUIThemeAware as they handle theme changes automatically
+			// These components already have their own theme listeners and will refresh themselves
+			LOG_DBG("Skipping FlatUIThemeAware component: " + className.ToStdString(), "FlatUIFrame");
+			continue;
+		}
+
+		// Update components that have RefreshTheme method but don't inherit from FlatUIThemeAware
 		if (className == "FlatUIHomeMenu") {
-			FlatUIHomeMenu* homeMenu = static_cast<FlatUIHomeMenu*>(window);
-			homeMenu->RefreshTheme();
-		}
-		else if (className == "FlatUIButtonBar") {
-			FlatUIButtonBar* buttonBar = static_cast<FlatUIButtonBar*>(window);
-			buttonBar->RefreshTheme();
-		}
-		else if (className == "FlatUIPanel") {
-			FlatUIPanel* panel = static_cast<FlatUIPanel*>(window);
-			panel->RefreshTheme();
-		}
-		else if (className == "FlatUIGallery") {
-			FlatUIGallery* gallery = static_cast<FlatUIGallery*>(window);
-			gallery->RefreshTheme();
+			// Skip FlatUIHomeMenu - it has its own theme listener and RefreshTheme method
+			LOG_DBG("Skipping FlatUIHomeMenu - has its own theme handling", "FlatUIFrame");
 		}
 		else if (className == "FlatUIPage") {
-			FlatUIPage* page = static_cast<FlatUIPage*>(window);
-			page->RefreshTheme();
+			// Skip FlatUIPage - it has its own theme listener and RefreshTheme method
+			LOG_DBG("Skipping FlatUIPage - has its own theme handling", "FlatUIFrame");
 		}
 		else if (className == "FlatUIHomeSpace") {
-			FlatUIHomeSpace* homeSpace = static_cast<FlatUIHomeSpace*>(window);
-			homeSpace->RefreshTheme();
+			// Skip FlatUIHomeSpace - it has its own theme listener and RefreshTheme method
+			// Duplicate processing here can cause layout issues like extra spacing around Home logo
+			LOG_DBG("Skipping FlatUIHomeSpace - has its own theme handling", "FlatUIFrame");
 		}
 		else if (className == "FlatUIProfileSpace") {
-			FlatUIProfileSpace* profileSpace = static_cast<FlatUIProfileSpace*>(window);
-			profileSpace->RefreshTheme();
+			// Skip FlatUIProfileSpace - it has its own theme listener and RefreshTheme method
+			LOG_DBG("Skipping FlatUIProfileSpace - has its own theme handling", "FlatUIFrame");
 		}
 		else if (className == "FlatUISystemButtons") {
-			FlatUISystemButtons* systemButtons = static_cast<FlatUISystemButtons*>(window);
-			systemButtons->RefreshTheme();
+			// Skip FlatUISystemButtons - it has its own theme listener and RefreshTheme method
+			LOG_DBG("Skipping FlatUISystemButtons - has its own theme handling", "FlatUIFrame");
 		}
 		else if (className == "FlatBarSpaceContainer") {
-			FlatBarSpaceContainer* container = static_cast<FlatBarSpaceContainer*>(window);
-			container->RefreshTheme();
+			// Skip FlatBarSpaceContainer - it has its own theme listener and RefreshTheme method
+			LOG_DBG("Skipping FlatBarSpaceContainer - has its own theme handling", "FlatUIFrame");
 		}
 		else if (className == "FlatUIFunctionSpace") {
-			FlatUIFunctionSpace* funcSpace = static_cast<FlatUIFunctionSpace*>(window);
-			funcSpace->RefreshTheme();
+			// Skip FlatUIFunctionSpace - it has its own theme listener and RefreshTheme method
+			LOG_DBG("Skipping FlatUIFunctionSpace - has its own theme handling", "FlatUIFrame");
+		}
+		// Skip Flat Widget controls - they all have their own theme listeners
+		else if (className == "FlatButton") {
+			LOG_DBG("Skipping FlatButton - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatCheckBox") {
+			LOG_DBG("Skipping FlatCheckBox - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatComboBox") {
+			LOG_DBG("Skipping FlatComboBox - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatLineEdit") {
+			LOG_DBG("Skipping FlatLineEdit - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatProgressBar") {
+			LOG_DBG("Skipping FlatProgressBar - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatRadioButton") {
+			LOG_DBG("Skipping FlatRadioButton - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatSlider") {
+			LOG_DBG("Skipping FlatSlider - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatSwitch") {
+			LOG_DBG("Skipping FlatSwitch - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "FlatEnhancedButton") {
+			LOG_DBG("Skipping FlatEnhancedButton - has its own theme handling", "FlatUIFrame");
+		}
+		// Update additional FlatUI controls
+		else if (className == "FlatUIStatusBar") {
+			window->Refresh(true);
+			window->Update();
+		}
+		else if (className == "FlatUIUnpinButton") {
+			window->Refresh(true);
+			window->Update();
+		}
+		else if (className == "FlatUIPinControl") {
+			window->Refresh(true);
+			window->Update();
+		}
+		else if (className == "FlatUIPinButton") {
+			window->Refresh(true);
+			window->Update();
+		}
+		else if (className == "FlatUICustomControl") {
+			window->Refresh(true);
+			window->Update();
+		}
+		else if (className == "FlatUISpacerControl") {
+			window->Refresh(true);
+			window->Update();
+		}
+		else if (className == "FlatBarNotebook") {
+			window->Refresh(true);
+			window->Update();
 		}
 		// Update standard wxWidgets controls
 		else if (className == "wxStaticText") {
@@ -482,20 +520,29 @@ void FlatUIFrame::BatchUpdateAllComponents()
 			window->SetBackgroundColour(CFG_COLOUR("IconPanelBgColour"));
 		}
 		else if (className == "FlatUIBar") {
-			window->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
+			// Skip FlatUIBar - it has its own theme listener and RefreshTheme method
+			// Duplicate processing here can cause layout issues like extra top margin
+			LOG_DBG("Skipping FlatUIBar - has its own theme handling", "FlatUIFrame");
 		}
 		else if (className == "FlatUITabDropdown") {
 			window->SetBackgroundColour(CFG_COLOUR("BarBackgroundColour"));
 		}
+		// Skip DockArea components - they all have their own theme listeners
+		else if (className == "DockArea") {
+			LOG_DBG("Skipping DockArea - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "DockAreaMergedTitleBar") {
+			LOG_DBG("Skipping DockAreaMergedTitleBar - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "DockAreaTabBar") {
+			LOG_DBG("Skipping DockAreaTabBar - has its own theme handling", "FlatUIFrame");
+		}
+		else if (className == "DockAreaTitleBar") {
+			LOG_DBG("Skipping DockAreaTitleBar - has its own theme handling", "FlatUIFrame");
+		}
 	}
 
-	// Update ribbon colors
-	FlatUIBar* ribbon = GetUIBar();
-	if (ribbon) {
-		ribbon->SetTabBorderColour(CFG_COLOUR("BarTabBorderColour"));
-		ribbon->SetActiveTabBackgroundColour(CFG_COLOUR("BarActiveTabBgColour"));
-		ribbon->SetActiveTabTextColour(CFG_COLOUR("BarActiveTextColour"));
-		ribbon->SetInactiveTabTextColour(CFG_COLOUR("BarInactiveTextColour"));
-		ribbon->SetTabBorderTopColour(CFG_COLOUR("BarTabBorderTopColour"));
-	}
+	// Note: FlatUIBar colors are handled by its own RefreshTheme method
+	// to avoid duplicate processing and layout issues
+	LOG_INF("Batch component theme update completed", "FlatUIFrame");
 }

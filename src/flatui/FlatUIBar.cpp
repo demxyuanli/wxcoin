@@ -929,6 +929,12 @@ void FlatUIBar::RefreshTheme()
 	m_barBottomMargin = CFG_INT("BarBottomMargin");
 	m_tabTopSpacing = CFG_INT("TabTopSpacing");
 	m_barUnpinnedHeight = CFG_INT("BarUnpinnedHeight");
+	
+	// Update border widths - this was missing and causing the 2px spacing issue!
+	m_tabBorderTop = CFG_INT("BarTabBorderTop");
+	m_tabBorderBottom = CFG_INT("BarTabBorderBottom");
+	m_tabBorderLeft = CFG_INT("BarTabBorderLeft");
+	m_tabBorderRight = CFG_INT("BarTabBorderRight");
 
 	// Update control properties
 	SetFont(CFG_DEFAULTFONT());
