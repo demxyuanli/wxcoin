@@ -251,6 +251,34 @@ void DockSystemButtons::UpdateThemeColors()
 void DockSystemButtons::OnThemeChanged()
 {
 	UpdateThemeColors();
+	
+	// Refresh SVG icons with new theme colors
+	for (auto& button : m_buttons) {
+		// Re-acquire SVG icons based on button type
+		switch (button.type) {
+		case DockSystemButtonType::PIN:
+			button.icon = SVG_ICON("thumbtack", wxSize(12, 12));
+			button.altIcon = SVG_ICON("unpin", wxSize(12, 12));
+			break;
+		case DockSystemButtonType::MINIMIZE:
+			button.icon = SVG_ICON("minimize", wxSize(12, 12));
+			button.altIcon = SVG_ICON("maximize", wxSize(12, 12));
+			break;
+		case DockSystemButtonType::CLOSE:
+			button.icon = SVG_ICON("close", wxSize(12, 12));
+			break;
+		default:
+			break;
+		}
+		
+		// Update hover and pressed icons
+		button.hoverIcon = button.icon;
+		button.pressedIcon = button.icon;
+		button.altHoverIcon = button.altIcon;
+		button.altPressedIcon = button.altIcon;
+	}
+	
+	Refresh();
 }
 
 void DockSystemButtons::OnButtonClick(wxMouseEvent& event)

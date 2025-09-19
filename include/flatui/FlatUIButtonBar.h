@@ -50,6 +50,8 @@ public:
 		int id;
 		wxString label;
 		wxBitmap icon;
+		wxString iconName; // SVG icon name for theme-aware updates
+		wxSize iconSize;   // Icon size for theme-aware updates
 		wxRect rect;
 		wxMenu* menu = nullptr;
 		bool isDropDown = false;
@@ -98,6 +100,11 @@ public:
 	void AddToggleButton(int id, const wxString& label, bool initialState = false, const wxBitmap& bitmap = wxNullBitmap, const wxString& tooltip = wxEmptyString);
 	void AddCheckBox(int id, const wxString& label, bool initialState = false, const wxString& tooltip = wxEmptyString);
 	void AddRadioButton(int id, const wxString& label, int radioGroup, bool initialState = false, const wxString& tooltip = wxEmptyString);
+
+	// SVG icon methods for theme-aware icons
+	void AddButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, wxMenu* menu = nullptr, const wxString& tooltip = wxEmptyString);
+	void AddToggleButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, bool initialState = false, const wxString& tooltip = wxEmptyString);
+	void SetButtonSVGIcon(int id, const wxString& iconName, const wxSize& iconSize);
 	void AddChoiceControl(int id, const wxString& label, const wxArrayString& choices, int initialSelection = 0, const wxString& tooltip = wxEmptyString);
 	void AddSeparator();
 

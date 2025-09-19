@@ -5,7 +5,10 @@
 #include "docking/DockManager.h"
 #include "docking/DockSplitter.h"
 #include "docking/DockLayoutConfig.h"
+#include "config/ThemeManager.h"
+#include <wx/timer.h>
 #include <algorithm>
+#include <memory>
 
 namespace ads {
 
@@ -31,18 +34,17 @@ public:
 
 // DockContainerWidget implementation
 DockContainerWidget::DockContainerWidget(DockManager* dockManager, wxWindow* parent)
-    : wxPanel(parent)
+    : wxPanel(parent, wxID_ANY)
     , d(std::make_unique<Private>(this))
     , m_dockManager(dockManager)
+    , m_rootSplitter(nullptr)
     , m_floatingWidget(nullptr)
     , m_lastAddedArea(nullptr)
-    , m_layoutConfig(nullptr)
     , m_resizeTimer(nullptr)
     , m_layoutUpdateTimer(nullptr)
-    , m_lastContainerSize(wxSize(0, 0))
-    , m_hasUserAdjustedLayout(false)
     , m_isResizeFreezeActive(false)
     , m_isResizing(false)
+    , m_hasUserAdjustedLayout(false)
 {
     // Create layout
     m_layout = new wxBoxSizer(wxVERTICAL);
@@ -62,6 +64,18 @@ DockContainerWidget::DockContainerWidget(DockManager* dockManager, wxWindow* par
             m_layoutConfig->LoadFromConfig();
         }
     }
+
+    // Create timers
+    m_resizeTimer = new wxTimer(this);
+    m_layoutUpdateTimer = new wxTimer(this);
+
+    // Initial theme setup
+    RefreshTheme();
+
+    // React to theme changes
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        RefreshTheme();
+    });
 }
 
 DockContainerWidget::~DockContainerWidget() {
@@ -70,6 +84,8 @@ DockContainerWidget::~DockContainerWidget() {
     
     // The splitter and other child windows will be destroyed automatically
     // by wxWidgets parent-child mechanism
+    m_layoutUpdateTimer->Stop();
+    delete m_layoutUpdateTimer;
 }
 
 DockArea* DockContainerWidget::addDockWidget(DockWidgetArea area, DockWidget* dockWidget, 
@@ -495,6 +511,13 @@ void DockContainerWidget::handleGlobalDockDrop(DockWidget* widget, DockWidgetAre
     // Force layout update after global drop
     Layout();
     Refresh();
+}
+
+void DockContainerWidget::RefreshTheme()
+{
+    SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
+    Refresh(true);
+    Update();
 }
 
 } // namespace ads

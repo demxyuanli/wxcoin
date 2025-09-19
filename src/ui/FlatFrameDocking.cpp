@@ -152,6 +152,9 @@ void FlatFrameDocking::InitializeDockingLayout() {
 
     // Create a panel for the main work area (between FlatUIBar and StatusBar)
     m_workAreaPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+    
+    // Set background color to match dock area to avoid white borders in dark theme
+    m_workAreaPanel->SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
 
     // Create dock manager to manage the work area
     m_dockManager = new DockManager(m_workAreaPanel);
@@ -171,7 +174,7 @@ void FlatFrameDocking::InitializeDockingLayout() {
     m_workAreaPanel->SetSizer(workAreaSizer);
 
     // Add the work area panel to the main sizer with border margins
-    mainSizer->Add(m_workAreaPanel, 1, wxEXPAND | wxLEFT | wxBOTTOM | wxRIGHT, 2);
+    mainSizer->Add(m_workAreaPanel, 1, wxEXPAND | wxLEFT | wxRIGHT, 0);
 
     // Get status bar from base class (should already exist from BorderlessFrameLogic constructor)
     FlatUIStatusBar* statusBar = GetFlatUIStatusBar();
@@ -191,7 +194,7 @@ void FlatFrameDocking::InitializeDockingLayout() {
 
         // Ensure status bar is added to the main sizer at the bottom with border margins
         if (mainSizer && !mainSizer->GetItem(statusBar)) {
-            mainSizer->Add(statusBar, 0, wxEXPAND | wxLEFT | wxBOTTOM | wxRIGHT, 1);
+            mainSizer->Add(statusBar, 0, wxEXPAND | wxLEFT | wxBOTTOM | wxRIGHT, 0);
         }
 
         // Ensure status bar is visible
@@ -910,6 +913,17 @@ void FlatFrameDocking::onSize(wxSizeEvent& event) {
 wxWindow* FlatFrameDocking::GetMainWorkArea() const {
     // Return the dock container widget as the main work area
     return m_dockManager ? m_dockManager->containerWidget() : m_workAreaPanel;
+}
+
+void FlatFrameDocking::OnThemeChanged(wxCommandEvent& event) {
+    // Call base class implementation first
+    FlatFrame::OnThemeChanged(event);
+    
+    // Update work area panel background color to match dock area
+    if (m_workAreaPanel) {
+        m_workAreaPanel->SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
+        m_workAreaPanel->Refresh();
+    }
 }
 
 void FlatFrameDocking::RegisterDockLayoutConfigListener() {

@@ -32,6 +32,9 @@ public:
 	// Splitter helpers
 	void SetInitialSashPosition(int px);
 	void SetSashGravity(double gravity);
+	
+	// Theme support
+	void RefreshTheme();
 
 private:
 	// UI header

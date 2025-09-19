@@ -1,6 +1,7 @@
 #include "flatui/FlatUIButtonBar.h"
 #include "flatui/FlatUIPanel.h"
 #include "config/ThemeManager.h"
+#include "config/SvgIconManager.h"
 
 // Style configuration methods
 void FlatUIButtonBar::SetButtonStyle(ButtonStyle style) {
@@ -133,6 +134,14 @@ void FlatUIButtonBar::RefreshTheme() {
 	// Update control properties
 	SetFont(CFG_DEFAULTFONT());
 	SetBackgroundColour(m_btnBarBgColour);
+
+	// Refresh SVG icons for theme-aware buttons
+	for (auto& button : m_buttons) {
+		if (!button.iconName.IsEmpty()) {
+			// Re-acquire SVG icon with new theme colors
+			button.icon = SvgIconManager::GetInstance().GetIconBitmap(button.iconName, button.iconSize);
+		}
+	}
 
 	// Note: Refresh is handled by parent frame for performance
 }

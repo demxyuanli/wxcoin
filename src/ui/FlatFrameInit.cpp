@@ -143,10 +143,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	m_searchCtrl->SetForegroundColour(CFG_COLOUR("SearchCtrlFgColour"));
 	m_searchCtrl->ShowSearchButton(true);
 	m_searchCtrl->ShowCancelButton(true);
-	wxBitmapButton* searchButton = new wxBitmapButton(searchPanel, ID_SearchExecute, SVG_ICON("search", wxSize(16, 16)));
-	searchButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+	m_searchButton = new wxBitmapButton(searchPanel, ID_SearchExecute, SvgIconManager::GetInstance().GetIconBitmap("search", wxSize(16, 16)));
+	m_searchButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
 	searchSizer->Add(m_searchCtrl, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, 2);
-	searchSizer->Add(searchButton, 0, wxALIGN_CENTER_VERTICAL);
+	searchSizer->Add(m_searchButton, 0, wxALIGN_CENTER_VERTICAL);
 	searchPanel->SetSizer(searchSizer);
 	searchPanel->SetFont(defaultFont);
 	m_ribbon->SetFunctionSpaceControl(searchPanel, 270);
@@ -154,14 +154,14 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	wxPanel* profilePanel = new wxPanel(m_ribbon);
 	profilePanel->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
 	wxBoxSizer* profileSizer = new wxBoxSizer(wxHORIZONTAL);
-	wxBitmapButton* userButton = new wxBitmapButton(profilePanel, ID_UserProfile, SVG_ICON("user", wxSize(16, 16)));
-	userButton->SetToolTip("User Profile");
-	userButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
-	wxBitmapButton* settingsButton = new wxBitmapButton(profilePanel, wxID_PREFERENCES, SVG_ICON("settings", wxSize(16, 16)));
-	settingsButton->SetToolTip("Settings");
-	settingsButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
-	profileSizer->Add(userButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
-	profileSizer->Add(settingsButton, 0, wxALIGN_CENTER_VERTICAL);
+	m_userButton = new wxBitmapButton(profilePanel, ID_UserProfile, SvgIconManager::GetInstance().GetIconBitmap("user", wxSize(16, 16)));
+	m_userButton->SetToolTip("User Profile");
+	m_userButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+	m_settingsButton = new wxBitmapButton(profilePanel, wxID_PREFERENCES, SvgIconManager::GetInstance().GetIconBitmap("settings", wxSize(16, 16)));
+	m_settingsButton->SetToolTip("Settings");
+	m_settingsButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+	profileSizer->Add(m_userButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	profileSizer->Add(m_settingsButton, 0, wxALIGN_CENTER_VERTICAL);
 	profilePanel->SetSizer(profileSizer);
 	m_ribbon->SetProfileSpaceControl(profilePanel, 60);
 
@@ -180,11 +180,11 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	filePanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* fileButtonBar = new FlatUIButtonBar(filePanel);
 	fileButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	fileButtonBar->AddButton(wxID_NEW, "New", SVG_ICON("new", wxSize(16, 16)), nullptr, "Create a new project");
-	fileButtonBar->AddButton(wxID_OPEN, "Open", SVG_ICON("open", wxSize(16, 16)), nullptr, "Open an existing project");
-	fileButtonBar->AddButton(wxID_SAVE, "Save", SVG_ICON("save", wxSize(16, 16)), nullptr, "Save current project");
-	fileButtonBar->AddButton(ID_SAVE_AS, "Save As", SVG_ICON("saveas", wxSize(16, 16)), nullptr, "Save project with a new name");
-	fileButtonBar->AddButton(ID_IMPORT_STEP, "Import STEP", SVG_ICON("import", wxSize(16, 16)), nullptr, "Import STEP file");
+	fileButtonBar->AddButtonWithSVG(wxID_NEW, "New", "new", wxSize(16, 16), nullptr, "Create a new project");
+	fileButtonBar->AddButtonWithSVG(wxID_OPEN, "Open", "open", wxSize(16, 16), nullptr, "Open an existing project");
+	fileButtonBar->AddButtonWithSVG(wxID_SAVE, "Save", "save", wxSize(16, 16), nullptr, "Save current project");
+	fileButtonBar->AddButtonWithSVG(ID_SAVE_AS, "Save As", "saveas", wxSize(16, 16), nullptr, "Save project with a new name");
+	fileButtonBar->AddButtonWithSVG(ID_IMPORT_STEP, "Import STEP", "import", wxSize(16, 16), nullptr, "Import STEP file");
 	filePanel->AddButtonBar(fileButtonBar, 0, wxEXPAND | wxALL, 5);
 	page1->AddPanel(filePanel);
 
@@ -197,13 +197,13 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	createPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* createButtonBar = new FlatUIButtonBar(createPanel);
 	createButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	createButtonBar->AddButton(ID_CREATE_BOX, "Box", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Create a box geometry");
-	createButtonBar->AddButton(ID_CREATE_SPHERE, "Sphere", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Create a sphere geometry");
-	createButtonBar->AddButton(ID_CREATE_CYLINDER, "Cylinder", SVG_ICON("cylinder", wxSize(16, 16)), nullptr, "Create a cylinder geometry");
-	createButtonBar->AddButton(ID_CREATE_CONE, "Cone", SVG_ICON("cone", wxSize(16, 16)), nullptr, "Create a cone geometry");
-	createButtonBar->AddButton(ID_CREATE_TORUS, "Torus", SVG_ICON("circle", wxSize(16, 16)), nullptr, "Create a torus geometry");
-	createButtonBar->AddButton(ID_CREATE_TRUNCATED_CYLINDER, "Truncated Cylinder", SVG_ICON("cylinder", wxSize(16, 16)), nullptr, "Create a truncated cylinder geometry");
-	createButtonBar->AddButton(ID_CREATE_WRENCH, "Wrench", SVG_ICON("wrench", wxSize(16, 16)), nullptr, "Create a wrench geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_BOX, "Box", "cube", wxSize(16, 16), nullptr, "Create a box geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_SPHERE, "Sphere", "circle", wxSize(16, 16), nullptr, "Create a sphere geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_CYLINDER, "Cylinder", "cylinder", wxSize(16, 16), nullptr, "Create a cylinder geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_CONE, "Cone", "cone", wxSize(16, 16), nullptr, "Create a cone geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_TORUS, "Torus", "circle", wxSize(16, 16), nullptr, "Create a torus geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_TRUNCATED_CYLINDER, "Truncated Cylinder", "cylinder", wxSize(16, 16), nullptr, "Create a truncated cylinder geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_WRENCH, "Wrench", "wrench", wxSize(16, 16), nullptr, "Create a wrench geometry");
 	createPanel->AddButtonBar(createButtonBar, 0, wxEXPAND | wxALL, 5);
 	page1->AddPanel(createPanel);
 	m_ribbon->AddPage(page1);
@@ -218,8 +218,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	editPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* editButtonBar = new FlatUIButtonBar(editPanel);
 	editButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	editButtonBar->AddButton(ID_UNDO, "Undo", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Undo last operation");
-	editButtonBar->AddButton(ID_REDO, "Redo", SVG_ICON("redo", wxSize(16, 16)), nullptr, "Redo last undone operation");
+	editButtonBar->AddButtonWithSVG(ID_UNDO, "Undo", "undo", wxSize(16, 16), nullptr, "Undo last operation");
+	editButtonBar->AddButtonWithSVG(ID_REDO, "Redo", "redo", wxSize(16, 16), nullptr, "Redo last undone operation");
 	editPanel->AddButtonBar(editButtonBar, 0, wxEXPAND | wxALL, 5);
 	page2->AddPanel(editPanel);
 	m_ribbon->AddPage(page2);
@@ -234,11 +234,11 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	viewPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* viewButtonBar = new FlatUIButtonBar(viewPanel);
 	viewButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	viewButtonBar->AddButton(ID_VIEW_ALL, "Fit All", SVG_ICON("fitview", wxSize(16, 16)), nullptr, "Fit all objects in view");
-	viewButtonBar->AddButton(ID_VIEW_TOP, "Top", SVG_ICON("topview", wxSize(16, 16)), nullptr, "Switch to top view");
-	viewButtonBar->AddButton(ID_VIEW_FRONT, "Front", SVG_ICON("frontview", wxSize(16, 16)), nullptr, "Switch to front view");
-	viewButtonBar->AddButton(ID_VIEW_RIGHT, "Right", SVG_ICON("rightview", wxSize(16, 16)), nullptr, "Switch to right view");
-	viewButtonBar->AddButton(ID_VIEW_ISOMETRIC, "Isometric", SVG_ICON("isoview", wxSize(16, 16)), nullptr, "Switch to isometric view");
+	viewButtonBar->AddButtonWithSVG(ID_VIEW_ALL, "Fit All", "fitview", wxSize(16, 16), nullptr, "Fit all objects in view");
+	viewButtonBar->AddButtonWithSVG(ID_VIEW_TOP, "Top", "topview", wxSize(16, 16), nullptr, "Switch to top view");
+	viewButtonBar->AddButtonWithSVG(ID_VIEW_FRONT, "Front", "frontview", wxSize(16, 16), nullptr, "Switch to front view");
+	viewButtonBar->AddButtonWithSVG(ID_VIEW_RIGHT, "Right", "rightview", wxSize(16, 16), nullptr, "Switch to right view");
+	viewButtonBar->AddButtonWithSVG(ID_VIEW_ISOMETRIC, "Isometric", "isoview", wxSize(16, 16), nullptr, "Switch to isometric view");
 	viewPanel->AddButtonBar(viewButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(viewPanel);
 
@@ -251,7 +251,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	assemblyPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* assemblyButtonBar = new FlatUIButtonBar(assemblyPanel);
 	assemblyButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	assemblyButtonBar->AddToggleButton(ID_EXPLODE_ASSEMBLY, "Explode", false, SVG_ICON("expand", wxSize(16, 16)), "Toggle exploded view for assemblies");
+	assemblyButtonBar->AddToggleButtonWithSVG(ID_EXPLODE_ASSEMBLY, "Explode", "expand", wxSize(16, 16), false, "Toggle exploded view for assemblies");
 	// Extra: we will open a small slider when explode is active
 	// Remove separate config button to match requirement: clicking Explode opens config first
 	assemblyPanel->AddButtonBar(assemblyButtonBar, 0, wxEXPAND | wxALL, 5);
@@ -266,10 +266,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	assiPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* AssiButtonBar = new FlatUIButtonBar(assiPanel);
 	AssiButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	AssiButtonBar->AddButton(ID_SET_TRANSPARENCY, "Set Transparency", SVG_ICON("transparency", wxSize(16, 16)), nullptr, "Set object transparency");
-	AssiButtonBar->AddToggleButton(ID_TOGGLE_COORDINATE_SYSTEM, "Toggle Coordinate System", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle coordinate system display");
-	AssiButtonBar->AddToggleButton(ID_TOGGLE_REFERENCE_GRID, "Reference Grid", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle reference grid plane");
-	AssiButtonBar->AddToggleButton(ID_TOGGLE_CHESSBOARD_GRID, "Chessboard Grid", false, SVG_ICON("grid", wxSize(16, 16)), "Toggle chessboard ground plane");
+	AssiButtonBar->AddButtonWithSVG(ID_SET_TRANSPARENCY, "Set Transparency", "transparency", wxSize(16, 16), nullptr, "Set object transparency");
+	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_COORDINATE_SYSTEM, "Toggle Coordinate System", "grid", wxSize(16, 16), false, "Toggle coordinate system display");
+	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_REFERENCE_GRID, "Reference Grid", "grid", wxSize(16, 16), false, "Toggle reference grid plane");
+	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_CHESSBOARD_GRID, "Chessboard Grid", "grid", wxSize(16, 16), false, "Toggle chessboard ground plane");
 	assiPanel->AddButtonBar(AssiButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(assiPanel);
 
@@ -282,17 +282,17 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
 	displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	displayButtonBar->AddToggleButton(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle original edge display");
-	displayButtonBar->AddToggleButton(ID_SHOW_FEATURE_EDGES, "Feature Edges", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle feature edge display");
-	displayButtonBar->AddToggleButton(ID_TOGGLE_WIREFRAME, "Wireframe Mode", false, SVG_ICON("triangle", wxSize(16, 16)), "Toggle wireframe rendering mode");
-	displayButtonBar->AddToggleButton(ID_SHOW_MESH_EDGES, "Show Mesh Edges", false, SVG_ICON("mesh", wxSize(16, 16)), "Show/hide mesh edges overlay");
-	displayButtonBar->AddToggleButton(ID_SHOW_NORMALS, "Show Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle normal vectors display");
-	displayButtonBar->AddToggleButton(ID_SHOW_FACE_NORMALS, "Show Face Normals", false, SVG_ICON("normals", wxSize(16, 16)), "Toggle face normal vectors display");
-	displayButtonBar->AddButton(ID_FIX_NORMALS, "Fix Normals", SVG_ICON("fixnormals", wxSize(16, 16)), nullptr, "Fix normal vectors orientation");
-	displayButtonBar->AddButton(ID_NORMAL_FIX_DIALOG, "Normal Fix Dialog", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open normal fix settings dialog");
-	displayButtonBar->AddToggleButton(ID_TOGGLE_SLICE, "Slice", false, SVG_ICON("layout", wxSize(16, 16)), "Toggle slicing plane and drag to move");
-	displayButtonBar->AddToggleButton(ID_TOGGLE_OUTLINE, "Outline", false, SVG_ICON("edges", wxSize(16, 16)), "Toggle geometry outline rendering");
-	displayButtonBar->AddButton(ID_OUTLINE_SETTINGS, "Outline Settings", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Open outline settings");
+	displayButtonBar->AddToggleButtonWithSVG(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", "edges", wxSize(16, 16), false, "Toggle original edge display");
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FEATURE_EDGES, "Feature Edges", "edges", wxSize(16, 16), false, "Toggle feature edge display");
+	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_WIREFRAME, "Wireframe Mode", "triangle", wxSize(16, 16), false, "Toggle wireframe rendering mode");
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_MESH_EDGES, "Show Mesh Edges", "mesh", wxSize(16, 16), false, "Show/hide mesh edges overlay");
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_NORMALS, "Show Normals", "normals", wxSize(16, 16), false, "Toggle normal vectors display");
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FACE_NORMALS, "Show Face Normals", "normals", wxSize(16, 16), false, "Toggle face normal vectors display");
+	displayButtonBar->AddButtonWithSVG(ID_FIX_NORMALS, "Fix Normals", "fixnormals", wxSize(16, 16), nullptr, "Fix normal vectors orientation");
+	displayButtonBar->AddButtonWithSVG(ID_NORMAL_FIX_DIALOG, "Normal Fix Dialog", "settings", wxSize(16, 16), nullptr, "Open normal fix settings dialog");
+	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_SLICE, "Slice", "layout", wxSize(16, 16), false, "Toggle slicing plane and drag to move");
+	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_OUTLINE, "Outline", "edges", wxSize(16, 16), false, "Toggle geometry outline rendering");
+	displayButtonBar->AddButtonWithSVG(ID_OUTLINE_SETTINGS, "Outline Settings", "settings", wxSize(16, 16), nullptr, "Open outline settings");
 	displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(displayPanel);
 	m_ribbon->AddPage(page3);
@@ -307,13 +307,13 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	toolsPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* toolsButtonBar = new FlatUIButtonBar(toolsPanel);
 	toolsButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	toolsButtonBar->AddButton(ID_MESH_QUALITY_DIALOG, "Mesh Quality", SVG_ICON("mesh", wxSize(16, 16)), nullptr, "Open mesh quality dialog");
-	toolsButtonBar->AddButton(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", SVG_ICON("cube", wxSize(16, 16)), nullptr, "Configure navigation cube");
-	toolsButtonBar->AddButton(ID_ZOOM_SPEED, "Zoom Speed", SVG_ICON("pulse", wxSize(16, 16)), nullptr, "Adjust zoom speed settings");
-	toolsButtonBar->AddButton(ID_RENDERING_SETTINGS, "Rendering Settings", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Configure material, lighting and texture settings");
-	toolsButtonBar->AddButton(ID_LIGHTING_SETTINGS, "Lighting Settings", SVG_ICON("light", wxSize(16, 16)), nullptr, "Configure scene lighting and environment settings");
-	toolsButtonBar->AddButton(ID_EDGE_SETTINGS, "Edge Settings", SVG_ICON("edges", wxSize(16, 16)), nullptr, "Configure edge color, width and style settings");
-	toolsButtonBar->AddButton(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", SVG_ICON("palette", wxSize(16, 16)), nullptr, "Open render preview system");
+	toolsButtonBar->AddButtonWithSVG(ID_MESH_QUALITY_DIALOG, "Mesh Quality", "mesh", wxSize(16, 16), nullptr, "Open mesh quality dialog");
+	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", "cube", wxSize(16, 16), nullptr, "Configure navigation cube");
+	toolsButtonBar->AddButtonWithSVG(ID_ZOOM_SPEED, "Zoom Speed", "pulse", wxSize(16, 16), nullptr, "Adjust zoom speed settings");
+	toolsButtonBar->AddButtonWithSVG(ID_RENDERING_SETTINGS, "Rendering Settings", "palette", wxSize(16, 16), nullptr, "Configure material, lighting and texture settings");
+	toolsButtonBar->AddButtonWithSVG(ID_LIGHTING_SETTINGS, "Lighting Settings", "light", wxSize(16, 16), nullptr, "Configure scene lighting and environment settings");
+	toolsButtonBar->AddButtonWithSVG(ID_EDGE_SETTINGS, "Edge Settings", "edges", wxSize(16, 16), nullptr, "Configure edge color, width and style settings");
+	toolsButtonBar->AddButtonWithSVG(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", "palette", wxSize(16, 16), nullptr, "Open render preview system");
 	toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(toolsPanel);
 
@@ -326,10 +326,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	textureTestPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* textureTestButtonBar = new FlatUIButtonBar(textureTestPanel);
 	textureTestButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	textureTestButtonBar->AddButton(ID_TEXTURE_MODE_DECAL, "Decal", SVG_ICON("decal", wxSize(16, 16)), nullptr, "Switch to Decal texture mode");
-	textureTestButtonBar->AddButton(ID_TEXTURE_MODE_MODULATE, "Modulate", SVG_ICON("modulate", wxSize(16, 16)), nullptr, "Switch to Modulate texture mode");
-	textureTestButtonBar->AddButton(ID_TEXTURE_MODE_REPLACE, "Replace", SVG_ICON("replace", wxSize(16, 16)), nullptr, "Switch to Replace texture mode");
-	textureTestButtonBar->AddButton(ID_TEXTURE_MODE_BLEND, "Blend", SVG_ICON("blend", wxSize(16, 16)), nullptr, "Switch to Blend texture mode");
+	textureTestButtonBar->AddButtonWithSVG(ID_TEXTURE_MODE_DECAL, "Decal", "decal", wxSize(16, 16), nullptr, "Switch to Decal texture mode");
+	textureTestButtonBar->AddButtonWithSVG(ID_TEXTURE_MODE_MODULATE, "Modulate", "modulate", wxSize(16, 16), nullptr, "Switch to Modulate texture mode");
+	textureTestButtonBar->AddButtonWithSVG(ID_TEXTURE_MODE_REPLACE, "Replace", "replace", wxSize(16, 16), nullptr, "Switch to Replace texture mode");
+	textureTestButtonBar->AddButtonWithSVG(ID_TEXTURE_MODE_BLEND, "Blend", "blend", wxSize(16, 16), nullptr, "Switch to Blend texture mode");
 	textureTestPanel->AddButtonBar(textureTestButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(textureTestPanel);
 	m_ribbon->AddPage(page4);
@@ -347,7 +347,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	layoutConfigPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* layoutConfigBar = new FlatUIButtonBar(layoutConfigPanel);
 	layoutConfigBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	layoutConfigBar->AddButton(ID_DOCK_LAYOUT_CONFIG, "Configure Layout", SVG_ICON("settings", wxSize(16, 16)), nullptr, "Configure dock panel sizes and layout");
+	layoutConfigBar->AddButtonWithSVG(ID_DOCK_LAYOUT_CONFIG, "Configure Layout", "settings", wxSize(16, 16), nullptr, "Configure dock panel sizes and layout");
 	layoutConfigPanel->AddButtonBar(layoutConfigBar, 0, wxEXPAND | wxALL, 5);
 	dockingPage->AddPanel(layoutConfigPanel);
 	
@@ -361,9 +361,9 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	layoutMgmtPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* layoutMgmtBar = new FlatUIButtonBar(layoutMgmtPanel);
 	layoutMgmtBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	layoutMgmtBar->AddButton(ID_DOCKING_SAVE_LAYOUT, "Save Layout", SVG_ICON("save", wxSize(16, 16)), nullptr, "Save current docking layout");
-	layoutMgmtBar->AddButton(ID_DOCKING_LOAD_LAYOUT, "Load Layout", SVG_ICON("open", wxSize(16, 16)), nullptr, "Load saved docking layout");
-	layoutMgmtBar->AddButton(ID_DOCKING_RESET_LAYOUT, "Reset Layout", SVG_ICON("undo", wxSize(16, 16)), nullptr, "Reset to default docking layout");
+	layoutMgmtBar->AddButtonWithSVG(ID_DOCKING_SAVE_LAYOUT, "Save Layout", "save", wxSize(16, 16), nullptr, "Save current docking layout");
+	layoutMgmtBar->AddButtonWithSVG(ID_DOCKING_LOAD_LAYOUT, "Load Layout", "open", wxSize(16, 16), nullptr, "Load saved docking layout");
+	layoutMgmtBar->AddButtonWithSVG(ID_DOCKING_RESET_LAYOUT, "Reset Layout", "undo", wxSize(16, 16), nullptr, "Reset to default docking layout");
 	layoutMgmtPanel->AddButtonBar(layoutMgmtBar, 0, wxEXPAND | wxALL, 5);
 	dockingPage->AddPanel(layoutMgmtPanel);
 	
@@ -377,8 +377,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	advancedPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* advancedBar = new FlatUIButtonBar(advancedPanel);
 	advancedBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	advancedBar->AddButton(ID_DOCKING_MANAGE_PERSPECTIVES, "Perspectives", SVG_ICON("layers", wxSize(16, 16)), nullptr, "Manage saved layout perspectives");
-	advancedBar->AddToggleButton(ID_DOCKING_TOGGLE_AUTOHIDE, "Auto-hide", false, SVG_ICON("pin", wxSize(16, 16)), "Toggle auto-hide for current panel");
+	advancedBar->AddButtonWithSVG(ID_DOCKING_MANAGE_PERSPECTIVES, "Perspectives", "layers", wxSize(16, 16), nullptr, "Manage saved layout perspectives");
+	advancedBar->AddToggleButtonWithSVG(ID_DOCKING_TOGGLE_AUTOHIDE, "Auto-hide", "pin", wxSize(16, 16), false, "Toggle auto-hide for current panel");
 	advancedPanel->AddButtonBar(advancedBar, 0, wxEXPAND | wxALL, 5);
 	dockingPage->AddPanel(advancedPanel);
 	

@@ -22,6 +22,20 @@ void FlatFrame::OnThemeChanged(wxCommandEvent& event)
 		m_ribbon->Refresh(true);
 		m_ribbon->Update();
 	}
+	
+	// Refresh SVG icons in bitmap buttons
+	if (m_searchButton) {
+		m_searchButton->SetBitmap(SvgIconManager::GetInstance().GetIconBitmap("search", wxSize(16, 16)));
+		m_searchButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+	}
+	if (m_userButton) {
+		m_userButton->SetBitmap(SvgIconManager::GetInstance().GetIconBitmap("user", wxSize(16, 16)));
+		m_userButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+	}
+	if (m_settingsButton) {
+		m_settingsButton->SetBitmap(SvgIconManager::GetInstance().GetIconBitmap("settings", wxSize(16, 16)));
+		m_settingsButton->SetBackgroundColour(CFG_COLOUR("BarBgColour"));
+	}
 	Refresh(true);
 	Update();
 }

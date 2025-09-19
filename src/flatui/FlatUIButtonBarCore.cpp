@@ -1,6 +1,7 @@
 #include "flatui/FlatUIButtonBar.h"
 #include "flatui/FlatUIPanel.h"
 #include "flatui/FlatUIEventManager.h"
+#include "config/SvgIconManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
 #include <wx/display.h>
@@ -112,6 +113,59 @@ void FlatUIButtonBar::AddButton(int id, ButtonType type, const wxString& label, 
 	m_buttons.push_back(button);
 	RecalculateLayout();
 	Refresh();
+}
+
+// SVG icon methods for theme-aware icons
+void FlatUIButtonBar::AddButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, wxMenu* menu, const wxString& tooltip) {
+	Freeze();
+	ButtonInfo button(id, ButtonType::NORMAL);
+	button.label = label;
+	button.iconName = iconName;
+	button.iconSize = iconSize;
+	button.icon = SvgIconManager::GetInstance().GetIconBitmap(iconName, iconSize);
+	button.menu = menu;
+	button.isDropDown = (menu != nullptr);
+	button.tooltip = tooltip;
+
+	// Calculate text size immediately
+	wxClientDC dc(this);
+	dc.SetFont(CFG_DEFAULTFONT());
+	button.textSize = dc.GetTextExtent(label);
+
+	m_buttons.push_back(button);
+	RecalculateLayout();
+
+	Thaw();
+	Refresh();
+}
+
+void FlatUIButtonBar::AddToggleButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, bool initialState, const wxString& tooltip) {
+	ButtonInfo button(id, ButtonType::TOGGLE);
+	button.label = label;
+	button.iconName = iconName;
+	button.iconSize = iconSize;
+	button.icon = SvgIconManager::GetInstance().GetIconBitmap(iconName, iconSize);
+	button.checked = initialState;
+	button.tooltip = tooltip;
+
+	// Calculate text size immediately
+	wxClientDC dc(this);
+	dc.SetFont(CFG_DEFAULTFONT());
+	button.textSize = dc.GetTextExtent(label);
+
+	m_buttons.push_back(button);
+	RecalculateLayout();
+	Refresh();
+}
+
+void FlatUIButtonBar::SetButtonSVGIcon(int id, const wxString& iconName, const wxSize& iconSize) {
+	ButtonInfo* button = FindButton(id);
+	if (button) {
+		button->iconName = iconName;
+		button->iconSize = iconSize;
+		button->icon = SvgIconManager::GetInstance().GetIconBitmap(iconName, iconSize);
+		Refresh();
+	}
 }
 
 void FlatUIButtonBar::AddSeparator() {

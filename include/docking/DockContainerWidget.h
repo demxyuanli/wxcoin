@@ -65,6 +65,9 @@ public:
     // Resize state
     bool isResizeInProgress() const { return m_isResizing; }
     
+    // Theme support
+    void RefreshTheme();
+
     // Layout configuration
     void applyLayoutConfig();
     void applyProportionalResize(const wxSize& oldSize, const wxSize& newSize);

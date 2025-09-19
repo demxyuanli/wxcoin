@@ -36,6 +36,8 @@ public:
 protected:
     void OnSplitterSashPosChanging(wxSplitterEvent& event);
     void OnSplitterSashPosChanged(wxSplitterEvent& event);
+    void OnPaint(wxPaintEvent& event);
+    void DrawSash(wxDC& dc) override;
 
 private:
     wxOrientation m_orientation;

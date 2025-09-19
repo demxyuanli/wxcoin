@@ -320,6 +320,50 @@ void DockAreaTitleBar::RefreshTheme() {
         m_titleLabel->SetBackgroundColour(CFG_COLOUR("DockTitleBarBgColour"));
     }
 
+    // Refresh SVG icons with new theme colors
+    const DockStyleConfig& style = GetDockStyleConfig();
+    if (style.useSvgIcons) {
+        try {
+            // Update pin button icon
+            if (m_pinButton) {
+                wxBitmap pinIcon = SvgIconManager::GetInstance().GetIconBitmap(
+                    style.pinIconName, wxSize(style.buttonSize, style.buttonSize));
+                if (pinIcon.IsOk()) {
+                    m_pinButton->SetBitmap(pinIcon);
+                }
+            }
+            
+            // Update close button icon
+            if (m_closeButton) {
+                wxBitmap closeIcon = SvgIconManager::GetInstance().GetIconBitmap(
+                    style.closeIconName, wxSize(12, 12));
+                if (closeIcon.IsOk()) {
+                    m_closeButton->SetBitmap(closeIcon);
+                }
+            }
+            
+            // Update auto-hide button icon
+            if (m_autoHideButton) {
+                wxBitmap autoHideIcon = SvgIconManager::GetInstance().GetIconBitmap(
+                    style.autoHideIconName, wxSize(12, 12));
+                if (autoHideIcon.IsOk()) {
+                    m_autoHideButton->SetBitmap(autoHideIcon);
+                }
+            }
+            
+            // Update menu button icon
+            if (m_menuButton) {
+                wxBitmap menuIcon = SvgIconManager::GetInstance().GetIconBitmap(
+                    style.menuIconName, wxSize(12, 12));
+                if (menuIcon.IsOk()) {
+                    m_menuButton->SetBitmap(menuIcon);
+                }
+            }
+        } catch (...) {
+            // Ignore errors in icon loading
+        }
+    }
+
     // Refresh the display to apply new theme colors
     Refresh(true);
     Update();

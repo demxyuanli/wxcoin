@@ -2,6 +2,7 @@
 #include "docking/DockContainerWidget.h"
 #include "config/ThemeManager.h"
 #include <algorithm>
+#include <wx/dcbuffer.h>
 
 namespace ads {
 
@@ -9,31 +10,33 @@ namespace ads {
 wxBEGIN_EVENT_TABLE(DockSplitter, wxSplitterWindow)
     EVT_SPLITTER_SASH_POS_CHANGING(wxID_ANY, DockSplitter::OnSplitterSashPosChanging)
     EVT_SPLITTER_SASH_POS_CHANGED(wxID_ANY, DockSplitter::OnSplitterSashPosChanged)
+    EVT_PAINT(DockSplitter::OnPaint)
 wxEND_EVENT_TABLE()
 
 // DockSplitter implementation
 DockSplitter::DockSplitter(wxWindow* parent)
     : wxSplitterWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                      wxSP_3D)
+                      wxSP_NOBORDER)
     , m_orientation(wxHORIZONTAL)
 {
     SetSashGravity(0.5);
     SetMinimumPaneSize(50);
+    SetBackgroundStyle(wxBG_STYLE_PAINT);
 
     // Theme-driven splitter visuals
     SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
-    SetSashSize(CFG_INT("SplitterWidth"));
 
     // React to theme change
     ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
         SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
-        SetSashSize(CFG_INT("SplitterWidth"));
         Refresh();
         Update();
     });
 }
 
 DockSplitter::~DockSplitter() {
+    // Remove theme change listener
+    ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void DockSplitter::setOrientation(wxOrientation orientation) {
@@ -167,6 +170,42 @@ void DockSplitter::OnSplitterSashPosChanged(wxSplitterEvent& event) {
     Update();
 
     event.Skip();
+}
+
+void DockSplitter::OnPaint(wxPaintEvent& event) {
+    wxAutoBufferedPaintDC dc(this);
+    
+    // Fill background with theme color
+    wxColour bgColor = CFG_COLOUR("DockAreaBgColour");
+    dc.SetBrush(wxBrush(bgColor));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(GetClientRect());
+    
+    // Draw sash if split
+    if (IsSplit()) {
+        DrawSash(dc);
+    }
+}
+
+void DockSplitter::DrawSash(wxDC& dc) {
+    if (!IsSplit()) return;
+    
+    wxSize size = GetClientSize();
+    int sashPos = GetSashPosition();
+    int sashWidth = CFG_INT("SplitterWidth");
+    if (sashWidth <= 0) sashWidth = 4;
+    
+    wxColour sashColor = CFG_COLOUR("SplitterSashColour");
+    dc.SetBrush(wxBrush(sashColor));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    
+    if (GetSplitMode() == wxSPLIT_VERTICAL) {
+        // Vertical split - sash is vertical
+        dc.DrawRectangle(sashPos, 0, sashWidth, size.GetHeight());
+    } else {
+        // Horizontal split - sash is horizontal
+        dc.DrawRectangle(0, sashPos, size.GetWidth(), sashWidth);
+    }
 }
 
 void DockSplitter::updateSplitter() {

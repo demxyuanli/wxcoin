@@ -59,12 +59,12 @@ void CanvasOptimized::onSize(wxSizeEvent& event) {
     // Cancel any pending high quality render
     if (m_highQualityTimer->IsRunning()) {
         m_highQualityTimer->Stop();
-    }
+    } 
     
     // Schedule high quality render after resize stabilizes
-    scheduleHighQualityRender();
-    
-    // Update size
+    scheduleHighQualityRender(); 
+     
+    // Update size 
     RenderingEngine* engine = getRenderingEngine();
     if (engine) {
         engine->handleResize(event.GetSize());

@@ -1,6 +1,7 @@
 #include "widgets/FlatMessagePanel.h"
 #include "config/SvgIconManager.h"
 #include "config/FontManager.h"
+#include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 
 wxBEGIN_EVENT_TABLE(FlatMessagePanel, wxPanel)
@@ -35,6 +36,11 @@ FlatMessagePanel::FlatMessagePanel(wxWindow* parent, wxWindowID id, const wxStri
 	SetSizer(root);
 	Layout();
 
+	// Register theme change listener
+	ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+		RefreshTheme();
+		});
+
 	// Apply configured font to all sub-controls
 	try {
 		FontManager& fm = FontManager::getInstance();
@@ -55,6 +61,9 @@ FlatMessagePanel::FlatMessagePanel(wxWindow* parent, wxWindowID id, const wxStri
 
 FlatMessagePanel::~FlatMessagePanel()
 {
+	// Remove theme change listener
+	ThemeManager::getInstance().removeThemeChangeListener(this);
+	
 	if (m_floatingFrame) {
 		m_floatingFrame->Destroy();
 		m_floatingFrame = nullptr;
@@ -260,4 +269,31 @@ void FlatMessagePanel::OnSize(wxSizeEvent& e)
 	// Refresh on size to avoid black borders
 	Refresh();
 	e.Skip();
+}
+
+void FlatMessagePanel::RefreshTheme()
+{
+	// Refresh SVG icons with new theme colors
+	if (m_btnFloat && m_btnMinimize && m_btnClose) {
+		try {
+			auto& iconMgr = SvgIconManager::GetInstance();
+			wxBitmap bFloat = iconMgr.GetIconBitmap("float", wxSize(12, 12));
+			wxBitmap bMin = iconMgr.GetIconBitmap("minimize", wxSize(12, 12));
+			wxBitmap bClose = iconMgr.GetIconBitmap("close", wxSize(12, 12));
+			if (bFloat.IsOk()) m_btnFloat->SetBitmap(bFloat);
+			if (bMin.IsOk()) m_btnMinimize->SetBitmap(bMin);
+			if (bClose.IsOk()) m_btnClose->SetBitmap(bClose);
+			
+			// Refresh the buttons
+			m_btnFloat->Refresh();
+			m_btnMinimize->Refresh();
+			m_btnClose->Refresh();
+		}
+		catch (...) {
+			// Fallback: use simple labels
+			m_btnFloat->SetLabel("F");
+			m_btnMinimize->SetLabel("-");
+			m_btnClose->SetLabel("x");
+		}
+	}
 }

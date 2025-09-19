@@ -55,6 +55,7 @@ public:
     // Override virtual methods from FlatFrame
     virtual bool IsUsingDockingSystem() const override { return true; }
     virtual wxWindow* GetMainWorkArea() const override;
+    virtual void OnThemeChanged(wxCommandEvent& event) override;
     
 protected:
     // Event handlers for docking
