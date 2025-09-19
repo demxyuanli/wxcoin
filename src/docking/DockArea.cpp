@@ -660,6 +660,7 @@ void DockArea::RefreshTheme() {
     // Apply theme colors to content area
     if (m_contentArea) {
         m_contentArea->SetBackgroundColour(CFG_COLOUR("DockAreaContentBgColour"));
+        m_contentArea->SetForegroundColour(CFG_COLOUR("DefaultTextColour"));
     }
 
     // Refresh child components that support theme
@@ -675,6 +676,7 @@ void DockArea::RefreshTheme() {
 
     // Apply theme colors to this component
     SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
+    SetForegroundColour(CFG_COLOUR("DefaultTextColour"));
 
     // Refresh the display
     Refresh(true);

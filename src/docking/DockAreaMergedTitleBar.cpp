@@ -56,7 +56,7 @@ DockAreaMergedTitleBar::DockAreaMergedTitleBar(DockArea* dockArea)
     , m_refreshFlags(0)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetMinSize(wxSize(-1, 30)); // Slightly taller than original to accommodate both tabs and buttons
+    SetMinSize(wxSize(-1, 28)); // Reduced by 2px as requested
 
     // Enable double buffering for smoother rendering
     SetDoubleBuffered(true);
@@ -202,8 +202,8 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
         drawTitleBarPattern(dc, clientRect);
     }
 
-    // Draw bottom border using themed colour
-    dc.SetPen(wxPen(CFG_COLOUR("TabBorderBottomColour")));
+    // Draw bottom border using themed colour (will redraw at end to ensure visibility)
+    dc.SetPen(wxPen(CFG_COLOUR("TabBorderBottomColour"), 1));
     dc.DrawLine(0, clientRect.GetHeight() - 1, clientRect.GetWidth(), clientRect.GetHeight() - 1);
 
     // Draw tabs on the left side
@@ -212,7 +212,7 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
             drawTab(dc, i);
         }
     }
-
+     
     // Draw overflow button if needed
     if (m_hasOverflow) {
         // Use SVG icon for dropdown button
@@ -221,6 +221,11 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
 
     // Draw buttons based on tab position
     drawButtons(dc, clientRect);
+
+    // Redraw bottom border last so it's not covered by subsequent drawing
+    dc.SetPen(wxPen(CFG_COLOUR("TabBorderBottomColour"), 1));
+    int bottomY = GetClientSize().GetHeight() - 1;
+    dc.DrawLine(0, bottomY, GetClientSize().GetWidth(), bottomY);
 }
 
 void DockAreaMergedTitleBar::onMouseLeftDown(wxMouseEvent& event) {
@@ -841,8 +846,8 @@ void DockAreaMergedTitleBar::updateHorizontalTabRects(const wxSize& size, const 
                                                       int tabSpacing, int textPadding, bool isTop) {
     int x = 5; // Left margin
     int tabHeight = style.tabHeight;
-    // Place tabs flush to title bar bottom: top margin 0 for top position
-    int tabY = isTop ? 0 : (size.GetHeight() - style.tabTopMargin - tabHeight);
+    // Top: 4px margin from top; Bottom: 0px margin from bottom
+    int tabY = isTop ? 4 : (size.GetHeight() - tabHeight);
 
     // Calculate available width for tabs (leave space for buttons)
     int buttonsWidth = 0;

@@ -19,6 +19,7 @@ static DockStyleConfig g_dockStyleConfig;
 // Helper function to ensure theme manager is initialized
 void EnsureThemeManagerInitialized() {
     static bool themeInitialized = false;
+    static bool themeListenerRegistered = false;
     if (!themeInitialized) {
         try {
             g_dockStyleConfig.InitializeFromThemeManager();
@@ -26,6 +27,23 @@ void EnsureThemeManagerInitialized() {
             wxLogDebug("DockStyleConfig: Initialized from ThemeManager");
         } catch (...) {
             wxLogDebug("DockStyleConfig: ThemeManager not available, using defaults");
+        }
+    }
+
+    // Register a one-time theme change listener to reinitialize styles on-the-fly
+    if (!themeListenerRegistered) {
+        try {
+            ThemeManager::getInstance().addThemeChangeListener(&g_dockStyleConfig, []() {
+                try {
+                    g_dockStyleConfig.InitializeFromThemeManager();
+                    wxLogDebug("DockStyleConfig: Reinitialized on theme change");
+                } catch (...) {
+                    wxLogDebug("DockStyleConfig: Theme change reinit failed");
+                }
+            });
+            themeListenerRegistered = true;
+        } catch (...) {
+            // Ignore listener registration failures
         }
     }
 }
@@ -40,8 +58,8 @@ void DrawStyledRect(wxDC& dc, const wxRect& rect, const DockStyleConfig& style,
     if (isActive && !isTitleBar) {
         bgColor = style.activeBackgroundColour;
     } else if (!isTitleBar) {
-        // Inactive tabs have no background color
-        bgColor = wxColour(0, 0, 0, 0);
+        // Inactive tabs use theme-provided inactive colour to match theme
+        bgColor = DOCK_COLOUR("TabInactiveColour");
     } else {
         // Title bar background
         bgColor = style.backgroundColour;
@@ -57,13 +75,13 @@ void DrawStyledRect(wxDC& dc, const wxRect& rect, const DockStyleConfig& style,
     // For active tabs: draw 2px top line and 1px left/right borders
     if (isActive && !isTitleBar) {
         dc.SetPen(wxPen(style.borderTopColour, 2));  // 2px top line
-        dc.DrawLine(rect.GetLeft() - 1, rect.GetTop(), rect.GetRight() - 1, rect.GetTop());
+        dc.DrawLine(rect.GetLeft() , rect.GetTop(), rect.GetRight() , rect.GetTop());
 
         dc.SetPen(wxPen(style.borderLeftColour, 1));  // 1px left border
         dc.DrawLine(rect.GetLeft(), rect.GetTop(), rect.GetLeft(), rect.GetBottom());
 
         dc.SetPen(wxPen(style.borderRightColour, 1));  // 1px right border
-        dc.DrawLine(rect.GetRight() - 1, rect.GetTop(), rect.GetRight() - 1, rect.GetBottom());
+        dc.DrawLine(rect.GetRight() , rect.GetTop(), rect.GetRight() , rect.GetBottom());
     }
 
     // For title bar: draw bottom border line
@@ -164,7 +182,7 @@ void DockStyleConfig::InitializeFromThemeManager() {
         // Update colors from theme (dock-specific keys)
         // Background of tab bar/title bar is handled by callers, but keep a sane default
         backgroundColour = DOCK_COLOUR("DockTabBarBgColour");
-        // Active tab background should use docking specific colour
+        // Active/inactive tab background should use docking specific colours
         activeBackgroundColour = DOCK_COLOUR("DockTabActiveBgColour");
         // Hover colour from generic highlight
         hoverBackgroundColour = DOCK_COLOUR("HighlightColour");
@@ -191,6 +209,9 @@ void DockStyleConfig::InitializeFromThemeManager() {
         if (tabTopMargin <= 0) tabTopMargin = 4;  // Default to 4 as specified
 
         titleBarHeight = DOCK_INT("TitleBarHeight");  // Use specific title bar height
+        if (titleBarHeight > 0) {
+            titleBarHeight = std::max(0, titleBarHeight - 2); // Reduce by 2px as requested
+        }
         
         // Pattern decoration configuration from theme
         patternDotColour = DOCK_COLOUR("PatternDotColour");

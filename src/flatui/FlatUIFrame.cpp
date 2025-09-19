@@ -198,9 +198,9 @@ int FlatUIFrame::CalculateMinimumWidth() const
 
 	int minWidth = 0;
 
-	// HomeSpace width (30px)
+	// HomeSpace width (use configured value instead of hardcoded 30px)
 	if (ribbon->GetHomeSpace()) {
-		minWidth += 30;
+		minWidth += CFG_INT("SystemButtonWidth");
 	}
 
 	// System buttons width (estimate 3 buttons * 30px each)

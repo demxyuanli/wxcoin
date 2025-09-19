@@ -1,5 +1,6 @@
 #include "docking/DockSplitter.h"
 #include "docking/DockContainerWidget.h"
+#include "config/ThemeManager.h"
 #include <algorithm>
 
 namespace ads {
@@ -18,6 +19,18 @@ DockSplitter::DockSplitter(wxWindow* parent)
 {
     SetSashGravity(0.5);
     SetMinimumPaneSize(50);
+
+    // Theme-driven splitter visuals
+    SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
+    SetSashSize(CFG_INT("SplitterWidth"));
+
+    // React to theme change
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
+        SetSashSize(CFG_INT("SplitterWidth"));
+        Refresh();
+        Update();
+    });
 }
 
 DockSplitter::~DockSplitter() {

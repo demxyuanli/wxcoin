@@ -8,6 +8,7 @@
 #include <functional>
 #include "config/FontManager.h"
 #include "config/SvgIconManager.h"
+#include "config/ThemeManager.h"
 
 // Custom events definitions
 wxDEFINE_EVENT(wxEVT_FLAT_TREE_ITEM_SELECTED, wxCommandEvent);
@@ -202,17 +203,28 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	, m_deferScrollbarUpdate(false)
 	, m_scrollbarUpdateTimer(nullptr)
 {
-	// Set default colors
-	m_backgroundColor = wxColour(255, 255, 255);
-	m_textColor = wxColour(0, 0, 0);
-	m_selectionColor = wxColour(0, 120, 215);
-	m_lineColor = wxColour(200, 200, 200);
+    // Set default colors from theme
+    m_backgroundColor = CFG_COLOUR("PanelContentBgColour");
+    m_textColor = CFG_COLOUR("PanelTextColour");
+    m_selectionColor = CFG_COLOUR("HighlightColour");
+    m_lineColor = CFG_COLOUR("PanelSeparatorBgColour");
 
 	// Add default tree column (default width 100)
 	AddColumn("Tree", FlatTreeColumn::ColumnType::TREE, 140);
 
-	// Set background color
-	SetBackgroundColour(m_backgroundColor);
+    // Set background color
+    SetBackgroundColour(m_backgroundColor);
+
+    // React to theme change
+    ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
+        m_backgroundColor = CFG_COLOUR("PanelContentBgColour");
+        m_textColor = CFG_COLOUR("PanelTextColour");
+        m_selectionColor = CFG_COLOUR("HighlightColour");
+        m_lineColor = CFG_COLOUR("PanelSeparatorBgColour");
+        SetBackgroundColour(m_backgroundColor);
+        Refresh(true);
+        Update();
+    });
 	// Enable buffered painting to satisfy wxAutoBufferedPaintDC requirements
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 	SetDoubleBuffered(true);

@@ -113,7 +113,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	m_ribbon->SetTabBorderWidths(2, 0, 1, 1);
 	m_ribbon->SetTabBorderTopColour(CFG_COLOUR("BarTabBorderTopColour"));
 	m_ribbon->SetTabCornerRadius(0);
-	m_ribbon->SetHomeButtonWidth(30);
+	m_ribbon->SetHomeButtonWidth(CFG_INT("SystemButtonWidth"));
 
 	FlatUIHomeSpace* homeSpace = m_ribbon->GetHomeSpace();
 	if (homeSpace) {

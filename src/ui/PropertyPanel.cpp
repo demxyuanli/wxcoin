@@ -10,10 +10,17 @@ PropertyPanel::PropertyPanel(wxWindow* parent)
 	: FlatUITitledPanel(parent, "Object Properties")
 {
 	LOG_INF_S("PropertyPanel initializing");
-	m_propGrid = new wxPropertyGrid(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxPG_DEFAULT_STYLE | wxPG_SPLITTER_AUTO_CENTER);
+    m_propGrid = new wxPropertyGrid(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxPG_DEFAULT_STYLE | wxPG_SPLITTER_AUTO_CENTER);
 	m_mainSizer->Add(m_propGrid, 1, wxEXPAND | wxALL, 2);
 
-	m_propGrid->Bind(wxEVT_PG_CHANGED, &PropertyPanel::onPropertyChanged, this);
+    m_propGrid->Bind(wxEVT_PG_CHANGED, &PropertyPanel::onPropertyChanged, this);
+
+    // Apply theme colours
+    m_propGrid->SetBackgroundColour(CFG_COLOUR("PanelContentBgColour"));
+    m_propGrid->SetForegroundColour(CFG_COLOUR("PanelTextColour"));
+    m_propGrid->SetCaptionBackgroundColour(CFG_COLOUR("PanelHeaderColour"));
+    m_propGrid->SetCaptionTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+    m_propGrid->SetLineColour(CFG_COLOUR("PanelSeparatorBgColour"));
 }
 
 PropertyPanel::~PropertyPanel()

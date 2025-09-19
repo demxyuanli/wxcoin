@@ -116,13 +116,14 @@ void DockAreaTitleBar::onPaint(wxPaintEvent& event) {
     dc.SetFont(style.font);
 
     // Draw themed background (avoid system colours to support dark theme)
-    wxRect rect(0, 0, GetClientSize().GetWidth(), style.titleBarHeight);
+    wxRect rect(0, 0, GetClientSize().GetWidth(), std::max(0, style.titleBarHeight - 2));
     dc.SetBrush(wxBrush(CFG_COLOUR("DockTitleBarBgColour")));
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.DrawRectangle(rect);
-    // Bottom border
+    // Bottom border (ensure visible within client area)
     dc.SetPen(wxPen(CFG_COLOUR("TabBorderBottomColour"), 1));
-    dc.DrawLine(rect.GetLeft(), rect.GetBottom() - 1, rect.GetRight(), rect.GetBottom() - 1);
+    int bottomY = rect.GetBottom() - 1;
+    dc.DrawLine(rect.GetLeft(), bottomY, rect.GetRight(), bottomY);
     
     // Draw decorative pattern on title bar
     drawTitleBarPattern(dc, rect);
@@ -316,6 +317,7 @@ void DockAreaTitleBar::RefreshTheme() {
     // Update title label color if it exists
     if (m_titleLabel) {
         m_titleLabel->SetForegroundColour(CFG_COLOUR("DockTitleBarTextColour"));
+        m_titleLabel->SetBackgroundColour(CFG_COLOUR("DockTitleBarBgColour"));
     }
 
     // Refresh the display to apply new theme colors

@@ -1,6 +1,7 @@
 // DockLayoutPreview.cpp - Implementation of DockLayoutPreview class
 
 #include "docking/DockLayoutConfig.h"
+#include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 
 namespace ads {
@@ -16,7 +17,7 @@ DockLayoutPreview::DockLayoutPreview(wxWindow* parent)
     : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_SUNKEN)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
-    SetBackgroundColour(*wxWHITE);
+    SetBackgroundColour(CFG_COLOUR("DockAreaBgColour"));
 }
 
 void DockLayoutPreview::SetConfig(const DockLayoutConfig& config) {
@@ -26,7 +27,9 @@ void DockLayoutPreview::SetConfig(const DockLayoutConfig& config) {
 
 void DockLayoutPreview::OnPaint(wxPaintEvent& event) {
     wxAutoBufferedPaintDC dc(this);
-    dc.Clear();
+    dc.SetBrush(wxBrush(CFG_COLOUR("DockAreaBgColour")));
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.DrawRectangle(GetClientRect());
 
     DrawLayoutPreview(dc);
 }
@@ -41,13 +44,13 @@ void DockLayoutPreview::DrawLayoutPreview(wxDC& dc) {
     clientRect.Deflate(10); // Margin
 
     // Colors for different areas
-    wxColour topColor(200, 200, 255);      // Light blue
-    wxColour bottomColor(200, 255, 200);   // Light green
-    wxColour leftColor(255, 200, 200);     // Light red
-    wxColour rightColor(255, 255, 200);    // Light yellow
-    wxColour centerColor(240, 240, 240);   // Light gray
-    wxColour borderColor(100, 100, 100);   // Dark gray
-    wxColour textColor(50, 50, 50);       // Dark gray for text
+    wxColour topColor = CFG_COLOUR("SecondaryBackgroundColour");
+    wxColour bottomColor = CFG_COLOUR("SecondaryBackgroundColour");
+    wxColour leftColor = CFG_COLOUR("SecondaryBackgroundColour");
+    wxColour rightColor = CFG_COLOUR("SecondaryBackgroundColour");
+    wxColour centerColor = CFG_COLOUR("PrimaryContentBgColour");
+    wxColour borderColor = CFG_COLOUR("DockAreaBorderColour");
+    wxColour textColor = CFG_COLOUR("DefaultTextColour");
 
     // Calculate areas
     wxRect topRect = CalculateAreaRect(TopDockWidgetArea, clientRect);
@@ -136,7 +139,10 @@ void DockLayoutPreview::DrawLayoutPreview(wxDC& dc) {
     dc.DrawText(centerLabel, centerRect.x + 5, centerRect.y + 5);
 
     // Draw splitter lines
-    dc.SetPen(wxPen(borderColor, m_config.splitterWidth));
+    {
+        wxColour splitCol = CFG_COLOUR("SplitterBorderColour");
+        dc.SetPen(wxPen(splitCol, m_config.splitterWidth));
+    }
 
     if (m_config.showTopArea) {
         dc.DrawLine(clientRect.x, topRect.GetBottom(),

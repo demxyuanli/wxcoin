@@ -65,24 +65,24 @@ namespace ads {
 		wxAutoBufferedPaintDC dc(this);
 		wxRect rect = GetClientRect();
 
-		// Draw background
-		wxColour bgColor;
-		if (m_isActive) {
-			bgColor = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
-		}
-		else if (m_isHovered) {
-			bgColor = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNHIGHLIGHT);
-		}
-		else {
-			bgColor = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
-		}
+        // Draw background using themed colours
+        wxColour bgColor;
+        if (m_isActive) {
+            bgColor = CFG_COLOUR("DockTabActiveBgColour");
+        }
+        else if (m_isHovered) {
+            bgColor = CFG_COLOUR("DockTabHoverBgColour");
+        }
+        else {
+            bgColor = CFG_COLOUR("DockTabBarBgColour");
+        }
 
 		dc.SetBrush(wxBrush(bgColor));
 		dc.SetPen(*wxTRANSPARENT_PEN);
 		dc.DrawRectangle(rect);
 
-		// Draw border
-		dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
+        // Draw border using theme colour
+        dc.SetPen(wxPen(CFG_COLOUR("DockAreaBorderColour")));
 		dc.DrawRectangle(rect);
 
 		// Draw content based on orientation
@@ -91,9 +91,9 @@ namespace ads {
 		if (isVertical) {
 			// Draw vertical text
 			dc.SetFont(GetFont());
-			dc.SetTextForeground(m_isActive ?
-				wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT) :
-				wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT));
+            dc.SetTextForeground(m_isActive ?
+                CFG_COLOUR("DockTabActiveTextColour") :
+                CFG_COLOUR("DockTabTextColour"));
 
 			wxString title = m_dockWidget->title();
 			wxSize textSize = dc.GetTextExtent(title);
@@ -125,9 +125,9 @@ namespace ads {
 
 			// Draw text
 			dc.SetFont(GetFont());
-			dc.SetTextForeground(m_isActive ?
-				wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT) :
-				wxSystemSettings::GetColour(wxSYS_COLOUR_BTNTEXT));
+            dc.SetTextForeground(m_isActive ?
+                CFG_COLOUR("DockTabActiveTextColour") :
+                CFG_COLOUR("DockTabTextColour"));
 
 			wxString title = m_dockWidget->title();
 			int textY = (rect.height - dc.GetCharHeight()) / 2;
@@ -175,7 +175,7 @@ namespace ads {
 		, m_container(container)
 		, m_location(location)
 	{
-		SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE));
+        SetBackgroundColour(CFG_COLOUR("DockTabBarBgColour"));
 
 		// Create sizer based on orientation
 		if (location == SideBarLeft || location == SideBarRight) {

@@ -697,32 +697,32 @@ void FloatingDragPreview::onPaint(wxPaintEvent& event) {
     // Draw a schematic representation instead of actual content
     wxSize size = GetClientSize();
     
-    // Background
-    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)));
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWFRAME), 2));
+    // Background (themed)
+    dc.SetBrush(wxBrush(CFG_COLOUR("DockAreaContentBgColour")));
+    dc.SetPen(wxPen(CFG_COLOUR("DockAreaBorderColour"), 2));
     dc.DrawRectangle(0, 0, size.GetWidth(), size.GetHeight());
     
     // Tab bar area
     int tabHeight = 30;
-    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)));
+    dc.SetBrush(wxBrush(CFG_COLOUR("DockTabBarBgColour")));
     dc.DrawRectangle(0, 0, size.GetWidth(), tabHeight);
     
     // Tab
     int tabWidth = std::min(150, size.GetWidth() - 20);
-    dc.SetBrush(wxBrush(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW)));
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_BTNSHADOW)));
+    dc.SetBrush(wxBrush(CFG_COLOUR("DockTabActiveBgColour")));
+    dc.SetPen(wxPen(CFG_COLOUR("TabBorderBottomColour")));
     dc.DrawRectangle(10, 5, tabWidth, tabHeight - 5);
     
     // Tab text
-    dc.SetFont(wxSystemSettings::GetFont(wxSYS_DEFAULT_GUI_FONT));
-    dc.SetTextForeground(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+    dc.SetFont(CFG_DEFAULTFONT());
+    dc.SetTextForeground(CFG_COLOUR("DockTabTextColour"));
     wxSize textSize = dc.GetTextExtent(title);
     int textX = 10 + (tabWidth - textSize.GetWidth()) / 2;
     int textY = 5 + (tabHeight - 5 - textSize.GetHeight()) / 2;
     dc.DrawText(title, textX, textY);
     
     // Content area hint
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT), 1, wxPENSTYLE_DOT));
+    dc.SetPen(wxPen(CFG_COLOUR("DefaultBorderColour"), 1, wxPENSTYLE_DOT));
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
     int margin = 10;
     dc.DrawRectangle(margin, tabHeight + margin, 

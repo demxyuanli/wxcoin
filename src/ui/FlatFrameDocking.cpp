@@ -1282,14 +1282,14 @@ int FlatFrameDocking::AdjustVerticalSplittersRecursive(wxWindow* window, int tar
         splitter->SetSashPosition(targetLeftWidth);
         splitter->UpdateSize();
         adjustedCount++;
-    }
+    } 
 
     // Recursively check all children 
     wxWindowList& children = window->GetChildren();
     for (wxWindowList::iterator it = children.begin(); it != children.end(); ++it) {
         wxWindow* child = *it;
         adjustedCount += AdjustVerticalSplittersRecursive(child, targetLeftWidth);
-    }
+    } 
       
     return adjustedCount;    
 }  
