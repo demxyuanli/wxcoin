@@ -67,6 +67,7 @@ namespace cmd {
 		// Navigation / settings
 		NavCubeConfig,
 		ZoomSpeed,
+		NavigationMode,
 		MeshQualityDialog,
 		RenderingSettings,
 		EdgeSettings,
@@ -142,6 +143,7 @@ namespace cmd {
 
 			{CommandType::NavCubeConfig, "NAV_CUBE_CONFIG"},
 			{CommandType::ZoomSpeed, "ZOOM_SPEED"},
+			{CommandType::NavigationMode, "NAVIGATION_MODE"},
 			{CommandType::MeshQualityDialog, "MESH_QUALITY_DIALOG"},
 			{CommandType::RenderingSettings, "RENDERING_SETTINGS"},
 			{CommandType::EdgeSettings, "EDGE_SETTINGS"},
@@ -211,6 +213,7 @@ namespace cmd {
 
 			{"NAV_CUBE_CONFIG", CommandType::NavCubeConfig},
 			{"ZOOM_SPEED", CommandType::ZoomSpeed},
+			{"NAVIGATION_MODE", CommandType::NavigationMode},
 			{"MESH_QUALITY_DIALOG", CommandType::MeshQualityDialog},
 			{"RENDERING_SETTINGS", CommandType::RenderingSettings},
 			{"EDGE_SETTINGS", CommandType::EdgeSettings},

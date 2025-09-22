@@ -270,6 +270,13 @@ private:
 		const OptimizationOptions& options
 	);
 
+	/**
+	 * @brief Detect if a shape is a shell model (surface model without volume)
+	 * @param shape The shape to analyze
+	 * @return true if the shape is a shell model
+	 */
+	static bool detectShellModel(const TopoDS_Shape& shape);
+
 
 
 

@@ -7,6 +7,7 @@
 #include "NavigationController.h"
 #include "InputManager.h"
 #include "logger/Logger.h"
+#include "WebViewPanel.h"
 #include "docking/DockArea.h"
 #include "docking/DockWidget.h"
 #include "docking/DockContainerWidget.h"
@@ -41,12 +42,14 @@ EVT_MENU(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
 EVT_MENU(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnViewShowHidePanel)
 EVT_MENU(ID_VIEW_MESSAGE, FlatFrameDocking::OnViewShowHidePanel)
 EVT_MENU(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnViewShowHidePanel)
+EVT_MENU(ID_VIEW_WEBVIEW, FlatFrameDocking::OnViewShowHidePanel)
 
 
 EVT_UPDATE_UI(ID_VIEW_PROPERTIES, FlatFrameDocking::OnUpdateUI)
 EVT_UPDATE_UI(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnUpdateUI)
 EVT_UPDATE_UI(ID_VIEW_MESSAGE, FlatFrameDocking::OnUpdateUI)
 EVT_UPDATE_UI(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnUpdateUI)
+EVT_UPDATE_UI(ID_VIEW_WEBVIEW, FlatFrameDocking::OnUpdateUI)
 
 // Override base class size event to ensure docking system controls layout
 EVT_SIZE(FlatFrameDocking::onSize)
@@ -62,6 +65,7 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     , m_canvasDock(nullptr)
     , m_messageDock(nullptr)
     , m_performanceDock(nullptr)
+    , m_webViewDock(nullptr)
     , m_outputCtrl(nullptr)
     , m_resizeTimer(nullptr)
     , m_pendingResizeSize(0, 0)
@@ -298,6 +302,11 @@ void FlatFrameDocking::CreateDockingLayout() {
     m_performanceDock = CreatePerformanceDockWidget();
     m_dockManager->addDockWidget(CenterDockWidgetArea, m_performanceDock, bottomArea);
     wxLogDebug("CreateDockingLayout: Performance dock created");
+
+    // 6. Create webview dock widget (right tab with canvas)
+    m_webViewDock = CreateWebViewDockWidget();
+    m_dockManager->addDockWidget(CenterDockWidgetArea, m_webViewDock, m_canvasDock->dockAreaWidget());
+    wxLogDebug("CreateDockingLayout: WebView dock created");
 
     // Log current dock areas and their sizes before applying layout config
     LogCurrentDockAreas("BEFORE applyLayoutConfig");
@@ -561,6 +570,24 @@ DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
     return dock;
 }
 
+DockWidget* FlatFrameDocking::CreateWebViewDockWidget() {
+    DockWidget* dock = new DockWidget("Browser", m_dockManager->containerWidget());
+
+    // Create WebView panel with dock as parent
+    WebViewPanel* webViewPanel = new WebViewPanel(dock, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+    webViewPanel->SetMinSize(wxSize(400, 300));
+
+    dock->setWidget(webViewPanel, ads::DockWidget::ForceNoScrollArea);
+
+    // Configure dock widget
+    dock->setFeature(DockWidgetClosable, true);
+    dock->setFeature(DockWidgetMovable, true);
+    dock->setFeature(DockWidgetFloatable, true);
+    dock->setIcon(wxArtProvider::GetIcon(wxART_GO_HOME, wxART_MENU));
+
+    return dock;
+}
+
 DockWidget* FlatFrameDocking::CreateToolboxDockWidget() {
     DockWidget* dock = new DockWidget("Toolbox", m_dockManager->containerWidget());
 
@@ -649,6 +676,7 @@ void FlatFrameDocking::ResetDockingLayout() {
     m_canvasDock = nullptr;
     m_messageDock = nullptr;
     m_performanceDock = nullptr;
+    m_webViewDock = nullptr;
 
     // Recreate default layout
     CreateDockingLayout();
@@ -836,6 +864,12 @@ void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
         }
         break;
 
+    case ID_VIEW_WEBVIEW:
+        if (m_webViewDock) {
+            m_webViewDock->toggleView();
+        }
+        break;
+
     default:
         // Ignore other events
         break;
@@ -867,6 +901,12 @@ void FlatFrameDocking::OnUpdateUI(wxUpdateUIEvent& event) {
     case ID_VIEW_PERFORMANCE:
         if (m_performanceDock) {
             event.Check(m_performanceDock->isVisible());
+        }
+        break;
+
+    case ID_VIEW_WEBVIEW:
+        if (m_webViewDock) {
+            event.Check(m_webViewDock->isVisible());
         }
         break;
 

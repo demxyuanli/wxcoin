@@ -246,6 +246,7 @@ public:
 	// Drawing methods
 	void DrawBackground(wxDC& dc);
 	void DrawItems(wxDC& dc);
+	void DrawItemsVirtual(wxDC& dc, int startY, int visibleTop, int visibleBottom);
 	void DrawItem(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int y, int level);
 	void DrawTreeColumnContent(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int x, int y, int level);
 	void DrawColumnContent(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int columnIndex, int x, int y);
@@ -271,12 +272,22 @@ public:
 	void ExpandAllRecursive(std::shared_ptr<FlatTreeItem> item);
 	void CollapseAllRecursive(std::shared_ptr<FlatTreeItem> item);
 	void CollectSelectedItems(std::shared_ptr<FlatTreeItem> item, std::vector<std::shared_ptr<FlatTreeItem>>& selected) const;
+	
+	// Virtual scrolling optimization
+	void BuildVisibleItemsList();
+	void BuildVisibleItemsRecursive(std::shared_ptr<FlatTreeItem> item, int& currentIndex, int level);
+	void InvalidateVisibleItemsList() { m_visibleItemsValid = false; }
 
 	// Utility methods
 	void RefreshItem(std::shared_ptr<FlatTreeItem> item);
 	void EnsureVisible(std::shared_ptr<FlatTreeItem> item);
 	void InvalidateItem(std::shared_ptr<FlatTreeItem> item);
 	void RefreshContentArea();
+	
+	// Incremental update methods
+	void UpdateItemText(std::shared_ptr<FlatTreeItem> item, const wxString& newText);
+	void UpdateItemIcon(std::shared_ptr<FlatTreeItem> item, const wxBitmap& newIcon);
+	void UpdateItemSelection(std::shared_ptr<FlatTreeItem> item, bool selected);
 
 private:
 	// Data members
@@ -344,6 +355,15 @@ private:
 	bool m_pendingScrollbarUpdate;
 	bool m_deferScrollbarUpdate;
 	wxTimer* m_scrollbarUpdateTimer;
+
+	// Virtual scrolling optimization
+	struct VisibleItemInfo {
+		std::shared_ptr<FlatTreeItem> item;
+		int level;
+		int yPosition;
+	};
+	std::vector<VisibleItemInfo> m_visibleItems;
+	bool m_visibleItemsValid;
 
 	DECLARE_EVENT_TABLE()
 };

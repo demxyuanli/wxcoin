@@ -548,11 +548,22 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 	);
 	m_coinNode->addChild(m_coinTransform);
 
-	// Shape hints
+	// Shape hints - adjust for shell models
 	SoShapeHints* hints = new SoShapeHints;
 	hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
-	hints->shapeType = SoShapeHints::SOLID;
-	hints->faceType = SoShapeHints::CONVEX;
+	
+	// Check if this is a shell model requiring different shape hints
+	bool isShellModel = (m_shape.ShapeType() == TopAbs_SHELL) || !m_cullFace;
+	if (isShellModel) {
+		// For shell models, use UNKNOWN_SHAPE_TYPE to allow better double-sided rendering
+		hints->shapeType = SoShapeHints::UNKNOWN_SHAPE_TYPE;
+		hints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
+	} else {
+		// For solid models, use standard solid hints
+		hints->shapeType = SoShapeHints::SOLID;
+		hints->faceType = SoShapeHints::CONVEX;
+	}
+	
 	m_coinNode->addChild(hints);
 
 	// Draw style (wireframe vs filled)

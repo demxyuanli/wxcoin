@@ -975,8 +975,27 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 		Quantity_Color componentColor = distinctColors[colorIndex];
 		geometry->setColor(componentColor);
 
-		// Remove transparency for a solid appearance
-		geometry->setTransparency(0.0);
+		// Detect if this is a shell model and apply appropriate settings
+		bool isShellModel = detectShellModel(shape);
+		if (isShellModel) {
+			LOG_INF_S("Detected shell model for: " + name + " - applying shell-specific rendering settings");
+			// For shell models, disable backface culling to ensure all faces are visible from both sides
+			geometry->setCullFace(false);
+			// Shell models should be opaque for better visibility
+			geometry->setTransparency(0.0);
+			// Enable depth testing but ensure proper depth write for shells
+			geometry->setDepthTest(true);
+			geometry->setDepthWrite(true);
+			// Set enhanced material properties for shell models with better contrast
+			geometry->setMaterialAmbientColor(Quantity_Color(0.2, 0.2, 0.2, Quantity_TOC_RGB));
+			geometry->setMaterialDiffuseColor(Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB));
+			geometry->setMaterialShininess(50.0);
+			// Enable smooth normals for better shell rendering
+			geometry->setSmoothNormals(true);
+		} else {
+			// Regular solid models use standard settings
+			geometry->setTransparency(0.0);
+		}
 
 		// Only analyze shape if explicitly enabled (disabled by default for speed)
 		if (options.enableShapeAnalysis) {
@@ -1508,7 +1527,29 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 					auto geom = std::make_shared<OCCGeometry>(partName);
 					geom->setShape(part);
 					geom->setColor(color);
-					geom->setTransparency(0.0);
+					
+					// Detect if this is a shell model and apply appropriate settings
+					bool isShellModel = detectShellModel(part);
+					if (isShellModel) {
+						LOG_INF_S("CAF: Detected shell model for: " + partName + " - applying shell-specific rendering settings");
+						// For shell models, disable backface culling to ensure all faces are visible from both sides
+						geom->setCullFace(false);
+						// Shell models should be opaque for better visibility
+						geom->setTransparency(0.0);
+						// Enable depth testing but ensure proper depth write for shells
+						geom->setDepthTest(true);
+						geom->setDepthWrite(true);
+						// Set enhanced material properties for shell models with better contrast
+						geom->setMaterialAmbientColor(Quantity_Color(0.2, 0.2, 0.2, Quantity_TOC_RGB));
+						geom->setMaterialDiffuseColor(Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB));
+						geom->setMaterialShininess(50.0);
+						// Enable smooth normals for better shell rendering
+						geom->setSmoothNormals(true);
+					} else {
+						// Regular solid models use standard settings
+						geom->setTransparency(0.0);
+					}
+					
 					geom->setAssemblyLevel(level);
 					result.geometries.push_back(geom);
 
@@ -1888,5 +1929,95 @@ static void decomposeByShellGroups(const TopoDS_Shape& shape, std::vector<TopoDS
 	} catch (const std::exception& e) {
 		LOG_WRN_S("Shell group decomposition failed: " + std::string(e.what()));
 		subShapes.push_back(shape);
+	}
+}
+
+// Helper function to detect if a shape is a shell model
+bool STEPReader::detectShellModel(const TopoDS_Shape& shape)
+{
+	try {
+		if (shape.IsNull()) {
+			return false;
+		}
+
+		// Check shape type - if it's a shell, it's definitely a shell model
+		if (shape.ShapeType() == TopAbs_SHELL) {
+			LOG_INF_S("Shape is a shell (TopAbs_SHELL)");
+			return true;
+		}
+
+		// Check if the shape contains shells but no solids
+		int solidCount = 0;
+		int shellCount = 0;
+		int faceCount = 0;
+		int openShellCount = 0;
+
+		for (TopExp_Explorer exp(shape, TopAbs_SOLID); exp.More(); exp.Next()) {
+			solidCount++;
+		}
+		
+		for (TopExp_Explorer exp(shape, TopAbs_SHELL); exp.More(); exp.Next()) {
+			shellCount++;
+			// Check if shell is closed (solid) or open (surface)
+			TopoDS_Shell shell = TopoDS::Shell(exp.Current());
+			if (!shell.Closed()) {
+				openShellCount++;
+			}
+		}
+		
+		for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+			faceCount++;
+		}
+
+		LOG_INF_S("Shape analysis - Solids: " + std::to_string(solidCount) + 
+			", Shells: " + std::to_string(shellCount) + 
+			", Open shells: " + std::to_string(openShellCount) +
+			", Faces: " + std::to_string(faceCount));
+
+		// If we have shells but no solids, it's likely a shell model
+		if (shellCount > 0 && solidCount == 0) {
+			LOG_INF_S("Detected shell model: has shells but no solids");
+			return true;
+		}
+
+		// If we have open shells, it's definitely a shell model requiring double-sided rendering
+		if (openShellCount > 0) {
+			LOG_INF_S("Detected open shell model: has " + std::to_string(openShellCount) + " open shells");
+			return true;
+		}
+
+		// If we have only faces and no solids/shells, check if it's a surface model
+		if (solidCount == 0 && shellCount == 0 && faceCount > 0) {
+			LOG_INF_S("Detected surface model: only faces, no solids or shells");
+			return true;
+		}
+
+		// Additional check: if we have a compound with only shells
+		if (shape.ShapeType() == TopAbs_COMPOUND) {
+			TopExp_Explorer exp(shape, TopAbs_SOLID);
+			if (!exp.More()) { // No solids found
+				TopExp_Explorer shellExp(shape, TopAbs_SHELL);
+				if (shellExp.More()) { // Has shells
+					LOG_INF_S("Detected shell model: compound with shells but no solids");
+					return true;
+				}
+			}
+		}
+
+		// Check for thin-walled solids (solids with very thin walls that might need double-sided rendering)
+		if (solidCount > 0 && shellCount > 0) {
+			// Additional heuristic: if solid has many shells relative to its size, it might be thin-walled
+			double shellToSolidRatio = static_cast<double>(shellCount) / static_cast<double>(solidCount);
+			if (shellToSolidRatio > 2.0) {
+				LOG_INF_S("Detected potentially thin-walled model: shell/solid ratio = " + std::to_string(shellToSolidRatio));
+				return true;
+			}
+		}
+
+		return false;
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Error detecting shell model: " + std::string(e.what()));
+		return false;
 	}
 }

@@ -3,6 +3,7 @@
 #include "SceneManager.h"
 #include "PickingAidManager.h"
 #include "NavigationController.h"
+#include "NavigationModeManager.h"
 #include "GeometryFactory.h"
 #include "PositionBasicDialog.h"
 #include "OCCViewer.h"
@@ -33,6 +34,7 @@ MouseHandler::MouseHandler(Canvas* canvas, ObjectTreePanel* objectTree, Property
 	, m_propertyPanel(propertyPanel)
 	, m_commandManager(commandManager)
 	, m_navigationController(nullptr)
+	, m_navigationModeManager(nullptr)
 	, m_operationMode(OperationMode::VIEW)
 	, m_isDragging(false)
 	, m_currentPositionBasicDialog(nullptr)
@@ -102,11 +104,16 @@ void MouseHandler::setNavigationController(NavigationController* controller) {
 	LOG_INF_S("NavigationController set for MouseHandler");
 }
 
+void MouseHandler::setNavigationModeManager(NavigationModeManager* manager) {
+	m_navigationModeManager = manager;
+	LOG_INF_S("NavigationModeManager set for MouseHandler");
+}
+
 void MouseHandler::handleMouseButton(wxMouseEvent& event) {
 	LOG_INF_S("Mouse button event - Mode: " + std::to_string(static_cast<int>(m_operationMode)) +
 		", LeftDown: " + std::to_string(event.LeftDown()));
 
-	if (m_operationMode == OperationMode::VIEW && m_navigationController) {
+	if (m_operationMode == OperationMode::VIEW) {
 		// Start/stop slice dragging with left button when slice is enabled
 		if (auto* viewer = m_canvas ? m_canvas->getOCCViewer() : nullptr) {
 			if (viewer->isSliceEnabled()) {
@@ -123,7 +130,14 @@ void MouseHandler::handleMouseButton(wxMouseEvent& event) {
 				}
 			}
 		}
-		m_navigationController->handleMouseButton(event);
+		
+		// Use NavigationModeManager if available, otherwise fall back to NavigationController
+		if (m_navigationModeManager) {
+			m_navigationModeManager->handleMouseButton(event);
+		}
+		else if (m_navigationController) {
+			m_navigationController->handleMouseButton(event);
+		}
 	}
 	else {
 		event.Skip();
@@ -160,7 +174,13 @@ void MouseHandler::handleMouseMotion(wxMouseEvent& event) {
 			}
 		}
 		else {
-			m_navigationController->handleMouseMotion(event);
+			// Use NavigationModeManager if available, otherwise fall back to NavigationController
+			if (m_navigationModeManager) {
+				m_navigationModeManager->handleMouseMotion(event);
+			}
+			else if (m_navigationController) {
+				m_navigationController->handleMouseMotion(event);
+			}
 		}
 	}
 	else {

@@ -85,6 +85,13 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	wxArrayString filePaths;
 	openFileDialog.GetPaths(filePaths);
 
+	// Set loading cursor for STEP import process
+	wxWindow* topWindow = wxTheApp->GetTopWindow();
+	if (topWindow) {
+		topWindow->SetCursor(wxCursor(wxCURSOR_WAIT));
+		LOG_INF_S("Set loading cursor for STEP import");
+	}
+
 	// Use balanced default settings for import (no dialog needed)
 	// Balanced preset: Good balance between quality and performance
 	double meshDeflection = 1.0;          // Balanced mesh precision
@@ -412,6 +419,12 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 				topWindow = m_frame;
 			}
 
+			// Restore arrow cursor after STEP import completion
+			if (topWindow) {
+				topWindow->SetCursor(wxCursor(wxCURSOR_ARROW));
+				LOG_INF_S("Restored arrow cursor after STEP import");
+			}
+
 			// Update overall statistics with final summary information
 			overallStats.totalFilesSelected = filePaths.size();
 			overallStats.totalFilesProcessed = filePaths.size();
@@ -524,6 +537,13 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception during STEP import: " + std::string(e.what()));
 
+		// Restore arrow cursor on exception
+		wxWindow* topWindow = wxTheApp->GetTopWindow();
+		if (topWindow) {
+			topWindow->SetCursor(wxCursor(wxCURSOR_ARROW));
+			LOG_INF_S("Restored arrow cursor after STEP import exception");
+		}
+
 		// Ensure progress is cleaned up
 		if (m_statusBar) {
 			try {
@@ -534,7 +554,7 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 		}
 
 		// Use top-level window for dialog
-		wxWindow* topWindow = wxTheApp->GetTopWindow();
+		topWindow = wxTheApp->GetTopWindow();
 		if (!topWindow) {
 			topWindow = m_frame;
 		}

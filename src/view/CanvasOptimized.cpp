@@ -71,7 +71,7 @@ void CanvasOptimized::onSize(wxSizeEvent& event) {
     }
     
     // Trigger repaint
-    Refresh(false);
+    Refresh(false); 
 }
 
 void CanvasOptimized::renderLowQuality() {

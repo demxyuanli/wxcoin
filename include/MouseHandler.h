@@ -10,6 +10,7 @@ class ObjectTreePanel;
 class PropertyPanel;
 class CommandManager;
 class NavigationController;
+class NavigationModeManager;
 class OCCViewer;
 class OCCGeometry;
 class PositionBasicDialog;
@@ -32,6 +33,7 @@ public:
 	void setOperationMode(OperationMode mode);
 	void setCreationGeometryType(const std::string& type);
 	void setNavigationController(NavigationController* controller);
+	void setNavigationModeManager(NavigationModeManager* manager);
 
 	std::string getCreationGeometryType() const { return m_creationGeometryType; }
 	OperationMode getOperationMode() const { return m_operationMode; }
@@ -43,6 +45,7 @@ private:
 	PropertyPanel* m_propertyPanel;
 	CommandManager* m_commandManager;
 	NavigationController* m_navigationController;
+	NavigationModeManager* m_navigationModeManager;
 	OperationMode m_operationMode;
 	SliceDragState m_sliceDragState{ SliceDragState::None };
 	SbVec3f m_sliceDragLastWorld;

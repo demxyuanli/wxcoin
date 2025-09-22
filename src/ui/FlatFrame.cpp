@@ -159,6 +159,7 @@ EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
 EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
 EVT_BUTTON(ID_NAVIGATION_CUBE_CONFIG, FlatFrame::onCommand)
 EVT_BUTTON(ID_ZOOM_SPEED, FlatFrame::onCommand)
+EVT_BUTTON(ID_NAVIGATION_MODE, FlatFrame::onCommand)
 EVT_BUTTON(ID_MESH_QUALITY_DIALOG, FlatFrame::onCommand)
 EVT_BUTTON(ID_RENDERING_SETTINGS, FlatFrame::onCommand)
 EVT_BUTTON(ID_LIGHTING_SETTINGS, FlatFrame::onCommand)
@@ -348,49 +349,28 @@ void FlatFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 		ribbon->SetSize(newSize);
 	}
 
-	// Force ribbon to update its size immediately
-	if (ribbon) {
-		ribbon->Layout();
-		ribbon->Refresh();
-		ribbon->Update();
-	}
-
-	// Force main splitter to recalculate its size and position
-	if (m_mainSplitter) {
-		m_mainSplitter->Layout();
-		m_mainSplitter->Refresh();
-		m_mainSplitter->Update();
-	}
-
-	// Add a deferred layout update to ensure proper space allocation after all changes
+	// Single deferred layout update to avoid flickering
 	CallAfter([this]() {
 		// Force complete layout recalculation
 		if (GetSizer()) {
 			GetSizer()->Layout();
 		}
 
-		// Force main splitter to recalculate its size and position
-		if (m_mainSplitter) {
-			m_mainSplitter->Layout();
-			m_mainSplitter->Refresh();
-			m_mainSplitter->Update();
+		// Update ribbon
+		FlatUIBar* ribbon = GetUIBar();
+		if (ribbon) {
+			ribbon->Layout();
 		}
 
-		// Force frame to recalculate its layout and ensure main work area fills remaining space
+		// Update main splitter
+		if (m_mainSplitter) {
+			m_mainSplitter->Layout();
+		}
+
+		// Force frame to recalculate its layout
 		Layout();
 		Refresh();
-		Update();
-
-		// Additional deferred update to ensure proper space allocation
-		CallAfter([this]() {
-			if (GetSizer()) {
-				GetSizer()->Layout();
-			}
-			Layout();
-			Refresh();
-			Update();
-			});
-		});
+	});
 }
 
 void FlatFrame::LoadSVGIcons(wxWindow* parent, wxSizer* sizer)

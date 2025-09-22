@@ -23,6 +23,7 @@ class ObjectTreePanel;
 class MouseHandler;
 class GeometryFactory;
 class CommandManager;
+class NavigationModeManager;
 class OCCViewer;
 class CommandDispatcher;
 class CommandListenerManager;
@@ -72,6 +73,7 @@ enum {
 	ID_REDO,
 	ID_NAVIGATION_CUBE_CONFIG,
 	ID_ZOOM_SPEED,
+	ID_NAVIGATION_MODE,
 	ID_MESH_QUALITY_DIALOG,
 	ID_RENDERING_SETTINGS,
 	ID_EDGE_SETTINGS,
@@ -116,6 +118,7 @@ enum {
 	ID_VIEW_PROPERTIES,
 	ID_VIEW_MESSAGE,
 	ID_VIEW_PERFORMANCE,
+	ID_VIEW_WEBVIEW,
 
 	// Flat Widgets Example
 	ID_SHOW_FLAT_WIDGETS_EXAMPLE,
@@ -177,6 +180,7 @@ private:
 	MouseHandler* m_mouseHandler;
 	GeometryFactory* m_geometryFactory;
 	CommandManager* m_commandManager;
+	NavigationModeManager* m_navigationModeManager;
 	OCCViewer* m_occViewer;
 	std::unique_ptr<CommandDispatcher> m_commandDispatcher;
 	std::unique_ptr<CommandListenerManager> m_listenerManager;
@@ -213,6 +217,9 @@ private:
 public:
 	// Message output methods
 	void appendMessage(const wxString& message);
+	
+	// Navigation mode manager access
+	NavigationModeManager* getNavigationModeManager() const { return m_navigationModeManager; }
 	
 	// Keyboard shortcuts
 	void SetupKeyboardShortcuts();

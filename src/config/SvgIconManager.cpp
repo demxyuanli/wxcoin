@@ -61,7 +61,6 @@ void SvgIconManager::LoadIcons()
 		cont = dir.GetNext(&filename);
 	}
 
-	LOG_INF(wxString::Format("SvgIconManager: Loaded %u SVG icons from '%s'", (unsigned int)iconMap.size(), iconDir.ToStdString()), "SvgIconManager");
 }
 
 wxString SvgIconManager::GetCacheKey(const wxString& name, const wxSize& size) const
@@ -206,7 +205,6 @@ void SvgIconManager::ClearThemeCache()
 	// Also clear the rendered caches since they depend on themed SVG
 	iconCache.clear();
 	bundleCache.clear();
-	LOG_DBG("SvgIconManager: Theme cache cleared", "SvgIconManager");
 }
 
 wxString SvgIconManager::ReadSvgFile(const wxString& filePath)
@@ -421,7 +419,6 @@ wxString SvgIconManager::NormalizeSvgStructure(const wxString& svgContent)
 						content.substr(closeStartPos);
 
 					normalizedContent = wxString(newContent);
-					LOG_DBG("SvgIconManager: Added group wrapper to SVG with direct path elements", "SvgIconManager");
 				}
 			}
 		}
@@ -465,7 +462,6 @@ wxString SvgIconManager::AddDefaultFillToElements(const wxString& svgContent, co
 	}
 	result += content.substr(lastPos);
 
-	LOG_DBG("SvgIconManager: Added default fill color to group elements", "SvgIconManager");
 	return wxString(result);
 }
 
@@ -561,13 +557,13 @@ wxString SvgIconManager::ReplaceNonLightColorsInStyles(const wxString& content, 
 			}
 		}
 
-		std::string replacement = "style=\"" + styleValue + "\"";
-
+		std::string replacement = "style=\"" + styleValue + "\"";  
+		 
 		resultStr += contentStr.substr(lastPos, match.position() - lastPos);
 		resultStr += replacement;
 		lastPos = match.position() + match.length();
 		++iter;
-	}
+	} 
 	resultStr += contentStr.substr(lastPos);
 
 	return wxString(resultStr);

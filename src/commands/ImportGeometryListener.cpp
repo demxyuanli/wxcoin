@@ -86,6 +86,13 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
         return CommandResult(false, "No files selected", commandType);
     }
 
+    // Set loading cursor for import process
+    wxWindow* topWindow = wxTheApp->GetTopWindow();
+    if (topWindow) {
+        topWindow->SetCursor(wxCursor(wxCURSOR_WAIT));
+        LOG_INF_S("Set loading cursor for geometry import");
+    }
+
     // Group files by format
     std::unordered_map<std::string, std::vector<std::string>> filesByFormat;
     for (const auto& filePath : filePaths) {
@@ -316,6 +323,14 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Exception during geometry import: " + std::string(e.what()));
+        
+        // Restore arrow cursor on exception
+        wxWindow* topWindow = wxTheApp->GetTopWindow();
+        if (topWindow) {
+            topWindow->SetCursor(wxCursor(wxCURSOR_ARROW));
+            LOG_INF_S("Restored arrow cursor after import exception");
+        }
+        
         cleanupProgress();
 
         // Show statistics dialog with error information
@@ -343,7 +358,7 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             overallStats.fileStats.push_back(fileStat);
         }
 
-        wxWindow* topWindow = wxTheApp->GetTopWindow();
+        topWindow = wxTheApp->GetTopWindow();
         if (!topWindow) {
             topWindow = m_frame;
         }
@@ -608,6 +623,13 @@ void ImportGeometryListener::updateProgress(int percent, const std::string& mess
 
 void ImportGeometryListener::cleanupProgress()
 {
+    // Restore arrow cursor after import completion
+    wxWindow* topWindow = wxTheApp->GetTopWindow();
+    if (topWindow) {
+        topWindow->SetCursor(wxCursor(wxCURSOR_ARROW));
+        LOG_INF_S("Restored arrow cursor after geometry import");
+    }
+
     if (m_statusBar) {
         try {
             m_statusBar->EnableProgressGauge(false);

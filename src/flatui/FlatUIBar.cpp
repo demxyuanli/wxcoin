@@ -461,8 +461,12 @@ void FlatUIBar::OnSize(wxSizeEvent& evt)
 	// Notify event dispatcher
 	m_eventDispatcher->HandleSizeEvent(newSize);
 
-	Refresh(true);
-	Update();
+	// Only refresh if necessary to avoid flickering
+	static wxSize lastSize;
+	if (newSize != lastSize) {
+		lastSize = newSize;
+		Refresh(false); // Use false to avoid erasing background unnecessarily
+	}
 	evt.Skip();
 }
 

@@ -202,6 +202,7 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	, m_pendingScrollbarUpdate(false)
 	, m_deferScrollbarUpdate(false)
 	, m_scrollbarUpdateTimer(nullptr)
+	, m_visibleItemsValid(false)
 {
     // Set default colors from theme
     m_backgroundColor = CFG_COLOUR("PanelContentBgColour");
@@ -259,6 +260,7 @@ void FlatTreeView::SetRoot(std::shared_ptr<FlatTreeItem> root)
 {
 	m_root = root;
 	m_needsLayout = true;
+	InvalidateVisibleItemsList();
 	UpdateScrollbars(); // Update scrollbars when root changes
 	Refresh();
 }
@@ -268,6 +270,7 @@ void FlatTreeView::AddItem(std::shared_ptr<FlatTreeItem> parent, std::shared_ptr
 	if (parent && child) {
 		parent->AddChild(child);
 		m_needsLayout = true;
+		InvalidateVisibleItemsList();
 		UpdateScrollbars(); // Update scrollbars when items are added
 		Refresh();
 	}
@@ -278,6 +281,7 @@ void FlatTreeView::RemoveItem(std::shared_ptr<FlatTreeItem> item)
 	if (item && item->GetParent()) {
 		item->GetParent()->RemoveChild(item);
 		m_needsLayout = true;
+		InvalidateVisibleItemsList();
 		UpdateScrollbars(); // Update scrollbars when items are removed
 		Refresh();
 	}
@@ -287,6 +291,7 @@ void FlatTreeView::Clear()
 {
 	m_root.reset();
 	m_needsLayout = true;
+	InvalidateVisibleItemsList();
 	UpdateScrollbars(); // Update scrollbars when cleared
 	Refresh();
 }
@@ -342,6 +347,7 @@ void FlatTreeView::ExpandItem(std::shared_ptr<FlatTreeItem> item, bool expand)
 	if (item && item->HasChildren()) {
 		item->SetExpanded(expand);
 		m_needsLayout = true;
+		InvalidateVisibleItemsList();
 		UpdateScrollbars(); // Update scrollbars when items are expanded/collapsed
 		Refresh();
 
@@ -359,6 +365,7 @@ void FlatTreeView::ExpandAll()
 	if (m_root) {
 		ExpandAllRecursive(m_root);
 		m_needsLayout = true;
+		InvalidateVisibleItemsList();
 		UpdateScrollbars(); // Update scrollbars when all items are expanded
 		Refresh();
 	}
@@ -369,6 +376,7 @@ void FlatTreeView::CollapseAll()
 	if (m_root) {
 		CollapseAllRecursive(m_root);
 		m_needsLayout = true;
+		InvalidateVisibleItemsList();
 		UpdateScrollbars(); // Update scrollbars when all items are collapsed
 		Refresh();
 	}
@@ -746,22 +754,56 @@ void FlatTreeView::DrawItems(wxDC& dc)
 	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
 
 	// Compute current vertical scroll in pixels
-	// Adjust clip by current scroll so that device clip top stays at headerY
 	int viewStartX = 0, viewStartY = 0;
 	GetViewStart(&viewStartX, &viewStartY);
 	int ppuX = 1, ppuY = 1;
 	GetScrollPixelsPerUnit(&ppuX, &ppuY);
 	int scrollXPixels = viewStartX * ppuX;
 	int scrollYPixels = viewStartY * ppuY;
+	
+	// Calculate visible range for virtual scrolling optimization
+	int visibleTop = scrollYPixels;
+	int visibleBottom = scrollYPixels + cs.GetHeight() - headerY;
+	
 	dc.SetClippingRegion(scrollXPixels, headerY + scrollYPixels, cs.GetWidth(), cs.GetHeight() - headerY);
 
-	// Start drawing from the top of the content area
-	// PrepareDC has already applied the scroll transformation
-	int startY = headerY;
-
-	DrawItemRecursive(dc, m_root, startY, 0);
+	// Use virtual scrolling - only draw visible items
+	DrawItemsVirtual(dc, headerY, visibleTop, visibleBottom);
 
 	dc.DestroyClippingRegion();
+}
+
+void FlatTreeView::DrawItemsVirtual(wxDC& dc, int /*startY*/, int visibleTop, int visibleBottom)
+{
+	// Build visible items list if needed
+	if (!m_visibleItemsValid) {
+		BuildVisibleItemsList();
+	}
+
+	// Calculate which items are actually visible in the current viewport
+	int firstVisibleIndex = -1;
+	int lastVisibleIndex = -1;
+
+	for (size_t i = 0; i < m_visibleItems.size(); ++i) {
+		int itemTop = m_visibleItems[i].yPosition;
+		int itemBottom = itemTop + m_itemHeight;
+
+		// Check if item intersects with visible area
+		if (itemBottom > visibleTop && itemTop < visibleBottom) {
+			if (firstVisibleIndex == -1) {
+				firstVisibleIndex = static_cast<int>(i);
+			}
+			lastVisibleIndex = static_cast<int>(i);
+		}
+	}
+
+	// Draw only visible items
+	if (firstVisibleIndex != -1 && lastVisibleIndex != -1) {
+		for (int i = firstVisibleIndex; i <= lastVisibleIndex; ++i) {
+			const auto& visibleItem = m_visibleItems[i];
+			DrawItem(dc, visibleItem.item, visibleItem.yPosition, visibleItem.level);
+		}
+	}
 }
 
 void FlatTreeView::DrawItemRecursive(wxDC& dc, std::shared_ptr<FlatTreeItem> item, int& y, int level)
@@ -1028,9 +1070,22 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
 
 	if (y < 0) return nullptr;
 
-	// Calculate item index based on pixel position
-	int itemIndex = y / m_itemHeight;
-	return GetItemByIndex(m_root, itemIndex);
+	// Build visible items list if needed
+	if (!m_visibleItemsValid) {
+		const_cast<FlatTreeView*>(this)->BuildVisibleItemsList();
+	}
+
+	// Use optimized hit testing with visible items list
+	for (const auto& visibleItem : m_visibleItems) {
+		int itemTop = visibleItem.yPosition - headerY;
+		int itemBottom = itemTop + m_itemHeight;
+		
+		if (y >= itemTop && y < itemBottom) {
+			return visibleItem.item;
+		}
+	}
+
+	return nullptr;
 }
 
 int FlatTreeView::HitTestColumn(const wxPoint& point)
@@ -1081,7 +1136,13 @@ void FlatTreeView::CalculateLayout()
 		return;
 	}
 
-	m_totalHeight = CalculateItemHeightRecursive(m_root);
+	// Build visible items list and calculate total height efficiently
+	if (!m_visibleItemsValid) {
+		BuildVisibleItemsList();
+	}
+	
+	// Total height is simply the number of visible items times item height
+	m_totalHeight = static_cast<int>(m_visibleItems.size()) * m_itemHeight;
 
 	// Calculate total content width
 	int totalContentWidth = 0;
@@ -1097,22 +1158,20 @@ void FlatTreeView::CalculateLayout()
 	// Don't call FitInside here to avoid triggering OnSize events
 	// FitInside will be called in UpdateScrollbars after timer delay
 
-	// 3. Update the top first-column horizontal scrollbar
+	// Update the top first-column horizontal scrollbar using cached visible items
 	{
 		wxClientDC tdc(this);
 		tdc.SetFont(GetFont());
 		int maxDepth = 0;
 		int maxText = 0;
-		std::function<void(std::shared_ptr<FlatTreeItem>, int)> dfs = [&](std::shared_ptr<FlatTreeItem> it, int depth) {
-			if (!it) return;
-			maxDepth = std::max(maxDepth, depth);
-			wxSize s = tdc.GetTextExtent(it->GetText());
+		
+		// Use cached visible items instead of recursive traversal
+		for (const auto& visibleItem : m_visibleItems) {
+			maxDepth = std::max(maxDepth, visibleItem.level);
+			wxSize s = tdc.GetTextExtent(visibleItem.item->GetText());
 			if (s.GetWidth() > maxText) maxText = s.GetWidth();
-			if (it->IsExpanded()) {
-				for (auto& ch : it->GetChildren()) dfs(ch, depth + 1);
-			}
-			};
-		dfs(m_root, 0);
+		}
+		
 		int icons = 40;
 		m_treeContentWidth = maxDepth * m_indentWidth + icons + maxText + 16;
 		int treeColWidth = m_columns.empty() ? 0 : m_columns[0]->GetWidth();
@@ -1358,6 +1417,8 @@ void FlatTreeView::CollectSelectedItems(std::shared_ptr<FlatTreeItem> item, std:
 void FlatTreeView::RefreshItem(std::shared_ptr<FlatTreeItem> item)
 {
 	if (item) {
+		// Only invalidate visible items list if the item visibility changed
+		// For simple text/icon changes, we don't need to rebuild the entire list
 		InvalidateItem(item);
 	}
 }
@@ -1394,13 +1455,27 @@ void FlatTreeView::EnsureVisible(std::shared_ptr<FlatTreeItem> item)
 void FlatTreeView::InvalidateItem(std::shared_ptr<FlatTreeItem> item)
 {
 	if (!item) return;
-	int y = CalculateItemY(item);
-	if (y == -1) { RefreshContentArea(); return; }
-	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
-	wxRect rect(0, y, GetClientSize().GetWidth(), m_itemHeight);
-	rect.y = std::max(rect.y, headerY);
-	RefreshRect(rect, false);
+	
+	// Build visible items list if needed
+	if (!m_visibleItemsValid) {
+		BuildVisibleItemsList();
+	}
+	
+	// Find item in visible items list for fast lookup
+	for (const auto& visibleItem : m_visibleItems) {
+		if (visibleItem.item == item) {
+			int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
+			int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+			wxRect rect(0, visibleItem.yPosition, GetClientSize().GetWidth(), m_itemHeight);
+			rect.y = std::max(rect.y, headerY);
+			RefreshRect(rect, false);
+			return;
+		}
+	}
+	
+	// Item not found in visible list - it might be collapsed or not visible
+	// Just refresh the content area as fallback
+	RefreshContentArea();
 }
 
 void FlatTreeView::RefreshContentArea()
@@ -1464,7 +1539,9 @@ wxString FlatTreeView::GetItemColumnSvgIconName(std::shared_ptr<FlatTreeItem> it
 	auto key = std::make_pair(item, column);
 	auto it = m_itemColumnSvgIconNames.find(key);
 	return it != m_itemColumnSvgIconNames.end() ? it->second : wxEmptyString;
-}void FlatTreeView::OnScrollbarUpdateTimer(wxTimerEvent& event)
+}
+
+void FlatTreeView::OnScrollbarUpdateTimer(wxTimerEvent& event)
 {
 	wxUnusedVar(event);
 	
@@ -1474,5 +1551,76 @@ wxString FlatTreeView::GetItemColumnSvgIconName(std::shared_ptr<FlatTreeItem> it
 	// Refresh to ensure the updated scrollbars are visible
 	Refresh();
 	
+}
+
+void FlatTreeView::BuildVisibleItemsList()
+{
+	m_visibleItems.clear();
+	
+	if (!m_root) {
+		m_visibleItemsValid = true;
+		return;
+	}
+
+	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
+	int startY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+	int currentIndex = 0;
+	
+	BuildVisibleItemsRecursive(m_root, currentIndex, 0);
+	
+	// Update Y positions
+	for (size_t i = 0; i < m_visibleItems.size(); ++i) {
+		m_visibleItems[i].yPosition = startY + static_cast<int>(i) * m_itemHeight;
+	}
+	
+	m_visibleItemsValid = true;
+}
+
+void FlatTreeView::BuildVisibleItemsRecursive(std::shared_ptr<FlatTreeItem> item, int& currentIndex, int level)
+{
+	if (!item || !item->IsVisible()) return;
+
+	// Add current item to visible list
+	VisibleItemInfo info;
+	info.item = item;
+	info.level = level;
+	info.yPosition = 0; // Will be set in BuildVisibleItemsList
+	m_visibleItems.push_back(info);
+	currentIndex++;
+
+	// Add children if expanded
+	if (item->IsExpanded()) {
+		for (auto& child : item->GetChildren()) {
+			BuildVisibleItemsRecursive(child, currentIndex, level + 1);
+		}
+	}
+}
+
+// Incremental update methods for better performance
+void FlatTreeView::UpdateItemText(std::shared_ptr<FlatTreeItem> item, const wxString& newText)
+{
+	if (item && item->GetText() != newText) {
+		item->SetText(newText);
+		// Only refresh this specific item, no need to rebuild entire tree
+		RefreshItem(item);
+	}
+}
+
+void FlatTreeView::UpdateItemIcon(std::shared_ptr<FlatTreeItem> item, const wxBitmap& newIcon)
+{
+	if (item) {
+		item->SetIcon(newIcon);
+		// Only refresh this specific item, no need to rebuild entire tree
+		RefreshItem(item);
+	}
+}
+
+void FlatTreeView::UpdateItemSelection(std::shared_ptr<FlatTreeItem> item, bool selected)
+{
+	if (item && item->IsSelected() != selected) {
+		item->SetSelected(selected);
+		// Only refresh this specific item, no need to rebuild entire tree
+		RefreshItem(item);
+	}
 }
 

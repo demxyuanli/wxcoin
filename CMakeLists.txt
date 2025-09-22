@@ -1,6 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 project(CADNav)
 
+# Override any problematic environment variables
+if(DEFINED ENV{CMAKE_POLICY_VERSION_MINIMUM})
+    unset(ENV{CMAKE_POLICY_VERSION_MINIMUM})
+endif()
+
+# Force set CMake policy version minimum to avoid environment issues
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5.0 CACHE STRING "" FORCE)
+
+# Set minimum CMake policy version
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,6 +78,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     CADGeometry    # Geometry模块
     wx::core
     wx::base
+    wx::webview
     Coin::Coin
     TKBO TKDE TKBin TKCAF
 )

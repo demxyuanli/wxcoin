@@ -588,6 +588,7 @@ void PreviewCanvas::render(bool fastMode)
 	glEnable(GL_BLEND);
 	glEnable(GL_LIGHTING); // Enable lighting
 	glEnable(GL_NORMALIZE); // Enable normal normalization for proper lighting
+	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE); // Enable two-sided lighting for shell models
 	glEnable(GL_TEXTURE_2D);
 
 	// Handle background rendering based on RenderingManager settings

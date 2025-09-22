@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <wx/gdicmn.h>
+#include "NavigationCubeConfigDialog.h"
 
 class Canvas;
 class SceneManager;
@@ -24,6 +25,20 @@ public:
 
 	void showConfigDialog();
 
+	// Configuration management
+	void setConfig(const CubeConfig& config);
+	CubeConfig getConfig() const;
+	void applyConfig(const CubeConfig& config);
+	
+	// Persistent configuration
+	void saveConfigToPersistent();
+	void loadConfigFromPersistent();
+	
+	// Positioning utilities
+	void centerCubeInViewport();
+	void calculateCenteredPosition(int& x, int& y, int cubeSize, const wxSize& windowSize);
+	
+	// Legacy methods for backward compatibility
 	void setRect(int x, int y, int size);
 	void setColor(const wxColour& color);
 	void setViewportSize(int size);
@@ -35,7 +50,7 @@ private:
 	void initCube();
 
 	struct Layout {
-		int x{ 20 }, y{ 20 }, size{ 200 };
+		int x{ 20 }, y{ 20 }, size{ 280 };
 		void update(int newX_logical, int newY_logical, int newSize_logical,
 			const wxSize& windowSize_logical, float dpiScale);
 	} m_cubeLayout;
@@ -47,4 +62,5 @@ private:
 	bool m_isEnabled;
 	float m_marginx = 40.0f;
 	float m_marginy = 40.0f;
+	CubeConfig m_cubeConfig;
 };

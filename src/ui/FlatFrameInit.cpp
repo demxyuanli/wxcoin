@@ -27,6 +27,7 @@
 #include "ObjectTreePanel.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
+#include "NavigationModeManager.h"
 #include "GeometryFactory.h"
 #include "InputManager.h"
 #include "SceneManager.h"
@@ -310,6 +311,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	toolsButtonBar->AddButtonWithSVG(ID_MESH_QUALITY_DIALOG, "Mesh Quality", "mesh", wxSize(16, 16), nullptr, "Open mesh quality dialog");
 	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", "cube", wxSize(16, 16), nullptr, "Configure navigation cube");
 	toolsButtonBar->AddButtonWithSVG(ID_ZOOM_SPEED, "Zoom Speed", "pulse", wxSize(16, 16), nullptr, "Adjust zoom speed settings");
+	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_MODE, "Navigation Mode", "compass", wxSize(16, 16), nullptr, "Switch between Gesture and Inventor navigation modes");
 	toolsButtonBar->AddButtonWithSVG(ID_RENDERING_SETTINGS, "Rendering Settings", "palette", wxSize(16, 16), nullptr, "Configure material, lighting and texture settings");
 	toolsButtonBar->AddButtonWithSVG(ID_LIGHTING_SETTINGS, "Lighting Settings", "light", wxSize(16, 16), nullptr, "Configure scene lighting and environment settings");
 	toolsButtonBar->AddButtonWithSVG(ID_EDGE_SETTINGS, "Edge Settings", "edges", wxSize(16, 16), nullptr, "Configure edge color, width and style settings");
@@ -520,7 +522,13 @@ void FlatFrame::createPanels() {
 	m_objectTreePanel->setPropertyPanel(m_propertyPanel);
 	m_mouseHandler = new MouseHandler(m_canvas, m_objectTreePanel, m_propertyPanel, m_commandManager);
 	m_canvas->getInputManager()->setMouseHandler(m_mouseHandler);
-	NavigationController* navController = new NavigationController(m_canvas, m_canvas->getSceneManager());
+	
+	// Create NavigationModeManager instead of direct NavigationController
+	m_navigationModeManager = new NavigationModeManager(m_canvas, m_canvas->getSceneManager());
+	m_mouseHandler->setNavigationModeManager(m_navigationModeManager);
+	
+	// Keep backward compatibility with direct NavigationController
+	NavigationController* navController = m_navigationModeManager->getCurrentController();
 	m_canvas->getInputManager()->setNavigationController(navController);
 	m_mouseHandler->setNavigationController(navController);
 

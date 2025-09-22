@@ -40,7 +40,7 @@ FlatUIPage::FlatUIPage(wxWindow* parent, const wxString& label)
 	Bind(wxEVT_PAINT, &FlatUIPage::OnPaint, this);
 	Bind(wxEVT_SIZE, &FlatUIPage::OnSize, this);
 
-	LOG_INF("Created page: " + label.ToStdString(), "FlatUIPage");
+
 }
 
 FlatUIPage::~FlatUIPage()
@@ -154,9 +154,6 @@ void FlatUIPage::RecalculatePageHeight()
 		totalWidth += panelBestSize.GetWidth();
 		maxHeight = wxMax(maxHeight, panelBestSize.GetHeight());
 
-		LOG_DBG("Panel " + panel->GetLabel().ToStdString() +
-			" Best Size: (" + std::to_string(panelBestSize.GetWidth()) +
-			"," + std::to_string(panelBestSize.GetHeight()) + ")", "FlatUIPage");
 	}
 
 	wxSize newMinSize(totalWidth, maxHeight);
@@ -166,9 +163,6 @@ void FlatUIPage::RecalculatePageHeight()
 		m_sizer->SetDimension(0, 0, totalWidth, maxHeight);
 	}
 
-	LOG_INF("RecalculatePageHeight: Page " + GetLabel().ToStdString() +
-		", Calculated size: (" + std::to_string(totalWidth) +
-		"," + std::to_string(maxHeight) + ")", "FlatUIPage");
 
 	if (wasHidden)
 		Hide();
@@ -202,13 +196,6 @@ void FlatUIPage::AddPanel(FlatUIPanel* panel)
 	wxSize pageSizeForLog = GetSize();
 	wxSize panelSizeForLog = panel->GetSize();
 
-	LOG_INF("Added panel: " + panel->GetLabel().ToStdString() +
-		" to page: " + GetLabel().ToStdString() +
-		". Page Size: (" + std::to_string(pageSizeForLog.GetWidth()) +
-		", " + std::to_string(pageSizeForLog.GetHeight()) + ")" +
-		". Panel Size: (" + std::to_string(panelSizeForLog.GetWidth()) +
-		", " + std::to_string(panelSizeForLog.GetHeight()) + ")",
-		"FlatUIPage");
 
 	panel->Show();
 	RecalculatePageHeight();
@@ -229,9 +216,6 @@ void FlatUIPage::InitializeLayout()
 	Layout();
 	Thaw();
 
-	LOG_INF("Initialized layout for page: " + GetLabel().ToStdString() +
-		", Size: (" + std::to_string(GetSize().GetWidth()) +
-		"," + std::to_string(GetSize().GetHeight()) + ")", "FlatUIPage");
 }
 
 void FlatUIPage::RefreshTheme()

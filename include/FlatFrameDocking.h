@@ -47,6 +47,7 @@ public:
     ads::DockWidget* CreateCanvasDockWidget();
     ads::DockWidget* CreateMessageDockWidget();
     ads::DockWidget* CreatePerformanceDockWidget();
+    ads::DockWidget* CreateWebViewDockWidget();
     ads::DockWidget* CreateToolboxDockWidget();  // Keep for compatibility, but not used
     
     // Access to dock manager
@@ -84,6 +85,7 @@ private:
     ads::DockWidget* m_canvasDock;
     ads::DockWidget* m_messageDock;      // Renamed from m_outputDock
     ads::DockWidget* m_performanceDock;  // New performance panel
+    ads::DockWidget* m_webViewDock;      // Browser dock
     
     // Output control
     wxTextCtrl* m_outputCtrl;

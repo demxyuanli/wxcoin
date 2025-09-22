@@ -57,6 +57,7 @@
 #include "HelpAboutListener.h"
 #include "NavCubeConfigListener.h"
 #include "ZoomSpeedListener.h"
+#include "NavigationModeListener.h"
 #include "FileExitListener.h"
 
 void FlatFrame::setupCommandSystem() {
@@ -137,6 +138,7 @@ void FlatFrame::setupCommandSystem() {
 	auto helpAboutListener = std::make_shared<HelpAboutListener>(this);
 	auto navCubeConfigListener = std::make_shared<NavCubeConfigListener>(m_canvas);
 	auto zoomSpeedListener = std::make_shared<ZoomSpeedListener>(this, m_canvas);
+	auto navigationModeListener = std::make_shared<NavigationModeListener>();
 	auto fileExitListener = std::make_shared<FileExitListener>(this);
 	auto meshQualityDialogListener = std::make_shared<MeshQualityDialogListener>(this, m_occViewer);
 	auto renderingSettingsListener = std::make_shared<RenderingSettingsListener>(m_occViewer, m_canvas->getRenderingEngine());
@@ -155,6 +157,7 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::HelpAbout, helpAboutListener);
 	m_listenerManager->registerListener(cmd::CommandType::NavCubeConfig, navCubeConfigListener);
 	m_listenerManager->registerListener(cmd::CommandType::ZoomSpeed, zoomSpeedListener);
+	m_listenerManager->registerListener(cmd::CommandType::NavigationMode, navigationModeListener);
 	m_listenerManager->registerListener(cmd::CommandType::FileExit, fileExitListener);
 	m_listenerManager->registerListener(cmd::CommandType::MeshQualityDialog, meshQualityDialogListener);
 	m_listenerManager->registerListener(cmd::CommandType::RenderingSettings, renderingSettingsListener);

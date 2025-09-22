@@ -51,6 +51,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_REDO, cmd::CommandType::Redo},
 	{ID_NAVIGATION_CUBE_CONFIG, cmd::CommandType::NavCubeConfig},
 	{ID_ZOOM_SPEED, cmd::CommandType::ZoomSpeed},
+	{ID_NAVIGATION_MODE, cmd::CommandType::NavigationMode},
 	{ID_MESH_QUALITY_DIALOG, cmd::CommandType::MeshQualityDialog},
 	{ID_RENDERING_SETTINGS, cmd::CommandType::RenderingSettings},
 	{ID_EDGE_SETTINGS, cmd::CommandType::EdgeSettings},
@@ -183,7 +184,8 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
 }
 
 void FlatFrame::onClose(wxCloseEvent& event) {
-	LOG_INF_S("Closing application"); Destroy();
+	LOG_INF_S("Closing application");
+	Destroy();
 }
 
 void FlatFrame::onActivate(wxActivateEvent& event) {

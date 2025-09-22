@@ -1,6 +1,8 @@
 # Navigation module - navigation control and navigation cube
 set(NAVIGATION_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/InventorNavigationController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/NavigationModeManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationStyle.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCube.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCubeManager.cpp
@@ -10,6 +12,8 @@ set(NAVIGATION_SOURCES
 
 set(NAVIGATION_HEADERS
     ${CMAKE_SOURCE_DIR}/include/NavigationController.h
+    ${CMAKE_SOURCE_DIR}/include/InventorNavigationController.h
+    ${CMAKE_SOURCE_DIR}/include/NavigationModeManager.h
     ${CMAKE_SOURCE_DIR}/include/NavigationStyle.h
     ${CMAKE_SOURCE_DIR}/include/NavigationCube.h
     ${CMAKE_SOURCE_DIR}/include/NavigationCubeManager.h

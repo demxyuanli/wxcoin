@@ -1,4 +1,5 @@
 #include "CuteNavCube.h"
+#include "NavigationCubeConfigDialog.h"
 #include "DPIManager.h"
 #include "DPIAwareRendering.h"
 #include <algorithm>
@@ -12,6 +13,7 @@
 #include <Inventor/nodes/SoDirectionalLight.h>
 #include <Inventor/nodes/SoEnvironment.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoFaceSet.h>
 #include <Inventor/nodes/SoLineSet.h>
@@ -46,7 +48,7 @@
 
 std::map<std::string, std::shared_ptr<CuteNavCube::TextureData>> CuteNavCube::s_textureCache;
 
-CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallback, float dpiScale, int windowWidth, int windowHeight)
+CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallback, float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config)
 	: m_root(new SoSeparator)
 	, m_orthoCamera(new SoOrthographicCamera)
 	, m_enabled(true)
@@ -59,15 +61,78 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_lastDragTime(0)
 	, m_windowWidth(windowWidth)
 	, m_windowHeight(windowHeight)
-	, m_positionX(20)  // Default to left side
-	, m_positionY(20)  // Default to bottom side
-	, m_cubeSize(150)  // Smaller default size for cute version
+	, m_positionX(config.x >= 0 ? config.x : 20)  // Use config or default
+	, m_positionY(config.y >= 0 ? config.y : 20)  // Use config or default
+	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.50f)
+	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
+	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
+	, m_needsGeometryRebuild(false)
+	, m_showEdges(config.showEdges)
+	, m_showCorners(config.showCorners)
+	, m_showTextures(config.showTextures)
+	, m_enableAnimation(config.enableAnimation)
+	, m_textColor(config.textColor)
+	, m_edgeColor(config.edgeColor)
+	, m_cornerColor(config.cornerColor)
+	, m_transparency(config.transparency >= 0.0f ? config.transparency : 0.0f)
+	, m_shininess(config.shininess >= 0.0f ? config.shininess : 0.5f)
+	, m_ambientIntensity(config.ambientIntensity >= 0.0f ? config.ambientIntensity : 0.8f)
+	, m_circleRadius(config.circleRadius > 0 ? config.circleRadius : 150)
+	, m_circleMarginX(config.circleMarginX >= 0 ? config.circleMarginX : 50)
+	, m_circleMarginY(config.circleMarginY >= 0 ? config.circleMarginY : 50)
 {
 	m_root->ref();
+	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
+	initialize();
+}
+
+// New constructor with camera move callback
+CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallback,
+						std::function<void(const SbVec3f&, const SbRotation&)> cameraMoveCallback,
+						float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config)
+	: m_root(new SoSeparator)
+	, m_orthoCamera(new SoOrthographicCamera)
+	, m_enabled(true)
+	, m_dpiScale(dpiScale)
+	, m_viewChangeCallback(viewChangeCallback)
+	, m_cameraMoveCallback(cameraMoveCallback)
+	, m_rotationChangedCallback(nullptr)
+	, m_isDragging(false)
+	, m_lastMousePos(0, 0)
+	, m_rotationX(0.0f)
+	, m_rotationY(0.0f)
+	, m_lastDragTime(0)
+	, m_windowWidth(windowWidth)
+	, m_windowHeight(windowHeight)
+	, m_positionX(config.x >= 0 ? config.x : 20)  // Use config or default
+	, m_positionY(config.y >= 0 ? config.y : 20)  // Use config or default
+	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.50f)
+	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
+	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
+	, m_needsGeometryRebuild(false)
+	, m_showEdges(config.showEdges)
+	, m_showCorners(config.showCorners)
+	, m_showTextures(config.showTextures)
+	, m_enableAnimation(config.enableAnimation)
+	, m_textColor(config.textColor)
+	, m_edgeColor(config.edgeColor)
+	, m_cornerColor(config.cornerColor)
+	, m_transparency(config.transparency >= 0.0f ? config.transparency : 0.0f)
+	, m_shininess(config.shininess >= 0.0f ? config.shininess : 0.5f)
+	, m_ambientIntensity(config.ambientIntensity >= 0.0f ? config.ambientIntensity : 0.8f)
+	, m_circleRadius(config.circleRadius > 0 ? config.circleRadius : 150)
+	, m_circleMarginX(config.circleMarginX >= 0 ? config.circleMarginX : 50)
+	, m_circleMarginY(config.circleMarginY >= 0 ? config.circleMarginY : 50)
+{
+	m_root->ref();
+	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
 	initialize();
 }
 
 CuteNavCube::~CuteNavCube() {
+	m_orthoCamera->unref(); // Release camera reference
 	m_root->unref();
 }
 
@@ -75,12 +140,72 @@ void CuteNavCube::initialize() {
 	setupGeometry();
 
 	m_faceToView = {
+		// 6 Main faces
 		{ "Front",  "Top" },
 		{ "Back",   "Bottom" },
 		{ "Left",   "Right" },
 		{ "Right",  "Left" },
 		{ "Top",    "Front" },
-		{ "Bottom", "Back" }
+		{ "Bottom", "Back" },
+
+		// 8 Corner faces (triangular)
+		{ "Corner0", "Top" },        // Front-Top-Left corner -> Top view
+		{ "Corner1", "Top" },        // Front-Top-Right corner -> Top view
+		{ "Corner2", "Top" },        // Back-Top-Right corner -> Top view
+		{ "Corner3", "Top" },        // Back-Top-Left corner -> Top view
+		{ "Corner4", "Bottom" },     // Front-Bottom-Left corner -> Bottom view
+		{ "Corner5", "Bottom" },     // Front-Bottom-Right corner -> Bottom view
+		{ "Corner6", "Bottom" },     // Back-Bottom-Right corner -> Bottom view
+		{ "Corner7", "Bottom" },     // Back-Bottom-Left corner -> Bottom view
+
+		// 12 Edge faces
+		{ "EdgeTF", "Top" },         // Top-Front edge -> Top view
+		{ "EdgeTB", "Top" },         // Top-Back edge -> Top view
+		{ "EdgeTL", "Top" },         // Top-Left edge -> Top view
+		{ "EdgeTR", "Top" },         // Top-Right edge -> Top view
+		{ "EdgeBF", "Bottom" },      // Bottom-Front edge -> Bottom view
+		{ "EdgeBB", "Bottom" },      // Bottom-Back edge -> Bottom view
+		{ "EdgeBL", "Bottom" },      // Bottom-Left edge -> Bottom view
+		{ "EdgeBR", "Bottom" },      // Bottom-Right edge -> Bottom view
+		{ "EdgeFR", "Front" },       // Front-Right edge -> Front view
+		{ "EdgeFL", "Front" },       // Front-Left edge -> Front view
+		{ "EdgeBL2", "Back" },       // Back-Left edge -> Back view
+		{ "EdgeBR2", "Back" }        // Back-Right edge -> Back view
+	};
+
+	// Face normal vectors and center points for camera positioning
+	m_faceNormals = {
+		// 6 Main faces
+		{ "Front",  std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0, 1)) },      // +Z axis
+		{ "Back",   std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0, -1)) },    // -Z axis
+		{ "Left",   std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-1, 0, 0)) },   // -X axis
+		{ "Right",  std::make_pair(SbVec3f(1, 0, 0), SbVec3f(1, 0, 0)) },    // +X axis
+		{ "Top",    std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0, 1, 0)) },    // +Y axis
+		{ "Bottom", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0, -1, 0)) },   // -Y axis
+
+		// 8 Corner faces (using closest main face normal)
+		{ "Corner0", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(-0.707, 0.707, 0.707)) },  // Front-Top-Left
+		{ "Corner1", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0.707, 0.707, 0.707)) },   // Front-Top-Right
+		{ "Corner2", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0.707, 0.707, -0.707)) },  // Back-Top-Right
+		{ "Corner3", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(-0.707, 0.707, -0.707)) }, // Back-Top-Left
+		{ "Corner4", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(-0.707, -0.707, 0.707)) }, // Front-Bottom-Left
+		{ "Corner5", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0.707, -0.707, 0.707)) },  // Front-Bottom-Right
+		{ "Corner6", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0.707, -0.707, -0.707)) }, // Back-Bottom-Right
+		{ "Corner7", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(-0.707, -0.707, -0.707)) }, // Back-Bottom-Left
+
+		// 12 Edge faces (using average of adjacent faces)
+		{ "EdgeTF", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0.707, 0.707)) },       // Top-Front
+		{ "EdgeTB", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0.707, -0.707)) },      // Top-Back
+		{ "EdgeTL", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, 0.707, 0)) },     // Top-Left
+		{ "EdgeTR", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, 0.707, 0)) },      // Top-Right
+		{ "EdgeBF", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, -0.707, 0.707)) },      // Bottom-Front
+		{ "EdgeBB", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, -0.707, -0.707)) },     // Bottom-Back
+		{ "EdgeBL", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, -0.707, 0)) },    // Bottom-Left
+		{ "EdgeBR", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, -0.707, 0)) },     // Bottom-Right
+		{ "EdgeFR", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, 0, 0.707)) },      // Front-Right
+		{ "EdgeFL", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, 0, 0.707)) },    // Front-Left
+		{ "EdgeBL2", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, 0, -0.707)) },   // Back-Left
+		{ "EdgeBR2", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, 0, -0.707)) }      // Back-Right
 	};
 }
 
@@ -104,13 +229,31 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 	dc.SetBackground(wxBrush(bgColor));
 	dc.Clear();
 
-	// Use DPI manager for high-quality font rendering
+	// Use high-quality font rendering for crisp text
 	auto& dpiManager = DPIManager::getInstance();
-	wxFont font = dpiManager.getScaledFont(32, "Arial", true, false); // Increased font size for cute version
+	// Use appropriate font size for high-resolution textures (512x512)
+	// The formula width / 4 gives reasonable text size that fits within the texture
+	int baseFontSize = std::max(72, static_cast<int>(width / 4.0f)); // More reasonable font size
+	LOG_INF_S("CuteNavCube::generateFaceTexture: Starting font setup - text: " + text +
+		", width: " + std::to_string(width) + "x" + std::to_string(height) +
+		", baseFontSize: " + std::to_string(baseFontSize) +
+		", DPI scale: " + std::to_string(dpiManager.getDPIScale()));
+
+	wxFont font(baseFontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Arial");
+	font.SetPointSize(baseFontSize); // Set font size directly
+
+	LOG_INF_S("CuteNavCube::generateFaceTexture: Font setup - width: " + std::to_string(width) +
+		", baseFontSize: " + std::to_string(baseFontSize) +
+		", font point size: " + std::to_string(font.GetPointSize()));
+
 	dc.SetFont(font);
-	dc.SetTextForeground(wxColour(0, 0, 0)); // Black text
+	dc.SetTextForeground(wxColour(0, 0, 0)); // Black text for high contrast
 
 	wxSize textSize = dc.GetTextExtent(text);
+	LOG_INF_S("CuteNavCube::generateFaceTexture: Text metrics - text: " + text +
+		", textSize: " + std::to_string(textSize.GetWidth()) + "x" + std::to_string(textSize.GetHeight()) +
+		", font height: " + std::to_string(font.GetPointSize()) +
+		", actual text height: " + std::to_string(textSize.GetHeight()));
 	int x = (width - textSize.GetWidth()) / 2;
 	int y = (height - textSize.GetHeight()) / 2;
 	dc.DrawText(text, x, y);
@@ -164,18 +307,33 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 }
 
 void CuteNavCube::setupGeometry() {
+	// Safely clear previous geometry while preserving camera
+	bool cameraWasInScene = false;
+	if (m_root->getNumChildren() > 0) {
+		// Check if camera is already in the scene
+		for (int i = 0; i < m_root->getNumChildren(); i++) {
+			if (m_root->getChild(i) == m_orthoCamera) {
+				cameraWasInScene = true;
+				break;
+			}
+		}
 	m_root->removeAllChildren(); // Clear previous geometry
+	}
 
+	// Setup camera properties
 	m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
 	m_orthoCamera->nearDistance = 0.05f; // Reduced to ensure all faces are visible
 	m_orthoCamera->farDistance = 15.0f;  // Increased to include all geometry
+	m_orthoCamera->position.setValue(0.0f, 0.0f, 5.0f); // Initial position
 	m_orthoCamera->orientation.setValue(SbRotation(SbVec3f(1, 0, 0), -M_PI / 2)); // Rotate to make Z up
+	
+	// Always add camera back to the scene
 	m_root->addChild(m_orthoCamera);
 
 	// --- Lighting Setup ---
 	SoEnvironment* env = new SoEnvironment;
 	env->ambientColor.setValue(0.8f, 0.8f, 0.85f); // Brighter and more neutral ambient color
-	env->ambientIntensity.setValue(1.0f);         // Max ambient intensity
+	env->ambientIntensity.setValue(m_ambientIntensity); // Use config value
 	m_root->addChild(env);
 
 	m_mainLight = new SoDirectionalLight;
@@ -220,8 +378,8 @@ void CuteNavCube::setupGeometry() {
 	SoSeparator* cubeAssembly = new SoSeparator;
 
 	// --- Manual Chamfered Cube Definition with Correct Normals ---
-	const float s = 0.5f;    // Main size
-	const float c = 0.18f;   // Chamfer size
+	const float s = m_geometrySize;   // Main size (configurable)
+	const float c = m_chamferSize;    // Chamfer size (configurable)
 
 	SbVec3f vertices[24] = {
 		// Corner 0 (+ + +): Front-Top-Right
@@ -325,21 +483,33 @@ void CuteNavCube::setupGeometry() {
 	int faceIndex = 0;
 
 	SoMaterial* mainFaceMaterial = new SoMaterial;
-	mainFaceMaterial->ambientColor.setValue(0.5f, 0.6f, 0.7f);
-	mainFaceMaterial->diffuseColor.setValue(0.8f, 0.85f, 1.0f);
+	// Use text color for main faces
+	float r = m_textColor.Red() / 255.0f;
+	float g = m_textColor.Green() / 255.0f;
+	float b = m_textColor.Blue() / 255.0f;
+	mainFaceMaterial->diffuseColor.setValue(r, g, b);
 	mainFaceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
-	mainFaceMaterial->shininess.setValue(0.5f);
-	mainFaceMaterial->transparency.setValue(0.0f);
+	mainFaceMaterial->shininess.setValue(m_shininess);
+	mainFaceMaterial->transparency.setValue(m_transparency);
 
 	SoMaterial* edgeAndCornerMaterial = new SoMaterial;
-	edgeAndCornerMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f); // Use white so it doesn't tint texture
+	// Use edge color for edge and corner faces
+	r = m_edgeColor.Red() / 255.0f;
+	g = m_edgeColor.Green() / 255.0f;
+	b = m_edgeColor.Blue() / 255.0f;
+	edgeAndCornerMaterial->diffuseColor.setValue(r, g, b);
 	edgeAndCornerMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
-	edgeAndCornerMaterial->shininess.setValue(0.5f);
-	edgeAndCornerMaterial->transparency.setValue(0.0f); // Transparency will come from texture alpha
+	edgeAndCornerMaterial->shininess.setValue(m_shininess);
+	edgeAndCornerMaterial->transparency.setValue(m_transparency);
 
-	// --- Pre-generate textures for edges and corners ---
-	const int texWidth = 128;
-	const int texHeight = 128;
+	// --- Pre-generate high-quality textures for edges and corners ---
+	// Use DPI manager for optimal texture resolution (already declared above)
+	const int baseTexSize = 512; // High-resolution base texture size
+	const int texWidth = dpiManager.getScaledTextureSize(baseTexSize);
+	const int texHeight = dpiManager.getScaledTextureSize(baseTexSize);
+	LOG_INF_S("CuteNavCube::setupGeometry: Texture size - base: " + std::to_string(baseTexSize) +
+		", scaled: " + std::to_string(texWidth) + "x" + std::to_string(texHeight) +
+		", DPI scale: " + std::to_string(dpiManager.getDPIScale()));
 
 	SoTexture2* whiteTexture = nullptr;
 	std::vector<unsigned char> whiteImageData(texWidth * texHeight * 4);
@@ -359,6 +529,9 @@ void CuteNavCube::setupGeometry() {
 
 	LOG_INF_S("--- Logging Face Properties ---");
 	for (const auto& faceDef : faces) {
+		// Skip faces based on display options
+		if (faceDef.materialType == 1 && !m_showEdges) continue;    // Skip edge faces if edges are disabled
+		if (faceDef.materialType == 2 && !m_showCorners) continue;  // Skip corner faces if corners are disabled
 		std::string indices_str;
 		for (int idx : faceDef.indices) { indices_str += std::to_string(idx) + " "; }
 
@@ -373,12 +546,17 @@ void CuteNavCube::setupGeometry() {
 
 		if (faceDef.materialType == 0) { // Main face
 			faceSep->addChild(mainFaceMaterial);
-			std::vector<unsigned char> imageData(texWidth * texHeight * 4);
-			if (generateFaceTexture(faceDef.textureKey, imageData.data(), texWidth, texHeight, wxColour(255, 255, 255, 160))) {
+			if (m_showTextures) {
+				// Use DPI manager for dynamic texture resolution (already declared above)
+				int faceTexWidth = dpiManager.getScaledTextureSize(baseTexSize);
+				int faceTexHeight = dpiManager.getScaledTextureSize(baseTexSize);
+				std::vector<unsigned char> imageData(faceTexWidth * faceTexHeight * 4);
+				if (generateFaceTexture(faceDef.textureKey, imageData.data(), faceTexWidth, faceTexHeight, wxColour(255, 255, 255, 160))) {
 				SoTexture2* texture = new SoTexture2;
-				texture->image.setValue(SbVec2s(texWidth, texHeight), 4, imageData.data());
+					texture->image.setValue(SbVec2s(faceTexWidth, faceTexHeight), 4, imageData.data());
 				texture->model = SoTexture2::DECAL;
 				faceSep->addChild(texture);
+				}
 			}
 
 			if (faceDef.textureKey == "Back") {
@@ -399,11 +577,13 @@ void CuteNavCube::setupGeometry() {
 		}
 		else { // Edges and Corners
 			faceSep->addChild(edgeAndCornerMaterial);
+			if (m_showTextures) {
 			if (faceDef.materialType == 1) { // Edge
 				if (greyTexture) faceSep->addChild(greyTexture);
 			}
 			else { // Corner (materialType == 2)
 				if (whiteTexture) faceSep->addChild(whiteTexture);
+				}
 			}
 
 			if (faceDef.indices.size() == 4) { // Edge faces (quads)
@@ -474,7 +654,7 @@ void CuteNavCube::setupGeometry() {
 
 void CuteNavCube::updateCameraRotation() {
 	// Rotates camera around the cube
-	float distance = 5.0f; // Keep a fixed distance
+	float distance = m_cameraDistance; // Configurable camera distance
 	float radX = m_rotationX * M_PI / 180.0f;
 	float radY = m_rotationY * M_PI / 180.0f;
 
@@ -484,7 +664,9 @@ void CuteNavCube::updateCameraRotation() {
 	float z = distance * cos(radY) * cos(radX);
 
 	m_orthoCamera->position.setValue(x, y, z);
-	m_orthoCamera->pointAt(SbVec3f(0, 0, 0)); // Always look at the origin
+	m_orthoCamera->pointAt(SbVec3f(0, 0, 0)); // Always look at the origin (cube center)
+	
+	// Note: Orthographic camera will automatically adjust to viewport
 
 	//LOG_DBG("CuteNavCube::updateCameraRotation: Camera position x=" + std::to_string(x) +
 	//    ", y=" + std::to_string(y) + ", z=" + std::to_string(z));
@@ -510,15 +692,96 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 		SoNode* node = pickedPath->getNode(i);
 		if (node && node->isOfType(SoSeparator::getClassTypeId()) && node->getName().getLength() > 0) {
 			std::string nameStr = node->getName().getString();
-			auto it = m_faceToView.find(nameStr);
-			if (it != m_faceToView.end()) {
-				LOG_INF_S("CuteNavCube::pickRegion: Picked face: " + nameStr + ", maps to view: " + it->second);
-				return it->second;
+			// Check if this is a valid face name
+			auto viewIt = m_faceToView.find(nameStr);
+			auto normalIt = m_faceNormals.find(nameStr);
+			if (viewIt != m_faceToView.end() && normalIt != m_faceNormals.end()) {
+				LOG_INF_S("CuteNavCube::pickRegion: Picked face: " + nameStr + ", maps to view: " + viewIt->second);
+				return nameStr; // Return the actual face name, not the mapped view
 			}
 		}
 	}
 
 	return "";
+}
+
+// Calculate camera position based on clicked face
+void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const {
+	// Handle main faces (6 faces) - use standard positioning
+	static const std::set<std::string> mainFaces = {"Front", "Back", "Left", "Right", "Top", "Bottom"};
+	if (mainFaces.find(faceName) != mainFaces.end()) {
+		auto it = m_faceNormals.find(faceName);
+		if (it != m_faceNormals.end()) {
+			const SbVec3f& normal = it->second.first;
+			const SbVec3f& center = it->second.second;
+
+			// Camera position: move back along the normal direction by camera distance
+			float distance = m_cameraDistance * 1.5f;
+			position = center - normal * distance;
+
+			// Camera orientation: look at the center point
+			SbVec3f upVector = SbVec3f(0, 1, 0); // Default up vector
+			if (std::abs(normal[1]) > 0.5f) {
+				// If looking at top/bottom, use X axis as up
+				upVector = SbVec3f(1, 0, 0);
+			}
+
+			SbVec3f direction = center - position;
+			orientation.setValue(SbVec3f(0, 0, -1), direction);
+			return;
+		}
+	}
+
+	// Handle edge faces (12 faces) - calculate position to view the edge
+	static const std::map<std::string, std::pair<SbVec3f, SbVec3f>> edgeFacePositions = {
+		{ "EdgeTF", std::make_pair(SbVec3f(0, 0.5, 1.2), SbVec3f(0, -1, 0)) },   // Top-Front edge: look down at front-top
+		{ "EdgeTB", std::make_pair(SbVec3f(0, 0.5, -1.2), SbVec3f(0, -1, 0)) },  // Top-Back edge: look down at back-top
+		{ "EdgeTL", std::make_pair(SbVec3f(-1.2, 0.5, 0), SbVec3f(1, 0, 0)) },  // Top-Left edge: look right at top-left
+		{ "EdgeTR", std::make_pair(SbVec3f(1.2, 0.5, 0), SbVec3f(-1, 0, 0)) },  // Top-Right edge: look left at top-right
+		{ "EdgeBF", std::make_pair(SbVec3f(0, -0.5, 1.2), SbVec3f(0, 1, 0)) },   // Bottom-Front edge: look up at bottom-front
+		{ "EdgeBB", std::make_pair(SbVec3f(0, -0.5, -1.2), SbVec3f(0, 1, 0)) },  // Bottom-Back edge: look up at bottom-back
+		{ "EdgeBL", std::make_pair(SbVec3f(-1.2, -0.5, 0), SbVec3f(1, 0, 0)) },  // Bottom-Left edge: look right at bottom-left
+		{ "EdgeBR", std::make_pair(SbVec3f(1.2, -0.5, 0), SbVec3f(-1, 0, 0)) },  // Bottom-Right edge: look left at bottom-right
+		{ "EdgeFR", std::make_pair(SbVec3f(1.2, 0, 1), SbVec3f(-1, 0, 0)) },    // Front-Right edge: look left at front-right
+		{ "EdgeFL", std::make_pair(SbVec3f(-1.2, 0, 1), SbVec3f(1, 0, 0)) },    // Front-Left edge: look right at front-left
+		{ "EdgeBL2", std::make_pair(SbVec3f(-1.2, 0, -1), SbVec3f(1, 0, 0)) },   // Back-Left edge: look right at back-left
+		{ "EdgeBR2", std::make_pair(SbVec3f(1.2, 0, -1), SbVec3f(-1, 0, 0)) }    // Back-Right edge: look left at back-right
+	};
+
+	auto edgeIt = edgeFacePositions.find(faceName);
+	if (edgeIt != edgeFacePositions.end()) {
+		position = edgeIt->second.first;
+		SbVec3f upVector = edgeIt->second.second;
+		SbVec3f direction = -position; // Look at origin
+		orientation.setValue(upVector, direction);
+		return;
+	}
+
+	// Handle corner faces (8 faces) - calculate position to view the corner
+	static const std::map<std::string, std::pair<SbVec3f, SbVec3f>> cornerFacePositions = {
+		{ "Corner0", std::make_pair(SbVec3f(-1.2, 1.2, 1.2), SbVec3f(0, 0, -1)) },  // Front-Top-Left: look towards origin
+		{ "Corner1", std::make_pair(SbVec3f(1.2, 1.2, 1.2), SbVec3f(0, 0, -1)) },   // Front-Top-Right: look towards origin
+		{ "Corner2", std::make_pair(SbVec3f(1.2, 1.2, -1.2), SbVec3f(0, 0, 1)) },   // Back-Top-Right: look towards origin
+		{ "Corner3", std::make_pair(SbVec3f(-1.2, 1.2, -1.2), SbVec3f(0, 0, 1)) },  // Back-Top-Left: look towards origin
+		{ "Corner4", std::make_pair(SbVec3f(-1.2, -1.2, 1.2), SbVec3f(0, 0, -1)) }, // Front-Bottom-Left: look towards origin
+		{ "Corner5", std::make_pair(SbVec3f(1.2, -1.2, 1.2), SbVec3f(0, 0, -1)) },  // Front-Bottom-Right: look towards origin
+		{ "Corner6", std::make_pair(SbVec3f(1.2, -1.2, -1.2), SbVec3f(0, 0, 1)) },  // Back-Bottom-Right: look towards origin
+		{ "Corner7", std::make_pair(SbVec3f(-1.2, -1.2, -1.2), SbVec3f(0, 0, 1)) }  // Back-Bottom-Left: look towards origin
+	};
+
+	auto cornerIt = cornerFacePositions.find(faceName);
+	if (cornerIt != cornerFacePositions.end()) {
+		position = cornerIt->second.first;
+		SbVec3f upVector = cornerIt->second.second;
+		SbVec3f direction = -position; // Look at origin
+		orientation.setValue(upVector, direction);
+		return;
+	}
+
+	// Default fallback
+	LOG_WRN_S("CuteNavCube::calculateCameraPositionForFace: Unknown face name: " + faceName);
+	position = SbVec3f(0, 0, 5);
+	orientation = SbRotation::identity();
 }
 
 void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
@@ -551,9 +814,30 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 				SbVec2s pickPos(currentPos[0], static_cast<short>(viewportSize.y - currentPos[1]));
 
 				std::string region = pickRegion(pickPos, viewportSize);
-				if (!region.empty() && m_viewChangeCallback) {
-					m_viewChangeCallback(region);
-					LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked, switched to view: " + region);
+				if (!region.empty()) {
+					// Calculate camera position for clicked face
+					SbVec3f cameraPos;
+					SbRotation cameraOrient;
+					calculateCameraPositionForFace(region, cameraPos, cameraOrient);
+
+					// Get the mapped view name for logging
+					auto viewIt = m_faceToView.find(region);
+					std::string viewName = (viewIt != m_faceToView.end()) ? viewIt->second : region;
+
+					// Call camera move callback if available, otherwise use view change callback
+					if (m_cameraMoveCallback) {
+						m_cameraMoveCallback(cameraPos, cameraOrient);
+						LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked face: " + region +
+							", mapped to view: " + viewName +
+							", moved camera to position: (" +
+							std::to_string(cameraPos[0]) + ", " +
+							std::to_string(cameraPos[1]) + ", " +
+							std::to_string(cameraPos[2]) + ")");
+					} else if (m_viewChangeCallback) {
+						m_viewChangeCallback(region); // Pass face name to callback
+						LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked face: " + region +
+							", mapped to view: " + viewName);
+					}
 				}
 			}
 		}
@@ -583,18 +867,60 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 void CuteNavCube::render(int x, int y, const wxSize& size) {
 	if (!m_enabled || !m_root) return;
 
+	// Check if geometry rebuild is needed
+	if (m_needsGeometryRebuild) {
+		setupGeometry();
+		m_needsGeometryRebuild = false;
+		LOG_INF_S(std::string("CuteNavCube::render: Rebuilt geometry with new parameters - ") +
+			"geometrySize: " + std::to_string(m_geometrySize) +
+			", chamferSize: " + std::to_string(m_chamferSize) +
+			", cameraDistance: " + std::to_string(m_cameraDistance) +
+			", showEdges: " + std::string(m_showEdges ? "true" : "false") +
+			", showCorners: " + std::string(m_showCorners ? "true" : "false") +
+			", showTextures: " + std::string(m_showTextures ? "true" : "false"));
+	}
+
+	// Only log when position actually changes or for debugging specific issues
+	static int lastX = -1, lastY = -1;
+	static int lastWidth = -1, lastHeight = -1;
+	static float lastDpiScale = -1.0f;
+
+	bool positionChanged = (x != lastX || y != lastY || size.x != lastWidth || size.y != lastHeight || m_dpiScale != lastDpiScale);
+
+	if (positionChanged) {
+		LOG_INF_S("CuteNavCube::render: Rendering cube at logical position: x=" + std::to_string(x) +
+			", y=" + std::to_string(y) + ", size=" + std::to_string(size.x) + "x" + std::to_string(size.y) +
+			", physical position: " + std::to_string(x * m_dpiScale) + "x" +
+			std::to_string(y * m_dpiScale) + " to " +
+			std::to_string((x + size.x) * m_dpiScale) + "x" +
+			std::to_string((y + size.y) * m_dpiScale) +
+			", window: " + std::to_string(m_windowWidth * m_dpiScale) + "x" +
+			std::to_string(m_windowHeight * m_dpiScale) + ", dpiScale: " + std::to_string(m_dpiScale));
+
+		lastX = x;
+		lastY = y;
+		lastWidth = size.x;
+		lastHeight = size.y;
+		lastDpiScale = m_dpiScale;
+	}
+
 	// Setup viewport for navigation cube at specified position and size
 	SbViewportRegion viewport;
-	// Use full window dimensions for correct coordinate mapping
+	// Use physical window dimensions for correct coordinate mapping
+	// Note: m_windowWidth and m_windowHeight are already in physical pixels from NavigationCubeManager
 	viewport.setWindowSize(SbVec2s(static_cast<short>(m_windowWidth), static_cast<short>(m_windowHeight)));
-	// Calculate physical pixel dimensions for the cube viewport
+
+	// Convert logical coordinates to physical pixels
+	int xPx = static_cast<int>(x * m_dpiScale);
+	int yPx = static_cast<int>(y * m_dpiScale);
 	int widthPx = static_cast<int>(size.x * m_dpiScale);
 	int heightPx = static_cast<int>(size.y * m_dpiScale);
+
 	// Convert top-left origin (x,y) to bottom-left origin for viewport
-	int windowHeightPx = static_cast<int>(m_windowHeight * m_dpiScale);
-	int yBottomPx = windowHeightPx - y - heightPx;
+	int yBottomPx = m_windowHeight - yPx - heightPx;
+
 	// Set the viewport rectangle where the cube will be rendered (origin bottom-left)
-	viewport.setViewportPixels(x, yBottomPx, widthPx, heightPx);
+	viewport.setViewportPixels(xPx, yBottomPx, widthPx, heightPx);
 
 	SoGLRenderAction renderAction(viewport);
 	renderAction.setSmoothing(true);
@@ -625,6 +951,139 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 
 void CuteNavCube::setEnabled(bool enabled) {
 	m_enabled = enabled;
+}
+
+void CuteNavCube::updateMaterialProperties(const CubeConfig& config) {
+	// Find and update material nodes in the scene graph
+	if (!m_root) return;
+	
+	// Update environment lighting
+	for (int i = 0; i < m_root->getNumChildren(); i++) {
+		SoNode* child = m_root->getChild(i);
+		
+		// Update environment settings
+		if (child->isOfType(SoEnvironment::getClassTypeId())) {
+			SoEnvironment* env = static_cast<SoEnvironment*>(child);
+			env->ambientIntensity.setValue(m_ambientIntensity);
+		}
+		
+		// Update materials in separators
+		if (child->isOfType(SoSeparator::getClassTypeId())) {
+			updateSeparatorMaterials(static_cast<SoSeparator*>(child));
+		}
+	}
+	
+	LOG_INF_S("CuteNavCube::updateMaterialProperties: Updated material properties");
+}
+
+void CuteNavCube::updateSeparatorMaterials(SoSeparator* sep) {
+	if (!sep) return;
+
+	// Get the separator name to determine material type
+	std::string sepName = sep->getName().getString();
+
+	for (int i = 0; i < sep->getNumChildren(); i++) {
+		SoNode* child = sep->getChild(i);
+
+		if (child->isOfType(SoMaterial::getClassTypeId())) {
+			SoMaterial* material = static_cast<SoMaterial*>(child);
+
+			// Apply transparency
+			material->transparency.setValue(m_transparency);
+
+			// Apply shininess
+			material->shininess.setValue(m_shininess);
+
+			// Update colors based on material context
+			float r, g, b;
+			if (sepName.find("Edge") != std::string::npos) {
+				// Edge material
+				r = m_edgeColor.Red() / 255.0f;
+				g = m_edgeColor.Green() / 255.0f;
+				b = m_edgeColor.Blue() / 255.0f;
+			}
+			else if (sepName.find("Corner") != std::string::npos) {
+				// Corner material
+				r = m_cornerColor.Red() / 255.0f;
+				g = m_cornerColor.Green() / 255.0f;
+				b = m_cornerColor.Blue() / 255.0f;
+			}
+			else {
+				// Main face material - using text color for main faces
+				r = m_textColor.Red() / 255.0f;
+				g = m_textColor.Green() / 255.0f;
+				b = m_textColor.Blue() / 255.0f;
+			}
+			material->diffuseColor.setValue(r, g, b);
+		}
+
+		// Recursively update nested separators
+		if (child->isOfType(SoSeparator::getClassTypeId())) {
+			updateSeparatorMaterials(static_cast<SoSeparator*>(child));
+		}
+	}
+}
+
+void CuteNavCube::applyConfig(const CubeConfig& config) {
+	// Store previous values to check what changed
+	bool geometryChanged = (m_geometrySize != config.cubeSize ||
+	                       m_chamferSize != config.chamferSize);
+	bool cameraChanged = (m_cameraDistance != config.cameraDistance);
+	bool displayChanged = (m_showEdges != config.showEdges ||
+	                      m_showCorners != config.showCorners ||
+	                      m_showTextures != config.showTextures);
+	bool colorChanged = (m_textColor.GetRGB() != config.textColor.GetRGB() ||
+	                    m_edgeColor.GetRGB() != config.edgeColor.GetRGB() ||
+	                    m_cornerColor.GetRGB() != config.cornerColor.GetRGB());
+	bool materialChanged = (m_transparency != config.transparency ||
+	                       m_shininess != config.shininess ||
+	                       m_ambientIntensity != config.ambientIntensity);
+	bool circleChanged = (m_circleRadius != config.circleRadius ||
+	                     m_circleMarginX != config.circleMarginX ||
+	                     m_circleMarginY != config.circleMarginY);
+
+	// Update all parameters
+	m_geometrySize = config.cubeSize;
+	m_chamferSize = config.chamferSize;
+	m_cameraDistance = config.cameraDistance;
+	m_showEdges = config.showEdges;
+	m_showCorners = config.showCorners;
+	m_showTextures = config.showTextures;
+	m_enableAnimation = config.enableAnimation;
+	m_textColor = config.textColor;
+	m_edgeColor = config.edgeColor;
+	m_cornerColor = config.cornerColor;
+
+	// Update material properties
+	m_transparency = config.transparency;
+	m_shininess = config.shininess;
+	m_ambientIntensity = config.ambientIntensity;
+
+	// Update circle navigation area
+	m_circleRadius = config.circleRadius;
+	m_circleMarginX = config.circleMarginX;
+	m_circleMarginY = config.circleMarginY;
+
+	// Apply camera distance changes immediately
+	if (cameraChanged) {
+		updateCameraRotation();
+	}
+
+	// Apply material and color changes to existing geometry
+	updateMaterialProperties(config);
+
+	// Apply geometry changes if needed (requires rebuild)
+	if (geometryChanged || displayChanged || colorChanged || materialChanged || circleChanged) {
+		// Mark for geometry rebuild on next render
+		m_needsGeometryRebuild = true;
+	}
+
+	LOG_INF_S("CuteNavCube::applyConfig: Applied configuration - size=" +
+		std::to_string(m_geometrySize) + ", chamfer=" + std::to_string(m_chamferSize) +
+		", distance=" + std::to_string(m_cameraDistance) +
+		", showEdges=" + (m_showEdges ? "true" : "false") +
+		", showCorners=" + (m_showCorners ? "true" : "false") +
+		", showTextures=" + (m_showTextures ? "true" : "false"));
 }
 
 void CuteNavCube::setCameraPosition(const SbVec3f& position) {
