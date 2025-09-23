@@ -398,6 +398,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	visibilityBar->AddToggleButton(ID_VIEW_PROPERTIES, "Properties", true, SVG_ICON("properties", wxSize(16, 16)), "Show/hide properties panel");
 	visibilityBar->AddToggleButton(ID_VIEW_MESSAGE, "Message", true, SVG_ICON("message", wxSize(16, 16)), "Show/hide message output panel");
 	visibilityBar->AddToggleButton(ID_VIEW_PERFORMANCE, "Performance", true, SVG_ICON("chart", wxSize(16, 16)), "Show/hide performance monitor panel");
+	visibilityBar->AddToggleButton(ID_VIEW_WEBVIEW, "WebView", true, SVG_ICON("globe", wxSize(16, 16)), "Show/hide web browser panel");
 	visibilityPanel->AddButtonBar(visibilityBar, 0, wxEXPAND | wxALL, 5);
 	dockingPage->AddPanel(visibilityPanel);
 	

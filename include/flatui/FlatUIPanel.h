@@ -123,11 +123,6 @@ private:
 
 	wxTimer m_resizeTimer;
 
-	// Graphics context caching for performance optimization
-	wxGraphicsContext* m_cachedGraphicsContext;
-	wxSize m_lastPaintSize;
-	bool m_needsRedraw;
-
 public:
 	// Theme refresh method
 	void RefreshTheme();

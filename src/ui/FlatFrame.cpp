@@ -349,28 +349,49 @@ void FlatFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 		ribbon->SetSize(newSize);
 	}
 
-	// Single deferred layout update to avoid flickering
+	// Force ribbon to update its size immediately
+	if (ribbon) {
+		ribbon->Layout();
+		ribbon->Refresh();
+		ribbon->Update();
+	}
+
+	// Force main splitter to recalculate its size and position
+	if (m_mainSplitter) {
+		m_mainSplitter->Layout();
+		m_mainSplitter->Refresh();
+		m_mainSplitter->Update();
+	}
+
+	// Add a deferred layout update to ensure proper space allocation after all changes
 	CallAfter([this]() {
 		// Force complete layout recalculation
 		if (GetSizer()) {
 			GetSizer()->Layout();
 		}
 
-		// Update ribbon
-		FlatUIBar* ribbon = GetUIBar();
-		if (ribbon) {
-			ribbon->Layout();
-		}
-
-		// Update main splitter
+		// Force main splitter to recalculate its size and position
 		if (m_mainSplitter) {
 			m_mainSplitter->Layout();
+			m_mainSplitter->Refresh();
+			m_mainSplitter->Update();
 		}
 
-		// Force frame to recalculate its layout
+		// Force frame to recalculate its layout and ensure main work area fills remaining space
 		Layout();
 		Refresh();
-	});
+		Update();
+
+		// Additional deferred update to ensure proper space allocation
+		CallAfter([this]() {
+			if (GetSizer()) {
+				GetSizer()->Layout();
+			}
+			Layout();
+			Refresh();
+			Update();
+			});
+		});
 }
 
 void FlatFrame::LoadSVGIcons(wxWindow* parent, wxSizer* sizer)

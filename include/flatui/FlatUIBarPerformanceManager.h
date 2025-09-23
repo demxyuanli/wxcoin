@@ -67,7 +67,6 @@ public:
 	void EnableHardwareAcceleration(bool enable = true);
 	bool IsHardwareAccelerationEnabled() const;
 	wxGraphicsContext* CreateOptimizedGraphicsContext(wxDC& dc);
-	void InvalidateGraphicsContext();
 
 	// Dirty region management
 	void InvalidateRegion(const wxRect& region);
@@ -112,11 +111,6 @@ private:
 	mutable std::unordered_map<wxString, DPIAwareResource> m_bitmapCache;
 	mutable std::unordered_map<wxString, DPIAwareResource> m_fontCache;
 	mutable std::unordered_map<wxString, DPIAwareResource> m_valueCache;
-
-	// Graphics context cache for performance optimization
-	mutable wxGraphicsContext* m_cachedGraphicsContext;
-	mutable wxSize m_lastContextSize;
-	mutable bool m_contextNeedsUpdate;
 
 	// Dirty region tracking
 	std::vector<wxRect> m_invalidRegions;

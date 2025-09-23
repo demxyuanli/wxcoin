@@ -179,11 +179,6 @@ private:
 	wxTimer m_animationTimer;
 	double m_animationProgress;
 
-	// Graphics context caching for performance optimization
-	wxGraphicsContext* m_cachedGraphicsContext;
-	wxSize m_lastPaintSize;
-	bool m_needsRedraw;
-
 	// Constants
 	static const int DEFAULT_CORNER_RADIUS = 6;
 	static const int DEFAULT_BORDER_WIDTH = 1;

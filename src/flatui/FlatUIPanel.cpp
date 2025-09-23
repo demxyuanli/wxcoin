@@ -23,10 +23,7 @@ FlatUIPanel::FlatUIPanel(FlatUIPage* parent, const wxString& label, int orientat
 	m_panelBorderLeft(0),
 	m_panelBorderRight(1),
 	m_borderStyle(PanelBorderStyle::NONE),
-	m_resizeTimer(this, TIMER_RESIZE),
-	m_cachedGraphicsContext(nullptr),
-	m_lastPaintSize(0, 0),
-	m_needsRedraw(true)
+	m_resizeTimer(this, TIMER_RESIZE)
 {
 	SetFont(GetThemeFont());
 	SetDoubleBuffered(true);
@@ -321,12 +318,6 @@ void FlatUIPanel::RecalculateBestSize()
 
 FlatUIPanel::~FlatUIPanel()
 {
-	// Clean up cached graphics context
-	if (m_cachedGraphicsContext) {
-		delete m_cachedGraphicsContext;
-		m_cachedGraphicsContext = nullptr;
-	}
-
 	for (auto buttonBar : m_buttonBars)
 		delete buttonBar;
 	for (auto gallery : m_galleries)
@@ -377,7 +368,6 @@ void FlatUIPanel::UpdateThemeValues()
 void FlatUIPanel::SetPanelBackgroundColour(const wxColour& colour)
 {
 	m_bgColour = colour;
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -419,14 +409,12 @@ void FlatUIPanel::SetBorderStyle(PanelBorderStyle style)
 		}
 	}
 
-	m_needsRedraw = true;
 	Refresh();
 }
 
 void FlatUIPanel::SetBorderColour(const wxColour& colour)
 {
 	m_borderColour = colour;
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -436,7 +424,6 @@ void FlatUIPanel::SetPanelBorderWidths(int top, int bottom, int left, int right)
 	m_panelBorderBottom = bottom;
 	m_panelBorderLeft = left;
 	m_panelBorderRight = right;
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -492,7 +479,6 @@ void FlatUIPanel::SetHeaderBorderColour(const wxColour& colour)
 void FlatUIPanel::SetLabel(const wxString& label)
 {
 	m_label = label;
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -544,39 +530,15 @@ void FlatUIPanel::OnPaint(wxPaintEvent& evt)
 	wxAutoBufferedPaintDC dc(this);
 	wxSize size = GetSize();
 
-	// Check if we need to recreate graphics context due to size change
-	bool sizeChanged = (size != m_lastPaintSize);
-	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
-
-	if (needNewContext) {
-		// Clean up old context
-		if (m_cachedGraphicsContext) {
-			delete m_cachedGraphicsContext;
-			m_cachedGraphicsContext = nullptr;
-		}
-
-		// Create new graphics context
-		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
-		if (!m_cachedGraphicsContext) {
-			LOG_ERR("Failed to create wxGraphicsContext in FlatUIPanel::OnPaint", "FlatUIPanel");
-			evt.Skip();
-			return;
-		}
-
-		m_lastPaintSize = size;
-		m_needsRedraw = true;
-	}
-
-	// Skip drawing if nothing changed and we have a cached context
-	if (!m_needsRedraw && m_cachedGraphicsContext) {
-		evt.Skip();
-		return;
-	}
-
 	dc.SetBackground(m_bgColour);
 	dc.Clear();
 
-	wxGraphicsContext* gc = m_cachedGraphicsContext;
+	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+	if (!gc) {
+		LOG_ERR("Failed to create wxGraphicsContext in FlatUIPanel::OnPaint", "FlatUIPanel");
+		evt.Skip();
+		return;
+	}
 
 	//LOG_DBG("Panel: " + m_label.ToStdString() +
 	//    " BorderStyle: " + std::to_string((int)m_borderStyle) +
@@ -774,10 +736,7 @@ void FlatUIPanel::OnPaint(wxPaintEvent& evt)
 		}
 	}
 
-	// Mark that we've completed drawing
-	m_needsRedraw = false;
-
-	// Note: Don't delete gc here as it's cached
+	delete gc;
 	evt.Skip();
 }
 
@@ -792,9 +751,6 @@ void FlatUIPanel::RefreshTheme() {
 	// Update control properties
 	SetFont(GetThemeFont());
 	SetBackgroundColour(CFG_COLOUR("PanelBgColour"));
-
-	// Mark that we need to redraw due to theme change
-	m_needsRedraw = true;
 
 	// Update child controls
 	for (auto buttonBar : m_buttonBars) {

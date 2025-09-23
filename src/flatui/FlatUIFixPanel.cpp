@@ -277,18 +277,23 @@ wxSize FlatUIFixPanel::DoGetBestSize() const
 
 void FlatUIFixPanel::OnSize(wxSizeEvent& event)
 {
-	// Use debounced layout update to prevent excessive refreshes during resize
-	static wxTimer* resizeTimer = nullptr;
-	if (!resizeTimer) {
-		resizeTimer = new wxTimer(this, wxID_ANY);
-		resizeTimer->Bind(wxEVT_TIMER, [this](wxTimerEvent&) {
-			UpdateLayout();
+	UpdateLayout();
+
+	// Force a deferred scroll check for edge cases
+	CallAfter([this]() {
+		FlatUIPage* activePage = GetActivePage();
+		if (activePage && m_scrollContainer) {
+			wxSize pageSize = activePage->GetBestSize();
+			wxSize containerSize = m_scrollContainer->GetSize();
+			bool shouldNeedScrolling = pageSize.GetWidth() > containerSize.GetWidth();
+
+			if (shouldNeedScrolling != m_scrollingEnabled) {
+				LOG_INF("OnSize: Correcting scroll state - should be " +
+					std::string(shouldNeedScrolling ? "enabled" : "disabled"), "FlatUIFixPanel");
+				PositionActivePage();
+			}
+		}
 		});
-	}
-	
-	// Stop previous timer and start new one with 50ms delay
-	resizeTimer->Stop();
-	resizeTimer->StartOnce(50);
 
 	event.Skip();
 }
@@ -297,14 +302,6 @@ void FlatUIFixPanel::OnPaint(wxPaintEvent& event)
 {
 	wxAutoBufferedPaintDC dc(this);
 	wxSize size = GetSize();
-	wxPoint position = GetPosition();
-
-	// Debug logging to track paint events
-	static int paintCount = 0;
-	paintCount++;
-	LOG_INF("FlatUIFixPanel::OnPaint #" + std::to_string(paintCount) + 
-		": position=(" + std::to_string(position.x) + "," + std::to_string(position.y) + 
-		"), size=(" + std::to_string(size.GetWidth()) + "," + std::to_string(size.GetHeight()) + ")", "FlatUIFixPanel");
 
 	// Fill background with white
 	dc.SetBackground(wxBrush(CFG_COLOUR("ScrolledWindowBgColour")));
@@ -315,9 +312,7 @@ void FlatUIFixPanel::OnPaint(wxPaintEvent& event)
 	dc.SetBrush(*wxTRANSPARENT_BRUSH);
 	dc.DrawLine(0, size.GetHeight() - 1, size.GetWidth(), size.GetHeight() - 1);
 
-	// CRITICAL FIX: Do NOT call event.Skip() here to prevent paint event propagation
-	// that causes infinite loop between FlatUIBar and FlatUIFixPanel
-	// event.Skip(); // REMOVED to prevent dead loop
+	event.Skip();
 }
 
 void FlatUIFixPanel::PositionUnpinButton()
@@ -398,17 +393,7 @@ void FlatUIFixPanel::PositionActivePage()
 	wxSize containerSize = m_scrollContainer->GetSize();
 
 	// Position page in scroll container with scroll offset
-	// Ensure page position is never negative to prevent blank areas in top-left corner
-	wxPoint pagePos(wxMax(0, -m_scrollOffset), 0);
-	
-	// Debug logging to track page positioning
-	static int positionCount = 0;
-	positionCount++;
-	LOG_INF("FlatUIFixPanel::PositionActivePage #" + std::to_string(positionCount) + 
-		": m_scrollOffset=" + std::to_string(m_scrollOffset) + 
-		", pagePos=(" + std::to_string(pagePos.x) + "," + std::to_string(pagePos.y) + 
-		"), containerSize=(" + std::to_string(containerSize.GetWidth()) + "," + std::to_string(containerSize.GetHeight()) + ")", "FlatUIFixPanel");
-	
+	wxPoint pagePos(-m_scrollOffset, 0);
 	activePage->SetPosition(pagePos);
 	// Reduce page height by 1 pixel to create visual separation
 	int adjustedHeight = containerSize.GetHeight() - 1;
@@ -653,32 +638,21 @@ void FlatUIFixPanel::UpdateScrollPosition()
 	}
 
 	// Move the page within the scroll container based on scroll offset
-	// Ensure page position is never negative to prevent blank areas in top-left corner
-	wxPoint newPos(wxMax(0, -m_scrollOffset), 0);
-	
-	// Debug logging to track scroll position updates
-	static int scrollUpdateCount = 0;
-	scrollUpdateCount++;
-	LOG_INF("FlatUIFixPanel::UpdateScrollPosition #" + std::to_string(scrollUpdateCount) + 
-		": m_scrollOffset=" + std::to_string(m_scrollOffset) + 
-		", newPos=(" + std::to_string(newPos.x) + "," + std::to_string(newPos.y) + ")", "FlatUIFixPanel");
-	
+	wxPoint newPos(-m_scrollOffset, 0);
 	activePage->SetPosition(newPos);
 
-	// Optimized layout and refresh to prevent excessive redraws
+	// Force immediate layout and refresh of both the page and container
 	activePage->Layout();
-	
-	// Use deferred refresh instead of immediate Update() to prevent loops
+	activePage->Refresh();
+	activePage->Update();
+
 	m_scrollContainer->Layout();
-	
-	// Only refresh the specific areas that need updating
-	activePage->Refresh(false); // Use false to avoid erasing background
-	m_scrollContainer->Refresh(false);
-	
-	// Defer panel refresh to prevent immediate redraw loops
-	CallAfter([this]() {
-		Refresh(false);
-	});
+	m_scrollContainer->Refresh();
+	m_scrollContainer->Update();
+
+	// Also refresh the entire panel to ensure proper redraw
+	Refresh();
+	Update();
 }
 
 bool FlatUIFixPanel::NeedsScrolling() const

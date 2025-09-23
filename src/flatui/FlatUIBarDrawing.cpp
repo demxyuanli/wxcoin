@@ -35,13 +35,6 @@ void FlatUIBar::DrawBarSeparator(wxDC& dc)
 
 void FlatUIBar::OnPaint(wxPaintEvent& evt)
 {
-	// Debug logging to track paint events
-	static int paintCount = 0;
-	paintCount++;
-	wxSize size = GetClientSize();
-	LOG_INF("FlatUIBar::OnPaint #" + std::to_string(paintCount) + 
-		": size=(" + std::to_string(size.GetWidth()) + "," + std::to_string(size.GetHeight()) + ")", "FlatUIBar");
-
 	if (m_performanceManager) {
 		m_performanceManager->StartPerformanceTimer("FlatUIBar_OnPaint");
 	}
@@ -55,7 +48,7 @@ void FlatUIBar::OnPaint(wxPaintEvent& evt)
 			// Use hardware-accelerated rendering
 			DrawBackgroundOptimized(*gc);
 			DrawBarSeparatorOptimized(*gc);
-			// NOTE: Do NOT delete gc here - it's cached by the performance manager
+			delete gc;
 		}
 		else {
 			// Fallback to traditional rendering

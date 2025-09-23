@@ -4,7 +4,6 @@
 #include <wx/graphics.h>
 #include <wx/dcclient.h>
 #include <wx/dcmemory.h>
-#include <wx/dcbuffer.h>
 #include "config/FontManager.h"
 #include "config/ThemeManager.h"
 #include <algorithm>
@@ -46,9 +45,6 @@ FlatButton::FlatButton(wxWindow* parent, wxWindowID id, const wxString& label,
 	, m_iconSize(DEFAULT_ICON_SIZE, DEFAULT_ICON_SIZE)
 	, m_animationProgress(0.0)
 	, m_useConfigFont(true)
-	, m_cachedGraphicsContext(nullptr)
-	, m_lastPaintSize(0, 0)
-	, m_needsRedraw(true)
 {
 	// Initialize default colors based on style
 	InitializeDefaultColors();
@@ -67,7 +63,6 @@ FlatButton::FlatButton(wxWindow* parent, wxWindowID id, const wxString& label,
 	// Add a theme change listener
 	ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
 		InitializeDefaultColors();
-		m_needsRedraw = true;
 		Refresh();
 		});
 
@@ -78,12 +73,6 @@ FlatButton::FlatButton(wxWindow* parent, wxWindowID id, const wxString& label,
 
 FlatButton::~FlatButton()
 {
-	// Clean up cached graphics context
-	if (m_cachedGraphicsContext) {
-		delete m_cachedGraphicsContext;
-		m_cachedGraphicsContext = nullptr;
-	}
-
 	if (m_animationTimer.IsRunning()) {
 		m_animationTimer.Stop();
 	}
@@ -153,7 +142,6 @@ void FlatButton::SetLabel(const wxString& label)
 	if (m_label != label) {
 		m_label = label;
 		InvalidateBestSize();
-		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -162,7 +150,6 @@ void FlatButton::SetIcon(const wxBitmap& icon)
 {
 	m_icon = icon;
 	InvalidateBestSize();
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -170,7 +157,6 @@ void FlatButton::SetIconSize(const wxSize& size)
 {
 	m_iconSize = size;
 	InvalidateBestSize();
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -179,7 +165,6 @@ void FlatButton::SetButtonStyle(ButtonStyle style)
 	if (m_buttonStyle != style) {
 		m_buttonStyle = style;
 		InitializeDefaultColors();
-		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -187,49 +172,42 @@ void FlatButton::SetButtonStyle(ButtonStyle style)
 void FlatButton::SetBackgroundColor(const wxColour& color)
 {
 	m_backgroundColor = color;
-	m_needsRedraw = true;
 	Refresh();
 }
 
 void FlatButton::SetHoverColor(const wxColour& color)
 {
 	m_hoverColor = color;
-	m_needsRedraw = true;
 	Refresh();
 }
 
 void FlatButton::SetPressedColor(const wxColour& color)
 {
 	m_pressedColor = color;
-	m_needsRedraw = true;
 	Refresh();
 }
 
 void FlatButton::SetTextColor(const wxColour& color)
 {
 	m_textColor = color;
-	m_needsRedraw = true;
 	Refresh();
 }
 
 void FlatButton::SetBorderColor(const wxColour& color)
 {
 	m_borderColor = color;
-	m_needsRedraw = true;
 	Refresh();
 }
 
 void FlatButton::SetBorderWidth(int width)
 {
 	m_borderWidth = width;
-	m_needsRedraw = true;
 	Refresh();
 }
 
 void FlatButton::SetCornerRadius(int radius)
 {
 	m_cornerRadius = radius;
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -237,7 +215,6 @@ void FlatButton::SetIconTextSpacing(int spacing)
 {
 	m_iconTextSpacing = spacing;
 	InvalidateBestSize();
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -246,7 +223,6 @@ void FlatButton::SetPadding(int horizontal, int vertical)
 	m_horizontalPadding = horizontal;
 	m_verticalPadding = vertical;
 	InvalidateBestSize();
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -261,7 +237,6 @@ void FlatButton::SetEnabled(bool enabled)
 	if (m_enabled != enabled) {
 		m_enabled = enabled;
 		UpdateState(enabled ? ButtonState::NORMAL : ButtonState::DISABLED);
-		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -271,7 +246,6 @@ void FlatButton::SetPressed(bool pressed)
 	if (m_isPressed != pressed) {
 		m_isPressed = pressed;
 		UpdateState(pressed ? ButtonState::PRESSED : ButtonState::NORMAL);
-		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -306,67 +280,36 @@ wxSize FlatButton::DoGetBestSize() const
 void FlatButton::OnPaint(wxPaintEvent& event)
 {
 	wxUnusedVar(event);
-	wxAutoBufferedPaintDC dc(this);
-	wxSize size = GetClientSize();
-
-	// Check if we need to recreate graphics context due to size change
-	bool sizeChanged = (size != m_lastPaintSize);
-	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
-
-	if (needNewContext) {
-		// Clean up old context
-		if (m_cachedGraphicsContext) {
-			delete m_cachedGraphicsContext;
-			m_cachedGraphicsContext = nullptr;
-		}
-
-		// Create new graphics context
-		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
-		if (!m_cachedGraphicsContext) {
-			event.Skip();
-			return;
-		}
-
-		m_lastPaintSize = size;
-		m_needsRedraw = true;
-	}
-
-	// Skip drawing if nothing changed and we have a cached context
-	if (!m_needsRedraw && m_cachedGraphicsContext) {
-		event.Skip();
-		return;
-	}
-
+	wxPaintDC dc(this);
 	// Base clear with parent's background to avoid black artifacts when using transparent styles
 	wxColour baseBg = GetParent() ? GetParent()->GetBackgroundColour() : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
 	dc.SetBackground(wxBrush(baseBg));
 	dc.Clear();
 
-	// Use cached graphics context
-	wxGraphicsContext* gc = m_cachedGraphicsContext;
+	// Use wxGraphicsContext for high-quality, anti-aliased rendering
+	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
 
-	// Set the font for drawing
-	wxFont currentFont = GetFont();
-	if (currentFont.IsOk()) {
-		gc->SetFont(currentFont, GetCurrentTextColor());
+	if (gc)
+	{
+		// Set the font for drawing
+		wxFont currentFont = GetFont();
+		if (currentFont.IsOk()) {
+			gc->SetFont(currentFont, GetCurrentTextColor());
+		}
+
+		// Draw in the correct order: shadow -> background -> border -> icon -> text
+		DrawBackground(*gc);
+		DrawBorder(*gc);
+		DrawIcon(*gc);
+		DrawText(*gc);
+
+		delete gc;
 	}
-
-	// Draw in the correct order: shadow -> background -> border -> icon -> text
-	DrawBackground(*gc);
-	DrawBorder(*gc);
-	DrawIcon(*gc);
-	DrawText(*gc);
-
-	// Mark that we've completed drawing
-	m_needsRedraw = false;
-
-	// Note: Don't delete gc here as it's cached
 }
 
 void FlatButton::OnSize(wxSizeEvent& event)
 {
 	wxUnusedVar(event);
-	m_needsRedraw = true;
 	Refresh();
 	event.Skip();
 }
@@ -639,7 +582,6 @@ void FlatButton::UpdateState(ButtonState newState)
 {
 	if (m_state != newState) {
 		m_state = newState;
-		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -731,7 +673,6 @@ void FlatButton::SetCustomFont(const wxFont& font)
 	m_useConfigFont = false;
 	SetFont(font);
 	InvalidateBestSize();
-	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -752,7 +693,6 @@ void FlatButton::ReloadFontFromConfig()
 			if (configFont.IsOk()) {
 				SetFont(configFont);
 				InvalidateBestSize();
-				m_needsRedraw = true;
 				Refresh();
 			}
 		}

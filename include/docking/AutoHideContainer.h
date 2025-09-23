@@ -53,11 +53,6 @@ namespace ads {
 		bool m_isHovered;
 		wxBitmap m_icon;
 
-		// Graphics context caching for performance optimization
-		wxGraphicsContext* m_cachedGraphicsContext;
-		wxSize m_lastPaintSize;
-		bool m_needsRedraw;
-
 		wxDECLARE_EVENT_TABLE();
 	};
 

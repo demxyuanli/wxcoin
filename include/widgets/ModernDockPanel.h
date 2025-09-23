@@ -274,11 +274,6 @@ private:
 	// Theme change handling
 	void OnThemeChanged();
 
-	// Graphics context caching for performance optimization
-	wxGraphicsContext* m_cachedGraphicsContext;
-	wxSize m_lastPaintSize;
-	bool m_needsRedraw;
-
 	// Docking control
 	bool m_dockingEnabled;
 	bool m_systemButtonsVisible;

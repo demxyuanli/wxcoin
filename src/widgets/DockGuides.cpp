@@ -5,7 +5,6 @@
 #include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/graphics.h>
-#include <wx/dcclient.h>
 #include <cmath>
 
 // DockGuideButton implementation
@@ -155,10 +154,7 @@ CentralDockGuides::CentralDockGuides(wxWindow* parent, IDockManager* manager)
 	: wxWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 		wxFRAME_SHAPED | wxBORDER_NONE | wxFRAME_NO_TASKBAR),
 	m_manager(manager),
-	m_highlightedPosition(DockPosition::None),
-	m_cachedGraphicsContext(nullptr),
-	m_lastPaintSize(0, 0),
-	m_needsRedraw(true)
+	m_highlightedPosition(DockPosition::None)
 {
 	// Set background style for custom painting
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -257,46 +253,20 @@ void CentralDockGuides::UpdateHighlight(const wxPoint& mousePos)
 
 	if (newHighlight != m_highlightedPosition) {
 		m_highlightedPosition = newHighlight;
-		m_needsRedraw = true;
-	Refresh();
+		Refresh();
 	}
 }
 
 void CentralDockGuides::OnPaint(wxPaintEvent& event)
 {
-	wxAutoBufferedPaintDC dc(this);
-	wxSize size = GetClientSize();
+	wxPaintDC dc(this);
 
-	// Check if we need to recreate graphics context due to size change
-	bool sizeChanged = (size != m_lastPaintSize);
-	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
-
-	if (needNewContext) {
-		// Clean up old context
-		if (m_cachedGraphicsContext) {
-			delete m_cachedGraphicsContext;
-			m_cachedGraphicsContext = nullptr;
-		}
-
-		// Create new graphics context
-		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
-		if (!m_cachedGraphicsContext) {
-			event.Skip();
-			return;
-		}
-
-		m_lastPaintSize = size;
-		m_needsRedraw = true;
-	}
-
-	// Skip drawing if nothing changed and we have a cached context
-	if (!m_needsRedraw && m_cachedGraphicsContext) {
+	// Create graphics context
+	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+	if (!gc) {
 		event.Skip();
 		return;
 	}
-
-	// Use cached graphics context
-	wxGraphicsContext* gc = m_cachedGraphicsContext;
 
 	// Clear background
 	gc->SetCompositionMode(wxCOMPOSITION_CLEAR);
@@ -306,10 +276,7 @@ void CentralDockGuides::OnPaint(wxPaintEvent& event)
 	RenderBackground(gc);
 	RenderGuideButtons(gc);
 
-	// Mark that we've completed drawing
-	m_needsRedraw = false;
-
-	// Note: Don't delete gc here as it's cached
+	delete gc;
 }
 
 void CentralDockGuides::RenderBackground(wxGraphicsContext* gc)
@@ -349,8 +316,7 @@ void CentralDockGuides::OnMouseLeave(wxMouseEvent& event)
 {
 	if (m_highlightedPosition != DockPosition::None) {
 		m_highlightedPosition = DockPosition::None;
-		m_needsRedraw = true;
-	Refresh();
+		Refresh();
 	}
 	event.Skip();
 }
@@ -504,46 +470,19 @@ void EdgeDockGuides::UpdateHighlight(const wxPoint& mousePos)
 
 	if (newHighlight != m_highlightedPosition) {
 		m_highlightedPosition = newHighlight;
-		m_needsRedraw = true;
-	Refresh();
+		Refresh();
 	}
 }
 
 void EdgeDockGuides::OnPaint(wxPaintEvent& event)
 {
-	wxAutoBufferedPaintDC dc(this);
-	wxSize size = GetClientSize();
+	wxPaintDC dc(this);
 
-	// Check if we need to recreate graphics context due to size change
-	bool sizeChanged = (size != m_lastPaintSize);
-	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
-
-	if (needNewContext) {
-		// Clean up old context
-		if (m_cachedGraphicsContext) {
-			delete m_cachedGraphicsContext;
-			m_cachedGraphicsContext = nullptr;
-		}
-
-		// Create new graphics context
-		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
-		if (!m_cachedGraphicsContext) {
-			event.Skip();
-			return;
-		}
-
-		m_lastPaintSize = size;
-		m_needsRedraw = true;
-	}
-
-	// Skip drawing if nothing changed and we have a cached context
-	if (!m_needsRedraw && m_cachedGraphicsContext) {
+	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+	if (!gc) {
 		event.Skip();
 		return;
 	}
-
-	// Use cached graphics context
-	wxGraphicsContext* gc = m_cachedGraphicsContext;
 
 	// Clear background
 	gc->SetCompositionMode(wxCOMPOSITION_CLEAR);
@@ -558,10 +497,7 @@ void EdgeDockGuides::OnPaint(wxPaintEvent& event)
 		RenderEdgeButton(gc, button.get(), highlighted);
 	}
 
-	// Mark that we've completed drawing
-	m_needsRedraw = false;
-
-	// Note: Don't delete gc here as it's cached
+	delete gc;
 }
 
 void EdgeDockGuides::RenderEdgeButton(wxGraphicsContext* gc, DockGuideButton* button, bool highlighted)
@@ -582,8 +518,7 @@ void EdgeDockGuides::OnMouseLeave(wxMouseEvent& event)
 {
 	if (m_highlightedPosition != DockPosition::None) {
 		m_highlightedPosition = DockPosition::None;
-		m_needsRedraw = true;
-	Refresh();
+		Refresh();
 	}
 	event.Skip();
 }

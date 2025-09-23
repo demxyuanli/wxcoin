@@ -7,7 +7,6 @@
 #include "NavigationController.h"
 #include "InputManager.h"
 #include "logger/Logger.h"
-#include "WebViewPanel.h"
 #include "docking/DockArea.h"
 #include "docking/DockWidget.h"
 #include "docking/DockContainerWidget.h"
@@ -18,6 +17,7 @@
 #include "docking/DockLayoutCache.h"
 #include "DockLayoutConfigListener.h"
 #include "CommandListenerManager.h"
+#include "WebViewPanel.h"
 #include <wx/textctrl.h>
 #include <wx/artprov.h>
 #include <wx/filedlg.h>
@@ -65,7 +65,6 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     , m_canvasDock(nullptr)
     , m_messageDock(nullptr)
     , m_performanceDock(nullptr)
-    , m_webViewDock(nullptr)
     , m_outputCtrl(nullptr)
     , m_resizeTimer(nullptr)
     , m_pendingResizeSize(0, 0)

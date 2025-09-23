@@ -73,11 +73,6 @@ private:
 	bool m_enableTop{ true };
 	bool m_enableBottom{ true };
 
-	// Graphics context caching for performance optimization
-	wxGraphicsContext* m_cachedGraphicsContext;
-	wxSize m_lastPaintSize;
-	bool m_needsRedraw;
-
 	static constexpr int GUIDE_SIZE = 120;
 	static constexpr int BUTTON_SIZE = 24;
 	static constexpr int CENTER_SIZE = 32;
@@ -116,11 +111,6 @@ private:
 	bool m_enableRight{ true };
 	bool m_enableTop{ true };
 	bool m_enableBottom{ true };
-
-	// Graphics context caching for performance optimization
-	wxGraphicsContext* m_cachedGraphicsContext;
-	wxSize m_lastPaintSize;
-	bool m_needsRedraw;
 
 	static constexpr int EDGE_BUTTON_SIZE = 20;
 	static constexpr int EDGE_MARGIN = 30;
