@@ -21,6 +21,9 @@ FlatUIBarPerformanceManager::FlatUIBarPerformanceManager(FlatUIBar* bar)
 	, m_hardwareAcceleration(true)
 	, m_batchPainting(false)
 	, m_optimizationFlags(PerformanceOptimization::ALL)
+	, m_cachedGraphicsContext(nullptr)
+	, m_lastContextSize(0, 0)
+	, m_contextNeedsUpdate(true)
 	, m_hasInvalidRegions(false)
 {
 	UpdateDPIScale();
@@ -36,6 +39,12 @@ FlatUIBarPerformanceManager::FlatUIBarPerformanceManager(FlatUIBar* bar)
 
 FlatUIBarPerformanceManager::~FlatUIBarPerformanceManager()
 {
+	// Clean up cached graphics context
+	if (m_cachedGraphicsContext) {
+		delete m_cachedGraphicsContext;
+		m_cachedGraphicsContext = nullptr;
+	}
+	
 	ClearResourceCache();
 	LogPerformanceStats();
 }
@@ -53,6 +62,7 @@ void FlatUIBarPerformanceManager::OnDPIChanged()
 	if (oldScale != m_currentDPIScale) {
 		// Clear caches when DPI changes
 		ClearResourceCache();
+		InvalidateGraphicsContext();  // Invalidate cached graphics context
 		InvalidateAll();
 
 		LOG_INF("DPI changed from " + std::to_string(oldScale) + " to " +
@@ -203,53 +213,55 @@ bool FlatUIBarPerformanceManager::IsHardwareAccelerationEnabled() const
 
 wxGraphicsContext* FlatUIBarPerformanceManager::CreateOptimizedGraphicsContext(wxDC& dc)
 {
-	// Try to create graphics context with proper DC type detection
+	// Check if we can reuse cached graphics context
+	if (m_bar && !m_contextNeedsUpdate && m_cachedGraphicsContext) {
+		wxSize currentSize = m_bar->GetClientSize();
+		if (currentSize == m_lastContextSize) {
+			// Reuse cached context - fastest path
+			return m_cachedGraphicsContext;
+		}
+	}
+
+	// Clean up old context if size changed
+	if (m_cachedGraphicsContext) {
+		delete m_cachedGraphicsContext;
+		m_cachedGraphicsContext = nullptr;
+	}
+
+	// Create new graphics context with minimal overhead
 	wxGraphicsContext* gc = nullptr;
 
-	// Check DC type and create appropriate graphics context
-	if (wxAutoBufferedPaintDC* paintDC = dynamic_cast<wxAutoBufferedPaintDC*>(&dc)) {
-		gc = wxGraphicsContext::Create(*paintDC);
-	}
-	else if (wxClientDC* clientDC = dynamic_cast<wxClientDC*>(&dc)) {
-		gc = wxGraphicsContext::Create(*clientDC);
-	}
-	else if (wxMemoryDC* memDC = dynamic_cast<wxMemoryDC*>(&dc)) {
-		gc = wxGraphicsContext::Create(*memDC);
-	}
-	else if (wxWindowDC* winDC = dynamic_cast<wxWindowDC*>(&dc)) {
-		gc = wxGraphicsContext::Create(*winDC);
-	}
-	else if (wxPaintDC* paintDC = dynamic_cast<wxPaintDC*>(&dc)) {
-		gc = wxGraphicsContext::Create(*paintDC);
-	}
-
-	// If standard creation failed, try creating from window
-	if (!gc && m_bar) {
+	// Use window-based creation as primary method - most reliable
+	if (m_bar) {
 		gc = wxGraphicsContext::Create(m_bar);
-		if (gc) {
-			LOG_DBG("Created graphics context from window", "PerformanceManager");
-		}
 	}
 
-#ifdef __WXMSW__
-	// On Windows, try to use Direct2D if available and hardware acceleration is enabled
+	// Hardware acceleration fallback on Windows
 	if (!gc && IsHardwareAccelerationEnabled()) {
+#ifdef __WXMSW__
 		if (wxGraphicsRenderer* renderer = wxGraphicsRenderer::GetDirect2DRenderer()) {
 			gc = wxGraphicsContext::Create(m_bar);
-			if (gc) {
-				LOG_DBG("Created Direct2D graphics context", "PerformanceManager");
-			}
 		}
-	}
 #endif
+	}
 
+	// Configure and cache the graphics context
 	if (gc) {
-		// Enable antialiasing for better quality
 		gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
 		gc->SetInterpolationQuality(wxINTERPOLATION_BEST);
+		
+		// Cache for reuse
+		m_cachedGraphicsContext = gc;
+		m_lastContextSize = m_bar ? m_bar->GetClientSize() : wxSize(0, 0);
+		m_contextNeedsUpdate = false;
 	}
 
 	return gc;
+}
+
+void FlatUIBarPerformanceManager::InvalidateGraphicsContext()
+{
+	m_contextNeedsUpdate = true;
 }
 
 void FlatUIBarPerformanceManager::InvalidateRegion(const wxRect& region)
@@ -334,7 +346,7 @@ void FlatUIBarPerformanceManager::EndBatchPaint()
 			for (const auto& operation : m_queuedOperations) {
 				operation(gc);
 			}
-			delete gc;
+			// NOTE: Do NOT delete gc here - it's cached by the performance manager
 		}
 
 		m_queuedOperations.clear();
@@ -360,7 +372,7 @@ void FlatUIBarPerformanceManager::QueuePaintOperation(std::function<void(wxGraph
 			wxGraphicsContext* gc = CreateOptimizedGraphicsContext(dc);
 			if (gc) {
 				operation(gc);
-				delete gc;
+				// NOTE: Do NOT delete gc here - it's cached by the performance manager
 			}
 		}
 	}

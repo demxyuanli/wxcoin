@@ -2,6 +2,7 @@
 #include <wx/checkbox.h>
 #include "config/FontManager.h"
 #include <wx/graphics.h>
+#include <wx/dcbuffer.h>
 #include "config/ThemeManager.h"
 
 wxDEFINE_EVENT(wxEVT_FLAT_CHECK_BOX_CLICKED, wxCommandEvent);
@@ -35,6 +36,9 @@ FlatCheckBox::FlatCheckBox(wxWindow* parent, wxWindowID id, const wxString& labe
 	, m_checkBoxSize(wxSize(16, 16))
 	, m_labelSpacing(DEFAULT_LABEL_SPACING)
 	, m_useConfigFont(true)
+	, m_cachedGraphicsContext(nullptr)
+	, m_lastPaintSize(0, 0)
+	, m_needsRedraw(true)
 {
 	// Initialize default colors based on style
 	InitializeDefaultColors();
@@ -50,12 +54,18 @@ FlatCheckBox::FlatCheckBox(wxWindow* parent, wxWindowID id, const wxString& labe
 	// Add a theme change listener
 	ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
 		InitializeDefaultColors();
-		Refresh();
+		m_needsRedraw = true;
+	Refresh();
 		});
 }
 
 FlatCheckBox::~FlatCheckBox()
 {
+	// Clean up cached graphics context
+	if (m_cachedGraphicsContext) {
+		delete m_cachedGraphicsContext;
+		m_cachedGraphicsContext = nullptr;
+	}
 }
 
 void FlatCheckBox::InitializeDefaultColors()
@@ -155,25 +165,58 @@ wxSize FlatCheckBox::DoGetBestSize() const
 
 void FlatCheckBox::OnPaint(wxPaintEvent& event)
 {
-	wxPaintDC dc(this);
-	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+	wxAutoBufferedPaintDC dc(this);
+	wxSize size = GetClientSize();
 
-	if (gc) {
-		// Draw background
-		DrawBackground(*gc);
+	// Check if we need to recreate graphics context due to size change
+	bool sizeChanged = (size != m_lastPaintSize);
+	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
 
-		// Draw checkbox
-		DrawCheckBox(*gc);
+	if (needNewContext) {
+		// Clean up old context
+		if (m_cachedGraphicsContext) {
+			delete m_cachedGraphicsContext;
+			m_cachedGraphicsContext = nullptr;
+		}
 
-		// Draw text
-		DrawText(*gc);
+		// Create new graphics context
+		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
+		if (!m_cachedGraphicsContext) {
+			event.Skip();
+			return;
+		}
 
-		delete gc;
+		m_lastPaintSize = size;
+		m_needsRedraw = true;
 	}
+
+	// Skip drawing if nothing changed and we have a cached context
+	if (!m_needsRedraw && m_cachedGraphicsContext) {
+		event.Skip();
+		return;
+	}
+
+	// Use cached graphics context
+	wxGraphicsContext* gc = m_cachedGraphicsContext;
+
+	// Draw background
+	DrawBackground(*gc);
+
+	// Draw checkbox
+	DrawCheckBox(*gc);
+
+	// Draw text
+	DrawText(*gc);
+
+	// Mark that we've completed drawing
+	m_needsRedraw = false;
+
+	// Note: Don't delete gc here as it's cached
 }
 
 void FlatCheckBox::OnSize(wxSizeEvent& event)
 {
+	m_needsRedraw = true;
 	this->Refresh();
 	event.Skip();
 }
@@ -269,6 +312,7 @@ void FlatCheckBox::OnMouseUp(wxMouseEvent& event)
 		ToggleValue();
 		SendCheckBoxEvent();
 	}
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -301,6 +345,7 @@ void FlatCheckBox::ToggleValue()
 	else {
 		m_checked = !m_checked;
 	}
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -469,6 +514,7 @@ void FlatCheckBox::SetCustomFont(const wxFont& font)
 	m_useConfigFont = false;
 	SetFont(font);
 	InvalidateBestSize();
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -489,7 +535,8 @@ void FlatCheckBox::ReloadFontFromConfig()
 			if (configFont.IsOk()) {
 				SetFont(configFont);
 				InvalidateBestSize();
-				Refresh();
+				m_needsRedraw = true;
+	Refresh();
 			}
 		}
 		catch (...) {

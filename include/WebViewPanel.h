@@ -21,7 +21,7 @@ public:
     bool CanGoBack() const;
     bool CanGoForward() const;
     
-    // Navigation controls
+    // Navigation controls (for external use)
     void OnBack(wxCommandEvent& event);
     void OnForward(wxCommandEvent& event);
     void OnReload(wxCommandEvent& event);
@@ -31,7 +31,6 @@ public:
     // WebView events
     void OnWebViewLoaded(wxWebViewEvent& event);
     void OnWebViewError(wxWebViewEvent& event);
-    void OnWebViewTitleChanged(wxWebViewEvent& event);
 
     // Window events
     void OnSize(wxSizeEvent& event);
@@ -41,15 +40,7 @@ private:
     void UpdateNavigationButtons();
     
     wxWebView* m_webView;
-    wxButton* m_backBtn;
-    wxButton* m_forwardBtn;
-    wxButton* m_reloadBtn;
-    wxButton* m_stopBtn;
-    wxTextCtrl* m_urlCtrl;
-    wxStaticText* m_statusText;
-    
     wxString m_currentURL;
-    wxString m_currentTitle;
 
     wxDECLARE_EVENT_TABLE();
 };

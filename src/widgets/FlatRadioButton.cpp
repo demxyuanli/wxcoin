@@ -2,6 +2,7 @@
 #include "config/FontManager.h"
 #include "config/ThemeManager.h"
 #include <wx/graphics.h>
+#include <wx/dcbuffer.h>
 
 wxDEFINE_EVENT(wxEVT_FLAT_RADIO_BUTTON_CLICKED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_FLAT_RADIO_BUTTON_STATE_CHANGED, wxCommandEvent);
@@ -32,6 +33,9 @@ FlatRadioButton::FlatRadioButton(wxWindow* parent, wxWindowID id, const wxString
 	, m_isHovered(false)
 	, m_isPressed(false)
 	, m_hasFocus(false)
+	, m_cachedGraphicsContext(nullptr)
+	, m_lastPaintSize(0, 0)
+	, m_needsRedraw(true)
 {
 	InitializeDefaultColors();
 	ReloadFontFromConfig();
@@ -42,12 +46,18 @@ FlatRadioButton::FlatRadioButton(wxWindow* parent, wxWindowID id, const wxString
 
 	ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
 		InitializeDefaultColors();
-		Refresh();
+		m_needsRedraw = true;
+	Refresh();
 		});
 }
 
 FlatRadioButton::~FlatRadioButton()
 {
+	// Clean up cached graphics context
+	if (m_cachedGraphicsContext) {
+		delete m_cachedGraphicsContext;
+		m_cachedGraphicsContext = nullptr;
+	}
 }
 
 void FlatRadioButton::InitializeDefaultColors()
@@ -63,6 +73,7 @@ void FlatRadioButton::InitializeDefaultColors()
 void FlatRadioButton::SetLabel(const wxString& label)
 {
 	m_label = label;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -70,7 +81,8 @@ void FlatRadioButton::SetValue(bool checked)
 {
 	if (m_checked != checked) {
 		m_checked = checked;
-		Refresh();
+		m_needsRedraw = true;
+	Refresh();
 	}
 }
 
@@ -78,6 +90,7 @@ bool FlatRadioButton::Enable(bool enabled)
 {
 	m_enabled = enabled;
 	wxControl::Enable(enabled);
+	m_needsRedraw = true;
 	Refresh();
 	return true;
 }
@@ -92,19 +105,54 @@ wxSize FlatRadioButton::DoGetBestSize() const
 
 void FlatRadioButton::OnPaint(wxPaintEvent& event)
 {
-	wxPaintDC dc(this);
-	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+	wxAutoBufferedPaintDC dc(this);
+	wxSize size = GetClientSize();
 
-	if (gc) {
-		DrawBackground(*gc);
-		DrawRadioButton(*gc);
-		DrawText(*gc);
-		delete gc;
+	// Check if we need to recreate graphics context due to size change
+	bool sizeChanged = (size != m_lastPaintSize);
+	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
+
+	if (needNewContext) {
+		// Clean up old context
+		if (m_cachedGraphicsContext) {
+			delete m_cachedGraphicsContext;
+			m_cachedGraphicsContext = nullptr;
+		}
+
+		// Create new graphics context
+		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
+		if (!m_cachedGraphicsContext) {
+			event.Skip();
+			return;
+		}
+
+		m_lastPaintSize = size;
+		m_needsRedraw = true;
 	}
+
+	// Skip drawing if nothing changed and we have a cached context
+	if (!m_needsRedraw && m_cachedGraphicsContext) {
+		event.Skip();
+		return;
+	}
+
+	// Use cached graphics context
+	wxGraphicsContext* gc = m_cachedGraphicsContext;
+
+	DrawBackground(*gc);
+	DrawRadioButton(*gc);
+	DrawText(*gc);
+
+	// Mark that we've completed drawing
+	m_needsRedraw = false;
+
+	// Note: Don't delete gc here as it's cached
 }
 
 void FlatRadioButton::OnSize(wxSizeEvent& event)
 {
+	m_needsRedraw = true;
+	m_needsRedraw = true;
 	Refresh();
 	event.Skip();
 }
@@ -114,6 +162,7 @@ void FlatRadioButton::OnMouseDown(wxMouseEvent& event)
 	if (!m_enabled) return;
 	m_isPressed = true;
 	SetFocus();
+	m_needsRedraw = true;
 	Refresh();
 	event.Skip();
 }
@@ -141,6 +190,7 @@ void FlatRadioButton::OnMouseUp(wxMouseEvent& event)
 			}
 		}
 	}
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -150,7 +200,8 @@ void FlatRadioButton::OnMouseMove(wxMouseEvent& event)
 	bool wasHovered = m_isHovered;
 	m_isHovered = true;
 	if (!wasHovered) {
-		Refresh();
+		m_needsRedraw = true;
+	Refresh();
 	}
 	event.Skip();
 }
@@ -159,6 +210,7 @@ void FlatRadioButton::OnMouseLeave(wxMouseEvent& event)
 {
 	if (!m_enabled) return;
 	m_isHovered = false;
+	m_needsRedraw = true;
 	Refresh();
 	event.Skip();
 }
@@ -167,6 +219,7 @@ void FlatRadioButton::OnMouseEnter(wxMouseEvent& event)
 {
 	if (!m_enabled) return;
 	m_isHovered = true;
+	m_needsRedraw = true;
 	Refresh();
 	event.Skip();
 }
@@ -186,6 +239,7 @@ void FlatRadioButton::OnKeyUp(wxKeyEvent& event)
 void FlatRadioButton::OnFocus(wxFocusEvent& event)
 {
 	m_hasFocus = true;
+	m_needsRedraw = true;
 	Refresh();
 	event.Skip();
 }
@@ -193,6 +247,7 @@ void FlatRadioButton::OnFocus(wxFocusEvent& event)
 void FlatRadioButton::OnKillFocus(wxFocusEvent& event)
 {
 	m_hasFocus = false;
+	m_needsRedraw = true;
 	Refresh();
 	event.Skip();
 }
@@ -296,6 +351,7 @@ void FlatRadioButton::SetCustomFont(const wxFont& font)
 	m_useConfigFont = false;
 	SetFont(font);
 	InvalidateBestSize();
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -316,7 +372,8 @@ void FlatRadioButton::ReloadFontFromConfig()
 			if (configFont.IsOk()) {
 				SetFont(configFont);
 				InvalidateBestSize();
-				Refresh();
+				m_needsRedraw = true;
+	Refresh();
 			}
 		}
 		catch (...) {

@@ -1533,9 +1533,9 @@ void DockAreaMergedTitleBar::onIdleRefresh(wxIdleEvent& event) {
 }
 
 void DockAreaMergedTitleBar::onResizeRefreshTimer(wxTimerEvent& event) {
-    // Perform the deferred refresh after resize debounce period
-    Refresh();
-    Update();
+    // Use the smart refresh system for optimal performance
+    // This avoids expensive Update() calls and uses idle-time refresh
+    scheduleRefresh(RefreshAll);
 }
 
 void DockAreaMergedTitleBar::RefreshTheme() {

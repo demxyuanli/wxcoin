@@ -178,6 +178,11 @@ private:
 	bool m_isPressed;
 	bool m_hasFocus;
 
+	// Graphics context caching for performance optimization
+	wxGraphicsContext* m_cachedGraphicsContext;
+	wxSize m_lastPaintSize;
+	bool m_needsRedraw;
+
 	// Layout
 	wxRect m_checkBoxRect;
 	wxRect m_textRect;

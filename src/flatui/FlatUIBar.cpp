@@ -424,6 +424,12 @@ void FlatUIBar::OnSize(wxSizeEvent& evt)
 {
 	wxSize newSize = GetClientSize();
 
+	// Debug logging to track resize events
+	static int resizeCount = 0;
+	resizeCount++;
+	LOG_INF("FlatUIBar::OnSize #" + std::to_string(resizeCount) + 
+		": newSize=(" + std::to_string(newSize.GetWidth()) + "," + std::to_string(newSize.GetHeight()) + ")", "FlatUIBar");
+
 	// Notify performance manager about size changes for invalidation
 	if (m_performanceManager) {
 		m_performanceManager->InvalidateAll();
@@ -465,6 +471,10 @@ void FlatUIBar::OnSize(wxSizeEvent& evt)
 	static wxSize lastSize;
 	if (newSize != lastSize) {
 		lastSize = newSize;
+		LOG_INF("FlatUIBar::OnSize: Size changed from (" + 
+			std::to_string(lastSize.GetWidth()) + "," + std::to_string(lastSize.GetHeight()) + 
+			") to (" + std::to_string(newSize.GetWidth()) + "," + std::to_string(newSize.GetHeight()) + 
+			"), calling Refresh(false)", "FlatUIBar");
 		Refresh(false); // Use false to avoid erasing background unnecessarily
 	}
 	evt.Skip();

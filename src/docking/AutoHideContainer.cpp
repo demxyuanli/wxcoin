@@ -7,6 +7,7 @@
 #include <wx/settings.h>
 #include <wx/graphics.h>
 #include <wx/button.h>
+#include <wx/dcclient.h>
 #include <cmath>
 
 namespace ads {
@@ -24,6 +25,9 @@ namespace ads {
 		, m_location(location)
 		, m_isActive(false)
 		, m_isHovered(false)
+		, m_cachedGraphicsContext(nullptr)
+		, m_lastPaintSize(0, 0)
+		, m_needsRedraw(true)
 	{
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
 
@@ -40,6 +44,11 @@ namespace ads {
 	}
 
 	AutoHideTab::~AutoHideTab() {
+		// Clean up cached graphics context
+		if (m_cachedGraphicsContext) {
+			delete m_cachedGraphicsContext;
+			m_cachedGraphicsContext = nullptr;
+		}
 	}
 
 	void AutoHideTab::updateIcon() {
@@ -57,7 +66,8 @@ namespace ads {
 	void AutoHideTab::setActive(bool active) {
 		if (m_isActive != active) {
 			m_isActive = active;
-			Refresh();
+			m_needsRedraw = true;
+		Refresh();
 		}
 	}
 
@@ -98,19 +108,44 @@ namespace ads {
 			wxString title = m_dockWidget->title();
 			wxSize textSize = dc.GetTextExtent(title);
 
-			// Save current transform
-			wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
-			if (gc) {
-				// Rotate 90 degrees
-				gc->Translate(rect.width / 2, rect.height / 2);
-				gc->Rotate(-M_PI / 2);
-
-				// Draw rotated text
-				gc->SetFont(GetFont(), dc.GetTextForeground());
-				gc->DrawText(title, -textSize.GetWidth() / 2, -rect.width / 2 + 5);
-
-				delete gc;
+			// Use cached graphics context for rotation
+			if (!m_cachedGraphicsContext) {
+				m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
+				if (!m_cachedGraphicsContext) {
+					return;
+				}
+				m_lastPaintSize = rect.GetSize();
+				m_needsRedraw = true;
 			}
+
+			// Check if we need to recreate graphics context due to size change
+			bool sizeChanged = (rect.GetSize() != m_lastPaintSize);
+			if (sizeChanged) {
+				delete m_cachedGraphicsContext;
+				m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
+				if (!m_cachedGraphicsContext) {
+					return;
+				}
+				m_lastPaintSize = rect.GetSize();
+				m_needsRedraw = true;
+			}
+
+			// Skip drawing if nothing changed and we have a cached context
+			if (!m_needsRedraw && m_cachedGraphicsContext) {
+				return;
+			}
+
+			wxGraphicsContext* gc = m_cachedGraphicsContext;
+			// Rotate 90 degrees
+			gc->Translate(rect.width / 2, rect.height / 2);
+			gc->Rotate(-M_PI / 2);
+
+			// Draw rotated text
+			gc->SetFont(GetFont(), dc.GetTextForeground());
+			gc->DrawText(title, -textSize.GetWidth() / 2, -rect.width / 2 + 5);
+
+			// Mark that we've completed drawing
+			m_needsRedraw = false;
 		}
 		else {
 			// Draw horizontal text and icon
@@ -137,6 +172,7 @@ namespace ads {
 
 	void AutoHideTab::OnMouseEnter(wxMouseEvent& event) {
 		m_isHovered = true;
+		m_needsRedraw = true;
 		Refresh();
 
 		// Show the dock widget through the container
@@ -152,6 +188,7 @@ namespace ads {
 
 	void AutoHideTab::OnMouseLeave(wxMouseEvent& event) {
 		m_isHovered = false;
+		m_needsRedraw = true;
 		Refresh();
 		event.Skip();
 	}

@@ -18,10 +18,10 @@ public:
 	virtual ~FlatEnhancedButton();
 
 	// Customization methods
-	void SetHoverColor(const wxColour& color) { m_hoverColor = color; }
-	void SetPressedColor(const wxColour& color) { m_pressedColor = color; }
-	void SetBorderRadius(double radius) { m_borderRadius = radius; }
-	void SetBorderColor(const wxColour& color) { m_borderColor = color; }
+	void SetHoverColor(const wxColour& color) { m_hoverColor = color; m_needsRedraw = true; }
+	void SetPressedColor(const wxColour& color) { m_pressedColor = color; m_needsRedraw = true; }
+	void SetBorderRadius(double radius) { m_borderRadius = radius; m_needsRedraw = true; }
+	void SetBorderColor(const wxColour& color) { m_borderColor = color; m_needsRedraw = true; }
 
 	// Color getters
 	wxColour GetHoverColor() const { return m_hoverColor; }
@@ -48,6 +48,11 @@ private:
 	wxColour m_pressedColor;
 	wxColour m_borderColor;
 	double m_borderRadius;
+
+	// Graphics context caching for performance optimization
+	wxGraphicsContext* m_cachedGraphicsContext;
+	wxSize m_lastPaintSize;
+	bool m_needsRedraw;
 
 	DECLARE_EVENT_TABLE()
 };

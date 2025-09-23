@@ -32,6 +32,11 @@ DockSystemButtons::DockSystemButtons(ModernDockPanel* parent, wxWindowID id)
 	m_buttonSpacing = DEFAULT_BUTTON_SPACING;
 	m_margin = DEFAULT_MARGIN;
 
+	// Initialize graphics context caching
+	m_cachedGraphicsContext = nullptr;
+	m_lastPaintSize = wxSize(0, 0);
+	m_needsRedraw = true;
+
 	// Initialize colors
 	UpdateThemeColors();
 
@@ -44,6 +49,11 @@ DockSystemButtons::DockSystemButtons(ModernDockPanel* parent, wxWindowID id)
 
 DockSystemButtons::~DockSystemButtons()
 {
+	// Clean up cached graphics context
+	if (m_cachedGraphicsContext) {
+		delete m_cachedGraphicsContext;
+		m_cachedGraphicsContext = nullptr;
+	}
 }
 
 void DockSystemButtons::InitializeButtons()
@@ -141,6 +151,7 @@ void DockSystemButtons::SetButtonEnabled(DockSystemButtonType type, bool enabled
 	int index = GetButtonIndex(type);
 	if (index >= 0) {
 		m_buttons[index].enabled = enabled;
+		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -159,6 +170,7 @@ void DockSystemButtons::SetButtonIcon(DockSystemButtonType type, const wxBitmap&
 	int index = GetButtonIndex(type);
 	if (index >= 0) {
 		m_buttons[index].icon = icon;
+		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -176,6 +188,7 @@ void DockSystemButtons::SetButtonToggled(DockSystemButtonType type, bool toggled
 	int index = GetButtonIndex(type);
 	if (index >= 0) {
 		m_buttons[index].isToggled = toggled;
+		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -194,6 +207,7 @@ void DockSystemButtons::ToggleButton(DockSystemButtonType type)
 	int index = GetButtonIndex(type);
 	if (index >= 0) {
 		m_buttons[index].isToggled = !m_buttons[index].isToggled;
+		m_needsRedraw = true;
 		Refresh();
 	}
 }
@@ -213,6 +227,7 @@ void DockSystemButtons::UpdateLayout()
 		panelWidth = totalWidth;
 	}
 
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -245,6 +260,7 @@ void DockSystemButtons::UpdateThemeColors()
 	m_buttonBorderColor = wxColour(0, 0, 0, 0); // Transparent border (no border)
 	m_buttonTextColor = CFG_COLOUR("PanelTextColour");
 
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -278,6 +294,7 @@ void DockSystemButtons::OnThemeChanged()
 		button.altPressedIcon = button.altIcon;
 	}
 	
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -317,6 +334,7 @@ void DockSystemButtons::OnButtonUp(wxMouseEvent& event)
 	}
 
 	m_pressedButtonIndex = -1;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -338,6 +356,7 @@ void DockSystemButtons::OnButtonLeave(wxMouseEvent& event)
 	wxUnusedVar(event);
 	m_hoveredButtonIndex = -1;
 	m_pressedButtonIndex = -1;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -346,27 +365,59 @@ void DockSystemButtons::OnPaint(wxPaintEvent& event)
 	wxUnusedVar(event);
 
 	wxAutoBufferedPaintDC dc(this);
-	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
+	wxSize size = GetClientSize();
 
-	if (gc) {
-		// Draw normal background
-		gc->SetBrush(wxBrush(m_backgroundColor));
-		gc->SetPen(*wxTRANSPARENT_PEN);
-		gc->DrawRectangle(0, 0, GetSize().GetWidth(), GetSize().GetHeight());
+	// Check if we need to recreate graphics context due to size change
+	bool sizeChanged = (size != m_lastPaintSize);
+	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
 
-		// Draw buttons
-		for (size_t i = 0; i < m_buttons.size(); ++i) {
-			if (m_buttons[i].visible) {
-				wxRect buttonRect = GetButtonRect(i);
-				bool hovered = (static_cast<int>(i) == m_hoveredButtonIndex);
-				bool pressed = (static_cast<int>(i) == m_pressedButtonIndex);
-
-				RenderButton(gc, buttonRect, m_buttons[i], hovered, pressed);
-			}
+	if (needNewContext) {
+		// Clean up old context
+		if (m_cachedGraphicsContext) {
+			delete m_cachedGraphicsContext;
+			m_cachedGraphicsContext = nullptr;
 		}
 
-		delete gc;
+		// Create new graphics context
+		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
+		if (!m_cachedGraphicsContext) {
+			event.Skip();
+			return;
+		}
+
+		m_lastPaintSize = size;
+		m_needsRedraw = true;
 	}
+
+	// Skip drawing if nothing changed and we have a cached context
+	if (!m_needsRedraw && m_cachedGraphicsContext) {
+		event.Skip();
+		return;
+	}
+
+	// Use cached graphics context
+	wxGraphicsContext* gc = m_cachedGraphicsContext;
+
+	// Draw normal background
+	gc->SetBrush(wxBrush(m_backgroundColor));
+	gc->SetPen(*wxTRANSPARENT_PEN);
+	gc->DrawRectangle(0, 0, GetSize().GetWidth(), GetSize().GetHeight());
+
+	// Draw buttons
+	for (size_t i = 0; i < m_buttons.size(); ++i) {
+		if (m_buttons[i].visible) {
+			wxRect buttonRect = GetButtonRect(i);
+			bool hovered = (static_cast<int>(i) == m_hoveredButtonIndex);
+			bool pressed = (static_cast<int>(i) == m_pressedButtonIndex);
+
+			RenderButton(gc, buttonRect, m_buttons[i], hovered, pressed);
+		}
+	}
+
+	// Mark that we've completed drawing
+	m_needsRedraw = false;
+
+	// Note: Don't delete gc here as it's cached
 }
 
 void DockSystemButtons::OnSize(wxSizeEvent& event)

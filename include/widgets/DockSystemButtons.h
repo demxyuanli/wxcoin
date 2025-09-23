@@ -106,6 +106,11 @@ private:
 	int m_hoveredButtonIndex;
 	int m_pressedButtonIndex;
 
+	// Graphics context caching for performance optimization
+	wxGraphicsContext* m_cachedGraphicsContext;
+	wxSize m_lastPaintSize;
+	bool m_needsRedraw;
+
 	// Constants
 	static constexpr int DEFAULT_BUTTON_SIZE = 12;  // Smaller size for title bar
 	static constexpr int DEFAULT_BUTTON_SPACING = 1; // Tighter spacing

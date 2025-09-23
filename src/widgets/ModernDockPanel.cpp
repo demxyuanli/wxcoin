@@ -46,6 +46,12 @@ ModernDockPanel::ModernDockPanel(ModernDockManager* manager, wxWindow* parent, c
 
 ModernDockPanel::~ModernDockPanel()
 {
+	// Clean up cached graphics context
+	if (m_cachedGraphicsContext) {
+		delete m_cachedGraphicsContext;
+		m_cachedGraphicsContext = nullptr;
+	}
+
 	// Cleanup is handled automatically by smart pointers and wxWidgets
 }
 
@@ -74,6 +80,11 @@ void ModernDockPanel::InitializePanel()
 	m_tabBorderRight = static_cast<int>(DEFAULT_TAB_BORDER_RIGHT * dpiScale);
 	m_tabPadding = static_cast<int>(DEFAULT_TAB_PADDING * dpiScale);
 	m_tabTopMargin = static_cast<int>(DEFAULT_TAB_TOP_MARGIN * dpiScale);
+
+	// Initialize graphics context caching
+	m_cachedGraphicsContext = nullptr;
+	m_lastPaintSize = wxSize(0, 0);
+	m_needsRedraw = true;
 
 	// Initialize fonts
 	m_tabFont = CFG_FONT();
@@ -117,6 +128,7 @@ void ModernDockPanel::UpdateThemeColors()
 	m_titleFont = CFG_FONT();
 
 	// Refresh display when colors change
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -147,6 +159,7 @@ void ModernDockPanel::AddContent(wxWindow* content, const wxString& title, const
 
 	// Update layout
 	UpdateLayout();
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -193,6 +206,7 @@ void ModernDockPanel::RemoveContent(int index)
 
 	// Update layout
 	UpdateLayout();
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -215,6 +229,7 @@ void ModernDockPanel::SelectContent(int index)
 		content->SetSize(m_contentRect);
 	}
 
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -260,6 +275,7 @@ void ModernDockPanel::SetContentTitle(int index, const wxString& title)
 {
 	if (index < 0 || index >= static_cast<int>(m_contents.size())) return;
 	m_contents[index]->title = title;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -273,12 +289,14 @@ void ModernDockPanel::SetContentIcon(int index, const wxBitmap& icon)
 {
 	if (index < 0 || index >= static_cast<int>(m_contents.size())) return;
 	m_contents[index]->icon = icon;
+	m_needsRedraw = true;
 	Refresh();
 }
 
 void ModernDockPanel::SetTitle(const wxString& title)
 {
 	m_title = title;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -287,7 +305,8 @@ void ModernDockPanel::SetState(DockPanelState state)
 	if (m_state != state) {
 		m_state = state;
 		UpdateLayout();
-		Refresh();
+		m_needsRedraw = true;
+	Refresh();
 	}
 }
 
@@ -299,6 +318,7 @@ void ModernDockPanel::SetFloating(bool floating)
 void ModernDockPanel::SetTabCloseMode(TabCloseMode mode)
 {
 	m_tabCloseMode = mode;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -307,7 +327,8 @@ void ModernDockPanel::SetShowTabs(bool show)
 	if (m_showTabs != show) {
 		m_showTabs = show;
 		UpdateLayout();
-		Refresh();
+		m_needsRedraw = true;
+	Refresh();
 	}
 }
 
@@ -490,13 +511,38 @@ wxRect ModernDockPanel::CalculateTitleBarCloseButtonRect(int tabIndex) const
 void ModernDockPanel::OnPaint(wxPaintEvent& event)
 {
 	wxAutoBufferedPaintDC dc(this);
+	wxSize size = GetClientSize();
 
-	// Create graphics context for smooth rendering
-	wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
-	if (!gc) {
+	// Check if we need to recreate graphics context due to size change
+	bool sizeChanged = (size != m_lastPaintSize);
+	bool needNewContext = !m_cachedGraphicsContext || sizeChanged;
+
+	if (needNewContext) {
+		// Clean up old context
+		if (m_cachedGraphicsContext) {
+			delete m_cachedGraphicsContext;
+			m_cachedGraphicsContext = nullptr;
+		}
+
+		// Create new graphics context
+		m_cachedGraphicsContext = wxGraphicsContext::Create(dc);
+		if (!m_cachedGraphicsContext) {
+			event.Skip();
+			return;
+		}
+
+		m_lastPaintSize = size;
+		m_needsRedraw = true;
+	}
+
+	// Skip drawing if nothing changed and we have a cached context
+	if (!m_needsRedraw && m_cachedGraphicsContext) {
 		event.Skip();
 		return;
 	}
+
+	// Use cached graphics context
+	wxGraphicsContext* gc = m_cachedGraphicsContext;
 
 	// Clear background
 	gc->SetBrush(wxBrush(m_backgroundColor));
@@ -524,7 +570,10 @@ void ModernDockPanel::OnPaint(wxPaintEvent& event)
 	gc->SetBrush(*wxTRANSPARENT_BRUSH);
 	gc->DrawRectangle(0, 0, GetSize().x, GetSize().y);
 
-	delete gc;
+	// Mark that we've completed drawing
+	m_needsRedraw = false;
+
+	// Note: Don't delete gc here as it's cached
 }
 
 void ModernDockPanel::RenderTitleBar(wxGraphicsContext* gc)
@@ -944,7 +993,8 @@ void ModernDockPanel::OnMouseMove(wxMouseEvent& event)
 		if (newHoveredTab != m_hoveredTabIndex || newHoveredClose != m_hoveredCloseIndex) {
 			m_hoveredTabIndex = newHoveredTab;
 			m_hoveredCloseIndex = newHoveredClose;
-			Refresh();
+			m_needsRedraw = true;
+	Refresh();
 		}
 	}
 
@@ -956,7 +1006,8 @@ void ModernDockPanel::OnMouseLeave(wxMouseEvent& event)
 	if (m_hoveredTabIndex != -1 || m_hoveredCloseIndex != -1) {
 		m_hoveredTabIndex = -1;
 		m_hoveredCloseIndex = -1;
-		Refresh();
+		m_needsRedraw = true;
+	Refresh();
 	}
 
 	event.Skip();
@@ -1072,6 +1123,7 @@ void ModernDockPanel::UpdateAnimation()
 	}
 
 	// Apply animation (specific implementation depends on animation type)
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -1085,18 +1137,21 @@ void ModernDockPanel::StopAnimation()
 void ModernDockPanel::SetTabStyle(TabStyle style)
 {
 	m_tabStyle = style;
+	m_needsRedraw = true;
 	Refresh();
 }
 
 void ModernDockPanel::SetTabBorderStyle(TabBorderStyle style)
 {
 	m_tabBorderStyle = style;
+	m_needsRedraw = true;
 	Refresh();
 }
 
 void ModernDockPanel::SetTabCornerRadius(int radius)
 {
 	m_tabCornerRadius = radius;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -1106,6 +1161,7 @@ void ModernDockPanel::SetTabBorderWidths(int top, int bottom, int left, int righ
 	m_tabBorderBottom = bottom;
 	m_tabBorderLeft = left;
 	m_tabBorderRight = right;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -1123,6 +1179,7 @@ void ModernDockPanel::SetTabBorderColours(const wxColour& top, const wxColour& b
 	m_tabBorderBottomColor = bottom;
 	m_tabBorderLeftColor = left;
 	m_tabBorderRightColor = right;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -1138,6 +1195,7 @@ void ModernDockPanel::SetTabPadding(int padding)
 {
 	m_tabPadding = padding;
 	UpdateLayout();
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -1145,6 +1203,7 @@ void ModernDockPanel::SetTabSpacing(int spacing)
 {
 	m_tabSpacing = spacing;
 	UpdateLayout();
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -1152,18 +1211,21 @@ void ModernDockPanel::SetTabTopMargin(int margin)
 {
 	m_tabTopMargin = margin;
 	UpdateLayout();
+	m_needsRedraw = true;
 	Refresh();
 }
 
 void ModernDockPanel::SetTabFont(const wxFont& font)
 {
 	m_tabFont = font;
+	m_needsRedraw = true;
 	Refresh();
 }
 
 void ModernDockPanel::SetTitleFont(const wxFont& font)
 {
 	m_titleFont = font;
+	m_needsRedraw = true;
 	Refresh();
 }
 
@@ -1231,5 +1293,6 @@ void ModernDockPanel::SetSystemButtonsVisible(bool visible)
 	}
 
 	// Refresh to update display
+	m_needsRedraw = true;
 	Refresh();
 }

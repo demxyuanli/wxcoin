@@ -6,6 +6,7 @@
 #include <wx/artprov.h>
 #include <wx/msgdlg.h>
 #include <wx/log.h>
+#include <wx/datetime.h>
 
 // Event IDs
 enum {
@@ -18,30 +19,16 @@ enum {
 };
 
 wxBEGIN_EVENT_TABLE(WebViewPanel, wxPanel)
-    EVT_BUTTON(ID_BACK, WebViewPanel::OnBack)
-    EVT_BUTTON(ID_FORWARD, WebViewPanel::OnForward)
-    EVT_BUTTON(ID_RELOAD, WebViewPanel::OnReload)
-    EVT_BUTTON(ID_STOP, WebViewPanel::OnStop)
-    EVT_TEXT_ENTER(ID_URL_CTRL, WebViewPanel::OnNavigate)
-    EVT_WEBVIEW_NAVIGATING(ID_WEBVIEW, WebViewPanel::OnWebViewLoaded)
+    // Only bind essential events to reduce flickering
     EVT_WEBVIEW_NAVIGATED(ID_WEBVIEW, WebViewPanel::OnWebViewLoaded)
-    EVT_WEBVIEW_LOADED(ID_WEBVIEW, WebViewPanel::OnWebViewLoaded)
     EVT_WEBVIEW_ERROR(ID_WEBVIEW, WebViewPanel::OnWebViewError)
-    EVT_WEBVIEW_TITLE_CHANGED(ID_WEBVIEW, WebViewPanel::OnWebViewTitleChanged)
 wxEND_EVENT_TABLE()
 
 WebViewPanel::WebViewPanel(wxWindow* parent, wxWindowID id,
                            const wxPoint& pos, const wxSize& size)
     : wxPanel(parent, id, pos, size)
     , m_webView(nullptr)
-    , m_backBtn(nullptr)
-    , m_forwardBtn(nullptr)
-    , m_reloadBtn(nullptr)
-    , m_stopBtn(nullptr)
-    , m_urlCtrl(nullptr)
-    , m_statusText(nullptr)
     , m_currentURL(wxEmptyString)
-    , m_currentTitle(wxEmptyString)
 {
     // Delay control creation until the widget is properly parented
     Bind(wxEVT_SIZE, &WebViewPanel::OnSize, this);
@@ -54,41 +41,7 @@ WebViewPanel::~WebViewPanel()
 
 void WebViewPanel::CreateControls()
 {
-    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-
-    // Navigation toolbar
-    wxBoxSizer* navSizer = new wxBoxSizer(wxHORIZONTAL);
-
-    m_backBtn = new wxButton(this, ID_BACK, "<", wxDefaultPosition, wxSize(30, 30));
-    m_backBtn->SetToolTip("Go back");
-    navSizer->Add(m_backBtn, 0, wxALL, 2);
-
-    m_forwardBtn = new wxButton(this, ID_FORWARD, ">", wxDefaultPosition, wxSize(30, 30));
-    m_forwardBtn->SetToolTip("Go forward");
-    navSizer->Add(m_forwardBtn, 0, wxALL, 2);
-
-    m_reloadBtn = new wxButton(this, ID_RELOAD, "R", wxDefaultPosition, wxSize(30, 30));
-    m_reloadBtn->SetToolTip("Reload");
-    navSizer->Add(m_reloadBtn, 0, wxALL, 2);
-
-    m_stopBtn = new wxButton(this, ID_STOP, "S", wxDefaultPosition, wxSize(30, 30));
-    m_stopBtn->SetToolTip("Stop");
-    navSizer->Add(m_stopBtn, 0, wxALL, 2);
-
-    navSizer->AddSpacer(10);
-
-    m_urlCtrl = new wxTextCtrl(this, ID_URL_CTRL, wxEmptyString,
-                               wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
-    m_urlCtrl->SetHint("Enter URL or search terms");
-    navSizer->Add(m_urlCtrl, 1, wxALL | wxEXPAND, 2);
-
-    mainSizer->Add(navSizer, 0, wxEXPAND | wxALL, 5);
-
-    // Status bar
-    m_statusText = new wxStaticText(this, wxID_ANY, "Ready");
-    mainSizer->Add(m_statusText, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
-
-    // Create WebView
+    // Create WebView directly without navigation controls
     if (wxWebView::IsBackendAvailable(wxWebViewBackendEdge))
     {
         m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
@@ -104,19 +57,24 @@ void WebViewPanel::CreateControls()
         wxMessageBox("WebView is not available on this platform.\n"
                     "Please install Microsoft Edge WebView2 or WebKit.",
                     "WebView Not Available", wxOK | wxICON_WARNING);
-        m_statusText->SetLabel("WebView not available");
         return;
     }
 
     if (m_webView)
     {
-        mainSizer->Add(m_webView, 1, wxEXPAND | wxALL, 5);
+        // Use a simple sizer that fills the entire panel
+        wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+        mainSizer->Add(m_webView, 1, wxEXPAND);
+        SetSizer(mainSizer);
+        
+        // Prevent layout recursion and flickering by using Freeze/Thaw
+        Freeze();
+        Layout();
+        Thaw();
+        
+        // Disable automatic refresh to prevent flickering
+        // Note: SetScrollRate is not available for wxWebView
     }
-
-    SetSizer(mainSizer);
-    Layout();
-
-    UpdateNavigationButtons();
 
     // Load the stored URL if any
     if (!m_currentURL.IsEmpty())
@@ -154,30 +112,25 @@ void WebViewPanel::LoadURL(const wxString& url)
     }
 
     m_currentURL = processedURL;
-    m_urlCtrl->SetValue(m_currentURL);
     m_webView->LoadURL(m_currentURL);
-    m_statusText->SetLabel("Loading...");
 }
 
 void WebViewPanel::LoadHTML(const wxString& html)
 {
     if (!m_webView) return;
     m_webView->SetPage(html, wxString());
-    m_statusText->SetLabel("HTML loaded");
 }
 
 void WebViewPanel::Reload()
 {
     if (!m_webView) return;
     m_webView->Reload();
-    m_statusText->SetLabel("Reloading...");
 }
 
 void WebViewPanel::Stop()
 {
     if (!m_webView) return;
     m_webView->Stop();
-    m_statusText->SetLabel("Stopped");
 }
 
 void WebViewPanel::GoBack()
@@ -186,7 +139,6 @@ void WebViewPanel::GoBack()
     if (m_webView->CanGoBack())
     {
         m_webView->GoBack();
-        m_statusText->SetLabel("Going back...");
     }
 }
 
@@ -196,7 +148,6 @@ void WebViewPanel::GoForward()
     if (m_webView->CanGoForward())
     {
         m_webView->GoForward();
-        m_statusText->SetLabel("Going forward...");
     }
 }
 
@@ -210,7 +161,7 @@ bool WebViewPanel::CanGoForward() const
     return m_webView && m_webView->CanGoForward();
 }
 
-// Event handlers
+// Navigation methods kept for external use
 void WebViewPanel::OnBack(wxCommandEvent& event)
 {
     GoBack();
@@ -233,51 +184,36 @@ void WebViewPanel::OnStop(wxCommandEvent& event)
 
 void WebViewPanel::OnNavigate(wxCommandEvent& event)
 {
-    wxString url = m_urlCtrl->GetValue();
-    if (!url.IsEmpty())
-    {
-        LoadURL(url);
-    }
+    // No longer used - navigation controls removed
 }
 
 void WebViewPanel::OnWebViewLoaded(wxWebViewEvent& event)
 {
-    UpdateNavigationButtons();
-
-    if (event.GetEventType() == wxEVT_WEBVIEW_LOADED)
+    // Only handle navigation events, ignore others to reduce flickering
+    if (event.GetEventType() == wxEVT_WEBVIEW_NAVIGATED)
     {
-        m_statusText->SetLabel("Loaded");
-    }
-    else if (event.GetEventType() == wxEVT_WEBVIEW_NAVIGATED)
-    {
-        m_currentURL = event.GetURL();
-        m_urlCtrl->SetValue(m_currentURL);
-        m_statusText->SetLabel("Navigated");
-    }
-    else if (event.GetEventType() == wxEVT_WEBVIEW_NAVIGATING)
-    {
-        m_statusText->SetLabel("Navigating...");
+        // Throttle URL updates to prevent excessive processing
+        static wxDateTime lastUpdateTime;
+        wxDateTime now = wxDateTime::Now();
+        
+        // Only update if at least 200ms have passed since last update
+        if (!lastUpdateTime.IsValid() || (now - lastUpdateTime).GetMilliseconds() > 200) {
+            m_currentURL = event.GetURL();
+            lastUpdateTime = now;
+        }
     }
 }
 
 void WebViewPanel::OnWebViewError(wxWebViewEvent& event)
 {
-    m_statusText->SetLabel("Error: " + event.GetString());
     wxLogError("WebView error: %s", event.GetString());
 }
 
-void WebViewPanel::OnWebViewTitleChanged(wxWebViewEvent& event)
-{
-    m_currentTitle = event.GetString();
-    // Could update window title here if needed
-}
+// Title changed event removed to reduce flickering
 
 void WebViewPanel::UpdateNavigationButtons()
 {
-    if (!m_backBtn || !m_forwardBtn) return;
-
-    m_backBtn->Enable(CanGoBack());
-    m_forwardBtn->Enable(CanGoForward());
+    // No longer needed - navigation buttons removed
 }
 
 void WebViewPanel::OnSize(wxSizeEvent& event)
@@ -285,10 +221,28 @@ void WebViewPanel::OnSize(wxSizeEvent& event)
     event.Skip();
 
     // Create controls only once, when we have a valid size
-    if (!m_webView && GetSize().GetWidth() > 0 && GetSize().GetHeight() > 0)
+    // Use a flag to prevent recursive calls during control creation
+    static bool creatingControls = false;
+    if (!m_webView && !creatingControls && GetSize().GetWidth() > 0 && GetSize().GetHeight() > 0)
     {
+        creatingControls = true;
         CreateControls();
+        creatingControls = false;
+        
         // Load a default page after controls are created
         LoadURL("https://www.google.com");
+    }
+    else if (m_webView)
+    {
+        // Prevent unnecessary refreshes during resize to avoid flickering
+        static wxDateTime lastResizeTime;
+        wxDateTime now = wxDateTime::Now();
+        
+        // Only refresh if enough time has passed since last resize
+        if (!lastResizeTime.IsValid() || (now - lastResizeTime).GetMilliseconds() > 200) {
+            lastResizeTime = now;
+            // Use minimal refresh to prevent flickering
+            m_webView->Refresh(false);
+        }
     }
 }

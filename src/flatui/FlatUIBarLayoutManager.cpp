@@ -17,6 +17,12 @@ FlatUIBarLayoutManager::FlatUIBarLayoutManager(FlatUIBar* bar)
 
 void FlatUIBarLayoutManager::UpdateLayout(const wxSize& barClientSize)
 {
+	// Debug logging to track layout updates
+	static int layoutUpdateCount = 0;
+	layoutUpdateCount++;
+	LOG_INF("FlatUIBarLayoutManager::UpdateLayout #" + std::to_string(layoutUpdateCount) + 
+		": barClientSize=(" + std::to_string(barClientSize.GetWidth()) + "," + std::to_string(barClientSize.GetHeight()) + ")", "LayoutManager");
+
 	if (!m_bar || barClientSize.GetWidth() <= 0 || barClientSize.GetHeight() <= 0) {
 		LOG_ERR("Invalid parameters for UpdateLayout", "LayoutManager");
 		return;
@@ -128,12 +134,10 @@ void FlatUIBarLayoutManager::UpdateLayout(const wxSize& barClientSize)
 			// Minimum viable height check to prevent invisible or overlapping panels
 			const int MIN_FIXPANEL_HEIGHT = 30; // Must be at least 20px to be useful
 			if (fixPanelHeight < MIN_FIXPANEL_HEIGHT) {
-				// Schedule a delayed layout update to retry when window size is proper
-				m_bar->CallAfter([this]() {
-					if (m_bar && m_bar->GetSize().GetHeight() > 50) { // Minimum reasonable window height
-						UpdateLayout(m_bar->GetSize());
-					}
-					});
+				// Hide FixPanel instead of scheduling delayed updates to prevent flickering
+				if (fixPanel->IsShown()) {
+					fixPanel->Hide();
+				}
 				return; // Don't position with invalid height
 			}
 
@@ -143,6 +147,12 @@ void FlatUIBarLayoutManager::UpdateLayout(const wxSize& barClientSize)
 			//        ", barBottomMargin=" + std::to_string(barBottomMargin) +
 			//        ", totalBarHeight=" + std::to_string(totalBarHeight) +
 			//        ", FIXED_PANEL_Y=" + std::to_string(FIXED_PANEL_Y), "LayoutManager");
+
+			// Debug logging to track FixPanel positioning
+			LOG_INF("FixPanel positioning: FIXED_PANEL_Y=" + std::to_string(FIXED_PANEL_Y) + 
+				", barClientSize=(" + std::to_string(barClientSize.GetWidth()) + 
+				"," + std::to_string(barClientSize.GetHeight()) + 
+				"), fixPanelHeight=" + std::to_string(fixPanelHeight), "LayoutManager");
 
 			fixPanel->SetPosition(wxPoint(0, FIXED_PANEL_Y));
 			fixPanel->SetSize(barClientSize.GetWidth(), fixPanelHeight);
