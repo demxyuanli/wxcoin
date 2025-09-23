@@ -34,11 +34,10 @@ public:
     void OnWebViewTitleChanged(wxWebViewEvent& event);
 
     // Window events
-    void OnShow(wxShowEvent& event);
+    void OnSize(wxSizeEvent& event);
 
 private:
-    void CreateUIControls();
-    void CreateWebView();
+    void CreateControls();
     void UpdateNavigationButtons();
     
     wxWebView* m_webView;

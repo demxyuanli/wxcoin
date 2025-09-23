@@ -28,7 +28,6 @@ wxBEGIN_EVENT_TABLE(WebViewPanel, wxPanel)
     EVT_WEBVIEW_LOADED(ID_WEBVIEW, WebViewPanel::OnWebViewLoaded)
     EVT_WEBVIEW_ERROR(ID_WEBVIEW, WebViewPanel::OnWebViewError)
     EVT_WEBVIEW_TITLE_CHANGED(ID_WEBVIEW, WebViewPanel::OnWebViewTitleChanged)
-    EVT_SHOW(WebViewPanel::OnShow)
 wxEND_EVENT_TABLE()
 
 WebViewPanel::WebViewPanel(wxWindow* parent, wxWindowID id,
@@ -44,8 +43,8 @@ WebViewPanel::WebViewPanel(wxWindow* parent, wxWindowID id,
     , m_currentURL(wxEmptyString)
     , m_currentTitle(wxEmptyString)
 {
-    // Create UI controls immediately, but delay WebView creation
-    CreateUIControls();
+    // Delay control creation until the widget is properly parented
+    Bind(wxEVT_SIZE, &WebViewPanel::OnSize, this);
 }
 
 WebViewPanel::~WebViewPanel()
@@ -53,7 +52,7 @@ WebViewPanel::~WebViewPanel()
     // WebView is automatically destroyed as child window
 }
 
-void WebViewPanel::CreateUIControls()
+void WebViewPanel::CreateControls()
 {
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -89,33 +88,16 @@ void WebViewPanel::CreateUIControls()
     m_statusText = new wxStaticText(this, wxID_ANY, "Ready");
     mainSizer->Add(m_statusText, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
 
-    // Placeholder for WebView (will be added later)
-    m_webView = nullptr;
-
-    SetSizer(mainSizer);
-    Layout();
-
-    UpdateNavigationButtons();
-}
-
-void WebViewPanel::CreateWebView()
-{
-    if (m_webView) return; // Already created
-
-    m_statusText->SetLabel("Creating WebView...");
-
     // Create WebView
     if (wxWebView::IsBackendAvailable(wxWebViewBackendEdge))
     {
         m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
                                    wxDefaultPosition, wxDefaultSize, wxWebViewBackendEdge);
-        m_statusText->SetLabel("Using Edge WebView2 backend");
     }
     else if (wxWebView::IsBackendAvailable(wxWebViewBackendWebKit))
     {
         m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
                                    wxDefaultPosition, wxDefaultSize, wxWebViewBackendWebKit);
-        m_statusText->SetLabel("Using WebKit backend");
     }
     else
     {
@@ -128,31 +110,19 @@ void WebViewPanel::CreateWebView()
 
     if (m_webView)
     {
-        // Add WebView to the sizer
-        GetSizer()->Add(m_webView, 1, wxEXPAND | wxALL, 5);
-        Layout();
-        
-        // Show the WebView
-        m_webView->Show();
-        
-        // Force refresh to ensure it's visible
-        m_webView->Refresh();
-        Update();
-
-        // Load the stored URL if any
-        if (!m_currentURL.IsEmpty())
-        {
-            LoadURL(m_currentURL);
-            m_currentURL.Clear();
-        }
-        else
-        {
-            m_statusText->SetLabel("WebView created successfully");
-        }
+        mainSizer->Add(m_webView, 1, wxEXPAND | wxALL, 5);
     }
-    else
+
+    SetSizer(mainSizer);
+    Layout();
+
+    UpdateNavigationButtons();
+
+    // Load the stored URL if any
+    if (!m_currentURL.IsEmpty())
     {
-        m_statusText->SetLabel("Failed to create WebView");
+        LoadURL(m_currentURL);
+        m_currentURL.Clear();
     }
 }
 
@@ -185,12 +155,8 @@ void WebViewPanel::LoadURL(const wxString& url)
 
     m_currentURL = processedURL;
     m_urlCtrl->SetValue(m_currentURL);
-    
-    // Update status before loading
-    m_statusText->SetLabel("Loading " + m_currentURL + "...");
-    
-    // Load the URL
     m_webView->LoadURL(m_currentURL);
+    m_statusText->SetLabel("Loading...");
 }
 
 void WebViewPanel::LoadHTML(const wxString& html)
@@ -280,17 +246,17 @@ void WebViewPanel::OnWebViewLoaded(wxWebViewEvent& event)
 
     if (event.GetEventType() == wxEVT_WEBVIEW_LOADED)
     {
-        m_statusText->SetLabel("Page loaded successfully");
+        m_statusText->SetLabel("Loaded");
     }
     else if (event.GetEventType() == wxEVT_WEBVIEW_NAVIGATED)
     {
         m_currentURL = event.GetURL();
         m_urlCtrl->SetValue(m_currentURL);
-        m_statusText->SetLabel("Navigated to: " + m_currentURL);
+        m_statusText->SetLabel("Navigated");
     }
     else if (event.GetEventType() == wxEVT_WEBVIEW_NAVIGATING)
     {
-        m_statusText->SetLabel("Navigating to: " + event.GetURL());
+        m_statusText->SetLabel("Navigating...");
     }
 }
 
@@ -314,19 +280,15 @@ void WebViewPanel::UpdateNavigationButtons()
     m_forwardBtn->Enable(CanGoForward());
 }
 
-void WebViewPanel::OnShow(wxShowEvent& event)
+void WebViewPanel::OnSize(wxSizeEvent& event)
 {
     event.Skip();
 
-    // Create WebView only once, when the panel is first shown
-    if (!m_webView && event.IsShown())
+    // Create controls only once, when we have a valid size
+    if (!m_webView && GetSize().GetWidth() > 0 && GetSize().GetHeight() > 0)
     {
-        // Use CallAfter to ensure proper timing
-        CallAfter([this]() {
-            CreateWebView();
-            // Load default page after WebView is created
-            wxSleep(1); // Give WebView time to initialize
-            LoadURL("https://www.sina.com");
-        });
+        CreateControls();
+        // Load a default page after controls are created
+        LoadURL("https://www.google.com");
     }
 }

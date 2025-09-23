@@ -185,7 +185,7 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
 
 void FlatFrame::onClose(wxCloseEvent& event) {
 	LOG_INF_S("Closing application");
-	Destroy();
+	event.Skip(); // Allow default processing (Destroy)
 }
 
 void FlatFrame::onActivate(wxActivateEvent& event) {
