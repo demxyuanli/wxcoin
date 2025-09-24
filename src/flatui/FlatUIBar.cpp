@@ -982,3 +982,4 @@ void FlatUIBar::RefreshTheme()
 
 	// Note: Refresh is handled by parent frame for performance
 }
+

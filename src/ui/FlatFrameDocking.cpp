@@ -65,6 +65,7 @@ FlatFrameDocking::FlatFrameDocking(const wxString& title, const wxPoint& pos, co
     , m_canvasDock(nullptr)
     , m_messageDock(nullptr)
     , m_performanceDock(nullptr)
+    , m_webViewDock(nullptr)
     , m_outputCtrl(nullptr)
     , m_resizeTimer(nullptr)
     , m_pendingResizeSize(0, 0)

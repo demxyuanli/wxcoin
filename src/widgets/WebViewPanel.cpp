@@ -43,6 +43,14 @@ WebViewPanel::WebViewPanel(wxWindow* parent, wxWindowID id,
     , m_currentURL(wxEmptyString)
     , m_currentTitle(wxEmptyString)
 {
+    // Handle WS_EX_COMPOSITED conflict with WebView2
+    // Since the parent FlatUI system enables WS_EX_COMPOSITED for performance,
+    // we need to handle WebView2 rendering conflicts differently
+#ifdef __WXMSW__
+    // Store initial window handle for later use
+    m_hwnd = GetHandle();
+#endif
+
     // Delay control creation until the widget is properly parented
     Bind(wxEVT_SIZE, &WebViewPanel::OnSize, this);
 }
@@ -88,28 +96,70 @@ void WebViewPanel::CreateControls()
     m_statusText = new wxStaticText(this, wxID_ANY, "Ready");
     mainSizer->Add(m_statusText, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
 
-    // Create WebView
-    if (wxWebView::IsBackendAvailable(wxWebViewBackendEdge))
+    // Create WebView - use IE backend to avoid WS_EX_COMPOSITED conflicts
+    bool webViewCreated = false;
+    
+    if (wxWebView::IsBackendAvailable(wxWebViewBackendIE))
     {
-        m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
-                                   wxDefaultPosition, wxDefaultSize, wxWebViewBackendEdge);
+        try {
+            m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
+                                       wxDefaultPosition, wxDefaultSize, wxWebViewBackendIE);
+            if (m_webView) {
+                webViewCreated = true;
+                m_statusText->SetLabel("Using IE WebView backend");
+            }
+        }
+        catch (const std::exception& e) {
+            wxLogError("Failed to create IE WebView: %s", e.what());
+        }
     }
-    else if (wxWebView::IsBackendAvailable(wxWebViewBackendWebKit))
+    
+    if (!webViewCreated && wxWebView::IsBackendAvailable(wxWebViewBackendWebKit))
     {
-        m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
-                                   wxDefaultPosition, wxDefaultSize, wxWebViewBackendWebKit);
+        try {
+            m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
+                                       wxDefaultPosition, wxDefaultSize, wxWebViewBackendWebKit);
+            if (m_webView) {
+                webViewCreated = true;
+                m_statusText->SetLabel("Using WebKit backend");
+            }
+        }
+        catch (const std::exception& e) {
+            wxLogError("Failed to create WebKit WebView: %s", e.what());
+        }
     }
-    else
+    
+    if (!webViewCreated && wxWebView::IsBackendAvailable(wxWebViewBackendEdge))
+    {
+        try {
+            m_webView = wxWebView::New(this, ID_WEBVIEW, wxWebViewDefaultURLStr,
+                                       wxDefaultPosition, wxDefaultSize, wxWebViewBackendEdge);
+            if (m_webView) {
+                webViewCreated = true;
+                m_statusText->SetLabel("Using Edge WebView2 backend (fallback)");
+            }
+        }
+        catch (const std::exception& e) {
+            wxLogError("Failed to create Edge WebView: %s", e.what());
+        }
+    }
+    
+    if (!webViewCreated)
     {
         wxMessageBox("WebView is not available on this platform.\n"
-                    "Please install Microsoft Edge WebView2 or WebKit.",
+                    "IE WebView backend requires Internet Explorer to be installed.\n"
+                    "Please install IE or WebView2 runtime.",
                     "WebView Not Available", wxOK | wxICON_WARNING);
-        m_statusText->SetLabel("WebView not available");
+        m_statusText->SetLabel("WebView not available - install IE or WebView2 runtime");
         return;
     }
 
     if (m_webView)
     {
+        // IE WebView backend is more compatible with WS_EX_COMPOSITED
+        // Enable double buffering for smoother rendering
+        m_webView->SetDoubleBuffered(true);
+        
         mainSizer->Add(m_webView, 1, wxEXPAND | wxALL, 5);
     }
 
@@ -247,6 +297,12 @@ void WebViewPanel::OnWebViewLoaded(wxWebViewEvent& event)
     if (event.GetEventType() == wxEVT_WEBVIEW_LOADED)
     {
         m_statusText->SetLabel("Loaded");
+        
+        // IE WebView backend handles composited rendering better
+        // Just ensure a refresh for proper display
+        if (m_webView) {
+            m_webView->Refresh(false);
+        }
     }
     else if (event.GetEventType() == wxEVT_WEBVIEW_NAVIGATED)
     {

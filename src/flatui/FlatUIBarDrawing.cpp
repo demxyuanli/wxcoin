@@ -267,3 +267,4 @@ void FlatUIBar::DrawTabBorder(wxDC& dc, const wxRect& tabRect, bool isActive)
 
 	delete gc;
 }
+

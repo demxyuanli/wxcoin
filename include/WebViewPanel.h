@@ -51,5 +51,9 @@ private:
     wxString m_currentURL;
     wxString m_currentTitle;
 
+#ifdef __WXMSW__
+    HWND m_hwnd;
+#endif
+
     wxDECLARE_EVENT_TABLE();
 };

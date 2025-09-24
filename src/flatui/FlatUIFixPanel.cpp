@@ -33,7 +33,7 @@ FlatUIFixPanel::FlatUIFixPanel(wxWindow* parent, wxWindowID id)
 	HWND hwnd = (HWND)GetHandle();
 	if (hwnd) {
 		long exStyle = ::GetWindowLong(hwnd, GWL_EXSTYLE);
-		::SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_COMPOSITED);
+		::SetWindowLong(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_COMPOSITED);
 	}
 #endif
 
