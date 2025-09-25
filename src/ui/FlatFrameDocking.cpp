@@ -1152,9 +1152,11 @@ void FlatFrameDocking::ApplyDynamicLayoutAdjustmentOptimized(ads::DockContainerW
         return;
     }
 
-    // Calculate target sizes based on current container dimensions
-    int targetLeftWidth = std::max(200, (containerSize.x * config.leftAreaPercent) / 100);
-    int targetBottomHeight = (containerSize.y * config.bottomAreaPercent) / 100;
+    // Calculate target sizes using the new fixed-size dock logic
+    int targetLeftWidth = container->calculateAreaSizeBasedOnFixedDocks(
+        ads::LeftDockWidgetArea, containerSize, config);
+    int targetBottomHeight = container->calculateAreaSizeBasedOnFixedDocks(
+        ads::BottomDockWidgetArea, containerSize, config);
 
     // Cache the main splitter to avoid repeated searches
     static wxSplitterWindow* cachedMainSplitter = nullptr;
@@ -1238,17 +1240,15 @@ void FlatFrameDocking::ApplyDynamicLayoutAdjustment(ads::DockContainerWidget* co
         return;
     }
 
-    // Calculate target sizes based on current container dimensions and percentage config
-    int targetLeftWidth = (containerSize.x * config.leftAreaPercent) / 100;
-    int targetRightWidth = (containerSize.x * config.rightAreaPercent) / 100;
-    int targetTopHeight = (containerSize.y * config.topAreaPercent) / 100;
-    int targetBottomHeight = (containerSize.y * config.bottomAreaPercent) / 100;
-
-    // Ensure left area minimum width of 200px (cannot be compressed)
-    if (targetLeftWidth < 200) {
-        targetLeftWidth = 200;
-        wxLogDebug("ApplyDynamicLayoutAdjustment: Enforcing minimum left width of 200px");
-    }
+    // Calculate target sizes using the new fixed-size dock logic
+    int targetLeftWidth = container->calculateAreaSizeBasedOnFixedDocks(
+        ads::LeftDockWidgetArea, containerSize, config);
+    int targetRightWidth = container->calculateAreaSizeBasedOnFixedDocks(
+        ads::RightDockWidgetArea, containerSize, config);
+    int targetTopHeight = container->calculateAreaSizeBasedOnFixedDocks(
+        ads::TopDockWidgetArea, containerSize, config);
+    int targetBottomHeight = container->calculateAreaSizeBasedOnFixedDocks(
+        ads::BottomDockWidgetArea, containerSize, config);
 
     wxLogDebug("ApplyDynamicLayoutAdjustment: Calculated target sizes (after min width check):");
     wxLogDebug("  - Left: %dpx (%d%%)", targetLeftWidth, config.leftAreaPercent);

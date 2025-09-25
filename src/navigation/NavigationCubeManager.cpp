@@ -164,6 +164,10 @@ void NavigationCubeManager::initCube() {
 							// Ensure reasonable near/far planes (similar to setView)
 							mainCamera->nearDistance.setValue(0.001f);
 							mainCamera->farDistance.setValue(10000.0f);
+
+							// CRITICAL: Call viewAll to ensure scene objects are visible (same as setView)
+							SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
+							mainCamera->viewAll(m_sceneManager->getSceneRoot(), viewport, 1.1f);
 						}
 
 						// Use the same refresh pattern as setView method

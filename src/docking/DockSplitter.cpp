@@ -155,18 +155,16 @@ void DockSplitter::OnSplitterSashPosChanged(wxSplitterEvent& event) {
         container->markUserAdjustedLayout();
     }
 
-    // Force refresh of all child windows after splitter position change
+    // Optimized refresh - only refresh affected regions
     if (GetWindow1()) {
-        GetWindow1()->Refresh();
-        GetWindow1()->Update();
+        GetWindow1()->RefreshRect(GetWindow1()->GetClientRect(), false);
     }
     if (GetWindow2()) {
-        GetWindow2()->Refresh();
-        GetWindow2()->Update();
+        GetWindow2()->RefreshRect(GetWindow2()->GetClientRect(), false);
     }
-
-    // Refresh the splitter itself
-    Refresh();
+    
+    // Refresh only the splitter area
+    RefreshRect(GetClientRect(), false);
     Update();
 
     event.Skip();

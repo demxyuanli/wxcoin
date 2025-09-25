@@ -555,24 +555,23 @@ int DockContainerWidget::getConfiguredAreaSize(DockWidgetArea area) const {
     }
 
     const DockLayoutConfig& config = m_dockManager->getLayoutConfig();
+    wxSize containerSize = GetSize();
 
-    if (config.usePercentage) {
-        // Calculate from percentage
-        wxSize containerSize = GetSize();
-        switch (area) {
-        case TopDockWidgetArea:
-            return containerSize.GetHeight() * config.topAreaPercent / 100;
-        case BottomDockWidgetArea:
-            return containerSize.GetHeight() * config.bottomAreaPercent / 100;
-        case LeftDockWidgetArea:
-            return containerSize.GetWidth() * config.leftAreaPercent / 100;
-        case RightDockWidgetArea:
-            return containerSize.GetWidth() * config.rightAreaPercent / 100;
-        default:
-            return 250;
-        }
-    } else {
-        // Use pixel values
+    // New logic: calculate sizes based on fixed-size docks
+    return calculateAreaSizeBasedOnFixedDocks(area, containerSize, config);
+}
+
+int DockContainerWidget::calculateAreaSizeBasedOnFixedDocks(DockWidgetArea area, 
+                                                           const wxSize& containerSize, 
+                                                           const DockLayoutConfig& config) const {
+    // Determine which docks have fixed sizes vs percentage-based sizes
+    bool leftFixed = config.showLeftArea && config.leftAreaFixed;
+    bool rightFixed = config.showRightArea && config.rightAreaFixed;
+    bool topFixed = config.showTopArea && config.topAreaFixed;
+    bool bottomFixed = config.showBottomArea && config.bottomAreaFixed;
+    
+    // If all docks use fixed sizes, just return the configured size
+    if (leftFixed && rightFixed && topFixed && bottomFixed) {
         switch (area) {
         case TopDockWidgetArea: return config.topAreaHeight;
         case BottomDockWidgetArea: return config.bottomAreaHeight;
@@ -581,6 +580,100 @@ int DockContainerWidget::getConfiguredAreaSize(DockWidgetArea area) const {
         default: return 250;
         }
     }
+    
+    // Calculate available space after fixed docks
+    int availableWidth = containerSize.GetWidth();
+    int availableHeight = containerSize.GetHeight();
+    
+    // Subtract fixed dock sizes
+    if (leftFixed) availableWidth -= config.leftAreaWidth;
+    if (rightFixed) availableWidth -= config.rightAreaWidth;
+    if (topFixed) availableHeight -= config.topAreaHeight;
+    if (bottomFixed) availableHeight -= config.bottomAreaHeight;
+    
+    // Ensure minimum available space
+    availableWidth = std::max(availableWidth, 240);
+    availableHeight = std::max(availableHeight, 200);
+    
+    // Calculate percentage-based dock sizes from remaining space
+    switch (area) {
+    case TopDockWidgetArea:
+        if (topFixed) {
+            return config.topAreaHeight;
+        } else if (config.showTopArea) {
+            return availableHeight * config.topAreaPercent / 100;
+        }
+        return 0;
+        
+    case BottomDockWidgetArea:
+        if (bottomFixed) {
+            return config.bottomAreaHeight;
+        } else if (config.showBottomArea) {
+            return availableHeight * config.bottomAreaPercent / 100;
+        }
+        return 0;
+        
+    case LeftDockWidgetArea:
+        if (leftFixed) {
+            return config.leftAreaWidth;
+        } else if (config.showLeftArea) {
+            return availableWidth * config.leftAreaPercent / 100;
+        }
+        return 0;
+        
+    case RightDockWidgetArea:
+        if (rightFixed) {
+            return config.rightAreaWidth;
+        } else if (config.showRightArea) {
+            return availableWidth * config.rightAreaPercent / 100;
+        }
+        return 0;
+        
+    default:
+        return 250;
+    }
+}
+
+bool DockContainerWidget::isLeftDockSplitter(DockSplitter* splitter) const {
+    if (!splitter || !splitter->IsSplit()) {
+        return false;
+    }
+    
+    // Check if this is the root splitter that controls left dock
+    DockSplitter* rootSplitter = dynamic_cast<DockSplitter*>(m_rootSplitter);
+    if (splitter == rootSplitter && splitter->GetSplitMode() == wxSPLIT_VERTICAL) {
+        // For left dock, we assume the first window is the left dock area
+        // This is a simplified heuristic based on typical layout patterns
+        return true;
+    }
+    
+    return false;
+}
+
+bool DockContainerWidget::isBottomDockSplitter(DockSplitter* splitter) const {
+    if (!splitter || !splitter->IsSplit()) {
+        return false;
+    }
+    
+    // Check if this splitter controls bottom dock based on layout structure
+    if (splitter->GetSplitMode() == wxSPLIT_HORIZONTAL) {
+        // Check if this is the main horizontal splitter (controls top/bottom)
+        DockSplitter* rootSplitter = dynamic_cast<DockSplitter*>(m_rootSplitter);
+        if (splitter == rootSplitter) {
+            return true;
+        }
+        
+        // Also check nested horizontal splitters
+        wxWindow* parent = splitter->GetParent();
+        DockSplitter* parentSplitter = dynamic_cast<DockSplitter*>(parent);
+        if (parentSplitter && parentSplitter->GetSplitMode() == wxSPLIT_VERTICAL) {
+            // This is a nested horizontal splitter inside a vertical splitter
+            // It likely controls bottom dock
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 wxWindow* DockContainerWidget::findOrCreateMiddleLayer(DockSplitter* rootSplitter) {
@@ -924,7 +1017,9 @@ void DockContainerWidget::applyLayoutConfig() {
         if (DockSplitter* subSplitter = dynamic_cast<DockSplitter*>(w2)) {
             // This is likely [Left | [Center | Right]] layout
             if (config.showLeftArea) {
-                int leftWidth = containerSize.GetWidth() * config.leftAreaPercent / 100;
+                // Use new layout calculation system
+                int leftWidth = calculateAreaSizeBasedOnFixedDocks(LeftDockWidgetArea, containerSize, config);
+                leftWidth = std::max(leftWidth, 240); // Ensure minimum width
                 rootSplitter->SetSashPosition(leftWidth);
             }
 
@@ -940,10 +1035,12 @@ void DockContainerWidget::applyLayoutConfig() {
         } else {
             // Simple left/right split
             if (config.showLeftArea) {
-                int leftWidth = containerSize.GetWidth() * config.leftAreaPercent / 100;
+                // Use new layout calculation system
+                int leftWidth = calculateAreaSizeBasedOnFixedDocks(LeftDockWidgetArea, containerSize, config);
+                leftWidth = std::max(leftWidth, 240); // Ensure minimum width
                 rootSplitter->SetSashPosition(leftWidth);
             } else if (config.showRightArea) {
-                int rightWidth = containerSize.GetWidth() * config.rightAreaPercent / 100;
+                int rightWidth = calculateAreaSizeBasedOnFixedDocks(RightDockWidgetArea, containerSize, config);
                 rootSplitter->SetSashPosition(containerSize.GetWidth() - rightWidth);
             }
         }
@@ -970,32 +1067,41 @@ void DockContainerWidget::applyProportionalResize(const wxSize& oldSize, const w
         return;
     }
     
-    // Calculate scale factors
-    double scaleX = static_cast<double>(newSize.GetWidth()) / oldSize.GetWidth();
-    double scaleY = static_cast<double>(newSize.GetHeight()) / oldSize.GetHeight();
+    std::vector<wxRect> dirtyRects;
+    const DockLayoutConfig& config = m_dockManager ? m_dockManager->getLayoutConfig() : DockLayoutConfig();
     
-    // Apply proportional scaling to all cached splitter ratios
+    // Apply proportional scaling to cached splitter ratios, but skip fixed-size docks
     for (auto& ratio : m_splitterRatios) {
-        if (!ratio.isValid || !ratio.splitter) {
+        if (!ratio.isValid || !ratio.splitter || ratio.splitter->IsBeingDeleted() ||
+            !ratio.splitter->GetParent()) {
             continue;
         }
         
         DockSplitter* splitter = dynamic_cast<DockSplitter*>(ratio.splitter);
-        if (!splitter) {
+        if (!splitter || !splitter->IsSplit() || !splitter->GetWindow1() || !splitter->GetWindow2()) {
             continue;
         }
-        // Extra safety: skip if window being destroyed or detached
-        if (splitter->IsBeingDeleted()) {
-            continue;
+        
+        // Check if this splitter controls a fixed-size dock
+        bool skipThisSplitter = false;
+        if (splitter->GetSplitMode() == wxSPLIT_VERTICAL) {
+            // Vertical splitter controls left/right docks
+            // Check if left dock is fixed and this splitter is the main left splitter
+            if (config.showLeftArea && config.leftAreaFixed && 
+                isLeftDockSplitter(splitter)) {
+                skipThisSplitter = true;
+            }
+        } else {
+            // Horizontal splitter controls top/bottom docks
+            // Check if bottom dock is fixed and this splitter is the main bottom splitter
+            if (config.showBottomArea && config.bottomAreaFixed && 
+                isBottomDockSplitter(splitter)) {
+                skipThisSplitter = true;
+            }
         }
-        if (!splitter->GetParent()) {
-            continue;
-        }
-        if (!splitter->GetWindow1() || !splitter->GetWindow2()) {
-            continue;
-        }
-        if (!splitter->IsSplit()) {
-            continue;
+        
+        if (skipThisSplitter) {
+            continue; // Skip fixed-size dock splitters
         }
         
         // Calculate new position based on scale factor
@@ -1019,6 +1125,9 @@ void DockContainerWidget::applyProportionalResize(const wxSize& oldSize, const w
         
         newPosition = std::max(minSize, std::min(newPosition, maxPosition));
         
+        // Store dirty region before applying new position
+        dirtyRects.push_back(splitter->GetRect());
+        
         // Apply new position
         splitter->SetSashPosition(newPosition);
     }
@@ -1026,9 +1135,10 @@ void DockContainerWidget::applyProportionalResize(const wxSize& oldSize, const w
     // Update layout without full refresh
     Layout();
     
-    // Use RefreshRect for better performance
-    wxRect dirtyRect = GetClientRect();
-    RefreshRect(dirtyRect, false);
+    // Only refresh dirty regions instead of entire client rect
+    for (const auto& rect : dirtyRects) {
+        RefreshRect(rect, false);
+    }
 }
 
 void DockContainerWidget::cacheSplitterRatios() {

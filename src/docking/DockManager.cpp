@@ -2,6 +2,7 @@
 #include "docking/DockWidget.h"
 #include "docking/DockArea.h"
 #include "docking/DockContainerWidget.h"
+#include "docking/DockContainerOptimized.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/DockOverlay.h"
 #include "docking/AutoHideContainer.h"
@@ -38,8 +39,8 @@ DockManager::DockManager(wxWindow* parent)
     , m_lastMousePos(wxDefaultPosition)
     , m_isProcessingDrag(false)
 {
-    // Create the main container widget
-    m_containerWidget = new DockContainerWidget(this, parent);
+    // Create the main container widget with optimized performance
+    m_containerWidget = new DockContainerOptimized(this, parent);
 
     // Create overlays for drag and drop with better performance
     m_dockOverlay = new DockOverlay(m_containerWidget);

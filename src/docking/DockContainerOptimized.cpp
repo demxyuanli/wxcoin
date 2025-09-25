@@ -4,6 +4,7 @@
 #include "docking/DockLayoutConfig.h"
 #include "logger/Logger.h"
 #include <wx/dcbuffer.h>
+#include <wx/stopwatch.h>
 
 namespace ads {
 
@@ -15,6 +16,7 @@ DockContainerOptimized::DockContainerOptimized(DockManager* dockManager, wxWindo
     : DockContainerWidget(dockManager, parent)
     , m_lastResizeTime(std::chrono::steady_clock::now())
     , m_cachedSize(0, 0)
+    , m_resizeThrottleMs(75) // Increased from 16ms to 75ms for better performance
 {
     // Enable optimizations
     SetBackgroundStyle(wxBG_STYLE_PAINT); // Prevent automatic background erase
@@ -45,7 +47,7 @@ void DockContainerOptimized::onSize(wxSizeEvent& event) {
     auto timeSinceLastResize = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - m_lastResizeTime).count();
     
-    // Throttle resize processing
+    // Throttle resize processing - increased to 75ms for better performance
     if (timeSinceLastResize < m_resizeThrottleMs) {
         m_pendingResizeCount++;
         event.Skip();
@@ -59,8 +61,18 @@ void DockContainerOptimized::onSize(wxSizeEvent& event) {
     wxSize oldSize = m_cachedSize;
     m_cachedSize = newSize;
     
-    // Process resize with optimizations
+    // Batch updates with Freeze/Thaw to reduce flicker
+    wxStopWatch stopwatch;
+    Freeze();
     processResize();
+    Thaw();
+    
+    // Performance monitoring - log if resize takes too long
+    long elapsed = stopwatch.Time();
+    if (elapsed > 20) { // Log if resize takes more than 20ms
+        wxLogDebug("DockContainerOptimized::onSize took %ldms (size: %dx%d)", 
+                   elapsed, newSize.x, newSize.y);
+    }
     
     m_resizeInProgress = false;
     m_pendingResizeCount = 0;
@@ -91,13 +103,13 @@ void DockContainerOptimized::updateLayoutIncremental() {
     wxSize containerSize = GetSize();
     
     // Only update splitters that actually need adjustment
-    if (m_layoutConfig && m_layoutConfig->usePercentage) {
-        // Calculate target positions once
-        int targetLeftWidth = (containerSize.x * m_layoutConfig->leftAreaPercent) / 100;
-        int targetBottomHeight = (containerSize.y * m_layoutConfig->bottomAreaPercent) / 100;
+    if (m_layoutConfig) {
+        // Use the new layout calculation system
+        int targetLeftWidth = calculateAreaSizeBasedOnFixedDocks(LeftDockWidgetArea, containerSize, *m_layoutConfig);
+        int targetBottomHeight = calculateAreaSizeBasedOnFixedDocks(BottomDockWidgetArea, containerSize, *m_layoutConfig);
         
         // Ensure minimum widths
-        targetLeftWidth = std::max(targetLeftWidth, 200);
+        targetLeftWidth = std::max(targetLeftWidth, 240);
         
         // Find and adjust only the main splitters
         if (DockSplitter* rootSplitter = dynamic_cast<DockSplitter*>(m_rootSplitter)) {
@@ -153,13 +165,23 @@ void DockContainerOptimized::schedulePaintRegions() {
 
 bool DockContainerOptimized::shouldSkipLayout() const {
     // Skip layout if we're in the middle of multiple rapid resizes
-    if (m_pendingResizeCount > 5) {
+    if (m_pendingResizeCount > 3) { // Reduced from 5 to 3 for more responsive UI
         return true;
     }
     
     // Skip if size is too small
     wxSize size = GetSize();
     if (size.x < 100 || size.y < 100) {
+        return true;
+    }
+    
+    // Skip if resize is in progress to avoid recursive calls
+    if (m_resizeInProgress) {
+        return true;
+    }
+    
+    // Skip if container is being destroyed
+    if (IsBeingDeleted()) {
         return true;
     }
     
@@ -170,6 +192,25 @@ void DockContainerOptimized::adjustSplitterEfficient(DockSplitter* splitter,
                                                     int targetLeftWidth, 
                                                     int targetBottomHeight) {
     if (!splitter || !splitter->IsSplit()) {
+        return;
+    }
+    
+    // Check if this splitter controls a fixed-size dock
+    bool isFixedSizeSplitter = false;
+    if (m_layoutConfig) {
+        if (splitter->GetSplitMode() == wxSPLIT_VERTICAL && 
+            m_layoutConfig->showLeftArea && m_layoutConfig->leftAreaFixed &&
+            isLeftDockSplitter(splitter)) {
+            isFixedSizeSplitter = true;
+        } else if (splitter->GetSplitMode() == wxSPLIT_HORIZONTAL && 
+                   m_layoutConfig->showBottomArea && m_layoutConfig->bottomAreaFixed &&
+                   isBottomDockSplitter(splitter)) {
+            isFixedSizeSplitter = true;
+        }
+    }
+    
+    // Don't adjust fixed-size dock splitters
+    if (isFixedSizeSplitter) {
         return;
     }
     

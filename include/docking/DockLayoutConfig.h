@@ -16,14 +16,20 @@ class DockLayoutPreview;
 struct DockLayoutConfig {
     // Default sizes for each area (in pixels or percentage)
     int topAreaHeight = 150;
-    int bottomAreaHeight = 200;
-    int leftAreaWidth = 200;     // Minimum width for left area (15/85 layout)
+    int bottomAreaHeight = 200;   // Fixed bottom dock height
+    int leftAreaWidth = 240;      // Fixed left dock width
     int rightAreaWidth = 250;
     int centerMinWidth = 400;
     int centerMinHeight = 300;
     
     // Use percentage instead of pixels
     bool usePercentage = true;    // Default to true for 15/85 layout
+    
+    // Fixed size flags - which docks use fixed sizes vs percentages
+    bool leftAreaFixed = true;     // Left dock uses fixed size (240px)
+    bool rightAreaFixed = false;   // Right dock uses percentage
+    bool topAreaFixed = false;     // Top dock uses percentage
+    bool bottomAreaFixed = true;   // Bottom dock uses fixed size (200px)
     
     // Percentage values (0-100)
     int topAreaPercent = 0;     // No top area for clean 15/85 layout
@@ -58,6 +64,10 @@ struct DockLayoutConfig {
                centerMinWidth == other.centerMinWidth &&
                centerMinHeight == other.centerMinHeight &&
                usePercentage == other.usePercentage &&
+               leftAreaFixed == other.leftAreaFixed &&
+               rightAreaFixed == other.rightAreaFixed &&
+               topAreaFixed == other.topAreaFixed &&
+               bottomAreaFixed == other.bottomAreaFixed &&
                topAreaPercent == other.topAreaPercent &&
                bottomAreaPercent == other.bottomAreaPercent &&
                leftAreaPercent == other.leftAreaPercent &&

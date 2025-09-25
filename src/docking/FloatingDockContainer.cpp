@@ -3,6 +3,7 @@
 #include "docking/DockArea.h"
 #include "docking/DockManager.h"
 #include "docking/DockContainerWidget.h"
+#include "docking/DockContainerOptimized.h"
 #include "docking/DockOverlay.h"
 #include "config/ThemeManager.h"
 #include <wx/dcmemory.h>
@@ -119,8 +120,8 @@ void FloatingDockContainer::init() {
     // Set background style for custom drawing
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     
-    // Create dock container
-    m_dockContainer = new DockContainerWidget(m_dockManager, this);
+    // Create dock container with optimized performance
+    m_dockContainer = new DockContainerOptimized(m_dockManager, this);
     m_dockContainer->setFloatingWidget(this);
 
     // Set up layout to make dock container fill the entire window

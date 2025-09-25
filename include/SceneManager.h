@@ -32,6 +32,7 @@ public:
 	bool screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos);
 
 	SoSeparator* getObjectRoot() const override { return m_objectRoot; }
+	SoSeparator* getSceneRoot() const { return m_sceneRoot; }
 	SoCamera* getCamera() const override { return m_camera; }
 	PickingAidManager* getPickingAidManager() const { return m_pickingAidManager.get(); }
 

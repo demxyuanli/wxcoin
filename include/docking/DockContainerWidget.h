@@ -77,6 +77,15 @@ public:
     
     // Helper for collecting splitter ratios
     void collectSplitterRatios(wxWindow* window);
+    
+    // New layout calculation based on fixed docks
+    int calculateAreaSizeBasedOnFixedDocks(DockWidgetArea area, 
+                                          const wxSize& containerSize, 
+                                          const DockLayoutConfig& config) const;
+    
+    // Helper methods to identify splitters that control fixed docks
+    bool isLeftDockSplitter(DockSplitter* splitter) const;
+    bool isBottomDockSplitter(DockSplitter* splitter) const;
 
     // Global docking support
     void enableGlobalDockingMode(bool enable);
