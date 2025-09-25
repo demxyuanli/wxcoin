@@ -50,7 +50,7 @@ private:
 	void initCube();
 
 	struct Layout {
-		int x{ 20 }, y{ 20 }, size{ 280 };
+		int x{ 20 }, y{ 20 }, cubeSize{ 280 };
 		void update(int newX_logical, int newY_logical, int newSize_logical,
 			const wxSize& windowSize_logical, float dpiScale);
 	} m_cubeLayout;

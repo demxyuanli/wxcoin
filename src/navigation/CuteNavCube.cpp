@@ -889,13 +889,14 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 
 	if (positionChanged) {
 		LOG_INF_S("CuteNavCube::render: Rendering cube at logical position: x=" + std::to_string(x) +
-			", y=" + std::to_string(y) + ", size=" + std::to_string(size.x) + "x" + std::to_string(size.y) +
+			", y=" + std::to_string(y) + ", viewport layout size=" + std::to_string(size.x) + "x" + std::to_string(size.y) +
+			", cube geometric size=" + std::to_string(m_cubeSize) + "x" + std::to_string(m_cubeSize) +
 			", physical position: " + std::to_string(x * m_dpiScale) + "x" +
 			std::to_string(y * m_dpiScale) + " to " +
 			std::to_string((x + size.x) * m_dpiScale) + "x" +
 			std::to_string((y + size.y) * m_dpiScale) +
-			", window: " + std::to_string(m_windowWidth * m_dpiScale) + "x" +
-			std::to_string(m_windowHeight * m_dpiScale) + ", dpiScale: " + std::to_string(m_dpiScale));
+			", window: " + std::to_string(m_windowWidth) + "x" +
+			std::to_string(m_windowHeight) + ", dpiScale: " + std::to_string(m_dpiScale));
 
 		lastX = x;
 		lastY = y;
@@ -911,6 +912,8 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 	viewport.setWindowSize(SbVec2s(static_cast<short>(m_windowWidth), static_cast<short>(m_windowHeight)));
 
 	// Convert logical coordinates to physical pixels
+	// Convert logical coordinates to physical pixels
+	// size parameter is the layout size (viewport position and size)
 	int xPx = static_cast<int>(x * m_dpiScale);
 	int yPx = static_cast<int>(y * m_dpiScale);
 	int widthPx = static_cast<int>(size.x * m_dpiScale);

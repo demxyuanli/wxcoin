@@ -15,10 +15,10 @@
 void NavigationCubeManager::Layout::update(int newX_logical, int newY_logical, int newSize_logical,
 	const wxSize& windowSize_logical, float dpiScale)
 {
-	size = (std::max)(120, (std::min)(newSize_logical, windowSize_logical.x / 2));
-	size = (std::max)(120, (std::min)(size, windowSize_logical.y / 2));
-	x = (std::max)(0, (std::min)(newX_logical, windowSize_logical.x - size));
-	y = (std::max)(0, (std::min)(newY_logical, windowSize_logical.y - size));
+	cubeSize = (std::max)(120, (std::min)(newSize_logical, windowSize_logical.x / 2));
+	cubeSize = (std::max)(120, (std::min)(cubeSize, windowSize_logical.y / 2));
+	x = (std::max)(0, (std::min)(newX_logical, windowSize_logical.x - cubeSize));
+	y = (std::max)(0, (std::min)(newY_logical, windowSize_logical.y - cubeSize));
 }
 
 NavigationCubeManager::NavigationCubeManager(Canvas* canvas, SceneManager* sceneManager)
@@ -200,9 +200,9 @@ void NavigationCubeManager::initCube() {
 		if (clientSize.x > 0 && clientSize.y > 0) {
 			// Use loaded configuration size or default
 			if (m_cubeConfig.size > 0) {
-				m_cubeLayout.size = m_cubeConfig.size;
+				m_cubeLayout.cubeSize = m_cubeConfig.size;
 			} else {
-			m_cubeLayout.size = 280;
+			m_cubeLayout.cubeSize = 280;
 				m_cubeConfig.size = 280;
 			}
 
@@ -217,32 +217,32 @@ void NavigationCubeManager::initCube() {
 		int cubeX, cubeY;
 		if (m_cubeConfig.x >= 0 && m_cubeConfig.y >= 0) {
 			// Use loaded position - convert from margins to coordinates
-			cubeX = clientSize.x - m_cubeLayout.size - m_cubeConfig.x;
+			cubeX = clientSize.x - m_cubeLayout.cubeSize - m_cubeConfig.x;
 			cubeY = m_cubeConfig.y;
 			LOG_INF_S("NavigationCubeManager: Using config margins - right margin: " + std::to_string(m_cubeConfig.x) +
 				", top margin: " + std::to_string(m_cubeConfig.y) +
 				", clientSize: " + std::to_string(clientSize.x) + "x" + std::to_string(clientSize.y) +
-				", cubeSize: " + std::to_string(m_cubeLayout.size) +
+				", cubeSize: " + std::to_string(m_cubeLayout.cubeSize) +
 				" -> calculated position: x=" + std::to_string(cubeX) + ", y=" + std::to_string(cubeY) +
-				" (formula: " + std::to_string(clientSize.x) + " - " + std::to_string(m_cubeLayout.size) + " - " + std::to_string(m_cubeConfig.x) + " = " + std::to_string(cubeX) + ")");
+				" (formula: " + std::to_string(clientSize.x) + " - " + std::to_string(m_cubeLayout.cubeSize) + " - " + std::to_string(m_cubeConfig.x) + " = " + std::to_string(cubeX) + ")");
 		} else {
 			// Calculate centered position as fallback
-			calculateCenteredPosition(cubeX, cubeY, m_cubeLayout.size, clientSize);
+			calculateCenteredPosition(cubeX, cubeY, m_cubeLayout.cubeSize, clientSize);
 			m_cubeConfig.x = cubeX;
 			m_cubeConfig.y = cubeY;
 			LOG_INF_S("NavigationCubeManager: Calculated fallback position - x=" + std::to_string(cubeX) +
-				", y=" + std::to_string(cubeY) + ", size=" + std::to_string(m_cubeLayout.size));
+				", y=" + std::to_string(cubeY) + ", size=" + std::to_string(m_cubeLayout.cubeSize));
 		}
 
 			// Update layout with position from config
-			m_cubeLayout.update(cubeX, cubeY, m_cubeLayout.size, clientSize, dpiScale);
+			m_cubeLayout.update(cubeX, cubeY, m_cubeLayout.cubeSize, clientSize, dpiScale);
 
 			LOG_INF_S("NavigationCubeManager: Initialized navigation cube at position: x=" + std::to_string(m_cubeLayout.x) +
-				", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size) +
+				", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.cubeSize) +
 				", physical pixels: " + std::to_string(m_cubeLayout.x * dpiScale) + "x" +
 				std::to_string(m_cubeLayout.y * dpiScale) + " to " +
-				std::to_string((m_cubeLayout.x + m_cubeLayout.size) * dpiScale) + "x" +
-				std::to_string((m_cubeLayout.y + m_cubeLayout.size) * dpiScale));
+				std::to_string((m_cubeLayout.x + m_cubeLayout.cubeSize) * dpiScale) + "x" +
+				std::to_string((m_cubeLayout.y + m_cubeLayout.cubeSize) * dpiScale));
 		}
 	}
 	catch (const std::exception& e) {
@@ -272,7 +272,7 @@ void NavigationCubeManager::render() {
 
 		wxSize currentClientSize = m_canvas->GetClientSize();
 		wxPoint currentPosition(m_cubeLayout.x, m_cubeLayout.y);
-		int currentSize = m_cubeLayout.size;
+		int currentSize = m_cubeLayout.cubeSize;
 
 		bool shouldLog = (currentClientSize != lastClientSize) ||
 		                (currentPosition != lastPosition) ||
@@ -283,18 +283,18 @@ void NavigationCubeManager::render() {
 			LOG_INF_S(std::string("NavigationCubeManager::render: Cube position updated - ") +
 				"clientSize: " + std::to_string(currentClientSize.x) + "x" + std::to_string(currentClientSize.y) +
 				", position: x=" + std::to_string(m_cubeLayout.x) + ", y=" + std::to_string(m_cubeLayout.y) +
-				", size=" + std::to_string(m_cubeLayout.size) +
+				", size=" + std::to_string(m_cubeLayout.cubeSize) +
 				", physical: " + std::to_string(m_cubeLayout.x * dpiScale) + "x" +
 				std::to_string(m_cubeLayout.y * dpiScale) + " to " +
-				std::to_string((m_cubeLayout.x + m_cubeLayout.size) * dpiScale) + "x" +
-				std::to_string((m_cubeLayout.y + m_cubeLayout.size) * dpiScale));
+				std::to_string((m_cubeLayout.x + m_cubeLayout.cubeSize) * dpiScale) + "x" +
+				std::to_string((m_cubeLayout.y + m_cubeLayout.cubeSize) * dpiScale));
 
 			lastClientSize = currentClientSize;
 			lastPosition = currentPosition;
 			lastSize = currentSize;
 		}
 
-		m_navCube->render(m_cubeLayout.x, m_cubeLayout.y, wxSize(m_cubeLayout.size, m_cubeLayout.size));
+		m_navCube->render(m_cubeLayout.x, m_cubeLayout.y, wxSize(m_cubeLayout.cubeSize, m_cubeLayout.cubeSize));
 	}
 }
 
@@ -307,13 +307,13 @@ bool NavigationCubeManager::handleMouseEvent(wxMouseEvent& event) {
 	float x = event.GetX() / dpiScale;
 	float y = event.GetY() / dpiScale;
 
-	if (x >= m_cubeLayout.x && x < (m_cubeLayout.x + m_cubeLayout.size) &&
-		y >= m_cubeLayout.y && y < (m_cubeLayout.y + m_cubeLayout.size)) {
+	if (x >= m_cubeLayout.x && x < (m_cubeLayout.x + m_cubeLayout.cubeSize) &&
+		y >= m_cubeLayout.y && y < (m_cubeLayout.y + m_cubeLayout.cubeSize)) {
 		wxMouseEvent cubeEvent(event);
 		cubeEvent.m_x = static_cast<int>((x - m_cubeLayout.x) * dpiScale);
 		cubeEvent.m_y = static_cast<int>((y - m_cubeLayout.y) * dpiScale);
 
-		int scaled_cube_dimension = static_cast<int>(m_cubeLayout.size * dpiScale);
+		int scaled_cube_dimension = static_cast<int>(m_cubeLayout.cubeSize * dpiScale);
 		wxSize cube_viewport_scaled_size(scaled_cube_dimension, scaled_cube_dimension);
 
 		if (event.GetEventType() == wxEVT_LEFT_DOWN ||
@@ -334,22 +334,22 @@ void NavigationCubeManager::handleSizeChange() {
 	LOG_INF_S("NavigationCubeManager::handleSizeChange: Window size changed to " +
 		std::to_string(size.x) + "x" + std::to_string(size.y) +
 		", dpiScale: " + std::to_string(dpiScale) +
-		", current cube size: " + std::to_string(m_cubeLayout.size) +
+		", current cube size: " + std::to_string(m_cubeLayout.cubeSize) +
 		", margins: " + std::to_string(m_marginx) + "x" + std::to_string(m_marginy));
 
 	// Update cube layout with logical coordinates
-	m_cubeLayout.update(size.x - m_cubeLayout.size - m_marginx,
+	m_cubeLayout.update(size.x - m_cubeLayout.cubeSize - m_marginx,
 		m_marginy,
-		m_cubeLayout.size, size, dpiScale);
+		m_cubeLayout.cubeSize, size, dpiScale);
 
 	LOG_INF_S(std::string("NavigationCubeManager::handleSizeChange: Cube repositioned - ") +
 		"clientSize: " + std::to_string(size.x) + "x" + std::to_string(size.y) +
-		", cubeSize: " + std::to_string(m_cubeLayout.size) +
+		", cubeSize: " + std::to_string(m_cubeLayout.cubeSize) +
 		", margins: " + std::to_string(m_marginx) + "x" + std::to_string(m_marginy) +
-		", calculated position: x=" + std::to_string(size.x) + " - " + std::to_string(m_cubeLayout.size) + " - " + std::to_string(m_marginx) + " = " +
-		std::to_string(size.x - m_cubeLayout.size - m_marginx) +
+		", calculated position: x=" + std::to_string(size.x) + " - " + std::to_string(m_cubeLayout.cubeSize) + " - " + std::to_string(m_marginx) + " = " +
+		std::to_string(size.x - m_cubeLayout.cubeSize - m_marginx) +
 		", y=" + std::to_string(m_marginy) +
-		", final position: x=" + std::to_string(m_cubeLayout.x) + ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.size));
+		", final position: x=" + std::to_string(m_cubeLayout.x) + ", y=" + std::to_string(m_cubeLayout.y) + ", size=" + std::to_string(m_cubeLayout.cubeSize));
 
 	// Update cube's window size with physical dimensions
 	if (m_navCube) {
@@ -420,7 +420,7 @@ void NavigationCubeManager::setRect(int x, int y, int size) {
 	LOG_INF_S("NavigationCubeManager::setRect: Set navigation cube rect - input: x=" + std::to_string(x) +
 		", y=" + std::to_string(y) + ", size=" + std::to_string(size) +
 		", final: x=" + std::to_string(m_cubeLayout.x) + ", y=" + std::to_string(m_cubeLayout.y) +
-		", size=" + std::to_string(m_cubeLayout.size) +
+		", size=" + std::to_string(m_cubeLayout.cubeSize) +
 		", clientSize: " + std::to_string(clientSize.x) + "x" + std::to_string(clientSize.y) +
 		", dpiScale: " + std::to_string(dpiScale));
 }
@@ -450,13 +450,13 @@ void NavigationCubeManager::setViewportSize(int size) {
 	float dpiScale = m_canvas->getDPIScale();
 
 	// Log before changes
-	LOG_INF_S("NavigationCubeManager::setViewportSize: Changing size from " + std::to_string(m_cubeLayout.size) +
+	LOG_INF_S("NavigationCubeManager::setViewportSize: Changing size from " + std::to_string(m_cubeLayout.cubeSize) +
 		" to " + std::to_string(size) +
 		", clientSize: " + std::to_string(clientSize.x) + "x" + std::to_string(clientSize.y) +
 		", dpiScale: " + std::to_string(dpiScale));
 
 	// Update layout size
-	m_cubeLayout.size = size;
+	m_cubeLayout.cubeSize = size;
 
 	// Recalculate position to maintain centering
 	int centeredX, centeredY;
@@ -470,8 +470,8 @@ void NavigationCubeManager::setViewportSize(int size) {
 		", repositioned to x=" + std::to_string(m_cubeLayout.x) + ", y=" + std::to_string(m_cubeLayout.y) +
 		", physical pixels: " + std::to_string(m_cubeLayout.x * dpiScale) + "x" +
 		std::to_string(m_cubeLayout.y * dpiScale) + " to " +
-		std::to_string((m_cubeLayout.x + m_cubeLayout.size) * dpiScale) + "x" +
-		std::to_string((m_cubeLayout.y + m_cubeLayout.size) * dpiScale));
+		std::to_string((m_cubeLayout.x + m_cubeLayout.cubeSize) * dpiScale) + "x" +
+		std::to_string((m_cubeLayout.y + m_cubeLayout.cubeSize) * dpiScale));
 
 	m_canvas->Refresh(true);
 }
@@ -554,8 +554,18 @@ void NavigationCubeManager::showConfigDialog() {
 	int clientWidthLogical = static_cast<int>(clientSize.x / dpiScale);
 	int clientHeightLogical = static_cast<int>(clientSize.y / dpiScale);
 
+	// Sync m_cubeConfig with current actual state before opening dialog
+	// This ensures the dialog shows the current cube state, not outdated config
+	CubeConfig currentConfig = m_cubeConfig;
+	
+	// Convert coordinates: X is margin from right edge, Y is margin from top edge
+	currentConfig.x = clientWidthLogical - m_cubeLayout.x - m_cubeLayout.cubeSize; // Right margin
+	currentConfig.y = m_cubeLayout.y; // Top margin
+	currentConfig.size = m_navCube ? m_navCube->getSize() : 140; // Cube geometric size
+	currentConfig.viewportSize = m_cubeLayout.cubeSize; // Layout size in viewport
+
 	// Create dialog with real-time config change callback
-	NavigationCubeConfigDialog dialog(m_canvas->GetParent(), m_cubeConfig, clientWidthLogical, clientHeightLogical,
+	NavigationCubeConfigDialog dialog(m_canvas->GetParent(), currentConfig, clientWidthLogical, clientHeightLogical,
 		[this](const CubeConfig& config) {
 			// Apply configuration changes in real-time
 			setConfig(config);
@@ -593,8 +603,27 @@ void NavigationCubeManager::applyConfig(const CubeConfig& config) {
 		"showTextures: " + std::string(config.showTextures ? "true" : "false"));
 
 	// Apply position and size
-	setRect(config.x, config.y, config.size);
-	setViewportSize(config.viewportSize);
+	// Convert margins to coordinates: X is margin from right edge, Y is margin from top edge
+	wxSize clientSize = m_canvas->GetClientSize();
+	float dpiScale = m_canvas->getDPIScale();
+	int clientWidthLogical = static_cast<int>(clientSize.x / dpiScale);
+	
+	int cubeX = clientWidthLogical - config.x - config.viewportSize; // Convert right margin to X coordinate
+	int cubeY = config.y; // Y is already top margin
+	
+	// Update cube geometric size independently from layout size
+	// size affects cube internal geometry, not layout position
+	if (m_navCube && config.size != m_navCube->getSize()) {
+		m_navCube->setSize(config.size);
+		LOG_INF_S("NavigationCubeManager::applyConfig: Updated cube geometric size to " + std::to_string(config.size) +
+			" (layout viewport size: " + std::to_string(config.viewportSize) + ")");
+	}
+	
+	// Update layout size using viewportSize
+	// viewportSize affects cube position and layout area
+	if (config.viewportSize != m_cubeLayout.cubeSize) {
+		setRect(cubeX, cubeY, config.viewportSize);
+	}
 
 	// Apply colors and material properties to the cube
 	if (m_navCube) {
@@ -605,7 +634,7 @@ void NavigationCubeManager::applyConfig(const CubeConfig& config) {
 	// Refresh display
 	m_canvas->Refresh(true);
 	LOG_INF_S("NavigationCubeManager::applyConfig: Applied new configuration - final position: (" +
-		std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.y) + "), size: " + std::to_string(m_cubeLayout.size));
+		std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.y) + "), size: " + std::to_string(m_cubeLayout.cubeSize));
 }
 
 void NavigationCubeManager::centerCubeInViewport() {
@@ -613,27 +642,27 @@ void NavigationCubeManager::centerCubeInViewport() {
 	float dpiScale = m_canvas->getDPIScale();
 
 	LOG_INF_S("NavigationCubeManager::centerCubeInViewport: Centering cube - current position: (" +
-		std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.y) + "), size: " + std::to_string(m_cubeLayout.size) +
+		std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.y) + "), size: " + std::to_string(m_cubeLayout.cubeSize) +
 		", clientSize: " + std::to_string(clientSize.x) + "x" + std::to_string(clientSize.y) +
 		", dpiScale: " + std::to_string(dpiScale));
 
 	int centeredX, centeredY;
 
-	calculateCenteredPosition(centeredX, centeredY, m_cubeLayout.size, clientSize);
+	calculateCenteredPosition(centeredX, centeredY, m_cubeLayout.cubeSize, clientSize);
 
 	// Update configuration with centered position
 	m_cubeConfig.x = centeredX;
 	m_cubeConfig.y = centeredY;
 
 	// Apply the centered position
-	setRect(centeredX, centeredY, m_cubeLayout.size);
+	setRect(centeredX, centeredY, m_cubeLayout.cubeSize);
 
 	LOG_INF_S("NavigationCubeManager::centerCubeInViewport: Centered cube at x=" +
 		std::to_string(centeredX) + ", y=" + std::to_string(centeredY) +
 		", logical position: " + std::to_string(centeredX * dpiScale) + "x" +
 		std::to_string(centeredY * dpiScale) + " to " +
-		std::to_string((centeredX + m_cubeLayout.size) * dpiScale) + "x" +
-		std::to_string((centeredY + m_cubeLayout.size) * dpiScale));
+		std::to_string((centeredX + m_cubeLayout.cubeSize) * dpiScale) + "x" +
+		std::to_string((centeredY + m_cubeLayout.cubeSize) * dpiScale));
 }
 
 void NavigationCubeManager::calculateCenteredPosition(int& x, int& y, int cubeSize, const wxSize& windowSize) {
