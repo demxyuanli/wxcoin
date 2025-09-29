@@ -2,6 +2,7 @@
 
 #include <wx/event.h>
 #include <Inventor/SbLinear.h>
+#include <Inventor/nodes/SoSeparator.h>
 
 class Canvas;
 class SceneManager;
@@ -37,6 +38,13 @@ public:
     void setZoomSpeedFactor(float factor);
     float getZoomSpeedFactor() const;
 
+    // Rotation center management
+    void setRotationCenter(const SbVec3f& center);
+    void clearRotationCenter();
+    bool hasRotationCenter() const;
+    const SbVec3f& getRotationCenter() const;
+    void pickRotationCenterAtMouse(const wxPoint& mousePos);
+
 private:
     void updateNavigationMode();
     void rotateCamera(const wxPoint& currentPos, const wxPoint& lastPos);
@@ -51,6 +59,17 @@ private:
     bool doSpin();
     void addToLog(const wxPoint& pos, wxLongLong time);
     void moveCursorPosition();
+
+    // Rotation center marker management
+    void createRotationCenterMarker();
+    void updateRotationCenterMarker();
+    void hideRotationCenterMarker();
+
+    // View plane utilities
+    SbVec3f getPointOnViewPlane(const wxPoint& mousePos);
+
+    // Configuration loading
+    void loadMarkerConfig();
 
     Canvas* m_canvas;
     SceneManager* m_sceneManager;
@@ -85,4 +104,22 @@ private:
     };
     std::vector<MovementLog> m_movementLog;
     static const size_t MAX_MOVEMENT_LOG_SIZE = 5;
+
+    // Rotation center management
+    SbVec3f m_rotationCenter;
+    bool m_hasRotationCenter;
+    SoSeparator* m_rotationCenterMarker;
+
+    // Rotation center marker configuration
+    struct MarkerConfig {
+        float radius = 0.15f;
+        float transparency = 0.8f;
+        float red = 1.0f;
+        float green = 0.0f;
+        float blue = 0.0f;
+    } m_markerConfig;
+
+    // Click vs drag detection
+    wxPoint m_clickStartPos;
+    bool m_isPotentialClick;
 };

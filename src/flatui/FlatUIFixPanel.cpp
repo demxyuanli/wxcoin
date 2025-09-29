@@ -62,7 +62,7 @@ FlatUIFixPanel::FlatUIFixPanel(wxWindow* parent, wxWindowID id)
 
 	// Ensure unpin button is on top by default
 	m_unpinButton->Raise();
-
+	 
 	// Create scroll controls (initially hidden)
 	CreateScrollControls();
 

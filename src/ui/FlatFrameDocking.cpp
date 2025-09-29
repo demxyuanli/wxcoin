@@ -573,8 +573,8 @@ DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
 DockWidget* FlatFrameDocking::CreateWebViewDockWidget() {
     DockWidget* dock = new DockWidget("Browser", m_dockManager->containerWidget());
 
-    // Create WebView panel with dock as parent
-    WebViewPanel* webViewPanel = new WebViewPanel(dock, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+    // Create WebView panel with dock as parent - disabled to prevent JavaScript crashes
+    WebViewPanel* webViewPanel = new WebViewPanel(dock, wxID_ANY, wxDefaultPosition, wxDefaultSize, true);
     webViewPanel->SetMinSize(wxSize(400, 300));
 
     dock->setWidget(webViewPanel, ads::DockWidget::ForceNoScrollArea);

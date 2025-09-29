@@ -6,9 +6,10 @@
 
 class WebViewPanel : public wxPanel {
 public:
-    WebViewPanel(wxWindow* parent, wxWindowID id = wxID_ANY, 
-                 const wxPoint& pos = wxDefaultPosition, 
-                 const wxSize& size = wxDefaultSize);
+    WebViewPanel(wxWindow* parent, wxWindowID id = wxID_ANY,
+                 const wxPoint& pos = wxDefaultPosition,
+                 const wxSize& size = wxDefaultSize,
+                 bool disableWebView = false);
     virtual ~WebViewPanel();
 
     // WebView operations
@@ -37,10 +38,15 @@ public:
     void OnSize(wxSizeEvent& event);
 
 private:
+    void LoadFallbackPage();
     void CreateControls();
     void UpdateNavigationButtons();
-    
+    void DisableWebView(const wxString& reason);
+    void CreateStaticPlaceholder();
+
     wxWebView* m_webView;
+    wxStaticText* m_placeholderText;
+    bool m_webViewDisabled;
     wxButton* m_backBtn;
     wxButton* m_forwardBtn;
     wxButton* m_reloadBtn;
