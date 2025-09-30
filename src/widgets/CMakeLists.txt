@@ -17,6 +17,7 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatTreeView.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatEnhancedButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatMessagePanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FramelessModalPopup.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WebViewPanel.cpp
 
     # Modern Docking System
@@ -57,6 +58,7 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatTreeView.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatEnhancedButton.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatMessagePanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/FramelessModalPopup.h
     ${CMAKE_SOURCE_DIR}/include/WebViewPanel.h
 
     # Modern Docking System

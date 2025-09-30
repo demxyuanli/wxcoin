@@ -20,7 +20,7 @@ enum {
     ID_CENTER_CUBE_BUTTON
 };
 
-BEGIN_EVENT_TABLE(NavigationCubeConfigDialog, wxDialog)
+BEGIN_EVENT_TABLE(NavigationCubeConfigDialog, FramelessModalPopup)
 EVT_BUTTON(wxID_OK, NavigationCubeConfigDialog::OnOK)
 EVT_BUTTON(wxID_CANCEL, NavigationCubeConfigDialog::OnCancel)
 EVT_BUTTON(ID_BACKGROUND_COLOR, NavigationCubeConfigDialog::OnChooseBackgroundColor)
@@ -40,16 +40,20 @@ END_EVENT_TABLE()
 
 NavigationCubeConfigDialog::NavigationCubeConfigDialog(wxWindow* parent, const CubeConfig& config, int maxX, int maxY,
 											   ConfigChangedCallback callback)
-    : wxDialog(parent, wxID_ANY, "Navigation Cube Configuration", wxDefaultPosition, wxSize(450, 500))
+    : FramelessModalPopup(parent, "Navigation Cube Configuration", wxSize(450, 500))
     , m_config(config)
     , m_maxX(maxX)
     , m_maxY(maxY)
     , m_configChangedCallback(callback)
 {
+	// Set up title bar with icon
+	SetTitleIcon("cube", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
     
     // Create notebook for tabbed interface
-    wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+    wxNotebook* notebook = new wxNotebook(m_contentPanel, wxID_ANY);
     
     // Create tabs
     wxPanel* positionPanel = new wxPanel(notebook);
@@ -76,11 +80,11 @@ NavigationCubeConfigDialog::NavigationCubeConfigDialog(wxWindow* parent, const C
     
     // Button sizer
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(new wxButton(this, wxID_OK, "OK"), 0, wxRIGHT, 5);
-	buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"));
+    buttonSizer->Add(new wxButton(m_contentPanel, wxID_OK, "OK"), 0, wxRIGHT, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_CANCEL, "Cancel"));
 	mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxBOTTOM, 10);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 	Layout();
 	Centre();
 }

@@ -25,7 +25,7 @@
 #include <OpenCASCADE/TopAbs.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 
-BEGIN_EVENT_TABLE(NormalFixDialog, wxDialog)
+BEGIN_EVENT_TABLE(NormalFixDialog, FramelessModalPopup)
 EVT_LISTBOX(wxID_ANY, NormalFixDialog::onGeometrySelectionChanged)
 EVT_CHECKBOX(wxID_ANY, NormalFixDialog::onSettingsChanged)
 EVT_SPINCTRLDOUBLE(wxID_ANY, NormalFixDialog::onSpinCtrlChanged)
@@ -39,13 +39,17 @@ END_EVENT_TABLE()
 
 NormalFixDialog::NormalFixDialog(wxWindow* parent, OCCViewer* viewer, wxWindowID id, 
                                const wxString& title, const wxPoint& pos, const wxSize& size)
-    : wxDialog(parent, id, title, pos, size, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+    : FramelessModalPopup(parent, title, size),
       m_viewer(viewer) {
     
     if (!m_viewer) {
         wxMessageBox("Viewer is not available", "Error", wxOK | wxICON_ERROR);
         return;
     }
+    
+    // Set up title bar with icon
+    SetTitleIcon("normal", wxSize(20, 20));
+    ShowTitleIcon(true);
     
     createControls();
     updateGeometryInfo();
@@ -56,7 +60,7 @@ void NormalFixDialog::createControls() {
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
     
     // Create notebook for different sections
-    m_notebook = new wxNotebook(this, wxID_ANY);
+    m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
     
     // Create pages
     createInfoPage();
@@ -70,7 +74,7 @@ void NormalFixDialog::createControls() {
     mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 5);
     
     // Create button panel
-    wxPanel* buttonPanel = new wxPanel(this);
+    wxPanel* buttonPanel = new wxPanel(m_contentPanel);
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     
     m_previewButton = new wxButton(buttonPanel, ID_PREVIEW_NORMALS, "Preview Normals");
@@ -89,7 +93,7 @@ void NormalFixDialog::createControls() {
     buttonPanel->SetSizer(buttonSizer);
     mainSizer->Add(buttonPanel, 0, wxEXPAND);
     
-    SetSizer(mainSizer);
+    m_contentPanel->SetSizer(mainSizer);
 }
 
 void NormalFixDialog::createInfoPage() {

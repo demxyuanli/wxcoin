@@ -1,10 +1,12 @@
 #pragma once
 
-#include <wx/wx.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/clrpicker.h>
 #include <wx/spinctrl.h>
+#include <wx/textctrl.h>
+#include <wx/checkbox.h>
 
-class FeatureEdgesParamDialog : public wxDialog {
+class FeatureEdgesParamDialog : public FramelessModalPopup {
 public:
 	explicit FeatureEdgesParamDialog(wxWindow* parent);
 

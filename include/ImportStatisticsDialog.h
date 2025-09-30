@@ -1,6 +1,6 @@
 #pragma once
 
-#include <wx/dialog.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/listctrl.h>
 #include <wx/stattext.h>
 #include <wx/sizer.h>
@@ -116,7 +116,7 @@ struct ImportOverallStatistics {
           meshDeflection(0.0) {}
 };
 
-class ImportStatisticsDialog : public wxDialog
+class ImportStatisticsDialog : public FramelessModalPopup
 {
 public:
     ImportStatisticsDialog(wxWindow* parent, const ImportOverallStatistics& stats);
@@ -140,16 +140,9 @@ private:
     // Controls
     wxNotebook* m_notebook;
 
-    // Summary page
+    // Summary page - Table format
     wxPanel* m_summaryPanel;
-    wxStaticText* m_totalFilesText;
-    wxStaticText* m_successfulFilesText;
-    wxStaticText* m_failedFilesText;
-    wxStaticText* m_totalGeometriesText;
-    wxStaticText* m_totalSizeText;
-    wxStaticText* m_totalTimeText;
-    wxStaticText* m_averageTimeText;
-    wxStaticText* m_successRateText;
+    wxListCtrl* m_summaryList;
 
     // Files page
     wxPanel* m_filesPanel;

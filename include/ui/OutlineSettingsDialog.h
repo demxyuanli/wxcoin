@@ -3,6 +3,7 @@
 #include <wx/wx.h>
 #include <wx/clrpicker.h>
 #include "viewer/ImageOutlinePass.h"
+#include "widgets/FramelessModalPopup.h"
 
 class OutlinePreviewCanvas;
 
@@ -14,7 +15,7 @@ struct ExtendedOutlineParams : public ImageOutlineParams {
 	wxColour geometryColor{ 200, 200, 200 }; // Light gray
 };
 
-class OutlineSettingsDialog : public wxDialog {
+class OutlineSettingsDialog : public FramelessModalPopup {
 public:
 	OutlineSettingsDialog(wxWindow* parent, const ImageOutlineParams& params);
 	ImageOutlineParams getParams() const { return m_params; }

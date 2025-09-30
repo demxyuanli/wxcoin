@@ -1,6 +1,6 @@
 #pragma once
 
-#include <wx/dialog.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/checkbox.h>
 #include <wx/spinctrl.h>
 #include <wx/choice.h>
@@ -10,7 +10,7 @@
 #include <wx/panel.h>
 #include <wx/statbox.h>
 
-class ImportSettingsDialog : public wxDialog
+class ImportSettingsDialog : public FramelessModalPopup
 {
 public:
     ImportSettingsDialog(wxWindow* parent);

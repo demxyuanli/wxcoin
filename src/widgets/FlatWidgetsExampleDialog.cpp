@@ -8,33 +8,26 @@
 #include <wx/notebook.h>
 #include <wx/timer.h>
 
-wxBEGIN_EVENT_TABLE(FlatWidgetsExampleDialog, wxDialog)
+wxBEGIN_EVENT_TABLE(FlatWidgetsExampleDialog, FramelessModalPopup)
 EVT_TIMER(wxID_ANY, FlatWidgetsExampleDialog::OnProgressTimer)
 wxEND_EVENT_TABLE()
 
 FlatWidgetsExampleDialog::FlatWidgetsExampleDialog(wxWindow* parent, const wxString& title)
-	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(1200, 700),
-		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxMAXIMIZE_BOX),
+	: FramelessModalPopup(parent, title, wxSize(1200, 700)),
 	m_notebook(nullptr),
 	m_progressTimer(nullptr)
 {
 	wxLogMessage("FlatWidgetsExampleDialog constructor started");
+
+	// Set up title bar with icon
+	SetTitleIcon("widgets", wxSize(20, 20));
+	ShowTitleIcon(true);
 
 	CreateControls();
 	wxLogMessage("FlatWidgetsExampleDialog controls created");
 
 	LayoutDialog();
 	wxLogMessage("FlatWidgetsExampleDialog layout completed");
-
-	// Center the dialog on the parent
-	if (parent) {
-		CentreOnParent();
-		wxLogMessage("FlatWidgetsExampleDialog centered on parent");
-	}
-	else {
-		Centre();
-		wxLogMessage("FlatWidgetsExampleDialog centered on screen");
-	}
 
 	wxLogMessage("FlatWidgetsExampleDialog constructor completed");
 }
@@ -65,7 +58,7 @@ void FlatWidgetsExampleDialog::CreateControls()
 	m_notebook->AddPage(m_progressPanel, "Progress", false);
 	
 	// Create progress animation timer
-	m_progressTimer = new wxTimer(this, wxID_ANY);
+	m_progressTimer = new wxTimer(m_contentPanel, wxID_ANY);
 	Bind(wxEVT_TIMER, &FlatWidgetsExampleDialog::OnProgressTimer, this);
 }
 
@@ -74,7 +67,7 @@ void FlatWidgetsExampleDialog::LayoutDialog()
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	// Add a title
-	wxStaticText* titleText = new wxStaticText(this, wxID_ANY, "Flat Widgets Example - PyQt-Fluent-Widgets Style");
+	wxStaticText* titleText = new wxStaticText(m_contentPanel, wxID_ANY, "Flat Widgets Example - PyQt-Fluent-Widgets Style");
 	wxFont titleFont = titleText->GetFont();
 	titleFont.SetPointSize(12);
 	titleFont.SetWeight(wxFONTWEIGHT_BOLD);
@@ -86,7 +79,7 @@ void FlatWidgetsExampleDialog::LayoutDialog()
 	mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
 
 	// Add a close button
-	wxButton* closeButton = new wxButton(this, wxID_CLOSE, "Close");
+	wxButton* closeButton = new wxButton(m_contentPanel, wxID_CLOSE, "Close");
 	closeButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
 		Close();
 		});
@@ -97,10 +90,7 @@ void FlatWidgetsExampleDialog::LayoutDialog()
 
 	mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 10);
 
-	SetSizer(mainSizer);
-
-	// Set minimum size
-	SetMinSize(wxSize(800, 500));
+	m_contentPanel->SetSizer(mainSizer);
 }
 
 void FlatWidgetsExampleDialog::OnProgressTimer(wxTimerEvent& event)

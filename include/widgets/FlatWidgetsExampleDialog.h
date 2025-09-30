@@ -6,6 +6,7 @@
 #include <wx/notebook.h>
 #include <wx/timer.h>
 #include "widgets/FlatWidgetsExample.h"
+#include "widgets/FramelessModalPopup.h"
 
 // Forward declarations for category panels
 class FlatWidgetsButtonsPanel;
@@ -13,7 +14,7 @@ class FlatWidgetsInputsPanel;
 class FlatWidgetsSelectionPanel;
 class FlatWidgetsProgressPanel;
 
-class FlatWidgetsExampleDialog : public wxDialog
+class FlatWidgetsExampleDialog : public FramelessModalPopup
 {
 public:
 	FlatWidgetsExampleDialog(wxWindow* parent, const wxString& title = "Flat Widgets Example");

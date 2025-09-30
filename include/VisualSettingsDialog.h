@@ -19,8 +19,9 @@
 #include "config/RenderingConfig.h"
 #include "config/LightingConfig.h"
 #include "GeometryDialogTypes.h"
+#include "widgets/FramelessModalPopup.h"
 
-class VisualSettingsDialog : public wxDialog {
+class VisualSettingsDialog : public FramelessModalPopup {
 public:
 	VisualSettingsDialog(wxWindow* parent, const wxString& title,
 		const BasicGeometryParameters& basicParams = BasicGeometryParameters());

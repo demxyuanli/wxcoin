@@ -11,7 +11,7 @@
 namespace ads {
 
 // Event table for DockLayoutConfigDialog
-wxBEGIN_EVENT_TABLE(DockLayoutConfigDialog, wxDialog)
+wxBEGIN_EVENT_TABLE(DockLayoutConfigDialog, FramelessModalPopup)
     EVT_CHECKBOX(wxID_ANY, DockLayoutConfigDialog::OnCheckChanged)
     EVT_SPINCTRL(wxID_ANY, DockLayoutConfigDialog::OnValueChanged)
     EVT_BUTTON(wxID_APPLY, DockLayoutConfigDialog::OnApply)
@@ -20,18 +20,17 @@ wxEND_EVENT_TABLE()
 
 // DockLayoutConfigDialog implementation
 DockLayoutConfigDialog::DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config, DockManager* dockManager)
-    : wxDialog(parent, wxID_ANY, "Dock Layout Configuration",
-              wxDefaultPosition, wxSize(1200, 700),
-              wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+    : FramelessModalPopup(parent, "Dock Layout Configuration", wxSize(1200, 700))
     , m_config(config)
     , m_dockManager(dockManager)
 {
+    // Set up title bar with icon
+    SetTitleIcon("layout", wxSize(20, 20));
+    ShowTitleIcon(true);
+
     CreateControls();
     UpdateControlStates();
     UpdatePreview();
-
-    // Center on parent
-    CenterOnParent();
 }
 
 void DockLayoutConfigDialog::CreateControls() {
@@ -41,7 +40,7 @@ void DockLayoutConfigDialog::CreateControls() {
     wxBoxSizer* contentSizer = new wxBoxSizer(wxHORIZONTAL);
 
     // Create notebook for organized settings
-    wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+    wxNotebook* notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
     // Size settings page
     wxPanel* sizePage = new wxPanel(notebook);
@@ -68,14 +67,14 @@ void DockLayoutConfigDialog::CreateControls() {
     contentSizer->Add(notebook, 1, wxEXPAND | wxALL, 5);
 
     // Preview panel on right side (50% of width)
-    CreatePreviewPanel(this, contentSizer);
+    CreatePreviewPanel(m_contentPanel, contentSizer);
 
     mainSizer->Add(contentSizer, 1, wxEXPAND);
 
     // Preset buttons
-    wxStaticBoxSizer* presetBox = new wxStaticBoxSizer(wxHORIZONTAL, this, "Quick Presets");
+    wxStaticBoxSizer* presetBox = new wxStaticBoxSizer(wxHORIZONTAL, m_contentPanel, "Quick Presets");
 
-    wxButton* preset2080Btn = new wxButton(this, wxID_HIGHEST + 1, "20/80 Layout");
+    wxButton* preset2080Btn = new wxButton(m_contentPanel, wxID_HIGHEST + 1, "20/80 Layout");
     preset2080Btn->SetToolTip("Left: 20%, Center: 80%");
     preset2080Btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         m_config.usePercentage = true;
@@ -92,7 +91,7 @@ void DockLayoutConfigDialog::CreateControls() {
         UpdatePreview();
     });
 
-    wxButton* preset3Column = new wxButton(this, wxID_HIGHEST + 2, "3-Column");
+    wxButton* preset3Column = new wxButton(m_contentPanel, wxID_HIGHEST + 2, "3-Column");
     preset3Column->SetToolTip("Left: 20%, Center: 60%, Right: 20%");
     preset3Column->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         m_config.usePercentage = true;
@@ -109,7 +108,7 @@ void DockLayoutConfigDialog::CreateControls() {
         UpdatePreview();
     });
 
-    wxButton* presetIDE = new wxButton(this, wxID_HIGHEST + 3, "IDE Layout");
+    wxButton* presetIDE = new wxButton(m_contentPanel, wxID_HIGHEST + 3, "IDE Layout");
     presetIDE->SetToolTip("Classic IDE layout with all panels");
     presetIDE->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
         m_config.usePercentage = true;
@@ -136,10 +135,10 @@ void DockLayoutConfigDialog::CreateControls() {
     // Button sizer
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    wxButton* resetBtn = new wxButton(this, wxID_RESET, "Reset to Defaults");
-    wxButton* applyBtn = new wxButton(this, wxID_APPLY, "Apply");
-    wxButton* okBtn = new wxButton(this, wxID_OK, "OK");
-    wxButton* cancelBtn = new wxButton(this, wxID_CANCEL, "Cancel");
+    wxButton* resetBtn = new wxButton(m_contentPanel, wxID_RESET, "Reset to Defaults");
+    wxButton* applyBtn = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
+    wxButton* okBtn = new wxButton(m_contentPanel, wxID_OK, "OK");
+    wxButton* cancelBtn = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
 
     buttonSizer->Add(resetBtn, 0, wxALL, 5);
     buttonSizer->AddStretchSpacer();
@@ -149,7 +148,7 @@ void DockLayoutConfigDialog::CreateControls() {
 
     mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
 
-    SetSizer(mainSizer);
+    m_contentPanel->SetSizer(mainSizer);
 }
 
 void DockLayoutConfigDialog::CreateSizeControls(wxWindow* parent, wxSizer* sizer) {

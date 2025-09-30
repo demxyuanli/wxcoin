@@ -1,12 +1,16 @@
 #pragma once
 
-#include <wx/wx.h>
+#include "widgets/FramelessModalPopup.h"
 #include "GeometryReader.h"
+#include <wx/checkbox.h>
+#include <wx/choice.h>
+#include <wx/stattext.h>
+#include <wx/panel.h>
 
 /**
  * @brief Dialog for configuring geometry decomposition options
  */
-class GeometryDecompositionDialog : public wxDialog
+class GeometryDecompositionDialog : public FramelessModalPopup
 {
 public:
     /**

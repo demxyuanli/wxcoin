@@ -10,12 +10,13 @@
 #include <wx/panel.h>
 #include <memory>
 #include <string>
+#include "widgets/FramelessModalPopup.h"
 
 // Forward declarations
 class ModernDockManager;
 
 // Dialog for selecting and configuring layout strategies
-class LayoutStrategyDialog : public wxDialog {
+class LayoutStrategyDialog : public FramelessModalPopup {
 public:
 	LayoutStrategyDialog(wxWindow* parent, ModernDockManager* dockManager);
 	~LayoutStrategyDialog() = default;

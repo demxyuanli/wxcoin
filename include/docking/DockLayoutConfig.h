@@ -4,6 +4,7 @@
 #include <wx/spinctrl.h>
 #include <wx/statline.h>
 #include "DockManager.h"
+#include "widgets/FramelessModalPopup.h"
 
 namespace ads {
 
@@ -90,7 +91,7 @@ struct DockLayoutConfig {
 /**
  * @brief Dialog for configuring dock layout
  */
-class DockLayoutConfigDialog : public wxDialog {
+class DockLayoutConfigDialog : public FramelessModalPopup {
 public:
     DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config, DockManager* dockManager = nullptr);
     

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <wx/dialog.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/spinctrl.h>
 #include <wx/colour.h>
 #include <wx/colordlg.h>
@@ -45,7 +45,7 @@ struct CubeConfig {
     int circleMarginY = 50;  // Distance from top edge to circle center
 };
 
-class NavigationCubeConfigDialog : public wxDialog {
+class NavigationCubeConfigDialog : public FramelessModalPopup {
 public:
 	using ConfigChangedCallback = std::function<void(const CubeConfig&)>;
 

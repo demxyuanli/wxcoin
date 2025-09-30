@@ -24,7 +24,7 @@ enum {
 	ID_BROWSE_TEXTURE_BUTTON
 };
 
-BEGIN_EVENT_TABLE(VisualSettingsDialog, wxDialog)
+BEGIN_EVENT_TABLE(VisualSettingsDialog, FramelessModalPopup)
 EVT_BUTTON(wxID_OK, VisualSettingsDialog::OnOkButton)
 EVT_BUTTON(wxID_CANCEL, VisualSettingsDialog::OnCancelButton)
 EVT_BUTTON(ID_BROWSE_TEXTURE_BUTTON, VisualSettingsDialog::OnBrowseTexture)
@@ -37,13 +37,17 @@ END_EVENT_TABLE()
 
 VisualSettingsDialog::VisualSettingsDialog(wxWindow* parent, const wxString& title,
 	const BasicGeometryParameters& basicParams)
-	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(600, 700), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	: FramelessModalPopup(parent, title, wxSize(600, 700)),
 	m_basicParams(basicParams)
 {
+	// Set up title bar with icon
+	SetTitleIcon("visual", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	// Create notebook for tabs
-	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	wxNotebook* notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
 	// Create panels with their own sizers
 	wxPanel* basicInfoPanel = new wxPanel(notebook, wxID_ANY);
@@ -80,7 +84,7 @@ VisualSettingsDialog::VisualSettingsDialog(wxWindow* parent, const wxString& tit
 
 	mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 5);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 
 	// Initialize controls with default values
 	SaveAdvancedParametersToControls();

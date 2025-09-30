@@ -5,6 +5,7 @@
 #include <wx/datetime.h>
 #include <wx/xml/xml.h>
 #include <wx/dialog.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/listctrl.h>
 #include <wx/toolbar.h>
 #include <wx/choice.h>
@@ -126,7 +127,7 @@ namespace ads {
 	/**
 	 * @brief Dialog for managing perspectives
 	 */
-	class PerspectiveDialog : public wxDialog {
+	class PerspectiveDialog : public FramelessModalPopup {
 	public:
 		PerspectiveDialog(wxWindow* parent, PerspectiveManager* manager);
 		~PerspectiveDialog();

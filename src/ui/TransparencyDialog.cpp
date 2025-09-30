@@ -8,7 +8,7 @@
 
 TransparencyDialog::TransparencyDialog(wxWindow* parent, OCCViewer* occViewer,
 	const std::vector<std::shared_ptr<OCCGeometry>>& selectedGeometries)
-	: wxDialog(parent, wxID_ANY, "Set Transparency", wxDefaultPosition, wxSize(400, 300))
+	: FramelessModalPopup(parent, "Set Transparency", wxSize(400, 300))
 	, m_occViewer(occViewer)
 	, m_selectedGeometries(selectedGeometries)
 	, m_transparencySlider(nullptr)
@@ -27,6 +27,10 @@ TransparencyDialog::TransparencyDialog(wxWindow* parent, OCCViewer* occViewer,
 		return;
 	}
 
+	// Set up title bar with icon
+	SetTitleIcon("eye", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	// Get current transparency from the first selected geometry
 	// In a real implementation, you might want to handle mixed transparency values
 	m_currentTransparency = 0.0; // Default value
@@ -39,10 +43,6 @@ TransparencyDialog::TransparencyDialog(wxWindow* parent, OCCViewer* occViewer,
 	layoutControls();
 	bindEvents();
 	updateControls();
-
-	Center();
-	Fit();
-	SetMinSize(GetBestSize());
 }
 
 TransparencyDialog::~TransparencyDialog()
@@ -52,16 +52,16 @@ TransparencyDialog::~TransparencyDialog()
 void TransparencyDialog::createControls()
 {
 	// Info text
-	m_infoText = new wxStaticText(this, wxID_ANY,
+	m_infoText = new wxStaticText(m_contentPanel, wxID_ANY,
 		wxString::Format("Setting transparency for %zu selected object(s)", m_selectedGeometries.size()));
 
 	// Transparency slider (0-100 for percentage)
-	m_transparencySlider = new wxSlider(this, ID_TRANSPARENCY_SLIDER,
+	m_transparencySlider = new wxSlider(m_contentPanel, ID_TRANSPARENCY_SLIDER,
 		static_cast<int>(m_currentTransparency * 100), 0, 100,
 		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
 
 	// Transparency spin control
-	m_transparencySpinCtrl = new wxSpinCtrlDouble(this, ID_TRANSPARENCY_SPIN,
+	m_transparencySpinCtrl = new wxSpinCtrlDouble(m_contentPanel, ID_TRANSPARENCY_SPIN,
 		wxString::Format("%.1f", m_currentTransparency * 100),
 		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
 		0.0, 100.0, m_currentTransparency * 100, 0.1);
@@ -76,16 +76,16 @@ void TransparencyDialog::layoutControls()
 	mainSizer->Add(m_infoText, 0, wxALL | wxEXPAND, 10);
 
 	// Transparency control section
-	wxStaticBox* transparencyBox = new wxStaticBox(this, wxID_ANY, "Transparency Settings");
+	wxStaticBox* transparencyBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Transparency Settings");
 	wxStaticBoxSizer* transparencySizer = new wxStaticBoxSizer(transparencyBox, wxVERTICAL);
 
-	transparencySizer->Add(new wxStaticText(this, wxID_ANY, "Transparency (0% = Opaque, 100% = Transparent):"),
+	transparencySizer->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Transparency (0% = Opaque, 100% = Transparent):"),
 		0, wxALL, 5);
 	transparencySizer->Add(m_transparencySlider, 0, wxEXPAND | wxALL, 5);
 
 	// Spin control in horizontal layout
 	wxBoxSizer* spinSizer = new wxBoxSizer(wxHORIZONTAL);
-	spinSizer->Add(new wxStaticText(this, wxID_ANY, "Precise value (%):"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+	spinSizer->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Precise value (%):"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
 	spinSizer->Add(m_transparencySpinCtrl, 0, wxALIGN_CENTER_VERTICAL);
 
 	transparencySizer->Add(spinSizer, 0, wxALL | wxALIGN_CENTER, 5);
@@ -94,13 +94,13 @@ void TransparencyDialog::layoutControls()
 
 	// Button section
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-	buttonSizer->Add(new wxButton(this, wxID_APPLY, "Apply"), 0, wxRIGHT, 5);
-	buttonSizer->Add(new wxButton(this, wxID_OK, "OK"), 0, wxRIGHT, 5);
-	buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, 0);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_APPLY, "Apply"), 0, wxRIGHT, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_OK, "OK"), 0, wxRIGHT, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_CANCEL, "Cancel"), 0, 0);
 
 	mainSizer->Add(buttonSizer, 0, wxALIGN_RIGHT | wxALL, 10);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 }
 
 void TransparencyDialog::bindEvents()

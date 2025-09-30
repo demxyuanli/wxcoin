@@ -24,7 +24,7 @@ enum {
 	ID_VISUAL_SETTINGS_BUTTON
 };
 
-BEGIN_EVENT_TABLE(PositionBasicDialog, wxDialog)
+BEGIN_EVENT_TABLE(PositionBasicDialog, FramelessModalPopup)
 EVT_BUTTON(wxID_OK, PositionBasicDialog::OnOkButton)
 EVT_BUTTON(wxID_CANCEL, PositionBasicDialog::OnCancelButton)
 EVT_BUTTON(ID_PICK_BUTTON, PositionBasicDialog::OnPickButton)
@@ -34,7 +34,7 @@ EVT_TEXT(ID_REFERENCE_Z_TEXT, PositionBasicDialog::OnReferenceZChanged)
 END_EVENT_TABLE()
 
 PositionBasicDialog::PositionBasicDialog(wxWindow* parent, const wxString& title, PickingAidManager* pickingAidManager, const std::string& geometryType)
-	: wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(400, 500), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+	: FramelessModalPopup(parent, title, wxSize(400, 500))
 	, m_positionPanel(nullptr)
 	, m_parametersPanel(nullptr)
 	, m_parametersSizer(nullptr)
@@ -42,10 +42,14 @@ PositionBasicDialog::PositionBasicDialog(wxWindow* parent, const wxString& title
 {
 	m_basicParams.geometryType = geometryType;
 
+	// Set up title bar with icon
+	SetTitleIcon("position", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-	// Create notebook for tabs - use 'this' as parent
-	wxNotebook* notebook = new wxNotebook(this, wxID_ANY);
+	// Create notebook for tabs - use 'm_contentPanel' as parent
+	wxNotebook* notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
 	// Create tabs with notebook as parent
 	m_positionPanel = new wxPanel(notebook, wxID_ANY);
@@ -69,7 +73,7 @@ PositionBasicDialog::PositionBasicDialog(wxWindow* parent, const wxString& title
 
 	mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 5);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 
 	// Initialize controls with default values
 	SaveParametersToControls();

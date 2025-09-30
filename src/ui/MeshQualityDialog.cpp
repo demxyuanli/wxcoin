@@ -5,7 +5,7 @@
 #include <wx/notebook.h>
 
 MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
-	: wxDialog(parent, wxID_ANY, "Mesh Quality Control", wxDefaultPosition, wxSize(600, 600))
+	: FramelessModalPopup(parent, "Mesh Quality Control", wxSize(600, 600))
 	, m_occViewer(occViewer)
 	, m_notebook(nullptr)
 	, m_deflectionSlider(nullptr)
@@ -68,6 +68,10 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 		return;
 	}
 
+	// Set up title bar with icon
+	SetTitleIcon("mesh", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	// Load current values from OCCViewer
 	m_currentDeflection = m_occViewer->getMeshDeflection();
 	m_currentAngularDeflection = m_occViewer->getAngularDeflection();
@@ -117,9 +121,6 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 	FindWindow(wxID_APPLY)->Bind(wxEVT_BUTTON, &MeshQualityDialog::onApply, this);
 	FindWindow(wxID_CANCEL)->Bind(wxEVT_BUTTON, &MeshQualityDialog::onCancel, this);
 	FindWindow(wxID_OK)->Bind(wxEVT_BUTTON, &MeshQualityDialog::onOK, this);
-
-	Fit();
-	SetMinSize(GetBestSize());
 }
 
 MeshQualityDialog::~MeshQualityDialog()
@@ -129,7 +130,7 @@ MeshQualityDialog::~MeshQualityDialog()
 void MeshQualityDialog::createControls()
 {
 	// Create notebook for different settings pages
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
 	// Create pages
 	createBasicQualityPage();
@@ -146,16 +147,16 @@ void MeshQualityDialog::layoutControls()
 	mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
 
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-	buttonSizer->Add(new wxButton(this, wxID_APPLY, "Apply"), 0, wxALL, 5);
-	buttonSizer->Add(new wxButton(this, wxID_RESET, "Reset"), 0, wxALL, 5);
-	buttonSizer->Add(new wxButton(this, wxID_ANY, "Validate"), 0, wxALL, 5);
-	buttonSizer->Add(new wxButton(this, wxID_ANY, "Export Report"), 0, wxALL, 5);
-	buttonSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxALL, 5);
-	buttonSizer->Add(new wxButton(this, wxID_OK, "OK"), 0, wxALL, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_APPLY, "Apply"), 0, wxALL, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_RESET, "Reset"), 0, wxALL, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_ANY, "Validate"), 0, wxALL, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_ANY, "Export Report"), 0, wxALL, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_CANCEL, "Cancel"), 0, wxALL, 5);
+	buttonSizer->Add(new wxButton(m_contentPanel, wxID_OK, "OK"), 0, wxALL, 5);
 
 	mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 	Layout();
 }
 
@@ -699,12 +700,12 @@ void MeshQualityDialog::onExportReport(wxCommandEvent& event)
 	report += "- Adaptive Meshing: " + std::string(m_currentAdaptiveMeshing ? "Yes" : "No") + "\n";
 
 	// Show report in dialog
-	wxDialog* reportDialog = new wxDialog(this, wxID_ANY, "Mesh Quality Report",
+	wxDialog* reportDialog = new wxDialog(m_contentPanel, wxID_ANY, "Mesh Quality Report",
 		wxDefaultPosition, wxSize(500, 400));
 
 	wxTextCtrl* textCtrl = new wxTextCtrl(reportDialog, wxID_ANY, report,
 		wxDefaultPosition, wxDefaultSize,
-		wxTE_MULTILINE | wxTE_READONLY);
+		wxTE_MULTILINE | wxTE_READONLY | wxEXPAND);
 
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 	sizer->Add(textCtrl, 1, wxEXPAND | wxALL, 10);

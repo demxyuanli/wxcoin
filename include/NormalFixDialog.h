@@ -17,6 +17,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include "widgets/FramelessModalPopup.h"
 
 class OCCViewer;
 class OCCGeometry;
@@ -32,7 +33,7 @@ enum {
 /**
  * @brief Dialog for normal fixing parameters and geometry information
  */
-class NormalFixDialog : public wxDialog {
+class NormalFixDialog : public FramelessModalPopup {
 public:
     NormalFixDialog(wxWindow* parent, OCCViewer* viewer, wxWindowID id = wxID_ANY, 
                    const wxString& title = "Normal Fix Settings", 

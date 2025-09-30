@@ -1,11 +1,17 @@
 #include "ExplodeConfigDialog.h"
 #include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/button.h>
 
 ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     ExplodeMode currentMode,
     double currentFactor)
-    : wxDialog(parent, wxID_ANY, "Explode", wxDefaultPosition, wxSize(400, 400))
+    : FramelessModalPopup(parent, "Explode", wxSize(400, 400))
 {
+    // Set up title bar with icon
+    SetTitleIcon("explosion", wxSize(20, 20));
+    ShowTitleIcon(true);
+
     wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
 
     wxArrayString modes;
@@ -19,8 +25,8 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     modes.Add("Diagonal");
     modes.Add("Assembly");
 
-    m_mode = new wxRadioBox(this, wxID_ANY, "Mode", wxDefaultPosition, wxDefaultSize, modes, 1, wxRA_SPECIFY_ROWS);
-    m_factor = new wxSpinCtrlDouble(this, wxID_ANY);
+    m_mode = new wxRadioBox(m_contentPanel, wxID_ANY, "Mode", wxDefaultPosition, wxDefaultSize, modes, 1, wxRA_SPECIFY_ROWS);
+    m_factor = new wxSpinCtrlDouble(m_contentPanel, wxID_ANY);
     m_factor->SetRange(0.01, 10.0);
     m_factor->SetIncrement(0.05);
 
@@ -28,14 +34,14 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     m_factor->SetValue(currentFactor);
 
     wxFlexGridSizer* grid = new wxFlexGridSizer(2, 8, 8);
-    grid->Add(new wxStaticText(this, wxID_ANY, "Distance Factor:"), 0, wxALIGN_CENTER_VERTICAL);
+    grid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Distance Factor:"), 0, wxALIGN_CENTER_VERTICAL);
     grid->Add(m_factor, 1, wxEXPAND);
 
     // Sliders helpers
     auto makeRow = [&](const wxString& label, wxSlider** out, int value, int minV, int maxV){
         wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-        row->Add(new wxStaticText(this, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
-        *out = new wxSlider(this, wxID_ANY, value, minV, maxV);
+        row->Add(new wxStaticText(m_contentPanel, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+        *out = new wxSlider(m_contentPanel, wxID_ANY, value, minV, maxV);
         row->Add(*out, 1, wxEXPAND);
         return row;
     };
@@ -49,7 +55,7 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     weightsBox->Add(makeRow("Diagonal Weight", &m_weightDiag, 0, 0, 200), 0, wxEXPAND);
 
     // Advanced parameters
-    wxStaticText* advTitle = new wxStaticText(this, wxID_ANY, "Advanced:");
+    wxStaticText* advTitle = new wxStaticText(m_contentPanel, wxID_ANY, "Advanced:");
     wxBoxSizer* advBox = new wxBoxSizer(wxVERTICAL);
     advBox->Add(makeRow("Per-Level Scale", &m_perLevelScale, 60, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
     advBox->Add(makeRow("Size Influence", &m_sizeInfluence, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
@@ -58,14 +64,14 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
 
     top->Add(m_mode, 0, wxALL | wxEXPAND, 8);
     top->Add(grid, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 8);
-    top->Add(new wxStaticText(this, wxID_ANY, "Directional Weights:"), 0, wxLEFT | wxRIGHT | wxTOP, 8);
+    top->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Directional Weights:"), 0, wxLEFT | wxRIGHT | wxTOP, 8);
     top->Add(weightsBox, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 8);
     top->Add(advTitle, 0, wxLEFT | wxRIGHT | wxTOP, 8);
     top->Add(advBox, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 8);
 
     wxStdDialogButtonSizer* btns = new wxStdDialogButtonSizer();
-    btns->AddButton(new wxButton(this, wxID_OK));
-    btns->AddButton(new wxButton(this, wxID_CANCEL));
+    btns->AddButton(new wxButton(m_contentPanel, wxID_OK));
+    btns->AddButton(new wxButton(m_contentPanel, wxID_CANCEL));
     btns->Realize();
     top->Add(btns, 0, wxALL | wxALIGN_RIGHT, 6);
 

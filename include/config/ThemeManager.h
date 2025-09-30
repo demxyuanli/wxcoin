@@ -42,6 +42,7 @@ public:
 	int getInt(const std::string& key) const;
 	std::string getString(const std::string& key) const;
 	wxFont getDefaultFont() const;
+	bool isInitialized() const;
 
 	// Theme creation and management
 	bool createTheme(const std::string& themeName, const ThemeProfile& profile);

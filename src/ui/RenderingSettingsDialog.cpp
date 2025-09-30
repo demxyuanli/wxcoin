@@ -9,7 +9,7 @@
 #include <wx/filename.h>
 
 RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* occViewer, RenderingEngine* renderingEngine)
-	: wxDialog(parent, wxID_ANY, "Rendering Settings", wxDefaultPosition, wxSize(500, 450), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+	: FramelessModalPopup(parent, "Rendering Settings", wxSize(500, 450))
 	, m_occViewer(occViewer)
 	, m_renderingEngine(renderingEngine)
 	, m_notebook(nullptr)
@@ -93,6 +93,10 @@ RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* oc
 	m_fresnel = lightingModelSettings.fresnel;
 	m_subsurfaceScattering = lightingModelSettings.subsurfaceScattering;
 
+	// Set up title bar with icon
+	SetTitleIcon("render", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	createControls();
 	layoutControls();
 	bindEvents();
@@ -105,7 +109,7 @@ RenderingSettingsDialog::~RenderingSettingsDialog()
 
 void RenderingSettingsDialog::createControls()
 {
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
 	createMaterialPage();
 	createLightingPage();
@@ -119,10 +123,10 @@ void RenderingSettingsDialog::createControls()
 	createLightingModelPage();
 
 	// Create dialog buttons
-	m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
-	m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
-	m_okButton = new wxButton(this, wxID_OK, "OK");
-	m_resetButton = new wxButton(this, wxID_ANY, "Reset to Defaults");
+	m_applyButton = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
+	m_cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
+	m_okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
+	m_resetButton = new wxButton(m_contentPanel, wxID_ANY, "Reset to Defaults");
 }
 
 void RenderingSettingsDialog::createMaterialPage()
@@ -800,7 +804,7 @@ void RenderingSettingsDialog::layoutControls()
 
 	mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 10);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 }
 
 void RenderingSettingsDialog::bindEvents()

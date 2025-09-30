@@ -16,11 +16,12 @@
 #include <wx/statbmp.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include "config/RenderingConfig.h"
+#include "widgets/FramelessModalPopup.h"
 
 class OCCViewer;
 class RenderingEngine;
 
-class RenderingSettingsDialog : public wxDialog
+class RenderingSettingsDialog : public FramelessModalPopup
 {
 public:
     RenderingSettingsDialog(wxWindow* parent, OCCViewer* occViewer, RenderingEngine* renderingEngine);

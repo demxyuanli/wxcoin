@@ -1,6 +1,6 @@
 #pragma once
 
-#include <wx/dialog.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/button.h>
 #include <wx/slider.h>
 #include <wx/checkbox.h>
@@ -11,7 +11,7 @@
 #include "OCCViewer.h"
 #include "config/EdgeSettingsConfig.h"
 
-class EdgeSettingsDialog : public wxDialog
+class EdgeSettingsDialog : public FramelessModalPopup
 {
 public:
 	EdgeSettingsDialog(wxWindow* parent, OCCViewer* viewer);

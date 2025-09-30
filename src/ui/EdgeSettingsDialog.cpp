@@ -10,10 +10,14 @@
 #include "EdgeComponent.h"
 
 EdgeSettingsDialog::EdgeSettingsDialog(wxWindow* parent, OCCViewer* viewer)
-	: wxDialog(parent, wxID_ANY, "Edge Settings", wxDefaultPosition, wxSize(600, 700))
+	: FramelessModalPopup(parent, "Edge Settings", wxSize(600, 700))
 	, m_viewer(viewer)
 	, m_currentPage("global")
 {
+	// Set up title bar with icon
+	SetTitleIcon("edge", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	loadSettings();
 	createControls();
 	bindEvents();
@@ -32,7 +36,7 @@ void EdgeSettingsDialog::createControls()
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	// Create notebook for different settings pages
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
 	// Create pages
 	createGlobalPage();
@@ -50,11 +54,11 @@ void EdgeSettingsDialog::createControls()
 
 	// Buttons
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-	m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
-	m_resetButton = new wxButton(this, wxID_RESET, "Reset");
-	m_saveButton = new wxButton(this, wxID_SAVE, "Save Config");
-	m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
-	m_okButton = new wxButton(this, wxID_OK, "OK");
+	m_applyButton = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
+	m_resetButton = new wxButton(m_contentPanel, wxID_RESET, "Reset");
+	m_saveButton = new wxButton(m_contentPanel, wxID_SAVE, "Save Config");
+	m_cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
+	m_okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
 
 	buttonSizer->Add(m_applyButton, 0, wxALL, 5);
 	buttonSizer->Add(m_resetButton, 0, wxALL, 5);
@@ -65,7 +69,7 @@ void EdgeSettingsDialog::createControls()
 
 	mainSizer->Add(buttonSizer, 0, wxALL | wxEXPAND, 10);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 	Layout();
 }
 

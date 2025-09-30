@@ -4,7 +4,7 @@
 #include <wx/sizer.h>
 #include <wx/font.h>
 
-wxBEGIN_EVENT_TABLE(GeometryDecompositionDialog, wxDialog)
+wxBEGIN_EVENT_TABLE(GeometryDecompositionDialog, FramelessModalPopup)
     EVT_BUTTON(wxID_OK, GeometryDecompositionDialog::onOK)
     EVT_BUTTON(wxID_CANCEL, GeometryDecompositionDialog::onCancel)
     EVT_CHOICE(wxID_ANY, GeometryDecompositionDialog::onDecompositionLevelChange)
@@ -12,7 +12,7 @@ wxBEGIN_EVENT_TABLE(GeometryDecompositionDialog, wxDialog)
 wxEND_EVENT_TABLE()
 
 GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, GeometryReader::DecompositionOptions& options)
-    : wxDialog(parent, wxID_ANY, "Geometry Decomposition Settings", wxDefaultPosition, wxSize(600, 400))
+    : FramelessModalPopup(parent, "Geometry Decomposition Settings", wxSize(600, 400))
     , m_options(options)
     , m_enableDecompositionCheckBox(nullptr)
     , m_decompositionLevelChoice(nullptr)
@@ -26,6 +26,10 @@ GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, Geome
     , m_colorScheme(options.colorScheme)
     , m_useConsistentColoring(options.useConsistentColoring)
 {
+    // Set up title bar with icon
+    SetTitleIcon("layers", wxSize(20, 20));
+    ShowTitleIcon(true);
+
     createControls();
     layoutControls();
     bindEvents();
@@ -41,7 +45,7 @@ GeometryDecompositionDialog::~GeometryDecompositionDialog()
 void GeometryDecompositionDialog::createControls()
 {
     // Enable decomposition checkbox
-    m_enableDecompositionCheckBox = new wxCheckBox(this, wxID_ANY, "Enable Geometry Decomposition");
+    m_enableDecompositionCheckBox = new wxCheckBox(m_contentPanel, wxID_ANY, "Enable Geometry Decomposition");
     m_enableDecompositionCheckBox->SetValue(m_enableDecomposition);
     m_enableDecompositionCheckBox->SetToolTip("Enable automatic decomposition of complex geometries into separate components");
 
@@ -53,7 +57,7 @@ void GeometryDecompositionDialog::createControls()
     levelChoices.Add("Shell Level");
     levelChoices.Add("Face Level (detailed)");
 
-    m_decompositionLevelChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, levelChoices);
+    m_decompositionLevelChoice = new wxChoice(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, levelChoices);
     m_decompositionLevelChoice->SetSelection(static_cast<int>(m_decompositionLevel));
     m_decompositionLevelChoice->SetToolTip("Choose how detailed the decomposition should be");
     m_decompositionLevelChoice->Enable(m_enableDecomposition);
@@ -67,13 +71,13 @@ void GeometryDecompositionDialog::createControls()
     colorChoices.Add("Monochrome Green");
     colorChoices.Add("Monochrome Gray");
 
-    m_colorSchemeChoice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, colorChoices);
+    m_colorSchemeChoice = new wxChoice(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, colorChoices);
     m_colorSchemeChoice->SetSelection(static_cast<int>(m_colorScheme));
     m_colorSchemeChoice->SetToolTip("Choose color scheme for decomposed components");
     m_colorSchemeChoice->Enable(m_enableDecomposition);
 
     // Consistent coloring checkbox
-    m_consistentColoringCheckBox = new wxCheckBox(this, wxID_ANY, "Use Consistent Coloring");
+    m_consistentColoringCheckBox = new wxCheckBox(m_contentPanel, wxID_ANY, "Use Consistent Coloring");
     m_consistentColoringCheckBox->SetValue(m_useConsistentColoring);
     m_consistentColoringCheckBox->SetToolTip("Use consistent colors for similar components across imports");
     m_consistentColoringCheckBox->Enable(m_enableDecomposition);
@@ -84,20 +88,20 @@ void GeometryDecompositionDialog::layoutControls()
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
     // Title
-    wxStaticText* title = new wxStaticText(this, wxID_ANY, "Configure Geometry Decomposition");
+    wxStaticText* title = new wxStaticText(m_contentPanel, wxID_ANY, "Configure Geometry Decomposition");
     wxFont titleFont = title->GetFont();
     titleFont.SetPointSize(titleFont.GetPointSize() + 2);
     titleFont.SetWeight(wxFONTWEIGHT_BOLD);
     title->SetFont(titleFont);
 
     mainSizer->Add(title, 0, wxALL | wxALIGN_CENTER, 10);
-    mainSizer->Add(new wxStaticLine(this), 0, wxEXPAND | wxLEFT | wxRIGHT, 15);
+    mainSizer->Add(new wxStaticLine(m_contentPanel), 0, wxEXPAND | wxLEFT | wxRIGHT, 15);
 
     // Main content
     wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
 
     // Enable decomposition
-    wxStaticBox* enableBox = new wxStaticBox(this, wxID_ANY, "Decomposition Control");
+    wxStaticBox* enableBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Decomposition Control");
     wxStaticBoxSizer* enableSizer = new wxStaticBoxSizer(enableBox, wxVERTICAL);
 
     enableSizer->Add(m_enableDecompositionCheckBox, 0, wxALL, 10);
@@ -105,28 +109,28 @@ void GeometryDecompositionDialog::layoutControls()
     contentSizer->Add(enableSizer, 0, wxEXPAND | wxALL, 10);
 
     // Decomposition settings
-    wxStaticBox* settingsBox = new wxStaticBox(this, wxID_ANY, "Decomposition Settings");
+    wxStaticBox* settingsBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Decomposition Settings");
     wxStaticBoxSizer* settingsSizer = new wxStaticBoxSizer(settingsBox, wxVERTICAL);
 
     wxFlexGridSizer* settingsGrid = new wxFlexGridSizer(3, 2, 8, 15);
     settingsGrid->AddGrowableCol(1);
 
     // Decomposition level
-    settingsGrid->Add(new wxStaticText(this, wxID_ANY, "Decomposition Level:"), 0, wxALIGN_CENTER_VERTICAL);
+    settingsGrid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Decomposition Level:"), 0, wxALIGN_CENTER_VERTICAL);
     settingsGrid->Add(m_decompositionLevelChoice, 1, wxEXPAND);
 
     // Color scheme
-    settingsGrid->Add(new wxStaticText(this, wxID_ANY, "Color Scheme:"), 0, wxALIGN_CENTER_VERTICAL);
+    settingsGrid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Color Scheme:"), 0, wxALIGN_CENTER_VERTICAL);
     settingsGrid->Add(m_colorSchemeChoice, 1, wxEXPAND);
 
     // Consistent coloring
-    settingsGrid->Add(new wxStaticText(this, wxID_ANY, "Coloring Mode:"), 0, wxALIGN_CENTER_VERTICAL);
+    settingsGrid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Coloring Mode:"), 0, wxALIGN_CENTER_VERTICAL);
     settingsGrid->Add(m_consistentColoringCheckBox, 1, wxEXPAND);
 
     settingsSizer->Add(settingsGrid, 0, wxEXPAND | wxALL, 10);
 
     // Help text
-    wxStaticText* helpText = new wxStaticText(this, wxID_ANY,
+    wxStaticText* helpText = new wxStaticText(m_contentPanel, wxID_ANY,
         "* Shape Level: Decomposes assemblies into individual shapes\n"
         "* Solid Level: Further decomposes shapes into individual solid bodies\n"
         "* Shell Level: Further decomposes solids into surface shells\n"
@@ -141,10 +145,10 @@ void GeometryDecompositionDialog::layoutControls()
     contentSizer->Add(settingsSizer, 0, wxEXPAND | wxALL, 10);
 
     // Color scheme preview
-    wxStaticBox* colorPreviewBox = new wxStaticBox(this, wxID_ANY, "Color Scheme Preview");
+    wxStaticBox* colorPreviewBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Color Scheme Preview");
     wxStaticBoxSizer* colorPreviewSizer = new wxStaticBoxSizer(colorPreviewBox, wxVERTICAL);
     
-    m_colorPreviewPanel = new wxPanel(this);
+    m_colorPreviewPanel = new wxPanel(m_contentPanel);
     m_colorPreviewPanel->SetBackgroundColour(wxColour(255, 255, 255));
     
     wxBoxSizer* colorPreviewPanelSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -154,10 +158,10 @@ void GeometryDecompositionDialog::layoutControls()
     contentSizer->Add(colorPreviewSizer, 0, wxEXPAND | wxALL, 10);
 
     // Preview section
-    wxStaticBox* previewBox = new wxStaticBox(this, wxID_ANY, "Settings Preview");
+    wxStaticBox* previewBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Settings Preview");
     wxStaticBoxSizer* previewSizer = new wxStaticBoxSizer(previewBox, wxVERTICAL);
 
-    m_previewPanel = new wxPanel(this);
+    m_previewPanel = new wxPanel(m_contentPanel);
     m_previewPanel->SetBackgroundColour(wxColour(248, 248, 248));
 
     m_previewText = new wxStaticText(m_previewPanel, wxID_ANY, "Preview will appear here");
@@ -177,8 +181,8 @@ void GeometryDecompositionDialog::layoutControls()
 
     // Buttons
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxButton* okBtn = new wxButton(this, wxID_OK, "OK");
-    wxButton* cancelBtn = new wxButton(this, wxID_CANCEL, "Cancel");
+    wxButton* okBtn = new wxButton(m_contentPanel, wxID_OK, "OK");
+    wxButton* cancelBtn = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
 
     okBtn->SetDefault();
     okBtn->SetMinSize(wxSize(80, 30));
@@ -189,8 +193,7 @@ void GeometryDecompositionDialog::layoutControls()
 
     mainSizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
 
-    SetSizer(mainSizer);
-    Fit();
+    m_contentPanel->SetSizer(mainSizer);
 }
 
 void GeometryDecompositionDialog::bindEvents()

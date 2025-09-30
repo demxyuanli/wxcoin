@@ -1,12 +1,12 @@
 #pragma once
 
-#include <wx/wx.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/radiobox.h>
 #include <wx/spinctrl.h>
 #include <wx/slider.h>
 #include "viewer/ExplodeTypes.h"
 
-class ExplodeConfigDialog : public wxDialog {
+class ExplodeConfigDialog : public FramelessModalPopup {
 public:
     ExplodeConfigDialog(wxWindow* parent,
         ExplodeMode currentMode,

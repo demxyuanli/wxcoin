@@ -144,7 +144,7 @@ void ThemeManager::loadSizeConfigurations(ThemeProfile& theme) {
 	std::vector<std::string> sizeSections = {
 		"BarSizes", "ButtonBarSizes", "Separators", "Icons",
 		"GallerySizes", "PanelSizes", "HomeSpace", "HomeMenu", "DragOverlay",
-		"DockArea", "ActBar", "ButtonBar"
+		"DockArea", "DockingSizes", "ActBar", "ButtonBar"
 	};
 
 	for (const auto& section : sizeSections) {
@@ -299,6 +299,10 @@ wxColour ThemeManager::getColour(const std::string& key) const {
 	}
 
 	return colorIt->second;
+}
+
+bool ThemeManager::isInitialized() const {
+	return m_initialized;
 }
 
 int ThemeManager::getInt(const std::string& key) const {

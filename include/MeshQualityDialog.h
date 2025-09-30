@@ -1,6 +1,6 @@
 #pragma once
 
-#include <wx/dialog.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/slider.h>
 #include <wx/checkbox.h>
 #include <wx/spinctrl.h>
@@ -14,7 +14,7 @@ class OCCViewer;
 class wxSpinDoubleEvent;
 class wxSpinEvent;
 
-class MeshQualityDialog : public wxDialog
+class MeshQualityDialog : public FramelessModalPopup
 {
 public:
 	MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer);

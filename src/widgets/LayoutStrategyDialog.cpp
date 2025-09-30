@@ -3,7 +3,7 @@
 #include "UnifiedDockTypes.h"
 #include <wx/msgdlg.h>
 
-wxBEGIN_EVENT_TABLE(LayoutStrategyDialog, wxDialog)
+wxBEGIN_EVENT_TABLE(LayoutStrategyDialog, FramelessModalPopup)
 EVT_CHOICE(wxID_ANY, LayoutStrategyDialog::OnStrategyChanged)
 EVT_BUTTON(wxID_APPLY, LayoutStrategyDialog::OnApplyClicked)
 EVT_BUTTON(wxID_CANCEL, LayoutStrategyDialog::OnCancelClicked)
@@ -11,11 +11,13 @@ EVT_BUTTON(wxID_OK, LayoutStrategyDialog::OnOKClicked)
 wxEND_EVENT_TABLE()
 
 LayoutStrategyDialog::LayoutStrategyDialog(wxWindow* parent, ModernDockManager* dockManager)
-	: wxDialog(parent, wxID_ANY, "Layout Strategy Configuration",
-		wxDefaultPosition, wxSize(500, 400),
-		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	: FramelessModalPopup(parent, "Layout Strategy Configuration", wxSize(500, 400)),
 	m_dockManager(dockManager)
 {
+	// Set up title bar with icon
+	SetTitleIcon("layout", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	InitializeUI();
 
 	// Get available strategies (hardcoded for now)
@@ -66,18 +68,18 @@ void LayoutStrategyDialog::InitializeUI()
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	// Strategy selection section
-	wxStaticBoxSizer* strategySizer = new wxStaticBoxSizer(wxVERTICAL, this, "Layout Strategy");
+	wxStaticBoxSizer* strategySizer = new wxStaticBoxSizer(wxVERTICAL, m_contentPanel, "Layout Strategy");
 
 	wxBoxSizer* choiceSizer = new wxBoxSizer(wxHORIZONTAL);
-	choiceSizer->Add(new wxStaticText(this, wxID_ANY, "Strategy:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
+	choiceSizer->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Strategy:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-	m_strategyChoice = new wxChoice(this, wxID_ANY);
+	m_strategyChoice = new wxChoice(m_contentPanel, wxID_ANY);
 	choiceSizer->Add(m_strategyChoice, 1, wxEXPAND);
 
 	strategySizer->Add(choiceSizer, 0, wxEXPAND | wxALL, 10);
 
 	// Strategy description
-	m_descriptionText = new wxStaticText(this, wxID_ANY,
+	m_descriptionText = new wxStaticText(m_contentPanel, wxID_ANY,
 		"Select a layout strategy to configure how panels are arranged in the docking system.");
 	m_descriptionText->Wrap(450);
 	strategySizer->Add(m_descriptionText, 0, wxEXPAND | wxALL, 10);
@@ -85,21 +87,21 @@ void LayoutStrategyDialog::InitializeUI()
 	mainSizer->Add(strategySizer, 0, wxEXPAND | wxALL, 10);
 
 	// Performance options section
-	wxStaticBoxSizer* performanceSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Performance Options");
+	wxStaticBoxSizer* performanceSizer = new wxStaticBoxSizer(wxVERTICAL, m_contentPanel, "Performance Options");
 
-	m_cachingCheckBox = new wxCheckBox(this, wxID_ANY, "Enable Layout Caching");
+	m_cachingCheckBox = new wxCheckBox(m_contentPanel, wxID_ANY, "Enable Layout Caching");
 	m_cachingCheckBox->SetValue(true);
 	performanceSizer->Add(m_cachingCheckBox, 0, wxALL, 10);
 
-	m_optimizationCheckBox = new wxCheckBox(this, wxID_ANY, "Enable Layout Optimization");
+	m_optimizationCheckBox = new wxCheckBox(m_contentPanel, wxID_ANY, "Enable Layout Optimization");
 	m_optimizationCheckBox->SetValue(true);
 	performanceSizer->Add(m_optimizationCheckBox, 0, wxALL, 10);
 
 	wxBoxSizer* updateModeSizer = new wxBoxSizer(wxHORIZONTAL);
-	m_updateModeLabel = new wxStaticText(this, wxID_ANY, "Layout Update Mode:");
+	m_updateModeLabel = new wxStaticText(m_contentPanel, wxID_ANY, "Layout Update Mode:");
 	updateModeSizer->Add(m_updateModeLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 10);
 
-	m_updateModeSpin = new wxSpinCtrl(this, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize,
+	m_updateModeSpin = new wxSpinCtrl(m_contentPanel, wxID_ANY, "0", wxDefaultPosition, wxDefaultSize,
 		wxSP_ARROW_KEYS, 0, 3, 0);
 	m_updateModeSpin->SetToolTip("0: Immediate, 1: Deferred, 2: Batched, 3: Manual");
 	updateModeSizer->Add(m_updateModeSpin, 0, wxEXPAND);
@@ -111,9 +113,9 @@ void LayoutStrategyDialog::InitializeUI()
 	// Button sizer
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 
-	m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
-	m_okButton = new wxButton(this, wxID_OK, "OK");
-	m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+	m_applyButton = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
+	m_okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
+	m_cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
 
 	buttonSizer->Add(m_applyButton, 0, wxRIGHT, 10);
 	buttonSizer->Add(m_okButton, 0, wxRIGHT, 10);
@@ -121,7 +123,7 @@ void LayoutStrategyDialog::InitializeUI()
 
 	mainSizer->Add(buttonSizer, 0, wxALIGN_RIGHT | wxALL, 10);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 
 	// Set default button
 	m_okButton->SetDefault();

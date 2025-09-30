@@ -11,6 +11,7 @@
 #include <vector>
 #include <Inventor/SbVec3f.h>
 #include "GeometryDialogTypes.h"
+#include "widgets/FramelessModalPopup.h"
 
 // Forward declarations
 class PickingAidManager;
@@ -19,7 +20,7 @@ class VisualSettingsDialog;
 // Callback function type for position picking completion
 typedef std::function<void(const SbVec3f&)> PositionPickingCallback;
 
-class PositionBasicDialog : public wxDialog {
+class PositionBasicDialog : public FramelessModalPopup {
 public:
 	PositionBasicDialog(wxWindow* parent, const wxString& title, PickingAidManager* pickingAidManager, const std::string& geometryType = "");
 	~PositionBasicDialog() {}

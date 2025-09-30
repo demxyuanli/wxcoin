@@ -438,7 +438,7 @@ namespace ads {
 		ID_IMPORT_PERSPECTIVE
 	};
 
-	wxBEGIN_EVENT_TABLE(PerspectiveDialog, wxDialog)
+	wxBEGIN_EVENT_TABLE(PerspectiveDialog, FramelessModalPopup)
 		EVT_LIST_ITEM_SELECTED(ID_PERSPECTIVE_LIST, PerspectiveDialog::OnPerspectiveSelected)
 		EVT_BUTTON(ID_LOAD_PERSPECTIVE, PerspectiveDialog::OnLoadPerspective)
 		EVT_BUTTON(wxID_OK, PerspectiveDialog::OnSavePerspective)
@@ -449,12 +449,15 @@ namespace ads {
 		wxEND_EVENT_TABLE()
 
 		PerspectiveDialog::PerspectiveDialog(wxWindow* parent, PerspectiveManager* manager)
-		: wxDialog(parent, wxID_ANY, "Manage Perspectives", wxDefaultPosition, wxSize(600, 400))
+		: FramelessModalPopup(parent, "Manage Perspectives", wxSize(600, 400))
 		, m_manager(manager)
 	{
+		// Set up title bar with icon
+		SetTitleIcon("perspective", wxSize(20, 20));
+		ShowTitleIcon(true);
+
 		CreateControls();
 		UpdatePerspectiveList();
-		Centre();
 	}
 
 	PerspectiveDialog::~PerspectiveDialog() {
@@ -464,7 +467,7 @@ namespace ads {
 		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 		// Create splitter
-		wxSplitterWindow* splitter = new wxSplitterWindow(this);
+		wxSplitterWindow* splitter = new wxSplitterWindow(m_contentPanel);
 
 		// Left panel - perspective list
 		wxPanel* leftPanel = new wxPanel(splitter);
@@ -508,7 +511,7 @@ namespace ads {
 		mainSizer->Add(splitter, 1, wxEXPAND | wxALL, 5);
 
 		// Button panel
-		wxPanel* buttonPanel = new wxPanel(this);
+		wxPanel* buttonPanel = new wxPanel(m_contentPanel);
 		wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 
 		m_loadButton = new wxButton(buttonPanel, ID_LOAD_PERSPECTIVE, "Load");
@@ -531,7 +534,7 @@ namespace ads {
 		buttonPanel->SetSizer(buttonSizer);
 		mainSizer->Add(buttonPanel, 0, wxEXPAND);
 
-		SetSizer(mainSizer);
+		m_contentPanel->SetSizer(mainSizer);
 
 		// Initially disable buttons
 		m_loadButton->Enable(false);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <wx/dialog.h>
+#include "widgets/FramelessModalPopup.h"
 #include <wx/slider.h>
 #include <wx/spinctrl.h>
 #include <wx/stattext.h>
@@ -12,7 +12,7 @@
 class OCCViewer;
 class OCCGeometry;
 
-class TransparencyDialog : public wxDialog
+class TransparencyDialog : public FramelessModalPopup
 {
 public:
 	TransparencyDialog(wxWindow* parent, OCCViewer* occViewer,

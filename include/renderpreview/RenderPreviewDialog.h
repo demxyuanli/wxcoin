@@ -17,6 +17,7 @@
 #include "renderpreview/RenderLightSettings.h"
 #include "renderpreview/ConfigValidator.h"
 #include "renderpreview/UndoManager.h"
+#include "widgets/FramelessModalPopup.h"
 
 // Forward declarations
 class PreviewCanvas;
@@ -25,7 +26,7 @@ class MaterialPanel;
 class GlobalSettingsPanel;
 class ObjectSettingsPanel;
 
-class RenderPreviewDialog : public wxDialog
+class RenderPreviewDialog : public FramelessModalPopup
 {
 public:
     RenderPreviewDialog(wxWindow* parent);

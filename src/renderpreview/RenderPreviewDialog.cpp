@@ -33,12 +33,16 @@
 // Event table removed - using Bind() method instead
 
 RenderPreviewDialog::RenderPreviewDialog(wxWindow* parent)
-	: wxDialog(parent, wxID_ANY, wxT("Render Preview System"), wxDefaultPosition, wxSize(1200, 700), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLOSE_BOX | wxCAPTION)
+	: FramelessModalPopup(parent, wxT("Render Preview System"), wxSize(1200, 700))
 	, m_currentLightIndex(-1)
 	, m_undoManager(std::make_unique<UndoManager>())
 	, m_validationEnabled(true)
 {
 	LOG_INF_S("RenderPreviewDialog::RenderPreviewDialog: Initializing");
+
+	// Set up title bar with icon
+	SetTitleIcon("render", wxSize(20, 20));
+	ShowTitleIcon(true);
 
 	// Initialize font manager
 	FontManager& fontManager = FontManager::getInstance();
@@ -46,7 +50,6 @@ RenderPreviewDialog::RenderPreviewDialog(wxWindow* parent)
 
 	createUI();
 	loadConfiguration();
-	SetSizer(GetSizer());
 
 	// Apply fonts to the entire dialog and its children
 	fontManager.applyFontToWindowAndChildren(this, "Default");
@@ -74,7 +77,7 @@ void RenderPreviewDialog::createUI()
 	auto* topSizer = new wxBoxSizer(wxHORIZONTAL);
 
 	// Left panel: Configuration tabs (fixed 450px width)
-	auto* leftPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(450, -1), wxBORDER_SUNKEN);
+	auto* leftPanel = new wxPanel(m_contentPanel, wxID_ANY, wxDefaultPosition, wxSize(450, -1), wxBORDER_SUNKEN);
 	auto* configNotebook = new wxNotebook(leftPanel, wxID_ANY);
 
 	// Create panel instances
@@ -90,7 +93,7 @@ void RenderPreviewDialog::createUI()
 	leftPanel->SetSizer(leftSizer);
 
 	// Right panel: Render preview canvas (adaptive width)
-	m_renderCanvas = new PreviewCanvas(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	m_renderCanvas = new PreviewCanvas(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
 
 	// Set up manager references after canvas is created
 	if (m_renderCanvas) {
@@ -128,11 +131,11 @@ void RenderPreviewDialog::createUI()
 	// Global dialog buttons (right side)
 	auto* dialogButtonSizer = new wxBoxSizer(wxHORIZONTAL);
 
-	m_helpButton = new wxButton(this, wxID_HELP, wxT("Help"));
+	m_helpButton = new wxButton(m_contentPanel, wxID_HELP, wxT("Help"));
 	m_helpButton->Bind(wxEVT_BUTTON, &RenderPreviewDialog::OnHelp, this);
 	dialogButtonSizer->Add(m_helpButton, 0, wxALL, 2);
 
-	m_closeButton = new wxButton(this, wxID_CLOSE, wxT("Close"));
+	m_closeButton = new wxButton(m_contentPanel, wxID_CLOSE, wxT("Close"));
 	m_closeButton->Bind(wxEVT_BUTTON, &RenderPreviewDialog::OnCloseButton, this);
 	dialogButtonSizer->Add(m_closeButton, 0, wxALL, 2);
 
@@ -140,7 +143,7 @@ void RenderPreviewDialog::createUI()
 
 	mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 2);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 }
 
 // Global dialog event handlers

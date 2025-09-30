@@ -15,15 +15,15 @@ wxBEGIN_EVENT_TABLE(ImportStatisticsDialog, wxDialog)
 wxEND_EVENT_TABLE()
 
 ImportStatisticsDialog::ImportStatisticsDialog(wxWindow* parent, const ImportOverallStatistics& stats)
-    : wxDialog(parent, wxID_ANY, "Import Statistics Report",
-               wxDefaultPosition, wxSize(800, 600),
-               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+    : FramelessModalPopup(parent, "Import Statistics Report", wxSize(720, 520)), // Adjusted for table layout
       m_statistics(stats)
 {
+    // Set up title bar with icon
+    SetTitleIcon("chart-bar", wxSize(20, 20));
+    ShowTitleIcon(true);
     createControls();
     layoutControls();
     populateData();
-    Centre();
 }
 
 ImportStatisticsDialog::~ImportStatisticsDialog()
@@ -32,19 +32,13 @@ ImportStatisticsDialog::~ImportStatisticsDialog()
 
 void ImportStatisticsDialog::createControls()
 {
-    // Create notebook
-    m_notebook = new wxNotebook(this, wxID_ANY);
+    // Create notebook as child of contentPanel
+    m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
-    // Summary page
+    // Summary page - Table format
     m_summaryPanel = new wxPanel(m_notebook, wxID_ANY);
-    m_totalFilesText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
-    m_successfulFilesText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
-    m_failedFilesText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
-    m_totalGeometriesText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
-    m_totalSizeText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
-    m_totalTimeText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
-    m_averageTimeText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
-    m_successRateText = new wxStaticText(m_summaryPanel, wxID_ANY, "");
+    m_summaryList = new wxListCtrl(m_summaryPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                   wxLC_REPORT | wxLC_SINGLE_SEL | wxBORDER_SUNKEN);
 
     // Files page
     m_filesPanel = new wxPanel(m_notebook, wxID_ANY);
@@ -67,6 +61,10 @@ void ImportStatisticsDialog::createControls()
     // Buttons will be created in layoutControls
 
     // Set up list controls
+    // Summary table
+    m_summaryList->InsertColumn(0, "Statistic", wxLIST_FORMAT_LEFT, 120);
+    m_summaryList->InsertColumn(1, "Value", wxLIST_FORMAT_LEFT, 100);
+
     // Files list
     m_filesList->InsertColumn(0, "File Name", wxLIST_FORMAT_LEFT, 200);
     m_filesList->InsertColumn(1, "Format", wxLIST_FORMAT_LEFT, 80);
@@ -86,60 +84,34 @@ void ImportStatisticsDialog::createControls()
 
 void ImportStatisticsDialog::layoutControls()
 {
-    // Summary page layout
+    // Summary page layout - Table format
     wxBoxSizer* summarySizer = new wxBoxSizer(wxVERTICAL);
-    wxGridSizer* summaryGrid = new wxGridSizer(2, 10, 10);
-
     wxStaticBoxSizer* summaryBox = new wxStaticBoxSizer(wxVERTICAL, m_summaryPanel, "Import Summary");
 
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Total Files Selected:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_totalFilesText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Successful Files:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_successfulFilesText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Failed Files:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_failedFilesText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Total Geometries:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_totalGeometriesText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Total Size:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_totalSizeText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Total Import Time:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_totalTimeText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Average Time per File:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_averageTimeText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryGrid->Add(new wxStaticText(m_summaryPanel, wxID_ANY, "Success Rate:"), 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-    summaryGrid->Add(m_successRateText, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    summaryBox->Add(summaryGrid, 1, wxEXPAND | wxALL, 10);
-    summarySizer->Add(summaryBox, 1, wxEXPAND | wxALL, 10);
+    summaryBox->Add(m_summaryList, 1, wxEXPAND | wxALL, 4);
+    summarySizer->Add(summaryBox, 1, wxEXPAND | wxALL, 4);
     m_summaryPanel->SetSizer(summarySizer);
 
-    // Files page layout
+    // Files page layout - more compact
     wxBoxSizer* filesSizer = new wxBoxSizer(wxVERTICAL);
     wxBoxSizer* filesContentSizer = new wxBoxSizer(wxVERTICAL);
 
-    filesContentSizer->Add(m_filesList, 1, wxEXPAND | wxALL, 5);
-    filesContentSizer->Add(new wxStaticText(m_filesPanel, wxID_ANY, "File Details:"), 0, wxLEFT | wxRIGHT | wxTOP, 5);
-    filesContentSizer->Add(m_fileDetailsText, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
+    filesContentSizer->Add(m_filesList, 1, wxEXPAND | wxALL, 2);
+    filesContentSizer->Add(new wxStaticText(m_filesPanel, wxID_ANY, "File Details:"), 0, wxLEFT | wxRIGHT | wxTOP, 3);
+    filesContentSizer->Add(m_fileDetailsText, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 2);
 
     filesSizer->Add(filesContentSizer, 1, wxEXPAND);
     m_filesPanel->SetSizer(filesSizer);
 
-    // Formats page layout
+    // Formats page layout - more compact
     wxBoxSizer* formatsSizer = new wxBoxSizer(wxVERTICAL);
-    formatsSizer->Add(m_formatsList, 1, wxEXPAND | wxALL, 5);
+    formatsSizer->Add(m_formatsList, 1, wxEXPAND | wxALL, 2);
     m_formatsPanel->SetSizer(formatsSizer);
 
-    // Details page layout
+    // Details page layout - more compact
     wxBoxSizer* detailsSizer = new wxBoxSizer(wxVERTICAL);
-    detailsSizer->Add(m_detailsTitleText, 0, wxALL, 5);
-    detailsSizer->Add(m_detailsTextCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
+    detailsSizer->Add(m_detailsTitleText, 0, wxALL, 3);
+    detailsSizer->Add(m_detailsTextCtrl, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 2);
     m_detailsPanel->SetSizer(detailsSizer);
 
     // Add pages to notebook
@@ -149,39 +121,61 @@ void ImportStatisticsDialog::layoutControls()
     m_notebook->AddPage(m_detailsPanel, "Details");
 
     // Create buttons
-    wxButton* saveButton = new wxButton(this, wxID_SAVE, "Save Report");
-    wxButton* closeButton = new wxButton(this, wxID_CLOSE, "Close");
+    wxButton* saveButton = new wxButton(m_contentPanel, wxID_SAVE, "Save Report");
+    wxButton* closeButton = new wxButton(m_contentPanel, wxID_CLOSE, "Close");
 
-    // Main layout
+    // Main layout - more compact
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
+    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 4);
 
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     buttonSizer->AddStretchSpacer();
-    buttonSizer->Add(saveButton, 0, wxRIGHT, 5);
+    buttonSizer->Add(saveButton, 0, wxRIGHT, 3);
     buttonSizer->Add(closeButton, 0);
 
-    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
-    SetSizer(mainSizer);
+    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 4);
+
+    // Set the sizer to the content panel
+    m_contentPanel->SetSizer(mainSizer);
 }
 
 void ImportStatisticsDialog::populateData()
 {
-    // Populate summary data
-    m_totalFilesText->SetLabel(wxString::Format("%d", m_statistics.totalFilesSelected));
-    m_successfulFilesText->SetLabel(wxString::Format("%d", m_statistics.totalSuccessfulFiles));
-    m_failedFilesText->SetLabel(wxString::Format("%d", m_statistics.totalFailedFiles));
-    m_totalGeometriesText->SetLabel(wxString::Format("%zu", m_statistics.totalGeometriesCreated));
-    m_totalSizeText->SetLabel(formatFileSize(m_statistics.totalFileSize));
-    m_totalTimeText->SetLabel(formatDuration(m_statistics.totalImportTime));
+    // Populate summary table
+    m_summaryList->DeleteAllItems();
+
+    long itemIndex = 0;
+    itemIndex = m_summaryList->InsertItem(itemIndex, "Files Selected");
+    m_summaryList->SetItem(itemIndex, 1, wxString::Format("%d", m_statistics.totalFilesSelected));
+
+    itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Successful");
+    m_summaryList->SetItem(itemIndex, 1, wxString::Format("%d", m_statistics.totalSuccessfulFiles));
+
+    itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Failed");
+    m_summaryList->SetItem(itemIndex, 1, wxString::Format("%d", m_statistics.totalFailedFiles));
+
+    itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Geometries");
+    m_summaryList->SetItem(itemIndex, 1, wxString::Format("%zu", m_statistics.totalGeometriesCreated));
+
+    itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Total Size");
+    m_summaryList->SetItem(itemIndex, 1, formatFileSize(m_statistics.totalFileSize));
+
+    itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Import Time");
+    m_summaryList->SetItem(itemIndex, 1, formatDuration(m_statistics.totalImportTime));
 
     if (m_statistics.totalFilesProcessed > 0) {
         auto avgTime = m_statistics.totalImportTime / m_statistics.totalFilesProcessed;
-        m_averageTimeText->SetLabel(formatDuration(avgTime));
-        m_successRateText->SetLabel(formatPercentage(m_statistics.totalSuccessfulFiles, m_statistics.totalFilesProcessed) + "%");
+        itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Avg Time");
+        m_summaryList->SetItem(itemIndex, 1, formatDuration(avgTime));
+
+        itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Success Rate");
+        m_summaryList->SetItem(itemIndex, 1, formatPercentage(m_statistics.totalSuccessfulFiles, m_statistics.totalFilesProcessed) + "%");
     } else {
-        m_averageTimeText->SetLabel("N/A");
-        m_successRateText->SetLabel("N/A");
+        itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Avg Time");
+        m_summaryList->SetItem(itemIndex, 1, "N/A");
+
+        itemIndex = m_summaryList->InsertItem(itemIndex + 1, "Success Rate");
+        m_summaryList->SetItem(itemIndex, 1, "N/A");
     }
 
     // Populate files list

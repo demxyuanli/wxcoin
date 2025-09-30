@@ -22,7 +22,7 @@
 #include <wx/msgdlg.h>
 #include <sstream>
 
-BEGIN_EVENT_TABLE(LightingSettingsDialog, wxDialog)
+BEGIN_EVENT_TABLE(LightingSettingsDialog, FramelessModalPopup)
 EVT_BUTTON(wxID_APPLY, LightingSettingsDialog::onApply)
 EVT_BUTTON(wxID_OK, LightingSettingsDialog::onOK)
 EVT_BUTTON(wxID_CANCEL, LightingSettingsDialog::onCancel)
@@ -30,15 +30,19 @@ EVT_BUTTON(wxID_RESET, LightingSettingsDialog::onReset)
 END_EVENT_TABLE()
 
 LightingSettingsDialog::LightingSettingsDialog(wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size)
-	: wxDialog(parent, id, title, pos, wxSize(800, 600), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+	: FramelessModalPopup(parent, title, wxSize(800, 600)),
 	m_config(LightingConfig::getInstance()),
 	m_currentLightIndex(-1)
 {
+	// Set up title bar with icon
+	SetTitleIcon("lighting", wxSize(20, 20));
+	ShowTitleIcon(true);
+
 	// Create main layout
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
 	// Create notebook for different lighting sections
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 
 	// Create pages
 	createEnvironmentPage();
@@ -56,7 +60,7 @@ LightingSettingsDialog::LightingSettingsDialog(wxWindow* parent, wxWindowID id, 
 	createButtons();
 	mainSizer->Add(m_buttonSizer, 0, wxEXPAND | wxALL, 5);
 
-	SetSizer(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 
 	// Load current settings
 	updateEnvironmentProperties();

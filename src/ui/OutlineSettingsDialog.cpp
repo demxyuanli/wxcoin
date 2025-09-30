@@ -6,8 +6,12 @@
 #include <sstream>
 
 OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlineParams& params)
-	: wxDialog(parent, wxID_ANY, "Outline Settings", wxDefaultPosition, wxSize(1200, 800)), 
+	: FramelessModalPopup(parent, "Outline Settings", wxSize(1200, 800)), 
 	  m_params(params) {
+	
+	// Set up title bar with icon
+	SetTitleIcon("outline", wxSize(20, 20));
+	ShowTitleIcon(true);
 	
 	// Initialize extended parameters with base parameters
 	m_extParams.depthWeight = params.depthWeight;
@@ -18,7 +22,7 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	m_extParams.thickness = params.thickness;
 	
 	// Create main splitter
-	wxSplitterWindow* splitter = new wxSplitterWindow(this, wxID_ANY);
+	wxSplitterWindow* splitter = new wxSplitterWindow(m_contentPanel, wxID_ANY);
 	splitter->SetMinimumPaneSize(400);
 	
 	// Left panel - controls
@@ -179,7 +183,7 @@ OutlineSettingsDialog::OutlineSettingsDialog(wxWindow* parent, const ImageOutlin
 	// Main sizer
 	wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 	mainSizer->Add(splitter, 1, wxEXPAND);
-	SetSizerAndFit(mainSizer);
+	m_contentPanel->SetSizer(mainSizer);
 	
 	// Bind color picker events
 	m_bgColorPicker->Bind(wxEVT_COLOURPICKER_CHANGED, &OutlineSettingsDialog::onColorChange, this);

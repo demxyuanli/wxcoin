@@ -11,8 +11,9 @@
 #include <wx/spinctrl.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include "config/LightingConfig.h"
+#include "widgets/FramelessModalPopup.h"
 
-class LightingSettingsDialog : public wxDialog
+class LightingSettingsDialog : public FramelessModalPopup
 {
 public:
 	LightingSettingsDialog(wxWindow* parent, wxWindowID id = wxID_ANY,
