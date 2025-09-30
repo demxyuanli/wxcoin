@@ -896,12 +896,13 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 		size_t total = shapes.size();
 		size_t successCount = 0;
 		size_t failCount = 0;
-		
+
 		for (size_t i = 0; i < shapes.size(); ++i) {
 			if (!shapes[i].IsNull()) {
 				std::string name = baseName + "_" + std::to_string(i);
-				auto geometry = processSingleShape(shapes[i], name, options);
+				auto geometry = processSingleShape(shapes[i], name, baseName, options);
 				if (geometry) {
+					LOG_INF_S("STEPReader: Created geometry '" + name + "' with filename '" + geometry->getFileName() + "'");
 					geometries.push_back(geometry);
 					successCount++;
 				} else {
@@ -937,6 +938,7 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 	const TopoDS_Shape& shape,
 	const std::string& name,
+	const std::string& baseName,
 	const OptimizationOptions& options)
 {
 	if (shape.IsNull()) {
@@ -948,6 +950,7 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 		// Use OCCT raw shape without active fixing (simplified approach)
 		auto geometry = std::make_shared<OCCGeometry>(name);
 		geometry->setShape(shape);
+		geometry->setFileName(baseName);
 
 		// Set distinct color for imported STEP models based on name hash (cool tones and muted)
 		static std::vector<Quantity_Color> distinctColors = {
@@ -1527,6 +1530,7 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 					auto geom = std::make_shared<OCCGeometry>(partName);
 					geom->setShape(part);
 					geom->setColor(color);
+					geom->setFileName(baseName);
 					
 					// Detect if this is a shell model and apply appropriate settings
 					bool isShellModel = detectShellModel(part);

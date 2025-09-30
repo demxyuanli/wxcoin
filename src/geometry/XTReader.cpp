@@ -319,8 +319,8 @@ std::vector<std::shared_ptr<OCCGeometry>> XTReader::processShapesParallel(
         
         for (size_t i = 0; i < shapes.size(); ++i) {
             std::string name = baseName + "_" + std::to_string(i + 1);
-            futures.push_back(std::async(std::launch::async, [this, &shapes, i, name, &options]() {
-                return processSingleShape(shapes[i], name, options);
+            futures.push_back(std::async(std::launch::async, [this, &shapes, i, name, baseName, &options]() {
+                return processSingleShape(shapes[i], name, baseName, options);
             }));
         }
         
@@ -328,6 +328,7 @@ std::vector<std::shared_ptr<OCCGeometry>> XTReader::processShapesParallel(
         for (auto& future : futures) {
             auto geometry = future.get();
             if (geometry) {
+                LOG_INF_S("XTReader: Created geometry '" + geometry->getName() + "' with filename '" + geometry->getFileName() + "'");
                 geometries.push_back(geometry);
             }
         }
@@ -335,8 +336,9 @@ std::vector<std::shared_ptr<OCCGeometry>> XTReader::processShapesParallel(
         // Process shapes sequentially
         for (size_t i = 0; i < shapes.size(); ++i) {
             std::string name = baseName + "_" + std::to_string(i + 1);
-            auto geometry = processSingleShape(shapes[i], name, options);
+            auto geometry = processSingleShape(shapes[i], name, baseName, options);
             if (geometry) {
+                LOG_INF_S("XTReader: Created geometry '" + name + "' with filename '" + geometry->getFileName() + "'");
                 geometries.push_back(geometry);
             }
             
@@ -353,10 +355,11 @@ std::vector<std::shared_ptr<OCCGeometry>> XTReader::processShapesParallel(
 std::shared_ptr<OCCGeometry> XTReader::processSingleShape(
     const TopoDS_Shape& shape,
     const std::string& name,
+    const std::string& baseName,
     const OptimizationOptions& options)
 {
     try {
-        return createGeometryFromShape(shape, name, options);
+        return createGeometryFromShape(shape, name, baseName, options);
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Failed to process shape " + name + ": " + std::string(e.what()));

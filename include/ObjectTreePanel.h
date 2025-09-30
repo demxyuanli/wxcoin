@@ -28,6 +28,8 @@ public:
 
 	// OCCGeometry support
 	void addOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
+	void addOCCGeometry(std::shared_ptr<OCCGeometry> geometry, std::shared_ptr<OCCGeometry> parentGeometry);
+	void addOCCGeometryFromFile(const wxString& fileName, std::shared_ptr<OCCGeometry> geometry);
 	void removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
 	void updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometry);
 	void selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
@@ -46,6 +48,13 @@ public:
 	void setOCCViewer(OCCViewer* viewer);
 
 	PropertyPanel* getPropertyPanel() const { return m_propertyPanel; }
+
+	
+	// Tree data structure management
+	void initializeTreeDataStructure();
+	void updateTreeDataStructure();
+	void refreshTreeDisplay();
+	void addOCCGeometryToNode(std::shared_ptr<FlatTreeItem> parentNode, std::shared_ptr<OCCGeometry> geometry);
 
 	// Public method for OCCViewer to update tree selection
 	void updateTreeSelectionFromViewer();
@@ -87,6 +96,63 @@ private:
 	std::map<std::shared_ptr<OCCGeometry>, std::shared_ptr<FlatTreeItem>> m_occGeometryBodyMap; // body container
 	std::map<std::shared_ptr<FlatTreeItem>, std::shared_ptr<OCCGeometry>> m_treeItemToOCCGeometry; // reverse
 
+	// File-based organization
+	std::map<wxString, std::shared_ptr<FlatTreeItem>> m_fileNodeMap; // filename -> file node
+	
+	// Tree data structure for efficient updates
+	struct TreeDataStructure {
+		std::map<wxString, std::vector<std::shared_ptr<OCCGeometry>>> fileGroups;
+		std::vector<std::shared_ptr<OCCGeometry>> ungroupedGeometries;
+		bool needsUpdate;
+		
+		TreeDataStructure() : needsUpdate(false) {}
+		
+		void clear() {
+			fileGroups.clear();
+			ungroupedGeometries.clear();
+			needsUpdate = true;
+		}
+		
+		void addGeometry(std::shared_ptr<OCCGeometry> geometry) {
+			if (!geometry) return;
+			
+			std::string fileName = geometry->getFileName();
+			if (!fileName.empty()) {
+				fileGroups[fileName].push_back(geometry);
+			} else {
+				ungroupedGeometries.push_back(geometry);
+			}
+			needsUpdate = true;
+		}
+		
+		void removeGeometry(std::shared_ptr<OCCGeometry> geometry) {
+			if (!geometry) return;
+			
+			std::string fileName = geometry->getFileName();
+			if (!fileName.empty()) {
+				auto it = fileGroups.find(fileName);
+				if (it != fileGroups.end()) {
+					auto& geometries = it->second;
+					geometries.erase(std::remove(geometries.begin(), geometries.end(), geometry), geometries.end());
+					if (geometries.empty()) {
+						fileGroups.erase(it);
+					}
+				}
+			} else {
+				ungroupedGeometries.erase(std::remove(ungroupedGeometries.begin(), ungroupedGeometries.end(), geometry), ungroupedGeometries.end());
+			}
+			needsUpdate = true;
+		}
+		
+		void updateGeometry(std::shared_ptr<OCCGeometry> geometry) {
+			// For now, just mark as needing update
+			// In the future, we could implement more sophisticated change tracking
+			needsUpdate = true;
+		}
+	};
+	
+	TreeDataStructure m_treeData;
+
 	// Column indices for treelist actions
 	enum Columns { COL_VIS = 1, COL_DEL = 2, COL_COLOR = 3, COL_EDIT = 4 };
 
@@ -112,4 +178,9 @@ private:
 	std::shared_ptr<FlatTreeItem> m_historyRoot;
 	std::shared_ptr<FlatTreeItem> m_undoRoot;
 	std::shared_ptr<FlatTreeItem> m_redoRoot;
+
+private:
+	// Helper methods for OCCGeometry hierarchy management
+	void removeOCCGeometryRecursive(std::shared_ptr<OCCGeometry> geometry);
+	std::shared_ptr<FlatTreeItem> getOrCreateFileNode(const wxString& fileName);
 };

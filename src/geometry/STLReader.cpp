@@ -111,7 +111,7 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
         if (progress) progress(80, "Creating OCCGeometry");
 
         // Create OCCGeometry
-        auto geometry = createGeometryFromShape(shape, baseName, options);
+        auto geometry = createGeometryFromShape(shape, baseName, baseName, options);
         if (!geometry) {
             result.errorMessage = "Failed to create OCCGeometry from shape";
             LOG_ERR_S("STL OCCGeometry creation failed: geometry is null");

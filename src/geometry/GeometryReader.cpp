@@ -25,12 +25,14 @@
 std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromShape(
     const TopoDS_Shape& shape,
     const std::string& name,
+    const std::string& fileName,
     const OptimizationOptions& options)
 {
     try {
         // Create OCCGeometry from shape
         auto geometry = std::make_shared<OCCGeometry>(name);
         geometry->setShape(shape);
+        geometry->setFileName(fileName);
         
         // Apply optimization options
         if (options.enableShapeAnalysis) {
@@ -45,6 +47,7 @@ std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromShape(
                 if (!fixedShape.IsNull()) {
                     geometry = std::make_shared<OCCGeometry>(name);
                     geometry->setShape(fixedShape);
+                    geometry->setFileName(fileName);
                 }
             }
         }

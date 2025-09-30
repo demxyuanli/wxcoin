@@ -250,6 +250,7 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             m_occViewer->beginBatchOperation();
             m_occViewer->addGeometries(allGeometries);
             m_occViewer->endBatchOperation();
+            m_occViewer->updateObjectTreeDeferred();
             
             if (m_statusBar) {
                 m_statusBar->SetGaugeValue(98);

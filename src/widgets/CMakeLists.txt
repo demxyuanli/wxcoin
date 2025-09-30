@@ -15,6 +15,7 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsSelectionPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatWidgetsProgressPanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatTreeView.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FlatTreeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatEnhancedButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatMessagePanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FramelessModalPopup.cpp
@@ -56,6 +57,7 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsSelectionPanel.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatWidgetsProgressPanel.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatTreeView.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/FlatTreeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatEnhancedButton.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatMessagePanel.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FramelessModalPopup.h

@@ -58,12 +58,18 @@ FramelessModalPopup::FramelessModalPopup(wxWindow* parent,
         wxRect parentRect = parent->GetRect();
         wxSize dialogSize = GetSize();
         
-        // Ensure dialog size doesn't exceed parent window size
+        // Ensure dialog size doesn't exceed parent window size, but allow larger dialogs
         if (dialogSize.GetWidth() > parentRect.width) {
-            dialogSize.SetWidth(parentRect.width - 20); // Leave some margin
+            // Only constrain if parent is very small, otherwise allow larger dialogs
+            if (parentRect.width < 600) {
+                dialogSize.SetWidth(parentRect.width - 20); // Leave some margin
+            }
         }
         if (dialogSize.GetHeight() > parentRect.height) {
-            dialogSize.SetHeight(parentRect.height - 20); // Leave some margin
+            // Only constrain if parent is very small, otherwise allow larger dialogs
+            if (parentRect.height < 600) {
+                dialogSize.SetHeight(parentRect.height - 20); // Leave some margin
+            }
         }
         
         // Set the constrained size
@@ -71,17 +77,21 @@ FramelessModalPopup::FramelessModalPopup(wxWindow* parent,
         
         // Recalculate center position based on the actual dialog size after constraints
         wxSize actualSize = GetSize();
-        int centerX = parentRect.x + (parentRect.width - actualSize.GetWidth()) / 2;
-        int centerY = parentRect.y + (parentRect.height - actualSize.GetHeight()) / 2;
         
-        // Ensure dialog stays within parent window bounds
-        if (centerX < parentRect.x) centerX = parentRect.x;
-        if (centerY < parentRect.y) centerY = parentRect.y;
-        if (centerX + actualSize.GetWidth() > parentRect.x + parentRect.width) {
-            centerX = parentRect.x + parentRect.width - actualSize.GetWidth();
+        // Use screen coordinates for positioning
+        wxPoint parentScreenPos = parent->ClientToScreen(wxPoint(0, 0));
+        int centerX = parentScreenPos.x + (parentRect.width - actualSize.GetWidth()) / 2;
+        int centerY = parentScreenPos.y + (parentRect.height - actualSize.GetHeight()) / 2;
+        
+        // Ensure dialog stays within screen bounds
+        wxRect screenRect = wxDisplay().GetClientArea();
+        if (centerX < screenRect.x) centerX = screenRect.x + 10;
+        if (centerY < screenRect.y) centerY = screenRect.y + 10;
+        if (centerX + actualSize.GetWidth() > screenRect.x + screenRect.width) {
+            centerX = screenRect.x + screenRect.width - actualSize.GetWidth() - 10;
         }
-        if (centerY + actualSize.GetHeight() > parentRect.y + parentRect.height) {
-            centerY = parentRect.y + parentRect.height - actualSize.GetHeight();
+        if (centerY + actualSize.GetHeight() > screenRect.y + screenRect.height) {
+            centerY = screenRect.y + screenRect.height - actualSize.GetHeight() - 10;
         }
         
         SetPosition(wxPoint(centerX, centerY));

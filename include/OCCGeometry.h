@@ -31,6 +31,9 @@ public:
 	const std::string& getName() const { return m_name; }
 	void setName(const std::string& name) { m_name = name; }
 
+	const std::string& getFileName() const { return m_fileName; }
+	void setFileName(const std::string& fileName) { m_fileName = fileName; }
+
 	const TopoDS_Shape& getShape() const { return m_shape; }
 	virtual void setShape(const TopoDS_Shape& shape);
 
@@ -252,6 +255,7 @@ private:
 
 protected:
 	std::string m_name;
+	std::string m_fileName;
 	TopoDS_Shape m_shape;
 
 	// Transform parameters

@@ -74,9 +74,9 @@ VisualSettingsDialog::VisualSettingsDialog(wxWindow* parent, const wxString& tit
 
 	// Add buttons
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-	wxButton* applyButton = new wxButton(this, wxID_APPLY, "Apply");
-	wxButton* okButton = new wxButton(this, wxID_OK, "OK");
-	wxButton* cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+	wxButton* applyButton = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
+	wxButton* okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
+	wxButton* cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
 
 	buttonSizer->Add(applyButton, 0, wxALL, 5);
 	buttonSizer->Add(okButton, 0, wxALL, 5);

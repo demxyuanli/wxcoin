@@ -1,4 +1,5 @@
 #include "widgets/FlatTreeView.h"
+#include "widgets/FlatTreeBuilder.h"
 #include <wx/dcclient.h>
 #include <wx/dcmemory.h>
 #include <wx/dcbuffer.h>
@@ -203,6 +204,7 @@ FlatTreeView::FlatTreeView(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 	, m_deferScrollbarUpdate(false)
 	, m_scrollbarUpdateTimer(nullptr)
 	, m_visibleItemsValid(false)
+	, m_cachedTreeScrollbarHeight(0)
 {
     // Set default colors from theme
     m_backgroundColor = CFG_COLOUR("PanelContentBgColour");
@@ -750,8 +752,7 @@ void FlatTreeView::DrawItems(wxDC& dc)
 	if (!m_root) return;
 
 	wxSize cs = GetClientSize();
-	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+	int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
 
 	// Compute current vertical scroll in pixels
 	int viewStartX = 0, viewStartY = 0;
@@ -1061,8 +1062,7 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
 {
 	if (!m_root) return nullptr;
 
-	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+	int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
 
 	// Convert screen coordinates to logical coordinates using wxScrolledWindow's mechanism
 	wxPoint logicalPoint = CalcUnscrolledPosition(point);
@@ -1180,12 +1180,17 @@ void FlatTreeView::CalculateLayout()
 			if (range > 0) {
 				m_treeHScrollBar->SetScrollbar(m_treeHScrollPos, treeColWidth, m_treeContentWidth, treeColWidth);
 				m_treeHScrollBar->Show();
+				m_cachedTreeScrollbarHeight = m_treeHScrollBar->GetBestSize().GetHeight();
 				RepositionTreeHScrollBar();
 			}
 			else {
 				m_treeHScrollBar->Hide();
 				m_treeHScrollPos = 0;
+				m_cachedTreeScrollbarHeight = 0;
 			}
+		}
+		else {
+			m_cachedTreeScrollbarHeight = 0;
 		}
 	}
 	m_needsLayout = false;
@@ -1294,8 +1299,7 @@ void FlatTreeView::UpdateScrollbars()
 	m_pendingScrollbarUpdate = true;
 	
 	wxSize clientSize = GetClientSize();
-	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-	int visibleHeight = clientSize.GetHeight() - (m_itemHeight + (barH > 0 ? barH : 0) + 1);
+	int visibleHeight = clientSize.GetHeight() - (m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1));
 
 
 	// Calculate total content width
@@ -1464,8 +1468,7 @@ void FlatTreeView::InvalidateItem(std::shared_ptr<FlatTreeItem> item)
 	// Find item in visible items list for fast lookup
 	for (const auto& visibleItem : m_visibleItems) {
 		if (visibleItem.item == item) {
-			int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-			int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+			int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
 			wxRect rect(0, visibleItem.yPosition, GetClientSize().GetWidth(), m_itemHeight);
 			rect.y = std::max(rect.y, headerY);
 			RefreshRect(rect, false);
@@ -1480,8 +1483,7 @@ void FlatTreeView::InvalidateItem(std::shared_ptr<FlatTreeItem> item)
 
 void FlatTreeView::RefreshContentArea()
 {
-	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-	int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+	int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
 	wxRect rect(0, headerY, GetClientSize().GetWidth(), GetClientSize().GetHeight() - headerY);
 	RefreshRect(rect, false);
 }
@@ -1556,14 +1558,13 @@ void FlatTreeView::OnScrollbarUpdateTimer(wxTimerEvent& event)
 void FlatTreeView::BuildVisibleItemsList()
 {
 	m_visibleItems.clear();
-	
+
 	if (!m_root) {
 		m_visibleItemsValid = true;
 		return;
 	}
 
-	int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-	int startY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
+	int startY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
 	int currentIndex = 0;
 	
 	BuildVisibleItemsRecursive(m_root, currentIndex, 0);
@@ -1580,13 +1581,16 @@ void FlatTreeView::BuildVisibleItemsRecursive(std::shared_ptr<FlatTreeItem> item
 {
 	if (!item || !item->IsVisible()) return;
 
-	// Add current item to visible list
-	VisibleItemInfo info;
-	info.item = item;
-	info.level = level;
-	info.yPosition = 0; // Will be set in BuildVisibleItemsList
-	m_visibleItems.push_back(info);
-	currentIndex++;
+	// Don't add root item to visible list - it's invisible container
+	if (item != m_root) {
+		// Add current item to visible list
+		VisibleItemInfo info;
+		info.item = item;
+		info.level = level;
+		info.yPosition = 0; // Will be set in BuildVisibleItemsList
+		m_visibleItems.push_back(info);
+		currentIndex++;
+	}
 
 	// Add children if expanded
 	if (item->IsExpanded()) {
@@ -1622,5 +1626,11 @@ void FlatTreeView::UpdateItemSelection(std::shared_ptr<FlatTreeItem> item, bool 
 		// Only refresh this specific item, no need to rebuild entire tree
 		RefreshItem(item);
 	}
+}
+
+// Tree builder access methods
+std::unique_ptr<FlatTreeBuilder> FlatTreeView::createBuilder()
+{
+	return std::make_unique<FlatTreeBuilder>(this);
 }
 

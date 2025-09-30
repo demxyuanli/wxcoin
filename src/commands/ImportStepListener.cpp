@@ -360,6 +360,7 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			// Add geometries
 			m_occViewer->addGeometries(allGeometries);
 			m_occViewer->endBatchOperation();
+			m_occViewer->updateObjectTreeDeferred();
 			if (m_statusBar) {
 				m_statusBar->SetGaugeValue(98);
 				m_statusBar->SetStatusText("Adding geometries to scene...", 0);

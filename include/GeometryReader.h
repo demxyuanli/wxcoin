@@ -148,6 +148,7 @@ protected:
     static std::shared_ptr<OCCGeometry> createGeometryFromShape(
         const TopoDS_Shape& shape,
         const std::string& name,
+        const std::string& fileName,
         const OptimizationOptions& options
     );
 

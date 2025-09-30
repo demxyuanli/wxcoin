@@ -65,8 +65,8 @@ PositionBasicDialog::PositionBasicDialog(wxWindow* parent, const wxString& title
 
 	// Add buttons
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-	wxButton* okButton = new wxButton(this, wxID_OK, "OK");
-	wxButton* cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
+	wxButton* okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
+	wxButton* cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
 
 	buttonSizer->Add(okButton, 0, wxALL, 5);
 	buttonSizer->Add(cancelButton, 0, wxALL, 5);

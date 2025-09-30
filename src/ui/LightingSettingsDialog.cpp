@@ -339,10 +339,10 @@ void LightingSettingsDialog::createButtons()
 {
 	m_buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 
-	m_applyButton = new wxButton(this, wxID_APPLY, "Apply");
-	m_okButton = new wxButton(this, wxID_OK, "OK");
-	m_cancelButton = new wxButton(this, wxID_CANCEL, "Cancel");
-	m_resetButton = new wxButton(this, wxID_RESET, "Reset");
+	m_applyButton = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
+	m_okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
+	m_cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
+	m_resetButton = new wxButton(m_contentPanel, wxID_RESET, "Reset");
 
 	m_buttonSizer->Add(m_applyButton, 0, wxALL, 5);
 	m_buttonSizer->AddStretchSpacer();

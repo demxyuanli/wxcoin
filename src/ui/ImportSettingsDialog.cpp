@@ -8,7 +8,7 @@ wxBEGIN_EVENT_TABLE(ImportSettingsDialog, FramelessModalPopup)
 wxEND_EVENT_TABLE()
 
 ImportSettingsDialog::ImportSettingsDialog(wxWindow* parent)
-    : FramelessModalPopup(parent, "Import Settings", wxSize(700, 700))
+    : FramelessModalPopup(parent, "Import Settings", wxSize(800, 800))
     , m_presetPanel(nullptr)
     , m_deflectionCtrl(nullptr)
     , m_angularDeflectionCtrl(nullptr)
@@ -266,7 +266,7 @@ void ImportSettingsDialog::layoutControls()
     tessellationHelp->SetFont(tessellationHelpFont);
     tessellationSizer->Add(tessellationHelp, 0, wxALL, 5);
 
-    leftColumn->Add(tessellationSizer, 0, wxEXPAND | wxALL, 5);
+    leftColumn->Add(tessellationSizer, 1, wxEXPAND | wxALL, 5);
 
     // Right column
     wxBoxSizer* rightColumn = new wxBoxSizer(wxVERTICAL);
@@ -308,8 +308,8 @@ void ImportSettingsDialog::layoutControls()
     
     rightColumn->Add(previewSizer, 1, wxEXPAND | wxALL, 5);
     
-    // Add columns to content sizer
-    contentSizer->Add(leftColumn, 0, wxEXPAND | wxALL, 8);
+    // Add columns to content sizer - give more space to left column
+    contentSizer->Add(leftColumn, 2, wxEXPAND | wxALL, 8);
     contentSizer->Add(rightColumn, 1, wxEXPAND | wxALL, 8);
     
     mainSizer->Add(contentSizer, 1, wxEXPAND | wxALL, 5);

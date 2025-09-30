@@ -135,6 +135,7 @@ private:
     std::shared_ptr<OCCGeometry> processSingleShape(
         const TopoDS_Shape& shape,
         const std::string& name,
+        const std::string& baseName,
         const OptimizationOptions& options
     );
 

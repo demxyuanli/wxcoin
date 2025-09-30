@@ -20,11 +20,23 @@ void ObjectTreeSync::addGeometry(std::shared_ptr<OCCGeometry> geometry, bool bat
 	if (!m_sceneManager || !m_sceneManager->getCanvas()) return;
 	Canvas* canvas = m_sceneManager->getCanvas();
 	if (batchMode) {
-		if (m_pendingQueue) m_pendingQueue->push_back(geometry);
+		if (m_pendingQueue) {
+			LOG_INF_S("ObjectTreeSync: Queuing geometry '" + geometry->getName() + "' for batch processing");
+			m_pendingQueue->push_back(geometry);
+		}
 		return;
 	}
 	if (canvas && canvas->getObjectTreePanel()) {
-		canvas->getObjectTreePanel()->addOCCGeometry(geometry);
+		// Use filename-based organization if filename is available
+		std::string fileName = geometry->getFileName();
+		LOG_INF_S("ObjectTreeSync: Adding geometry '" + geometry->getName() + "' with filename '" + fileName + "'");
+		if (!fileName.empty()) {
+			canvas->getObjectTreePanel()->addOCCGeometryFromFile(fileName, geometry);
+		} else {
+			// Fallback to old method for geometries without filename
+			LOG_WRN_S("ObjectTreeSync: Geometry '" + geometry->getName() + "' has no filename, using old method");
+			canvas->getObjectTreePanel()->addOCCGeometry(geometry);
+		}
 	}
 }
 
@@ -38,12 +50,29 @@ void ObjectTreeSync::removeGeometry(std::shared_ptr<OCCGeometry> geometry) {
 }
 
 void ObjectTreeSync::processDeferred() {
-	if (!m_pendingQueue || m_pendingQueue->empty()) return;
+	if (!m_pendingQueue || m_pendingQueue->empty()) {
+		LOG_INF_S("ObjectTreeSync: No pending geometries to process");
+		return;
+	}
 	if (!m_sceneManager || !m_sceneManager->getCanvas()) return;
 	Canvas* canvas = m_sceneManager->getCanvas();
 	if (!canvas || !canvas->getObjectTreePanel()) return;
+	
+	LOG_INF_S("ObjectTreeSync: Processing " + std::to_string(m_pendingQueue->size()) + " deferred geometries");
 	for (const auto& g : *m_pendingQueue) {
-		if (g) canvas->getObjectTreePanel()->addOCCGeometry(g);
+		if (g) {
+			// Use filename-based organization if filename is available
+			std::string fileName = g->getFileName();
+			LOG_INF_S("ObjectTreeSync: Processing deferred geometry '" + g->getName() + "' with filename '" + fileName + "'");
+			if (!fileName.empty()) {
+				canvas->getObjectTreePanel()->addOCCGeometryFromFile(fileName, g);
+			} else {
+				// Fallback to old method for geometries without filename
+				LOG_WRN_S("ObjectTreeSync: Deferred geometry '" + g->getName() + "' has no filename, using old method");
+				canvas->getObjectTreePanel()->addOCCGeometry(g);
+			}
+		}
 	}
 	m_pendingQueue->clear();
+	LOG_INF_S("ObjectTreeSync: Completed processing deferred geometries");
 }

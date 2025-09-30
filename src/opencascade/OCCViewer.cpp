@@ -918,6 +918,11 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 		// Store geometry
 		m_geometries.push_back(geometry);
 
+		// Add to object tree sync (batch mode)
+		if (m_objectTreeSync) {
+			m_objectTreeSync->addGeometry(geometry, true); // true = batch mode
+		}
+
 		// Collect Coin3D node and record mapping for picking -> hover silhouette
 		SoSeparator* coinNode = geometry->getCoinNode();
 		if (coinNode) {
@@ -940,10 +945,11 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 	if (m_batchOperationActive) {
 		for (const auto& geometry : geometries) {
 			if (geometry) {
+				LOG_INF_S("OCCViewer: Queuing geometry '" + geometry->getName() + "' with filename '" + geometry->getFileName() + "' for deferred update");
 				m_pendingObjectTreeUpdates.push_back(geometry);
 			}
 		}
-		LOG_INF_S("Queued " + std::to_string(geometries.size()) + " geometries for deferred ObjectTree update");
+		LOG_INF_S("OCCViewer: Queued " + std::to_string(geometries.size()) + " geometries for deferred ObjectTree update");
 	}
 
 	auto batchAddEndTime = std::chrono::high_resolution_clock::now();
@@ -962,14 +968,15 @@ void OCCViewer::requestViewRefresh()
 void OCCViewer::updateObjectTreeDeferred()
 {
 	if (m_pendingObjectTreeUpdates.empty()) {
-		LOG_INF_S("No pending ObjectTree updates to process");
+		LOG_INF_S("OCCViewer: No pending ObjectTree updates to process");
 		return;
 	}
+	LOG_INF_S("OCCViewer: Starting deferred ObjectTree update for " + std::to_string(m_pendingObjectTreeUpdates.size()) + " geometries");
 	auto updateStartTime = std::chrono::high_resolution_clock::now();
 	if (m_objectTreeSync) m_objectTreeSync->processDeferred();
 	auto updateEndTime = std::chrono::high_resolution_clock::now();
 	auto updateDuration = std::chrono::duration_cast<std::chrono::milliseconds>(updateEndTime - updateStartTime);
-	LOG_INF_S("Deferred ObjectTree updates processed in " + std::to_string(updateDuration.count()) + "ms");
+	LOG_INF_S("OCCViewer: Deferred ObjectTree updates processed in " + std::to_string(updateDuration.count()) + "ms");
 }
 
 // Subdivision surface control implementations

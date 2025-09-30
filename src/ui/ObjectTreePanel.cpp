@@ -1,4 +1,5 @@
 #include "ObjectTreePanel.h"
+#include "widgets/FlatTreeBuilder.h"
 #include "GeometryObject.h"
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
@@ -140,11 +141,8 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 	m_bmpColor = wxArtProvider::GetBitmap(wxART_TIP, wxART_BUTTON, wxSize(12, 12));
 	m_bmpEdit = wxArtProvider::GetBitmap(wxART_EDIT, wxART_BUTTON, wxSize(12, 12));
 
-	// Build root
-	m_rootItem = std::make_shared<FlatTreeItem>("Root", FlatTreeItem::ItemType::ROOT);
-	m_treeView->SetItemSvgIcon(m_rootItem, "folder", wxSize(12, 12));
-	m_rootItem->SetExpanded(true);
-	m_treeView->SetRoot(m_rootItem);
+	// Tree starts empty - no fixed root node
+	m_rootItem.reset();
 	m_partRootItem.reset();
 
 	// Click handling
@@ -155,6 +153,9 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 
 	// Context menu
 	createContextMenu();
+
+	// Initialize tree data structure
+	initializeTreeDataStructure();
 
 	// Tab 2: History (Undo/Redo trees)
 	{
@@ -256,7 +257,7 @@ void ObjectTreePanel::updateObjectName(GeometryObject* object)
 	m_treeView->Refresh();
 }
 
-void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
+void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry, std::shared_ptr<OCCGeometry> parentGeometry)
 {
 	if (!geometry) {
 		LOG_ERR_S("Attempted to add null OCCGeometry to tree");
@@ -267,34 +268,215 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
 		return;
 	}
 
-
-	// Flat hierarchy: add geometry item directly under root with a type-distinguishing icon
 	m_treeView->Freeze();
-	auto featureItem = std::make_shared<FlatTreeItem>(geometry->getName(), FlatTreeItem::ItemType::FILE);
+
+	// Create virtual root if it doesn't exist
+	if (!m_rootItem) {
+		m_rootItem = std::make_shared<FlatTreeItem>("VirtualRoot", FlatTreeItem::ItemType::ROOT);
+		m_rootItem->SetExpanded(true);
+		m_treeView->SetRoot(m_rootItem);
+	}
+
+	// Create geometry item
+	auto geometryItem = std::make_shared<FlatTreeItem>(geometry->getName(), FlatTreeItem::ItemType::FILE);
 
 	// Set SVG icon for the tree item (12x12 size)
-	m_treeView->SetItemSvgIcon(featureItem, "file", wxSize(12, 12));
+	m_treeView->SetItemSvgIcon(geometryItem, "file", wxSize(12, 12));
 
 	// Set SVG icons for columns (12x12 size)
-	m_treeView->SetItemColumnSvgIcon(featureItem, 1, geometry->isVisible() ? "eyeopen" : "eyeclosed", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(featureItem, 2, "delete", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(featureItem, 3, "palette", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(featureItem, 4, "edit", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 1, geometry->isVisible() ? "eyeopen" : "eyeclosed", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 2, "delete", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 3, "palette", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 4, "edit", wxSize(12, 12));
 
 	// Fallback to bitmap icons if SVG not available
-	featureItem->SetIcon(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(12, 12)));
-	featureItem->SetColumnIcon(1, geometry->isVisible() ? m_bmpEyeOpen : m_bmpEyeClosed);
-	featureItem->SetColumnIcon(2, m_bmpDelete);
-	featureItem->SetColumnIcon(3, m_bmpColor);
-	featureItem->SetColumnIcon(4, m_bmpEdit);
+	geometryItem->SetIcon(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(12, 12)));
+	geometryItem->SetColumnIcon(1, geometry->isVisible() ? m_bmpEyeOpen : m_bmpEyeClosed);
+	geometryItem->SetColumnIcon(2, m_bmpDelete);
+	geometryItem->SetColumnIcon(3, m_bmpColor);
+	geometryItem->SetColumnIcon(4, m_bmpEdit);
 
-	m_rootItem->AddChild(featureItem);
+	// Determine parent item
+	std::shared_ptr<FlatTreeItem> parentItem;
+	if (parentGeometry) {
+		auto it = m_occGeometryMap.find(parentGeometry);
+		if (it != m_occGeometryMap.end()) {
+			parentItem = it->second;
+		}
+	}
+	if (!parentItem) {
+		parentItem = m_rootItem; // Default to virtual root
+	}
+
+	// Add as child of parent
+	parentItem->AddChild(geometryItem);
+	m_occGeometryMap[geometry] = geometryItem;
+	m_treeItemToOCCGeometry[geometryItem] = geometry;
+
 	m_treeView->Thaw();
+
+	// Force layout update to ensure proper expansion and scrolling
+	m_treeView->InvalidateVisibleItemsList();
+	m_treeView->UpdateScrollbars();
 	m_treeView->Refresh();
+}
 
-	m_occGeometryMap[geometry] = featureItem;
-	m_treeItemToOCCGeometry[featureItem] = geometry;
+// Add geometry from a specific file (creates file node as 1st level, geometry as child)
+void ObjectTreePanel::addOCCGeometryFromFile(const wxString& fileName, std::shared_ptr<OCCGeometry> geometry)
+{
+	if (!geometry) {
+		LOG_ERR_S("Attempted to add null OCCGeometry to tree");
+		return;
+	}
+	
+	// Check if filename is empty
+	if (fileName.IsEmpty()) {
+		LOG_WRN_S("Filename is empty for geometry '" + geometry->getName() + "'");
+		return;
+	}
 
+	LOG_INF_S("Adding geometry '" + geometry->getName() + "' from file '" + fileName.ToStdString() + "'");
+	
+	// Update data structure
+	m_treeData.addGeometry(geometry);
+	
+	// Refresh display
+	refreshTreeDisplay();
+}
+
+
+// Initialize tree data structure
+void ObjectTreePanel::initializeTreeDataStructure()
+{
+	LOG_INF_S("Initializing tree data structure");
+	m_treeData.clear();
+	
+	// Create virtual root if it doesn't exist
+	if (!m_rootItem) {
+		m_rootItem = std::make_shared<FlatTreeItem>("VirtualRoot", FlatTreeItem::ItemType::ROOT);
+		m_rootItem->SetExpanded(true);
+		m_treeView->SetRoot(m_rootItem);
+	}
+	
+	LOG_INF_S("Tree data structure initialized");
+}
+
+// Update tree data structure
+void ObjectTreePanel::updateTreeDataStructure()
+{
+	if (!m_treeData.needsUpdate) {
+		return;
+	}
+	
+	LOG_INF_S("Updating tree data structure");
+	
+	// Clear existing tree items
+	m_treeView->Clear();
+	m_occGeometryMap.clear();
+	m_treeItemToOCCGeometry.clear();
+	m_fileNodeMap.clear();
+	
+	// Recreate virtual root
+	m_rootItem = std::make_shared<FlatTreeItem>("VirtualRoot", FlatTreeItem::ItemType::ROOT);
+	m_rootItem->SetExpanded(true);
+	m_treeView->SetRoot(m_rootItem);
+	
+	// Add file groups
+	for (const auto& fileGroup : m_treeData.fileGroups) {
+		const wxString& fileName = fileGroup.first;
+		const auto& geometries = fileGroup.second;
+		
+		if (!geometries.empty()) {
+			// Create file node
+			auto fileNode = getOrCreateFileNode(fileName);
+			
+			// Add geometries to file node
+			for (const auto& geometry : geometries) {
+				addOCCGeometryToNode(fileNode, geometry);
+			}
+		}
+	}
+	
+	// Add ungrouped geometries
+	for (const auto& geometry : m_treeData.ungroupedGeometries) {
+		addOCCGeometryToNode(m_rootItem, geometry);
+	}
+	
+	m_treeData.needsUpdate = false;
+	LOG_INF_S("Tree data structure updated");
+}
+
+// Refresh tree display
+void ObjectTreePanel::refreshTreeDisplay()
+{
+	LOG_INF_S("Refreshing tree display");
+	
+	// Update data structure first
+	updateTreeDataStructure();
+	
+	// Force layout update
+	m_treeView->InvalidateVisibleItemsList();
+	m_treeView->UpdateScrollbars();
+	m_treeView->Refresh();
+	
+	LOG_INF_S("Tree display refreshed");
+}
+
+// Helper method to add geometry to a specific node
+void ObjectTreePanel::addOCCGeometryToNode(std::shared_ptr<FlatTreeItem> parentNode, std::shared_ptr<OCCGeometry> geometry)
+{
+	if (!geometry || !parentNode) {
+		return;
+	}
+	
+	// Check if geometry already exists
+	if (m_occGeometryMap.find(geometry) != m_occGeometryMap.end()) {
+		LOG_WRN_S("OCCGeometry already exists in tree: " + geometry->getName());
+		return;
+	}
+	
+	// Create geometry item
+	auto geometryItem = std::make_shared<FlatTreeItem>(geometry->getName(), FlatTreeItem::ItemType::FILE);
+	
+	// Set SVG icon for the tree item
+	m_treeView->SetItemSvgIcon(geometryItem, "file", wxSize(12, 12));
+	
+	// Set SVG icons for columns
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 1, geometry->isVisible() ? "eyeopen" : "eyeclosed", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 2, "delete", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 3, "palette", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 4, "edit", wxSize(12, 12));
+	
+	// Fallback to bitmap icons if SVG not available
+	geometryItem->SetIcon(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(12, 12)));
+	geometryItem->SetColumnIcon(1, geometry->isVisible() ? m_bmpEyeOpen : m_bmpEyeClosed);
+	geometryItem->SetColumnIcon(2, m_bmpDelete);
+	geometryItem->SetColumnIcon(3, m_bmpColor);
+	geometryItem->SetColumnIcon(4, m_bmpEdit);
+	
+	// Add to parent node
+	parentNode->AddChild(geometryItem);
+	
+	// Update mappings
+	m_occGeometryMap[geometry] = geometryItem;
+	m_treeItemToOCCGeometry[geometryItem] = geometry;
+}
+
+// Backward compatibility - add geometry as root level
+void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
+{
+	if (!geometry) {
+		LOG_ERR_S("Attempted to add null OCCGeometry to tree");
+		return;
+	}
+	
+	LOG_INF_S("Adding geometry '" + geometry->getName() + "' (no filename)");
+	
+	// Update data structure
+	m_treeData.addGeometry(geometry);
+	
+	// Refresh display
+	refreshTreeDisplay();
 }
 
 void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
@@ -304,23 +486,74 @@ void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
 		return;
 	}
 
+	LOG_INF_S("Removing geometry '" + geometry->getName() + "' from tree");
+	
+	// Update data structure
+	m_treeData.removeGeometry(geometry);
+	
+	// Refresh display
+	refreshTreeDisplay();
+}
+
+void ObjectTreePanel::removeOCCGeometryRecursive(std::shared_ptr<OCCGeometry> geometry)
+{
 	auto it = m_occGeometryMap.find(geometry);
 	if (it == m_occGeometryMap.end()) {
-		LOG_WRN_S("OCCGeometry not found in tree: " + geometry->getName());
-		return;
+		return; // Already removed
 	}
 
-	LOG_DBG("Removing OCCGeometry from tree", "ObjectTreePanel");
-	m_treeView->Freeze();
 	auto featureItem = it->second;
+
+	// Recursively remove all children first
+	std::vector<std::shared_ptr<FlatTreeItem>> children = featureItem->GetChildren();
+	for (auto& child : children) {
+		auto childIt = m_treeItemToOCCGeometry.find(child);
+		if (childIt != m_treeItemToOCCGeometry.end()) {
+			auto childGeometry = childIt->second;
+			removeOCCGeometryRecursive(childGeometry); // Recursive call
+		}
+	}
+
 	// Remove from parent
 	if (featureItem && featureItem->GetParent()) {
 		featureItem->GetParent()->RemoveChild(featureItem);
 	}
 	m_occGeometryMap.erase(it);
 	m_treeItemToOCCGeometry.erase(featureItem);
-	m_treeView->Thaw();
-	m_treeView->Refresh();
+}
+
+std::shared_ptr<FlatTreeItem> ObjectTreePanel::getOrCreateFileNode(const wxString& fileName)
+{
+	auto it = m_fileNodeMap.find(fileName);
+	if (it != m_fileNodeMap.end()) {
+		return it->second;
+	}
+
+	// Create new file node
+	auto fileNode = std::make_shared<FlatTreeItem>(fileName, FlatTreeItem::ItemType::FOLDER);
+	m_treeView->SetItemSvgIcon(fileNode, "folder", wxSize(12, 12));
+
+	// Set SVG icons for columns (12x12 size) - file nodes can also be controlled
+	m_treeView->SetItemColumnSvgIcon(fileNode, 1, "eyeopen", wxSize(12, 12)); // Default visible
+	m_treeView->SetItemColumnSvgIcon(fileNode, 2, "delete", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(fileNode, 3, "palette", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(fileNode, 4, "edit", wxSize(12, 12));
+
+	// Fallback to bitmap icons if SVG not available
+	fileNode->SetIcon(wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(12, 12)));
+	fileNode->SetColumnIcon(1, m_bmpEyeOpen);
+	fileNode->SetColumnIcon(2, m_bmpDelete);
+	fileNode->SetColumnIcon(3, m_bmpColor);
+	fileNode->SetColumnIcon(4, m_bmpEdit);
+
+	// Add to virtual root
+	m_rootItem->AddChild(fileNode);
+	fileNode->SetExpanded(true); // Expand file nodes by default
+
+	// Store in map
+	m_fileNodeMap[fileName] = fileNode;
+
+	return fileNode;
 }
 
 void ObjectTreePanel::updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometry)
@@ -637,7 +870,7 @@ void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int 
 	m_lastSelectedItem = item;
 	item->SetSelected(true);
 
-	// Root -> clear selection
+	// Virtual root -> clear selection (should not happen since root is not visible)
 	if (item == m_rootItem) {
 		if (m_propertyPanel) m_propertyPanel->clearProperties();
 		if (m_occViewer) m_occViewer->deselectAll();

@@ -12,7 +12,7 @@ wxBEGIN_EVENT_TABLE(GeometryDecompositionDialog, FramelessModalPopup)
 wxEND_EVENT_TABLE()
 
 GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, GeometryReader::DecompositionOptions& options)
-    : FramelessModalPopup(parent, "Geometry Decomposition Settings", wxSize(600, 400))
+    : FramelessModalPopup(parent, "Geometry Decomposition Settings", wxSize(600, 700))
     , m_options(options)
     , m_enableDecompositionCheckBox(nullptr)
     , m_decompositionLevelChoice(nullptr)

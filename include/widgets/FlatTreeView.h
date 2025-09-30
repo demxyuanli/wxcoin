@@ -17,6 +17,7 @@
 class FlatTreeView;
 class FlatTreeItem;
 class FlatTreeColumn;
+class FlatTreeBuilder;
 
 // Custom events
 wxDECLARE_EVENT(wxEVT_FLAT_TREE_ITEM_SELECTED, wxCommandEvent);
@@ -288,6 +289,10 @@ public:
 	void UpdateItemText(std::shared_ptr<FlatTreeItem> item, const wxString& newText);
 	void UpdateItemIcon(std::shared_ptr<FlatTreeItem> item, const wxBitmap& newIcon);
 	void UpdateItemSelection(std::shared_ptr<FlatTreeItem> item, bool selected);
+	
+	// Tree builder access
+	FlatTreeBuilder* getBuilder() { return m_builder.get(); }
+	std::unique_ptr<FlatTreeBuilder> createBuilder();
 
 private:
 	// Data members
@@ -365,7 +370,14 @@ private:
 	std::vector<VisibleItemInfo> m_visibleItems;
 	bool m_visibleItemsValid;
 
+	// Cached scrollbar height for consistent layout calculations
+	int m_cachedTreeScrollbarHeight;
+
+	// Tree builder
+	std::unique_ptr<FlatTreeBuilder> m_builder;
+
 	DECLARE_EVENT_TABLE()
 };
+
 
 #endif // FLAT_TREE_VIEW_H
