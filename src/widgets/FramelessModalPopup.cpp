@@ -329,9 +329,6 @@ void FramelessModalPopup::OnPaint(wxPaintEvent& event)
     if (gc) {
         wxRect clientRect = GetClientRect();
 
-        // Debug output
-        wxLogDebug("FramelessModalPopup OnPaint - ClientRect: %d,%d,%d,%d, TitleBarHeight: %d, BorderWidth: %d, Title: %s",
-                   clientRect.x, clientRect.y, clientRect.width, clientRect.height, TITLE_BAR_HEIGHT, BORDER_WIDTH, m_titleText.c_str());
 
         // Clear background
         gc->SetBrush(wxBrush(CFG_COLOUR("PanelBgColour")));
@@ -348,9 +345,6 @@ void FramelessModalPopup::OnPaint(wxPaintEvent& event)
             titleBarBg = wxColour(200, 200, 200);
         }
 
-        wxLogDebug("FramelessModalPopup OnPaint - TitleBarBg: %d,%d,%d, PanelBg: %d,%d,%d, TitleBarHeight: %d",
-                   titleBarBg.Red(), titleBarBg.Green(), titleBarBg.Blue(),
-                   panelBg.Red(), panelBg.Green(), panelBg.Blue(), TITLE_BAR_HEIGHT);
 
         // Draw title bar background with theme-managed color
         gc->SetBrush(wxBrush(titleBarBg));
@@ -407,10 +401,6 @@ void FramelessModalPopup::OnPaint(wxPaintEvent& event)
         wxLogDebug("FramelessModalPopup OnPaint - Failed to create graphics context");
     }
     
-    // Force a redraw of the title bar area
-    wxRect titleBarRect(0, 0, GetClientSize().GetWidth(), TITLE_BAR_HEIGHT);
-    RefreshRect(titleBarRect, false);
-    
     // Ensure content panel doesn't overlap title bar
     if (m_contentPanel) {
         wxSize clientSize = GetClientSize();
@@ -418,10 +408,6 @@ void FramelessModalPopup::OnPaint(wxPaintEvent& event)
         m_contentPanel->SetSize(clientSize.GetWidth() - 2 * BORDER_WIDTH, 
                                clientSize.GetHeight() - TITLE_BAR_HEIGHT - BORDER_WIDTH);
         
-        wxLogDebug("FramelessModalPopup OnPaint - Content panel repositioned to (%d, %d) with size (%d, %d)",
-                   BORDER_WIDTH, TITLE_BAR_HEIGHT,
-                   clientSize.GetWidth() - 2 * BORDER_WIDTH, 
-                   clientSize.GetHeight() - TITLE_BAR_HEIGHT - BORDER_WIDTH);
     }
 }
 
