@@ -30,8 +30,8 @@ public:
     bool isEdgeDisplayTypeEnabled(EdgeType type) const;
     void updateEdgeDisplay(SoSeparator* parentNode);
 
-    // Apply appearance (color and width) to a specific edge node type if it exists
-    void applyAppearanceToEdgeNode(EdgeType type, const Quantity_Color& color, double width);
+    // Apply appearance (color, width and style) to a specific edge node type if it exists
+    void applyAppearanceToEdgeNode(EdgeType type, const Quantity_Color& color, double width, int style = 0);
 
     void generateHighlightEdgeNode();
     void generateNormalLineNode(const TriangleMesh& mesh, double length);

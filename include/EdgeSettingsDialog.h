@@ -149,4 +149,16 @@ private:
 	wxCheckBox* m_onlyConcaveCheckbox = nullptr;
 	bool m_onlyConvex = false;
 	bool m_onlyConcave = false;
+
+	// Normal display controls
+	wxCheckBox* m_showNormalLinesCheckbox = nullptr;
+	wxCheckBox* m_showFaceNormalLinesCheckbox = nullptr;
+	wxSlider* m_normalLengthSlider = nullptr;
+	wxStaticText* m_normalLengthLabel = nullptr;
+	double m_normalLength = 1.0;
+
+	// Normal display event handlers
+	void onShowNormalLinesCheckbox(wxCommandEvent& event);
+	void onShowFaceNormalLinesCheckbox(wxCommandEvent& event);
+	void onNormalLengthSlider(wxCommandEvent& event);
 };

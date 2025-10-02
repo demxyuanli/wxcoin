@@ -12,32 +12,42 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 		return CommandResult(false, "OCCViewer not available", commandType);
 	}
 
-	// Open parameter dialog
-	OriginalEdgesParamDialog dialog(nullptr);
-	if (dialog.ShowModal() == wxID_OK) {
-		// Get parameters from dialog
-		double samplingDensity = dialog.getSamplingDensity();
-		double minLength = dialog.getMinLength();
-		bool showLinesOnly = dialog.getShowLinesOnly();
-		wxColour edgeColor = dialog.getEdgeColor();
-		double edgeWidth = dialog.getEdgeWidth();
+	// Toggle logic: if currently enabled -> disable; if disabled -> open param dialog
+	const bool currentlyEnabled = m_viewer->isEdgeTypeEnabled(EdgeType::Original);
+	if (!currentlyEnabled) {
+		// Open parameter dialog to get parameters
+		OriginalEdgesParamDialog dialog(nullptr);
+		if (dialog.ShowModal() == wxID_OK) {
+			// Get parameters from dialog
+			double samplingDensity = dialog.getSamplingDensity();
+			double minLength = dialog.getMinLength();
+			bool showLinesOnly = dialog.getShowLinesOnly();
+			wxColour edgeColor = dialog.getEdgeColor();
+			double edgeWidth = dialog.getEdgeWidth();
 
-		LOG_INF_S("Original edges parameters: density=" + std::to_string(samplingDensity) + 
-			", minLength=" + std::to_string(minLength) + 
-			", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
-			", width=" + std::to_string(edgeWidth));
+			LOG_INF_S("Original edges parameters: density=" + std::to_string(samplingDensity) +
+				", minLength=" + std::to_string(minLength) +
+				", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
+				", width=" + std::to_string(edgeWidth));
 
-		// Apply parameters to viewer
-		m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth);
-		
-		// Toggle original edges display
-		const bool show = !m_viewer->isEdgeTypeEnabled(EdgeType::Original);
-		m_viewer->setShowOriginalEdges(show);
-		
-		return CommandResult(true, show ? "Original edges shown with new parameters" : "Original edges hidden", commandType);
+			// Apply parameters to viewer
+			m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth);
+
+			// Enable original edges display
+			m_viewer->setShowOriginalEdges(true);
+
+			return CommandResult(true, "Original edges shown with new parameters", commandType);
+		}
+		else {
+			// User cancelled, don't enable original edges
+			return CommandResult(true, "Original edges display cancelled", commandType);
+		}
 	}
-	
-	return CommandResult(false, "Original edges dialog cancelled", commandType);
+	else {
+		// Disable original edges
+		m_viewer->setShowOriginalEdges(false);
+		return CommandResult(true, "Original edges hidden", commandType);
+	}
 }
 
 bool ShowOriginalEdgesListener::canHandleCommand(const std::string& commandType) const {

@@ -177,6 +177,12 @@ CommandResult ImportStepListener::executeCommand(const std::string& commandType,
 			readerOptions.tessellationMaxPoints = tessellationMaxPoints;
 			readerOptions.enableAdaptiveTessellation = enableAdaptiveTessellation;
 
+			// Set decomposition options for proper color scheme application
+			readerOptions.decomposition.enableDecomposition = true;  // Enable decomposition
+			readerOptions.decomposition.level = GeometryReader::DecompositionLevel::SOLID_LEVEL;  // Decompose to solid level
+			readerOptions.decomposition.colorScheme = GeometryReader::ColorScheme::DISTINCT_COLORS;  // Use distinct colors
+			readerOptions.decomposition.useConsistentColoring = true;  // Use consistent coloring
+
 			auto result = reader->readFile(filePathStr, readerOptions,
 				[this, flatFrame, i, &filePaths](int percent, const std::string& stage) {
 					try {

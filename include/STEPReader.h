@@ -204,6 +204,27 @@ private:
 	);
 
 	/**
+	 * @brief Process a single shape with custom color palette and index
+	 * @param shape The shape to process
+	 * @param name Name for the geometry object
+	 * @param baseName Base filename
+	 * @param options Optimization options
+	 * @param palette Color palette to use
+	 * @param hasher Hash function for consistent coloring
+	 * @param colorIndex Index in the color palette
+	 * @return Processed geometry object
+	 */
+	static std::shared_ptr<OCCGeometry> processSingleShape(
+		const TopoDS_Shape& shape,
+		const std::string& name,
+		const std::string& baseName,
+		const OptimizationOptions& options,
+		const std::vector<Quantity_Color>& palette,
+		const std::hash<std::string>& hasher,
+		size_t colorIndex
+	);
+
+	/**
 	 * @brief Read STEP file metadata (colors, materials, names)
 	 * @param reader The STEP reader instance
 	 * @return Vector of entity metadata

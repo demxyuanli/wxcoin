@@ -47,11 +47,32 @@ void MeshingService::applyAndRemesh(
 	config.setParameter("tessellation_method", std::to_string(tessellationMethod));
 	config.setParameter("feature_preservation", std::to_string(featurePreservation));
 
+	// Check if advanced parameters require forced rebuild
+	bool needsForcedRebuild = false;
+	if (!geometries.empty()) {
+		auto& config = RenderingToolkitAPI::getConfig();
+		auto& smoothingSettings = config.getSmoothingSettings();
+		auto& subdivisionSettings = config.getSubdivisionSettings();
+
+		// Check if this is a significant change that requires forced rebuild
+		needsForcedRebuild = (
+			smoothingSettings.enabled != geometries[0]->isSmoothingEnabled() ||
+			subdivisionSettings.enabled != geometries[0]->isSubdivisionEnabled() ||
+			smoothingSettings.iterations != geometries[0]->getSmoothingIterations() ||
+			subdivisionSettings.levels != geometries[0]->getSubdivisionLevel()
+		);
+	}
+
 	// Regenerate all geometries with updated parameters
 	for (auto& geometry : geometries) {
 		if (geometry) {
-			geometry->updateCoinRepresentationIfNeeded(meshParams);
-			LOG_INF_S("Updated mesh (if needed) for geometry: " + geometry->getName());
+			if (needsForcedRebuild) {
+				geometry->forceCoinRepresentationRebuild(meshParams);
+				LOG_INF_S("Forced rebuild for geometry: " + geometry->getName());
+			} else {
+				geometry->updateCoinRepresentationIfNeeded(meshParams);
+				LOG_INF_S("Updated mesh (if needed) for geometry: " + geometry->getName());
+			}
 		}
 	}
 }

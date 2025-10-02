@@ -72,6 +72,7 @@ protected:
     bool m_dragging;
     wxPoint m_dragStartPos;
     wxRect m_parentWindowRect;
+    bool m_inSizeEvent;
 
     wxDECLARE_EVENT_TABLE();
 };

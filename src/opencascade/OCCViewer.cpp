@@ -1364,7 +1364,11 @@ void OCCViewer::setShowFeatureEdges(bool show) {
 }
 
 void OCCViewer::applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) {
-	if (m_edgeDisplayManager) m_edgeDisplayManager->applyFeatureEdgeAppearance(color, width, edgesOnly);
+	if (m_edgeDisplayManager) m_edgeDisplayManager->applyFeatureEdgeAppearance(color, width, edgesOnly, m_meshParams);
+}
+
+void OCCViewer::applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly) {
+	if (m_edgeDisplayManager) m_edgeDisplayManager->applyFeatureEdgeAppearance(color, width, style, edgesOnly);
 }
 
 void OCCViewer::setExplodeEnabled(bool enabled, double factor) {

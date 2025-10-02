@@ -494,11 +494,24 @@ void FlatTreeView::OnPaint(wxPaintEvent& event)
 		// Don't call UpdateScrollbars here - let the timer handle it
 	}
 
+	// Draw background for entire control
 	DrawBackground(dc);
+	
+	// Draw column headers in non-scrolled area (before PrepareDC)
 	DrawColumnHeaders(dc);
 	
-	// Prepare DC for scrolled drawing of content only
-	PrepareDC(dc);
+	// Set up scrolled DC with offset for content area
+	// We want content to start below the header
+	int headerHeight = m_itemHeight;
+	int scrollX = 0, scrollY = 0;
+	GetViewStart(&scrollX, &scrollY);
+	int ppuX = 1, ppuY = 1;
+	GetScrollPixelsPerUnit(&ppuX, &ppuY);
+	
+	// Set device origin: content scrolls but header stays fixed
+	dc.SetDeviceOrigin(-scrollX * ppuX, headerHeight - scrollY * ppuY);
+	
+	// Draw items in scrolled area (below headers)
 	DrawItems(dc);
 }
 
@@ -752,24 +765,25 @@ void FlatTreeView::DrawItems(wxDC& dc)
 	if (!m_root) return;
 
 	wxSize cs = GetClientSize();
-	int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
+	int headerHeight = m_itemHeight;
 
 	// Compute current vertical scroll in pixels
-	int viewStartX = 0, viewStartY = 0;
-	GetViewStart(&viewStartX, &viewStartY);
-	int ppuX = 1, ppuY = 1;
-	GetScrollPixelsPerUnit(&ppuX, &ppuY);
-	int scrollXPixels = viewStartX * ppuX;
+	int viewStartY = 0;
+	GetViewStart(nullptr, &viewStartY);
+	int ppuY = 1;
+	GetScrollPixelsPerUnit(nullptr, &ppuY);
 	int scrollYPixels = viewStartY * ppuY;
 	
 	// Calculate visible range for virtual scrolling optimization
 	int visibleTop = scrollYPixels;
-	int visibleBottom = scrollYPixels + cs.GetHeight() - headerY;
+	int visibleBottom = scrollYPixels + cs.GetHeight() - headerHeight;
 	
-	dc.SetClippingRegion(scrollXPixels, headerY + scrollYPixels, cs.GetWidth(), cs.GetHeight() - headerY);
+	// Set clipping region for content area
+	// Since we've set device origin, logical (0,0) maps to device (0, headerHeight)
+	dc.SetClippingRegion(0, 0, cs.GetWidth(), cs.GetHeight() - headerHeight);
 
 	// Use virtual scrolling - only draw visible items
-	DrawItemsVirtual(dc, headerY, visibleTop, visibleBottom);
+	DrawItemsVirtual(dc, 0, visibleTop, visibleBottom);
 
 	dc.DestroyClippingRegion();
 }
@@ -1062,13 +1076,23 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
 {
 	if (!m_root) return nullptr;
 
-	int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
+	int headerHeight = m_itemHeight;
 
-	// Convert screen coordinates to logical coordinates using wxScrolledWindow's mechanism
-	wxPoint logicalPoint = CalcUnscrolledPosition(point);
-	int y = logicalPoint.y - headerY;
+	// If click is in header area, return nullptr
+	if (point.y < headerHeight) return nullptr;
 
-	if (y < 0) return nullptr;
+	// Convert device coordinates to content area coordinates
+	// point.y is device coordinate, subtract headerHeight to get position in content area
+	int contentY = point.y - headerHeight;
+	
+	// Add scroll offset to get logical position
+	int scrollY = 0;
+	GetViewStart(nullptr, &scrollY);
+	int ppuY = 1;
+	GetScrollPixelsPerUnit(nullptr, &ppuY);
+	int logicalY = contentY + scrollY * ppuY;
+
+	if (logicalY < 0) return nullptr;
 
 	// Build visible items list if needed
 	if (!m_visibleItemsValid) {
@@ -1077,10 +1101,10 @@ std::shared_ptr<FlatTreeItem> FlatTreeView::HitTest(const wxPoint& point)
 
 	// Use optimized hit testing with visible items list
 	for (const auto& visibleItem : m_visibleItems) {
-		int itemTop = visibleItem.yPosition - headerY;
+		int itemTop = visibleItem.yPosition;
 		int itemBottom = itemTop + m_itemHeight;
 		
-		if (y >= itemTop && y < itemBottom) {
+		if (logicalY >= itemTop && logicalY < itemBottom) {
 			return visibleItem.item;
 		}
 	}
@@ -1180,17 +1204,12 @@ void FlatTreeView::CalculateLayout()
 			if (range > 0) {
 				m_treeHScrollBar->SetScrollbar(m_treeHScrollPos, treeColWidth, m_treeContentWidth, treeColWidth);
 				m_treeHScrollBar->Show();
-				m_cachedTreeScrollbarHeight = m_treeHScrollBar->GetBestSize().GetHeight();
 				RepositionTreeHScrollBar();
 			}
 			else {
 				m_treeHScrollBar->Hide();
 				m_treeHScrollPos = 0;
-				m_cachedTreeScrollbarHeight = 0;
 			}
-		}
-		else {
-			m_cachedTreeScrollbarHeight = 0;
 		}
 	}
 	m_needsLayout = false;
@@ -1201,8 +1220,11 @@ void FlatTreeView::RepositionTreeHScrollBar()
 	if (!m_treeHScrollBar) return;
 	int treeColWidth = m_columns.empty() ? 0 : m_columns[0]->GetWidth();
 	int barHeight = m_treeHScrollBar->GetBestSize().GetHeight();
-	// Pin directly below header at top-left, width equals first column width
-	m_treeHScrollBar->SetSize(0, m_itemHeight, treeColWidth, barHeight);
+	// Position at top of header, covering the first column header
+	// This allows the scrollbar to appear above the header when needed
+	int yPos = m_itemHeight - barHeight;
+	if (yPos < 0) yPos = 0;
+	m_treeHScrollBar->SetSize(0, yPos, treeColWidth, barHeight);
 	m_treeHScrollBar->Raise();
 }
 
@@ -1299,7 +1321,8 @@ void FlatTreeView::UpdateScrollbars()
 	m_pendingScrollbarUpdate = true;
 	
 	wxSize clientSize = GetClientSize();
-	int visibleHeight = clientSize.GetHeight() - (m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1));
+	// Visible height is client height minus header height
+	int visibleHeight = clientSize.GetHeight() - m_itemHeight;
 
 
 	// Calculate total content width
@@ -1435,9 +1458,8 @@ void FlatTreeView::EnsureVisible(std::shared_ptr<FlatTreeItem> item)
 	if (itemY != -1) {
 		// Use wxScrolledWindow's Scroll method to ensure item is visible
 		wxSize clientSize = GetClientSize();
-		int barH = (m_treeHScrollBar && m_treeHScrollBar->IsShown()) ? m_treeHScrollBar->GetBestSize().GetHeight() : 0;
-		int headerY = m_itemHeight + (barH > 0 ? barH : 0) + 1;
-		int visibleHeight = clientSize.GetHeight() - headerY;
+		int headerHeight = m_itemHeight;
+		int visibleHeight = clientSize.GetHeight() - headerHeight;
 
 		// Calculate item index and visible items
 		int itemIndex = itemY / m_itemHeight;
@@ -1468,9 +1490,15 @@ void FlatTreeView::InvalidateItem(std::shared_ptr<FlatTreeItem> item)
 	// Find item in visible items list for fast lookup
 	for (const auto& visibleItem : m_visibleItems) {
 		if (visibleItem.item == item) {
-			int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
-			wxRect rect(0, visibleItem.yPosition, GetClientSize().GetWidth(), m_itemHeight);
-			rect.y = std::max(rect.y, headerY);
+			int headerHeight = m_itemHeight;
+			// Get current scroll position
+			int scrollY = 0;
+			GetViewStart(nullptr, &scrollY);
+			int ppuY = 1;
+			GetScrollPixelsPerUnit(nullptr, &ppuY);
+			// Convert logical position to device position
+			int deviceY = headerHeight + visibleItem.yPosition - scrollY * ppuY;
+			wxRect rect(0, deviceY, GetClientSize().GetWidth(), m_itemHeight);
 			RefreshRect(rect, false);
 			return;
 		}
@@ -1483,8 +1511,8 @@ void FlatTreeView::InvalidateItem(std::shared_ptr<FlatTreeItem> item)
 
 void FlatTreeView::RefreshContentArea()
 {
-	int headerY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
-	wxRect rect(0, headerY, GetClientSize().GetWidth(), GetClientSize().GetHeight() - headerY);
+	int headerHeight = m_itemHeight;
+	wxRect rect(0, headerHeight, GetClientSize().GetWidth(), GetClientSize().GetHeight() - headerHeight);
 	RefreshRect(rect, false);
 }
 
@@ -1564,14 +1592,13 @@ void FlatTreeView::BuildVisibleItemsList()
 		return;
 	}
 
-	int startY = m_itemHeight + (m_cachedTreeScrollbarHeight > 0 ? m_cachedTreeScrollbarHeight + 1 : 1);
 	int currentIndex = 0;
 	
 	BuildVisibleItemsRecursive(m_root, currentIndex, 0);
 	
-	// Update Y positions
+	// Update Y positions - start from 0 in logical coordinates
 	for (size_t i = 0; i < m_visibleItems.size(); ++i) {
-		m_visibleItems[i].yPosition = startY + static_cast<int>(i) * m_itemHeight;
+		m_visibleItems[i].yPosition = static_cast<int>(i) * m_itemHeight;
 	}
 	
 	m_visibleItemsValid = true;

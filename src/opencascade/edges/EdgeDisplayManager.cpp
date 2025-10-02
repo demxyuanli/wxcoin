@@ -34,6 +34,17 @@ void EdgeDisplayManager::toggleEdgeType(EdgeType type, bool show, const MeshPara
 void EdgeDisplayManager::setShowOriginalEdges(bool show, const MeshParameters& meshParams) { m_flags.showOriginalEdges = show; updateAll(meshParams); }
 void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& meshParams) {
 	m_flags.showFeatureEdges = show;
+
+	// When disabling feature edges, restore geometry faces visibility
+	if (!show && m_geometries) {
+		for (auto& g : *m_geometries) {
+			if (g) {
+				// Restore faces visibility when disabling feature edges
+				g->setFacesVisible(true);
+			}
+		}
+	}
+
 	if (show && !m_featureCacheValid && !m_featureEdgeRunning.load()) {
 		// Kick off async generation using last known params (or defaults)
 		startAsyncFeatureEdgeGeneration(m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave, meshParams);
@@ -42,6 +53,17 @@ void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& me
 }
 void EdgeDisplayManager::setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams) {
 	m_flags.showFeatureEdges = show;
+
+	// When disabling feature edges, restore geometry faces visibility
+	if (!show && m_geometries) {
+		for (auto& g : *m_geometries) {
+			if (g) {
+				// Restore faces visibility when disabling feature edges
+				g->setFacesVisible(true);
+			}
+		}
+	}
+
 	if (show) {
 		bool paramsChanged = m_lastFeatureParams.angleDeg != featureAngleDeg || m_lastFeatureParams.minLength != minLength || m_lastFeatureParams.onlyConvex != onlyConvex || m_lastFeatureParams.onlyConcave != onlyConcave;
 		if (paramsChanged) {
@@ -129,9 +151,17 @@ void EdgeDisplayManager::startAsyncFeatureEdgeGeneration(double featureAngleDeg,
 		if (m_sceneManager && m_sceneManager->getCanvas()) {
 			m_sceneManager->getCanvas()->CallAfter([this, meshParams]() {
 				updateAll(meshParams);
+				// Apply stored appearance parameters after feature edges are generated
+				if (m_flags.showFeatureEdges) {
+					applyFeatureEdgeAppearance(m_featureEdgeAppearance.color, m_featureEdgeAppearance.width, m_featureEdgeAppearance.edgesOnly, meshParams);
+				}
 			});
 		} else {
 			updateAll(meshParams);
+			// Apply stored appearance parameters after feature edges are generated
+			if (m_flags.showFeatureEdges) {
+				applyFeatureEdgeAppearance(m_featureEdgeAppearance.color, m_featureEdgeAppearance.width, m_featureEdgeAppearance.edgesOnly, meshParams);
+			}
 		}
 		});
 }
@@ -140,8 +170,19 @@ void EdgeDisplayManager::invalidateFeatureEdgeCache() {
 	m_featureCacheValid = false;
 }
 
-void EdgeDisplayManager::applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) {
+void EdgeDisplayManager::applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly, const MeshParameters& meshParams) {
+	applyFeatureEdgeAppearance(color, width, 0, edgesOnly); // Default to solid style
+}
+
+void EdgeDisplayManager::applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly) {
 	if (!m_geometries) return;
+
+	// Store appearance parameters for later use
+	m_featureEdgeAppearance.color = color;
+	m_featureEdgeAppearance.width = width;
+	m_featureEdgeAppearance.style = style;
+	m_featureEdgeAppearance.edgesOnly = edgesOnly;
+
 	for (auto& g : *m_geometries) {
 		if (!g) continue;
 		g->setEdgeColor(color);
@@ -149,9 +190,16 @@ void EdgeDisplayManager::applyFeatureEdgeAppearance(const Quantity_Color& color,
 		g->setFacesVisible(!edgesOnly);
 		if (g->edgeComponent) {
 			g->edgeComponent->edgeFlags = m_flags;
-			// Guard in case feature node not built yet
+			// If feature edge node exists, apply appearance immediately
 			if (g->edgeComponent->getEdgeNode(EdgeType::Feature)) {
-				g->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width);
+				g->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width, style);
+			} else if (m_flags.showFeatureEdges && !m_featureEdgeRunning.load()) {
+				// If feature edges are enabled but node doesn't exist, ensure generation with current params
+				// This handles the case where appearance is applied before feature edges are generated
+				if (!m_featureCacheValid) {
+					startAsyncFeatureEdgeGeneration(m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength,
+						m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave, MeshParameters{});
+				}
 			}
 			g->updateEdgeDisplay();
 		}

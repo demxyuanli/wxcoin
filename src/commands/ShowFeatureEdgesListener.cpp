@@ -32,13 +32,22 @@ CommandResult ShowFeatureEdgesListener::executeCommand(const std::string& comman
 			bool onlyConcave = dialog.getOnlyConcave();
 			wxColour edgeCol = dialog.getEdgeColor();
 			double edgeWidth = dialog.getEdgeWidth();
+			int edgeStyle = dialog.getEdgeStyle();
 			bool edgesOnly = dialog.getEdgesOnly();
 
 			// Log parameters
 			if (auto* frame = wxGetTopLevelParent(wxWindow::FindFocus())) {
 				if (auto* flatFrame = dynamic_cast<FlatFrame*>(frame)) {
-					wxString paramMsg = wxString::Format("Feature edge parameters: Angle=%.1f°, MinLength=%.3f, OnlyConvex=%s, OnlyConcave=%s, EdgeWidth=%.1f",
-						angle, minLength, onlyConvex ? "Yes" : "No", onlyConcave ? "Yes" : "No", edgeWidth);
+					wxString styleName;
+					switch (edgeStyle) {
+						case 0: styleName = "Solid"; break;
+						case 1: styleName = "Dashed"; break;
+						case 2: styleName = "Dotted"; break;
+						case 3: styleName = "Dash-Dot"; break;
+						default: styleName = "Unknown"; break;
+					}
+					wxString paramMsg = wxString::Format("Feature edge parameters: Angle=%.1f°, MinLength=%.3f, OnlyConvex=%s, OnlyConcave=%s, EdgeWidth=%.1f, Style=%s",
+						angle, minLength, onlyConvex ? "Yes" : "No", onlyConcave ? "Yes" : "No", edgeWidth, styleName.mb_str());
 					flatFrame->appendMessage(paramMsg);
 					flatFrame->appendMessage("Starting feature edge generation...");
 
@@ -55,7 +64,7 @@ CommandResult ShowFeatureEdgesListener::executeCommand(const std::string& comman
 			m_viewer->setShowFeatureEdges(true, angle, minLength, onlyConvex, onlyConcave);
 			// Apply appearance without recomputation
 			Quantity_Color qcol(edgeCol.Red() / 255.0, edgeCol.Green() / 255.0, edgeCol.Blue() / 255.0, Quantity_TOC_RGB);
-			m_viewer->applyFeatureEdgeAppearance(qcol, edgeWidth, edgesOnly);
+			m_viewer->applyFeatureEdgeAppearance(qcol, edgeWidth, edgeStyle, edgesOnly);
 			return CommandResult(true, "Feature edges shown with custom parameters", commandType);
 		}
 		else {

@@ -30,6 +30,7 @@ public:
 	void addOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
 	void addOCCGeometry(std::shared_ptr<OCCGeometry> geometry, std::shared_ptr<OCCGeometry> parentGeometry);
 	void addOCCGeometryFromFile(const wxString& fileName, std::shared_ptr<OCCGeometry> geometry);
+	void addOCCGeometryFromFile(const wxString& fileName, std::shared_ptr<OCCGeometry> geometry, bool immediateRefresh);
 	void removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry);
 	void updateOCCGeometryName(std::shared_ptr<OCCGeometry> geometry);
 	void selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry);

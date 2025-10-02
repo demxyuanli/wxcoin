@@ -886,11 +886,51 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 	}
 
 	try {
-		// Extract individual shapes
 		std::vector<TopoDS_Shape> shapes;
-		extractShapes(shape, shapes);
+
+		// Check if decomposition is enabled
+		if (options.decomposition.enableDecomposition) {
+			// Use decomposition logic
+			shapes = decomposeByLevelUsingTopo(shape, options.decomposition.level);
+
+			// Apply heuristic component detection when decomposition yields a single part
+			if (shapes.size() == 1) {
+				std::vector<TopoDS_Shape> heuristics;
+				// 1) Try shell grouping (multi-shell solids)
+				decomposeByShellGroups(shape, heuristics);
+				if (heuristics.size() <= 1) {
+					// 2) FreeCAD-like strategy (solids>shells>features)
+					heuristics.clear();
+					decomposeShapeFreeCADLike(shape, heuristics);
+				}
+				if (heuristics.size() <= 1) {
+					// 3) Geometric features grouping (planes/cylinders etc.)
+					heuristics.clear();
+					decomposeByGeometricFeatures(shape, heuristics);
+				}
+				if (heuristics.size() <= 1) {
+					// 4) Connectivity-based grouping (last resort)
+					heuristics.clear();
+					decomposeByConnectivity(shape, heuristics);
+				}
+				if (heuristics.size() > 1) {
+					shapes = std::move(heuristics);
+				}
+			}
+
+			LOG_INF_S("Decomposed shape into " + std::to_string(shapes.size()) + " components using level: " +
+				std::to_string(static_cast<int>(options.decomposition.level)));
+		} else {
+			// No decomposition - extract individual shapes as before
+			extractShapes(shape, shapes);
+		}
 
 		LOG_INF_S("Converting " + std::to_string(shapes.size()) + " shapes to geometries for: " + baseName);
+
+		// Get color palette for the selected scheme
+		auto palette = getPaletteForScheme(options.decomposition.colorScheme);
+		std::hash<std::string> hasher;
+		size_t colorIndex = 0;
 
 		// Sequential processing with progress (simplified from parallel)
 		size_t total = shapes.size();
@@ -900,11 +940,12 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 		for (size_t i = 0; i < shapes.size(); ++i) {
 			if (!shapes[i].IsNull()) {
 				std::string name = baseName + "_" + std::to_string(i);
-				auto geometry = processSingleShape(shapes[i], name, baseName, options);
+				auto geometry = processSingleShape(shapes[i], name, baseName, options, palette, hasher, colorIndex);
 				if (geometry) {
 					LOG_INF_S("STEPReader: Created geometry '" + name + "' with filename '" + geometry->getFileName() + "'");
 					geometries.push_back(geometry);
 					successCount++;
+					colorIndex++;
 				} else {
 					failCount++;
 				}
@@ -915,9 +956,9 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPReader::shapeToGeometries(
 				progress(pct, "convert");
 			}
 		}
-		
+
 		if (failCount > 0) {
-			LOG_WRN_S("Failed to process " + std::to_string(failCount) + " out of " + 
+			LOG_WRN_S("Failed to process " + std::to_string(failCount) + " out of " +
 				std::to_string(total) + " shapes for: " + baseName);
 		}
 	}
@@ -941,6 +982,33 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 	const std::string& baseName,
 	const OptimizationOptions& options)
 {
+	// Get color palette for the selected scheme
+	auto palette = getPaletteForScheme(options.decomposition.colorScheme);
+	std::hash<std::string> hasher;
+
+	// Use sequential coloring if decomposition is enabled, otherwise use hash-based coloring
+	size_t colorIndex = 0;
+	if (options.decomposition.enableDecomposition && options.decomposition.useConsistentColoring) {
+		// Use hash-based consistent coloring for decomposed components
+		colorIndex = hasher(name) % palette.size();
+	} else {
+		// Use sequential coloring from the palette
+		static size_t globalColorIndex = 0;
+		colorIndex = globalColorIndex++ % palette.size();
+	}
+
+	return processSingleShape(shape, name, baseName, options, palette, hasher, colorIndex);
+}
+
+std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
+	const TopoDS_Shape& shape,
+	const std::string& name,
+	const std::string& baseName,
+	const OptimizationOptions& options,
+	const std::vector<Quantity_Color>& palette,
+	const std::hash<std::string>& hasher,
+	size_t colorIndex)
+{
 	if (shape.IsNull()) {
 		LOG_WRN_S("Skipping null shape for: " + name);
 		return nullptr;
@@ -952,30 +1020,8 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 		geometry->setShape(shape);
 		geometry->setFileName(baseName);
 
-		// Set distinct color for imported STEP models based on name hash (cool tones and muted)
-		static std::vector<Quantity_Color> distinctColors = {
-			Quantity_Color(0.4, 0.5, 0.6, Quantity_TOC_RGB), // Cool Blue-Gray
-			Quantity_Color(0.3, 0.5, 0.7, Quantity_TOC_RGB), // Steel Blue
-			Quantity_Color(0.2, 0.4, 0.6, Quantity_TOC_RGB), // Deep Blue
-			Quantity_Color(0.4, 0.6, 0.7, Quantity_TOC_RGB), // Light Blue-Gray
-			Quantity_Color(0.3, 0.6, 0.5, Quantity_TOC_RGB), // Teal
-			Quantity_Color(0.2, 0.5, 0.4, Quantity_TOC_RGB), // Dark Teal
-			Quantity_Color(0.5, 0.4, 0.6, Quantity_TOC_RGB), // Cool Purple
-			Quantity_Color(0.4, 0.3, 0.5, Quantity_TOC_RGB), // Muted Purple
-			Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB), // Neutral Gray
-			Quantity_Color(0.4, 0.4, 0.4, Quantity_TOC_RGB), // Dark Gray
-			Quantity_Color(0.6, 0.5, 0.4, Quantity_TOC_RGB), // Cool Beige
-			Quantity_Color(0.5, 0.6, 0.5, Quantity_TOC_RGB), // Cool Green-Gray
-			Quantity_Color(0.3, 0.4, 0.5, Quantity_TOC_RGB), // Slate Blue
-			Quantity_Color(0.4, 0.5, 0.4, Quantity_TOC_RGB), // Cool Green
-			Quantity_Color(0.6, 0.4, 0.5, Quantity_TOC_RGB), // Cool Rose
-		};
-		
-		// Generate color index based on name hash for consistent coloring
-		std::hash<std::string> hasher;
-		size_t hashValue = hasher(name);
-		size_t colorIndex = hashValue % distinctColors.size();
-		Quantity_Color componentColor = distinctColors[colorIndex];
+		// Set color based on the provided palette and index
+		Quantity_Color componentColor = palette[colorIndex % palette.size()];
 		geometry->setColor(componentColor);
 
 		// Detect if this is a shell model and apply appropriate settings

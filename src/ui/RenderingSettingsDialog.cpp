@@ -133,8 +133,6 @@ void RenderingSettingsDialog::createMaterialPage()
 {
 	m_materialPage = new wxPanel(m_notebook);
 
-	// Material preset choice
-	new wxStaticText(m_materialPage, wxID_ANY, "Material Preset:");
 	m_materialPresetChoice = new wxChoice(m_materialPage, wxID_ANY);
 	auto presets = RenderingConfig::getAvailablePresets();
 	for (const auto& preset : presets) {
@@ -143,27 +141,22 @@ void RenderingSettingsDialog::createMaterialPage()
 	m_materialPresetChoice->SetSelection(0); // Default to "Custom"
 
 	// Material ambient color
-	new wxStaticText(m_materialPage, wxID_ANY, "Ambient Color:");
 	m_materialAmbientColorButton = new wxButton(m_materialPage, wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 30));
 	updateColorButton(m_materialAmbientColorButton, quantityColorToWxColour(m_materialAmbientColor));
 
 	// Material diffuse color
-	new wxStaticText(m_materialPage, wxID_ANY, "Diffuse Color:");
 	m_materialDiffuseColorButton = new wxButton(m_materialPage, wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 30));
 	updateColorButton(m_materialDiffuseColorButton, quantityColorToWxColour(m_materialDiffuseColor));
 
 	// Material specular color
-	new wxStaticText(m_materialPage, wxID_ANY, "Specular Color:");
 	m_materialSpecularColorButton = new wxButton(m_materialPage, wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 30));
 	updateColorButton(m_materialSpecularColorButton, quantityColorToWxColour(m_materialSpecularColor));
 
 	// Material shininess
-	new wxStaticText(m_materialPage, wxID_ANY, "Shininess:");
 	m_materialShininessSlider = new wxSlider(m_materialPage, wxID_ANY, 30, 0, 100, wxDefaultPosition, wxSize(200, -1));
 	m_materialShininessLabel = new wxStaticText(m_materialPage, wxID_ANY, "30");
 
 	// Material transparency
-	new wxStaticText(m_materialPage, wxID_ANY, "Transparency:");
 	m_materialTransparencySlider = new wxSlider(m_materialPage, wxID_ANY, 0, 0, 100, wxDefaultPosition, wxSize(200, -1));
 	m_materialTransparencyLabel = new wxStaticText(m_materialPage, wxID_ANY, "0%");
 
@@ -1386,6 +1379,15 @@ void RenderingSettingsDialog::applySettings()
 		// RenderingSettingsDialog only manages global rendering configuration
 		LOG_INF_S("Global rendering settings applied. Individual geometry settings are managed by PositionBasicDialog and VisualSettingsDialog.");
 
+		// Apply normal display settings
+		if (m_showNormalDebug) {
+			m_occViewer->setShowNormalLines(true);
+			LOG_INF_S("Normal lines display enabled through rendering settings");
+		} else {
+			m_occViewer->setShowNormalLines(false);
+			LOG_INF_S("Normal lines display disabled through rendering settings");
+		}
+
 		// Apply lighting settings to rendering engine
 		if (m_renderingEngine) {
 			// Lighting is now handled by SceneManager through LightingConfig
@@ -1533,9 +1535,12 @@ Quantity_Color RenderingSettingsDialog::wxColourToQuantityColor(const wxColour& 
 
 void RenderingSettingsDialog::updateColorButton(wxButton* button, const wxColour& color)
 {
-	button->SetBackgroundColour(color);
-	button->SetForegroundColour(color.Red() + color.Green() + color.Blue() < 382 ? *wxWHITE : *wxBLACK);
-	button->Refresh();
+	// Only update if color actually changed to avoid unnecessary repaints
+	if (button->GetBackgroundColour() != color) {
+		button->SetBackgroundColour(color);
+		button->SetForegroundColour(color.Red() + color.Green() + color.Blue() < 382 ? *wxWHITE : *wxBLACK);
+		button->Refresh();
+	}
 }
 
 void RenderingSettingsDialog::onMaterialPresetChoice(wxCommandEvent& event)

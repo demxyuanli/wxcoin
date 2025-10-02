@@ -6,6 +6,7 @@
 #include <wx/colordlg.h>
 #include <wx/msgdlg.h>
 #include <wx/settings.h>
+#include <wx/statline.h>
 #include <string>
 #include "EdgeComponent.h"
 
@@ -272,7 +273,14 @@ void EdgeSettingsDialog::createFeatureEdgePage() {
 	m_featureEdgePage = new wxPanel(m_notebook);
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
-	wxStaticText* angleLabelStatic = new wxStaticText(m_featureEdgePage, wxID_ANY, "Feature Angle Threshold ():");
+	// Feature edge settings section
+	wxStaticText* featureSectionLabel = new wxStaticText(m_featureEdgePage, wxID_ANY, "Feature Edge Settings");
+	wxFont boldFont = featureSectionLabel->GetFont();
+	boldFont.MakeBold();
+	featureSectionLabel->SetFont(boldFont);
+	sizer->Add(featureSectionLabel, 0, wxALL, 5);
+
+	wxStaticText* angleLabelStatic = new wxStaticText(m_featureEdgePage, wxID_ANY, "Feature Angle Threshold (degrees):");
 	sizer->Add(angleLabelStatic, 0, wxALL, 5);
 	m_featureEdgeAngleSlider = new wxSlider(m_featureEdgePage, wxID_ANY, 30, 1, 90, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
 	m_featureEdgeAngleLabel = new wxStaticText(m_featureEdgePage, wxID_ANY, wxString::Format("%d", 30));
@@ -294,6 +302,34 @@ void EdgeSettingsDialog::createFeatureEdgePage() {
 	m_onlyConcaveCheckbox = new wxCheckBox(m_featureEdgePage, wxID_ANY, "Only Concave Edges");
 	sizer->Add(m_onlyConvexCheckbox, 0, wxALL, 5);
 	sizer->Add(m_onlyConcaveCheckbox, 0, wxALL, 5);
+
+	// Add separator
+	sizer->AddSpacer(10);
+	wxStaticLine* separator = new wxStaticLine(m_featureEdgePage, wxID_ANY);
+	sizer->Add(separator, 0, wxEXPAND | wxALL, 5);
+	sizer->AddSpacer(10);
+
+	// Normal display settings section
+	wxStaticText* normalSectionLabel = new wxStaticText(m_featureEdgePage, wxID_ANY, "Normal Display Settings");
+	normalSectionLabel->SetFont(boldFont);
+	sizer->Add(normalSectionLabel, 0, wxALL, 5);
+
+	m_showNormalLinesCheckbox = new wxCheckBox(m_featureEdgePage, wxID_ANY, "Show Normal Lines");
+	m_showNormalLinesCheckbox->SetValue(false);
+	sizer->Add(m_showNormalLinesCheckbox, 0, wxALL, 5);
+
+	m_showFaceNormalLinesCheckbox = new wxCheckBox(m_featureEdgePage, wxID_ANY, "Show Face Normal Lines");
+	m_showFaceNormalLinesCheckbox->SetValue(false);
+	sizer->Add(m_showFaceNormalLinesCheckbox, 0, wxALL, 5);
+
+	wxStaticText* normalLengthLabel = new wxStaticText(m_featureEdgePage, wxID_ANY, "Normal Line Length:");
+	sizer->Add(normalLengthLabel, 0, wxALL, 5);
+	m_normalLengthSlider = new wxSlider(m_featureEdgePage, wxID_ANY, 50, 10, 200, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+	m_normalLengthLabel = new wxStaticText(m_featureEdgePage, wxID_ANY, "1.0");
+	wxBoxSizer* normalLengthSizer = new wxBoxSizer(wxHORIZONTAL);
+	normalLengthSizer->Add(m_normalLengthSlider, 1, wxEXPAND | wxRIGHT, 5);
+	normalLengthSizer->Add(m_normalLengthLabel, 0, wxALIGN_CENTER_VERTICAL);
+	sizer->Add(normalLengthSizer, 0, wxALL | wxEXPAND, 5);
 
 	m_featureEdgePage->SetSizer(sizer);
 }
@@ -335,6 +371,11 @@ void EdgeSettingsDialog::bindEvents()
 	m_featureEdgeMinLengthSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &EdgeSettingsDialog::onFeatureEdgeMinLengthSlider, this);
 	m_onlyConvexCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &EdgeSettingsDialog::onFeatureEdgeConvexCheckbox, this);
 	m_onlyConcaveCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &EdgeSettingsDialog::onFeatureEdgeConcaveCheckbox, this);
+
+	// Normal display events
+	m_showNormalLinesCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &EdgeSettingsDialog::onShowNormalLinesCheckbox, this);
+	m_showFaceNormalLinesCheckbox->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, &EdgeSettingsDialog::onShowFaceNormalLinesCheckbox, this);
+	m_normalLengthSlider->Bind(wxEVT_COMMAND_SLIDER_UPDATED, &EdgeSettingsDialog::onNormalLengthSlider, this);
 }
 
 void EdgeSettingsDialog::updateControls()
@@ -420,6 +461,8 @@ void EdgeSettingsDialog::applySettings()
 	for (auto& geometry : m_viewer->getAllGeometry()) {
 		if (geometry && geometry->edgeComponent) {
 			geometry->edgeComponent->extractFeatureEdges(geometry->getShape(), m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave);
+			// Apply feature edge appearance using global settings
+			geometry->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
 			geometry->edgeComponent->updateEdgeDisplay(geometry->getCoinNode());
 		}
 	}
@@ -599,6 +642,32 @@ void EdgeSettingsDialog::onFeatureEdgeConvexCheckbox(wxCommandEvent& event) {
 }
 void EdgeSettingsDialog::onFeatureEdgeConcaveCheckbox(wxCommandEvent& event) {
 	m_onlyConcave = m_onlyConcaveCheckbox->GetValue();
+}
+
+// Normal display event handlers
+void EdgeSettingsDialog::onShowNormalLinesCheckbox(wxCommandEvent& event) {
+	bool showNormals = m_showNormalLinesCheckbox->GetValue();
+	if (m_viewer) {
+		m_viewer->setShowNormalLines(showNormals);
+		LOG_INF_S("Normal lines display " + std::string(showNormals ? "enabled" : "disabled"));
+	}
+}
+
+void EdgeSettingsDialog::onShowFaceNormalLinesCheckbox(wxCommandEvent& event) {
+	bool showFaceNormals = m_showFaceNormalLinesCheckbox->GetValue();
+	if (m_viewer) {
+		m_viewer->setShowFaceNormalLines(showFaceNormals);
+		LOG_INF_S("Face normal lines display " + std::string(showFaceNormals ? "enabled" : "disabled"));
+	}
+}
+
+void EdgeSettingsDialog::onNormalLengthSlider(wxCommandEvent& event) {
+	m_normalLength = static_cast<double>(m_normalLengthSlider->GetValue()) / 50.0; // Scale to reasonable range
+	m_normalLengthLabel->SetLabel(wxString::Format("%.2f", m_normalLength));
+	if (m_viewer) {
+		m_viewer->setNormalLength(m_normalLength);
+		LOG_INF_S("Normal line length set to: " + std::to_string(m_normalLength));
+	}
 }
 
 void EdgeSettingsDialog::onApply(wxCommandEvent& event)

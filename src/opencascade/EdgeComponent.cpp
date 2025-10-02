@@ -396,13 +396,14 @@ void EdgeComponent::extractFeatureEdges(const TopoDS_Shape& shape, double featur
 
 	if (featureEdgeNode) featureEdgeNode->unref();
 
-	// Create material for feature edges
+	// Create material for feature edges - use default red color instead of hardcoded blue
 	SoMaterial* mat = new SoMaterial;
-	mat->diffuseColor.setValue(0, 0, 1); // Blue
+	mat->diffuseColor.setValue(1, 0, 0); // Red (will be overridden by applyAppearanceToEdgeNode)
 
 	// Create draw style for feature edges
 	SoDrawStyle* drawStyle = new SoDrawStyle;
 	drawStyle->lineWidth = 2.0f; // Thicker lines for better visibility
+	drawStyle->linePattern = 0xFFFF; // Default to solid - will be overridden by applyAppearanceToEdgeNode
 
 	// Create coordinates
 	SoCoordinate3* coords = new SoCoordinate3;
@@ -600,14 +601,24 @@ void EdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
 	}
 }
 
-void EdgeComponent::applyAppearanceToEdgeNode(EdgeType type, const Quantity_Color& color, double width) {
+void EdgeComponent::applyAppearanceToEdgeNode(EdgeType type, const Quantity_Color& color, double width, int style) {
 	std::lock_guard<std::mutex> lock(m_nodeMutex);
 	SoSeparator* node = getEdgeNode(type);
-	if (!node) return;
+	if (!node) {
+		LOG_WRN_S("applyAppearanceToEdgeNode: node is null for type " + std::to_string(static_cast<int>(type)));
+		return;
+	}
+
+	LOG_INF_S("applyAppearanceToEdgeNode: type=" + std::to_string(static_cast<int>(type)) +
+		", width=" + std::to_string(width) + ", style=" + std::to_string(style));
 
 	// Update material color if present
 	const int childCount = node->getNumChildren();
-	if (childCount <= 0) return;
+	if (childCount <= 0) {
+		LOG_WRN_S("applyAppearanceToEdgeNode: node has no children");
+		return;
+	}
+
 	for (int i = 0; i < childCount; ++i) {
 		SoNode* child = node->getChild(i);
 		if (!child) continue;
@@ -617,8 +628,33 @@ void EdgeComponent::applyAppearanceToEdgeNode(EdgeType type, const Quantity_Colo
 			mat->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
 			continue;
 		}
-		if (SoDrawStyle* style = dynamic_cast<SoDrawStyle*>(child)) {
-			style->lineWidth = static_cast<float>(std::max(0.1, std::min(10.0, width)));
+		if (SoDrawStyle* drawStyle = dynamic_cast<SoDrawStyle*>(child)) {
+			drawStyle->lineWidth = static_cast<float>(std::max(0.1, std::min(10.0, width)));
+
+			// Set line pattern based on style
+			// Coin3D line patterns: 0xFFFF = solid, 0xAAAA = dashed (alternating pixels), 0xCCCC = dotted (2 pixels on/off)
+			switch (style) {
+				case 0: // Solid
+					drawStyle->linePattern = 0xFFFF;
+					LOG_INF_S("Setting line pattern to SOLID (0xFFFF)");
+					break;
+				case 1: // Dashed
+					drawStyle->linePattern = 0xAAAA; // Alternating pixels for dash
+					LOG_INF_S("Setting line pattern to DASHED (0xAAAA)");
+					break;
+				case 2: // Dotted
+					drawStyle->linePattern = 0xCCCC; // 2 pixels on, 2 pixels off
+					LOG_INF_S("Setting line pattern to DOTTED (0xCCCC)");
+					break;
+				case 3: // Dash-Dot
+					drawStyle->linePattern = 0xA9A9; // Dash-dot pattern
+					LOG_INF_S("Setting line pattern to DASH-DOT (0xA9A9)");
+					break;
+				default:
+					drawStyle->linePattern = 0xFFFF; // Default to solid
+					LOG_INF_S("Setting line pattern to DEFAULT SOLID (0xFFFF)");
+					break;
+			}
 			continue;
 		}
 	}
@@ -655,6 +691,21 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 	LOG_INF_S("Generating normal line node with " + std::to_string(mesh.vertices.size()) +
 		" vertices and " + std::to_string(mesh.normals.size()) + " normals");
 
+	// Check if we have valid data
+	if (mesh.vertices.empty()) {
+		LOG_WRN_S("Cannot generate normal lines: no vertices in mesh");
+		return;
+	}
+	if (mesh.normals.empty()) {
+		LOG_WRN_S("Cannot generate normal lines: no normals in mesh");
+		return;
+	}
+	if (mesh.normals.size() != mesh.vertices.size()) {
+		LOG_WRN_S("Cannot generate normal lines: normals count (" + std::to_string(mesh.normals.size()) + 
+			") does not match vertices count (" + std::to_string(mesh.vertices.size()) + ")");
+		return;
+	}
+
 	std::vector<gp_Pnt> points;
 	std::vector<int32_t> indices;
 	std::vector<float> colors; // Store colors for each line
@@ -662,6 +713,7 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 	int normalCount = 0;
 	int correctNormalCount = 0;
 	int incorrectNormalCount = 0;
+	int zeroNormalCount = 0;
 
 	for (size_t i = 0; i < mesh.vertices.size() && i < mesh.normals.size(); ++i) {
 		const gp_Pnt& v = mesh.vertices[i];
@@ -698,13 +750,16 @@ void EdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double leng
 			}
 			
 			normalCount++;
+		} else {
+			zeroNormalCount++;
 		}
 	}
 
 	LOG_INF_S("Generated " + std::to_string(normalCount) + " normal lines from " +
 		std::to_string(mesh.vertices.size()) + " vertices");
 	LOG_INF_S("Correct normals: " + std::to_string(correctNormalCount) + 
-		", Incorrect normals: " + std::to_string(incorrectNormalCount));
+		", Incorrect normals: " + std::to_string(incorrectNormalCount) +
+		", Zero normals: " + std::to_string(zeroNormalCount));
 
 	if (normalLineNode) normalLineNode->unref();
 

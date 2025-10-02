@@ -232,11 +232,18 @@ public:
 	bool needsMeshRegeneration() const;
 	void setMeshRegenerationNeeded(bool needed);
 	void updateCoinRepresentationIfNeeded(const MeshParameters& params);
+	void forceCoinRepresentationRebuild(const MeshParameters& params);
 
 	std::unique_ptr<EdgeComponent> edgeComponent;
 	void setEdgeDisplayType(EdgeType type, bool show);
 	bool isEdgeDisplayTypeEnabled(EdgeType type) const;
 	void updateEdgeDisplay();
+
+	// Advanced parameter accessors for comparison with config
+	bool isSmoothingEnabled() const { return m_lastSmoothingEnabled; }
+	int getSmoothingIterations() const { return m_lastSmoothingIterations; }
+	bool isSubdivisionEnabled() const { return m_lastSubdivisionEnabled; }
+	int getSubdivisionLevel() const { return m_lastSubdivisionLevel; }
 
 	// Assembly level for hierarchical explode
 	int getAssemblyLevel() const { return m_assemblyLevel; }
@@ -341,6 +348,21 @@ protected:
 	// Performance optimization
 	bool m_meshRegenerationNeeded;
 	MeshParameters m_lastMeshParams;
+
+	// Advanced parameters tracking for change detection
+	bool m_lastSmoothingEnabled{ false };
+	int m_lastSmoothingIterations{ 2 };
+	double m_lastSmoothingStrength{ 0.5 };
+	double m_lastSmoothingCreaseAngle{ 30.0 };
+	bool m_lastSubdivisionEnabled{ false };
+	int m_lastSubdivisionLevel{ 2 };
+	int m_lastSubdivisionMethod{ 0 };
+	double m_lastSubdivisionCreaseAngle{ 30.0 };
+	int m_lastTessellationMethod{ 0 };
+	int m_lastTessellationQuality{ 2 };
+	double m_lastFeaturePreservation{ 0.5 };
+	bool m_lastAdaptiveMeshing{ false };
+	bool m_lastParallelProcessing{ true };
 
 	// Material tracking
 	bool m_materialExplicitlySet; // Flag to track if material has been explicitly set

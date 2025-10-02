@@ -324,11 +324,18 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry, std:
 // Add geometry from a specific file (creates file node as 1st level, geometry as child)
 void ObjectTreePanel::addOCCGeometryFromFile(const wxString& fileName, std::shared_ptr<OCCGeometry> geometry)
 {
+	// Default behavior: immediate refresh for backward compatibility
+	addOCCGeometryFromFile(fileName, geometry, true);
+}
+
+// Add geometry from a specific file (creates file node as 1st level, geometry as child)
+void ObjectTreePanel::addOCCGeometryFromFile(const wxString& fileName, std::shared_ptr<OCCGeometry> geometry, bool immediateRefresh)
+{
 	if (!geometry) {
 		LOG_ERR_S("Attempted to add null OCCGeometry to tree");
 		return;
 	}
-	
+
 	// Check if filename is empty
 	if (fileName.IsEmpty()) {
 		LOG_WRN_S("Filename is empty for geometry '" + geometry->getName() + "'");
@@ -336,12 +343,14 @@ void ObjectTreePanel::addOCCGeometryFromFile(const wxString& fileName, std::shar
 	}
 
 	LOG_INF_S("Adding geometry '" + geometry->getName() + "' from file '" + fileName.ToStdString() + "'");
-	
+
 	// Update data structure
 	m_treeData.addGeometry(geometry);
-	
-	// Refresh display
-	refreshTreeDisplay();
+
+	// Refresh display only if requested (for batch operations)
+	if (immediateRefresh) {
+		refreshTreeDisplay();
+	}
 }
 
 

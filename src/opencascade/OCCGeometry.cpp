@@ -8,6 +8,7 @@
 #include "rendering/GeometryProcessor.h"
 #include <limits>
 #include <cmath>
+#include <cstdlib>
 #include <wx/gdicmn.h>
 #include <chrono>
 #include <fstream> // Added for file validation
@@ -471,6 +472,60 @@ void OCCGeometry::setMeshRegenerationNeeded(bool needed)
 	m_meshRegenerationNeeded = needed;
 }
 
+void OCCGeometry::forceCoinRepresentationRebuild(const MeshParameters& params)
+{
+	try {
+		// Force rebuild by marking as needed and calling buildCoinRepresentation directly
+		m_meshRegenerationNeeded = true;
+		buildCoinRepresentation(params,
+			m_materialDiffuseColor, m_materialAmbientColor,
+			m_materialSpecularColor, m_materialEmissiveColor,
+			m_materialShininess, m_transparency);
+		m_lastMeshParams = params;
+		m_meshRegenerationNeeded = false;
+
+		// Update advanced parameter tracking after rebuild
+		auto& config = RenderingToolkitAPI::getConfig();
+		auto& smoothingSettings = config.getSmoothingSettings();
+		auto& subdivisionSettings = config.getSubdivisionSettings();
+		auto& edgeSettings = config.getEdgeSettings();
+
+		m_lastSmoothingEnabled = smoothingSettings.enabled;
+		m_lastSmoothingIterations = smoothingSettings.iterations;
+		m_lastSmoothingCreaseAngle = smoothingSettings.creaseAngle;
+		m_lastSubdivisionEnabled = subdivisionSettings.enabled;
+		m_lastSubdivisionLevel = subdivisionSettings.levels;
+		m_lastSubdivisionCreaseAngle = edgeSettings.featureEdgeAngle;
+
+		// Update custom parameter tracking with safer conversion
+		try {
+			m_lastSmoothingStrength = std::stod(config.getParameter("smoothing_strength", "0.5"));
+			m_lastTessellationMethod = std::stoi(config.getParameter("tessellation_method", "0"));
+			m_lastTessellationQuality = std::stoi(config.getParameter("tessellation_quality", "2"));
+			m_lastFeaturePreservation = std::stod(config.getParameter("feature_preservation", "0.5"));
+			m_lastAdaptiveMeshing = (config.getParameter("adaptive_meshing", "false") == "true");
+			m_lastParallelProcessing = (config.getParameter("parallel_processing", "true") == "true");
+		}
+		catch (const std::exception& e) {
+			LOG_WRN_S("Error parsing custom parameters for " + m_name + ": " + std::string(e.what()));
+		}
+
+		LOG_INF_S("Forced rebuild of Coin3D representation for " + m_name);
+	}
+	catch (const Standard_ConstructionError& e) {
+		LOG_ERR_S("Standard_ConstructionError in forceCoinRepresentationRebuild for " + m_name + ": " + std::string(e.GetMessageString()));
+		m_meshRegenerationNeeded = false;
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Exception in forceCoinRepresentationRebuild for " + m_name + ": " + std::string(e.what()));
+		m_meshRegenerationNeeded = false;
+	}
+	catch (...) {
+		LOG_ERR_S("Unknown exception in forceCoinRepresentationRebuild for " + m_name);
+		m_meshRegenerationNeeded = false;
+	}
+}
+
 void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 {
 	// Check if mesh parameters have changed
@@ -479,9 +534,36 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		params.relative != m_lastMeshParams.relative ||
 		params.inParallel != m_lastMeshParams.inParallel);
 
-	if (m_meshRegenerationNeeded || paramsChanged) {
+	// Check if advanced parameters have changed by comparing with RenderingToolkitAPI config
+	auto& config = RenderingToolkitAPI::getConfig();
+	auto& smoothingSettings = config.getSmoothingSettings();
+	auto& subdivisionSettings = config.getSubdivisionSettings();
+	auto& edgeSettings = config.getEdgeSettings();
+
+	bool advancedParamsChanged = (
+		smoothingSettings.enabled != m_lastSmoothingEnabled ||
+		smoothingSettings.iterations != m_lastSmoothingIterations ||
+		smoothingSettings.creaseAngle != m_lastSmoothingCreaseAngle ||
+		subdivisionSettings.enabled != m_lastSubdivisionEnabled ||
+		subdivisionSettings.levels != m_lastSubdivisionLevel ||
+		edgeSettings.featureEdgeAngle != m_lastSubdivisionCreaseAngle);
+
+	// Check custom parameters that affect rendering
+	bool customParamsChanged = (
+		config.getParameter("smoothing_strength", "0.5") != std::to_string(m_lastSmoothingStrength) ||
+		config.getParameter("tessellation_method", "0") != std::to_string(m_lastTessellationMethod) ||
+		config.getParameter("tessellation_quality", "2") != std::to_string(m_lastTessellationQuality) ||
+		config.getParameter("feature_preservation", "0.5") != std::to_string(m_lastFeaturePreservation) ||
+		config.getParameter("adaptive_meshing", "false") != (m_lastAdaptiveMeshing ? "true" : "false") ||
+		config.getParameter("parallel_processing", "true") != (m_lastParallelProcessing ? "true" : "false"));
+
+	if (m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged || customParamsChanged) {
 		try {
-			buildCoinRepresentation(params);
+			// Use the material-aware version to preserve imported geometry colors
+			buildCoinRepresentation(params,
+				m_materialDiffuseColor, m_materialAmbientColor,
+				m_materialSpecularColor, m_materialEmissiveColor,
+				m_materialShininess, m_transparency);
 			m_lastMeshParams = params;
 			m_meshRegenerationNeeded = false;
 		}
@@ -822,6 +904,36 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 		else {
 			LOG_INF_S("Skipping edge generation for geometry (edge display disabled): " + m_name);
 		}
+	}
+
+	// Update tracking variables for next comparison
+	m_lastMeshParams = params;
+
+	// Update advanced parameter tracking
+	auto& config = RenderingToolkitAPI::getConfig();
+	auto& smoothingSettings = config.getSmoothingSettings();
+	auto& subdivisionSettings = config.getSubdivisionSettings();
+	auto& edgeSettings = config.getEdgeSettings();
+
+	m_lastSmoothingEnabled = smoothingSettings.enabled;
+	m_lastSmoothingIterations = smoothingSettings.iterations;
+	m_lastSmoothingCreaseAngle = smoothingSettings.creaseAngle;
+	m_lastSubdivisionEnabled = subdivisionSettings.enabled;
+	m_lastSubdivisionLevel = subdivisionSettings.levels;
+	m_lastSubdivisionCreaseAngle = edgeSettings.featureEdgeAngle;
+
+	// Update custom parameter tracking with safer conversion
+	try {
+		m_lastSmoothingStrength = std::stod(config.getParameter("smoothing_strength", "0.5"));
+		m_lastTessellationMethod = std::stoi(config.getParameter("tessellation_method", "0"));
+		m_lastTessellationQuality = std::stoi(config.getParameter("tessellation_quality", "2"));
+		m_lastFeaturePreservation = std::stod(config.getParameter("feature_preservation", "0.5"));
+		m_lastAdaptiveMeshing = (config.getParameter("adaptive_meshing", "false") == "true");
+		m_lastParallelProcessing = (config.getParameter("parallel_processing", "true") == "true");
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Error parsing custom parameters for " + m_name + ": " + std::string(e.what()));
+		// Keep default values if parsing fails
 	}
 }
 
@@ -1868,3 +1980,6 @@ void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& para
 	LOG_INF_S("  - Show edges: " + std::string(params.showEdges ? "true" : "false"));
 	LOG_INF_S("  - Subdivision enabled: " + std::string(params.subdivisionEnabled ? "true" : "false"));
 }
+
+
+

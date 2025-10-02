@@ -242,6 +242,7 @@ public:
 	bool isEdgeTypeEnabled(EdgeType type) const override;
 	void updateAllEdgeDisplays() override;
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) override;
+	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly);
 
 	// Slice (clipping plane) control
 	void setSliceEnabled(bool enabled) override;

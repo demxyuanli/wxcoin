@@ -42,8 +42,17 @@ public:
 	FeatureEdgeParams getLastFeatureEdgeParams() const { return m_lastFeatureParams; }
 	void invalidateFeatureEdgeCache();
 
+	struct FeatureEdgeAppearance {
+		Quantity_Color color{ 1.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default red
+		double width{ 2.0 };
+		int style{ 0 }; // 0=Solid, 1=Dashed, 2=Dotted, 3=Dash-Dot
+		bool edgesOnly{ false };
+	};
+
 	// Appearance
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly);
+	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly, const MeshParameters& meshParams);
+	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly);
 	
 	// Original edges parameters
 	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width);
@@ -59,6 +68,7 @@ private:
 	std::thread m_featureEdgeThread;
 	FeatureEdgeParams m_lastFeatureParams{};
 	bool m_featureCacheValid{ false };
+	FeatureEdgeAppearance m_featureEdgeAppearance{};
 	
 	// Original edges parameters
 	struct OriginalEdgeParams { 

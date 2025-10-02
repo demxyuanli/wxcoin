@@ -21,4 +21,5 @@ public:
 	virtual bool isEdgeTypeEnabled(EdgeType type) const = 0;
 	virtual void updateAllEdgeDisplays() = 0;
 	virtual void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) = 0;
+	virtual void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly) = 0;
 };

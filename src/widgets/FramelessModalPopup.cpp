@@ -29,7 +29,8 @@ FramelessModalPopup::FramelessModalPopup(wxWindow* parent,
       m_showTitleIcon(false),
       m_closeButtonHovered(false),
       m_closeButtonPressed(false),
-      m_dragging(false)
+      m_dragging(false),
+      m_inSizeEvent(false)
 {
     // Set background style for custom painting
     SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -207,7 +208,13 @@ void FramelessModalPopup::OnThemeChanged()
 
 void FramelessModalPopup::CreateControls()
 {
-    // Create content panel that fills the client area
+    // Create a main sizer for the dialog to control layout
+    wxBoxSizer* dialogSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Add spacer for title bar
+    dialogSizer->AddSpacer(TITLE_BAR_HEIGHT);
+    
+    // Create content panel that fills the remaining area
     m_contentPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                 wxTAB_TRAVERSAL | wxNO_BORDER);
     
@@ -218,16 +225,14 @@ void FramelessModalPopup::CreateControls()
         m_contentPanel->SetBackgroundColour(wxColour(250, 250, 250)); // Default light gray
     }
     
-    // Position and size content panel below title bar
-    wxSize clientSize = GetClientSize();
-    m_contentPanel->SetPosition(wxPoint(BORDER_WIDTH, TITLE_BAR_HEIGHT));
-    m_contentPanel->SetSize(clientSize.GetWidth() - 2 * BORDER_WIDTH, 
-                           clientSize.GetHeight() - TITLE_BAR_HEIGHT - BORDER_WIDTH);
+    // Add content panel to sizer with proper borders
+    dialogSizer->Add(m_contentPanel, 1, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, BORDER_WIDTH);
     
-    wxLogDebug("FramelessModalPopup CreateControls - Content panel positioned at (%d, %d) with size (%d, %d)", 
-               BORDER_WIDTH, TITLE_BAR_HEIGHT, 
-               clientSize.GetWidth() - 2 * BORDER_WIDTH, 
-               clientSize.GetHeight() - TITLE_BAR_HEIGHT - BORDER_WIDTH);
+    // Set the sizer for this dialog
+    SetSizer(dialogSizer);
+    
+    wxLogDebug("FramelessModalPopup CreateControls - Content panel added to sizer with title bar spacer: %d", 
+               TITLE_BAR_HEIGHT);
 }
 
 void FramelessModalPopup::LayoutControls()
@@ -284,16 +289,12 @@ void FramelessModalPopup::DrawTitleBarContent(wxGraphicsContext* gc)
     int leftMargin = this->BORDER_WIDTH + 8; // Left margin from border
     int currentX = leftMargin;
 
-    wxLogDebug("FramelessModalPopup DrawTitleBarContent - Title: %s, ShowIcon: %d, IconOk: %d, TitleBarHeight: %d",
-               m_titleText.c_str(), m_showTitleIcon, m_titleIcon.IsOk(), TITLE_BAR_HEIGHT);
-
     // Draw title icon if enabled and available
     if (this->m_showTitleIcon && this->m_titleIcon.IsOk()) {
         int iconY = (this->TITLE_BAR_HEIGHT - this->m_titleIcon.GetHeight()) / 2;
         gc->DrawBitmap(this->m_titleIcon, currentX, iconY,
                       this->m_titleIcon.GetWidth(), this->m_titleIcon.GetHeight());
         currentX += this->m_titleIcon.GetWidth() + 8; // Add spacing after icon
-        wxLogDebug("FramelessModalPopup DrawTitleBarContent - Drew icon at %d,%d", currentX - this->m_titleIcon.GetWidth() - 8, iconY);
     }
 
     // Draw title text if available
@@ -303,7 +304,6 @@ void FramelessModalPopup::DrawTitleBarContent(wxGraphicsContext* gc)
 
         int textY = (this->TITLE_BAR_HEIGHT - textHeight) / 2;
         gc->DrawText(this->m_titleText, currentX, textY);
-        wxLogDebug("FramelessModalPopup DrawTitleBarContent - Drew text at %d,%d, size: %.1fx%.1f", currentX, textY, textWidth, textHeight);
     }
 }
 
@@ -339,7 +339,6 @@ void FramelessModalPopup::OnPaint(wxPaintEvent& event)
     if (gc) {
         wxRect clientRect = GetClientRect();
 
-
         // Clear background
         gc->SetBrush(wxBrush(CFG_COLOUR("PanelBgColour")));
         gc->SetPen(*wxTRANSPARENT_PEN);
@@ -347,14 +346,12 @@ void FramelessModalPopup::OnPaint(wxPaintEvent& event)
 
         // Draw title bar background
         wxColour titleBarBg = CFG_COLOUR("TitleBarBgColour");
-        wxColour panelBg = CFG_COLOUR("PanelBgColour");
 
         // Use theme-managed title bar background color
         if (!titleBarBg.IsOk()) {
             // Fallback to a default title bar color if not configured
             titleBarBg = wxColour(200, 200, 200);
         }
-
 
         // Draw title bar background with theme-managed color
         gc->SetBrush(wxBrush(titleBarBg));
@@ -410,35 +407,24 @@ void FramelessModalPopup::OnPaint(wxPaintEvent& event)
     } else {
         wxLogDebug("FramelessModalPopup OnPaint - Failed to create graphics context");
     }
-    
-    // Ensure content panel doesn't overlap title bar
-    if (m_contentPanel) {
-        wxSize clientSize = GetClientSize();
-        m_contentPanel->SetPosition(wxPoint(BORDER_WIDTH, TITLE_BAR_HEIGHT));
-        m_contentPanel->SetSize(clientSize.GetWidth() - 2 * BORDER_WIDTH, 
-                               clientSize.GetHeight() - TITLE_BAR_HEIGHT - BORDER_WIDTH);
-        
-    }
 }
 
 void FramelessModalPopup::OnSize(wxSizeEvent& event)
 {
-    event.Skip();
-    
-    // Update content panel position and size when window is resized
-    if (m_contentPanel) {
-        wxSize clientSize = GetClientSize();
-        m_contentPanel->SetPosition(wxPoint(BORDER_WIDTH, TITLE_BAR_HEIGHT));
-        m_contentPanel->SetSize(clientSize.GetWidth() - 2 * BORDER_WIDTH, 
-                               clientSize.GetHeight() - TITLE_BAR_HEIGHT - BORDER_WIDTH);
-        
-        wxLogDebug("FramelessModalPopup OnSize - Content panel resized to (%d, %d) at position (%d, %d)",
-                   clientSize.GetWidth() - 2 * BORDER_WIDTH, 
-                   clientSize.GetHeight() - TITLE_BAR_HEIGHT - BORDER_WIDTH,
-                   BORDER_WIDTH, TITLE_BAR_HEIGHT);
+    // Prevent recursive OnSize events
+    if (m_inSizeEvent) {
+        event.Skip();
+        return;
     }
     
-    UpdateLayout();
+    m_inSizeEvent = true;
+    
+    // Sizer will automatically handle content panel layout
+    // Just trigger a layout update
+    Layout();
+    
+    m_inSizeEvent = false;
+    event.Skip();
 }
 
 void FramelessModalPopup::OnMouseMove(wxMouseEvent& event)
