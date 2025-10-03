@@ -122,6 +122,7 @@ public:
 	double getMeshDeflection() const override;
 	void setAngularDeflection(double deflection, bool remesh = true) override;
 	double getAngularDeflection() const override;
+	const MeshParameters& getMeshParameters() const;
 
 	// LOD (Level of Detail) control
 	void setLODEnabled(bool enabled) override;

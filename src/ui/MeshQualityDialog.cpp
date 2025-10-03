@@ -391,7 +391,24 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 	
 	// Use a small delay to ensure all parameter changes are processed
 	wxMilliSleep(50);
+	
+	// Force regeneration of all geometries to ensure they use the latest parameters
+	// This is critical to ensure Coin3D representation matches EdgeComponent mesh data
 	m_occViewer->remeshAllGeometries();
+	
+	// Additional step: Force all geometries to regenerate their Coin3D representation
+	// This ensures that the geometry faces use the same parameters as the mesh edges
+	auto geometries = m_occViewer->getAllGeometry();
+	for (auto& geometry : geometries) {
+		if (geometry) {
+			// Force regeneration by marking as needed and updating
+			geometry->setMeshRegenerationNeeded(true);
+			geometry->updateCoinRepresentationIfNeeded(m_occViewer->getMeshParameters());
+			LOG_INF_S("Forced regeneration for geometry: " + geometry->getName());
+		}
+	}
+	
+	LOG_INF_S("Completed forced regeneration of " + std::to_string(geometries.size()) + " geometries");
 	
 	// Force view refresh to ensure changes are visible
 	m_occViewer->requestViewRefresh();

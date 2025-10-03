@@ -479,7 +479,44 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		params.relative != m_lastMeshParams.relative ||
 		params.inParallel != m_lastMeshParams.inParallel);
 
-	if (m_meshRegenerationNeeded || paramsChanged) {
+	// Also check if advanced parameters have changed by checking RenderingToolkitAPI config
+	// This ensures that smoothing, subdivision, and tessellation changes trigger remesh
+	bool advancedParamsChanged = false;
+	try {
+		auto& config = RenderingToolkitAPI::getConfig();
+		auto& smoothingSettings = config.getSmoothingSettings();
+		auto& subdivisionSettings = config.getSubdivisionSettings();
+		
+		// Check if any advanced parameters are different from last known values
+		// We'll force regeneration if any advanced features are enabled or if parameters changed
+		advancedParamsChanged = (smoothingSettings.enabled || subdivisionSettings.enabled);
+		
+		// Also check custom parameters that might have changed
+		std::string tessellationQuality = config.getParameter("tessellation_quality");
+		std::string adaptiveMeshing = config.getParameter("adaptive_meshing");
+		std::string smoothingStrength = config.getParameter("smoothing_strength");
+		
+		// If any of these parameters exist, assume advanced parameters have changed
+		if (!tessellationQuality.empty() || !adaptiveMeshing.empty() || !smoothingStrength.empty()) {
+			advancedParamsChanged = true;
+		}
+		
+		// Additional check: if any advanced features are enabled, always regenerate
+		// This ensures that when MeshQualityDialog applies settings, the geometry uses the latest parameters
+		if (advancedParamsChanged) {
+			LOG_INF_S("Advanced mesh parameters changed, forcing regeneration for geometry: " + m_name);
+			LOG_INF_S("  - Smoothing enabled: " + std::string(smoothingSettings.enabled ? "true" : "false"));
+			LOG_INF_S("  - Subdivision enabled: " + std::string(subdivisionSettings.enabled ? "true" : "false"));
+			if (!tessellationQuality.empty()) {
+				LOG_INF_S("  - Tessellation quality: " + tessellationQuality);
+			}
+		}
+	} catch (...) {
+		// If we can't access config, assume no advanced changes
+		advancedParamsChanged = false;
+	}
+
+	if (m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged) {
 		try {
 			buildCoinRepresentation(params);
 			m_lastMeshParams = params;
