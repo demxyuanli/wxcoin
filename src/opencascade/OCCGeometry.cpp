@@ -534,30 +534,33 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		params.relative != m_lastMeshParams.relative ||
 		params.inParallel != m_lastMeshParams.inParallel);
 
-	// Check if advanced parameters have changed by comparing with RenderingToolkitAPI config
-	auto& config = RenderingToolkitAPI::getConfig();
-	auto& smoothingSettings = config.getSmoothingSettings();
-	auto& subdivisionSettings = config.getSubdivisionSettings();
-	auto& edgeSettings = config.getEdgeSettings();
+	// Also check if advanced parameters have changed by checking RenderingToolkitAPI config
+	// This ensures that smoothing, subdivision, and tessellation changes trigger remesh
+	bool advancedParamsChanged = false;
+	try {
+		auto& config = RenderingToolkitAPI::getConfig();
+		auto& smoothingSettings = config.getSmoothingSettings();
+		auto& subdivisionSettings = config.getSubdivisionSettings();
+		
+		// Check if any advanced parameters are different from last known values
+		// We'll force regeneration if any advanced features are enabled or if parameters changed
+		advancedParamsChanged = (smoothingSettings.enabled || subdivisionSettings.enabled);
+		
+		// Also check custom parameters that might have changed
+		std::string tessellationQuality = config.getParameter("tessellation_quality");
+		std::string adaptiveMeshing = config.getParameter("adaptive_meshing");
+		std::string smoothingStrength = config.getParameter("smoothing_strength");
+		
+		// If any of these parameters exist, assume advanced parameters have changed
+		if (!tessellationQuality.empty() || !adaptiveMeshing.empty() || !smoothingStrength.empty()) {
+			advancedParamsChanged = true;
+		}
+	} catch (...) {
+		// If we can't access config, assume no advanced changes
+		advancedParamsChanged = false;
+	}
 
-	bool advancedParamsChanged = (
-		smoothingSettings.enabled != m_lastSmoothingEnabled ||
-		smoothingSettings.iterations != m_lastSmoothingIterations ||
-		smoothingSettings.creaseAngle != m_lastSmoothingCreaseAngle ||
-		subdivisionSettings.enabled != m_lastSubdivisionEnabled ||
-		subdivisionSettings.levels != m_lastSubdivisionLevel ||
-		edgeSettings.featureEdgeAngle != m_lastSubdivisionCreaseAngle);
-
-	// Check custom parameters that affect rendering
-	bool customParamsChanged = (
-		config.getParameter("smoothing_strength", "0.5") != std::to_string(m_lastSmoothingStrength) ||
-		config.getParameter("tessellation_method", "0") != std::to_string(m_lastTessellationMethod) ||
-		config.getParameter("tessellation_quality", "2") != std::to_string(m_lastTessellationQuality) ||
-		config.getParameter("feature_preservation", "0.5") != std::to_string(m_lastFeaturePreservation) ||
-		config.getParameter("adaptive_meshing", "false") != (m_lastAdaptiveMeshing ? "true" : "false") ||
-		config.getParameter("parallel_processing", "true") != (m_lastParallelProcessing ? "true" : "false"));
-
-	if (m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged || customParamsChanged) {
+	if (m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged) {
 		try {
 			// Use the material-aware version to preserve imported geometry colors
 			buildCoinRepresentation(params,

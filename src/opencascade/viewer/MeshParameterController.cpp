@@ -59,4 +59,7 @@ void MeshParameterController::applyRemesh() {
 		m_smoothingEnabled, m_smoothingIterations, m_smoothingStrength, m_smoothingCreaseAngle,
 		m_subdivisionEnabled, m_subdivisionLevel, m_subdivisionMethod, m_subdivisionCreaseAngle,
 		m_tessellationMethod, m_tessellationQuality, m_featurePreservation, m_adaptiveMeshing, m_parallelProcessing);
+	
+	// Request view refresh after remeshing
+	if (m_viewer) m_viewer->requestViewRefresh();
 }
