@@ -111,12 +111,12 @@ public:
     explicit RenderingConfigParameterSynchronizer(RenderingConfig* config);
     ~RenderingConfigParameterSynchronizer();
     
-    // 参数同步
+    // Parameter synchronization
     void syncFromTree();
     void syncToTree();
     void setupParameterMappings();
     
-    // 参数更新回调
+    // Parameter update callbacks
     void onTreeParameterChanged(const std::string& path, const ParameterValue& value);
     void onConfigPropertyChanged(const std::string& property, const ParameterValue& value);
     
@@ -131,7 +131,7 @@ private:
 };
 
 /**
- * @brief 参数同步器初始化器
+ * @brief Parameter synchronizer initializer
  */
 class ParameterSynchronizerInitializer {
 public:
