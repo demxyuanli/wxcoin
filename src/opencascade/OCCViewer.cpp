@@ -679,6 +679,11 @@ double OCCViewer::getAngularDeflection() const
 	return m_meshParams.angularDeflection;
 }
 
+const MeshParameters& OCCViewer::getMeshParameters() const
+{
+	return m_meshParams;
+}
+
 void OCCViewer::onSelectionChanged()
 {
 	if (m_selectionManager) m_selectionManager->onSelectionChanged();

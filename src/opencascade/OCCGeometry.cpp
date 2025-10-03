@@ -500,6 +500,17 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		if (!tessellationQuality.empty() || !adaptiveMeshing.empty() || !smoothingStrength.empty()) {
 			advancedParamsChanged = true;
 		}
+		
+		// Additional check: if any advanced features are enabled, always regenerate
+		// This ensures that when MeshQualityDialog applies settings, the geometry uses the latest parameters
+		if (advancedParamsChanged) {
+			LOG_INF_S("Advanced mesh parameters changed, forcing regeneration for geometry: " + m_name);
+			LOG_INF_S("  - Smoothing enabled: " + std::string(smoothingSettings.enabled ? "true" : "false"));
+			LOG_INF_S("  - Subdivision enabled: " + std::string(subdivisionSettings.enabled ? "true" : "false"));
+			if (!tessellationQuality.empty()) {
+				LOG_INF_S("  - Tessellation quality: " + tessellationQuality);
+			}
+		}
 	} catch (...) {
 		// If we can't access config, assume no advanced changes
 		advancedParamsChanged = false;

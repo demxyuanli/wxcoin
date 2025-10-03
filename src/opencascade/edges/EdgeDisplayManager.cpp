@@ -76,6 +76,11 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams) {
 	if (!m_geometries) return;
 	EdgeGenerationService generator;
 	EdgeRenderApplier applier;
+	
+	// Use the provided meshParams, but ensure it's the latest parameters
+	// This helps maintain consistency between geometry faces and mesh edges
+	MeshParameters currentParams = meshParams;
+	
 	for (auto& g : *m_geometries) {
 		if (!g) continue;
 		if (!g->edgeComponent) g->edgeComponent = std::make_unique<EdgeComponent>();
@@ -91,7 +96,7 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams) {
 		if (m_flags.showNormalLines && g->edgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) needMesh = true;
 		if (m_flags.showFaceNormalLines && g->edgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) needMesh = true;
 		if (needMesh) {
-			generator.ensureMeshDerivedEdges(g, meshParams, m_flags.showMeshEdges, m_flags.showNormalLines, m_flags.showFaceNormalLines);
+			generator.ensureMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showNormalLines, m_flags.showFaceNormalLines);
 		}
 		if (m_flags.showFeatureEdges && m_featureCacheValid) {
 			generator.ensureFeatureEdges(g, m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave);
