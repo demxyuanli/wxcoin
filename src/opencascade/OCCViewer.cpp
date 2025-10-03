@@ -599,6 +599,8 @@ void OCCViewer::setMeshDeflection(double deflection, bool remesh)
 					if (++logCounter % 10 == 0) { // Log every 10th remesh
 						LOG_DBG_S("Remeshed all geometries with deflection: " + std::to_string(deflection));
 					}
+					// Request view refresh after remeshing
+					if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 				}
 				catch (const std::exception& e) {
 					LOG_ERR_S("OCCViewer::setMeshDeflection: Exception during remesh: " + std::string(e.what()));
@@ -647,6 +649,8 @@ void OCCViewer::setAngularDeflection(double deflection, bool remesh)
 					if (++logCounter % 10 == 0) { // Log every 10th remesh
 						LOG_DBG_S("Remeshed all geometries with angular deflection: " + std::to_string(deflection));
 					}
+					// Request view refresh after remeshing
+					if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 				}
 				catch (const std::exception& e) {
 					LOG_ERR_S("OCCViewer::setAngularDeflection: Exception during remesh: " + std::string(e.what()));
