@@ -12,34 +12,34 @@ class OCCGeometry;
 class RenderingConfig;
 
 /**
- * @brief 参数同步器 - 负责在参数树和现有系统之间同步参数
+ * @brief Parameter synchronizer - responsible for synchronizing parameters between parameter tree and existing systems
  */
 class ParameterSynchronizer {
 public:
     static ParameterSynchronizer& getInstance();
     
-    // 几何对象同步
+    // Geometry object synchronization
     void synchronizeGeometry(std::shared_ptr<OCCGeometry> geometry);
     void unsynchronizeGeometry(std::shared_ptr<OCCGeometry> geometry);
     
-    // 渲染配置同步
+    // Rendering configuration synchronization
     void synchronizeRenderingConfig(RenderingConfig* config);
     void unsynchronizeRenderingConfig(RenderingConfig* config);
     
-    // 参数同步控制
+    // Parameter synchronization control
     void enableSynchronization(bool enable) { m_synchronizationEnabled = enable; }
     bool isSynchronizationEnabled() const { return m_synchronizationEnabled; }
     
-    // 同步方向控制
+    // Synchronization direction control
     void setSyncDirection(const std::string& parameterPath, bool treeToSystem, bool systemToTree);
     void setDefaultSyncDirection(bool treeToSystem, bool systemToTree);
     
-    // 批量同步
+    // Batch synchronization
     void beginBatchSync();
     void endBatchSync();
     bool isInBatchSync() const { return m_inBatchSync; }
     
-    // 同步状态查询
+    // Synchronization status query
     bool isParameterSynchronized(const std::string& parameterPath) const;
     std::vector<std::string> getSynchronizedParameters() const;
     
@@ -49,27 +49,27 @@ private:
     ParameterSynchronizer(const ParameterSynchronizer&) = delete;
     ParameterSynchronizer& operator=(const ParameterSynchronizer&) = delete;
     
-    // 内部方法
+    // Internal methods
     void setupGeometrySynchronization(std::shared_ptr<OCCGeometry> geometry);
     void setupRenderingConfigSynchronization(RenderingConfig* config);
     void onParameterTreeChanged(const std::string& path, const ParameterValue& value);
     void onSystemParameterChanged(const std::string& path, const ParameterValue& value);
     
-    // 参数映射
+    // Parameter mapping
     std::map<std::string, std::string> m_parameterToGeometryProperty;
     std::map<std::string, std::string> m_parameterToConfigProperty;
     
-    // 同步状态
+    // Synchronization state
     std::atomic<bool> m_synchronizationEnabled;
     std::atomic<bool> m_inBatchSync;
     bool m_defaultTreeToSystem;
     bool m_defaultSystemToTree;
     
-    // 同步对象
+    // Synchronized objects
     std::map<std::shared_ptr<OCCGeometry>, std::vector<std::string>> m_synchronizedGeometries;
     std::map<RenderingConfig*, std::vector<std::string>> m_synchronizedConfigs;
     
-    // 回调管理
+    // Callback management
     std::vector<ParameterChangedCallback> m_treeCallbacks;
     std::vector<ParameterChangedCallback> m_systemCallbacks;
     
@@ -77,19 +77,19 @@ private:
 };
 
 /**
- * @brief 几何参数同步器
+ * @brief Geometry parameter synchronizer
  */
 class GeometryParameterSynchronizer {
 public:
     explicit GeometryParameterSynchronizer(std::shared_ptr<OCCGeometry> geometry);
     ~GeometryParameterSynchronizer();
     
-    // 参数同步
+    // Parameter synchronization
     void syncFromTree();
     void syncToTree();
     void setupParameterMappings();
     
-    // 参数更新回调
+    // Parameter update callbacks
     void onTreeParameterChanged(const std::string& path, const ParameterValue& value);
     void onGeometryPropertyChanged(const std::string& property, const ParameterValue& value);
     
@@ -104,7 +104,7 @@ private:
 };
 
 /**
- * @brief 渲染配置参数同步器
+ * @brief Rendering configuration parameter synchronizer
  */
 class RenderingConfigParameterSynchronizer {
 public:

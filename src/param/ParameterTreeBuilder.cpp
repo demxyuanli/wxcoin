@@ -5,7 +5,7 @@
 void ParameterTreeBuilder::buildGeometryParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 几何变换参数
+    // Geometry transform parameters
     tree.registerParameter("geometry/transform/position/x", 0.0);
     tree.registerParameter("geometry/transform/position/y", 0.0);
     tree.registerParameter("geometry/transform/position/z", 0.0);
@@ -15,7 +15,7 @@ void ParameterTreeBuilder::buildGeometryParameterTree() {
     tree.registerParameter("geometry/transform/rotation/angle", 0.0);
     tree.registerParameter("geometry/transform/scale", 1.0);
     
-    // 几何显示参数
+    // Geometry display parameters
     tree.registerParameter("geometry/display/visible", true);
     tree.registerParameter("geometry/display/selected", false);
     tree.registerParameter("geometry/display/wireframe_mode", false);
@@ -23,19 +23,19 @@ void ParameterTreeBuilder::buildGeometryParameterTree() {
     tree.registerParameter("geometry/display/faces_visible", true);
     tree.registerParameter("geometry/display/wireframe_overlay", false);
     
-    // 几何颜色参数
+    // Geometry color parameters
     tree.registerParameter("geometry/color/main", Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB));
     tree.registerParameter("geometry/color/edge", Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB));
     tree.registerParameter("geometry/color/vertex", Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB));
     tree.registerParameter("geometry/transparency", 0.0);
     
-    // 几何尺寸参数
+    // Geometry size parameters
     tree.registerParameter("geometry/size/edge_width", 1.0);
     tree.registerParameter("geometry/size/vertex_size", 2.0);
     tree.registerParameter("geometry/size/point_size", 2.0);
     tree.registerParameter("geometry/size/wireframe_width", 1.0);
     
-    // 几何质量参数
+    // Geometry quality parameters
     tree.registerParameter("geometry/quality/tessellation_level", 2);
     tree.registerParameter("geometry/quality/deflection", 0.5);
     tree.registerParameter("geometry/quality/angular_deflection", 1.0);
@@ -46,19 +46,19 @@ void ParameterTreeBuilder::buildGeometryParameterTree() {
 void ParameterTreeBuilder::buildRenderingParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 渲染模式参数
+    // Rendering mode parameters
     tree.registerParameter("rendering/mode/display_mode", RenderingConfig::DisplayMode::Solid);
     tree.registerParameter("rendering/mode/shading_mode", RenderingConfig::ShadingMode::Smooth);
     tree.registerParameter("rendering/mode/rendering_quality", RenderingConfig::RenderingQuality::Normal);
     
-    // 渲染特性参数
+    // Rendering feature parameters
     tree.registerParameter("rendering/features/show_edges", false);
     tree.registerParameter("rendering/features/show_vertices", false);
     tree.registerParameter("rendering/features/smooth_normals", true);
     tree.registerParameter("rendering/features/enable_lod", true);
     tree.registerParameter("rendering/features/lod_distance", 100.0);
     
-    // 渲染性能参数
+    // Rendering performance parameters
     tree.registerParameter("rendering/performance/anti_aliasing_samples", 4);
     tree.registerParameter("rendering/performance/enable_culling", true);
     tree.registerParameter("rendering/performance/enable_depth_test", true);
@@ -68,18 +68,18 @@ void ParameterTreeBuilder::buildRenderingParameterTree() {
 void ParameterTreeBuilder::buildDisplayParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 显示模式参数
+    // Display mode parameters
     tree.registerParameter("display/mode/display_mode", RenderingConfig::DisplayMode::Solid);
     tree.registerParameter("display/mode/wireframe_mode", false);
     tree.registerParameter("display/mode/transparent_mode", false);
     
-    // 显示元素参数
+    // Display element parameters
     tree.registerParameter("display/elements/show_edges", false);
     tree.registerParameter("display/elements/show_vertices", false);
     tree.registerParameter("display/elements/show_faces", true);
     tree.registerParameter("display/elements/show_normals", false);
     
-    // 显示样式参数
+    // Display style parameters
     tree.registerParameter("display/style/edge_width", 1.0);
     tree.registerParameter("display/style/vertex_size", 2.0);
     tree.registerParameter("display/style/point_size", 2.0);
@@ -89,20 +89,20 @@ void ParameterTreeBuilder::buildDisplayParameterTree() {
 void ParameterTreeBuilder::buildQualityParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 质量等级参数
+    // Quality level parameters
     tree.registerParameter("quality/level/rendering_quality", RenderingConfig::RenderingQuality::Normal);
     tree.registerParameter("quality/level/tessellation_level", 2);
     
-    // 抗锯齿参数
+    // Anti-aliasing parameters
     tree.registerParameter("quality/antialiasing/samples", 4);
     tree.registerParameter("quality/antialiasing/enabled", true);
     
-    // LOD参数
+    // LOD parameters
     tree.registerParameter("quality/lod/enabled", true);
     tree.registerParameter("quality/lod/distance", 100.0);
     tree.registerParameter("quality/lod/levels", 3);
     
-    // 细分参数
+    // Subdivision parameters
     tree.registerParameter("quality/subdivision/enabled", false);
     tree.registerParameter("quality/subdivision/levels", 2);
 }
@@ -110,22 +110,22 @@ void ParameterTreeBuilder::buildQualityParameterTree() {
 void ParameterTreeBuilder::buildLightingParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 光照模型参数
+    // Lighting model parameters
     tree.registerParameter("lighting/model/lighting_model", RenderingConfig::LightingModel::BlinnPhong);
     tree.registerParameter("lighting/model/roughness", 0.5);
     tree.registerParameter("lighting/model/metallic", 0.0);
     tree.registerParameter("lighting/model/fresnel", 0.04);
     tree.registerParameter("lighting/model/subsurface_scattering", 0.0);
     
-    // 环境光参数
+    // Ambient light parameters
     tree.registerParameter("lighting/ambient/color", Quantity_Color(0.7, 0.7, 0.7, Quantity_TOC_RGB));
     tree.registerParameter("lighting/ambient/intensity", 0.8);
     
-    // 漫射光参数
+    // Diffuse light parameters
     tree.registerParameter("lighting/diffuse/color", Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB));
     tree.registerParameter("lighting/diffuse/intensity", 1.0);
     
-    // 镜面光参数
+    // Specular light parameters
     tree.registerParameter("lighting/specular/color", Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB));
     tree.registerParameter("lighting/specular/intensity", 1.0);
 }
@@ -133,37 +133,37 @@ void ParameterTreeBuilder::buildLightingParameterTree() {
 void ParameterTreeBuilder::buildMaterialParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 材质颜色参数
+    // Material color parameters
     tree.registerParameter("material/color/ambient", Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB));
     tree.registerParameter("material/color/diffuse", Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB));
     tree.registerParameter("material/color/specular", Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB));
     tree.registerParameter("material/color/emissive", Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB));
     
-    // 材质属性参数
+    // Material property parameters
     tree.registerParameter("material/properties/shininess", 30.0);
     tree.registerParameter("material/properties/transparency", 0.0);
     tree.registerParameter("material/properties/metallic", 0.0);
     tree.registerParameter("material/properties/roughness", 0.5);
     
-    // 材质预设参数
+    // Material preset parameters
     tree.registerParameter("material/preset/current", RenderingConfig::MaterialPreset::Custom);
 }
 
 void ParameterTreeBuilder::buildTextureParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 纹理启用参数
+    // Texture enable parameters
     tree.registerParameter("texture/enabled", false);
     tree.registerParameter("texture/image_path", std::string(""));
     
-    // 纹理颜色参数
+    // Texture color parameters
     tree.registerParameter("texture/color/main", Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB));
     tree.registerParameter("texture/intensity", 0.5);
     
-    // 纹理模式参数
+    // Texture mode parameters
     tree.registerParameter("texture/mode/texture_mode", RenderingConfig::TextureMode::Modulate);
     
-    // 纹理坐标参数
+    // Texture coordinate parameters
     tree.registerParameter("texture/coordinates/repeat_u", 1.0);
     tree.registerParameter("texture/coordinates/repeat_v", 1.0);
     tree.registerParameter("texture/coordinates/offset_u", 0.0);
@@ -173,19 +173,19 @@ void ParameterTreeBuilder::buildTextureParameterTree() {
 void ParameterTreeBuilder::buildShadowParameterTree() {
     auto& tree = ParameterTree::getInstance();
     
-    // 阴影模式参数
+    // Shadow mode parameters
     tree.registerParameter("shadow/mode/shadow_mode", RenderingConfig::ShadowMode::Soft);
     tree.registerParameter("shadow/mode/enabled", true);
     
-    // 阴影强度参数
+    // Shadow intensity parameters
     tree.registerParameter("shadow/intensity/shadow_intensity", 0.7);
     tree.registerParameter("shadow/intensity/shadow_softness", 0.5);
     
-    // 阴影质量参数
+    // Shadow quality parameters
     tree.registerParameter("shadow/quality/shadow_map_size", 1024);
     tree.registerParameter("shadow/quality/shadow_bias", 0.001);
     
-    // 阴影距离参数
+    // Shadow distance parameters
     tree.registerParameter("shadow/distance/near_plane", 0.1);
     tree.registerParameter("shadow/distance/far_plane", 1000.0);
 }

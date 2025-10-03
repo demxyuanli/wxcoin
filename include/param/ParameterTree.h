@@ -13,7 +13,7 @@
 #include "config/RenderingConfig.h"
 
 /**
- * @brief 参数值类型定义
+ * @brief Parameter value type definition
  */
 using ParameterValue = std::variant<
     bool, int, double, std::string, 
@@ -28,47 +28,47 @@ using ParameterValue = std::variant<
 >;
 
 /**
- * @brief 参数变更回调函数类型
+ * @brief Parameter change callback function type
  */
 using ParameterChangedCallback = std::function<void(const std::string&, const ParameterValue&)>;
 
 /**
- * @brief 批量更新回调函数类型
+ * @brief Batch update callback function type
  */
 using BatchUpdateCallback = std::function<void(const std::vector<std::string>&)>;
 
 /**
- * @brief 参数节点类型枚举
+ * @brief Parameter node type enumeration
  */
 enum class ParameterNodeType {
-    Root,           // 根节点
-    Category,       // 分类节点
-    Group,          // 组节点
-    Parameter       // 参数节点
+    Root,           // Root node
+    Category,       // Category node
+    Group,          // Group node
+    Parameter       // Parameter node
 };
 
 /**
- * @brief 参数节点基类
+ * @brief Base class for parameter nodes
  */
 class ParameterNode {
 public:
     ParameterNode(const std::string& name, ParameterNodeType type, ParameterNode* parent = nullptr);
     virtual ~ParameterNode() = default;
 
-    // 基本信息
+    // Basic information
     const std::string& getName() const { return m_name; }
     ParameterNodeType getType() const { return m_type; }
     ParameterNode* getParent() const { return m_parent; }
     const std::string& getPath() const { return m_path; }
 
-    // 子节点管理
+    // Child node management
     void addChild(std::shared_ptr<ParameterNode> child);
     void removeChild(const std::string& name);
     std::shared_ptr<ParameterNode> getChild(const std::string& name) const;
     std::vector<std::shared_ptr<ParameterNode>> getChildren() const;
     bool hasChild(const std::string& name) const;
 
-    // 路径操作
+    // Path operations
     std::string getFullPath() const;
     static std::vector<std::string> parsePath(const std::string& path);
 
@@ -84,19 +84,19 @@ protected:
 };
 
 /**
- * @brief 参数节点实现
+ * @brief Parameter node implementation
  */
 class Parameter : public ParameterNode {
 public:
     Parameter(const std::string& name, const ParameterValue& defaultValue, ParameterNode* parent = nullptr);
     
-    // 参数值操作
+    // Parameter value operations
     const ParameterValue& getValue() const { return m_value; }
     void setValue(const ParameterValue& value);
     const ParameterValue& getDefaultValue() const { return m_defaultValue; }
     void resetToDefault();
 
-    // 类型信息
+    // Type information
     template<typename T>
     T getValueAs() const {
         return std::get<T>(m_value);
@@ -107,12 +107,12 @@ public:
         return std::holds_alternative<T>(m_value);
     }
 
-    // 回调管理
+    // Callback management
     void addChangedCallback(ParameterChangedCallback callback);
     void removeChangedCallback(ParameterChangedCallback callback);
     void notifyChanged();
 
-    // 验证
+    // Validation
     void setValidator(std::function<bool(const ParameterValue&)> validator);
     bool validate(const ParameterValue& value) const;
 
@@ -125,43 +125,43 @@ private:
 };
 
 /**
- * @brief 参数树管理器
+ * @brief Parameter tree manager
  */
 class ParameterTree {
 public:
     static ParameterTree& getInstance();
 
-    // 树结构管理
+    // Tree structure management
     std::shared_ptr<ParameterNode> getRoot() const { return m_root; }
     std::shared_ptr<ParameterNode> findNode(const std::string& path) const;
     std::shared_ptr<Parameter> findParameter(const std::string& path) const;
 
-    // 参数注册
+    // Parameter registration
     std::shared_ptr<Parameter> registerParameter(
         const std::string& path, 
         const ParameterValue& defaultValue,
         std::function<bool(const ParameterValue&)> validator = nullptr
     );
 
-    // 参数操作
+    // Parameter operations
     bool setParameterValue(const std::string& path, const ParameterValue& value);
     ParameterValue getParameterValue(const std::string& path) const;
     bool hasParameter(const std::string& path) const;
 
-    // 批量操作
+    // Batch operations
     void beginBatchUpdate();
     void endBatchUpdate();
     void setBatchUpdateCallback(BatchUpdateCallback callback);
 
-    // 回调管理
+    // Callback management
     void addGlobalChangedCallback(ParameterChangedCallback callback);
     void removeGlobalChangedCallback(ParameterChangedCallback callback);
 
-    // 路径操作
+    // Path operations
     std::vector<std::string> getAllParameterPaths() const;
     std::vector<std::string> getParameterPathsInCategory(const std::string& category) const;
 
-    // 序列化
+    // Serialization
     std::string serializeToJson() const;
     bool deserializeFromJson(const std::string& json);
 
@@ -184,7 +184,7 @@ private:
 };
 
 /**
- * @brief 参数树构建器 - 用于初始化参数树结构
+ * @brief Parameter tree builder - used to initialize parameter tree structure
  */
 class ParameterTreeBuilder {
 public:

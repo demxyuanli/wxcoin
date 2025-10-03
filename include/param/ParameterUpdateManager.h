@@ -15,34 +15,34 @@ class OCCGeometry;
 class RenderingConfig;
 
 /**
- * @brief 更新类型枚举
+ * @brief Update type enumeration
  */
 enum class UpdateType {
-    Geometry,           // 几何更新
-    Rendering,          // 渲染更新
-    Display,            // 显示更新
-    Lighting,           // 光照更新
-    Material,           // 材质更新
-    Texture,            // 纹理更新
-    Shadow,             // 阴影更新
-    Quality,            // 质量更新
-    Transform,          // 变换更新
-    Color,              // 颜色更新
-    FullRefresh         // 完全刷新
+    Geometry,           // Geometry update
+    Rendering,          // Rendering update
+    Display,            // Display update
+    Lighting,           // Lighting update
+    Material,           // Material update
+    Texture,            // Texture update
+    Shadow,             // Shadow update
+    Quality,            // Quality update
+    Transform,          // Transform update
+    Color,              // Color update
+    FullRefresh         // Full refresh
 };
 
 /**
- * @brief 更新优先级枚举
+ * @brief Update priority enumeration
  */
 enum class UpdatePriority {
-    Low = 0,            // 低优先级
-    Normal = 1,         // 普通优先级
-    High = 2,           // 高优先级
-    Critical = 3        // 关键优先级
+    Low = 0,            // Low priority
+    Normal = 1,         // Normal priority
+    High = 2,           // High priority
+    Critical = 3        // Critical priority
 };
 
 /**
- * @brief 更新任务结构
+ * @brief Update task structure
  */
 struct UpdateTask {
     UpdateType type;
@@ -59,7 +59,7 @@ struct UpdateTask {
 };
 
 /**
- * @brief 参数到更新类型的映射
+ * @brief Parameter to update type mapping
  */
 class ParameterUpdateMapping {
 public:
@@ -75,7 +75,7 @@ private:
 };
 
 /**
- * @brief 更新接口基类
+ * @brief Base class for update interfaces
  */
 class IUpdateInterface {
 public:
@@ -94,40 +94,40 @@ public:
 };
 
 /**
- * @brief 参数更新管理器
+ * @brief Parameter update manager
  */
 class ParameterUpdateManager {
 public:
     static ParameterUpdateManager& getInstance();
     
-    // 更新接口注册
+    // Update interface registration
     void registerUpdateInterface(std::shared_ptr<IUpdateInterface> interface);
     void unregisterUpdateInterface(std::shared_ptr<IUpdateInterface> interface);
     
-    // 参数变更处理
+    // Parameter change handling
     void onParameterChanged(const std::string& path, const ParameterValue& value);
     void onBatchUpdate(const std::vector<std::string>& changedPaths);
     
-    // 更新任务管理
+    // Update task management
     void addUpdateTask(const UpdateTask& task);
     void processUpdateTasks();
     void clearUpdateTasks();
     
-    // 批量更新控制
+    // Batch update control
     void beginBatchUpdate();
     void endBatchUpdate();
     bool isInBatchUpdate() const { return m_inBatchUpdate; }
     
-    // 更新策略配置
+    // Update strategy configuration
     void setUpdateStrategy(UpdateType type, std::function<void()> strategy);
     void setBatchUpdateThreshold(size_t threshold) { m_batchUpdateThreshold = threshold; }
     void setUpdateDelay(std::chrono::milliseconds delay) { m_updateDelay = delay; }
     
-    // 性能优化
+    // Performance optimization
     void enableUpdateOptimization(bool enable) { m_optimizationEnabled = enable; }
     void setUpdateFrequencyLimit(int maxUpdatesPerSecond);
     
-    // 调试和监控
+    // Debugging and monitoring
     size_t getPendingTaskCount() const;
     std::vector<std::string> getPendingParameterPaths() const;
     void enableDebugMode(bool enable) { m_debugMode = enable; }
@@ -138,43 +138,43 @@ private:
     ParameterUpdateManager(const ParameterUpdateManager&) = delete;
     ParameterUpdateManager& operator=(const ParameterUpdateManager&) = delete;
     
-    // 内部方法
+    // Internal methods
     void scheduleUpdate(const std::string& parameterPath, const ParameterValue& value);
     void executeUpdate(UpdateType type);
     void optimizeUpdateTasks();
     void mergeUpdateTasks();
     bool shouldSkipUpdate(const std::string& parameterPath) const;
     
-    // 更新接口管理
+    // Update interface management
     std::vector<std::shared_ptr<IUpdateInterface>> m_updateInterfaces;
     mutable std::mutex m_interfacesMutex;
     
-    // 更新任务管理
+    // Update task management
     std::vector<UpdateTask> m_updateTasks;
     mutable std::mutex m_tasksMutex;
     
-    // 批量更新状态
+    // Batch update state
     std::atomic<bool> m_inBatchUpdate;
     std::vector<std::string> m_batchChangedPaths;
     mutable std::mutex m_batchMutex;
     
-    // 更新策略
+    // Update strategies
     std::map<UpdateType, std::function<void()>> m_updateStrategies;
     size_t m_batchUpdateThreshold;
     std::chrono::milliseconds m_updateDelay;
     
-    // 性能优化
+    // Performance optimization
     std::atomic<bool> m_optimizationEnabled;
     int m_maxUpdatesPerSecond;
     std::chrono::steady_clock::time_point m_lastUpdateTime;
     std::set<std::string> m_recentlyUpdatedPaths;
     
-    // 调试
+    // Debugging
     std::atomic<bool> m_debugMode;
 };
 
 /**
- * @brief 几何对象更新接口实现
+ * @brief Geometry object update interface implementation
  */
 class GeometryUpdateInterface : public IUpdateInterface {
 public:
@@ -197,7 +197,7 @@ private:
 };
 
 /**
- * @brief 渲染配置更新接口实现
+ * @brief Rendering configuration update interface implementation
  */
 class RenderingConfigUpdateInterface : public IUpdateInterface {
 public:
@@ -220,7 +220,7 @@ private:
 };
 
 /**
- * @brief 参数更新管理器初始化器
+ * @brief Parameter update manager initializer
  */
 class ParameterUpdateManagerInitializer {
 public:

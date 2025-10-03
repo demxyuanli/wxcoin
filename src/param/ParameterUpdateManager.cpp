@@ -11,7 +11,7 @@ std::map<std::string, UpdatePriority> ParameterUpdateMapping::s_parameterToPrior
 std::map<std::string, std::vector<UpdateType>> ParameterUpdateMapping::s_parameterToAffectedTypes;
 
 void ParameterUpdateMapping::initializeMappings() {
-    // 几何变换参数
+    // Geometry transform parameters
     s_parameterToUpdateType["geometry/transform/position/x"] = UpdateType::Transform;
     s_parameterToUpdateType["geometry/transform/position/y"] = UpdateType::Transform;
     s_parameterToUpdateType["geometry/transform/position/z"] = UpdateType::Transform;
@@ -21,7 +21,7 @@ void ParameterUpdateMapping::initializeMappings() {
     s_parameterToUpdateType["geometry/transform/rotation/angle"] = UpdateType::Transform;
     s_parameterToUpdateType["geometry/transform/scale"] = UpdateType::Transform;
     
-    // 几何显示参数
+    // Geometry display parameters
     s_parameterToUpdateType["geometry/display/visible"] = UpdateType::Display;
     s_parameterToUpdateType["geometry/display/selected"] = UpdateType::Display;
     s_parameterToUpdateType["geometry/display/wireframe_mode"] = UpdateType::Display;
@@ -29,13 +29,13 @@ void ParameterUpdateMapping::initializeMappings() {
     s_parameterToUpdateType["geometry/display/faces_visible"] = UpdateType::Display;
     s_parameterToUpdateType["geometry/display/wireframe_overlay"] = UpdateType::Display;
     
-    // 几何颜色参数
+    // Geometry color parameters
     s_parameterToUpdateType["geometry/color/main"] = UpdateType::Color;
     s_parameterToUpdateType["geometry/color/edge"] = UpdateType::Color;
     s_parameterToUpdateType["geometry/color/vertex"] = UpdateType::Color;
     s_parameterToUpdateType["geometry/transparency"] = UpdateType::Material;
     
-    // 材质参数
+    // Material parameters
     s_parameterToUpdateType["material/color/ambient"] = UpdateType::Material;
     s_parameterToUpdateType["material/color/diffuse"] = UpdateType::Material;
     s_parameterToUpdateType["material/color/specular"] = UpdateType::Material;
@@ -45,14 +45,14 @@ void ParameterUpdateMapping::initializeMappings() {
     s_parameterToUpdateType["material/properties/metallic"] = UpdateType::Material;
     s_parameterToUpdateType["material/properties/roughness"] = UpdateType::Material;
     
-    // 纹理参数
+    // Texture parameters
     s_parameterToUpdateType["texture/enabled"] = UpdateType::Texture;
     s_parameterToUpdateType["texture/image_path"] = UpdateType::Texture;
     s_parameterToUpdateType["texture/color/main"] = UpdateType::Texture;
     s_parameterToUpdateType["texture/intensity"] = UpdateType::Texture;
     s_parameterToUpdateType["texture/mode/texture_mode"] = UpdateType::Texture;
     
-    // 光照参数
+    // Lighting parameters
     s_parameterToUpdateType["lighting/model/lighting_model"] = UpdateType::Lighting;
     s_parameterToUpdateType["lighting/model/roughness"] = UpdateType::Lighting;
     s_parameterToUpdateType["lighting/model/metallic"] = UpdateType::Lighting;
@@ -64,7 +64,7 @@ void ParameterUpdateMapping::initializeMappings() {
     s_parameterToUpdateType["lighting/specular/color"] = UpdateType::Lighting;
     s_parameterToUpdateType["lighting/specular/intensity"] = UpdateType::Lighting;
     
-    // 阴影参数
+    // Shadow parameters
     s_parameterToUpdateType["shadow/mode/shadow_mode"] = UpdateType::Shadow;
     s_parameterToUpdateType["shadow/mode/enabled"] = UpdateType::Shadow;
     s_parameterToUpdateType["shadow/intensity/shadow_intensity"] = UpdateType::Shadow;
@@ -72,7 +72,7 @@ void ParameterUpdateMapping::initializeMappings() {
     s_parameterToUpdateType["shadow/quality/shadow_map_size"] = UpdateType::Shadow;
     s_parameterToUpdateType["shadow/quality/shadow_bias"] = UpdateType::Shadow;
     
-    // 质量参数
+    // Quality parameters
     s_parameterToUpdateType["quality/level/rendering_quality"] = UpdateType::Quality;
     s_parameterToUpdateType["quality/level/tessellation_level"] = UpdateType::Quality;
     s_parameterToUpdateType["quality/antialiasing/samples"] = UpdateType::Quality;
@@ -80,7 +80,7 @@ void ParameterUpdateMapping::initializeMappings() {
     s_parameterToUpdateType["quality/lod/enabled"] = UpdateType::Quality;
     s_parameterToUpdateType["quality/lod/distance"] = UpdateType::Quality;
     
-    // 渲染参数
+    // Rendering parameters
     s_parameterToUpdateType["rendering/mode/display_mode"] = UpdateType::Rendering;
     s_parameterToUpdateType["rendering/mode/shading_mode"] = UpdateType::Rendering;
     s_parameterToUpdateType["rendering/mode/rendering_quality"] = UpdateType::Rendering;
@@ -88,7 +88,7 @@ void ParameterUpdateMapping::initializeMappings() {
     s_parameterToUpdateType["rendering/features/show_vertices"] = UpdateType::Rendering;
     s_parameterToUpdateType["rendering/features/smooth_normals"] = UpdateType::Rendering;
     
-    // 设置优先级
+    // Set priorities
     for (auto& pair : s_parameterToUpdateType) {
         const std::string& path = pair.first;
         UpdateType type = pair.second;
@@ -104,14 +104,14 @@ void ParameterUpdateMapping::initializeMappings() {
         }
     }
     
-    // 设置影响类型
+    // Set affected types
     for (auto& pair : s_parameterToUpdateType) {
         const std::string& path = pair.first;
         UpdateType type = pair.second;
         
         s_parameterToAffectedTypes[path] = {type};
         
-        // 某些参数可能影响多个更新类型
+        // Some parameters may affect multiple update types
         if (path.find("material") != std::string::npos) {
             s_parameterToAffectedTypes[path].push_back(UpdateType::Rendering);
         }
@@ -188,12 +188,12 @@ void ParameterUpdateManager::onBatchUpdate(const std::vector<std::string>& chang
         std::cout << "Batch update with " << changedPaths.size() << " parameters" << std::endl;
     }
     
-    // 优化批量更新
+    // Optimize batch updates
     if (m_optimizationEnabled) {
         optimizeUpdateTasks();
     }
     
-    // 执行更新任务
+    // Execute update tasks
     processUpdateTasks();
 }
 
@@ -209,18 +209,18 @@ void ParameterUpdateManager::processUpdateTasks() {
         return;
     }
     
-    // 按优先级排序
+    // Sort by priority
     std::sort(m_updateTasks.begin(), m_updateTasks.end(),
         [](const UpdateTask& a, const UpdateTask& b) {
             return static_cast<int>(a.priority) > static_cast<int>(b.priority);
         });
     
-    // 合并相同类型的更新任务
+    // Merge update tasks of the same type
     if (m_optimizationEnabled) {
         mergeUpdateTasks();
     }
     
-    // 执行更新任务
+    // Execute update tasks
     std::set<UpdateType> executedTypes;
     for (const auto& task : m_updateTasks) {
         if (executedTypes.find(task.type) == executedTypes.end()) {
@@ -337,7 +337,7 @@ void ParameterUpdateManager::executeUpdate(UpdateType type) {
 void ParameterUpdateManager::optimizeUpdateTasks() {
     std::lock_guard<std::mutex> lock(m_tasksMutex);
     
-    // 移除重复的更新任务
+    // Remove duplicate update tasks
     std::map<UpdateType, UpdateTask> latestTasks;
     for (const auto& task : m_updateTasks) {
         auto it = latestTasks.find(task.type);
@@ -353,7 +353,7 @@ void ParameterUpdateManager::optimizeUpdateTasks() {
 }
 
 void ParameterUpdateManager::mergeUpdateTasks() {
-    // 合并相同类型的更新任务，只保留最新的
+    // Merge update tasks of the same type, keep only the latest
     std::map<UpdateType, UpdateTask> mergedTasks;
     
     for (const auto& task : m_updateTasks) {
@@ -374,7 +374,7 @@ bool ParameterUpdateManager::shouldSkipUpdate(const std::string& parameterPath) 
         return false;
     }
     
-    // 检查更新频率限制
+    // Check update frequency limit
     auto now = std::chrono::steady_clock::now();
     auto timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(
         now - m_lastUpdateTime).count();
@@ -383,7 +383,7 @@ bool ParameterUpdateManager::shouldSkipUpdate(const std::string& parameterPath) 
         return true;
     }
     
-    // 检查是否最近已更新
+    // Check if recently updated
     if (m_recentlyUpdatedPaths.find(parameterPath) != m_recentlyUpdatedPaths.end()) {
         return true;
     }
@@ -548,21 +548,21 @@ void ParameterUpdateManagerInitializer::initializeParameterMappings() {
 void ParameterUpdateManagerInitializer::initializeUpdateStrategies() {
     auto& manager = ParameterUpdateManager::getInstance();
     
-    // 设置默认更新策略
+    // Set default update strategies
     manager.setUpdateStrategy(UpdateType::Geometry, []() {
-        // 几何更新策略
+        // Geometry update strategy
     });
     
     manager.setUpdateStrategy(UpdateType::Rendering, []() {
-        // 渲染更新策略
+        // Rendering update strategy
     });
     
     manager.setUpdateStrategy(UpdateType::Display, []() {
-        // 显示更新策略
+        // Display update strategy
     });
 }
 
 void ParameterUpdateManagerInitializer::initializeDefaultInterfaces() {
-    // 初始化默认的更新接口
-    // 这里可以根据需要添加默认的更新接口
+    // Initialize default update interfaces
+    // Default update interfaces can be added here as needed
 }
