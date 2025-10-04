@@ -5,7 +5,7 @@
 #include <iostream>
 #include <thread>
 
-// ParameterUpdateMapping 实现
+// ParameterUpdateMapping implementation
 std::map<std::string, UpdateType> ParameterUpdateMapping::s_parameterToUpdateType;
 std::map<std::string, UpdatePriority> ParameterUpdateMapping::s_parameterToPriority;
 std::map<std::string, std::vector<UpdateType>> ParameterUpdateMapping::s_parameterToAffectedTypes;
@@ -139,7 +139,7 @@ std::vector<UpdateType> ParameterUpdateMapping::getAffectedUpdateTypes(const std
     return (it != s_parameterToAffectedTypes.end()) ? it->second : std::vector<UpdateType>{UpdateType::FullRefresh};
 }
 
-// ParameterUpdateManager 实现
+// ParameterUpdateManager implementation
 ParameterUpdateManager& ParameterUpdateManager::getInstance() {
     static ParameterUpdateManager instance;
     return instance;
@@ -286,7 +286,7 @@ void ParameterUpdateManager::scheduleUpdate(const std::string& parameterPath, co
     auto task = UpdateTask(type, priority, parameterPath, value, nullptr);
     addUpdateTask(task);
     
-    // 检查是否需要立即执行
+    // Check if immediate execution is needed
     if (priority >= UpdatePriority::High) {
         processUpdateTasks();
     }
@@ -391,7 +391,7 @@ bool ParameterUpdateManager::shouldSkipUpdate(const std::string& parameterPath) 
     return false;
 }
 
-// GeometryUpdateInterface 实现
+// GeometryUpdateInterface implementation
 GeometryUpdateInterface::GeometryUpdateInterface(std::shared_ptr<OCCGeometry> geometry)
     : m_geometry(geometry) {
 }
@@ -463,7 +463,7 @@ void GeometryUpdateInterface::fullRefresh() {
     }
 }
 
-// RenderingConfigUpdateInterface 实现
+// RenderingConfigUpdateInterface implementation
 RenderingConfigUpdateInterface::RenderingConfigUpdateInterface(RenderingConfig* config)
     : m_config(config) {
 }
@@ -534,7 +534,7 @@ void RenderingConfigUpdateInterface::fullRefresh() {
     }
 }
 
-// ParameterUpdateManagerInitializer 实现
+// ParameterUpdateManagerInitializer implementation
 void ParameterUpdateManagerInitializer::initialize() {
     initializeParameterMappings();
     initializeUpdateStrategies();

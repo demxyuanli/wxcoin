@@ -4,7 +4,7 @@
 #include <iostream>
 #include <json/json.h>
 
-// ParameterNode 实现
+// ParameterNode implementation
 ParameterNode::ParameterNode(const std::string& name, ParameterNodeType type, ParameterNode* parent)
     : m_name(name), m_type(type), m_parent(parent) {
     updatePath();
@@ -72,7 +72,7 @@ void ParameterNode::updatePath() {
     m_path = getFullPath();
 }
 
-// Parameter 实现
+// Parameter implementation
 Parameter::Parameter(const std::string& name, const ParameterValue& defaultValue, ParameterNode* parent)
     : ParameterNode(name, ParameterNodeType::Parameter, parent)
     , m_value(defaultValue)
@@ -83,7 +83,7 @@ void Parameter::setValue(const ParameterValue& value) {
     std::lock_guard<std::mutex> lock(m_valueMutex);
     
     if (m_validator && !m_validator(value)) {
-        return; // 验证失败，不设置值
+        return; // Validation failed, don't set value
     }
     
     m_value = value;
@@ -126,7 +126,7 @@ bool Parameter::validate(const ParameterValue& value) const {
     return !m_validator || m_validator(value);
 }
 
-// ParameterTree 实现
+// ParameterTree implementation
 ParameterTree& ParameterTree::getInstance() {
     static ParameterTree instance;
     return instance;
@@ -168,13 +168,13 @@ std::shared_ptr<Parameter> ParameterTree::registerParameter(
     
     std::lock_guard<std::mutex> lock(m_treeMutex);
     
-    // 检查参数是否已存在
+    // Check if parameter already exists
     auto existing = findParameter(path);
     if (existing) {
         return existing;
     }
     
-    // 创建路径
+    // Create path
     auto parts = ParameterNode::parsePath(path);
     if (parts.empty()) {
         return nullptr;
@@ -182,7 +182,7 @@ std::shared_ptr<Parameter> ParameterTree::registerParameter(
     
     std::shared_ptr<ParameterNode> current = m_root;
     
-    // 创建中间节点
+    // Create intermediate nodes
     for (size_t i = 0; i < parts.size() - 1; ++i) {
         auto child = current->getChild(parts[i]);
         if (!child) {
@@ -192,7 +192,7 @@ std::shared_ptr<Parameter> ParameterTree::registerParameter(
         current = child;
     }
     
-    // 创建参数节点
+    // Create parameter node
     auto param = std::make_shared<Parameter>(parts.back(), defaultValue, current.get());
     param->setValidator(validator);
     current->addChild(param);
@@ -324,8 +324,8 @@ std::string ParameterTree::serializeToJson() const {
         [&](std::shared_ptr<ParameterNode> node, Json::Value& jsonNode) {
             if (node->getType() == ParameterNodeType::Parameter) {
                 auto param = std::static_pointer_cast<Parameter>(node);
-                // 这里需要根据ParameterValue的类型进行序列化
-                // 简化实现，实际应用中需要完整的序列化支持
+                // Serialization based on ParameterValue type needed here
+                // Simplified implementation, full serialization support needed in actual application
                 jsonNode["value"] = "serialized_value";
             } else {
                 Json::Value children(Json::objectValue);
@@ -354,8 +354,8 @@ bool ParameterTree::deserializeFromJson(const std::string& json) {
         return false;
     }
     
-    // 这里需要实现反序列化逻辑
-    // 简化实现，实际应用中需要完整的反序列化支持
+    // Deserialization logic needs to be implemented here
+    // Simplified implementation, full deserialization support needed in actual application
     
     return true;
 }

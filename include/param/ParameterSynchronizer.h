@@ -7,7 +7,7 @@
 #include <functional>
 #include <mutex>
 
-// 前向声明
+// Forward declarations
 class OCCGeometry;
 class RenderingConfig;
 
