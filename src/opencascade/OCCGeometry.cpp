@@ -542,18 +542,44 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		auto& smoothingSettings = config.getSmoothingSettings();
 		auto& subdivisionSettings = config.getSubdivisionSettings();
 		
-		// Check if any advanced parameters are different from last known values
-		// We'll force regeneration if any advanced features are enabled or if parameters changed
-		advancedParamsChanged = (smoothingSettings.enabled || subdivisionSettings.enabled);
+		// Check if advanced parameters have actually changed from last known values
+		// We need to compare current values with stored values to detect real changes
+		static bool lastSmoothingEnabled = false;
+		static bool lastSubdivisionEnabled = false;
+		static int lastSubdivisionLevel = 1;
+		static int lastSmoothingIterations = 1;
+		static double lastSmoothingStrength = 0.5;
 		
-		// Also check custom parameters that might have changed
+		// Check if smoothing parameters changed
+		bool smoothingChanged = (smoothingSettings.enabled != lastSmoothingEnabled ||
+			smoothingSettings.iterations != lastSmoothingIterations);
+		
+		// Check if subdivision parameters changed
+		bool subdivisionChanged = (subdivisionSettings.enabled != lastSubdivisionEnabled ||
+			subdivisionSettings.levels != lastSubdivisionLevel);
+		
+		// Check custom parameters
 		std::string tessellationQuality = config.getParameter("tessellation_quality");
 		std::string adaptiveMeshing = config.getParameter("adaptive_meshing");
 		std::string smoothingStrength = config.getParameter("smoothing_strength");
 		
-		// If any of these parameters exist, assume advanced parameters have changed
-		if (!tessellationQuality.empty() || !adaptiveMeshing.empty() || !smoothingStrength.empty()) {
-			advancedParamsChanged = true;
+		// Only regenerate if parameters actually changed
+		advancedParamsChanged = (smoothingChanged || subdivisionChanged || 
+			!tessellationQuality.empty() || !adaptiveMeshing.empty() || !smoothingStrength.empty());
+		
+		// Update stored values for next comparison
+		if (advancedParamsChanged) {
+			lastSmoothingEnabled = smoothingSettings.enabled;
+			lastSubdivisionEnabled = subdivisionSettings.enabled;
+			lastSubdivisionLevel = subdivisionSettings.levels;
+			lastSmoothingIterations = smoothingSettings.iterations;
+			
+			LOG_INF_S("Advanced mesh parameters changed, forcing regeneration for geometry: " + m_name);
+			LOG_INF_S("  - Smoothing enabled: " + std::string(smoothingSettings.enabled ? "true" : "false"));
+			LOG_INF_S("  - Subdivision enabled: " + std::string(subdivisionSettings.enabled ? "true" : "false"));
+			if (!tessellationQuality.empty()) {
+				LOG_INF_S("  - Tessellation quality: " + tessellationQuality);
+			}
 		}
 	} catch (...) {
 		// If we can't access config, assume no advanced changes

@@ -86,7 +86,7 @@ set(UIDialogMesh_SOURCES
 
 add_library(UIDialogMesh STATIC ${UIDialogMesh_SOURCES})
 target_include_directories(UIDialogMesh PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogMesh PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogMesh PUBLIC CADCore CADConfig CADLogger CADParam CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
 set_target_properties(UIDialogMesh PROPERTIES FOLDER "UI")
 
 # Aggregator for dialogs

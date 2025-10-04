@@ -12,7 +12,6 @@ set(GEOMETRY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/STLReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BREPReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/XTReader.cpp
-    ${CMAKE_SOURCE_DIR}/src/NormalValidator.cpp
 )
 
 # Set header files
@@ -27,7 +26,6 @@ set(GEOMETRY_HEADERS
     ${CMAKE_SOURCE_DIR}/include/STLReader.h
     ${CMAKE_SOURCE_DIR}/include/BREPReader.h
     ${CMAKE_SOURCE_DIR}/include/XTReader.h
-    ${CMAKE_SOURCE_DIR}/include/NormalValidator.h
 )
 
 # Create geometry library
@@ -49,6 +47,7 @@ target_include_directories(CADGeometry PUBLIC
 target_link_libraries(CADGeometry PUBLIC
     CADCore
     CADLogger
+    CADParam
     CADOCC
     ${OpenCASCADE_LIBRARIES}
 )

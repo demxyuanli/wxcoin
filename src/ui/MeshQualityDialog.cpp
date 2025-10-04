@@ -1,8 +1,12 @@
 #include "MeshQualityDialog.h"
 #include "OCCViewer.h"
+#include "MeshParameterManagerSimple.h"
 #include "logger/Logger.h"
 #include <wx/statbox.h>
 #include <wx/notebook.h>
+#include <map>
+#include <set>
+#include <cmath>
 
 MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 	: FramelessModalPopup(parent, "Mesh Quality Control", wxSize(600, 600))
@@ -62,6 +66,8 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 	, m_angularDeflectionSlider(nullptr)
 	, m_angularDeflectionSpinCtrl(nullptr)
 	, m_currentAngularDeflection(1.0)
+	, m_eventLoopDisabled(false)
+	, m_isApplyingParameters(false)
 {
 	if (!m_occViewer) {
 		LOG_ERR_S("OCCViewer is null in MeshQualityDialog");
@@ -99,6 +105,21 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 	m_currentFeaturePreservation = m_occViewer->getFeaturePreservation();
 	m_currentParallelProcessing = m_occViewer->isParallelProcessing();
 	m_currentAdaptiveMeshing = m_occViewer->isAdaptiveMeshing();
+
+	// Initialize parameter manager
+	auto& paramManager = MeshParameterManagerSimple::getInstance();
+	if (m_occViewer) {
+		auto viewerPtr = std::shared_ptr<OCCViewer>(m_occViewer, [](OCCViewer*) {});
+		paramManager.initializeFromViewer(viewerPtr);
+		LOG_INF_S("=== MESH QUALITY DIALOG INTEGRATION ===");
+		LOG_INF_S("MeshQualityDialog initialized with MeshParameterManagerSimple");
+		LOG_INF_S("Current deflection: " + std::to_string(paramManager.getDeflection()));
+		LOG_INF_S("Current angular deflection: " + std::to_string(paramManager.getAngularDeflection()));
+		LOG_INF_S("LOD enabled: " + std::string(paramManager.isLODEnabled() ? "true" : "false"));
+		LOG_INF_S("=== INTEGRATION COMPLETE ===");
+	} else {
+		LOG_WRN_S("MeshQualityDialog: OCCViewer is null, parameter manager not initialized");
+	}
 
 	createControls();
 	layoutControls();
@@ -252,22 +273,42 @@ void MeshQualityDialog::updateControls()
 
 void MeshQualityDialog::onDeflectionSlider(wxCommandEvent& event)
 {
-	double value = static_cast<double>(m_deflectionSlider->GetValue()) / 1000.0;
-	m_deflectionSpinCtrl->SetValue(value);
-	m_currentDeflection = value;
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
+	}
 	
-	// Update UI only, no real-time application
-	updateParameterDependencies("deflection", value);
+	double value = static_cast<double>(m_deflectionSlider->GetValue()) / 1000.0;
+	
+	// Use unified parameter update system
+	updateParameterUnified("deflection", value, m_enableRealTimePreview);
+	
+	// Update spin control directly to avoid circular events
+	if (m_deflectionSpinCtrl && !m_eventLoopDisabled) {
+		disableEventLoop();
+		m_deflectionSpinCtrl->SetValue(value);
+		enableEventLoop();
+	}
 }
 
 void MeshQualityDialog::onDeflectionSpinCtrl(wxSpinDoubleEvent& event)
 {
-	double value = m_deflectionSpinCtrl->GetValue();
-	m_deflectionSlider->SetValue(static_cast<int>(value * 1000));
-	m_currentDeflection = value;
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
+	}
 	
-	// Update UI only, no real-time application
-	updateParameterDependencies("deflection", value);
+	double value = m_deflectionSpinCtrl->GetValue();
+	
+	// Use unified parameter update system
+	updateParameterUnified("deflection", value, m_enableRealTimePreview);
+	
+	// Update slider directly to avoid circular events
+	if (m_deflectionSlider && !m_eventLoopDisabled) {
+		disableEventLoop();
+		m_deflectionSlider->SetValue(static_cast<int>(value * 1000));
+		enableEventLoop();
+	}
 }
 
 void MeshQualityDialog::onLODEnable(wxCommandEvent& event)
@@ -331,134 +372,89 @@ void MeshQualityDialog::onApply(wxCommandEvent& event)
 		return;
 	}
 
-	LOG_INF_S("=== APPLYING MESH QUALITY SETTINGS ===");
-	
-	// Provide user-friendly feedback based on settings
-	if (m_currentDeflection >= 2.0) {
-		LOG_INF_S("[PERF] Performance Mode: Using very coarse mesh for maximum speed");
-		LOG_INF_S("Tip: If quality is too low, try reducing Deflection to 1.0-1.5");
-	} else if (m_currentDeflection >= 1.0) {
-		LOG_INF_S("[BALANCED] Balanced Mode: Good balance between quality and performance");
-	} else if (m_currentDeflection >= 0.5) {
-		LOG_INF_S("[QUALITY] Quality Mode: Using fine mesh for better visual quality");
-	} else {
-		LOG_INF_S("[ULTRA] Ultra Quality Mode: Maximum quality, may impact performance");
-		LOG_INF_S("Tip: Enable LOD for better interaction responsiveness");
-	}
-	
-	if (m_currentLODEnabled) {
-		LOG_INF_S("[OK] LOD Enabled: Automatic quality adjustment during interaction");
-		LOG_INF_S("  - Rough mode: " + std::to_string(m_currentLODRoughDeflection) + 
-			" (used during mouse interaction)");
-		LOG_INF_S("  - Fine mode: " + std::to_string(m_currentLODFineDeflection) + 
-			" (used when idle)");
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
 	}
 
-	// Apply all settings without triggering individual remesh operations
-	// This avoids throttling issues and ensures all parameters are applied together
-	m_occViewer->setMeshDeflection(m_currentDeflection, false);  // Don't remesh yet
-	m_occViewer->setAngularDeflection(m_currentAngularDeflection, false);  // Don't remesh yet
-	m_occViewer->setLODEnabled(m_currentLODEnabled);
-	m_occViewer->setLODRoughDeflection(m_currentLODRoughDeflection);
-	m_occViewer->setLODFineDeflection(m_currentLODFineDeflection);
-	m_occViewer->setLODTransitionTime(m_currentLODTransitionTime);
-
-	// Apply subdivision settings
-	m_occViewer->setSubdivisionEnabled(m_currentSubdivisionEnabled);
-	m_occViewer->setSubdivisionLevel(m_currentSubdivisionLevel);
-	m_occViewer->setSubdivisionMethod(m_currentSubdivisionMethod);
-	m_occViewer->setSubdivisionCreaseAngle(m_currentSubdivisionCreaseAngle);
-
-	// Apply smoothing settings
-	m_occViewer->setSmoothingEnabled(m_currentSmoothingEnabled);
-	m_occViewer->setSmoothingMethod(m_currentSmoothingMethod);
-	m_occViewer->setSmoothingIterations(m_currentSmoothingIterations);
-	m_occViewer->setSmoothingStrength(m_currentSmoothingStrength);
-	m_occViewer->setSmoothingCreaseAngle(m_currentSmoothingCreaseAngle);
-
-	// Apply advanced settings
-	m_occViewer->setTessellationMethod(m_currentTessellationMethod);
-	m_occViewer->setTessellationQuality(m_currentTessellationQuality);
-	m_occViewer->setFeaturePreservation(m_currentFeaturePreservation);
-	m_occViewer->setParallelProcessing(m_currentParallelProcessing);
-	m_occViewer->setAdaptiveMeshing(m_currentAdaptiveMeshing);
-
-	// Force complete remesh with all new parameters
-	LOG_INF_S("Forcing complete mesh regeneration with all new parameters...");
-	LOG_INF_S("Parameters: Deflection=" + std::to_string(m_currentDeflection) + 
-		", Angular=" + std::to_string(m_currentAngularDeflection) +
-		", Subdivision=" + std::string(m_currentSubdivisionEnabled ? "On" : "Off") +
-		", Smoothing=" + std::string(m_currentSmoothingEnabled ? "On" : "Off"));
+	// Set waiting cursor for long operation
+	setWaitingCursor();
 	
-	// Use a small delay to ensure all parameter changes are processed
-	wxMilliSleep(50);
-	m_occViewer->remeshAllGeometries();
+	LOG_INF_S("=== APPLYING MESH QUALITY SETTINGS ATOMICALLY ===");
 	
-	// Force view refresh to ensure changes are visible
-	m_occViewer->requestViewRefresh();
+	// Prepare all parameters for atomic application
+	std::map<std::string, double> allParameters = {
+		{"deflection", m_currentDeflection},
+		{"angularDeflection", m_currentAngularDeflection},
+		{"lodRoughDeflection", m_currentLODRoughDeflection},
+		{"lodFineDeflection", m_currentLODFineDeflection},
+		{"subdivisionLevel", static_cast<double>(m_currentSubdivisionLevel)},
+		{"smoothingIterations", static_cast<double>(m_currentSmoothingIterations)},
+		{"smoothingStrength", m_currentSmoothingStrength},
+		{"tessellationQuality", static_cast<double>(m_currentTessellationQuality)},
+		{"featurePreservation", m_currentFeaturePreservation},
+		{"subdivisionEnabled", m_currentSubdivisionEnabled ? 1.0 : 0.0},
+		{"smoothingEnabled", m_currentSmoothingEnabled ? 1.0 : 0.0},
+		{"lodEnabled", m_currentLODEnabled ? 1.0 : 0.0},
+		{"parallelProcessing", m_currentParallelProcessing ? 1.0 : 0.0},
+		{"adaptiveMeshing", m_currentAdaptiveMeshing ? 1.0 : 0.0}
+	};
 	
-	// Additional refresh mechanisms to ensure parameter changes are visible
-	wxYield(); // Allow UI to process
-	wxMilliSleep(100); // Give time for remesh to complete
+	// Apply all parameters atomically
+	applyParametersAtomically(allParameters, true);
 	
-	// Force another refresh to ensure low-resolution changes are visible
-	m_occViewer->requestViewRefresh();
-
-	// Validate parameters were applied
-	m_occViewer->validateMeshParameters();
-
-	LOG_INF_S("=== MESH QUALITY SETTINGS APPLIED SUCCESSFULLY ===");
-
-	// Force immediate visual update for resolution changes
-	forceImmediateVisualUpdate();
-
-	// Show success message with current parameters
-	wxString successMsg = wxString::Format(
-		"Mesh quality settings have been applied successfully!\n\n"
-		"Current parameters:\n"
-		"- Mesh Deflection: %.3f\n"
-		"- Angular Deflection: %.3f\n"
-		"- LOD: %s\n"
-		"- Subdivision: %s\n"
-		"- Smoothing: %s\n\n"
-		"Check the log for detailed information.",
-		m_currentDeflection,
-		m_currentAngularDeflection,
-		m_currentLODEnabled ? "Enabled" : "Disabled",
-		m_currentSubdivisionEnabled ? "Enabled" : "Disabled",
-		m_currentSmoothingEnabled ? "Enabled" : "Disabled"
-	);
-	
-	wxMessageBox(successMsg, "Settings Applied", wxOK | wxICON_INFORMATION);
+	LOG_INF_S("=== MESH QUALITY SETTINGS APPLIED ATOMICALLY SUCCESSFULLY ===");
 }
 
 void MeshQualityDialog::onReset(wxCommandEvent& event)
 {
-	// Reset to default values
-	m_currentDeflection = 0.1;
-	m_currentLODEnabled = true;
-	m_currentLODRoughDeflection = 0.2;
-	m_currentLODFineDeflection = 0.05;
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
+	}
+	
+	// Set waiting cursor for long operation
+	setWaitingCursor();
+	
+	LOG_INF_S("=== RESETTING MESH QUALITY DIALOG TO DEFAULTS ATOMICALLY ===");
+	
+	// Prepare default parameters for atomic application
+	std::map<std::string, double> defaultParameters = {
+		{"deflection", 0.1},
+		{"angularDeflection", 0.5},
+		{"lodRoughDeflection", 0.2},
+		{"lodFineDeflection", 0.05},
+		{"subdivisionLevel", 2.0},
+		{"smoothingIterations", 2.0},
+		{"smoothingStrength", 0.5},
+		{"tessellationQuality", 2.0},
+		{"featurePreservation", 0.5},
+		{"subdivisionEnabled", 0.0},
+		{"smoothingEnabled", 0.0},
+		{"lodEnabled", 1.0},
+		{"parallelProcessing", 1.0},
+		{"adaptiveMeshing", 0.0}
+	};
+	
+	// Apply default parameters atomically
+	applyParametersAtomically(defaultParameters, true);
+	
+	// Reset additional parameters
 	m_currentLODTransitionTime = 500;
-
-	m_currentSubdivisionEnabled = false;
-	m_currentSubdivisionLevel = 2;
 	m_currentSubdivisionMethod = 0;
 	m_currentSubdivisionCreaseAngle = 30.0;
-
-	m_currentSmoothingEnabled = false;
 	m_currentSmoothingMethod = 0;
-	m_currentSmoothingIterations = 2;
-	m_currentSmoothingStrength = 0.5;
 	m_currentSmoothingCreaseAngle = 30.0;
-
 	m_currentTessellationMethod = 0;
-	m_currentTessellationQuality = 2;
-	m_currentFeaturePreservation = 0.5;
-	m_currentParallelProcessing = true;
-	m_currentAdaptiveMeshing = false;
-
-	updateControls();
+	
+	// Reset parameter manager to defaults
+	auto& paramManager = MeshParameterManagerSimple::getInstance();
+	paramManager.resetToDefaults();
+	
+	// Synchronize all states
+	synchronizeAllStates();
+	
+	LOG_INF_S("=== MESH QUALITY DIALOG RESET ATOMICALLY COMPLETE ===");
 }
 
 void MeshQualityDialog::onCancel(wxCommandEvent& event)
@@ -613,7 +609,7 @@ void MeshQualityDialog::onAdaptiveMeshingCheckBox(wxCommandEvent& event)
 void MeshQualityDialog::onValidate(wxCommandEvent& event)
 {
 	if (!m_occViewer) {
-		wxMessageBox("OCCViewer is not available", "Validation Error", wxOK | wxICON_ERROR);
+	// wxMessageBox("OCCViewer is not available", "Validation Error", wxOK | wxICON_ERROR);
 		return;
 	}
 
@@ -670,12 +666,12 @@ void MeshQualityDialog::onValidate(wxCommandEvent& event)
 
 	if (passedChecks == totalChecks) {
 		result += "\n All parameters applied successfully!";
-		wxMessageBox(result, "Validation Success", wxOK | wxICON_INFORMATION);
+		// wxMessageBox(result, "Validation Success", wxOK | wxICON_INFORMATION);
 	}
 	else {
 		result += "\n  Some parameters failed to apply correctly.\n";
 		result += "Check the log for detailed information.";
-		wxMessageBox(result, "Validation Warning", wxOK | wxICON_WARNING);
+		// wxMessageBox(result, "Validation Warning", wxOK | wxICON_WARNING);
 	}
 
 	LOG_INF_S("Validation completed: " + std::to_string(passedChecks) + "/" + std::to_string(totalChecks) + " checks passed");
@@ -684,7 +680,7 @@ void MeshQualityDialog::onValidate(wxCommandEvent& event)
 void MeshQualityDialog::onExportReport(wxCommandEvent& event)
 {
 	if (!m_occViewer) {
-		wxMessageBox("OCCViewer is not available", "Export Error", wxOK | wxICON_ERROR);
+		// wxMessageBox("OCCViewer is not available", "Export Error", wxOK | wxICON_ERROR);
 		return;
 	}
 
@@ -699,24 +695,27 @@ void MeshQualityDialog::onExportReport(wxCommandEvent& event)
 	report += "- Smoothing Enabled: " + std::string(m_currentSmoothingEnabled ? "Yes" : "No") + "\n";
 	report += "- Adaptive Meshing: " + std::string(m_currentAdaptiveMeshing ? "Yes" : "No") + "\n";
 
-	// Show report in dialog
-	wxDialog* reportDialog = new wxDialog(m_contentPanel, wxID_ANY, "Mesh Quality Report",
-		wxDefaultPosition, wxSize(500, 400));
+	// Show report in dialog - DISABLED
+	// wxDialog* reportDialog = new wxDialog(m_contentPanel, wxID_ANY, "Mesh Quality Report",
+	//	wxDefaultPosition, wxSize(500, 400));
 
-	wxTextCtrl* textCtrl = new wxTextCtrl(reportDialog, wxID_ANY, report,
-		wxDefaultPosition, wxDefaultSize,
-		wxTE_MULTILINE | wxTE_READONLY | wxEXPAND);
+	// wxTextCtrl* textCtrl = new wxTextCtrl(reportDialog, wxID_ANY, report,
+	//	wxDefaultPosition, wxDefaultSize,
+	//	wxTE_MULTILINE | wxTE_READONLY | wxEXPAND);
 
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-	sizer->Add(textCtrl, 1, wxEXPAND | wxALL, 10);
+	// wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	// sizer->Add(textCtrl, 1, wxEXPAND | wxALL, 10);
 
-	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-	buttonSizer->Add(new wxButton(reportDialog, wxID_OK, "Close"), 0, wxALL, 5);
-	sizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
+	// wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+	// buttonSizer->Add(new wxButton(reportDialog, wxID_OK, "Close"), 0, wxALL, 5);
+	// sizer->Add(buttonSizer, 0, wxALIGN_CENTER | wxALL, 10);
 
-	reportDialog->SetSizer(sizer);
-	reportDialog->ShowModal();
-	reportDialog->Destroy();
+	// reportDialog->SetSizer(sizer);
+	// reportDialog->ShowModal();
+	// reportDialog->Destroy();
+	
+	// Just log the report instead of showing dialog
+	LOG_INF_S("Mesh Quality Report: " + report);
 }
 
 void MeshQualityDialog::createBasicQualityPage()
@@ -1177,42 +1176,46 @@ void MeshQualityDialog::createSurfaceSmoothingPresetsPage()
 // Preset handlers
 void MeshQualityDialog::onPerformancePreset(wxCommandEvent& event)
 {
-	LOG_INF_S("Applying Performance Preset");
-	m_currentAngularDeflection = 2.0; // Larger angular deflection for performance
-	applyPreset(2.0, true, 3.0, 1.0, true);
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
+	}
+	
+	LOG_INF_S("Applying Performance Preset via atomic operation");
+	applyPresetAtomically("performance");
 }
 
 void MeshQualityDialog::onBalancedPreset(wxCommandEvent& event)
 {
-	LOG_INF_S("Applying Balanced Preset");
-	m_currentAngularDeflection = 1.0; // Medium angular deflection for balance
-	applyPreset(1.0, true, 1.5, 0.5, true);
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
+	}
+	
+	LOG_INF_S("Applying Balanced Preset via atomic operation");
+	applyPresetAtomically("balanced");
 }
 
 void MeshQualityDialog::onQualityPreset(wxCommandEvent& event)
 {
-	LOG_INF_S("Applying Quality Preset");
-	m_currentAngularDeflection = 0.5; // Small angular deflection for quality
-	applyPreset(0.5, true, 0.6, 0.3, true);
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
+	}
+	
+	LOG_INF_S("Applying Quality Preset via atomic operation");
+	applyPresetAtomically("quality");
 }
 
 void MeshQualityDialog::onUltraQualityPreset(wxCommandEvent& event)
 {
-	LOG_INF_S("Applying Ultra Quality Preset");
-	m_currentAngularDeflection = 0.3; // Very small angular deflection for ultra quality
-	applyPreset(0.2, true, 0.4, 0.1, true);
+	// Skip if event loop is disabled
+	if (m_eventLoopDisabled) {
+		return;
+	}
 	
-	// Enable advanced features for ultra quality
-	m_currentSubdivisionEnabled = true;
-	m_currentSubdivisionLevel = 3;
-	m_currentSmoothingEnabled = true;
-	m_currentSmoothingIterations = 4;
-	m_currentSmoothingStrength = 0.8;
-	m_currentTessellationQuality = 4;
-	m_currentFeaturePreservation = 0.9;
-	m_currentAdaptiveMeshing = true;
-	
-	syncAllUI();
+	LOG_INF_S("Applying Ultra Quality Preset via atomic operation");
+	applyPresetAtomically("ultra");
 }
 
 void MeshQualityDialog::onGamingPreset(wxCommandEvent& event)
@@ -1223,14 +1226,27 @@ void MeshQualityDialog::onGamingPreset(wxCommandEvent& event)
 	
 	// Gaming-optimized settings
 	m_currentSubdivisionEnabled = false; // Disable for performance
+	m_currentSubdivisionLevel = 1;
+	m_currentSubdivisionMethod = 0;
+	m_currentSubdivisionCreaseAngle = 30.0;
+	
 	m_currentSmoothingEnabled = true;    // Light smoothing for visual appeal
+	m_currentSmoothingMethod = 0; // Laplacian
 	m_currentSmoothingIterations = 1;
 	m_currentSmoothingStrength = 0.4;
+	m_currentSmoothingCreaseAngle = 30.0;
+	
+	m_currentTessellationMethod = 0; // Standard
 	m_currentTessellationQuality = 2;
 	m_currentFeaturePreservation = 0.6;
 	m_currentLODTransitionTime = 200;    // Fast LOD transitions
+	m_currentAdaptiveMeshing = false;    // Disable for consistent performance
+	m_currentParallelProcessing = true;  // Enable for better performance
 	
+	// Update all UI controls to reflect the changes
 	syncAllUI();
+	
+	LOG_INF_S("Gaming Preset applied with performance optimizations");
 }
 
 void MeshQualityDialog::onCADPreset(wxCommandEvent& event)
@@ -1241,13 +1257,26 @@ void MeshQualityDialog::onCADPreset(wxCommandEvent& event)
 	
 	// CAD-optimized settings for precision
 	m_currentSubdivisionEnabled = false; // Keep original geometry intact
+	m_currentSubdivisionLevel = 1;
+	m_currentSubdivisionMethod = 0;
+	m_currentSubdivisionCreaseAngle = 15.0; // Preserve sharp edges
+	
 	m_currentSmoothingEnabled = false;   // No smoothing for accuracy
+	m_currentSmoothingMethod = 0;
+	m_currentSmoothingIterations = 1;
+	m_currentSmoothingStrength = 0.1;
+	m_currentSmoothingCreaseAngle = 15.0;
+	
+	m_currentTessellationMethod = 0; // Standard tessellation
 	m_currentTessellationQuality = 3;
 	m_currentFeaturePreservation = 1.0;  // Maximum feature preservation
 	m_currentAdaptiveMeshing = false;    // Consistent meshing
 	m_currentParallelProcessing = true;  // Use parallel processing
 	
+	// Update all UI controls to reflect the changes
 	syncAllUI();
+	
+	LOG_INF_S("CAD Preset applied with precision optimizations");
 }
 
 void MeshQualityDialog::onRenderingPreset(wxCommandEvent& event)
@@ -1260,23 +1289,53 @@ void MeshQualityDialog::onRenderingPreset(wxCommandEvent& event)
 	m_currentSubdivisionEnabled = true;
 	m_currentSubdivisionLevel = 4;
 	m_currentSubdivisionMethod = 0; // Catmull-Clark for smooth surfaces
+	m_currentSubdivisionCreaseAngle = 20.0; // Preserve sharp edges
+	
 	m_currentSmoothingEnabled = true;
+	m_currentSmoothingMethod = 0; // Laplacian
 	m_currentSmoothingIterations = 5;
 	m_currentSmoothingStrength = 0.9;
 	m_currentSmoothingCreaseAngle = 20.0; // Preserve sharp edges
-	m_currentTessellationQuality = 5;
+	
 	m_currentTessellationMethod = 2; // Curvature-based tessellation
+	m_currentTessellationQuality = 5;
 	m_currentFeaturePreservation = 1.0;
 	m_currentAdaptiveMeshing = true;
+	m_currentParallelProcessing = true;
 	
+	// Update all UI controls to reflect the changes
 	syncAllUI();
+	
+	LOG_INF_S("Rendering Preset applied with maximum quality settings");
 }
 
 void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled,
                                     double roughDeflection, double fineDeflection,
                                     bool parallelProcessing)
 {
-	// Update current values
+	LOG_INF_S("=== APPLYING PRESET VIA PARAMETER MANAGER ===");
+	LOG_INF_S("Deflection: " + std::to_string(deflection));
+	LOG_INF_S("LOD Enabled: " + std::string(lodEnabled ? "true" : "false"));
+	LOG_INF_S("Rough Deflection: " + std::to_string(roughDeflection));
+	LOG_INF_S("Fine Deflection: " + std::to_string(fineDeflection));
+	
+	// Use parameter manager for centralized parameter handling
+	auto& paramManager = MeshParameterManagerSimple::getInstance();
+	if (m_occViewer) {
+		auto viewerPtr = std::shared_ptr<OCCViewer>(m_occViewer, [](OCCViewer*) {});
+		
+		// Reset parameter manager to ensure clean state
+		paramManager.resetToDefaults();
+		
+		// Apply the new preset
+		MeshParameterManagerSimple::applyPreset(viewerPtr, deflection, lodEnabled, 
+		                                        roughDeflection, fineDeflection, parallelProcessing);
+		LOG_INF_S("Preset applied successfully via MeshParameterManagerSimple");
+	} else {
+		LOG_ERR_S("Cannot apply preset: OCCViewer is null");
+	}
+	
+	// Update current values to keep UI in sync
 	m_currentDeflection = deflection;
 	m_currentLODEnabled = lodEnabled;
 	m_currentLODRoughDeflection = roughDeflection;
@@ -1297,7 +1356,7 @@ void MeshQualityDialog::applyPreset(double deflection, bool lodEnabled,
 	// Show feedback
 	wxString msg = wxString::Format("Preset configured: Deflection=%.1f, Angular=%.1f, LOD=%s\n\nClick Apply to apply these settings.",
 		deflection, m_currentAngularDeflection, lodEnabled ? "On" : "Off");
-	wxMessageBox(msg, "Preset Configured", wxOK | wxICON_INFORMATION);
+	// wxMessageBox(msg, "Preset Configured", wxOK | wxICON_INFORMATION);
 }
 
 // Angular Deflection event handlers
@@ -1342,8 +1401,14 @@ void MeshQualityDialog::onFineSurfacePreset(wxCommandEvent& event)
 
 void MeshQualityDialog::onUltraFineSurfacePreset(wxCommandEvent& event)
 {
+	// Set waiting cursor for preset application
+	setWaitingCursor();
+	
 	LOG_INF_S("Applying Ultra Fine Surface Preset");
 	applySurfacePreset(0.1, 0.1, true, 4, true, 5, 0.9, true, 0.05, 0.1, 5, 1.0, 1.0);
+	
+	// Restore normal cursor
+	restoreCursor();
 }
 
 void MeshQualityDialog::onCustomSurfacePreset(wxCommandEvent& event)
@@ -1367,7 +1432,27 @@ void MeshQualityDialog::applySurfacePreset(double deflection, double angularDefl
 {
 	LOG_INF_S("=== APPLYING SURFACE PRESET ===");
 	
-	// Update current values
+	// Use parameter manager for centralized parameter handling
+	auto& paramManager = MeshParameterManagerSimple::getInstance();
+	if (m_occViewer) {
+		auto viewerPtr = std::shared_ptr<OCCViewer>(m_occViewer, [](OCCViewer*) {});
+		
+		// Reset parameter manager to ensure clean state
+		paramManager.resetToDefaults();
+		
+		// Apply the new surface preset
+		MeshParameterManagerSimple::applySurfacePreset(viewerPtr, deflection, angularDeflection,
+		                                               subdivisionEnabled, subdivisionLevel,
+		                                               smoothingEnabled, smoothingIterations,
+		                                               smoothingStrength, lodEnabled, lodFineDeflection,
+		                                               lodRoughDeflection, tessellationQuality,
+		                                               featurePreservation, smoothingCreaseAngle);
+		LOG_INF_S("Surface preset applied successfully via MeshParameterManagerSimple");
+	} else {
+		LOG_ERR_S("Cannot apply surface preset: OCCViewer is null");
+	}
+	
+	// Update current values to keep UI in sync
 	m_currentDeflection = deflection;
 	m_currentAngularDeflection = angularDeflection;
 	m_currentSubdivisionEnabled = subdivisionEnabled;
@@ -1394,6 +1479,11 @@ void MeshQualityDialog::applySurfacePreset(double deflection, double angularDefl
 	
 	// Update UI controls
 	updateControls();
+	
+	// Sync all UI controls to reflect the changes across all tabs
+	syncAllUI();
+	
+	LOG_INF_S("Surface preset applied successfully with UI synchronization");
 	
 	// Apply to OCCViewer (preset application - no immediate remesh)
 	if (m_occViewer) {
@@ -1442,7 +1532,7 @@ void MeshQualityDialog::applySurfacePreset(double deflection, double angularDefl
 		smoothingEnabled ? "Enabled" : "Disabled", smoothingIterations, smoothingStrength,
 		lodEnabled ? "Enabled" : "Disabled", lodFineDeflection, lodRoughDeflection,
 		tessellationQuality, featurePreservation);
-	wxMessageBox(msg, "Surface Preset Applied", wxOK | wxICON_INFORMATION);
+	// wxMessageBox(msg, "Surface Preset Applied", wxOK | wxICON_INFORMATION);
 	
 	LOG_INF_S("Surface preset applied successfully");
 }
@@ -1491,6 +1581,12 @@ void MeshQualityDialog::updateParameterDependencies(const std::string& parameter
 
 void MeshQualityDialog::syncAllUI()
 {
+	// Skip UI updates if event loop is disabled to prevent circular updates
+	if (m_eventLoopDisabled) {
+		LOG_INF_S("UI sync skipped - event loop disabled");
+		return;
+	}
+	
 	// Update all UI controls with current values
 	if (m_deflectionSlider) {
 		m_deflectionSlider->SetValue(static_cast<int>(m_currentDeflection * 1000));
@@ -1504,6 +1600,8 @@ void MeshQualityDialog::syncAllUI()
 	if (m_angularDeflectionSpinCtrl) {
 		m_angularDeflectionSpinCtrl->SetValue(m_currentAngularDeflection);
 	}
+	
+	// LOD controls
 	if (m_lodEnableCheckBox) {
 		m_lodEnableCheckBox->SetValue(m_currentLODEnabled);
 	}
@@ -1519,6 +1617,14 @@ void MeshQualityDialog::syncAllUI()
 	if (m_lodFineDeflectionSpinCtrl) {
 		m_lodFineDeflectionSpinCtrl->SetValue(m_currentLODFineDeflection);
 	}
+	if (m_lodTransitionTimeSlider) {
+		m_lodTransitionTimeSlider->SetValue(m_currentLODTransitionTime);
+	}
+	if (m_lodTransitionTimeSpinCtrl) {
+		m_lodTransitionTimeSpinCtrl->SetValue(m_currentLODTransitionTime);
+	}
+	
+	// Subdivision controls
 	if (m_subdivisionEnableCheckBox) {
 		m_subdivisionEnableCheckBox->SetValue(m_currentSubdivisionEnabled);
 	}
@@ -1528,8 +1634,22 @@ void MeshQualityDialog::syncAllUI()
 	if (m_subdivisionLevelSpinCtrl) {
 		m_subdivisionLevelSpinCtrl->SetValue(m_currentSubdivisionLevel);
 	}
+	if (m_subdivisionMethodChoice) {
+		m_subdivisionMethodChoice->SetSelection(m_currentSubdivisionMethod);
+	}
+	if (m_subdivisionCreaseAngleSlider) {
+		m_subdivisionCreaseAngleSlider->SetValue(static_cast<int>(m_currentSubdivisionCreaseAngle));
+	}
+	if (m_subdivisionCreaseAngleSpinCtrl) {
+		m_subdivisionCreaseAngleSpinCtrl->SetValue(m_currentSubdivisionCreaseAngle);
+	}
+	
+	// Smoothing controls
 	if (m_smoothingEnableCheckBox) {
 		m_smoothingEnableCheckBox->SetValue(m_currentSmoothingEnabled);
+	}
+	if (m_smoothingMethodChoice) {
+		m_smoothingMethodChoice->SetSelection(m_currentSmoothingMethod);
 	}
 	if (m_smoothingIterationsSlider) {
 		m_smoothingIterationsSlider->SetValue(m_currentSmoothingIterations);
@@ -1537,9 +1657,46 @@ void MeshQualityDialog::syncAllUI()
 	if (m_smoothingIterationsSpinCtrl) {
 		m_smoothingIterationsSpinCtrl->SetValue(m_currentSmoothingIterations);
 	}
+	if (m_smoothingStrengthSlider) {
+		m_smoothingStrengthSlider->SetValue(static_cast<int>(m_currentSmoothingStrength * 100));
+	}
+	if (m_smoothingStrengthSpinCtrl) {
+		m_smoothingStrengthSpinCtrl->SetValue(m_currentSmoothingStrength);
+	}
+	if (m_smoothingCreaseAngleSlider) {
+		m_smoothingCreaseAngleSlider->SetValue(static_cast<int>(m_currentSmoothingCreaseAngle));
+	}
+	if (m_smoothingCreaseAngleSpinCtrl) {
+		m_smoothingCreaseAngleSpinCtrl->SetValue(m_currentSmoothingCreaseAngle);
+	}
 	
-	// Update control states
+	// Advanced controls
+	if (m_tessellationMethodChoice) {
+		m_tessellationMethodChoice->SetSelection(m_currentTessellationMethod);
+	}
+	if (m_tessellationQualitySlider) {
+		m_tessellationQualitySlider->SetValue(m_currentTessellationQuality);
+	}
+	if (m_tessellationQualitySpinCtrl) {
+		m_tessellationQualitySpinCtrl->SetValue(m_currentTessellationQuality);
+	}
+	if (m_featurePreservationSlider) {
+		m_featurePreservationSlider->SetValue(static_cast<int>(m_currentFeaturePreservation * 100));
+	}
+	if (m_featurePreservationSpinCtrl) {
+		m_featurePreservationSpinCtrl->SetValue(m_currentFeaturePreservation);
+	}
+	if (m_parallelProcessingCheckBox) {
+		m_parallelProcessingCheckBox->SetValue(m_currentParallelProcessing);
+	}
+	if (m_adaptiveMeshingCheckBox) {
+		m_adaptiveMeshingCheckBox->SetValue(m_currentAdaptiveMeshing);
+	}
+	
+	// Update control states (enable/disable based on checkboxes)
 	updateControls();
+	
+	LOG_INF_S("All UI controls synchronized with current parameter values");
 }
 
 void MeshQualityDialog::forceImmediateVisualUpdate()
@@ -1574,4 +1731,426 @@ void MeshQualityDialog::forceImmediateVisualUpdate()
 	catch (const std::exception& e) {
 		LOG_ERR_S("Error during immediate visual update: " + std::string(e.what()));
 	}
+}
+
+void MeshQualityDialog::setWaitingCursor()
+{
+	SetCursor(wxCURSOR_WAIT);
+	LOG_INF_S("Set waiting cursor for long operation");
+}
+
+void MeshQualityDialog::restoreCursor()
+{
+	SetCursor(wxCURSOR_ARROW);
+	LOG_INF_S("Restored normal cursor after operation completed");
+}
+
+// Event loop control methods
+void MeshQualityDialog::disableEventLoop()
+{
+	m_eventLoopDisabled = true;
+	LOG_INF_S("Event loop disabled to prevent circular updates");
+}
+
+void MeshQualityDialog::enableEventLoop()
+{
+	m_eventLoopDisabled = false;
+	LOG_INF_S("Event loop enabled");
+}
+
+bool MeshQualityDialog::isEventLoopDisabled() const
+{
+	return m_eventLoopDisabled;
+}
+
+// Unified parameter management system
+void MeshQualityDialog::updateParameterUnified(const std::string& parameterName, double value, bool immediateApply)
+{
+	if (m_isApplyingParameters) {
+		LOG_INF_S("Parameter update deferred: " + parameterName + " = " + std::to_string(value));
+		m_pendingParameters[parameterName] = value;
+		return;
+	}
+	
+	LOG_INF_S("Updating parameter: " + parameterName + " = " + std::to_string(value));
+	
+	// Update internal state
+	if (parameterName == "deflection") {
+		m_currentDeflection = value;
+	} else if (parameterName == "angularDeflection") {
+		m_currentAngularDeflection = value;
+	} else if (parameterName == "lodRoughDeflection") {
+		m_currentLODRoughDeflection = value;
+	} else if (parameterName == "lodFineDeflection") {
+		m_currentLODFineDeflection = value;
+	} else if (parameterName == "subdivisionLevel") {
+		m_currentSubdivisionLevel = static_cast<int>(value);
+	} else if (parameterName == "smoothingIterations") {
+		m_currentSmoothingIterations = static_cast<int>(value);
+	} else if (parameterName == "smoothingStrength") {
+		m_currentSmoothingStrength = value;
+	} else if (parameterName == "tessellationQuality") {
+		m_currentTessellationQuality = static_cast<int>(value);
+	} else if (parameterName == "featurePreservation") {
+		m_currentFeaturePreservation = value;
+	}
+	
+	// Update parameter manager
+	auto& paramManager = MeshParameterManagerSimple::getInstance();
+	if (parameterName == "deflection") {
+		paramManager.setDeflection(value);
+	} else if (parameterName == "angularDeflection") {
+		paramManager.setAngularDeflection(value);
+	}
+	
+	// Apply to viewer if immediate apply is requested
+	if (immediateApply && m_occViewer) {
+		if (parameterName == "deflection") {
+			m_occViewer->setMeshDeflection(value, true);
+		} else if (parameterName == "angularDeflection") {
+			m_occViewer->setAngularDeflection(value, true);
+		}
+		
+		// Force complete mesh regeneration with new parameters
+		LOG_INF_S("Forcing complete mesh regeneration for parameter: " + parameterName);
+		m_occViewer->remeshAllGeometries();
+		
+		// Force all geometries to regenerate their Coin3D representation with new parameters
+		auto geometries = m_occViewer->getAllGeometry();
+		for (auto& geometry : geometries) {
+			if (geometry) {
+				geometry->setMeshRegenerationNeeded(true);
+				geometry->updateCoinRepresentationIfNeeded(m_occViewer->getMeshParameters());
+				LOG_INF_S("Regenerated Coin3D representation for geometry: " + geometry->getName());
+			}
+		}
+		
+		m_occViewer->requestViewRefresh();
+	}
+	
+	// Update UI safely (with event loop disabled)
+	disableEventLoop();
+	syncAllUI();
+	enableEventLoop();
+	
+	// Handle parameter dependencies safely
+	updateParameterDependenciesSafe(parameterName, value);
+}
+
+void MeshQualityDialog::updateParameterUnified(const std::string& parameterName, bool value, bool immediateApply)
+{
+	if (m_isApplyingParameters) {
+		LOG_INF_S("Parameter update deferred: " + parameterName + " = " + std::string(value ? "true" : "false"));
+		m_pendingParameters[parameterName] = value ? 1.0 : 0.0;
+		return;
+	}
+	
+	LOG_INF_S("Updating parameter: " + parameterName + " = " + std::string(value ? "true" : "false"));
+	
+	// Update internal state
+	if (parameterName == "lodEnabled") {
+		m_currentLODEnabled = value;
+	} else if (parameterName == "subdivisionEnabled") {
+		m_currentSubdivisionEnabled = value;
+	} else if (parameterName == "smoothingEnabled") {
+		m_currentSmoothingEnabled = value;
+	} else if (parameterName == "parallelProcessing") {
+		m_currentParallelProcessing = value;
+	} else if (parameterName == "adaptiveMeshing") {
+		m_currentAdaptiveMeshing = value;
+	}
+	
+	// Apply to viewer if immediate apply is requested
+	if (immediateApply && m_occViewer) {
+		if (parameterName == "lodEnabled") {
+			m_occViewer->setLODEnabled(value);
+		} else if (parameterName == "subdivisionEnabled") {
+			m_occViewer->setSubdivisionEnabled(value);
+		} else if (parameterName == "smoothingEnabled") {
+			m_occViewer->setSmoothingEnabled(value);
+		} else if (parameterName == "parallelProcessing") {
+			m_occViewer->setParallelProcessing(value);
+		} else if (parameterName == "adaptiveMeshing") {
+			m_occViewer->setAdaptiveMeshing(value);
+		}
+		
+		// Force complete mesh regeneration with new parameters
+		LOG_INF_S("Forcing complete mesh regeneration for parameter: " + parameterName);
+		m_occViewer->remeshAllGeometries();
+		
+		// Force all geometries to regenerate their Coin3D representation with new parameters
+		auto geometries = m_occViewer->getAllGeometry();
+		for (auto& geometry : geometries) {
+			if (geometry) {
+				geometry->setMeshRegenerationNeeded(true);
+				geometry->updateCoinRepresentationIfNeeded(m_occViewer->getMeshParameters());
+				LOG_INF_S("Regenerated Coin3D representation for geometry: " + geometry->getName());
+			}
+		}
+		
+		m_occViewer->requestViewRefresh();
+	}
+	
+	// Update UI safely
+	disableEventLoop();
+	syncAllUI();
+	enableEventLoop();
+}
+
+void MeshQualityDialog::updateParameterUnified(const std::string& parameterName, int value, bool immediateApply)
+{
+	updateParameterUnified(parameterName, static_cast<double>(value), immediateApply);
+}
+
+// Atomic operations
+void MeshQualityDialog::applyParametersAtomically(const std::map<std::string, double>& parameters, bool immediateRemesh)
+{
+	if (m_isApplyingParameters) {
+		LOG_WRN_S("Already applying parameters, skipping atomic operation");
+		return;
+	}
+	
+	m_isApplyingParameters = true;
+	setWaitingCursor();
+	
+	LOG_INF_S("=== APPLYING PARAMETERS ATOMICALLY ===");
+	
+	try {
+		// Disable event loop to prevent circular updates
+		disableEventLoop();
+		
+		// Apply all parameters to internal state
+		for (const auto& param : parameters) {
+			updateParameterUnified(param.first, param.second, false);
+		}
+		
+		// Apply all parameters to viewer
+		if (m_occViewer) {
+			for (const auto& param : parameters) {
+				if (param.first == "deflection") {
+					m_occViewer->setMeshDeflection(param.second, false);
+				} else if (param.first == "angularDeflection") {
+					m_occViewer->setAngularDeflection(param.second, false);
+				} else if (param.first == "lodRoughDeflection") {
+					m_occViewer->setLODRoughDeflection(param.second);
+				} else if (param.first == "lodFineDeflection") {
+					m_occViewer->setLODFineDeflection(param.second);
+				} else if (param.first == "subdivisionEnabled") {
+					m_occViewer->setSubdivisionEnabled(param.second > 0.5);
+				} else if (param.first == "smoothingEnabled") {
+					m_occViewer->setSmoothingEnabled(param.second > 0.5);
+				} else if (param.first == "lodEnabled") {
+					m_occViewer->setLODEnabled(param.second > 0.5);
+				} else if (param.first == "parallelProcessing") {
+					m_occViewer->setParallelProcessing(param.second > 0.5);
+				} else if (param.first == "adaptiveMeshing") {
+					m_occViewer->setAdaptiveMeshing(param.second > 0.5);
+				} else if (param.first == "subdivisionLevel") {
+					m_occViewer->setSubdivisionLevel(static_cast<int>(param.second));
+				} else if (param.first == "smoothingIterations") {
+					m_occViewer->setSmoothingIterations(static_cast<int>(param.second));
+				} else if (param.first == "smoothingStrength") {
+					m_occViewer->setSmoothingStrength(param.second);
+				} else if (param.first == "tessellationQuality") {
+					m_occViewer->setTessellationQuality(static_cast<int>(param.second));
+				} else if (param.first == "featurePreservation") {
+					m_occViewer->setFeaturePreservation(param.second);
+				}
+			}
+			
+			// Force remesh if requested
+			if (immediateRemesh) {
+				LOG_INF_S("Forcing complete mesh regeneration with all new parameters");
+				m_occViewer->remeshAllGeometries();
+				
+				// Force all geometries to regenerate their Coin3D representation with new parameters
+				auto geometries = m_occViewer->getAllGeometry();
+				for (auto& geometry : geometries) {
+					if (geometry) {
+						geometry->setMeshRegenerationNeeded(true);
+						geometry->updateCoinRepresentationIfNeeded(m_occViewer->getMeshParameters());
+						LOG_INF_S("Regenerated Coin3D representation for geometry: " + geometry->getName());
+					}
+				}
+				
+				m_occViewer->requestViewRefresh();
+			}
+		}
+		
+		// Update UI
+		syncAllUI();
+		
+		LOG_INF_S("=== PARAMETERS APPLIED ATOMICALLY SUCCESSFULLY ===");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Error in atomic parameter application: " + std::string(e.what()));
+	}
+	
+	// Always execute cleanup
+	enableEventLoop();
+	m_isApplyingParameters = false;
+	restoreCursor();
+}
+
+void MeshQualityDialog::applyPresetAtomically(const std::string& presetName)
+{
+	LOG_INF_S("=== APPLYING PRESET ATOMICALLY: " + presetName + " ===");
+	
+	std::map<std::string, double> presetParams;
+	
+	if (presetName == "performance") {
+		presetParams = {
+			{"deflection", 2.0},
+			{"angularDeflection", 2.0},
+			{"lodRoughDeflection", 3.0},
+			{"lodFineDeflection", 1.0},
+			{"subdivisionEnabled", 0.0},
+			{"smoothingEnabled", 0.0},
+			{"tessellationQuality", 1.0},
+			{"featurePreservation", 0.3}
+		};
+	} else if (presetName == "balanced") {
+		presetParams = {
+			{"deflection", 1.0},
+			{"angularDeflection", 1.0},
+			{"lodRoughDeflection", 1.5},
+			{"lodFineDeflection", 0.5},
+			{"subdivisionEnabled", 0.0},
+			{"smoothingEnabled", 1.0},
+			{"smoothingIterations", 1.0},
+			{"smoothingStrength", 0.3},
+			{"tessellationQuality", 2.0},
+			{"featurePreservation", 0.5}
+		};
+	} else if (presetName == "quality") {
+		presetParams = {
+			{"deflection", 0.5},
+			{"angularDeflection", 0.5},
+			{"lodRoughDeflection", 0.6},
+			{"lodFineDeflection", 0.3},
+			{"subdivisionEnabled", 1.0},
+			{"subdivisionLevel", 2.0},
+			{"smoothingEnabled", 1.0},
+			{"smoothingIterations", 2.0},
+			{"smoothingStrength", 0.6},
+			{"tessellationQuality", 3.0},
+			{"featurePreservation", 0.7}
+		};
+	} else if (presetName == "ultra") {
+		presetParams = {
+			{"deflection", 0.2},
+			{"angularDeflection", 0.3},
+			{"lodRoughDeflection", 0.4},
+			{"lodFineDeflection", 0.1},
+			{"subdivisionEnabled", 1.0},
+			{"subdivisionLevel", 3.0},
+			{"smoothingEnabled", 1.0},
+			{"smoothingIterations", 4.0},
+			{"smoothingStrength", 0.8},
+			{"tessellationQuality", 4.0},
+			{"featurePreservation", 0.9}
+		};
+	}
+	
+	applyParametersAtomically(presetParams, true);
+}
+
+// State synchronization
+void MeshQualityDialog::synchronizeAllStates()
+{
+	LOG_INF_S("=== SYNCHRONIZING ALL STATES ===");
+	
+	// Disable event loop
+	disableEventLoop();
+	
+	// Update parameter manager with current state
+	auto& paramManager = MeshParameterManagerSimple::getInstance();
+	paramManager.setDeflection(m_currentDeflection);
+	paramManager.setAngularDeflection(m_currentAngularDeflection);
+	paramManager.setLODEnabled(m_currentLODEnabled);
+	paramManager.setLODRoughDeflection(m_currentLODRoughDeflection);
+	paramManager.setLODFineDeflection(m_currentLODFineDeflection);
+	
+	// Update UI
+	syncAllUI();
+	
+	// Enable event loop
+	enableEventLoop();
+	
+	LOG_INF_S("=== ALL STATES SYNCHRONIZED ===");
+}
+
+bool MeshQualityDialog::isStateConsistent() const
+{
+	// Check if parameter manager state matches dialog state
+	auto& paramManager = MeshParameterManagerSimple::getInstance();
+	
+	bool consistent = true;
+	consistent &= (std::abs(paramManager.getDeflection() - m_currentDeflection) < 0.001);
+	consistent &= (std::abs(paramManager.getAngularDeflection() - m_currentAngularDeflection) < 0.001);
+	consistent &= (paramManager.isLODEnabled() == m_currentLODEnabled);
+	consistent &= (std::abs(paramManager.getLODRoughDeflection() - m_currentLODRoughDeflection) < 0.001);
+	consistent &= (std::abs(paramManager.getLODFineDeflection() - m_currentLODFineDeflection) < 0.001);
+	
+	LOG_INF_S("State consistency check: " + std::string(consistent ? "PASS" : "FAIL"));
+	return consistent;
+}
+
+// Parameter dependency management
+void MeshQualityDialog::updateParameterDependenciesSafe(const std::string& parameter, double value)
+{
+	if (m_parameterDependencies.count(parameter) > 0) {
+		LOG_WRN_S("Parameter dependency already being processed: " + parameter);
+		return;
+	}
+	
+	m_parameterDependencies.insert(parameter);
+	
+	try {
+		if (parameter == "deflection") {
+			// Auto-adjust LOD parameters based on deflection
+			if (value >= 1.5) {
+				m_currentLODRoughDeflection = std::min(value * 1.5, 2.0);
+				m_currentLODFineDeflection = std::min(value * 0.8, 1.0);
+			} else if (value <= 0.3) {
+				m_currentLODRoughDeflection = std::max(value * 2.0, 0.6);
+				m_currentLODFineDeflection = std::max(value * 0.5, 0.1);
+			} else {
+				m_currentLODRoughDeflection = value * 1.2;
+				m_currentLODFineDeflection = value * 0.6;
+			}
+			
+			// Auto-adjust angular deflection based on mesh deflection
+			if (value >= 1.0) {
+				m_currentAngularDeflection = 1.0 + (value - 1.0) * 0.5;
+			} else {
+				m_currentAngularDeflection = 1.0 - (1.0 - value) * 0.3;
+			}
+			
+			// Auto-adjust subdivision and smoothing based on deflection
+			if (value >= 1.5) {
+				m_currentSubdivisionEnabled = false;
+				m_currentSmoothingEnabled = false;
+			} else if (value <= 0.5) {
+				m_currentSubdivisionEnabled = true;
+				m_currentSmoothingEnabled = true;
+				m_currentSubdivisionLevel = value <= 0.2 ? 3 : 2;
+				m_currentSmoothingIterations = value <= 0.2 ? 3 : 2;
+			}
+			
+			LOG_INF_S("Parameter dependencies updated for deflection: " + std::to_string(value));
+		}
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Error updating parameter dependencies: " + std::string(e.what()));
+	}
+	
+	// Always execute cleanup
+	m_parameterDependencies.erase(parameter);
+}
+
+void MeshQualityDialog::clearParameterDependencies()
+{
+	m_parameterDependencies.clear();
+	LOG_INF_S("Parameter dependencies cleared");
 }

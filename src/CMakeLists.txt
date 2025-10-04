@@ -8,6 +8,9 @@ add_subdirectory(core)
 # 2. Logger module (no dependencies)
 add_subdirectory(logger)
 
+# 3. Param module (depends on core and logger modules)
+add_subdirectory(param)
+
 # 3. Config module (depends on core and logger modules)
 add_subdirectory(config)
 
@@ -23,37 +26,38 @@ add_subdirectory(commands)
 # 6.1. Optimizer module (depends on core, logger, commands, and occ)
 add_subdirectory(optimizer)
 
-# 6. Rendering module (depends on core module)
+# 7. Rendering module (depends on core module)
 add_subdirectory(rendering)
 
-# 6.2. View module (depends on rendering)
+# 7.1. View module (depends on rendering)
 add_subdirectory(view)
 
-# 6.5. Rendering Toolkit module (depends on core, logger, config modules)
+# 7.2. Rendering Toolkit module (depends on core, logger, config modules)
 add_subdirectory(rendering_toolkit)
 
-# 7. Input module (depends on core module)
+# 8. Input module (depends on core module)
 add_subdirectory(input)
 
-# 8. Navigation module (depends on core and rendering modules)
+# 9. Navigation module (depends on core and rendering modules)
 add_subdirectory(navigation)
 
-# 9. FlatUI module (depends on core and config modules)
+# 10. FlatUI module (depends on core and config modules)
 add_subdirectory(flatui)
 
-# 9.5. Widgets module (depends on core and config modules)
+# 10.1. Widgets module (depends on core and config modules)
 add_subdirectory(widgets)
 
-# 9.6. Docking module (depends on core module)
+# 10.2. Docking module (depends on core module)
 add_subdirectory(docking)
 
-# 10. UI module (depends on all other modules)
+# 11. UI module (depends on all other modules)
 add_subdirectory(ui)
 add_subdirectory(renderpreview)
 
 # Set module folder structure (for IDE organization)
 set_target_properties(CADCore PROPERTIES FOLDER "Modules")
 set_target_properties(CADLogger PROPERTIES FOLDER "Modules")
+set_target_properties(CADParam PROPERTIES FOLDER "Modules")
 set_target_properties(CADConfig PROPERTIES FOLDER "Modules")
 set_target_properties(CADOCC PROPERTIES FOLDER "Modules")
 set_target_properties(CADGeometry PROPERTIES FOLDER "Modules")

@@ -9,6 +9,10 @@
 #include <wx/button.h>
 #include <wx/notebook.h>
 #include <wx/choice.h>
+#include <map>
+#include <set>
+#include <string>
+#include <memory>
 
 class OCCViewer;
 class wxSpinDoubleEvent;
@@ -113,6 +117,32 @@ private:
 		bool smoothingEnabled, int smoothingIterations, double smoothingStrength,
 		bool lodEnabled, double lodFineDeflection, double lodRoughDeflection,
 		int tessellationQuality, double featurePreservation, double smoothingCreaseAngle);
+	
+	// Cursor management for long operations
+	void setWaitingCursor();
+	void restoreCursor();
+	
+	// Unified parameter management system
+	void updateParameterUnified(const std::string& parameterName, double value, bool immediateApply = false);
+	void updateParameterUnified(const std::string& parameterName, bool value, bool immediateApply = false);
+	void updateParameterUnified(const std::string& parameterName, int value, bool immediateApply = false);
+	
+	// Event loop control
+	void disableEventLoop();
+	void enableEventLoop();
+	bool isEventLoopDisabled() const;
+	
+	// Atomic operations
+	void applyParametersAtomically(const std::map<std::string, double>& parameters, bool immediateRemesh = false);
+	void applyPresetAtomically(const std::string& presetName);
+	
+	// State synchronization
+	void synchronizeAllStates();
+	bool isStateConsistent() const;
+	
+	// Parameter dependency management
+	void updateParameterDependenciesSafe(const std::string& parameter, double value);
+	void clearParameterDependencies();
 
 	OCCViewer* m_occViewer;
 
@@ -192,4 +222,10 @@ private:
 	double m_currentFeaturePreservation;
 	bool m_currentParallelProcessing;
 	bool m_currentAdaptiveMeshing;
+	
+	// State management for unified parameter system
+	bool m_eventLoopDisabled;
+	bool m_isApplyingParameters;
+	std::map<std::string, double> m_pendingParameters;
+	std::set<std::string> m_parameterDependencies;
 };
