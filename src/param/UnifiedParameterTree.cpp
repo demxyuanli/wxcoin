@@ -115,7 +115,7 @@ bool ParameterValueNode::setValue(const ParameterValue& value) {
 }
 
 ParameterValue ParameterValueNode::getValue() const {
-    std::lock_guard<std::mutex> lock(m_valueMutex);
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_valueMutex));
     return m_value;
 }
 

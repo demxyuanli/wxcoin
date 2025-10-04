@@ -216,17 +216,17 @@ bool UpdateCoordinator::cancelTask(const std::string& taskId) {
 }
 
 bool UpdateCoordinator::isTaskPending(const std::string& taskId) const {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_queueMutex));
     return m_pendingTasks.find(taskId) != m_pendingTasks.end();
 }
 
 bool UpdateCoordinator::isTaskExecuting(const std::string& taskId) const {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_queueMutex));
     return m_executingTasks.find(taskId) != m_executingTasks.end();
 }
 
 std::vector<std::string> UpdateCoordinator::getPendingTasks() const {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_queueMutex));
     std::vector<std::string> tasks;
     for (const auto& pair : m_pendingTasks) {
         tasks.push_back(pair.first);
@@ -235,7 +235,7 @@ std::vector<std::string> UpdateCoordinator::getPendingTasks() const {
 }
 
 std::vector<std::string> UpdateCoordinator::getExecutingTasks() const {
-    std::lock_guard<std::mutex> lock(m_queueMutex);
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_queueMutex));
     std::vector<std::string> tasks;
     for (const auto& pair : m_executingTasks) {
         tasks.push_back(pair.first);

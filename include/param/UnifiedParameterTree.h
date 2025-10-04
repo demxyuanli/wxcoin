@@ -99,7 +99,7 @@ protected:
     void setParent(ParameterNode* parent) { m_parent = parent; }
     void updateChildrenPaths();
 
-private:
+protected:
     std::string m_name;
     Type m_type;
     std::string m_path;
