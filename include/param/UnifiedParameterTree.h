@@ -19,79 +19,79 @@ class ParameterRegistry;
 class UpdateCoordinator;
 
 /**
- * @brief 参数值类型定义
- * 支持多种数据类型的参数值
+ * @brief Parameter value type definition
+ * Supports multiple data types for parameter values
  */
 using ParameterValue = std::variant<
-    bool,           // 布尔值
-    int,            // 整数
-    double,         // 浮点数
-    std::string,    // 字符串
-    std::vector<double>, // 向量（用于颜色、位置等）
-    std::any        // 任意类型（用于复杂对象）
+    bool,           // Boolean value
+    int,            // Integer
+    double,         // Floating point number
+    std::string,    // String
+    std::vector<double>, // Vector (for colors, positions, etc.)
+    std::any        // Any type (for complex objects)
 >;
 
 /**
- * @brief 参数变更事件
+ * @brief Parameter change event
  */
 struct ParameterChangeEvent {
-    std::string path;                    // 参数路径
-    ParameterValue oldValue;             // 旧值
-    ParameterValue newValue;             // 新值
-    std::chrono::steady_clock::time_point timestamp; // 时间戳
-    std::string source;                  // 变更来源
-    bool isBatchUpdate;                  // 是否为批量更新
+    std::string path;                    // Parameter path
+    ParameterValue oldValue;             // Old value
+    ParameterValue newValue;             // New value
+    std::chrono::steady_clock::time_point timestamp; // Timestamp
+    std::string source;                  // Change source
+    bool isBatchUpdate;                  // Whether it's a batch update
 };
 
 /**
- * @brief 参数节点基类
- * 表示参数树中的一个节点，可以是参数值或容器节点
+ * @brief Parameter node base class
+ * Represents a node in the parameter tree, can be a parameter value or container node
  */
 class ParameterNode {
 public:
     enum class Type {
-        CONTAINER,      // 容器节点
-        PARAMETER,      // 参数节点
-        GROUP           // 分组节点
+        CONTAINER,      // Container node
+        PARAMETER,      // Parameter node
+        GROUP           // Group node
     };
 
     ParameterNode(const std::string& name, Type type = Type::CONTAINER);
     virtual ~ParameterNode() = default;
 
-    // 基本信息
+    // Basic information
     const std::string& getName() const { return m_name; }
     Type getType() const { return m_type; }
     const std::string& getPath() const { return m_path; }
     ParameterNode* getParent() const { return m_parent; }
 
-    // 子节点管理
+    // Child node management
     void addChild(std::shared_ptr<ParameterNode> child);
     void removeChild(const std::string& name);
     std::shared_ptr<ParameterNode> getChild(const std::string& name) const;
     std::vector<std::shared_ptr<ParameterNode>> getChildren() const;
     bool hasChild(const std::string& name) const;
 
-    // 路径操作
+    // Path operations
     std::string getFullPath() const;
     std::vector<std::string> getPathComponents() const;
 
-    // 参数值操作（仅对参数节点有效）
+    // Parameter value operations (only valid for parameter nodes)
     virtual bool setValue(const ParameterValue& value);
     virtual ParameterValue getValue() const;
     virtual bool hasValue() const { return false; }
 
-    // 元数据
+    // Metadata
     void setDescription(const std::string& desc) { m_description = desc; }
     const std::string& getDescription() const { return m_description; }
     void setTags(const std::vector<std::string>& tags) { m_tags = tags; }
     const std::vector<std::string>& getTags() const { return m_tags; }
 
-    // 依赖关系
+    // Dependencies
     void addDependency(const std::string& paramPath);
     void removeDependency(const std::string& paramPath);
     const std::set<std::string>& getDependencies() const { return m_dependencies; }
 
-    // 验证
+    // Validation
     virtual bool validateValue(const ParameterValue& value) const { return true; }
 
 protected:
@@ -107,35 +107,35 @@ private:
     std::unordered_map<std::string, std::shared_ptr<ParameterNode>> m_children;
     std::string m_description;
     std::vector<std::string> m_tags;
-    std::set<std::string> m_dependencies; // 依赖的其他参数路径
+    std::set<std::string> m_dependencies; // Dependent parameter paths
 };
 
 /**
- * @brief 参数值节点
- * 存储实际参数值的叶子节点
+ * @brief Parameter value node
+ * Leaf node that stores actual parameter values
  */
 class ParameterValueNode : public ParameterNode {
 public:
     ParameterValueNode(const std::string& name, const ParameterValue& defaultValue = ParameterValue{});
     ~ParameterValueNode() override = default;
 
-    // 参数值操作
+    // Parameter value operations
     bool setValue(const ParameterValue& value) override;
     ParameterValue getValue() const override;
     bool hasValue() const override { return true; }
 
-    // 默认值
+    // Default values
     void setDefaultValue(const ParameterValue& value) { m_defaultValue = value; }
     ParameterValue getDefaultValue() const { return m_defaultValue; }
     void resetToDefault() { setValue(m_defaultValue); }
 
-    // 值范围限制
+    // Value range constraints
     void setMinValue(const ParameterValue& min) { m_minValue = min; }
     void setMaxValue(const ParameterValue& max) { m_maxValue = max; }
     ParameterValue getMinValue() const { return m_minValue; }
     ParameterValue getMaxValue() const { return m_maxValue; }
 
-    // 验证
+    // Validation
     bool validateValue(const ParameterValue& value) const override;
 
 private:
@@ -147,15 +147,15 @@ private:
 };
 
 /**
- * @brief 参数组节点
- * 用于逻辑分组的容器节点
+ * @brief Parameter group node
+ * Container node for logical grouping
  */
 class ParameterGroupNode : public ParameterNode {
 public:
     ParameterGroupNode(const std::string& name, const std::string& description = "");
     ~ParameterGroupNode() override = default;
 
-    // 组特定操作
+    // Group-specific operations
     void setCollapsed(bool collapsed) { m_collapsed = collapsed; }
     bool isCollapsed() const { return m_collapsed; }
     void setIcon(const std::string& icon) { m_icon = icon; }
@@ -167,51 +167,51 @@ private:
 };
 
 /**
- * @brief 统一参数树管理器
- * 管理整个参数树结构，提供统一的参数访问接口
+ * @brief Unified parameter tree manager
+ * Manages the entire parameter tree structure and provides unified parameter access interface
  */
 class UnifiedParameterTree {
 public:
     UnifiedParameterTree();
     ~UnifiedParameterTree();
 
-    // 树结构管理
+    // Tree structure management
     std::shared_ptr<ParameterNode> getRoot() const { return m_root; }
     std::shared_ptr<ParameterNode> getNode(const std::string& path) const;
     std::shared_ptr<ParameterNode> createNode(const std::string& path, ParameterNode::Type type = ParameterNode::Type::CONTAINER);
     std::shared_ptr<ParameterValueNode> createParameter(const std::string& path, const ParameterValue& defaultValue = ParameterValue{});
     std::shared_ptr<ParameterGroupNode> createGroup(const std::string& path, const std::string& description = "");
 
-    // 参数值操作
+    // Parameter value operations
     bool setParameterValue(const std::string& path, const ParameterValue& value);
     ParameterValue getParameterValue(const std::string& path) const;
     bool hasParameter(const std::string& path) const;
 
-    // 批量操作
+    // Batch operations
     bool setParameterValues(const std::unordered_map<std::string, ParameterValue>& values);
     std::unordered_map<std::string, ParameterValue> getParameterValues(const std::vector<std::string>& paths) const;
 
-    // 路径操作
+    // Path operations
     std::vector<std::string> getAllParameterPaths() const;
     std::vector<std::string> getParameterPathsByTag(const std::string& tag) const;
     std::vector<std::string> getChildPaths(const std::string& parentPath) const;
 
-    // 依赖关系管理
+    // Dependencies管理
     void addDependency(const std::string& paramPath, const std::string& dependencyPath);
     void removeDependency(const std::string& paramPath, const std::string& dependencyPath);
     std::vector<std::string> getDependentParameters(const std::string& paramPath) const;
 
-    // 事件回调
+    // Event callbacks
     using ParameterChangeCallback = std::function<void(const ParameterChangeEvent&)>;
     int registerChangeCallback(ParameterChangeCallback callback);
     void unregisterChangeCallback(int callbackId);
     void notifyParameterChange(const ParameterChangeEvent& event);
 
-    // 序列化
+    // Serialization
     bool saveToFile(const std::string& filename) const;
     bool loadFromFile(const std::string& filename);
 
-    // 验证
+    // Validation
     bool validateAllParameters() const;
     std::vector<std::string> getValidationErrors() const;
 
@@ -221,7 +221,7 @@ private:
     int m_nextCallbackId;
     mutable std::mutex m_treeMutex;
 
-    // 内部辅助方法
+    // Internal helper methods
     std::shared_ptr<ParameterNode> findOrCreateNode(const std::string& path);
     std::vector<std::string> splitPath(const std::string& path) const;
     void validatePath(const std::string& path) const;
@@ -229,24 +229,24 @@ private:
 };
 
 /**
- * @brief 参数树工厂
- * 提供预定义的参数树结构创建功能
+ * @brief Parameter tree factory
+ * Provides predefined parameter tree structure creation functionality
  */
 class ParameterTreeFactory {
 public:
-    // 几何表示参数
+    // Geometry representation parameters
     static std::shared_ptr<UnifiedParameterTree> createGeometryParameterTree();
     
-    // 渲染控制参数
+    // Rendering control parameters
     static std::shared_ptr<UnifiedParameterTree> createRenderingParameterTree();
     
-    // 网格参数
+    // Mesh parameters
     static std::shared_ptr<UnifiedParameterTree> createMeshParameterTree();
     
-    // 光照参数
+    // Lighting parameters
     static std::shared_ptr<UnifiedParameterTree> createLightingParameterTree();
     
-    // 完整参数树（包含所有参数）
+    // Complete parameter tree (includes all parameters)
     static std::shared_ptr<UnifiedParameterTree> createCompleteParameterTree();
 
 private:

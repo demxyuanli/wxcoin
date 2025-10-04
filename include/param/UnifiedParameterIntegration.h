@@ -16,36 +16,36 @@ class RenderingEngine;
 class OCCViewer;
 
 /**
- * @brief 统一参数集成管理器
- * 负责将现有参数系统与新的统一参数管理系统进行集成
+ * @brief Unified parameter integration manager
+ * Responsible for integrating existing parameter systems with the new unified parameter management system
  */
 class UnifiedParameterIntegration {
 public:
-    // 集成状态
+    // Integration status
     enum class IntegrationStatus {
-        NOT_INTEGRATED,     // 未集成
-        INTEGRATING,        // 集成中
-        INTEGRATED,         // 已集成
-        ERROR               // 集成错误
+        NOT_INTEGRATED,     // Not integrated
+        INTEGRATING,        // Integrating
+        INTEGRATED,         // Integrated
+        ERROR               // Integration error
     };
 
-    // 集成配置
+    // Integration configuration
     struct IntegrationConfig {
-        bool autoSyncEnabled = true;           // 自动同步
-        bool bidirectionalSync = true;        // 双向同步
-        std::chrono::milliseconds syncInterval = std::chrono::milliseconds(100); // 同步间隔
-        bool enableSmartBatching = true;      // 启用智能批量处理
-        bool enableDependencyTracking = true; // 启用依赖跟踪
-        bool enablePerformanceMonitoring = true; // 启用性能监控
+        bool autoSyncEnabled = true;           // Auto sync
+        bool bidirectionalSync = true;        // Bidirectional sync
+        std::chrono::milliseconds syncInterval = std::chrono::milliseconds(100); // Sync interval
+        bool enableSmartBatching = true;      // Enable smart batching
+        bool enableDependencyTracking = true; // Enable dependency tracking
+        bool enablePerformanceMonitoring = true; // Enable performance monitoring
     };
 
     static UnifiedParameterIntegration& getInstance();
 
-    // 初始化
+    // Initialization
     bool initialize(const IntegrationConfig& config = IntegrationConfig{});
     void shutdown();
 
-    // 系统集成
+    // System integration
     bool integrateRenderingConfig(RenderingConfig* config);
     bool integrateMeshParameterManager(MeshParameterManager* manager);
     bool integrateLightingConfig(LightingConfig* config);
@@ -53,45 +53,45 @@ public:
     bool integrateRenderingEngine(RenderingEngine* engine);
     bool integrateOCCViewer(OCCViewer* viewer);
 
-    // 集成状态查询
+    // Integration status query
     IntegrationStatus getIntegrationStatus(ParameterRegistry::SystemType systemType) const;
     bool isSystemIntegrated(ParameterRegistry::SystemType systemType) const;
     std::vector<ParameterRegistry::SystemType> getIntegratedSystems() const;
 
-    // 同步控制
+    // Synchronization control
     void enableAutoSync(bool enabled);
     void setSyncInterval(std::chrono::milliseconds interval);
     void performManualSync();
     void syncFromExistingSystems();
     void syncToExistingSystems();
 
-    // 参数访问（统一接口）
+    // Parameter access (unified interface)
     bool setParameter(const std::string& fullPath, const ParameterValue& value);
     ParameterValue getParameter(const std::string& fullPath) const;
     bool hasParameter(const std::string& fullPath) const;
 
-    // 批量参数操作
+    // Batch parameter operations
     bool setParameters(const std::unordered_map<std::string, ParameterValue>& parameters);
     std::unordered_map<std::string, ParameterValue> getParameters(const std::vector<std::string>& paths) const;
 
-    // 更新协调
+    // Update coordination
     std::string scheduleParameterChange(const std::string& path, const ParameterValue& oldValue, const ParameterValue& newValue);
     std::string scheduleGeometryRebuild(const std::string& geometryPath);
     std::string scheduleRenderingUpdate(const std::string& target = "");
     std::string scheduleLightingUpdate();
 
-    // 预设管理
+    // Preset management
     void saveCurrentStateAsPreset(const std::string& presetName);
     void loadPreset(const std::string& presetName);
     std::vector<std::string> getAvailablePresets() const;
     void deletePreset(const std::string& presetName);
 
-    // 依赖关系管理
+    // Dependency management
     void addParameterDependency(const std::string& paramPath, const std::string& dependencyPath);
     void removeParameterDependency(const std::string& paramPath, const std::string& dependencyPath);
     std::vector<std::string> getParameterDependencies(const std::string& paramPath) const;
 
-    // 性能监控
+    // Performance monitoring
     struct PerformanceReport {
         size_t totalParameters;
         size_t activeSystems;
@@ -104,17 +104,17 @@ public:
     PerformanceReport getPerformanceReport() const;
     void resetPerformanceMetrics();
 
-    // 验证和诊断
+    // Validation and diagnostics
     bool validateAllParameters() const;
     std::vector<std::string> getValidationErrors() const;
     std::string getSystemDiagnostics() const;
 
-    // 事件回调
+    // Event callbacks
     using IntegrationEventCallback = std::function<void(const std::string& event, const std::string& details)>;
     int registerIntegrationEventCallback(IntegrationEventCallback callback);
     void unregisterIntegrationEventCallback(int callbackId);
 
-    // 配置管理
+    // Configuration management
     void setIntegrationConfig(const IntegrationConfig& config);
     IntegrationConfig getIntegrationConfig() const;
 
@@ -124,19 +124,19 @@ private:
     UnifiedParameterIntegration(const UnifiedParameterIntegration&) = delete;
     UnifiedParameterIntegration& operator=(const UnifiedParameterIntegration&) = delete;
 
-    // 内部数据结构
+    // Internal data structures
     IntegrationConfig m_config;
     std::unordered_map<ParameterRegistry::SystemType, IntegrationStatus> m_integrationStatus;
     std::unordered_map<int, IntegrationEventCallback> m_eventCallbacks;
     int m_nextCallbackId;
 
-    // 同步线程
+    // Synchronization thread
     std::thread m_syncThread;
     std::atomic<bool> m_syncRunning;
     std::mutex m_syncMutex;
     std::condition_variable m_syncCondition;
 
-    // 内部方法
+    // Internal methods
     void initializeDefaultIntegration();
     void syncThreadFunction();
     void performSystemSync(ParameterRegistry::SystemType systemType);
@@ -145,8 +145,8 @@ private:
 };
 
 /**
- * @brief 参数系统桥接器
- * 为特定系统提供参数桥接功能
+ * @brief Parameter system bridge
+ * Provides parameter bridging functionality for specific systems
  */
 class ParameterSystemBridge {
 public:
@@ -167,7 +167,7 @@ public:
 };
 
 /**
- * @brief 渲染系统桥接器
+ * @brief Rendering system bridge
  */
 class RenderingSystemBridge : public ParameterSystemBridge {
 public:
@@ -195,7 +195,7 @@ private:
 };
 
 /**
- * @brief 网格系统桥接器
+ * @brief Mesh system bridge
  */
 class MeshSystemBridge : public ParameterSystemBridge {
 public:

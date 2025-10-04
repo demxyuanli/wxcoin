@@ -16,23 +16,23 @@ class MeshParameterManager;
 class LightingConfig;
 
 /**
- * @brief 参数注册表
- * 统一管理所有参数系统，提供参数注册、查找和协调功能
+ * @brief Parameter registry
+ * Unified management of all parameter systems, provides parameter registration, lookup and coordination functionality
  */
 class ParameterRegistry {
 public:
-    // 参数系统类型
+    // Parameter system types
     enum class SystemType {
-        GEOMETRY,       // 几何表示参数
-        RENDERING,      // 渲染控制参数
-        MESH,          // 网格参数
-        LIGHTING,      // 光照参数
-        NAVIGATION,    // 导航参数
-        DISPLAY,       // 显示参数
-        PERFORMANCE    // 性能参数
+        GEOMETRY,       // Geometry representation parameters
+        RENDERING,      // Rendering control parameters
+        MESH,          // Mesh parameters
+        LIGHTING,      // Lighting parameters
+        NAVIGATION,    // Navigation parameters
+        DISPLAY,       // Display parameters
+        PERFORMANCE    // Performance parameters
     };
 
-    // 参数变更通知
+    // Parameter change notification
     struct ParameterSystemChange {
         SystemType systemType;
         std::string parameterPath;
@@ -45,60 +45,60 @@ public:
 
     static ParameterRegistry& getInstance();
 
-    // 系统注册
+    // System registration
     void registerParameterSystem(SystemType type, std::shared_ptr<UnifiedParameterTree> tree);
     void unregisterParameterSystem(SystemType type);
     std::shared_ptr<UnifiedParameterTree> getParameterSystem(SystemType type) const;
 
-    // 参数访问
+    // Parameter access
     bool setParameter(SystemType systemType, const std::string& path, const ParameterValue& value);
     ParameterValue getParameter(SystemType systemType, const std::string& path) const;
     bool hasParameter(SystemType systemType, const std::string& path) const;
 
-    // 跨系统参数操作
+    // Cross-system parameter operations
     bool setParameterByFullPath(const std::string& fullPath, const ParameterValue& value);
     ParameterValue getParameterByFullPath(const std::string& fullPath) const;
     bool hasParameterByFullPath(const std::string& fullPath) const;
 
-    // 批量操作
+    // Batch operations
     bool setParametersBySystem(SystemType systemType, const std::unordered_map<std::string, ParameterValue>& values);
     std::unordered_map<std::string, ParameterValue> getAllParametersBySystem(SystemType systemType) const;
 
-    // 参数路径解析
+    // Parameter path parsing
     std::pair<SystemType, std::string> parseFullPath(const std::string& fullPath) const;
     std::string buildFullPath(SystemType systemType, const std::string& path) const;
 
-    // 系统间依赖管理
+    // Inter-system dependency management
     void addSystemDependency(SystemType dependentSystem, SystemType dependencySystem);
     void removeSystemDependency(SystemType dependentSystem, SystemType dependencySystem);
     std::vector<SystemType> getDependentSystems(SystemType systemType) const;
 
-    // 变更通知
+    // Change notification
     int registerSystemChangeCallback(SystemChangeCallback callback);
     void unregisterSystemChangeCallback(int callbackId);
     void notifySystemChange(const ParameterSystemChange& change);
 
-    // 与现有系统的集成
+    // Integration with existing systems
     void integrateRenderingConfig(RenderingConfig* config);
     void integrateMeshParameterManager(MeshParameterManager* manager);
     void integrateLightingConfig(LightingConfig* config);
 
-    // 同步操作
+    // Synchronization operations
     void syncFromExistingSystems();
     void syncToExistingSystems();
 
-    // 预设管理
+    // Preset management
     void savePreset(const std::string& presetName);
     void loadPreset(const std::string& presetName);
     std::vector<std::string> getAvailablePresets() const;
     void deletePreset(const std::string& presetName);
 
-    // 验证和诊断
+    // Validation and diagnostics
     bool validateAllSystems() const;
     std::vector<std::string> getValidationReport() const;
     std::string getSystemStatusReport() const;
 
-    // 性能监控
+    // Performance monitoring
     struct PerformanceStats {
         size_t totalParameters;
         size_t activeSystems;
@@ -114,22 +114,22 @@ private:
     ParameterRegistry(const ParameterRegistry&) = delete;
     ParameterRegistry& operator=(const ParameterRegistry&) = delete;
 
-    // 内部数据结构
+    // Internal data structures
     std::unordered_map<SystemType, std::shared_ptr<UnifiedParameterTree>> m_systems;
     std::unordered_map<SystemType, std::vector<SystemType>> m_systemDependencies;
     std::unordered_map<int, SystemChangeCallback> m_systemCallbacks;
     int m_nextCallbackId;
 
-    // 现有系统集成
+    // Existing system integration
     RenderingConfig* m_renderingConfig;
     MeshParameterManager* m_meshParameterManager;
     LightingConfig* m_lightingConfig;
 
-    // 性能统计
+    // Performance statistics
     mutable std::mutex m_statsMutex;
     PerformanceStats m_performanceStats;
 
-    // 内部辅助方法
+    // Internal helper methods
     void initializeDefaultSystems();
     void updatePerformanceStats();
     void syncSystemToRegistry(SystemType systemType);
@@ -137,8 +137,8 @@ private:
 };
 
 /**
- * @brief 参数系统适配器基类
- * 为现有参数系统提供统一的适配接口
+ * @brief Parameter system adapter base class
+ * Provides unified adapter interface for existing parameter systems
  */
 class ParameterSystemAdapter {
 public:
@@ -157,7 +157,7 @@ public:
 };
 
 /**
- * @brief 渲染配置适配器
+ * @brief Rendering configuration adapter
  */
 class RenderingConfigAdapter : public ParameterSystemAdapter {
 public:
@@ -181,7 +181,7 @@ private:
 };
 
 /**
- * @brief 网格参数管理器适配器
+ * @brief Mesh parameter manager adapter
  */
 class MeshParameterManagerAdapter : public ParameterSystemAdapter {
 public:
@@ -205,7 +205,7 @@ private:
 };
 
 /**
- * @brief 光照配置适配器
+ * @brief Lighting configuration adapter
  */
 class LightingConfigAdapter : public ParameterSystemAdapter {
 public:
@@ -228,7 +228,7 @@ private:
     void initializeParameterTree(std::shared_ptr<UnifiedParameterTree> tree);
 };
 
-// 便利宏定义
+// Convenience macro definitions
 #define REGISTER_PARAM(system, path, value) \
     ParameterRegistry::getInstance().setParameter(ParameterRegistry::SystemType::system, path, value)
 
