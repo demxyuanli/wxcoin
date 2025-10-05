@@ -528,6 +528,16 @@ void OCCGeometry::forceCoinRepresentationRebuild(const MeshParameters& params)
 
 void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 {
+	LOG_INF_S("=== GEOMETRY " + m_name + ": CHECKING MESH REGENERATION NEED ===");
+	LOG_INF_S("New parameters: deflection=" + std::to_string(params.deflection) +
+		", angularDeflection=" + std::to_string(params.angularDeflection) +
+		", relative=" + std::string(params.relative ? "true" : "false") +
+		", inParallel=" + std::string(params.inParallel ? "true" : "false"));
+	LOG_INF_S("Last parameters: deflection=" + std::to_string(m_lastMeshParams.deflection) +
+		", angularDeflection=" + std::to_string(m_lastMeshParams.angularDeflection) +
+		", relative=" + std::string(m_lastMeshParams.relative ? "true" : "false") +
+		", inParallel=" + std::string(m_lastMeshParams.inParallel ? "true" : "false"));
+
 	// Check if mesh parameters have changed
 	bool paramsChanged = (params.deflection != m_lastMeshParams.deflection ||
 		params.angularDeflection != m_lastMeshParams.angularDeflection ||
@@ -543,58 +553,80 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		auto& subdivisionSettings = config.getSubdivisionSettings();
 		
 		// Check if advanced parameters have actually changed from last known values
-		// We need to compare current values with stored values to detect real changes
-		static bool lastSmoothingEnabled = false;
-		static bool lastSubdivisionEnabled = false;
-		static int lastSubdivisionLevel = 1;
-		static int lastSmoothingIterations = 1;
-		static double lastSmoothingStrength = 0.5;
-		
-		// Check if smoothing parameters changed
-		bool smoothingChanged = (smoothingSettings.enabled != lastSmoothingEnabled ||
-			smoothingSettings.iterations != lastSmoothingIterations);
+		// Compare current values with stored instance values to detect real changes
+		bool smoothingChanged = (smoothingSettings.enabled != m_lastSmoothingEnabled ||
+			smoothingSettings.iterations != m_lastSmoothingIterations ||
+			smoothingSettings.creaseAngle != m_lastSmoothingCreaseAngle);
 		
 		// Check if subdivision parameters changed
-		bool subdivisionChanged = (subdivisionSettings.enabled != lastSubdivisionEnabled ||
-			subdivisionSettings.levels != lastSubdivisionLevel);
+		bool subdivisionChanged = (subdivisionSettings.enabled != m_lastSubdivisionEnabled ||
+			subdivisionSettings.levels != m_lastSubdivisionLevel);
 		
-		// Check custom parameters
-		std::string tessellationQuality = config.getParameter("tessellation_quality");
-		std::string adaptiveMeshing = config.getParameter("adaptive_meshing");
-		std::string smoothingStrength = config.getParameter("smoothing_strength");
+		// Check custom parameters by comparing with stored values
+		double currentSmoothingStrength = std::stod(config.getParameter("smoothing_strength", "0.5"));
+		int currentTessellationMethod = std::stoi(config.getParameter("tessellation_method", "0"));
+		int currentTessellationQuality = std::stoi(config.getParameter("tessellation_quality", "2"));
+		double currentFeaturePreservation = std::stod(config.getParameter("feature_preservation", "0.5"));
+		bool currentAdaptiveMeshing = (config.getParameter("adaptive_meshing", "false") == "true");
+		bool currentParallelProcessing = (config.getParameter("parallel_processing", "true") == "true");
+		
+		bool customParamsChanged = (currentSmoothingStrength != m_lastSmoothingStrength ||
+			currentTessellationMethod != m_lastTessellationMethod ||
+			currentTessellationQuality != m_lastTessellationQuality ||
+			currentFeaturePreservation != m_lastFeaturePreservation ||
+			currentAdaptiveMeshing != m_lastAdaptiveMeshing ||
+			currentParallelProcessing != m_lastParallelProcessing);
 		
 		// Only regenerate if parameters actually changed
-		advancedParamsChanged = (smoothingChanged || subdivisionChanged || 
-			!tessellationQuality.empty() || !adaptiveMeshing.empty() || !smoothingStrength.empty());
+		advancedParamsChanged = (smoothingChanged || subdivisionChanged || customParamsChanged);
 		
-		// Update stored values for next comparison
 		if (advancedParamsChanged) {
-			lastSmoothingEnabled = smoothingSettings.enabled;
-			lastSubdivisionEnabled = subdivisionSettings.enabled;
-			lastSubdivisionLevel = subdivisionSettings.levels;
-			lastSmoothingIterations = smoothingSettings.iterations;
-			
 			LOG_INF_S("Advanced mesh parameters changed, forcing regeneration for geometry: " + m_name);
-			LOG_INF_S("  - Smoothing enabled: " + std::string(smoothingSettings.enabled ? "true" : "false"));
-			LOG_INF_S("  - Subdivision enabled: " + std::string(subdivisionSettings.enabled ? "true" : "false"));
-			if (!tessellationQuality.empty()) {
-				LOG_INF_S("  - Tessellation quality: " + tessellationQuality);
-			}
+			LOG_INF_S("  - Smoothing enabled: " + std::string(smoothingSettings.enabled ? "true" : "false") +
+				" (was: " + std::string(m_lastSmoothingEnabled ? "true" : "false") + ")");
+			LOG_INF_S("  - Smoothing iterations: " + std::to_string(smoothingSettings.iterations) +
+				" (was: " + std::to_string(m_lastSmoothingIterations) + ")");
+			LOG_INF_S("  - Subdivision enabled: " + std::string(subdivisionSettings.enabled ? "true" : "false") +
+				" (was: " + std::string(m_lastSubdivisionEnabled ? "true" : "false") + ")");
+			LOG_INF_S("  - Subdivision levels: " + std::to_string(subdivisionSettings.levels) +
+				" (was: " + std::to_string(m_lastSubdivisionLevel) + ")");
+			LOG_INF_S("  - Tessellation quality: " + std::to_string(currentTessellationQuality) +
+				" (was: " + std::to_string(m_lastTessellationQuality) + ")");
+			LOG_INF_S("  - Smoothing strength: " + std::to_string(currentSmoothingStrength) +
+				" (was: " + std::to_string(m_lastSmoothingStrength) + ")");
 		}
+	} catch (const std::exception& e) {
+		// If we can't access config, assume no advanced changes
+		LOG_ERR_S("Exception accessing RenderingToolkitAPI config: " + std::string(e.what()));
+		advancedParamsChanged = false;
 	} catch (...) {
 		// If we can't access config, assume no advanced changes
+		LOG_ERR_S("Unknown exception accessing RenderingToolkitAPI config");
 		advancedParamsChanged = false;
 	}
 
+	LOG_INF_S("=== GEOMETRY " + m_name + ": FINAL DECISION CHECK ===");
+	LOG_INF_S("m_meshRegenerationNeeded=" + std::string(m_meshRegenerationNeeded ? "true" : "false"));
+	LOG_INF_S("paramsChanged=" + std::string(paramsChanged ? "true" : "false"));
+	LOG_INF_S("advancedParamsChanged=" + std::string(advancedParamsChanged ? "true" : "false"));
+	LOG_INF_S("Will regenerate: " + std::string((m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged) ? "YES" : "NO"));
+
 	if (m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged) {
+		LOG_INF_S("=== GEOMETRY " + m_name + ": MESH REGENERATION REQUIRED ===");
+		LOG_INF_S("Reasons: forced=" + std::string(m_meshRegenerationNeeded ? "true" : "false") +
+			", paramsChanged=" + std::string(paramsChanged ? "true" : "false") +
+			", advancedParamsChanged=" + std::string(advancedParamsChanged ? "true" : "false"));
+
 		try {
 			// Use the material-aware version to preserve imported geometry colors
+			LOG_INF_S("GEOMETRY " + m_name + ": Building Coin3D representation");
 			buildCoinRepresentation(params,
 				m_materialDiffuseColor, m_materialAmbientColor,
 				m_materialSpecularColor, m_materialEmissiveColor,
 				m_materialShininess, m_transparency);
 			m_lastMeshParams = params;
 			m_meshRegenerationNeeded = false;
+			LOG_INF_S("=== GEOMETRY " + m_name + ": MESH REGENERATION COMPLETED ===");
 		}
 		catch (const Standard_ConstructionError& e) {
 			LOG_ERR_S("Standard_ConstructionError in buildCoinRepresentation for " + m_name + ": " + std::string(e.GetMessageString()));
@@ -1909,29 +1941,12 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
 	drawStyle->lineWidth = m_wireframeMode ? 1.0f : 0.0f;
 	m_coinNode->addChild(drawStyle);
 
-	// Convert shape to mesh using OCCMeshConverter (geometry conversion only)
-	TriangleMesh mesh = OCCMeshConverter::convertToMesh(m_shape, params.deflection);
-
-	if (mesh.isEmpty()) {
-		LOG_ERR_S("Failed to convert shape to mesh for " + m_name);
-		return;
-	}
-
-	// Apply smoothing if enabled
-	if (m_smoothNormals) {
-		mesh = OCCMeshConverter::smoothNormals(mesh, 30.0, 2);
-	}
-
-	// Apply subdivision if enabled
-	if (m_subdivisionEnabled) {
-		mesh = OCCMeshConverter::createSubdivisionSurface(mesh, m_subdivisionLevels);
-	}
-
 	// Use RenderingToolkitAPI for all rendering operations (proper architecture)
 	auto& manager = RenderingToolkitAPI::getManager();
 	auto backend = manager.getRenderBackend("Coin3D");
 	if (backend) {
-		auto sceneNode = backend->createSceneNode(mesh, m_selected,
+		// Use the material-aware version to preserve custom material settings
+		auto sceneNode = backend->createSceneNode(m_shape, params, m_selected,
 			diffuseColor, ambientColor, specularColor, emissiveColor, shininess, transparency);
 		if (sceneNode) {
 			SoSeparator* meshNode = sceneNode.get();
@@ -1947,7 +1962,6 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
 	auto buildDuration = std::chrono::duration_cast<std::chrono::microseconds>(buildEndTime - buildStartTime);
 
 	LOG_INF_S("Coin3D representation built for " + m_name + " with custom material in " + std::to_string(buildDuration.count()) + " microseconds");
-	LOG_INF_S("Mesh statistics: " + std::to_string(mesh.getVertexCount()) + " vertices, " + std::to_string(mesh.getTriangleCount()) + " triangles");
 }
 
 void OCCGeometry::updateEdgeDisplay() {

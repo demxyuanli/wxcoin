@@ -1926,7 +1926,10 @@ void MeshQualityDialog::applyParametersAtomically(const std::map<std::string, do
 		
 		// Apply all parameters to viewer
 		if (m_occViewer) {
+			LOG_INF_S("=== APPLYING PARAMETERS TO OCCVIEWER ===");
 			for (const auto& param : parameters) {
+				LOG_INF_S("Setting parameter: " + param.first + " = " + std::to_string(param.second));
+
 				if (param.first == "deflection") {
 					m_occViewer->setMeshDeflection(param.second, false);
 				} else if (param.first == "angularDeflection") {
@@ -1957,21 +1960,13 @@ void MeshQualityDialog::applyParametersAtomically(const std::map<std::string, do
 					m_occViewer->setFeaturePreservation(param.second);
 				}
 			}
+			LOG_INF_S("=== PARAMETERS APPLIED TO OCCVIEWER ===");
 			
 			// Force remesh if requested
 			if (immediateRemesh) {
 				LOG_INF_S("Forcing complete mesh regeneration with all new parameters");
 				m_occViewer->remeshAllGeometries();
-				
-				// Force all geometries to regenerate their Coin3D representation with new parameters
-				auto geometries = m_occViewer->getAllGeometry();
-				for (auto& geometry : geometries) {
-					if (geometry) {
-						geometry->setMeshRegenerationNeeded(true);
-						geometry->updateCoinRepresentationIfNeeded(m_occViewer->getMeshParameters());
-						LOG_INF_S("Regenerated Coin3D representation for geometry: " + geometry->getName());
-					}
-				}
+				LOG_INF_S("Mesh regeneration completed for all geometries");
 				
 				m_occViewer->requestViewRefresh();
 			}

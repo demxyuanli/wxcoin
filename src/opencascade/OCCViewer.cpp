@@ -807,7 +807,13 @@ void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::remeshAllGeometries()
 {
-	if (m_meshController) m_meshController->remeshAll();
+	LOG_INF_S("=== OCCVIEWER: STARTING REMESH ALL GEOMETRIES ===");
+	if (m_meshController) {
+		m_meshController->remeshAll();
+	} else {
+		LOG_WRN_S("OCCVIEWER: Mesh controller is null, cannot remesh");
+	}
+	LOG_INF_S("=== OCCVIEWER: REMESH ALL GEOMETRIES COMPLETED ===");
 }
 
 // LOD (Level of Detail) methods

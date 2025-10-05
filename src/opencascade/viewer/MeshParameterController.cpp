@@ -3,6 +3,7 @@
 #include "viewer/MeshingService.h"
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
+#include "logger/Logger.h"
 
 MeshParameterController::MeshParameterController(OCCViewer* viewer,
 	MeshingService* mesher,
@@ -36,7 +37,11 @@ void MeshParameterController::setFeaturePreservation(double preservation) { m_fe
 void MeshParameterController::setAdaptiveMeshing(bool enabled) { m_adaptiveMeshing = enabled; applyRemesh(); }
 void MeshParameterController::setParallelProcessing(bool enabled) { m_parallelProcessing = enabled; }
 
-void MeshParameterController::remeshAll() { applyRemesh(); }
+void MeshParameterController::remeshAll() {
+	LOG_INF_S("=== MESH CONTROLLER: REMESH ALL STARTED ===");
+	applyRemesh();
+	LOG_INF_S("=== MESH CONTROLLER: REMESH ALL COMPLETED ===");
+}
 
 bool MeshParameterController::isSmoothingEnabled() const { return m_smoothingEnabled; }
 int MeshParameterController::getSmoothingMethod() const { return m_smoothingMethod; }
@@ -54,12 +59,30 @@ bool MeshParameterController::isAdaptiveMeshing() const { return m_adaptiveMeshi
 bool MeshParameterController::isParallelProcessing() const { return m_parallelProcessing; }
 
 void MeshParameterController::applyRemesh() {
-	if (!m_mesher || !m_params || !m_geometries) return;
+	if (!m_mesher || !m_params || !m_geometries) {
+		LOG_ERR_S("MESH CONTROLLER: Missing required components for remesh");
+		return;
+	}
+
+	LOG_INF_S("=== MESH CONTROLLER: APPLYING REMESH PARAMETERS ===");
+	LOG_INF_S("Parameters: deflection=" + std::to_string(m_params->deflection) +
+		", angularDeflection=" + std::to_string(m_params->angularDeflection) +
+		", smoothingEnabled=" + std::string(m_smoothingEnabled ? "true" : "false") +
+		", subdivisionEnabled=" + std::string(m_subdivisionEnabled ? "true" : "false") +
+		", geometries=" + std::to_string(m_geometries->size()));
+
 	m_mesher->applyAndRemesh(*m_params, *m_geometries,
 		m_smoothingEnabled, m_smoothingIterations, m_smoothingStrength, m_smoothingCreaseAngle,
 		m_subdivisionEnabled, m_subdivisionLevel, m_subdivisionMethod, m_subdivisionCreaseAngle,
 		m_tessellationMethod, m_tessellationQuality, m_featurePreservation, m_adaptiveMeshing, m_parallelProcessing);
-	
+
 	// Request view refresh after remeshing
-	if (m_viewer) m_viewer->requestViewRefresh();
+	if (m_viewer) {
+		LOG_INF_S("MESH CONTROLLER: Requesting view refresh after remesh");
+		m_viewer->requestViewRefresh();
+	} else {
+		LOG_WRN_S("MESH CONTROLLER: No viewer available for refresh");
+	}
+
+	LOG_INF_S("=== MESH CONTROLLER: REMESH APPLICATION COMPLETED ===");
 }

@@ -144,19 +144,22 @@ void Canvas::showErrorDialog(const std::string& message) const {
 }
 
 void Canvas::render(bool fastMode) {
+	LOG_INF_S("=== CANVAS: STARTING RENDER (mode=" + std::string(fastMode ? "FAST" : "QUALITY") + ") ===");
+
 	// Skip rendering if we're already rendering (prevents recursive calls)
 	static bool isRendering = false;
 	if (isRendering) {
+		LOG_WRN_S("CANVAS: Recursive render call detected, skipping");
 		return;
 	}
-	
+
 	// Guard to ensure we reset the flag
 	struct RenderGuard {
 		bool& flag;
 		RenderGuard(bool& f) : flag(f) { flag = true; }
 		~RenderGuard() { flag = false; }
 	} guard(isRendering);
-	
+
 	auto renderStartTime = std::chrono::high_resolution_clock::now();
 
 	if (m_renderingEngine) {
@@ -210,7 +213,11 @@ void Canvas::render(bool fastMode) {
 			c.fps = 1000.0 / std::max(1, c.totalMs);
 			perf::PerformanceBus::instance().setCanvas(c);
 		}
+	} else {
+		LOG_WRN_S("CANVAS: No rendering engine available");
 	}
+
+	LOG_INF_S("=== CANVAS: RENDER COMPLETED ===");
 }
 
 void Canvas::onPaint(wxPaintEvent& event) {

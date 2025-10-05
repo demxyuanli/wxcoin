@@ -1,4 +1,5 @@
 #include "rendering/OpenCASCADEProcessor.h"
+#include "rendering/RenderingToolkitAPI.h"
 #include "logger/Logger.h"
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRep_Tool.hxx>
@@ -42,9 +43,72 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 	}
 
 	try {
-		// Create incremental mesh
-		BRepMesh_IncrementalMesh meshGen(shape, params.deflection, params.relative,
-			params.angularDeflection, params.inParallel);
+		// Get config reference for reading parameters
+		auto& configRef = RenderingToolkitAPI::getConfig();
+
+		// Read all tessellation parameters from config
+		int tessellationQuality = 2;
+		bool adaptiveMeshing = false;
+		int tessellationMethod = 0;
+		double featurePreservation = 0.5;
+		bool parallelProcessingConfig = true;
+
+		try {
+			tessellationQuality = std::stoi(configRef.getParameter("tessellation_quality", "2"));
+			adaptiveMeshing = (configRef.getParameter("adaptive_meshing", "false") == "true");
+			tessellationMethod = std::stoi(configRef.getParameter("tessellation_method", "0"));
+			featurePreservation = std::stod(configRef.getParameter("feature_preservation", "0.5"));
+			parallelProcessingConfig = (configRef.getParameter("parallel_processing", "true") == "true");
+		} catch (...) {
+			// Use defaults if parsing fails
+			tessellationQuality = 2;
+			adaptiveMeshing = false;
+			tessellationMethod = 0;
+			featurePreservation = 0.5;
+			parallelProcessingConfig = true;
+		}
+
+		// Use config setting if available, otherwise use parameter setting
+		bool useParallel = parallelProcessingConfig && params.inParallel;
+
+		// Log additional tessellation parameters for debugging
+		LOG_INF_S("Tessellation parameters: quality=" + std::to_string(tessellationQuality) +
+			", adaptive=" + std::string(adaptiveMeshing ? "true" : "false") +
+			", method=" + std::to_string(tessellationMethod) +
+			", featurePreservation=" + std::to_string(featurePreservation) +
+			", parallel=" + std::string(useParallel ? "true" : "false"));
+
+		// Adjust basic parameters based on advanced settings
+		double adjustedDeflection = params.deflection;
+		double adjustedAngularDeflection = params.angularDeflection;
+		
+		// Only adjust parameters if user has explicitly set high quality settings
+		// Default tessellationQuality=2 should not trigger aggressive parameter adjustment
+		if (tessellationQuality >= 3) {
+			// Only apply aggressive quality adjustments for very high quality settings
+			// Quality 3: 0.25x deflection (very detailed)
+			// Quality 4+: 0.1x deflection (extremely detailed)
+			double qualityFactor = 1.0 / (1.0 + (tessellationQuality - 2));
+			adjustedDeflection *= qualityFactor;
+			adjustedAngularDeflection *= qualityFactor;
+			LOG_INF_S("Applied high quality tessellation adjustment: factor=" + std::to_string(qualityFactor));
+		}
+		
+		// Only apply adaptive meshing adjustment if explicitly enabled AND quality is high
+		if (adaptiveMeshing && tessellationQuality >= 3) {
+			// Adaptive meshing uses even smaller deflection for better quality
+			adjustedDeflection *= 0.7; // Less aggressive than 0.5
+			adjustedAngularDeflection *= 0.7;
+			LOG_INF_S("Applied adaptive meshing adjustment");
+		}
+		
+		LOG_INF_S("Adjusted mesh parameters: deflection=" + std::to_string(adjustedDeflection) +
+			", angularDeflection=" + std::to_string(adjustedAngularDeflection) +
+			" (original: " + std::to_string(params.deflection) + ", " + std::to_string(params.angularDeflection) + ")");
+
+		// Create incremental mesh with adjusted parameters
+		BRepMesh_IncrementalMesh meshGen(shape, adjustedDeflection, params.relative,
+			adjustedAngularDeflection, useParallel);
 
 		if (!meshGen.IsDone()) {
 			LOG_ERR_S("Failed to generate mesh for shape");
@@ -63,14 +127,38 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			calculateNormals(mesh);
 		}
 
-		// Apply smoothing if enabled
-		if (m_smoothingEnabled) {
-			mesh = smoothNormals(mesh, m_creaseAngle, 2);
+		// Apply smoothing if enabled - read from RenderingToolkitAPI config
+		auto& config = configRef; // Reuse the config reference from earlier
+		auto& smoothingSettings = config.getSmoothingSettings();
+		auto& subdivisionSettings = config.getSubdivisionSettings();
+
+		// Read custom parameters
+		double smoothingStrength = 0.5;
+		try {
+			smoothingStrength = std::stod(config.getParameter("smoothing_strength", "0.5"));
+		} catch (...) {
+			smoothingStrength = 0.5;
 		}
 
-		// Apply subdivision if enabled
-		if (m_subdivisionEnabled) {
-			mesh = createSubdivisionSurface(mesh, m_subdivisionLevels);
+		if (smoothingSettings.enabled) {
+			// Use smoothing strength to modify iterations based on strength
+			int adjustedIterations = smoothingSettings.iterations;
+			if (smoothingStrength > 0.7) {
+				adjustedIterations = std::max(adjustedIterations + 1, 1);
+			} else if (smoothingStrength < 0.3) {
+				adjustedIterations = std::max(adjustedIterations - 1, 1);
+			}
+
+			mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
+			LOG_INF_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
+				", iterations=" + std::to_string(adjustedIterations) +
+				", strength=" + std::to_string(smoothingStrength));
+		}
+
+		// Apply subdivision if enabled - read from RenderingToolkitAPI config
+		if (subdivisionSettings.enabled) {
+			mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
+			LOG_INF_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
 		}
 
 		LOG_INF_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) +
