@@ -71,7 +71,7 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
 
 		// Auto-fit all geometries after creating new geometry
 		if (m_occViewer) {
-			LOG_INF_S("Auto-executing fitAll after creating geometry: " + type);
+			LOG_DBG_S("Auto-executing fitAll after creating geometry: " + type);
 			m_occViewer->fitAll();
 		}
 	}
@@ -81,7 +81,7 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
 }
 
 std::shared_ptr<OCCGeometry> GeometryFactory::createOCCGeometryWithParameters(const std::string& type, const SbVec3f& position, const BasicGeometryParameters& params) {
-	LOG_INF_S("[GeometryFactoryDebug] createOCCGeometryWithParameters called with position: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
+	LOG_DBG_S("[GeometryFactoryDebug] createOCCGeometryWithParameters called with position: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
 
 	std::shared_ptr<OCCGeometry> geometry = nullptr;
 
@@ -120,11 +120,11 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCGeometryWithParameters(co
 			addGeometryToCullingSystem(geometry);
 		}
 
-		LOG_INF_S("Created OCC geometry with parameters: " + type);
+		LOG_DBG_S("Created OCC geometry with parameters: " + type);
 
 		// Auto-fit all geometries after creating new geometry
 		if (m_occViewer) {
-			LOG_INF_S("Auto-executing fitAll after creating geometry: " + type);
+			LOG_DBG_S("Auto-executing fitAll after creating geometry: " + type);
 			m_occViewer->fitAll();
 		}
 	}

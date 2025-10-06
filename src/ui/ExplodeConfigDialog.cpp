@@ -2,18 +2,31 @@
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 #include <wx/button.h>
+#include <wx/scrolwin.h>
+#include <wx/statbox.h>
 
 ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     ExplodeMode currentMode,
     double currentFactor)
-    : FramelessModalPopup(parent, "Explode", wxSize(400, 400))
+    : FramelessModalPopup(parent, "Explode Configuration", wxSize(500, 600))
 {
     // Set up title bar with icon
     SetTitleIcon("explosion", wxSize(20, 20));
     ShowTitleIcon(true);
 
-    wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
+    // Create main layout
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
+    // Create scrolled window for content
+    wxScrolledWindow* scrolledWindow = new wxScrolledWindow(m_contentPanel, wxID_ANY, 
+        wxDefaultPosition, wxDefaultSize, wxVSCROLL | wxHSCROLL);
+    scrolledWindow->SetScrollRate(10, 10);
+    
+    wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
+
+    // Mode selection section
+    wxStaticBoxSizer* modeBox = new wxStaticBoxSizer(wxVERTICAL, scrolledWindow, "Explode Mode");
+    
     wxArrayString modes;
     modes.Add("Radial");
     modes.Add("Axis X");
@@ -25,60 +38,79 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     modes.Add("Diagonal");
     modes.Add("Assembly");
 
-    m_mode = new wxRadioBox(m_contentPanel, wxID_ANY, "Mode", wxDefaultPosition, wxDefaultSize, modes, 1, wxRA_SPECIFY_ROWS);
-    m_factor = new wxSpinCtrlDouble(m_contentPanel, wxID_ANY);
+    m_mode = new wxRadioBox(scrolledWindow, wxID_ANY, "Mode", wxDefaultPosition, wxDefaultSize, modes, 3, wxRA_SPECIFY_COLS);
+    m_mode->SetSelection(modeToSelection(currentMode));
+    modeBox->Add(m_mode, 0, wxEXPAND | wxALL, 5);
+    
+    contentSizer->Add(modeBox, 0, wxEXPAND | wxALL, 5);
+
+    // Distance factor section
+    wxStaticBoxSizer* factorBox = new wxStaticBoxSizer(wxVERTICAL, scrolledWindow, "Distance Factor");
+    
+    wxFlexGridSizer* factorGrid = new wxFlexGridSizer(2, 8, 8);
+    factorGrid->AddGrowableCol(1);
+    
+    m_factor = new wxSpinCtrlDouble(scrolledWindow, wxID_ANY);
     m_factor->SetRange(0.01, 10.0);
     m_factor->SetIncrement(0.05);
-
-    m_mode->SetSelection(modeToSelection(currentMode));
     m_factor->SetValue(currentFactor);
+    
+    factorGrid->Add(new wxStaticText(scrolledWindow, wxID_ANY, "Factor:"), 0, wxALIGN_CENTER_VERTICAL);
+    factorGrid->Add(m_factor, 1, wxEXPAND);
+    
+    factorBox->Add(factorGrid, 0, wxEXPAND | wxALL, 5);
+    contentSizer->Add(factorBox, 0, wxEXPAND | wxALL, 5);
 
-    wxFlexGridSizer* grid = new wxFlexGridSizer(2, 8, 8);
-    grid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Distance Factor:"), 0, wxALIGN_CENTER_VERTICAL);
-    grid->Add(m_factor, 1, wxEXPAND);
-
-    // Sliders helpers
-    auto makeRow = [&](const wxString& label, wxSlider** out, int value, int minV, int maxV){
+    // Direction weights section
+    wxStaticBoxSizer* weightsBox = new wxStaticBoxSizer(wxVERTICAL, scrolledWindow, "Directional Weights");
+    
+    // Sliders helper function
+    auto makeSliderRow = [&](const wxString& label, wxSlider** out, int value, int minV, int maxV){
         wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-        row->Add(new wxStaticText(m_contentPanel, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
-        *out = new wxSlider(m_contentPanel, wxID_ANY, value, minV, maxV);
+        row->Add(new wxStaticText(scrolledWindow, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+        *out = new wxSlider(scrolledWindow, wxID_ANY, value, minV, maxV);
         row->Add(*out, 1, wxEXPAND);
         return row;
     };
 
-    // Direction weights
-    wxBoxSizer* weightsBox = new wxBoxSizer(wxVERTICAL);
-    weightsBox->Add(makeRow("Radial Weight", &m_weightRadial, 100, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
-    weightsBox->Add(makeRow("Axis X Weight", &m_weightX, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
-    weightsBox->Add(makeRow("Axis Y Weight", &m_weightY, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
-    weightsBox->Add(makeRow("Axis Z Weight", &m_weightZ, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
-    weightsBox->Add(makeRow("Diagonal Weight", &m_weightDiag, 0, 0, 200), 0, wxEXPAND);
+    weightsBox->Add(makeSliderRow("Radial Weight", &m_weightRadial, 100, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
+    weightsBox->Add(makeSliderRow("Axis X Weight", &m_weightX, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
+    weightsBox->Add(makeSliderRow("Axis Y Weight", &m_weightY, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
+    weightsBox->Add(makeSliderRow("Axis Z Weight", &m_weightZ, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
+    weightsBox->Add(makeSliderRow("Diagonal Weight", &m_weightDiag, 0, 0, 200), 0, wxEXPAND);
+    
+    contentSizer->Add(weightsBox, 0, wxEXPAND | wxALL, 5);
 
-    // Advanced parameters
-    wxStaticText* advTitle = new wxStaticText(m_contentPanel, wxID_ANY, "Advanced:");
-    wxBoxSizer* advBox = new wxBoxSizer(wxVERTICAL);
-    advBox->Add(makeRow("Per-Level Scale", &m_perLevelScale, 60, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
-    advBox->Add(makeRow("Size Influence", &m_sizeInfluence, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
-    advBox->Add(makeRow("Jitter", &m_jitter, 0, 0, 100), 0, wxEXPAND | wxBOTTOM, 4);
-    advBox->Add(makeRow("Min Spacing", &m_minSpacing, 0, 0, 200), 0, wxEXPAND);
+    // Advanced parameters section
+    wxStaticBoxSizer* advancedBox = new wxStaticBoxSizer(wxVERTICAL, scrolledWindow, "Advanced Parameters");
+    
+    advancedBox->Add(makeSliderRow("Per-Level Scale", &m_perLevelScale, 60, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
+    advancedBox->Add(makeSliderRow("Size Influence", &m_sizeInfluence, 0, 0, 200), 0, wxEXPAND | wxBOTTOM, 4);
+    advancedBox->Add(makeSliderRow("Jitter", &m_jitter, 0, 0, 100), 0, wxEXPAND | wxBOTTOM, 4);
+    advancedBox->Add(makeSliderRow("Min Spacing", &m_minSpacing, 0, 0, 200), 0, wxEXPAND);
+    
+    contentSizer->Add(advancedBox, 0, wxEXPAND | wxALL, 5);
 
-    top->Add(m_mode, 0, wxALL | wxEXPAND, 8);
-    top->Add(grid, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 8);
-    top->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Directional Weights:"), 0, wxLEFT | wxRIGHT | wxTOP, 8);
-    top->Add(weightsBox, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 8);
-    top->Add(advTitle, 0, wxLEFT | wxRIGHT | wxTOP, 8);
-    top->Add(advBox, 1, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, 8);
+    // Set sizer for scrolled window
+    scrolledWindow->SetSizer(contentSizer);
+    scrolledWindow->FitInside();
+    
+    mainSizer->Add(scrolledWindow, 1, wxEXPAND | wxALL, 5);
 
+    // Button section
     wxStdDialogButtonSizer* btns = new wxStdDialogButtonSizer();
     btns->AddButton(new wxButton(m_contentPanel, wxID_OK));
     btns->AddButton(new wxButton(m_contentPanel, wxID_CANCEL));
     btns->Realize();
-    top->Add(btns, 0, wxALL | wxALIGN_RIGHT, 6);
+    mainSizer->Add(btns, 0, wxALL | wxALIGN_RIGHT, 5);
 
-    SetSizerAndFit(top);
-    SetMinSize(wxSize(360, 360));
-    SetMaxSize(wxSize(400, 400));
+    m_contentPanel->SetSizer(mainSizer);
+    
+    // Set reasonable size constraints
+    SetMinSize(wxSize(450, 500));
+    SetMaxSize(wxSize(600, 800));
 
+    // Bind events
     m_mode->Bind(wxEVT_RADIOBOX, [this](wxCommandEvent&){ updateSliderEnableByMode(); });
     updateSliderEnableByMode();
 }

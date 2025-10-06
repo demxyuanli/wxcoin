@@ -72,7 +72,7 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 		bool useParallel = parallelProcessingConfig && params.inParallel;
 
 		// Log additional tessellation parameters for debugging
-		LOG_INF_S("Tessellation parameters: quality=" + std::to_string(tessellationQuality) +
+		LOG_DBG_S("Tessellation parameters: quality=" + std::to_string(tessellationQuality) +
 			", adaptive=" + std::string(adaptiveMeshing ? "true" : "false") +
 			", method=" + std::to_string(tessellationMethod) +
 			", featurePreservation=" + std::to_string(featurePreservation) +
@@ -91,7 +91,7 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			double qualityFactor = 1.0 / (1.0 + (tessellationQuality - 2));
 			adjustedDeflection *= qualityFactor;
 			adjustedAngularDeflection *= qualityFactor;
-			LOG_INF_S("Applied high quality tessellation adjustment: factor=" + std::to_string(qualityFactor));
+			LOG_DBG_S("Applied high quality tessellation adjustment: factor=" + std::to_string(qualityFactor));
 		}
 		
 		// Only apply adaptive meshing adjustment if explicitly enabled AND quality is high
@@ -99,10 +99,10 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			// Adaptive meshing uses even smaller deflection for better quality
 			adjustedDeflection *= 0.7; // Less aggressive than 0.5
 			adjustedAngularDeflection *= 0.7;
-			LOG_INF_S("Applied adaptive meshing adjustment");
+			LOG_DBG_S("Applied adaptive meshing adjustment");
 		}
 		
-		LOG_INF_S("Adjusted mesh parameters: deflection=" + std::to_string(adjustedDeflection) +
+		LOG_DBG_S("Adjusted mesh parameters: deflection=" + std::to_string(adjustedDeflection) +
 			", angularDeflection=" + std::to_string(adjustedAngularDeflection) +
 			" (original: " + std::to_string(params.deflection) + ", " + std::to_string(params.angularDeflection) + ")");
 
@@ -150,7 +150,7 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			}
 
 			mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
-			LOG_INF_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
+			LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
 				", iterations=" + std::to_string(adjustedIterations) +
 				", strength=" + std::to_string(smoothingStrength));
 		}
@@ -158,10 +158,10 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 		// Apply subdivision if enabled - read from RenderingToolkitAPI config
 		if (subdivisionSettings.enabled) {
 			mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
-			LOG_INF_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
+			LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
 		}
 
-		LOG_INF_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) +
+		LOG_DBG_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) +
 			" vertices and " + std::to_string(mesh.getTriangleCount()) + " triangles");
 	}
 	catch (const std::exception& e) {
@@ -226,7 +226,7 @@ void OpenCASCADEProcessor::calculateNormals(TriangleMesh& mesh) {
 		}
 	}
 
-	LOG_INF_S("Calculated normals for " + std::to_string(mesh.normals.size()) + " vertices");
+	LOG_DBG_S("Calculated normals for " + std::to_string(mesh.normals.size()) + " vertices");
 }
 
 TriangleMesh OpenCASCADEProcessor::smoothNormals(const TriangleMesh& mesh,
@@ -307,7 +307,7 @@ TriangleMesh OpenCASCADEProcessor::smoothNormals(const TriangleMesh& mesh,
 		}
 	}
 
-	LOG_INF_S("Smoothed normals with " + std::to_string(iterations) + " iterations, crease angle: " + std::to_string(creaseAngle));
+	LOG_DBG_S("Smoothed normals with " + std::to_string(iterations) + " iterations, crease angle: " + std::to_string(creaseAngle));
 	return result;
 }
 

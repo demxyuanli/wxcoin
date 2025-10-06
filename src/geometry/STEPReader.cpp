@@ -1036,8 +1036,11 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 			geometry->setDepthTest(true);
 			geometry->setDepthWrite(true);
 			// Set enhanced material properties for shell models with better contrast
-			geometry->setMaterialAmbientColor(Quantity_Color(0.2, 0.2, 0.2, Quantity_TOC_RGB));
-			geometry->setMaterialDiffuseColor(Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB));
+			// Use the component color for ambient and diffuse, but adjust intensity for better shell rendering
+			Standard_Real r, g, b;
+			componentColor.Values(r, g, b, Quantity_TOC_RGB);
+			geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
+			geometry->setMaterialDiffuseColor(Quantity_Color(r * 0.8, g * 0.8, b * 0.8, Quantity_TOC_RGB));
 			geometry->setMaterialShininess(50.0);
 			// Enable smooth normals for better shell rendering
 			geometry->setSmoothNormals(true);
@@ -1590,8 +1593,11 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 						geom->setDepthTest(true);
 						geom->setDepthWrite(true);
 						// Set enhanced material properties for shell models with better contrast
-						geom->setMaterialAmbientColor(Quantity_Color(0.2, 0.2, 0.2, Quantity_TOC_RGB));
-						geom->setMaterialDiffuseColor(Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB));
+						// Use the component color for ambient and diffuse, but adjust intensity for better shell rendering
+						Standard_Real r, g, b;
+						color.Values(r, g, b, Quantity_TOC_RGB);
+						geom->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
+						geom->setMaterialDiffuseColor(Quantity_Color(r * 0.8, g * 0.8, b * 0.8, Quantity_TOC_RGB));
 						geom->setMaterialShininess(50.0);
 						// Enable smooth normals for better shell rendering
 						geom->setSmoothNormals(true);

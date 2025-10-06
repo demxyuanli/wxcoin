@@ -117,19 +117,19 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 	if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
 		CommandResult result = m_listenerManager->dispatch(commandType, parameters);
 		onCommandFeedback(result);
-		// If explode state toggled on, show inline slider to adjust factor in real-time
+		// Handle explode slider dialog creation and destruction
 		if (commandType == cmd::CommandType::ExplodeAssembly && m_occViewer) {
 			if (m_occViewer->isExplodeEnabled()) {
 				// Create a lightweight modeless slider window centered at the bottom of canvas
 				wxWindow* canvas = m_canvas;
-				wxDialog* sliderDlg = new wxDialog(this, wxID_ANY, "Explode Factor", wxDefaultPosition, wxSize(400, 30), wxBORDER_NONE | wxSTAY_ON_TOP);
-				sliderDlg->SetBackgroundColour(GetBackgroundColour());
-				sliderDlg->SetTransparent(180);
+				m_explodeSliderDialog = new wxDialog(this, wxID_ANY, "Explode Factor", wxDefaultPosition, wxSize(400, 30), wxBORDER_NONE | wxSTAY_ON_TOP);
+				m_explodeSliderDialog->SetBackgroundColour(GetBackgroundColour());
+				m_explodeSliderDialog->SetTransparent(180);
 				wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 				ExplodeMode tmpMode; double tmpFactor; m_occViewer->getExplodeParams(tmpMode, tmpFactor);
-				wxSlider* slider = new wxSlider(sliderDlg, wxID_ANY, int(tmpFactor * 100), 1, 1000);
+				wxSlider* slider = new wxSlider(m_explodeSliderDialog, wxID_ANY, int(tmpFactor * 100), 1, 1000);
 				sizer->Add(slider, 1, wxEXPAND | wxALL, 2);
-				sliderDlg->SetSizerAndFit(sizer);
+				m_explodeSliderDialog->SetSizerAndFit(sizer);
 				if (canvas) {
 					wxSize cs = canvas->GetClientSize();
 					int w = 400;
@@ -138,14 +138,25 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 					wxPoint sp = canvas->ClientToScreen(wxPoint(0, 0));
 					int x = sp.x + (cs.GetWidth() - w) / 2;
 					int y = sp.y + cs.GetHeight() - h;
-					sliderDlg->SetSize(wxRect(x, y, w, h));
+					m_explodeSliderDialog->SetSize(wxRect(x, y, w, h));
 				}
 				slider->Bind(wxEVT_SLIDER, [this](wxCommandEvent& e) {
 					double f = std::max(0.01, e.GetInt() / 100.0);
 					m_occViewer->setExplodeEnabled(true, f);
 				});
-				sliderDlg->Bind(wxEVT_CLOSE_WINDOW, [this, sliderDlg](wxCloseEvent&){ sliderDlg->Destroy(); });
-				sliderDlg->Show();
+				m_explodeSliderDialog->Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent&){ 
+					if (m_explodeSliderDialog) {
+						m_explodeSliderDialog->Destroy();
+						m_explodeSliderDialog = nullptr;
+					}
+				});
+				m_explodeSliderDialog->Show();
+			} else {
+				// Destroy the slider dialog when explode is disabled
+				if (m_explodeSliderDialog) {
+					m_explodeSliderDialog->Destroy();
+					m_explodeSliderDialog = nullptr;
+				}
 			}
 		}
 	}

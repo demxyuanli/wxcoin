@@ -378,12 +378,12 @@ void PositionBasicDialog::OnOkButton(wxCommandEvent& event)
 						AdvancedGeometryParameters advancedParams = GetAdvancedParameters();
 						geometry->applyAdvancedParameters(advancedParams);
 
-						LOG_INF_S("Created geometry with advanced parameters:");
-						LOG_INF_S("  - Material diffuse color: " + std::to_string(advancedParams.materialDiffuseColor.Red()) + "," +
-							std::to_string(advancedParams.materialDiffuseColor.Green()) + "," +
-							std::to_string(advancedParams.materialDiffuseColor.Blue()));
-						LOG_INF_S("  - Transparency: " + std::to_string(advancedParams.materialTransparency));
-						LOG_INF_S("  - Texture enabled: " + std::string(advancedParams.textureEnabled ? "true" : "false"));
+					LOG_DBG_S("Created geometry with advanced parameters:");
+					LOG_DBG_S("  - Material diffuse color: " + std::to_string(advancedParams.materialDiffuseColor.Red()) + "," +
+						std::to_string(advancedParams.materialDiffuseColor.Green()) + "," +
+						std::to_string(advancedParams.materialDiffuseColor.Blue()));
+					LOG_DBG_S("  - Transparency: " + std::to_string(advancedParams.materialTransparency));
+					LOG_DBG_S("  - Texture enabled: " + std::string(advancedParams.textureEnabled ? "true" : "false"));
 					}
 
 					mouseHandler->setOperationMode(MouseHandler::OperationMode::VIEW);

@@ -128,7 +128,7 @@ TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape,
 			mesh = createSubdivisionSurface(mesh, s_subdivisionLevels);
 		}
 
-		LOG_INF_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) +
+		LOG_DBG_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) +
 			" vertices and " + std::to_string(mesh.getTriangleCount()) + " triangles");
 	}
 	catch (const std::exception& e) {

@@ -226,7 +226,8 @@ public:
 
 	EdgeDisplayFlags globalEdgeFlags;
 	void setShowOriginalEdges(bool show) override;
-	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width);
+	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,
+		bool highlightIntersectionNodes = false, const wxColour& intersectionNodeColor = wxColour(255, 0, 0), double intersectionNodeSize = 3.0);
 	void setShowFeatureEdges(bool show) override;
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) override;
 	void setShowMeshEdges(bool show) override;
@@ -335,6 +336,9 @@ private:
 	bool m_originalEdgesShowLinesOnly = false;
 	wxColour m_originalEdgesColor = wxColour(255, 255, 255);
 	double m_originalEdgesWidth = 1.0;
+	bool m_originalEdgesHighlightIntersectionNodes = false;
+	wxColour m_originalEdgesIntersectionNodeColor = wxColour(255, 0, 0);
+	double m_originalEdgesIntersectionNodeSize = 3.0;
 
 	Quantity_Color m_defaultColor;
 	double m_defaultTransparency;

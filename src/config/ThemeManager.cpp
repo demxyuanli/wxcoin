@@ -294,7 +294,12 @@ wxColour ThemeManager::getColour(const std::string& key) const {
 
 	auto colorIt = themeIt->second.colours.find(key);
 	if (colorIt == themeIt->second.colours.end()) {
-		LOG_WRN("Color key not found: " + key + " in theme: " + m_currentTheme, "ThemeManager");
+		// Only log warning once per key to avoid log spam
+		static std::set<std::string> loggedColorKeys;
+		if (loggedColorKeys.find(key) == loggedColorKeys.end()) {
+			LOG_WRN("Color key not found: " + key + " in theme: " + m_currentTheme, "ThemeManager");
+			loggedColorKeys.insert(key);
+		}
 		return wxColour(255, 0, 0);
 	}
 
@@ -345,7 +350,12 @@ std::string ThemeManager::getString(const std::string& key) const {
 
 	auto strIt = themeIt->second.strings.find(key);
 	if (strIt == themeIt->second.strings.end()) {
-		LOG_WRN("String key not found: " + key + " in theme: " + m_currentTheme, "ThemeManager");
+		// Only log warning once per key to avoid log spam
+		static std::set<std::string> loggedStringKeys;
+		if (loggedStringKeys.find(key) == loggedStringKeys.end()) {
+			LOG_WRN("String key not found: " + key + " in theme: " + m_currentTheme, "ThemeManager");
+			loggedStringKeys.insert(key);
+		}
 		return "";
 	}
 

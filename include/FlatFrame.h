@@ -186,6 +186,9 @@ private:
 	std::unique_ptr<CommandListenerManager> m_listenerManager;
 	bool m_isFirstActivate;
 	bool m_startupTimerFired;  // Track if startup timer has already fired
+	
+	// Explode slider tracking
+	wxDialog* m_explodeSliderDialog{ nullptr };  // Track the explode slider dialog
 
 protected:
 	// Protected members accessible to derived classes

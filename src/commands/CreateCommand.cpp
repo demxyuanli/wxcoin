@@ -16,7 +16,7 @@ CreateCommand::~CreateCommand()
 void CreateCommand::execute()
 {
 	if (!m_object) return;
-	LOG_INF_S("Executing CreateCommand for object: " + m_object->getName());
+	LOG_DBG_S("Executing CreateCommand for object: " + m_object->getName());
 	m_objectRoot->addChild(m_object->getRoot());
 	m_objectTree->addObject(m_object.get());
 	m_propertyPanel->updateProperties(m_object.get());

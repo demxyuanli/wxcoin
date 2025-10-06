@@ -7,7 +7,8 @@ enum class EdgeType {
     Mesh,
     Highlight,
     NormalLine,
-    FaceNormalLine
+    FaceNormalLine,
+    IntersectionNodes
 };
 
 // Edge display state structure

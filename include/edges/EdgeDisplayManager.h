@@ -55,7 +55,8 @@ public:
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly);
 	
 	// Original edges parameters
-	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width);
+	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width,
+		bool highlightIntersectionNodes = false, const Quantity_Color& intersectionNodeColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), double intersectionNodeSize = 3.0);
 
 private:
 	SceneManager* m_sceneManager{ nullptr };
@@ -77,6 +78,9 @@ private:
 		bool showLinesOnly{ false }; 
 		Quantity_Color color{ 1.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default red
 		double width{ 1.0 }; 
+		bool highlightIntersectionNodes{ false };
+		Quantity_Color intersectionNodeColor{ 1.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default red
+		double intersectionNodeSize{ 3.0 };
 	};
 	OriginalEdgeParams m_originalEdgeParams{};
 };

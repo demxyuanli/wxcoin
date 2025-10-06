@@ -2,7 +2,7 @@
 #include "logger/Logger.h"
 
 OriginalEdgesParamDialog::OriginalEdgesParamDialog(wxWindow* parent)
-	: FramelessModalPopup(parent, "Original Edges Parameters", wxSize(400, 300))
+	: FramelessModalPopup(parent, "Original Edges Parameters", wxSize(400, 450))
 {
 	// Set up title bar with icon
 	SetTitleIcon("line", wxSize(20, 20));
@@ -59,6 +59,42 @@ OriginalEdgesParamDialog::OriginalEdgesParamDialog(wxWindow* parent)
 	widthSizer->Add(m_edgeWidth, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 	mainSizer->Add(widthSizer, 0, wxEXPAND | wxALL, 5);
 
+	// Highlight Intersection Nodes
+	m_highlightIntersectionNodes = new wxCheckBox(m_contentPanel, wxID_ANY, "Highlight Intersection Nodes");
+	m_highlightIntersectionNodes->SetToolTip("Show intersection points between edges as highlighted nodes");
+	mainSizer->Add(m_highlightIntersectionNodes, 0, wxALL, 5);
+
+	// Intersection Node Color
+	wxStaticText* intersectionColorLabel = new wxStaticText(m_contentPanel, wxID_ANY, "Node Color:");
+	m_intersectionNodeColorPicker = new wxColourPickerCtrl(m_contentPanel, wxID_ANY, wxColour(255, 0, 0),
+		wxDefaultPosition, wxSize(100, -1));
+	m_intersectionNodeColorPicker->SetToolTip("Color for intersection nodes");
+	m_intersectionNodeColorPicker->Enable(false); // Initially disabled
+
+	wxBoxSizer* intersectionColorSizer = new wxBoxSizer(wxHORIZONTAL);
+	intersectionColorSizer->Add(intersectionColorLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	intersectionColorSizer->Add(m_intersectionNodeColorPicker, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	mainSizer->Add(intersectionColorSizer, 0, wxEXPAND | wxALL, 5);
+
+	// Intersection Node Size
+	wxStaticText* intersectionSizeLabel = new wxStaticText(m_contentPanel, wxID_ANY, "Node Size:");
+	m_intersectionNodeSize = new wxSpinCtrlDouble(m_contentPanel, wxID_ANY, "3.0", wxDefaultPosition, wxSize(100, -1),
+		wxSP_ARROW_KEYS, 1.0, 20.0, 3.0, 0.5);
+	m_intersectionNodeSize->SetToolTip("Size of intersection nodes");
+	m_intersectionNodeSize->Enable(false); // Initially disabled
+
+	wxBoxSizer* intersectionSizeSizer = new wxBoxSizer(wxHORIZONTAL);
+	intersectionSizeSizer->Add(intersectionSizeLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	intersectionSizeSizer->Add(m_intersectionNodeSize, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	mainSizer->Add(intersectionSizeSizer, 0, wxEXPAND | wxALL, 5);
+
+	// Connect checkbox event to enable/disable controls
+	m_highlightIntersectionNodes->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& event) {
+		bool enabled = event.IsChecked();
+		m_intersectionNodeColorPicker->Enable(enabled);
+		m_intersectionNodeSize->Enable(enabled);
+	});
+
 	// Buttons
 	wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 	wxButton* okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
@@ -90,4 +126,16 @@ wxColour OriginalEdgesParamDialog::getEdgeColor() const {
 
 double OriginalEdgesParamDialog::getEdgeWidth() const {
 	return m_edgeWidth->GetValue();
+}
+
+bool OriginalEdgesParamDialog::getHighlightIntersectionNodes() const {
+	return m_highlightIntersectionNodes->GetValue();
+}
+
+wxColour OriginalEdgesParamDialog::getIntersectionNodeColor() const {
+	return m_intersectionNodeColorPicker->GetColour();
+}
+
+double OriginalEdgesParamDialog::getIntersectionNodeSize() const {
+	return m_intersectionNodeSize->GetValue();
 }

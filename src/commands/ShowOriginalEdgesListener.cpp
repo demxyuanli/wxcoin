@@ -18,20 +18,26 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 		// Open parameter dialog to get parameters
 		OriginalEdgesParamDialog dialog(nullptr);
 		if (dialog.ShowModal() == wxID_OK) {
-			// Get parameters from dialog
-			double samplingDensity = dialog.getSamplingDensity();
-			double minLength = dialog.getMinLength();
-			bool showLinesOnly = dialog.getShowLinesOnly();
-			wxColour edgeColor = dialog.getEdgeColor();
-			double edgeWidth = dialog.getEdgeWidth();
+		// Get parameters from dialog
+		double samplingDensity = dialog.getSamplingDensity();
+		double minLength = dialog.getMinLength();
+		bool showLinesOnly = dialog.getShowLinesOnly();
+		wxColour edgeColor = dialog.getEdgeColor();
+		double edgeWidth = dialog.getEdgeWidth();
+		bool highlightIntersectionNodes = dialog.getHighlightIntersectionNodes();
+		wxColour intersectionNodeColor = dialog.getIntersectionNodeColor();
+		double intersectionNodeSize = dialog.getIntersectionNodeSize();
 
-			LOG_INF_S("Original edges parameters: density=" + std::to_string(samplingDensity) +
-				", minLength=" + std::to_string(minLength) +
-				", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
-				", width=" + std::to_string(edgeWidth));
+		LOG_INF_S("Original edges parameters: density=" + std::to_string(samplingDensity) +
+			", minLength=" + std::to_string(minLength) +
+			", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
+			", width=" + std::to_string(edgeWidth) +
+			", highlightNodes=" + std::string(highlightIntersectionNodes ? "true" : "false") +
+			", nodeSize=" + std::to_string(intersectionNodeSize));
 
-			// Apply parameters to viewer
-			m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth);
+		// Apply parameters to viewer
+		m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth, 
+			highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize);
 
 			// Enable original edges display
 			m_viewer->setShowOriginalEdges(true);

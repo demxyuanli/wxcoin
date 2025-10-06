@@ -299,6 +299,12 @@ FlatFrame::~FlatFrame()
 	m_startupTimer.Stop();
 	m_progressTimer.Stop();
 
+	// Clean up explode slider dialog
+	if (m_explodeSliderDialog) {
+		m_explodeSliderDialog->Destroy();
+		m_explodeSliderDialog = nullptr;
+	}
+
 	// Unbind events to prevent access violations
 	auto& eventManager = FlatUIEventManager::getInstance();
 	eventManager.unbindFrameEvents(this);

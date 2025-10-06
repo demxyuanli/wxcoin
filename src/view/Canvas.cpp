@@ -144,7 +144,7 @@ void Canvas::showErrorDialog(const std::string& message) const {
 }
 
 void Canvas::render(bool fastMode) {
-	LOG_INF_S("=== CANVAS: STARTING RENDER (mode=" + std::string(fastMode ? "FAST" : "QUALITY") + ") ===");
+	LOG_DBG_S("=== CANVAS: STARTING RENDER (mode=" + std::string(fastMode ? "FAST" : "QUALITY") + ") ===");
 
 	// Skip rendering if we're already rendering (prevents recursive calls)
 	static bool isRendering = false;
@@ -217,7 +217,7 @@ void Canvas::render(bool fastMode) {
 		LOG_WRN_S("CANVAS: No rendering engine available");
 	}
 
-	LOG_INF_S("=== CANVAS: RENDER COMPLETED ===");
+	LOG_DBG_S("=== CANVAS: RENDER COMPLETED ===");
 }
 
 void Canvas::onPaint(wxPaintEvent& event) {

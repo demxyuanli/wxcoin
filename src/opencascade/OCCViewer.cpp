@@ -1350,25 +1350,33 @@ void OCCViewer::setShowOriginalEdges(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowOriginalEdges(show, m_meshParams);
 }
 
-void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width) {
+void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,
+	bool highlightIntersectionNodes, const wxColour& intersectionNodeColor, double intersectionNodeSize) {
 	// Store parameters for use when generating original edges
 	m_originalEdgesSamplingDensity = samplingDensity;
 	m_originalEdgesMinLength = minLength;
 	m_originalEdgesShowLinesOnly = showLinesOnly;
 	m_originalEdgesColor = color;
 	m_originalEdgesWidth = width;
+	m_originalEdgesHighlightIntersectionNodes = highlightIntersectionNodes;
+	m_originalEdgesIntersectionNodeColor = intersectionNodeColor;
+	m_originalEdgesIntersectionNodeSize = intersectionNodeSize;
 	
 	LOG_INF_S("Original edges parameters set: density=" + std::to_string(samplingDensity) + 
 		", minLength=" + std::to_string(minLength) + 
 		", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
-		", width=" + std::to_string(width));
+		", width=" + std::to_string(width) +
+		", highlightNodes=" + std::string(highlightIntersectionNodes ? "true" : "false") +
+		", nodeSize=" + std::to_string(intersectionNodeSize));
 	
 	// Convert wxColour to Quantity_Color
 	Quantity_Color occColor(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
+	Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
 	
 	// Apply parameters to EdgeDisplayManager
 	if (m_edgeDisplayManager) {
-		m_edgeDisplayManager->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, occColor, width);
+		m_edgeDisplayManager->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, occColor, width,
+			highlightIntersectionNodes, intersectionNodeOccColor, intersectionNodeSize);
 	}
 	
 	// Refresh the view

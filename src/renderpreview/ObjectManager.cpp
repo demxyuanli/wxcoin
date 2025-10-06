@@ -48,7 +48,7 @@ ObjectManager::~ObjectManager()
 
 int ObjectManager::addObject(const ObjectSettings& settings)
 {
-	LOG_INF_S("ObjectManager::addObject: Adding object of type " + std::to_string(static_cast<int>(settings.objectType)));
+	LOG_DBG_S("ObjectManager::addObject: Adding object of type " + std::to_string(static_cast<int>(settings.objectType)));
 
 	auto managedObject = std::make_unique<ManagedObject>();
 	managedObject->objectId = m_nextObjectId++;
