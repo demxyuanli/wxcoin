@@ -294,6 +294,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_SLICE, "Slice", "layout", wxSize(16, 16), false, "Toggle slicing plane and drag to move");
 	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_OUTLINE, "Outline", "edges", wxSize(16, 16), false, "Toggle geometry outline rendering");
 	displayButtonBar->AddButtonWithSVG(ID_OUTLINE_SETTINGS, "Outline Settings", "settings", wxSize(16, 16), nullptr, "Open outline settings");
+	displayButtonBar->AddToggleButtonWithSVG(ID_FACE_QUERY_TOOL, "Face Query", "search", wxSize(16, 16), false, "Activate face query tool - left-click or middle-click on faces to view information");
 	displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(displayPanel);
 	m_ribbon->AddPage(page3);

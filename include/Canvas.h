@@ -7,6 +7,7 @@
 #include "interfaces/IViewportManager.h"
 #include "interfaces/IMultiViewportManager.h"
 #include "interfaces/IViewRefresher.h"
+#include "FaceInfoOverlay.h"
 
 // Forward declarations
 class OCCViewer;
@@ -71,6 +72,9 @@ public:
 	IViewRefresher* getViewRefresher() const { return reinterpret_cast<IViewRefresher*>(m_refreshManager.get()); }
 	// Optional injection entry
 	static void SetSubsystemFactory(class ISubsystemFactory* factory);
+
+	// Face info overlay
+	FaceInfoOverlay* getFaceInfoOverlay() { return &m_faceInfoOverlay; }
 private:
 	void initializeSubsystems();
 	void connectSubsystems();
@@ -109,6 +113,9 @@ private:
 	// Mouse hover optimization
 	wxPoint m_lastHoverPos;
 	int m_hoverUpdateCounter;
+
+	// Face info overlay
+	FaceInfoOverlay m_faceInfoOverlay;
 
 	DECLARE_EVENT_TABLE()
 };

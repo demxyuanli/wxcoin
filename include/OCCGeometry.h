@@ -13,6 +13,16 @@
 #include "EdgeTypes.h"
 class EdgeComponent;
 
+/**
+ * @brief Face index mapping structure for Coin3D triangle to geometry face mapping
+ */
+struct FaceIndexMapping {
+    int geometryFaceId;  // Index of the face in the original geometry (from TopExp_Explorer)
+    std::vector<int> triangleIndices;  // Indices of triangles in Coin3D mesh that belong to this face
+
+    FaceIndexMapping(int faceId = -1) : geometryFaceId(faceId) {}
+};
+
 // Forward declarations
 class SoSeparator;
 class SoTransform;
@@ -248,6 +258,18 @@ public:
 	// Assembly level for hierarchical explode
 	int getAssemblyLevel() const { return m_assemblyLevel; }
 	void setAssemblyLevel(int level) { m_assemblyLevel = level; }
+
+	// Face index mapping for Coin3D triangle to geometry face mapping
+	const std::vector<FaceIndexMapping>& getFaceIndexMappings() const { return m_faceIndexMappings; }
+	void setFaceIndexMappings(const std::vector<FaceIndexMapping>& mappings) { m_faceIndexMappings = mappings; }
+
+	// Query methods for face index mapping
+	int getGeometryFaceIdForTriangle(int triangleIndex) const;
+	std::vector<int> getTrianglesForGeometryFace(int geometryFaceId) const;
+	bool hasFaceIndexMapping() const { return !m_faceIndexMappings.empty(); }
+
+	// Build face index mapping during mesh generation
+	void buildFaceIndexMapping(const MeshParameters& params = MeshParameters());
 	
 	// LOD (Level of Detail) support - additional methods
 	void addLODLevel(double distance, double deflection);
@@ -369,7 +391,10 @@ protected:
 
 	// Assembly level
 	int m_assemblyLevel{0};
-	
+
+	// Face index mapping for Coin3D triangle to geometry face mapping
+	std::vector<FaceIndexMapping> m_faceIndexMappings;
+
 	// LOD support
 	std::vector<std::pair<double, double>> m_lodLevels; // distance, deflection pairs
 };

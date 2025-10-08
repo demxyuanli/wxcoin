@@ -49,6 +49,7 @@ namespace cmd {
 		ShowFeatureEdges, // New: show feature edges
 		ShowMeshEdges, // New: show mesh edges
 		ShowFaceNormals, // New: show face normals
+		FaceQueryTool, // New: face query tool
 
 		// Texture modes
 		TextureModeDecal,
@@ -130,6 +131,7 @@ namespace cmd {
 			{CommandType::ShowFeatureEdges, "SHOW_FEATURE_EDGES"},
 			{CommandType::ShowMeshEdges, "SHOW_MESH_EDGES"},
 			{CommandType::ShowFaceNormals, "SHOW_FACE_NORMALS"},
+			{CommandType::FaceQueryTool, "FACE_QUERY_TOOL"},
 
 			{CommandType::TextureModeDecal, "TEXTURE_MODE_DECAL"},
 			{CommandType::TextureModeModulate, "TEXTURE_MODE_MODULATE"},
@@ -200,6 +202,7 @@ namespace cmd {
 			{"SHOW_FEATURE_EDGES", CommandType::ShowFeatureEdges},
 			{"SHOW_MESH_EDGES", CommandType::ShowMeshEdges},
 			{"SHOW_FACE_NORMALS", CommandType::ShowFaceNormals},
+			{"FACE_QUERY_TOOL", CommandType::FaceQueryTool},
 
 			{"TEXTURE_MODE_DECAL", CommandType::TextureModeDecal},
 			{"TEXTURE_MODE_MODULATE", CommandType::TextureModeModulate},

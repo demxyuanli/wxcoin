@@ -56,6 +56,14 @@ void InputManager::enterPickingState() {
 	}
 }
 
+void InputManager::setCustomInputState(std::unique_ptr<InputState> state) {
+	if (state) {
+		m_customState = std::move(state);
+		m_currentState = m_customState.get();
+		LOG_INF_S("InputManager set custom input state");
+	}
+}
+
 void InputManager::onMouseButton(wxMouseEvent& event) {
 	if (m_currentState) {
 		m_currentState->onMouseButton(event);

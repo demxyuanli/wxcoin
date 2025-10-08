@@ -154,6 +154,7 @@ EVT_BUTTON(ID_SHOW_FEATURE_EDGES, FlatFrame::onCommand)
 EVT_BUTTON(ID_SHOW_MESH_EDGES, FlatFrame::onCommand)
 EVT_BUTTON(ID_OUTLINE_SETTINGS, FlatFrame::onCommand)
 EVT_BUTTON(ID_TOGGLE_OUTLINE, FlatFrame::onCommand)
+EVT_BUTTON(ID_FACE_QUERY_TOOL, FlatFrame::onCommand)
 
 EVT_BUTTON(ID_UNDO, FlatFrame::onCommand)
 EVT_BUTTON(ID_REDO, FlatFrame::onCommand)

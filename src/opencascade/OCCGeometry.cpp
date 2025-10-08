@@ -155,7 +155,6 @@ void OCCGeometry::setShape(const TopoDS_Shape& shape)
 	try {
 		m_shape = shape;
 		m_coinNeedsUpdate = true;
-		LOG_INF_S("Successfully set shape for: " + getName());
 	}
 	catch (const Standard_ConstructionError& e) {
 		LOG_ERR_S("Construction error in setShape for " + getName() + ": " + std::string(e.GetMessageString()));
@@ -458,6 +457,10 @@ void OCCGeometry::setCoinNode(SoSeparator* node)
 
 void OCCGeometry::regenerateMesh(const MeshParameters& params)
 {
+	// Clear old face mapping since mesh will be regenerated
+	m_faceIndexMappings.clear();
+	LOG_INF_S("Regenerating mesh for " + m_name + " - face mapping will be rebuilt");
+	
 	buildCoinRepresentation(params);
 }
 
@@ -477,6 +480,11 @@ void OCCGeometry::forceCoinRepresentationRebuild(const MeshParameters& params)
 	try {
 		// Force rebuild by marking as needed and calling buildCoinRepresentation directly
 		m_meshRegenerationNeeded = true;
+		
+		// Clear old face mapping since mesh will be regenerated
+		m_faceIndexMappings.clear();
+		LOG_INF_S("Force rebuilding mesh for " + m_name + " - face mapping will be rebuilt");
+		
 		buildCoinRepresentation(params,
 			m_materialDiffuseColor, m_materialAmbientColor,
 			m_materialSpecularColor, m_materialEmissiveColor,
@@ -510,7 +518,6 @@ void OCCGeometry::forceCoinRepresentationRebuild(const MeshParameters& params)
 			LOG_WRN_S("Error parsing custom parameters for " + m_name + ": " + std::string(e.what()));
 		}
 
-		LOG_INF_S("Forced rebuild of Coin3D representation for " + m_name);
 	}
 	catch (const Standard_ConstructionError& e) {
 		LOG_ERR_S("Standard_ConstructionError in forceCoinRepresentationRebuild for " + m_name + ": " + std::string(e.GetMessageString()));
@@ -528,15 +535,6 @@ void OCCGeometry::forceCoinRepresentationRebuild(const MeshParameters& params)
 
 void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 {
-	LOG_INF_S("=== GEOMETRY " + m_name + ": CHECKING MESH REGENERATION NEED ===");
-	LOG_INF_S("New parameters: deflection=" + std::to_string(params.deflection) +
-		", angularDeflection=" + std::to_string(params.angularDeflection) +
-		", relative=" + std::string(params.relative ? "true" : "false") +
-		", inParallel=" + std::string(params.inParallel ? "true" : "false"));
-	LOG_INF_S("Last parameters: deflection=" + std::to_string(m_lastMeshParams.deflection) +
-		", angularDeflection=" + std::to_string(m_lastMeshParams.angularDeflection) +
-		", relative=" + std::string(m_lastMeshParams.relative ? "true" : "false") +
-		", inParallel=" + std::string(m_lastMeshParams.inParallel ? "true" : "false"));
 
 	// Check if mesh parameters have changed
 	bool paramsChanged = (params.deflection != m_lastMeshParams.deflection ||
@@ -579,22 +577,6 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		
 		// Only regenerate if parameters actually changed
 		advancedParamsChanged = (smoothingChanged || subdivisionChanged || customParamsChanged);
-		
-		if (advancedParamsChanged) {
-			LOG_INF_S("Advanced mesh parameters changed, forcing regeneration for geometry: " + m_name);
-			LOG_INF_S("  - Smoothing enabled: " + std::string(smoothingSettings.enabled ? "true" : "false") +
-				" (was: " + std::string(m_lastSmoothingEnabled ? "true" : "false") + ")");
-			LOG_INF_S("  - Smoothing iterations: " + std::to_string(smoothingSettings.iterations) +
-				" (was: " + std::to_string(m_lastSmoothingIterations) + ")");
-			LOG_INF_S("  - Subdivision enabled: " + std::string(subdivisionSettings.enabled ? "true" : "false") +
-				" (was: " + std::string(m_lastSubdivisionEnabled ? "true" : "false") + ")");
-			LOG_INF_S("  - Subdivision levels: " + std::to_string(subdivisionSettings.levels) +
-				" (was: " + std::to_string(m_lastSubdivisionLevel) + ")");
-			LOG_INF_S("  - Tessellation quality: " + std::to_string(currentTessellationQuality) +
-				" (was: " + std::to_string(m_lastTessellationQuality) + ")");
-			LOG_INF_S("  - Smoothing strength: " + std::to_string(currentSmoothingStrength) +
-				" (was: " + std::to_string(m_lastSmoothingStrength) + ")");
-		}
 	} catch (const std::exception& e) {
 		// If we can't access config, assume no advanced changes
 		LOG_ERR_S("Exception accessing RenderingToolkitAPI config: " + std::string(e.what()));
@@ -605,28 +587,21 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 		advancedParamsChanged = false;
 	}
 
-	LOG_INF_S("=== GEOMETRY " + m_name + ": FINAL DECISION CHECK ===");
-	LOG_INF_S("m_meshRegenerationNeeded=" + std::string(m_meshRegenerationNeeded ? "true" : "false"));
-	LOG_INF_S("paramsChanged=" + std::string(paramsChanged ? "true" : "false"));
-	LOG_INF_S("advancedParamsChanged=" + std::string(advancedParamsChanged ? "true" : "false"));
-	LOG_INF_S("Will regenerate: " + std::string((m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged) ? "YES" : "NO"));
-
 	if (m_meshRegenerationNeeded || paramsChanged || advancedParamsChanged) {
-		LOG_INF_S("=== GEOMETRY " + m_name + ": MESH REGENERATION REQUIRED ===");
-		LOG_INF_S("Reasons: forced=" + std::string(m_meshRegenerationNeeded ? "true" : "false") +
-			", paramsChanged=" + std::string(paramsChanged ? "true" : "false") +
-			", advancedParamsChanged=" + std::string(advancedParamsChanged ? "true" : "false"));
-
 		try {
+			// Clear old face mapping since mesh parameters have changed
+			if (paramsChanged || advancedParamsChanged) {
+				m_faceIndexMappings.clear();
+				LOG_INF_S("Mesh parameters changed for " + m_name + " - face mapping will be rebuilt");
+			}
+			
 			// Use the material-aware version to preserve imported geometry colors
-			LOG_INF_S("GEOMETRY " + m_name + ": Building Coin3D representation");
 			buildCoinRepresentation(params,
 				m_materialDiffuseColor, m_materialAmbientColor,
 				m_materialSpecularColor, m_materialEmissiveColor,
 				m_materialShininess, m_transparency);
 			m_lastMeshParams = params;
 			m_meshRegenerationNeeded = false;
-			LOG_INF_S("=== GEOMETRY " + m_name + ": MESH REGENERATION COMPLETED ===");
 		}
 		catch (const Standard_ConstructionError& e) {
 			LOG_ERR_S("Standard_ConstructionError in buildCoinRepresentation for " + m_name + ": " + std::string(e.GetMessageString()));
@@ -754,11 +729,6 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 		// Add emissive color for better lighting response
 		material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
 
-		LOG_INF_S("Material set for " + m_name + " - ambient: " +
-			std::to_string(r * 1.5) + "," + std::to_string(g * 1.5) + "," + std::to_string(b * 1.5) +
-			" diffuse: " + std::to_string(r * 0.8) + "," + std::to_string(g * 0.8) + "," + std::to_string(b * 0.8) +
-			" shininess: " + std::to_string(m_materialShininess) + " transparency: " + std::to_string(m_transparency) +
-			" (enhanced ambient for consistent lighting)");
 	}
 	m_coinNode->addChild(material);
 
@@ -915,7 +885,6 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 		edgeCfg.getHoverSettings().showEdges;
 
 	if (edgeComponent && anyEdgeDisplayRequested) {
-		LOG_INF_S("Generating edge nodes for geometry: " + m_name);
 
 		// Generate nodes only for requested types to avoid unnecessary overlays
 		if (edgeComponent->edgeFlags.showOriginalEdges) {
@@ -930,10 +899,7 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 		auto& manager = RenderingToolkitAPI::getManager();
 		auto processor = manager.getGeometryProcessor("OpenCASCADE");
 		if (processor) {
-			LOG_INF_S("Converting shape to mesh for edge visualization");
 			TriangleMesh mesh = processor->convertToMesh(m_shape, params);
-			LOG_INF_S("Mesh conversion result: " + std::to_string(mesh.vertices.size()) +
-				" vertices, " + std::to_string(mesh.normals.size()) + " normals");
 
 			// Generate mesh edges when requested
 			if (edgeComponent->edgeFlags.showMeshEdges) {
@@ -941,11 +907,9 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 			}
 			// Generate normal/face-normal lines when requested
 			if (edgeComponent->edgeFlags.showNormalLines) {
-				LOG_INF_S("Generating normal line node for geometry: " + m_name);
 				edgeComponent->generateNormalLineNode(mesh, 0.5); // Use default length for now
 			}
 			if (edgeComponent->edgeFlags.showFaceNormalLines) {
-				LOG_INF_S("Generating face normal line node for geometry: " + m_name);
 				edgeComponent->generateFaceNormalLineNode(mesh, 0.5); // Use default length for now
 			}
 		}
@@ -965,6 +929,12 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 		else {
 			LOG_INF_S("Skipping edge generation for geometry (edge display disabled): " + m_name);
 		}
+	}
+
+	// Build face index mapping if not already built to enable face picking for all geometries
+	if (!hasFaceIndexMapping()) {
+		LOG_INF_S("Building face index mapping for geometry: " + m_name);
+		buildFaceIndexMapping(params);
 	}
 
 	// Update tracking variables for next comparison
@@ -1355,17 +1325,12 @@ void OCCCone::buildShape()
 
 		// Always use axis-based constructor with proper parameter validation
 		BRepPrimAPI_MakeCone coneMaker(axis, m_bottomRadius, actualTopRadius, m_height);
-		LOG_INF_S("BRepPrimAPI_MakeCone created for OCCCone: " + m_name +
-			" with params - bottomRadius: " + std::to_string(m_bottomRadius) +
-			", topRadius: " + std::to_string(actualTopRadius) +
-			", height: " + std::to_string(m_height));
 
 		coneMaker.Build();
 
 		if (coneMaker.IsDone()) {
 			TopoDS_Shape shape = coneMaker.Shape();
 			if (!shape.IsNull()) {
-				LOG_INF_S("Cone shape created successfully for OCCCone: " + m_name);
 				setShape(shape);
 
 				// Log the center of the created shape
@@ -1375,7 +1340,6 @@ void OCCCone::buildShape()
 					Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
 					box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
 					gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-					LOG_INF_S("[OCCGeometryDebug] OCCCone shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
 				}
 			}
 			else {
@@ -1383,14 +1347,12 @@ void OCCCone::buildShape()
 
 				// Fallback: try with small non-zero topRadius if it was exactly 0
 				if (m_topRadius == 0.0 && actualTopRadius == 0.0) {
-					LOG_INF_S("Attempting fallback with small topRadius for perfect cone: " + m_name);
 					actualTopRadius = 0.001;
 					BRepPrimAPI_MakeCone fallbackMaker(axis, m_bottomRadius, actualTopRadius, m_height);
 					fallbackMaker.Build();
 					if (fallbackMaker.IsDone()) {
 						TopoDS_Shape fallbackShape = fallbackMaker.Shape();
 						if (!fallbackShape.IsNull()) {
-							LOG_INF_S("Fallback cone creation successful for: " + m_name);
 							setShape(fallbackShape);
 
 							// Log the center of the created shape
@@ -1400,7 +1362,6 @@ void OCCCone::buildShape()
 								Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
 								box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
 								gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-								LOG_INF_S("[OCCGeometryDebug] OCCCone fallback shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
 							}
 						}
 						else {
@@ -1426,7 +1387,6 @@ void OCCCone::buildShape()
 OCCTorus::OCCTorus(const std::string& name, double majorRadius, double minorRadius)
 	: OCCGeometry(name), m_majorRadius(majorRadius), m_minorRadius(minorRadius)
 {
-	LOG_INF_S("Creating OCCTorus: " + name + " with major radius: " + std::to_string(majorRadius) + " minor radius: " + std::to_string(minorRadius));
 	buildShape();
 }
 
@@ -1435,7 +1395,6 @@ void OCCTorus::setDimensions(double majorRadius, double minorRadius)
 	if (m_majorRadius != majorRadius || m_minorRadius != minorRadius) {
 		m_majorRadius = majorRadius;
 		m_minorRadius = minorRadius;
-		LOG_INF_S("OCCTorus dimensions changed: " + m_name + " major: " + std::to_string(majorRadius) + " minor: " + std::to_string(minorRadius));
 		buildShape();
 		m_coinNeedsUpdate = true;
 	}
@@ -1449,8 +1408,6 @@ void OCCTorus::getSize(double& majorRadius, double& minorRadius) const
 
 void OCCTorus::buildShape()
 {
-	LOG_INF_S("Building OCCTorus shape with major radius: " + std::to_string(m_majorRadius) + " minor radius: " + std::to_string(m_minorRadius));
-
 	try {
 		// Validate parameters
 		if (m_majorRadius <= 0.0 || m_minorRadius <= 0.0) {
@@ -1472,7 +1429,6 @@ void OCCTorus::buildShape()
 			TopoDS_Shape shape = torusMaker.Shape();
 			if (!shape.IsNull()) {
 				m_shape = shape;
-				LOG_INF_S("OCCTorus shape created successfully: " + m_name);
 			}
 			else {
 				LOG_ERR_S("OCCTorus shape is null after creation: " + m_name);
@@ -1491,8 +1447,6 @@ void OCCTorus::buildShape()
 OCCTruncatedCylinder::OCCTruncatedCylinder(const std::string& name, double bottomRadius, double topRadius, double height)
 	: OCCGeometry(name), m_bottomRadius(bottomRadius), m_topRadius(topRadius), m_height(height)
 {
-	LOG_INF_S("Creating OCCTruncatedCylinder: " + name + " with bottom radius: " + std::to_string(bottomRadius) +
-		" top radius: " + std::to_string(topRadius) + " height: " + std::to_string(height));
 	buildShape();
 }
 
@@ -1502,10 +1456,6 @@ void OCCTruncatedCylinder::setDimensions(double bottomRadius, double topRadius, 
 		m_bottomRadius = bottomRadius;
 		m_topRadius = topRadius;
 		m_height = height;
-		LOG_INF_S("OCCTruncatedCylinder dimensions changed: " + m_name +
-			" bottom: " + std::to_string(bottomRadius) +
-			" top: " + std::to_string(topRadius) +
-			" height: " + std::to_string(height));
 		buildShape();
 		m_coinNeedsUpdate = true;
 	}
@@ -1520,8 +1470,6 @@ void OCCTruncatedCylinder::getSize(double& bottomRadius, double& topRadius, doub
 
 void OCCTruncatedCylinder::buildShape()
 {
-	LOG_INF_S("Building OCCTruncatedCylinder shape with bottom radius: " + std::to_string(m_bottomRadius) +
-		" top radius: " + std::to_string(m_topRadius) + " height: " + std::to_string(m_height));
 
 	try {
 		// Validate parameters
@@ -1542,10 +1490,6 @@ void OCCTruncatedCylinder::buildShape()
 			TopoDS_Shape shape = truncatedCylinderMaker.Shape();
 			if (!shape.IsNull()) {
 				m_shape = shape;
-				LOG_INF_S("OCCTruncatedCylinder shape created successfully: " + m_name);
-			}
-			else {
-				LOG_ERR_S("OCCTruncatedCylinder shape is null after creation: " + m_name);
 			}
 		}
 		else {
@@ -1561,23 +1505,19 @@ void OCCTruncatedCylinder::buildShape()
 
 void OCCGeometry::setSmoothNormals(bool enabled) {
 	m_smoothNormals = enabled;
-	LOG_INF_S("Smooth normals " + std::string(enabled ? "enabled" : "disabled"));
 }
 
 void OCCGeometry::setWireframeWidth(double width) {
 	m_wireframeWidth = width;
-	LOG_INF_S("Wireframe width set to: " + std::to_string(width));
 }
 
 void OCCGeometry::setPointSize(double size) {
 	m_pointSize = size;
-	LOG_INF_S("Point size set to: " + std::to_string(size));
 }
 
 // Display methods implementation
 void OCCGeometry::setDisplayMode(RenderingConfig::DisplayMode mode) {
 	m_displayMode = mode;
-	LOG_INF_S("Display mode set to: " + RenderingConfig::getDisplayModeName(mode));
 }
 
 void OCCGeometry::setShowEdges(bool enabled) {
@@ -1591,105 +1531,105 @@ void OCCGeometry::setShowWireframe(bool enabled) {
 
 void OCCGeometry::setShowVertices(bool enabled) {
 	m_showVertices = enabled;
-	LOG_INF_S("Show vertices " + std::string(enabled ? "enabled" : "disabled"));
+
 }
 
 void OCCGeometry::setEdgeWidth(double width) {
 	m_edgeWidth = width;
-	LOG_INF_S("Edge width set to: " + std::to_string(width));
+
 }
 
 void OCCGeometry::setVertexSize(double size) {
 	m_vertexSize = size;
-	LOG_INF_S("Vertex size set to: " + std::to_string(size));
+
 }
 
 void OCCGeometry::setEdgeColor(const Quantity_Color& color) {
 	m_edgeColor = color;
-	LOG_INF_S("Edge color set");
+
 }
 
 void OCCGeometry::setVertexColor(const Quantity_Color& color) {
 	m_vertexColor = color;
-	LOG_INF_S("Vertex color set");
+
 }
 
 // Quality methods implementation
 void OCCGeometry::setRenderingQuality(RenderingConfig::RenderingQuality quality) {
 	m_renderingQuality = quality;
-	LOG_INF_S("Rendering quality set to: " + RenderingConfig::getQualityModeName(quality));
+
 }
 
 void OCCGeometry::setTessellationLevel(int level) {
 	m_tessellationLevel = level;
-	LOG_INF_S("Tessellation level set to: " + std::to_string(level));
+
 }
 
 void OCCGeometry::setAntiAliasingSamples(int samples) {
 	m_antiAliasingSamples = samples;
-	LOG_INF_S("Anti-aliasing samples set to: " + std::to_string(samples));
+
 }
 
 void OCCGeometry::setEnableLOD(bool enabled) {
 	m_enableLOD = enabled;
-	LOG_INF_S("LOD " + std::string(enabled ? "enabled" : "disabled"));
+
 }
 
 void OCCGeometry::setLODDistance(double distance) {
 	m_lodDistance = distance;
-	LOG_INF_S("LOD distance set to: " + std::to_string(distance));
+
 }
 
 // Shadow methods implementation
 void OCCGeometry::setShadowMode(RenderingConfig::ShadowMode mode) {
 	m_shadowMode = mode;
-	LOG_INF_S("Shadow mode set to: " + RenderingConfig::getShadowModeName(mode));
+
 }
 
 void OCCGeometry::setShadowIntensity(double intensity) {
 	m_shadowIntensity = intensity;
-	LOG_INF_S("Shadow intensity set to: " + std::to_string(intensity));
+
 }
 
 void OCCGeometry::setShadowSoftness(double softness) {
 	m_shadowSoftness = softness;
-	LOG_INF_S("Shadow softness set to: " + std::to_string(softness));
+
 }
 
 void OCCGeometry::setShadowMapSize(int size) {
 	m_shadowMapSize = size;
-	LOG_INF_S("Shadow map size set to: " + std::to_string(size));
+
 }
 
 void OCCGeometry::setShadowBias(double bias) {
 	m_shadowBias = bias;
-	LOG_INF_S("Shadow bias set to: " + std::to_string(bias));
+
 }
 
 // Lighting model methods implementation
 void OCCGeometry::setLightingModel(RenderingConfig::LightingModel model) {
 	m_lightingModel = model;
-	LOG_INF_S("Lighting model set to: " + RenderingConfig::getLightingModelName(model));
+
 }
 
 void OCCGeometry::setRoughness(double roughness) {
 	m_roughness = roughness;
-	LOG_INF_S("Roughness set to: " + std::to_string(roughness));
+
 }
 
 void OCCGeometry::setMetallic(double metallic) {
 	m_metallic = metallic;
-	LOG_INF_S("Metallic set to: " + std::to_string(metallic));
+
 }
 
 void OCCGeometry::setFresnel(double fresnel) {
 	m_fresnel = fresnel;
-	LOG_INF_S("Fresnel set to: " + std::to_string(fresnel));
+
 }
 
 void OCCGeometry::setSubsurfaceScattering(double scattering) {
 	m_subsurfaceScattering = scattering;
-	LOG_INF_S("Subsurface scattering set to: " + std::to_string(scattering));
+
 }
 
 void OCCGeometry::updateFromRenderingConfig()
@@ -1739,21 +1679,11 @@ void OCCGeometry::updateFromRenderingConfig()
 			m_materialDiffuseColor, m_materialAmbientColor,
 			m_materialSpecularColor, m_materialEmissiveColor,
 			m_materialShininess, m_transparency);
-		LOG_INF_S("Rebuilt Coin3D representation for geometry '" + m_name + "' with custom material");
 
 		// Force the scene graph to be marked as needing update
 		// Note: Coin3D nodes don't have getParent() method, so we just touch the current node
 		m_coinNode->touch();
 	}
-
-	LOG_INF_S("Updated geometry '" + m_name + "' from RenderingConfig:");
-	LOG_INF_S("  - Material diffuse color: " + std::to_string(m_materialDiffuseColor.Red()) + "," +
-		std::to_string(m_materialDiffuseColor.Green()) + "," + std::to_string(m_materialDiffuseColor.Blue()));
-	LOG_INF_S("  - Material ambient color: " + std::to_string(m_materialAmbientColor.Red()) + "," +
-		std::to_string(m_materialAmbientColor.Green()) + "," + std::to_string(m_materialAmbientColor.Blue()));
-	LOG_INF_S("  - Transparency: " + std::to_string(m_transparency));
-	LOG_INF_S("  - Texture enabled: " + std::string(m_textureEnabled ? "true" : "false"));
-	LOG_INF_S("  - Blend mode: " + RenderingConfig::getBlendModeName(m_blendMode));
 }
 
 void OCCGeometry::updateMaterialForLighting()
@@ -1797,7 +1727,6 @@ void OCCGeometry::updateMaterialForLighting()
 				// Adjust shininess for better lighting response
 				material->shininess.setValue(static_cast<float>(m_materialShininess / 100.0));
 
-				LOG_INF_S("Updated material for lighting response: " + m_name + " (enhanced ambient for consistent lighting)");
 			}
 			break;
 		}
@@ -1958,10 +1887,15 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
 		LOG_ERR_S("Coin3D backend not available for " + m_name);
 	}
 
+	// Build face index mapping if not already built to enable face picking for all geometries
+	if (!hasFaceIndexMapping()) {
+		LOG_INF_S("Building face index mapping for geometry: " + m_name);
+		buildFaceIndexMapping(params);
+	}
+
 	auto buildEndTime = std::chrono::high_resolution_clock::now();
 	auto buildDuration = std::chrono::duration_cast<std::chrono::microseconds>(buildEndTime - buildStartTime);
 
-	LOG_INF_S("Coin3D representation built for " + m_name + " with custom material in " + std::to_string(buildDuration.count()) + " microseconds");
 }
 
 void OCCGeometry::updateEdgeDisplay() {
@@ -2024,5 +1958,93 @@ void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& para
 	LOG_INF_S("  - Subdivision enabled: " + std::string(params.subdivisionEnabled ? "true" : "false"));
 }
 
+// ===== FACE INDEX MAPPING IMPLEMENTATION =====
 
+// Build face index mapping during mesh generation
+void OCCGeometry::buildFaceIndexMapping(const MeshParameters& params) {
+	try {
+		if (m_shape.IsNull()) {
+			LOG_WRN_S("Cannot build face index mapping for null shape");
+			return;
+		}
+
+		m_faceIndexMappings.clear();
+
+		// Extract all faces from the shape
+		std::vector<TopoDS_Face> faces;
+		for (TopExp_Explorer exp(m_shape, TopAbs_FACE); exp.More(); exp.Next()) {
+			faces.push_back(TopoDS::Face(exp.Current()));
+		}
+
+		if (faces.empty()) {
+			LOG_WRN_S("No faces found in shape for index mapping");
+			return;
+		}
+
+		LOG_INF_S("Building face index mapping for " + std::to_string(faces.size()) + " faces");
+
+		// Use the new processor method with face mapping support
+		GeometryProcessor* baseProcessor = RenderingToolkitAPI::getManager().getGeometryProcessor();
+		auto* processor = dynamic_cast<OpenCASCADEProcessor*>(baseProcessor);
+		if (!processor) {
+			LOG_WRN_S("OpenCASCADEProcessor not available for face mapping");
+			return;
+		}
+
+		std::vector<std::pair<int, std::vector<int>>> faceMappings;
+		TriangleMesh mesh = processor->convertToMeshWithFaceMapping(m_shape, params, faceMappings);
+
+		if (mesh.triangles.empty() || faceMappings.empty()) {
+			LOG_WRN_S("No mesh triangles or face mappings found");
+			return;
+		}
+
+		// Convert to FaceIndexMapping format
+		m_faceIndexMappings.reserve(faceMappings.size());
+		for (const auto& [faceId, triangleIndices] : faceMappings) {
+			FaceIndexMapping mapping(faceId);
+			mapping.triangleIndices = triangleIndices;
+			m_faceIndexMappings.push_back(mapping);
+		}
+
+		LOG_INF_S("Built face index mapping with " + std::to_string(m_faceIndexMappings.size()) +
+			" face mappings, total triangles: " + std::to_string(mesh.getTriangleCount()));
+
+	} catch (const std::exception& e) {
+		LOG_ERR_S("Failed to build face index mapping: " + std::string(e.what()));
+		m_faceIndexMappings.clear();
+	}
+}
+
+// Get geometry face ID for a given triangle index
+int OCCGeometry::getGeometryFaceIdForTriangle(int triangleIndex) const {
+	if (!hasFaceIndexMapping()) {
+		return -1;
+	}
+
+	for (const auto& mapping : m_faceIndexMappings) {
+		// Check if triangleIndex is in this face's triangle range
+		auto it = std::find(mapping.triangleIndices.begin(), mapping.triangleIndices.end(), triangleIndex);
+		if (it != mapping.triangleIndices.end()) {
+			return mapping.geometryFaceId;
+		}
+	}
+
+	return -1; // Triangle not found in any face mapping
+}
+
+// Get all triangle indices for a given geometry face ID
+std::vector<int> OCCGeometry::getTrianglesForGeometryFace(int geometryFaceId) const {
+	if (!hasFaceIndexMapping()) {
+		return {};
+	}
+
+	for (const auto& mapping : m_faceIndexMappings) {
+		if (mapping.geometryFaceId == geometryFaceId) {
+			return mapping.triangleIndices;
+		}
+	}
+
+	return {}; // Face ID not found
+}
 

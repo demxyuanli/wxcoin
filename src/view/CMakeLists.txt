@@ -7,6 +7,7 @@ set(CADVIEW_SOURCES
     ${CMAKE_SOURCE_DIR}/src/view/MultiViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewRefreshManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/DynamicSilhouetteRenderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/view/FaceInfoOverlay.cpp
 )
 
 set(CADVIEW_HEADERS
@@ -17,6 +18,7 @@ set(CADVIEW_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
     ${CMAKE_SOURCE_DIR}/include/EventCoordinator.h
     ${CMAKE_SOURCE_DIR}/include/DynamicSilhouetteRenderer.h
+    ${CMAKE_SOURCE_DIR}/include/FaceInfoOverlay.h
 )
 
 add_library(CADView STATIC ${CADVIEW_SOURCES} ${CADVIEW_HEADERS})
@@ -29,8 +31,10 @@ target_include_directories(CADView PUBLIC
 target_link_libraries(CADView PUBLIC
     CADCore
     CADLogger
+    CADConfig
     CADRendering
     CADInput
+    CADOCC
     ${wxWidgets_LIBRARIES}
 )
 

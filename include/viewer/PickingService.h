@@ -8,6 +8,19 @@ class OCCGeometry;
 class SceneManager;
 class SoSeparator;
 
+/**
+ * @brief Detailed picking result containing geometry and face information
+ */
+struct PickingResult {
+	std::shared_ptr<OCCGeometry> geometry;
+	int triangleIndex = -1;  // Index of clicked triangle in mesh
+	int geometryFaceId = -1; // Corresponding face ID in original geometry
+
+	PickingResult() = default;
+	PickingResult(std::shared_ptr<OCCGeometry> geom, int triIdx = -1, int faceId = -1)
+		: geometry(geom), triangleIndex(triIdx), geometryFaceId(faceId) {}
+};
+
 // Service that performs screen-space picking and resolves to top-level geometries
 class PickingService {
 public:
@@ -18,6 +31,9 @@ public:
 	void setRoot(SoSeparator* occRoot);
 
 	std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos) const;
+
+	// Extended picking with face index information
+	PickingResult pickDetailedAtScreen(const wxPoint& screenPos) const;
 
 private:
 	static SoSeparator* findTopLevelSeparatorInPath(class SoPath* path, SoSeparator* occRoot);

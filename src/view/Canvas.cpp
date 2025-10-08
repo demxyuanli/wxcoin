@@ -19,6 +19,7 @@
 #include "interfaces/ServiceLocator.h"
 #include "OCCViewer.h"
 #include <wx/dcclient.h>
+#include <wx/dcgraph.h>
 #include <wx/msgdlg.h>
 #include "MultiViewportManager.h"
 #include <chrono>
@@ -39,6 +40,8 @@ EVT_SIZE(Canvas::onSize)
 EVT_ERASE_BACKGROUND(Canvas::onEraseBackground)
 EVT_LEFT_DOWN(Canvas::onMouseEvent)
 EVT_LEFT_UP(Canvas::onMouseEvent)
+EVT_MIDDLE_DOWN(Canvas::onMouseEvent)
+EVT_MIDDLE_UP(Canvas::onMouseEvent)
 EVT_RIGHT_DOWN(Canvas::onMouseEvent)
 EVT_RIGHT_UP(Canvas::onMouseEvent)
 EVT_MOTION(Canvas::onMouseEvent)
@@ -223,6 +226,15 @@ void Canvas::render(bool fastMode) {
 void Canvas::onPaint(wxPaintEvent& event) {
 	wxPaintDC dc(this);
 	render(false);
+	
+	// Draw face info overlay after 3D rendering using Graphics Context for transparency support
+	m_faceInfoOverlay.update();
+	if (m_faceInfoOverlay.isVisible()) {
+		// Use wxGCDC for proper alpha transparency support
+		wxGCDC gcdc(dc);
+		m_faceInfoOverlay.draw(gcdc, GetClientSize());
+	}
+	
 	if (m_eventCoordinator) {
 		m_eventCoordinator->handlePaintEvent(event);
 	}

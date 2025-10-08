@@ -56,6 +56,8 @@ set(COMMANDS_SOURCES
     RenderPreviewSystemListener.cpp
     ShowFlatWidgetsExampleListener.cpp
     ExplodeAssemblyListener.cpp
+    FaceQueryListener.cpp
+    FaceQueryCommandListener.cpp
     SliceToggleListener.cpp
     DockLayoutConfigListener.cpp
 )
@@ -118,6 +120,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/RenderPreviewSystemListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowFlatWidgetsExampleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeAssemblyListener.h
+    ${CMAKE_SOURCE_DIR}/include/FaceQueryListener.h
+    ${CMAKE_SOURCE_DIR}/include/FaceQueryCommandListener.h
     ${CMAKE_SOURCE_DIR}/include/SliceToggleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeConfigListener.h
     ${CMAKE_SOURCE_DIR}/include/ToggleOutlineListener.h

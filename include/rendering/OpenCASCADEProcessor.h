@@ -3,7 +3,9 @@
 #include "GeometryProcessor.h"
 #include <memory>
 #include <set>
+#include <vector>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/TopoDS_Face.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/gp_Vec.hxx>
 #include <OpenCASCADE/Poly_Triangulation.hxx>
@@ -23,6 +25,11 @@ public:
 	// GeometryProcessor interface
 	TriangleMesh convertToMesh(const TopoDS_Shape& shape,
 		const MeshParameters& params = MeshParameters()) override;
+
+	// Extended interface with face index mapping
+	TriangleMesh convertToMeshWithFaceMapping(const TopoDS_Shape& shape,
+		const MeshParameters& params,
+		std::vector<std::pair<int, std::vector<int>>>& faceMappings);
 
 	void calculateNormals(TriangleMesh& mesh) override;
 
@@ -47,9 +54,13 @@ public:
 private:
 	// Helper methods
 	void meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, const MeshParameters& params);
+	void meshFaceWithIndexTracking(const TopoDS_Face& face, TriangleMesh& mesh,
+		const MeshParameters& params, std::vector<int>& triangleIndices, int& currentTriangleIndex);
 	void extractTriangulation(const Handle(Poly_Triangulation)& triangulation,
 		const TopLoc_Location& location,
 		TriangleMesh& mesh, TopAbs_Orientation orientation);
+	void extractTriangulationWithIndexTracking(const Handle(Poly_Triangulation)& triangulation,
+		const TopLoc_Location& location, TriangleMesh& mesh, TopAbs_Orientation orientation, std::vector<int>& triangleIndices);
 	void subdivideTriangle(TriangleMesh& mesh, const gp_Pnt& p0, const gp_Pnt& p1,
 		const gp_Pnt& p2, int levels);
 	std::set<std::pair<int, int>> findBoundaryEdges(const TriangleMesh& mesh);

@@ -1,6 +1,7 @@
 #include "FlatFrame.h"
 #include "OCCViewer.h"
 #include "Canvas.h"
+#include "InputManager.h"
 #include "CommandType.h"
 #include "CommandListenerManager.h"
 #include "logger/Logger.h"
@@ -38,6 +39,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_SHOW_FEATURE_EDGES, cmd::CommandType::ShowFeatureEdges},
 	{ID_SHOW_MESH_EDGES, cmd::CommandType::ShowMeshEdges},
 	{ID_SHOW_FACE_NORMALS, cmd::CommandType::ShowFaceNormals},
+	{ID_FACE_QUERY_TOOL, cmd::CommandType::FaceQueryTool},
 	{ID_TOGGLE_SLICE, cmd::CommandType::SliceToggle},
 	{ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},
 	{ID_TEXTURE_MODE_MODULATE, cmd::CommandType::TextureModeModulate},
@@ -181,6 +183,16 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
 		LOG_INF_S("Show normals state updated: " + std::string(m_occViewer->isShowNormals() ? "shown" : "hidden"));
 	}
 	// Outline toggle handled directly; add optional feedback if needed
+
+	// Handle face query tool toggle state
+	if (result.commandId == cmd::to_string(cmd::CommandType::FaceQueryTool) && result.success) {
+		bool isActive = m_canvas && m_canvas->getInputManager() && m_canvas->getInputManager()->isCustomInputStateActive();
+		// TODO: Update button state in ribbon when FlatUIBar supports SetToggleButtonState
+		// if (m_ribbon) {
+		//     m_ribbon->SetToggleButtonState(ID_FACE_QUERY_TOOL, isActive);
+		// }
+		LOG_INF_S("Face query tool state updated: " + std::string(isActive ? "active" : "inactive"));
+	}
 
 	if (m_canvas && (
 		result.commandId.find("VIEW_") == 0 ||

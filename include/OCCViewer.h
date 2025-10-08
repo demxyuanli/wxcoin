@@ -271,6 +271,7 @@ public:
 
 	gp_Pnt getCameraPosition() const override;
 	SoSeparator* getRootSeparator() const { return m_occRoot; }
+	PickingService* getPickingService() const { return m_pickingService.get(); }
 
 	// Hover silhouette API (screen-space driven)
 	void updateHoverSilhouetteAt(const wxPoint& screenPos);

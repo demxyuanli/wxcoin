@@ -172,6 +172,157 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 	return mesh;
 }
 
+// Convert to mesh with face index mapping
+TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Shape& shape,
+	const MeshParameters& params, std::vector<std::pair<int, std::vector<int>>>& faceMappings) {
+
+	TriangleMesh mesh;
+
+	if (shape.IsNull()) {
+		LOG_WRN_S("Cannot convert null shape to mesh");
+		return mesh;
+	}
+
+	try {
+		// Get config reference for reading parameters
+		auto& configRef = RenderingToolkitAPI::getConfig();
+
+		// Read all tessellation parameters from config
+		int tessellationQuality = 2;
+		bool adaptiveMeshing = false;
+		int tessellationMethod = 0;
+		double featurePreservation = 0.5;
+		bool parallelProcessingConfig = true;
+
+		try {
+			tessellationQuality = std::stoi(configRef.getParameter("tessellation_quality", "2"));
+			adaptiveMeshing = (configRef.getParameter("adaptive_meshing", "false") == "true");
+			tessellationMethod = std::stoi(configRef.getParameter("tessellation_method", "0"));
+			featurePreservation = std::stod(configRef.getParameter("feature_preservation", "0.5"));
+			parallelProcessingConfig = (configRef.getParameter("parallel_processing", "true") == "true");
+		} catch (...) {
+			// Use defaults if parsing fails
+			tessellationQuality = 2;
+			adaptiveMeshing = false;
+			tessellationMethod = 0;
+			featurePreservation = 0.5;
+			parallelProcessingConfig = true;
+		}
+
+		// Use config setting if available, otherwise use parameter setting
+		bool useParallel = parallelProcessingConfig && params.inParallel;
+
+		// Log additional tessellation parameters for debugging
+		LOG_DBG_S("Tessellation parameters: quality=" + std::to_string(tessellationQuality) +
+			", adaptive=" + std::string(adaptiveMeshing ? "true" : "false") +
+			", method=" + std::to_string(tessellationMethod) +
+			", featurePreservation=" + std::to_string(featurePreservation) +
+			", parallel=" + std::string(useParallel ? "true" : "false"));
+
+		// Adjust basic parameters based on advanced settings
+		double adjustedDeflection = params.deflection;
+		double adjustedAngularDeflection = params.angularDeflection;
+
+		// Only adjust parameters if user has explicitly set high quality settings
+		// Default tessellationQuality=2 should not trigger aggressive parameter adjustment
+		if (tessellationQuality >= 3) {
+			// Only apply aggressive quality adjustments for very high quality settings
+			// Quality 3: 0.25x deflection (very detailed)
+			// Quality 4+: 0.1x deflection (extremely detailed)
+			double qualityFactor = 1.0 / (1.0 + (tessellationQuality - 2));
+			adjustedDeflection *= qualityFactor;
+			adjustedAngularDeflection *= qualityFactor;
+			LOG_DBG_S("Applied high quality tessellation adjustment: factor=" + std::to_string(qualityFactor));
+		}
+
+		// Only apply adaptive meshing adjustment if explicitly enabled AND quality is high
+		if (adaptiveMeshing && tessellationQuality >= 3) {
+			// Adaptive meshing uses even smaller deflection for better quality
+			adjustedDeflection *= 0.7; // Less aggressive than 0.5
+		}
+
+		// Generate mesh with BRepMesh
+		BRepMesh_IncrementalMesh meshGen(shape, adjustedDeflection, params.relative,
+			adjustedAngularDeflection, useParallel);
+
+		if (!meshGen.IsDone()) {
+			LOG_ERR_S("Failed to generate mesh for shape");
+			return mesh;
+		}
+
+		// Extract triangles from all faces with face index tracking
+		std::vector<TopoDS_Face> allFaces;
+		for (TopExp_Explorer faceExplorer(shape, TopAbs_FACE); faceExplorer.More(); faceExplorer.Next()) {
+			allFaces.push_back(TopoDS::Face(faceExplorer.Current()));
+		}
+
+		faceMappings.clear();
+		faceMappings.reserve(allFaces.size());
+
+		int currentTriangleIndex = 0;
+
+		for (size_t faceIndex = 0; faceIndex < allFaces.size(); ++faceIndex) {
+			const TopoDS_Face& face = allFaces[faceIndex];
+			std::vector<int> faceTriangleIndices;
+
+			// Mesh the face and track triangle indices
+			meshFaceWithIndexTracking(face, mesh, params, faceTriangleIndices, currentTriangleIndex);
+
+			// Store face-triangle mapping
+			faceMappings.emplace_back(static_cast<int>(faceIndex), faceTriangleIndices);
+		}
+
+		// Calculate normals if not already done
+		if (mesh.normals.empty() && !mesh.vertices.empty()) {
+			calculateNormals(mesh);
+		}
+
+		// Apply smoothing if enabled - read from RenderingToolkitAPI config
+		auto& smoothingSettings = configRef.getSmoothingSettings();
+		auto& subdivisionSettings = configRef.getSubdivisionSettings();
+
+		// Read custom parameters
+		double smoothingStrength = 0.5;
+		try {
+			smoothingStrength = std::stod(configRef.getParameter("smoothing_strength", "0.5"));
+		} catch (...) {
+			smoothingStrength = 0.5;
+		}
+
+		if (smoothingSettings.enabled) {
+			// Use smoothing strength to modify iterations based on strength
+			int adjustedIterations = smoothingSettings.iterations;
+			if (smoothingStrength > 0.7) {
+				adjustedIterations = std::max(adjustedIterations + 1, 1);
+			} else if (smoothingStrength < 0.3) {
+				adjustedIterations = std::max(adjustedIterations - 1, 1);
+			}
+
+			mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
+			LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
+				", iterations=" + std::to_string(adjustedIterations) +
+				", strength=" + std::to_string(smoothingStrength));
+		}
+
+		// Apply subdivision if enabled - read from RenderingToolkitAPI config
+		if (subdivisionSettings.enabled) {
+			mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
+			LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
+		}
+
+		LOG_INF_S("Generated mesh with face mapping: " + std::to_string(mesh.getVertexCount()) +
+			" vertices, " + std::to_string(mesh.getTriangleCount()) + " triangles, " +
+			std::to_string(faceMappings.size()) + " face mappings");
+
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Exception in mesh conversion with face mapping: " + std::string(e.what()));
+		mesh.clear();
+	}
+
+	return mesh;
+}
+
 void OpenCASCADEProcessor::calculateNormals(TriangleMesh& mesh) {
 	if (mesh.vertices.empty() || mesh.triangles.empty()) {
 		LOG_WRN_S("Cannot calculate normals for empty mesh");
@@ -372,6 +523,32 @@ void OpenCASCADEProcessor::meshFace(const TopoDS_Shape& face, TriangleMesh& mesh
 	}
 }
 
+// Mesh face with triangle index tracking for face mapping
+void OpenCASCADEProcessor::meshFaceWithIndexTracking(const TopoDS_Face& face, TriangleMesh& mesh,
+	const MeshParameters& params, std::vector<int>& triangleIndices, int& currentTriangleIndex) {
+
+	TopLoc_Location location;
+	Handle(Poly_Triangulation) triangulation = BRep_Tool::Triangulation(face, location);
+
+	// If triangulation exists, extract it
+	if (!triangulation.IsNull()) {
+		int startTriangleIndex = currentTriangleIndex;
+		extractTriangulationWithIndexTracking(triangulation, location, mesh, face.Orientation(), triangleIndices);
+		currentTriangleIndex += triangulation->NbTriangles();
+	}
+	else {
+		// If no triangulation exists, create one
+		BRepMesh_IncrementalMesh mesher(face, params.deflection, params.relative, params.angularDeflection,
+			params.inParallel);
+		triangulation = BRep_Tool::Triangulation(face, location);
+		if (!triangulation.IsNull()) {
+			int startTriangleIndex = currentTriangleIndex;
+			extractTriangulationWithIndexTracking(triangulation, location, mesh, face.Orientation(), triangleIndices);
+			currentTriangleIndex += triangulation->NbTriangles();
+		}
+	}
+}
+
 void OpenCASCADEProcessor::extractTriangulation(const Handle(Poly_Triangulation)& triangulation,
 	const TopLoc_Location& location,
 	TriangleMesh& mesh, TopAbs_Orientation orientation) {
@@ -427,4 +604,55 @@ gp_Vec OpenCASCADEProcessor::calculateTriangleNormalVec(const gp_Pnt& p1, const 
 	}
 
 	return normal;
+}
+
+// Extract triangulation with triangle index tracking
+void OpenCASCADEProcessor::extractTriangulationWithIndexTracking(const Handle(Poly_Triangulation)& triangulation,
+	const TopLoc_Location& location, TriangleMesh& mesh, TopAbs_Orientation orientation, std::vector<int>& triangleIndices) {
+
+	if (triangulation.IsNull()) {
+		return;
+	}
+
+	// Get transformation
+	gp_Trsf transform = location.Transformation();
+
+	// Extract vertices
+	int vertexOffset = static_cast<int>(mesh.vertices.size());
+
+	for (int i = 1; i <= triangulation->NbNodes(); i++) {
+		gp_Pnt point = triangulation->Node(i);
+		point.Transform(transform);
+		mesh.vertices.push_back(point);
+	}
+
+	// Extract triangles with proper orientation handling and index tracking
+	const Poly_Array1OfTriangle& triangles = triangulation->Triangles();
+	int startTriangleIndex = static_cast<int>(mesh.triangles.size()) / 3;
+
+	for (int i = triangles.Lower(); i <= triangles.Upper(); i++) {
+		int n1, n2, n3;
+		triangles.Value(i).Get(n1, n2, n3);
+
+		// Adjust indices to be 0-based and add vertex offset
+		int idx1 = vertexOffset + n1 - 1;
+		int idx2 = vertexOffset + n2 - 1;
+		int idx3 = vertexOffset + n3 - 1;
+
+		// Handle face orientation - reverse triangle winding if face is reversed
+		if (orientation == TopAbs_REVERSED) {
+			mesh.triangles.push_back(idx1);
+			mesh.triangles.push_back(idx3);  // Swap n2 and n3 to reverse winding
+			mesh.triangles.push_back(idx2);
+		}
+		else {
+			mesh.triangles.push_back(idx1);
+			mesh.triangles.push_back(idx2);
+			mesh.triangles.push_back(idx3);
+		}
+
+		// Track triangle index for this face
+		int triangleIndex = startTriangleIndex + (i - triangles.Lower());
+		triangleIndices.push_back(triangleIndex);
+	}
 }

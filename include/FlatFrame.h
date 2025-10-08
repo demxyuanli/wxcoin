@@ -66,6 +66,7 @@ enum {
 	ID_SHOW_FEATURE_EDGES, // New: show feature edges
 	ID_SHOW_MESH_EDGES, // New: show mesh edges
 	ID_SHOW_FACE_NORMALS, // New: show face normals
+	ID_FACE_QUERY_TOOL, // New: face query tool
 	ID_TOGGLE_SLICE,
 	ID_TOGGLE_OUTLINE, // New: toggle outline display
 

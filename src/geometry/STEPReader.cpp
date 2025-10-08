@@ -1,6 +1,8 @@
 #include "STEPReader.h"
 #include "logger/Logger.h"
 #include "OCCShapeBuilder.h"
+#include "rendering/GeometryProcessor.h"
+#include "config/RenderingConfig.h"
 
 // OpenCASCADE STEP import includes
 #include <STEPControl_Reader.hxx>
@@ -17,6 +19,27 @@
 #include <GeomLProp_SLProps.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS.hxx>
+#include <Geom_Surface.hxx>
+#include <Geom_Plane.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <Geom_SphericalSurface.hxx>
+#include <Geom_ConicalSurface.hxx>
+#include <Geom_ToroidalSurface.hxx>
+#include <BRep_Tool.hxx>
+#include <GProp_GProps.hxx>
+#include <BRepGProp.hxx>
+#include <gp_Pnt.hxx>
+#include <gp_Dir.hxx>
+#include <gp_Vec.hxx>
+#include <BRepBuilderAPI_MakeSolid.hxx>
+#include <ShapeFix_Shell.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopAbs_ShapeEnum.hxx>
+#include <Bnd_Box.hxx>
+#include <stack>
+#include <execution>
+#include <numeric>
+#include <set>
 
 // STEP metadata includes
 #include <STEPCAFControl_Reader.hxx>
@@ -1054,6 +1077,16 @@ std::shared_ptr<OCCGeometry> STEPReader::processSingleShape(
 			OCCShapeBuilder::analyzeShapeTopology(shape, name);
 		}
 
+		// Build face index mapping to enable face picking for all geometries
+		MeshParameters meshParams;
+		meshParams.deflection = 0.001;  // High quality mesh for face mapping
+		meshParams.angularDeflection = 0.5;
+		meshParams.relative = true;
+		meshParams.inParallel = true;
+
+		LOG_INF_S("Building face index mapping for geometry: " + name);
+		geometry->buildFaceIndexMapping(meshParams);
+
 		return geometry;
 	}
 	catch (const Standard_ConstructionError& e) {
@@ -1488,16 +1521,26 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 				TopLoc_Location ownLoc = shapeTool->GetLocation(label);
 				TopLoc_Location globLoc = parentLoc * ownLoc;
 
+				// Debug: Log label information
+				LOG_INF_S("Processing label at level " + std::to_string(level) + 
+					" - IsAssembly: " + std::string(shapeTool->IsAssembly(label) ? "true" : "false") +
+					", IsShape: " + std::string(shapeTool->IsShape(label) ? "true" : "false") +
+					", IsReference: " + std::string(shapeTool->IsReference(label) ? "true" : "false"));
+
 				if (shapeTool->IsAssembly(label)) {
 					TDF_LabelSequence children;
 					shapeTool->GetComponents(label, children);
+					LOG_INF_S("Found assembly with " + std::to_string(children.Length()) + " components");
 					for (int k = 1; k <= children.Length(); ++k) {
 						processLabel(children.Value(k), globLoc, level + 1);
 					}
 					return;
 				}
 
-				if (!shapeTool->IsShape(label)) return;
+				if (!shapeTool->IsShape(label)) {
+					LOG_INF_S("Label is not a shape, skipping");
+					return;
+				}
 
 				// Resolve referenced shape (instance) and compose full location
 				TDF_Label srcLabel = label;
@@ -1511,11 +1554,16 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 				}
 
 				TopoDS_Shape shape = shapeTool->GetShape(srcLabel);
-				if (shape.IsNull()) return;
+				if (shape.IsNull()) {
+					LOG_INF_S("Shape is null, skipping");
+					return;
+				}
 				TopLoc_Location finalLoc = globLoc * srcLoc;
 				TopoDS_Shape located = finalLoc.IsIdentity() ? shape : shape.Moved(finalLoc);
 
 				std::string compName = baseName + "_Component_" + std::to_string(componentIndex);
+				LOG_INF_S("Processing shape: " + compName + ", ShapeType: " + std::to_string(located.ShapeType()) + 
+					" (TopAbs_COMPOUND=" + std::to_string(TopAbs_COMPOUND) + ")");
 				Handle(TDataStd_Name) nameAttr;
 				if (label.FindAttribute(TDataStd_Name::GetID(), nameAttr)) {
 					TCollection_ExtendedString extStr = nameAttr->Get();
@@ -1546,36 +1594,126 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 					}
 				}
 
-				auto parts = decomposeByLevelUsingTopo(located, options.decomposition.level);
-				// Heuristic component detection when decomposition yields a single part
+				// Check if this is a compound shape that might represent an assembly
+				std::vector<TopoDS_Shape> parts;
+				LOG_INF_S("Checking shape type: " + std::to_string(located.ShapeType()) + " (TopAbs_COMPOUND=" + std::to_string(TopAbs_COMPOUND) + ", TopAbs_SOLID=" + std::to_string(TopAbs_SOLID) + ")");
+				
+				// For assembly detection, we need to check if this shape contains multiple sub-components
+				// regardless of whether it's a compound or a solid with multiple parts
+				if (located.ShapeType() == TopAbs_COMPOUND) {
+					LOG_INF_S("Detected compound shape - treating as potential assembly");
+					// For compounds, try to extract individual solids/shells
+					for (TopExp_Explorer exp(located, TopAbs_SOLID); exp.More(); exp.Next()) {
+						parts.push_back(exp.Current());
+					}
+					// If no solids, try shells
+					if (parts.empty()) {
+						for (TopExp_Explorer exp(located, TopAbs_SHELL); exp.More(); exp.Next()) {
+							parts.push_back(exp.Current());
+						}
+					}
+					LOG_INF_S("Compound decomposition found " + std::to_string(parts.size()) + " parts");
+				} else if (located.ShapeType() == TopAbs_SOLID) {
+					// For solids, check if they contain multiple sub-components that could be assembly parts
+					LOG_INF_S("Detected solid shape - checking for multiple sub-components");
+					
+					// Count shells within this solid
+					int shellCount = 0;
+					for (TopExp_Explorer exp(located, TopAbs_SHELL); exp.More(); exp.Next()) {
+						shellCount++;
+					}
+					
+					// If solid has multiple shells, treat each shell as a potential component
+					if (shellCount > 1) {
+						LOG_INF_S("Solid contains " + std::to_string(shellCount) + " shells - treating as assembly");
+						for (TopExp_Explorer exp(located, TopAbs_SHELL); exp.More(); exp.Next()) {
+							parts.push_back(exp.Current());
+						}
+					} else {
+						// Single shell solid - use normal decomposition
+						LOG_INF_S("Single shell solid - using normal decomposition");
+						parts = decomposeByLevelUsingTopo(located, options.decomposition.level);
+					}
+				} else {
+					// Use normal decomposition for other shape types
+					parts = decomposeByLevelUsingTopo(located, options.decomposition.level);
+				}
+
+				// Apply user-configured decomposition options
 				if (options.decomposition.enableDecomposition && parts.size() == 1) {
+					LOG_INF_S("Decomposition enabled - applying user-configured decomposition level: " + 
+						std::to_string(static_cast<int>(options.decomposition.level)));
+					
 					std::vector<TopoDS_Shape> heuristics;
-					// 1) Try shell grouping (multi-shell solids)
-					decomposeByShellGroups(located, heuristics);
-					if (heuristics.size() <= 1) {
-						// 2) FreeCAD-like strategy (solids>shells>features)
-						heuristics.clear();
-						decomposeShapeFreeCADLike(located, heuristics);
+					
+					// Apply decomposition based on user-selected level
+					switch (options.decomposition.level) {
+						case GeometryReader::DecompositionLevel::NO_DECOMPOSITION:
+							LOG_INF_S("No decomposition requested - keeping single part");
+							break;
+							
+						case GeometryReader::DecompositionLevel::SHAPE_LEVEL:
+							// Try to decompose into individual shapes
+							decomposeByShellGroups(located, heuristics);
+							if (heuristics.size() <= 1) {
+								heuristics.clear();
+								decomposeShapeFreeCADLike(located, heuristics);
+							}
+							break;
+							
+						case GeometryReader::DecompositionLevel::SOLID_LEVEL:
+							// Decompose into individual solids
+							decomposeShapeFreeCADLike(located, heuristics);
+							if (heuristics.size() <= 1) {
+								heuristics.clear();
+								decomposeByGeometricFeatures(located, heuristics);
+							}
+							break;
+							
+						case GeometryReader::DecompositionLevel::SHELL_LEVEL:
+							// Decompose into individual shells
+							decomposeByShellGroups(located, heuristics);
+							if (heuristics.size() <= 1) {
+								heuristics.clear();
+								decomposeByGeometricFeatures(located, heuristics);
+							}
+							break;
+							
+						case GeometryReader::DecompositionLevel::FACE_LEVEL:
+							// Decompose into individual faces (most detailed)
+							decomposeByFaceGroups(located, heuristics);
+							if (heuristics.size() <= 1) {
+								heuristics.clear();
+								decomposeByConnectivity(located, heuristics);
+							}
+							// Try intelligent decomposition if still single component
+							if (heuristics.size() <= 1) {
+								heuristics.clear();
+								decomposeByFeatureRecognition(located, heuristics);
+								if (heuristics.size() <= 1) {
+									heuristics.clear();
+									decomposeByAdjacentFacesClustering(located, heuristics);
+								}
+							}
+							break;
 					}
-					if (heuristics.size() <= 1) {
-						// 3) Geometric features grouping (planes/cylinders etc.)
-						heuristics.clear();
-						decomposeByGeometricFeatures(located, heuristics);
-					}
-					if (heuristics.size() <= 1) {
-						// 4) Connectivity-based grouping (last resort)
-						heuristics.clear();
-						decomposeByConnectivity(located, heuristics);
-					}
+					
 					if (heuristics.size() > 1) {
 						parts = std::move(heuristics);
+						LOG_INF_S("User-configured decomposition found " + std::to_string(parts.size()) + " components");
+					} else {
+						LOG_INF_S("User-configured decomposition did not find additional components - keeping single part");
 					}
+				} else if (parts.size() == 1) {
+					LOG_INF_S("Decomposition disabled - keeping single part");
 				}
 				int localIdx = 0;
+				LOG_INF_S("Creating " + std::to_string(parts.size()) + " geometry components from shape");
 				for (const auto& part : parts) {
 					std::string partName = parts.size() > 1 ? (compName + "_Part_" + std::to_string(localIdx)) : compName;
 					Quantity_Color color = makeColorForName(partName, hasCafColor ? &cafColor : nullptr);
 
+					LOG_INF_S("Creating geometry: " + partName + " (part " + std::to_string(localIdx) + "/" + std::to_string(parts.size()) + ")");
 					auto geom = std::make_shared<OCCGeometry>(partName);
 					geom->setShape(part);
 					geom->setColor(color);
@@ -1606,7 +1744,19 @@ STEPReader::ReadResult STEPReader::readSTEPFileWithCAF(const std::string& filePa
 						geom->setTransparency(0.0);
 					}
 					
-					geom->setAssemblyLevel(level);
+				geom->setAssemblyLevel(level);
+
+				// Build face index mapping for all geometries to enable face query
+				// This allows face picking to work regardless of decomposition level
+				MeshParameters meshParams;
+				meshParams.deflection = 0.001;  // High quality mesh for face mapping
+				meshParams.angularDeflection = 0.5;
+				meshParams.relative = true;
+				meshParams.inParallel = true;
+
+				LOG_INF_S("Building face index mapping for geometry: " + partName);
+				geom->buildFaceIndexMapping(meshParams);
+
 					result.geometries.push_back(geom);
 
 					STEPEntityInfo info;
@@ -2074,6 +2224,982 @@ bool STEPReader::detectShellModel(const TopoDS_Shape& shape)
 	}
 	catch (const std::exception& e) {
 		LOG_WRN_S("Error detecting shell model: " + std::string(e.what()));
+		return false;
+	}
+}
+
+// Feature-based intelligent decomposition (FreeCAD-style) - Optimized
+void STEPReader::decomposeByFeatureRecognition(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& components) {
+	try {
+		LOG_INF_S("Starting optimized feature-based intelligent decomposition");
+
+		std::vector<TopoDS_Face> faces;
+		std::vector<Bnd_Box> faceBounds;
+
+		// Extract all faces and pre-compute bounding boxes for spatial optimization
+		for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+			TopoDS_Face face = TopoDS::Face(exp.Current());
+			faces.push_back(face);
+
+			// Pre-compute bounding box for spatial filtering
+			Bnd_Box box;
+			BRepBndLib::Add(face, box);
+			faceBounds.push_back(box);
+		}
+
+		if (faces.empty()) {
+			LOG_INF_S("No faces found for feature-based decomposition");
+			return;
+		}
+
+		LOG_INF_S("Analyzing " + std::to_string(faces.size()) + " faces for feature recognition");
+
+		// Parallel feature extraction with spatial pre-filtering
+		std::vector<FaceFeature> faceFeatures = extractFaceFeaturesParallel(faces, faceBounds);
+
+		// Optimized clustering with spatial partitioning
+		std::vector<std::vector<int>> featureGroups;
+		clusterFacesByFeaturesOptimized(faceFeatures, faceBounds, featureGroups);
+
+		LOG_INF_S("Feature-based clustering found " + std::to_string(featureGroups.size()) + " potential components");
+
+		// Create components from face groups with validation
+		createComponentsFromGroups(faceFeatures, featureGroups, components);
+
+		// Post-process: merge similar small components
+		mergeSmallComponents(components);
+
+		LOG_INF_S("Feature-based decomposition created " + std::to_string(components.size()) + " components");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Feature-based decomposition failed: " + std::string(e.what()));
+	}
+}
+
+// Adjacent faces clustering decomposition - Optimized
+void STEPReader::decomposeByAdjacentFacesClustering(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& components) {
+	try {
+		LOG_INF_S("Starting optimized adjacent faces clustering decomposition");
+
+		std::vector<TopoDS_Face> faces;
+		std::vector<Bnd_Box> faceBounds;
+
+		// Extract all faces and pre-compute bounding boxes
+		for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+			TopoDS_Face face = TopoDS::Face(exp.Current());
+			faces.push_back(face);
+
+			Bnd_Box box;
+			BRepBndLib::Add(face, box);
+			faceBounds.push_back(box);
+		}
+
+		if (faces.empty()) {
+			LOG_INF_S("No faces found for adjacent faces clustering");
+			return;
+		}
+
+		LOG_INF_S("Analyzing " + std::to_string(faces.size()) + " faces for adjacent clustering");
+
+		// Optimized adjacency graph building with spatial filtering
+		std::vector<std::vector<int>> adjacencyGraph(faces.size());
+		buildFaceAdjacencyGraphOptimized(faces, faceBounds, adjacencyGraph);
+
+		// Advanced clustering with geometric validation
+		std::vector<std::vector<int>> clusters;
+		clusterAdjacentFacesOptimized(faces, adjacencyGraph, clusters);
+
+		LOG_INF_S("Adjacent faces clustering found " + std::to_string(clusters.size()) + " clusters");
+
+		// Create validated components from clusters
+		createValidatedComponentsFromClusters(faces, clusters, components);
+
+		// Post-process: filter and refine components
+		refineComponents(components);
+
+		LOG_INF_S("Adjacent faces clustering created " + std::to_string(components.size()) + " components");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Adjacent faces clustering failed: " + std::string(e.what()));
+	}
+}
+
+// Helper methods for intelligent decomposition
+
+std::string STEPReader::classifyFaceType(const TopoDS_Face& face) {
+	try {
+		// Get the underlying surface
+		Handle(Geom_Surface) surface = BRep_Tool::Surface(face);
+		
+		if (surface.IsNull()) {
+			return "UNKNOWN";
+		}
+		
+		// Classify surface type
+		if (surface->DynamicType() == STANDARD_TYPE(Geom_Plane)) {
+			return "PLANE";
+		}
+		else if (surface->DynamicType() == STANDARD_TYPE(Geom_CylindricalSurface)) {
+			return "CYLINDER";
+		}
+		else if (surface->DynamicType() == STANDARD_TYPE(Geom_SphericalSurface)) {
+			return "SPHERE";
+		}
+		else if (surface->DynamicType() == STANDARD_TYPE(Geom_ConicalSurface)) {
+			return "CONE";
+		}
+		else if (surface->DynamicType() == STANDARD_TYPE(Geom_ToroidalSurface)) {
+			return "TORUS";
+		}
+		else {
+			return "SURFACE";
+		}
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Failed to classify face type: " + std::string(e.what()));
+		return "UNKNOWN";
+	}
+}
+
+double STEPReader::calculateFaceArea(const TopoDS_Face& face) {
+	try {
+		GProp_GProps props;
+		BRepGProp::SurfaceProperties(face, props);
+		return props.Mass();
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Failed to calculate face area: " + std::string(e.what()));
+		return 0.0;
+	}
+}
+
+gp_Pnt STEPReader::calculateFaceCentroid(const TopoDS_Face& face) {
+	try {
+		GProp_GProps props;
+		BRepGProp::SurfaceProperties(face, props);
+		return props.CentreOfMass();
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Failed to calculate face centroid: " + std::string(e.what()));
+		return gp_Pnt(0, 0, 0);
+	}
+}
+
+gp_Dir STEPReader::calculateFaceNormal(const TopoDS_Face& face) {
+	try {
+		Handle(Geom_Surface) surface = BRep_Tool::Surface(face);
+		if (surface.IsNull()) {
+			return gp_Dir(0, 0, 1);
+		}
+		
+		// Get parameter bounds
+		double uMin, uMax, vMin, vMax;
+		surface->Bounds(uMin, uMax, vMin, vMax);
+		
+		// Calculate normal at center of parameter space
+		double u = (uMin + uMax) * 0.5;
+		double v = (vMin + vMax) * 0.5;
+		
+		gp_Pnt point = surface->Value(u, v);
+		gp_Vec du, dv;
+		surface->D1(u, v, point, du, dv);
+		
+		gp_Vec normal = du.Crossed(dv);
+		if (normal.Magnitude() > 1e-12) {
+			normal.Normalize();
+		}
+		
+		return gp_Dir(normal);
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Failed to calculate face normal: " + std::string(e.what()));
+		return gp_Dir(0, 0, 1);
+	}
+}
+
+void STEPReader::clusterFacesByFeatures(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& featureGroups) {
+	try {
+		std::unordered_map<std::string, std::vector<int>> typeGroups;
+		
+		// Group faces by type
+		for (size_t i = 0; i < faceFeatures.size(); ++i) {
+			typeGroups[faceFeatures[i].type].push_back(i);
+		}
+		
+		// For each type group, further cluster by geometric similarity
+		for (auto& [type, indices] : typeGroups) {
+			if (indices.size() <= 1) {
+				if (!indices.empty()) {
+					featureGroups.push_back({indices[0]});
+				}
+				continue;
+			}
+			
+			// Cluster by area similarity and centroid proximity
+			std::vector<std::vector<int>> subGroups;
+			std::vector<bool> assigned(indices.size(), false);
+			
+			for (size_t i = 0; i < indices.size(); ++i) {
+				if (assigned[i]) continue;
+				
+				std::vector<int> group = {indices[i]};
+				assigned[i] = true;
+				
+				const FaceFeature& refFeature = faceFeatures[indices[i]];
+				
+				for (size_t j = i + 1; j < indices.size(); ++j) {
+					if (assigned[j]) continue;
+					
+					const FaceFeature& testFeature = faceFeatures[indices[j]];
+					
+					// Check area similarity (within 20% tolerance)
+					double areaRatio = std::min(refFeature.area, testFeature.area) / std::max(refFeature.area, testFeature.area);
+					
+					// Check centroid distance
+					double distance = refFeature.centroid.Distance(testFeature.centroid);
+					
+					if (areaRatio > 0.8 && distance < 10.0) { // Configurable thresholds
+						group.push_back(indices[j]);
+						assigned[j] = true;
+					}
+				}
+				
+				featureGroups.push_back(group);
+			}
+		}
+		
+		LOG_INF_S("Feature clustering created " + std::to_string(featureGroups.size()) + " groups");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Feature clustering failed: " + std::string(e.what()));
+	}
+}
+
+void STEPReader::buildFaceAdjacencyGraph(const std::vector<TopoDS_Face>& faces, std::vector<std::vector<int>>& adjacencyGraph) {
+	try {
+		adjacencyGraph.clear();
+		adjacencyGraph.resize(faces.size());
+		
+		// For each pair of faces, check if they share an edge
+		for (size_t i = 0; i < faces.size(); ++i) {
+			for (size_t j = i + 1; j < faces.size(); ++j) {
+				if (areFacesAdjacent(faces[i], faces[j])) {
+					adjacencyGraph[i].push_back(j);
+					adjacencyGraph[j].push_back(i);
+				}
+			}
+		}
+		
+		LOG_INF_S("Built adjacency graph for " + std::to_string(faces.size()) + " faces");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Failed to build adjacency graph: " + std::string(e.what()));
+	}
+}
+
+void STEPReader::clusterAdjacentFaces(const std::vector<TopoDS_Face>& faces, const std::vector<std::vector<int>>& adjacencyGraph, std::vector<std::vector<int>>& clusters) {
+	try {
+		clusters.clear();
+		std::vector<bool> visited(faces.size(), false);
+		
+		// Use DFS to find connected components
+		for (size_t i = 0; i < faces.size(); ++i) {
+			if (visited[i]) continue;
+			
+			std::vector<int> cluster;
+			std::stack<int> stack;
+			stack.push(i);
+			
+			while (!stack.empty()) {
+				int current = stack.top();
+				stack.pop();
+				
+				if (visited[current]) continue;
+				visited[current] = true;
+				cluster.push_back(current);
+				
+				// Add adjacent faces to stack
+				for (int adjacent : adjacencyGraph[current]) {
+					if (!visited[adjacent]) {
+						stack.push(adjacent);
+					}
+				}
+			}
+			
+			if (cluster.size() >= 3) { // Only keep substantial clusters
+				clusters.push_back(cluster);
+			}
+		}
+		
+		LOG_INF_S("Adjacent clustering found " + std::to_string(clusters.size()) + " clusters");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Adjacent clustering failed: " + std::string(e.what()));
+	}
+}
+
+TopoDS_Shape STEPReader::tryCreateSolidFromFaces(const TopoDS_Compound& compound, const std::vector<FaceFeature>& faceFeatures, const std::vector<int>& group) {
+	try {
+		// Simple approach: try to create a shell from the faces
+		BRep_Builder builder;
+		TopoDS_Shell shell;
+		builder.MakeShell(shell);
+		
+		for (int faceId : group) {
+			builder.Add(shell, faceFeatures[faceId].face);
+		}
+		
+		// Try to close the shell
+		ShapeFix_Shell shellFixer;
+		shellFixer.Init(shell);
+		shellFixer.SetPrecision(1e-6);
+		shellFixer.Perform();
+		
+		TopoDS_Shell closedShell = shellFixer.Shell();
+		
+		// Try to create solid from closed shell
+		BRepBuilderAPI_MakeSolid solidMaker(closedShell);
+		if (solidMaker.IsDone()) {
+			return solidMaker.Solid();
+		}
+		
+		return closedShell; // Return shell if solid creation fails
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Failed to create solid from faces: " + std::string(e.what()));
+		return TopoDS_Shape();
+	}
+}
+
+TopoDS_Shape STEPReader::tryCreateSolidFromFaceCluster(const TopoDS_Compound& compound, const std::vector<TopoDS_Face>& faces, const std::vector<int>& cluster) {
+	try {
+		// Simple approach: try to create a shell from the faces
+		BRep_Builder builder;
+		TopoDS_Shell shell;
+		builder.MakeShell(shell);
+		
+		for (int faceId : cluster) {
+			builder.Add(shell, faces[faceId]);
+		}
+		
+		// Try to close the shell
+		ShapeFix_Shell shellFixer;
+		shellFixer.Init(shell);
+		shellFixer.SetPrecision(1e-6);
+		shellFixer.Perform();
+		
+		TopoDS_Shell closedShell = shellFixer.Shell();
+		
+		// Try to create solid from closed shell
+		BRepBuilderAPI_MakeSolid solidMaker(closedShell);
+		if (solidMaker.IsDone()) {
+			return solidMaker.Solid();
+		}
+		
+		return closedShell; // Return shell if solid creation fails
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Failed to create solid from face cluster: " + std::string(e.what()));
+		return TopoDS_Shape();
+	}
+}
+
+bool STEPReader::areFacesAdjacent(const TopoDS_Face& face1, const TopoDS_Face& face2) {
+	try {
+		// Check if faces share any edges
+		for (TopExp_Explorer exp1(face1, TopAbs_EDGE); exp1.More(); exp1.Next()) {
+			TopoDS_Edge edge1 = TopoDS::Edge(exp1.Current());
+
+			for (TopExp_Explorer exp2(face2, TopAbs_EDGE); exp2.More(); exp2.Next()) {
+				TopoDS_Edge edge2 = TopoDS::Edge(exp2.Current());
+
+				if (edge1.IsSame(edge2)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Failed to check face adjacency: " + std::string(e.what()));
+		return false;
+	}
+}
+
+// ===== OPTIMIZED DECOMPOSITION FUNCTIONS =====
+
+// Parallel face feature extraction
+std::vector<STEPReader::FaceFeature> STEPReader::extractFaceFeaturesParallel(
+	const std::vector<TopoDS_Face>& faces,
+	const std::vector<Bnd_Box>& faceBounds)
+{
+	std::vector<FaceFeature> faceFeatures(faces.size());
+
+	// Parallel feature extraction
+	std::for_each(std::execution::par, faces.begin(), faces.end(),
+		[&](const TopoDS_Face& face) {
+			size_t index = &face - &faces[0]; // Calculate index
+
+			FaceFeature feature;
+			feature.face = face;
+			feature.id = static_cast<int>(index);
+			feature.type = classifyFaceType(face);
+			feature.area = calculateFaceArea(face);
+			feature.centroid = calculateFaceCentroid(face);
+			feature.normal = calculateFaceNormal(face);
+
+			faceFeatures[index] = feature;
+		});
+
+	return faceFeatures;
+}
+
+// Optimized face clustering with spatial partitioning
+void STEPReader::clusterFacesByFeaturesOptimized(
+	const std::vector<FaceFeature>& faceFeatures,
+	const std::vector<Bnd_Box>& faceBounds,
+	std::vector<std::vector<int>>& featureGroups)
+{
+	try {
+		// Calculate global bounding box for spatial partitioning
+		Bnd_Box globalBox;
+		for (const auto& box : faceBounds) {
+			globalBox.Add(box);
+		}
+
+		// Create spatial grid for efficient neighbor search
+		const int gridSize = 8; // 8x8x8 grid
+		std::vector<std::vector<int>> spatialGrid(gridSize * gridSize * gridSize);
+
+		// Assign faces to grid cells
+		for (size_t i = 0; i < faceFeatures.size(); ++i) {
+			if (faceBounds[i].IsVoid()) continue;
+
+			Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
+			faceBounds[i].Get(xMin, yMin, zMin, xMax, yMax, zMax);
+
+			// Calculate grid cell
+			Standard_Real globalXMin, globalYMin, globalZMin, globalXMax, globalYMax, globalZMax;
+			globalBox.Get(globalXMin, globalYMin, globalZMin, globalXMax, globalYMax, globalZMax);
+
+			int cellX = static_cast<int>((xMin - globalXMin) / (globalXMax - globalXMin) * gridSize);
+			int cellY = static_cast<int>((yMin - globalYMin) / (globalYMax - globalYMin) * gridSize);
+			int cellZ = static_cast<int>((zMin - globalZMin) / (globalZMax - globalZMin) * gridSize);
+
+			cellX = std::max(0, std::min(gridSize - 1, cellX));
+			cellY = std::max(0, std::min(gridSize - 1, cellY));
+			cellZ = std::max(0, std::min(gridSize - 1, cellZ));
+
+			int cellIndex = cellX + cellY * gridSize + cellZ * gridSize * gridSize;
+			spatialGrid[cellIndex].push_back(static_cast<int>(i));
+		}
+
+		// Group faces by type first (fast pre-filtering)
+		std::unordered_map<std::string, std::vector<int>> typeGroups;
+		for (size_t i = 0; i < faceFeatures.size(); ++i) {
+			typeGroups[faceFeatures[i].type].push_back(static_cast<int>(i));
+		}
+
+		// For each type group, perform spatial-aware clustering
+		for (const auto& [type, indices] : typeGroups) {
+			if (indices.size() <= 1) {
+				if (!indices.empty()) {
+					featureGroups.push_back({indices[0]});
+				}
+				continue;
+			}
+
+			// Spatial-aware clustering within type groups
+			std::vector<bool> processed(indices.size(), false);
+
+			for (size_t i = 0; i < indices.size(); ++i) {
+				if (processed[i]) continue;
+
+				std::vector<int> group = {indices[i]};
+				processed[i] = true;
+
+				const FaceFeature& refFeature = faceFeatures[indices[i]];
+
+				// Find spatially nearby faces for comparison
+				std::vector<int> nearbyFaces = findNearbyFaces(indices[i], spatialGrid, faceBounds, gridSize);
+
+				for (int nearbyIdx : nearbyFaces) {
+					// Find the position in the indices array
+					auto it = std::find(indices.begin(), indices.end(), nearbyIdx);
+					if (it == indices.end()) continue;
+
+					size_t localIdx = it - indices.begin();
+					if (processed[localIdx]) continue;
+
+					const FaceFeature& testFeature = faceFeatures[nearbyIdx];
+
+					// Enhanced similarity check with multiple criteria
+					if (areFeaturesSimilar(refFeature, testFeature, faceBounds[indices[i]], faceBounds[nearbyIdx])) {
+						group.push_back(indices[localIdx]);
+						processed[localIdx] = true;
+					}
+				}
+
+				featureGroups.push_back(group);
+			}
+		}
+
+		LOG_INF_S("Optimized clustering created " + std::to_string(featureGroups.size()) + " groups");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Optimized feature clustering failed: " + std::string(e.what()));
+	}
+}
+
+// Find faces in nearby grid cells
+std::vector<int> STEPReader::findNearbyFaces(
+	int faceIndex,
+	const std::vector<std::vector<int>>& spatialGrid,
+	const std::vector<Bnd_Box>& faceBounds,
+	int gridSize)
+{
+	std::vector<int> nearbyFaces;
+
+	if (faceBounds[faceIndex].IsVoid()) return nearbyFaces;
+
+	Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
+	faceBounds[faceIndex].Get(xMin, yMin, zMin, xMax, yMax, zMax);
+
+	// Calculate grid cell for this face
+	Bnd_Box globalBox;
+	for (const auto& box : faceBounds) {
+		globalBox.Add(box);
+	}
+
+	Standard_Real globalXMin, globalYMin, globalZMin, globalXMax, globalYMax, globalZMax;
+	globalBox.Get(globalXMin, globalYMin, globalZMin, globalXMax, globalYMax, globalZMax);
+
+	int cellX = static_cast<int>((xMin - globalXMin) / (globalXMax - globalXMin) * gridSize);
+	int cellY = static_cast<int>((yMin - globalYMin) / (globalYMax - globalYMin) * gridSize);
+	int cellZ = static_cast<int>((zMin - globalZMin) / (globalZMax - globalZMin) * gridSize);
+
+	cellX = std::max(0, std::min(gridSize - 1, cellX));
+	cellY = std::max(0, std::min(gridSize - 1, cellY));
+	cellZ = std::max(0, std::min(gridSize - 1, cellZ));
+
+	// Check neighboring cells (3x3x3 neighborhood)
+	for (int dx = -1; dx <= 1; ++dx) {
+		for (int dy = -1; dy <= 1; ++dy) {
+			for (int dz = -1; dz <= 1; ++dz) {
+				int nx = cellX + dx;
+				int ny = cellY + dy;
+				int nz = cellZ + dz;
+
+				if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && nz >= 0 && nz < gridSize) {
+					int cellIndex = nx + ny * gridSize + nz * gridSize * gridSize;
+					for (int faceIdx : spatialGrid[cellIndex]) {
+						if (faceIdx != faceIndex) {
+							nearbyFaces.push_back(faceIdx);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nearbyFaces;
+}
+
+// Enhanced feature similarity check
+bool STEPReader::areFeaturesSimilar(
+	const FaceFeature& f1,
+	const FaceFeature& f2,
+	const Bnd_Box& b1,
+	const Bnd_Box& b2)
+{
+	// Basic type check
+	if (f1.type != f2.type) return false;
+
+	// Area similarity (within 25% tolerance)
+	double areaRatio = std::min(f1.area, f2.area) / std::max(f1.area, f2.area);
+	if (areaRatio < 0.75) return false;
+
+	// Centroid distance check (relative to bounding box size)
+	Standard_Real xMin1, yMin1, zMin1, xMax1, yMax1, zMax1;
+	Standard_Real xMin2, yMin2, zMin2, xMax2, yMax2, zMax2;
+	b1.Get(xMin1, yMin1, zMin1, xMax1, yMax1, zMax1);
+	b2.Get(xMin2, yMin2, zMin2, xMax2, yMax2, zMax2);
+
+	double boxSize1 = std::max({xMax1 - xMin1, yMax1 - yMin1, zMax1 - zMin1});
+	double boxSize2 = std::max({xMax2 - xMin2, yMax2 - yMin2, zMax2 - zMin2});
+	double avgBoxSize = (boxSize1 + boxSize2) * 0.5;
+
+	double distance = f1.centroid.Distance(f2.centroid);
+	if (distance > avgBoxSize * 2.0) return false; // Too far apart
+
+	// Normal similarity (for planes and similar surfaces)
+	if (f1.type == "PLANE" || f1.type == "CYLINDER") {
+		double dotProduct = f1.normal.Dot(f2.normal);
+		if (std::abs(dotProduct) < 0.9) return false; // Not parallel enough
+	}
+
+	return true;
+}
+
+// Create components from face groups with validation
+void STEPReader::createComponentsFromGroups(
+	const std::vector<FaceFeature>& faceFeatures,
+	const std::vector<std::vector<int>>& featureGroups,
+	std::vector<TopoDS_Shape>& components)
+{
+	for (const auto& group : featureGroups) {
+		if (group.size() < 2) continue; // Skip single-face groups
+
+		try {
+			TopoDS_Compound compound;
+			BRep_Builder builder;
+			builder.MakeCompound(compound);
+
+			for (int faceId : group) {
+				TopoDS_Shape shapeToAdd = faceFeatures[faceId].face;
+				builder.Add(compound, shapeToAdd);
+			}
+
+			// Try to create a solid from the face group
+			TopoDS_Shape component = tryCreateSolidFromFaces(compound, faceFeatures, group);
+			if (!component.IsNull()) {
+				components.push_back(component);
+			}
+		}
+		catch (const std::exception& e) {
+			LOG_WRN_S("Failed to create component from face group: " + std::string(e.what()));
+		}
+	}
+}
+
+// Merge small similar components
+void STEPReader::mergeSmallComponents(std::vector<TopoDS_Shape>& components) {
+	try {
+		if (components.size() <= 1) return;
+
+		std::vector<TopoDS_Shape> mergedComponents;
+		std::vector<bool> merged(components.size(), false);
+
+		// Calculate volumes for size comparison
+		std::vector<double> volumes(components.size(), 0.0);
+		for (size_t i = 0; i < components.size(); ++i) {
+			try {
+				GProp_GProps props;
+				BRepGProp::VolumeProperties(components[i], props);
+				volumes[i] = props.Mass();
+			} catch (...) {
+				volumes[i] = 0.0;
+			}
+		}
+
+		// Find global volume statistics
+		std::vector<double> validVolumes;
+		for (double vol : volumes) {
+			if (vol > 1e-12) validVolumes.push_back(vol);
+		}
+
+		if (validVolumes.empty()) return;
+
+		std::sort(validVolumes.begin(), validVolumes.end());
+		double medianVolume = validVolumes[validVolumes.size() / 2];
+		double smallThreshold = medianVolume * 0.01; // 1% of median volume
+
+		for (size_t i = 0; i < components.size(); ++i) {
+			if (merged[i]) continue;
+
+			std::vector<TopoDS_Shape> mergeGroup = {components[i]};
+			merged[i] = true;
+
+			// Find similar small components to merge
+			for (size_t j = i + 1; j < components.size(); ++j) {
+				if (merged[j] || volumes[j] > smallThreshold) continue;
+
+				if (areShapesSimilar(components[i], components[j])) {
+					mergeGroup.push_back(components[j]);
+					merged[j] = true;
+				}
+			}
+
+			// Create merged component if multiple shapes
+			if (mergeGroup.size() > 1) {
+				TopoDS_Compound compound;
+				BRep_Builder builder;
+				builder.MakeCompound(compound);
+
+			for (const auto& shape : mergeGroup) {
+				TopoDS_Shape shapeToAdd = shape;
+				builder.Add(compound, shapeToAdd);
+			}
+
+				mergedComponents.push_back(compound);
+			} else {
+				mergedComponents.push_back(components[i]);
+			}
+		}
+
+		components = std::move(mergedComponents);
+		LOG_INF_S("Component merging reduced count from " + std::to_string(merged.size()) +
+			" to " + std::to_string(components.size()));
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Component merging failed: " + std::string(e.what()));
+	}
+}
+
+// Optimized adjacency graph building with spatial filtering
+void STEPReader::buildFaceAdjacencyGraphOptimized(
+	const std::vector<TopoDS_Face>& faces,
+	const std::vector<Bnd_Box>& faceBounds,
+	std::vector<std::vector<int>>& adjacencyGraph)
+{
+	try {
+		adjacencyGraph.assign(faces.size(), std::vector<int>());
+
+		// Create spatial index for efficient neighbor finding
+		const int gridSize = 4; // Smaller grid for adjacency
+		std::vector<std::vector<int>> spatialGrid(gridSize * gridSize * gridSize);
+
+		// Build spatial grid
+		Bnd_Box globalBox;
+		for (const auto& box : faceBounds) {
+			globalBox.Add(box);
+		}
+
+		for (size_t i = 0; i < faces.size(); ++i) {
+			if (faceBounds[i].IsVoid()) continue;
+
+			Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
+			faceBounds[i].Get(xMin, yMin, zMin, xMax, yMax, zMax);
+
+			int cellX = static_cast<int>((xMin - globalBox.CornerMin().X()) /
+				(globalBox.CornerMax().X() - globalBox.CornerMin().X()) * gridSize);
+			int cellY = static_cast<int>((yMin - globalBox.CornerMin().Y()) /
+				(globalBox.CornerMax().Y() - globalBox.CornerMin().Y()) * gridSize);
+			int cellZ = static_cast<int>((zMin - globalBox.CornerMin().Z()) /
+				(globalBox.CornerMax().Z() - globalBox.CornerMin().Z()) * gridSize);
+
+			cellX = std::max(0, std::min(gridSize - 1, cellX));
+			cellY = std::max(0, std::min(gridSize - 1, cellY));
+			cellZ = std::max(0, std::min(gridSize - 1, cellZ));
+
+			int cellIndex = cellX + cellY * gridSize + cellZ * gridSize * gridSize;
+			spatialGrid[cellIndex].push_back(static_cast<int>(i));
+		}
+
+		// Build adjacency using spatial filtering
+		for (size_t i = 0; i < faces.size(); ++i) {
+			std::vector<int> nearbyFaces = findNearbyFaces(static_cast<int>(i), spatialGrid, faceBounds, gridSize);
+
+			// Check adjacency only with nearby faces
+			for (int nearbyIdx : nearbyFaces) {
+				if (nearbyIdx <= static_cast<int>(i)) continue; // Avoid duplicates
+
+				if (areFacesAdjacent(faces[i], faces[nearbyIdx])) {
+					adjacencyGraph[i].push_back(nearbyIdx);
+					adjacencyGraph[nearbyIdx].push_back(static_cast<int>(i));
+				}
+			}
+		}
+
+		// Log adjacency statistics
+		size_t totalConnections = 0;
+		for (const auto& connections : adjacencyGraph) {
+			totalConnections += connections.size();
+		}
+
+		LOG_INF_S("Built optimized adjacency graph: " + std::to_string(totalConnections / 2) + " connections");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Optimized adjacency graph building failed: " + std::string(e.what()));
+	}
+}
+
+// Optimized adjacent face clustering
+void STEPReader::clusterAdjacentFacesOptimized(
+	const std::vector<TopoDS_Face>& faces,
+	const std::vector<std::vector<int>>& adjacencyGraph,
+	std::vector<std::vector<int>>& clusters)
+{
+	try {
+		clusters.clear();
+		std::vector<bool> visited(faces.size(), false);
+
+		// Use DFS to find connected components with size filtering
+		for (size_t i = 0; i < faces.size(); ++i) {
+			if (visited[i]) continue;
+
+			std::vector<int> cluster;
+			std::stack<int> stack;
+			stack.push(static_cast<int>(i));
+
+			while (!stack.empty()) {
+				int current = stack.top();
+				stack.pop();
+
+				if (visited[current]) continue;
+				visited[current] = true;
+				cluster.push_back(current);
+
+				// Add adjacent faces to stack
+				for (int adjacent : adjacencyGraph[current]) {
+					if (!visited[adjacent]) {
+						stack.push(adjacent);
+					}
+				}
+			}
+
+			// Enhanced filtering: check cluster quality
+			if (isValidCluster(cluster, faces)) {
+				clusters.push_back(cluster);
+			}
+		}
+
+		LOG_INF_S("Optimized clustering found " + std::to_string(clusters.size()) + " valid clusters");
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Optimized adjacent clustering failed: " + std::string(e.what()));
+	}
+}
+
+// Validate cluster quality
+bool STEPReader::isValidCluster(const std::vector<int>& cluster, const std::vector<TopoDS_Face>& faces) {
+	if (cluster.size() < 3) return false;
+
+	try {
+		// Check if cluster forms a closed surface (basic check)
+		int totalEdges = 0;
+		std::set<TopoDS_Edge, EdgeComparator> uniqueEdges;
+
+		for (int faceId : cluster) {
+			for (TopExp_Explorer exp(faces[faceId], TopAbs_EDGE); exp.More(); exp.Next()) {
+				TopoDS_Edge edge = TopoDS::Edge(exp.Current());
+				uniqueEdges.insert(edge);
+				totalEdges++;
+			}
+		}
+
+		// Simple heuristic: cluster should have reasonable edge-to-face ratio
+		double edgeToFaceRatio = static_cast<double>(uniqueEdges.size()) / cluster.size();
+		if (edgeToFaceRatio < 2.5 || edgeToFaceRatio > 6.0) {
+			return false; // Unreasonable topology
+		}
+
+		// Check bounding box aspect ratio
+		Bnd_Box clusterBox;
+		for (int faceId : cluster) {
+			BRepBndLib::Add(faces[faceId], clusterBox);
+		}
+
+		if (clusterBox.IsVoid()) return false;
+
+		Standard_Real xMin, yMin, zMin, xMax, yMax, zMax;
+		clusterBox.Get(xMin, yMin, zMin, xMax, yMax, zMax);
+
+		double sizeX = xMax - xMin;
+		double sizeY = yMax - yMin;
+		double sizeZ = zMax - zMin;
+
+		if (sizeX < 1e-6 || sizeY < 1e-6 || sizeZ < 1e-6) {
+			return false; // Degenerate cluster
+		}
+
+		return true;
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Cluster validation failed: " + std::string(e.what()));
+		return false;
+	}
+}
+
+// Create validated components from clusters
+void STEPReader::createValidatedComponentsFromClusters(
+	const std::vector<TopoDS_Face>& faces,
+	const std::vector<std::vector<int>>& clusters,
+	std::vector<TopoDS_Shape>& components)
+{
+	for (const auto& cluster : clusters) {
+		try {
+			TopoDS_Compound compound;
+			BRep_Builder builder;
+			builder.MakeCompound(compound);
+
+			for (int faceId : cluster) {
+				TopoDS_Shape shapeToAdd = faces[faceId];
+				builder.Add(compound, shapeToAdd);
+			}
+
+			// Try to create a solid from the face cluster
+			TopoDS_Shape component = tryCreateSolidFromFaceCluster(compound, faces, cluster);
+			if (!component.IsNull()) {
+				components.push_back(component);
+			}
+		}
+		catch (const std::exception& e) {
+			LOG_WRN_S("Failed to create component from validated cluster: " + std::string(e.what()));
+		}
+	}
+}
+
+// Refine and filter components
+void STEPReader::refineComponents(std::vector<TopoDS_Shape>& components) {
+	try {
+		std::vector<TopoDS_Shape> refinedComponents;
+
+		for (const auto& component : components) {
+			try {
+				// Check component validity
+				if (component.IsNull()) continue;
+
+				// Get component properties
+				GProp_GProps props;
+				BRepGProp::VolumeProperties(component, props);
+				double volume = props.Mass();
+
+				// Filter out invalid or too small components
+				if (volume > 1e-12) {
+					refinedComponents.push_back(component);
+				}
+			}
+			catch (const std::exception& e) {
+				LOG_WRN_S("Component refinement failed for one component: " + std::string(e.what()));
+			}
+		}
+
+		components = std::move(refinedComponents);
+		LOG_INF_S("Component refinement kept " + std::to_string(components.size()) + " valid components");
+	}
+	catch (const std::exception& e) {
+		LOG_WRN_S("Component refinement failed: " + std::string(e.what()));
+	}
+}
+
+// Check if two shapes are similar for merging
+bool STEPReader::areShapesSimilar(const TopoDS_Shape& shape1, const TopoDS_Shape& shape2) {
+	try {
+		// Get bounding boxes
+		Bnd_Box box1, box2;
+		BRepBndLib::Add(shape1, box1);
+		BRepBndLib::Add(shape2, box2);
+
+		if (box1.IsVoid() || box2.IsVoid()) return false;
+
+		// Check size similarity
+		Standard_Real x1, y1, z1, X1, Y1, Z1;
+		Standard_Real x2, y2, z2, X2, Y2, Z2;
+
+		box1.Get(x1, y1, z1, X1, Y1, Z1);
+		box2.Get(x2, y2, z2, X2, Y2, Z2);
+
+		double vol1 = (X1 - x1) * (Y1 - y1) * (Z1 - z1);
+		double vol2 = (X2 - x2) * (Y2 - y2) * (Z2 - z2);
+
+		if (vol1 < 1e-12 || vol2 < 1e-12) return false;
+
+		double volRatio = std::min(vol1, vol2) / std::max(vol1, vol2);
+		return volRatio > 0.8; // Within 20% volume similarity
+
+	} catch (const std::exception& e) {
 		return false;
 	}
 }

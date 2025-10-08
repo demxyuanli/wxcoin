@@ -4,6 +4,7 @@
 #include <wx/propgrid/propgrid.h>
 #include "GeometryObject.h"
 #include "OCCGeometry.h"
+#include "viewer/PickingService.h"
 
 class PropertyPanel : public FlatUITitledPanel
 {
@@ -13,6 +14,7 @@ public:
 
 	void updateProperties(GeometryObject* object);
 	void updateProperties(std::shared_ptr<OCCGeometry> geometry);
+	void showFaceQueryResult(const PickingResult& result);
 	void clearProperties();
 
 private:

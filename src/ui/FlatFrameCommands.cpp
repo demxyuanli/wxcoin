@@ -44,6 +44,7 @@
 #include "ShowMeshEdgesListener.h"
 #include "ShowWireFrameListener.h"
 #include "ShowFaceNormalsListener.h"
+#include "FaceQueryCommandListener.h"
 #include "RenderPreviewSystemListener.h"
 #include "ShowFlatWidgetsExampleListener.h"
 #include "ReferenceGridToggleListener.h"
@@ -96,6 +97,8 @@ void FlatFrame::setupCommandSystem() {
 	auto showWireFrameListener = std::make_shared<ShowWireFrameListener>(m_occViewer);
 	auto showFaceNormalsListener = std::make_shared<ShowFaceNormalsListener>(m_occViewer);
 	auto showFeatureEdgesListener = std::make_shared<ShowFeatureEdgesListener>(m_occViewer);
+	auto faceQueryCommandListener = std::make_shared<FaceQueryCommandListener>(
+		m_canvas->getInputManager(), m_occViewer->getPickingService());
 
 	m_listenerManager->registerListener(cmd::CommandType::ViewAll, viewAllListener);
 	m_listenerManager->registerListener(cmd::CommandType::ViewTop, viewTopListener);
@@ -111,6 +114,7 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::ShowFeatureEdges, showFeatureEdgesListener);
 	m_listenerManager->registerListener(cmd::CommandType::ShowMeshEdges, showMeshEdgesListener);
 	m_listenerManager->registerListener(cmd::CommandType::ShowFaceNormals, showFaceNormalsListener);
+	m_listenerManager->registerListener(cmd::CommandType::FaceQueryTool, faceQueryCommandListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, showWireFrameListener);
 
 	auto textureModeDecalListener = std::make_shared<TextureModeDecalListener>(this, m_occViewer);

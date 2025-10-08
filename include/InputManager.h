@@ -22,6 +22,8 @@ public:
 	// State management
 	void enterDefaultState();
 	void enterPickingState();
+	void setCustomInputState(std::unique_ptr<InputState> state);
+	bool isCustomInputStateActive() const { return m_currentState == m_customState.get(); }
 
 	// Event handlers
 	void onMouseButton(wxMouseEvent& event);
@@ -38,6 +40,7 @@ private:
 
 	std::unique_ptr<InputState> m_defaultState;
 	std::unique_ptr<InputState> m_pickingState;
+	std::unique_ptr<InputState> m_customState;
 	InputState* m_currentState;
 
 	wxLongLong m_lastMotionTime;

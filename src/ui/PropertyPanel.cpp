@@ -298,3 +298,50 @@ void PropertyPanel::clearProperties()
 	m_currentObject = nullptr;
 	m_currentOCCGeometry = nullptr;
 }
+
+void PropertyPanel::showFaceQueryResult(const PickingResult& result) {
+	m_propGrid->Clear();
+	m_currentObject = nullptr;
+	m_currentOCCGeometry = nullptr;
+
+	if (!result.geometry) {
+		m_propGrid->Append(new wxStringProperty("Result", "Result", "No geometry selected"));
+		return;
+	}
+
+	// Display geometry information
+	m_propGrid->Append(new wxStringProperty("Geometry", "Geometry", result.geometry->getName()));
+	m_propGrid->Append(new wxStringProperty("File", "File", result.geometry->getFileName()));
+
+	// Display face information
+	if (result.triangleIndex >= 0) {
+		m_propGrid->Append(new wxStringProperty("Triangle Index", "TriangleIndex",
+			std::to_string(result.triangleIndex)));
+	} else {
+		m_propGrid->Append(new wxStringProperty("Triangle Index", "TriangleIndex", "N/A"));
+	}
+
+	if (result.geometryFaceId >= 0) {
+		m_propGrid->Append(new wxStringProperty("Geometry Face ID", "GeometryFaceId",
+			std::to_string(result.geometryFaceId)));
+
+		// Show additional face information if available
+		if (result.geometry->hasFaceIndexMapping()) {
+			auto triangles = result.geometry->getTrianglesForGeometryFace(result.geometryFaceId);
+			m_propGrid->Append(new wxStringProperty("Triangles in Face", "TrianglesInFace",
+				std::to_string(triangles.size())));
+		}
+	} else {
+		m_propGrid->Append(new wxStringProperty("Geometry Face ID", "GeometryFaceId", "N/A"));
+	}
+
+	// Display mapping status
+	bool hasMapping = result.geometry->hasFaceIndexMapping();
+	m_propGrid->Append(new wxStringProperty("Face Mapping", "FaceMapping",
+		hasMapping ? "Available" : "Not Available"));
+
+	if (!hasMapping) {
+		m_propGrid->Append(new wxStringProperty("Note", "Note",
+			"Face index mapping not built. Use FACE_LEVEL decomposition for detailed face information."));
+	}
+}

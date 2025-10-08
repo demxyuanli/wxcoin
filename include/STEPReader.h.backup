@@ -7,14 +7,13 @@
 #include <mutex>
 #include <future>
 #include <functional>
+#include <cstddef>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/TopoDS_Compound.hxx>
 #include <OpenCASCADE/TopoDS_Face.hxx>
-#include <OpenCASCADE/TopoDS_Edge.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/gp_Dir.hxx>
-#include <OpenCASCADE/Bnd_Box.hxx>
 #include "OCCGeometry.h"
 #include "GeometryReader.h"
 
@@ -304,7 +303,6 @@ private:
 	 */
 	static bool detectShellModel(const TopoDS_Shape& shape);
 
-public:
 	/**
 	 * @brief Face feature structure for intelligent decomposition
 	 */
@@ -317,6 +315,142 @@ public:
 		gp_Dir normal;
 		std::vector<int> adjacentFaces;
 	};
+
+	/**
+	 * @brief Classify face type based on geometry
+	 * @param face Input face
+	 * @return Face type string
+	 */
+	static std::string classifyFaceType(const TopoDS_Face& face);
+
+	/**
+	 * @brief Calculate face area
+	 * @param face Input face
+	 * @return Face area
+	 */
+	static double calculateFaceArea(const TopoDS_Face& face);
+
+	/**
+	 * @brief Calculate face centroid
+	 * @param face Input face
+	 * @return Face centroid point
+	 */
+	static gp_Pnt calculateFaceCentroid(const TopoDS_Face& face);
+
+	/**
+	 * @brief Calculate face normal
+	 * @param face Input face
+	 * @return Face normal direction
+	 */
+	static gp_Dir calculateFaceNormal(const TopoDS_Face& face);
+
+	/**
+	 * @brief Create hash for edge based on geometric properties
+	 * @param edge Input edge
+	 * @return Hash value for the edge
+	 */
+	static size_t hashEdge(const TopoDS_Edge& edge);
+
+	/**
+	 * @brief Combine two hash values (Boost algorithm)
+	 * @param seed Current hash seed
+	 * @param value Value to combine
+	 * @return Combined hash value
+	 */
+	static size_t hashCombine(size_t seed, size_t value);
+
+	/**
+	 * @brief Check if two faces are adjacent (share edges)
+	 * @param face1 First face
+	 * @param face2 Second face
+	 * @return true if faces are adjacent
+	 */
+	static bool areFacesAdjacent(const TopoDS_Face& face1, const TopoDS_Face& face2);
+
+	/**
+	 * @brief Cluster faces by similar features
+	 * @param faceFeatures Input face features
+	 * @param featureGroups Output feature groups
+	 */
+	static void clusterFacesByFeatures(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& featureGroups);
+
+	/**
+	 * @brief Improved clustering algorithm with spatial partitioning and hierarchical clustering
+	 * @param faceFeatures Input face features
+	 * @param featureGroups Output optimized feature groups
+	 */
+	static void clusterFacesByFeaturesImproved(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& featureGroups);
+
+	/**
+	 * @brief Simple fallback clustering by face type only
+	 * @param faceFeatures Input face features
+	 * @param featureGroups Output feature groups
+	 */
+	static void clusterFacesByFeaturesSimple(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& featureGroups);
+
+	/**
+	 * @brief Perform hierarchical agglomerative clustering on face indices
+	 * @param faceFeatures All face features
+	 * @param indices Indices of faces to cluster
+	 * @return Clusters of face indices
+	 */
+	static std::vector<std::vector<int>> performHierarchicalClustering(const std::vector<FaceFeature>& faceFeatures, const std::vector<int>& indices);
+
+	/**
+	 * @brief Calculate distance between two clusters for hierarchical clustering
+	 * @param faceFeatures All face features
+	 * @param cluster1 First cluster indices
+	 * @param cluster2 Second cluster indices
+	 * @return Distance metric between clusters
+	 */
+	static double calculateClusterDistance(const std::vector<FaceFeature>& faceFeatures, const std::vector<int>& cluster1, const std::vector<int>& cluster2);
+
+	/**
+	 * @brief Merge clusters that are very similar
+	 * @param faceFeatures All face features
+	 * @param clusters Clusters to potentially merge (modified in place)
+	 */
+	static void mergeSimilarClusters(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& clusters);
+
+	/**
+	 * @brief Filter out clusters that don't form meaningful components
+	 * @param faceFeatures All face features
+	 * @param clusters Clusters to filter (modified in place)
+	 */
+	static void filterMeaningfulGroups(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& clusters);
+
+	/**
+	 * @brief Build face adjacency graph
+	 * @param faces Input faces
+	 * @param adjacencyGraph Output adjacency graph
+	 */
+	static void buildFaceAdjacencyGraph(const std::vector<TopoDS_Face>& faces, std::vector<std::vector<int>>& adjacencyGraph);
+
+	/**
+	 * @brief Cluster adjacent faces based on geometric similarity
+	 * @param faces Input faces
+	 * @param adjacencyGraph Face adjacency graph
+	 * @param clusters Output face clusters
+	 */
+	static void clusterAdjacentFaces(const std::vector<TopoDS_Face>& faces, const std::vector<std::vector<int>>& adjacencyGraph, std::vector<std::vector<int>>& clusters);
+
+	/**
+	 * @brief Try to create solid from face group
+	 * @param compound Input compound of faces
+	 * @param faceFeatures Face features
+	 * @param group Face group indices
+	 * @return Created solid or null shape
+	 */
+	static TopoDS_Shape tryCreateSolidFromFaces(const TopoDS_Compound& compound, const std::vector<FaceFeature>& faceFeatures, const std::vector<int>& group);
+
+	/**
+	 * @brief Try to create solid from face cluster
+	 * @param compound Input compound of faces
+	 * @param faces Input faces
+	 * @param cluster Face cluster indices
+	 * @return Created solid or null shape
+	 */
+	static TopoDS_Shape tryCreateSolidFromFaceCluster(const TopoDS_Compound& compound, const std::vector<TopoDS_Face>& faces, const std::vector<int>& cluster);
 
 	/**
 	 * @brief Feature-based intelligent decomposition (FreeCAD-style)
@@ -332,17 +466,6 @@ public:
 	 */
 	static void decomposeByAdjacentFacesClustering(const TopoDS_Shape& shape, std::vector<TopoDS_Shape>& components);
 
-	/**
-	 * @brief Comparator for TopoDS_Edge to use in sets
-	 */
-	struct EdgeComparator {
-		bool operator()(const TopoDS_Edge& a, const TopoDS_Edge& b) const {
-			// Use TShape identity comparison
-			return a.TShape().get() < b.TShape().get();
-		}
-	};
-
-private:
 	/**
 	 * @brief Classify face type based on geometry
 	 * @param face Input face
@@ -379,11 +502,79 @@ private:
 	static void clusterFacesByFeatures(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& featureGroups);
 
 	/**
+	 * @brief Improved clustering algorithm with spatial partitioning and hierarchical clustering
+	 * @param faceFeatures Input face features
+	 * @param featureGroups Output optimized feature groups
+	 */
+	static void clusterFacesByFeaturesImproved(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& featureGroups);
+
+	/**
+	 * @brief Simple fallback clustering by face type only
+	 * @param faceFeatures Input face features
+	 * @param featureGroups Output feature groups
+	 */
+	static void clusterFacesByFeaturesSimple(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& featureGroups);
+
+	/**
+	 * @brief Perform hierarchical agglomerative clustering on face indices
+	 * @param faceFeatures All face features
+	 * @param indices Indices of faces to cluster
+	 * @return Clusters of face indices
+	 */
+	static std::vector<std::vector<int>> performHierarchicalClustering(const std::vector<FaceFeature>& faceFeatures, const std::vector<int>& indices);
+
+	/**
+	 * @brief Calculate distance between two clusters for hierarchical clustering
+	 * @param faceFeatures All face features
+	 * @param cluster1 First cluster indices
+	 * @param cluster2 Second cluster indices
+	 * @return Distance metric between clusters
+	 */
+	static double calculateClusterDistance(const std::vector<FaceFeature>& faceFeatures, const std::vector<int>& cluster1, const std::vector<int>& cluster2);
+
+	/**
+	 * @brief Merge clusters that are very similar
+	 * @param faceFeatures All face features
+	 * @param clusters Clusters to potentially merge (modified in place)
+	 */
+	static void mergeSimilarClusters(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& clusters);
+
+	/**
+	 * @brief Filter out clusters that don't form meaningful components
+	 * @param faceFeatures All face features
+	 * @param clusters Clusters to filter (modified in place)
+	 */
+	static void filterMeaningfulGroups(const std::vector<FaceFeature>& faceFeatures, std::vector<std::vector<int>>& clusters);
+
+	/**
 	 * @brief Build face adjacency graph
 	 * @param faces Input faces
 	 * @param adjacencyGraph Output adjacency graph
 	 */
 	static void buildFaceAdjacencyGraph(const std::vector<TopoDS_Face>& faces, std::vector<std::vector<int>>& adjacencyGraph);
+
+	/**
+	 * @brief Check if two faces are adjacent (share edges)
+	 * @param face1 First face
+	 * @param face2 Second face
+	 * @return true if faces are adjacent
+	 */
+	static bool areFacesAdjacent(const TopoDS_Face& face1, const TopoDS_Face& face2);
+
+	/**
+	 * @brief Create hash for edge based on geometric properties
+	 * @param edge Input edge
+	 * @return Hash value for the edge
+	 */
+	static size_t hashEdge(const TopoDS_Edge& edge);
+
+	/**
+	 * @brief Combine two hash values (Boost algorithm)
+	 * @param seed Current hash seed
+	 * @param value Value to combine
+	 * @return Combined hash value
+	 */
+	static size_t hashCombine(size_t seed, size_t value);
 
 	/**
 	 * @brief Cluster adjacent faces based on geometric similarity
@@ -410,136 +601,6 @@ private:
 	 * @return Created solid or null shape
 	 */
 	static TopoDS_Shape tryCreateSolidFromFaceCluster(const TopoDS_Compound& compound, const std::vector<TopoDS_Face>& faces, const std::vector<int>& cluster);
-
-	/**
-	 * @brief Check if two faces are adjacent (share edges)
-	 * @param face1 First face
-	 * @param face2 Second face
-	 * @return true if faces are adjacent
-	 */
-	static bool areFacesAdjacent(const TopoDS_Face& face1, const TopoDS_Face& face2);
-
-private:
-	/**
-	 * @brief Parallel face feature extraction
-	 * @param faces Input faces
-	 * @param faceBounds Face bounding boxes
-	 * @return Vector of face features
-	 */
-	static std::vector<FaceFeature> extractFaceFeaturesParallel(
-		const std::vector<TopoDS_Face>& faces,
-		const std::vector<Bnd_Box>& faceBounds);
-
-	/**
-	 * @brief Optimized face clustering with spatial partitioning
-	 * @param faceFeatures Face features
-	 * @param faceBounds Face bounding boxes
-	 * @param featureGroups Output feature groups
-	 */
-	static void clusterFacesByFeaturesOptimized(
-		const std::vector<FaceFeature>& faceFeatures,
-		const std::vector<Bnd_Box>& faceBounds,
-		std::vector<std::vector<int>>& featureGroups);
-
-	/**
-	 * @brief Find faces in nearby grid cells
-	 * @param faceIndex Face index
-	 * @param spatialGrid Spatial grid
-	 * @param faceBounds Face bounding boxes
-	 * @param gridSize Grid size
-	 * @return Vector of nearby face indices
-	 */
-	static std::vector<int> findNearbyFaces(
-		int faceIndex,
-		const std::vector<std::vector<int>>& spatialGrid,
-		const std::vector<Bnd_Box>& faceBounds,
-		int gridSize);
-
-	/**
-	 * @brief Enhanced feature similarity check
-	 * @param f1 First face feature
-	 * @param f2 Second face feature
-	 * @param b1 First bounding box
-	 * @param b2 Second bounding box
-	 * @return true if features are similar
-	 */
-	static bool areFeaturesSimilar(
-		const FaceFeature& f1,
-		const FaceFeature& f2,
-		const Bnd_Box& b1,
-		const Bnd_Box& b2);
-
-	/**
-	 * @brief Create components from face groups with validation
-	 * @param faceFeatures Face features
-	 * @param featureGroups Face groups
-	 * @param components Output components
-	 */
-	static void createComponentsFromGroups(
-		const std::vector<FaceFeature>& faceFeatures,
-		const std::vector<std::vector<int>>& featureGroups,
-		std::vector<TopoDS_Shape>& components);
-
-	/**
-	 * @brief Merge small similar components
-	 * @param components Components to merge
-	 */
-	static void mergeSmallComponents(std::vector<TopoDS_Shape>& components);
-
-	/**
-	 * @brief Optimized adjacency graph building with spatial filtering
-	 * @param faces Faces
-	 * @param faceBounds Face bounding boxes
-	 * @param adjacencyGraph Output adjacency graph
-	 */
-	static void buildFaceAdjacencyGraphOptimized(
-		const std::vector<TopoDS_Face>& faces,
-		const std::vector<Bnd_Box>& faceBounds,
-		std::vector<std::vector<int>>& adjacencyGraph);
-
-	/**
-	 * @brief Optimized adjacent face clustering
-	 * @param faces Faces
-	 * @param adjacencyGraph Adjacency graph
-	 * @param clusters Output clusters
-	 */
-	static void clusterAdjacentFacesOptimized(
-		const std::vector<TopoDS_Face>& faces,
-		const std::vector<std::vector<int>>& adjacencyGraph,
-		std::vector<std::vector<int>>& clusters);
-
-	/**
-	 * @brief Validate cluster quality
-	 * @param cluster Face cluster
-	 * @param faces Face list
-	 * @return true if cluster is valid
-	 */
-	static bool isValidCluster(const std::vector<int>& cluster, const std::vector<TopoDS_Face>& faces);
-
-	/**
-	 * @brief Create validated components from clusters
-	 * @param faces Faces
-	 * @param clusters Face clusters
-	 * @param components Output components
-	 */
-	static void createValidatedComponentsFromClusters(
-		const std::vector<TopoDS_Face>& faces,
-		const std::vector<std::vector<int>>& clusters,
-		std::vector<TopoDS_Shape>& components);
-
-	/**
-	 * @brief Refine and filter components
-	 * @param components Components to refine
-	 */
-	static void refineComponents(std::vector<TopoDS_Shape>& components);
-
-	/**
-	 * @brief Check if two shapes are similar for merging
-	 * @param shape1 First shape
-	 * @param shape2 Second shape
-	 * @return true if shapes are similar
-	 */
-	static bool areShapesSimilar(const TopoDS_Shape& shape1, const TopoDS_Shape& shape2);
 
 
 

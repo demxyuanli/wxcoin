@@ -37,6 +37,7 @@ public:
 
 	std::string getCreationGeometryType() const { return m_creationGeometryType; }
 	OperationMode getOperationMode() const { return m_operationMode; }
+	Canvas* getCanvas() const { return m_canvas; }
 
 private:
 

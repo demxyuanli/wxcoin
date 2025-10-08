@@ -342,8 +342,6 @@ void ObjectTreePanel::addOCCGeometryFromFile(const wxString& fileName, std::shar
 		return;
 	}
 
-	LOG_INF_S("Adding geometry '" + geometry->getName() + "' from file '" + fileName.ToStdString() + "'");
-
 	// Update data structure
 	m_treeData.addGeometry(geometry);
 

@@ -162,7 +162,12 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
                 std::string(m_decompositionOptions.enableDecomposition ? "true" : "false") +
                 ", level=" + std::to_string(static_cast<int>(m_decompositionOptions.level)));
         } else {
-            LOG_INF_S("Geometry decomposition dialog cancelled, using default settings");
+            LOG_INF_S("Geometry decomposition dialog cancelled, using default settings (no decomposition)");
+            // Reset to default settings when dialog is cancelled
+            m_decompositionOptions.enableDecomposition = false;
+            m_decompositionOptions.level = GeometryReader::DecompositionLevel::NO_DECOMPOSITION;
+            m_decompositionOptions.colorScheme = GeometryReader::ColorScheme::DISTINCT_COLORS;
+            m_decompositionOptions.useConsistentColoring = true;
         }
     }
 
