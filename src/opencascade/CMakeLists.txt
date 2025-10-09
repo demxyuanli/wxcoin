@@ -44,6 +44,8 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeGenerationService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderApplier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeExtractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderer.cpp
 )
 
 set(OPENCASCADE_HEADERS
