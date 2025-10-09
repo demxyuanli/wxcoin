@@ -1,11 +1,28 @@
 # OpenCASCADE module - CAD geometry kernel and modeling
 set(OPENCASCADE_SOURCES
+    # Legacy monolithic implementations (to be gradually migrated)
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCGeometry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCViewer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCShapeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCBrepConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCMeshConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeComponent.cpp
+    
+    # New modular geometry implementations
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryCore.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryTransform.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryMaterial.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryAppearance.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryDisplay.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryQuality.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryMesh.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryPrimitives.cpp
+    
+    # New modular viewer implementations
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewportController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/RenderingController.cpp
+    
+    # Existing viewer controllers
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SliceController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ExplodeController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/LODController.cpp
@@ -22,6 +39,8 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlineDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SelectionOutlineManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ImageOutlinePass.cpp
+    
+    # Edge display modules
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeGenerationService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderApplier.cpp
