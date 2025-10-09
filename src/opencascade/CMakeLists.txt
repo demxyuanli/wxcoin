@@ -49,13 +49,14 @@ set(OPENCASCADE_SOURCES
 )
 
 set(OPENCASCADE_HEADERS
-    # Compatibility wrappers (backward compatibility)
+    # Main headers
     ${CMAKE_SOURCE_DIR}/include/OCCGeometry.h
     ${CMAKE_SOURCE_DIR}/include/OCCViewer.h
     ${CMAKE_SOURCE_DIR}/include/EdgeComponent.h
+    ${CMAKE_SOURCE_DIR}/include/OCCShapeBuilder.h
+    ${CMAKE_SOURCE_DIR}/include/OCCBrepConverter.h
     
-    # Refactored OCCGeometry modules
-    ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometry.h
+    # Internal geometry module headers
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryCore.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryTransform.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryMaterial.h
@@ -65,19 +66,13 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryMesh.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryPrimitives.h
     
-    # Refactored OCCViewer modules
-    ${CMAKE_SOURCE_DIR}/include/viewer/OCCViewer.h
+    # Internal viewer module headers
     ${CMAKE_SOURCE_DIR}/include/viewer/ViewportController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/RenderingController.h
     
-    # Refactored EdgeComponent modules
-    ${CMAKE_SOURCE_DIR}/include/edges/EdgeComponent.h
+    # Internal edge module headers
     ${CMAKE_SOURCE_DIR}/include/edges/EdgeExtractor.h
     ${CMAKE_SOURCE_DIR}/include/edges/EdgeRenderer.h
-    
-    # Other headers
-    ${CMAKE_SOURCE_DIR}/include/OCCShapeBuilder.h
-    ${CMAKE_SOURCE_DIR}/include/OCCBrepConverter.h
     ${CMAKE_SOURCE_DIR}/include/viewer/SliceController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ExplodeController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ExplodeTypes.h
