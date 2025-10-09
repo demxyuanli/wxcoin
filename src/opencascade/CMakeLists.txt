@@ -1,6 +1,6 @@
 # OpenCASCADE module - CAD geometry kernel and modeling
 set(OPENCASCADE_SOURCES
-    # Legacy monolithic implementations (to be gradually migrated)
+    # Main implementations
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCGeometry.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCViewer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCShapeBuilder.cpp
@@ -8,7 +8,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCMeshConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeComponent.cpp
     
-    # New modular geometry implementations
+    # Modular geometry implementations (internal)
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryCore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryTransform.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryMaterial.cpp
@@ -18,7 +18,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryMesh.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryPrimitives.cpp
     
-    # New modular viewer implementations
+    # Modular viewer implementations (internal)
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewportController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/RenderingController.cpp
     
