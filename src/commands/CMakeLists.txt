@@ -149,6 +149,17 @@ target_link_libraries(CADCommands PUBLIC
     ${OpenCASCADE_LIBRARIES}
 )
 
+# Enable precompiled headers for faster compilation
+if(MSVC)
+    target_precompile_headers(CADCommands PRIVATE
+        <wx/wx.h>
+        <vector>
+        <string>
+        <memory>
+        <Inventor/nodes/SoSeparator.h>
+    )
+endif()
+
 set_target_properties(CADCommands PROPERTIES
     FOLDER "Commands"
     EXPORT_NAME Commands

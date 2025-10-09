@@ -133,6 +133,19 @@ target_link_libraries(UIFrame PUBLIC
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}
 )
+
+# Enable precompiled headers for faster compilation
+if(MSVC)
+    target_precompile_headers(UIFrame PRIVATE
+        <wx/wx.h>
+        <wx/panel.h>
+        <wx/sizer.h>
+        <vector>
+        <string>
+        <memory>
+    )
+endif()
+
 set_target_properties(UIFrame PROPERTIES FOLDER "UI")
 
 # Add FlatFrameDocking to UIFrame

@@ -103,6 +103,19 @@ target_link_libraries(widgets PUBLIC
     ${wxWidgets_LIBRARIES}
 )
 
+# Enable precompiled headers for faster compilation
+if(MSVC)
+    target_precompile_headers(widgets PRIVATE
+        <wx/wx.h>
+        <wx/panel.h>
+        <wx/button.h>
+        <wx/sizer.h>
+        <vector>
+        <string>
+        <memory>
+    )
+endif()
+
 target_compile_definitions(widgets PRIVATE
     WXUSINGDLL
     __WXMSW__

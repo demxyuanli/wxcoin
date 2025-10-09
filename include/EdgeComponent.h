@@ -57,6 +57,9 @@ private:
     SoSeparator* silhouetteEdgeNode = nullptr;  // New: silhouette edge node
     SoSeparator* intersectionNodesNode = nullptr;  // New: intersection nodes node
     mutable std::mutex m_nodeMutex;
+    
+    std::unique_ptr<class EdgeExtractor> m_extractor;
+    std::unique_ptr<class EdgeRenderer> m_renderer;
 
 public:
     // Friend class to allow OCCViewer access to silhouetteEdgeNode

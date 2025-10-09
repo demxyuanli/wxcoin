@@ -394,6 +394,7 @@ protected:
 
 	// Face index mapping for Coin3D triangle to geometry face mapping
 	std::vector<FaceIndexMapping> m_faceIndexMappings;
+	std::unordered_map<int, int> m_triangleToFaceMap;  // Optimized reverse mapping: triangle index -> face ID
 
 	// LOD support
 	std::vector<std::pair<double, double>> m_lodLevels; // distance, deflection pairs

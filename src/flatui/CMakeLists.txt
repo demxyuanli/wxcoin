@@ -94,6 +94,20 @@ target_link_libraries(CADFlatUI PUBLIC
     Coin::Coin
 )
 
+# Enable precompiled headers for faster compilation
+if(MSVC)
+    target_precompile_headers(CADFlatUI PRIVATE
+        <wx/wx.h>
+        <wx/panel.h>
+        <wx/button.h>
+        <wx/sizer.h>
+        <vector>
+        <string>
+        <memory>
+        <map>
+    )
+endif()
+
 # Set library export properties
 set_target_properties(CADFlatUI PROPERTIES
     FOLDER "FlatUI"

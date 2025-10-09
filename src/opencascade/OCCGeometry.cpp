@@ -1076,432 +1076,7 @@ void OCCGeometry::createWireframeRepresentation(const MeshParameters& params)
 // which sets the m_coinNeedsUpdate flag. The representation will be
 // built on the next call to getCoinNode().
 
-// OCCBox implementation
-OCCBox::OCCBox(const std::string& name, double width, double height, double depth)
-	: OCCGeometry(name)
-	, m_width(width)
-	, m_height(height)
-	, m_depth(depth)
-{
-	buildShape();
-}
-
-void OCCBox::setDimensions(double width, double height, double depth)
-{
-	m_width = width;
-	m_height = height;
-	m_depth = depth;
-	buildShape();
-}
-
-void OCCBox::getSize(double& width, double& height, double& depth) const
-{
-	width = m_width;
-	height = m_height;
-	depth = m_depth;
-}
-
-void OCCBox::buildShape()
-{
-	LOG_INF_S("Building OCCBox shape with dimensions: " + std::to_string(m_width) + " x " + std::to_string(m_height) + " x " + std::to_string(m_depth));
-
-	try {
-		// Use the simplest constructor that takes dimensions only
-		BRepPrimAPI_MakeBox boxMaker(m_width, m_height, m_depth);
-		boxMaker.Build();
-		LOG_INF_S("BRepPrimAPI_MakeBox created for OCCBox: " + m_name);
-
-		if (boxMaker.IsDone()) {
-			TopoDS_Shape shape = boxMaker.Shape();
-			LOG_INF_S("Box shape created successfully for OCCBox: " + m_name + " - Shape is null: " + (shape.IsNull() ? "yes" : "no"));
-			setShape(shape);
-
-			// Log the center of the created shape
-			Bnd_Box box;
-			BRepBndLib::Add(shape, box);
-			if (!box.IsVoid()) {
-				Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-				box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-				gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-				LOG_INF_S("[OCCGeometryDebug] OCCBox shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
-			}
-		}
-		else {
-			LOG_ERR_S("BRepPrimAPI_MakeBox failed for OCCBox: " + m_name);
-		}
-	}
-	catch (const std::exception& e) {
-		LOG_ERR_S("Failed to create box: " + std::string(e.what()) + " for OCCBox: " + m_name);
-	}
-}
-
-// OCCCylinder implementation
-OCCCylinder::OCCCylinder(const std::string& name, double radius, double height)
-	: OCCGeometry(name)
-	, m_radius(radius)
-	, m_height(height)
-{
-	buildShape();
-}
-
-void OCCCylinder::setDimensions(double radius, double height)
-{
-	m_radius = radius;
-	m_height = height;
-	buildShape();
-}
-
-void OCCCylinder::getSize(double& radius, double& height) const
-{
-	radius = m_radius;
-	height = m_height;
-}
-
-void OCCCylinder::buildShape()
-{
-	LOG_INF_S("Building OCCCylinder shape with radius: " + std::to_string(m_radius) + " height: " + std::to_string(m_height));
-
-	try {
-		// Use the simplest constructor that takes radius and height
-		BRepPrimAPI_MakeCylinder cylinderMaker(m_radius, m_height);
-		LOG_INF_S("BRepPrimAPI_MakeCylinder created for OCCCylinder: " + m_name);
-		cylinderMaker.Build();
-		if (cylinderMaker.IsDone()) {
-			TopoDS_Shape shape = cylinderMaker.Shape();
-			LOG_INF_S("Cylinder shape created successfully for OCCCylinder: " + m_name + " - Shape is null: " + (shape.IsNull() ? "yes" : "no"));
-			setShape(shape);
-
-			// Log the center of the created shape
-			Bnd_Box box;
-			BRepBndLib::Add(shape, box);
-			if (!box.IsVoid()) {
-				Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-				box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-				gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-				LOG_INF_S("[OCCGeometryDebug] OCCCylinder shape center: (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
-			}
-		}
-		else {
-			LOG_ERR_S("BRepPrimAPI_MakeCylinder failed for OCCCylinder: " + m_name);
-		}
-	}
-	catch (const std::exception& e) {
-		LOG_ERR_S("Failed to create cylinder: " + std::string(e.what()) + " for OCCCylinder: " + m_name);
-	}
-}
-
-// OCCSphere implementation
-OCCSphere::OCCSphere(const std::string& name, double radius)
-	: OCCGeometry(name)
-	, m_radius(radius)
-{
-	buildShape();
-}
-
-void OCCSphere::setRadius(double radius)
-{
-	m_radius = radius;
-	buildShape();
-}
-
-void OCCSphere::buildShape()
-{
-	LOG_INF_S("Building OCCSphere shape with radius: " + std::to_string(m_radius));
-
-	try {
-		// Validate radius parameter
-		if (m_radius <= 0.0) {
-			LOG_ERR_S("Invalid radius for OCCSphere: " + m_name + " - radius: " + std::to_string(m_radius));
-			return;
-		}
-
-		// Try simple constructor first, as in pythonocc examples
-		BRepPrimAPI_MakeSphere sphereMaker(m_radius);
-		sphereMaker.Build();
-		LOG_INF_S("Simple BRepPrimAPI_MakeSphere created for OCCSphere: " + m_name);
-
-		if (sphereMaker.IsDone()) {
-			TopoDS_Shape shape = sphereMaker.Shape();
-			if (!shape.IsNull()) {
-				LOG_INF_S("Sphere shape created successfully with simple constructor for: " + m_name);
-				setShape(shape);
-
-				// Log the center of the created shape
-				Bnd_Box box;
-				BRepBndLib::Add(shape, box);
-				if (!box.IsVoid()) {
-					Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-					box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-					gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-					LOG_INF_S("[OCCGeometryDebug] OCCSphere shape center (simple): (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
-				}
-				return;
-			}
-			else {
-				LOG_ERR_S("Simple constructor returned null shape for: " + m_name);
-			}
-		}
-		else {
-			LOG_ERR_S("Simple BRepPrimAPI_MakeSphere failed (IsDone = false) for: " + m_name);
-		}
-
-		// Fallback to axis-based constructor
-		LOG_INF_S("Falling back to axis-based constructor for OCCSphere: " + m_name);
-		gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-		BRepPrimAPI_MakeSphere fallbackMaker(axis, m_radius);
-		fallbackMaker.Build();
-		if (fallbackMaker.IsDone()) {
-			TopoDS_Shape fallbackShape = fallbackMaker.Shape();
-			if (!fallbackShape.IsNull()) {
-				LOG_INF_S("Fallback sphere creation successful for: " + m_name);
-				setShape(fallbackShape);
-
-				// Log the center of the created shape
-				Bnd_Box box;
-				BRepBndLib::Add(fallbackShape, box);
-				if (!box.IsVoid()) {
-					Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-					box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-					gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-					LOG_INF_S("[OCCGeometryDebug] OCCSphere shape center (fallback): (" + std::to_string(center.X()) + ", " + std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
-				}
-			}
-			else {
-				LOG_ERR_S("Fallback also returned null shape for: " + m_name);
-			}
-		}
-		else {
-			LOG_ERR_S("Fallback BRepPrimAPI_MakeSphere failed for: " + m_name);
-		}
-	}
-	catch (const std::exception& e) {
-		LOG_ERR_S("Failed to create sphere: " + std::string(e.what()) + " for OCCSphere: " + m_name);
-	}
-}
-
-// OCCCone implementation
-OCCCone::OCCCone(const std::string& name, double bottomRadius, double topRadius, double height)
-	: OCCGeometry(name)
-	, m_bottomRadius(bottomRadius)
-	, m_topRadius(topRadius)
-	, m_height(height)
-{
-	buildShape();
-}
-
-void OCCCone::setDimensions(double bottomRadius, double topRadius, double height)
-{
-	m_bottomRadius = bottomRadius;
-	m_topRadius = topRadius;
-	m_height = height;
-	buildShape();
-}
-
-void OCCCone::getSize(double& bottomRadius, double& topRadius, double& height) const
-{
-	bottomRadius = m_bottomRadius;
-	topRadius = m_topRadius;
-	height = m_height;
-}
-
-void OCCCone::buildShape()
-{
-	LOG_INF_S("Building OCCCone shape with bottomRadius: " + std::to_string(m_bottomRadius) + " topRadius: " + std::to_string(m_topRadius) + " height: " + std::to_string(m_height));
-
-	try {
-		// Following OpenCASCADE examples: use gp_Ax2 for proper cone orientation
-		gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-
-		// Enhanced parameter validation and fallback mechanism
-		double actualTopRadius = m_topRadius;
-
-		// Log which constructor approach we're using
-		if (actualTopRadius <= 0.001) {
-			LOG_INF_S("Creating perfect cone (topRadius ~= 0) for: " + m_name);
-		}
-		else {
-			LOG_INF_S("Creating truncated cone for: " + m_name);
-		}
-
-		// Always use axis-based constructor with proper parameter validation
-		BRepPrimAPI_MakeCone coneMaker(axis, m_bottomRadius, actualTopRadius, m_height);
-
-		coneMaker.Build();
-
-		if (coneMaker.IsDone()) {
-			TopoDS_Shape shape = coneMaker.Shape();
-			if (!shape.IsNull()) {
-				setShape(shape);
-
-				// Log the center of the created shape
-				Bnd_Box box;
-				BRepBndLib::Add(shape, box);
-				if (!box.IsVoid()) {
-					Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-					box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-					gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-				}
-			}
-			else {
-				LOG_ERR_S("BRepPrimAPI_MakeCone returned null shape for OCCCone: " + m_name);
-
-				// Fallback: try with small non-zero topRadius if it was exactly 0
-				if (m_topRadius == 0.0 && actualTopRadius == 0.0) {
-					actualTopRadius = 0.001;
-					BRepPrimAPI_MakeCone fallbackMaker(axis, m_bottomRadius, actualTopRadius, m_height);
-					fallbackMaker.Build();
-					if (fallbackMaker.IsDone()) {
-						TopoDS_Shape fallbackShape = fallbackMaker.Shape();
-						if (!fallbackShape.IsNull()) {
-							setShape(fallbackShape);
-
-							// Log the center of the created shape
-							Bnd_Box box;
-							BRepBndLib::Add(fallbackShape, box);
-							if (!box.IsVoid()) {
-								Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-								box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-								gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-							}
-						}
-						else {
-							LOG_ERR_S("Fallback cone creation also failed for: " + m_name);
-						}
-					}
-					else {
-						LOG_ERR_S("Fallback BRepPrimAPI_MakeCone also failed for: " + m_name);
-					}
-				}
-			}
-		}
-		else {
-			LOG_ERR_S("BRepPrimAPI_MakeCone failed (IsDone = false) for OCCCone: " + m_name);
-		}
-	}
-	catch (const std::exception& e) {
-		LOG_ERR_S("Failed to create cone: " + std::string(e.what()) + " for OCCCone: " + m_name);
-	}
-}
-
-// OCCTorus implementation
-OCCTorus::OCCTorus(const std::string& name, double majorRadius, double minorRadius)
-	: OCCGeometry(name), m_majorRadius(majorRadius), m_minorRadius(minorRadius)
-{
-	buildShape();
-}
-
-void OCCTorus::setDimensions(double majorRadius, double minorRadius)
-{
-	if (m_majorRadius != majorRadius || m_minorRadius != minorRadius) {
-		m_majorRadius = majorRadius;
-		m_minorRadius = minorRadius;
-		buildShape();
-		m_coinNeedsUpdate = true;
-	}
-}
-
-void OCCTorus::getSize(double& majorRadius, double& minorRadius) const
-{
-	majorRadius = m_majorRadius;
-	minorRadius = m_minorRadius;
-}
-
-void OCCTorus::buildShape()
-{
-	try {
-		// Validate parameters
-		if (m_majorRadius <= 0.0 || m_minorRadius <= 0.0) {
-			LOG_ERR_S("Invalid radii for OCCTorus: " + m_name + " - major: " + std::to_string(m_majorRadius) + " minor: " + std::to_string(m_minorRadius));
-			return;
-		}
-
-		if (m_minorRadius >= m_majorRadius) {
-			LOG_ERR_S("Invalid torus dimensions: minor radius must be less than major radius for " + m_name);
-			return;
-		}
-
-		// Create torus using axis-based constructor for better control
-		gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-		BRepPrimAPI_MakeTorus torusMaker(axis, m_majorRadius, m_minorRadius);
-		torusMaker.Build();
-
-		if (torusMaker.IsDone()) {
-			TopoDS_Shape shape = torusMaker.Shape();
-			if (!shape.IsNull()) {
-				m_shape = shape;
-			}
-			else {
-				LOG_ERR_S("OCCTorus shape is null after creation: " + m_name);
-			}
-		}
-		else {
-			LOG_ERR_S("BRepPrimAPI_MakeTorus failed for: " + m_name);
-		}
-	}
-	catch (const std::exception& e) {
-		LOG_ERR_S("Exception in OCCTorus::buildShape for " + m_name + ": " + e.what());
-	}
-}
-
-// OCCTruncatedCylinder implementation
-OCCTruncatedCylinder::OCCTruncatedCylinder(const std::string& name, double bottomRadius, double topRadius, double height)
-	: OCCGeometry(name), m_bottomRadius(bottomRadius), m_topRadius(topRadius), m_height(height)
-{
-	buildShape();
-}
-
-void OCCTruncatedCylinder::setDimensions(double bottomRadius, double topRadius, double height)
-{
-	if (m_bottomRadius != bottomRadius || m_topRadius != topRadius || m_height != height) {
-		m_bottomRadius = bottomRadius;
-		m_topRadius = topRadius;
-		m_height = height;
-		buildShape();
-		m_coinNeedsUpdate = true;
-	}
-}
-
-void OCCTruncatedCylinder::getSize(double& bottomRadius, double& topRadius, double& height) const
-{
-	bottomRadius = m_bottomRadius;
-	topRadius = m_topRadius;
-	height = m_height;
-}
-
-void OCCTruncatedCylinder::buildShape()
-{
-
-	try {
-		// Validate parameters
-		if (m_bottomRadius <= 0.0 || m_topRadius <= 0.0 || m_height <= 0.0) {
-			LOG_ERR_S("Invalid dimensions for OCCTruncatedCylinder: " + m_name +
-				" - bottom: " + std::to_string(m_bottomRadius) +
-				" top: " + std::to_string(m_topRadius) +
-				" height: " + std::to_string(m_height));
-			return;
-		}
-
-		// Create truncated cylinder using cone with different radii
-		gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-		BRepPrimAPI_MakeCone truncatedCylinderMaker(axis, m_bottomRadius, m_topRadius, m_height);
-		truncatedCylinderMaker.Build();
-
-		if (truncatedCylinderMaker.IsDone()) {
-			TopoDS_Shape shape = truncatedCylinderMaker.Shape();
-			if (!shape.IsNull()) {
-				m_shape = shape;
-			}
-		}
-		else {
-			LOG_ERR_S("BRepPrimAPI_MakeCone failed for OCCTruncatedCylinder: " + m_name);
-		}
-	}
-	catch (const std::exception& e) {
-		LOG_ERR_S("Exception in OCCTruncatedCylinder::buildShape for " + m_name + ": " + e.what());
-	}
-}
-
-// Removed setShadingMode(RenderingConfig::ShadingMode) method - functionality not needed
+// Primitive class implementations moved to OCCGeometryPrimitives.cpp
 
 void OCCGeometry::setSmoothNormals(bool enabled) {
 	m_smoothNormals = enabled;
@@ -1870,7 +1445,40 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
 	drawStyle->lineWidth = m_wireframeMode ? 1.0f : 0.0f;
 	m_coinNode->addChild(drawStyle);
 
-	// Use RenderingToolkitAPI for all rendering operations (proper architecture)
+	// Build face index mapping and create scene node together to avoid duplicate mesh generation
+	if (!hasFaceIndexMapping()) {
+		// Use the processor to generate mesh with face mapping
+		GeometryProcessor* baseProcessor = RenderingToolkitAPI::getManager().getGeometryProcessor();
+		auto* processor = dynamic_cast<OpenCASCADEProcessor*>(baseProcessor);
+		if (processor) {
+			std::vector<std::pair<int, std::vector<int>>> faceMappings;
+			TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(m_shape, params, faceMappings);
+			
+			if (!faceMappings.empty()) {
+				// Build face index mappings and reverse map
+				m_faceIndexMappings.clear();
+				m_faceIndexMappings.reserve(faceMappings.size());
+				m_triangleToFaceMap.clear();
+				m_triangleToFaceMap.reserve(meshWithMapping.getTriangleCount());
+				
+				for (const auto& [faceId, triangleIndices] : faceMappings) {
+					FaceIndexMapping mapping(faceId);
+					mapping.triangleIndices = triangleIndices;
+					m_faceIndexMappings.push_back(mapping);
+					
+					// Build reverse mapping for O(1) lookup
+					for (int triIdx : triangleIndices) {
+						m_triangleToFaceMap[triIdx] = faceId;
+					}
+				}
+				
+				LOG_INF_S("Built face index mapping with " + std::to_string(m_faceIndexMappings.size()) +
+					" face mappings, total triangles: " + std::to_string(meshWithMapping.getTriangleCount()));
+			}
+		}
+	}
+	
+	// Use RenderingToolkitAPI for rendering operations
 	auto& manager = RenderingToolkitAPI::getManager();
 	auto backend = manager.getRenderBackend("Coin3D");
 	if (backend) {
@@ -1885,12 +1493,6 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
 	}
 	else {
 		LOG_ERR_S("Coin3D backend not available for " + m_name);
-	}
-
-	// Build face index mapping if not already built to enable face picking for all geometries
-	if (!hasFaceIndexMapping()) {
-		LOG_INF_S("Building face index mapping for geometry: " + m_name);
-		buildFaceIndexMapping(params);
 	}
 
 	auto buildEndTime = std::chrono::high_resolution_clock::now();
@@ -1999,12 +1601,20 @@ void OCCGeometry::buildFaceIndexMapping(const MeshParameters& params) {
 			return;
 		}
 
-		// Convert to FaceIndexMapping format
+		// Convert to FaceIndexMapping format and build reverse map
 		m_faceIndexMappings.reserve(faceMappings.size());
+		m_triangleToFaceMap.clear();
+		m_triangleToFaceMap.reserve(mesh.getTriangleCount());
+		
 		for (const auto& [faceId, triangleIndices] : faceMappings) {
 			FaceIndexMapping mapping(faceId);
 			mapping.triangleIndices = triangleIndices;
 			m_faceIndexMappings.push_back(mapping);
+			
+			// Build reverse mapping for O(1) lookup
+			for (int triIdx : triangleIndices) {
+				m_triangleToFaceMap[triIdx] = faceId;
+			}
 		}
 
 		LOG_INF_S("Built face index mapping with " + std::to_string(m_faceIndexMappings.size()) +
@@ -2022,12 +1632,10 @@ int OCCGeometry::getGeometryFaceIdForTriangle(int triangleIndex) const {
 		return -1;
 	}
 
-	for (const auto& mapping : m_faceIndexMappings) {
-		// Check if triangleIndex is in this face's triangle range
-		auto it = std::find(mapping.triangleIndices.begin(), mapping.triangleIndices.end(), triangleIndex);
-		if (it != mapping.triangleIndices.end()) {
-			return mapping.geometryFaceId;
-		}
+	// Use optimized reverse mapping for O(1) lookup
+	auto it = m_triangleToFaceMap.find(triangleIndex);
+	if (it != m_triangleToFaceMap.end()) {
+		return it->second;
 	}
 
 	return -1; // Triangle not found in any face mapping

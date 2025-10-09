@@ -60,6 +60,16 @@ target_compile_definitions(CADGeometry PRIVATE
 # MSVC specific settings
 if(MSVC)
     target_compile_options(CADGeometry PRIVATE /std:c++17)
+    
+    # Enable precompiled headers for faster compilation
+    target_precompile_headers(CADGeometry PRIVATE
+        <vector>
+        <string>
+        <memory>
+        <map>
+        <Standard_Handle.hxx>
+        <TopoDS_Shape.hxx>
+    )
 endif()
 
 # Set module folder for IDE organization

@@ -69,4 +69,24 @@ struct AdvancedGeometryParameters {
 	double edgeWidth = 1.0;
 	Quantity_Color edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
 	bool edgeEnabled = true;
+	
+	// Smoothing parameters
+	bool smoothingEnabled = false;
+	int smoothingIterations = 2;
+	double smoothingStrength = 0.5;
+	double smoothingCreaseAngle = 30.0;
+	
+	// Subdivision parameters
+	int subdivisionLevel = 2;
+	int subdivisionMethod = 0;
+	double subdivisionCreaseAngle = 30.0;
+	
+	// Tessellation parameters
+	int tessellationMethod = 0;
+	int tessellationQuality = 2;
+	double featurePreservation = 0.5;
+	
+	// Performance parameters
+	bool adaptiveMeshing = false;
+	bool parallelProcessing = true;
 };

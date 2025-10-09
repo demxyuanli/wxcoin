@@ -14,13 +14,37 @@ if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
-# 设置 C++ 标准
+# Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 设置默认构建类型
+# Set default build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build" FORCE)
+endif()
+
+# Compilation speed optimization
+if(MSVC)
+    # Enable multi-processor compilation
+    add_compile_options(/MP)
+    
+    # Disable minimal rebuild to speed up compilation
+    string(REPLACE "/Gm" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+    string(REPLACE "/Gm" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+    
+    # Use parallel linking
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /CGTHREADS:8")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /CGTHREADS:8")
+    
+    # Enable incremental linking in Debug
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL")
+    
+    # Fast PDB generation
+    add_compile_options($<$<CONFIG:Debug>:/Zi>)
+    add_compile_options($<$<CONFIG:Release>:/Zi>)
+    
+    # Reduce string pooling overhead
+    add_compile_options(/Zc:inline)
 endif()
 
 # 检查是否通过预设或环境变量设置了工具链文件
@@ -83,17 +107,20 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     TKBO TKDE TKBin TKCAF
 )
 
-# Windows 下启用 Unicode 支持
+# Enable Unicode support on Windows
 if(WIN32)
     add_definitions(-DUNICODE -D_UNICODE)
+    
+    # Reduce unnecessary symbol exports
+    add_definitions(-D_WINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
 endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CADNav)
 
-# MSVC 特定设置
+# MSVC specific settings
 if(MSVC)
-    # 强制在 Debug 模式下使用 /ZI 支持"编辑并继续"
-    target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:/ZI /Od>)
+    # Use /Zi instead of /ZI for faster compilation
+    target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:/Od>)
     target_compile_options(${PROJECT_NAME} PRIVATE /std:c++17)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         LINK_FLAGS "/SUBSYSTEM:WINDOWS"
