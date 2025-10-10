@@ -34,6 +34,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewUpdateService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshingService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshParameterController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshParameterAdvisor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/HoverSilhouetteManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/BatchOperationManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlineDisplayManager.cpp
@@ -46,6 +47,8 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderApplier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeExtractor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeGeometryCache.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeLODManager.cpp
 )
 
 set(OPENCASCADE_HEADERS

@@ -1,4 +1,5 @@
 #include "edges/EdgeExtractor.h"
+#include "edges/EdgeGeometryCache.h"
 #include "logger/Logger.h"
 #include <TopoDS.hxx>
 #include <TopExp_Explorer.hxx>
@@ -20,6 +21,7 @@
 #include <thread>
 #include <limits>
 #include <cmath>
+#include <sstream>
 
 EdgeExtractor::EdgeExtractor()
 {
@@ -74,6 +76,180 @@ std::vector<gp_Pnt> EdgeExtractor::extractOriginalEdges(
     const TopoDS_Shape& shape, 
     double samplingDensity, 
     double minLength, 
+    bool showLinesOnly,
+    std::vector<gp_Pnt>* intersectionPoints)
+{
+    // Try to use cache if no intersection points are requested
+    if (intersectionPoints == nullptr) {
+        // Generate cache key based on shape pointer and parameters
+        std::ostringstream keyStream;
+        keyStream << "original_" 
+                  << reinterpret_cast<uintptr_t>(&shape.TShape()) << "_"
+                  << samplingDensity << "_"
+                  << minLength << "_"
+                  << (showLinesOnly ? "1" : "0");
+        std::string cacheKey = keyStream.str();
+        
+        // Get from cache or compute
+        auto& cache = EdgeGeometryCache::getInstance();
+        return cache.getOrCompute(cacheKey, [&]() {
+            // Cache miss - compute normally
+            LOG_DBG_S("Computing original edges (cache miss)");
+            return extractOriginalEdgesImpl(shape, samplingDensity, minLength, showLinesOnly, nullptr);
+        });
+    } else {
+        // Intersection points requested - compute without cache
+        LOG_DBG_S("Computing original edges with intersections (no cache)");
+        return extractOriginalEdgesImpl(shape, samplingDensity, minLength, showLinesOnly, intersectionPoints);
+    }
+}
+
+// Analyze curve curvature to determine adaptive sampling density
+double EdgeExtractor::analyzeCurveCurvature(
+    const Handle(Geom_Curve)& curve,
+    Standard_Real first,
+    Standard_Real last,
+    GeomAbs_CurveType curveType)
+{
+    // For lines, curvature is zero
+    if (curveType == GeomAbs_Line) {
+        return 0.0;
+    }
+
+    const int analysisPoints = 10;
+    double maxCurvature = 0.0;
+    double totalCurvature = 0.0;
+    int validPoints = 0;
+
+    try {
+        for (int i = 0; i <= analysisPoints; ++i) {
+            Standard_Real t = first + (last - first) * i / analysisPoints;
+
+            gp_Pnt p;
+            gp_Vec d1, d2;
+            curve->D2(t, p, d1, d2);
+
+            // Calculate curvature: |d1 × d2| / |d1|³
+            double denominator = d1.Magnitude();
+            if (denominator > 1e-10) {
+                double curvature = d1.Crossed(d2).Magnitude() / std::pow(denominator, 3.0);
+                maxCurvature = std::max(maxCurvature, curvature);
+                totalCurvature += curvature;
+                validPoints++;
+            }
+        }
+    } catch (const Standard_Failure&) {
+        // If curvature calculation fails, use conservative approach
+        LOG_WRN_S("Curvature calculation failed, using conservative sampling");
+        return 0.1; // Medium curvature assumption
+    }
+
+    if (validPoints == 0) {
+        return 0.0;
+    }
+
+    // Return average curvature, but cap at reasonable maximum
+    double avgCurvature = totalCurvature / validPoints;
+    return std::min(avgCurvature, 10.0); // Cap at 10 to prevent excessive sampling
+}
+
+// Adaptive curve sampling based on curvature analysis
+std::vector<gp_Pnt> EdgeExtractor::adaptiveSampleCurve(
+    const Handle(Geom_Curve)& curve,
+    Standard_Real first,
+    Standard_Real last,
+    GeomAbs_CurveType curveType,
+    double baseSamplingDensity)
+{
+    std::vector<gp_Pnt> points;
+
+    // Fast path for lines - always use 2 points
+    if (curveType == GeomAbs_Line) {
+        points.push_back(curve->Value(first));
+        points.push_back(curve->Value(last));
+        return points;
+    }
+
+    // Analyze curvature to determine sampling density
+    double maxCurvature = analyzeCurveCurvature(curve, first, last, curveType);
+
+    // Determine base sample count based on curvature
+    int baseSamples;
+    if (maxCurvature < 0.001) {
+        baseSamples = 4;      // Very low curvature - minimal sampling
+    } else if (maxCurvature < 0.01) {
+        baseSamples = 6;      // Low curvature
+    } else if (maxCurvature < 0.1) {
+        baseSamples = 8;      // Medium curvature
+    } else if (maxCurvature < 1.0) {
+        baseSamples = 12;     // High curvature
+    } else if (maxCurvature < 5.0) {
+        baseSamples = 16;     // Very high curvature
+    } else {
+        baseSamples = 20;     // Extreme curvature
+    }
+
+    // Adjust for curve type complexity
+    switch (curveType) {
+        case GeomAbs_Circle:
+        case GeomAbs_Ellipse:
+            // Circles and ellipses need more samples for smooth appearance
+            baseSamples = std::max(baseSamples, 12);
+            break;
+        case GeomAbs_BSplineCurve:
+        case GeomAbs_BezierCurve:
+            // B-splines and Bezier curves may need more samples
+            baseSamples = std::max(baseSamples, 10);
+            break;
+        case GeomAbs_Hyperbola:
+        case GeomAbs_Parabola:
+            // Conic sections need moderate sampling
+            baseSamples = std::max(baseSamples, 8);
+            break;
+        default:
+            break;
+    }
+
+    // Apply sampling density factor
+    double curveLength = last - first;
+    int densitySamples = std::max(4, static_cast<int>(curveLength * baseSamplingDensity * 0.3));
+
+    // Take the maximum of curvature-based and density-based sampling
+    int finalSamples = std::max(baseSamples, densitySamples);
+
+    // Cap maximum samples to prevent performance issues
+    finalSamples = std::min(finalSamples, 64);
+
+    // Generate sample points
+    points.reserve(finalSamples + 1);
+    for (int i = 0; i <= finalSamples; ++i) {
+        Standard_Real t = first + (last - first) * i / finalSamples;
+        try {
+            points.push_back(curve->Value(t));
+        } catch (const Standard_Failure&) {
+            // If evaluation fails, skip this point
+            LOG_WRN_S("Failed to evaluate curve at parameter " + std::to_string(t));
+        }
+    }
+
+    // Ensure we have at least 2 points
+    if (points.size() < 2) {
+        points.clear();
+        points.push_back(curve->Value(first));
+        points.push_back(curve->Value(last));
+    }
+
+    LOG_DBG_S("Adaptive sampling: curvature=" + std::to_string(maxCurvature) +
+              ", type=" + std::to_string(static_cast<int>(curveType)) +
+              ", samples=" + std::to_string(points.size()));
+
+    return points;
+}
+
+std::vector<gp_Pnt> EdgeExtractor::extractOriginalEdgesImpl(
+    const TopoDS_Shape& shape,
+    double samplingDensity,
+    double minLength,
     bool showLinesOnly,
     std::vector<gp_Pnt>* intersectionPoints)
 {
@@ -134,36 +310,15 @@ std::vector<gp_Pnt> EdgeExtractor::extractOriginalEdges(
     std::for_each(std::execution::par, edgeData.begin(), edgeData.end(), [&](EdgeData& data) {
         if (!data.isValid || !data.passesLengthFilter) return;
 
-        if (data.curveType == GeomAbs_Line || showLinesOnly) {
-            data.sampledPoints.push_back(data.curve->Value(data.first));
-            data.sampledPoints.push_back(data.curve->Value(data.last));
-            data.pointCount = 2;
-        } else {
-            Standard_Real curveLength = data.last - data.first;
-            int baseSamples = std::max(4, static_cast<int>(curveLength * samplingDensity * 0.5));
-
-            switch (data.curveType) {
-                case GeomAbs_Circle:
-                case GeomAbs_Ellipse:
-                    baseSamples = std::max(baseSamples, 16);
-                    break;
-                case GeomAbs_BSplineCurve:
-                case GeomAbs_BezierCurve:
-                    baseSamples = std::max(baseSamples, 12);
-                    break;
-                default:
-                    break;
-            }
-
-            int numSamples = std::min(100, baseSamples);
-
-            data.sampledPoints.reserve(numSamples + 1);
-            for (int i = 0; i <= numSamples; ++i) {
-                Standard_Real t = data.first + (data.last - data.first) * i / numSamples;
-                data.sampledPoints.push_back(data.curve->Value(t));
-            }
-            data.pointCount = data.sampledPoints.size();
-        }
+        // Use adaptive sampling for all curves
+        data.sampledPoints = adaptiveSampleCurve(
+            data.curve,
+            data.first,
+            data.last,
+            data.curveType,
+            samplingDensity
+        );
+        data.pointCount = data.sampledPoints.size();
 
         totalPoints += data.pointCount;
     });

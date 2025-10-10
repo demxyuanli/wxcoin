@@ -43,6 +43,7 @@ private:
 	void onAngularDeflectionSlider(wxCommandEvent& event);
 	void onAngularDeflectionSpinCtrl(wxSpinDoubleEvent& event);
 	void onLODEnable(wxCommandEvent& event);
+	void onEdgeLODEnable(wxCommandEvent& event);
 	void onLODRoughDeflectionSlider(wxCommandEvent& event);
 	void onLODRoughDeflectionSpinCtrl(wxSpinDoubleEvent& event);
 	void onLODFineDeflectionSlider(wxCommandEvent& event);
@@ -95,7 +96,11 @@ private:
 	void onCADPreset(wxCommandEvent& event);
 	void onRenderingPreset(wxCommandEvent& event);
 	void onCustomPreset(wxCommandEvent& event);
-	
+
+	// Intelligent recommendation events
+	void onAutoRecommend(wxCommandEvent& event);
+	void onQualityPresetChoice(wxCommandEvent& event);
+
 	// Parameter dependency and linking
 	void updateParameterDependencies(const std::string& parameter, double value);
 	void syncAllUI();
@@ -155,6 +160,7 @@ private:
 	wxSlider* m_angularDeflectionSlider;
 	wxSpinCtrlDouble* m_angularDeflectionSpinCtrl;
 	wxCheckBox* m_lodEnableCheckBox;
+	wxCheckBox* m_edgeLODEnableCheckBox;
 	wxSlider* m_lodRoughDeflectionSlider;
 	wxSpinCtrlDouble* m_lodRoughDeflectionSpinCtrl;
 	wxSlider* m_lodFineDeflectionSlider;
@@ -222,7 +228,13 @@ private:
 	double m_currentFeaturePreservation;
 	bool m_currentParallelProcessing;
 	bool m_currentAdaptiveMeshing;
-	
+	bool m_currentEdgeLODEnabled;
+
+	// Intelligent recommendation controls
+	wxButton* m_autoRecommendBtn;
+	wxStaticText* m_triangleEstimateLabel;
+	wxChoice* m_qualityPresetChoice;
+
 	// State management for unified parameter system
 	bool m_eventLoopDisabled;
 	bool m_isApplyingParameters;

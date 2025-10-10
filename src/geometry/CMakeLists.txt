@@ -12,6 +12,10 @@ set(GEOMETRY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/STLReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BREPReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/XTReader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/BVHAccelerator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../SelectionAccelerator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../StreamingFileReader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../ProgressiveGeometryLoader.cpp
 )
 
 # Set header files
@@ -26,6 +30,10 @@ set(GEOMETRY_HEADERS
     ${CMAKE_SOURCE_DIR}/include/STLReader.h
     ${CMAKE_SOURCE_DIR}/include/BREPReader.h
     ${CMAKE_SOURCE_DIR}/include/XTReader.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/BVHAccelerator.h
+    ${CMAKE_SOURCE_DIR}/include/SelectionAccelerator.h
+    ${CMAKE_SOURCE_DIR}/include/StreamingFileReader.h
+    ${CMAKE_SOURCE_DIR}/include/ProgressiveGeometryLoader.h
 )
 
 # Create geometry library

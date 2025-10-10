@@ -12,6 +12,7 @@
 #include "EdgeTypes.h"
 #include "rendering/GeometryProcessor.h"
 #include <mutex>
+#include <memory>
 
 class EdgeComponent {
 public:
@@ -42,6 +43,12 @@ public:
     void clearSilhouetteEdgeNode();  // New: clear silhouette edge node
     void generateIntersectionNodesNode(const std::vector<gp_Pnt>& intersectionPoints, const Quantity_Color& color, double size);
 
+    // LOD (Level of Detail) management
+    void setLODEnabled(bool enabled);
+    bool isLODEnabled() const;
+    void updateLODLevel(const gp_Pnt& cameraPos);
+    void generateLODLevels(const TopoDS_Shape& shape, const gp_Pnt& cameraPos);
+
 private:
     void findEdgeIntersections(const TopoDS_Shape& shape, std::vector<gp_Pnt>& intersectionPoints);
     void findEdgeIntersectionsFromEdges(const std::vector<class TopoDS_Edge>& edges, std::vector<gp_Pnt>& intersectionPoints);
@@ -60,6 +67,7 @@ private:
     
     std::unique_ptr<class EdgeExtractor> m_extractor;
     std::unique_ptr<class EdgeRenderer> m_renderer;
+    std::unique_ptr<class EdgeLODManager> m_lodManager;
 
 public:
     // Friend class to allow OCCViewer access to silhouetteEdgeNode

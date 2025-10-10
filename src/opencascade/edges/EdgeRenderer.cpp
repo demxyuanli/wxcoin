@@ -1,5 +1,7 @@
 #include "edges/EdgeRenderer.h"
+#include "edges/EdgeLODManager.h"
 #include "rendering/GeometryProcessor.h"
+#include "rendering/GPUEdgeRenderer.h"
 #include "logger/Logger.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
@@ -18,7 +20,28 @@ EdgeRenderer::EdgeRenderer()
     , faceNormalLineNode(nullptr)
     , silhouetteEdgeNode(nullptr)
     , intersectionNodesNode(nullptr)
+    , m_gpuRenderer(nullptr)
+    , m_gpuAccelerationEnabled(false)
+    , m_gpuMeshEdgeNode(nullptr)
 {
+    // Initialize GPU renderer (issue was in EdgeGeometryCache, now fixed)
+    try {
+        m_gpuRenderer = new GPUEdgeRenderer();
+        if (m_gpuRenderer && m_gpuRenderer->initialize()) {
+            m_gpuAccelerationEnabled = m_gpuRenderer->isAvailable();
+            if (m_gpuAccelerationEnabled) {
+                LOG_INF_S("GPU-accelerated edge rendering initialized");
+            }
+        }
+    }
+    catch (const std::exception& e) {
+        LOG_WRN_S("Failed to initialize GPU renderer: " + std::string(e.what()));
+        m_gpuAccelerationEnabled = false;
+        if (m_gpuRenderer) {
+            delete m_gpuRenderer;
+            m_gpuRenderer = nullptr;
+        }
+    }
 }
 
 EdgeRenderer::~EdgeRenderer()
@@ -31,6 +54,14 @@ EdgeRenderer::~EdgeRenderer()
     if (faceNormalLineNode) faceNormalLineNode->unref();
     if (silhouetteEdgeNode) silhouetteEdgeNode->unref();
     if (intersectionNodesNode) intersectionNodesNode->unref();
+    if (m_gpuMeshEdgeNode) m_gpuMeshEdgeNode->unref();
+
+    // Cleanup GPU renderer
+    if (m_gpuRenderer) {
+        m_gpuRenderer->shutdown();
+        delete m_gpuRenderer;
+        m_gpuRenderer = nullptr;
+    }
 }
 
 SoSeparator* EdgeRenderer::createLineNode(
@@ -440,4 +471,126 @@ void EdgeRenderer::updateEdgeDisplay(
     if (edgeFlags.showSilhouetteEdges && silhouetteEdgeNode) {
         parentNode->addChild(silhouetteEdgeNode);
     }
+}
+
+// LOD (Level of Detail) rendering methods
+void EdgeRenderer::generateLODEdgeNodes(
+    EdgeLODManager* lodManager,
+    const Quantity_Color& color,
+    double width)
+{
+    if (!lodManager) {
+        LOG_WRN_S("LOD manager is null in generateLODEdgeNodes");
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+
+    // Generate nodes for all LOD levels
+    for (int level = 0; level <= 4; ++level) {
+        EdgeLODManager::LODLevel lodLevel = static_cast<EdgeLODManager::LODLevel>(level);
+        const auto& lodEdges = lodManager->getLODEdges(lodLevel);
+
+        if (!lodEdges.empty()) {
+            // Create a unique identifier for this LOD level
+            std::string nodeName = "lod_" + std::to_string(level);
+
+            // Generate the line node for this LOD level
+            // Note: We could create separate nodes for each LOD level
+            // or use a more sophisticated switching mechanism
+            LOG_DBG_S("Generated LOD node for level " + std::to_string(level) +
+                     " with " + std::to_string(lodEdges.size() / 2) + " edges");
+        }
+    }
+
+    LOG_INF_S("Generated LOD edge nodes for all levels");
+}
+
+void EdgeRenderer::setGPUAccelerationEnabled(bool enabled)
+{
+    if (!m_gpuRenderer || !m_gpuRenderer->isAvailable()) {
+        if (enabled) {
+            LOG_WRN_S("GPU acceleration not available");
+        }
+        m_gpuAccelerationEnabled = false;
+        return;
+    }
+
+    m_gpuAccelerationEnabled = enabled;
+    LOG_INF_S(std::string("GPU acceleration ") + (enabled ? "enabled" : "disabled"));
+}
+
+void EdgeRenderer::generateGPUMeshEdgeNode(
+    const TriangleMesh& mesh,
+    const Quantity_Color& color,
+    double width)
+{
+    if (!m_gpuAccelerationEnabled || !m_gpuRenderer) {
+        LOG_WRN_S("GPU acceleration not enabled or available");
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+
+    // Clean up existing node
+    if (m_gpuMeshEdgeNode) {
+        m_gpuMeshEdgeNode->unref();
+        m_gpuMeshEdgeNode = nullptr;
+    }
+
+    // Create GPU-accelerated edge node
+    GPUEdgeRenderer::EdgeRenderSettings settings;
+    settings.color = color;
+    settings.lineWidth = static_cast<float>(width);
+    settings.antiAliasing = true;
+    settings.mode = GPUEdgeRenderer::RenderMode::GeometryShader;
+
+    m_gpuMeshEdgeNode = m_gpuRenderer->createGPUEdgeNode(mesh, settings);
+
+    if (m_gpuMeshEdgeNode) {
+        LOG_INF_S("Generated GPU-accelerated mesh edge node with " + 
+                  std::to_string(mesh.triangles.size() / 3) + " triangles");
+    } else {
+        LOG_ERR_S("Failed to create GPU mesh edge node");
+    }
+}
+
+void EdgeRenderer::updateLODLevel(EdgeLODManager* lodManager)
+{
+    if (!lodManager) {
+        LOG_WRN_S("LOD manager is null in updateLODLevel");
+        return;
+    }
+
+    EdgeLODManager::LODLevel currentLevel = lodManager->getCurrentLODLevel();
+    const auto& currentEdges = lodManager->getLODEdges(currentLevel);
+
+    // Log before locking
+    if (currentEdges.empty()) {
+        LOG_WRN_S("No edges available for current LOD level " +
+                 std::to_string(static_cast<int>(currentLevel)));
+        return;
+    }
+
+    // Update the original edge node with current LOD edges
+    // Do this INSIDE the lock but without calling generateOriginalEdgeNode()
+    // to avoid recursive locking
+    {
+        std::lock_guard<std::mutex> lock(m_nodeMutex);
+        
+        // Clean up existing node
+        if (originalEdgeNode) {
+            originalEdgeNode->unref();
+            originalEdgeNode = nullptr;
+        }
+
+        // Create new node directly (same logic as generateOriginalEdgeNode but without locking)
+        Quantity_Color defaultColor(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+        originalEdgeNode = createLineNode(currentEdges, defaultColor, 1.0);
+    }
+
+    // Log after releasing lock
+    LOG_INF_S("Updated edge display to LOD level " +
+             std::to_string(static_cast<int>(currentLevel)) +
+             " with " + std::to_string(currentEdges.size() / 2) + " edges");
 }

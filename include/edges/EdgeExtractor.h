@@ -5,6 +5,8 @@
 #include <OpenCASCADE/TopoDS_Edge.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
+#include <OpenCASCADE/Geom_Curve.hxx>
+#include <OpenCASCADE/GeomAbs_CurveType.hxx>
 #include "EdgeTypes.h"
 #include "rendering/GeometryProcessor.h"
 
@@ -71,6 +73,28 @@ public:
         const gp_Pnt& cameraPos);
 
 private:
+    // Implementation methods (without cache)
+    std::vector<gp_Pnt> extractOriginalEdgesImpl(
+        const TopoDS_Shape& shape,
+        double samplingDensity,
+        double minLength,
+        bool showLinesOnly,
+        std::vector<gp_Pnt>* intersectionPoints);
+
+    // Adaptive sampling methods
+    double analyzeCurveCurvature(
+        const Handle(Geom_Curve)& curve,
+        Standard_Real first,
+        Standard_Real last,
+        GeomAbs_CurveType curveType);
+
+    std::vector<gp_Pnt> adaptiveSampleCurve(
+        const Handle(Geom_Curve)& curve,
+        Standard_Real first,
+        Standard_Real last,
+        GeomAbs_CurveType curveType,
+        double baseSamplingDensity);
+
     // Helper methods for edge processing
     void findEdgeIntersections(
         const TopoDS_Shape& shape, 

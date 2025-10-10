@@ -9,6 +9,8 @@
 // Forward declarations
 class SoSeparator;
 struct TriangleMesh;
+class EdgeLODManager;
+class GPUEdgeRenderer;
 
 /**
  * @brief Edge visualization and rendering
@@ -106,6 +108,45 @@ public:
         double size);
 
     /**
+     * @brief Generate LOD-based edge nodes
+     * @param lodManager LOD manager containing edge data for different levels
+     * @param color Edge color
+     * @param width Edge line width
+     */
+    void generateLODEdgeNodes(
+        EdgeLODManager* lodManager,
+        const Quantity_Color& color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB),
+        double width = 1.0);
+
+    /**
+     * @brief Update edge display based on current LOD level
+     * @param lodManager LOD manager
+     */
+    void updateLODLevel(EdgeLODManager* lodManager);
+
+    /**
+     * @brief Enable/disable GPU-accelerated edge rendering
+     * @param enabled True to use GPU acceleration
+     */
+    void setGPUAccelerationEnabled(bool enabled);
+
+    /**
+     * @brief Check if GPU acceleration is enabled
+     */
+    bool isGPUAccelerationEnabled() const { return m_gpuAccelerationEnabled; }
+
+    /**
+     * @brief Generate GPU-accelerated mesh edge node
+     * @param mesh Triangle mesh
+     * @param color Edge color
+     * @param width Edge line width
+     */
+    void generateGPUMeshEdgeNode(
+        const TriangleMesh& mesh,
+        const Quantity_Color& color = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
+        double width = 1.0);
+
+    /**
      * @brief Get edge node by type
      * @param type Edge type
      * @return Coin3D separator node for the edge type
@@ -143,6 +184,11 @@ private:
     SoSeparator* faceNormalLineNode;
     SoSeparator* silhouetteEdgeNode;
     SoSeparator* intersectionNodesNode;
+
+    // GPU-accelerated rendering
+    GPUEdgeRenderer* m_gpuRenderer;
+    bool m_gpuAccelerationEnabled;
+    SoSeparator* m_gpuMeshEdgeNode;
 
     mutable std::mutex m_nodeMutex;
 

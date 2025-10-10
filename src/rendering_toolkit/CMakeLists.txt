@@ -8,6 +8,7 @@ set(RENDERING_TOOLKIT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Coin3DBackendImpl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FrustumCuller.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OcclusionCuller.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GPUEdgeRenderer.cpp
 )
 
 set(RENDERING_TOOLKIT_HEADERS
@@ -22,6 +23,7 @@ set(RENDERING_TOOLKIT_HEADERS
     ${CMAKE_SOURCE_DIR}/include/rendering/RenderingToolkitAPI.h
     ${CMAKE_SOURCE_DIR}/include/rendering/FrustumCuller.h
     ${CMAKE_SOURCE_DIR}/include/rendering/OcclusionCuller.h
+    ${CMAKE_SOURCE_DIR}/include/rendering/GPUEdgeRenderer.h
 )
 
 # Create Rendering Toolkit static library

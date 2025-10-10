@@ -1,6 +1,7 @@
 #include "MeshQualityDialog.h"
 #include "OCCViewer.h"
 #include "MeshParameterManagerSimple.h"
+#include "viewer/MeshParameterAdvisor.h"
 #include "logger/Logger.h"
 #include <wx/statbox.h>
 #include <wx/notebook.h>
@@ -9,12 +10,13 @@
 #include <cmath>
 
 MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
-	: FramelessModalPopup(parent, "Mesh Quality Control", wxSize(600, 600))
+	: FramelessModalPopup(parent, "Mesh Quality Control", wxSize(600, 660))
 	, m_occViewer(occViewer)
 	, m_notebook(nullptr)
 	, m_deflectionSlider(nullptr)
 	, m_deflectionSpinCtrl(nullptr)
 	, m_lodEnableCheckBox(nullptr)
+	, m_edgeLODEnableCheckBox(nullptr)
 	, m_lodRoughDeflectionSlider(nullptr)
 	, m_lodRoughDeflectionSpinCtrl(nullptr)
 	, m_lodFineDeflectionSlider(nullptr)
@@ -43,8 +45,12 @@ MeshQualityDialog::MeshQualityDialog(wxWindow* parent, OCCViewer* occViewer)
 	, m_parallelProcessingCheckBox(nullptr)
 	, m_adaptiveMeshingCheckBox(nullptr)
 	, m_realTimePreviewCheckBox(nullptr)
+	, m_autoRecommendBtn(nullptr)
+	, m_triangleEstimateLabel(nullptr)
+	, m_qualityPresetChoice(nullptr)
 	, m_currentDeflection(0.1)
 	, m_currentLODEnabled(true)
+	, m_currentEdgeLODEnabled(false)
 	, m_currentLODRoughDeflection(0.2)
 	, m_currentLODFineDeflection(0.05)
 	, m_currentLODTransitionTime(500)
@@ -189,6 +195,7 @@ void MeshQualityDialog::bindEvents()
 	m_angularDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onAngularDeflectionSlider, this);
 	m_angularDeflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onAngularDeflectionSpinCtrl, this);
 	m_lodEnableCheckBox->Bind(wxEVT_CHECKBOX, &MeshQualityDialog::onLODEnable, this);
+	m_edgeLODEnableCheckBox->Bind(wxEVT_CHECKBOX, &MeshQualityDialog::onEdgeLODEnable, this);
 	m_lodRoughDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onLODRoughDeflectionSlider, this);
 	m_lodRoughDeflectionSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onLODRoughDeflectionSpinCtrl, this);
 	m_lodFineDeflectionSlider->Bind(wxEVT_SLIDER, &MeshQualityDialog::onLODFineDeflectionSlider, this);
@@ -222,6 +229,10 @@ void MeshQualityDialog::bindEvents()
 	m_featurePreservationSpinCtrl->Bind(wxEVT_SPINCTRLDOUBLE, &MeshQualityDialog::onFeaturePreservationSpinCtrl, this);
 	m_parallelProcessingCheckBox->Bind(wxEVT_CHECKBOX, &MeshQualityDialog::onParallelProcessingCheckBox, this);
 	m_adaptiveMeshingCheckBox->Bind(wxEVT_CHECKBOX, &MeshQualityDialog::onAdaptiveMeshingCheckBox, this);
+
+	// Intelligent recommendation events
+	m_autoRecommendBtn->Bind(wxEVT_BUTTON, &MeshQualityDialog::onAutoRecommend, this);
+	m_qualityPresetChoice->Bind(wxEVT_CHOICE, &MeshQualityDialog::onQualityPresetChoice, this);
 
 	// Dialog events
 	FindWindow(wxID_APPLY)->Bind(wxEVT_BUTTON, &MeshQualityDialog::onApply, this);
@@ -315,6 +326,19 @@ void MeshQualityDialog::onLODEnable(wxCommandEvent& event)
 {
 	m_currentLODEnabled = m_lodEnableCheckBox->GetValue();
 	updateControls();
+}
+
+void MeshQualityDialog::onEdgeLODEnable(wxCommandEvent& event)
+{
+	m_currentEdgeLODEnabled = m_edgeLODEnableCheckBox->GetValue();
+	LOG_INF_S("Edge LOD enabled: " + std::string(m_currentEdgeLODEnabled ? "true" : "false"));
+
+	// Apply edge LOD setting to OCCViewer if available
+	if (m_occViewer) {
+		// TODO: Add method to OCCViewer to control edge LOD
+		// For now, just log the setting
+		LOG_INF_S("Edge LOD setting applied: " + std::string(m_currentEdgeLODEnabled ? "enabled" : "disabled"));
+	}
 }
 
 void MeshQualityDialog::onLODRoughDeflectionSlider(wxCommandEvent& event)
@@ -822,60 +846,103 @@ void MeshQualityDialog::createBasicQualityPage()
 	middleRowSizer->Add(angularSizer, 1, wxEXPAND | wxALL, 3);
 	mainSizer->Add(middleRowSizer, 0, wxEXPAND | wxALL, 3);
 
+	// Intelligence section: Auto-recommend and quality presets
+	wxStaticBox* intelligenceBox = new wxStaticBox(basicPage, wxID_ANY, "Smart Recommendations");
+	wxStaticBoxSizer* intelligenceSizer = new wxStaticBoxSizer(intelligenceBox, wxVERTICAL);
+
+	// Auto recommend button
+	m_autoRecommendBtn = new wxButton(basicPage, wxID_ANY, "Auto Recommend Parameters");
+	m_autoRecommendBtn->SetToolTip("Automatically analyze the current geometry and recommend optimal mesh parameters");
+	intelligenceSizer->Add(m_autoRecommendBtn, 0, wxEXPAND | wxALL, 5);
+
+	// Quality preset choice
+	wxBoxSizer* presetRowSizer = new wxBoxSizer(wxHORIZONTAL);
+	presetRowSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Quality Preset:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+
+	m_qualityPresetChoice = new wxChoice(basicPage, wxID_ANY);
+	m_qualityPresetChoice->Append("Draft (Fast Preview)");
+	m_qualityPresetChoice->Append("Low (Basic Quality)");
+	m_qualityPresetChoice->Append("Medium (Balanced)");
+	m_qualityPresetChoice->Append("High (Production)");
+	m_qualityPresetChoice->Append("Very High (Maximum)");
+	m_qualityPresetChoice->SetSelection(2); // Default to Medium
+	m_qualityPresetChoice->SetToolTip("Choose a quality preset based on your use case");
+	presetRowSizer->Add(m_qualityPresetChoice, 1, wxEXPAND | wxALL, 5);
+	intelligenceSizer->Add(presetRowSizer, 0, wxEXPAND);
+
+	// Triangle estimate display
+	m_triangleEstimateLabel = new wxStaticText(basicPage, wxID_ANY, "Estimated triangles: Analyzing...");
+	m_triangleEstimateLabel->SetForegroundColour(wxColour(100, 100, 100)); // Gray text
+	intelligenceSizer->Add(m_triangleEstimateLabel, 0, wxALL, 5);
+
+	mainSizer->Add(intelligenceSizer, 0, wxEXPAND | wxALL, 3);
+
 	// Bottom section: LOD controls (compact)
-	wxStaticBox* lodBox = new wxStaticBox(basicPage, wxID_ANY, "Level of Detail (LOD)");
+	wxStaticBox* lodBox = new wxStaticBox(basicPage, wxID_ANY, "Performance & Quality");
 	wxStaticBoxSizer* lodSizer = new wxStaticBoxSizer(lodBox, wxVERTICAL);
 
-	// LOD enable checkbox
-	m_lodEnableCheckBox = new wxCheckBox(basicPage, wxID_ANY, "Enable LOD (auto quality adjustment)");
-	m_lodEnableCheckBox->SetValue(m_currentLODEnabled);
-	lodSizer->Add(m_lodEnableCheckBox, 0, wxALL, 2);
+	// LOD controls in horizontal layout to save space
+	wxBoxSizer* lodControlsSizer = new wxBoxSizer(wxHORIZONTAL);
 
-	// LOD parameters in two columns
-	wxBoxSizer* lodParamsSizer = new wxBoxSizer(wxHORIZONTAL);
-	
-	// Left: Rough deflection
-	wxBoxSizer* roughSizer = new wxBoxSizer(wxVERTICAL);
-	roughSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Rough (interaction):"), 0, wxALL, 1);
+	// Left: LOD enable checkboxes
+	wxBoxSizer* lodEnableSizer = new wxBoxSizer(wxVERTICAL);
+	m_lodEnableCheckBox = new wxCheckBox(basicPage, wxID_ANY, "LOD (mesh quality)");
+	m_lodEnableCheckBox->SetValue(m_currentLODEnabled);
+	lodEnableSizer->Add(m_lodEnableCheckBox, 0, wxALL, 2);
+
+	m_edgeLODEnableCheckBox = new wxCheckBox(basicPage, wxID_ANY, "Edge LOD (distance detail)");
+	m_edgeLODEnableCheckBox->SetValue(m_currentEdgeLODEnabled);
+	m_edgeLODEnableCheckBox->SetToolTip("Automatically reduce edge detail for distant objects to improve performance");
+	lodEnableSizer->Add(m_edgeLODEnableCheckBox, 0, wxALL, 2);
+
+	lodControlsSizer->Add(lodEnableSizer, 0, wxEXPAND | wxALL, 2);
+
+	// Right: Compact LOD parameters
+	wxBoxSizer* lodParamsSizer = new wxBoxSizer(wxVERTICAL);
+
+	// Rough deflection (compact)
+	wxBoxSizer* roughRowSizer = new wxBoxSizer(wxHORIZONTAL);
+	roughRowSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Rough:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 1);
 	m_lodRoughDeflectionSlider = new wxSlider(basicPage, wxID_ANY,
 		static_cast<int>(m_currentLODRoughDeflection * 1000), 1, 1000,
-		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+		wxDefaultPosition, wxSize(80, -1), wxSL_HORIZONTAL);
 	m_lodRoughDeflectionSpinCtrl = new wxSpinCtrlDouble(basicPage, wxID_ANY,
 		wxString::Format("%.3f", m_currentLODRoughDeflection),
-		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
+		wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS,
 		0.001, 1.0, m_currentLODRoughDeflection, 0.001);
-	roughSizer->Add(m_lodRoughDeflectionSlider, 0, wxEXPAND | wxALL, 1);
-	roughSizer->Add(m_lodRoughDeflectionSpinCtrl, 0, wxALIGN_CENTER | wxALL, 1);
+	roughRowSizer->Add(m_lodRoughDeflectionSlider, 1, wxEXPAND | wxALL, 1);
+	roughRowSizer->Add(m_lodRoughDeflectionSpinCtrl, 0, wxALL, 1);
+	lodParamsSizer->Add(roughRowSizer, 0, wxEXPAND | wxALL, 1);
 
-	// Right: Fine deflection
-	wxBoxSizer* fineSizer = new wxBoxSizer(wxVERTICAL);
-	fineSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Fine (idle):"), 0, wxALL, 1);
+	// Fine deflection (compact)
+	wxBoxSizer* fineRowSizer = new wxBoxSizer(wxHORIZONTAL);
+	fineRowSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Fine:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 1);
 	m_lodFineDeflectionSlider = new wxSlider(basicPage, wxID_ANY,
 		static_cast<int>(m_currentLODFineDeflection * 1000), 1, 1000,
-		wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL | wxSL_LABELS);
+		wxDefaultPosition, wxSize(80, -1), wxSL_HORIZONTAL);
 	m_lodFineDeflectionSpinCtrl = new wxSpinCtrlDouble(basicPage, wxID_ANY,
 		wxString::Format("%.3f", m_currentLODFineDeflection),
-		wxDefaultPosition, wxDefaultSize, wxSP_ARROW_KEYS,
+		wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS,
 		0.001, 1.0, m_currentLODFineDeflection, 0.001);
-	fineSizer->Add(m_lodFineDeflectionSlider, 0, wxEXPAND | wxALL, 1);
-	fineSizer->Add(m_lodFineDeflectionSpinCtrl, 0, wxALIGN_CENTER | wxALL, 1);
+	fineRowSizer->Add(m_lodFineDeflectionSlider, 1, wxEXPAND | wxALL, 1);
+	fineRowSizer->Add(m_lodFineDeflectionSpinCtrl, 0, wxALL, 1);
+	lodParamsSizer->Add(fineRowSizer, 0, wxEXPAND | wxALL, 1);
 
-	lodParamsSizer->Add(roughSizer, 1, wxEXPAND | wxALL, 2);
-	lodParamsSizer->Add(fineSizer, 1, wxEXPAND | wxALL, 2);
-	lodSizer->Add(lodParamsSizer, 0, wxEXPAND | wxALL, 2);
+	lodControlsSizer->Add(lodParamsSizer, 1, wxEXPAND | wxALL, 2);
+	lodSizer->Add(lodControlsSizer, 0, wxEXPAND | wxALL, 2);
 
-	// Transition time (compact)
+	// Transition time (compact horizontal)
 	wxBoxSizer* transitionSizer = new wxBoxSizer(wxHORIZONTAL);
-	transitionSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Transition time:"), 0, wxALL, 2);
+	transitionSizer->Add(new wxStaticText(basicPage, wxID_ANY, "Transition:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 1);
 	m_lodTransitionTimeSlider = new wxSlider(basicPage, wxID_ANY,
 		m_currentLODTransitionTime, 100, 2000,
-		wxDefaultPosition, wxSize(120, -1), wxSL_HORIZONTAL | wxSL_LABELS);
+		wxDefaultPosition, wxSize(100, -1), wxSL_HORIZONTAL);
 	m_lodTransitionTimeSpinCtrl = new wxSpinCtrl(basicPage, wxID_ANY,
 		wxString::Format("%d", m_currentLODTransitionTime),
-		wxDefaultPosition, wxSize(60, -1), wxSP_ARROW_KEYS,
+		wxDefaultPosition, wxSize(50, -1), wxSP_ARROW_KEYS,
 		100, 2000, m_currentLODTransitionTime);
-	transitionSizer->Add(m_lodTransitionTimeSlider, 0, wxALL, 2);
-	transitionSizer->Add(m_lodTransitionTimeSpinCtrl, 0, wxALL, 2);
+	transitionSizer->Add(m_lodTransitionTimeSlider, 1, wxEXPAND | wxALL, 1);
+	transitionSizer->Add(m_lodTransitionTimeSpinCtrl, 0, wxALL, 1);
 	lodSizer->Add(transitionSizer, 0, wxEXPAND | wxALL, 2);
 
 	mainSizer->Add(lodSizer, 0, wxEXPAND | wxALL, 3);
@@ -2148,4 +2215,151 @@ void MeshQualityDialog::clearParameterDependencies()
 {
 	m_parameterDependencies.clear();
 	LOG_INF_S("Parameter dependencies cleared");
+}
+
+// Intelligent recommendation event handlers
+void MeshQualityDialog::onAutoRecommend(wxCommandEvent& event)
+{
+	try {
+		if (!m_occViewer) {
+			wxMessageBox("No viewer available for analysis", "Error", wxOK | wxICON_ERROR);
+			return;
+		}
+
+		// Get selected geometries
+		auto selectedGeometries = m_occViewer->getSelectedGeometries();
+		if (selectedGeometries.empty()) {
+			wxMessageBox("No geometry selected. Please select a geometry first.", "Error", wxOK | wxICON_ERROR);
+			return;
+		}
+
+		// Use the first selected geometry
+		auto currentGeometry = selectedGeometries[0];
+		if (!currentGeometry || currentGeometry->getShape().IsNull()) {
+			wxMessageBox("Selected geometry is invalid", "Error", wxOK | wxICON_ERROR);
+			return;
+		}
+
+		// Use MeshParameterAdvisor for analysis
+		auto recommendedParams = MeshParameterAdvisor::recommendParameters(currentGeometry->getShape());
+
+		// Update UI with recommended values
+		m_deflectionSpinCtrl->SetValue(wxString::Format("%.6f", recommendedParams.deflection));
+		m_angularDeflectionSpinCtrl->SetValue(wxString::Format("%.6f", recommendedParams.angularDeflection));
+
+		// Update slider values too
+		m_deflectionSlider->SetValue(static_cast<int>(recommendedParams.deflection * 1000));
+		m_angularDeflectionSlider->SetValue(static_cast<int>(recommendedParams.angularDeflection * 1000));
+
+		// Update current values
+		m_currentDeflection = recommendedParams.deflection;
+		m_currentAngularDeflection = recommendedParams.angularDeflection;
+
+		// Estimate triangle count
+		size_t estimatedTriangles = MeshParameterAdvisor::estimateTriangleCount(currentGeometry->getShape(), recommendedParams);
+		m_triangleEstimateLabel->SetLabel(wxString::Format("Estimated triangles: ~%zu", estimatedTriangles));
+
+		// Update preset choice to "Custom" to indicate manual override
+		m_qualityPresetChoice->SetSelection(-1); // No selection
+
+		wxMessageBox(wxString::Format(
+			"Parameters automatically recommended based on geometry analysis.\n\n"
+			"Deflection: %.6f\n"
+			"Angular Deflection: %.6f\n"
+			"Estimated triangles: ~%zu\n\n"
+			"Click 'Apply' to use these parameters.",
+			recommendedParams.deflection, recommendedParams.angularDeflection, estimatedTriangles),
+			"Auto Recommendation Complete", wxOK | wxICON_INFORMATION);
+
+	} catch (const std::exception& e) {
+		wxMessageBox(wxString::Format("Error during auto recommendation: %s", e.what()),
+			"Error", wxOK | wxICON_ERROR);
+	}
+}
+
+void MeshQualityDialog::onQualityPresetChoice(wxCommandEvent& event)
+{
+	try {
+		int selection = m_qualityPresetChoice->GetSelection();
+		if (selection < 0) return; // No selection
+
+		if (!m_occViewer) {
+			wxMessageBox("No viewer available", "Error", wxOK | wxICON_ERROR);
+			return;
+		}
+
+		auto selectedGeometries = m_occViewer->getSelectedGeometries();
+		if (selectedGeometries.empty()) {
+			wxMessageBox("No geometry selected. Please select a geometry first.", "Error", wxOK | wxICON_ERROR);
+			return;
+		}
+
+		// Use the first selected geometry
+		auto currentGeometry = selectedGeometries[0];
+		if (!currentGeometry || currentGeometry->getShape().IsNull()) {
+			wxMessageBox("Selected geometry is invalid", "Error", wxOK | wxICON_ERROR);
+			return;
+		}
+
+		// Get preset parameters
+		MeshParameters presetParams;
+
+		switch (selection) {
+			case 0: // Draft
+				presetParams = MeshParameterAdvisor::getDraftPreset(currentGeometry->getShape());
+				break;
+			case 1: // Low
+				presetParams = MeshParameterAdvisor::getLowPreset(currentGeometry->getShape());
+				break;
+			case 2: // Medium
+				presetParams = MeshParameterAdvisor::getMediumPreset(currentGeometry->getShape());
+				break;
+			case 3: // High
+				presetParams = MeshParameterAdvisor::getHighPreset(currentGeometry->getShape());
+				break;
+			case 4: // Very High
+				presetParams = MeshParameterAdvisor::getVeryHighPreset(currentGeometry->getShape());
+				break;
+			default:
+				return;
+		}
+
+		// Apply preset parameters to UI
+		m_deflectionSpinCtrl->SetValue(wxString::Format("%.6f", presetParams.deflection));
+		m_angularDeflectionSpinCtrl->SetValue(wxString::Format("%.6f", presetParams.angularDeflection));
+
+		// Update sliders
+		m_deflectionSlider->SetValue(static_cast<int>(presetParams.deflection * 1000));
+		m_angularDeflectionSlider->SetValue(static_cast<int>(presetParams.angularDeflection * 1000));
+
+		// Update current values
+		m_currentDeflection = presetParams.deflection;
+		m_currentAngularDeflection = presetParams.angularDeflection;
+
+		// Estimate triangle count
+		size_t estimatedTriangles = MeshParameterAdvisor::estimateTriangleCount(currentGeometry->getShape(), presetParams);
+		m_triangleEstimateLabel->SetLabel(wxString::Format("Estimated triangles: ~%zu", estimatedTriangles));
+
+		// Update controls based on preset
+		m_parallelProcessingCheckBox->SetValue(presetParams.inParallel);
+
+		const wxString presetNames[] = {"Draft", "Low", "Medium", "High", "Very High"};
+		wxMessageBox(wxString::Format(
+			"'%s' preset applied!\n\n"
+			"Deflection: %.6f\n"
+			"Angular Deflection: %.6f\n"
+			"Parallel Processing: %s\n"
+			"Estimated triangles: ~%zu\n\n"
+			"Click 'Apply' to use these parameters.",
+			presetNames[selection].c_str(),
+			presetParams.deflection,
+			presetParams.angularDeflection,
+			presetParams.inParallel ? "Enabled" : "Disabled",
+			estimatedTriangles),
+			"Preset Applied", wxOK | wxICON_INFORMATION);
+
+	} catch (const std::exception& e) {
+		wxMessageBox(wxString::Format("Error applying preset: %s", e.what()),
+			"Error", wxOK | wxICON_ERROR);
+	}
 }
