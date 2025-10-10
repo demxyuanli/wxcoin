@@ -90,6 +90,9 @@ private:
 
 	void createCheckerboardPlane(float planeZ = 0.0f);
 
+	// Camera clipping planes
+	void updateCameraClippingPlanes();
+
 	// Culling state
 	bool m_cullingEnabled;
 	bool m_lastCullingUpdateValid;

@@ -819,37 +819,96 @@ STEPReader::ReadResult STEPReader::readSTEPFile(const std::string& filePath,
 		}
 
 		// Use STEPCAFControl_Reader for advanced color and assembly information
+		// Try CAF reader first, but use it only if it contains useful color/material info
 		bool cafSuccess = false;
-		try {
-			LOG_INF_S("Attempting to read STEP file with CAF reader: " + filePath);
-			ReadResult cafResult = readSTEPFileWithCAF(filePath, options, progress);
-			if (cafResult.success && !cafResult.geometries.empty()) {
-				// Use CAF results if successful
-				result.geometries = cafResult.geometries;
-				result.entityMetadata = cafResult.entityMetadata;
-				result.assemblyStructure = cafResult.assemblyStructure;
-				cafSuccess = true;
-				LOG_INF_S("Successfully read STEP file with CAF reader, found " + 
-					std::to_string(result.geometries.size()) + " colored components");
+		size_t fileSize = std::filesystem::file_size(filePath);
+		
+		// Helper lambda to check if CAF results contain meaningful color information
+		auto hasValidColorInfo = [](const std::vector<std::shared_ptr<OCCGeometry>>& geometries) -> bool {
+			if (geometries.empty()) return false;
+			
+			// Default gray color that OCCT uses when no color is specified
+			const Quantity_Color defaultGray(0.7, 0.7, 0.7, Quantity_TOC_RGB);
+			const double colorTolerance = 0.01; // Small tolerance for floating point comparison
+			
+			// Check if any geometry has a non-default color
+			int nonDefaultColorCount = 0;
+			for (const auto& geom : geometries) {
+				if (!geom) continue;
+				Quantity_Color color = geom->getColor();
 				
-				// Log color information for debugging
-				for (size_t i = 0; i < result.geometries.size(); i++) {
-					Quantity_Color color = result.geometries[i]->getColor();
-					LOG_INF_S("Component " + std::to_string(i) + " color: R=" + 
-						std::to_string(color.Red()) + " G=" + std::to_string(color.Green()) + 
-						" B=" + std::to_string(color.Blue()));
+				// Check if color is significantly different from default gray
+				bool isDifferent = (std::abs(color.Red() - defaultGray.Red()) > colorTolerance ||
+								  std::abs(color.Green() - defaultGray.Green()) > colorTolerance ||
+								  std::abs(color.Blue() - defaultGray.Blue()) > colorTolerance);
+				
+				if (isDifferent) {
+					nonDefaultColorCount++;
+				}
+			}
+			
+			// Consider CAF valid if at least one component has a non-default color
+			return nonDefaultColorCount > 0;
+		};
+		
+		try {
+			LOG_INF_S("Attempting to read STEP file with CAF reader: " + filePath + 
+					 " (size: " + std::to_string(fileSize / (1024 * 1024)) + " MB)");
+			
+			ReadResult cafResult = readSTEPFileWithCAF(filePath, options, progress);
+			
+			if (cafResult.success && !cafResult.geometries.empty()) {
+				// Check if CAF contains useful color/material information
+				bool hasColors = hasValidColorInfo(cafResult.geometries);
+				
+				if (hasColors) {
+					// Use CAF results - they contain valuable color information
+					result.geometries = cafResult.geometries;
+					result.entityMetadata = cafResult.entityMetadata;
+					result.assemblyStructure = cafResult.assemblyStructure;
+					cafSuccess = true;
+					LOG_INF_S("CAF reader successful with color information - using CAF results (" + 
+						std::to_string(result.geometries.size()) + " colored components)");
+					
+					// Log color information for debugging
+					int coloredCount = 0;
+					for (size_t i = 0; i < result.geometries.size(); i++) {
+						Quantity_Color color = result.geometries[i]->getColor();
+						if (std::abs(color.Red() - 0.7) > 0.01 || 
+							std::abs(color.Green() - 0.7) > 0.01 || 
+							std::abs(color.Blue() - 0.7) > 0.01) {
+							LOG_DBG_S("Component " + std::to_string(i) + " color: R=" + 
+								std::to_string(color.Red()) + " G=" + std::to_string(color.Green()) + 
+								" B=" + std::to_string(color.Blue()));
+							coloredCount++;
+						}
+					}
+					LOG_INF_S("Found " + std::to_string(coloredCount) + " components with custom colors");
+				} else {
+					LOG_INF_S("CAF reader returned only default colors - falling back to standard reader with decomposition");
 				}
 			} else {
 				LOG_WRN_S("CAF reader failed: " + (cafResult.errorMessage.empty() ? "Unknown error" : cafResult.errorMessage));
-				LOG_WRN_S("Falling back to standard reader");
+				LOG_WRN_S("Falling back to standard reader with decomposition");
 			}
 		} catch (const std::exception& e) {
 			LOG_WRN_S("CAF reader exception: " + std::string(e.what()));
+			LOG_INF_S("Falling back to standard reader with decomposition");
 		}
 
 		// Convert to geometry objects with simplified processing (fallback if CAF failed)
 		if (!cafSuccess) {
 			std::string baseName = std::filesystem::path(filePath).stem().string();
+			
+			// Log that we're using decomposition settings
+			if (options.decomposition.enableDecomposition) {
+				LOG_INF_S("Using standard reader with decomposition (level: " + 
+						 std::to_string(static_cast<int>(options.decomposition.level)) + 
+						 ", color scheme: " + std::to_string(static_cast<int>(options.decomposition.colorScheme)) + ")");
+			} else {
+				LOG_INF_S("Using standard reader without decomposition");
+			}
+			
 			result.geometries = shapeToGeometries(result.rootShape, baseName, options, progress, 70, 25);
 		}
 

@@ -11,7 +11,6 @@ ProgressiveGeometryLoader::ProgressiveGeometryLoader()
     , m_shouldStop(false)
     , m_isPaused(false)
 {
-    LOG_INF_S("ProgressiveGeometryLoader initialized");
 }
 
 ProgressiveGeometryLoader::~ProgressiveGeometryLoader()
@@ -29,8 +28,10 @@ ProgressiveGeometryLoader::~ProgressiveGeometryLoader()
 bool ProgressiveGeometryLoader::startLoading(const LoadingConfiguration& config,
                                            const Callbacks& callbacks)
 {
+    LOG_INF_S("ProgressiveGeometryLoader::startLoading called for: " + config.filePath);
+    
     if (m_state != LoadingState::Idle) {
-        LOG_WRN_S("Cannot start loading: loader is not idle");
+        LOG_WRN_S("Cannot start loading: loader is not idle, state=" + std::to_string(static_cast<int>(m_state)));
         return false;
     }
 
@@ -47,6 +48,8 @@ bool ProgressiveGeometryLoader::startLoading(const LoadingConfiguration& config,
     m_chunkLoadTimes.clear();
     m_renderChunks.clear();
 
+    LOG_INF_S("Creating streaming reader");
+    
     // Create appropriate streaming reader
     m_streamReader = createStreamingReader(config.filePath);
     if (!m_streamReader) {
@@ -54,19 +57,29 @@ bool ProgressiveGeometryLoader::startLoading(const LoadingConfiguration& config,
         return false;
     }
 
+    // Set loader reference for chunk notifications
+    m_streamReader->setLoader(this);
+
+    LOG_INF_S("Starting streaming reader");
+    
     // Start streaming reader
     if (!m_streamReader->loadFile(config.filePath, config.streamConfig)) {
         LOG_ERR_S("Failed to start streaming reader for: " + config.filePath);
         return false;
     }
 
+    LOG_INF_S("Streaming reader started successfully");
+    
     changeState(LoadingState::Preparing, "Preparing for progressive loading...");
 
+    LOG_INF_S("Starting loading and rendering threads");
+    
     // Start loading and rendering threads
     m_loadingThread = std::thread(&ProgressiveGeometryLoader::loadingThreadFunc, this);
     m_renderingThread = std::thread(&ProgressiveGeometryLoader::renderingThreadFunc, this);
 
-    LOG_INF_S("Progressive loading started for: " + config.filePath);
+    LOG_INF_S("Threads started");
+    
     return true;
 }
 
@@ -75,7 +88,6 @@ void ProgressiveGeometryLoader::pauseLoading()
     if (m_state == LoadingState::Loading) {
         m_isPaused = true;
         changeState(LoadingState::Paused, "Loading paused");
-        LOG_INF_S("Progressive loading paused");
     }
 }
 
@@ -85,7 +97,6 @@ void ProgressiveGeometryLoader::resumeLoading()
         m_isPaused = false;
         changeState(LoadingState::Loading, "Loading resumed");
         m_condition.notify_all();
-        LOG_INF_S("Progressive loading resumed");
     }
 }
 
@@ -105,26 +116,26 @@ void ProgressiveGeometryLoader::cancelLoading()
     }
 
     changeState(LoadingState::Cancelled, "Loading cancelled by user");
-    LOG_INF_S("Progressive loading cancelled");
 }
 
 ProgressiveGeometryLoader::LoadingStats ProgressiveGeometryLoader::getStats() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_stats;
+    LoadingStats statsCopy = m_stats;
+    return statsCopy;
 }
 
 double ProgressiveGeometryLoader::getProgress() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_stats.totalChunks == 0) return 0.0;
-    return static_cast<double>(m_stats.loadedChunks) / m_stats.totalChunks;
+    double progress = static_cast<double>(m_stats.loadedChunks) / m_stats.totalChunks;
+    return progress;
 }
 
 void ProgressiveGeometryLoader::loadingThreadFunc()
 {
     LOG_INF_S("Loading thread started");
-
     changeState(LoadingState::Loading, "Loading geometry chunks...");
 
     size_t chunkIndex = 0;
@@ -141,11 +152,21 @@ void ProgressiveGeometryLoader::loadingThreadFunc()
         }
 
         // Load next chunk
+        LOG_DBG_S("Loading thread: calling getNextChunk");
         std::vector<TopoDS_Shape> shapes;
-        if (!m_streamReader->getNextChunk(shapes)) {
-            // No more chunks available
+        
+        if (!m_streamReader) {
+            LOG_ERR_S("Stream reader is null!");
             break;
         }
+        
+        if (!m_streamReader->getNextChunk(shapes)) {
+            // No more chunks available
+            LOG_INF_S("No more chunks available, loading complete");
+            break;
+        }
+
+        LOG_INF_S("Loading thread: got " + std::to_string(shapes.size()) + " shapes");
 
         if (!shapes.empty()) {
             auto startTime = std::chrono::steady_clock::now();
@@ -161,12 +182,14 @@ void ProgressiveGeometryLoader::loadingThreadFunc()
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
+    LOG_INF_S("Loading thread finishing");
     if (!m_shouldStop) {
         changeState(LoadingState::Completed, "Loading completed successfully");
-        LOG_INF_S("Loading thread completed successfully");
-    } else {
-        LOG_INF_S("Loading thread stopped");
+        // Stop rendering thread since all chunks are loaded
+        m_shouldStop = true;
+        LOG_INF_S("Signaling rendering thread to stop");
     }
+    LOG_INF_S("Loading thread completed");
 }
 
 void ProgressiveGeometryLoader::renderingThreadFunc()
@@ -175,34 +198,44 @@ void ProgressiveGeometryLoader::renderingThreadFunc()
 
     while (!m_shouldStop) {
         bool hasWork = false;
+        RenderChunk chunkToRender;
 
         {
             std::lock_guard<std::mutex> lock(m_mutex);
 
+            LOG_DBG_S("Rendering thread: checking for work, chunks count: " + std::to_string(m_renderChunks.size()));
+
             // Find unrendered chunks
             for (auto& chunk : m_renderChunks) {
+                LOG_DBG_S("Rendering thread: chunk rendered=" + std::to_string(chunk.isRendered) +
+                         ", shapes=" + std::to_string(chunk.shapes.size()));
                 if (!chunk.isRendered && !chunk.shapes.empty()) {
-                    if (m_callbacks.onChunkRendered) {
-                        m_callbacks.onChunkRendered(chunk);
-                    }
+                    chunkToRender = chunk;
                     chunk.isRendered = true;
                     m_stats.renderedChunks++;
                     m_stats.renderedShapes += chunk.shapes.size();
                     hasWork = true;
+                    LOG_DBG_S("Rendering thread: found work, shapes=" + std::to_string(chunk.shapes.size()));
                     break;
                 }
             }
         }
 
+        // Call callback outside the lock
+        if (hasWork && m_callbacks.onChunkRendered) {
+            LOG_INF_S("Rendering thread: calling onChunkRendered callback with " +
+                     std::to_string(chunkToRender.shapes.size()) + " shapes");
+            m_callbacks.onChunkRendered(chunkToRender);
+        }
+
         if (!hasWork) {
             // No work to do, sleep a bit
+            LOG_DBG_S("Rendering thread: no work, sleeping");
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
 
         updateStats();
     }
-
-    LOG_INF_S("Rendering thread stopped");
 }
 
 void ProgressiveGeometryLoader::processLoadedChunk(const std::vector<TopoDS_Shape>& shapes,
@@ -210,12 +243,18 @@ void ProgressiveGeometryLoader::processLoadedChunk(const std::vector<TopoDS_Shap
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    LOG_INF_S("ProgressiveGeometryLoader: processing loaded chunk " + std::to_string(chunkIndex) +
+             " with " + std::to_string(shapes.size()) + " shapes");
+
     RenderChunk chunk;
     chunk.shapes = shapes;
     chunk.chunkIndex = chunkIndex;
     chunk.loadTime = m_chunkLoadTimes.empty() ? 0.0 : m_chunkLoadTimes.back();
 
     m_renderChunks.push_back(chunk);
+
+    LOG_INF_S("ProgressiveGeometryLoader: added chunk to render queue, total chunks: " +
+             std::to_string(m_renderChunks.size()));
 
     // Update stats
     m_stats.loadedChunks++;
@@ -234,18 +273,31 @@ void ProgressiveGeometryLoader::processLoadedChunk(const std::vector<TopoDS_Shap
 
 void ProgressiveGeometryLoader::updateStats()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    LoadingStats statsCopy;
+    double progressValue = 0.0;
+    
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-    m_stats.averageLoadTime = calculateAverageLoadTime();
-    m_stats.totalLoadTime = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::steady_clock::now() - m_startTime).count();
+        m_stats.averageLoadTime = calculateAverageLoadTime();
+        m_stats.totalLoadTime = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now() - m_startTime).count();
 
+        statsCopy = m_stats;
+        
+        // Calculate progress without calling getProgress() to avoid recursive lock
+        if (m_stats.totalChunks > 0) {
+            progressValue = static_cast<double>(m_stats.loadedChunks) / m_stats.totalChunks;
+        }
+    }
+    
+    // Call callbacks outside the lock to avoid blocking
     if (m_callbacks.onStatsUpdated) {
-        m_callbacks.onStatsUpdated(m_stats);
+        m_callbacks.onStatsUpdated(statsCopy);
     }
 
     if (m_callbacks.onProgress) {
-        m_callbacks.onProgress(getProgress());
+        m_callbacks.onProgress(progressValue);
     }
 }
 
@@ -253,12 +305,10 @@ void ProgressiveGeometryLoader::changeState(LoadingState newState, const std::st
 {
     m_state = newState;
 
+    // Call callback outside any locks to prevent deadlock
     if (m_callbacks.onStateChanged) {
         m_callbacks.onStateChanged(newState, message);
     }
-
-    LOG_INF_S("Loading state changed to: " + std::to_string(static_cast<int>(newState)) +
-              " - " + message);
 }
 
 void ProgressiveGeometryLoader::handleError(const std::string& error)
@@ -516,7 +566,6 @@ bool ProgressiveGeometryReader::loadGeometry(const std::string& filePath,
     } else {
         // Use traditional loading
         // This would integrate with existing geometry readers
-        LOG_INF_S("Using traditional loading for: " + filePath);
         return false; // Placeholder - would implement actual loading
     }
 }

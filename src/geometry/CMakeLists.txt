@@ -13,9 +13,9 @@ set(GEOMETRY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/BREPReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/XTReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BVHAccelerator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../SelectionAccelerator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../StreamingFileReader.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../ProgressiveGeometryLoader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SelectionAccelerator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/StreamingFileReader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ProgressiveGeometryLoader.cpp
 )
 
 # Set header files

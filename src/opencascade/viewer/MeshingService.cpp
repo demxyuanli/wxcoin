@@ -21,15 +21,6 @@ void MeshingService::applyAndRemesh(
 	bool adaptiveMeshing,
 	bool parallelProcessing
 ) {
-	LOG_INF_S("=== MESHING SERVICE: UPDATING RENDERING TOOLKIT CONFIG ===");
-	LOG_INF_S("Mesh parameters: deflection=" + std::to_string(meshParams.deflection) +
-		", angularDeflection=" + std::to_string(meshParams.angularDeflection) +
-		", relative=" + std::string(meshParams.relative ? "true" : "false") +
-		", inParallel=" + std::string(meshParams.inParallel ? "true" : "false"));
-	LOG_INF_S("Processing settings: smoothing=" + std::string(smoothingEnabled ? "true" : "false") +
-		", subdivision=" + std::string(subdivisionEnabled ? "true" : "false") +
-		", geometries=" + std::to_string(geometries.size()));
-
 	// Update RenderingToolkitAPI configuration with current parameters
 	auto& config = RenderingToolkitAPI::getConfig();
 
@@ -57,15 +48,11 @@ void MeshingService::applyAndRemesh(
 	config.setParameter("feature_preservation", std::to_string(featurePreservation));
 
 	// Regenerate all geometries with updated parameters
-	LOG_INF_S("=== MESHING SERVICE: STARTING GEOMETRY REGENERATION ===");
 	for (auto& geometry : geometries) {
 		if (geometry) {
-			LOG_INF_S("Processing geometry: " + geometry->getName());
 			// Force mesh regeneration by setting the flag and calling updateCoinRepresentationIfNeeded
 			geometry->setMeshRegenerationNeeded(true);
 			geometry->updateCoinRepresentationIfNeeded(meshParams);
-			LOG_INF_S("Updated mesh (if needed) for geometry: " + geometry->getName());
 		}
 	}
-	LOG_INF_S("=== MESHING SERVICE: GEOMETRY REGENERATION COMPLETED ===");
 }

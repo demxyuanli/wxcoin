@@ -14,7 +14,6 @@ SelectionAccelerator::SelectionAccelerator()
     : m_selectionMode(SelectionMode::Shapes)
     , m_bvh(std::make_unique<BVHAccelerator>())
 {
-    LOG_INF_S("SelectionAccelerator initialized");
 }
 
 SelectionAccelerator::~SelectionAccelerator()
@@ -24,9 +23,6 @@ SelectionAccelerator::~SelectionAccelerator()
 
 bool SelectionAccelerator::build(const std::vector<TopoDS_Shape>& shapes, SelectionMode mode)
 {
-    LOG_INF_S("Building selection accelerator for " + std::to_string(shapes.size()) +
-              " shapes, mode: " + std::to_string(static_cast<int>(mode)));
-
     clear();
     m_shapes = shapes;
     m_selectionMode = mode;
@@ -34,6 +30,12 @@ bool SelectionAccelerator::build(const std::vector<TopoDS_Shape>& shapes, Select
     if (shapes.empty()) {
         LOG_WRN_S("No shapes provided for selection acceleration");
         return false;
+    }
+
+    // For single shape, no need for BVH acceleration
+    if (shapes.size() == 1) {
+        LOG_INF_S("Single shape detected, skipping BVH acceleration for selection");
+        return true;
     }
 
     try {
@@ -51,9 +53,6 @@ bool SelectionAccelerator::build(const std::vector<TopoDS_Shape>& shapes, Select
                 buildForVertices(shapes);
                 break;
         }
-
-        LOG_INF_S("Selection accelerator built successfully");
-        LOG_INF_S("Performance stats: " + getPerformanceStats());
 
         return true;
     } catch (const std::exception& e) {
@@ -250,7 +249,6 @@ size_t SelectionAccelerator::selectByRectangle(const gp_Pnt& rectMin, const gp_P
         }
     }
 
-    LOG_INF_S("Rectangle selection found " + std::to_string(selectionCount) + " items");
     return selectionCount;
 }
 
@@ -268,9 +266,6 @@ bool SelectionAccelerator::setSelectionMode(SelectionMode mode)
     if (mode == m_selectionMode) {
         return false;  // No change needed
     }
-
-    LOG_INF_S("Changing selection mode from " + std::to_string(static_cast<int>(m_selectionMode)) +
-              " to " + std::to_string(static_cast<int>(mode)));
 
     m_selectionMode = mode;
     // Note: Changing mode requires rebuilding the accelerator
@@ -304,8 +299,6 @@ void SelectionAccelerator::clear()
     m_rayTestsPerformed = 0;
     m_pointTestsPerformed = 0;
     m_selectionsFound = 0;
-
-    LOG_INF_S("SelectionAccelerator cleared");
 }
 
 // Utility functions

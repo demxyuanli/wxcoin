@@ -57,6 +57,11 @@ SceneManager::SceneManager(Canvas* canvas)
 }
 
 SceneManager::~SceneManager() {
+	// Critical: Remove listeners BEFORE cleanup to prevent dangling pointer access
+	if (m_canvas && m_canvas->getRefreshManager()) {
+		m_canvas->getRefreshManager()->removeAllListeners();
+		LOG_INF_S("Removed all refresh listeners in destructor");
+	}
 	cleanup();
 	LOG_INF_S("SceneManager destroyed");
 }
@@ -126,6 +131,22 @@ bool SceneManager::initScene() {
 		RenderingToolkitAPI::setOcclusionCullingEnabled(true);
 		LOG_INF_S("Culling system initialized and enabled");
 
+		// Add refresh listener for camera clipping plane updates
+		// Note: Listener is removed in destructor to prevent dangling pointer access
+		if (m_canvas && m_canvas->getRefreshManager()) {
+			m_canvas->getRefreshManager()->addRefreshListener(
+				[this](ViewRefreshManager::RefreshReason reason) {
+					// Extra safety: check if camera is still valid
+					if (!m_camera || !m_sceneRoot) {
+						return; // Object may be in the process of destruction
+					}
+					if (reason == ViewRefreshManager::RefreshReason::CAMERA_MOVED) {
+						updateCameraClippingPlanes();
+					}
+				});
+			LOG_INF_S("Added camera clipping plane update listener");
+		}
+
 		resetView();
 		return true;
 	}
@@ -137,6 +158,12 @@ bool SceneManager::initScene() {
 }
 
 void SceneManager::cleanup() {
+	// Remove all refresh listeners to prevent dangling pointer issues
+	if (m_canvas && m_canvas->getRefreshManager()) {
+		m_canvas->getRefreshManager()->removeAllListeners();
+		LOG_INF_S("Removed all refresh listeners during cleanup");
+	}
+
 	if (m_sceneRoot) {
 		m_sceneRoot->unref();
 		m_sceneRoot = nullptr;
@@ -178,10 +205,8 @@ void SceneManager::resetView() {
 
 	m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
 
-	m_camera->nearDistance.setValue(0.001f);
-	m_camera->farDistance.setValue(10000.0f);
-
-	updateSceneBounds(); // Update bounds after view reset
+	// Update scene bounds and clipping planes dynamically
+	updateSceneBounds(); // This will call updateCameraClippingPlanes() automatically
 
 	if (m_canvas->getRefreshManager()) {
 		m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
@@ -227,8 +252,8 @@ void SceneManager::toggleCameraMode() {
 	SbViewportRegion viewportToggle(size.x, size.y);
 	m_camera->viewAll(m_sceneRoot, viewportToggle);
 
-	m_camera->nearDistance.setValue(0.001f);
-	m_camera->farDistance.setValue(10000.0f);
+	// Update clipping planes based on scene bounds
+	updateSceneBounds();
 
 	if (m_canvas->getRefreshManager()) {
 		m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
@@ -293,9 +318,8 @@ void SceneManager::setView(const std::string& viewName) {
 	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
 	m_camera->viewAll(m_sceneRoot, viewport, 1.1f); // 1.1 factor to add some margin
 
-	// Ensure reasonable near/far planes
-	m_camera->nearDistance.setValue(0.001f);
-	m_camera->farDistance.setValue(10000.0f);
+	// Update clipping planes based on scene bounds
+	updateSceneBounds();
 
 	LOG_INF_S("Switched to view: " + viewName);
 
@@ -487,7 +511,60 @@ void SceneManager::updateSceneBounds() {
 		if (m_pickingAidManager) {
 			m_pickingAidManager->updateReferenceGrid();
 		}
+
+		// Update camera clipping planes based on scene bounds
+		updateCameraClippingPlanes();
 	}
+}
+
+void SceneManager::updateCameraClippingPlanes() {
+	if (!m_camera || m_sceneBoundingBox.isEmpty()) {
+		LOG_DBG_S("Skipping clipping plane update - camera or scene bounds invalid");
+		return;
+	}
+
+	// Get camera position
+	SbVec3f cameraPos = m_camera->position.getValue();
+
+	// Get scene bounding box
+	SbVec3f min, max;
+	m_sceneBoundingBox.getBounds(min, max);
+	SbVec3f sceneCenter = m_sceneBoundingBox.getCenter();
+
+	// Calculate scene dimensions
+	float sceneRadius = (max - min).length() * 0.5f;
+	float cameraDist = (sceneCenter - cameraPos).length();
+
+	// Calculate distances from camera to scene bounds
+	float distToMin = (min - cameraPos).length();
+	float distToMax = (max - cameraPos).length();
+
+	// Calculate optimal near and far clipping planes
+	// Near plane: camera to closest point - safety margin
+	float optimalNear = std::max(0.001f, cameraDist - sceneRadius * 1.5f);
+	
+	// Far plane: camera to farthest point + safety margin
+	float optimalFar = cameraDist + sceneRadius * 1.5f;
+
+	// Ensure minimum values
+	optimalNear = std::max(0.001f, optimalNear);
+	optimalFar = std::max(10.0f, optimalFar);
+
+	// For very large scenes, don't limit the far plane
+	// Only apply reasonable near plane limit
+	optimalNear = std::min(optimalNear, sceneRadius * 0.1f);  // Near can't be more than 10% of scene size
+	
+	// No upper limit on far plane - let it adapt to scene size
+	// optimalFar = std::min(optimalFar, 10000.0f); // REMOVED - this was causing clipping
+
+	// Update camera clipping planes
+	m_camera->nearDistance.setValue(optimalNear);
+	m_camera->farDistance.setValue(optimalFar);
+
+	LOG_INF_S("Updated clipping planes - Near: " + std::to_string(optimalNear) +
+	          ", Far: " + std::to_string(optimalFar) +
+	          ", Scene radius: " + std::to_string(sceneRadius) +
+	          ", Camera dist to scene: " + std::to_string(cameraDist));
 }
 
 float SceneManager::getSceneBoundingBoxSize() const {

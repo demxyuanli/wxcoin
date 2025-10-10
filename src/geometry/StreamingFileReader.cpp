@@ -1,4 +1,6 @@
 #include "StreamingFileReader.h"
+#include "ProgressiveGeometryLoader.h"
+#include "logger/Logger.h"
 #include <fstream>
 #include <filesystem>
 #include <algorithm>
@@ -7,6 +9,8 @@
 #include <OpenCASCADE/STEPControl_Reader.hxx>
 #include <OpenCASCADE/IGESControl_Reader.hxx>
 #include <OpenCASCADE/Interface_Static.hxx>
+#include <OpenCASCADE/IFSelect_ReturnStatus.hxx>
+#include <OpenCASCADE/Standard_Failure.hxx>
 
 StreamingFileReader::StreamingFileReader()
     : m_isLoading(false)
@@ -104,9 +108,14 @@ size_t StreamingFileReader::estimateMemoryRequirements(const std::string& filePa
 // =====================================================================================
 
 StreamingSTEPReader::StreamingSTEPReader()
-    : m_currentPosition(0)
+    : StreamingFileReader()
+    , m_currentPosition(0)
     , m_fileSize(0)
     , m_processedEntities(0)
+    , m_stepReader(nullptr)
+    , m_totalRoots(0)
+    , m_currentRoot(0)
+    , m_currentChunkIndex(0)
 {
 }
 
@@ -114,6 +123,11 @@ StreamingSTEPReader::~StreamingSTEPReader()
 {
     if (m_fileStream.is_open()) {
         m_fileStream.close();
+    }
+    
+    if (m_stepReader) {
+        delete m_stepReader;
+        m_stepReader = nullptr;
     }
 }
 
@@ -123,58 +137,128 @@ bool StreamingSTEPReader::loadFile(const std::string& filePath, const LoadingCon
     m_filePath = filePath;
     m_isLoading = true;
     m_cancelRequested = false;
+    m_currentRoot = 0;
+    m_currentChunkIndex = 0;
 
-    LOG_INF_S("Starting streaming STEP load for: " + filePath);
-
-    if (!openFile(filePath)) {
-        LOG_ERR_S("Failed to open STEP file: " + filePath);
+    // Create and initialize STEP reader
+    if (m_stepReader) {
+        delete m_stepReader;
+    }
+    m_stepReader = new STEPControl_Reader();
+    
+    // Read the entire STEP file
+    IFSelect_ReturnStatus status = m_stepReader->ReadFile(filePath.c_str());
+    if (status != IFSelect_RetDone) {
+        LOG_ERR_S("Failed to read STEP file: " + filePath);
         m_isLoading = false;
+        delete m_stepReader;
+        m_stepReader = nullptr;
         return false;
     }
+    
+    // Get total number of roots
+    m_totalRoots = m_stepReader->NbRootsForTransfer();
+    if (m_totalRoots == 0) {
+        LOG_ERR_S("No transferable roots found in STEP file");
+        m_isLoading = false;
+        delete m_stepReader;
+        m_stepReader = nullptr;
+        return false;
+    }
+    
+    LOG_INF_S("STEP file loaded: " + std::to_string(m_totalRoots) + " roots to process");
 
-    // Count total entities for progress estimation
-    m_progress.totalShapes = countEntitiesInFile();
-    m_progress.totalBytes = m_fileSize;
-
-    LOG_INF_S("STEP file opened. Size: " + std::to_string(m_fileSize) +
-              " bytes, Estimated entities: " + std::to_string(m_progress.totalShapes));
+    // Initialize progress
+    m_progress.totalShapes = m_totalRoots;
+    m_progress.shapesLoaded = 0;
+    
+    try {
+        m_fileSize = std::filesystem::file_size(filePath);
+        m_progress.totalBytes = m_fileSize;
+    } catch(...) {
+        m_progress.totalBytes = 0;
+    }
 
     return true;
 }
 
 bool StreamingSTEPReader::getNextChunk(std::vector<TopoDS_Shape>& shapes)
 {
+    LOG_DBG_S("StreamingSTEPReader::getNextChunk called");
+    
     if (!m_isLoading || m_cancelRequested) {
+        LOG_DBG_S("Not loading or cancelled");
         return false;
     }
 
     shapes.clear();
-
-    // Parse next chunk of STEP data
-    if (!parseNextChunk()) {
-        // No more data to parse
+    
+    // Check if we've already processed all roots
+    if (m_currentRoot >= m_totalRoots) {
+        LOG_INF_S("All roots already processed");
         m_progress.isComplete = true;
         m_isLoading = false;
         updateProgress(m_progress);
         return false;
     }
 
-    // Extract shapes from parsed entities
+    // Parse next chunk of STEP data (transfer roots)
+    LOG_DBG_S("Calling parseNextChunk, currentRoot=" + std::to_string(m_currentRoot) + 
+             ", totalRoots=" + std::to_string(m_totalRoots));
+    
+    bool hasMoreChunks = parseNextChunk();
+    
+    LOG_DBG_S("parseNextChunk returned " + std::string(hasMoreChunks ? "true" : "false") + 
+             ", now extracting shapes");
+    
+    // Extract shapes from the transferred roots
     if (!extractShapesFromEntities(shapes)) {
         LOG_WRN_S("Failed to extract shapes from STEP entities");
-        return true; // Continue with next chunk
+        
+        // Check if we should continue
+        if (hasMoreChunks) {
+            return true; // Continue with next chunk
+        } else {
+            m_progress.isComplete = true;
+            m_isLoading = false;
+            updateProgress(m_progress);
+            return false;
+        }
     }
 
+    LOG_INF_S("Extracted " + std::to_string(shapes.size()) + " shapes from chunk");
+
     // Update progress
-    m_progress.shapesLoaded += shapes.size();
-    m_progress.progressPercent = (static_cast<double>(m_currentPosition) / m_fileSize) * 100.0;
+    m_progress.shapesLoaded = m_currentRoot;
+    m_progress.progressPercent = (static_cast<double>(m_currentRoot) / m_totalRoots) * 100.0;
     updateProgress(m_progress);
 
     // Update memory info
-    m_memoryInfo.currentUsage = estimateMemoryRequirements(m_filePath) * m_progress.progressPercent / 100.0;
-    updateMemoryInfo(m_memoryInfo);
+    try {
+        m_memoryInfo.currentUsage = estimateMemoryRequirements(m_filePath) * m_progress.progressPercent / 100.0;
+        updateMemoryInfo(m_memoryInfo);
+    } catch (...) {
+        // Ignore memory estimation errors
+    }
 
-    return true;
+    // Notify loader about the chunk if we have shapes
+    if (!shapes.empty() && m_loader) {
+        size_t chunkIndex = m_currentChunkIndex++;
+        LOG_INF_S("Notifying loader about chunk " + std::to_string(chunkIndex) +
+                 " with " + std::to_string(shapes.size()) + " shapes");
+        m_loader->processLoadedChunk(shapes, chunkIndex);
+    }
+
+    // Return true if we have shapes OR if there are more chunks to process
+    if (!shapes.empty() || hasMoreChunks) {
+        return true;
+    }
+    
+    // All done
+    m_progress.isComplete = true;
+    m_isLoading = false;
+    updateProgress(m_progress);
+    return false;
 }
 
 StreamingFileReader::LoadingProgress StreamingSTEPReader::getProgress() const
@@ -191,10 +275,15 @@ void StreamingSTEPReader::cancelLoading()
 {
     m_cancelRequested = true;
     m_isLoading = false;
+    
     if (m_fileStream.is_open()) {
         m_fileStream.close();
     }
-    LOG_INF_S("STEP streaming loading cancelled");
+    
+    if (m_stepReader) {
+        delete m_stepReader;
+        m_stepReader = nullptr;
+    }
 }
 
 bool StreamingSTEPReader::isLoading() const
@@ -209,118 +298,107 @@ std::vector<std::string> StreamingSTEPReader::getSupportedExtensions() const
 
 bool StreamingSTEPReader::openFile(const std::string& filePath)
 {
-    try {
-        m_fileStream.open(filePath, std::ios::binary);
-        if (!m_fileStream.is_open()) {
-            return false;
-        }
-
-        // Get file size
-        m_fileStream.seekg(0, std::ios::end);
-        m_fileSize = m_fileStream.tellg();
-        m_fileStream.seekg(0, std::ios::beg);
-
-        m_currentPosition = 0;
-        return true;
-    } catch (const std::exception& e) {
-        LOG_ERR_S("Exception opening file: " + std::string(e.what()));
-        return false;
-    }
+    // Not used in new implementation - file is read in loadFile()
+    return true;
 }
 
 bool StreamingSTEPReader::parseNextChunk()
 {
-    if (!m_fileStream.is_open() || m_cancelRequested) {
+    LOG_DBG_S("parseNextChunk: currentRoot=" + std::to_string(m_currentRoot) + 
+             ", totalRoots=" + std::to_string(m_totalRoots));
+    
+    // Check if we have more roots to process
+    if (m_currentRoot >= m_totalRoots || m_cancelRequested || !m_stepReader) {
+        LOG_DBG_S("parseNextChunk: returning false (no more roots or cancelled)");
         return false;
     }
 
-    const size_t bufferSize = m_config.chunkSize;
-    std::vector<char> buffer(bufferSize);
-
-    // Read next chunk
-    m_fileStream.read(buffer.data(), bufferSize);
-    std::streamsize bytesRead = m_fileStream.gcount();
-
-    if (bytesRead <= 0) {
-        return false; // End of file
+    // We'll process roots in batches
+    Standard_Integer batchSize = static_cast<Standard_Integer>(m_config.maxShapesPerChunk);
+    batchSize = std::min(batchSize, m_totalRoots - m_currentRoot);
+    
+    LOG_INF_S("parseNextChunk: processing batch of " + std::to_string(batchSize) + " roots");
+    
+    if (batchSize <= 0) {
+        LOG_DBG_S("parseNextChunk: batchSize <= 0, returning false");
+        return false;
     }
 
-    m_currentPosition += bytesRead;
-
-    // Convert buffer to string and process
-    std::string chunk(buffer.data(), bytesRead);
-
-    // Simple STEP entity parsing (this is a simplified implementation)
-    // In a real implementation, you'd use a proper STEP parser
-    size_t pos = 0;
-    while (pos < chunk.size()) {
-        if (isCancelled()) break;
-
-        // Find entity start
-        size_t entityStart = chunk.find('#', pos);
-        if (entityStart == std::string::npos) break;
-
-        // Find entity end
-        size_t entityEnd = chunk.find(';', entityStart);
-        if (entityEnd == std::string::npos) {
-            // Entity spans multiple chunks - this is complex to handle
-            // For simplicity, we'll process complete entities only
-            break;
+    // Transfer next batch of roots
+    LOG_INF_S("Transferring roots " + std::to_string(m_currentRoot + 1) + 
+             " to " + std::to_string(m_currentRoot + batchSize));
+    
+    for (Standard_Integer i = 0; i < batchSize && m_currentRoot < m_totalRoots; i++) {
+        if (m_cancelRequested) break;
+        
+        m_currentRoot++;
+        
+        LOG_DBG_S("Transferring root " + std::to_string(m_currentRoot));
+        
+        // Transfer this root (1-based indexing in OpenCASCADE)
+        if (!m_stepReader->TransferRoot(m_currentRoot)) {
+            LOG_WRN_S("Failed to transfer root " + std::to_string(m_currentRoot));
         }
-
-        // Extract entity
-        std::string entity = chunk.substr(entityStart, entityEnd - entityStart + 1);
-        processSTEPEntity(entity);
-
-        pos = entityEnd + 1;
-        m_processedEntities++;
     }
 
-    return true;
+    LOG_INF_S("parseNextChunk completed, processed " + std::to_string(m_currentRoot) + 
+             " of " + std::to_string(m_totalRoots) + " roots");
+
+    return m_currentRoot < m_totalRoots; // More data available
 }
 
 void StreamingSTEPReader::processSTEPEntity(const std::string& entity)
 {
-    // Simple entity processing - in reality this would be much more complex
-    // For now, just collect entities for later processing
-    m_entityBuffer.push_back(entity);
-
-    // Limit buffer size to prevent excessive memory usage
-    if (m_entityBuffer.size() > m_config.maxShapesPerChunk * 10) {
-        // Process some entities to free memory
-        std::vector<TopoDS_Shape> dummyShapes;
-        extractShapesFromEntities(dummyShapes);
-    }
+    // Not used in the new implementation
+    // Keeping for compatibility
 }
 
 bool StreamingSTEPReader::extractShapesFromEntities(std::vector<TopoDS_Shape>& shapes)
 {
-    if (m_entityBuffer.empty()) {
-        return true;
+    LOG_DBG_S("extractShapesFromEntities called");
+    
+    if (!m_stepReader) {
+        LOG_ERR_S("Step reader is null in extractShapesFromEntities");
+        return false;
     }
 
     try {
-        // This is a highly simplified STEP processing
-        // In a real implementation, you'd use OpenCASCADE's STEPControl_Reader
-        // with proper entity parsing and assembly
-
-        // For demonstration, create some dummy shapes
-        // In reality, this would parse the STEP entities and create actual geometry
-
-        size_t shapesToCreate = std::min(m_entityBuffer.size() / 5, m_config.maxShapesPerChunk);
-        shapesToCreate = std::max(shapesToCreate, size_t(1));
-
-        for (size_t i = 0; i < shapesToCreate; ++i) {
-            // Create a simple box as placeholder
-            // In real implementation, this would parse actual STEP geometry
-            TopoDS_Shape shape; // Empty shape for now
-            shapes.push_back(shape);
+        // Get all shapes transferred so far
+        Standard_Integer nbShapes = m_stepReader->NbShapes();
+        
+        LOG_INF_S("extractShapesFromEntities: reader has " + std::to_string(nbShapes) + " shapes");
+        
+        if (nbShapes == 0) {
+            LOG_WRN_S("No shapes available from STEP reader");
+            return false; // Changed to false - this is actually an error if we transferred roots
         }
 
-        // Clear processed entities
-        m_entityBuffer.clear();
+        // Extract shapes from the reader
+        for (Standard_Integer i = 1; i <= nbShapes; i++) {
+            if (m_cancelRequested) break;
+            
+            LOG_DBG_S("Getting shape " + std::to_string(i) + " of " + std::to_string(nbShapes));
+            
+            TopoDS_Shape shape = m_stepReader->Shape(i);
+            if (!shape.IsNull()) {
+                shapes.push_back(shape);
+                LOG_DBG_S("Shape " + std::to_string(i) + " added, type: " + std::to_string(shape.ShapeType()));
+            } else {
+                LOG_WRN_S("Shape " + std::to_string(i) + " is null");
+            }
+        }
+        
+        LOG_INF_S("Extracted " + std::to_string(shapes.size()) + " valid shapes from " + 
+                 std::to_string(nbShapes) + " total shapes");
+        
+        // Update progress
+        m_progress.shapesLoaded = m_currentRoot;
+        m_progress.progressPercent = (static_cast<double>(m_currentRoot) / m_totalRoots) * 100.0;
 
-        return true;
+        return shapes.size() > 0; // Return true only if we got shapes
+    } catch (const Standard_Failure& e) {
+        LOG_ERR_S("OpenCASCADE error extracting shapes: " + std::string(e.GetMessageString()));
+        return false;
     } catch (const std::exception& e) {
         LOG_ERR_S("Error extracting shapes from STEP entities: " + std::string(e.what()));
         return false;
@@ -329,10 +407,8 @@ bool StreamingSTEPReader::extractShapesFromEntities(std::vector<TopoDS_Shape>& s
 
 size_t StreamingSTEPReader::countEntitiesInFile() const
 {
-    // Simple estimation based on file size
-    // In reality, you'd scan the file to count actual entities
-    const size_t AVG_ENTITY_SIZE = 200; // Rough estimate
-    return m_fileSize / AVG_ENTITY_SIZE;
+    // Return the actual number of roots
+    return m_totalRoots;
 }
 
 // =====================================================================================
@@ -360,15 +436,11 @@ bool StreamingIGESReader::loadFile(const std::string& filePath, const LoadingCon
     m_isLoading = true;
     m_cancelRequested = false;
 
-    LOG_INF_S("Starting streaming IGES load for: " + filePath);
-
     if (!openFile(filePath)) {
         LOG_ERR_S("Failed to open IGES file: " + filePath);
         m_isLoading = false;
         return false;
     }
-
-    LOG_INF_S("IGES file opened. Size: " + std::to_string(m_fileSize) + " bytes");
 
     return true;
 }
@@ -417,7 +489,6 @@ void StreamingIGESReader::cancelLoading()
     if (m_fileStream.is_open()) {
         m_fileStream.close();
     }
-    LOG_INF_S("IGES streaming loading cancelled");
 }
 
 bool StreamingIGESReader::isLoading() const

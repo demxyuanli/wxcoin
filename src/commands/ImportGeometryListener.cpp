@@ -10,6 +10,8 @@
 #include "OCCViewer.h"
 #include "GeometryDecompositionDialog.h"
 #include "GeometryImportOptimizer.h"
+#include "ProgressiveGeometryLoader.h"
+#include "StreamingFileReader.h"
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/app.h>
@@ -191,11 +193,92 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
         int totalGeometries = 0;
         double totalImportTime = 0.0;
         std::vector<std::shared_ptr<OCCGeometry>> allGeometries;
+        
+        // First pass: check for large files that need progressive loading
+        std::vector<std::string> largeFiles;
+        for (const auto& formatGroup : filesByFormat) {
+            for (const auto& filePath : formatGroup.second) {
+                try {
+                    size_t fileSize = std::filesystem::file_size(filePath);
+                    if (shouldUseProgressiveLoading(filePath, fileSize)) {
+                        largeFiles.push_back(filePath);
+                        LOG_INF_S("Large file detected (" + std::to_string(fileSize / (1024*1024)) + 
+                                 " MB), will use progressive loading: " + filePath);
+                        
+                        if (flatFrame) {
+                            flatFrame->appendMessage(wxString::Format("Large file (%zu MB) - will use progressive loading mode", 
+                                                    fileSize / (1024*1024)));
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    LOG_WRN_S("Failed to check file size: " + std::string(e.what()));
+                }
+            }
+        }
+        
+        // Handle large files with progressive loading first
+        for (const auto& filePath : largeFiles) {
+            auto fileStartTime = std::chrono::high_resolution_clock::now();
+            
+            GeometryReader::OptimizationOptions opts;
+            setupBalancedImportOptions(opts);
+            
+            std::vector<std::shared_ptr<OCCGeometry>> progressiveGeoms;
+            if (importWithProgressiveLoading(filePath, opts, progressiveGeoms)) {
+                allGeometries.insert(allGeometries.end(), 
+                                   progressiveGeoms.begin(), 
+                                   progressiveGeoms.end());
+                totalSuccessfulFiles++;
+                
+                // Create file statistics for progressive loading
+                auto fileEndTime = std::chrono::high_resolution_clock::now();
+                ImportFileStatistics fileStat;
+                wxFileName wxFile(filePath);
+                fileStat.fileName = wxFile.GetFullName().ToStdString();
+                fileStat.filePath = filePath;
+                fileStat.format = "STEP (Progressive)";
+                fileStat.success = true;
+                fileStat.geometriesCreated = progressiveGeoms.size();
+                fileStat.importTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    fileEndTime - fileStartTime);
+                
+                try {
+                    fileStat.fileSize = std::filesystem::file_size(filePath);
+                } catch (...) {
+                    fileStat.fileSize = 0;
+                }
+                
+                overallStats.fileStats.push_back(fileStat);
+                overallStats.totalGeometriesCreated += fileStat.geometriesCreated;
+                overallStats.totalFileSize += fileStat.fileSize;
+                
+                LOG_INF_S("Progressive loading stats: " + std::to_string(progressiveGeoms.size()) + 
+                         " geometries in " + std::to_string(fileStat.importTime.count()) + "ms");
+                
+                if (flatFrame) {
+                    flatFrame->appendMessage(wxString::Format("Progressive loading completed: %zu geometries", 
+                                            progressiveGeoms.size()));
+                }
+            }
+        }
 
-        // Process each format group
+        // Process each format group (skip files already processed with progressive loading)
         for (const auto& formatGroup : filesByFormat) {
             const std::string& formatName = formatGroup.first;
-            const std::vector<std::string>& formatFiles = formatGroup.second;
+            std::vector<std::string> formatFiles = formatGroup.second;
+            
+            // Remove large files from normal processing
+            formatFiles.erase(
+                std::remove_if(formatFiles.begin(), formatFiles.end(),
+                    [&largeFiles](const std::string& file) {
+                        return std::find(largeFiles.begin(), largeFiles.end(), file) != largeFiles.end();
+                    }),
+                formatFiles.end()
+            );
+            
+            if (formatFiles.empty()) {
+                continue; // All files in this format were large files
+            }
 
             if (flatFrame) {
                 flatFrame->appendMessage(wxString::Format("Processing %s files: %zu files", formatName, formatFiles.size()));
@@ -643,4 +726,128 @@ void ImportGeometryListener::cleanupProgress()
         }
         catch (...) {}
     }
+}
+
+bool ImportGeometryListener::shouldUseProgressiveLoading(const std::string& filePath, size_t fileSize) {
+    // Progressive loading threshold
+    const size_t PROGRESSIVE_THRESHOLD = 50 * 1024 * 1024; // 50MB
+    
+    if (fileSize <= PROGRESSIVE_THRESHOLD) {
+        return false;
+    }
+    
+    return StreamingFileReader::supportsStreaming(filePath);
+}
+
+bool ImportGeometryListener::importWithProgressiveLoading(const std::string& filePath,
+    const GeometryReader::OptimizationOptions& options,
+    std::vector<std::shared_ptr<OCCGeometry>>& allGeometries)
+{
+    auto loader = std::make_unique<ProgressiveGeometryLoader>();
+    
+    ProgressiveGeometryLoader::LoadingConfiguration config;
+    config.filePath = filePath;
+    config.streamConfig.maxMemoryUsage = 1024 * 1024 * 1024;
+    config.streamConfig.chunkSize = StreamingFileReader::getOptimalChunkSize(
+        std::filesystem::file_size(filePath));
+    config.streamConfig.maxShapesPerChunk = 100;
+    config.maxConcurrentChunks = 2;
+    config.renderBatchSize = 50;
+    config.autoStartRendering = true;
+    config.enableMemoryManagement = true;
+    config.targetFrameRate = 30.0;
+    
+    ProgressiveGeometryLoader::Callbacks callbacks;
+    
+    callbacks.onProgress = [this](double progress) {
+        if (m_statusBar) {
+            int percent = static_cast<int>(progress * 100.0);
+            m_statusBar->SetGaugeValue(percent);
+            wxYield();
+        }
+    };
+    
+    callbacks.onStateChanged = [this](ProgressiveGeometryLoader::LoadingState state, 
+                                     const std::string& message) {
+        if (m_statusBar) {
+            m_statusBar->SetStatusText(message, 0);
+            wxYield();
+        }
+    };
+    
+    callbacks.onChunkRendered = [this, &allGeometries, &filePath]
+        (const ProgressiveGeometryLoader::RenderChunk& chunk) {
+        for (size_t i = 0; i < chunk.shapes.size(); ++i) {
+            const auto& shape = chunk.shapes[i];
+            if (!shape.IsNull()) {
+                std::string baseName = std::filesystem::path(filePath).stem().string();
+                std::string name = baseName + "_chunk" + std::to_string(chunk.chunkIndex) +
+                                 "_" + std::to_string(i);
+
+                auto geometry = std::make_shared<OCCGeometry>(name);
+                geometry->setShape(shape);
+
+                Quantity_Color defaultColor(0.7, 0.7, 0.7, Quantity_TOC_RGB);
+                geometry->setColor(defaultColor);
+
+                allGeometries.push_back(geometry);
+            }
+        }
+
+        LOG_INF_S("Progressive loading: rendered chunk " + std::to_string(chunk.chunkIndex) +
+                 " with " + std::to_string(chunk.shapes.size()) + " shapes, total geometries: " +
+                 std::to_string(allGeometries.size()));
+    };
+    
+    callbacks.onError = [](const std::string& error) {
+        LOG_ERR_S("Progressive loading error: " + error);
+    };
+    
+    bool success = loader->startLoading(config, callbacks);
+    
+    if (!success) {
+        LOG_ERR_S("Failed to start progressive loading for: " + filePath);
+        return false;
+    }
+    
+    LOG_INF_S("Progressive loading started, waiting for completion");
+    
+    // Wait for loading to complete with timeout
+    auto startWait = std::chrono::steady_clock::now();
+    const auto MAX_WAIT_TIME = std::chrono::minutes(10); // 10 minute timeout
+    
+    while (loader->getState() == ProgressiveGeometryLoader::LoadingState::Loading ||
+           loader->getState() == ProgressiveGeometryLoader::LoadingState::Preparing ||
+           loader->getState() == ProgressiveGeometryLoader::LoadingState::Rendering) {
+        
+        wxYield();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // Check timeout
+        auto elapsed = std::chrono::steady_clock::now() - startWait;
+        if (elapsed > MAX_WAIT_TIME) {
+            LOG_ERR_S("Progressive loading timeout after " + 
+                     std::to_string(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count()) + 
+                     " seconds");
+            loader->cancelLoading();
+            return false;
+        }
+        
+        // Log state every 5 seconds for debugging
+        static auto lastLog = std::chrono::steady_clock::now();
+        if (std::chrono::steady_clock::now() - lastLog > std::chrono::seconds(5)) {
+            LOG_INF_S("Still loading... State: " + std::to_string(static_cast<int>(loader->getState())) +
+                     ", Progress: " + std::to_string(loader->getProgress() * 100.0) + "%");
+            lastLog = std::chrono::steady_clock::now();
+        }
+    }
+    
+    auto finalState = loader->getState();
+    LOG_INF_S("Progressive loading finished with state: " + std::to_string(static_cast<int>(finalState)));
+
+    // Don't add to viewer here - let the main import flow handle it
+    // This prevents duplicate addition and ensures consistent batch handling
+    LOG_INF_S("Progressive loading completed with " + std::to_string(allGeometries.size()) + " geometries");
+
+    return finalState == ProgressiveGeometryLoader::LoadingState::Completed;
 }

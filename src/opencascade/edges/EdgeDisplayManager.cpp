@@ -91,13 +91,6 @@ void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, doub
 	m_originalEdgeParams.highlightIntersectionNodes = highlightIntersectionNodes;
 	m_originalEdgeParams.intersectionNodeColor = intersectionNodeColor;
 	m_originalEdgeParams.intersectionNodeSize = intersectionNodeSize;
-	
-	LOG_INF_S("Original edges parameters set in EdgeDisplayManager: density=" + std::to_string(samplingDensity) + 
-		", minLength=" + std::to_string(minLength) + 
-		", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
-		", width=" + std::to_string(width) +
-		", highlightNodes=" + std::string(highlightIntersectionNodes ? "true" : "false") +
-		", nodeSize=" + std::to_string(intersectionNodeSize));
 }
 
 void EdgeDisplayManager::updateAll(const MeshParameters& meshParams) {

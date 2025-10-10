@@ -310,10 +310,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 			LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
 		}
 
-		LOG_INF_S("Generated mesh with face mapping: " + std::to_string(mesh.getVertexCount()) +
-			" vertices, " + std::to_string(mesh.getTriangleCount()) + " triangles, " +
-			std::to_string(faceMappings.size()) + " face mappings");
-
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception in mesh conversion with face mapping: " + std::string(e.what()));

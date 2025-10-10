@@ -68,8 +68,6 @@ OBJReader::ReadResult OBJReader::readFile(const std::string& filePath,
             return result;
         }
 
-        LOG_INF_S("OBJ file parsed successfully: " + std::to_string(vertices.size()) + " vertices, " + std::to_string(faces.size()) + " faces");
-
         if (progress) progress(60, "Creating geometry");
 
         if (vertices.empty() || faces.empty()) {
@@ -87,8 +85,6 @@ OBJReader::ReadResult OBJReader::readFile(const std::string& filePath,
             LOG_ERR_S("OBJ shape creation failed: shape is null");
             return result;
         }
-
-        LOG_INF_S("OBJ shape created successfully");
 
         if (progress) progress(80, "Creating OCCGeometry");
 
@@ -108,8 +104,6 @@ OBJReader::ReadResult OBJReader::readFile(const std::string& filePath,
             LOG_INF_S("Normal processing disabled for OBJ import");
         }
 
-        LOG_INF_S("OBJ OCCGeometry created successfully");
-
         result.geometries.push_back(geometry);
         result.rootShape = shape;
         result.success = true;
@@ -117,10 +111,6 @@ OBJReader::ReadResult OBJReader::readFile(const std::string& filePath,
         auto totalEndTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
         result.importTime = static_cast<double>(totalDuration.count());
-
-        LOG_INF_S("OBJ file imported successfully: " + std::to_string(vertices.size()) + 
-                 " vertices, " + std::to_string(faces.size()) + " faces in " + 
-                 std::to_string(result.importTime) + "ms");
 
         return result;
     }
@@ -167,8 +157,6 @@ bool OBJReader::parseOBJFile(const std::string& filePath,
         LOG_ERR_S("Cannot open OBJ file: " + filePath);
         return false;
     }
-
-    LOG_INF_S("Successfully opened OBJ file: " + filePath);
 
     std::string line;
     std::string currentMaterial;

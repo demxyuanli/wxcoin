@@ -23,7 +23,6 @@ set(COMMANDS_SOURCES
     FixNormalsListener.cpp
     GeometryFactory.cpp
     HelpAboutListener.cpp
-    ImportStepListener.cpp
     ImportGeometryListener.cpp
     LightingSettingsListener.cpp
     MeshQualityDialogListener.cpp
@@ -88,7 +87,6 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FixNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/GeometryFactory.h
     ${CMAKE_SOURCE_DIR}/include/HelpAboutListener.h
-    ${CMAKE_SOURCE_DIR}/include/ImportStepListener.h
     ${CMAKE_SOURCE_DIR}/include/ImportGeometryListener.h
     ${CMAKE_SOURCE_DIR}/include/LightingSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialogListener.h

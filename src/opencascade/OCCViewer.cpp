@@ -23,6 +23,8 @@
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoTranslation.h>
 #include <Inventor/nodes/SoScale.h>
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
 #include <algorithm>
 #include <limits>
 #include <cmath>
@@ -54,6 +56,7 @@
 #include "viewer/BatchOperationManager.h"
 #include "viewer/OutlineDisplayManager.h"
 #include "viewer/SelectionOutlineManager.h"
+#include "SelectionAccelerator.h"
 
 gp_Pnt OCCViewer::getCameraPosition() const {
 	if (!m_sceneManager || !m_sceneManager->getCanvas()) return gp_Pnt(0, 0, 0);
@@ -125,6 +128,9 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
 	m_meshingService = std::make_unique<MeshingService>();
 	m_meshController = std::make_unique<MeshParameterController>(this, m_meshingService.get(), &m_meshParams, &m_geometries);
 	m_batchManager = std::make_unique<BatchOperationManager>(m_sceneManager, m_objectTreeSync.get(), m_viewUpdater.get());
+	
+	// Initialize selection accelerator
+	m_selectionAccelerator = std::make_unique<SelectionAccelerator>();
 }
 
 OCCViewer::~OCCViewer()
@@ -171,11 +177,6 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 	}
 	auto validationEndTime = std::chrono::high_resolution_clock::now();
 	auto validationDuration = std::chrono::duration_cast<std::chrono::microseconds>(validationEndTime - validationStartTime);
-
-	// Only log in non-batch mode to reduce overhead
-	if (!m_batchOperationActive) {
-		LOG_INF_S("Adding geometry: " + geometry->getName());
-	}
 
 	auto meshStartTime = std::chrono::high_resolution_clock::now();
 	// Use optimized mesh update method
@@ -227,7 +228,6 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 			if (!m_preserveViewOnAdd && m_viewUpdater) m_viewUpdater->resetView();
 			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::GEOMETRY_CHANGED), true);
 			m_viewUpdater->refreshCanvas(false);
-			LOG_INF_S(std::string("Scene bounds updated and ") + (m_preserveViewOnAdd ? "view preserved" : "view reset") + " after adding geometry");
 		}
 	}
 
@@ -235,26 +235,15 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 	if (m_outlineManager) {
 		m_outlineManager->onGeometryAdded(geometry);
 	}
+	
+	// Rebuild selection accelerator when new geometry is added
+	rebuildSelectionAccelerator();
+	
 	auto viewUpdateEndTime = std::chrono::high_resolution_clock::now();
 	auto viewUpdateDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewUpdateEndTime - viewUpdateStartTime);
 
 	auto addEndTime = std::chrono::high_resolution_clock::now();
 	auto addDuration = std::chrono::duration_cast<std::chrono::milliseconds>(addEndTime - addStartTime);
-
-	// Only show detailed breakdown in non-batch mode or for debugging
-	if (!m_batchOperationActive) {
-		LOG_INF_S("=== GEOMETRY ADDITION BREAKDOWN ===");
-		LOG_INF_S("Geometry: " + geometry->getName());
-		LOG_INF_S("  - Validation: " + std::to_string(validationDuration.count()) + "μs");
-		LOG_INF_S("  - Mesh regeneration: " + std::to_string(meshDuration.count()) + "ms");
-		LOG_INF_S("  - Storage: " + std::to_string(storageDuration.count()) + "μs");
-		LOG_INF_S("  - Coin3D node: " + std::to_string(coinNodeDuration.count()) + "μs");
-		LOG_INF_S("  - Add to scene: " + std::to_string(addChildDuration.count()) + "μs");
-		LOG_INF_S("  - Object tree: " + std::to_string(objectTreeDuration.count()) + "μs");
-		LOG_INF_S("  - View update: " + std::to_string(viewUpdateDuration.count()) + "μs");
-		LOG_INF_S("TOTAL ADDITION TIME: " + std::to_string(addDuration.count()) + "ms");
-		LOG_INF_S("==================================");
-	}
 }
 
 void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
@@ -274,7 +263,9 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
 		if (m_objectTreeSync) m_objectTreeSync->removeGeometry(geometry);
 
 		if (m_geometryRepo) m_geometryRepo->remove(geometry);
-		LOG_INF_S("Removed OCC geometry: " + geometry->getName());
+		
+		// Rebuild selection accelerator after geometry removed
+		rebuildSelectionAccelerator();
 	}
 }
 
@@ -291,8 +282,11 @@ void OCCViewer::clearAll()
 	m_selectedGeometries.clear();
 	if (m_geometryRepo) m_geometryRepo->clear();
 	if (m_sceneAttach) m_sceneAttach->detachAll();
-
-	LOG_INF_S("Cleared all OCC geometries");
+	
+	// Clear selection accelerator
+	if (m_selectionAccelerator) {
+		m_selectionAccelerator->clear();
+	}
 }
 
 // --- Hover silhouette helpers ---
@@ -437,8 +431,6 @@ void OCCViewer::setAllColor(const Quantity_Color& color)
 
 void OCCViewer::fitAll()
 {
-	LOG_INF_S("Fit all OCC geometries");
-
 	if (!m_sceneManager) {
 		LOG_WRN_S("SceneManager is null, cannot perform fitAll");
 		return;
@@ -458,13 +450,11 @@ void OCCViewer::fitAll()
 		}
 		canvas->Refresh();
 	}
-
-	LOG_INF_S("FitAll completed - view adjusted to show all geometries");
 }
 
 void OCCViewer::fitGeometry(const std::string& name)
 {
-	LOG_INF_S("Fit geometry: " + name);
+	// Not implemented
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
@@ -473,49 +463,53 @@ std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
 		return nullptr;
 	}
 
-	// Convert screen coordinates to world coordinates
+	// Convert screen coordinates to world coordinates and get ray
 	SbVec3f worldPos;
 	if (!m_sceneManager->screenToWorld(wxPoint(x, y), worldPos)) {
-		LOG_WRN_S("Failed to convert screen coordinates to world coordinates");
 		return nullptr;
 	}
+	
+	// Try to use SelectionAccelerator for fast picking if available
+	if (m_selectionAccelerator && !m_geometries.empty()) {
+		// Get camera for ray direction
+		gp_Pnt cameraPos = getCameraPosition();
+		gp_Pnt clickPos(worldPos[0], worldPos[1], worldPos[2]);
+		gp_Vec rayDir(cameraPos, clickPos);
+		
+		if (rayDir.Magnitude() > 1e-7) {
+			rayDir.Normalize();
+			
+			SelectionAccelerator::SelectionResult result;
+			if (m_selectionAccelerator->selectByRay(cameraPos, rayDir, result)) {
+				// Map shape index back to geometry
+				if (result.shapeIndex < m_geometries.size()) {
+					return m_geometries[result.shapeIndex];
+				}
+			}
+		}
+	}
 
-	LOG_INF_S("Picking at world position: (" + std::to_string(worldPos[0]) + ", " +
-		std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
-
-	// Find the closest geometry to the picked point
+	// Fallback to traditional distance-based picking
 	std::shared_ptr<OCCGeometry> closestGeometry = nullptr;
 	double minDistance = std::numeric_limits<double>::max();
 
 	for (auto& geometry : m_geometries) {
 		if (!geometry->isVisible()) continue;
 
-		// Get geometry position
 		gp_Pnt geometryPos = geometry->getPosition();
 
-		// Calculate distance to geometry center
 		double distance = std::sqrt(
 			std::pow(worldPos[0] - geometryPos.X(), 2) +
 			std::pow(worldPos[1] - geometryPos.Y(), 2) +
 			std::pow(worldPos[2] - geometryPos.Z(), 2)
 		);
 
-		LOG_INF_S("Geometry '" + geometry->getName() + "' at distance: " + std::to_string(distance));
-
-		// Use a much larger picking radius for complex geometries like wrench
-		double pickingRadius = 15.0; // Increased from 10.0 to 15.0
+		double pickingRadius = 15.0;
 
 		if (distance < minDistance && distance < pickingRadius) {
 			minDistance = distance;
 			closestGeometry = geometry;
 		}
-	}
-
-	if (closestGeometry) {
-		LOG_INF_S("Picked geometry: " + closestGeometry->getName() + " at distance: " + std::to_string(minDistance));
-	}
-	else {
-		LOG_INF_S("No geometry picked");
 	}
 
 	return closestGeometry;
@@ -553,8 +547,6 @@ void OCCViewer::setShowEdges(bool showEdges)
 
 	// Immediate refresh
 	if (m_viewUpdater) m_viewUpdater->requestEdgesToggled(true);
-
-	LOG_INF_S("OCCViewer showEdges set to: " + std::string(showEdges ? "enabled" : "disabled"));
 }
 
 void OCCViewer::setAntiAliasing(bool enabled)
@@ -594,11 +586,6 @@ void OCCViewer::setMeshDeflection(double deflection, bool remesh)
 				try {
 					remeshAllGeometries();
 					lastRemeshTime = currentTime;
-					// Reduce debug logging frequency
-					static int logCounter = 0;
-					if (++logCounter % 10 == 0) { // Log every 10th remesh
-						LOG_DBG_S("Remeshed all geometries with deflection: " + std::to_string(deflection));
-					}
 					// Request view refresh after remeshing
 					if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 				}
@@ -609,15 +596,6 @@ void OCCViewer::setMeshDeflection(double deflection, bool remesh)
 				catch (...) {
 					LOG_ERR_S("OCCViewer::setMeshDeflection: Unknown exception during remesh");
 					// Don't update lastRemeshTime if remesh failed
-				}
-			}
-			else {
-				// Skip remesh if too soon after last one - reduce logging frequency in debug
-				static int skipLogCounter = 0;
-				if (++skipLogCounter % 50 == 0) { // Log every 50th skip
-					long long timeDiff = (currentTime - lastRemeshTime).GetValue();
-					LOG_DBG_S("Remesh throttled for deflection: " + std::to_string(deflection) +
-						" (last remesh was " + std::to_string(timeDiff) + "ms ago)");
 				}
 			}
 		}
@@ -644,11 +622,6 @@ void OCCViewer::setAngularDeflection(double deflection, bool remesh)
 				try {
 					remeshAllGeometries();
 					lastRemeshTime = currentTime;
-					// Reduce debug logging frequency
-					static int logCounter = 0;
-					if (++logCounter % 10 == 0) { // Log every 10th remesh
-						LOG_DBG_S("Remeshed all geometries with angular deflection: " + std::to_string(deflection));
-					}
 					// Request view refresh after remeshing
 					if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 				}
@@ -659,15 +632,6 @@ void OCCViewer::setAngularDeflection(double deflection, bool remesh)
 				catch (...) {
 					LOG_ERR_S("OCCViewer::setAngularDeflection: Unknown exception during remesh");
 					// Don't update lastRemeshTime if remesh failed
-				}
-			}
-			else {
-				// Skip remesh if too soon after last one - reduce logging frequency in debug
-				static int skipLogCounter = 0;
-				if (++skipLogCounter % 50 == 0) { // Log every 50th skip
-					long long timeDiff = (currentTime - lastRemeshTime).GetValue();
-					LOG_DBG_S("Remesh throttled for angular deflection: " + std::to_string(deflection) +
-						" (last remesh was " + std::to_string(timeDiff) + "ms ago)");
 				}
 			}
 		}
@@ -738,7 +702,6 @@ void OCCViewer::updateNormalsDisplay()
 void OCCViewer::setNormalConsistencyMode(bool enabled)
 {
 	m_normalConsistencyMode = enabled;
-	LOG_INF_S("Normal consistency mode " + std::string(enabled ? "enabled" : "disabled"));
 	
 	// Apply to all geometries
 	for (auto& geometry : m_geometries) {
@@ -760,7 +723,6 @@ bool OCCViewer::isNormalConsistencyModeEnabled() const
 void OCCViewer::setNormalDebugMode(bool enabled)
 {
 	m_normalDebugMode = enabled;
-	LOG_INF_S("Normal debug mode " + std::string(enabled ? "enabled" : "disabled"));
 	
 	// Toggle normal display based on debug mode
 	setShowNormals(enabled);
@@ -781,8 +743,6 @@ bool OCCViewer::isNormalDebugModeEnabled() const
 
 void OCCViewer::refreshNormalDisplay()
 {
-	LOG_INF_S("Refreshing normal display");
-	
 	// Force regeneration of all normal lines
 	if (m_edgeDisplayManager) {
 		m_edgeDisplayManager->updateAll(m_meshParams);
@@ -796,7 +756,6 @@ void OCCViewer::toggleNormalDisplay()
 {
 	bool currentState = isShowNormals();
 	setShowNormals(!currentState);
-	LOG_INF_S("Normal display toggled to: " + std::string(!currentState ? "ON" : "OFF"));
 }
 
 void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
@@ -807,13 +766,9 @@ void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::remeshAllGeometries()
 {
-	LOG_INF_S("=== OCCVIEWER: STARTING REMESH ALL GEOMETRIES ===");
 	if (m_meshController) {
 		m_meshController->remeshAll();
-	} else {
-		LOG_WRN_S("OCCVIEWER: Mesh controller is null, cannot remesh");
 	}
-	LOG_INF_S("=== OCCVIEWER: REMESH ALL GEOMETRIES COMPLETED ===");
 }
 
 // LOD (Level of Detail) methods
@@ -822,7 +777,6 @@ void OCCViewer::setLODEnabled(bool enabled)
 	if (m_lodEnabled != enabled) {
 		m_lodEnabled = enabled;
 		if (m_lodController) m_lodController->setEnabled(enabled);
-		LOG_INF_S("LOD " + std::string(enabled ? "enabled" : "disabled"));
 	}
 }
 
@@ -832,7 +786,6 @@ void OCCViewer::setLODRoughDeflection(double deflection)
 {
 	if (m_lodController && m_lodController->getRoughDeflection() != deflection) {
 		m_lodController->setRoughDeflection(deflection);
-		LOG_INF_S("LOD rough deflection set to: " + std::to_string(deflection));
 	}
 }
 
@@ -842,7 +795,6 @@ void OCCViewer::setLODFineDeflection(double deflection)
 {
 	if (m_lodController && m_lodController->getFineDeflection() != deflection) {
 		m_lodController->setFineDeflection(deflection);
-		LOG_INF_S("LOD fine deflection set to: " + std::to_string(deflection));
 	}
 }
 
@@ -852,7 +804,6 @@ void OCCViewer::setLODTransitionTime(int milliseconds)
 {
 	if (m_lodController && m_lodController->getTransitionTimeMs() != milliseconds) {
 		m_lodController->setTransitionTimeMs(milliseconds);
-		LOG_INF_S("LOD transition time set to: " + std::to_string(milliseconds) + "ms");
 	}
 }
 
@@ -861,7 +812,6 @@ int OCCViewer::getLODTransitionTime() const { return m_lodController ? m_lodCont
 void OCCViewer::setLODMode(bool roughMode)
 {
 	if (m_lodController) m_lodController->setMode(roughMode);
-	LOG_INF_S("LOD mode switched to " + std::string(roughMode ? "rough" : "fine"));
 }
 
 bool OCCViewer::isLODRoughMode() const { return m_lodController ? m_lodController->isRoughMode() : false; }
@@ -879,7 +829,6 @@ void OCCViewer::beginBatchOperation()
 	m_batchOperationActive = true;
 	m_needsViewRefresh = false;
 	if (m_batchManager) m_batchManager->begin();
-	LOG_INF_S("Batch operation started");
 }
 
 void OCCViewer::endBatchOperation()
@@ -930,6 +879,19 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 		// Regenerate mesh (lazy)
 		geometry->updateCoinRepresentationIfNeeded(m_meshParams);
 
+		// Log geometry bounds for debugging
+		if (!geometry->getShape().IsNull()) {
+			Bnd_Box bbox;
+			BRepBndLib::Add(geometry->getShape(), bbox);
+			if (!bbox.IsVoid()) {
+				double xmin, ymin, zmin, xmax, ymax, zmax;
+				bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+				LOG_DBG_S("Geometry '" + geometry->getName() + "' bounds: [" +
+						 std::to_string(xmin) + "," + std::to_string(ymin) + "," + std::to_string(zmin) + "] to [" +
+						 std::to_string(xmax) + "," + std::to_string(ymax) + "," + std::to_string(zmax) + "]");
+			}
+		}
+
 		// Store geometry
 		m_geometries.push_back(geometry);
 
@@ -960,7 +922,6 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 	if (m_batchOperationActive) {
 		for (const auto& geometry : geometries) {
 			if (geometry) {
-				LOG_INF_S("OCCViewer: Queuing geometry '" + geometry->getName() + "' with filename '" + geometry->getFileName() + "' for deferred update");
 				m_pendingObjectTreeUpdates.push_back(geometry);
 			}
 		}
@@ -999,8 +960,6 @@ void OCCViewer::setSubdivisionEnabled(bool enabled)
 {
 	if (m_subdivisionEnabled == enabled) return;
 	m_subdivisionEnabled = enabled;
-	LOG_INF_S("Subdivision enabled: " + std::string(enabled ? "true" : "false"));
-	logParameterChange("subdivision_enabled", enabled ? 0.0 : 1.0, enabled ? 1.0 : 0.0);
 	if (m_meshController) m_meshController->setSubdivisionEnabled(enabled);
 }
 
@@ -1012,10 +971,7 @@ bool OCCViewer::isSubdivisionEnabled() const
 void OCCViewer::setSubdivisionLevel(int level)
 {
 	if (level < 1 || level > 5 || m_subdivisionLevel == level) return;
-	int oldValue = m_subdivisionLevel;
 	m_subdivisionLevel = level;
-	LOG_INF_S("Subdivision level set to: " + std::to_string(level));
-	logParameterChange("subdivision_level", oldValue, level);
 	if (m_meshController) m_meshController->setSubdivisionLevel(level);
 }
 
@@ -1028,7 +984,6 @@ void OCCViewer::setSubdivisionMethod(int method)
 {
 	if (method < 0 || method > 3 || m_subdivisionMethod == method) return;
 	m_subdivisionMethod = method;
-	LOG_INF_S("Subdivision method set to: " + std::to_string(method));
 	if (m_meshController) m_meshController->setSubdivisionMethod(method);
 }
 
@@ -1041,7 +996,6 @@ void OCCViewer::setSubdivisionCreaseAngle(double angle)
 {
 	if (angle < 0.0 || angle > 180.0 || m_subdivisionCreaseAngle == angle) return;
 	m_subdivisionCreaseAngle = angle;
-	LOG_INF_S("Subdivision crease angle set to: " + std::to_string(angle));
 	if (m_meshController) m_meshController->setSubdivisionCreaseAngle(angle);
 }
 
@@ -1055,7 +1009,6 @@ void OCCViewer::setSmoothingEnabled(bool enabled)
 {
 	if (m_smoothingEnabled == enabled) return;
 	m_smoothingEnabled = enabled;
-	LOG_INF_S("Smoothing enabled: " + std::string(enabled ? "true" : "false"));
 	if (m_meshController) m_meshController->setSmoothingEnabled(enabled);
 }
 
@@ -1068,7 +1021,6 @@ void OCCViewer::setSmoothingMethod(int method)
 {
 	if (method < 0 || method > 3 || m_smoothingMethod == method) return;
 	m_smoothingMethod = method;
-	LOG_INF_S("Smoothing method set to: " + std::to_string(method));
 	if (m_meshController) m_meshController->setSmoothingMethod(method);
 }
 
@@ -1081,7 +1033,6 @@ void OCCViewer::setSmoothingIterations(int iterations)
 {
 	if (iterations < 1 || iterations > 10 || m_smoothingIterations == iterations) return;
 	m_smoothingIterations = iterations;
-	LOG_INF_S("Smoothing iterations set to: " + std::to_string(iterations));
 	if (m_meshController) m_meshController->setSmoothingIterations(iterations);
 }
 
@@ -1094,7 +1045,6 @@ void OCCViewer::setSmoothingStrength(double strength)
 {
 	if (strength < 0.01 || strength > 1.0 || m_smoothingStrength == strength) return;
 	m_smoothingStrength = strength;
-	LOG_INF_S("Smoothing strength set to: " + std::to_string(strength));
 	if (m_meshController) m_meshController->setSmoothingStrength(strength);
 }
 
@@ -1107,7 +1057,6 @@ void OCCViewer::setSmoothingCreaseAngle(double angle)
 {
 	if (angle < 0.0 || angle > 180.0 || m_smoothingCreaseAngle == angle) return;
 	m_smoothingCreaseAngle = angle;
-	LOG_INF_S("Smoothing crease angle set to: " + std::to_string(angle));
 	if (m_meshController) m_meshController->setSmoothingCreaseAngle(angle);
 }
 
@@ -1121,7 +1070,6 @@ void OCCViewer::setTessellationMethod(int method)
 {
 	if (method < 0 || method > 3 || m_tessellationMethod == method) return;
 	m_tessellationMethod = method;
-	LOG_INF_S("Tessellation method set to: " + std::to_string(method));
 	if (m_meshController) m_meshController->setTessellationMethod(method);
 }
 
@@ -1134,7 +1082,6 @@ void OCCViewer::setTessellationQuality(int quality)
 {
 	if (quality < 1 || quality > 5 || m_tessellationQuality == quality) return;
 	m_tessellationQuality = quality;
-	LOG_INF_S("Tessellation quality set to: " + std::to_string(quality));
 	if (m_meshController) m_meshController->setTessellationQuality(quality);
 }
 
@@ -1147,7 +1094,6 @@ void OCCViewer::setFeaturePreservation(double preservation)
 {
 	if (preservation < 0.0 || preservation > 1.0 || m_featurePreservation == preservation) return;
 	m_featurePreservation = preservation;
-	LOG_INF_S("Feature preservation set to: " + std::to_string(preservation));
 	if (m_meshController) m_meshController->setFeaturePreservation(preservation);
 }
 
@@ -1160,7 +1106,6 @@ void OCCViewer::setParallelProcessing(bool enabled)
 {
 	if (m_parallelProcessing == enabled) return;
 	m_parallelProcessing = enabled;
-	LOG_INF_S("Parallel processing enabled: " + std::string(enabled ? "true" : "false"));
 	if (m_meshController) m_meshController->setParallelProcessing(enabled);
 }
 
@@ -1173,7 +1118,6 @@ void OCCViewer::setAdaptiveMeshing(bool enabled)
 {
 	if (m_adaptiveMeshing == enabled) return;
 	m_adaptiveMeshing = enabled;
-	LOG_INF_S("Adaptive meshing enabled: " + std::string(enabled ? "true" : "false"));
 	if (m_meshController) m_meshController->setAdaptiveMeshing(enabled);
 }
 
@@ -1362,13 +1306,6 @@ void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLen
 	m_originalEdgesIntersectionNodeColor = intersectionNodeColor;
 	m_originalEdgesIntersectionNodeSize = intersectionNodeSize;
 	
-	LOG_INF_S("Original edges parameters set: density=" + std::to_string(samplingDensity) + 
-		", minLength=" + std::to_string(minLength) + 
-		", linesOnly=" + std::string(showLinesOnly ? "true" : "false") +
-		", width=" + std::to_string(width) +
-		", highlightNodes=" + std::string(highlightIntersectionNodes ? "true" : "false") +
-		", nodeSize=" + std::to_string(intersectionNodeSize));
-	
 	// Convert wxColour to Quantity_Color
 	Quantity_Color occColor(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
 	Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
@@ -1484,12 +1421,10 @@ void OCCViewer::setShowHighlightEdges(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowHighlightEdges(show, m_meshParams);
 }
 void OCCViewer::setShowNormalLines(bool show) {
-	LOG_INF_S("Setting show normal lines to: " + std::string(show ? "true" : "false"));
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowNormalLines(show, m_meshParams);
 }
 
 void OCCViewer::setShowFaceNormalLines(bool show) {
-	LOG_INF_S("Setting show face normal lines to: " + std::string(show ? "true" : "false"));
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFaceNormalLines(show, m_meshParams);
 }
 
@@ -1517,3 +1452,43 @@ void OCCViewer::updateAllEdgeDisplays() {
 }
 
 void OCCViewer::invalidateFeatureEdgeCache() {}
+
+void OCCViewer::rebuildSelectionAccelerator()
+{
+	if (!m_selectionAccelerator) {
+		return;
+	}
+
+	LOG_INF_S("Starting selection accelerator rebuild...");
+
+	// Collect all shapes from geometries
+	std::vector<TopoDS_Shape> shapes;
+	shapes.reserve(m_geometries.size());
+
+	for (const auto& geometry : m_geometries) {
+		if (geometry && !geometry->getShape().IsNull() && geometry->isVisible()) {
+			shapes.push_back(geometry->getShape());
+		}
+	}
+
+	LOG_INF_S("Collected " + std::to_string(shapes.size()) + " shapes for selection accelerator");
+
+	// Rebuild accelerator for shape-level selection
+	if (!shapes.empty()) {
+		LOG_INF_S("Building selection accelerator...");
+		auto startTime = std::chrono::high_resolution_clock::now();
+
+		bool success = m_selectionAccelerator->build(shapes, SelectionAccelerator::SelectionMode::Shapes);
+
+		auto endTime = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+
+		if (success) {
+			LOG_INF_S("Selection accelerator rebuilt with " + std::to_string(shapes.size()) + " shapes in " + std::to_string(duration.count()) + "ms");
+		} else {
+			LOG_ERR_S("Failed to rebuild selection accelerator");
+		}
+	} else {
+		LOG_WRN_S("No shapes available for selection accelerator rebuild");
+	}
+}

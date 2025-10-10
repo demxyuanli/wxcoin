@@ -144,6 +144,13 @@ public:
      */
     static LoadingConfiguration getRecommendedConfig(const std::string& filePath);
 
+    /**
+     * @brief Process a loaded chunk (called by streaming reader)
+     * @param shapes Loaded shapes
+     * @param chunkIndex Index of the chunk
+     */
+    void processLoadedChunk(const std::vector<TopoDS_Shape>& shapes, size_t chunkIndex);
+
 private:
     LoadingState m_state;
     LoadingConfiguration m_config;
@@ -168,7 +175,6 @@ private:
     // Helper methods
     void loadingThreadFunc();
     void renderingThreadFunc();
-    void processLoadedChunk(const std::vector<TopoDS_Shape>& shapes, size_t chunkIndex);
     void updateStats();
     void changeState(LoadingState newState, const std::string& message = "");
     void handleError(const std::string& error);

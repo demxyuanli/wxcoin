@@ -119,9 +119,6 @@ XTReader::ReadResult XTReader::readFile(const std::string& filePath,
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
         result.importTime = static_cast<double>(totalDuration.count());
 
-        LOG_INF_S("X_T file imported successfully: " + std::to_string(result.geometries.size()) + 
-                 " geometries in " + std::to_string(result.importTime) + "ms");
-
         return result;
     }
     catch (const std::exception& e) {
@@ -328,7 +325,6 @@ std::vector<std::shared_ptr<OCCGeometry>> XTReader::processShapesParallel(
         for (auto& future : futures) {
             auto geometry = future.get();
             if (geometry) {
-                LOG_INF_S("XTReader: Created geometry '" + geometry->getName() + "' with filename '" + geometry->getFileName() + "'");
                 geometries.push_back(geometry);
             }
         }
@@ -338,7 +334,6 @@ std::vector<std::shared_ptr<OCCGeometry>> XTReader::processShapesParallel(
             std::string name = baseName + "_" + std::to_string(i + 1);
             auto geometry = processSingleShape(shapes[i], name, baseName, options);
             if (geometry) {
-                LOG_INF_S("XTReader: Created geometry '" + name + "' with filename '" + geometry->getFileName() + "'");
                 geometries.push_back(geometry);
             }
             

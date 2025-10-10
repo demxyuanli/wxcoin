@@ -48,6 +48,7 @@ class MeshParameterController; // mesh params + remesh
 class MeshingService; // apply + regenerate
 class HoverSilhouetteManager; // hover silhouette
 class BatchOperationManager; // batch updates
+class SelectionAccelerator; // selection acceleration
 
 /**
  * @brief OpenCASCADE viewer integration
@@ -282,6 +283,7 @@ private:
 	void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
 	static bool approximatelyEqual(double a, double b, double eps = 1e-6) { return std::abs(a - b) <= eps; }
 	void invalidateFeatureEdgeCache();
+	void rebuildSelectionAccelerator();
 
 	SceneManager* m_sceneManager;
 	SoSeparator* m_occRoot;
@@ -394,4 +396,7 @@ private:
 
 	// New manager to centralize edge display
 	std::unique_ptr<EdgeDisplayManager> m_edgeDisplayManager;
+	
+	// Selection acceleration using BVH
+	std::unique_ptr<SelectionAccelerator> m_selectionAccelerator;
 };

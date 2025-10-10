@@ -86,8 +86,6 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
             return result;
         }
 
-        LOG_INF_S("STL file parsed successfully: " + std::to_string(triangles.size()) + " triangles");
-
         if (progress) progress(60, "Creating geometry");
 
         if (triangles.empty()) {
@@ -105,8 +103,6 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
             LOG_ERR_S("STL shape creation failed: shape is null");
             return result;
         }
-
-        LOG_INF_S("STL shape created successfully");
 
         if (progress) progress(80, "Creating OCCGeometry");
 
@@ -126,8 +122,6 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
             LOG_INF_S("Normal processing disabled for STL import");
         }
 
-        LOG_INF_S("STL OCCGeometry created successfully");
-
         result.geometries.push_back(geometry);
         result.rootShape = shape;
         result.success = true;
@@ -135,9 +129,6 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
         auto totalEndTime = std::chrono::high_resolution_clock::now();
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
         result.importTime = static_cast<double>(totalDuration.count());
-
-        LOG_INF_S("STL file imported successfully: " + std::to_string(triangles.size()) + 
-                 " triangles in " + std::to_string(result.importTime) + "ms");
 
         return result;
     }

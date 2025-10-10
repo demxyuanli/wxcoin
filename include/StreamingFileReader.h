@@ -8,6 +8,9 @@
 #include <OpenCASCADE/TColStd_SequenceOfAsciiString.hxx>
 #include "logger/Logger.h"
 
+// Forward declaration
+class ProgressiveGeometryLoader;
+
 /**
  * @brief Streaming file reader for large CAD models
  *
@@ -95,7 +98,19 @@ public:
     /**
      * @brief Cancel loading operation
      */
-    virtual void cancelLoading() = 0;
+    virtual void cancelLoading() {
+        // Default implementation - subclasses can override
+        m_cancelRequested = true;
+        m_isLoading = false;
+    }
+
+    /**
+     * @brief Set the loader that will receive loaded chunks
+     * @param loader Pointer to the progressive geometry loader
+     */
+    void setLoader(ProgressiveGeometryLoader* loader) {
+        m_loader = loader;
+    }
 
     /**
      * @brief Check if loading is in progress
@@ -143,6 +158,7 @@ protected:
     MemoryInfo m_memoryInfo;
     bool m_isLoading;
     bool m_cancelRequested;
+    ProgressiveGeometryLoader* m_loader;
 
     /**
      * @brief Update progress information
@@ -194,6 +210,12 @@ private:
     // STEP parsing state
     std::vector<std::string> m_entityBuffer;
     size_t m_processedEntities;
+    
+    // STEP reader for actual parsing
+    class STEPControl_Reader* m_stepReader;
+    Standard_Integer m_totalRoots;
+    Standard_Integer m_currentRoot;
+    size_t m_currentChunkIndex;
 
     // Helper methods
     bool openFile(const std::string& filePath);

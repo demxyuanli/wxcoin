@@ -5,6 +5,7 @@
 #include "GeometryReader.h"
 #include "GeometryImportOptimizer.h"
 #include "ImportStatisticsDialog.h"
+#include "ProgressiveGeometryLoader.h"
 #include <memory>
 #include <wx/frame.h>
 #include <chrono>
@@ -88,4 +89,23 @@ private:
      * @brief Clean up progress display
      */
     void cleanupProgress();
+
+    /**
+     * @brief Check if file should use progressive loading
+     * @param filePath Path to file
+     * @param fileSize File size in bytes
+     * @return True if progressive loading should be used
+     */
+    bool shouldUseProgressiveLoading(const std::string& filePath, size_t fileSize);
+
+    /**
+     * @brief Import large file using progressive loading
+     * @param filePath Path to large file
+     * @param options Import options
+     * @param allGeometries Output vector to accumulate geometries
+     * @return True if import successful
+     */
+    bool importWithProgressiveLoading(const std::string& filePath,
+        const GeometryReader::OptimizationOptions& options,
+        std::vector<std::shared_ptr<OCCGeometry>>& allGeometries);
 };

@@ -292,7 +292,6 @@ void OCCGeometry::setWireframeMode(bool wireframe)
 		if (m_coinNode) {
 			buildCoinRepresentation();
 			m_coinNode->touch();
-			LOG_INF_S("Wireframe mode changed to " + std::string(wireframe ? "enabled" : "disabled") + " for " + m_name);
 		}
 	}
 }
@@ -374,7 +373,6 @@ void OCCGeometry::setTextureEnabled(bool enabled)
 		// Force rebuild of Coin3D representation to apply texture changes
 		buildCoinRepresentation();
 		m_coinNode->touch();
-		LOG_INF_S("Texture enabled set to " + std::to_string(enabled) + " for " + m_name);
 	}
 }
 
@@ -387,7 +385,6 @@ void OCCGeometry::setTextureImagePath(const std::string& path)
 		// Force rebuild of Coin3D representation to apply texture changes
 		buildCoinRepresentation();
 		m_coinNode->touch();
-		LOG_INF_S("Texture image path set to " + path + " for " + m_name);
 	}
 }
 
@@ -400,7 +397,6 @@ void OCCGeometry::setTextureMode(RenderingConfig::TextureMode mode)
 		// Force rebuild of Coin3D representation to apply texture changes
 		buildCoinRepresentation();
 		m_coinNode->touch();
-		LOG_INF_S("Texture mode set to " + std::to_string(static_cast<int>(mode)) + " for " + m_name);
 	}
 }
 
@@ -459,7 +455,6 @@ void OCCGeometry::regenerateMesh(const MeshParameters& params)
 {
 	// Clear old face mapping since mesh will be regenerated
 	m_faceIndexMappings.clear();
-	LOG_INF_S("Regenerating mesh for " + m_name + " - face mapping will be rebuilt");
 	
 	buildCoinRepresentation(params);
 }
@@ -483,7 +478,6 @@ void OCCGeometry::forceCoinRepresentationRebuild(const MeshParameters& params)
 		
 		// Clear old face mapping since mesh will be regenerated
 		m_faceIndexMappings.clear();
-		LOG_INF_S("Force rebuilding mesh for " + m_name + " - face mapping will be rebuilt");
 		
 		buildCoinRepresentation(params,
 			m_materialDiffuseColor, m_materialAmbientColor,
@@ -592,7 +586,6 @@ void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 			// Clear old face mapping since mesh parameters have changed
 			if (paramsChanged || advancedParamsChanged) {
 				m_faceIndexMappings.clear();
-				LOG_INF_S("Mesh parameters changed for " + m_name + " - face mapping will be rebuilt");
 			}
 			
 			// Use the material-aware version to preserve imported geometry colors
@@ -787,8 +780,6 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 				// Add texture coordinate node
 				m_coinNode->addChild(texCoord);
 
-				LOG_INF_S("Texture applied to " + m_name + " - path: " + m_textureImagePath +
-					" mode: " + std::to_string(static_cast<int>(m_textureMode)));
 			}
 			catch (const std::exception& e) {
 				LOG_ERR_S("Exception while loading texture for " + m_name + ": " + std::string(e.what()));
@@ -812,8 +803,6 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 		blendHints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
 		m_coinNode->addChild(blendHints);
 
-		LOG_INF_S("Applied blend mode " + std::to_string(static_cast<int>(m_blendMode)) +
-			" with transparency " + std::to_string(m_transparency) + " for " + m_name);
 	}
 
 	// Face culling settings
@@ -859,16 +848,8 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 
 	m_coinNeedsUpdate = false;
 
-	auto buildEndTime = std::chrono::high_resolution_clock::now();
+    auto buildEndTime = std::chrono::high_resolution_clock::now();
 	auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
-
-	// Only log detailed breakdown for debugging or when needed
-	if (buildDuration.count() > 100) { // Only log if build takes more than 100ms
-		LOG_INF_S("=== COIN3D BUILD BREAKDOWN ===");
-		LOG_INF_S("Geometry: " + m_name);
-		LOG_INF_S("TOTAL BUILD TIME: " + std::to_string(buildDuration.count()) + "ms");
-		LOG_INF_S("==============================");
-	}
 
 	// Generate edge nodes for EdgeComponent on demand when any edge type is toggled or if overlay edges are requested
 	bool anyEdgeDisplayRequested = false;
@@ -922,18 +903,9 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 			edgeComponent->generateHighlightEdgeNode();
 		}
 	}
-	else {
-		if (!edgeComponent) {
-			LOG_WRN_S("EdgeComponent is null for geometry: " + m_name);
-		}
-		else {
-			LOG_INF_S("Skipping edge generation for geometry (edge display disabled): " + m_name);
-		}
-	}
 
 	// Build face index mapping if not already built to enable face picking for all geometries
 	if (!hasFaceIndexMapping()) {
-		LOG_INF_S("Building face index mapping for geometry: " + m_name);
 		buildFaceIndexMapping(params);
 	}
 
@@ -1066,10 +1038,6 @@ void OCCGeometry::createWireframeRepresentation(const MeshParameters& params)
 
 	lineSet->coordIndex.setValues(0, static_cast<int>(indices.size()), indices.data());
 	m_coinNode->addChild(lineSet);
-
-	LOG_INF_S("Created wireframe representation for " + m_name +
-		" with " + std::to_string(mesh.vertices.size()) + " vertices and " +
-		std::to_string(mesh.triangles.size() / 3) + " triangles");
 }
 
 // All primitive classes (OCCBox, OCCCylinder, etc.) call setShape(),
@@ -1320,7 +1288,6 @@ void OCCGeometry::forceTextureUpdate()
 			// Force rebuild of Coin3D representation to apply texture changes
 			buildCoinRepresentation();
 			m_coinNode->touch();
-			LOG_INF_S("Forced texture update for " + m_name + " - path: " + m_textureImagePath);
 		}
 	}
 }
@@ -1472,8 +1439,6 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
 					}
 				}
 				
-				LOG_INF_S("Built face index mapping with " + std::to_string(m_faceIndexMappings.size()) +
-					" face mappings, total triangles: " + std::to_string(meshWithMapping.getTriangleCount()));
 			}
 		}
 	}
@@ -1506,8 +1471,6 @@ void OCCGeometry::updateEdgeDisplay() {
 
 void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& params)
 {
-	LOG_INF_S("Applying advanced parameters to geometry: " + m_name);
-
 	// Apply material parameters
 	setMaterialDiffuseColor(params.materialDiffuseColor);
 	setMaterialAmbientColor(params.materialAmbientColor);
@@ -1548,16 +1511,7 @@ void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& para
 	if (m_coinNode) {
 		buildCoinRepresentation();
 		m_coinNode->touch();
-		LOG_INF_S("Rebuilt Coin3D representation for geometry '" + m_name + "' with advanced parameters");
 	}
-
-	LOG_INF_S("Advanced parameters applied to geometry '" + m_name + "':");
-	LOG_INF_S("  - Material diffuse color: " + std::to_string(params.materialDiffuseColor.Red()) + "," +
-		std::to_string(params.materialDiffuseColor.Green()) + "," + std::to_string(params.materialDiffuseColor.Blue()));
-	LOG_INF_S("  - Transparency: " + std::to_string(params.materialTransparency));
-	LOG_INF_S("  - Texture enabled: " + std::string(params.textureEnabled ? "true" : "false"));
-	LOG_INF_S("  - Show edges: " + std::string(params.showEdges ? "true" : "false"));
-	LOG_INF_S("  - Subdivision enabled: " + std::string(params.subdivisionEnabled ? "true" : "false"));
 }
 
 // ===== FACE INDEX MAPPING IMPLEMENTATION =====

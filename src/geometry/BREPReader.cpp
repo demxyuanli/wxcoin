@@ -190,7 +190,6 @@ std::vector<std::shared_ptr<OCCGeometry>> BREPReader::processShapesParallel(
         for (auto& future : futures) {
             auto geometry = future.get();
             if (geometry) {
-                LOG_INF_S("BREPReader: Created geometry '" + geometry->getName() + "' with filename '" + geometry->getFileName() + "'");
                 geometries.push_back(geometry);
             }
         }
@@ -200,7 +199,6 @@ std::vector<std::shared_ptr<OCCGeometry>> BREPReader::processShapesParallel(
             std::string name = baseName + "_" + std::to_string(i + 1);
             auto geometry = processSingleShape(shapes[i], name, baseName, options);
             if (geometry) {
-                LOG_INF_S("BREPReader: Created geometry '" + name + "' with filename '" + geometry->getFileName() + "'");
                 geometries.push_back(geometry);
             }
             

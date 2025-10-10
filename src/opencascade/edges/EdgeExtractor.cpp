@@ -94,12 +94,10 @@ std::vector<gp_Pnt> EdgeExtractor::extractOriginalEdges(
         auto& cache = EdgeGeometryCache::getInstance();
         return cache.getOrCompute(cacheKey, [&]() {
             // Cache miss - compute normally
-            LOG_DBG_S("Computing original edges (cache miss)");
             return extractOriginalEdgesImpl(shape, samplingDensity, minLength, showLinesOnly, nullptr);
         });
     } else {
         // Intersection points requested - compute without cache
-        LOG_DBG_S("Computing original edges with intersections (no cache)");
         return extractOriginalEdgesImpl(shape, samplingDensity, minLength, showLinesOnly, intersectionPoints);
     }
 }
@@ -238,10 +236,6 @@ std::vector<gp_Pnt> EdgeExtractor::adaptiveSampleCurve(
         points.push_back(curve->Value(first));
         points.push_back(curve->Value(last));
     }
-
-    LOG_DBG_S("Adaptive sampling: curvature=" + std::to_string(maxCurvature) +
-              ", type=" + std::to_string(static_cast<int>(curveType)) +
-              ", samples=" + std::to_string(points.size()));
 
     return points;
 }
@@ -481,15 +475,6 @@ std::vector<gp_Pnt> EdgeExtractor::extractFeatureEdges(
             }
         }
     }
-    
-    LOG_INF_S("Feature edge extraction: total=" + std::to_string(totalEdges) + 
-              " closed=" + std::to_string(closedCurves) +
-              " nullCurve=" + std::to_string(nullCurves) +
-              " filteredLen=" + std::to_string(filteredByLength) +
-              " one-face=" + std::to_string(oneFaceEdges) +
-              " two-face=" + std::to_string(twoFaceEdges) + 
-              " feature=" + std::to_string(featureEdgesFound) + 
-              " points=" + std::to_string(points.size()/2));
 
     return points;
 }
@@ -610,8 +595,6 @@ void EdgeExtractor::findEdgeIntersectionsFromEdges(
 {
     auto startTime = std::chrono::steady_clock::now();
 
-    LOG_INF_S("Finding intersections from " + std::to_string(edges.size()) + " filtered edges");
-
     // For small number of edges, use simpler approach
     if (edges.size() < 50) {
         findEdgeIntersectionsSimple(edges, intersectionPoints);
@@ -641,9 +624,6 @@ void EdgeExtractor::findEdgeIntersectionsFromEdges(
     double gridSizeX = (xmax - xmin) / gridSize;
     double gridSizeY = (ymax - ymin) / gridSize;
     double gridSizeZ = (zmax - zmin) / gridSize;
-
-    LOG_INF_S("Using " + std::to_string(gridSize) + "x" + std::to_string(gridSize) + "x" + std::to_string(gridSize) +
-              " grid for spatial partitioning, tolerance: " + std::to_string(tolerance));
 
     // Precompute edge data
     for (const auto& edge : edges) {
@@ -686,8 +666,6 @@ void EdgeExtractor::findEdgeIntersectionsFromEdges(
 
         edgeData.push_back(data);
     }
-
-    LOG_INF_S("Precomputed " + std::to_string(edgeData.size()) + " edge bounding boxes");
 
     // Create spatial grid
     std::vector<std::vector<std::vector<std::vector<size_t>>>> grid(
@@ -782,20 +760,12 @@ void EdgeExtractor::findEdgeIntersectionsFromEdges(
 
     auto endTime = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-
-    LOG_INF_S("Intersection detection completed in " + std::to_string(duration.count()) + "ms");
-    LOG_INF_S("Statistics: " + std::to_string(processedComparisons.load()) + " comparisons, " +
-              std::to_string(bboxFiltered.load()) + " filtered by AABB, " +
-              std::to_string(distanceFiltered.load()) + " filtered by distance");
-    LOG_INF_S("Found " + std::to_string(intersectionPoints.size()) + " intersection points");
 }
 
 void EdgeExtractor::findEdgeIntersectionsSimple(
     const std::vector<TopoDS_Edge>& edges, 
     std::vector<gp_Pnt>& intersectionPoints)
 {
-    LOG_INF_S("Using simple intersection detection for " + std::to_string(edges.size()) + " edges");
-
     // Calculate bounding box for tolerance
     Bnd_Box bbox;
     for (const auto& edge : edges) {
@@ -868,8 +838,6 @@ void EdgeExtractor::findEdgeIntersectionsSimple(
             }
         }
     }
-
-    LOG_INF_S("Simple intersection detection found " + std::to_string(intersectionPoints.size()) + " intersection points");
 }
 
 double EdgeExtractor::computeMinDistanceBetweenCurves(

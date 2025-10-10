@@ -498,12 +498,8 @@ void EdgeRenderer::generateLODEdgeNodes(
             // Generate the line node for this LOD level
             // Note: We could create separate nodes for each LOD level
             // or use a more sophisticated switching mechanism
-            LOG_DBG_S("Generated LOD node for level " + std::to_string(level) +
-                     " with " + std::to_string(lodEdges.size() / 2) + " edges");
         }
     }
-
-    LOG_INF_S("Generated LOD edge nodes for all levels");
 }
 
 void EdgeRenderer::setGPUAccelerationEnabled(bool enabled)
@@ -517,7 +513,6 @@ void EdgeRenderer::setGPUAccelerationEnabled(bool enabled)
     }
 
     m_gpuAccelerationEnabled = enabled;
-    LOG_INF_S(std::string("GPU acceleration ") + (enabled ? "enabled" : "disabled"));
 }
 
 void EdgeRenderer::generateGPUMeshEdgeNode(
@@ -547,10 +542,7 @@ void EdgeRenderer::generateGPUMeshEdgeNode(
 
     m_gpuMeshEdgeNode = m_gpuRenderer->createGPUEdgeNode(mesh, settings);
 
-    if (m_gpuMeshEdgeNode) {
-        LOG_INF_S("Generated GPU-accelerated mesh edge node with " + 
-                  std::to_string(mesh.triangles.size() / 3) + " triangles");
-    } else {
+    if (!m_gpuMeshEdgeNode) {
         LOG_ERR_S("Failed to create GPU mesh edge node");
     }
 }
@@ -589,8 +581,4 @@ void EdgeRenderer::updateLODLevel(EdgeLODManager* lodManager)
         originalEdgeNode = createLineNode(currentEdges, defaultColor, 1.0);
     }
 
-    // Log after releasing lock
-    LOG_INF_S("Updated edge display to LOD level " +
-             std::to_string(static_cast<int>(currentLevel)) +
-             " with " + std::to_string(currentEdges.size() / 2) + " edges");
 }
