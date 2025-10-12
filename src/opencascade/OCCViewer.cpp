@@ -30,7 +30,6 @@
 #include <cmath>
 #include <wx/gdicmn.h>
 #include <chrono>
-#include "EdgeComponent.h"
 #include "edges/EdgeDisplayManager.h"
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoNode.h>
@@ -1411,7 +1410,16 @@ float OCCViewer::getSliceOffset() const {
 
 void OCCViewer::setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) {
 	if (m_edgeDisplayManager) {
-		m_edgeDisplayManager->setShowFeatureEdges(show, featureAngleDeg, minLength, onlyConvex, onlyConcave, m_meshParams);
+		// Use default color and width for backward compatibility
+		Quantity_Color defaultColor(1.0, 0.0, 0.0, Quantity_TOC_RGB); // Red
+		m_edgeDisplayManager->setShowFeatureEdges(show, featureAngleDeg, minLength, onlyConvex, onlyConcave, m_meshParams, defaultColor, 2.0);
+	}
+}
+
+void OCCViewer::setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave,
+	const Quantity_Color& color, double width) {
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->setShowFeatureEdges(show, featureAngleDeg, minLength, onlyConvex, onlyConcave, m_meshParams, color, width);
 	}
 }
 void OCCViewer::setShowMeshEdges(bool show) {
@@ -1426,6 +1434,10 @@ void OCCViewer::setShowNormalLines(bool show) {
 
 void OCCViewer::setShowFaceNormalLines(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFaceNormalLines(show, m_meshParams);
+}
+
+void OCCViewer::setShowIntersectionNodes(bool show) {
+	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowIntersectionNodes(show, m_meshParams);
 }
 
 // removed deprecated setShowSilhouetteEdges
@@ -1443,12 +1455,19 @@ bool OCCViewer::isEdgeTypeEnabled(EdgeType type) const {
 	case EdgeType::Highlight: return flags.showHighlightEdges;
 	case EdgeType::NormalLine: return flags.showNormalLines;
 	case EdgeType::FaceNormalLine: return flags.showFaceNormalLines;
+	case EdgeType::IntersectionNodes: return flags.showIntersectionNodes;
 	}
 	return false;
 }
 
 void OCCViewer::updateAllEdgeDisplays() {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->updateAll(m_meshParams);
+}
+
+void OCCViewer::forceRegenerateMeshDerivedEdges(const MeshParameters& meshParams) {
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->updateAll(meshParams, true); // true = force mesh regeneration
+	}
 }
 
 void OCCViewer::invalidateFeatureEdgeCache() {}

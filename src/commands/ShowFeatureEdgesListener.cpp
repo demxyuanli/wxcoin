@@ -60,10 +60,10 @@ CommandResult ShowFeatureEdgesListener::executeCommand(const std::string& comman
 				}
 			}
 
-			// Enable feature edges with parameters (viewer will reuse cache if unchanged)
-			m_viewer->setShowFeatureEdges(true, angle, minLength, onlyConvex, onlyConcave);
-			// Apply appearance without recomputation
+			// Enable feature edges with parameters and appearance
 			Quantity_Color qcol(edgeCol.Red() / 255.0, edgeCol.Green() / 255.0, edgeCol.Blue() / 255.0, Quantity_TOC_RGB);
+			m_viewer->setShowFeatureEdges(true, angle, minLength, onlyConvex, onlyConcave, qcol, edgeWidth);
+			// Apply additional appearance settings (style, edges-only)
 			m_viewer->applyFeatureEdgeAppearance(qcol, edgeWidth, edgeStyle, edgesOnly);
 			return CommandResult(true, "Feature edges shown with custom parameters", commandType);
 		}

@@ -155,9 +155,14 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& positi
 		auto box = std::make_shared<OCCBox>(name, width, height, depth);
 
 		if (box && !box->getShape().IsNull()) {
+			// Set position BEFORE buildShape to create at correct location
 			box->setPosition(gp_Pnt(position[0], position[1], position[2]));
-			LOG_INF_S("Created OCCBox: " + name + " with dimensions " +
-				std::to_string(width) + "x" + std::to_string(height) + "x" + std::to_string(depth));
+			// Rebuild shape at new position
+			box->setDimensions(width, height, depth);
+			
+			LOG_INF_S("Created OCCBox: " + name + " at position (" +
+				std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) +
+				") with dimensions " + std::to_string(width) + "x" + std::to_string(height) + "x" + std::to_string(depth));
 			return box;
 		}
 		else {

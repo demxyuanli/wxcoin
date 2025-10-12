@@ -5,15 +5,56 @@
 #endif
 
 #include "edges/EdgeGenerationService.h"
-#include "EdgeComponent.h"
+#include "edges/ModularEdgeComponent.h"
+#include "edges/extractors/OriginalEdgeExtractor.h"
 #include "rendering/RenderingToolkitAPI.h"
+#include "logger/Logger.h"
 
 bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& geom, double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width,
 	bool highlightIntersectionNodes, const Quantity_Color& intersectionNodeColor, double intersectionNodeSize) {
 	if (!geom) return false;
-	if (!geom->edgeComponent) geom->edgeComponent = std::make_unique<EdgeComponent>();
-	if (geom->edgeComponent->getEdgeNode(EdgeType::Original) != nullptr) return false;
-	geom->edgeComponent->extractOriginalEdges(geom->getShape(), samplingDensity, minLength, showLinesOnly, color, width, 
+
+	// Use the component specified by the geometry
+	// Migration completed - always use modular edge component
+	if (!geom->modularEdgeComponent) {
+		geom->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+	}
+
+	auto& comp = geom->modularEdgeComponent;
+
+	// Check if original edge node already exists
+	if (comp->getEdgeNode(EdgeType::Original) != nullptr) {
+		// Node exists - just apply new appearance (color, width) without regenerating geometry
+		comp->applyAppearanceToEdgeNode(EdgeType::Original, color, width);
+
+		// Handle intersection nodes
+		if (highlightIntersectionNodes) {
+			// If intersection nodes don't exist, we need to generate them
+			if (comp->getEdgeNode(EdgeType::IntersectionNodes) == nullptr) {
+				// Generate intersection nodes without regenerating the entire edge geometry
+				std::vector<gp_Pnt> intersectionPoints;
+				auto extractor = std::dynamic_pointer_cast<OriginalEdgeExtractor>(comp->getOriginalExtractor());
+				if (extractor) {
+					extractor->findEdgeIntersections(geom->getShape(), intersectionPoints, 0.0); // Use adaptive tolerance
+
+					if (!intersectionPoints.empty()) {
+						comp->createIntersectionNodesNode(intersectionPoints, intersectionNodeColor, intersectionNodeSize);
+					}
+				}
+			} else {
+				// Intersection nodes exist - just update appearance
+				comp->applyAppearanceToEdgeNode(EdgeType::IntersectionNodes, intersectionNodeColor, intersectionNodeSize);
+			}
+		} else {
+			// If intersection highlighting is disabled, clean up intersection nodes
+			comp->clearEdgeNode(EdgeType::IntersectionNodes);
+		}
+
+		return false; // No new geometry generated
+	}
+
+	// Node doesn't exist - generate new geometry with specified parameters
+	comp->extractOriginalEdges(geom->getShape(), samplingDensity, minLength, showLinesOnly, color, width,
 		highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize);
 	return true;
 }
@@ -22,11 +63,17 @@ bool EdgeGenerationService::ensureFeatureEdges(std::shared_ptr<OCCGeometry>& geo
 	double featureAngleDeg,
 	double minLength,
 	bool onlyConvex,
-	bool onlyConcave) {
+	bool onlyConcave,
+	const Quantity_Color& color,
+	double width) {
 	if (!geom) return false;
-	if (!geom->edgeComponent) geom->edgeComponent = std::make_unique<EdgeComponent>();
-	if (geom->edgeComponent->getEdgeNode(EdgeType::Feature) != nullptr) return false;
-	geom->edgeComponent->extractFeatureEdges(geom->getShape(), featureAngleDeg, minLength, onlyConvex, onlyConcave);
+
+	// Migration completed - always use modular edge component
+	if (!geom->modularEdgeComponent) {
+		geom->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+	}
+	if (geom->modularEdgeComponent->getEdgeNode(EdgeType::Feature) != nullptr) return false;
+	geom->modularEdgeComponent->extractFeatureEdges(geom->getShape(), featureAngleDeg, minLength, onlyConvex, onlyConcave, color, width);
 	return true;
 }
 
@@ -36,29 +83,85 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 	bool needNormalLines,
 	bool needFaceNormalLines) {
 	if (!geom) return false;
-	if (!geom->edgeComponent) geom->edgeComponent = std::make_unique<EdgeComponent>();
+
 	bool generated = false;
 	bool needMesh = false;
-	if (needMeshEdges && geom->edgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) needMesh = true;
-	if (needNormalLines && geom->edgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) needMesh = true;
-	if (needFaceNormalLines && geom->edgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) needMesh = true;
+
+	// Migration completed - always use modular edge component
+	if (!geom->modularEdgeComponent) {
+		geom->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+	}
+	if (needMeshEdges && geom->modularEdgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) needMesh = true;
+	if (needNormalLines && geom->modularEdgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) needMesh = true;
+	if (needFaceNormalLines && geom->modularEdgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) needMesh = true;
+
 	if (!needMesh) return false;
 
 	auto& manager = RenderingToolkitAPI::getManager();
 	auto processor = manager.getGeometryProcessor("OpenCASCADE");
 	if (!processor) return false;
 	TriangleMesh mesh = processor->convertToMesh(geom->getShape(), meshParams);
-	if (needMeshEdges && geom->edgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) {
-		geom->edgeComponent->extractMeshEdges(mesh);
+
+	auto& comp = geom->modularEdgeComponent;
+	if (needMeshEdges && comp->getEdgeNode(EdgeType::Mesh) == nullptr) {
+		Quantity_Color meshColor(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+		comp->extractMeshEdges(mesh, meshColor, 1.0);
 		generated = true;
 	}
-	if (needNormalLines && geom->edgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) {
-		geom->edgeComponent->generateNormalLineNode(mesh, 0.5);
+	if (needNormalLines && comp->getEdgeNode(EdgeType::NormalLine) == nullptr) {
+		comp->generateNormalLineNode(mesh, 0.5);
 		generated = true;
 	}
-	if (needFaceNormalLines && geom->edgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) {
-		geom->edgeComponent->generateFaceNormalLineNode(mesh, 0.5);
+	if (needFaceNormalLines && comp->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) {
+		comp->generateFaceNormalLineNode(mesh, 0.5);
 		generated = true;
 	}
+
+	return generated;
+}
+
+bool EdgeGenerationService::forceRegenerateMeshDerivedEdges(std::shared_ptr<OCCGeometry>& geom,
+	const MeshParameters& meshParams,
+	bool needMeshEdges,
+	bool needNormalLines,
+	bool needFaceNormalLines) {
+	if (!geom) return false;
+
+	bool generated = false;
+
+	auto& manager = RenderingToolkitAPI::getManager();
+	auto processor = manager.getGeometryProcessor("OpenCASCADE");
+	if (!processor) return false;
+	TriangleMesh mesh = processor->convertToMesh(geom->getShape(), meshParams);
+
+	// Migration completed - always use modular edge component
+	if (!geom->modularEdgeComponent) {
+		geom->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+	}
+
+	auto& comp = geom->modularEdgeComponent;
+
+	// Force regenerate mesh edges if requested
+	if (needMeshEdges) {
+		comp->clearEdgeNode(EdgeType::Mesh);
+		Quantity_Color meshColor(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+		comp->extractMeshEdges(mesh, meshColor, 1.0);
+		generated = true;
+	}
+
+	// Force regenerate normal lines if requested
+	if (needNormalLines) {
+		comp->clearEdgeNode(EdgeType::NormalLine);
+		comp->generateNormalLineNode(mesh, 0.5);
+		generated = true;
+	}
+
+	// Force regenerate face normal lines if requested
+	if (needFaceNormalLines) {
+		comp->clearEdgeNode(EdgeType::FaceNormalLine);
+		comp->generateFaceNormalLineNode(mesh, 0.5);
+		generated = true;
+	}
+
 	return generated;
 }

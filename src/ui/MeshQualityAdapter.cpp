@@ -376,7 +376,10 @@ private:
                     
                     // Update Coin3D representation (ensures consistency with EdgeComponent)
                     geometry->updateCoinRepresentation();
-                    
+
+                    // Force regenerate mesh-derived edges (normals, mesh edges) since mesh changed
+                    m_occViewer->forceRegenerateMeshDerivedEdges(params);
+
                     successCount++;
                     LOG_INF_S("Applied parameters to geometry: " + geometry->getName());
                     

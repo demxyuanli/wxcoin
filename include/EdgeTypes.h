@@ -21,4 +21,5 @@ struct EdgeDisplayFlags {
     bool showNormalLines = false;
     bool showFaceNormalLines = false;
     bool showSilhouetteEdges = false;
+    bool showIntersectionNodes = false;
 }; 

@@ -5,12 +5,12 @@
 #endif
 
 #include "edges/EdgeRenderApplier.h"
-#include "EdgeComponent.h"
+#include "edges/ModularEdgeComponent.h"
 
 void EdgeRenderApplier::applyFlagsAndAttach(std::shared_ptr<OCCGeometry>& geom, const EdgeDisplayFlags& flags) {
 	if (!geom) return;
-	if (!geom->edgeComponent) return;
-	geom->edgeComponent->edgeFlags = flags;
+	if (!geom->modularEdgeComponent) return;
+	geom->modularEdgeComponent->edgeFlags = flags;
 	geom->updateEdgeDisplay();
 }
 
@@ -19,7 +19,7 @@ void EdgeRenderApplier::applyFeatureAppearance(std::shared_ptr<OCCGeometry>& geo
 	geom->setEdgeColor(color);
 	geom->setEdgeWidth(width);
 	geom->setFacesVisible(!edgesOnly);
-	if (geom->edgeComponent) {
-		geom->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width);
+	if (geom->modularEdgeComponent) {
+		geom->modularEdgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width);
 	}
 }

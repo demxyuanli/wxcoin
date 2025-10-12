@@ -2,7 +2,6 @@
 #include "MeshParamNames.h"
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
-#include "EdgeComponent.h"
 #include "logger/Logger.h"
 #include <omp.h>
 #include <TopExp_Explorer.hxx>

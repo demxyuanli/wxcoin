@@ -41,6 +41,8 @@ public:
     void generateFaceNormalLineNode(const TriangleMesh& mesh, double length);
     void generateSilhouetteEdgeNode(const TopoDS_Shape& shape, const gp_Pnt& cameraPos);
     void clearSilhouetteEdgeNode();  // New: clear silhouette edge node
+    void clearMeshEdgeNode();  // New: clear mesh edge node
+    void clearEdgeNode(EdgeType type);  // Clear edge node by type
     void generateIntersectionNodesNode(const std::vector<gp_Pnt>& intersectionPoints, const Quantity_Color& color, double size);
 
     // LOD (Level of Detail) management

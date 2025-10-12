@@ -6,7 +6,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCShapeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCBrepConverter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OCCMeshConverter.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/EdgeComponent.cpp
+
     
     # Modular geometry implementations (internal)
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryCore.cpp
@@ -45,9 +45,24 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeGenerationService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderApplier.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeExtractor.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeGeometryCache.cpp
+    
+    # Edge extractors (modular)
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/BaseEdgeExtractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/OriginalEdgeExtractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/FeatureEdgeExtractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/MeshEdgeExtractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/SilhouetteEdgeExtractor.cpp
+    
+    # Edge renderers (modular)
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/renderers/BaseEdgeRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/renderers/OriginalEdgeRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/renderers/FeatureEdgeRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/renderers/MeshEdgeRenderer.cpp
+
+    # Modular edge component
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/ModularEdgeComponent.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeProcessorFactory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeLODManager.cpp
 )
 
@@ -55,7 +70,7 @@ set(OPENCASCADE_HEADERS
     # Main headers
     ${CMAKE_SOURCE_DIR}/include/OCCGeometry.h
     ${CMAKE_SOURCE_DIR}/include/OCCViewer.h
-    ${CMAKE_SOURCE_DIR}/include/EdgeComponent.h
+
     ${CMAKE_SOURCE_DIR}/include/OCCShapeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/OCCBrepConverter.h
     
@@ -73,9 +88,21 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/viewer/ViewportController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/RenderingController.h
     
-    # Internal edge module headers
-    ${CMAKE_SOURCE_DIR}/include/edges/EdgeExtractor.h
-    ${CMAKE_SOURCE_DIR}/include/edges/EdgeRenderer.h
+
+
+    # Modular edge component headers
+    ${CMAKE_SOURCE_DIR}/include/edges/ModularEdgeComponent.h
+    ${CMAKE_SOURCE_DIR}/include/edges/EdgeProcessorFactory.h
+
+    # Modular extractors headers
+    ${CMAKE_SOURCE_DIR}/include/edges/extractors/BaseEdgeExtractor.h
+    ${CMAKE_SOURCE_DIR}/include/edges/extractors/OriginalEdgeExtractor.h
+    ${CMAKE_SOURCE_DIR}/include/edges/extractors/FeatureEdgeExtractor.h
+    ${CMAKE_SOURCE_DIR}/include/edges/extractors/MeshEdgeExtractor.h
+    ${CMAKE_SOURCE_DIR}/include/edges/extractors/SilhouetteEdgeExtractor.h
+
+    # Modular renderers headers
+    ${CMAKE_SOURCE_DIR}/include/edges/renderers/BaseEdgeRenderer.h
     ${CMAKE_SOURCE_DIR}/include/viewer/SliceController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ExplodeController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ExplodeTypes.h

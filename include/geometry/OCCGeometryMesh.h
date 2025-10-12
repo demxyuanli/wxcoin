@@ -5,10 +5,12 @@
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include "rendering/GeometryProcessor.h"
 #include "EdgeTypes.h"
+#include "geometry/GeometryRenderContext.h"
 
 // Forward declarations
 class SoSeparator;
 class EdgeComponent;
+class ModularEdgeComponent;
 class TopoDS_Shape;
 
 /**
@@ -35,7 +37,13 @@ public:
     SoSeparator* getCoinNode() { return m_coinNode; }
     void setCoinNode(SoSeparator* node);
 
-    // Mesh generation
+    // Mesh generation - new modular interface
+    void buildCoinRepresentation(
+        const TopoDS_Shape& shape,
+        const MeshParameters& params,
+        const GeometryRenderContext& context);
+    
+    // Legacy interface for backward compatibility
     void regenerateMesh(const TopoDS_Shape& shape, const MeshParameters& params);
     void buildCoinRepresentation(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
     void buildCoinRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
@@ -50,11 +58,19 @@ public:
     void forceCoinRepresentationRebuild(const TopoDS_Shape& shape, const MeshParameters& params);
 
     // Edge component integration
-    std::unique_ptr<EdgeComponent> edgeComponent;
+    std::unique_ptr<ModularEdgeComponent> modularEdgeComponent;  // Modular component
+
+    // Edge component control
+    bool useModularEdgeComponent = true;  // Switch between old and new component
+
     void setEdgeDisplayType(EdgeType type, bool show);
     bool isEdgeDisplayTypeEnabled(EdgeType type) const;
     void updateEdgeDisplay();
     bool hasOriginalEdges() const;
+
+    // Modular edge component methods
+    void enableModularEdgeComponent(bool enable);
+    bool isUsingModularEdgeComponent() const { return useModularEdgeComponent; }
 
     // Assembly level for hierarchical explode
     int getAssemblyLevel() const { return m_assemblyLevel; }
@@ -77,13 +93,13 @@ public:
     void optimizeMemory();
 
 protected:
+    // Protected helper for wireframe generation
+    void createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params);
+    
     SoSeparator* m_coinNode;
     bool m_coinNeedsUpdate;
     bool m_meshRegenerationNeeded;
     MeshParameters m_lastMeshParams;
     int m_assemblyLevel;
     std::vector<FaceIndexMapping> m_faceIndexMappings;
-
-private:
-    void createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params);
 };

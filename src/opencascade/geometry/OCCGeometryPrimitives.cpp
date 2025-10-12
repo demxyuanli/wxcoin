@@ -37,17 +37,20 @@ void OCCBox::getSize(double& width, double& height, double& depth) const
 
 void OCCBox::buildShape()
 {
-    LOG_INF_S("Building OCCBox shape with dimensions: " + std::to_string(m_width) + " x " + 
-              std::to_string(m_height) + " x " + std::to_string(m_depth));
+    gp_Pnt pos = getPosition();
+    LOG_INF_S("Building OCCBox at position (" + std::to_string(pos.X()) + ", " + 
+              std::to_string(pos.Y()) + ", " + std::to_string(pos.Z()) + ") with dimensions: " + 
+              std::to_string(m_width) + " x " + std::to_string(m_height) + " x " + std::to_string(m_depth));
 
     try {
-        BRepPrimAPI_MakeBox boxMaker(m_width, m_height, m_depth);
+        // Create box directly at specified position
+        BRepPrimAPI_MakeBox boxMaker(pos, m_width, m_height, m_depth);
         boxMaker.Build();
 
         if (boxMaker.IsDone()) {
             TopoDS_Shape shape = boxMaker.Shape();
             setShape(shape);
-            LOG_INF_S("Box shape created successfully for: " + m_name);
+            LOG_INF_S("Box shape created successfully at specified position for: " + getName());
 
             // Log the center of the created shape
             Bnd_Box box;
@@ -60,7 +63,7 @@ void OCCBox::buildShape()
                          std::to_string(center.Y()) + ", " + std::to_string(center.Z()) + ")");
             }
         } else {
-            LOG_ERR_S("BRepPrimAPI_MakeBox failed for: " + m_name);
+            LOG_ERR_S("BRepPrimAPI_MakeBox failed for: " + getName());
         }
     }
     catch (const std::exception& e) {
@@ -93,19 +96,23 @@ void OCCCylinder::getSize(double& radius, double& height) const
 
 void OCCCylinder::buildShape()
 {
-    LOG_INF_S("Building OCCCylinder shape with radius: " + std::to_string(m_radius) + 
-              " height: " + std::to_string(m_height));
+    gp_Pnt pos = getPosition();
+    LOG_INF_S("Building OCCCylinder at position (" + std::to_string(pos.X()) + ", " + 
+              std::to_string(pos.Y()) + ", " + std::to_string(pos.Z()) + ") with radius: " + 
+              std::to_string(m_radius) + " height: " + std::to_string(m_height));
 
     try {
-        BRepPrimAPI_MakeCylinder cylinderMaker(m_radius, m_height);
+        // Create cylinder at specified position using gp_Ax2
+        gp_Ax2 axis(pos, gp_Dir(0, 0, 1));
+        BRepPrimAPI_MakeCylinder cylinderMaker(axis, m_radius, m_height);
         cylinderMaker.Build();
 
         if (cylinderMaker.IsDone()) {
             TopoDS_Shape shape = cylinderMaker.Shape();
             setShape(shape);
-            LOG_INF_S("Cylinder shape created successfully for: " + m_name);
+            LOG_INF_S("Cylinder shape created successfully at specified position for: " + getName());
         } else {
-            LOG_ERR_S("BRepPrimAPI_MakeCylinder failed for: " + m_name);
+            LOG_ERR_S("BRepPrimAPI_MakeCylinder failed for: " + getName());
         }
     }
     catch (const std::exception& e) {
@@ -130,7 +137,10 @@ void OCCSphere::setRadius(double radius)
 
 void OCCSphere::buildShape()
 {
-    LOG_INF_S("Building OCCSphere shape with radius: " + std::to_string(m_radius));
+    gp_Pnt pos = getPosition();
+    LOG_INF_S("Building OCCSphere at position (" + std::to_string(pos.X()) + ", " + 
+              std::to_string(pos.Y()) + ", " + std::to_string(pos.Z()) + 
+              ") with radius: " + std::to_string(m_radius));
 
     try {
         if (m_radius <= 0.0) {
@@ -138,35 +148,22 @@ void OCCSphere::buildShape()
             return;
         }
 
-        // Try simple constructor first
-        BRepPrimAPI_MakeSphere sphereMaker(m_radius);
+        // Create sphere at specified position using gp_Ax2
+        gp_Ax2 axis(pos, gp_Dir(0, 0, 1));
+        BRepPrimAPI_MakeSphere sphereMaker(axis, m_radius);
         sphereMaker.Build();
 
         if (sphereMaker.IsDone()) {
             TopoDS_Shape shape = sphereMaker.Shape();
             if (!shape.IsNull()) {
                 setShape(shape);
-                LOG_INF_S("Sphere shape created successfully for: " + m_name);
+                LOG_INF_S("Sphere shape created successfully at specified position for: " + getName());
                 return;
-            }
-        }
-
-        // Fallback to axis-based constructor
-        LOG_INF_S("Falling back to axis-based constructor for OCCSphere");
-        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
-        BRepPrimAPI_MakeSphere fallbackMaker(axis, m_radius);
-        fallbackMaker.Build();
-
-        if (fallbackMaker.IsDone()) {
-            TopoDS_Shape fallbackShape = fallbackMaker.Shape();
-            if (!fallbackShape.IsNull()) {
-                setShape(fallbackShape);
-                LOG_INF_S("Fallback sphere creation successful for: " + m_name);
             } else {
-                LOG_ERR_S("Fallback also returned null shape");
+                LOG_ERR_S("Sphere shape is null after creation");
             }
         } else {
-            LOG_ERR_S("Fallback BRepPrimAPI_MakeSphere failed");
+            LOG_ERR_S("BRepPrimAPI_MakeSphere failed");
         }
     }
     catch (const std::exception& e) {
@@ -202,11 +199,15 @@ void OCCCone::getSize(double& bottomRadius, double& topRadius, double& height) c
 
 void OCCCone::buildShape()
 {
-    LOG_INF_S("Building OCCCone shape with bottomRadius: " + std::to_string(m_bottomRadius) + 
+    gp_Pnt pos = getPosition();
+    LOG_INF_S("Building OCCCone at position (" + std::to_string(pos.X()) + ", " + 
+              std::to_string(pos.Y()) + ", " + std::to_string(pos.Z()) + 
+              ") with bottomRadius: " + std::to_string(m_bottomRadius) + 
               " topRadius: " + std::to_string(m_topRadius) + " height: " + std::to_string(m_height));
 
     try {
-        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        // Create cone at specified position
+        gp_Ax2 axis(pos, gp_Dir(0, 0, 1));
         double actualTopRadius = m_topRadius;
 
         if (actualTopRadius <= 0.001) {
@@ -220,7 +221,7 @@ void OCCCone::buildShape()
             TopoDS_Shape shape = coneMaker.Shape();
             if (!shape.IsNull()) {
                 setShape(shape);
-                LOG_INF_S("Cone shape created successfully for: " + m_name);
+                LOG_INF_S("Cone shape created successfully at specified position for: " + getName());
             } else {
                 LOG_ERR_S("Cone shape is null after creation");
             }
@@ -258,6 +259,10 @@ void OCCTorus::getSize(double& majorRadius, double& minorRadius) const
 
 void OCCTorus::buildShape()
 {
+    gp_Pnt pos = getPosition();
+    LOG_INF_S("Building OCCTorus at position (" + std::to_string(pos.X()) + ", " + 
+              std::to_string(pos.Y()) + ", " + std::to_string(pos.Z()) + ")");
+              
     try {
         if (m_majorRadius <= 0.0 || m_minorRadius <= 0.0) {
             LOG_ERR_S("Invalid radii for OCCTorus - major: " + std::to_string(m_majorRadius) + 
@@ -270,7 +275,8 @@ void OCCTorus::buildShape()
             return;
         }
 
-        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        // Create torus at specified position
+        gp_Ax2 axis(pos, gp_Dir(0, 0, 1));
         BRepPrimAPI_MakeTorus torusMaker(axis, m_majorRadius, m_minorRadius);
         torusMaker.Build();
 
@@ -278,7 +284,7 @@ void OCCTorus::buildShape()
             TopoDS_Shape shape = torusMaker.Shape();
             if (!shape.IsNull()) {
                 setShape(shape);
-                LOG_INF_S("Torus shape created successfully for: " + m_name);
+                LOG_INF_S("Torus shape created successfully at specified position for: " + getName());
             } else {
                 LOG_ERR_S("Torus shape is null after creation");
             }
@@ -319,6 +325,10 @@ void OCCTruncatedCylinder::getSize(double& bottomRadius, double& topRadius, doub
 
 void OCCTruncatedCylinder::buildShape()
 {
+    gp_Pnt pos = getPosition();
+    LOG_INF_S("Building OCCTruncatedCylinder at position (" + std::to_string(pos.X()) + ", " + 
+              std::to_string(pos.Y()) + ", " + std::to_string(pos.Z()) + ")");
+              
     try {
         if (m_bottomRadius <= 0.0 || m_topRadius <= 0.0 || m_height <= 0.0) {
             LOG_ERR_S("Invalid dimensions for OCCTruncatedCylinder - bottom: " + 
@@ -327,8 +337,8 @@ void OCCTruncatedCylinder::buildShape()
             return;
         }
 
-        // Create truncated cylinder using cone with different radii
-        gp_Ax2 axis(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1));
+        // Create truncated cylinder at specified position using cone with different radii
+        gp_Ax2 axis(pos, gp_Dir(0, 0, 1));
         BRepPrimAPI_MakeCone truncatedCylinderMaker(axis, m_bottomRadius, m_topRadius, m_height);
         truncatedCylinderMaker.Build();
 
@@ -336,7 +346,7 @@ void OCCTruncatedCylinder::buildShape()
             TopoDS_Shape shape = truncatedCylinderMaker.Shape();
             if (!shape.IsNull()) {
                 setShape(shape);
-                LOG_INF_S("Truncated cylinder created successfully for: " + m_name);
+                LOG_INF_S("Truncated cylinder created successfully at specified position for: " + getName());
             }
         } else {
             LOG_ERR_S("BRepPrimAPI_MakeCone failed for OCCTruncatedCylinder");

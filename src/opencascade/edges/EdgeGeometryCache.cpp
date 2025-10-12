@@ -65,12 +65,6 @@ std::vector<gp_Pnt> EdgeGeometryCache::getOrCompute(
         insertedNew = true;
     }
     
-    // Log after releasing lock
-    if (insertedNew) {
-        LOG_INF_S("EdgeCache stored: " + key + 
-                  " (" + std::to_string(points.size()) + " points, " +
-                  "cache size: " + std::to_string(cacheSize) + " entries)");
-    }
     
     return points;
 }
@@ -101,7 +95,6 @@ void EdgeGeometryCache::clear() {
         m_missCount = 0;
     }
     
-    LOG_INF_S("EdgeCache cleared (" + std::to_string(oldSize) + " entries removed)");
 }
 
 void EdgeGeometryCache::evictOldEntries(std::chrono::seconds maxAge) {
@@ -124,10 +117,6 @@ void EdgeGeometryCache::evictOldEntries(std::chrono::seconds maxAge) {
         remaining = m_cache.size();
     }
     
-    if (evicted > 0) {
-        LOG_INF_S("EdgeCache evicted " + std::to_string(evicted) + 
-                  " old entries (remaining: " + std::to_string(remaining) + ")");
-    }
 }
 
 

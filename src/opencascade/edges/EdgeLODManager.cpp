@@ -1,5 +1,6 @@
 #include "edges/EdgeLODManager.h"
-#include "edges/EdgeExtractor.h"
+#include "edges/EdgeProcessorFactory.h"
+#include "edges/extractors/OriginalEdgeExtractor.h"
 #include "logger/Logger.h"
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
@@ -14,7 +15,6 @@ EdgeLODManager::EdgeLODManager()
     , m_transitionHysteresis(10.0)
     , m_thresholds(DEFAULT_THRESHOLDS)
 {
-    LOG_INF_S("EdgeLODManager initialized with default thresholds");
 }
 
 EdgeLODManager::~EdgeLODManager()
@@ -25,10 +25,6 @@ EdgeLODManager::~EdgeLODManager()
 void EdgeLODManager::setLODThresholds(const LODThresholds& thresholds)
 {
     m_thresholds = thresholds;
-    LOG_INF_S("LOD thresholds updated: minimal=" + std::to_string(thresholds.minimalDistance) +
-              ", low=" + std::to_string(thresholds.lowDistance) +
-              ", medium=" + std::to_string(thresholds.mediumDistance) +
-              ", high=" + std::to_string(thresholds.highDistance));
 }
 
 EdgeLODManager::LODLevel EdgeLODManager::getLODLevel(double distance) const
@@ -55,7 +51,6 @@ void EdgeLODManager::generateLODLevels(const TopoDS_Shape& shape,
         return;
     }
 
-    LOG_INF_S("Generating LOD levels for shape");
 
     // Calculate distance for LOD determination
     double distance = calculateDistanceToShape(shape, cameraPos);
@@ -94,15 +89,6 @@ void EdgeLODManager::generateLODLevels(const TopoDS_Shape& shape,
         *lodStats = m_lodStats;
     }
 
-    LOG_INF_S("LOD generation completed:");
-    LOG_INF_S("  Current distance: " + std::to_string(distance));
-    LOG_INF_S("  Target LOD: " + std::to_string(static_cast<int>(targetLOD)));
-    LOG_INF_S("  Minimal edges: " + std::to_string(m_lodStats.minimalEdges));
-    LOG_INF_S("  Low edges: " + std::to_string(m_lodStats.lowEdges));
-    LOG_INF_S("  Medium edges: " + std::to_string(m_lodStats.mediumEdges));
-    LOG_INF_S("  High edges: " + std::to_string(m_lodStats.highEdges));
-    LOG_INF_S("  Maximum edges: " + std::to_string(m_lodStats.maximumEdges));
-    LOG_INF_S("  Memory usage: " + std::to_string(m_lodStats.memoryUsageMB) + " MB");
 }
 
 const std::vector<gp_Pnt>& EdgeLODManager::getLODEdges(LODLevel level) const
@@ -131,10 +117,6 @@ bool EdgeLODManager::updateLODLevel(const gp_Pnt& cameraPos)
     LODLevel newLOD = getLODLevel(distance);
 
     if (newLOD != m_currentLODLevel) {
-        LOG_INF_S("LOD level changed from " + std::to_string(static_cast<int>(m_currentLODLevel)) +
-                  " to " + std::to_string(static_cast<int>(newLOD)) +
-                  " (distance: " + std::to_string(distance) + ")");
-
         m_currentLODLevel = newLOD;
         m_lastCameraPos = cameraPos;
         return true;
@@ -154,8 +136,13 @@ void EdgeLODManager::generateMinimalLOD(const TopoDS_Shape& shape)
 {
     // Minimal LOD: Only show major structural edges or hide completely
     // For now, use a very coarse sampling
-    EdgeExtractor extractor;
-    auto edges = extractor.extractOriginalEdges(shape, 5.0, 5.0); // Very coarse
+    auto extractor = EdgeProcessorFactory::getInstance().getExtractor(EdgeType::Original);
+    OriginalEdgeParams params;
+    params.samplingDensity = 5.0;
+    params.minLength = 5.0;
+    params.showLinesOnly = false;
+
+    auto edges = extractor->extract(shape, &params);
 
     // Further reduce by keeping only every Nth edge
     std::vector<gp_Pnt> minimalEdges;
@@ -172,8 +159,13 @@ void EdgeLODManager::generateMinimalLOD(const TopoDS_Shape& shape)
 void EdgeLODManager::generateLowLOD(const TopoDS_Shape& shape)
 {
     // Low LOD: Simplified edges, reduced detail
-    EdgeExtractor extractor;
-    auto edges = extractor.extractOriginalEdges(shape, 10.0, 2.0); // Coarse sampling
+    auto extractor = EdgeProcessorFactory::getInstance().getExtractor(EdgeType::Original);
+    OriginalEdgeParams params;
+    params.samplingDensity = 10.0;
+    params.minLength = 2.0;
+    params.showLinesOnly = false;
+
+    auto edges = extractor->extract(shape, &params);
 
     // Reduce edge count by filtering short edges and simplifying
     std::vector<gp_Pnt> lowEdges;
@@ -190,8 +182,13 @@ void EdgeLODManager::generateLowLOD(const TopoDS_Shape& shape)
 void EdgeLODManager::generateMediumLOD(const TopoDS_Shape& shape)
 {
     // Medium LOD: Standard detail level
-    EdgeExtractor extractor;
-    auto edges = extractor.extractOriginalEdges(shape, 40.0, 1.0); // Medium sampling
+    auto extractor = EdgeProcessorFactory::getInstance().getExtractor(EdgeType::Original);
+    OriginalEdgeParams params;
+    params.samplingDensity = 40.0;
+    params.minLength = 1.0;
+    params.showLinesOnly = false;
+
+    auto edges = extractor->extract(shape, &params);
 
     // Moderate reduction
     std::vector<gp_Pnt> mediumEdges;
@@ -208,8 +205,13 @@ void EdgeLODManager::generateMediumLOD(const TopoDS_Shape& shape)
 void EdgeLODManager::generateHighLOD(const TopoDS_Shape& shape)
 {
     // High LOD: Detailed but not maximum
-    EdgeExtractor extractor;
-    auto edges = extractor.extractOriginalEdges(shape, 60.0, 0.5); // Fine sampling
+    auto extractor = EdgeProcessorFactory::getInstance().getExtractor(EdgeType::Original);
+    OriginalEdgeParams params;
+    params.samplingDensity = 60.0;
+    params.minLength = 0.5;
+    params.showLinesOnly = false;
+
+    auto edges = extractor->extract(shape, &params);
 
     // Light reduction
     std::vector<gp_Pnt> highEdges;
@@ -226,8 +228,13 @@ void EdgeLODManager::generateHighLOD(const TopoDS_Shape& shape)
 void EdgeLODManager::generateMaximumLOD(const TopoDS_Shape& shape)
 {
     // Maximum LOD: Full detail
-    EdgeExtractor extractor;
-    auto edges = extractor.extractOriginalEdges(shape, 80.0, 0.01); // Full detail
+    auto extractor = EdgeProcessorFactory::getInstance().getExtractor(EdgeType::Original);
+    OriginalEdgeParams params;
+    params.samplingDensity = 80.0;
+    params.minLength = 0.01;
+    params.showLinesOnly = false;
+
+    auto edges = extractor->extract(shape, &params);
 
     m_lodEdgeData[LODLevel::Maximum] = std::move(edges);
 }

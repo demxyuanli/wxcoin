@@ -97,7 +97,11 @@ void OCCGeometryDisplay::setFaceDisplay(bool enable)
 
 void OCCGeometryDisplay::setFacesVisible(bool visible)
 {
-    m_facesVisible = visible;
+    if (m_facesVisible != visible) {
+        m_facesVisible = visible;
+        // Trigger re-render when faces visibility changes
+        // This will be handled by the geometry's buildCoinRepresentation
+    }
 }
 
 void OCCGeometryDisplay::setWireframeOverlay(bool enable)

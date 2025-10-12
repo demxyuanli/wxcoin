@@ -1,0 +1,146 @@
+#pragma once
+
+#include <Inventor/nodes/SoSeparator.h>
+#include <memory>
+#include <mutex>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/Quantity_Color.hxx>
+#include "EdgeTypes.h"
+#include "rendering/GeometryProcessor.h"
+#include "edges/extractors/BaseEdgeExtractor.h"
+#include "edges/renderers/BaseEdgeRenderer.h"
+#include "edges/extractors/OriginalEdgeExtractor.h"
+#include "edges/extractors/FeatureEdgeExtractor.h"
+#include "edges/extractors/MeshEdgeExtractor.h"
+#include "edges/extractors/SilhouetteEdgeExtractor.h"
+
+// Forward declarations
+class EdgeLODManager;
+class EdgeProcessorFactory;
+
+/**
+ * @brief Modular edge component using the new modular edge system
+ *
+ * This component uses specialized extractors and renderers for different
+ * edge types, providing better separation of concerns and extensibility.
+ */
+class ModularEdgeComponent {
+public:
+    EdgeDisplayFlags edgeFlags;
+
+    ModularEdgeComponent();
+    ~ModularEdgeComponent();
+
+    // Original edges
+    void extractOriginalEdges(
+        const TopoDS_Shape& shape,
+        double samplingDensity = 80.0,
+        double minLength = 0.01,
+        bool showLinesOnly = false,
+        const Quantity_Color& color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB),
+        double width = 1.0,
+        bool highlightIntersectionNodes = false,
+        const Quantity_Color& intersectionNodeColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
+        double intersectionNodeSize = 3.0);
+
+    // Feature edges
+    void extractFeatureEdges(
+        const TopoDS_Shape& shape,
+        double featureAngle = 15.0,
+        double minLength = 0.005,
+        bool onlyConvex = false,
+        bool onlyConcave = false,
+        const Quantity_Color& color = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
+        double width = 2.0);
+
+    // Mesh edges
+    void extractMeshEdges(
+        const TriangleMesh& mesh,
+        const Quantity_Color& color = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
+        double width = 1.0);
+
+    // Silhouette edges
+    void extractSilhouetteEdges(
+        const TopoDS_Shape& shape,
+        const gp_Pnt& cameraPos);
+
+    // Generate all edge nodes
+    void generateAllEdgeNodes();
+
+    // Node access
+    SoSeparator* getEdgeNode(EdgeType type);
+
+    // Extractor access (for advanced operations)
+    std::shared_ptr<BaseEdgeExtractor> getOriginalExtractor() { return m_originalExtractor; }
+
+    // Display control
+    void setEdgeDisplayType(EdgeType type, bool show);
+    bool isEdgeDisplayTypeEnabled(EdgeType type) const;
+    void updateEdgeDisplay(SoSeparator* parentNode);
+
+    // Appearance control
+    void applyAppearanceToEdgeNode(
+        EdgeType type,
+        const Quantity_Color& color,
+        double width,
+        int style = 0);
+
+    // Special edge types
+    void generateHighlightEdgeNode();
+    void generateNormalLineNode(const TriangleMesh& mesh, double length);
+    void generateFaceNormalLineNode(const TriangleMesh& mesh, double length);
+
+    // Intersection nodes appearance update
+    void updateIntersectionNodesAppearance(
+        SoSeparator* node,
+        const Quantity_Color& color,
+        double size);
+
+    // Intersection nodes
+    SoSeparator* createIntersectionNodesNode(
+        const std::vector<gp_Pnt>& intersectionPoints,
+        const Quantity_Color& color,
+        double size);
+
+    // Cleanup
+    void clearMeshEdgeNode();
+    void clearSilhouetteEdgeNode();
+    void clearEdgeNode(EdgeType type);
+
+    // LOD management
+    void setLODEnabled(bool enabled);
+    bool isLODEnabled() const;
+    void updateLODLevel(const gp_Pnt& cameraPos);
+    void generateLODLevels(const TopoDS_Shape& shape, const gp_Pnt& cameraPos);
+
+private:
+    // Processors for different edge types
+    std::shared_ptr<BaseEdgeExtractor> m_originalExtractor;
+    std::shared_ptr<BaseEdgeExtractor> m_featureExtractor;
+    std::shared_ptr<BaseEdgeExtractor> m_meshExtractor;
+    std::shared_ptr<BaseEdgeExtractor> m_silhouetteExtractor;
+
+    std::shared_ptr<BaseEdgeRenderer> m_originalRenderer;
+    std::shared_ptr<BaseEdgeRenderer> m_featureRenderer;
+    std::shared_ptr<BaseEdgeRenderer> m_meshRenderer;
+
+    // LOD manager
+    std::unique_ptr<EdgeLODManager> m_lodManager;
+
+    // Edge nodes
+    SoSeparator* originalEdgeNode = nullptr;
+    SoSeparator* featureEdgeNode = nullptr;
+    SoSeparator* meshEdgeNode = nullptr;
+    SoSeparator* highlightEdgeNode = nullptr;
+    SoSeparator* normalLineNode = nullptr;
+    SoSeparator* faceNormalLineNode = nullptr;
+    SoSeparator* silhouetteEdgeNode = nullptr;
+    SoSeparator* intersectionNodesNode = nullptr;
+
+    mutable std::mutex m_nodeMutex;
+
+    // Helper methods
+    void cleanupEdgeNode(SoSeparator*& node);
+    void attachEdgeNodeToParent(SoSeparator* parentNode, SoSeparator* edgeNode);
+};

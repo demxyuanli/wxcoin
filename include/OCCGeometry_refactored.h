@@ -33,19 +33,11 @@ public:
     // Override setShape to propagate to all modules
     virtual void setShape(const TopoDS_Shape& shape) override;
 
-    // Override transform methods to trigger mesh rebuild
-    virtual void setPosition(const gp_Pnt& position) override;
-    virtual void setRotation(const gp_Vec& axis, double angle) override;
-    virtual void setScale(double scale) override;
-
     // Override color setter to sync with material
     virtual void setColor(const Quantity_Color& color) override;
 
     // Override transparency to sync across modules
     virtual void setTransparency(double transparency) override;
-    
-    // Override wireframe mode to trigger mesh rebuild
-    virtual void setWireframeMode(bool wireframe) override;
 
     // Coin3D integration - delegated to OCCGeometryMesh
     using OCCGeometryMesh::getCoinNode;
@@ -62,20 +54,18 @@ public:
     
     void forceCoinRepresentationRebuild(const MeshParameters& params) {
         if (!getShape().IsNull()) {
-            setMeshRegenerationNeeded(true);
-            buildCoinRepresentation(params);
+            OCCGeometryMesh::forceCoinRepresentationRebuild(getShape(), params);
         }
     }
 
-    // Wrapper methods that use modular interface
+    // Wrapper methods that pass shape from Core module
     void updateCoinRepresentationIfNeeded(const MeshParameters& params);
     SoSeparator* getCoinNodeWithShape();
     
-    // Convenience method: regenerateMesh using modular interface
+    // Convenience method: regenerateMesh using internal shape
     void regenerateMesh(const MeshParameters& params) {
         if (!getShape().IsNull()) {
-            setMeshRegenerationNeeded(true);
-            buildCoinRepresentation(params);
+            OCCGeometryMesh::regenerateMesh(getShape(), params);
         }
     }
 
@@ -106,6 +96,7 @@ public:
     using OCCGeometryDisplay::isShowWireframe;
 
     // Edge component integration
+    using OCCGeometryMesh::edgeComponent;
     using OCCGeometryMesh::setEdgeDisplayType;
     using OCCGeometryMesh::isEdgeDisplayTypeEnabled;
     using OCCGeometryMesh::updateEdgeDisplay;
@@ -131,6 +122,9 @@ public:
     using OCCGeometryMesh::optimizeMemory;
 
 private:
+    // Helper methods
+    void createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params);
+
     // Subdivision settings (legacy compatibility)
     bool m_subdivisionEnabled{false};
     int m_subdivisionLevels{2};

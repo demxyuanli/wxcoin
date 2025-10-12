@@ -6,7 +6,7 @@
 
 #include "edges/EdgeDisplayManager.h"
 #include "rendering/RenderingToolkitAPI.h"
-#include "EdgeComponent.h"
+#include "edges/ModularEdgeComponent.h"
 #include "edges/EdgeGenerationService.h"
 #include "edges/EdgeRenderApplier.h"
 #include "logger/Logger.h"
@@ -27,11 +27,22 @@ void EdgeDisplayManager::toggleEdgeType(EdgeType type, bool show, const MeshPara
 	case EdgeType::Highlight: m_flags.showHighlightEdges = show; break;
 	case EdgeType::NormalLine: m_flags.showNormalLines = show; break;
 	case EdgeType::FaceNormalLine: m_flags.showFaceNormalLines = show; break;
+	case EdgeType::IntersectionNodes: m_flags.showIntersectionNodes = show; break;
 	}
 	updateAll(meshParams);
 }
 
-void EdgeDisplayManager::setShowOriginalEdges(bool show, const MeshParameters& meshParams) { m_flags.showOriginalEdges = show; updateAll(meshParams); }
+void EdgeDisplayManager::setShowOriginalEdges(bool show, const MeshParameters& meshParams) {
+    m_flags.showOriginalEdges = show;
+
+    // If disabling original edges and intersection nodes are enabled through original edge parameters,
+    // also disable intersection nodes since they are conceptually part of original edges
+    if (!show && m_originalEdgeParams.highlightIntersectionNodes) {
+        m_flags.showIntersectionNodes = false;
+    }
+
+    updateAll(meshParams);
+}
 void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& meshParams) {
 	m_flags.showFeatureEdges = show;
 
@@ -40,7 +51,10 @@ void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& me
 		for (auto& g : *m_geometries) {
 			if (g) {
 				// Restore faces visibility when disabling feature edges
+				// Reset edges-only state and ensure faces are visible
+				m_featureEdgeAppearance.edgesOnly = false;
 				g->setFacesVisible(true);
+				g->buildCoinRepresentation(); // Force rebuild to apply changes
 			}
 		}
 	}
@@ -51,24 +65,39 @@ void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& me
 	}
 	updateAll(meshParams);
 }
-void EdgeDisplayManager::setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams) {
+void EdgeDisplayManager::setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams,
+	const Quantity_Color& color, double width) {
 	m_flags.showFeatureEdges = show;
 
-	// When disabling feature edges, restore geometry faces visibility
+	// When disabling feature edges, check if we need to restore geometry faces visibility
 	if (!show && m_geometries) {
+		// Check if any other edge type has edges-only enabled
+		bool anyOtherEdgesOnly = false; // Currently no other edge types have edges-only
+
+		bool shouldShowFaces = !anyOtherEdgesOnly;
+
 		for (auto& g : *m_geometries) {
 			if (g) {
-				// Restore faces visibility when disabling feature edges
-				g->setFacesVisible(true);
+				g->setFacesVisible(shouldShowFaces);
+				g->buildCoinRepresentation();
 			}
 		}
+
+		// Reset edges-only state when disabling feature edges
+		m_featureEdgeAppearance.edgesOnly = false;
 	}
 
 	if (show) {
 		bool paramsChanged = m_lastFeatureParams.angleDeg != featureAngleDeg || m_lastFeatureParams.minLength != minLength || m_lastFeatureParams.onlyConvex != onlyConvex || m_lastFeatureParams.onlyConcave != onlyConcave;
-		if (paramsChanged) {
+		bool appearanceChanged = m_featureEdgeAppearance.color != color || m_featureEdgeAppearance.width != width;
+
+		if (paramsChanged || appearanceChanged) {
 			m_lastFeatureParams = { featureAngleDeg, minLength, onlyConvex, onlyConcave };
-			invalidateFeatureEdgeCache();
+			m_featureEdgeAppearance.color = color;
+			m_featureEdgeAppearance.width = width;
+			if (paramsChanged || appearanceChanged) {
+				invalidateFeatureEdgeCache();
+			}
 		}
 		if (!m_featureCacheValid && !m_featureEdgeRunning.load()) {
 			startAsyncFeatureEdgeGeneration(m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave, meshParams);
@@ -81,6 +110,8 @@ void EdgeDisplayManager::setShowHighlightEdges(bool show, const MeshParameters& 
 void EdgeDisplayManager::setShowNormalLines(bool show, const MeshParameters& meshParams) { m_flags.showNormalLines = show; updateAll(meshParams); }
 void EdgeDisplayManager::setShowFaceNormalLines(bool show, const MeshParameters& meshParams) { m_flags.showFaceNormalLines = show; updateAll(meshParams); }
 
+void EdgeDisplayManager::setShowIntersectionNodes(bool show, const MeshParameters& meshParams) { m_flags.showIntersectionNodes = show; updateAll(meshParams); }
+
 void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width,
 	bool highlightIntersectionNodes, const Quantity_Color& intersectionNodeColor, double intersectionNodeSize) {
 	m_originalEdgeParams.samplingDensity = samplingDensity;
@@ -91,9 +122,18 @@ void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, doub
 	m_originalEdgeParams.highlightIntersectionNodes = highlightIntersectionNodes;
 	m_originalEdgeParams.intersectionNodeColor = intersectionNodeColor;
 	m_originalEdgeParams.intersectionNodeSize = intersectionNodeSize;
+
+	// Update the intersection nodes display flag
+	m_flags.showIntersectionNodes = highlightIntersectionNodes;
+
+	// Apply the new parameters immediately if original edges are currently shown
+	if (m_flags.showOriginalEdges) {
+		// Update parameters and regenerate edges to ensure all appearance updates take effect
+		updateAll(MeshParameters{}); // This will handle both edge appearance and intersection colors
+	}
 }
 
-void EdgeDisplayManager::updateAll(const MeshParameters& meshParams) {
+void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceMeshRegeneration) {
 	if (!m_geometries) return;
 	EdgeGenerationService generator;
 	EdgeRenderApplier applier;
@@ -104,24 +144,53 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams) {
 	
 	for (auto& g : *m_geometries) {
 		if (!g) continue;
-		if (!g->edgeComponent) g->edgeComponent = std::make_unique<EdgeComponent>();
-		g->edgeComponent->edgeFlags = m_flags;
+
+		// Set edge flags on the appropriate component
+		// Migration completed - always use modular edge component
+		if (!g->modularEdgeComponent) {
+			g->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+		}
+		g->modularEdgeComponent->edgeFlags = m_flags;
 
 		if (m_flags.showOriginalEdges) {
-			generator.ensureOriginalEdges(g, m_originalEdgeParams.samplingDensity, m_originalEdgeParams.minLength, 
+			generator.ensureOriginalEdges(g, m_originalEdgeParams.samplingDensity, m_originalEdgeParams.minLength,
 				m_originalEdgeParams.showLinesOnly, m_originalEdgeParams.color, m_originalEdgeParams.width,
 				m_originalEdgeParams.highlightIntersectionNodes, m_originalEdgeParams.intersectionNodeColor, m_originalEdgeParams.intersectionNodeSize);
 		}
 		bool needMesh = false;
-		if (m_flags.showMeshEdges && g->edgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) needMesh = true;
+		if (m_flags.showMeshEdges) {
+			// Check if mesh edge node exists
+			SoSeparator* meshNode = nullptr;
+			if (g->modularEdgeComponent) {
+				meshNode = g->modularEdgeComponent->getEdgeNode(EdgeType::Mesh);
+			}
+			if (!meshNode) needMesh = true;
+		}
 		// For vertex normals, we also need mesh data. Ensure we treat "show normals" as enabling normal lines.
-		if (m_flags.showNormalLines && g->edgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) needMesh = true;
-		if (m_flags.showFaceNormalLines && g->edgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) needMesh = true;
+		if (m_flags.showNormalLines) {
+			SoSeparator* normalNode = nullptr;
+			if (g->modularEdgeComponent) {
+				normalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::NormalLine);
+			}
+			if (!normalNode) needMesh = true;
+		}
+		if (m_flags.showFaceNormalLines) {
+			SoSeparator* faceNormalNode = nullptr;
+			if (g->modularEdgeComponent) {
+				faceNormalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::FaceNormalLine);
+			}
+			if (!faceNormalNode) needMesh = true;
+		}
 		if (needMesh) {
-			generator.ensureMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showNormalLines, m_flags.showFaceNormalLines);
+			if (forceMeshRegeneration) {
+				generator.forceRegenerateMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showNormalLines, m_flags.showFaceNormalLines);
+			} else {
+				generator.ensureMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showNormalLines, m_flags.showFaceNormalLines);
+			}
 		}
 		if (m_flags.showFeatureEdges && m_featureCacheValid) {
-			generator.ensureFeatureEdges(g, m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave);
+			generator.ensureFeatureEdges(g, m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave,
+				m_featureEdgeAppearance.color, m_featureEdgeAppearance.width);
 		}
 		applier.applyFlagsAndAttach(g, m_flags);
 	}
@@ -142,10 +211,10 @@ void EdgeDisplayManager::startAsyncFeatureEdgeGeneration(double featureAngleDeg,
 		int done = 0;
 		for (auto& g : *m_geometries) {
 			if (!g) continue;
-			if (!g->edgeComponent) g->edgeComponent = std::make_unique<EdgeComponent>();
-			if (m_flags.showFeatureEdges && g->edgeComponent->getEdgeNode(EdgeType::Feature) == nullptr) {
+			if (!g->modularEdgeComponent) g->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+			if (m_flags.showFeatureEdges && g->modularEdgeComponent->getEdgeNode(EdgeType::Feature) == nullptr) {
 				// Worker thread: compute feature edge geometry only
-				g->edgeComponent->extractFeatureEdges(g->getShape(), m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave);
+				g->modularEdgeComponent->extractFeatureEdges(g->getShape(), m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave, m_featureEdgeAppearance.color, m_featureEdgeAppearance.width);
 			}
 			done++;
 			m_featureEdgeProgress = static_cast<int>(static_cast<double>(done) / std::max(1, total) * 100.0);
@@ -188,28 +257,43 @@ void EdgeDisplayManager::applyFeatureEdgeAppearance(const Quantity_Color& color,
 	m_featureEdgeAppearance.style = style;
 	m_featureEdgeAppearance.edgesOnly = edgesOnly;
 
+	// Determine if any edge type has edges-only enabled
+	bool anyEdgesOnly = edgesOnly; // For feature edges
+
 	for (auto& g : *m_geometries) {
 		if (!g) continue;
 		g->setEdgeColor(color);
 		g->setEdgeWidth(width);
-		g->setFacesVisible(!edgesOnly);
-		if (g->edgeComponent) {
-			g->edgeComponent->edgeFlags = m_flags;
+
+		// Update faces visibility based on global edges-only state
+		bool shouldShowFaces = !anyEdgesOnly;
+		g->setFacesVisible(shouldShowFaces);
+
+		// Force rebuild of rendering to apply faces visibility change
+		g->buildCoinRepresentation();
+
+		if (g->modularEdgeComponent) {
+			g->modularEdgeComponent->edgeFlags = m_flags;
 			// If feature edge node exists, apply appearance immediately
-			if (g->edgeComponent->getEdgeNode(EdgeType::Feature)) {
-				g->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width, style);
-			} else if (m_flags.showFeatureEdges && !m_featureEdgeRunning.load()) {
-				// If feature edges are enabled but node doesn't exist, ensure generation with current params
-				// This handles the case where appearance is applied before feature edges are generated
-				if (!m_featureCacheValid) {
-					startAsyncFeatureEdgeGeneration(m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength,
-						m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave, MeshParameters{});
-				}
+			if (g->modularEdgeComponent->getEdgeNode(EdgeType::Feature)) {
+				g->modularEdgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, color, width, style);
 			}
-			g->updateEdgeDisplay();
+			g->modularEdgeComponent->updateEdgeDisplay(g->getCoinNode());
 		}
 	}
 	if (m_sceneManager && m_sceneManager->getCanvas()) {
 		if (auto* rm = m_sceneManager->getCanvas()->getRefreshManager()) rm->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
 	}
+}
+
+void EdgeDisplayManager::setUseModularEdgeComponent(bool useModular) {
+	// Migration completed - always use modular edge component
+	if (!useModular) {
+		LOG_WRN_S("Legacy edge component no longer supported - using modular component");
+	}
+}
+
+bool EdgeDisplayManager::isUsingModularEdgeComponent() const {
+	// Migration completed - always use modular edge component
+	return true;
 }

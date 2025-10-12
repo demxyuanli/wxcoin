@@ -97,6 +97,11 @@ public:
     void clearSilhouetteEdgeNode();
 
     /**
+     * @brief Clear mesh edge node
+     */
+    void clearMeshEdgeNode();
+
+    /**
      * @brief Generate intersection nodes visualization
      * @param intersectionPoints Points to visualize
      * @param color Point color
@@ -121,8 +126,10 @@ public:
     /**
      * @brief Update edge display based on current LOD level
      * @param lodManager LOD manager
+     * @param color Edge color
+     * @param width Edge width
      */
-    void updateLODLevel(EdgeLODManager* lodManager);
+    void updateLODLevel(EdgeLODManager* lodManager, const Quantity_Color& color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB), double width = 1.0);
 
     /**
      * @brief Enable/disable GPU-accelerated edge rendering

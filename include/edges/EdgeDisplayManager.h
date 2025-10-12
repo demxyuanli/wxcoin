@@ -24,13 +24,20 @@ public:
 	void setShowOriginalEdges(bool show, const MeshParameters& meshParams);
 	void setShowFeatureEdges(bool show, const MeshParameters& meshParams);
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams);
+	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams,
+		const Quantity_Color& color, double width);
 	void setShowMeshEdges(bool show, const MeshParameters& meshParams);
 	void setShowHighlightEdges(bool show, const MeshParameters& meshParams);
 	void setShowNormalLines(bool show, const MeshParameters& meshParams);
 	void setShowFaceNormalLines(bool show, const MeshParameters& meshParams);
+	void setShowIntersectionNodes(bool show, const MeshParameters& meshParams);
 
 	// Update
-	void updateAll(const MeshParameters& meshParams);
+	void updateAll(const MeshParameters& meshParams, bool forceMeshRegeneration = false);
+
+	// Edge component switching (for migration)
+	void setUseModularEdgeComponent(bool useModular);
+	bool isUsingModularEdgeComponent() const;
 
 	// Feature edge generation
 	void startAsyncFeatureEdgeGeneration(double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams);

@@ -231,10 +231,13 @@ public:
 		bool highlightIntersectionNodes = false, const wxColour& intersectionNodeColor = wxColour(255, 0, 0), double intersectionNodeSize = 3.0);
 	void setShowFeatureEdges(bool show) override;
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) override;
+	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave,
+		const Quantity_Color& color, double width);
 	void setShowMeshEdges(bool show) override;
 	void setShowHighlightEdges(bool show) override;
 	void setShowNormalLines(bool show) override;
 	void setShowFaceNormalLines(bool show) override;
+	void setShowIntersectionNodes(bool show) override;
 	// Outline API
 	void setOutlineEnabled(bool enabled) override { if (m_outlineManager) m_outlineManager->setEnabled(enabled); }
 	bool isOutlineEnabled() const override { return m_outlineManager ? m_outlineManager->isEnabled() : false; }
@@ -246,6 +249,9 @@ public:
 	void updateAllEdgeDisplays() override;
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) override;
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly);
+
+	// Force regenerate mesh-derived edges (normals, mesh edges) when mesh parameters change
+	void forceRegenerateMeshDerivedEdges(const MeshParameters& meshParams);
 
 	// Slice (clipping plane) control
 	void setSliceEnabled(bool enabled) override;

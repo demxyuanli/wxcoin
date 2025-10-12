@@ -8,7 +8,7 @@
 #include <wx/settings.h>
 #include <wx/statline.h>
 #include <string>
-#include "EdgeComponent.h"
+#include "edges/ModularEdgeComponent.h"
 
 EdgeSettingsDialog::EdgeSettingsDialog(wxWindow* parent, OCCViewer* viewer)
 	: FramelessModalPopup(parent, "Edge Settings", wxSize(600, 700))
@@ -459,11 +459,11 @@ void EdgeSettingsDialog::applySettings()
 	config.applySettingsToGeometries();
 
 	for (auto& geometry : m_viewer->getAllGeometry()) {
-		if (geometry && geometry->edgeComponent) {
-			geometry->edgeComponent->extractFeatureEdges(geometry->getShape(), m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave);
+		if (geometry && geometry->modularEdgeComponent) {
+			geometry->modularEdgeComponent->extractFeatureEdges(geometry->getShape(), m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
 			// Apply feature edge appearance using global settings
-			geometry->edgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
-			geometry->edgeComponent->updateEdgeDisplay(geometry->getCoinNode());
+			geometry->modularEdgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
+			geometry->modularEdgeComponent->updateEdgeDisplay(geometry->getCoinNode());
 		}
 	}
 

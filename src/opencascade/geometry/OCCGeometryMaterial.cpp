@@ -13,6 +13,9 @@ OCCGeometryMaterial::OCCGeometryMaterial()
 {
     m_coinMaterial = new SoMaterial();
     m_coinMaterial->ref();
+    
+    // Initialize SoMaterial with default values
+    updateCoinMaterial();
 }
 
 OCCGeometryMaterial::~OCCGeometryMaterial()
@@ -98,14 +101,14 @@ void OCCGeometryMaterial::updateCoinMaterial()
 {
     if (!m_coinMaterial) return;
     
-    // Set ambient color
+    // Set ambient color (no enhancement here, will be applied in buildCoinRepresentation)
     m_coinMaterial->ambientColor.setValue(
         static_cast<float>(m_materialAmbientColor.Red()),
         static_cast<float>(m_materialAmbientColor.Green()),
         static_cast<float>(m_materialAmbientColor.Blue())
     );
     
-    // Set diffuse color
+    // Set diffuse color (no reduction here, will be applied in buildCoinRepresentation)
     m_coinMaterial->diffuseColor.setValue(
         static_cast<float>(m_materialDiffuseColor.Red()),
         static_cast<float>(m_materialDiffuseColor.Green()),
@@ -126,8 +129,8 @@ void OCCGeometryMaterial::updateCoinMaterial()
         static_cast<float>(m_materialEmissiveColor.Blue())
     );
     
-    // Set shininess (Coin3D uses 0-1 range, convert from 0-128)
-    float shininess = static_cast<float>(m_materialShininess / 128.0);
+    // Set shininess (Coin3D uses 0-1 range, convert from 0-100 to match original)
+    float shininess = static_cast<float>(m_materialShininess / 100.0);  // Use 100 like original
     if (shininess > 1.0f) shininess = 1.0f;
     if (shininess < 0.0f) shininess = 0.0f;
     m_coinMaterial->shininess.setValue(shininess);
