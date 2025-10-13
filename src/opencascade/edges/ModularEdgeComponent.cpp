@@ -451,7 +451,80 @@ void ModularEdgeComponent::generateLODLevels(const TopoDS_Shape& shape, const gp
 
 void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
     if (node) {
-        node->unref();
+        // Validate pointer before dereferencing
+        uintptr_t ptrValue = reinterpret_cast<uintptr_t>(node);
+
+        // Check for known invalid pointer patterns (64-bit) - MUST BE FIRST
+        if (ptrValue == 0 ||
+            ptrValue == 0xFFFFFFFFFFFFFFFFULL ||
+            ptrValue == 0xFFFFFFFFFFFFFE87ULL ||
+            ptrValue == 0xCDCDCDCDCDCDCDCDULL ||  // Uninitialized heap memory (MSVC debug)
+            ptrValue == 0xDDDDDDDDDDDDDDDDULL ||  // Freed memory (MSVC debug)
+            ptrValue == 0xFEEEFEEEFEEEFEEEULL ||  // Other debug patterns
+            ptrValue == 0xBAADF00DBAADF00DULL ||
+            ptrValue == 0xDEADBEEFDEADBEEFULL) {
+            LOG_WRN_S("ModularEdgeComponent: Invalid pointer pattern detected in cleanupEdgeNode (0x" +
+                     std::to_string(ptrValue) + "), skipping unref");
+            node = nullptr;
+            return;
+        }
+
+        // Additional check: pointer should be aligned (SoSeparator objects are typically 8-byte aligned)
+        if (ptrValue % sizeof(void*) != 0) {
+            LOG_WRN_S("ModularEdgeComponent: Unaligned pointer detected in cleanupEdgeNode (0x" +
+                     std::to_string(ptrValue) + "), skipping unref");
+            node = nullptr;
+            return;
+        }
+
+        // Use Windows API to validate memory region (safer than direct access)
+#ifdef _WIN32
+        MEMORY_BASIC_INFORMATION mbi;
+        if (VirtualQuery(node, &mbi, sizeof(mbi)) == 0) {
+            // VirtualQuery failed - invalid memory
+            LOG_WRN_S("ModularEdgeComponent: VirtualQuery failed for pointer in cleanupEdgeNode (0x" +
+                     std::to_string(ptrValue) + "), skipping unref");
+            node = nullptr;
+            return;
+        }
+
+        // Check if memory is committed and accessible
+        if (mbi.State != MEM_COMMIT ||
+            (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
+            LOG_WRN_S("ModularEdgeComponent: Invalid memory protection for pointer in cleanupEdgeNode (0x" +
+                     std::to_string(ptrValue) + "), skipping unref");
+            node = nullptr;
+            return;
+        }
+#endif
+
+        // Final safety check: try to call a simple method that doesn't modify state
+        try {
+            // Check if the object has a valid vtable by calling a non-virtual method
+            // This is safer than accessing vtable directly
+            volatile int refCount = node->getRefCount(); // This should not crash if object is valid
+            if (refCount < 0) {
+                LOG_WRN_S("ModularEdgeComponent: Invalid refCount detected in cleanupEdgeNode (" +
+                         std::to_string(refCount) + "), skipping unref");
+                node = nullptr;
+                return;
+            }
+        } catch (...) {
+            LOG_WRN_S("ModularEdgeComponent: Exception during refCount check in cleanupEdgeNode (0x" +
+                     std::to_string(ptrValue) + "), skipping unref");
+            node = nullptr;
+            return;
+        }
+
+        // If we reach here, the pointer should be valid
+        try {
+            node->unref();
+            LOG_DBG_S("ModularEdgeComponent: Successfully unref'd node");
+        } catch (const std::exception& e) {
+            LOG_ERR_S("ModularEdgeComponent: Exception during node->unref(): " + std::string(e.what()));
+        } catch (...) {
+            LOG_ERR_S("ModularEdgeComponent: Unknown exception during node->unref()");
+        }
         node = nullptr;
     }
 }

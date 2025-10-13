@@ -13,14 +13,10 @@ OriginalEdgeRenderer::OriginalEdgeRenderer()
     , intersectionNodesNode(nullptr) {}
 
 OriginalEdgeRenderer::~OriginalEdgeRenderer() {
-    if (originalEdgeNode) {
-        originalEdgeNode->unref();
-        originalEdgeNode = nullptr;
-    }
-    if (intersectionNodesNode) {
-        intersectionNodesNode->unref();
-        intersectionNodesNode = nullptr;
-    }
+    // Note: Node cleanup is handled by ModularEdgeComponent::cleanupEdgeNode()
+    // to avoid double unref() calls. We just clear our internal pointers.
+    originalEdgeNode = nullptr;
+    intersectionNodesNode = nullptr;
 }
 
 SoSeparator* OriginalEdgeRenderer::generateNode(
@@ -88,11 +84,9 @@ SoSeparator* OriginalEdgeRenderer::generateIntersectionNodes(
 
     std::lock_guard<std::mutex> lock(m_nodeMutex);
 
-    // Clean up existing node
-    if (intersectionNodesNode) {
-        intersectionNodesNode->unref();
-        intersectionNodesNode = nullptr;
-    }
+    // Note: Node cleanup is handled by ModularEdgeComponent::cleanupEdgeNode()
+    // We just clear our internal pointer to avoid double unref()
+    intersectionNodesNode = nullptr;
 
     if (points.empty()) return nullptr;
 

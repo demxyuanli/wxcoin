@@ -71,11 +71,9 @@ SoSeparator* MeshEdgeRenderer::generateNode(
 
     std::lock_guard<std::mutex> lock(m_nodeMutex);
 
-    // Clean up existing node
-    if (meshEdgeNode) {
-        meshEdgeNode->unref();
-        meshEdgeNode = nullptr;
-    }
+    // Note: We don't clean up existing node here - that's the caller's responsibility
+    // to avoid double unref() calls. We just clear our internal pointer.
+    meshEdgeNode = nullptr;
 
     if (points.empty()) return nullptr;
 
@@ -123,16 +121,9 @@ SoSeparator* MeshEdgeRenderer::generateNormalLineNode(
 
     std::lock_guard<std::mutex> lock(m_nodeMutex);
 
-    // Clean up existing node
-    if (normalLineNode) {
-        try {
-            normalLineNode->unref();
-        } catch (...) {
-            // Node was already deleted or corrupted
-            LOG_WRN_S("Warning: normalLineNode was corrupted during cleanup");
-        }
-        normalLineNode = nullptr;
-    }
+    // Note: We don't clean up existing node here - that's the caller's responsibility
+    // to avoid double unref() calls. We just clear our internal pointer.
+    normalLineNode = nullptr;
 
     if (mesh.vertices.empty() || mesh.normals.empty()) return nullptr;
 
@@ -165,13 +156,16 @@ SoSeparator* MeshEdgeRenderer::generateNormalLineNode(
     }
 
     if (normalPoints.empty()) {
-        try {
-            normalLineNode->unref();
-        } catch (...) {
-            // Node was corrupted
-            LOG_WRN_S("Warning: normalLineNode was corrupted when no normals found");
+        // Clean up the node we just created since we can't use it
+        if (normalLineNode) {
+            try {
+                normalLineNode->unref();
+            } catch (...) {
+                // Node was corrupted
+                LOG_WRN_S("Warning: normalLineNode was corrupted when no normals found");
+            }
+            normalLineNode = nullptr;
         }
-        normalLineNode = nullptr;
         return nullptr;
     }
 
@@ -205,16 +199,9 @@ SoSeparator* MeshEdgeRenderer::generateFaceNormalLineNode(
 
     std::lock_guard<std::mutex> lock(m_nodeMutex);
 
-    // Clean up existing node
-    if (faceNormalLineNode) {
-        try {
-            faceNormalLineNode->unref();
-        } catch (...) {
-            // Node was already deleted or corrupted
-            LOG_WRN_S("Warning: faceNormalLineNode was corrupted during cleanup");
-        }
-        faceNormalLineNode = nullptr;
-    }
+    // Note: We don't clean up existing node here - that's the caller's responsibility
+    // to avoid double unref() calls. We just clear our internal pointer.
+    faceNormalLineNode = nullptr;
 
     if (mesh.vertices.empty() || mesh.triangles.empty()) return nullptr;
 
@@ -266,13 +253,16 @@ SoSeparator* MeshEdgeRenderer::generateFaceNormalLineNode(
     }
 
     if (normalPoints.empty()) {
-        try {
-            faceNormalLineNode->unref();
-        } catch (...) {
-            // Node was corrupted
-            LOG_WRN_S("Warning: faceNormalLineNode was corrupted when no face normals found");
+        // Clean up the node we just created since we can't use it
+        if (faceNormalLineNode) {
+            try {
+                faceNormalLineNode->unref();
+            } catch (...) {
+                // Node was corrupted
+                LOG_WRN_S("Warning: faceNormalLineNode was corrupted when no face normals found");
+            }
+            faceNormalLineNode = nullptr;
         }
-        faceNormalLineNode = nullptr;
         return nullptr;
     }
 
@@ -302,23 +292,13 @@ SoSeparator* MeshEdgeRenderer::generateFaceNormalLineNode(
 void MeshEdgeRenderer::clearMeshEdgeNode() {
     std::lock_guard<std::mutex> lock(m_nodeMutex);
 
-    if (meshEdgeNode) {
-        try {
-            meshEdgeNode->unref();
-        } catch (...) {
-            // Node was already deleted or corrupted
-            LOG_WRN_S("Warning: meshEdgeNode was corrupted during clearMeshEdgeNode");
-        }
-        meshEdgeNode = nullptr;
-    }
+    // Note: We don't call unref() here because the owner (ModularEdgeComponent)
+    // is responsible for managing the node's reference count.
+    // We just clear our internal pointer.
+    meshEdgeNode = nullptr;
 
-    if (m_gpuMeshEdgeNode) {
-        try {
-            m_gpuMeshEdgeNode->unref();
-        } catch (...) {
-            // Node was already deleted or corrupted
-            LOG_WRN_S("Warning: m_gpuMeshEdgeNode was corrupted during clearMeshEdgeNode");
-        }
-        m_gpuMeshEdgeNode = nullptr;
-    }
+    // Same for GPU node
+    m_gpuMeshEdgeNode = nullptr;
+
+    LOG_DBG_S("MeshEdgeRenderer: Cleared mesh edge nodes (reference counting handled by owner)");
 }

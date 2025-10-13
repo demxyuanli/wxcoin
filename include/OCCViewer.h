@@ -24,6 +24,21 @@
 #include "viewer/interfaces/IOutlineApi.h"
 #include "viewer/OutlineDisplayManager.h"
 #include "viewer/ImageOutlinePass.h"
+#include "viewer/config/SubdivisionConfig.h"
+#include "viewer/config/SmoothingConfig.h"
+#include "viewer/config/TessellationConfig.h"
+#include "viewer/config/NormalDisplayConfig.h"
+#include "viewer/config/OriginalEdgesConfig.h"
+#include "viewer/EdgeDisplayConfig.h"
+
+// Forward declarations
+class NormalDisplayService;
+class RenderModeManager;
+class GeometryManagementService;
+class ViewOperationsService;
+class GeometryFactoryService;
+class ConfigurationManager;
+class MeshQualityService;
 #include <unordered_map>
 #include <atomic>
 #include <thread>
@@ -48,7 +63,8 @@ class MeshParameterController; // mesh params + remesh
 class MeshingService; // apply + regenerate
 class HoverSilhouetteManager; // hover silhouette
 class BatchOperationManager; // batch updates
-class SelectionAccelerator; // selection acceleration
+class SelectionAcceleratorService; // selection acceleration service
+class MeshQualityValidator; // mesh quality validation and monitoring
 
 /**
  * @brief OpenCASCADE viewer integration
@@ -203,7 +219,7 @@ public:
 	void upgradeGeometryToAdvanced(const std::string& name);
 	void upgradeAllGeometriesToAdvanced();
 
-	// Mesh quality validation and debugging
+	// Mesh quality validation and debugging (delegated to MeshQualityValidator)
 	void validateMeshParameters();
 	void logCurrentMeshSettings();
 	void compareMeshQuality(const std::string& geometryName);
@@ -211,10 +227,23 @@ public:
 	void exportMeshStatistics(const std::string& filename);
 	bool verifyParameterApplication(const std::string& parameterName, double expectedValue);
 
-	// Real-time parameter monitoring
+	// Real-time parameter monitoring (delegated to MeshQualityValidator)
 	void enableParameterMonitoring(bool enabled);
 	bool isParameterMonitoringEnabled() const;
 	void logParameterChange(const std::string& parameterName, double oldValue, double newValue);
+
+	// Configuration management (delegated to ConfigurationManager)
+	void loadDefaultConfigurations();
+	bool loadConfigurationFromFile(const std::string& filename);
+	bool saveConfigurationToFile(const std::string& filename) const;
+	bool validateAllConfigurations() const;
+	std::string getConfigurationValidationErrors() const;
+	void applyQualityPreset(const std::string& presetName);
+	void applyPerformancePreset(const std::string& presetName);
+	std::vector<std::string> getAvailableConfigurationPresets() const;
+	void resetConfigurationsToDefaults();
+	std::string exportConfigurationAsJson() const;
+	bool importConfigurationFromJson(const std::string& jsonString);
 
 	// Force mesh regeneration
 	void remeshAllGeometries();
@@ -225,6 +254,12 @@ public:
 	void setPreserveViewOnAdd(bool preserve) override { m_preserveViewOnAdd = preserve; }
 	bool isPreserveViewOnAdd() const override { return m_preserveViewOnAdd; }
 
+	// Simplified Edge Display APIs - unified facade interface
+	void setEdgeDisplayMode(EdgeType type, bool show);
+	void configureEdgeDisplay(const EdgeDisplayConfig& config);
+	const EdgeDisplayFlags& getEdgeDisplayFlags() const;
+
+	// Legacy edge display APIs (deprecated - use simplified APIs above)
 	EdgeDisplayFlags globalEdgeFlags;
 	void setShowOriginalEdges(bool show) override;
 	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,
@@ -290,6 +325,9 @@ private:
 	static bool approximatelyEqual(double a, double b, double eps = 1e-6) { return std::abs(a - b) <= eps; }
 	void invalidateFeatureEdgeCache();
 	void rebuildSelectionAccelerator();
+	
+	// Throttled remeshing helper to avoid excessive remesh operations
+	void throttledRemesh(const std::string& context);
 
 	SceneManager* m_sceneManager;
 	SoSeparator* m_occRoot;
@@ -306,67 +344,46 @@ private:
 	MeshParameters m_meshParams;
 
 	// LOD settings (controller-backed)
-	bool m_lodEnabled;
+	bool m_lodEnabled = false;
 	std::unique_ptr<LODController> m_lodController;
 
-	// Subdivision settings
-	bool m_subdivisionEnabled;
-	int m_subdivisionLevel;
-	int m_subdivisionMethod;
-	double m_subdivisionCreaseAngle;
+	// Structured configuration objects (now managed by ConfigurationManager)
+	// Removed: SubdivisionConfig m_subdivisionConfig;
+	// Removed: SmoothingConfig m_smoothingConfig;
+	// Removed: TessellationConfig m_tessellationConfig;
+	// Removed: OriginalEdgesConfig m_originalEdgesConfig;
 
-	// Smoothing settings
-	bool m_smoothingEnabled;
-	int m_smoothingMethod;
-	int m_smoothingIterations;
-	double m_smoothingStrength;
-	double m_smoothingCreaseAngle;
+	// Display services
+	std::unique_ptr<NormalDisplayService> m_normalDisplayService;
+	std::unique_ptr<RenderModeManager> m_renderModeManager;
 
-	// Advanced tessellation settings
-	int m_tessellationMethod;
-	int m_tessellationQuality;
-	double m_featurePreservation;
-	bool m_parallelProcessing;
-	bool m_adaptiveMeshing;
+	// Geometry management service
+	std::unique_ptr<GeometryManagementService> m_geometryManagementService;
 
-	// Normal display settings
-	bool m_showNormals;
-	double m_normalLength;
-	Quantity_Color m_correctNormalColor;
-	Quantity_Color m_incorrectNormalColor;
-	
-	// Normal consistency settings
-	bool m_normalConsistencyMode;
-	bool m_normalDebugMode;
-
-	// Original edges parameters
-	double m_originalEdgesSamplingDensity = 80.0;
-	double m_originalEdgesMinLength = 0.01;
-	bool m_originalEdgesShowLinesOnly = false;
-	wxColour m_originalEdgesColor = wxColour(255, 255, 255);
-	double m_originalEdgesWidth = 1.0;
-	bool m_originalEdgesHighlightIntersectionNodes = false;
-	wxColour m_originalEdgesIntersectionNodeColor = wxColour(255, 0, 0);
-	double m_originalEdgesIntersectionNodeSize = 3.0;
+	// Additional services
+	std::unique_ptr<ViewOperationsService> m_viewOperationsService;
+	std::unique_ptr<GeometryFactoryService> m_geometryFactoryService;
+	std::unique_ptr<ConfigurationManager> m_configurationManager;
+	std::unique_ptr<MeshQualityService> m_meshQualityService;
 
 	Quantity_Color m_defaultColor;
-	double m_defaultTransparency;
+	double m_defaultTransparency = 0.0;
 
 	// Batch operation state
-	bool m_batchOperationActive;
-	bool m_needsViewRefresh;
+	bool m_batchOperationActive = false;
+	bool m_needsViewRefresh = false;
 	bool m_preserveViewOnAdd{ true };
 	std::unique_ptr<BatchOperationManager> m_batchManager;
 
 	// Performance optimization
-	bool m_meshRegenerationNeeded;
+	bool m_meshRegenerationNeeded = false;
 	MeshParameters m_lastMeshParams;
 
 	// Deferred ObjectTree updates
 	std::vector<std::shared_ptr<OCCGeometry>> m_pendingObjectTreeUpdates;
 
 	// Parameter monitoring
-	bool m_parameterMonitoringEnabled;
+	bool m_parameterMonitoringEnabled = false;
 
 	std::unordered_map<SoSeparator*, std::shared_ptr<OCCGeometry>> m_nodeToGeom;
 	std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos);
@@ -403,6 +420,9 @@ private:
 	// New manager to centralize edge display
 	std::unique_ptr<EdgeDisplayManager> m_edgeDisplayManager;
 	
-	// Selection acceleration using BVH
-	std::unique_ptr<SelectionAccelerator> m_selectionAccelerator;
+	// Selection acceleration service
+	std::unique_ptr<SelectionAcceleratorService> m_selectionAcceleratorService;
+	
+	// Mesh quality validation and monitoring
+	std::unique_ptr<MeshQualityValidator> m_qualityValidator;
 };

@@ -10,22 +10,9 @@ FeatureEdgeRenderer::FeatureEdgeRenderer()
     : featureEdgeNode(nullptr) {}
 
 FeatureEdgeRenderer::~FeatureEdgeRenderer() {
-    if (featureEdgeNode) {
-        // Check for invalid pointers
-        if (reinterpret_cast<uintptr_t>(featureEdgeNode) == 0xFFFFFFFFFFFFFFFFULL ||
-            reinterpret_cast<uintptr_t>(featureEdgeNode) == 0xFFFFFFFFFFFFFE87ULL) {
-            LOG_WRN_S("FeatureEdgeRenderer destructor: Invalid featureEdgeNode pointer detected, skipping unref");
-        } else {
-            try {
-                featureEdgeNode->unref();
-            } catch (const std::exception& e) {
-                LOG_WRN_S("FeatureEdgeRenderer destructor: Exception during unref: " + std::string(e.what()));
-            } catch (...) {
-                LOG_WRN_S("FeatureEdgeRenderer destructor: Unknown exception during unref");
-            }
-        }
-        featureEdgeNode = nullptr;
-    }
+    // Note: Node cleanup is handled by ModularEdgeComponent::cleanupEdgeNode()
+    // to avoid double unref() calls. We just clear our internal pointer.
+    featureEdgeNode = nullptr;
 }
 
 SoSeparator* FeatureEdgeRenderer::generateNode(

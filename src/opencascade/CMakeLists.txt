@@ -34,12 +34,21 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewUpdateService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshingService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshParameterController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/NormalDisplayService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/RenderModeManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/GeometryManagementService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewOperationsService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/GeometryFactoryService.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ConfigurationManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshQualityService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshParameterAdvisor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/HoverSilhouetteManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/BatchOperationManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlineDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SelectionOutlineManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ImageOutlinePass.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshQualityValidator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SelectionAcceleratorService.cpp
     
     # Edge display modules
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeDisplayManager.cpp
@@ -117,6 +126,13 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/viewer/MeshParameterController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/HoverSilhouetteManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/BatchOperationManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/MeshQualityValidator.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/config/SubdivisionConfig.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/config/SmoothingConfig.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/config/TessellationConfig.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/config/NormalDisplayConfig.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/config/OriginalEdgesConfig.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/SelectionAcceleratorService.h
     ${CMAKE_SOURCE_DIR}/include/edges/EdgeDisplayManager.h
     ${CMAKE_SOURCE_DIR}/include/edges/EdgeGenerationService.h
     ${CMAKE_SOURCE_DIR}/include/edges/EdgeRenderApplier.h

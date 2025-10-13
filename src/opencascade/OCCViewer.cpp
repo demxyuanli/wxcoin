@@ -5,6 +5,13 @@
 #endif
 
 #include "OCCViewer.h"
+#include "viewer/NormalDisplayService.h"
+#include "viewer/RenderModeManager.h"
+#include "viewer/GeometryManagementService.h"
+#include "viewer/ViewOperationsService.h"
+#include "viewer/GeometryFactoryService.h"
+#include "viewer/ConfigurationManager.h"
+#include "viewer/MeshQualityService.h"
 #include "OCCGeometry.h"
 #include "rendering/RenderingToolkitAPI.h"
 #include "SceneManager.h"
@@ -55,7 +62,8 @@
 #include "viewer/BatchOperationManager.h"
 #include "viewer/OutlineDisplayManager.h"
 #include "viewer/SelectionOutlineManager.h"
-#include "SelectionAccelerator.h"
+#include "viewer/SelectionAcceleratorService.h"
+#include "viewer/MeshQualityValidator.h"
 
 gp_Pnt OCCViewer::getCameraPosition() const {
 	if (!m_sceneManager || !m_sceneManager->getCanvas()) return gp_Pnt(0, 0, 0);
@@ -73,40 +81,27 @@ gp_Pnt OCCViewer::getCameraPosition() const {
 OCCViewer::OCCViewer(SceneManager* sceneManager)
 	: m_sceneManager(sceneManager),
 	m_occRoot(nullptr),
+	m_normalRoot(nullptr),
 	m_wireframeMode(false),
+	m_shadingMode(false),
 	m_showEdges(true),
 	m_antiAliasing(true),
-	m_showNormals(false),
-	m_normalLength(0.5),
-	m_correctNormalColor(1.0, 0.0, 0.0, Quantity_TOC_RGB),
-	m_incorrectNormalColor(0.0, 1.0, 0.0, Quantity_TOC_RGB),
-	m_normalConsistencyMode(true),
-	m_normalDebugMode(false),
 	m_defaultColor(0.7, 0.7, 0.7, Quantity_TOC_RGB),
-	m_defaultTransparency(0.0),
-	m_lodEnabled(false),
-
-	m_subdivisionEnabled(false),
-	m_subdivisionLevel(2),
-	m_subdivisionMethod(0),
-	m_subdivisionCreaseAngle(30.0),
-	m_smoothingEnabled(false),
-	m_smoothingMethod(0),
-	m_smoothingIterations(2),
-	m_smoothingStrength(0.5),
-	m_smoothingCreaseAngle(30.0),
-	m_tessellationMethod(0),
-	m_tessellationQuality(2),
-	m_featurePreservation(0.5),
-	m_parallelProcessing(true),
-	m_adaptiveMeshing(false),
-	m_batchOperationActive(false),
-	m_needsViewRefresh(false),
-	m_parameterMonitoringEnabled(false)
+	m_lastMeshParams{}  // 初始化为默认值，避免随机值导致的问题
 {
 	initializeViewer();
 	// Remove default edge display to avoid conflicts with new EdgeComponent system
 	// setShowEdges(true);
+
+	// Create services
+	m_configurationManager = std::make_unique<ConfigurationManager>();
+	m_normalDisplayService = std::make_unique<NormalDisplayService>();
+	m_renderModeManager = std::make_unique<RenderModeManager>();
+	m_geometryManagementService = std::make_unique<GeometryManagementService>(
+		m_sceneManager, &m_geometries, &m_selectedGeometries);
+	m_viewOperationsService = std::make_unique<ViewOperationsService>();
+	m_geometryFactoryService = std::make_unique<GeometryFactoryService>();
+	m_meshQualityService = std::make_unique<MeshQualityService>();
 
 	// Create LOD controller
 	m_lodController = std::make_unique<LODController>(this);
@@ -124,12 +119,32 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
 	m_geometryRepo = std::make_unique<GeometryRepository>(&m_geometries);
 	m_sceneAttach = std::make_unique<SceneAttachmentService>(m_occRoot, &m_nodeToGeom);
 	m_viewUpdater = std::make_unique<ViewUpdateService>(m_sceneManager);
+
+	// Set up geometry management service dependencies
+	if (m_geometryManagementService) {
+		m_geometryManagementService->setServices(
+			m_geometryRepo.get(),
+			m_sceneAttach.get(),
+			m_objectTreeSync.get(),
+			m_selectionManager.get(),
+			m_viewUpdater.get()
+		);
+	}
+
+	// Set up view operations service
+	if (m_viewOperationsService) {
+		m_viewOperationsService->setBatchMode(m_batchOperationActive);
+	}
 	m_meshingService = std::make_unique<MeshingService>();
 	m_meshController = std::make_unique<MeshParameterController>(this, m_meshingService.get(), &m_meshParams, &m_geometries);
 	m_batchManager = std::make_unique<BatchOperationManager>(m_sceneManager, m_objectTreeSync.get(), m_viewUpdater.get());
 	
-	// Initialize selection accelerator
-	m_selectionAccelerator = std::make_unique<SelectionAccelerator>();
+	// Initialize selection accelerator service
+	m_selectionAcceleratorService = std::make_unique<SelectionAcceleratorService>();
+	
+	// Initialize mesh quality validator
+	m_qualityValidator = std::make_unique<MeshQualityValidator>();
+	m_qualityValidator->setContext(&m_geometries, &m_meshParams);
 }
 
 OCCViewer::~OCCViewer()
@@ -169,77 +184,32 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 		return;
 	}
 
-	auto validationStartTime = std::chrono::high_resolution_clock::now();
-	if (m_geometryRepo && m_geometryRepo->existsByName(geometry->getName())) {
-		LOG_WRN_S("Geometry with name '" + geometry->getName() + "' already exists");
-		return;
-	}
-	auto validationEndTime = std::chrono::high_resolution_clock::now();
-	auto validationDuration = std::chrono::duration_cast<std::chrono::microseconds>(validationEndTime - validationStartTime);
-
-	auto meshStartTime = std::chrono::high_resolution_clock::now();
-	// Use optimized mesh update method
+	// Update mesh representation first
 	geometry->updateCoinRepresentationIfNeeded(m_meshParams);
-	auto meshEndTime = std::chrono::high_resolution_clock::now();
-	auto meshDuration = std::chrono::duration_cast<std::chrono::milliseconds>(meshEndTime - meshStartTime);
 
-	auto storageStartTime = std::chrono::high_resolution_clock::now();
-	if (m_geometryRepo) m_geometryRepo->add(geometry);
-	auto storageEndTime = std::chrono::high_resolution_clock::now();
-	auto storageDuration = std::chrono::duration_cast<std::chrono::microseconds>(storageEndTime - storageStartTime);
+	// Use geometry management service to add the geometry
+	if (m_geometryManagementService) {
+		if (m_geometryManagementService->addGeometry(geometry, m_batchOperationActive)) {
+			// Notify outline manager
+			if (m_outlineManager) {
+				m_outlineManager->onGeometryAdded(geometry);
+			}
 
-	auto coinNodeStartTime = std::chrono::high_resolution_clock::now();
-	SoSeparator* coinNode = geometry->getCoinNode();
-	auto coinNodeEndTime = std::chrono::high_resolution_clock::now();
-	auto coinNodeDuration = std::chrono::duration_cast<std::chrono::microseconds>(coinNodeEndTime - coinNodeStartTime);
-
-	auto addChildStartTime = std::chrono::high_resolution_clock::now();
-	if (coinNode && m_occRoot) {
-		if (m_sceneAttach) m_sceneAttach->attach(geometry);
-	}
-	else {
-		if (!coinNode) {
-			LOG_ERR_S("Coin3D node is null for geometry: " + geometry->getName());
-		}
-		if (!m_occRoot) {
-			LOG_ERR_S("OCC root is null, cannot add geometry: " + geometry->getName());
-		}
-	}
-	auto addChildEndTime = std::chrono::high_resolution_clock::now();
-	auto addChildDuration = std::chrono::duration_cast<std::chrono::microseconds>(addChildEndTime - addChildStartTime);
-
-	auto objectTreeStartTime = std::chrono::high_resolution_clock::now();
-	if (m_objectTreeSync) {
-		m_objectTreeSync->addGeometry(geometry, m_batchOperationActive);
-	}
-	auto objectTreeEndTime = std::chrono::high_resolution_clock::now();
-	auto objectTreeDuration = std::chrono::duration_cast<std::chrono::microseconds>(objectTreeEndTime - objectTreeStartTime);
-
-	auto viewUpdateStartTime = std::chrono::high_resolution_clock::now();
-	// Auto-update scene bounds and optionally view when geometry is added
-	if (m_viewUpdater) {
-		m_viewUpdater->updateSceneBounds();
-		if (m_batchOperationActive) {
-			m_needsViewRefresh = true;
-			if (m_batchManager) m_batchManager->markNeedsViewRefresh();
-		}
-		else {
-			if (!m_preserveViewOnAdd && m_viewUpdater) m_viewUpdater->resetView();
-			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::GEOMETRY_CHANGED), true);
-			m_viewUpdater->refreshCanvas(false);
+			// Handle view updates
+			if (m_viewUpdater) {
+				m_viewUpdater->updateSceneBounds();
+				if (m_batchOperationActive) {
+					m_needsViewRefresh = true;
+					if (m_batchManager) m_batchManager->markNeedsViewRefresh();
+				}
+				else {
+					if (!m_preserveViewOnAdd && m_viewUpdater) m_viewUpdater->resetView();
+					m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::GEOMETRY_CHANGED), true);
+					m_viewUpdater->refreshCanvas(false);
+				}
+			}
 		}
 	}
-
-	// Notify outline manager if exists
-	if (m_outlineManager) {
-		m_outlineManager->onGeometryAdded(geometry);
-	}
-	
-	// Rebuild selection accelerator when new geometry is added
-	rebuildSelectionAccelerator();
-	
-	auto viewUpdateEndTime = std::chrono::high_resolution_clock::now();
-	auto viewUpdateDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewUpdateEndTime - viewUpdateStartTime);
 
 	auto addEndTime = std::chrono::high_resolution_clock::now();
 	auto addDuration = std::chrono::duration_cast<std::chrono::milliseconds>(addEndTime - addStartTime);
@@ -247,44 +217,22 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
-	if (!geometry) return;
-
-	auto it = std::find(m_geometries.begin(), m_geometries.end(), geometry);
-	if (it != m_geometries.end()) {
-		if (m_sceneAttach) m_sceneAttach->detach(geometry);
-
-		auto selectedIt = std::find(m_selectedGeometries.begin(), m_selectedGeometries.end(), geometry);
-		if (selectedIt != m_selectedGeometries.end()) {
-			m_selectedGeometries.erase(selectedIt);
-		}
-
-		// Remove geometry from ObjectTree
-		if (m_objectTreeSync) m_objectTreeSync->removeGeometry(geometry);
-
-		if (m_geometryRepo) m_geometryRepo->remove(geometry);
-		
-		// Rebuild selection accelerator after geometry removed
-		rebuildSelectionAccelerator();
+	if (m_geometryManagementService) {
+		m_geometryManagementService->removeGeometry(geometry);
 	}
 }
 
 void OCCViewer::removeGeometry(const std::string& name)
 {
-	auto geometry = findGeometry(name);
-	if (geometry) {
-		removeGeometry(geometry);
+	if (m_geometryManagementService) {
+		m_geometryManagementService->removeGeometry(name);
 	}
 }
 
 void OCCViewer::clearAll()
 {
-	m_selectedGeometries.clear();
-	if (m_geometryRepo) m_geometryRepo->clear();
-	if (m_sceneAttach) m_sceneAttach->detachAll();
-	
-	// Clear selection accelerator
-	if (m_selectionAccelerator) {
-		m_selectionAccelerator->clear();
+	if (m_geometryManagementService) {
+		m_geometryManagementService->clearAll();
 	}
 }
 
@@ -342,65 +290,54 @@ void OCCViewer::updateHoverSilhouetteAt(const wxPoint& screenPos) {
 
 std::shared_ptr<OCCGeometry> OCCViewer::findGeometry(const std::string& name)
 {
-	if (m_geometryRepo) return m_geometryRepo->findByName(name);
+	if (m_geometryManagementService) {
+		return m_geometryManagementService->findGeometry(name);
+	}
 	return nullptr;
 }
 
 std::vector<std::shared_ptr<OCCGeometry>> OCCViewer::getAllGeometry() const
 {
-	return m_geometries;
+	if (m_geometryManagementService) {
+		return m_geometryManagementService->getAllGeometries();
+	}
+	return std::vector<std::shared_ptr<OCCGeometry>>();
 }
 
 std::vector<std::shared_ptr<OCCGeometry>> OCCViewer::getSelectedGeometries() const
 {
-	return m_selectedGeometries;
+	if (m_geometryManagementService) {
+		return m_geometryManagementService->getSelectedGeometries();
+	}
+	return std::vector<std::shared_ptr<OCCGeometry>>();
 }
 
 void OCCViewer::setGeometryVisible(const std::string& name, bool visible)
 {
-	if (m_selectionManager) m_selectionManager->setGeometryVisible(name, visible);
-	// Ensure scene attachment reflects visibility
-	if (auto g = findGeometry(name)) {
-		SoSeparator* coinNode = g->getCoinNode();
-		if (coinNode && m_occRoot) {
-			int idx = m_occRoot->findChild(coinNode);
-			if (visible) {
-				if (idx < 0) {
-					m_occRoot->addChild(coinNode);
-				}
-			}
-			else {
-				if (idx >= 0) {
-					m_occRoot->removeChild(idx);
-				}
-			}
-		}
+	if (m_geometryManagementService) {
+		m_geometryManagementService->setGeometryVisible(name, visible);
 	}
-	// Also update tree item text to reflect [H] marker
-	if (m_sceneManager && m_sceneManager->getCanvas()) {
-		Canvas* canvas = m_sceneManager->getCanvas();
-		if (canvas && canvas->getObjectTreePanel()) {
-			if (auto g = findGeometry(name)) {
-				canvas->getObjectTreePanel()->updateOCCGeometryName(g);
-			}
-		}
-	}
-	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 }
 
 void OCCViewer::setGeometrySelected(const std::string& name, bool selected)
 {
-	if (m_selectionManager) m_selectionManager->setGeometrySelected(name, selected);
+	if (m_geometryManagementService) {
+		m_geometryManagementService->setGeometrySelected(name, selected);
+	}
 }
 
 void OCCViewer::setGeometryColor(const std::string& name, const Quantity_Color& color)
 {
-	if (m_selectionManager) m_selectionManager->setGeometryColor(name, color);
+	if (m_geometryManagementService) {
+		m_geometryManagementService->setGeometryColor(name, color);
+	}
 }
 
 void OCCViewer::setGeometryTransparency(const std::string& name, double transparency)
 {
-	if (m_selectionManager) m_selectionManager->setGeometryTransparency(name, transparency);
+	if (m_geometryManagementService) {
+		m_geometryManagementService->setGeometryTransparency(name, transparency);
+	}
 }
 
 void OCCViewer::hideAll()
@@ -468,8 +405,8 @@ std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
 		return nullptr;
 	}
 	
-	// Try to use SelectionAccelerator for fast picking if available
-	if (m_selectionAccelerator && !m_geometries.empty()) {
+	// Try to use SelectionAcceleratorService for fast picking
+	if (m_selectionAcceleratorService && !m_geometries.empty()) {
 		// Get camera for ray direction
 		gp_Pnt cameraPos = getCameraPosition();
 		gp_Pnt clickPos(worldPos[0], worldPos[1], worldPos[2]);
@@ -478,50 +415,25 @@ std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
 		if (rayDir.Magnitude() > 1e-7) {
 			rayDir.Normalize();
 			
-			SelectionAccelerator::SelectionResult result;
-			if (m_selectionAccelerator->selectByRay(cameraPos, rayDir, result)) {
-				// Map shape index back to geometry
-				if (result.shapeIndex < m_geometries.size()) {
-					return m_geometries[result.shapeIndex];
-				}
+			auto result = m_selectionAcceleratorService->pickByRay(cameraPos, rayDir, m_geometries);
+			if (result) {
+				return result;
 			}
 		}
 	}
 
-	// Fallback to traditional distance-based picking
-	std::shared_ptr<OCCGeometry> closestGeometry = nullptr;
-	double minDistance = std::numeric_limits<double>::max();
-
-	for (auto& geometry : m_geometries) {
-		if (!geometry->isVisible()) continue;
-
-		gp_Pnt geometryPos = geometry->getPosition();
-
-		double distance = std::sqrt(
-			std::pow(worldPos[0] - geometryPos.X(), 2) +
-			std::pow(worldPos[1] - geometryPos.Y(), 2) +
-			std::pow(worldPos[2] - geometryPos.Z(), 2)
-		);
-
-		double pickingRadius = 15.0;
-
-		if (distance < minDistance && distance < pickingRadius) {
-			minDistance = distance;
-			closestGeometry = geometry;
-		}
+	// Fallback to distance-based picking
+	if (m_selectionAcceleratorService) {
+		return m_selectionAcceleratorService->pickByDistance(worldPos, m_geometries);
 	}
 
-	return closestGeometry;
+	return nullptr;
 }
 
 void OCCViewer::setWireframeMode(bool wireframe)
 {
-	m_wireframeMode = wireframe;
-	// Update all geometries to wireframe mode
-	for (auto& geometry : m_geometries) {
-		if (geometry) {
-			geometry->setWireframeMode(wireframe);
-		}
+	if (m_renderModeManager) {
+		m_renderModeManager->setWireframeMode(wireframe, m_geometries);
 	}
 
 	// Request immediate view refresh
@@ -532,15 +444,9 @@ void OCCViewer::setWireframeMode(bool wireframe)
 
 void OCCViewer::setShowEdges(bool showEdges)
 {
-	m_showEdges = showEdges;
-
-	// Update EdgeSettingsConfig
-	EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
-	edgeConfig.setGlobalShowEdges(showEdges);
-
-	// Update rendering toolkit configuration
-	auto& config = RenderingToolkitAPI::getConfig();
-	config.getEdgeSettings().showEdges = showEdges;
+	if (m_renderModeManager) {
+		m_renderModeManager->setShowEdges(showEdges, m_edgeDisplayManager.get(), m_meshParams);
+	}
 
 	remeshAllGeometries();
 
@@ -550,53 +456,34 @@ void OCCViewer::setShowEdges(bool showEdges)
 
 void OCCViewer::setAntiAliasing(bool enabled)
 {
-	m_antiAliasing = enabled;
+	if (m_renderModeManager) {
+		m_renderModeManager->setAntiAliasing(enabled);
+	}
 }
 
 bool OCCViewer::isWireframeMode() const
 {
-	return m_wireframeMode;
+	return m_renderModeManager ? m_renderModeManager->isWireframeMode() : false;
 }
 
 // Removed isShadingMode method - functionality not needed
 
 bool OCCViewer::isShowEdges() const
 {
-	return m_showEdges;
+	return m_renderModeManager ? m_renderModeManager->isShowEdges() : true;
 }
 
 bool OCCViewer::isShowNormals() const
 {
-	return m_showNormals;
+	return m_normalDisplayService ? m_normalDisplayService->isShowNormals() : false;
 }
 
 void OCCViewer::setMeshDeflection(double deflection, bool remesh)
 {
 	if (m_meshParams.deflection != deflection) {
 		m_meshParams.deflection = deflection;
-
-		// Throttle remeshing to prevent excessive calls
 		if (remesh) {
-			static wxLongLong lastRemeshTime = 0;
-			wxLongLong currentTime = wxGetLocalTimeMillis();
-			const int MIN_REMESH_INTERVAL = 200; // Minimum 200ms between remesh operations
-
-			if (currentTime - lastRemeshTime >= MIN_REMESH_INTERVAL) {
-				try {
-					remeshAllGeometries();
-					lastRemeshTime = currentTime;
-					// Request view refresh after remeshing
-					if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
-				}
-				catch (const std::exception& e) {
-					LOG_ERR_S("OCCViewer::setMeshDeflection: Exception during remesh: " + std::string(e.what()));
-					// Don't update lastRemeshTime if remesh failed
-				}
-				catch (...) {
-					LOG_ERR_S("OCCViewer::setMeshDeflection: Unknown exception during remesh");
-					// Don't update lastRemeshTime if remesh failed
-				}
-			}
+			throttledRemesh("setMeshDeflection");
 		}
 	}
 }
@@ -610,29 +497,8 @@ void OCCViewer::setAngularDeflection(double deflection, bool remesh)
 {
 	if (m_meshParams.angularDeflection != deflection) {
 		m_meshParams.angularDeflection = deflection;
-
-		// Throttle remeshing to prevent excessive calls
 		if (remesh) {
-			static wxLongLong lastRemeshTime = 0;
-			wxLongLong currentTime = wxGetLocalTimeMillis();
-			const int MIN_REMESH_INTERVAL = 200; // Minimum 200ms between remesh operations
-
-			if (currentTime - lastRemeshTime >= MIN_REMESH_INTERVAL) {
-				try {
-					remeshAllGeometries();
-					lastRemeshTime = currentTime;
-					// Request view refresh after remeshing
-					if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
-				}
-				catch (const std::exception& e) {
-					LOG_ERR_S("OCCViewer::setAngularDeflection: Exception during remesh: " + std::string(e.what()));
-					// Don't update lastRemeshTime if remesh failed
-				}
-				catch (...) {
-					LOG_ERR_S("OCCViewer::setAngularDeflection: Unknown exception during remesh");
-					// Don't update lastRemeshTime if remesh failed
-				}
-			}
+			throttledRemesh("setAngularDeflection");
 		}
 	}
 }
@@ -662,8 +528,13 @@ void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::setShowNormals(bool showNormals)
 {
-	m_showNormals = showNormals;
-	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowNormalLines(showNormals, m_meshParams);
+	if (m_normalDisplayService && m_configurationManager) {
+		// Sync configuration from ConfigurationManager
+		auto& config = m_configurationManager->getNormalDisplayConfig();
+		config.showNormals = showNormals;
+		m_normalDisplayService->setNormalDisplayConfig(config);
+		m_normalDisplayService->setShowNormals(showNormals, m_edgeDisplayManager.get(), m_meshParams);
+	}
 	if (m_sceneManager && m_sceneManager->getCanvas()) {
 		auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
 		if (refreshManager) {
@@ -674,20 +545,26 @@ void OCCViewer::setShowNormals(bool showNormals)
 
 void OCCViewer::setNormalLength(double length)
 {
-	m_normalLength = length;
-	// Force regeneration of normal lines with new length
-	if (m_edgeDisplayManager) {
-		m_edgeDisplayManager->updateAll(m_meshParams);
+	if (m_normalDisplayService && m_configurationManager) {
+		auto& config = m_configurationManager->getNormalDisplayConfig();
+		config.length = length;
+		m_normalDisplayService->setNormalDisplayConfig(config);
+		m_normalDisplayService->setNormalLength(length);
+		// Force regeneration of normal lines with new length
+		if (m_edgeDisplayManager) {
+			m_edgeDisplayManager->updateAll(m_meshParams);
+		}
 	}
 }
 
 void OCCViewer::setNormalColor(const Quantity_Color& correct, const Quantity_Color& incorrect)
 {
-	m_correctNormalColor = correct;
-	m_incorrectNormalColor = incorrect;
-	// Force regeneration of normal lines with new colors
-	if (m_edgeDisplayManager) {
-		m_edgeDisplayManager->updateAll(m_meshParams);
+	if (m_normalDisplayService) {
+		m_normalDisplayService->setNormalColor(correct, incorrect);
+		// Force regeneration of normal lines with new colors
+		if (m_edgeDisplayManager) {
+			m_edgeDisplayManager->updateAll(m_meshParams);
+		}
 	}
 }
 
@@ -700,61 +577,64 @@ void OCCViewer::updateNormalsDisplay()
 // Enhanced normal consistency tools
 void OCCViewer::setNormalConsistencyMode(bool enabled)
 {
-	m_normalConsistencyMode = enabled;
-	
-	// Apply to all geometries
-	for (auto& geometry : m_geometries) {
-		if (geometry) {
-			// Force regeneration with consistency mode
-			geometry->regenerateMesh(m_meshParams);
+	if (m_normalDisplayService && m_configurationManager) {
+		auto& config = m_configurationManager->getNormalDisplayConfig();
+		config.consistencyMode = enabled;
+		m_normalDisplayService->setNormalDisplayConfig(config);
+		m_normalDisplayService->setNormalConsistencyMode(enabled);
+
+		// Apply to all geometries
+		for (auto& geometry : m_geometries) {
+			if (geometry) {
+				// Force regeneration with consistency mode
+				geometry->regenerateMesh(m_meshParams);
+			}
 		}
+
+		// Refresh view
+		if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 	}
-	
-	// Refresh view
-	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 }
 
 bool OCCViewer::isNormalConsistencyModeEnabled() const
 {
-	return m_normalConsistencyMode;
+	return m_normalDisplayService ? m_normalDisplayService->isNormalConsistencyModeEnabled() : false;
 }
 
 void OCCViewer::setNormalDebugMode(bool enabled)
 {
-	m_normalDebugMode = enabled;
-	
-	// Toggle normal display based on debug mode
-	setShowNormals(enabled);
-	
-	// Update normal colors for debug visualization
-	if (enabled) {
-		setNormalColor(
-			Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB),  // Green for correct
-			Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB)   // Red for incorrect
-		);
+	if (m_normalDisplayService && m_configurationManager) {
+		auto& config = m_configurationManager->getNormalDisplayConfig();
+		config.debugMode = enabled;
+		m_normalDisplayService->setNormalDisplayConfig(config);
+		m_normalDisplayService->setNormalDebugMode(enabled);
+
+		// Toggle normal display based on debug mode
+		setShowNormals(enabled);
 	}
 }
 
 bool OCCViewer::isNormalDebugModeEnabled() const
 {
-	return m_normalDebugMode;
+	return m_normalDisplayService ? m_normalDisplayService->isNormalDebugModeEnabled() : false;
 }
 
 void OCCViewer::refreshNormalDisplay()
 {
 	// Force regeneration of all normal lines
-	if (m_edgeDisplayManager) {
-		m_edgeDisplayManager->updateAll(m_meshParams);
+	if (m_normalDisplayService) {
+		m_normalDisplayService->refreshNormalDisplay(m_edgeDisplayManager.get(), m_meshParams);
 	}
-	
+
 	// Refresh view
 	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 }
 
 void OCCViewer::toggleNormalDisplay()
 {
-	bool currentState = isShowNormals();
-	setShowNormals(!currentState);
+	if (m_normalDisplayService) {
+		m_normalDisplayService->toggleNormalDisplay(m_edgeDisplayManager.get(), m_meshParams);
+	}
 }
 
 void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
@@ -957,334 +837,376 @@ void OCCViewer::updateObjectTreeDeferred()
 // Subdivision surface control implementations
 void OCCViewer::setSubdivisionEnabled(bool enabled)
 {
-	if (m_subdivisionEnabled == enabled) return;
-	m_subdivisionEnabled = enabled;
-	if (m_meshController) m_meshController->setSubdivisionEnabled(enabled);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSubdivisionConfig();
+		if (config.enabled == enabled) return;
+		config.enabled = enabled;
+		if (m_meshController) m_meshController->setSubdivisionEnabled(enabled);
+	}
 }
 
 bool OCCViewer::isSubdivisionEnabled() const
 {
-	return m_subdivisionEnabled;
+	return m_configurationManager ? m_configurationManager->getSubdivisionConfig().enabled : false;
 }
 
 void OCCViewer::setSubdivisionLevel(int level)
 {
-	if (level < 1 || level > 5 || m_subdivisionLevel == level) return;
-	m_subdivisionLevel = level;
-	if (m_meshController) m_meshController->setSubdivisionLevel(level);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSubdivisionConfig();
+		if (level < 1 || level > 5 || config.level == level) return;
+		config.level = level;
+		if (m_meshController) m_meshController->setSubdivisionLevel(level);
+	}
 }
 
 int OCCViewer::getSubdivisionLevel() const
 {
-	return m_subdivisionLevel;
+	return m_configurationManager ? m_configurationManager->getSubdivisionConfig().level : 1;
 }
 
 void OCCViewer::setSubdivisionMethod(int method)
 {
-	if (method < 0 || method > 3 || m_subdivisionMethod == method) return;
-	m_subdivisionMethod = method;
-	if (m_meshController) m_meshController->setSubdivisionMethod(method);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSubdivisionConfig();
+		if (method < 0 || method > 3 || config.method == method) return;
+		config.method = method;
+		if (m_meshController) m_meshController->setSubdivisionMethod(method);
+	}
 }
 
 int OCCViewer::getSubdivisionMethod() const
 {
-	return m_subdivisionMethod;
+	return m_configurationManager ? m_configurationManager->getSubdivisionConfig().method : 0;
 }
 
 void OCCViewer::setSubdivisionCreaseAngle(double angle)
 {
-	if (angle < 0.0 || angle > 180.0 || m_subdivisionCreaseAngle == angle) return;
-	m_subdivisionCreaseAngle = angle;
-	if (m_meshController) m_meshController->setSubdivisionCreaseAngle(angle);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSubdivisionConfig();
+		if (angle < 0.0 || angle > 180.0 || config.creaseAngle == angle) return;
+		config.creaseAngle = angle;
+		if (m_meshController) m_meshController->setSubdivisionCreaseAngle(angle);
+	}
 }
 
 double OCCViewer::getSubdivisionCreaseAngle() const
 {
-	return m_subdivisionCreaseAngle;
+	return m_configurationManager ? m_configurationManager->getSubdivisionConfig().creaseAngle : 30.0;
 }
 
 // Mesh smoothing control implementations
 void OCCViewer::setSmoothingEnabled(bool enabled)
 {
-	if (m_smoothingEnabled == enabled) return;
-	m_smoothingEnabled = enabled;
-	if (m_meshController) m_meshController->setSmoothingEnabled(enabled);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSmoothingConfig();
+		if (config.enabled == enabled) return;
+		config.enabled = enabled;
+		if (m_meshController) m_meshController->setSmoothingEnabled(enabled);
+	}
 }
 
 bool OCCViewer::isSmoothingEnabled() const
 {
-	return m_smoothingEnabled;
+	return m_configurationManager ? m_configurationManager->getSmoothingConfig().enabled : false;
 }
 
 void OCCViewer::setSmoothingMethod(int method)
 {
-	if (method < 0 || method > 3 || m_smoothingMethod == method) return;
-	m_smoothingMethod = method;
-	if (m_meshController) m_meshController->setSmoothingMethod(method);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSmoothingConfig();
+		if (method < 0 || method > 3 || config.method == method) return;
+		config.method = method;
+		if (m_meshController) m_meshController->setSmoothingMethod(method);
+	}
 }
 
 int OCCViewer::getSmoothingMethod() const
 {
-	return m_smoothingMethod;
+	return m_configurationManager ? m_configurationManager->getSmoothingConfig().method : 0;
 }
 
 void OCCViewer::setSmoothingIterations(int iterations)
 {
-	if (iterations < 1 || iterations > 10 || m_smoothingIterations == iterations) return;
-	m_smoothingIterations = iterations;
-	if (m_meshController) m_meshController->setSmoothingIterations(iterations);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSmoothingConfig();
+		if (iterations < 1 || iterations > 10 || config.iterations == iterations) return;
+		config.iterations = iterations;
+		if (m_meshController) m_meshController->setSmoothingIterations(iterations);
+	}
 }
 
 int OCCViewer::getSmoothingIterations() const
 {
-	return m_smoothingIterations;
+	return m_configurationManager ? m_configurationManager->getSmoothingConfig().iterations : 3;
 }
 
 void OCCViewer::setSmoothingStrength(double strength)
 {
-	if (strength < 0.01 || strength > 1.0 || m_smoothingStrength == strength) return;
-	m_smoothingStrength = strength;
-	if (m_meshController) m_meshController->setSmoothingStrength(strength);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSmoothingConfig();
+		if (strength < 0.01 || strength > 1.0 || config.strength == strength) return;
+		config.strength = strength;
+		if (m_meshController) m_meshController->setSmoothingStrength(strength);
+	}
 }
 
 double OCCViewer::getSmoothingStrength() const
 {
-	return m_smoothingStrength;
+	return m_configurationManager ? m_configurationManager->getSmoothingConfig().strength : 0.5;
 }
 
 void OCCViewer::setSmoothingCreaseAngle(double angle)
 {
-	if (angle < 0.0 || angle > 180.0 || m_smoothingCreaseAngle == angle) return;
-	m_smoothingCreaseAngle = angle;
-	if (m_meshController) m_meshController->setSmoothingCreaseAngle(angle);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getSmoothingConfig();
+		if (angle < 0.0 || angle > 180.0 || config.creaseAngle == angle) return;
+		config.creaseAngle = angle;
+		if (m_meshController) m_meshController->setSmoothingCreaseAngle(angle);
+	}
 }
 
 double OCCViewer::getSmoothingCreaseAngle() const
 {
-	return m_smoothingCreaseAngle;
+	return m_configurationManager ? m_configurationManager->getSmoothingConfig().creaseAngle : 30.0;
 }
 
 // Advanced tessellation control implementations
 void OCCViewer::setTessellationMethod(int method)
 {
-	if (method < 0 || method > 3 || m_tessellationMethod == method) return;
-	m_tessellationMethod = method;
-	if (m_meshController) m_meshController->setTessellationMethod(method);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getTessellationConfig();
+		if (method < 0 || method > 3 || config.method == method) return;
+		config.method = method;
+		if (m_meshController) m_meshController->setTessellationMethod(method);
+	}
 }
 
 int OCCViewer::getTessellationMethod() const
 {
-	return m_tessellationMethod;
+	return m_configurationManager ? m_configurationManager->getTessellationConfig().method : 0;
 }
 
 void OCCViewer::setTessellationQuality(int quality)
 {
-	if (quality < 1 || quality > 5 || m_tessellationQuality == quality) return;
-	m_tessellationQuality = quality;
-	if (m_meshController) m_meshController->setTessellationQuality(quality);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getTessellationConfig();
+		if (quality < 1 || quality > 5 || config.quality == quality) return;
+		config.quality = quality;
+		if (m_meshController) m_meshController->setTessellationQuality(quality);
+	}
 }
 
 int OCCViewer::getTessellationQuality() const
 {
-	return m_tessellationQuality;
+	return m_configurationManager ? m_configurationManager->getTessellationConfig().quality : 3;
 }
 
 void OCCViewer::setFeaturePreservation(double preservation)
 {
-	if (preservation < 0.0 || preservation > 1.0 || m_featurePreservation == preservation) return;
-	m_featurePreservation = preservation;
-	if (m_meshController) m_meshController->setFeaturePreservation(preservation);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getTessellationConfig();
+		if (preservation < 0.0 || preservation > 1.0 || config.featurePreservation == preservation) return;
+		config.featurePreservation = preservation;
+		if (m_meshController) m_meshController->setFeaturePreservation(preservation);
+	}
 }
 
 double OCCViewer::getFeaturePreservation() const
 {
-	return m_featurePreservation;
+	return m_configurationManager ? m_configurationManager->getTessellationConfig().featurePreservation : 0.5;
 }
 
 void OCCViewer::setParallelProcessing(bool enabled)
 {
-	if (m_parallelProcessing == enabled) return;
-	m_parallelProcessing = enabled;
-	if (m_meshController) m_meshController->setParallelProcessing(enabled);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getTessellationConfig();
+		if (config.parallelProcessing == enabled) return;
+		config.parallelProcessing = enabled;
+		if (m_meshController) m_meshController->setParallelProcessing(enabled);
+	}
 }
 
 bool OCCViewer::isParallelProcessing() const
 {
-	return m_parallelProcessing;
+	return m_configurationManager ? m_configurationManager->getTessellationConfig().parallelProcessing : false;
 }
 
 void OCCViewer::setAdaptiveMeshing(bool enabled)
 {
-	if (m_adaptiveMeshing == enabled) return;
-	m_adaptiveMeshing = enabled;
-	if (m_meshController) m_meshController->setAdaptiveMeshing(enabled);
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getTessellationConfig();
+		if (config.adaptiveMeshing == enabled) return;
+		config.adaptiveMeshing = enabled;
+		if (m_meshController) m_meshController->setAdaptiveMeshing(enabled);
+	}
 }
 
 bool OCCViewer::isAdaptiveMeshing() const
 {
-	return m_adaptiveMeshing;
+	return m_configurationManager ? m_configurationManager->getTessellationConfig().adaptiveMeshing : false;
 }
 
-// Mesh quality validation and debugging implementations
+// Mesh quality validation and debugging (delegated to MeshQualityValidator)
 void OCCViewer::validateMeshParameters()
 {
-	LOG_INF_S("=== MESH PARAMETER VALIDATION ===");
+	if (m_qualityValidator && m_configurationManager) {
+		// Set configurations from ConfigurationManager to MeshQualityValidator
+		const auto& subdivisionConfig = m_configurationManager->getSubdivisionConfig();
+		const auto& smoothingConfig = m_configurationManager->getSmoothingConfig();
+		const auto& tessellationConfig = m_configurationManager->getTessellationConfig();
 
-	// Validate subdivision parameters
-	LOG_INF_S("Subdivision Settings:");
-	LOG_INF_S("  - Enabled: " + std::string(m_subdivisionEnabled ? "true" : "false"));
-	LOG_INF_S("  - Level: " + std::to_string(m_subdivisionLevel));
-	LOG_INF_S("  - Method: " + std::to_string(m_subdivisionMethod));
-	LOG_INF_S("  - Crease Angle: " + std::to_string(m_subdivisionCreaseAngle));
+		m_qualityValidator->setSubdivisionParams(subdivisionConfig.enabled, subdivisionConfig.level,
+			subdivisionConfig.method, subdivisionConfig.creaseAngle);
+		m_qualityValidator->setSmoothingParams(smoothingConfig.enabled, smoothingConfig.method,
+			smoothingConfig.iterations, smoothingConfig.strength, smoothingConfig.creaseAngle);
+		m_qualityValidator->setTessellationParams(tessellationConfig.method, tessellationConfig.quality,
+			tessellationConfig.featurePreservation, tessellationConfig.parallelProcessing, tessellationConfig.adaptiveMeshing);
 
-	// Validate smoothing parameters
-	LOG_INF_S("Smoothing Settings:");
-	LOG_INF_S("  - Enabled: " + std::string(m_smoothingEnabled ? "true" : "false"));
-	LOG_INF_S("  - Method: " + std::to_string(m_smoothingMethod));
-	LOG_INF_S("  - Iterations: " + std::to_string(m_smoothingIterations));
-	LOG_INF_S("  - Strength: " + std::to_string(m_smoothingStrength));
-	LOG_INF_S("  - Crease Angle: " + std::to_string(m_smoothingCreaseAngle));
-
-	// Validate tessellation parameters
-	LOG_INF_S("Tessellation Settings:");
-	LOG_INF_S("  - Method: " + std::to_string(m_tessellationMethod));
-	LOG_INF_S("  - Quality: " + std::to_string(m_tessellationQuality));
-	LOG_INF_S("  - Feature Preservation: " + std::to_string(m_featurePreservation));
-	LOG_INF_S("  - Parallel Processing: " + std::string(m_parallelProcessing ? "true" : "false"));
-	LOG_INF_S("  - Adaptive Meshing: " + std::string(m_adaptiveMeshing ? "true" : "false"));
-
-	// Validate basic mesh parameters
-	LOG_INF_S("Basic Mesh Settings:");
-	LOG_INF_S("  - Deflection: " + std::to_string(m_meshParams.deflection));
-	LOG_INF_S("  - Angular Deflection: " + std::to_string(m_meshParams.angularDeflection) +
-		" (controls curve approximation - lower = smoother curves)");
-	LOG_INF_S("  - Relative: " + std::string(m_meshParams.relative ? "true" : "false"));
-	LOG_INF_S("  - In Parallel: " + std::string(m_meshParams.inParallel ? "true" : "false"));
-
-	// Add recommendations for curve-surface fitting
-	if (m_meshParams.angularDeflection > 2.0) {
-		LOG_WRN_S("Angular deflection is large - curves may appear faceted");
-		LOG_INF_S("  Recommendation: Reduce angular deflection to < 1.0 for smoother curves");
-	} else if (m_meshParams.angularDeflection < 0.5) {
-		LOG_INF_S("Angular deflection is small - curves will be very smooth");
-		if (m_meshParams.deflection > 0.5) {
-			LOG_WRN_S("  Warning: Large deflection with small angular deflection may cause fitting issues");
-			LOG_INF_S("  Recommendation: Reduce mesh deflection or increase angular deflection");
-		}
+		m_qualityValidator->validateMeshParameters();
 	}
-
-	LOG_INF_S("=== VALIDATION COMPLETE ===");
 }
 
 void OCCViewer::logCurrentMeshSettings()
 {
-	LOG_INF_S("=== CURRENT MESH SETTINGS ===");
-	LOG_INF_S("Geometry Count: " + std::to_string(m_geometries.size()));
-
-	for (const auto& geometry : m_geometries) {
-		if (geometry) {
-			LOG_INF_S("Geometry: " + geometry->getName());
-			// TODO: Add geometry-specific mesh statistics
-		}
+	if (m_meshQualityService) {
+		m_meshQualityService->logCurrentMeshSettings();
 	}
-
-	LOG_INF_S("=== SETTINGS LOGGED ===");
 }
 
 void OCCViewer::compareMeshQuality(const std::string& geometryName)
 {
-	auto geometry = findGeometry(geometryName);
-	if (!geometry) {
-		LOG_ERR_S("Geometry not found: " + geometryName);
-		return;
+	if (m_qualityValidator) {
+		m_qualityValidator->compareMeshQuality(geometryName);
 	}
-
-	LOG_INF_S("=== MESH QUALITY COMPARISON FOR: " + geometryName + " ===");
-
-	// TODO: Implement mesh quality comparison
-	// This would compare current mesh with previous state or reference mesh
-
-	LOG_INF_S("=== COMPARISON COMPLETE ===");
 }
 
 std::string OCCViewer::getMeshQualityReport() const
 {
-	std::string report = "=== MESH QUALITY REPORT ===\n";
-
-	report += "Active Geometries: " + std::to_string(m_geometries.size()) + "\n";
-	report += "Subdivision Enabled: " + std::string(m_subdivisionEnabled ? "Yes" : "No") + "\n";
-	report += "Smoothing Enabled: " + std::string(m_smoothingEnabled ? "Yes" : "No") + "\n";
-	report += "Adaptive Meshing: " + std::string(m_adaptiveMeshing ? "Yes" : "No") + "\n";
-	report += "Parallel Processing: " + std::string(m_parallelProcessing ? "Yes" : "No") + "\n";
-
-	report += "\nCurrent Parameters:\n";
-	report += "- Deflection: " + std::to_string(m_meshParams.deflection) + "\n";
-	report += "- Subdivision Level: " + std::to_string(m_subdivisionLevel) + "\n";
-	report += "- Smoothing Iterations: " + std::to_string(m_smoothingIterations) + "\n";
-	report += "- Tessellation Quality: " + std::to_string(m_tessellationQuality) + "\n";
-
-	return report;
+	if (m_meshQualityService) {
+		return m_meshQualityService->getMeshQualityReport();
+	}
+	return "Mesh quality service not initialized";
 }
 
 void OCCViewer::exportMeshStatistics(const std::string& filename)
 {
-	LOG_INF_S("Exporting mesh statistics to: " + filename);
-
-	// TODO: Implement mesh statistics export
-	// This would export detailed mesh information to a file
-
-	LOG_INF_S("Mesh statistics exported successfully");
+	if (m_meshQualityService) {
+		m_meshQualityService->exportMeshStatistics(filename);
+	}
 }
 
 bool OCCViewer::verifyParameterApplication(const std::string& parameterName, double expectedValue)
 {
-	LOG_INF_S("Verifying parameter: " + parameterName + " = " + std::to_string(expectedValue));
-
-	// Check if parameter matches expected value
-	if (parameterName == "deflection") {
-		bool matches = std::abs(m_meshParams.deflection - expectedValue) < 1e-6;
-		LOG_INF_S("Deflection verification: " + std::string(matches ? "PASS" : "FAIL"));
-		return matches;
+	if (m_qualityValidator) {
+		return m_qualityValidator->verifyParameterApplication(parameterName, expectedValue);
 	}
-	else if (parameterName == "subdivision_level") {
-		bool matches = (m_subdivisionLevel == static_cast<int>(expectedValue));
-		LOG_INF_S("Subdivision level verification: " + std::string(matches ? "PASS" : "FAIL"));
-		return matches;
-	}
-	else if (parameterName == "smoothing_iterations") {
-		bool matches = (m_smoothingIterations == static_cast<int>(expectedValue));
-		LOG_INF_S("Smoothing iterations verification: " + std::string(matches ? "PASS" : "FAIL"));
-		return matches;
-	}
-	else if (parameterName == "angular_deflection") {
-		bool matches = std::abs(m_meshParams.angularDeflection - expectedValue) < 1e-6;
-		LOG_INF_S("Angular deflection verification: " + std::string(matches ? "PASS" : "FAIL"));
-		return matches;
-	}
-	// Add more parameter checks as needed
-
-	LOG_ERR_S("Unknown parameter: " + parameterName);
 	return false;
 }
 
-// Real-time parameter monitoring implementations
+// Real-time parameter monitoring (delegated to MeshQualityService)
 void OCCViewer::enableParameterMonitoring(bool enabled)
 {
-	m_parameterMonitoringEnabled = enabled;
-	LOG_INF_S("Parameter monitoring " + std::string(enabled ? "enabled" : "disabled"));
+	if (m_meshQualityService) {
+		m_meshQualityService->enableParameterMonitoring(enabled);
+	}
 }
 
 bool OCCViewer::isParameterMonitoringEnabled() const
 {
-	return m_parameterMonitoringEnabled;
+	return m_meshQualityService ? m_meshQualityService->isParameterMonitoringEnabled() : false;
 }
 
 void OCCViewer::logParameterChange(const std::string& parameterName, double oldValue, double newValue)
 {
-	if (m_parameterMonitoringEnabled) {
-		LOG_INF_S("PARAMETER CHANGE: " + parameterName +
-			" [" + std::to_string(oldValue) + " -> " + std::to_string(newValue) + "]");
+	if (m_meshQualityService) {
+		m_meshQualityService->logParameterChange(parameterName, oldValue, newValue);
 	}
+}
+
+// Configuration management (delegated to ConfigurationManager)
+void OCCViewer::loadDefaultConfigurations()
+{
+	if (m_configurationManager) {
+		m_configurationManager->loadDefaultConfigurations();
+	}
+}
+
+bool OCCViewer::loadConfigurationFromFile(const std::string& filename)
+{
+	if (m_configurationManager) {
+		return m_configurationManager->loadConfigurationFromFile(filename);
+	}
+	return false;
+}
+
+bool OCCViewer::saveConfigurationToFile(const std::string& filename) const
+{
+	if (m_configurationManager) {
+		return m_configurationManager->saveConfigurationToFile(filename);
+	}
+	return false;
+}
+
+bool OCCViewer::validateAllConfigurations() const
+{
+	if (m_configurationManager) {
+		return m_configurationManager->validateAllConfigurations();
+	}
+	return false;
+}
+
+std::string OCCViewer::getConfigurationValidationErrors() const
+{
+	if (m_configurationManager) {
+		return m_configurationManager->getValidationErrors();
+	}
+	return "Configuration manager not initialized";
+}
+
+void OCCViewer::applyQualityPreset(const std::string& presetName)
+{
+	if (m_configurationManager) {
+		m_configurationManager->applyQualityPreset(presetName);
+	}
+}
+
+void OCCViewer::applyPerformancePreset(const std::string& presetName)
+{
+	if (m_configurationManager) {
+		m_configurationManager->applyPerformancePreset(presetName);
+	}
+}
+
+std::vector<std::string> OCCViewer::getAvailableConfigurationPresets() const
+{
+	if (m_configurationManager) {
+		return m_configurationManager->getAvailablePresets();
+	}
+	return std::vector<std::string>();
+}
+
+void OCCViewer::resetConfigurationsToDefaults()
+{
+	if (m_configurationManager) {
+		m_configurationManager->resetToDefaults();
+	}
+}
+
+std::string OCCViewer::exportConfigurationAsJson() const
+{
+	if (m_configurationManager) {
+		return m_configurationManager->exportConfigurationAsJson();
+	}
+	return "{}";
+}
+
+bool OCCViewer::importConfigurationFromJson(const std::string& jsonString)
+{
+	if (m_configurationManager) {
+		return m_configurationManager->importConfigurationFromJson(jsonString);
+	}
+	return false;
 }
 
 // Legacy display flag APIs removed; rendering handled at geometry level and by EdgeDisplayManager
@@ -1295,28 +1217,31 @@ void OCCViewer::setShowOriginalEdges(bool show) {
 
 void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,
 	bool highlightIntersectionNodes, const wxColour& intersectionNodeColor, double intersectionNodeSize) {
-	// Store parameters for use when generating original edges
-	m_originalEdgesSamplingDensity = samplingDensity;
-	m_originalEdgesMinLength = minLength;
-	m_originalEdgesShowLinesOnly = showLinesOnly;
-	m_originalEdgesColor = color;
-	m_originalEdgesWidth = width;
-	m_originalEdgesHighlightIntersectionNodes = highlightIntersectionNodes;
-	m_originalEdgesIntersectionNodeColor = intersectionNodeColor;
-	m_originalEdgesIntersectionNodeSize = intersectionNodeSize;
-	
-	// Convert wxColour to Quantity_Color
-	Quantity_Color occColor(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
-	Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
-	
-	// Apply parameters to EdgeDisplayManager
-	if (m_edgeDisplayManager) {
-		m_edgeDisplayManager->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, occColor, width,
-			highlightIntersectionNodes, intersectionNodeOccColor, intersectionNodeSize);
+	// Store parameters in ConfigurationManager
+	if (m_configurationManager) {
+		auto& config = m_configurationManager->getOriginalEdgesConfig();
+		config.samplingDensity = samplingDensity;
+		config.minLength = minLength;
+		config.showLinesOnly = showLinesOnly;
+		config.color = color;
+		config.width = width;
+		config.highlightIntersectionNodes = highlightIntersectionNodes;
+		config.intersectionNodeColor = intersectionNodeColor;
+		config.intersectionNodeSize = intersectionNodeSize;
+
+		// Convert wxColour to Quantity_Color
+		Quantity_Color occColor(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
+		Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
+
+		// Apply parameters to EdgeDisplayManager
+		if (m_edgeDisplayManager) {
+			m_edgeDisplayManager->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, occColor, width,
+				highlightIntersectionNodes, intersectionNodeOccColor, intersectionNodeSize);
+		}
+
+		// Refresh the view
+		requestViewRefresh();
 	}
-	
-	// Refresh the view
-	requestViewRefresh();
 }
 void OCCViewer::setShowFeatureEdges(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFeatureEdges(show, m_meshParams);
@@ -1474,40 +1399,108 @@ void OCCViewer::invalidateFeatureEdgeCache() {}
 
 void OCCViewer::rebuildSelectionAccelerator()
 {
-	if (!m_selectionAccelerator) {
-		return;
+	if (m_selectionAcceleratorService) {
+		m_selectionAcceleratorService->rebuildFromGeometries(m_geometries);
 	}
+}
 
-	LOG_INF_S("Starting selection accelerator rebuild...");
+void OCCViewer::throttledRemesh(const std::string& context)
+{
+	static wxLongLong lastRemeshTime = 0;
+	wxLongLong currentTime = wxGetLocalTimeMillis();
+	const int MIN_REMESH_INTERVAL = 200; // Minimum 200ms between remesh operations
 
-	// Collect all shapes from geometries
-	std::vector<TopoDS_Shape> shapes;
-	shapes.reserve(m_geometries.size());
-
-	for (const auto& geometry : m_geometries) {
-		if (geometry && !geometry->getShape().IsNull() && geometry->isVisible()) {
-			shapes.push_back(geometry->getShape());
+	if (currentTime - lastRemeshTime >= MIN_REMESH_INTERVAL) {
+		try {
+			remeshAllGeometries();
+			lastRemeshTime = currentTime;
+			// Request view refresh after remeshing
+			if (m_viewUpdater) {
+				m_viewUpdater->requestGeometryChanged(true);
+			}
+		}
+		catch (const std::exception& e) {
+			LOG_ERR_S("OCCViewer::" + context + ": Exception during remesh: " + std::string(e.what()));
+			// Don't update lastRemeshTime if remesh failed
+		}
+		catch (...) {
+			LOG_ERR_S("OCCViewer::" + context + ": Unknown exception during remesh");
+			// Don't update lastRemeshTime if remesh failed
 		}
 	}
+}
 
-	LOG_INF_S("Collected " + std::to_string(shapes.size()) + " shapes for selection accelerator");
-
-	// Rebuild accelerator for shape-level selection
-	if (!shapes.empty()) {
-		LOG_INF_S("Building selection accelerator...");
-		auto startTime = std::chrono::high_resolution_clock::now();
-
-		bool success = m_selectionAccelerator->build(shapes, SelectionAccelerator::SelectionMode::Shapes);
-
-		auto endTime = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-
-		if (success) {
-			LOG_INF_S("Selection accelerator rebuilt with " + std::to_string(shapes.size()) + " shapes in " + std::to_string(duration.count()) + "ms");
-		} else {
-			LOG_ERR_S("Failed to rebuild selection accelerator");
-		}
-	} else {
-		LOG_WRN_S("No shapes available for selection accelerator rebuild");
+// Simplified Edge Display APIs - unified facade interface
+void OCCViewer::setEdgeDisplayMode(EdgeType type, bool show) {
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->toggleEdgeType(type, show, m_meshParams);
 	}
+}
+
+void OCCViewer::configureEdgeDisplay(const EdgeDisplayConfig& config) {
+	// Apply configuration through individual setters for backward compatibility
+	setShowOriginalEdges(config.showOriginalEdges);
+	setShowFeatureEdges(config.showFeatureEdges);
+	setShowMeshEdges(config.showMeshEdges);
+	setShowNormalLines(config.showNormalLines);
+	setShowFaceNormalLines(config.showFaceNormalLines);
+	setShowHighlightEdges(config.showHighlightEdges);
+	setShowIntersectionNodes(config.showIntersectionNodes);
+}
+
+const EdgeDisplayFlags& OCCViewer::getEdgeDisplayFlags() const {
+	return m_edgeDisplayManager ? m_edgeDisplayManager->getFlags() : globalEdgeFlags;
+}
+
+// Advanced geometry creation - delegated to GeometryFactoryService
+std::shared_ptr<OCCGeometry> OCCViewer::addGeometryWithAdvancedRendering(const TopoDS_Shape& shape, const std::string& name)
+{
+	if (m_geometryFactoryService) {
+		auto geometry = m_geometryFactoryService->addGeometryWithAdvancedRendering(shape, name);
+		if (geometry && m_geometryManagementService) {
+			// Add to scene using geometry management service
+			m_geometryManagementService->addGeometry(geometry, m_batchOperationActive);
+		}
+		return geometry;
+	}
+	return nullptr;
+}
+
+std::shared_ptr<OCCGeometry> OCCViewer::addBezierCurve(const std::vector<gp_Pnt>& controlPoints, const std::string& name)
+{
+	if (m_geometryFactoryService) {
+		auto geometry = m_geometryFactoryService->addBezierCurve(controlPoints, name);
+		if (geometry && m_geometryManagementService) {
+			// Add to scene using geometry management service
+			m_geometryManagementService->addGeometry(geometry, m_batchOperationActive);
+		}
+		return geometry;
+	}
+	return nullptr;
+}
+
+std::shared_ptr<OCCGeometry> OCCViewer::addBezierSurface(const std::vector<std::vector<gp_Pnt>>& controlPoints, const std::string& name)
+{
+	if (m_geometryFactoryService) {
+		auto geometry = m_geometryFactoryService->addBezierSurface(controlPoints, name);
+		if (geometry && m_geometryManagementService) {
+			// Add to scene using geometry management service
+			m_geometryManagementService->addGeometry(geometry, m_batchOperationActive);
+		}
+		return geometry;
+	}
+	return nullptr;
+}
+
+std::shared_ptr<OCCGeometry> OCCViewer::addBSplineCurve(const std::vector<gp_Pnt>& poles, const std::vector<double>& weights, const std::string& name)
+{
+	if (m_geometryFactoryService) {
+		auto geometry = m_geometryFactoryService->addBSplineCurve(poles, weights, name);
+		if (geometry && m_geometryManagementService) {
+			// Add to scene using geometry management service
+			m_geometryManagementService->addGeometry(geometry, m_batchOperationActive);
+		}
+		return geometry;
+	}
+	return nullptr;
 }
