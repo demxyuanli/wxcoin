@@ -43,6 +43,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshQualityService.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshParameterAdvisor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/HoverSilhouetteManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/viewer/FaceHighlightManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/BatchOperationManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/OutlineDisplayManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SelectionOutlineManager.cpp
@@ -125,6 +126,7 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/viewer/MeshingService.h
     ${CMAKE_SOURCE_DIR}/include/viewer/MeshParameterController.h
     ${CMAKE_SOURCE_DIR}/include/viewer/HoverSilhouetteManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/FaceHighlightManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/BatchOperationManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/MeshQualityValidator.h
     ${CMAKE_SOURCE_DIR}/include/viewer/config/SubdivisionConfig.h

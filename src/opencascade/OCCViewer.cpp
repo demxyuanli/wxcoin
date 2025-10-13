@@ -57,6 +57,7 @@
 #include "viewer/MeshingService.h"
 #include "viewer/MeshParameterController.h"
 #include "viewer/HoverSilhouetteManager.h"
+#include "viewer/FaceHighlightManager.h"
 #include "viewer/BatchOperationManager.h"
 #include "viewer/OutlineDisplayManager.h"
 #include "viewer/SelectionOutlineManager.h"
@@ -282,6 +283,27 @@ void OCCViewer::updateHoverSilhouetteAt(const wxPoint& screenPos) {
 		if (!m_hoverManager) m_hoverManager = std::make_unique<HoverSilhouetteManager>(m_sceneManager, m_occRoot, m_pickingService.get());
 		m_hoverManager->updateHoverSilhouetteAt(screenPos);
 	}
+}
+
+void OCCViewer::updateFaceHighlightAt(const wxPoint& screenPos) {
+	if (!m_faceHighlightManager) {
+		m_faceHighlightManager = std::make_unique<FaceHighlightManager>(m_sceneManager, m_occRoot, m_pickingService.get());
+	}
+	
+	if (m_faceHighlightManager->isEnabled()) {
+		m_faceHighlightManager->updateHoverHighlightAt(screenPos);
+	}
+}
+
+void OCCViewer::setFaceHighlightEnabled(bool enabled) {
+	if (!m_faceHighlightManager) {
+		m_faceHighlightManager = std::make_unique<FaceHighlightManager>(m_sceneManager, m_occRoot, m_pickingService.get());
+	}
+	m_faceHighlightManager->setEnabled(enabled);
+}
+
+bool OCCViewer::isFaceHighlightEnabled() const {
+	return m_faceHighlightManager && m_faceHighlightManager->isEnabled();
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::findGeometry(const std::string& name)

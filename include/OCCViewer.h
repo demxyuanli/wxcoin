@@ -62,6 +62,7 @@ class ViewUpdateService; // view/canvas refresh
 class MeshParameterController; // mesh params + remesh
 class MeshingService; // apply + regenerate
 class HoverSilhouetteManager; // hover silhouette
+class FaceHighlightManager; // face highlight on hover
 class BatchOperationManager; // batch updates
 class SelectionAcceleratorService; // selection acceleration service
 class MeshQualityValidator; // mesh quality validation and monitoring
@@ -316,6 +317,11 @@ public:
 
 	// Hover silhouette API (screen-space driven)
 	void updateHoverSilhouetteAt(const wxPoint& screenPos);
+	
+	// Face highlight API
+	void updateFaceHighlightAt(const wxPoint& screenPos);
+	void setFaceHighlightEnabled(bool enabled);
+	bool isFaceHighlightEnabled() const;
 
 private:
 	void initializeViewer();
@@ -392,6 +398,7 @@ private:
 	std::shared_ptr<OCCGeometry> pickGeometryAtScreen(const wxPoint& screenPos);
 	void setHoveredSilhouette(std::shared_ptr<OCCGeometry> geometry);
 	std::unique_ptr<HoverSilhouetteManager> m_hoverManager;
+	std::unique_ptr<FaceHighlightManager> m_faceHighlightManager;
 
 	// Explode state (controller-backed)
 	bool m_explodeEnabled{ false };
