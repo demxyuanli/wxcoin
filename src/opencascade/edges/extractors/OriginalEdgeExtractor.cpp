@@ -13,6 +13,7 @@
 #include <atomic>
 #include <sstream>
 #include <thread>
+#include <future>
 #include <limits>
 #include <cmath>
 #include <algorithm>
@@ -34,8 +35,6 @@ std::vector<gp_Pnt> OriginalEdgeExtractor::extractTyped(
     // Use default parameters if not provided
     OriginalEdgeParams defaultParams;
     const OriginalEdgeParams& p = params ? *params : defaultParams;
-
-    // Debug: Log shape information
     
     // Try to use cache
     std::ostringstream keyStream;
@@ -50,71 +49,255 @@ std::vector<gp_Pnt> OriginalEdgeExtractor::extractTyped(
     return cache.getOrCompute(cacheKey, [&]() {
         std::vector<gp_Pnt> result;
         
-        // Collect all edges
+        // Fast edge counting for optimization
+        int totalEdges = 0;
+        for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+            totalEdges++;
+        }
+
+        // For large models, use progressive loading
+        if (totalEdges > 1000) {
+            return extractProgressive(shape, p, totalEdges);
+        }
+
+        // Collect all edges for smaller models
         std::vector<TopoDS_Edge> allEdges;
-        int edgeCount = 0;
+        allEdges.reserve(totalEdges);
         for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
             allEdges.push_back(TopoDS::Edge(exp.Current()));
-            edgeCount++;
         }
-        
-        // Process edges in parallel
-        std::mutex resultMutex;
-        std::for_each(std::execution::par, allEdges.begin(), allEdges.end(),
-            [&](const TopoDS_Edge& edge) {
+
+        // Use sequential processing to maintain topology order
+        return extractEdgesBatched(allEdges, p);
+    });
+}
+
+std::vector<gp_Pnt> OriginalEdgeExtractor::extractProgressive(
+    const TopoDS_Shape& shape,
+    const OriginalEdgeParams& params,
+    int totalEdges) {
+
+    std::vector<gp_Pnt> result;
+
+    // Progressive loading: process in batches
+    const int batchSize = 200;
+    int processed = 0;
+
+    std::vector<TopoDS_Edge> batch;
+    batch.reserve(batchSize);
+
+    for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+        batch.push_back(TopoDS::Edge(exp.Current()));
+        processed++;
+
+        if (batch.size() >= batchSize || processed >= totalEdges) {
+            // Process this batch
+            std::vector<gp_Pnt> batchResult = extractEdgesBatched(batch, params);
+            result.insert(result.end(), batchResult.begin(), batchResult.end());
+
+            // Clear batch for next iteration
+            batch.clear();
+
+            // Yield control for UI responsiveness (simulate)
+            if (processed % 1000 == 0) {
+                std::this_thread::yield();
+            }
+        }
+    }
+
+    return result;
+}
+
+std::vector<gp_Pnt> OriginalEdgeExtractor::extractEdgesBatched(
+    const std::vector<TopoDS_Edge>& edges,
+    const OriginalEdgeParams& params) {
+
+    std::vector<gp_Pnt> result;
+
+    // Pre-allocate result vector for better performance
+    size_t estimatedSize = edges.size() * 10; // Rough estimate
+    result.reserve(estimatedSize);
+
+    // Process edges sequentially to maintain topology order
+    // This is crucial for correct edge connectivity display
+    for (const TopoDS_Edge& edge : edges) {
+        // Fast edge filtering
+        if (!shouldProcessEdge(edge, params)) {
+            continue;
+        }
+
+        std::vector<gp_Pnt> edgePoints = extractSingleEdgeFast(edge, params);
+        if (!edgePoints.empty()) {
+            result.insert(result.end(), edgePoints.begin(), edgePoints.end());
+        }
+    }
+
+    return result;
+}
+
+bool OriginalEdgeExtractor::shouldProcessEdge(const TopoDS_Edge& edge, const OriginalEdgeParams& params) {
                 Standard_Real first, last;
                 Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
 
                 if (curve.IsNull()) {
-                    LOG_WRN_S("OriginalEdgeExtractor: Edge has null curve");
-                    return;
-                }
+        return false;
+    }
 
-                // Adaptive sampling
-                BRepAdaptor_Curve adaptor(edge);
-                GeomAbs_CurveType curveType = adaptor.GetType();
-
-                // Check minimum length
+    // Fast length check
                 gp_Pnt startPoint = curve->Value(first);
                 gp_Pnt endPoint = curve->Value(last);
                 double edgeLength = startPoint.Distance(endPoint);
 
-                // For closed edges, check if the edge is closed and use curve length instead
-                bool isClosed = (edge.Closed() || adaptor.IsClosed() || edgeLength < 1e-6);
+    // Quick check for closed edges
+    bool isClosed = (edge.Closed() || edgeLength < 1e-6);
                 if (isClosed) {
-                    // For closed curves, use the parameter range to estimate length
                     double paramRange = last - first;
-                    if (paramRange > p.minLength) {
-                        edgeLength = paramRange; // Use parameter range as approximation
-                    }
-                }
+        if (paramRange <= params.minLength) {
+            return false;
+        }
+        edgeLength = paramRange;
+    }
 
-                if (edgeLength < p.minLength) {
-                    return;
-                }
+    if (edgeLength < params.minLength) {
+        return false;
+    }
 
-                // Filter by curve type if showLinesOnly is enabled
-                if (p.showLinesOnly && curveType != GeomAbs_Line) {
-                    return;
-                }
-                
-                std::vector<gp_Pnt> sampledPoints = adaptiveSampleCurve(
-                    curve, first, last, curveType, p.samplingDensity);
-                
-                // Convert to line segments
-                std::vector<gp_Pnt> edgePoints;
-                for (size_t i = 0; i + 1 < sampledPoints.size(); ++i) {
-                    edgePoints.push_back(sampledPoints[i]);
-                    edgePoints.push_back(sampledPoints[i + 1]);
-                }
-                
-                // Thread-safe append
-                std::lock_guard<std::mutex> lock(resultMutex);
-                result.insert(result.end(), edgePoints.begin(), edgePoints.end());
-            });
-        
-        return result;
-    });
+    // Fast curve type check
+    if (params.showLinesOnly) {
+        BRepAdaptor_Curve adaptor(edge);
+        GeomAbs_CurveType curveType = adaptor.GetType();
+        if (curveType != GeomAbs_Line) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+std::vector<gp_Pnt> OriginalEdgeExtractor::extractSingleEdgeFast(
+    const TopoDS_Edge& edge,
+    const OriginalEdgeParams& params) {
+
+    Standard_Real first, last;
+    Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
+
+    if (curve.IsNull()) {
+        return {};
+    }
+
+    BRepAdaptor_Curve adaptor(edge);
+    GeomAbs_CurveType curveType = adaptor.GetType();
+
+    std::vector<gp_Pnt> sampledPoints;
+
+    // Optimized sampling for lines (most common case)
+    if (curveType == GeomAbs_Line) {
+        sampledPoints.push_back(curve->Value(first));
+        sampledPoints.push_back(curve->Value(last));
+    } else {
+        // Use faster sampling for curved edges
+        sampledPoints = adaptiveSampleCurveFast(curve, first, last, curveType, params.samplingDensity);
+    }
+
+    // Convert sampled points to line segments
+    // This ensures proper edge connectivity by creating point pairs for each line segment
+    std::vector<gp_Pnt> edgePoints;
+    for (size_t i = 0; i + 1 < sampledPoints.size(); ++i) {
+        edgePoints.push_back(sampledPoints[i]);
+        edgePoints.push_back(sampledPoints[i + 1]);
+    }
+
+    return edgePoints;
+}
+
+std::vector<gp_Pnt> OriginalEdgeExtractor::adaptiveSampleCurveFast(
+    const Handle(Geom_Curve)& curve,
+    Standard_Real first,
+    Standard_Real last,
+    GeomAbs_CurveType curveType,
+    double baseSamplingDensity) const {
+
+    std::vector<gp_Pnt> points;
+
+    // Fast path for simple curves
+    if (curveType == GeomAbs_Line) {
+        points.push_back(curve->Value(first));
+        points.push_back(curve->Value(last));
+        return points;
+    }
+
+    // Simplified curvature-based sampling
+    double maxCurvature = analyzeCurveCurvatureFast(curve, first, last, curveType);
+
+    // Determine sample count based on curvature
+    int baseSamples;
+    if (maxCurvature < 0.01) baseSamples = 4;
+    else if (maxCurvature < 0.1) baseSamples = 6;
+    else if (maxCurvature < 1.0) baseSamples = 8;
+    else baseSamples = 12;
+
+    // Apply sampling density
+    double curveLength = last - first;
+    int densitySamples = std::max(3, static_cast<int>(curveLength * baseSamplingDensity * 0.2));
+    int finalSamples = std::max(baseSamples, densitySamples);
+    finalSamples = std::min(finalSamples, 32); // Limit maximum samples
+
+    // Generate points
+    points.reserve(finalSamples + 1);
+    for (int i = 0; i <= finalSamples; ++i) {
+        Standard_Real t = first + (last - first) * i / finalSamples;
+        try {
+            points.push_back(curve->Value(t));
+        } catch (...) {
+            // Fallback to endpoints if evaluation fails
+            if (points.empty()) {
+                points.push_back(curve->Value(first));
+                points.push_back(curve->Value(last));
+                return points;
+            }
+        }
+    }
+
+    // Ensure minimum 2 points
+    if (points.size() < 2) {
+        points.clear();
+        points.push_back(curve->Value(first));
+        points.push_back(curve->Value(last));
+    }
+
+    return points;
+}
+
+double OriginalEdgeExtractor::analyzeCurveCurvatureFast(
+    const Handle(Geom_Curve)& curve,
+    Standard_Real first,
+    Standard_Real last,
+    GeomAbs_CurveType curveType) const {
+
+    if (curveType == GeomAbs_Line) return 0.0;
+
+    const int analysisPoints = 5; // Reduced from 10 for speed
+    double maxCurvature = 0.0;
+
+    try {
+        for (int i = 0; i <= analysisPoints; ++i) {
+            Standard_Real t = first + (last - first) * i / analysisPoints;
+
+            gp_Pnt p;
+            gp_Vec d1, d2;
+            curve->D2(t, p, d1, d2);
+
+            double denominator = d1.Magnitude();
+            if (denominator > 1e-10) {
+                double curvature = d1.Crossed(d2).Magnitude() / std::pow(denominator, 3.0);
+                maxCurvature = std::max(maxCurvature, curvature);
+            }
+        }
+    } catch (...) {
+        return 0.1; // Default fallback
+    }
+
+    return std::min(maxCurvature, 5.0); // Cap maximum curvature
 }
 
 std::vector<gp_Pnt> OriginalEdgeExtractor::adaptiveSampleCurve(

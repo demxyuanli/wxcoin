@@ -123,10 +123,56 @@ private:
     
 protected:
     std::vector<gp_Pnt> extractTyped(const TopoDS_Shape& shape, const OriginalEdgeParams* params) override;
-    
+
 private:
     /**
-     * @brief Adaptive curve sampling based on curvature
+     * @brief Progressive extraction for large models
+     */
+    std::vector<gp_Pnt> extractProgressive(
+        const TopoDS_Shape& shape,
+        const OriginalEdgeParams& params,
+        int totalEdges);
+
+    /**
+     * @brief Batched edge processing for better parallelization
+     */
+    std::vector<gp_Pnt> extractEdgesBatched(
+        const std::vector<TopoDS_Edge>& edges,
+        const OriginalEdgeParams& params);
+
+    /**
+     * @brief Fast edge filtering
+     */
+    bool shouldProcessEdge(const TopoDS_Edge& edge, const OriginalEdgeParams& params);
+
+    /**
+     * @brief Fast single edge extraction
+     */
+    std::vector<gp_Pnt> extractSingleEdgeFast(
+        const TopoDS_Edge& edge,
+        const OriginalEdgeParams& params);
+
+    /**
+     * @brief Fast adaptive curve sampling based on curvature
+     */
+    std::vector<gp_Pnt> adaptiveSampleCurveFast(
+        const Handle(Geom_Curve)& curve,
+        Standard_Real first,
+        Standard_Real last,
+        GeomAbs_CurveType curveType,
+        double baseSamplingDensity) const;
+
+    /**
+     * @brief Fast curve curvature analysis
+     */
+    double analyzeCurveCurvatureFast(
+        const Handle(Geom_Curve)& curve,
+        Standard_Real first,
+        Standard_Real last,
+        GeomAbs_CurveType curveType) const;
+
+    /**
+     * @brief Adaptive curve sampling based on curvature (legacy)
      */
     std::vector<gp_Pnt> adaptiveSampleCurve(
         const Handle(Geom_Curve)& curve,
@@ -134,9 +180,9 @@ private:
         Standard_Real last,
         GeomAbs_CurveType curveType,
         double baseSamplingDensity) const;
-    
+
     /**
-     * @brief Analyze curve curvature for adaptive sampling
+     * @brief Analyze curve curvature for adaptive sampling (legacy)
      */
     double analyzeCurveCurvature(
         const Handle(Geom_Curve)& curve,

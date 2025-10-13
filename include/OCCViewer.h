@@ -196,7 +196,6 @@ public:
 	void setShowNormals(bool showNormals);
 	void setNormalLength(double length);
 	void setNormalColor(const Quantity_Color& correct, const Quantity_Color& incorrect);
-	void updateNormalsDisplay();
 	
 	// Enhanced normal consistency tools
 	void setNormalConsistencyMode(bool enabled);
@@ -321,13 +320,17 @@ public:
 private:
 	void initializeViewer();
 	void onLODTimer();
-	void createNormalVisualization(std::shared_ptr<OCCGeometry> geometry);
 	static bool approximatelyEqual(double a, double b, double eps = 1e-6) { return std::abs(a - b) <= eps; }
-	void invalidateFeatureEdgeCache();
 	void rebuildSelectionAccelerator();
 	
 	// Throttled remeshing helper to avoid excessive remesh operations
 	void throttledRemesh(const std::string& context);
+
+	// Configuration synchronization helpers
+	template<typename T, typename Func>
+	void updateConfigAndNotify(T& configValue, T newValue, Func&& meshControllerFunc);
+	template<typename T>
+	void updateConfigValue(T& configValue, T newValue);
 
 	SceneManager* m_sceneManager;
 	SoSeparator* m_occRoot;

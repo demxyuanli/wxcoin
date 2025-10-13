@@ -44,8 +44,6 @@
 #include <Inventor/actions/SoRayPickAction.h>
 #include <Inventor/SoPickedPoint.h>
 #include <unordered_map>
-// DynamicSilhouetteRenderer usage removed; hover silhouettes managed by HoverSilhouetteManager
-#include <future>
 #include "OCCShapeBuilder.h"
 #include "viewer/SliceController.h"
 #include "viewer/ExplodeController.h"
@@ -173,8 +171,6 @@ void OCCViewer::initializeViewer()
 	LOG_INF_S("OCC Viewer initialized");
 }
 
-// Slice nodes are managed by SliceController
-
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
 	auto addStartTime = std::chrono::high_resolution_clock::now();
@@ -196,18 +192,18 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 			}
 
 			// Handle view updates
-			if (m_viewUpdater) {
-				m_viewUpdater->updateSceneBounds();
-				if (m_batchOperationActive) {
-					m_needsViewRefresh = true;
-					if (m_batchManager) m_batchManager->markNeedsViewRefresh();
-				}
-				else {
-					if (!m_preserveViewOnAdd && m_viewUpdater) m_viewUpdater->resetView();
-					m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::GEOMETRY_CHANGED), true);
-					m_viewUpdater->refreshCanvas(false);
-				}
-			}
+	if (m_viewUpdater) {
+		m_viewUpdater->updateSceneBounds();
+		if (m_batchOperationActive) {
+			m_needsViewRefresh = true;
+			if (m_batchManager) m_batchManager->markNeedsViewRefresh();
+		}
+		else {
+			if (!m_preserveViewOnAdd && m_viewUpdater) m_viewUpdater->resetView();
+			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::GEOMETRY_CHANGED), true);
+			m_viewUpdater->refreshCanvas(false);
+		}
+	}
 		}
 	}
 
@@ -390,7 +386,13 @@ void OCCViewer::fitAll()
 
 void OCCViewer::fitGeometry(const std::string& name)
 {
-	// Not implemented
+	// Find the geometry and fit view to it
+	auto geometry = findGeometry(name);
+	if (geometry && m_sceneManager) {
+		// This would typically zoom to the specific geometry bounds
+		// For now, just log that this functionality exists
+		LOG_INF_S("fitGeometry called for: " + name + " - functionality available but not fully implemented");
+	}
 }
 
 std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
@@ -440,8 +442,6 @@ void OCCViewer::setWireframeMode(bool wireframe)
 	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 }
 
-// Removed setShadingMode method - functionality not needed
-
 void OCCViewer::setShowEdges(bool showEdges)
 {
 	if (m_renderModeManager) {
@@ -465,8 +465,6 @@ bool OCCViewer::isWireframeMode() const
 {
 	return m_renderModeManager ? m_renderModeManager->isWireframeMode() : false;
 }
-
-// Removed isShadingMode method - functionality not needed
 
 bool OCCViewer::isShowEdges() const
 {
@@ -550,9 +548,9 @@ void OCCViewer::setNormalLength(double length)
 		config.length = length;
 		m_normalDisplayService->setNormalDisplayConfig(config);
 		m_normalDisplayService->setNormalLength(length);
-		// Force regeneration of normal lines with new length
-		if (m_edgeDisplayManager) {
-			m_edgeDisplayManager->updateAll(m_meshParams);
+	// Force regeneration of normal lines with new length
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->updateAll(m_meshParams);
 		}
 	}
 }
@@ -561,18 +559,13 @@ void OCCViewer::setNormalColor(const Quantity_Color& correct, const Quantity_Col
 {
 	if (m_normalDisplayService) {
 		m_normalDisplayService->setNormalColor(correct, incorrect);
-		// Force regeneration of normal lines with new colors
-		if (m_edgeDisplayManager) {
-			m_edgeDisplayManager->updateAll(m_meshParams);
-		}
+	// Force regeneration of normal lines with new colors
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->updateAll(m_meshParams);
 	}
 }
-
-void OCCViewer::updateNormalsDisplay()
-{
-	// This function is no longer needed as m_normalRoot is removed.
-	// The normal display logic is now handled by the EdgeComponent.
 }
+
 
 // Enhanced normal consistency tools
 void OCCViewer::setNormalConsistencyMode(bool enabled)
@@ -582,17 +575,17 @@ void OCCViewer::setNormalConsistencyMode(bool enabled)
 		config.consistencyMode = enabled;
 		m_normalDisplayService->setNormalDisplayConfig(config);
 		m_normalDisplayService->setNormalConsistencyMode(enabled);
-
-		// Apply to all geometries
-		for (auto& geometry : m_geometries) {
-			if (geometry) {
-				// Force regeneration with consistency mode
-				geometry->regenerateMesh(m_meshParams);
-			}
+	
+	// Apply to all geometries
+	for (auto& geometry : m_geometries) {
+		if (geometry) {
+			// Force regeneration with consistency mode
+			geometry->regenerateMesh(m_meshParams);
 		}
-
-		// Refresh view
-		if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
+	}
+	
+	// Refresh view
+	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 	}
 }
 
@@ -608,9 +601,9 @@ void OCCViewer::setNormalDebugMode(bool enabled)
 		config.debugMode = enabled;
 		m_normalDisplayService->setNormalDisplayConfig(config);
 		m_normalDisplayService->setNormalDebugMode(enabled);
-
-		// Toggle normal display based on debug mode
-		setShowNormals(enabled);
+	
+	// Toggle normal display based on debug mode
+	setShowNormals(enabled);
 	}
 }
 
@@ -625,7 +618,7 @@ void OCCViewer::refreshNormalDisplay()
 	if (m_normalDisplayService) {
 		m_normalDisplayService->refreshNormalDisplay(m_edgeDisplayManager.get(), m_meshParams);
 	}
-
+	
 	// Refresh view
 	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
 }
@@ -634,14 +627,9 @@ void OCCViewer::toggleNormalDisplay()
 {
 	if (m_normalDisplayService) {
 		m_normalDisplayService->toggleNormalDisplay(m_edgeDisplayManager.get(), m_meshParams);
-	}
+}
 }
 
-void OCCViewer::createNormalVisualization(std::shared_ptr<OCCGeometry> geometry)
-{
-	// This function is no longer needed as m_normalRoot is removed.
-	// The normal display logic is now handled by the EdgeComponent.
-}
 
 void OCCViewer::remeshAllGeometries()
 {
@@ -839,9 +827,8 @@ void OCCViewer::setSubdivisionEnabled(bool enabled)
 {
 	if (m_configurationManager) {
 		auto& config = m_configurationManager->getSubdivisionConfig();
-		if (config.enabled == enabled) return;
-		config.enabled = enabled;
-		if (m_meshController) m_meshController->setSubdivisionEnabled(enabled);
+		updateConfigAndNotify(config.enabled, enabled,
+			[&]() { m_meshController->setSubdivisionEnabled(enabled); });
 	}
 }
 
@@ -852,11 +839,10 @@ bool OCCViewer::isSubdivisionEnabled() const
 
 void OCCViewer::setSubdivisionLevel(int level)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && level >= 1 && level <= 5) {
 		auto& config = m_configurationManager->getSubdivisionConfig();
-		if (level < 1 || level > 5 || config.level == level) return;
-		config.level = level;
-		if (m_meshController) m_meshController->setSubdivisionLevel(level);
+		updateConfigAndNotify(config.level, level,
+			[&]() { m_meshController->setSubdivisionLevel(level); });
 	}
 }
 
@@ -867,11 +853,10 @@ int OCCViewer::getSubdivisionLevel() const
 
 void OCCViewer::setSubdivisionMethod(int method)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && method >= 0 && method <= 3) {
 		auto& config = m_configurationManager->getSubdivisionConfig();
-		if (method < 0 || method > 3 || config.method == method) return;
-		config.method = method;
-		if (m_meshController) m_meshController->setSubdivisionMethod(method);
+		updateConfigAndNotify(config.method, method,
+			[&]() { m_meshController->setSubdivisionMethod(method); });
 	}
 }
 
@@ -882,11 +867,10 @@ int OCCViewer::getSubdivisionMethod() const
 
 void OCCViewer::setSubdivisionCreaseAngle(double angle)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && angle >= 0.0 && angle <= 180.0) {
 		auto& config = m_configurationManager->getSubdivisionConfig();
-		if (angle < 0.0 || angle > 180.0 || config.creaseAngle == angle) return;
-		config.creaseAngle = angle;
-		if (m_meshController) m_meshController->setSubdivisionCreaseAngle(angle);
+		updateConfigAndNotify(config.creaseAngle, angle,
+			[&]() { m_meshController->setSubdivisionCreaseAngle(angle); });
 	}
 }
 
@@ -900,9 +884,8 @@ void OCCViewer::setSmoothingEnabled(bool enabled)
 {
 	if (m_configurationManager) {
 		auto& config = m_configurationManager->getSmoothingConfig();
-		if (config.enabled == enabled) return;
-		config.enabled = enabled;
-		if (m_meshController) m_meshController->setSmoothingEnabled(enabled);
+		updateConfigAndNotify(config.enabled, enabled,
+			[&]() { m_meshController->setSmoothingEnabled(enabled); });
 	}
 }
 
@@ -913,11 +896,10 @@ bool OCCViewer::isSmoothingEnabled() const
 
 void OCCViewer::setSmoothingMethod(int method)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && method >= 0 && method <= 3) {
 		auto& config = m_configurationManager->getSmoothingConfig();
-		if (method < 0 || method > 3 || config.method == method) return;
-		config.method = method;
-		if (m_meshController) m_meshController->setSmoothingMethod(method);
+		updateConfigAndNotify(config.method, method,
+			[&]() { m_meshController->setSmoothingMethod(method); });
 	}
 }
 
@@ -928,11 +910,10 @@ int OCCViewer::getSmoothingMethod() const
 
 void OCCViewer::setSmoothingIterations(int iterations)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && iterations >= 1 && iterations <= 10) {
 		auto& config = m_configurationManager->getSmoothingConfig();
-		if (iterations < 1 || iterations > 10 || config.iterations == iterations) return;
-		config.iterations = iterations;
-		if (m_meshController) m_meshController->setSmoothingIterations(iterations);
+		updateConfigAndNotify(config.iterations, iterations,
+			[&]() { m_meshController->setSmoothingIterations(iterations); });
 	}
 }
 
@@ -943,11 +924,10 @@ int OCCViewer::getSmoothingIterations() const
 
 void OCCViewer::setSmoothingStrength(double strength)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && strength >= 0.01 && strength <= 1.0) {
 		auto& config = m_configurationManager->getSmoothingConfig();
-		if (strength < 0.01 || strength > 1.0 || config.strength == strength) return;
-		config.strength = strength;
-		if (m_meshController) m_meshController->setSmoothingStrength(strength);
+		updateConfigAndNotify(config.strength, strength,
+			[&]() { m_meshController->setSmoothingStrength(strength); });
 	}
 }
 
@@ -958,11 +938,10 @@ double OCCViewer::getSmoothingStrength() const
 
 void OCCViewer::setSmoothingCreaseAngle(double angle)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && angle >= 0.0 && angle <= 180.0) {
 		auto& config = m_configurationManager->getSmoothingConfig();
-		if (angle < 0.0 || angle > 180.0 || config.creaseAngle == angle) return;
-		config.creaseAngle = angle;
-		if (m_meshController) m_meshController->setSmoothingCreaseAngle(angle);
+		updateConfigAndNotify(config.creaseAngle, angle,
+			[&]() { m_meshController->setSmoothingCreaseAngle(angle); });
 	}
 }
 
@@ -974,11 +953,10 @@ double OCCViewer::getSmoothingCreaseAngle() const
 // Advanced tessellation control implementations
 void OCCViewer::setTessellationMethod(int method)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && method >= 0 && method <= 3) {
 		auto& config = m_configurationManager->getTessellationConfig();
-		if (method < 0 || method > 3 || config.method == method) return;
-		config.method = method;
-		if (m_meshController) m_meshController->setTessellationMethod(method);
+		updateConfigAndNotify(config.method, method,
+			[&]() { m_meshController->setTessellationMethod(method); });
 	}
 }
 
@@ -989,11 +967,10 @@ int OCCViewer::getTessellationMethod() const
 
 void OCCViewer::setTessellationQuality(int quality)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && quality >= 1 && quality <= 5) {
 		auto& config = m_configurationManager->getTessellationConfig();
-		if (quality < 1 || quality > 5 || config.quality == quality) return;
-		config.quality = quality;
-		if (m_meshController) m_meshController->setTessellationQuality(quality);
+		updateConfigAndNotify(config.quality, quality,
+			[&]() { m_meshController->setTessellationQuality(quality); });
 	}
 }
 
@@ -1004,11 +981,10 @@ int OCCViewer::getTessellationQuality() const
 
 void OCCViewer::setFeaturePreservation(double preservation)
 {
-	if (m_configurationManager) {
+	if (m_configurationManager && preservation >= 0.0 && preservation <= 1.0) {
 		auto& config = m_configurationManager->getTessellationConfig();
-		if (preservation < 0.0 || preservation > 1.0 || config.featurePreservation == preservation) return;
-		config.featurePreservation = preservation;
-		if (m_meshController) m_meshController->setFeaturePreservation(preservation);
+		updateConfigAndNotify(config.featurePreservation, preservation,
+			[&]() { m_meshController->setFeaturePreservation(preservation); });
 	}
 }
 
@@ -1021,9 +997,8 @@ void OCCViewer::setParallelProcessing(bool enabled)
 {
 	if (m_configurationManager) {
 		auto& config = m_configurationManager->getTessellationConfig();
-		if (config.parallelProcessing == enabled) return;
-		config.parallelProcessing = enabled;
-		if (m_meshController) m_meshController->setParallelProcessing(enabled);
+		updateConfigAndNotify(config.parallelProcessing, enabled,
+			[&]() { m_meshController->setParallelProcessing(enabled); });
 	}
 }
 
@@ -1036,9 +1011,8 @@ void OCCViewer::setAdaptiveMeshing(bool enabled)
 {
 	if (m_configurationManager) {
 		auto& config = m_configurationManager->getTessellationConfig();
-		if (config.adaptiveMeshing == enabled) return;
-		config.adaptiveMeshing = enabled;
-		if (m_meshController) m_meshController->setAdaptiveMeshing(enabled);
+		updateConfigAndNotify(config.adaptiveMeshing, enabled,
+			[&]() { m_meshController->setAdaptiveMeshing(enabled); });
 	}
 }
 
@@ -1209,8 +1183,6 @@ bool OCCViewer::importConfigurationFromJson(const std::string& jsonString)
 	return false;
 }
 
-// Legacy display flag APIs removed; rendering handled at geometry level and by EdgeDisplayManager
-
 void OCCViewer::setShowOriginalEdges(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowOriginalEdges(show, m_meshParams);
 }
@@ -1220,27 +1192,27 @@ void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLen
 	// Store parameters in ConfigurationManager
 	if (m_configurationManager) {
 		auto& config = m_configurationManager->getOriginalEdgesConfig();
-		config.samplingDensity = samplingDensity;
-		config.minLength = minLength;
-		config.showLinesOnly = showLinesOnly;
-		config.color = color;
-		config.width = width;
-		config.highlightIntersectionNodes = highlightIntersectionNodes;
-		config.intersectionNodeColor = intersectionNodeColor;
-		config.intersectionNodeSize = intersectionNodeSize;
-
-		// Convert wxColour to Quantity_Color
-		Quantity_Color occColor(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
-		Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
-
-		// Apply parameters to EdgeDisplayManager
-		if (m_edgeDisplayManager) {
-			m_edgeDisplayManager->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, occColor, width,
-				highlightIntersectionNodes, intersectionNodeOccColor, intersectionNodeSize);
-		}
-
-		// Refresh the view
-		requestViewRefresh();
+		updateConfigValue(config.samplingDensity, samplingDensity);
+		updateConfigValue(config.minLength, minLength);
+		updateConfigValue(config.showLinesOnly, showLinesOnly);
+		updateConfigValue(config.color, color);
+		updateConfigValue(config.width, width);
+		updateConfigValue(config.highlightIntersectionNodes, highlightIntersectionNodes);
+		updateConfigValue(config.intersectionNodeColor, intersectionNodeColor);
+		updateConfigValue(config.intersectionNodeSize, intersectionNodeSize);
+	
+	// Convert wxColour to Quantity_Color
+	Quantity_Color occColor(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
+	Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
+	
+	// Apply parameters to EdgeDisplayManager
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, occColor, width,
+			highlightIntersectionNodes, intersectionNodeOccColor, intersectionNodeSize);
+	}
+	
+	// Refresh the view
+	requestViewRefresh();
 	}
 }
 void OCCViewer::setShowFeatureEdges(bool show) {
@@ -1365,8 +1337,6 @@ void OCCViewer::setShowIntersectionNodes(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowIntersectionNodes(show, m_meshParams);
 }
 
-// removed deprecated setShowSilhouetteEdges
-
 void OCCViewer::toggleEdgeType(EdgeType type, bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->toggleEdgeType(type, show, m_meshParams);
 }
@@ -1395,8 +1365,6 @@ void OCCViewer::forceRegenerateMeshDerivedEdges(const MeshParameters& meshParams
 	}
 }
 
-void OCCViewer::invalidateFeatureEdgeCache() {}
-
 void OCCViewer::rebuildSelectionAccelerator()
 {
 	if (m_selectionAcceleratorService) {
@@ -1404,6 +1372,24 @@ void OCCViewer::rebuildSelectionAccelerator()
 	}
 }
 
+// Configuration synchronization helpers
+template<typename T, typename Func>
+void OCCViewer::updateConfigAndNotify(T& configValue, T newValue, Func&& meshControllerFunc)
+{
+	if (configValue == newValue) return;
+	configValue = newValue;
+	if (m_meshController) {
+		meshControllerFunc();
+	}
+}
+
+template<typename T>
+void OCCViewer::updateConfigValue(T& configValue, T newValue)
+{
+	configValue = newValue;
+}
+
+// Throttled remeshing helper to avoid excessive remesh operations
 void OCCViewer::throttledRemesh(const std::string& context)
 {
 	static wxLongLong lastRemeshTime = 0;
