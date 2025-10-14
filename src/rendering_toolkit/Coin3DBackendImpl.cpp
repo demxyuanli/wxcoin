@@ -306,10 +306,12 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
 	}
 
 	// Add shape hints
+	// Note: This backend is typically used for general mesh rendering
+	// For maximum compatibility with shell models, use conservative settings
 	SoShapeHints* hints = new SoShapeHints;
-	hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
-	hints->shapeType = SoShapeHints::SOLID;
-	hints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
+	hints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
+	hints->shapeType = SoShapeHints::UNKNOWN_SHAPE_TYPE;  // Allow both solid and shell models
+	hints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;     // Disable backface culling for compatibility
 	hints->creaseAngle = static_cast<float>(m_config.getSmoothingSettings().creaseAngle * M_PI / 180.0);
 	node->addChild(hints);
 

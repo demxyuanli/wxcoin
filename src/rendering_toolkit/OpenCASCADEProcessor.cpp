@@ -2,6 +2,7 @@
 #include "rendering/RenderingToolkitAPI.h"
 #include "logger/Logger.h"
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <IMeshTools_Parameters.hxx>
 #include <BRep_Tool.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -107,8 +108,20 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			" (original: " + std::to_string(params.deflection) + ", " + std::to_string(params.angularDeflection) + ")");
 
 		// Create incremental mesh with adjusted parameters
-		BRepMesh_IncrementalMesh meshGen(shape, adjustedDeflection, params.relative,
-			adjustedAngularDeflection, useParallel);
+		// Use IMeshTools_Parameters for better control over meshing
+		IMeshTools_Parameters meshParams;
+		meshParams.Deflection = adjustedDeflection;
+		meshParams.Angle = adjustedAngularDeflection;
+		meshParams.Relative = params.relative;
+		meshParams.InParallel = useParallel;
+		meshParams.MinSize = Precision::Confusion();
+		meshParams.InternalVerticesMode = Standard_True;  // Critical: ensure internal vertices are created for seam edges
+		meshParams.ControlSurfaceDeflection = Standard_True;  // Better surface approximation
+		
+		BRepMesh_IncrementalMesh meshGen;
+		meshGen.SetShape(shape);
+		meshGen.ChangeParameters() = meshParams;
+		meshGen.Perform();
 
 		if (!meshGen.IsDone()) {
 			LOG_ERR_S("Failed to generate mesh for shape");
@@ -241,9 +254,20 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 			adjustedDeflection *= 0.7; // Less aggressive than 0.5
 		}
 
-		// Generate mesh with BRepMesh
-		BRepMesh_IncrementalMesh meshGen(shape, adjustedDeflection, params.relative,
-			adjustedAngularDeflection, useParallel);
+		// Generate mesh with BRepMesh using IMeshTools_Parameters for better control
+		IMeshTools_Parameters meshParams;
+		meshParams.Deflection = adjustedDeflection;
+		meshParams.Angle = adjustedAngularDeflection;
+		meshParams.Relative = params.relative;
+		meshParams.InParallel = useParallel;
+		meshParams.MinSize = Precision::Confusion();
+		meshParams.InternalVerticesMode = Standard_True;  // Critical: ensure internal vertices are created for seam edges
+		meshParams.ControlSurfaceDeflection = Standard_True;  // Better surface approximation
+		
+		BRepMesh_IncrementalMesh meshGen;
+		meshGen.SetShape(shape);
+		meshGen.ChangeParameters() = meshParams;
+		meshGen.Perform();
 
 		if (!meshGen.IsDone()) {
 			LOG_ERR_S("Failed to generate mesh for shape");

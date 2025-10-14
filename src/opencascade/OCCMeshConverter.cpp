@@ -5,6 +5,7 @@
 
 // OpenCASCADE includes
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <IMeshTools_Parameters.hxx>
 #include <BRep_Tool.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -97,9 +98,20 @@ TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape,
 	}
 
 	try {
-		// Create incremental mesh
-		BRepMesh_IncrementalMesh meshGen(shape, params.deflection, params.relative,
-			params.angularDeflection, params.inParallel);
+		// Create incremental mesh with proper parameters for seam edges
+		IMeshTools_Parameters meshParams;
+		meshParams.Deflection = params.deflection;
+		meshParams.Angle = params.angularDeflection;
+		meshParams.Relative = params.relative;
+		meshParams.InParallel = params.inParallel;
+		meshParams.MinSize = Precision::Confusion();
+		meshParams.InternalVerticesMode = Standard_True;  // Critical: ensure internal vertices are created for seam edges
+		meshParams.ControlSurfaceDeflection = Standard_True;  // Better surface approximation
+		
+		BRepMesh_IncrementalMesh meshGen;
+		meshGen.SetShape(shape);
+		meshGen.ChangeParameters() = meshParams;
+		meshGen.Perform();
 
 		if (!meshGen.IsDone()) {
 			LOG_ERR_S("Failed to generate mesh for shape");

@@ -466,13 +466,17 @@ void OCCGeometryMesh::buildCoinRepresentation(
 
     // ===== Shape hints =====
     SoShapeHints* hints = new SoShapeHints();
-    hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
     
     bool isShellModel = (context.display.shapeType == TopAbs_SHELL) || !context.display.cullFace;
     if (isShellModel) {
-        hints->shapeType = SoShapeHints::UNKNOWN_SHAPE_TYPE;
-        hints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
+        // For shell models (pipes, thin-wall parts), disable backface culling completely
+        // Use unknown ordering so Coin does not assume a specific front face
+        hints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
+        hints->shapeType = SoShapeHints::UNKNOWN_SHAPE_TYPE;  // Not a closed solid
+        hints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;    // Disable front/back distinction
     } else {
+        // For solid models, use standard settings with backface culling
+        hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
         hints->shapeType = SoShapeHints::SOLID;
         hints->faceType = SoShapeHints::CONVEX;
     }

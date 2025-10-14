@@ -2,6 +2,7 @@
 set(COMMANDS_SOURCES
     Command.cpp
     CommandDispatcher.cpp
+    CommandErrorHelper.cpp
     CommandListenerManager.cpp
     CoordinateSystemVisibilityListener.cpp
     ReferenceGridToggleListener.cpp
@@ -64,6 +65,7 @@ set(COMMANDS_SOURCES
 set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/Command.h
     ${CMAKE_SOURCE_DIR}/include/CommandDispatcher.h
+    ${CMAKE_SOURCE_DIR}/include/CommandErrorHelper.h
     ${CMAKE_SOURCE_DIR}/include/CommandListener.h
     ${CMAKE_SOURCE_DIR}/include/CommandListenerManager.h
     ${CMAKE_SOURCE_DIR}/include/CommandType.h
