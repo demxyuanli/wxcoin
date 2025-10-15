@@ -88,6 +88,9 @@ public:
     // Build face index mapping during mesh generation
     void buildFaceIndexMapping(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
 
+    // Wireframe appearance update
+    void updateWireframeMaterial(const Quantity_Color& color);
+
     // Memory optimization
     void releaseTemporaryData();
     void optimizeMemory();

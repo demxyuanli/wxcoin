@@ -48,6 +48,9 @@ public:
     double getWireframeWidth() const { return m_wireframeWidth; }
     virtual void setWireframeWidth(double width);
 
+    Quantity_Color getWireframeColor() const { return m_wireframeColor; }
+    virtual void setWireframeColor(const Quantity_Color& color);
+
     bool isShowWireframe() const { return m_showWireframe; }
     virtual void setShowWireframe(bool enabled);
 
@@ -85,6 +88,7 @@ protected:
     // Wireframe settings
     bool m_wireframeMode;
     double m_wireframeWidth;
+    Quantity_Color m_wireframeColor;
     bool m_showWireframe;
 
     // Face visibility

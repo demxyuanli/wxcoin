@@ -114,9 +114,9 @@ void MouseHandler::handleMouseButton(wxMouseEvent& event) {
 		", LeftDown: " + std::to_string(event.LeftDown()));
 
 	if (m_operationMode == OperationMode::VIEW) {
-		// Start/stop slice dragging with left button when slice is enabled
+		// Start/stop slice dragging with left button when slice is enabled AND drag mode is active
 		if (auto* viewer = m_canvas ? m_canvas->getOCCViewer() : nullptr) {
-			if (viewer->isSliceEnabled()) {
+			if (viewer->isSliceEnabled() && viewer->isSliceDragEnabled()) {
 				if (event.LeftDown()) {
 					enableSliceDragging(true);
 					m_lastMousePos = event.GetPosition();

@@ -20,7 +20,7 @@ wxEND_EVENT_TABLE()
 
 // DockLayoutConfigDialog implementation
 DockLayoutConfigDialog::DockLayoutConfigDialog(wxWindow* parent, DockLayoutConfig& config, DockManager* dockManager)
-    : FramelessModalPopup(parent, "Dock Layout Configuration", wxSize(1200, 700))
+    : FramelessModalPopup(parent, "Dock Layout Configuration", wxSize(800, 640))
     , m_config(config)
     , m_dockManager(dockManager)
 {

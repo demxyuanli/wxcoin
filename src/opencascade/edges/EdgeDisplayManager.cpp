@@ -297,3 +297,36 @@ bool EdgeDisplayManager::isUsingModularEdgeComponent() const {
 	// Migration completed - always use modular edge component
 	return true;
 }
+
+// Wireframe appearance methods
+void EdgeDisplayManager::applyWireframeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew) {
+	m_wireframeAppearance = { color, width, style, showOnlyNew };
+	// Note: Wireframe appearance is handled by RenderModeManager, not edge display manager
+	// This method stores the parameters for reference
+}
+
+void EdgeDisplayManager::setWireframeAppearance(const WireframeAppearance& appearance) {
+	m_wireframeAppearance = appearance;
+	applyWireframeAppearance(appearance.color, appearance.width, appearance.style, appearance.showOnlyNew);
+}
+
+// Mesh edges appearance methods
+void EdgeDisplayManager::applyMeshEdgeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew) {
+	m_meshEdgeAppearance = { color, width, style, showOnlyNew };
+	// Apply to all geometries
+	if (m_geometries) {
+		for (auto& g : *m_geometries) {
+			if (g && g->modularEdgeComponent) {
+				g->modularEdgeComponent->applyAppearanceToEdgeNode(EdgeType::Mesh, color, width, style);
+			}
+		}
+	}
+	if (m_sceneManager && m_sceneManager->getCanvas()) {
+		if (auto* rm = m_sceneManager->getCanvas()->getRefreshManager()) rm->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
+	}
+}
+
+void EdgeDisplayManager::setMeshEdgeAppearance(const MeshEdgeAppearance& appearance) {
+	m_meshEdgeAppearance = appearance;
+	applyMeshEdgeAppearance(appearance.color, appearance.width, appearance.style, appearance.showOnlyNew);
+}

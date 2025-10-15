@@ -626,7 +626,7 @@ void MultiViewportManager::renderCubeOutline() {
 
 	glEnable(GL_SCISSOR_TEST);
 	glScissor(viewport.x, yBottom, viewport.width, viewport.height);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_SCISSOR_TEST);
 
 	SbViewportRegion viewportRegion;
@@ -660,7 +660,7 @@ void MultiViewportManager::renderCoordinateSystem() {
 
 	glEnable(GL_SCISSOR_TEST);
 	glScissor(viewport.x, yBottom, viewport.width, viewport.height);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_SCISSOR_TEST);
 
 	SbViewportRegion viewportRegion;

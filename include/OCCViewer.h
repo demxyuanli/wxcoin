@@ -10,6 +10,8 @@
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
+#include <Inventor/SbLinear.h>
+#include <Inventor/SbViewportRegion.h>
 #include "EdgeTypes.h"
 #include "edges/EdgeDisplayManager.h"
 #include "viewer/interfaces/IGeometryApi.h"
@@ -86,6 +88,9 @@ class OCCViewer : public wxEvtHandler,
 public:
 	explicit OCCViewer(SceneManager* sceneManager);
 	~OCCViewer();
+
+	// Get the scene manager
+	SceneManager* getSceneManager() const { return m_sceneManager; }
 
 	// Type alias to keep backward compatibility with existing OCCViewer::ExplodeMode references
 	using ExplodeMode = ::ExplodeMode;
@@ -278,6 +283,14 @@ public:
 	void refreshOutlineAll() override { if (m_outlineManager) m_outlineManager->updateAll(); }
 	ImageOutlineParams getOutlineParams() const { return m_outlineManager ? m_outlineManager->getParams() : ImageOutlineParams{}; }
 	void setOutlineParams(const ImageOutlineParams& p) { if (m_outlineManager) m_outlineManager->setParams(p); }
+
+	// Wireframe appearance
+	void applyWireframeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew);
+	void setWireframeAppearance(const EdgeDisplayManager::WireframeAppearance& appearance);
+
+	// Mesh edges appearance
+	void applyMeshEdgeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew);
+	void setMeshEdgeAppearance(const EdgeDisplayManager::MeshEdgeAppearance& appearance);
 	void toggleEdgeType(EdgeType type, bool show) override;
 	bool isEdgeTypeEnabled(EdgeType type) const override;
 	void updateAllEdgeDisplays() override;
@@ -294,6 +307,31 @@ public:
 	void moveSliceAlongNormal(float delta) override;
 	SbVec3f getSliceNormal() const override;
 	float getSliceOffset() const override;
+
+	// Enhanced slice features
+	void setShowSectionContours(bool show) override;
+	bool isShowSectionContours() const override;
+	void setSlicePlaneColor(const SbVec3f& color) override;
+	const SbVec3f& getSlicePlaneColor() const override;
+	void setSlicePlaneOpacity(float opacity) override;
+	float getSlicePlaneOpacity() const override;
+	void setSliceGeometries(const std::vector<OCCGeometry*>& geometries) override;
+
+	// Mouse interaction
+	bool handleSliceMousePress(const SbVec2s* mousePos, const SbViewportRegion* vp) override;
+	bool handleSliceMouseMove(const SbVec2s* mousePos, const SbViewportRegion* vp) override;
+	bool handleSliceMouseRelease(const SbVec2s* mousePos, const SbViewportRegion* vp) override;
+	bool isSliceInteracting() const override;
+	
+	// Drag mode control
+	void setSliceDragEnabled(bool enabled) override;
+	bool isSliceDragEnabled() const override;
+
+private:
+	// Internal helper for slice geometries
+	void updateSliceGeometries();
+
+public:
 
 	// Assembly explode view
 	void setExplodeEnabled(bool enabled, double factor = 1.0) override;

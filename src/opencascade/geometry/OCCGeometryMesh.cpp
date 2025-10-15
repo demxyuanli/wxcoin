@@ -491,8 +491,13 @@ void OCCGeometryMesh::buildCoinRepresentation(
     // ===== Material =====
     SoMaterial* material = new SoMaterial();
     if (context.display.wireframeMode) {
-        // Wireframe mode: use blue color
-        material->diffuseColor.setValue(0.0f, 0.0f, 1.0f);
+        // Wireframe mode: use configured wireframe color
+        const Quantity_Color& wColor = context.display.wireframeColor;
+        material->diffuseColor.setValue(
+            static_cast<float>(wColor.Red()),
+            static_cast<float>(wColor.Green()),
+            static_cast<float>(wColor.Blue())
+        );
         material->transparency.setValue(static_cast<float>(context.material.transparency));
     }
     else {
@@ -679,4 +684,32 @@ void OCCGeometryMesh::buildCoinRepresentation(
     auto buildEndTime = std::chrono::high_resolution_clock::now();
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
     LOG_INF_S("Coin3D scene built (modular) in " + std::to_string(buildDuration.count()) + "ms");
+}
+
+void OCCGeometryMesh::updateWireframeMaterial(const Quantity_Color& color)
+{
+    if (!m_coinNode) {
+        return;
+    }
+
+    // Find the material node in the Coin scene graph
+    // The structure is: Separator -> DrawStyle -> Material -> Shape
+    SoMaterial* material = nullptr;
+
+    for (int i = 0; i < m_coinNode->getNumChildren(); ++i) {
+        SoNode* child = m_coinNode->getChild(i);
+        if (child->isOfType(SoMaterial::getClassTypeId())) {
+            material = static_cast<SoMaterial*>(child);
+            break;
+        }
+    }
+
+    if (material) {
+        // Update the diffuse color
+        material->diffuseColor.setValue(
+            static_cast<float>(color.Red()),
+            static_cast<float>(color.Green()),
+            static_cast<float>(color.Blue())
+        );
+    }
 }

@@ -12,6 +12,7 @@ OCCGeometryDisplay::OCCGeometryDisplay()
     , m_vertexColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
     , m_wireframeMode(false)
     , m_wireframeWidth(1.0)
+    , m_wireframeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
     , m_showWireframe(false)
     , m_facesVisible(true)
     , m_smoothNormals(false)
@@ -80,6 +81,11 @@ void OCCGeometryDisplay::setWireframeWidth(double width)
     if (width < 0.1) width = 0.1;
     if (width > 10.0) width = 10.0;
     m_wireframeWidth = width;
+}
+
+void OCCGeometryDisplay::setWireframeColor(const Quantity_Color& color)
+{
+    m_wireframeColor = color;
 }
 
 void OCCGeometryDisplay::setPointSize(double size)

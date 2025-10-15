@@ -56,10 +56,32 @@ public:
 		bool edgesOnly{ false };
 	};
 
+	struct WireframeAppearance {
+		Quantity_Color color{ 0.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default black
+		double width{ 1.0 };
+		int style{ 0 }; // 0=Solid, 1=Dashed, 2=Dotted, 3=Dash-Dot
+		bool showOnlyNew{ false };
+	};
+
+	struct MeshEdgeAppearance {
+		Quantity_Color color{ 0.0, 0.0, 1.0, Quantity_TOC_RGB }; // Default blue
+		double width{ 1.0 };
+		int style{ 0 }; // 0=Solid, 1=Dashed, 2=Dotted, 3=Dash-Dot
+		bool showOnlyNew{ false };
+	};
+
 	// Appearance
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly);
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly, const MeshParameters& meshParams);
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly);
+
+	// Wireframe appearance
+	void applyWireframeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew);
+	void setWireframeAppearance(const WireframeAppearance& appearance);
+
+	// Mesh edges appearance
+	void applyMeshEdgeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew);
+	void setMeshEdgeAppearance(const MeshEdgeAppearance& appearance);
 	
 	// Original edges parameters
 	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width,
@@ -77,14 +99,18 @@ private:
 	FeatureEdgeParams m_lastFeatureParams{};
 	bool m_featureCacheValid{ false };
 	FeatureEdgeAppearance m_featureEdgeAppearance{};
-	
+
+	// Wireframe and mesh edge appearance
+	WireframeAppearance m_wireframeAppearance{};
+	MeshEdgeAppearance m_meshEdgeAppearance{};
+
 	// Original edges parameters
-	struct OriginalEdgeParams { 
-		double samplingDensity{ 80.0 }; 
-		double minLength{ 0.01 }; 
-		bool showLinesOnly{ false }; 
+	struct OriginalEdgeParams {
+		double samplingDensity{ 80.0 };
+		double minLength{ 0.01 };
+		bool showLinesOnly{ false };
 		Quantity_Color color{ 1.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default red
-		double width{ 1.0 }; 
+		double width{ 1.0 };
 		bool highlightIntersectionNodes{ false };
 		Quantity_Color intersectionNodeColor{ 1.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default red
 		double intersectionNodeSize{ 3.0 };

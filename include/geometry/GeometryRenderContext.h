@@ -49,6 +49,7 @@ struct DisplaySettings {
     bool visible{true};
     bool selected{false};
     double wireframeWidth{1.0};
+    Quantity_Color wireframeColor{0.0, 0.0, 0.0, Quantity_TOC_RGB};
     bool cullFace{true};
     TopAbs_ShapeEnum shapeType{TopAbs_SOLID};
 };
@@ -107,6 +108,7 @@ struct GeometryRenderContext {
         ctx.display.visible = geom.isVisible();
         ctx.display.selected = geom.isSelected();
         ctx.display.wireframeWidth = geom.getWireframeWidth();
+        ctx.display.wireframeColor = geom.getWireframeColor();
         ctx.display.cullFace = geom.isCullFaceEnabled();
         if (!geom.getShape().IsNull()) {
             ctx.display.shapeType = geom.getShape().ShapeType();

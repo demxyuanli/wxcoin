@@ -215,6 +215,8 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
 	if (m_geometryManagementService) {
 		m_geometryManagementService->removeGeometry(geometry);
+		// Update slice geometries after removal
+		updateSliceGeometries();
 	}
 }
 
@@ -222,6 +224,8 @@ void OCCViewer::removeGeometry(const std::string& name)
 {
 	if (m_geometryManagementService) {
 		m_geometryManagementService->removeGeometry(name);
+		// Update slice geometries after removal
+		updateSliceGeometries();
 	}
 }
 
@@ -229,6 +233,8 @@ void OCCViewer::clearAll()
 {
 	if (m_geometryManagementService) {
 		m_geometryManagementService->clearAll();
+		// Update slice geometries after clearing
+		updateSliceGeometries();
 	}
 }
 
@@ -761,6 +767,9 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 
 		// Store geometry
 		m_geometries.push_back(geometry);
+
+		// Update slice geometries if slice is active
+		updateSliceGeometries();
 
 		// Add to object tree sync (batch mode)
 		if (m_objectTreeSync) {
@@ -1305,6 +1314,79 @@ float OCCViewer::getSliceOffset() const {
 	return m_sliceController ? m_sliceController->offset() : 0.0f;
 }
 
+void OCCViewer::setShowSectionContours(bool show) {
+	if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+	m_sliceController->setShowSectionContours(show);
+	if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
+}
+
+bool OCCViewer::isShowSectionContours() const {
+	return m_sliceController ? m_sliceController->isShowSectionContours() : false;
+}
+
+void OCCViewer::setSlicePlaneColor(const SbVec3f& color) {
+	if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+	m_sliceController->setPlaneColor(color);
+	if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
+}
+
+const SbVec3f& OCCViewer::getSlicePlaneColor() const {
+	static const SbVec3f defaultColor(0.7f, 0.95f, 0.7f); // Light green
+	return m_sliceController ? m_sliceController->getPlaneColor() : defaultColor;
+}
+
+void OCCViewer::setSlicePlaneOpacity(float opacity) {
+	if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+	m_sliceController->setPlaneOpacity(opacity);
+	if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
+}
+
+float OCCViewer::getSlicePlaneOpacity() const {
+	return m_sliceController ? m_sliceController->getPlaneOpacity() : 0.85f;
+}
+
+void OCCViewer::setSliceGeometries(const std::vector<OCCGeometry*>& geometries) {
+	if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+	m_sliceController->setGeometries(geometries);
+	if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
+}
+
+void OCCViewer::updateSliceGeometries() {
+	if (m_sliceController) {
+		std::vector<OCCGeometry*> geomPtrs;
+		geomPtrs.reserve(m_geometries.size());
+		for (const auto& geom : m_geometries) {
+			geomPtrs.push_back(geom.get());
+		}
+		m_sliceController->setGeometries(geomPtrs);
+	}
+}
+
+bool OCCViewer::handleSliceMousePress(const SbVec2s* mousePos, const SbViewportRegion* vp) {
+	return m_sliceController ? m_sliceController->handleMousePress(mousePos, vp) : false;
+}
+
+bool OCCViewer::handleSliceMouseMove(const SbVec2s* mousePos, const SbViewportRegion* vp) {
+	return m_sliceController ? m_sliceController->handleMouseMove(mousePos, vp) : false;
+}
+
+bool OCCViewer::handleSliceMouseRelease(const SbVec2s* mousePos, const SbViewportRegion* vp) {
+	return m_sliceController ? m_sliceController->handleMouseRelease(mousePos, vp) : false;
+}
+
+bool OCCViewer::isSliceInteracting() const {
+	return m_sliceController ? m_sliceController->isInteracting() : false;
+}
+
+void OCCViewer::setSliceDragEnabled(bool enabled) {
+	if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+	m_sliceController->setDragEnabled(enabled);
+}
+
+bool OCCViewer::isSliceDragEnabled() const {
+	return m_sliceController ? m_sliceController->isDragEnabled() : false;
+}
+
 void OCCViewer::setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) {
 	if (m_edgeDisplayManager) {
 		// Use default color and width for backward compatibility
@@ -1489,4 +1571,46 @@ std::shared_ptr<OCCGeometry> OCCViewer::addBSplineCurve(const std::vector<gp_Pnt
 		return geometry;
 	}
 	return nullptr;
+}
+
+// Wireframe appearance methods
+void OCCViewer::applyWireframeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew) {
+	// Apply wireframe appearance to all geometries
+	for (auto& g : m_geometries) {
+		if (g) {
+			g->setWireframeWidth(width);
+			g->setWireframeColor(color);
+			// Update the Coin3D material if the geometry is in wireframe mode
+			if (g->isWireframeMode()) {
+				g->updateWireframeMaterial(color);
+			}
+		}
+	}
+
+	// Store in edge display manager for reference
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->applyWireframeAppearance(color, width, style, showOnlyNew);
+	}
+
+	// Request view refresh
+	if (m_viewUpdater) m_viewUpdater->requestGeometryChanged(true);
+}
+
+void OCCViewer::setWireframeAppearance(const EdgeDisplayManager::WireframeAppearance& appearance) {
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->setWireframeAppearance(appearance);
+	}
+}
+
+// Mesh edges appearance methods
+void OCCViewer::applyMeshEdgeAppearance(const Quantity_Color& color, double width, int style, bool showOnlyNew) {
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->applyMeshEdgeAppearance(color, width, style, showOnlyNew);
+	}
+}
+
+void OCCViewer::setMeshEdgeAppearance(const EdgeDisplayManager::MeshEdgeAppearance& appearance) {
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->setMeshEdgeAppearance(appearance);
+	}
 }

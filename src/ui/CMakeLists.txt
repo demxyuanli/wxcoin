@@ -52,12 +52,16 @@ add_library(UIDialogEdges STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/EdgeSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FeatureEdgesParamDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OriginalEdgesParamDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/WireframeParamDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/MeshEdgesParamDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OutlineSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OutlinePreviewCanvas.cpp
 
     ${CMAKE_SOURCE_DIR}/include/EdgeSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/FeatureEdgesParamDialog.h
     ${CMAKE_SOURCE_DIR}/include/OriginalEdgesParamDialog.h
+    ${CMAKE_SOURCE_DIR}/include/WireframeParamDialog.h
+    ${CMAKE_SOURCE_DIR}/include/MeshEdgesParamDialog.h
     ${CMAKE_SOURCE_DIR}/include/ui/OutlineSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/ui/OutlinePreviewCanvas.h
 
@@ -77,6 +81,7 @@ set(UIDialogMesh_SOURCES
     NormalFixDialog.cpp
     GeometryDecompositionDialog.cpp
     FaceQueryDialog.cpp
+    SliceParamDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
     ${CMAKE_SOURCE_DIR}/include/ImportSettingsDialog.h
@@ -84,6 +89,7 @@ set(UIDialogMesh_SOURCES
     ${CMAKE_SOURCE_DIR}/include/NormalFixDialog.h
     ${CMAKE_SOURCE_DIR}/include/GeometryDecompositionDialog.h
     ${CMAKE_SOURCE_DIR}/include/FaceQueryDialog.h
+    ${CMAKE_SOURCE_DIR}/include/SliceParamDialog.h
 )
 
 add_library(UIDialogMesh STATIC ${UIDialogMesh_SOURCES})
