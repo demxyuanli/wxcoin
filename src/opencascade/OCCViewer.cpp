@@ -215,8 +215,7 @@ void OCCViewer::removeGeometry(std::shared_ptr<OCCGeometry> geometry)
 {
 	if (m_geometryManagementService) {
 		m_geometryManagementService->removeGeometry(geometry);
-		// Update slice geometries after removal
-		updateSliceGeometries();
+		// Don't update slice geometries here - it will be updated when needed
 	}
 }
 
@@ -224,8 +223,7 @@ void OCCViewer::removeGeometry(const std::string& name)
 {
 	if (m_geometryManagementService) {
 		m_geometryManagementService->removeGeometry(name);
-		// Update slice geometries after removal
-		updateSliceGeometries();
+		// Don't update slice geometries here - it will be updated when needed
 	}
 }
 
@@ -233,8 +231,7 @@ void OCCViewer::clearAll()
 {
 	if (m_geometryManagementService) {
 		m_geometryManagementService->clearAll();
-		// Update slice geometries after clearing
-		updateSliceGeometries();
+		// Don't update slice geometries here - it will be updated when needed
 	}
 }
 
@@ -768,8 +765,7 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 		// Store geometry
 		m_geometries.push_back(geometry);
 
-		// Update slice geometries if slice is active
-		updateSliceGeometries();
+		// Don't update slice geometries here - will be updated when slice is enabled
 
 		// Add to object tree sync (batch mode)
 		if (m_objectTreeSync) {
@@ -1286,6 +1282,12 @@ void OCCViewer::clearExplode() {
 
 void OCCViewer::setSliceEnabled(bool enabled) {
 	if (!m_sliceController) m_sliceController = std::make_unique<SliceController>(m_sceneManager, m_occRoot);
+	
+	// Update geometries list before enabling
+	if (enabled) {
+		updateSliceGeometries();
+	}
+	
 	m_sliceController->setEnabled(enabled);
 	if (m_sceneManager && m_sceneManager->getCanvas()) m_sceneManager->getCanvas()->Refresh();
 }
@@ -1356,7 +1358,9 @@ void OCCViewer::updateSliceGeometries() {
 		std::vector<OCCGeometry*> geomPtrs;
 		geomPtrs.reserve(m_geometries.size());
 		for (const auto& geom : m_geometries) {
-			geomPtrs.push_back(geom.get());
+			if (geom) {  // Check for valid pointer
+				geomPtrs.push_back(geom.get());
+			}
 		}
 		m_sliceController->setGeometries(geomPtrs);
 	}

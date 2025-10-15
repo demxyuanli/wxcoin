@@ -47,6 +47,8 @@ DockWidget::DockWidget(const wxString& title, wxWindow* parent)
     , m_closeHandler(nullptr)
     , m_userData(nullptr)
     , m_orientation(OrientationAuto)
+    , m_savedArea(NoDockWidgetArea)
+    , m_savedTargetArea(nullptr)
 {
     SetName(title);
     
@@ -246,21 +248,34 @@ void DockWidget::toggleViewInternal(bool open) {
     m_closed = !open;
     
     if (open) {
-        // Show the widget
-        if (m_dockArea) {
-            m_dockArea->toggleView(true);
-            m_dockArea->setCurrentDockWidget(this);
-            Show();
+        // Restore the widget
+        if (m_savedArea != NoDockWidgetArea && m_savedTargetArea) {
+            // Try to restore to the saved location
+            wxLogDebug("DockWidget::toggleViewInternal - Restoring to saved area: %d, target: %p", 
+                      m_savedArea, m_savedTargetArea);
+            m_dockManager->addDockWidget(m_savedArea, this, m_savedTargetArea);
+            m_savedArea = NoDockWidgetArea;
+            m_savedTargetArea = nullptr;
         } else {
-            // Create new dock area
+            // Fallback to center
+            wxLogDebug("DockWidget::toggleViewInternal - No saved location, adding to center");
             m_dockManager->addDockWidget(CenterDockWidgetArea, this);
         }
     } else {
-        // Hide the widget
-        Hide();
-        
-        if (m_dockArea && m_dockArea->dockWidgetsCount() == 1) {
-            m_dockArea->toggleView(false);
+        // Hide the widget by removing it from the dock area
+        if (m_dockArea) {
+            // Determine the area this widget is in
+            DockContainerWidget* container = m_dockArea->dockContainer();
+            if (container) {
+                m_savedArea = container->dockAreaOf(m_dockArea);
+                // Find a neighboring dock area to use as target for restoration
+                m_savedTargetArea = container->findAdjacentDockArea(m_dockArea);
+                wxLogDebug("DockWidget::toggleViewInternal - Saving area: %d, target: %p", 
+                          m_savedArea, m_savedTargetArea);
+            }
+            
+            // Remove from dock area - this will trigger layout reorganization
+            m_dockArea->removeDockWidget(this);
         }
     }
     

@@ -12,6 +12,9 @@ namespace ads {
 	class DockWidgetTab;
 	class FloatingDockContainer;
 	class DockContainerWidget;
+	
+	// Forward declaration of DockWidgetArea enum
+	enum DockWidgetArea;
 
 
 // Dock widget features
@@ -214,6 +217,10 @@ private:
     std::function<bool()> m_closeHandler;
     void* m_userData;
     DockWidgetOrientation m_orientation;
+    
+    // Store original location for toggle restore
+    DockWidgetArea m_savedArea;
+    DockArea* m_savedTargetArea;
     
     friend class DockManager;
     friend class DockArea;

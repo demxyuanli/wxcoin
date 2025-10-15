@@ -18,13 +18,18 @@ DockLayoutConfigListener::~DockLayoutConfigListener()
 CommandResult DockLayoutConfigListener::executeCommand(const std::string& commandType,
     const std::unordered_map<std::string, std::string>& parameters)
 {
+    wxLogDebug("DockLayoutConfigListener::executeCommand - commandType: %s", commandType.c_str());
+    
     if (commandType == "DOCK_LAYOUT_CONFIG")
     {
+        wxLogDebug("  -> Opening DockLayoutConfigDialog");
+        
         // Get the parent window (main frame)
         wxWindow* parent = wxGetActiveWindow();
         if (!parent) {
             parent = wxTheApp->GetTopWindow();
         }
+        wxLogDebug("  -> Parent window: %p", parent);
 
         // Get current configuration
         const DockLayoutConfig& currentConfig = m_dockManager->getLayoutConfig();
@@ -33,8 +38,10 @@ CommandResult DockLayoutConfigListener::executeCommand(const std::string& comman
         // Create and show the dock layout configuration dialog
         DockLayoutConfigDialog dialog(parent, config, m_dockManager);
         
+        wxLogDebug("  -> Showing dialog...");
         if (dialog.ShowModal() == wxID_OK)
         {
+            wxLogDebug("  -> Dialog accepted, applying config");
             config = dialog.GetConfig();
             m_dockManager->setLayoutConfig(config);
             
@@ -48,9 +55,11 @@ CommandResult DockLayoutConfigListener::executeCommand(const std::string& comman
             return CommandResult(true, "Dock layout configuration applied", "DOCK_LAYOUT_CONFIG");
         }
         
+        wxLogDebug("  -> Dialog cancelled");
         return CommandResult(true, "Dock layout configuration cancelled", "DOCK_LAYOUT_CONFIG");
     }
 
+    wxLogDebug("  -> Unknown command type");
     return CommandResult(false, "Unknown command type", "DOCK_LAYOUT_CONFIG");
 }
 

@@ -520,4 +520,88 @@ void DockContainerWidget::RefreshTheme()
     Update();
 }
 
+DockWidgetArea DockContainerWidget::dockAreaOf(DockArea* area) const
+{
+    if (!area) {
+        return NoDockWidgetArea;
+    }
+    
+    // Traverse up the splitter tree to determine the area's position
+    wxWindow* current = area;
+    wxWindow* parent = area->GetParent();
+    
+    while (parent && parent != this) {
+        DockSplitter* splitter = dynamic_cast<DockSplitter*>(parent);
+        if (splitter) {
+            // Check if we're in window1 or window2
+            bool isWindow1 = (splitter->GetWindow1() == current);
+            bool isWindow2 = (splitter->GetWindow2() == current);
+            
+            if (isWindow1 || isWindow2) {
+                // Check splitter orientation
+                int splitMode = splitter->GetSplitMode();
+                
+                // If the parent is the root splitter
+                if (splitter->GetParent() == this || splitter == m_rootSplitter) {
+                    if (splitMode == wxSPLIT_VERTICAL) {
+                        // Vertical split: left/right
+                        return isWindow1 ? LeftDockWidgetArea : RightDockWidgetArea;
+                    } else {
+                        // Horizontal split: top/bottom
+                        return isWindow1 ? TopDockWidgetArea : BottomDockWidgetArea;
+                    }
+                }
+            }
+        }
+        
+        current = parent;
+        parent = parent->GetParent();
+    }
+    
+    // Default to center if we couldn't determine
+    return CenterDockWidgetArea;
+}
+
+DockArea* DockContainerWidget::findAdjacentDockArea(DockArea* area) const
+{
+    if (!area || m_dockAreas.empty()) {
+        return nullptr;
+    }
+    
+    // Try to find an area in the same parent splitter first
+    wxWindow* parent = area->GetParent();
+    if (DockSplitter* splitter = dynamic_cast<DockSplitter*>(parent)) {
+        // Get the sibling window
+        wxWindow* sibling = nullptr;
+        if (splitter->GetWindow1() == area) {
+            sibling = splitter->GetWindow2();
+        } else if (splitter->GetWindow2() == area) {
+            sibling = splitter->GetWindow1();
+        }
+        
+        // If sibling is a DockArea, use it
+        if (DockArea* siblingArea = dynamic_cast<DockArea*>(sibling)) {
+            return siblingArea;
+        }
+        
+        // If sibling is a splitter, find the first DockArea in it
+        if (DockSplitter* sibSplitter = dynamic_cast<DockSplitter*>(sibling)) {
+            for (auto* otherArea : m_dockAreas) {
+                if (otherArea != area && otherArea->IsDescendant(sibSplitter)) {
+                    return otherArea;
+                }
+            }
+        }
+    }
+    
+    // Fallback: find any other dock area
+    for (auto* otherArea : m_dockAreas) {
+        if (otherArea != area) {
+            return otherArea;
+        }
+    }
+    
+    return nullptr;
+}
+
 } // namespace ads

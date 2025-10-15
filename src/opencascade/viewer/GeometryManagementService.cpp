@@ -85,39 +85,52 @@ bool GeometryManagementService::addGeometry(std::shared_ptr<OCCGeometry> geometr
 }
 
 bool GeometryManagementService::removeGeometry(std::shared_ptr<OCCGeometry> geometry) {
-    if (!geometry) return false;
+    if (!geometry || !m_geometries) return false;
 
+    // First verify the geometry exists in the list
     auto it = std::find(m_geometries->begin(), m_geometries->end(), geometry);
     if (it == m_geometries->end()) {
+        LOG_WRN_S("Geometry not found: " + geometry->getName());
         return false;
     }
 
+    // Save the geometry name for logging
+    std::string geomName = geometry->getName();
+
     // Remove from selected geometries if present
-    auto selectedIt = std::find(m_selectedGeometries->begin(), m_selectedGeometries->end(), geometry);
-    if (selectedIt != m_selectedGeometries->end()) {
-        m_selectedGeometries->erase(selectedIt);
+    if (m_selectedGeometries) {
+        auto selectedIt = std::find(m_selectedGeometries->begin(), m_selectedGeometries->end(), geometry);
+        if (selectedIt != m_selectedGeometries->end()) {
+            m_selectedGeometries->erase(selectedIt);
+        }
     }
 
-    // Detach from scene
+    // Detach from scene BEFORE erasing from vector
     detachGeometryFromScene(geometry);
 
-    // Remove from object tree
+    // Remove from object tree BEFORE erasing from vector
     if (m_objectTreeSync) {
         m_objectTreeSync->removeGeometry(geometry);
     }
 
-    // Remove from repository
+    // Remove from repository BEFORE erasing from vector
     if (m_geometryRepo) {
         m_geometryRepo->remove(geometry);
     }
 
-    // Remove from main list
-    m_geometries->erase(it);
+    // NOW safe to remove from main list - re-find iterator to be absolutely sure it's valid
+    it = std::find(m_geometries->begin(), m_geometries->end(), geometry);
+    if (it != m_geometries->end()) {
+        m_geometries->erase(it);
+    } else {
+        LOG_ERR_S("Iterator became invalid during removal operations");
+        return false;
+    }
 
     // Rebuild selection accelerator
     rebuildSelectionAccelerator();
 
-    LOG_INF_S("Removed geometry: " + geometry->getName());
+    LOG_INF_S("Removed geometry: " + geomName);
     return true;
 }
 

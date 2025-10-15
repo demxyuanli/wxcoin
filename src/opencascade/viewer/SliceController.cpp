@@ -53,6 +53,12 @@ void SliceController::setEnabled(bool enabled) {
 	if (m_enabled == enabled) return;
 	m_enabled = enabled;
 	if (m_enabled) {
+		// Check if there are geometries available
+		if (m_geometries.empty()) {
+			m_enabled = false;
+			return;
+		}
+		
 		// Initialize plane at scene center for immediate visible effect
 		if (m_sceneManager) {
 			SbVec3f bbMin, bbMax;
@@ -186,6 +192,9 @@ void SliceController::setDragEnabled(bool enabled) {
 void SliceController::updateVisualizationSize() {
 	if (!m_sceneManager || !m_sliceVisual) return;
 
+	// Don't update if no geometries
+	if (m_geometries.empty()) return;
+
 	SbVec3f bbMin, bbMax;
 	m_sceneManager->getSceneBoundingBoxMinMax(bbMin, bbMax);
 
@@ -251,6 +260,9 @@ void SliceController::updateBorderFrame() {
 
 	// Clear existing border
 	m_borderFrame->removeAllChildren();
+
+	// Don't create border if no geometries
+	if (m_geometries.empty()) return;
 
 	SbVec3f bbMin, bbMax;
 	m_sceneManager->getSceneBoundingBoxMinMax(bbMin, bbMax);

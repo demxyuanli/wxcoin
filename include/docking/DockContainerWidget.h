@@ -34,6 +34,8 @@ public:
     DockArea* dockArea(int index) const;
     std::vector<DockArea*> dockAreas() const { return m_dockAreas; }
     int dockAreaCount() const { return static_cast<int>(m_dockAreas.size()); }
+    DockWidgetArea dockAreaOf(DockArea* area) const;
+    DockArea* findAdjacentDockArea(DockArea* area) const;
     
     // Splitter management
     void addDockArea(DockArea* dockArea, DockWidgetArea area = CenterDockWidgetArea);

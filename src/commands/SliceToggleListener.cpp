@@ -20,6 +20,11 @@ CommandResult SliceToggleListener::executeCommand(const std::string& commandType
 	const std::unordered_map<std::string, std::string>&) {
 	if (!m_viewer) return CommandResult(false, "OCCViewer not available", commandType);
 	
+	// Check if there are any geometries in the scene
+	if (m_viewer->getAllGeometry().empty()) {
+		return CommandResult(false, "No geometry available for slicing", commandType);
+	}
+	
 	bool wasEnabled = m_viewer->isSliceEnabled();
 	
 	if (!wasEnabled) {

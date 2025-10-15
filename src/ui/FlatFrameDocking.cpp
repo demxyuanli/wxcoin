@@ -29,20 +29,20 @@ using namespace ads;
 
 // Event table
 wxBEGIN_EVENT_TABLE(FlatFrameDocking, FlatFrame)
-EVT_MENU(ID_DOCKING_SAVE_LAYOUT, FlatFrameDocking::OnDockingSaveLayout)
-EVT_MENU(ID_DOCKING_LOAD_LAYOUT, FlatFrameDocking::OnDockingLoadLayout)
-EVT_MENU(ID_DOCKING_RESET_LAYOUT, FlatFrameDocking::OnDockingResetLayout)
-EVT_MENU(ID_DOCKING_MANAGE_PERSPECTIVES, FlatFrameDocking::OnDockingManagePerspectives)
-EVT_MENU(ID_DOCKING_TOGGLE_AUTOHIDE, FlatFrameDocking::OnDockingToggleAutoHide)
-EVT_MENU(ID_DOCKING_CONFIGURE_LAYOUT, FlatFrameDocking::OnDockingConfigureLayout)
-EVT_MENU(ID_DOCKING_ADJUST_LAYOUT, FlatFrameDocking::OnDockingAdjustLayout)
+EVT_BUTTON(ID_DOCKING_SAVE_LAYOUT, FlatFrameDocking::OnDockingSaveLayout)
+EVT_BUTTON(ID_DOCKING_LOAD_LAYOUT, FlatFrameDocking::OnDockingLoadLayout)
+EVT_BUTTON(ID_DOCKING_RESET_LAYOUT, FlatFrameDocking::OnDockingResetLayout)
+EVT_BUTTON(ID_DOCKING_MANAGE_PERSPECTIVES, FlatFrameDocking::OnDockingManagePerspectives)
+EVT_BUTTON(ID_DOCKING_TOGGLE_AUTOHIDE, FlatFrameDocking::OnDockingToggleAutoHide)
+EVT_BUTTON(ID_DOCKING_CONFIGURE_LAYOUT, FlatFrameDocking::OnDockingConfigureLayout)
+EVT_BUTTON(ID_DOCKING_ADJUST_LAYOUT, FlatFrameDocking::OnDockingAdjustLayout)
 
-// View panel events
-EVT_MENU(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
-EVT_MENU(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnViewShowHidePanel)
-EVT_MENU(ID_VIEW_MESSAGE, FlatFrameDocking::OnViewShowHidePanel)
-EVT_MENU(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnViewShowHidePanel)
-EVT_MENU(ID_VIEW_WEBVIEW, FlatFrameDocking::OnViewShowHidePanel)
+// View panel events - toggle buttons also send wxEVT_BUTTON
+EVT_BUTTON(ID_VIEW_PROPERTIES, FlatFrameDocking::OnViewShowHidePanel)
+EVT_BUTTON(ID_VIEW_OBJECT_TREE, FlatFrameDocking::OnViewShowHidePanel)
+EVT_BUTTON(ID_VIEW_MESSAGE, FlatFrameDocking::OnViewShowHidePanel)
+EVT_BUTTON(ID_VIEW_PERFORMANCE, FlatFrameDocking::OnViewShowHidePanel)
+EVT_BUTTON(ID_VIEW_WEBVIEW, FlatFrameDocking::OnViewShowHidePanel)
 
 
 EVT_UPDATE_UI(ID_VIEW_PROPERTIES, FlatFrameDocking::OnUpdateUI)
@@ -438,6 +438,7 @@ DockWidget* FlatFrameDocking::CreatePropertyDockWidget() {
         }
         // Reparent existing panel to the dock widget
         propertyPanel->Reparent(dock);
+        propertyPanel->Show();
     }
     dock->setWidget(propertyPanel);
 
@@ -471,6 +472,7 @@ DockWidget* FlatFrameDocking::CreateObjectTreeDockWidget() {
         }
         // Reparent existing panel to the dock widget
         objectTreePanel->Reparent(dock);
+        objectTreePanel->Show();
     }
     dock->setWidget(objectTreePanel);
 
@@ -511,6 +513,7 @@ DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
         }
         // Reparent existing output to the dock widget
         output->Reparent(dock);
+        output->Show();
     }
 
     dock->setWidget(output);
@@ -664,13 +667,43 @@ void FlatFrameDocking::LoadDockingLayout(const wxString& filename) {
 }
 
 void FlatFrameDocking::ResetDockingLayout() {
-    // Remove all dock widgets
-    auto widgets = m_dockManager->dockWidgets();
-    for (auto* widget : widgets) {
-        m_dockManager->removeDockWidget(widget);
+    if (!m_dockManager) {
+        return;
     }
 
-    // Clear references
+    wxLogDebug("ResetDockingLayout: starting reset");
+
+    wxWindow* tempParent = m_workAreaPanel ? static_cast<wxWindow*>(m_workAreaPanel) : static_cast<wxWindow*>(this);
+
+    std::vector<wxWindow*> extractedWidgets;
+    
+    auto extractWidget = [&](ads::DockWidget* dockWidget) -> wxWindow* {
+        if (!dockWidget) return nullptr;
+        wxWindow* widget = dockWidget->widget();
+        if (widget && widget->GetParent() == dockWidget) {
+            if (dockWidget->GetSizer()) {
+                dockWidget->GetSizer()->Detach(widget);
+            }
+            widget->Reparent(tempParent);
+            widget->Hide();
+            return widget;
+        }
+        return nullptr;
+    };
+    
+    if (wxWindow* w = extractWidget(m_canvasDock)) extractedWidgets.push_back(w);
+    if (wxWindow* w = extractWidget(m_propertyDock)) extractedWidgets.push_back(w);
+    if (wxWindow* w = extractWidget(m_objectTreeDock)) extractedWidgets.push_back(w);
+    if (wxWindow* w = extractWidget(m_messageDock)) extractedWidgets.push_back(w);
+    if (wxWindow* w = extractWidget(m_performanceDock)) extractedWidgets.push_back(w);
+    if (wxWindow* w = extractWidget(m_webViewDock)) extractedWidgets.push_back(w);
+    
+    if (m_workAreaPanel && m_workAreaPanel->GetSizer()) {
+        m_workAreaPanel->GetSizer()->Clear(false);
+    }
+
+    DockManager* oldManager = m_dockManager;
+
     m_propertyDock = nullptr;
     m_objectTreeDock = nullptr;
     m_canvasDock = nullptr;
@@ -678,8 +711,22 @@ void FlatFrameDocking::ResetDockingLayout() {
     m_performanceDock = nullptr;
     m_webViewDock = nullptr;
 
-    // Recreate default layout
+    m_dockManager = nullptr;
+
+    delete oldManager;
+
+    m_dockManager = new DockManager(m_workAreaPanel);
+    ConfigureDockManager();
+    
+    if (m_workAreaPanel) {
+        wxBoxSizer* workAreaSizer = new wxBoxSizer(wxVERTICAL);
+        workAreaSizer->Add(m_dockManager->containerWidget(), 1, wxEXPAND);
+        m_workAreaPanel->SetSizer(workAreaSizer);
+        m_workAreaPanel->Layout();
+    }
+
     CreateDockingLayout();
+    RegisterDockLayoutConfigListener();
 
     appendMessage("Layout reset to default");
 }
@@ -838,39 +885,52 @@ void FlatFrameDocking::HandleDelayedResize() {
 void FlatFrameDocking::OnViewShowHidePanel(wxCommandEvent& event) {
     // Handle show/hide for dock widgets
     int id = event.GetId();
+    
+    wxLogDebug("FlatFrameDocking::OnViewShowHidePanel - id: %d", id);
 
     switch (id) {
     case ID_VIEW_PROPERTIES:
         if (m_propertyDock) {
-            m_propertyDock->toggleView();
+            bool isClosed = m_propertyDock->isClosed();
+            wxLogDebug("  -> Toggling Properties dock: %p, current closed: %d, setting to: %d", m_propertyDock, isClosed, isClosed);
+            m_propertyDock->toggleView(isClosed);
         }
         break;
 
     case ID_VIEW_OBJECT_TREE:
         if (m_objectTreeDock) {
-            m_objectTreeDock->toggleView();
+            bool isClosed = m_objectTreeDock->isClosed();
+            wxLogDebug("  -> Toggling Object Tree dock: %p, current closed: %d, setting to: %d", m_objectTreeDock, isClosed, isClosed);
+            m_objectTreeDock->toggleView(isClosed);
         }
         break;
 
     case ID_VIEW_MESSAGE:
         if (m_messageDock) {
-            m_messageDock->toggleView();
+            bool isClosed = m_messageDock->isClosed();
+            wxLogDebug("  -> Toggling Message dock: %p, current closed: %d, setting to: %d", m_messageDock, isClosed, isClosed);
+            m_messageDock->toggleView(isClosed);
         }
         break;
 
     case ID_VIEW_PERFORMANCE:
         if (m_performanceDock) {
-            m_performanceDock->toggleView();
+            bool isClosed = m_performanceDock->isClosed();
+            wxLogDebug("  -> Toggling Performance dock: %p, current closed: %d, setting to: %d", m_performanceDock, isClosed, isClosed);
+            m_performanceDock->toggleView(isClosed);
         }
         break;
 
     case ID_VIEW_WEBVIEW:
         if (m_webViewDock) {
-            m_webViewDock->toggleView();
+            bool isClosed = m_webViewDock->isClosed();
+            wxLogDebug("  -> Toggling WebView dock: %p, current closed: %d, setting to: %d", m_webViewDock, isClosed, isClosed);
+            m_webViewDock->toggleView(isClosed);
         }
         break;
 
     default:
+        wxLogDebug("  -> Unknown ID: %d", id);
         // Ignore other events
         break;
     }
