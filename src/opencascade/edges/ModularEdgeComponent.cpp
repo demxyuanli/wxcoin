@@ -161,6 +161,7 @@ SoSeparator* ModularEdgeComponent::getEdgeNode(EdgeType type) {
         case EdgeType::NormalLine: return normalLineNode;
         case EdgeType::FaceNormalLine: return faceNormalLineNode;
         case EdgeType::Silhouette: return silhouetteEdgeNode;
+        case EdgeType::IntersectionNodes: return intersectionNodesNode;
         default: return nullptr;
     }
 }
@@ -173,6 +174,7 @@ void ModularEdgeComponent::setEdgeDisplayType(EdgeType type, bool show) {
         case EdgeType::Highlight: edgeFlags.showHighlightEdges = show; break;
         case EdgeType::NormalLine: edgeFlags.showNormalLines = show; break;
         case EdgeType::FaceNormalLine: edgeFlags.showFaceNormalLines = show; break;
+        case EdgeType::IntersectionNodes: edgeFlags.showIntersectionNodes = show; break;
     }
 }
 
@@ -184,6 +186,7 @@ bool ModularEdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
         case EdgeType::Highlight: return edgeFlags.showHighlightEdges;
         case EdgeType::NormalLine: return edgeFlags.showNormalLines;
         case EdgeType::FaceNormalLine: return edgeFlags.showFaceNormalLines;
+        case EdgeType::IntersectionNodes: return edgeFlags.showIntersectionNodes;
         default: return false;
     }
 }
@@ -219,6 +222,11 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
     }
     if (normalLineNode && edgeFlags.showNormalLines) {
         parentNode->addChild(normalLineNode);
+        LOG_INF_S("ModularEdgeComponent::updateEdgeDisplay - Added normal line node to scene");
+    } else {
+        if (!normalLineNode && edgeFlags.showNormalLines) {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay - showNormalLines=true but normalLineNode is null");
+        }
     }
     if (faceNormalLineNode && edgeFlags.showFaceNormalLines) {
         parentNode->addChild(faceNormalLineNode);
@@ -320,25 +328,31 @@ void ModularEdgeComponent::updateIntersectionNodesAppearance(
 
     if (!node) return;
 
+    // Node structure:
+    // node (SoSeparator)
+    //   ├─ material (SoMaterial) - first child
+    //   └─ pointSep (SoSeparator) - for each intersection point
+    //       ├─ trans (SoTranslation)
+    //       └─ sphere (SoSphere)
 
-    // Update the material color for all child spheres
+    // Update the top-level material color
     for (int i = 0; i < node->getNumChildren(); ++i) {
         SoNode* child = node->getChild(i);
-        if (child->isOfType(SoSeparator::getClassTypeId())) {
+        if (child->isOfType(SoMaterial::getClassTypeId())) {
+            SoMaterial* material = static_cast<SoMaterial*>(child);
+            material->diffuseColor.setValue(
+                static_cast<float>(color.Red()),
+                static_cast<float>(color.Green()),
+                static_cast<float>(color.Blue())
+            );
+        } else if (child->isOfType(SoSeparator::getClassTypeId())) {
+            // This is a point separator containing translation and sphere
             SoSeparator* sphereSep = static_cast<SoSeparator*>(child);
-            // Update material color
             for (int j = 0; j < sphereSep->getNumChildren(); ++j) {
                 SoNode* subChild = sphereSep->getChild(j);
-                if (subChild->isOfType(SoMaterial::getClassTypeId())) {
-                    SoMaterial* material = static_cast<SoMaterial*>(subChild);
-                    material->diffuseColor.setValue(
-                        static_cast<float>(color.Red()),
-                        static_cast<float>(color.Green()),
-                        static_cast<float>(color.Blue())
-                    );
-                } else if (subChild->isOfType(SoSphere::getClassTypeId())) {
+                if (subChild->isOfType(SoSphere::getClassTypeId())) {
                     SoSphere* sphere = static_cast<SoSphere*>(subChild);
-                    sphere->radius.setValue(static_cast<float>(size));
+                    sphere->radius.setValue(static_cast<float>(size * 0.01));
                 }
             }
         }
@@ -349,7 +363,10 @@ void ModularEdgeComponent::generateHighlightEdgeNode() {
 }
 
 void ModularEdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double length) {
-    if (!m_meshRenderer) return;
+    if (!m_meshRenderer) {
+        LOG_WRN_S("ModularEdgeComponent::generateNormalLineNode - m_meshRenderer is null");
+        return;
+    }
 
     std::lock_guard<std::mutex> lock(m_nodeMutex);
     cleanupEdgeNode(normalLineNode);
@@ -358,6 +375,12 @@ void ModularEdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, doub
     // Use red color for vertex normals (matching old implementation)
     Quantity_Color normalColor(1.0, 0.0, 0.0, Quantity_TOC_RGB);
     normalLineNode = meshRenderer->generateNormalLineNode(mesh, length, normalColor);
+    
+    if (normalLineNode) {
+        LOG_INF_S("ModularEdgeComponent::generateNormalLineNode - Normal line node created successfully");
+    } else {
+        LOG_WRN_S("ModularEdgeComponent::generateNormalLineNode - Normal line node is null after generation");
+    }
 }
 
 SoSeparator* ModularEdgeComponent::createIntersectionNodesNode(

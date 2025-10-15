@@ -115,8 +115,12 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 	}
 	cmd::CommandType commandType = it->second;
 	std::unordered_map<std::string, std::string> parameters;
-	if (commandType == cmd::CommandType::ShowNormals) { parameters["toggle"] = "true"; }
+	if (commandType == cmd::CommandType::ShowNormals) { 
+		parameters["toggle"] = "true"; 
+		LOG_INF_S("FlatFrame::onCommand - ShowNormals command detected, will dispatch");
+	}
 	if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
+		LOG_INF_S("FlatFrame::onCommand - Dispatching command: " + cmd::to_string(commandType));
 		CommandResult result = m_listenerManager->dispatch(commandType, parameters);
 		onCommandFeedback(result);
 		// Handle explode slider dialog creation and destruction

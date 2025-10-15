@@ -248,34 +248,63 @@ void DockWidget::toggleViewInternal(bool open) {
     m_closed = !open;
     
     if (open) {
-        // Restore the widget
-        if (m_savedArea != NoDockWidgetArea && m_savedTargetArea) {
-            // Try to restore to the saved location
-            wxLogDebug("DockWidget::toggleViewInternal - Restoring to saved area: %d, target: %p", 
-                      m_savedArea, m_savedTargetArea);
-            m_dockManager->addDockWidget(m_savedArea, this, m_savedTargetArea);
-            m_savedArea = NoDockWidgetArea;
-            m_savedTargetArea = nullptr;
-        } else {
-            // Fallback to center
-            wxLogDebug("DockWidget::toggleViewInternal - No saved location, adding to center");
-            m_dockManager->addDockWidget(CenterDockWidgetArea, this);
-        }
-    } else {
-        // Hide the widget by removing it from the dock area
+        // Show the widget and its area
+        Show();
         if (m_dockArea) {
-            // Determine the area this widget is in
-            DockContainerWidget* container = m_dockArea->dockContainer();
-            if (container) {
-                m_savedArea = container->dockAreaOf(m_dockArea);
-                // Find a neighboring dock area to use as target for restoration
-                m_savedTargetArea = container->findAdjacentDockArea(m_dockArea);
-                wxLogDebug("DockWidget::toggleViewInternal - Saving area: %d, target: %p", 
-                          m_savedArea, m_savedTargetArea);
+            m_dockArea->Show();
+            m_dockArea->setCurrentDockWidget(this);
+            
+            // Restore splitter position if we saved it
+            if (m_tabIndex >= 0) { // Use m_tabIndex to store saved sash position
+                wxWindow* parent = m_dockArea->GetParent();
+                if (wxSplitterWindow* splitter = dynamic_cast<wxSplitterWindow*>(parent)) {
+                    if (splitter->IsSplit()) {
+                        splitter->SetSashPosition(m_tabIndex);
+                        wxLogDebug("DockWidget::toggleViewInternal - Restored sash position: %d", m_tabIndex);
+                    }
+                }
+                m_tabIndex = -1; // Clear saved position
             }
             
-            // Remove from dock area - this will trigger layout reorganization
-            m_dockArea->removeDockWidget(this);
+            // Trigger layout update
+            if (m_dockManager->containerWidget()) {
+                m_dockManager->containerWidget()->Layout();
+                m_dockManager->containerWidget()->Refresh();
+            }
+        }
+    } else {
+        // Save splitter position and collapse
+        if (m_dockArea && m_dockArea->dockWidgetsCount() == 1) {
+            wxWindow* parent = m_dockArea->GetParent();
+            if (wxSplitterWindow* splitter = dynamic_cast<wxSplitterWindow*>(parent)) {
+                if (splitter->IsSplit()) {
+                    // Save current sash position
+                    int savedPos = splitter->GetSashPosition();
+                    m_tabIndex = savedPos; // Store in m_tabIndex temporarily
+                    wxLogDebug("DockWidget::toggleViewInternal - Saved sash position: %d", savedPos);
+                    
+                    // Determine which window is the dock area
+                    bool isWindow1 = (splitter->GetWindow1() == m_dockArea);
+                    
+                    // Collapse to minimum size
+                    if (isWindow1) {
+                        splitter->SetSashPosition(0);
+                    } else {
+                        splitter->SetSashPosition(splitter->GetSize().GetHeight() > splitter->GetSize().GetWidth() 
+                            ? splitter->GetSize().GetHeight() 
+                            : splitter->GetSize().GetWidth());
+                    }
+                }
+            }
+            
+            m_dockArea->Hide();
+            Hide();
+            
+            // Trigger layout update
+            if (m_dockManager->containerWidget()) {
+                m_dockManager->containerWidget()->Layout();
+                m_dockManager->containerWidget()->Refresh();
+            }
         }
     }
     

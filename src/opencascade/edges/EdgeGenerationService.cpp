@@ -109,6 +109,8 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 		generated = true;
 	}
 	if (needNormalLines && comp->getEdgeNode(EdgeType::NormalLine) == nullptr) {
+		LOG_INF_S("EdgeGenerationService::ensureMeshDerivedEdges - Generating normal line node, mesh has " + 
+			std::to_string(mesh.vertices.size()) + " vertices, " + std::to_string(mesh.normals.size()) + " normals");
 		comp->generateNormalLineNode(mesh, 0.5);
 		generated = true;
 	}

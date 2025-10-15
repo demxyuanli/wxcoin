@@ -529,12 +529,19 @@ void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::setShowNormals(bool showNormals)
 {
+	LOG_INF_S("OCCViewer::setShowNormals called with: " + std::string(showNormals ? "true" : "false"));
+	
 	if (m_normalDisplayService && m_configurationManager) {
 		// Sync configuration from ConfigurationManager
 		auto& config = m_configurationManager->getNormalDisplayConfig();
 		config.showNormals = showNormals;
 		m_normalDisplayService->setNormalDisplayConfig(config);
 		m_normalDisplayService->setShowNormals(showNormals, m_edgeDisplayManager.get(), m_meshParams);
+		
+		LOG_INF_S("OCCViewer::setShowNormals - After setting, isShowNormals returns: " + 
+			std::string(m_normalDisplayService->isShowNormals() ? "true" : "false"));
+	} else {
+		LOG_WRN_S("OCCViewer::setShowNormals - m_normalDisplayService or m_configurationManager is null");
 	}
 	if (m_sceneManager && m_sceneManager->getCanvas()) {
 		auto* refreshManager = m_sceneManager->getCanvas()->getRefreshManager();
