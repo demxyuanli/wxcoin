@@ -84,25 +84,60 @@ public:
 };
 
 // Convenience macro definitions to simplify common error handling patterns
+
+// Check pointer and return error if null
 #define CHECK_PTR_RETURN(ptr, serviceName, commandType) \
     { auto __result = CommandErrorHelper::checkPointer(ptr, serviceName, commandType); \
       if (!__result.success) return __result; }
 
+// Return error results
 #define RETURN_SERVICE_ERROR(serviceName, commandType) \
     return CommandErrorHelper::serviceNotAvailable(serviceName, commandType);
 
 #define RETURN_ERROR(message, commandType) \
     return CommandErrorHelper::error(message, commandType);
 
+// Return success results
 #define RETURN_SUCCESS(message, commandType) \
     return CommandErrorHelper::success(message, commandType);
 
 #define RETURN_SUCCESS_DEFAULT(commandType) \
     return CommandErrorHelper::success(commandType);
 
+// DEPRECATED: Use direct try-catch or TRY_EXECUTE instead
+// This macro has a design flaw: it executes the statement but doesn't handle return values properly
+// Keep for backward compatibility, but don't use in new code
+// 
+// WARNING: Using this macro will generate a deprecation warning
+// See docs/CommandErrorHelper_Usage.md for migration guide
+#ifdef _MSC_VER
+    #define EXECUTE_SAFELY_DEPRECATED_WARNING __pragma(message("Warning: EXECUTE_SAFELY is deprecated. Use TRY_EXECUTE or direct try-catch instead. See docs/CommandErrorHelper_Usage.md"))
+#else
+    #define EXECUTE_SAFELY_DEPRECATED_WARNING _Pragma("GCC warning \"EXECUTE_SAFELY is deprecated. Use TRY_EXECUTE or direct try-catch instead.\"")
+#endif
+
 #define EXECUTE_SAFELY(func, commandType) \
+    EXECUTE_SAFELY_DEPRECATED_WARNING \
     { try { func; } catch (const std::exception& e) { \
         return CommandErrorHelper::error("Exception occurred: " + std::string(e.what()), commandType); \
       } catch (...) { \
         return CommandErrorHelper::error("Unknown exception occurred", commandType); \
       } }
+
+// NEW: Properly handle void operations with exception handling
+// Usage: TRY_EXECUTE(myFunction(), commandType);
+#define TRY_EXECUTE(operation, commandType) \
+    do { \
+        try { \
+            operation; \
+        } catch (const std::exception& e) { \
+            return CommandErrorHelper::error("Exception in " #operation ": " + std::string(e.what()), commandType); \
+        } catch (...) { \
+            return CommandErrorHelper::error("Unknown exception in " #operation, commandType); \
+        } \
+    } while(0)
+
+// NEW: Execute and return result with exception handling
+// Usage: return EXECUTE_AND_RETURN([&]() { ... return result; }, commandType);
+#define EXECUTE_AND_RETURN(func, commandType) \
+    CommandErrorHelper::executeSafely(func, commandType)

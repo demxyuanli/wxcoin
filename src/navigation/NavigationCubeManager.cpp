@@ -31,6 +31,11 @@ NavigationCubeManager::NavigationCubeManager(Canvas* canvas, SceneManager* scene
 	// Load configuration from persistent storage
 	loadConfigFromPersistent();
 
+	// Override default configuration values
+	m_cubeConfig.size = 100;        // geometry size
+	m_cubeConfig.viewportSize = 120; // viewport layout size
+	m_cubeConfig.cubeSize = 0.5f;   // geometry size scale (0.0-1.0)
+
 	// Set margins from configuration if available
 	auto& dpiManager = DPIManager::getInstance();
 	if (m_cubeConfig.x >= 0) {
@@ -196,8 +201,8 @@ void NavigationCubeManager::initCube() {
 			if (m_cubeConfig.size > 0) {
 				m_cubeLayout.cubeSize = m_cubeConfig.size;
 			} else {
-			m_cubeLayout.cubeSize = 280;
-				m_cubeConfig.size = 280;
+			m_cubeLayout.cubeSize = 0.5f;
+				m_cubeConfig.size = 100;
 			}
 			// Use loaded position or calculate centered position
 		int cubeX, cubeY;
@@ -277,13 +282,15 @@ bool NavigationCubeManager::handleMouseEvent(wxMouseEvent& event) {
 	float x = event.GetX() / dpiScale;
 	float y = event.GetY() / dpiScale;
 
-	if (x >= m_cubeLayout.x && x < (m_cubeLayout.x + m_cubeLayout.cubeSize) &&
-		y >= m_cubeLayout.y && y < (m_cubeLayout.y + m_cubeLayout.cubeSize)) {
+	// Use the actual geometric cube size for mouse detection, not just the layout size
+	int cubeSize = m_navCube->getSize();
+	if (x >= m_cubeLayout.x && x <= (m_cubeLayout.x + cubeSize) &&
+		y >= m_cubeLayout.y && y <= (m_cubeLayout.y + cubeSize)) {
 		wxMouseEvent cubeEvent(event);
 		cubeEvent.m_x = static_cast<int>((x - m_cubeLayout.x) * dpiScale);
 		cubeEvent.m_y = static_cast<int>((y - m_cubeLayout.y) * dpiScale);
 
-		int scaled_cube_dimension = static_cast<int>(m_cubeLayout.cubeSize * dpiScale);
+		int scaled_cube_dimension = static_cast<int>(cubeSize * dpiScale);
 		wxSize cube_viewport_scaled_size(scaled_cube_dimension, scaled_cube_dimension);
 
 		if (event.GetEventType() == wxEVT_LEFT_DOWN ||
@@ -471,7 +478,7 @@ void NavigationCubeManager::syncMainCameraToCube() {
 	//    "), dist: " + std::to_string(mainCamDistanceToOrigin));
 }
 
-void NavigationCubeManager::showConfigDialog() {
+void NavigationCubeManager::showConfigDialog() { 
 	if (!m_canvas) {
 		LOG_ERR_S("NavigationCubeManager::showConfigDialog: Canvas is null");
 		return;

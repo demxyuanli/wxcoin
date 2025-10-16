@@ -27,6 +27,7 @@
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/SbName.h>
+#include <wx/menu.h>
 
 // Forward declarations
 class SoPickedPoint;
@@ -106,6 +107,18 @@ private:
 	void handleShapeHover(const std::string& shapeName, bool isHovering);
 	void addEventCallbackToShape(SoSeparator* shapeRoot, const std::string& shapeName);
 	std::string findShapeNameFromPath(SoPath* path);
+	
+	// Popup menu methods
+	void showCubeContextMenu(const wxPoint& screenPos);
+	void onMenuResetView(wxCommandEvent& event);
+	void onMenuToggleVisibility(wxCommandEvent& event);
+	void onMenuCubeSettings(wxCommandEvent& event);
+	
+	// Hover effect methods
+	void updateCubeHoverState(bool isHovering);
+	void setCubeMaterialColor(const SbColor& color);
+	void updateShapeHoverState(const std::string& shapeName, bool isHovering);
+	void setShapeMaterialColor(SoMaterial* material, const SbColor& color);
 
 	Canvas* m_canvas;
 	SceneManager* m_sceneManager;
@@ -134,11 +147,30 @@ private:
 		SoSeparator* rootNode;
 		std::string shapeName;
 		std::vector<SoNode*> childNodes;
+		SoMaterial* material;  // Material for hover effect
 
-		CompositeShape(SoSeparator* root, const std::string& name)
-			: rootNode(root), shapeName(name) {
+		CompositeShape(SoSeparator* root, const std::string& name, SoMaterial* mat = nullptr)
+			: rootNode(root), shapeName(name), material(mat) {
 		}
 	};
 
 	std::vector<CompositeShape> m_compositeShapes;
+	
+	// Context menu IDs
+	enum MenuIds {
+		ID_MENU_RESET_VIEW = wxID_HIGHEST + 1,
+		ID_MENU_TOGGLE_CUBE_VISIBILITY,
+		ID_MENU_TOGGLE_COORD_VISIBILITY,
+		ID_MENU_CUBE_SETTINGS
+	};
+	
+	// Last click position for menu
+	wxPoint m_lastClickPos;
+	
+	// Hover state tracking
+	bool m_isCubeHovered;
+	std::string m_lastHoveredShape;
+	SoMaterial* m_cubeMaterial;
+	SbColor m_normalColor;
+	SbColor m_hoverColor;
 };
