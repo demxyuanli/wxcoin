@@ -32,8 +32,8 @@ NavigationCubeManager::NavigationCubeManager(Canvas* canvas, SceneManager* scene
 	loadConfigFromPersistent();
 
 	// Override default configuration values
-	m_cubeConfig.size = 100;        // geometry size
-	m_cubeConfig.viewportSize = 120; // viewport layout size
+	m_cubeConfig.size = 80;        // geometry size
+	m_cubeConfig.viewportSize = 80; // viewport layout size
 	m_cubeConfig.cubeSize = 0.5f;   // geometry size scale (0.0-1.0)
 
 	// Set margins from configuration if available
@@ -202,7 +202,7 @@ void NavigationCubeManager::initCube() {
 				m_cubeLayout.cubeSize = m_cubeConfig.size;
 			} else {
 			m_cubeLayout.cubeSize = 0.5f;
-				m_cubeConfig.size = 100;
+				m_cubeConfig.size = 80;
 			}
 			// Use loaded position or calculate centered position
 		int cubeX, cubeY;

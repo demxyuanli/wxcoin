@@ -119,6 +119,7 @@ private:
 	void setCubeMaterialColor(const SbColor& color);
 	void updateShapeHoverState(const std::string& shapeName, bool isHovering);
 	void setShapeMaterialColor(SoMaterial* material, const SbColor& color);
+	void updateArrowHeadMaterials(SoSeparator* arrowNode, const SbColor& color);
 
 	Canvas* m_canvas;
 	SceneManager* m_sceneManager;

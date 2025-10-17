@@ -34,6 +34,7 @@
 #include <GL/gl.h>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 
 MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneManager)
 	: m_canvas(canvas)
@@ -193,6 +194,11 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 	case 2: arrowName = "Bottom Right Arrow"; break;
 	default: arrowName = "Unknown Arrow"; break;
 	}
+
+	// Create material for arrow
+	SoMaterial* arrowMaterial = new SoMaterial;
+	arrowMaterial->diffuseColor.setValue(m_normalColor);
+	arrowSep->addChild(arrowMaterial);
 
 	// Set the name on the root separator for easier identification
 	arrowSep->setName(arrowName.c_str());
@@ -382,7 +388,7 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 
 	// Note: Arrows don't have a single material, they're made of lines + triangles
 	// Store as composite shape without material (will handle hover differently if needed)
-	CompositeShape compositeShape(arrowSep, arrowName, nullptr);
+	CompositeShape compositeShape(arrowSep, arrowName, arrowMaterial);
 	m_compositeShapes.push_back(compositeShape);
 
 	m_cubeOutlineRoot->addChild(arrowSep);
@@ -1184,19 +1190,35 @@ void MultiViewportManager::setCubeMaterialColor(const SbColor& color) {
 }
 
 void MultiViewportManager::updateShapeHoverState(const std::string& shapeName, bool isHovering) {
+	// Normalize shape name - SbName may convert spaces to underscores
+	std::string normalizedName = shapeName;
+	// Replace underscores with spaces for matching
+	std::replace(normalizedName.begin(), normalizedName.end(), '_', ' ');
+	
 	// Find the shape in composite shapes
 	for (const auto& compositeShape : m_compositeShapes) {
-		if (compositeShape.shapeName == shapeName && compositeShape.material) {
+		// Compare both original and normalized names
+		if ((compositeShape.shapeName == shapeName || compositeShape.shapeName == normalizedName) && compositeShape.material) {
 			if (isHovering) {
-				LOG_INF_S("MultiViewportManager: Hovering " + shapeName + " - changing to hover color");
+				LOG_INF_S("MultiViewportManager: Hovering " + compositeShape.shapeName + " - changing to hover color");
 				setShapeMaterialColor(compositeShape.material, m_hoverColor);
+				
+				// For arrows, also update child materials (arrow heads)
+				if (compositeShape.shapeName.find("Arrow") != std::string::npos && compositeShape.rootNode) {
+					updateArrowHeadMaterials(compositeShape.rootNode, m_hoverColor);
+				}
 			} else {
-				LOG_INF_S("MultiViewportManager: Leaving " + shapeName + " - restoring normal color");
+				LOG_INF_S("MultiViewportManager: Leaving " + compositeShape.shapeName + " - restoring normal color");
 				// Restore original color based on shape type
-				if (shapeName == "Cube" || shapeName == "Sphere") {
+				if (compositeShape.shapeName == "Cube" || compositeShape.shapeName == "Sphere") {
 					setShapeMaterialColor(compositeShape.material, SbColor(0.8f, 1.0f, 0.8f));  // Green
 				} else {
 					setShapeMaterialColor(compositeShape.material, m_normalColor);  // Gray
+				}
+				
+				// For arrows, also restore child materials (arrow heads)
+				if (compositeShape.shapeName.find("Arrow") != std::string::npos && compositeShape.rootNode) {
+					updateArrowHeadMaterials(compositeShape.rootNode, m_normalColor);
 				}
 			}
 			return;
@@ -1209,5 +1231,27 @@ void MultiViewportManager::updateShapeHoverState(const std::string& shapeName, b
 void MultiViewportManager::setShapeMaterialColor(SoMaterial* material, const SbColor& color) {
 	if (material) {
 		material->diffuseColor.setValue(color);
+	}
+}
+
+void MultiViewportManager::updateArrowHeadMaterials(SoSeparator* arrowNode, const SbColor& color) {
+	if (!arrowNode) return;
+	
+	// Recursively traverse the scene graph and update all materials in the arrow
+	int numChildren = arrowNode->getNumChildren();
+	for (int i = 0; i < numChildren; ++i) {
+		SoNode* child = arrowNode->getChild(i);
+		
+		// Check if this child is a material
+		if (child->isOfType(SoMaterial::getClassTypeId())) {
+			SoMaterial* mat = static_cast<SoMaterial*>(child);
+			mat->diffuseColor.setValue(color);
+		}
+		
+		// Recursively check separators
+		if (child->isOfType(SoSeparator::getClassTypeId())) {
+			SoSeparator* sep = static_cast<SoSeparator*>(child);
+			updateArrowHeadMaterials(sep, color);
+		}
 	}
 }
