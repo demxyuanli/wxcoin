@@ -262,6 +262,9 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	eventManager.bindButtonEvent(this, &FlatFrame::OnToggleFunctionSpace, ID_ToggleFunctionSpace);
 	eventManager.bindButtonEvent(this, &FlatFrame::OnToggleProfileSpace, ID_ToggleProfileSpace);
 
+	// Bind general button events to command system for Navigator and other UI buttons
+	Bind(wxEVT_COMMAND_BUTTON_CLICKED, &FlatFrame::onCommand, this);
+
 	if (m_searchCtrl) {
 		m_searchCtrl->Bind(wxEVT_COMMAND_TEXT_ENTER, &FlatFrame::OnSearchTextEnter, this);
 	}

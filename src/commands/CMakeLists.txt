@@ -53,6 +53,8 @@ set(COMMANDS_SOURCES
     ViewRightListener.cpp
     ViewTopListener.cpp
     ZoomSpeedListener.cpp
+    ViewBookmarkListener.cpp
+    NavigationAnimationListener.cpp
     RenderPreviewSystemListener.cpp
     ShowFlatWidgetsExampleListener.cpp
     ExplodeAssemblyListener.cpp
@@ -117,6 +119,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ViewRightListener.h
     ${CMAKE_SOURCE_DIR}/include/ViewTopListener.h
     ${CMAKE_SOURCE_DIR}/include/ZoomSpeedListener.h
+    ${CMAKE_SOURCE_DIR}/include/ViewBookmarkListener.h
+    ${CMAKE_SOURCE_DIR}/include/NavigationAnimationListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderPreviewSystemListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowFlatWidgetsExampleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeAssemblyListener.h

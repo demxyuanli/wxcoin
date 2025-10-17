@@ -3,6 +3,7 @@
 #include "SceneManager.h"
 #include "NavigationCubeManager.h"
 #include "DPIManager.h"
+#include "FlatFrame.h"
 #include "logger/Logger.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
@@ -22,6 +23,7 @@
 #include <Inventor/nodes/SoPickStyle.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoRayPickAction.h>
+#include <wx/app.h>
 
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/SbViewportRegion.h>
@@ -800,14 +802,14 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 
 	// Priority 1: Check navigation cube viewport first
 	// Note: NavigationCubeManager uses wxWidgets coordinate system (top-left origin)
+	bool cubeHandled = false;
 	if (m_navigationCubeManager) {
-		bool handled = m_navigationCubeManager->handleMouseEvent(event);
-		if (handled) {
-			return true; // NavigationCubeManager handled the event
-		}
+		cubeHandled = m_navigationCubeManager->handleMouseEvent(event);
+		// Don't return immediately - allow fallthrough to outline viewport for transparent areas
 	}
 
-	// Priority 2: Check cube outline viewport only if mouse is NOT in navigation cube viewport
+	// Priority 2: Check cube outline viewport (always check, even if cube handled the event)
+	// This allows ray penetration through transparent areas of the navigation cube
 	if (m_viewports[VIEWPORT_CUBE_OUTLINE].enabled && m_cubeOutlineRoot) {
 		ViewportInfo& outlineViewport = m_viewports[VIEWPORT_CUBE_OUTLINE];
 
@@ -888,19 +890,32 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 						LOG_INF_S("MultiViewportManager: Clicked shape '" + clickedShape + "' at worldPos(" +
 							std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
 
-						// Show context menu if small cube was clicked
+						// Show context menu if small cube or sphere was clicked
 						if (clickedShape == "Cube") {
 							LOG_INF_S("MultiViewportManager: Showing context menu for cube");
 							m_lastClickPos = wxPoint(static_cast<int>(event.GetX()), static_cast<int>(event.GetY()));
 							wxPoint screenPos = m_canvas->ClientToScreen(m_lastClickPos);
 							showCubeContextMenu(screenPos);
 						}
+						else if (clickedShape == "Sphere") {
+							LOG_INF_S("MultiViewportManager: Showing context menu for sphere");
+							m_lastClickPos = wxPoint(static_cast<int>(event.GetX()), static_cast<int>(event.GetY()));
+							wxPoint screenPos = m_canvas->ClientToScreen(m_lastClickPos);
+							showSphereContextMenu(screenPos);
+						}
 					}
+					
+					// If we found an object in outline viewport, handle it regardless of cube handling
+					LOG_INF_S("MultiViewportManager: Ray penetrated through transparent cube area to outline object");
+					return true;
 				} else {
 					LOG_INF_S("MultiViewportManager: No object picked at click position");
+					// If cube handled the event but no outline object was found, return cube's result
+					if (cubeHandled) {
+						LOG_INF_S("MultiViewportManager: Cube handled click, no outline object found");
+						return true;
+					}
 				}
-
-				return true;
 			}
 			else if (event.LeftUp()) {
 				return true;
@@ -958,6 +973,7 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 					// Highlight new shape
 					if (!hoveredShape.empty()) {
 						updateShapeHoverState(hoveredShape, true);
+						LOG_INF_S("MultiViewportManager: Ray penetrated through transparent cube area to hover outline object");
 					}
 					
 					m_lastHoveredShape = hoveredShape;
@@ -968,6 +984,8 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 					}
 				}
 				
+				// Always return true for hover events in outline viewport, even if cube also handled it
+				// This allows hover effects to work through transparent cube areas
 				return true;
 			}
 			// For other events, do not consume
@@ -1267,5 +1285,111 @@ void MultiViewportManager::updateArrowHeadMaterials(SoSeparator* arrowNode, cons
 			SoSeparator* sep = static_cast<SoSeparator*>(child);
 			updateArrowHeadMaterials(sep, color);
 		}
+	}
+}
+
+void MultiViewportManager::showSphereContextMenu(const wxPoint& screenPos) {
+	if (!m_canvas) {
+		LOG_WRN_S("MultiViewportManager::showSphereContextMenu: Canvas is null");
+		return;
+	}
+
+	wxMenu contextMenu;
+
+	// Standard Views submenu
+	wxMenu* viewsMenu = new wxMenu();
+	viewsMenu->Append(ID_VIEW_BOOKMARK_FRONT, "Front View", "Switch to front view");
+	viewsMenu->Append(ID_VIEW_BOOKMARK_BACK, "Back View", "Switch to back view");
+	viewsMenu->Append(ID_VIEW_BOOKMARK_LEFT, "Left View", "Switch to left view");
+	viewsMenu->Append(ID_VIEW_BOOKMARK_RIGHT, "Right View", "Switch to right view");
+	viewsMenu->Append(ID_VIEW_BOOKMARK_TOP, "Top View", "Switch to top view");
+	viewsMenu->Append(ID_VIEW_BOOKMARK_BOTTOM, "Bottom View", "Switch to bottom view");
+	viewsMenu->Append(ID_VIEW_BOOKMARK_ISOMETRIC, "Isometric View", "Switch to isometric view");
+	contextMenu.AppendSubMenu(viewsMenu, "Standard Views", "Switch to standard views");
+
+	contextMenu.AppendSeparator();
+
+	// Fit and zoom operations
+	contextMenu.Append(ID_VIEW_ALL, "Fit All\tCtrl+A", "Fit all objects in view");
+	contextMenu.AppendSeparator();
+	contextMenu.Append(ID_ZOOM_IN, "Zoom In\tCtrl++", "Zoom in");
+	contextMenu.Append(ID_ZOOM_OUT, "Zoom Out\tCtrl+-", "Zoom out");
+	contextMenu.Append(ID_ZOOM_RESET, "Reset Zoom\tCtrl+0", "Reset zoom to 100%");
+
+	contextMenu.AppendSeparator();
+
+	// Animation types submenu
+	wxMenu* animationMenu = new wxMenu();
+	animationMenu->Append(ID_ANIMATION_TYPE_LINEAR, "Linear", "Set linear animation");
+	animationMenu->Append(ID_ANIMATION_TYPE_SMOOTH, "Smooth", "Set smooth animation");
+	animationMenu->Append(ID_ANIMATION_TYPE_EASE_IN, "Ease In", "Set ease-in animation");
+	animationMenu->Append(ID_ANIMATION_TYPE_EASE_OUT, "Ease Out", "Set ease-out animation");
+	animationMenu->Append(ID_ANIMATION_TYPE_BOUNCE, "Bounce", "Set bounce animation");
+	contextMenu.AppendSubMenu(animationMenu, "Animation Type", "Set view transition animation type");
+
+	// Bind event handlers to route through command system
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_ALL);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_FRONT);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_BACK);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_LEFT);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_RIGHT);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_TOP);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_BOTTOM);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_ISOMETRIC);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuZoom, this, ID_ZOOM_IN);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuZoom, this, ID_ZOOM_OUT);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuZoom, this, ID_ZOOM_RESET);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_LINEAR);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_SMOOTH);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_EASE_IN);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_EASE_OUT);
+	m_canvas->Bind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_BOUNCE);
+
+	// Show popup menu
+	m_canvas->PopupMenu(&contextMenu, m_canvas->ScreenToClient(screenPos));
+
+	// Unbind event handlers
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_ALL);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_FRONT);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_BACK);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_LEFT);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_RIGHT);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_TOP);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_BOTTOM);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuViewBookmark, this, ID_VIEW_BOOKMARK_ISOMETRIC);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuZoom, this, ID_ZOOM_IN);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuZoom, this, ID_ZOOM_OUT);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuZoom, this, ID_ZOOM_RESET);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_LINEAR);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_SMOOTH);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_EASE_IN);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_EASE_OUT);
+	m_canvas->Unbind(wxEVT_MENU, &MultiViewportManager::onMenuAnimationType, this, ID_ANIMATION_TYPE_BOUNCE);
+}
+
+void MultiViewportManager::onMenuViewBookmark(wxCommandEvent& event) {
+	// Create a new command event and send it to the main frame
+	if (wxTheApp && wxTheApp->GetTopWindow()) {
+		wxCommandEvent cmdEvent(wxEVT_COMMAND_BUTTON_CLICKED, event.GetId());
+		cmdEvent.SetEventObject(m_canvas);
+		wxTheApp->GetTopWindow()->ProcessWindowEvent(cmdEvent);
+	}
+}
+
+void MultiViewportManager::onMenuZoom(wxCommandEvent& event) {
+	// Create a new command event and send it to the main frame
+	if (wxTheApp && wxTheApp->GetTopWindow()) {
+		wxCommandEvent cmdEvent(wxEVT_COMMAND_BUTTON_CLICKED, event.GetId());
+		cmdEvent.SetEventObject(m_canvas);
+		wxTheApp->GetTopWindow()->ProcessWindowEvent(cmdEvent);
+	}
+}
+
+void MultiViewportManager::onMenuAnimationType(wxCommandEvent& event) {
+	// Create a new command event and send it to the main frame
+	if (wxTheApp && wxTheApp->GetTopWindow()) {
+		wxCommandEvent cmdEvent(wxEVT_COMMAND_BUTTON_CLICKED, event.GetId());
+		cmdEvent.SetEventObject(m_canvas);
+		wxTheApp->GetTopWindow()->ProcessWindowEvent(cmdEvent);
 	}
 }

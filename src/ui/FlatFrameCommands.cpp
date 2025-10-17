@@ -24,6 +24,8 @@
 #include "ViewFrontListener.h"
 #include "ViewRightListener.h"
 #include "ViewIsometricListener.h"
+#include "ViewBookmarkListener.h"
+#include "NavigationAnimationListener.h"
 #include "ShowNormalsListener.h"
 #include "FixNormalsListener.h"
 #include "NormalFixDialogListener.h"
@@ -87,6 +89,29 @@ void FlatFrame::setupCommandSystem() {
 	auto viewFrontListener = std::make_shared<ViewFrontListener>(m_canvas->getInputManager()->getNavigationController());
 	auto viewRightListener = std::make_shared<ViewRightListener>(m_canvas->getInputManager()->getNavigationController());
 	auto viewIsoListener = std::make_shared<ViewIsometricListener>(m_canvas->getInputManager()->getNavigationController());
+
+	// New navigation features
+	auto viewBookmarkListener = std::make_shared<ViewBookmarkListener>();
+	viewBookmarkListener->setCamera(m_canvas->getCamera(), [this]() {
+		if (m_canvas) {
+			m_canvas->Refresh();
+			m_canvas->Update();
+			// Force immediate redraw
+			wxYield();
+		}
+	});
+	viewBookmarkListener->setCanvas(m_canvas);
+	auto navigationAnimationListener = std::make_shared<NavigationAnimationListener>();
+	navigationAnimationListener->setCamera(m_canvas->getCamera());
+	auto zoomControllerListener = std::make_shared<ZoomControllerListener>();
+	zoomControllerListener->setCamera(m_canvas->getCamera(), [this]() {
+		if (m_canvas) {
+			m_canvas->Refresh();
+			m_canvas->Update();
+			// Force immediate redraw
+			wxYield();
+		}
+	});
 	auto showNormalsListener = std::make_shared<ShowNormalsListener>(m_occViewer);
 	auto fixNormalsListener = std::make_shared<FixNormalsListener>(m_occViewer);
 	auto normalFixDialogListener = std::make_shared<NormalFixDialogListener>(this, m_occViewer);
@@ -105,6 +130,33 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::ViewFront, viewFrontListener);
 	m_listenerManager->registerListener(cmd::CommandType::ViewRight, viewRightListener);
 	m_listenerManager->registerListener(cmd::CommandType::ViewIsometric, viewIsoListener);
+
+	// Register new navigation features
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkSave, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkFront, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkBack, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkLeft, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkRight, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkTop, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkBottom, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkIsometric, viewBookmarkListener);
+	m_listenerManager->registerListener(cmd::CommandType::ViewBookmarkManager, viewBookmarkListener);
+
+	m_listenerManager->registerListener(cmd::CommandType::AnimationTypeLinear, navigationAnimationListener);
+	m_listenerManager->registerListener(cmd::CommandType::AnimationTypeSmooth, navigationAnimationListener);
+	m_listenerManager->registerListener(cmd::CommandType::AnimationTypeEaseIn, navigationAnimationListener);
+	m_listenerManager->registerListener(cmd::CommandType::AnimationTypeEaseOut, navigationAnimationListener);
+	m_listenerManager->registerListener(cmd::CommandType::AnimationTypeBounce, navigationAnimationListener);
+
+	m_listenerManager->registerListener(cmd::CommandType::ZoomIn, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomOut, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomReset, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomSettings, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomLevel25, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomLevel50, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomLevel100, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomLevel200, zoomControllerListener);
+	m_listenerManager->registerListener(cmd::CommandType::ZoomLevel400, zoomControllerListener);
 	m_listenerManager->registerListener(cmd::CommandType::ShowNormals, showNormalsListener);
 	m_listenerManager->registerListener(cmd::CommandType::FixNormals, fixNormalsListener);
 	m_listenerManager->registerListener(cmd::CommandType::NormalFixDialog, normalFixDialogListener);

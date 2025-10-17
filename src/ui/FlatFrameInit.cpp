@@ -298,6 +298,81 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	page3->AddPanel(displayPanel);
 	m_ribbon->AddPage(page3);
 
+	// Create Navigator page with navigation tools
+	FlatUIPage* navigatorPage = new FlatUIPage(m_ribbon, "Navigator");
+
+	// Bookmarks panel
+	FlatUIPanel* bookmarkPanel = new FlatUIPanel(navigatorPage, "Bookmarks", wxHORIZONTAL);
+	bookmarkPanel->SetFont(CFG_DEFAULTFONT());
+	bookmarkPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	bookmarkPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	bookmarkPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	bookmarkPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	bookmarkPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* bookmarkButtonBar = new FlatUIButtonBar(bookmarkPanel);
+	bookmarkButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	bookmarkButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_SAVE, "Save Bookmark", "save", wxSize(16, 16), nullptr, "Save current view as bookmark");
+	bookmarkButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_MANAGER, "Manage Bookmarks", "folder", wxSize(16, 16), nullptr, "Open bookmark manager");
+	bookmarkPanel->AddButtonBar(bookmarkButtonBar, 0, wxEXPAND | wxALL, 5);
+	navigatorPage->AddPanel(bookmarkPanel);
+
+	// Standard views panel
+	FlatUIPanel* standardViewPanel = new FlatUIPanel(navigatorPage, "Standard Views", wxHORIZONTAL);
+	standardViewPanel->SetFont(CFG_DEFAULTFONT());
+	standardViewPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	standardViewPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	standardViewPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	standardViewPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	standardViewPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* standardViewButtonBar = new FlatUIButtonBar(standardViewPanel);
+	standardViewButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_FRONT, "Front", "frontview", wxSize(16, 16), nullptr, "Animate to front view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_BACK, "Back", "backview", wxSize(16, 16), nullptr, "Animate to back view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_LEFT, "Left", "leftview", wxSize(16, 16), nullptr, "Animate to left view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_RIGHT, "Right", "rightview", wxSize(16, 16), nullptr, "Animate to right view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_TOP, "Top", "topview", wxSize(16, 16), nullptr, "Animate to top view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_BOTTOM, "Bottom", "bottomview", wxSize(16, 16), nullptr, "Animate to bottom view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_ISOMETRIC, "Isometric", "isoview", wxSize(16, 16), nullptr, "Animate to isometric view");
+	standardViewPanel->AddButtonBar(standardViewButtonBar, 0, wxEXPAND | wxALL, 5);
+	navigatorPage->AddPanel(standardViewPanel);
+
+	// Zoom controls panel
+	FlatUIPanel* zoomPanel = new FlatUIPanel(navigatorPage, "Zoom", wxHORIZONTAL);
+	zoomPanel->SetFont(CFG_DEFAULTFONT());
+	zoomPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	zoomPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	zoomPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	zoomPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	zoomPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* zoomButtonBar = new FlatUIButtonBar(zoomPanel);
+	zoomButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_IN, "Zoom In", "zoom_in", wxSize(16, 16), nullptr, "Zoom in");
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_OUT, "Zoom Out", "zoom_out", wxSize(16, 16), nullptr, "Zoom out");
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_RESET, "Reset Zoom", "zoom_reset", wxSize(16, 16), nullptr, "Reset zoom to 100%");
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_SETTINGS, "Zoom Settings", "settings", wxSize(16, 16), nullptr, "Configure zoom settings");
+	zoomPanel->AddButtonBar(zoomButtonBar, 0, wxEXPAND | wxALL, 5);
+	navigatorPage->AddPanel(zoomPanel);
+
+	// Animation settings panel
+	FlatUIPanel* animationPanel = new FlatUIPanel(navigatorPage, "Animation", wxHORIZONTAL);
+	animationPanel->SetFont(CFG_DEFAULTFONT());
+	animationPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	animationPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	animationPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	animationPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	animationPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* animationButtonBar = new FlatUIButtonBar(animationPanel);
+	animationButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_LINEAR, "Linear", "line", wxSize(16, 16), nullptr, "Set linear animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_SMOOTH, "Smooth", "wave", wxSize(16, 16), nullptr, "Set smooth animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_IN, "Ease In", "arrow_up", wxSize(16, 16), nullptr, "Set ease-in animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_OUT, "Ease Out", "arrow_down", wxSize(16, 16), nullptr, "Set ease-out animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_BOUNCE, "Bounce", "bounce", wxSize(16, 16), nullptr, "Set bounce animation");
+	animationPanel->AddButtonBar(animationButtonBar, 0, wxEXPAND | wxALL, 5);
+	navigatorPage->AddPanel(animationPanel);
+
+	m_ribbon->AddPage(navigatorPage);
+
 	FlatUIPage* page4 = new FlatUIPage(m_ribbon, "Tools");
 	FlatUIPanel* toolsPanel = new FlatUIPanel(page4, "Tools", wxHORIZONTAL);
 	toolsPanel->SetFont(CFG_DEFAULTFONT());
@@ -404,6 +479,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	m_ribbon->AddPage(dockingPage);
 
 	createPanels();
+	// Setup command system after Canvas is created
 	setupCommandSystem();
 
 	SetClientSize(size);
@@ -592,7 +668,31 @@ void FlatFrame::SetupKeyboardShortcuts()
 		wxAcceleratorEntry(wxACCEL_CTRL, 'S', wxID_SAVE),
 		wxAcceleratorEntry(wxACCEL_CTRL, 'Z', ID_UNDO),
 		wxAcceleratorEntry(wxACCEL_CTRL, 'Y', ID_REDO),
-		wxAcceleratorEntry(wxACCEL_CTRL, 'H', ID_ShowUIHierarchy)
+		wxAcceleratorEntry(wxACCEL_CTRL, 'H', ID_ShowUIHierarchy),
+
+		// Navigation features shortcuts
+		wxAcceleratorEntry(wxACCEL_CTRL, 'B', ID_VIEW_BOOKMARK_SAVE),     // Ctrl+B: Save bookmark
+		wxAcceleratorEntry(wxACCEL_ALT, 'B', ID_VIEW_BOOKMARK_MANAGER),   // Alt+B: Bookmark manager
+		wxAcceleratorEntry(wxACCEL_ALT, 'F', ID_VIEW_BOOKMARK_FRONT),     // Alt+F: Front view
+		wxAcceleratorEntry(wxACCEL_ALT, 'R', ID_VIEW_BOOKMARK_RIGHT),     // Alt+R: Right view
+		wxAcceleratorEntry(wxACCEL_ALT, 'T', ID_VIEW_BOOKMARK_TOP),       // Alt+T: Top view
+		wxAcceleratorEntry(wxACCEL_ALT, 'I', ID_VIEW_BOOKMARK_ISOMETRIC), // Alt+I: Isometric view
+		wxAcceleratorEntry(wxACCEL_ALT, 'L', ID_VIEW_BOOKMARK_LEFT),      // Alt+L: Left view
+		wxAcceleratorEntry(wxACCEL_ALT, 'K', ID_VIEW_BOOKMARK_BACK),      // Alt+K: Back view
+		wxAcceleratorEntry(wxACCEL_ALT, 'M', ID_VIEW_BOOKMARK_BOTTOM),    // Alt+M: Bottom view
+
+		// Zoom shortcuts
+		wxAcceleratorEntry(wxACCEL_CTRL, WXK_ADD, ID_ZOOM_IN),            // Ctrl++: Zoom in
+		wxAcceleratorEntry(wxACCEL_CTRL, WXK_SUBTRACT, ID_ZOOM_OUT),      // Ctrl+-: Zoom out
+		wxAcceleratorEntry(wxACCEL_CTRL, '0', ID_ZOOM_RESET),             // Ctrl+0: Reset zoom
+		wxAcceleratorEntry(wxACCEL_ALT, 'Z', ID_ZOOM_SETTINGS),           // Alt+Z: Zoom settings
+
+		// Animation shortcuts
+		wxAcceleratorEntry(wxACCEL_ALT, '1', ID_ANIMATION_TYPE_LINEAR),   // Alt+1: Linear animation
+		wxAcceleratorEntry(wxACCEL_ALT, '2', ID_ANIMATION_TYPE_SMOOTH),   // Alt+2: Smooth animation
+		wxAcceleratorEntry(wxACCEL_ALT, '3', ID_ANIMATION_TYPE_EASE_IN),  // Alt+3: Ease-in animation
+		wxAcceleratorEntry(wxACCEL_ALT, '4', ID_ANIMATION_TYPE_EASE_OUT), // Alt+4: Ease-out animation
+		wxAcceleratorEntry(wxACCEL_ALT, '5', ID_ANIMATION_TYPE_BOUNCE)    // Alt+5: Bounce animation
 	};
 	
 	wxAcceleratorTable accel(sizeof(entries) / sizeof(wxAcceleratorEntry), entries);

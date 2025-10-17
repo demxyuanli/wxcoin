@@ -131,9 +131,13 @@ private:
 	
 	// Popup menu methods
 	void showCubeContextMenu(const wxPoint& screenPos);
+	void showSphereContextMenu(const wxPoint& screenPos);
 	void onMenuResetView(wxCommandEvent& event);
 	void onMenuToggleVisibility(wxCommandEvent& event);
 	void onMenuCubeSettings(wxCommandEvent& event);
+	void onMenuViewBookmark(wxCommandEvent& event);
+	void onMenuZoom(wxCommandEvent& event);
+	void onMenuAnimationType(wxCommandEvent& event);
 	
 	// Hover effect methods
 	void updateCubeHoverState(bool isHovering);

@@ -64,7 +64,9 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_positionX(config.x >= 0 ? config.x : 20)  // Use config or default
 	, m_positionY(config.y >= 0 ? config.y : 20)  // Use config or default
 	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
-	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.50f)
+	, m_currentX(0.0f)
+	, m_currentY(0.0f)
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.75f)  // Increased from 0.50 to 0.75 for better picking
 	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
 	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
 	, m_needsGeometryRebuild(false)
@@ -111,7 +113,9 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_positionX(config.x >= 0 ? config.x : 20)  // Use config or default
 	, m_positionY(config.y >= 0 ? config.y : 20)  // Use config or default
 	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
-	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.50f)
+	, m_currentX(0.0f)
+	, m_currentY(0.0f)
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.75f)  // Increased from 0.50 to 0.75 for better picking
 	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
 	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
 	, m_needsGeometryRebuild(false)
@@ -334,14 +338,8 @@ void CuteNavCube::setupGeometry() {
 	m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
 	m_orthoCamera->nearDistance = 0.05f; // Reduced to ensure all faces are visible
 	m_orthoCamera->farDistance = 15.0f;  // Increased to include all geometry
-	m_orthoCamera->position.setValue(0.0f, 0.0f, 2.5f); // Move camera closer to make cube fill more viewport
+	m_orthoCamera->position.setValue(0.0f, 0.0f, 5.0f); // Initial position
 	m_orthoCamera->orientation.setValue(SbRotation(SbVec3f(1, 0, 0), -M_PI / 2)); // Rotate to make Z up
-	
-	// Set explicit height for orthographic camera to control zoom level
-	SoOrthographicCamera* ortho = static_cast<SoOrthographicCamera*>(m_orthoCamera);
-	if (ortho) {
-		ortho->height.setValue(1.8f); // Make cube fill ~70% of viewport (cube is ~1.0 units)
-	}
 	
 	// Always add camera back to the scene
 	m_root->addChild(m_orthoCamera);
@@ -729,11 +727,33 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 	}
 
 	// Add picking debug log
-	LOG_INF_S("CuteNavCube::pickRegion: Picking at position (" + 
-		std::to_string(mousePos[0]) + ", " + std::to_string(mousePos[1]) + 
+	LOG_INF_S("CuteNavCube::pickRegion: Picking at position (" +
+		std::to_string(mousePos[0]) + ", " + std::to_string(mousePos[1]) +
 		") in viewport " + std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y));
 
-	SoRayPickAction pickAction(SbViewportRegion(viewportSize.x, viewportSize.y));
+	// Create viewport region matching the cube's viewport settings
+	SbViewportRegion pickViewport;
+	pickViewport.setWindowSize(SbVec2s(static_cast<short>(m_windowWidth), static_cast<short>(m_windowHeight)));
+
+	// Set viewport pixels to match the cube's position and size
+	int viewportX = static_cast<int>(m_currentX * m_dpiScale);
+	int viewportY = m_windowHeight - static_cast<int>((m_currentY + m_cubeSize) * m_dpiScale); // Bottom-left origin
+	int viewportWidth = static_cast<int>(m_cubeSize * m_dpiScale);
+	int viewportHeight = static_cast<int>(m_cubeSize * m_dpiScale);
+
+	pickViewport.setViewportPixels(viewportX, viewportY, viewportWidth, viewportHeight);
+
+	// Debug viewport settings
+	static int debugCount = 0;
+	if (++debugCount % 10 == 0) {
+		LOG_INF_S("CuteNavCube::pickRegion: Viewport settings - window:" +
+			std::to_string(m_windowWidth) + "x" + std::to_string(m_windowHeight) +
+			", viewport:" + std::to_string(viewportX) + "," + std::to_string(viewportY) +
+			" " + std::to_string(viewportWidth) + "x" + std::to_string(viewportHeight) +
+			", mouse:" + std::to_string(mousePos[0]) + "," + std::to_string(mousePos[1]));
+	}
+
+	SoRayPickAction pickAction(pickViewport);
 	pickAction.setPoint(mousePos);
 	pickAction.apply(m_root);
 
@@ -854,8 +874,8 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 	orientation = SbRotation::identity();
 }
 
-void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
-	if (!m_enabled) return;
+bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
+	if (!m_enabled) return false;
 
 	static SbVec2s dragStartPos(0, 0);
 
@@ -901,7 +921,7 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 		// Don't return here - allow click/drag events to be processed
 		if (!event.LeftIsDown()) {
-			return;
+			return true; // Hover events are always handled
 		}
 	}
 
@@ -919,7 +939,7 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 			}
 			m_hoveredFace = "";
 		}
-		return;
+		return true; // Mouse leaving is always handled
 	}
 
 	if (event.LeftDown()) {
@@ -966,13 +986,17 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 						LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked face: " + region +
 							", mapped to view: " + viewName);
 					}
+					return true; // Successfully handled click on cube face
+				} else {
+					LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked transparent area, allowing ray penetration");
+					return false; // Transparent area, allow ray penetration to outline viewport
 				}
 			}
 		}
 	}
 	else if (event.Dragging() && m_isDragging) {
 		SbVec2s delta = currentPos - m_lastMousePos;
-		if (delta[0] == 0 && delta[1] == 0) return; // Ignore no-movement events
+		if (delta[0] == 0 && delta[1] == 0) return true; // Ignore no-movement events
 
 		float sensitivity = 1.0f;
 		m_rotationY += delta[0] * sensitivity;
@@ -989,7 +1013,11 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 		//LOG_DBG("CuteNavCube::handleMouseEvent: Rotated: X=" + std::to_string(m_rotationX) +
 		//    ", Y=" + std::to_string(m_rotationY));
+		return true; // Drag events are always handled
 	}
+	
+	// Default: event not handled (for transparent areas)
+	return false;
 }
 
 void CuteNavCube::render(int x, int y, const wxSize& size) {
@@ -1039,6 +1067,10 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 	// Note: m_windowWidth and m_windowHeight are already in physical pixels from NavigationCubeManager
 	viewport.setWindowSize(SbVec2s(static_cast<short>(m_windowWidth), static_cast<short>(m_windowHeight)));
 
+	// Save current position for picking coordinate conversion
+	m_currentX = x;
+	m_currentY = y;
+
 	// Convert logical coordinates to physical pixels
 	// Convert logical coordinates to physical pixels
 	// size parameter is the layout size (viewport position and size)
@@ -1052,6 +1084,15 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 
 	// Set the viewport rectangle where the cube will be rendered (origin bottom-left)
 	viewport.setViewportPixels(xPx, yBottomPx, widthPx, heightPx);
+
+	// Clear the viewport area to prevent ghosting/trailing effects during rotation
+	glPushAttrib(GL_SCISSOR_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(xPx, yBottomPx, widthPx, heightPx);
+	// Don't clear color buffer to maintain transparency, only clear depth buffer
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_SCISSOR_TEST);
+	glPopAttrib();
 
 	SoGLRenderAction renderAction(viewport);
 	renderAction.setSmoothing(true);

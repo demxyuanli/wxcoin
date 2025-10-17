@@ -6,9 +6,13 @@ set(CADVIEW_SOURCES
     ${CMAKE_SOURCE_DIR}/src/view/ViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/MultiViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/CoordinateTransformer.cpp
+    ${CMAKE_SOURCE_DIR}/src/view/ViewBookmark.cpp
+    ${CMAKE_SOURCE_DIR}/src/view/CameraAnimation.cpp
+    ${CMAKE_SOURCE_DIR}/src/view/ZoomController.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewRefreshManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/DynamicSilhouetteRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/view/FaceInfoOverlay.cpp
+    # ${CMAKE_SOURCE_DIR}/src/view/NavigationFeaturesTest.cpp  # Uncomment to enable tests
 )
 
 set(CADVIEW_HEADERS
@@ -18,6 +22,9 @@ set(CADVIEW_HEADERS
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/CoordinateTransformer.h
     ${CMAKE_SOURCE_DIR}/include/ViewportConfig.h
+    ${CMAKE_SOURCE_DIR}/include/ViewBookmark.h
+    ${CMAKE_SOURCE_DIR}/include/CameraAnimation.h
+    ${CMAKE_SOURCE_DIR}/include/ZoomController.h
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
     ${CMAKE_SOURCE_DIR}/include/EventCoordinator.h
     ${CMAKE_SOURCE_DIR}/include/DynamicSilhouetteRenderer.h

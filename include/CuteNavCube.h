@@ -29,7 +29,7 @@ public:
 	SoSeparator* getRoot() const { return m_root; }
 	void setEnabled(bool enabled);
 	bool isEnabled() const { return m_enabled; }
-	void handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize);
+	bool handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize);
 	void render(int x, int y, const wxSize& size);
 	void applyConfig(const CubeConfig& config);
 	void setWindowSize(int width, int height) {
@@ -93,6 +93,10 @@ private:
 	int m_positionX;
 	int m_positionY;
 	int m_cubeSize;
+
+	// Current rendering position (for picking coordinate conversion)
+	float m_currentX;
+	float m_currentY;
 	
 	// Configuration properties
 	float m_geometrySize;

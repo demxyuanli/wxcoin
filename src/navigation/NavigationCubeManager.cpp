@@ -296,9 +296,9 @@ bool NavigationCubeManager::handleMouseEvent(wxMouseEvent& event) {
 		if (event.GetEventType() == wxEVT_LEFT_DOWN ||
 			event.GetEventType() == wxEVT_LEFT_UP ||
 			event.GetEventType() == wxEVT_MOTION) {
-			m_navCube->handleMouseEvent(cubeEvent, cube_viewport_scaled_size);
+			bool cubeHandled = m_navCube->handleMouseEvent(cubeEvent, cube_viewport_scaled_size);
 			m_canvas->Refresh(true);
-			return true; // Event handled
+			return cubeHandled; // Return whether cube actually handled the event
 		}
 	}
 	return false; // Event not handled

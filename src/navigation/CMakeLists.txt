@@ -4,7 +4,6 @@ set(NAVIGATION_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/InventorNavigationController.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationModeManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationStyle.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCube.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCubeManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CuteNavCube.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCubeConfigDialog.cpp
@@ -15,7 +14,6 @@ set(NAVIGATION_HEADERS
     ${CMAKE_SOURCE_DIR}/include/InventorNavigationController.h
     ${CMAKE_SOURCE_DIR}/include/NavigationModeManager.h
     ${CMAKE_SOURCE_DIR}/include/NavigationStyle.h
-    ${CMAKE_SOURCE_DIR}/include/NavigationCube.h
     ${CMAKE_SOURCE_DIR}/include/NavigationCubeManager.h
     ${CMAKE_SOURCE_DIR}/include/CuteNavCube.h
     ${CMAKE_SOURCE_DIR}/include/NavigationCubeConfigDialog.h

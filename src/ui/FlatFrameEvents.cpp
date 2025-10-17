@@ -29,6 +29,35 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_VIEW_FRONT, cmd::CommandType::ViewFront},
 	{ID_VIEW_RIGHT, cmd::CommandType::ViewRight},
 	{ID_VIEW_ISOMETRIC, cmd::CommandType::ViewIsometric},
+
+	// View Bookmarks
+	{ID_VIEW_BOOKMARK_SAVE, cmd::CommandType::ViewBookmarkSave},
+	{ID_VIEW_BOOKMARK_FRONT, cmd::CommandType::ViewBookmarkFront},
+	{ID_VIEW_BOOKMARK_BACK, cmd::CommandType::ViewBookmarkBack},
+	{ID_VIEW_BOOKMARK_LEFT, cmd::CommandType::ViewBookmarkLeft},
+	{ID_VIEW_BOOKMARK_RIGHT, cmd::CommandType::ViewBookmarkRight},
+	{ID_VIEW_BOOKMARK_TOP, cmd::CommandType::ViewBookmarkTop},
+	{ID_VIEW_BOOKMARK_BOTTOM, cmd::CommandType::ViewBookmarkBottom},
+	{ID_VIEW_BOOKMARK_ISOMETRIC, cmd::CommandType::ViewBookmarkIsometric},
+	{ID_VIEW_BOOKMARK_MANAGER, cmd::CommandType::ViewBookmarkManager},
+
+	// Animation Types
+	{ID_ANIMATION_TYPE_LINEAR, cmd::CommandType::AnimationTypeLinear},
+	{ID_ANIMATION_TYPE_SMOOTH, cmd::CommandType::AnimationTypeSmooth},
+	{ID_ANIMATION_TYPE_EASE_IN, cmd::CommandType::AnimationTypeEaseIn},
+	{ID_ANIMATION_TYPE_EASE_OUT, cmd::CommandType::AnimationTypeEaseOut},
+	{ID_ANIMATION_TYPE_BOUNCE, cmd::CommandType::AnimationTypeBounce},
+
+	// Zoom Controls
+	{ID_ZOOM_IN, cmd::CommandType::ZoomIn},
+	{ID_ZOOM_OUT, cmd::CommandType::ZoomOut},
+	{ID_ZOOM_RESET, cmd::CommandType::ZoomReset},
+	{ID_ZOOM_SETTINGS, cmd::CommandType::ZoomSettings},
+	{ID_ZOOM_LEVEL_25, cmd::CommandType::ZoomLevel25},
+	{ID_ZOOM_LEVEL_50, cmd::CommandType::ZoomLevel50},
+	{ID_ZOOM_LEVEL_100, cmd::CommandType::ZoomLevel100},
+	{ID_ZOOM_LEVEL_200, cmd::CommandType::ZoomLevel200},
+	{ID_ZOOM_LEVEL_400, cmd::CommandType::ZoomLevel400},
 	{ID_SHOW_NORMALS, cmd::CommandType::ShowNormals},
 	{ID_FIX_NORMALS, cmd::CommandType::FixNormals},
 	{ID_NORMAL_FIX_DIALOG, cmd::CommandType::NormalFixDialog},
