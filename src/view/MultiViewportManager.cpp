@@ -142,7 +142,10 @@ void MultiViewportManager::createEquilateralTriangle(float x, float y, float ang
 
 	// Store as composite shape with material reference
 	CompositeShape compositeShape(triSep, triangleName, material);
+	compositeShape.collectMaterials(triSep);  // Collect all materials in the shape
+	size_t index = m_compositeShapes.size();
 	m_compositeShapes.push_back(compositeShape);
+	m_shapeNameToIndex[triangleName] = index;  // Build index for fast lookup
 
 	m_cubeOutlineRoot->addChild(triSep);
 }
@@ -389,7 +392,10 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 	// Note: Arrows don't have a single material, they're made of lines + triangles
 	// Store as composite shape without material (will handle hover differently if needed)
 	CompositeShape compositeShape(arrowSep, arrowName, arrowMaterial);
+	compositeShape.collectMaterials(arrowSep);  // Collect all materials including arrow head
+	size_t index = m_compositeShapes.size();
 	m_compositeShapes.push_back(compositeShape);
+	m_shapeNameToIndex[arrowName] = index;  // Build index for fast lookup
 
 	m_cubeOutlineRoot->addChild(arrowSep);
 }
@@ -418,7 +424,10 @@ void MultiViewportManager::createTopRightCircle(float scale) {
 
 	// Store as composite shape with material reference
 	CompositeShape compositeShape(sphereSep, "Sphere", mat);
+	compositeShape.collectMaterials(sphereSep);  // Collect all materials in the shape
+	size_t index = m_compositeShapes.size();
 	m_compositeShapes.push_back(compositeShape);
+	m_shapeNameToIndex["Sphere"] = index;  // Build index for fast lookup
 
 	m_cubeOutlineRoot->addChild(sphereSep);
 }
@@ -486,7 +495,10 @@ void MultiViewportManager::createSmallCube(float scale) {
 
 	// Store as composite shape with material reference
 	CompositeShape compositeShape(cubeSep, "Cube", m_cubeMaterial);
+	compositeShape.collectMaterials(cubeSep);  // Collect all materials in the shape
+	size_t index = m_compositeShapes.size();
 	m_compositeShapes.push_back(compositeShape);
+	m_shapeNameToIndex["Cube"] = index;  // Build index for fast lookup
 
 	m_cubeOutlineRoot->addChild(cubeSep);
 }
@@ -636,11 +648,30 @@ void MultiViewportManager::renderCubeOutline() {
 		return;
 	}
 
-	ViewportInfo& viewport = m_viewports[VIEWPORT_CUBE_OUTLINE];
-	glPushAttrib(GL_ALL_ATTRIB_BITS);
-	glPushMatrix();
+	renderViewport(m_viewports[VIEWPORT_CUBE_OUTLINE], m_cubeOutlineRoot);
+}
+
+void MultiViewportManager::renderCoordinateSystem() {
+	if (!m_coordinateSystemRoot || !m_coordinateSystemCamera) {
+		LOG_WRN_S("MultiViewportManager: Coordinate system scene not initialized");
+		return;
+	}
+
+	syncCoordinateSystemCameraToMain();
+
+	renderViewport(m_viewports[VIEWPORT_COORDINATE_SYSTEM], m_coordinateSystemRoot);
+}
+
+void MultiViewportManager::renderViewport(const ViewportInfo& viewport, SoSeparator* root) {
+	if (!root) {
+		LOG_WRN_S("MultiViewportManager: Viewport root is null");
+		return;
+	}
 
 	wxSize canvasSize = m_canvas->GetClientSize();
+
+	glPushAttrib(GL_ALL_ATTRIB_BITS);
+	glPushMatrix();
 
 	glEnable(GL_SCISSOR_TEST);
 	glScissor(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -655,41 +686,7 @@ void MultiViewportManager::renderCubeOutline() {
 	renderAction.setSmoothing(true);
 	renderAction.setTransparencyType(SoGLRenderAction::BLEND);
 
-	renderAction.apply(m_cubeOutlineRoot);
-
-	glPopMatrix();
-	glPopAttrib();
-}
-
-void MultiViewportManager::renderCoordinateSystem() {
-	if (!m_coordinateSystemRoot || !m_coordinateSystemCamera) {
-		LOG_WRN_S("MultiViewportManager: Coordinate system scene not initialized");
-		return;
-	}
-
-	syncCoordinateSystemCameraToMain();
-
-	ViewportInfo& viewport = m_viewports[VIEWPORT_COORDINATE_SYSTEM];
-	glPushAttrib(GL_ALL_ATTRIB_BITS);
-	glPushMatrix();
-
-	wxSize canvasSize = m_canvas->GetClientSize();
-	int yBottom = canvasSize.y - viewport.y - viewport.height;
-
-	glEnable(GL_SCISSOR_TEST);
-	glScissor(viewport.x, yBottom, viewport.width, viewport.height);
-	glClear(GL_DEPTH_BUFFER_BIT);
-	glDisable(GL_SCISSOR_TEST);
-
-	SbViewportRegion viewportRegion;
-	viewportRegion.setWindowSize(SbVec2s(canvasSize.x, canvasSize.y));
-	viewportRegion.setViewportPixels(viewport.x, yBottom, viewport.width, viewport.height);
-
-	SoGLRenderAction renderAction(viewportRegion);
-	renderAction.setSmoothing(true);
-	renderAction.setTransparencyType(SoGLRenderAction::BLEND);
-
-	renderAction.apply(m_coordinateSystemRoot);
+	renderAction.apply(root);
 
 	glPopMatrix();
 	glPopAttrib();
@@ -697,6 +694,8 @@ void MultiViewportManager::renderCoordinateSystem() {
 
 void MultiViewportManager::handleSizeChange(const wxSize& canvasSize) {
 	updateViewportLayouts(canvasSize);
+	// Invalidate picking cache on size change
+	m_pickingCache.invalidate();
 }
 
 void MultiViewportManager::updateViewportLayouts(const wxSize& canvasSize) {
@@ -728,11 +727,11 @@ void MultiViewportManager::updateViewportLayouts(const wxSize& canvasSize) {
 		" - " + std::to_string(canvasSize.x - margin) + 
 		"], wxY: [" + std::to_string(wxYTop) + " - " + std::to_string(wxYBottom) + "]");
 
-	// Coordinate system (bottom-right)
+	// Coordinate system (bottom-right) - Y in GL coordinates (from bottom)
 	int coordSize = static_cast<int>(80 * m_dpiScale);
 	m_viewports[VIEWPORT_COORDINATE_SYSTEM] = ViewportInfo(
 		canvasSize.x - coordSize - margin,
-		canvasSize.y - coordSize - margin,
+		margin,  // GL Y coordinate = margin (near bottom)
 		coordSize,
 		coordSize
 	);
@@ -907,32 +906,44 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 				return true;
 			}
 			else if (event.Moving()) {
-				// Handle hover effect
-				SoRayPickAction pickAction(viewportRegion);
-				pickAction.setPoint(pickPoint);
-				pickAction.apply(m_cubeOutlineRoot);
-
-				SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
+				// Handle hover effect with picking cache optimization
+				wxPoint currentMousePos(static_cast<int>(event.GetX()), static_cast<int>(event.GetY()));
 				std::string hoveredShape = "";
 
-				if (pickedPoint) {
-					SoPath* path = pickedPoint->getPath();
-					if (path) {
-						hoveredShape = findShapeNameFromPath(path);
-						SbVec3f worldPos = pickedPoint->getPoint();
-						static std::string lastLoggedShape = "";
-						if (hoveredShape != lastLoggedShape) {
-							LOG_INF_S("MultiViewportManager: Hovering over shape '" + hoveredShape + "' at worldPos(" +
-								std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
-							lastLoggedShape = hoveredShape;
+				// Check if we should perform a new pick or use cached result
+				if (m_pickingCache.shouldRepick(currentMousePos)) {
+					// Perform actual picking
+					SoRayPickAction pickAction(viewportRegion);
+					pickAction.setPoint(pickPoint);
+					pickAction.apply(m_cubeOutlineRoot);
+
+					SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
+
+					if (pickedPoint) {
+						SoPath* path = pickedPoint->getPath();
+						if (path) {
+							hoveredShape = findShapeNameFromPath(path);
+							SbVec3f worldPos = pickedPoint->getPoint();
+							static std::string lastLoggedShape = "";
+							if (hoveredShape != lastLoggedShape) {
+								LOG_INF_S("MultiViewportManager: Hovering over shape '" + hoveredShape + "' at worldPos(" +
+									std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
+								lastLoggedShape = hoveredShape;
+							}
+						}
+					} else {
+						static bool loggedNoPick = false;
+						if (!loggedNoPick) {
+							LOG_INF_S("MultiViewportManager: Mouse moving in viewport but no shape picked");
+							loggedNoPick = true;
 						}
 					}
+
+					// Update cache
+					m_pickingCache.update(currentMousePos, hoveredShape);
 				} else {
-					static bool loggedNoPick = false;
-					if (!loggedNoPick) {
-						LOG_INF_S("MultiViewportManager: Mouse moving in viewport but no shape picked");
-						loggedNoPick = true;
-					}
+					// Use cached result
+					hoveredShape = m_pickingCache.lastResult;
 				}
 				
 				// Update hover state if changed
@@ -974,10 +985,11 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 		}
 	}
 
-	// Mouse is not in any viewport - clear hover state
+	// Mouse is not in any viewport - clear hover state and invalidate cache
 	if (event.Moving() && !m_lastHoveredShape.empty()) {
 		updateShapeHoverState(m_lastHoveredShape, false);
 		m_lastHoveredShape = "";
+		m_pickingCache.invalidate();
 		if (m_canvas) {
 			m_canvas->Refresh();
 		}
@@ -1192,40 +1204,42 @@ void MultiViewportManager::setCubeMaterialColor(const SbColor& color) {
 void MultiViewportManager::updateShapeHoverState(const std::string& shapeName, bool isHovering) {
 	// Normalize shape name - SbName may convert spaces to underscores
 	std::string normalizedName = shapeName;
-	// Replace underscores with spaces for matching
 	std::replace(normalizedName.begin(), normalizedName.end(), '_', ' ');
 	
-	// Find the shape in composite shapes
-	for (const auto& compositeShape : m_compositeShapes) {
-		// Compare both original and normalized names
-		if ((compositeShape.shapeName == shapeName || compositeShape.shapeName == normalizedName) && compositeShape.material) {
-			if (isHovering) {
-				LOG_INF_S("MultiViewportManager: Hovering " + compositeShape.shapeName + " - changing to hover color");
-				setShapeMaterialColor(compositeShape.material, m_hoverColor);
-				
-				// For arrows, also update child materials (arrow heads)
-				if (compositeShape.shapeName.find("Arrow") != std::string::npos && compositeShape.rootNode) {
-					updateArrowHeadMaterials(compositeShape.rootNode, m_hoverColor);
-				}
-			} else {
-				LOG_INF_S("MultiViewportManager: Leaving " + compositeShape.shapeName + " - restoring normal color");
-				// Restore original color based on shape type
-				if (compositeShape.shapeName == "Cube" || compositeShape.shapeName == "Sphere") {
-					setShapeMaterialColor(compositeShape.material, SbColor(0.8f, 1.0f, 0.8f));  // Green
-				} else {
-					setShapeMaterialColor(compositeShape.material, m_normalColor);  // Gray
-				}
-				
-				// For arrows, also restore child materials (arrow heads)
-				if (compositeShape.shapeName.find("Arrow") != std::string::npos && compositeShape.rootNode) {
-					updateArrowHeadMaterials(compositeShape.rootNode, m_normalColor);
-				}
-			}
-			return;
+	// Fast lookup using hash map
+	size_t shapeIndex = SIZE_MAX;
+	auto it = m_shapeNameToIndex.find(shapeName);
+	if (it != m_shapeNameToIndex.end()) {
+		shapeIndex = it->second;
+	} else {
+		// Try normalized name
+		it = m_shapeNameToIndex.find(normalizedName);
+		if (it != m_shapeNameToIndex.end()) {
+			shapeIndex = it->second;
 		}
 	}
 	
-	LOG_DBG_S("MultiViewportManager: Shape '" + shapeName + "' not found or has no material");
+	if (shapeIndex == SIZE_MAX || shapeIndex >= m_compositeShapes.size()) {
+		LOG_DBG_S("MultiViewportManager: Shape '" + shapeName + "' not found in index");
+		return;
+	}
+	
+	CompositeShape& compositeShape = m_compositeShapes[shapeIndex];
+	
+	if (isHovering) {
+		LOG_INF_S("MultiViewportManager: Hovering " + compositeShape.shapeName + " - changing to hover color");
+		// Batch update all materials in the shape
+		compositeShape.setAllMaterialsColor(m_hoverColor);
+	} else {
+		LOG_INF_S("MultiViewportManager: Leaving " + compositeShape.shapeName + " - restoring normal color");
+		// Restore original color based on shape type
+		SbColor restoreColor = m_normalColor;
+		if (compositeShape.shapeName == "Cube" || compositeShape.shapeName == "Sphere") {
+			restoreColor = SbColor(0.8f, 1.0f, 0.8f);  // Green
+		}
+		// Batch update all materials in the shape
+		compositeShape.setAllMaterialsColor(restoreColor);
+	}
 }
 
 void MultiViewportManager::setShapeMaterialColor(SoMaterial* material, const SbColor& color) {

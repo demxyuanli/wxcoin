@@ -115,6 +115,13 @@ if(WIN32)
     add_definitions(-D_WINDOWS -DWIN32_LEAN_AND_MEAN -DNOMINMAX)
 endif()
 
+# Viewport debugging option
+option(DEBUG_VIEWPORT_LOGS "Enable detailed viewport debug logging" OFF)
+if(DEBUG_VIEWPORT_LOGS)
+    add_compile_definitions(DEBUG_VIEWPORT_LOGS)
+    message(STATUS "Viewport debug logging enabled")
+endif()
+
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CADNav)
 
 # MSVC specific settings

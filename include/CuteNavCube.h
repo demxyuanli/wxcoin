@@ -4,6 +4,7 @@
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
+#include <Inventor/nodes/SoMaterial.h>
 #include <wx/event.h>
 #include <wx/gdicmn.h>
 #include <wx/colour.h>
@@ -45,6 +46,12 @@ public:
 	void getPosition(int& x, int& y) const { x = m_positionX; y = m_positionY; }
 	void setSize(int size) { m_cubeSize = size; }
 	int getSize() const { return m_cubeSize; }
+
+	// Hover effect configuration
+	void setHoverColors(const SbColor& normalColor, const SbColor& hoverColor) {
+		m_normalFaceColor = normalColor;
+		m_hoverFaceColor = hoverColor;
+	}
 
 private:
 	void setupGeometry();
@@ -113,6 +120,13 @@ private:
 	int m_circleRadius;
 	int m_circleMarginX;
 	int m_circleMarginY;
+
+	// Hover effect state management
+	std::string m_hoveredFace;                                    // Currently hovered face
+	std::map<std::string, SoMaterial*> m_faceMaterials;          // Materials for each face
+	std::map<std::string, SbColor> m_faceBaseColors;             // Base color for each face
+	SbColor m_normalFaceColor;                                   // Normal face color
+	SbColor m_hoverFaceColor;                                    // Hover face color
 
 	// Face normal vectors and center points for camera positioning
 	std::map<std::string, std::pair<SbVec3f, SbVec3f>> m_faceNormals;

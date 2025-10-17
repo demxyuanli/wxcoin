@@ -4,6 +4,8 @@
 #include <wx/gdicmn.h>
 #include <memory>
 #include <map>
+#include <unordered_map>
+#include <algorithm>
 #include <Inventor/nodes/SoSeparator.h>
 #include "interfaces/IMultiViewportManager.h"
 #include <Inventor/nodes/SoCamera.h>
@@ -15,7 +17,7 @@
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoLineSet.h>
 #include <Inventor/nodes/SoText2.h>
-#include <Inventor/actions/SoGLRenderAction.h>  // Add this include
+#include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/nodes/SoEventCallback.h>
 #include <Inventor/events/SoMouseButtonEvent.h>
 #include <Inventor/events/SoLocation2Event.h>
@@ -28,6 +30,22 @@
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/SbName.h>
 #include <wx/menu.h>
+#include "CoordinateTransformer.h"
+#include "ViewportConfig.h"
+#include "logger/Logger.h"
+
+// Define viewport logging macros
+#ifdef DEBUG_VIEWPORT_LOGS
+	#define LOG_VIEWPORT_DBG(msg) LOG_DBG_S(msg)
+	#define LOG_VIEWPORT_TRACE(msg) LOG_INF_S(msg)
+#else
+	#define LOG_VIEWPORT_DBG(msg) do {} while(0)
+	#define LOG_VIEWPORT_TRACE(msg) do {} while(0)
+#endif
+
+#define LOG_VIEWPORT_ERR(msg) LOG_ERR_S(msg)
+#define LOG_VIEWPORT_WRN(msg) LOG_WRN_S(msg)
+#define LOG_VIEWPORT_INFO(msg) LOG_INF_S(msg)
 
 // Forward declarations
 class SoPickedPoint;
@@ -85,6 +103,9 @@ private:
 	void renderNavigationCube();
 	void renderCubeOutline();
 	void renderCoordinateSystem();
+	
+	// Generic viewport rendering function
+	void renderViewport(const ViewportInfo& viewport, SoSeparator* root);
 
 	void setViewport(const ViewportInfo& viewport);
 	void syncCameraWithMain(SoCamera* targetCamera);
@@ -139,6 +160,9 @@ private:
 	int m_margin;
 	float m_dpiScale;
 	bool m_initialized;  // Add this flag
+	
+	// Coordinate transformation helper
+	std::unique_ptr<CoordinateTransformer> m_coordTransformer;
 
 	// Shape name mapping for click detection
 	std::map<std::string, std::string> m_shapeNames; // position -> shape name
@@ -148,14 +172,76 @@ private:
 		SoSeparator* rootNode;
 		std::string shapeName;
 		std::vector<SoNode*> childNodes;
-		SoMaterial* material;  // Material for hover effect
+		SoMaterial* material;  // Primary material for hover effect
+		std::vector<SoMaterial*> allMaterials;  // All materials in this shape (for arrows with multiple parts)
 
 		CompositeShape(SoSeparator* root, const std::string& name, SoMaterial* mat = nullptr)
 			: rootNode(root), shapeName(name), material(mat) {
+			if (mat) {
+				allMaterials.push_back(mat);
+			}
+		}
+
+		// Collect all materials from the scene graph
+		void collectMaterials(SoNode* node) {
+			if (!node) return;
+
+			if (node->isOfType(SoMaterial::getClassTypeId())) {
+				SoMaterial* mat = static_cast<SoMaterial*>(node);
+				// Avoid duplicates
+				if (std::find(allMaterials.begin(), allMaterials.end(), mat) == allMaterials.end()) {
+					allMaterials.push_back(mat);
+				}
+			}
+
+			if (node->isOfType(SoSeparator::getClassTypeId())) {
+				SoSeparator* sep = static_cast<SoSeparator*>(node);
+				for (int i = 0; i < sep->getNumChildren(); ++i) {
+					collectMaterials(sep->getChild(i));
+				}
+			}
+		}
+
+		// Update all materials to a given color
+		void setAllMaterialsColor(const SbColor& color) {
+			for (SoMaterial* mat : allMaterials) {
+				if (mat) {
+					mat->diffuseColor.setValue(color);
+				}
+			}
+		}
+	};
+
+	// Picking cache for performance optimization
+	struct PickingCache {
+		wxPoint lastPickPos;       // Last picking position
+		std::string lastResult;    // Last picked shape name
+		bool isValid;              // Cache validity flag
+		int pickThreshold;         // Minimum pixel distance to trigger new pick
+
+		PickingCache() : lastPickPos(-1, -1), lastResult(""), isValid(false), pickThreshold(3) {}
+
+		bool shouldRepick(const wxPoint& currentPos) const {
+			if (!isValid) return true;
+			int dx = currentPos.x - lastPickPos.x;
+			int dy = currentPos.y - lastPickPos.y;
+			return (dx * dx + dy * dy) > (pickThreshold * pickThreshold);
+		}
+
+		void update(const wxPoint& pos, const std::string& result) {
+			lastPickPos = pos;
+			lastResult = result;
+			isValid = true;
+		}
+
+		void invalidate() {
+			isValid = false;
+			lastResult = "";
 		}
 	};
 
 	std::vector<CompositeShape> m_compositeShapes;
+	std::unordered_map<std::string, size_t> m_shapeNameToIndex;  // Fast shape lookup
 	
 	// Context menu IDs
 	enum MenuIds {
@@ -174,4 +260,7 @@ private:
 	SoMaterial* m_cubeMaterial;
 	SbColor m_normalColor;
 	SbColor m_hoverColor;
+
+	// Picking cache instance
+	PickingCache m_pickingCache;
 };

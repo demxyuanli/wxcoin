@@ -5,6 +5,7 @@ set(CADVIEW_SOURCES
     ${CMAKE_SOURCE_DIR}/src/view/CanvasOptimized.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/MultiViewportManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/view/CoordinateTransformer.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewRefreshManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/DynamicSilhouetteRenderer.cpp
     ${CMAKE_SOURCE_DIR}/src/view/FaceInfoOverlay.cpp
@@ -15,6 +16,8 @@ set(CADVIEW_HEADERS
     ${CMAKE_SOURCE_DIR}/include/view/CanvasOptimized.h
     ${CMAKE_SOURCE_DIR}/include/ViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
+    ${CMAKE_SOURCE_DIR}/include/CoordinateTransformer.h
+    ${CMAKE_SOURCE_DIR}/include/ViewportConfig.h
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
     ${CMAKE_SOURCE_DIR}/include/EventCoordinator.h
     ${CMAKE_SOURCE_DIR}/include/DynamicSilhouetteRenderer.h

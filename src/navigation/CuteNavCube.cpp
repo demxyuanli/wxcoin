@@ -81,6 +81,9 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_circleRadius(config.circleRadius > 0 ? config.circleRadius : 150)
 	, m_circleMarginX(config.circleMarginX >= 0 ? config.circleMarginX : 50)
 	, m_circleMarginY(config.circleMarginY >= 0 ? config.circleMarginY : 50)
+	, m_hoveredFace("")
+	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
+	, m_hoverFaceColor(1.0f, 0.85f, 0.4f)
 {
 	m_root->ref();
 	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
@@ -125,6 +128,9 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_circleRadius(config.circleRadius > 0 ? config.circleRadius : 150)
 	, m_circleMarginX(config.circleMarginX >= 0 ? config.circleMarginX : 50)
 	, m_circleMarginY(config.circleMarginY >= 0 ? config.circleMarginY : 50)
+	, m_hoveredFace("")
+	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
+	, m_hoverFaceColor(1.0f, 0.85f, 0.4f)
 {
 	m_root->ref();
 	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
@@ -307,6 +313,10 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 }
 
 void CuteNavCube::setupGeometry() {
+	// Clear existing face maps before rebuilding geometry
+	m_faceMaterials.clear();
+	m_faceBaseColors.clear();
+
 	// Safely clear previous geometry while preserving camera
 	bool cameraWasInScene = false;
 	if (m_root->getNumChildren() > 0) {
@@ -324,8 +334,14 @@ void CuteNavCube::setupGeometry() {
 	m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
 	m_orthoCamera->nearDistance = 0.05f; // Reduced to ensure all faces are visible
 	m_orthoCamera->farDistance = 15.0f;  // Increased to include all geometry
-	m_orthoCamera->position.setValue(0.0f, 0.0f, 5.0f); // Initial position
+	m_orthoCamera->position.setValue(0.0f, 0.0f, 2.5f); // Move camera closer to make cube fill more viewport
 	m_orthoCamera->orientation.setValue(SbRotation(SbVec3f(1, 0, 0), -M_PI / 2)); // Rotate to make Z up
+	
+	// Set explicit height for orthographic camera to control zoom level
+	SoOrthographicCamera* ortho = static_cast<SoOrthographicCamera*>(m_orthoCamera);
+	if (ortho) {
+		ortho->height.setValue(1.8f); // Make cube fill ~70% of viewport (cube is ~1.0 units)
+	}
 	
 	// Always add camera back to the scene
 	m_root->addChild(m_orthoCamera);
@@ -491,6 +507,12 @@ void CuteNavCube::setupGeometry() {
 	mainFaceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
 	mainFaceMaterial->shininess.setValue(m_shininess);
 	mainFaceMaterial->transparency.setValue(m_transparency);
+	m_faceBaseColors["Front"] = mainFaceMaterial->diffuseColor[0];
+	m_faceBaseColors["Back"] = mainFaceMaterial->diffuseColor[0];
+	m_faceBaseColors["Left"] = mainFaceMaterial->diffuseColor[0];
+	m_faceBaseColors["Right"] = mainFaceMaterial->diffuseColor[0];
+	m_faceBaseColors["Top"] = mainFaceMaterial->diffuseColor[0];
+	m_faceBaseColors["Bottom"] = mainFaceMaterial->diffuseColor[0];
 
 	SoMaterial* edgeAndCornerMaterial = new SoMaterial;
 	// Use edge color for edge and corner faces
@@ -501,6 +523,18 @@ void CuteNavCube::setupGeometry() {
 	edgeAndCornerMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
 	edgeAndCornerMaterial->shininess.setValue(m_shininess);
 	edgeAndCornerMaterial->transparency.setValue(m_transparency);
+	m_faceBaseColors["EdgeTF"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeTB"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeTL"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeTR"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeBF"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeBB"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeBL"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeBR"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeFR"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeFL"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeBL2"] = edgeAndCornerMaterial->diffuseColor[0];
+	m_faceBaseColors["EdgeBR2"] = edgeAndCornerMaterial->diffuseColor[0];
 
 	// --- Pre-generate high-quality textures for edges and corners ---
 	// Use DPI manager for optimal texture resolution (already declared above)
@@ -545,44 +579,58 @@ void CuteNavCube::setupGeometry() {
 		face->coordIndex.set1Value(faceDef.indices.size(), -1); // End marker
 
 		if (faceDef.materialType == 0) { // Main face
-			faceSep->addChild(mainFaceMaterial);
+			// Create dedicated material for main face
+			SoMaterial* faceMaterial = new SoMaterial;
+			faceMaterial->diffuseColor.setValue(m_normalFaceColor[0], m_normalFaceColor[1], m_normalFaceColor[2]);
+			faceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
+			faceMaterial->shininess.setValue(m_shininess);
+			faceMaterial->transparency.setValue(m_transparency);
+
+			faceSep->addChild(faceMaterial);
+			m_faceMaterials[faceDef.name] = faceMaterial;
+			m_faceBaseColors[faceDef.name] = SbColor(m_normalFaceColor[0], m_normalFaceColor[1], m_normalFaceColor[2]);
+
 			if (m_showTextures) {
 				// Use DPI manager for dynamic texture resolution (already declared above)
 				int faceTexWidth = dpiManager.getScaledTextureSize(baseTexSize);
 				int faceTexHeight = dpiManager.getScaledTextureSize(baseTexSize);
 				std::vector<unsigned char> imageData(faceTexWidth * faceTexHeight * 4);
 				if (generateFaceTexture(faceDef.textureKey, imageData.data(), faceTexWidth, faceTexHeight, wxColour(255, 255, 255, 160))) {
-				SoTexture2* texture = new SoTexture2;
+					SoTexture2* texture = new SoTexture2;
 					texture->image.setValue(SbVec2s(faceTexWidth, faceTexHeight), 4, imageData.data());
-				texture->model = SoTexture2::DECAL;
-				faceSep->addChild(texture);
+					texture->model = SoTexture2::DECAL;
+					faceSep->addChild(texture);
 				}
 			}
 
-			if (faceDef.textureKey == "Back") {
-				// Special UV mapping for the 'Back' face to correct its orientation
-				face->textureCoordIndex.set1Value(0, 0);
-				face->textureCoordIndex.set1Value(1, 1);
-				face->textureCoordIndex.set1Value(2, 2);
-				face->textureCoordIndex.set1Value(3, 3);
-			}
-			else {
-				// Default UV mapping for other main faces
-				face->textureCoordIndex.set1Value(0, 1);
-				face->textureCoordIndex.set1Value(1, 0);
-				face->textureCoordIndex.set1Value(2, 3);
-				face->textureCoordIndex.set1Value(3, 2);
-			}
+			// Set texture coordinate indices for main faces (quads)
+			face->textureCoordIndex.set1Value(0, 0);
+			face->textureCoordIndex.set1Value(1, 1);
+			face->textureCoordIndex.set1Value(2, 2);
+			face->textureCoordIndex.set1Value(3, 3);
 			face->textureCoordIndex.set1Value(4, -1);
 		}
 		else { // Edges and Corners
-			faceSep->addChild(edgeAndCornerMaterial);
+			// Create dedicated material for edge/corner face
+			SoMaterial* faceMaterial = new SoMaterial;
+			float edgeR = m_edgeColor.Red() / 255.0f;
+			float edgeG = m_edgeColor.Green() / 255.0f;
+			float edgeB = m_edgeColor.Blue() / 255.0f;
+			faceMaterial->diffuseColor.setValue(edgeR, edgeG, edgeB);
+			faceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
+			faceMaterial->shininess.setValue(m_shininess);
+			faceMaterial->transparency.setValue(m_transparency);
+
+			faceSep->addChild(faceMaterial);
+			m_faceMaterials[faceDef.name] = faceMaterial;
+			m_faceBaseColors[faceDef.name] = SbColor(edgeR, edgeG, edgeB);
+
 			if (m_showTextures) {
-			if (faceDef.materialType == 1) { // Edge
-				if (greyTexture) faceSep->addChild(greyTexture);
-			}
-			else { // Corner (materialType == 2)
-				if (whiteTexture) faceSep->addChild(whiteTexture);
+				if (faceDef.materialType == 1) { // Edge
+					if (greyTexture) faceSep->addChild(greyTexture);
+				}
+				else { // Corner (materialType == 2)
+					if (whiteTexture) faceSep->addChild(whiteTexture);
 				}
 			}
 
@@ -673,35 +721,57 @@ void CuteNavCube::updateCameraRotation() {
 }
 
 std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize) {
+	// Validate viewport size
+	if (viewportSize.x <= 0 || viewportSize.y <= 0) {
+		LOG_INF_S("CuteNavCube::pickRegion: Invalid viewport size - " + 
+			std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y));
+		return "";
+	}
+
+	// Add picking debug log
+	LOG_INF_S("CuteNavCube::pickRegion: Picking at position (" + 
+		std::to_string(mousePos[0]) + ", " + std::to_string(mousePos[1]) + 
+		") in viewport " + std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y));
+
 	SoRayPickAction pickAction(SbViewportRegion(viewportSize.x, viewportSize.y));
 	pickAction.setPoint(mousePos);
 	pickAction.apply(m_root);
 
 	SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
 	if (!pickedPoint) {
+		LOG_INF_S("CuteNavCube::pickRegion: No picked point (miss)");
 		return "";
 	}
 
 	SoPath* pickedPath = pickedPoint->getPath();
 	if (!pickedPath || pickedPath->getLength() == 0) {
+		LOG_INF_S("CuteNavCube::pickRegion: Invalid picked path");
 		return "";
 	}
+
+	// Add path length log
+	LOG_INF_S("CuteNavCube::pickRegion: Picked path length: " + std::to_string(pickedPath->getLength()));
 
 	// Find the named separator for the face
 	for (int i = pickedPath->getLength() - 1; i >= 0; --i) {
 		SoNode* node = pickedPath->getNode(i);
 		if (node && node->isOfType(SoSeparator::getClassTypeId()) && node->getName().getLength() > 0) {
 			std::string nameStr = node->getName().getString();
+			LOG_INF_S("CuteNavCube::pickRegion: Found named node at index " + std::to_string(i) + ": " + nameStr);
+			
 			// Check if this is a valid face name
 			auto viewIt = m_faceToView.find(nameStr);
 			auto normalIt = m_faceNormals.find(nameStr);
 			if (viewIt != m_faceToView.end() && normalIt != m_faceNormals.end()) {
 				LOG_INF_S("CuteNavCube::pickRegion: Picked face: " + nameStr + ", maps to view: " + viewIt->second);
 				return nameStr; // Return the actual face name, not the mapped view
+			} else {
+				LOG_INF_S("CuteNavCube::pickRegion: Named node '" + nameStr + "' is not a registered face");
 			}
 		}
 	}
 
+	LOG_INF_S("CuteNavCube::pickRegion: No valid face found in picked path");
 	return "";
 }
 
@@ -793,6 +863,64 @@ void CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 		static_cast<short>(event.GetX()),
 		static_cast<short>(event.GetY())
 	);
+
+	// Handle mouse movement (hover detection)
+	// Check for motion events (both Moving() and Dragging())
+	if (event.GetEventType() == wxEVT_MOTION) {
+		// Convert coordinates for picking
+		SbVec2s pickPos(currentPos[0], static_cast<short>(viewportSize.y - currentPos[1]));
+		std::string hoveredFace = pickRegion(pickPos, viewportSize);
+
+		// Update hover state
+		if (hoveredFace != m_hoveredFace) {
+			// Restore previous face color
+			if (!m_hoveredFace.empty()) {
+				std::map<std::string, SoMaterial*>::iterator matIt = m_faceMaterials.find(m_hoveredFace);
+				if (matIt != m_faceMaterials.end() && matIt->second) {
+					SbColor baseColor = m_normalFaceColor;
+					std::map<std::string, SbColor>::iterator colorIt = m_faceBaseColors.find(m_hoveredFace);
+					if (colorIt != m_faceBaseColors.end()) {
+						baseColor = colorIt->second;
+					}
+					matIt->second->diffuseColor.setValue(baseColor[0], baseColor[1], baseColor[2]);
+					LOG_INF_S("CuteNavCube::handleMouseEvent: Hovered out from face: " + m_hoveredFace);
+				}
+			}
+
+			// Set new hovered face color
+			if (!hoveredFace.empty()) {
+				std::map<std::string, SoMaterial*>::iterator matIt = m_faceMaterials.find(hoveredFace);
+				if (matIt != m_faceMaterials.end() && matIt->second) {
+					matIt->second->diffuseColor.setValue(m_hoverFaceColor[0], m_hoverFaceColor[1], m_hoverFaceColor[2]);
+					LOG_INF_S("CuteNavCube::handleMouseEvent: Hovered over face: " + hoveredFace);
+				}
+			}
+
+			m_hoveredFace = hoveredFace;
+		}
+
+		// Don't return here - allow click/drag events to be processed
+		if (!event.LeftIsDown()) {
+			return;
+		}
+	}
+
+	// When mouse leaves window, restore all face colors
+	if (event.Leaving()) {
+		if (!m_hoveredFace.empty()) {
+			std::map<std::string, SoMaterial*>::iterator matIt = m_faceMaterials.find(m_hoveredFace);
+			if (matIt != m_faceMaterials.end() && matIt->second) {
+				SbColor baseColor = m_normalFaceColor;
+				std::map<std::string, SbColor>::iterator colorIt = m_faceBaseColors.find(m_hoveredFace);
+				if (colorIt != m_faceBaseColors.end()) {
+					baseColor = colorIt->second;
+				}
+				matIt->second->diffuseColor.setValue(baseColor[0], baseColor[1], baseColor[2]);
+			}
+			m_hoveredFace = "";
+		}
+		return;
+	}
 
 	if (event.LeftDown()) {
 		m_isDragging = true;
