@@ -841,7 +841,7 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 		}
 
 		if (xInRange && yInRange) {
-			LOG_INF_S("MultiViewportManager: Mouse entered cube outline viewport range");
+			// LOG_INF_S("MultiViewportManager: Mouse entered cube outline viewport range"); // Too frequent, disabled
 			// Convert to viewport-local coordinates
 			// localX: 0 at left edge of viewport
 			// localY: 0 at top edge in visual space
@@ -857,15 +857,16 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 					std::to_string(localX) + ", " + std::to_string(pickY) + ")");
 			}
 			else if (event.Moving()) {
-				static int hoverLogCount = 0;
-				hoverLogCount++;
-				if (hoverLogCount % 50 == 0) {
-					LOG_INF_S("MultiViewportManager: Hover transform wx(" +
-						std::to_string(static_cast<int>(x)) + ", " +
-						std::to_string(static_cast<int>(y_wx)) + ") -> local(" +
-						std::to_string(localX) + ", " + std::to_string(localY) + ") -> pick(" +
-						std::to_string(localX) + ", " + std::to_string(pickY) + ")");
-				}
+				// Hover transform logging disabled for performance
+				// static int hoverLogCount = 0;
+				// hoverLogCount++;
+				// if (hoverLogCount % 50 == 0) {
+				//	LOG_INF_S("MultiViewportManager: Hover transform wx(" +
+				//		std::to_string(static_cast<int>(x)) + ", " +
+				//		std::to_string(static_cast<int>(y_wx)) + ") -> local(" +
+				//		std::to_string(localX) + ", " + std::to_string(localY) + ") -> pick(" +
+				//		std::to_string(localX) + ", " + std::to_string(pickY) + ")");
+				// }
 			}
 
 			// Use viewport region matching the cube outline viewport only
@@ -949,7 +950,7 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 					} else {
 						static bool loggedNoPick = false;
 						if (!loggedNoPick) {
-							LOG_INF_S("MultiViewportManager: Mouse moving in viewport but no shape picked");
+							// LOG_INF_S("MultiViewportManager: Mouse moving in viewport but no shape picked"); // Too frequent, disabled
 							loggedNoPick = true;
 						}
 					}

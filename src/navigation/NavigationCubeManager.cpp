@@ -83,13 +83,13 @@ void NavigationCubeManager::initCube() {
 
 			// If this is a face name, map it to the corresponding view
 			static const std::map<std::string, std::string> faceToView = {
-				// 6 Main faces
-				{ "Front",  "Top" },
-				{ "Back",   "Bottom" },
-				{ "Left",   "Right" },
-				{ "Right",  "Left" },
-				{ "Top",    "Front" },
-				{ "Bottom", "Back" },
+				// 6 Main faces - Click face -> View direction
+				{ "Front",  "Front" },
+				{ "Back",   "Back" },
+				{ "Left",   "Left" },
+				{ "Right",  "Right" },
+				{ "Top",    "Top" },
+				{ "Bottom", "Bottom" },
 
 				// 8 Corner faces (triangular)
 				{ "Corner0", "Top" },        // Front-Top-Left corner -> Top view
@@ -191,7 +191,17 @@ void NavigationCubeManager::initCube() {
 			}
 		};
 
-		m_navCube = std::make_unique<CuteNavCube>(cubeCallback, cameraMoveCallback, dpiScale, windowWidthPx, windowHeightPx, m_cubeConfig);
+		// Create refresh callback that requests refresh from canvas
+		auto refreshCallback = [this]() {
+			// Request refresh from the refresh manager if available, otherwise use canvas directly
+			if (m_canvas && m_canvas->getRefreshManager()) {
+				m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MANUAL_REQUEST, true);
+			} else if (m_canvas) {
+				m_canvas->Refresh(true);
+			}
+		};
+
+		m_navCube = std::make_unique<CuteNavCube>(cubeCallback, cameraMoveCallback, refreshCallback, dpiScale, windowWidthPx, windowHeightPx, m_cubeConfig);
 		m_navCube->setRotationChangedCallback([this]() {
 			syncMainCameraToCube();
 			m_canvas->Refresh(true);
@@ -282,10 +292,11 @@ bool NavigationCubeManager::handleMouseEvent(wxMouseEvent& event) {
 	float x = event.GetX() / dpiScale;
 	float y = event.GetY() / dpiScale;
 
-	// Use the actual geometric cube size for mouse detection, not just the layout size
-	int cubeSize = m_navCube->getSize();
+	// Use the layout size for mouse detection (viewport size where cube is rendered)
+	int cubeSize = m_cubeLayout.cubeSize;
 	if (x >= m_cubeLayout.x && x <= (m_cubeLayout.x + cubeSize) &&
 		y >= m_cubeLayout.y && y <= (m_cubeLayout.y + cubeSize)) {
+		// Mouse is within cube area - intercept all mouse events to prevent them from reaching canvas
 		wxMouseEvent cubeEvent(event);
 		cubeEvent.m_x = static_cast<int>((x - m_cubeLayout.x) * dpiScale);
 		cubeEvent.m_y = static_cast<int>((y - m_cubeLayout.y) * dpiScale);
@@ -295,13 +306,18 @@ bool NavigationCubeManager::handleMouseEvent(wxMouseEvent& event) {
 
 		if (event.GetEventType() == wxEVT_LEFT_DOWN ||
 			event.GetEventType() == wxEVT_LEFT_UP ||
-			event.GetEventType() == wxEVT_MOTION) {
+			event.GetEventType() == wxEVT_MOTION ||
+			event.GetEventType() == wxEVT_LEAVE_WINDOW) {
 			bool cubeHandled = m_navCube->handleMouseEvent(cubeEvent, cube_viewport_scaled_size);
-			m_canvas->Refresh(true);
-			return cubeHandled; // Return whether cube actually handled the event
+			// Note: Removed m_canvas->Refresh(true) to prevent recursive refresh during mouse event handling
+			// The main rendering loop will handle refresh appropriately
+			return true; // Always consume events in cube area
 		}
+		
+		// For other event types in cube area, still consume them
+		return true; // Event consumed by cube area
 	}
-	return false; // Event not handled
+	return false; // Mouse not in cube area, let event continue to canvas
 }
 
 void NavigationCubeManager::handleSizeChange() {

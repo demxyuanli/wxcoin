@@ -5,6 +5,7 @@
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoDirectionalLight.h>
 #include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoTexture2.h>
 #include <wx/event.h>
 #include <wx/gdicmn.h>
 #include <wx/colour.h>
@@ -21,6 +22,10 @@ public:
 	CuteNavCube(std::function<void(const std::string&)> viewChangeCallback, float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config);
 	CuteNavCube(std::function<void(const std::string&)> viewChangeCallback,
 			   std::function<void(const SbVec3f&, const SbRotation&)> cameraMoveCallback,
+			   float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config);
+	CuteNavCube(std::function<void(const std::string&)> viewChangeCallback,
+			   std::function<void(const SbVec3f&, const SbRotation&)> cameraMoveCallback,
+			   std::function<void()> refreshCallback,
 			   float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config);
 	~CuteNavCube();
 
@@ -40,6 +45,8 @@ public:
 	void setCameraPosition(const SbVec3f& position);
 	void setCameraOrientation(const SbRotation& orientation);
 	void setRotationChangedCallback(std::function<void()> callback) { m_rotationChangedCallback = callback; }
+	void setRefreshCallback(std::function<void()> callback) { m_refreshCallback = callback; }
+	void setCanvas(class Canvas* canvas) { m_canvas = canvas; }
 
 	// CuteNavCube specific methods
 	void setPosition(int x, int y) { m_positionX = x; m_positionY = y; }
@@ -59,7 +66,10 @@ private:
 	void updateCameraRotation();
 	void updateSeparatorMaterials(SoSeparator* sep);
 	bool generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height, const wxColour& bgColor);
+	void regenerateFaceTexture(const std::string& faceName, bool isHover);
 	void calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const;
+	void generateAndCacheTextures();  // Generate and cache all textures at initialization
+	SoTexture2* createTextureForFace(const std::string& faceName, bool isHover);  // Helper to create a texture
 
 	// Texture cache entry
 	struct TextureData {
@@ -81,6 +91,10 @@ private:
 	std::function<void(const std::string&)> m_viewChangeCallback;
 	std::function<void(const SbVec3f&, const SbRotation&)> m_cameraMoveCallback;
 	std::function<void()> m_rotationChangedCallback;
+	std::function<void()> m_refreshCallback;
+
+	// Canvas reference for refresh operations
+	class Canvas* m_canvas;
 	bool m_isDragging;
 	SbVec2s m_lastMousePos;
 	float m_rotationX;
@@ -128,9 +142,14 @@ private:
 	// Hover effect state management
 	std::string m_hoveredFace;                                    // Currently hovered face
 	std::map<std::string, SoMaterial*> m_faceMaterials;          // Materials for each face
+	std::map<std::string, SoSeparator*> m_faceSeparators;        // Separators for each face (for texture replacement)
 	std::map<std::string, SbColor> m_faceBaseColors;             // Base color for each face
 	SbColor m_normalFaceColor;                                   // Normal face color
 	SbColor m_hoverFaceColor;                                    // Hover face color
+	
+	// Texture cache for each face (normal and hover states)
+	std::map<std::string, SoTexture2*> m_normalTextures;         // Normal state textures for each face
+	std::map<std::string, SoTexture2*> m_hoverTextures;          // Hover state textures for each face
 
 	// Face normal vectors and center points for camera positioning
 	std::map<std::string, std::pair<SbVec3f, SbVec3f>> m_faceNormals;

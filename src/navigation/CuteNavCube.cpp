@@ -1,7 +1,9 @@
 #include "CuteNavCube.h"
+#include "Canvas.h"
 #include "NavigationCubeConfigDialog.h"
 #include "DPIManager.h"
 #include "DPIAwareRendering.h"
+#include "config/ConfigManager.h"
 #include <algorithm>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoMaterial.h>
@@ -85,7 +87,8 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_circleMarginY(config.circleMarginY >= 0 ? config.circleMarginY : 50)
 	, m_hoveredFace("")
 	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
-	, m_hoverFaceColor(1.0f, 0.85f, 0.4f)
+	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
+	, m_canvas(nullptr)
 {
 	m_root->ref();
 	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
@@ -103,6 +106,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_viewChangeCallback(viewChangeCallback)
 	, m_cameraMoveCallback(cameraMoveCallback)
 	, m_rotationChangedCallback(nullptr)
+	, m_refreshCallback(nullptr)
 	, m_isDragging(false)
 	, m_lastMousePos(0, 0)
 	, m_rotationX(0.0f)
@@ -134,7 +138,60 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_circleMarginY(config.circleMarginY >= 0 ? config.circleMarginY : 50)
 	, m_hoveredFace("")
 	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
-	, m_hoverFaceColor(1.0f, 0.85f, 0.4f)
+	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
+	, m_canvas(nullptr)
+{
+	m_root->ref();
+	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
+	initialize();
+}
+
+// New constructor with refresh callback
+CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallback,
+						std::function<void(const SbVec3f&, const SbRotation&)> cameraMoveCallback,
+						std::function<void()> refreshCallback,
+						float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config)
+	: m_root(new SoSeparator)
+	, m_orthoCamera(new SoOrthographicCamera)
+	, m_enabled(true)
+	, m_dpiScale(dpiScale)
+	, m_viewChangeCallback(viewChangeCallback)
+	, m_cameraMoveCallback(cameraMoveCallback)
+	, m_rotationChangedCallback(nullptr)
+	, m_refreshCallback(refreshCallback)
+	, m_isDragging(false)
+	, m_lastMousePos(0, 0)
+	, m_rotationX(0.0f)
+	, m_rotationY(0.0f)
+	, m_lastDragTime(0)
+	, m_windowWidth(windowWidth)
+	, m_windowHeight(windowHeight)
+	, m_positionX(config.x >= 0 ? config.x : 20)  // Use config or default
+	, m_positionY(config.y >= 0 ? config.y : 20)  // Use config or default
+	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
+	, m_currentX(0.0f)
+	, m_currentY(0.0f)
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.75f)  // Increased from 0.50 to 0.75 for better picking
+	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
+	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
+	, m_needsGeometryRebuild(false)
+	, m_showEdges(config.showEdges)
+	, m_showCorners(config.showCorners)
+	, m_showTextures(config.showTextures)
+	, m_enableAnimation(config.enableAnimation)
+	, m_textColor(config.textColor)
+	, m_edgeColor(config.edgeColor)
+	, m_cornerColor(config.cornerColor)
+	, m_transparency(config.transparency >= 0.0f ? config.transparency : 0.0f)
+	, m_shininess(config.shininess >= 0.0f ? config.shininess : 0.5f)
+	, m_ambientIntensity(config.ambientIntensity >= 0.0f ? config.ambientIntensity : 0.8f)
+	, m_circleRadius(config.circleRadius > 0 ? config.circleRadius : 150)
+	, m_circleMarginX(config.circleMarginX >= 0 ? config.circleMarginX : 50)
+	, m_circleMarginY(config.circleMarginY >= 0 ? config.circleMarginY : 50)
+	, m_hoveredFace("")
+	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
+	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
+	, m_canvas(nullptr)
 {
 	m_root->ref();
 	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
@@ -142,6 +199,20 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 }
 
 CuteNavCube::~CuteNavCube() {
+	// Release cached textures
+	for (auto& pair : m_normalTextures) {
+		if (pair.second) {
+			pair.second->unref();
+		}
+	}
+	for (auto& pair : m_hoverTextures) {
+		if (pair.second) {
+			pair.second->unref();
+		}
+	}
+	m_normalTextures.clear();
+	m_hoverTextures.clear();
+	
 	m_orthoCamera->unref(); // Release camera reference
 	m_root->unref();
 }
@@ -150,13 +221,13 @@ void CuteNavCube::initialize() {
 	setupGeometry();
 
 	m_faceToView = {
-		// 6 Main faces
-		{ "Front",  "Top" },
-		{ "Back",   "Bottom" },
-		{ "Left",   "Right" },
-		{ "Right",  "Left" },
-		{ "Top",    "Front" },
-		{ "Bottom", "Back" },
+		// 6 Main faces - Click face -> View direction
+		{ "Front",  "Front" },
+		{ "Back",   "Back" },
+		{ "Left",   "Left" },
+		{ "Right",  "Right" },
+		{ "Top",    "Top" },
+		{ "Bottom", "Bottom" },
 
 		// 8 Corner faces (triangular)
 		{ "Corner0", "Top" },        // Front-Top-Left corner -> Top view
@@ -241,23 +312,26 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 
 	// Use high-quality font rendering for crisp text
 	auto& dpiManager = DPIManager::getInstance();
-	// Use appropriate font size for high-resolution textures (512x512)
-	// The formula width / 4 gives reasonable text size that fits within the texture
-	int baseFontSize = std::max(72, static_cast<int>(width / 4.0f)); // More reasonable font size
+	// Calculate optimal font size: larger fonts for better readability on small cube faces
+	// Use smaller ratios to get larger fonts for better precision
+	float fontRatio = (width >= 1024) ? 3.5f : 3.0f; // Even smaller ratio for larger, more precise fonts
+	int baseFontSize = std::max(40, static_cast<int>(width / fontRatio)); // Increased minimum font size
+	// Apply DPI scaling to font size for crisp rendering on high-DPI displays
+	baseFontSize = static_cast<int>(baseFontSize * dpiManager.getDPIScale());
 	LOG_INF_S("CuteNavCube::generateFaceTexture: Starting font setup - text: " + text +
 		", width: " + std::to_string(width) + "x" + std::to_string(height) +
 		", baseFontSize: " + std::to_string(baseFontSize) +
 		", DPI scale: " + std::to_string(dpiManager.getDPIScale()));
 
 	wxFont font(baseFontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Arial");
-	font.SetPointSize(baseFontSize); // Set font size directly
+	font.SetPointSize(baseFontSize);
+
+	dc.SetFont(font);
+	dc.SetTextForeground(wxColour(0, 0, 0)); // Black text for high contrast
 
 	LOG_INF_S("CuteNavCube::generateFaceTexture: Font setup - width: " + std::to_string(width) +
 		", baseFontSize: " + std::to_string(baseFontSize) +
 		", font point size: " + std::to_string(font.GetPointSize()));
-
-	dc.SetFont(font);
-	dc.SetTextForeground(wxColour(0, 0, 0)); // Black text for high contrast
 
 	wxSize textSize = dc.GetTextExtent(text);
 	LOG_INF_S("CuteNavCube::generateFaceTexture: Text metrics - text: " + text +
@@ -497,67 +571,117 @@ void CuteNavCube::setupGeometry() {
 	int faceIndex = 0;
 
 	SoMaterial* mainFaceMaterial = new SoMaterial;
-	// Use text color for main faces
-	float r = m_textColor.Red() / 255.0f;
-	float g = m_textColor.Green() / 255.0f;
-	float b = m_textColor.Blue() / 255.0f;
-	mainFaceMaterial->diffuseColor.setValue(r, g, b);
-	mainFaceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
-	mainFaceMaterial->shininess.setValue(m_shininess);
-	mainFaceMaterial->transparency.setValue(m_transparency);
-	m_faceBaseColors["Front"] = mainFaceMaterial->diffuseColor[0];
-	m_faceBaseColors["Back"] = mainFaceMaterial->diffuseColor[0];
-	m_faceBaseColors["Left"] = mainFaceMaterial->diffuseColor[0];
-	m_faceBaseColors["Right"] = mainFaceMaterial->diffuseColor[0];
-	m_faceBaseColors["Top"] = mainFaceMaterial->diffuseColor[0];
-	m_faceBaseColors["Bottom"] = mainFaceMaterial->diffuseColor[0];
+	// Frosted glass material for main faces - read all properties from config
+	mainFaceMaterial->diffuseColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialDiffuseR", 0.7)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialDiffuseG", 0.9)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialDiffuseB", 0.7))
+	);
+	mainFaceMaterial->ambientColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialAmbientR", 0.4)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialAmbientG", 0.6)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialAmbientB", 0.4))
+	);
+	mainFaceMaterial->specularColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialSpecularR", 0.8)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialSpecularG", 1.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialSpecularB", 0.8))
+	);
+	mainFaceMaterial->emissiveColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialEmissiveR", 0.05)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialEmissiveG", 0.15)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialEmissiveB", 0.05))
+	);
+	mainFaceMaterial->shininess.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialShininess", 0.4))
+	);
+	mainFaceMaterial->transparency.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialTransparency", 0.15))
+	);
+	// Store base colors for hover effects from config
+	SbColor baseColor(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorR", 0.6)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorG", 0.8)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorB", 0.6))
+	);
+	m_faceBaseColors["Front"] = baseColor;
+	m_faceBaseColors["Back"] = baseColor;
+	m_faceBaseColors["Left"] = baseColor;
+	m_faceBaseColors["Right"] = baseColor;
+	m_faceBaseColors["Top"] = baseColor;
+	m_faceBaseColors["Bottom"] = baseColor;
 
 	SoMaterial* edgeAndCornerMaterial = new SoMaterial;
-	// Use edge color for edge and corner faces
-	r = m_edgeColor.Red() / 255.0f;
-	g = m_edgeColor.Green() / 255.0f;
-	b = m_edgeColor.Blue() / 255.0f;
-	edgeAndCornerMaterial->diffuseColor.setValue(r, g, b);
-	edgeAndCornerMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
-	edgeAndCornerMaterial->shininess.setValue(m_shininess);
-	edgeAndCornerMaterial->transparency.setValue(m_transparency);
-	m_faceBaseColors["EdgeTF"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeTB"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeTL"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeTR"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeBF"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeBB"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeBL"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeBR"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeFR"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeFL"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeBL2"] = edgeAndCornerMaterial->diffuseColor[0];
-	m_faceBaseColors["EdgeBR2"] = edgeAndCornerMaterial->diffuseColor[0];
+	// Frosted glass material for edges and corners - read all properties from config
+	edgeAndCornerMaterial->diffuseColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialDiffuseR", 0.6)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialDiffuseG", 0.8)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialDiffuseB", 0.6))
+	);
+	edgeAndCornerMaterial->ambientColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientR", 0.3)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientG", 0.5)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientB", 0.3))
+	);
+	edgeAndCornerMaterial->specularColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialSpecularR", 0.7)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialSpecularG", 0.9)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialSpecularB", 0.7))
+	);
+	edgeAndCornerMaterial->emissiveColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveR", 0.04)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveG", 0.12)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveB", 0.04))
+	);
+	edgeAndCornerMaterial->shininess.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialShininess", 0.35))
+	);
+	edgeAndCornerMaterial->transparency.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialTransparency", 0.1))
+	);
+	// Store base colors for edges and corners from config
+	SbColor edgeBaseColor(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeHoverColorR", 0.5)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeHoverColorG", 0.7)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeHoverColorB", 0.5))
+	);
+	m_faceBaseColors["EdgeTF"] = edgeBaseColor;
+	m_faceBaseColors["EdgeTB"] = edgeBaseColor;
+	m_faceBaseColors["EdgeTL"] = edgeBaseColor;
+	m_faceBaseColors["EdgeTR"] = edgeBaseColor;
+	m_faceBaseColors["EdgeBF"] = edgeBaseColor;
+	m_faceBaseColors["EdgeBB"] = edgeBaseColor;
+	m_faceBaseColors["EdgeBL"] = edgeBaseColor;
+	m_faceBaseColors["EdgeBR"] = edgeBaseColor;
+	m_faceBaseColors["EdgeFR"] = edgeBaseColor;
+	m_faceBaseColors["EdgeFL"] = edgeBaseColor;
+	m_faceBaseColors["EdgeBL2"] = edgeBaseColor;
+	m_faceBaseColors["EdgeBR2"] = edgeBaseColor;
+	// Corner faces use the same material but slightly different base color for hover effect from config
+	SbColor cornerBaseColor(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CornerHoverColorR", 0.4)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CornerHoverColorG", 0.6)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CornerHoverColorB", 0.4))
+	);
+	m_faceBaseColors["Corner0"] = cornerBaseColor;
+	m_faceBaseColors["Corner1"] = cornerBaseColor;
+	m_faceBaseColors["Corner2"] = cornerBaseColor;
+	m_faceBaseColors["Corner3"] = cornerBaseColor;
+	m_faceBaseColors["Corner4"] = cornerBaseColor;
+	m_faceBaseColors["Corner5"] = cornerBaseColor;
+	m_faceBaseColors["Corner6"] = cornerBaseColor;
+	m_faceBaseColors["Corner7"] = cornerBaseColor;
 
 	// --- Pre-generate high-quality textures for edges and corners ---
 	// Use DPI manager for optimal texture resolution (already declared above)
-	const int baseTexSize = 512; // High-resolution base texture size
+	const int baseTexSize = 2048; // Ultra-high resolution base texture size for maximum text precision
 	const int texWidth = dpiManager.getScaledTextureSize(baseTexSize);
 	const int texHeight = dpiManager.getScaledTextureSize(baseTexSize);
 	LOG_INF_S("CuteNavCube::setupGeometry: Texture size - base: " + std::to_string(baseTexSize) +
 		", scaled: " + std::to_string(texWidth) + "x" + std::to_string(texHeight) +
 		", DPI scale: " + std::to_string(dpiManager.getDPIScale()));
 
-	SoTexture2* whiteTexture = nullptr;
-	std::vector<unsigned char> whiteImageData(texWidth * texHeight * 4);
-	if (generateFaceTexture("", whiteImageData.data(), texWidth, texHeight, wxColour(255, 255, 255, 160))) {
-		whiteTexture = new SoTexture2;
-		whiteTexture->image.setValue(SbVec2s(texWidth, texHeight), 4, whiteImageData.data());
-		whiteTexture->model = SoTexture2::DECAL;
-	}
-
-	SoTexture2* greyTexture = nullptr;
-	std::vector<unsigned char> greyImageData(texWidth * texHeight * 4);
-	if (generateFaceTexture("", greyImageData.data(), texWidth, texHeight, wxColour(180, 180, 180, 160))) {
-		greyTexture = new SoTexture2;
-		greyTexture->image.setValue(SbVec2s(texWidth, texHeight), 4, greyImageData.data());
-		greyTexture->model = SoTexture2::DECAL;
-	}
+	// Textures will be generated and cached later in generateAndCacheTextures()
 
 	LOG_INF_S("--- Logging Face Properties ---");
 	for (const auto& faceDef : faces) {
@@ -569,6 +693,9 @@ void CuteNavCube::setupGeometry() {
 
 		SoSeparator* faceSep = new SoSeparator;
 		faceSep->setName(SbName(faceDef.name.c_str()));
+		
+		// Store the separator for later texture replacement
+		m_faceSeparators[faceDef.name] = faceSep;
 
 		SoIndexedFaceSet* face = new SoIndexedFaceSet;
 		for (size_t i = 0; i < faceDef.indices.size(); i++) {
@@ -577,29 +704,13 @@ void CuteNavCube::setupGeometry() {
 		face->coordIndex.set1Value(faceDef.indices.size(), -1); // End marker
 
 		if (faceDef.materialType == 0) { // Main face
-			// Create dedicated material for main face
-			SoMaterial* faceMaterial = new SoMaterial;
-			faceMaterial->diffuseColor.setValue(m_normalFaceColor[0], m_normalFaceColor[1], m_normalFaceColor[2]);
-			faceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
-			faceMaterial->shininess.setValue(m_shininess);
-			faceMaterial->transparency.setValue(m_transparency);
-
-			faceSep->addChild(faceMaterial);
-			m_faceMaterials[faceDef.name] = faceMaterial;
-			m_faceBaseColors[faceDef.name] = SbColor(m_normalFaceColor[0], m_normalFaceColor[1], m_normalFaceColor[2]);
-
-			if (m_showTextures) {
-				// Use DPI manager for dynamic texture resolution (already declared above)
-				int faceTexWidth = dpiManager.getScaledTextureSize(baseTexSize);
-				int faceTexHeight = dpiManager.getScaledTextureSize(baseTexSize);
-				std::vector<unsigned char> imageData(faceTexWidth * faceTexHeight * 4);
-				if (generateFaceTexture(faceDef.textureKey, imageData.data(), faceTexWidth, faceTexHeight, wxColour(255, 255, 255, 160))) {
-					SoTexture2* texture = new SoTexture2;
-					texture->image.setValue(SbVec2s(faceTexWidth, faceTexHeight), 4, imageData.data());
-					texture->model = SoTexture2::DECAL;
-					faceSep->addChild(texture);
-				}
-			}
+			// Use the pre-defined frosted glass material for main faces
+			faceSep->addChild(mainFaceMaterial);
+			m_faceMaterials[faceDef.name] = mainFaceMaterial;
+			// Base colors are already set above
+			LOG_INF_S("CuteNavCube::setupGeometry: Used shared frosted glass material for main face: " + faceDef.name);
+			
+			// Texture will be added later in generateAndCacheTextures()
 
 			// Set texture coordinate indices for main faces (quads)
 			face->textureCoordIndex.set1Value(0, 0);
@@ -609,28 +720,13 @@ void CuteNavCube::setupGeometry() {
 			face->textureCoordIndex.set1Value(4, -1);
 		}
 		else { // Edges and Corners
-			// Create dedicated material for edge/corner face
-			SoMaterial* faceMaterial = new SoMaterial;
-			float edgeR = m_edgeColor.Red() / 255.0f;
-			float edgeG = m_edgeColor.Green() / 255.0f;
-			float edgeB = m_edgeColor.Blue() / 255.0f;
-			faceMaterial->diffuseColor.setValue(edgeR, edgeG, edgeB);
-			faceMaterial->specularColor.setValue(0.8f, 0.8f, 0.8f);
-			faceMaterial->shininess.setValue(m_shininess);
-			faceMaterial->transparency.setValue(m_transparency);
-
-			faceSep->addChild(faceMaterial);
-			m_faceMaterials[faceDef.name] = faceMaterial;
-			m_faceBaseColors[faceDef.name] = SbColor(edgeR, edgeG, edgeB);
-
-			if (m_showTextures) {
-				if (faceDef.materialType == 1) { // Edge
-					if (greyTexture) faceSep->addChild(greyTexture);
-				}
-				else { // Corner (materialType == 2)
-					if (whiteTexture) faceSep->addChild(whiteTexture);
-				}
-			}
+			// Use the pre-defined frosted glass material for edges and corners
+			faceSep->addChild(edgeAndCornerMaterial);
+			m_faceMaterials[faceDef.name] = edgeAndCornerMaterial;
+			// Base colors are already set above
+			LOG_INF_S("CuteNavCube::setupGeometry: Used shared frosted glass material for edge/corner face: " + faceDef.name);
+			
+			// Texture will be added later in generateAndCacheTextures()
 
 			if (faceDef.indices.size() == 4) { // Edge faces (quads)
 				face->textureCoordIndex.set1Value(0, 0);
@@ -657,6 +753,12 @@ void CuteNavCube::setupGeometry() {
 	m_root->addChild(cubeAssembly);
 
 	LOG_INF_S("CuteNavCube::setupGeometry: Total faces analyzed: " + std::to_string(faceIndex));
+	LOG_INF_S("CuteNavCube::setupGeometry: Materials stored: " + std::to_string(m_faceMaterials.size()));
+	// Detailed material addresses disabled for cleaner logs
+	// for (const auto& pair : m_faceMaterials) {
+	//	LOG_INF_S("CuteNavCube::setupGeometry: Face '" + pair.first + "' has material at " + 
+	//		std::to_string(reinterpret_cast<uintptr_t>(pair.second)));
+	// }
 	LOG_INF_S("CuteNavCube::setupGeometry: Manual geometry definition with verified normals.");
 
 	// --- Add black outlines to all faces ---
@@ -696,6 +798,11 @@ void CuteNavCube::setupGeometry() {
 	m_root->addChild(outlineSep);
 
 	LOG_INF_S("CuteNavCube::setupGeometry: Final rebuild of cube geometry with definitive winding order and outlines.");
+	
+	// Generate and cache all textures after geometry setup
+	if (m_showTextures) {
+		generateAndCacheTextures();
+	}
 }
 
 void CuteNavCube::updateCameraRotation() {
@@ -726,32 +833,26 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 		return "";
 	}
 
-	// Add picking debug log
-	LOG_INF_S("CuteNavCube::pickRegion: Picking at position (" +
-		std::to_string(mousePos[0]) + ", " + std::to_string(mousePos[1]) +
-		") in viewport " + std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y));
+	// Add picking debug log - disabled for performance
+	// LOG_INF_S("CuteNavCube::pickRegion: Picking at position (" +
+	//	std::to_string(mousePos[0]) + ", " + std::to_string(mousePos[1]) +
+	//	") in viewport " + std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y));
 
-	// Create viewport region matching the cube's viewport settings
+	// Create viewport region for picking - use cube's local coordinate system
 	SbViewportRegion pickViewport;
-	pickViewport.setWindowSize(SbVec2s(static_cast<short>(m_windowWidth), static_cast<short>(m_windowHeight)));
+	pickViewport.setWindowSize(SbVec2s(static_cast<short>(viewportSize.x), static_cast<short>(viewportSize.y)));
 
-	// Set viewport pixels to match the cube's position and size
-	int viewportX = static_cast<int>(m_currentX * m_dpiScale);
-	int viewportY = m_windowHeight - static_cast<int>((m_currentY + m_cubeSize) * m_dpiScale); // Bottom-left origin
-	int viewportWidth = static_cast<int>(m_cubeSize * m_dpiScale);
-	int viewportHeight = static_cast<int>(m_cubeSize * m_dpiScale);
-
-	pickViewport.setViewportPixels(viewportX, viewportY, viewportWidth, viewportHeight);
+	// Set viewport pixels to match the cube's local viewport (0,0 to cubeSize,cubeSize)
+	pickViewport.setViewportPixels(0, 0, viewportSize.x, viewportSize.y);
 
 	// Debug viewport settings
 	static int debugCount = 0;
-	if (++debugCount % 10 == 0) {
-		LOG_INF_S("CuteNavCube::pickRegion: Viewport settings - window:" +
-			std::to_string(m_windowWidth) + "x" + std::to_string(m_windowHeight) +
-			", viewport:" + std::to_string(viewportX) + "," + std::to_string(viewportY) +
-			" " + std::to_string(viewportWidth) + "x" + std::to_string(viewportHeight) +
-			", mouse:" + std::to_string(mousePos[0]) + "," + std::to_string(mousePos[1]));
-	}
+	// Debug counter disabled for performance
+	// if (++debugCount % 10 == 0) {
+	//	LOG_INF_S("CuteNavCube::pickRegion: Viewport settings - local:" +
+	//		std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y) +
+	//		", mouse:" + std::to_string(mousePos[0]) + "," + std::to_string(mousePos[1]));
+	// }
 
 	SoRayPickAction pickAction(pickViewport);
 	pickAction.setPoint(mousePos);
@@ -875,7 +976,14 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 }
 
 bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
-	if (!m_enabled) return false;
+	std::string eventType = event.Moving() ? "MOVING" : event.Leaving() ? "LEAVING" : event.LeftDown() ? "LEFT_DOWN" : event.LeftUp() ? "LEFT_UP" : "OTHER";
+	LOG_INF_S("CuteNavCube::handleMouseEvent: === BEGIN === Event type: " + eventType +
+		", Current hovered face: '" + m_hoveredFace + "', Materials count: " + std::to_string(m_faceMaterials.size()));
+
+	if (!m_enabled) {
+		LOG_INF_S("CuteNavCube::handleMouseEvent: Cube not enabled, returning false");
+		return false;
+	}
 
 	static SbVec2s dragStartPos(0, 0);
 
@@ -887,32 +995,40 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 	// Handle mouse movement (hover detection)
 	// Check for motion events (both Moving() and Dragging())
 	if (event.GetEventType() == wxEVT_MOTION) {
-		// Convert coordinates for picking
+		// Convert coordinates for picking - NavigationCubeManager already converted to cube-local coordinates
+		// We need to flip Y for OpenGL picking (OpenGL uses bottom-left origin)
 		SbVec2s pickPos(currentPos[0], static_cast<short>(viewportSize.y - currentPos[1]));
 		std::string hoveredFace = pickRegion(pickPos, viewportSize);
 
 		// Update hover state
 		if (hoveredFace != m_hoveredFace) {
-			// Restore previous face color
+			LOG_INF_S("CuteNavCube::handleMouseEvent: Hover state changing from '" + m_hoveredFace + "' to '" + hoveredFace + "'");
+
+			// Restore previous face color by regenerating texture
 			if (!m_hoveredFace.empty()) {
-				std::map<std::string, SoMaterial*>::iterator matIt = m_faceMaterials.find(m_hoveredFace);
-				if (matIt != m_faceMaterials.end() && matIt->second) {
-					SbColor baseColor = m_normalFaceColor;
-					std::map<std::string, SbColor>::iterator colorIt = m_faceBaseColors.find(m_hoveredFace);
-					if (colorIt != m_faceBaseColors.end()) {
-						baseColor = colorIt->second;
-					}
-					matIt->second->diffuseColor.setValue(baseColor[0], baseColor[1], baseColor[2]);
-					LOG_INF_S("CuteNavCube::handleMouseEvent: Hovered out from face: " + m_hoveredFace);
+				LOG_INF_S("CuteNavCube::handleMouseEvent: Restoring texture for face: " + m_hoveredFace + " - regenerating texture with normal color");
+				
+				// Regenerate texture with normal color for this face
+				regenerateFaceTexture(m_hoveredFace, false); // false = normal state
+				
+				// Request refresh through callback
+				if (m_refreshCallback) {
+					m_refreshCallback();
+					LOG_INF_S("CuteNavCube::handleMouseEvent: Requested refresh after texture restoration");
 				}
 			}
 
-			// Set new hovered face color
+			// Set new hovered face color by regenerating texture
 			if (!hoveredFace.empty()) {
-				std::map<std::string, SoMaterial*>::iterator matIt = m_faceMaterials.find(hoveredFace);
-				if (matIt != m_faceMaterials.end() && matIt->second) {
-					matIt->second->diffuseColor.setValue(m_hoverFaceColor[0], m_hoverFaceColor[1], m_hoverFaceColor[2]);
-					LOG_INF_S("CuteNavCube::handleMouseEvent: Hovered over face: " + hoveredFace);
+				LOG_INF_S("CuteNavCube::handleMouseEvent: Hovering over face: " + hoveredFace + " - regenerating texture with hover color");
+				
+				// Regenerate texture with hover color for this face
+				regenerateFaceTexture(hoveredFace, true); // true = hover state
+				
+				// Request refresh through callback
+				if (m_refreshCallback) {
+					m_refreshCallback();
+					LOG_INF_S("CuteNavCube::handleMouseEvent: Requested refresh after hover texture regeneration");
 				}
 			}
 
@@ -921,24 +1037,31 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 		// Don't return here - allow click/drag events to be processed
 		if (!event.LeftIsDown()) {
+			LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Hover event handled, final hovered face: '" + m_hoveredFace + "'");
 			return true; // Hover events are always handled
 		}
 	}
 
 	// When mouse leaves window, restore all face colors
 	if (event.Leaving()) {
+		LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving cube area, current hovered face: '" + m_hoveredFace + "'");
 		if (!m_hoveredFace.empty()) {
-			std::map<std::string, SoMaterial*>::iterator matIt = m_faceMaterials.find(m_hoveredFace);
-			if (matIt != m_faceMaterials.end() && matIt->second) {
-				SbColor baseColor = m_normalFaceColor;
-				std::map<std::string, SbColor>::iterator colorIt = m_faceBaseColors.find(m_hoveredFace);
-				if (colorIt != m_faceBaseColors.end()) {
-					baseColor = colorIt->second;
-				}
-				matIt->second->diffuseColor.setValue(baseColor[0], baseColor[1], baseColor[2]);
+			LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - restoring texture for face: " + m_hoveredFace + " - regenerating texture with normal color");
+			
+			// Regenerate texture with normal color for this face
+			regenerateFaceTexture(m_hoveredFace, false); // false = normal state
+			
+			// Request refresh through callback
+			if (m_refreshCallback) {
+				m_refreshCallback();
+				LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - requested refresh after texture restoration");
 			}
 			m_hoveredFace = "";
+			LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - hover state reset to empty");
+		} else {
+			LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - no face was hovered, nothing to restore");
 		}
+		LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Mouse leaving event handled, final hovered face: '" + m_hoveredFace + "'");
 		return true; // Mouse leaving is always handled
 	}
 
@@ -989,6 +1112,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 					return true; // Successfully handled click on cube face
 				} else {
 					LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked transparent area, allowing ray penetration");
+					LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Click event not handled (transparent area), final hovered face: '" + m_hoveredFace + "'");
 					return false; // Transparent area, allow ray penetration to outline viewport
 				}
 			}
@@ -1013,10 +1137,12 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 		//LOG_DBG("CuteNavCube::handleMouseEvent: Rotated: X=" + std::to_string(m_rotationX) +
 		//    ", Y=" + std::to_string(m_rotationY));
+		LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Drag event handled, final hovered face: '" + m_hoveredFace + "'");
 		return true; // Drag events are always handled
 	}
-	
+
 	// Default: event not handled (for transparent areas)
+	LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Event not handled (transparent area), final hovered face: '" + m_hoveredFace + "'");
 	return false;
 }
 
@@ -1276,5 +1402,196 @@ void CuteNavCube::setCameraOrientation(const SbRotation& orientation) {
 	}
 	else {
 		LOG_WRN_S("CuteNavCube::setCameraOrientation: Camera not initialized");
+	}
+}
+
+SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool isHover) {
+	// Determine texture color based on hover state and face type
+	wxColour textureColor;
+	if (isHover) {
+		// Use hover color from config
+		int hoverR = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorR", 255);
+		int hoverG = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorG", 200);
+		int hoverB = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorB", 150);
+		int hoverA = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorA", 160);
+		textureColor = wxColour(hoverR, hoverG, hoverB, hoverA);
+	} else {
+		// Use normal color based on face type from config
+		if (faceName == "Front" || faceName == "Back" || faceName == "Left" || 
+			faceName == "Right" || faceName == "Top" || faceName == "Bottom") {
+			// Main faces
+			int mainR = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorR", 180);
+			int mainG = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorG", 220);
+			int mainB = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorB", 180);
+			int mainA = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorA", 160);
+			textureColor = wxColour(mainR, mainG, mainB, mainA);
+		} else if (faceName.find("Edge") != std::string::npos) {
+			// Edge faces
+			int edgeR = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorR", 150);
+			int edgeG = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorG", 200);
+			int edgeB = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorB", 150);
+			int edgeA = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorA", 160);
+			textureColor = wxColour(edgeR, edgeG, edgeB, edgeA);
+		} else if (faceName.find("Corner") != std::string::npos) {
+			// Corner faces
+			int cornerR = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorR", 170);
+			int cornerG = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorG", 210);
+			int cornerB = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorB", 170);
+			int cornerA = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorA", 160);
+			textureColor = wxColour(cornerR, cornerG, cornerB, cornerA);
+		} else {
+			// Default to main face color
+			int mainR = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorR", 180);
+			int mainG = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorG", 220);
+			int mainB = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorB", 180);
+			int mainA = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorA", 160);
+			textureColor = wxColour(mainR, mainG, mainB, mainA);
+		}
+	}
+	
+	// Generate texture
+	auto& dpiManager = DPIManager::getInstance();
+	const int baseTexSize = 2048;
+	int texWidth = dpiManager.getScaledTextureSize(baseTexSize);
+	int texHeight = dpiManager.getScaledTextureSize(baseTexSize);
+	
+	std::vector<unsigned char> imageData(texWidth * texHeight * 4);
+	
+	// Generate texture with appropriate text and color
+	std::string textureText = "";
+	if (faceName == "Front" || faceName == "Back" || faceName == "Left" || 
+		faceName == "Right" || faceName == "Top" || faceName == "Bottom") {
+		textureText = faceName; // Main faces have text
+	}
+	
+	if (generateFaceTexture(textureText, imageData.data(), texWidth, texHeight, textureColor)) {
+		// Create new texture
+		SoTexture2* texture = new SoTexture2;
+		texture->image.setValue(SbVec2s(texWidth, texHeight), 4, imageData.data());
+		texture->model = SoTexture2::DECAL;
+		return texture;
+	}
+	
+	return nullptr;
+}
+
+void CuteNavCube::generateAndCacheTextures() {
+	LOG_INF_S("CuteNavCube::generateAndCacheTextures: Starting texture cache generation");
+	
+	// Generate textures for all faces in both normal and hover states
+	std::vector<std::string> allFaces = {
+		// Main faces
+		"Front", "Back", "Left", "Right", "Top", "Bottom",
+		// Edge faces
+		"EdgeTF", "EdgeTB", "EdgeTL", "EdgeTR", "EdgeBF", "EdgeBB", "EdgeBL", "EdgeBR",
+		"EdgeFR", "EdgeFL", "EdgeBL2", "EdgeBR2",
+		// Corner faces
+		"Corner0", "Corner1", "Corner2", "Corner3", "Corner4", "Corner5", "Corner6", "Corner7"
+	};
+	
+	int normalCount = 0;
+	int hoverCount = 0;
+	int addedCount = 0;
+	
+	for (const auto& faceName : allFaces) {
+		// Check if face separator exists first
+		auto sepIt = m_faceSeparators.find(faceName);
+		if (sepIt == m_faceSeparators.end()) {
+			continue; // Skip if separator doesn't exist (face might be hidden)
+		}
+		
+		// Generate normal state texture
+		SoTexture2* normalTexture = createTextureForFace(faceName, false);
+		if (normalTexture) {
+			normalTexture->ref(); // Add reference to prevent premature deletion
+			m_normalTextures[faceName] = normalTexture;
+			normalCount++;
+			
+			// Add the normal texture to the face separator
+			SoSeparator* faceSep = sepIt->second;
+			// Insert texture after material node (which should be the first child)
+			if (faceSep->getNumChildren() > 0) {
+				faceSep->insertChild(normalTexture, 1); // Insert at index 1 (after material)
+				addedCount++;
+			}
+		}
+		
+		// Generate hover state texture
+		SoTexture2* hoverTexture = createTextureForFace(faceName, true);
+		if (hoverTexture) {
+			hoverTexture->ref(); // Add reference to prevent premature deletion
+			m_hoverTextures[faceName] = hoverTexture;
+			hoverCount++;
+		}
+	}
+	
+	LOG_INF_S("CuteNavCube::generateAndCacheTextures: Cached " + std::to_string(normalCount) + 
+		" normal textures and " + std::to_string(hoverCount) + " hover textures, added " + 
+		std::to_string(addedCount) + " initial textures to scene");
+}
+
+void CuteNavCube::regenerateFaceTexture(const std::string& faceName, bool isHover) {
+	LOG_INF_S("CuteNavCube::regenerateFaceTexture: Switching texture for face: " + faceName + 
+		", hover: " + (isHover ? "true" : "false"));
+	
+	// Find the face separator node
+	auto faceIt = m_faceSeparators.find(faceName);
+	if (faceIt == m_faceSeparators.end()) {
+		LOG_WRN_S("CuteNavCube::regenerateFaceTexture: Face separator not found: " + faceName);
+		return;
+	}
+	
+	SoSeparator* faceSep = faceIt->second;
+	
+	// Get the appropriate cached texture
+	SoTexture2* newTexture = nullptr;
+	if (isHover) {
+		auto it = m_hoverTextures.find(faceName);
+		if (it != m_hoverTextures.end()) {
+			newTexture = it->second;
+		}
+	} else {
+		auto it = m_normalTextures.find(faceName);
+		if (it != m_normalTextures.end()) {
+			newTexture = it->second;
+		}
+	}
+	
+	if (!newTexture) {
+		LOG_WRN_S("CuteNavCube::regenerateFaceTexture: Cached texture not found for face: " + faceName + 
+			", hover: " + (isHover ? "true" : "false"));
+		return;
+	}
+	
+	// Find existing texture node in the separator
+	int numChildren = faceSep->getNumChildren();
+	int textureIndex = -1;
+	SoTexture2* oldTexture = nullptr;
+	
+	for (int i = 0; i < numChildren; i++) {
+		SoNode* child = faceSep->getChild(i);
+		if (child->isOfType(SoTexture2::getClassTypeId())) {
+			textureIndex = i;
+			oldTexture = static_cast<SoTexture2*>(child);
+			break;
+		}
+	}
+	
+	// Replace or insert texture
+	if (textureIndex >= 0 && oldTexture != newTexture) {
+		// Only replace if the new texture is different from the old one
+		faceSep->removeChild(textureIndex);
+		faceSep->insertChild(newTexture, textureIndex);
+		LOG_INF_S("CuteNavCube::regenerateFaceTexture: Replaced texture at index " + std::to_string(textureIndex) + 
+			" for face: " + faceName + " with " + std::string(isHover ? "hover" : "normal") + " texture");
+	} else if (textureIndex < 0) {
+		// Insert texture after material node (which should be the first child)
+		if (numChildren > 0) {
+			faceSep->insertChild(newTexture, 1); // Insert at index 1 (after material)
+		} else {
+			faceSep->addChild(newTexture);
+		}
+		LOG_INF_S("CuteNavCube::regenerateFaceTexture: Inserted " + std::string(isHover ? "hover" : "normal") + 
+			" texture for face: " + faceName);
 	}
 }
