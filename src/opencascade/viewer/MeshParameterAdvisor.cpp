@@ -151,7 +151,7 @@ size_t MeshParameterAdvisor::estimateTriangleCount(const TopoDS_Shape& shape,
     }
     
     // Estimate based on surface area and deflection
-    // Average triangle area �?deflection²
+    // Average triangle area deflection²
     double avgTriangleArea = params.deflection * params.deflection;
     
     // Roughly 2 triangles per unit area

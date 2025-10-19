@@ -67,6 +67,12 @@ endif()
 # 查找依赖
 find_package(wxWidgets CONFIG REQUIRED)
 find_package(Coin CONFIG REQUIRED)
+
+# Force using vcpkg OpenCASCADE by setting search paths
+if(CMAKE_TOOLCHAIN_FILE)
+    set(OpenCASCADE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/share/opencascade" CACHE PATH "OpenCASCADE directory" FORCE)
+endif()
+
 find_package(OpenCASCADE CONFIG REQUIRED)
 
 # 添加源代码目录

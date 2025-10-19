@@ -139,7 +139,10 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 			}
 			return;
 		}
-		LOG_WRN_S("Unknown command ID: " + std::to_string(event.GetId()));
+		// For unknown command IDs, skip to allow event propagation to derived classes
+		// This is crucial for docking system buttons handled by FlatFrameDocking
+		LOG_INF_S("Unknown command ID, skipping event propagation: " + std::to_string(event.GetId()));
+		event.Skip();
 		return;
 	}
 	cmd::CommandType commandType = it->second;

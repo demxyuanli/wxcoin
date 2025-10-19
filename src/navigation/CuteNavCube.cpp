@@ -658,7 +658,10 @@ void CuteNavCube::setupGeometry() {
 
 	// --- Pre-generate high-quality textures for edges and corners ---
 	// Use DPI manager for optimal texture resolution (already declared above)
-	const int baseTexSize = 2048; // Ultra-high resolution base texture size for maximum text precision
+	// Load texture size from config (default 512 to save memory)
+	// Navigation cube is typically 80-150px, so 512px texture is more than sufficient
+	// Memory usage: 256=256KB, 512=1MB, 1024=4MB, 2048=16MB per texture
+	const int baseTexSize = ConfigManager::getInstance().getInt("NavigationCube", "TextureBaseSize", 512);
 	const int texWidth = dpiManager.getScaledTextureSize(baseTexSize);
 	const int texHeight = dpiManager.getScaledTextureSize(baseTexSize);
 	// Textures will be generated and cached later in generateAndCacheTextures()
@@ -1323,24 +1326,48 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 	
 	// Generate texture
 	auto& dpiManager = DPIManager::getInstance();
-	const int baseTexSize = 2048;
-	int texWidth = dpiManager.getScaledTextureSize(baseTexSize);
-	int texHeight = dpiManager.getScaledTextureSize(baseTexSize);
+	
+	// Check if this face has text (main faces only)
+	bool hasText = (faceName == "Front" || faceName == "Back" || faceName == "Left" || 
+	                faceName == "Right" || faceName == "Top" || faceName == "Bottom");
+	
+	int texWidth, texHeight;
+	
+	if (hasText) {
+		// Main faces with text need high resolution texture
+		// Load texture size from config (default 512 to save memory)
+		// Memory usage: 256=256KB, 512=1MB, 1024=4MB, 2048=16MB per texture
+		const int baseTexSize = ConfigManager::getInstance().getInt("NavigationCube", "TextureBaseSize", 512);
+		texWidth = dpiManager.getScaledTextureSize(baseTexSize);
+		texHeight = dpiManager.getScaledTextureSize(baseTexSize);
+	} else {
+		// Edge and corner faces are solid color - use tiny 2x2 texture for massive memory saving
+		// Memory usage: 2x2x4 = 16 bytes per texture (vs 1MB for 512x512)
+		// This saves ~40 textures x 1MB = 40MB of memory!
+		texWidth = 2;
+		texHeight = 2;
+	}
 	
 	std::vector<unsigned char> imageData(texWidth * texHeight * 4);
 	
 	// Generate texture with appropriate text and color
-	std::string textureText = "";
-	if (faceName == "Front" || faceName == "Back" || faceName == "Left" || 
-		faceName == "Right" || faceName == "Top" || faceName == "Bottom") {
-		textureText = faceName; // Main faces have text
-	}
+	std::string textureText = hasText ? faceName : "";
 	
 	if (generateFaceTexture(textureText, imageData.data(), texWidth, texHeight, textureColor)) {
 		// Create new texture
 		SoTexture2* texture = new SoTexture2;
 		texture->image.setValue(SbVec2s(texWidth, texHeight), 4, imageData.data());
-		texture->model = SoTexture2::DECAL;
+		
+		if (hasText) {
+			// Text textures use DECAL mode (no tiling)
+			texture->model = SoTexture2::DECAL;
+		} else {
+			// Solid color textures use MODULATE with repeat wrapping for tiling
+			texture->model = SoTexture2::MODULATE;
+			texture->wrapS = SoTexture2::REPEAT;
+			texture->wrapT = SoTexture2::REPEAT;
+		}
+		
 		return texture;
 	}
 	

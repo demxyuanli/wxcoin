@@ -182,11 +182,10 @@ EVT_BUTTON(ID_TOGGLE_REFERENCE_GRID, FlatFrame::onCommand)
 EVT_BUTTON(ID_TOGGLE_CHESSBOARD_GRID, FlatFrame::onCommand)
 EVT_BUTTON(ID_EXPLODE_ASSEMBLY, FlatFrame::onCommand)
 
-// Docking related button events
-EVT_BUTTON(ID_DOCKING_SAVE_LAYOUT, FlatFrame::onCommand)
-EVT_BUTTON(ID_DOCKING_LOAD_LAYOUT, FlatFrame::onCommand)
-EVT_BUTTON(ID_DOCKING_RESET_LAYOUT, FlatFrame::onCommand)
-// Docking-related buttons are handled in FlatFrameDocking
+// Docking related button events - handled in FlatFrameDocking
+// EVT_BUTTON(ID_DOCKING_SAVE_LAYOUT, FlatFrame::onCommand)
+// EVT_BUTTON(ID_DOCKING_LOAD_LAYOUT, FlatFrame::onCommand)
+// EVT_BUTTON(ID_DOCKING_RESET_LAYOUT, FlatFrame::onCommand)
 // EVT_BUTTON(ID_DOCKING_MANAGE_PERSPECTIVES, FlatFrame::onCommand)
 // EVT_BUTTON(ID_DOCKING_TOGGLE_AUTOHIDE, FlatFrame::onCommand)
 // EVT_BUTTON(ID_VIEW_OBJECT_TREE, FlatFrame::onCommand)
