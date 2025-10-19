@@ -113,7 +113,7 @@ void EdgeDisplayManager::setShowFaceNormalLines(bool show, const MeshParameters&
 void EdgeDisplayManager::setShowIntersectionNodes(bool show, const MeshParameters& meshParams) { m_flags.showIntersectionNodes = show; updateAll(meshParams); }
 
 void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width,
-	bool highlightIntersectionNodes, const Quantity_Color& intersectionNodeColor, double intersectionNodeSize) {
+		bool highlightIntersectionNodes, const Quantity_Color& intersectionNodeColor, double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape) {
 	m_originalEdgeParams.samplingDensity = samplingDensity;
 	m_originalEdgeParams.minLength = minLength;
 	m_originalEdgeParams.showLinesOnly = showLinesOnly;
@@ -122,6 +122,7 @@ void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, doub
 	m_originalEdgeParams.highlightIntersectionNodes = highlightIntersectionNodes;
 	m_originalEdgeParams.intersectionNodeColor = intersectionNodeColor;
 	m_originalEdgeParams.intersectionNodeSize = intersectionNodeSize;
+	m_originalEdgeParams.intersectionNodeShape = intersectionNodeShape;
 
 	// Update the intersection nodes display flag
 	m_flags.showIntersectionNodes = highlightIntersectionNodes;
@@ -155,7 +156,7 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 		if (m_flags.showOriginalEdges) {
 			generator.ensureOriginalEdges(g, m_originalEdgeParams.samplingDensity, m_originalEdgeParams.minLength,
 				m_originalEdgeParams.showLinesOnly, m_originalEdgeParams.color, m_originalEdgeParams.width,
-				m_originalEdgeParams.highlightIntersectionNodes, m_originalEdgeParams.intersectionNodeColor, m_originalEdgeParams.intersectionNodeSize);
+				m_originalEdgeParams.highlightIntersectionNodes, m_originalEdgeParams.intersectionNodeColor, m_originalEdgeParams.intersectionNodeSize, m_originalEdgeParams.intersectionNodeShape);
 		}
 		bool needMesh = false;
 		if (m_flags.showMeshEdges) {

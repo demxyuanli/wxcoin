@@ -54,37 +54,31 @@ void OCCMeshConverter::setShowEdges(bool show)
 	s_showEdges = show;
 	EdgeSettingsConfig& edgeConfig = EdgeSettingsConfig::getInstance();
 	edgeConfig.setGlobalShowEdges(show);
-	LOG_INF_S("OCCMeshConverter showEdges set to: " + std::string(show ? "enabled" : "disabled"));
 }
 
 void OCCMeshConverter::setFeatureEdgeAngle(double angleDegrees)
 {
 	s_featureEdgeAngle = angleDegrees;
-	LOG_INF_S("Feature edge angle set to: " + std::to_string(angleDegrees) + " degrees");
 }
 
 void OCCMeshConverter::setSmoothingEnabled(bool enabled)
 {
 	s_smoothingEnabled = enabled;
-	LOG_INF_S("Normal smoothing " + std::string(enabled ? "enabled" : "disabled"));
 }
 
 void OCCMeshConverter::setSubdivisionEnabled(bool enabled)
 {
 	s_subdivisionEnabled = enabled;
-	LOG_INF_S("Subdivision " + std::string(enabled ? "enabled" : "disabled"));
 }
 
 void OCCMeshConverter::setSubdivisionLevels(int levels)
 {
 	s_subdivisionLevels = levels;
-	LOG_INF_S("Subdivision levels set to: " + std::to_string(levels));
 }
 
 void OCCMeshConverter::setCreaseAngle(double angle)
 {
 	s_creaseAngle = angle;
-	LOG_INF_S("Crease angle set to: " + std::to_string(angle));
 }
 
 TriangleMesh OCCMeshConverter::convertToMesh(const TopoDS_Shape& shape,

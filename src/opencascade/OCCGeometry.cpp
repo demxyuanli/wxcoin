@@ -33,7 +33,6 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , OCCGeometryQuality()
     , OCCGeometryMesh()
 {
-    LOG_INF_S("Created OCCGeometry: " + name);
 
     // Apply settings from RenderingConfig
     updateFromRenderingConfig();
@@ -45,7 +44,6 @@ OCCGeometry::OCCGeometry(const std::string& name)
 
 OCCGeometry::~OCCGeometry()
 {
-    LOG_INF_S("Destroying OCCGeometry: " + getName());
 }
 
 void OCCGeometry::setShape(const TopoDS_Shape& shape)

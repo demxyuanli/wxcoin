@@ -1,9 +1,11 @@
 #pragma once
 
 #include "widgets/FramelessModalPopup.h"
+#include "edges/ModularEdgeComponent.h"
 #include <wx/clrpicker.h>
 #include <wx/spinctrl.h>
 #include <wx/checkbox.h>
+#include <wx/choice.h>
 
 class OriginalEdgesParamDialog : public FramelessModalPopup {
 public:
@@ -17,6 +19,7 @@ public:
 	bool getHighlightIntersectionNodes() const;
 	wxColour getIntersectionNodeColor() const;
 	double getIntersectionNodeSize() const;
+	IntersectionNodeShape getIntersectionNodeShape() const;
 
 private:
 	wxSpinCtrlDouble* m_samplingDensity{ nullptr };
@@ -27,4 +30,5 @@ private:
 	wxCheckBox* m_highlightIntersectionNodes{ nullptr };
 	wxColourPickerCtrl* m_intersectionNodeColorPicker{ nullptr };
 	wxSpinCtrlDouble* m_intersectionNodeSize{ nullptr };
+	wxChoice* m_intersectionNodeShape{ nullptr };
 };

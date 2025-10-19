@@ -35,22 +35,6 @@ struct OriginalEdgeParams {
  */
 class OriginalEdgeExtractor : public TypedEdgeExtractor<OriginalEdgeParams> {
 public:
-    OriginalEdgeExtractor();
-    ~OriginalEdgeExtractor() = default;
-    
-    // BaseEdgeExtractor interface
-    bool canExtract(const TopoDS_Shape& shape) const override;
-    const char* getName() const override { return "OriginalEdgeExtractor"; }
-
-    /**
-     * @brief Find edge intersections
-     */
-    void findEdgeIntersections(
-        const TopoDS_Shape& shape,
-        std::vector<gp_Pnt>& intersectionPoints,
-        double tolerance = 0.005);
-
-private:
     /**
      * @brief Axis-Aligned Bounding Box structure
      */
@@ -86,23 +70,74 @@ private:
     };
 
     /**
-     * @brief Edge data structure for spatial partitioning
+     * @brief Pre-filtered edge data with computed properties
+     */
+    struct FilteredEdge {
+        TopoDS_Edge edge;
+        Handle(Geom_Curve) curve;
+        Standard_Real first, last;
+        double length;
+        bool isLineOnly; // Cached curve type info
+    };
+
+    /**
+     * @brief Optimized edge data structure for spatial partitioning with precomputed properties
      */
     struct EdgeData {
-        TopoDS_Edge edge;
         Handle(Geom_Curve) curve;
         Standard_Real first, last;
         AABB bbox;
         int gridX, gridY, gridZ;
+        double length; // Precomputed edge length
+
+        // Constructor for efficient initialization from filtered edge
+        EdgeData(const FilteredEdge& filteredEdge, double bboxMargin);
+
+        // Constructor for legacy TopoDS_Edge initialization
+        EdgeData(const TopoDS_Edge& edge, double bboxMargin);
     };
+    OriginalEdgeExtractor();
+    ~OriginalEdgeExtractor() = default;
+    
+    // BaseEdgeExtractor interface
+    bool canExtract(const TopoDS_Shape& shape) const override;
+    const char* getName() const override { return "OriginalEdgeExtractor"; }
 
     /**
-     * @brief Find edge intersections from a list of edges
+     * @brief Find edge intersections
+     */
+    void findEdgeIntersections(
+        const TopoDS_Shape& shape,
+        std::vector<gp_Pnt>& intersectionPoints,
+        double tolerance = 0.005);
+
+private:
+
+    /**
+     * @brief Find edge intersections from a list of edges (legacy version)
      */
     void findEdgeIntersectionsFromEdges(
         const std::vector<TopoDS_Edge>& edges,
         std::vector<gp_Pnt>& intersectionPoints,
         double tolerance = 0.005);
+
+    /**
+     * @brief Find edge intersections from pre-filtered edges (optimized version)
+     */
+    void findEdgeIntersectionsFromFilteredEdges(
+        const std::vector<FilteredEdge>& edges,
+        std::vector<gp_Pnt>& intersectionPoints,
+        double tolerance = 0.005);
+
+    /**
+     * @brief Optimized single-pass edge collection and filtering
+     */
+    void collectAndFilterEdges(const TopoDS_Shape& shape, const OriginalEdgeParams& params,
+                              std::vector<FilteredEdge>& filteredEdges);
+    std::vector<gp_Pnt> extractEdgesFiltered(const std::vector<FilteredEdge>& edges,
+                                           const OriginalEdgeParams& params);
+    std::vector<gp_Pnt> extractProgressiveFiltered(const std::vector<FilteredEdge>& edges,
+                                                  const OriginalEdgeParams& params);
 
     /**
      * @brief Simple intersection detection for small number of edges
@@ -139,6 +174,7 @@ private:
     std::vector<gp_Pnt> extractEdgesBatched(
         const std::vector<TopoDS_Edge>& edges,
         const OriginalEdgeParams& params);
+
 
     /**
      * @brief Fast edge filtering

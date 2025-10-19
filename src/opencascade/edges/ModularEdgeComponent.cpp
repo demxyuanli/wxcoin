@@ -7,6 +7,11 @@
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTranslation.h>
 #include <Inventor/nodes/SoSphere.h>
+#include <Inventor/nodes/SoPointSet.h>
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoLineSet.h>
+#include <Inventor/nodes/SoCube.h>
+#include <Inventor/nodes/SoDrawStyle.h>
 
 ModularEdgeComponent::ModularEdgeComponent() {
     m_lodManager = std::make_unique<EdgeLODManager>();
@@ -46,7 +51,8 @@ void ModularEdgeComponent::extractOriginalEdges(
     double width,
     bool highlightIntersectionNodes,
     const Quantity_Color& intersectionNodeColor,
-    double intersectionNodeSize) {
+    double intersectionNodeSize,
+    IntersectionNodeShape intersectionNodeShape) {
 
     if (!m_originalExtractor || !m_originalRenderer) {
         LOG_WRN_S("Original edge extractor/renderer not available");
@@ -65,12 +71,12 @@ void ModularEdgeComponent::extractOriginalEdges(
     if (highlightIntersectionNodes) {
         // Extract intersection points
         std::vector<gp_Pnt> intersectionPoints;
-        // Use the extractor's intersection detection method
-        static_cast<OriginalEdgeExtractor*>(m_originalExtractor.get())->findEdgeIntersections(shape, intersectionPoints, 0.0); // Use adaptive tolerance
+        auto originalExtractor = static_cast<OriginalEdgeExtractor*>(m_originalExtractor.get());
+        originalExtractor->findEdgeIntersections(shape, intersectionPoints, 0.0); // Use adaptive tolerance
 
         if (!intersectionPoints.empty()) {
             cleanupEdgeNode(intersectionNodesNode);
-            intersectionNodesNode = createIntersectionNodesNode(intersectionPoints, intersectionNodeColor, intersectionNodeSize);
+            intersectionNodesNode = createIntersectionNodesNode(intersectionPoints, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
         } else {
             cleanupEdgeNode(intersectionNodesNode);
         }
@@ -222,7 +228,6 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
     }
     if (normalLineNode && edgeFlags.showNormalLines) {
         parentNode->addChild(normalLineNode);
-        LOG_INF_S("ModularEdgeComponent::updateEdgeDisplay - Added normal line node to scene");
     } else {
         if (!normalLineNode && edgeFlags.showNormalLines) {
             LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay - showNormalLines=true but normalLineNode is null");
@@ -377,7 +382,6 @@ void ModularEdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, doub
     normalLineNode = meshRenderer->generateNormalLineNode(mesh, length, normalColor);
     
     if (normalLineNode) {
-        LOG_INF_S("ModularEdgeComponent::generateNormalLineNode - Normal line node created successfully");
     } else {
         LOG_WRN_S("ModularEdgeComponent::generateNormalLineNode - Normal line node is null after generation");
     }
@@ -386,7 +390,8 @@ void ModularEdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, doub
 SoSeparator* ModularEdgeComponent::createIntersectionNodesNode(
     const std::vector<gp_Pnt>& intersectionPoints,
     const Quantity_Color& color,
-    double size) {
+    double size,
+    IntersectionNodeShape shape) {
 
     if (intersectionPoints.empty()) return nullptr;
 
@@ -401,22 +406,120 @@ SoSeparator* ModularEdgeComponent::createIntersectionNodesNode(
     );
     node->addChild(material);
 
-    for (const auto& pt : intersectionPoints) {
-        SoSeparator* pointSep = new SoSeparator();
+    switch (shape) {
+        case IntersectionNodeShape::Point: {
+            // Most efficient: single point set for all points with adjustable size
+            SoCoordinate3* coords = new SoCoordinate3();
+            coords->point.setNum(intersectionPoints.size());
 
-        SoTranslation* trans = new SoTranslation();
-        trans->translation.setValue(
-            static_cast<float>(pt.X()),
-            static_cast<float>(pt.Y()),
-            static_cast<float>(pt.Z())
-        );
-        pointSep->addChild(trans);
+            SbVec3f* points = coords->point.startEditing();
+            for (size_t i = 0; i < intersectionPoints.size(); ++i) {
+                const auto& pt = intersectionPoints[i];
+                points[i].setValue(
+                    static_cast<float>(pt.X()),
+                    static_cast<float>(pt.Y()),
+                    static_cast<float>(pt.Z())
+                );
+            }
+            coords->point.finishEditing();
 
-        SoSphere* sphere = new SoSphere();
-        sphere->radius.setValue(static_cast<float>(size * 0.01));
-        pointSep->addChild(sphere);
+            // Use SoDrawStyle to control point size
+            SoDrawStyle* drawStyle = new SoDrawStyle();
+            drawStyle->pointSize.setValue(static_cast<float>(size));
 
-        node->addChild(pointSep);
+            SoPointSet* pointSet = new SoPointSet();
+            pointSet->numPoints.setValue(intersectionPoints.size());
+
+            node->addChild(drawStyle);
+            node->addChild(coords);
+            node->addChild(pointSet);
+            break;
+        }
+
+        case IntersectionNodeShape::Cross: {
+            // Balanced performance: cross made of lines
+            float crossSize = static_cast<float>(size * 0.005f); // Adjust size for cross
+
+            for (const auto& pt : intersectionPoints) {
+                SoSeparator* pointSep = new SoSeparator();
+
+                SoTranslation* trans = new SoTranslation();
+                trans->translation.setValue(
+                    static_cast<float>(pt.X()),
+                    static_cast<float>(pt.Y()),
+                    static_cast<float>(pt.Z())
+                );
+                pointSep->addChild(trans);
+
+                // Create cross using two lines
+                SoCoordinate3* coords = new SoCoordinate3();
+                coords->point.setNum(4);
+                coords->point.set1Value(0, -crossSize, 0, 0);
+                coords->point.set1Value(1, crossSize, 0, 0);
+                coords->point.set1Value(2, 0, -crossSize, 0);
+                coords->point.set1Value(3, 0, crossSize, 0);
+
+                SoLineSet* lineSet = new SoLineSet();
+                int32_t indices[] = {0, 1, -1, 2, 3, -1}; // Two lines with separator
+                lineSet->numVertices.setValues(0, 6, indices);
+
+                pointSep->addChild(coords);
+                pointSep->addChild(lineSet);
+
+                node->addChild(pointSep);
+            }
+            break;
+        }
+
+        case IntersectionNodeShape::Cube: {
+            // Good balance: simple cube
+            float cubeSize = static_cast<float>(size * 0.003f); // Adjust size for cube
+
+            for (const auto& pt : intersectionPoints) {
+                SoSeparator* pointSep = new SoSeparator();
+
+                SoTranslation* trans = new SoTranslation();
+                trans->translation.setValue(
+                    static_cast<float>(pt.X()),
+                    static_cast<float>(pt.Y()),
+                    static_cast<float>(pt.Z())
+                );
+                pointSep->addChild(trans);
+
+                SoCube* cube = new SoCube();
+                cube->width.setValue(cubeSize);
+                cube->height.setValue(cubeSize);
+                cube->depth.setValue(cubeSize);
+
+                pointSep->addChild(cube);
+
+                node->addChild(pointSep);
+            }
+            break;
+        }
+
+        case IntersectionNodeShape::Sphere:
+        default: {
+            // Traditional sphere (higher quality, slower)
+            for (const auto& pt : intersectionPoints) {
+                SoSeparator* pointSep = new SoSeparator();
+
+                SoTranslation* trans = new SoTranslation();
+                trans->translation.setValue(
+                    static_cast<float>(pt.X()),
+                    static_cast<float>(pt.Y()),
+                    static_cast<float>(pt.Z())
+                );
+                pointSep->addChild(trans);
+
+                SoSphere* sphere = new SoSphere();
+                sphere->radius.setValue(static_cast<float>(size * 0.01));
+                pointSep->addChild(sphere);
+
+                node->addChild(pointSep);
+            }
+            break;
+        }
     }
 
     return node;

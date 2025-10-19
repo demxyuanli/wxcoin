@@ -15,7 +15,6 @@ void RenderModeManager::setWireframeMode(bool wireframe, std::vector<std::shared
 {
     m_wireframeMode = wireframe;
     applyWireframeToAllGeometries(geometries);
-    LOG_INF_S("Wireframe mode " + std::string(wireframe ? "enabled" : "disabled"));
 }
 
 bool RenderModeManager::isWireframeMode() const
@@ -26,7 +25,6 @@ bool RenderModeManager::isWireframeMode() const
 void RenderModeManager::setShadingMode(bool shading)
 {
     m_shadingMode = shading;
-    LOG_INF_S("Shading mode " + std::string(shading ? "enabled" : "disabled"));
 }
 
 bool RenderModeManager::isShadingMode() const
@@ -47,7 +45,6 @@ void RenderModeManager::setShowEdges(bool showEdges, EdgeDisplayManager* edgeDis
     // Update rendering toolkit configuration
     updateRenderingToolkitConfiguration(showEdges);
 
-    LOG_INF_S("Edge display " + std::string(showEdges ? "enabled" : "disabled"));
 }
 
 bool RenderModeManager::isShowEdges() const
@@ -58,7 +55,6 @@ bool RenderModeManager::isShowEdges() const
 void RenderModeManager::setAntiAliasing(bool enabled)
 {
     m_antiAliasing = enabled;
-    LOG_INF_S("Anti-aliasing " + std::string(enabled ? "enabled" : "disabled"));
 }
 
 bool RenderModeManager::isAntiAliasing() const
@@ -73,14 +69,12 @@ void RenderModeManager::applyWireframeToAllGeometries(std::vector<std::shared_pt
             geometry->setWireframeMode(m_wireframeMode);
         }
     }
-    LOG_INF_S("Applied wireframe mode to all geometries");
 }
 
 void RenderModeManager::applyShadingToAllGeometries(std::vector<std::shared_ptr<OCCGeometry>>& geometries)
 {
     // Implementation for shading mode application
     // This might involve updating material properties or shader states
-    LOG_INF_S("Applied shading mode to all geometries");
 }
 
 void RenderModeManager::updateRenderingToolkitConfiguration(bool showEdges)

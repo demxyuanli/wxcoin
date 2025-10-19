@@ -23,7 +23,6 @@ void SelectionAcceleratorService::rebuildFromGeometries(const std::vector<std::s
         return;
     }
 
-    LOG_INF_S("Starting selection accelerator rebuild...");
 
     // Collect all shapes from geometries
     std::vector<TopoDS_Shape> shapes;
@@ -35,11 +34,9 @@ void SelectionAcceleratorService::rebuildFromGeometries(const std::vector<std::s
         }
     }
 
-    LOG_INF_S("Collected " + std::to_string(shapes.size()) + " shapes for selection accelerator");
 
     // Rebuild accelerator for shape-level selection
     if (!shapes.empty()) {
-        LOG_INF_S("Building selection accelerator...");
         auto startTime = std::chrono::high_resolution_clock::now();
 
         bool success = m_accelerator->build(shapes, SelectionAccelerator::SelectionMode::Shapes);
@@ -49,8 +46,7 @@ void SelectionAcceleratorService::rebuildFromGeometries(const std::vector<std::s
 
         if (success) {
             m_shapeCount = shapes.size();
-            LOG_INF_S("Selection accelerator rebuilt with " + std::to_string(shapes.size()) + 
-                     " shapes in " + std::to_string(duration.count()) + "ms");
+
         } else {
             m_shapeCount = 0;
             LOG_ERR_S("Failed to rebuild selection accelerator");

@@ -88,11 +88,28 @@ OriginalEdgesParamDialog::OriginalEdgesParamDialog(wxWindow* parent)
 	intersectionSizeSizer->Add(m_intersectionNodeSize, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
 	mainSizer->Add(intersectionSizeSizer, 0, wxEXPAND | wxALL, 5);
 
+	// Intersection Node Shape
+	wxStaticText* intersectionShapeLabel = new wxStaticText(m_contentPanel, wxID_ANY, "Node Shape:");
+	m_intersectionNodeShape = new wxChoice(m_contentPanel, wxID_ANY, wxDefaultPosition, wxSize(100, -1));
+	m_intersectionNodeShape->Append("Point (Fastest)");
+	m_intersectionNodeShape->Append("Cross");
+	m_intersectionNodeShape->Append("Cube");
+	m_intersectionNodeShape->Append("Sphere (Best Quality)");
+	m_intersectionNodeShape->SetSelection(0); // Default to Point
+	m_intersectionNodeShape->SetToolTip("Shape for intersection nodes - Point is fastest for many nodes");
+	m_intersectionNodeShape->Enable(false); // Initially disabled
+
+	wxBoxSizer* intersectionShapeSizer = new wxBoxSizer(wxHORIZONTAL);
+	intersectionShapeSizer->Add(intersectionShapeLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	intersectionShapeSizer->Add(m_intersectionNodeShape, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+	mainSizer->Add(intersectionShapeSizer, 0, wxEXPAND | wxALL, 5);
+
 	// Connect checkbox event to enable/disable controls
 	m_highlightIntersectionNodes->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent& event) {
 		bool enabled = event.IsChecked();
 		m_intersectionNodeColorPicker->Enable(enabled);
 		m_intersectionNodeSize->Enable(enabled);
+		m_intersectionNodeShape->Enable(enabled);
 	});
 
 	// Buttons
@@ -138,4 +155,15 @@ wxColour OriginalEdgesParamDialog::getIntersectionNodeColor() const {
 
 double OriginalEdgesParamDialog::getIntersectionNodeSize() const {
 	return m_intersectionNodeSize->GetValue();
+}
+
+IntersectionNodeShape OriginalEdgesParamDialog::getIntersectionNodeShape() const {
+	int selection = m_intersectionNodeShape->GetSelection();
+	switch (selection) {
+		case 0: return IntersectionNodeShape::Point;
+		case 1: return IntersectionNodeShape::Cross;
+		case 2: return IntersectionNodeShape::Cube;
+		case 3: return IntersectionNodeShape::Sphere;
+		default: return IntersectionNodeShape::Point;
+	}
 }

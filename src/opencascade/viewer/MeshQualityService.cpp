@@ -23,9 +23,7 @@ void MeshQualityService::enableParameterMonitoring(bool enabled)
 {
     m_parameterMonitoringEnabled = enabled;
     if (enabled) {
-        LOG_INF_S("Mesh quality parameter monitoring enabled");
     } else {
-        LOG_INF_S("Mesh quality parameter monitoring disabled");
     }
 }
 
@@ -44,10 +42,6 @@ void MeshQualityService::logParameterChange(const std::string& parameterName, do
     if (oldValue != 0.0) {
         changePercent = ((newValue - oldValue) / oldValue) * 100.0;
     }
-
-    LOG_INF_S("Parameter changed - " + parameterName +
-              ": " + std::to_string(oldValue) + " -> " + std::to_string(newValue) +
-              " (" + (changePercent >= 0 ? "+" : "") + std::to_string(changePercent) + "%)");
 
     updateParameterTracking(parameterName, newValue);
     checkQualityThresholds();
@@ -79,7 +73,6 @@ void MeshQualityService::logCurrentMeshSettings()
         }
     }
 
-    LOG_INF_S(summary);
 }
 
 bool MeshQualityService::validateMeshParameters() const
@@ -222,7 +215,6 @@ void MeshQualityService::exportMeshStatistics(const std::string& filename) const
             file << metric.first << "," << std::fixed << std::setprecision(6) << metric.second << "\n";
         }
 
-        LOG_INF_S("Mesh statistics exported to: " + filename);
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Error exporting mesh statistics to '" + filename + "': " + std::string(e.what()));
@@ -245,8 +237,7 @@ void MeshQualityService::setQualityThresholds(double minQuality, double maxDevia
 {
     m_minQualityThreshold = minQuality;
     m_maxDeviationThreshold = maxDeviation;
-    LOG_INF_S("Quality thresholds updated: Min=" + std::to_string(minQuality) +
-              ", MaxDev=" + std::to_string(maxDeviation));
+
 
     if (m_qualityAlertsEnabled) {
         checkQualityThresholds();
@@ -263,7 +254,6 @@ void MeshQualityService::setMonitoringInterval(int milliseconds)
 {
     if (milliseconds >= 100) {
         m_monitoringIntervalMs = milliseconds;
-        LOG_INF_S("Monitoring interval set to " + std::to_string(milliseconds) + "ms");
     } else {
         LOG_WRN_S("Monitoring interval must be at least 100ms, keeping current value");
     }
@@ -278,10 +268,8 @@ void MeshQualityService::enableQualityAlerts(bool enabled)
 {
     m_qualityAlertsEnabled = enabled;
     if (enabled) {
-        LOG_INF_S("Quality alerts enabled");
         checkQualityThresholds();
     } else {
-        LOG_INF_S("Quality alerts disabled");
         m_activeAlerts.clear();
     }
 }

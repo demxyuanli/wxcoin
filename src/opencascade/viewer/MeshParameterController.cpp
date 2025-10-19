@@ -38,9 +38,7 @@ void MeshParameterController::setAdaptiveMeshing(bool enabled) { m_adaptiveMeshi
 void MeshParameterController::setParallelProcessing(bool enabled) { m_parallelProcessing = enabled; }
 
 void MeshParameterController::remeshAll() {
-	LOG_INF_S("=== MESH CONTROLLER: REMESH ALL STARTED ===");
 	applyRemesh();
-	LOG_INF_S("=== MESH CONTROLLER: REMESH ALL COMPLETED ===");
 }
 
 bool MeshParameterController::isSmoothingEnabled() const { return m_smoothingEnabled; }
@@ -64,13 +62,6 @@ void MeshParameterController::applyRemesh() {
 		return;
 	}
 
-	LOG_INF_S("=== MESH CONTROLLER: APPLYING REMESH PARAMETERS ===");
-	LOG_INF_S("Parameters: deflection=" + std::to_string(m_params->deflection) +
-		", angularDeflection=" + std::to_string(m_params->angularDeflection) +
-		", smoothingEnabled=" + std::string(m_smoothingEnabled ? "true" : "false") +
-		", subdivisionEnabled=" + std::string(m_subdivisionEnabled ? "true" : "false") +
-		", geometries=" + std::to_string(m_geometries->size()));
-
 	m_mesher->applyAndRemesh(*m_params, *m_geometries,
 		m_smoothingEnabled, m_smoothingIterations, m_smoothingStrength, m_smoothingCreaseAngle,
 		m_subdivisionEnabled, m_subdivisionLevel, m_subdivisionMethod, m_subdivisionCreaseAngle,
@@ -78,11 +69,9 @@ void MeshParameterController::applyRemesh() {
 
 	// Request view refresh after remeshing
 	if (m_viewer) {
-		LOG_INF_S("MESH CONTROLLER: Requesting view refresh after remesh");
 		m_viewer->requestViewRefresh();
 	} else {
 		LOG_WRN_S("MESH CONTROLLER: No viewer available for refresh");
 	}
 
-	LOG_INF_S("=== MESH CONTROLLER: REMESH APPLICATION COMPLETED ===");
 }

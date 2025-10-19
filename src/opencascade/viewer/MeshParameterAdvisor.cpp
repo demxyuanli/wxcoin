@@ -82,12 +82,7 @@ ShapeComplexity MeshParameterAdvisor::analyzeShape(const TopoDS_Shape& shape) {
         if (complexity.surfaceArea > 0 && complexity.faceCount > 0) {
             complexity.avgCurvature = complexity.faceCount / complexity.surfaceArea;
         }
-        
-        LOG_INF_S("Shape analysis: faces=" + std::to_string(complexity.faceCount) +
-                  ", edges=" + std::to_string(complexity.edgeCount) +
-                  ", bbox=" + std::to_string(complexity.boundingBoxSize) +
-                  ", area=" + std::to_string(complexity.surfaceArea) +
-                  ", complex=" + std::to_string(complexity.hasComplexSurfaces));
+
         
     } catch (const std::exception& e) {
         LOG_ERR_S("Error analyzing shape: " + std::string(e.what()));
@@ -126,29 +121,23 @@ MeshParameters MeshParameterAdvisor::recommendParameters(const TopoDS_Shape& sha
     if (complexity.hasComplexSurfaces) {
         params.deflection *= 0.5;
         params.angularDeflection *= 0.7;
-        LOG_INF_S("Adjusted for complex surfaces");
     }
     
     // Adjust for high curvature
     if (complexity.avgCurvature > 0.1) {
         params.deflection *= 0.7;
         params.angularDeflection *= 0.8;
-        LOG_INF_S("Adjusted for high curvature");
     }
     
     // Adjust for many faces (assemblies)
     if (complexity.faceCount > 1000) {
         params.deflection *= 1.5;  // Coarser for assemblies
-        LOG_INF_S("Adjusted for large assembly");
     }
     
     // Ensure reasonable limits
     params.deflection = std::max(0.0001, std::min(10.0, params.deflection));
     params.angularDeflection = std::max(0.01, std::min(1.0, params.angularDeflection));
-    
-    LOG_INF_S("Recommended parameters: deflection=" + std::to_string(params.deflection) +
-              ", angular=" + std::to_string(params.angularDeflection) +
-              ", parallel=" + std::to_string(params.inParallel));
+
     
     return params;
 }
@@ -162,7 +151,7 @@ size_t MeshParameterAdvisor::estimateTriangleCount(const TopoDS_Shape& shape,
     }
     
     // Estimate based on surface area and deflection
-    // Average triangle area ≈ deflection²
+    // Average triangle area �?deflection²
     double avgTriangleArea = params.deflection * params.deflection;
     
     // Roughly 2 triangles per unit area
@@ -181,7 +170,6 @@ size_t MeshParameterAdvisor::estimateTriangleCount(const TopoDS_Shape& shape,
     double angularFactor = 0.2 / std::max(0.01, params.angularDeflection);
     estimate = static_cast<size_t>(estimate * angularFactor);
     
-    LOG_INF_S("Estimated triangle count: ~" + std::to_string(estimate));
     
     return estimate;
 }

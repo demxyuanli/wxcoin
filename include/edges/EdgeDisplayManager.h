@@ -6,6 +6,7 @@
 #include <thread>
 #include "EdgeTypes.h"
 #include "OCCGeometry.h"
+#include "edges/ModularEdgeComponent.h"
 
 class SceneManager;
 struct MeshParameters;
@@ -85,7 +86,7 @@ public:
 	
 	// Original edges parameters
 	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width,
-		bool highlightIntersectionNodes = false, const Quantity_Color& intersectionNodeColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), double intersectionNodeSize = 3.0);
+		bool highlightIntersectionNodes = false, const Quantity_Color& intersectionNodeColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), double intersectionNodeSize = 3.0, IntersectionNodeShape intersectionNodeShape = IntersectionNodeShape::Point);
 
 private:
 	SceneManager* m_sceneManager{ nullptr };
@@ -114,6 +115,7 @@ private:
 		bool highlightIntersectionNodes{ false };
 		Quantity_Color intersectionNodeColor{ 1.0, 0.0, 0.0, Quantity_TOC_RGB }; // Default red
 		double intersectionNodeSize{ 3.0 };
+		IntersectionNodeShape intersectionNodeShape{ IntersectionNodeShape::Point };
 	};
 	OriginalEdgeParams m_originalEdgeParams{};
 };

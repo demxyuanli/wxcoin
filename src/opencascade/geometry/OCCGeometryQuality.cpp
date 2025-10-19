@@ -62,7 +62,6 @@ void OCCGeometryQuality::setRenderingQuality(RenderingConfig::RenderingQuality q
             break;
     }
     
-    LOG_INF_S("Rendering quality set to: " + std::to_string(static_cast<int>(quality)));
 }
 
 void OCCGeometryQuality::setTessellationLevel(int level)
@@ -83,7 +82,6 @@ void OCCGeometryQuality::setAntiAliasingSamples(int samples)
 void OCCGeometryQuality::setEnableLOD(bool enabled)
 {
     m_enableLOD = enabled;
-    LOG_INF_S(std::string("LOD: ") + (enabled ? "enabled" : "disabled"));
 }
 
 void OCCGeometryQuality::setLODDistance(double distance)
@@ -95,7 +93,6 @@ void OCCGeometryQuality::setLODDistance(double distance)
 void OCCGeometryQuality::addLODLevel(double distance, double deflection)
 {
     m_lodLevels.push_back(std::make_pair(distance, deflection));
-    LOG_INF_S("Added LOD level at distance: " + std::to_string(distance));
 }
 
 int OCCGeometryQuality::getLODLevel(double viewDistance) const
@@ -148,7 +145,6 @@ void OCCGeometryQuality::setShadowBias(double bias)
 void OCCGeometryQuality::setLightingModel(RenderingConfig::LightingModel model)
 {
     m_lightingModel = model;
-    LOG_INF_S("Lighting model changed");
 }
 
 void OCCGeometryQuality::setRoughness(double roughness)
@@ -202,7 +198,6 @@ void OCCGeometryQuality::applyAdvancedParameters(const AdvancedGeometryParameter
     m_lastAdaptiveMeshing = params.adaptiveMeshing;
     m_lastParallelProcessing = params.parallelProcessing;
     
-    LOG_INF_S("Advanced parameters applied");
 }
 
 void OCCGeometryQuality::updateFromRenderingConfig()
@@ -215,5 +210,4 @@ void OCCGeometryQuality::updateFromRenderingConfig()
     m_shadowIntensity = config.getShadowSettings().shadowIntensity;
     m_lightingModel = config.getLightingModelSettings().lightingModel;
     
-    LOG_INF_S("Updated quality settings from RenderingConfig");
 }

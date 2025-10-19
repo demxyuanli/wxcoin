@@ -29,7 +29,6 @@ void NormalDisplayService::setShowNormals(bool showNormals, EdgeDisplayManager* 
     if (edgeDisplayManager) {
         edgeDisplayManager->setShowNormalLines(showNormals, meshParams);
     }
-    LOG_INF_S("Normal display " + std::string(showNormals ? "enabled" : "disabled"));
 }
 
 bool NormalDisplayService::isShowNormals() const
@@ -40,7 +39,6 @@ bool NormalDisplayService::isShowNormals() const
 void NormalDisplayService::setNormalLength(double length)
 {
     m_config.length = length;
-    LOG_INF_S("Normal length set to: " + std::to_string(length));
 }
 
 double NormalDisplayService::getNormalLength() const
@@ -52,7 +50,6 @@ void NormalDisplayService::setNormalColor(const Quantity_Color& correct, const Q
 {
     m_config.correctColor = correct;
     m_config.incorrectColor = incorrect;
-    LOG_INF_S("Normal colors updated");
 }
 
 void NormalDisplayService::getNormalColor(Quantity_Color& correct, Quantity_Color& incorrect) const
@@ -64,7 +61,6 @@ void NormalDisplayService::getNormalColor(Quantity_Color& correct, Quantity_Colo
 void NormalDisplayService::setNormalConsistencyMode(bool enabled)
 {
     m_config.consistencyMode = enabled;
-    LOG_INF_S("Normal consistency mode " + std::string(enabled ? "enabled" : "disabled"));
 }
 
 bool NormalDisplayService::isNormalConsistencyModeEnabled() const
@@ -81,12 +77,10 @@ void NormalDisplayService::setNormalDebugMode(bool enabled)
         // Enable debug visualization with specific colors
         m_config.correctColor = Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB);   // Green for correct
         m_config.incorrectColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB); // Red for incorrect
-        LOG_INF_S("Normal debug mode enabled with debug colors");
     } else {
         // Restore default colors
         m_config.correctColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB);   // Red for correct
         m_config.incorrectColor = Quantity_Color(0.0, 1.0, 0.0, Quantity_TOC_RGB); // Green for incorrect
-        LOG_INF_S("Normal debug mode disabled");
     }
 }
 
@@ -101,7 +95,6 @@ void NormalDisplayService::refreshNormalDisplay(EdgeDisplayManager* edgeDisplayM
     if (edgeDisplayManager) {
         edgeDisplayManager->updateAll(meshParams);
     }
-    LOG_INF_S("Normal display refreshed");
 }
 
 void NormalDisplayService::toggleNormalDisplay(EdgeDisplayManager* edgeDisplayManager, const MeshParameters& meshParams)
@@ -114,12 +107,10 @@ void NormalDisplayService::enableNormalDebugVisualization(EdgeDisplayManager* ed
 {
     setNormalDebugMode(true);
     setShowNormals(true, edgeDisplayManager, meshParams);
-    LOG_INF_S("Normal debug visualization enabled");
 }
 
 void NormalDisplayService::updateNormalDisplaySettings()
 {
-    LOG_INF_S("Normal display settings updated");
 }
 
 void NormalDisplayService::forceNormalRegeneration(EdgeDisplayManager* edgeDisplayManager, const MeshParameters& meshParams)

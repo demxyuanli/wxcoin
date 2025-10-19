@@ -168,7 +168,6 @@ void OCCViewer::initializeViewer()
 	// Create outline manager (disabled by default)
 	m_outlineManager = std::make_unique<OutlineDisplayManager>(m_sceneManager, m_occRoot, &m_geometries);
 
-	LOG_INF_S("OCC Viewer initialized");
 }
 
 void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
@@ -394,7 +393,6 @@ void OCCViewer::fitGeometry(const std::string& name)
 	if (geometry && m_sceneManager) {
 		// This would typically zoom to the specific geometry bounds
 		// For now, just log that this functionality exists
-		LOG_INF_S("fitGeometry called for: " + name + " - functionality available but not fully implemented");
 	}
 }
 
@@ -529,7 +527,6 @@ void OCCViewer::onGeometryChanged(std::shared_ptr<OCCGeometry> geometry)
 
 void OCCViewer::setShowNormals(bool showNormals)
 {
-	LOG_INF_S("OCCViewer::setShowNormals called with: " + std::string(showNormals ? "true" : "false"));
 	
 	if (m_normalDisplayService && m_configurationManager) {
 		// Sync configuration from ConfigurationManager
@@ -538,8 +535,6 @@ void OCCViewer::setShowNormals(bool showNormals)
 		m_normalDisplayService->setNormalDisplayConfig(config);
 		m_normalDisplayService->setShowNormals(showNormals, m_edgeDisplayManager.get(), m_meshParams);
 		
-		LOG_INF_S("OCCViewer::setShowNormals - After setting, isShowNormals returns: " + 
-			std::string(m_normalDisplayService->isShowNormals() ? "true" : "false"));
 	} else {
 		LOG_WRN_S("OCCViewer::setShowNormals - m_normalDisplayService or m_configurationManager is null");
 	}
@@ -727,7 +722,6 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 	}
 
 	auto batchAddStartTime = std::chrono::high_resolution_clock::now();
-	LOG_INF_S("Starting batch addition of " + std::to_string(geometries.size()) + " geometries");
 
 	// Pre-allocate space to avoid reallocations
 	m_geometries.reserve(m_geometries.size() + geometries.size());
@@ -804,12 +798,8 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 				m_pendingObjectTreeUpdates.push_back(geometry);
 			}
 		}
-		LOG_INF_S("OCCViewer: Queued " + std::to_string(geometries.size()) + " geometries for deferred ObjectTree update");
 	}
 
-	auto batchAddEndTime = std::chrono::high_resolution_clock::now();
-	auto batchAddDuration = std::chrono::duration_cast<std::chrono::milliseconds>(batchAddEndTime - batchAddStartTime);
-	LOG_INF_S("Batch geometry addition completed in " + std::to_string(batchAddDuration.count()) + "ms");
 }
 
 void OCCViewer::requestViewRefresh()
@@ -823,15 +813,9 @@ void OCCViewer::requestViewRefresh()
 void OCCViewer::updateObjectTreeDeferred()
 {
 	if (m_pendingObjectTreeUpdates.empty()) {
-		LOG_INF_S("OCCViewer: No pending ObjectTree updates to process");
 		return;
 	}
-	LOG_INF_S("OCCViewer: Starting deferred ObjectTree update for " + std::to_string(m_pendingObjectTreeUpdates.size()) + " geometries");
-	auto updateStartTime = std::chrono::high_resolution_clock::now();
 	if (m_objectTreeSync) m_objectTreeSync->processDeferred();
-	auto updateEndTime = std::chrono::high_resolution_clock::now();
-	auto updateDuration = std::chrono::duration_cast<std::chrono::milliseconds>(updateEndTime - updateStartTime);
-	LOG_INF_S("OCCViewer: Deferred ObjectTree updates processed in " + std::to_string(updateDuration.count()) + "ms");
 }
 
 // Subdivision surface control implementations
@@ -1200,7 +1184,7 @@ void OCCViewer::setShowOriginalEdges(bool show) {
 }
 
 void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,
-	bool highlightIntersectionNodes, const wxColour& intersectionNodeColor, double intersectionNodeSize) {
+	bool highlightIntersectionNodes, const wxColour& intersectionNodeColor, double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape) {
 	// Store parameters in ConfigurationManager
 	if (m_configurationManager) {
 		auto& config = m_configurationManager->getOriginalEdgesConfig();
@@ -1212,6 +1196,7 @@ void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLen
 		updateConfigValue(config.highlightIntersectionNodes, highlightIntersectionNodes);
 		updateConfigValue(config.intersectionNodeColor, intersectionNodeColor);
 		updateConfigValue(config.intersectionNodeSize, intersectionNodeSize);
+		// Note: intersectionNodeShape is not stored in config yet, could be added later
 	
 	// Convert wxColour to Quantity_Color
 	Quantity_Color occColor(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
@@ -1220,7 +1205,7 @@ void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLen
 	// Apply parameters to EdgeDisplayManager
 	if (m_edgeDisplayManager) {
 		m_edgeDisplayManager->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, occColor, width,
-			highlightIntersectionNodes, intersectionNodeOccColor, intersectionNodeSize);
+			highlightIntersectionNodes, intersectionNodeOccColor, intersectionNodeSize, intersectionNodeShape);
 	}
 	
 	// Refresh the view

@@ -44,14 +44,12 @@ void ViewOperationsService::fitAll(SceneManager* sceneManager, ViewUpdateService
         }
     }
 
-    LOG_INF_S("View fitted to all geometries");
 }
 
 void ViewOperationsService::hideAll(SelectionManager* selectionManager)
 {
     if (selectionManager) {
         selectionManager->hideAll();
-        LOG_INF_S("All geometries hidden");
     }
 }
 
@@ -59,7 +57,6 @@ void ViewOperationsService::showAll(SelectionManager* selectionManager)
 {
     if (selectionManager) {
         selectionManager->showAll();
-        LOG_INF_S("All geometries shown");
     }
 }
 
@@ -67,7 +64,6 @@ void ViewOperationsService::selectAll(SelectionManager* selectionManager)
 {
     if (selectionManager) {
         selectionManager->selectAll();
-        LOG_INF_S("All geometries selected");
     }
 }
 
@@ -75,7 +71,6 @@ void ViewOperationsService::deselectAll(SelectionManager* selectionManager)
 {
     if (selectionManager) {
         selectionManager->deselectAll();
-        LOG_INF_S("All geometries deselected");
     }
 }
 
@@ -86,7 +81,6 @@ void ViewOperationsService::setAllColor(const Quantity_Color& color, const std::
             geometry->setColor(color);
         }
     }
-    LOG_INF_S("Set color for all geometries");
 }
 
 void ViewOperationsService::requestViewRefresh(SceneManager* sceneManager, ViewUpdateService* viewUpdater)
@@ -97,19 +91,15 @@ void ViewOperationsService::requestViewRefresh(SceneManager* sceneManager, ViewU
             canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
         }
     }
-    LOG_INF_S("View refresh requested");
 }
 
 void ViewOperationsService::updateObjectTreeDeferred(ObjectTreeSync* objectTreeSync)
 {
     if (!objectTreeSync) {
-        LOG_INF_S("No pending ObjectTree updates to process");
         return;
     }
 
-    LOG_INF_S("Starting deferred ObjectTree update");
     objectTreeSync->processDeferred();
-    LOG_INF_S("Deferred ObjectTree updates processed");
 }
 
 void ViewOperationsService::updateSceneBounds(SceneManager* sceneManager)

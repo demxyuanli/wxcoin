@@ -303,7 +303,6 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 			imageData[i + 2] = 255; // B
 			imageData[i + 3] = 255; // A
 		}
-		LOG_INF_S("CuteNavCube::generateFaceTexture: Fallback to white texture for: " + text);
 		return true;
 	}
 
@@ -318,10 +317,7 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 	int baseFontSize = std::max(40, static_cast<int>(width / fontRatio)); // Increased minimum font size
 	// Apply DPI scaling to font size for crisp rendering on high-DPI displays
 	baseFontSize = static_cast<int>(baseFontSize * dpiManager.getDPIScale());
-	LOG_INF_S("CuteNavCube::generateFaceTexture: Starting font setup - text: " + text +
-		", width: " + std::to_string(width) + "x" + std::to_string(height) +
-		", baseFontSize: " + std::to_string(baseFontSize) +
-		", DPI scale: " + std::to_string(dpiManager.getDPIScale()));
+	// Font setup for texture generation
 
 	wxFont font(baseFontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Arial");
 	font.SetPointSize(baseFontSize);
@@ -329,15 +325,8 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 	dc.SetFont(font);
 	dc.SetTextForeground(wxColour(0, 0, 0)); // Black text for high contrast
 
-	LOG_INF_S("CuteNavCube::generateFaceTexture: Font setup - width: " + std::to_string(width) +
-		", baseFontSize: " + std::to_string(baseFontSize) +
-		", font point size: " + std::to_string(font.GetPointSize()));
 
 	wxSize textSize = dc.GetTextExtent(text);
-	LOG_INF_S("CuteNavCube::generateFaceTexture: Text metrics - text: " + text +
-		", textSize: " + std::to_string(textSize.GetWidth()) + "x" + std::to_string(textSize.GetHeight()) +
-		", font height: " + std::to_string(font.GetPointSize()) +
-		", actual text height: " + std::to_string(textSize.GetHeight()));
 	int x = (width - textSize.GetWidth()) / 2;
 	int y = (height - textSize.GetHeight()) / 2;
 	dc.DrawText(text, x, y);
@@ -353,7 +342,6 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 			imageData[i + 2] = 255; // B
 			imageData[i + 3] = 255; // A
 		}
-		LOG_INF_S("CuteNavCube::generateFaceTexture: Fallback to white texture for: " + text);
 		return true;
 	}
 
@@ -382,11 +370,8 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 			imageData[i + 2] = 255; // B
 			imageData[i + 3] = 255; // A
 		}
-		LOG_INF_S("CuteNavCube::generateFaceTexture: Fallback to white texture for: " + text);
 	}
 
-	LOG_INF_S("CuteNavCube::generateFaceTexture: Texture generated for " + text +
-		", size=" + std::to_string(width) + "x" + std::to_string(height));
 	return true;
 }
 
@@ -567,7 +552,6 @@ void CuteNavCube::setupGeometry() {
 	}
 	cubeAssembly->addChild(coords);
 
-	LOG_INF_S("=== Manual Face Definition Analysis ===");
 	int faceIndex = 0;
 
 	SoMaterial* mainFaceMaterial = new SoMaterial;
@@ -677,13 +661,7 @@ void CuteNavCube::setupGeometry() {
 	const int baseTexSize = 2048; // Ultra-high resolution base texture size for maximum text precision
 	const int texWidth = dpiManager.getScaledTextureSize(baseTexSize);
 	const int texHeight = dpiManager.getScaledTextureSize(baseTexSize);
-	LOG_INF_S("CuteNavCube::setupGeometry: Texture size - base: " + std::to_string(baseTexSize) +
-		", scaled: " + std::to_string(texWidth) + "x" + std::to_string(texHeight) +
-		", DPI scale: " + std::to_string(dpiManager.getDPIScale()));
-
 	// Textures will be generated and cached later in generateAndCacheTextures()
-
-	LOG_INF_S("--- Logging Face Properties ---");
 	for (const auto& faceDef : faces) {
 		// Skip faces based on display options
 		if (faceDef.materialType == 1 && !m_showEdges) continue;    // Skip edge faces if edges are disabled
@@ -708,8 +686,6 @@ void CuteNavCube::setupGeometry() {
 			faceSep->addChild(mainFaceMaterial);
 			m_faceMaterials[faceDef.name] = mainFaceMaterial;
 			// Base colors are already set above
-			LOG_INF_S("CuteNavCube::setupGeometry: Used shared frosted glass material for main face: " + faceDef.name);
-			
 			// Texture will be added later in generateAndCacheTextures()
 
 			// Set texture coordinate indices for main faces (quads)
@@ -724,8 +700,6 @@ void CuteNavCube::setupGeometry() {
 			faceSep->addChild(edgeAndCornerMaterial);
 			m_faceMaterials[faceDef.name] = edgeAndCornerMaterial;
 			// Base colors are already set above
-			LOG_INF_S("CuteNavCube::setupGeometry: Used shared frosted glass material for edge/corner face: " + faceDef.name);
-			
 			// Texture will be added later in generateAndCacheTextures()
 
 			if (faceDef.indices.size() == 4) { // Edge faces (quads)
@@ -752,14 +726,6 @@ void CuteNavCube::setupGeometry() {
 
 	m_root->addChild(cubeAssembly);
 
-	LOG_INF_S("CuteNavCube::setupGeometry: Total faces analyzed: " + std::to_string(faceIndex));
-	LOG_INF_S("CuteNavCube::setupGeometry: Materials stored: " + std::to_string(m_faceMaterials.size()));
-	// Detailed material addresses disabled for cleaner logs
-	// for (const auto& pair : m_faceMaterials) {
-	//	LOG_INF_S("CuteNavCube::setupGeometry: Face '" + pair.first + "' has material at " + 
-	//		std::to_string(reinterpret_cast<uintptr_t>(pair.second)));
-	// }
-	LOG_INF_S("CuteNavCube::setupGeometry: Manual geometry definition with verified normals.");
 
 	// --- Add black outlines to all faces ---
 	SoSeparator* outlineSep = new SoSeparator;
@@ -796,8 +762,6 @@ void CuteNavCube::setupGeometry() {
 	outlineSep->addChild(outlineFaceSet);
 
 	m_root->addChild(outlineSep);
-
-	LOG_INF_S("CuteNavCube::setupGeometry: Final rebuild of cube geometry with definitive winding order and outlines.");
 	
 	// Generate and cache all textures after geometry setup
 	if (m_showTextures) {
@@ -860,39 +824,29 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 
 	SoPickedPoint* pickedPoint = pickAction.getPickedPoint();
 	if (!pickedPoint) {
-		LOG_INF_S("CuteNavCube::pickRegion: No picked point (miss)");
-		return "";
+	return "";
 	}
 
 	SoPath* pickedPath = pickedPoint->getPath();
 	if (!pickedPath || pickedPath->getLength() == 0) {
-		LOG_INF_S("CuteNavCube::pickRegion: Invalid picked path");
 		return "";
 	}
-
-	// Add path length log
-	LOG_INF_S("CuteNavCube::pickRegion: Picked path length: " + std::to_string(pickedPath->getLength()));
 
 	// Find the named separator for the face
 	for (int i = pickedPath->getLength() - 1; i >= 0; --i) {
 		SoNode* node = pickedPath->getNode(i);
 		if (node && node->isOfType(SoSeparator::getClassTypeId()) && node->getName().getLength() > 0) {
 			std::string nameStr = node->getName().getString();
-			LOG_INF_S("CuteNavCube::pickRegion: Found named node at index " + std::to_string(i) + ": " + nameStr);
 			
 			// Check if this is a valid face name
 			auto viewIt = m_faceToView.find(nameStr);
 			auto normalIt = m_faceNormals.find(nameStr);
 			if (viewIt != m_faceToView.end() && normalIt != m_faceNormals.end()) {
-				LOG_INF_S("CuteNavCube::pickRegion: Picked face: " + nameStr + ", maps to view: " + viewIt->second);
 				return nameStr; // Return the actual face name, not the mapped view
-			} else {
-				LOG_INF_S("CuteNavCube::pickRegion: Named node '" + nameStr + "' is not a registered face");
 			}
 		}
 	}
 
-	LOG_INF_S("CuteNavCube::pickRegion: No valid face found in picked path");
 	return "";
 }
 
@@ -977,11 +931,8 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 
 bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
 	std::string eventType = event.Moving() ? "MOVING" : event.Leaving() ? "LEAVING" : event.LeftDown() ? "LEFT_DOWN" : event.LeftUp() ? "LEFT_UP" : "OTHER";
-	LOG_INF_S("CuteNavCube::handleMouseEvent: === BEGIN === Event type: " + eventType +
-		", Current hovered face: '" + m_hoveredFace + "', Materials count: " + std::to_string(m_faceMaterials.size()));
 
 	if (!m_enabled) {
-		LOG_INF_S("CuteNavCube::handleMouseEvent: Cube not enabled, returning false");
 		return false;
 	}
 
@@ -1002,33 +953,19 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 		// Update hover state
 		if (hoveredFace != m_hoveredFace) {
-			LOG_INF_S("CuteNavCube::handleMouseEvent: Hover state changing from '" + m_hoveredFace + "' to '" + hoveredFace + "'");
-
 			// Restore previous face color by regenerating texture
 			if (!m_hoveredFace.empty()) {
-				LOG_INF_S("CuteNavCube::handleMouseEvent: Restoring texture for face: " + m_hoveredFace + " - regenerating texture with normal color");
-				
-				// Regenerate texture with normal color for this face
-				regenerateFaceTexture(m_hoveredFace, false); // false = normal state
-				
-				// Request refresh through callback
+				regenerateFaceTexture(m_hoveredFace, false);
 				if (m_refreshCallback) {
 					m_refreshCallback();
-					LOG_INF_S("CuteNavCube::handleMouseEvent: Requested refresh after texture restoration");
 				}
 			}
 
 			// Set new hovered face color by regenerating texture
 			if (!hoveredFace.empty()) {
-				LOG_INF_S("CuteNavCube::handleMouseEvent: Hovering over face: " + hoveredFace + " - regenerating texture with hover color");
-				
-				// Regenerate texture with hover color for this face
-				regenerateFaceTexture(hoveredFace, true); // true = hover state
-				
-				// Request refresh through callback
+				regenerateFaceTexture(hoveredFace, true);
 				if (m_refreshCallback) {
 					m_refreshCallback();
-					LOG_INF_S("CuteNavCube::handleMouseEvent: Requested refresh after hover texture regeneration");
 				}
 			}
 
@@ -1037,31 +974,19 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 		// Don't return here - allow click/drag events to be processed
 		if (!event.LeftIsDown()) {
-			LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Hover event handled, final hovered face: '" + m_hoveredFace + "'");
 			return true; // Hover events are always handled
 		}
 	}
 
 	// When mouse leaves window, restore all face colors
 	if (event.Leaving()) {
-		LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving cube area, current hovered face: '" + m_hoveredFace + "'");
 		if (!m_hoveredFace.empty()) {
-			LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - restoring texture for face: " + m_hoveredFace + " - regenerating texture with normal color");
-			
-			// Regenerate texture with normal color for this face
-			regenerateFaceTexture(m_hoveredFace, false); // false = normal state
-			
-			// Request refresh through callback
+			regenerateFaceTexture(m_hoveredFace, false);
 			if (m_refreshCallback) {
 				m_refreshCallback();
-				LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - requested refresh after texture restoration");
 			}
 			m_hoveredFace = "";
-			LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - hover state reset to empty");
-		} else {
-			LOG_INF_S("CuteNavCube::handleMouseEvent: Mouse leaving - no face was hovered, nothing to restore");
 		}
-		LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Mouse leaving event handled, final hovered face: '" + m_hoveredFace + "'");
 		return true; // Mouse leaving is always handled
 	}
 
@@ -1098,21 +1023,11 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 					// Call camera move callback if available, otherwise use view change callback
 					if (m_cameraMoveCallback) {
 						m_cameraMoveCallback(cameraPos, cameraOrient);
-						LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked face: " + region +
-							", mapped to view: " + viewName +
-							", moved camera to position: (" +
-							std::to_string(cameraPos[0]) + ", " +
-							std::to_string(cameraPos[1]) + ", " +
-							std::to_string(cameraPos[2]) + ")");
 					} else if (m_viewChangeCallback) {
-						m_viewChangeCallback(region); // Pass face name to callback
-						LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked face: " + region +
-							", mapped to view: " + viewName);
+						m_viewChangeCallback(region);
 					}
-					return true; // Successfully handled click on cube face
+					return true;
 				} else {
-					LOG_INF_S("CuteNavCube::handleMouseEvent: Clicked transparent area, allowing ray penetration");
-					LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Click event not handled (transparent area), final hovered face: '" + m_hoveredFace + "'");
 					return false; // Transparent area, allow ray penetration to outline viewport
 				}
 			}
@@ -1135,14 +1050,10 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 			m_rotationChangedCallback();
 		}
 
-		//LOG_DBG("CuteNavCube::handleMouseEvent: Rotated: X=" + std::to_string(m_rotationX) +
-		//    ", Y=" + std::to_string(m_rotationY));
-		LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Drag event handled, final hovered face: '" + m_hoveredFace + "'");
 		return true; // Drag events are always handled
 	}
 
 	// Default: event not handled (for transparent areas)
-	LOG_INF_S("CuteNavCube::handleMouseEvent: === END === Event not handled (transparent area), final hovered face: '" + m_hoveredFace + "'");
 	return false;
 }
 
@@ -1153,38 +1064,6 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 	if (m_needsGeometryRebuild) {
 		setupGeometry();
 		m_needsGeometryRebuild = false;
-		LOG_INF_S(std::string("CuteNavCube::render: Rebuilt geometry with new parameters - ") +
-			"geometrySize: " + std::to_string(m_geometrySize) +
-			", chamferSize: " + std::to_string(m_chamferSize) +
-			", cameraDistance: " + std::to_string(m_cameraDistance) +
-			", showEdges: " + std::string(m_showEdges ? "true" : "false") +
-			", showCorners: " + std::string(m_showCorners ? "true" : "false") +
-			", showTextures: " + std::string(m_showTextures ? "true" : "false"));
-	}
-
-	// Only log when position actually changes or for debugging specific issues
-	static int lastX = -1, lastY = -1;
-	static int lastWidth = -1, lastHeight = -1;
-	static float lastDpiScale = -1.0f;
-
-	bool positionChanged = (x != lastX || y != lastY || size.x != lastWidth || size.y != lastHeight || m_dpiScale != lastDpiScale);
-
-	if (positionChanged) {
-		LOG_INF_S("CuteNavCube::render: Rendering cube at logical position: x=" + std::to_string(x) +
-			", y=" + std::to_string(y) + ", viewport layout size=" + std::to_string(size.x) + "x" + std::to_string(size.y) +
-			", cube geometric size=" + std::to_string(m_cubeSize) + "x" + std::to_string(m_cubeSize) +
-			", physical position: " + std::to_string(x * m_dpiScale) + "x" +
-			std::to_string(y * m_dpiScale) + " to " +
-			std::to_string((x + size.x) * m_dpiScale) + "x" +
-			std::to_string((y + size.y) * m_dpiScale) +
-			", window: " + std::to_string(m_windowWidth) + "x" +
-			std::to_string(m_windowHeight) + ", dpiScale: " + std::to_string(m_dpiScale));
-
-		lastX = x;
-		lastY = y;
-		lastWidth = size.x;
-		lastHeight = size.y;
-		lastDpiScale = m_dpiScale;
 	}
 
 	// Setup viewport for navigation cube at specified position and size
@@ -1271,7 +1150,6 @@ void CuteNavCube::updateMaterialProperties(const CubeConfig& config) {
 		}
 	}
 	
-	LOG_INF_S("CuteNavCube::updateMaterialProperties: Updated material properties");
 }
 
 void CuteNavCube::updateSeparatorMaterials(SoSeparator* sep) {
@@ -1376,12 +1254,6 @@ void CuteNavCube::applyConfig(const CubeConfig& config) {
 		m_needsGeometryRebuild = true;
 	}
 
-	LOG_INF_S("CuteNavCube::applyConfig: Applied configuration - size=" +
-		std::to_string(m_geometrySize) + ", chamfer=" + std::to_string(m_chamferSize) +
-		", distance=" + std::to_string(m_cameraDistance) +
-		", showEdges=" + (m_showEdges ? "true" : "false") +
-		", showCorners=" + (m_showCorners ? "true" : "false") +
-		", showTextures=" + (m_showTextures ? "true" : "false"));
 }
 
 void CuteNavCube::setCameraPosition(const SbVec3f& position) {
@@ -1476,7 +1348,6 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 }
 
 void CuteNavCube::generateAndCacheTextures() {
-	LOG_INF_S("CuteNavCube::generateAndCacheTextures: Starting texture cache generation");
 	
 	// Generate textures for all faces in both normal and hover states
 	std::vector<std::string> allFaces = {
@@ -1525,15 +1396,9 @@ void CuteNavCube::generateAndCacheTextures() {
 		}
 	}
 	
-	LOG_INF_S("CuteNavCube::generateAndCacheTextures: Cached " + std::to_string(normalCount) + 
-		" normal textures and " + std::to_string(hoverCount) + " hover textures, added " + 
-		std::to_string(addedCount) + " initial textures to scene");
 }
 
 void CuteNavCube::regenerateFaceTexture(const std::string& faceName, bool isHover) {
-	LOG_INF_S("CuteNavCube::regenerateFaceTexture: Switching texture for face: " + faceName + 
-		", hover: " + (isHover ? "true" : "false"));
-	
 	// Find the face separator node
 	auto faceIt = m_faceSeparators.find(faceName);
 	if (faceIt == m_faceSeparators.end()) {
@@ -1582,16 +1447,12 @@ void CuteNavCube::regenerateFaceTexture(const std::string& faceName, bool isHove
 		// Only replace if the new texture is different from the old one
 		faceSep->removeChild(textureIndex);
 		faceSep->insertChild(newTexture, textureIndex);
-		LOG_INF_S("CuteNavCube::regenerateFaceTexture: Replaced texture at index " + std::to_string(textureIndex) + 
-			" for face: " + faceName + " with " + std::string(isHover ? "hover" : "normal") + " texture");
 	} else if (textureIndex < 0) {
 		// Insert texture after material node (which should be the first child)
 		if (numChildren > 0) {
-			faceSep->insertChild(newTexture, 1); // Insert at index 1 (after material)
+			faceSep->insertChild(newTexture, 1);
 		} else {
 			faceSep->addChild(newTexture);
 		}
-		LOG_INF_S("CuteNavCube::regenerateFaceTexture: Inserted " + std::string(isHover ? "hover" : "normal") + 
-			" texture for face: " + faceName);
 	}
 }

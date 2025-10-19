@@ -20,6 +20,16 @@ class EdgeLODManager;
 class EdgeProcessorFactory;
 
 /**
+ * @brief Enumeration for intersection node display shapes
+ */
+enum class IntersectionNodeShape {
+    Sphere,     // Traditional sphere (higher quality, slower)
+    Point,      // Simple point (fastest performance)
+    Cross,      // Cross shape made of lines (balanced performance/quality)
+    Cube        // Simple cube (good balance)
+};
+
+/**
  * @brief Modular edge component using the new modular edge system
  *
  * This component uses specialized extractors and renderers for different
@@ -42,7 +52,8 @@ public:
         double width = 1.0,
         bool highlightIntersectionNodes = false,
         const Quantity_Color& intersectionNodeColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
-        double intersectionNodeSize = 3.0);
+        double intersectionNodeSize = 3.0,
+        IntersectionNodeShape intersectionNodeShape = IntersectionNodeShape::Point);
 
     // Feature edges
     void extractFeatureEdges(
@@ -101,7 +112,8 @@ public:
     SoSeparator* createIntersectionNodesNode(
         const std::vector<gp_Pnt>& intersectionPoints,
         const Quantity_Color& color,
-        double size);
+        double size,
+        IntersectionNodeShape shape = IntersectionNodeShape::Point);
 
     // Cleanup
     void clearMeshEdgeNode();

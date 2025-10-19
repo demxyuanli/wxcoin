@@ -27,6 +27,7 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 		bool highlightIntersectionNodes = dialog.getHighlightIntersectionNodes();
 		wxColour intersectionNodeColor = dialog.getIntersectionNodeColor();
 		double intersectionNodeSize = dialog.getIntersectionNodeSize();
+		IntersectionNodeShape intersectionNodeShape = dialog.getIntersectionNodeShape();
 
 		LOG_INF_S("Original edges parameters: density=" + std::to_string(samplingDensity) +
 			", minLength=" + std::to_string(minLength) +
@@ -36,8 +37,8 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 			", nodeSize=" + std::to_string(intersectionNodeSize));
 
 		// Apply parameters to viewer
-		m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth, 
-			highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize);
+		m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth,
+			highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 
 			// Enable original edges display
 			m_viewer->setShowOriginalEdges(true);

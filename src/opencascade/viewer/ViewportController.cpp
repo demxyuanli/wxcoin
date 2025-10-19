@@ -23,14 +23,12 @@ void ViewportController::fitAll()
     }
     
     m_sceneManager->getCanvas()->resetView();
-    LOG_INF_S("Viewport: fitAll executed");
 }
 
 void ViewportController::fitGeometry(const std::string& name)
 {
     // TODO: Implement fit specific geometry
     // This requires bounding box calculation and camera adjustment
-    LOG_INF_S("Viewport: fitGeometry for " + name + " (framework)");
     
     // For now, just fit all
     fitAll();
@@ -46,7 +44,6 @@ void ViewportController::requestViewRefresh()
     if (canvas && canvas->getRefreshManager()) {
         canvas->getRefreshManager()->requestRefresh();
     }
-    LOG_INF_S("View refresh requested");
 }
 
 gp_Pnt ViewportController::getCameraPosition() const

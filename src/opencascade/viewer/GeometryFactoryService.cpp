@@ -29,7 +29,6 @@ std::shared_ptr<OCCGeometry> GeometryFactoryService::addGeometryWithAdvancedRend
         auto geometry = createAdvancedGeometry(shape, name);
         if (geometry) {
             applyAdvancedRendering(geometry);
-            LOG_INF_S("Created advanced geometry: " + name);
         }
         return geometry;
     }
@@ -52,7 +51,6 @@ std::shared_ptr<OCCGeometry> GeometryFactoryService::addBezierCurve(
         TopoDS_Shape curveShape = createBezierCurveShape(controlPoints);
         if (!curveShape.IsNull()) {
             auto geometry = createBasicGeometry(curveShape, name);
-            LOG_INF_S("Created Bezier curve: " + name);
             return geometry;
         }
         return nullptr;
@@ -76,7 +74,6 @@ std::shared_ptr<OCCGeometry> GeometryFactoryService::addBezierSurface(
         TopoDS_Shape surfaceShape = createBezierSurfaceShape(controlPoints);
         if (!surfaceShape.IsNull()) {
             auto geometry = createBasicGeometry(surfaceShape, name);
-            LOG_INF_S("Created Bezier surface: " + name);
             return geometry;
         }
         return nullptr;
@@ -101,7 +98,6 @@ std::shared_ptr<OCCGeometry> GeometryFactoryService::addBSplineCurve(
         TopoDS_Shape curveShape = createBSplineCurveShape(poles, weights);
         if (!curveShape.IsNull()) {
             auto geometry = createBasicGeometry(curveShape, name);
-            LOG_INF_S("Created B-Spline curve: " + name);
             return geometry;
         }
         return nullptr;
@@ -115,13 +111,11 @@ std::shared_ptr<OCCGeometry> GeometryFactoryService::addBSplineCurve(
 void GeometryFactoryService::upgradeGeometryToAdvanced(const std::string& name)
 {
     // Implementation would upgrade existing geometry to use advanced rendering
-    LOG_INF_S("Upgrading geometry to advanced rendering: " + name);
 }
 
 void GeometryFactoryService::upgradeAllGeometriesToAdvanced()
 {
     // Implementation would upgrade all geometries to advanced rendering
-    LOG_INF_S("Upgrading all geometries to advanced rendering");
 }
 
 bool GeometryFactoryService::isAdvancedGeometrySupported() const
@@ -242,7 +236,6 @@ void GeometryFactoryService::applyAdvancedRendering(std::shared_ptr<OCCGeometry>
     if (geometry) {
         // Apply advanced rendering features
         // This would include things like better shaders, lighting, etc.
-        LOG_INF_S("Applied advanced rendering to geometry");
     }
 }
 

@@ -5,7 +5,6 @@
 OCCGeometryCore::OCCGeometryCore(const std::string& name)
     : m_name(name)
 {
-    LOG_INF_S("Created OCCGeometryCore: " + m_name);
 }
 
 void OCCGeometryCore::setShape(const TopoDS_Shape& shape)
@@ -16,5 +15,4 @@ void OCCGeometryCore::setShape(const TopoDS_Shape& shape)
     }
     
     m_shape = shape;
-    LOG_INF_S("Shape set for geometry: " + m_name);
 }

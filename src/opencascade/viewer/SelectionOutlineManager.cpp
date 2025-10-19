@@ -36,7 +36,6 @@ SelectionOutlineManager::~SelectionOutlineManager() = default;
 void SelectionOutlineManager::setEnabled(bool enabled) {
 	if (m_enabled == enabled) return;
 	m_enabled = enabled;
-	LOG_INF((std::string("SelectionOutlineManager setEnabled ") + (enabled ? "true" : "false")).c_str(), "SelectionOutline");
 	if (!m_enabled) {
 		clearAll();
 	}

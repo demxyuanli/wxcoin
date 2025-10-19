@@ -77,5 +77,4 @@ void ObjectTreeSync::processDeferred() {
 
 	// Now refresh the tree display once for all geometries
 	canvas->getObjectTreePanel()->refreshTreeDisplay();
-	LOG_INF_S("ObjectTreeSync: Completed processing deferred geometries");
 }

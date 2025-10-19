@@ -3,6 +3,7 @@
 #include "EdgeTypes.h"
 #include "OCCGeometry.h"
 #include "rendering/GeometryProcessor.h"
+#include "edges/ModularEdgeComponent.h"
 
 // Responsible solely for generating edge nodes on a geometry
 class EdgeGenerationService {
@@ -10,7 +11,7 @@ public:
 	EdgeGenerationService() = default;
 
 	bool ensureOriginalEdges(std::shared_ptr<OCCGeometry>& geom, double samplingDensity = 80.0, double minLength = 0.01, bool showLinesOnly = false, const Quantity_Color& color = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), double width = 1.0,
-		bool highlightIntersectionNodes = false, const Quantity_Color& intersectionNodeColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), double intersectionNodeSize = 3.0);
+		bool highlightIntersectionNodes = false, const Quantity_Color& intersectionNodeColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), double intersectionNodeSize = 3.0, IntersectionNodeShape intersectionNodeShape = IntersectionNodeShape::Point);
 	bool ensureFeatureEdges(std::shared_ptr<OCCGeometry>& geom,
 		double featureAngleDeg,
 		double minLength,

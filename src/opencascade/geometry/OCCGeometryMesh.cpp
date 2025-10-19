@@ -55,7 +55,6 @@ void OCCGeometryMesh::setCoinNode(SoSeparator* node)
 
 void OCCGeometryMesh::regenerateMesh(const TopoDS_Shape& shape, const MeshParameters& params)
 {
-    LOG_INF_S("Regenerating mesh");
     m_meshRegenerationNeeded = true;
     m_lastMeshParams = params;
     buildCoinRepresentation(shape, params);
@@ -110,7 +109,6 @@ void OCCGeometryMesh::buildCoinRepresentation(const TopoDS_Shape& shape, const M
     
     auto buildEndTime = std::chrono::high_resolution_clock::now();
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
-    LOG_INF_S("Coin representation built in " + std::to_string(buildDuration.count()) + "ms");
 }
 
 void OCCGeometryMesh::buildCoinRepresentation(
@@ -169,7 +167,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
 
     auto buildEndTime = std::chrono::high_resolution_clock::now();
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
-    LOG_INF_S("Coin representation with materials built in " + std::to_string(buildDuration.count()) + "ms");
 }
 
 void OCCGeometryMesh::updateCoinRepresentationIfNeeded(const TopoDS_Shape& shape, const MeshParameters& params)
@@ -271,7 +268,6 @@ void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const Mes
             return;
         }
 
-        LOG_INF_S("Building face index mapping for " + std::to_string(faces.size()) + " faces");
 
         // Use the processor to generate mesh with face mapping
         auto& manager = RenderingToolkitAPI::getManager();
@@ -292,7 +288,6 @@ void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const Mes
                     m_faceIndexMappings.push_back(mapping);
                 }
                 
-                LOG_INF_S("Face index mapping built successfully: " + std::to_string(m_faceIndexMappings.size()) + " faces mapped");
             } else {
                 LOG_WRN_S("No face mappings generated");
             }
@@ -309,14 +304,12 @@ void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const Mes
 void OCCGeometryMesh::releaseTemporaryData()
 {
     // Release any temporary mesh generation data
-    LOG_INF_S("Releasing temporary mesh data");
 }
 
 void OCCGeometryMesh::optimizeMemory()
 {
     // Optimize memory usage
     m_faceIndexMappings.shrink_to_fit();
-    LOG_INF_S("Memory optimized");
 }
 
 void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
@@ -344,9 +337,6 @@ void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, c
         LOG_WRN_S("Empty mesh generated for wireframe representation");
         return;
     }
-
-    LOG_INF_S("Creating wireframe with " + std::to_string(mesh.vertices.size()) + " vertices and " + 
-              std::to_string(mesh.triangles.size() / 3) + " triangles");
 
     // Create coordinate node
     SoCoordinate3* coords = new SoCoordinate3();
@@ -389,7 +379,6 @@ void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, c
     lineSet->coordIndex.setValues(0, static_cast<int>(indices.size()), indices.data());
     m_coinNode->addChild(lineSet);
     
-    LOG_INF_S("Wireframe representation created successfully");
 }
 
 // ========== NEW MODULAR INTERFACE ==========
@@ -427,7 +416,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
             // Also clear normal-related nodes since they depend on mesh quality
             modularEdgeComponent->clearEdgeNode(EdgeType::NormalLine);
             modularEdgeComponent->clearEdgeNode(EdgeType::FaceNormalLine);
-            LOG_INF_S("Mesh parameters changed, cleared modular mesh edge nodes and normal nodes");
         }
     }
 
@@ -683,7 +671,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
 
     auto buildEndTime = std::chrono::high_resolution_clock::now();
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
-    LOG_INF_S("Coin3D scene built (modular) in " + std::to_string(buildDuration.count()) + "ms");
 }
 
 void OCCGeometryMesh::updateWireframeMaterial(const Quantity_Color& color)

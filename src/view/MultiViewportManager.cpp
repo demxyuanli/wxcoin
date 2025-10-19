@@ -55,8 +55,6 @@ MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneMa
 	, m_cubeMaterial(nullptr)
 	, m_normalColor(0.8f, 0.8f, 0.8f)
 	, m_hoverColor(1.0f, 0.7f, 0.3f) {
-	LOG_INF_S("MultiViewportManager: Initializing");
-
 	if (!m_canvas) {
 		LOG_ERR_S("MultiViewportManager: Canvas is null");
 	}
@@ -65,12 +63,9 @@ MultiViewportManager::MultiViewportManager(Canvas* canvas, SceneManager* sceneMa
 	}
 
 	initializeViewports();
-	LOG_INF_S("MultiViewportManager: Initialization completed");
 }
 
 MultiViewportManager::~MultiViewportManager() {
-	LOG_INF_S("MultiViewportManager: Destroyed");
-
 	if (m_cubeOutlineRoot) {
 		m_cubeOutlineRoot->unref();
 	}
@@ -175,11 +170,6 @@ void MultiViewportManager::createCubeOutlineScene() {
 	createTopRightCircle(scale);
 	createSmallCube(scale);
 
-	// Debug: Print all composite shapes
-	LOG_INF_S("Created composite shapes:");
-	for (const auto& compositeShape : m_compositeShapes) {
-		LOG_INF_S("  " + compositeShape.shapeName);
-	}
 }
 
 void MultiViewportManager::createCurvedArrow(int dir, float scale) {
@@ -720,14 +710,6 @@ void MultiViewportManager::updateViewportLayouts(const wxSize& canvasSize) {
 		outlineSize
 	);
 	
-	// Log viewport layout for debugging
-	int wxYTop = canvasSize.y - margin - outlineSize;
-	int wxYBottom = wxYTop + outlineSize;
-	LOG_INF_S("MultiViewportManager: Cube outline viewport layout - Canvas: " + 
-		std::to_string(canvasSize.x) + "x" + std::to_string(canvasSize.y) + 
-		", Viewport x: [" + std::to_string(canvasSize.x - outlineSize - margin) + 
-		" - " + std::to_string(canvasSize.x - margin) + 
-		"], wxY: [" + std::to_string(wxYTop) + " - " + std::to_string(wxYBottom) + "]");
 
 	// Coordinate system (bottom-right) - Y in GL coordinates (from bottom)
 	int coordSize = static_cast<int>(80 * m_dpiScale);
@@ -751,54 +733,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 	float y_wx = event.GetY();
 	float y_gl = canvasSize.y - y_wx;
 
-	// Debug: Log all mouse events to see if we're getting them
-	static int eventCount = 0;
-	if (event.Moving() || event.LeftDown()) {
-		eventCount++;
-		if (eventCount % 50 == 0 || event.LeftDown()) { // Log every 50 move events or all clicks
-			LOG_INF_S("MultiViewportManager::handleMouseEvent: wxPos(" +
-				std::to_string(static_cast<int>(x)) + ", " +
-				std::to_string(static_cast<int>(y_wx)) + ") -> glPosY(" +
-				std::to_string(static_cast<int>(y_gl)) + "), canvas=" +
-				std::to_string(canvasSize.x) + "x" + std::to_string(canvasSize.y));
-		}
-	}
-
-	// Log object positions for debugging
-	static bool loggedObjectPositions = false;
-	if (!loggedObjectPositions && m_initialized) {
-		loggedObjectPositions = true;
-		LOG_INF_S("MultiViewportManager: Object positions (scale=0.95):");
-		LOG_INF_S("  Cube: translation(2.375, -2.375, 0)");
-		LOG_INF_S("  Sphere: translation(2.375, 2.375, 0), scale(0.475, 0.475, 0.475)");
-		for (int i = 0; i < 4; ++i) {
-			float angle_rad = (i < 2) ? 0 : M_PI;
-			if (i == 2) angle_rad = M_PI / 2;
-			if (i == 3) angle_rad = -M_PI / 2;
-			float tx = (i % 2 == 0) ? 0 : ((i < 2) ? 2.7f : -2.7f);
-			float ty = (i % 2 == 0) ? ((i < 2) ? 2.7f : -2.7f) : 0;
-			tx *= 0.95f;
-			ty *= 0.95f;
-			std::string name = (i == 0) ? "Top Triangle" : (i == 1) ? "Bottom Triangle" : (i == 2) ? "Left Triangle" : "Right Triangle";
-			LOG_INF_S("  " + name + ": translation(" + std::to_string(tx) + ", " + std::to_string(ty) + ", 0)");
-		}
-		for (int i = 0; i < 4; ++i) {
-			std::string name;
-			float radius = 2.7f * 0.95f;
-			float start_angle = 0, end_angle = 0;
-			switch (i) {
-			case 0: name = "Top Left Arrow"; start_angle = 110.0f; end_angle = 145.0f; break;
-			case 1: name = "Top Right Arrow"; start_angle = 70.0f; end_angle = 35.0f; break;
-			case 2: name = "Bottom Left Arrow"; start_angle = 250.0f; end_angle = 215.0f; break;
-			case 3: name = "Bottom Right Arrow"; start_angle = 290.0f; end_angle = 325.0f; break;
-			}
-			float start_rad = start_angle * M_PI / 180.0f;
-			float end_rad = end_angle * M_PI / 180.0f;
-			SbVec3f start_pos(radius * cos(start_rad), radius * sin(start_rad), 0);
-			SbVec3f end_pos(radius * cos(end_rad), radius * sin(end_rad), 0);
-			LOG_INF_S("  " + name + ": arc from (" + std::to_string(start_pos[0]) + ", " + std::to_string(start_pos[1]) + ") to (" + std::to_string(end_pos[0]) + ", " + std::to_string(end_pos[1]) + ")");
-		}
-	}
 
 	// Priority 1: Check navigation cube viewport first
 	// Note: NavigationCubeManager uses wxWidgets coordinate system (top-left origin)
@@ -823,22 +757,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 		bool xInRange = (x >= outlineViewport.x && x <= (outlineViewport.x + outlineViewport.width));
 		bool yInRange = (y_wx >= visualWxYTop && y_wx <= visualWxYBottom);
 
-		// Debug: Log viewport bounds (only on clicks or occasionally)
-		static int checkCount = 0;
-		if (event.Moving() || event.LeftDown()) {
-			checkCount++;
-			if (checkCount % 50 == 0 || event.LeftDown()) {
-				LOG_INF_S("MultiViewportManager: ViewportRect gl(x=" +
-					std::to_string(outlineViewport.x) + ".." +
-					std::to_string(outlineViewport.x + outlineViewport.width) + ", y=" +
-					std::to_string(outlineViewport.y) + ".." +
-					std::to_string(outlineViewport.y + outlineViewport.height) + ") -> visualWxY[" +
-					std::to_string(visualWxYTop) + ".." + std::to_string(visualWxYBottom) + "] mouse(" +
-					std::to_string(static_cast<int>(x)) + ", " +
-					std::to_string(static_cast<int>(y_wx)) + ") inRange: " +
-					(xInRange ? "X" : "x") + (yInRange ? "Y" : "y"));
-			}
-		}
 
 		if (xInRange && yInRange) {
 			// LOG_INF_S("MultiViewportManager: Mouse entered cube outline viewport range"); // Too frequent, disabled
@@ -849,35 +767,12 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 			int localY = static_cast<int>(y_wx) - visualWxYTop;  // Distance from visual top
 			// For OpenGL picking: need to flip Y since GL uses bottom-up
 			int pickY = outlineViewport.height - localY - 1;
-			if (event.LeftDown()) {
-				LOG_INF_S("MultiViewportManager: Click transform wx(" +
-					std::to_string(static_cast<int>(x)) + ", " +
-					std::to_string(static_cast<int>(y_wx)) + ") -> local(" +
-					std::to_string(localX) + ", " + std::to_string(localY) + ") -> pick(" +
-					std::to_string(localX) + ", " + std::to_string(pickY) + ")");
-			}
-			else if (event.Moving()) {
-				// Hover transform logging disabled for performance
-				// static int hoverLogCount = 0;
-				// hoverLogCount++;
-				// if (hoverLogCount % 50 == 0) {
-				//	LOG_INF_S("MultiViewportManager: Hover transform wx(" +
-				//		std::to_string(static_cast<int>(x)) + ", " +
-				//		std::to_string(static_cast<int>(y_wx)) + ") -> local(" +
-				//		std::to_string(localX) + ", " + std::to_string(localY) + ") -> pick(" +
-				//		std::to_string(localX) + ", " + std::to_string(pickY) + ")");
-				// }
-			}
 
 			// Use viewport region matching the cube outline viewport only
 			SbViewportRegion viewportRegion(outlineViewport.width, outlineViewport.height);
 			SbVec2s pickPoint(localX, pickY);
 
 			if (event.LeftDown()) {
-				LOG_INF_S("MultiViewportManager: Mouse click in cube outline viewport at local(" +
-					std::to_string(localX) + ", " + std::to_string(localY) +
-					"), pickPoint(" + std::to_string(pickPoint[0]) + ", " + std::to_string(pickPoint[1]) + ")");
-
 				SoRayPickAction pickAction(viewportRegion);
 				pickAction.setPoint(pickPoint);
 				pickAction.apply(m_cubeOutlineRoot);
@@ -887,33 +782,24 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 					SoPath* path = pickedPoint->getPath();
 					if (path) {
 						std::string clickedShape = findShapeNameFromPath(path);
-						SbVec3f worldPos = pickedPoint->getPoint();
-						LOG_INF_S("MultiViewportManager: Clicked shape '" + clickedShape + "' at worldPos(" +
-							std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
 
 						// Show context menu if small cube or sphere was clicked
 						if (clickedShape == "Cube") {
-							LOG_INF_S("MultiViewportManager: Showing context menu for cube");
 							m_lastClickPos = wxPoint(static_cast<int>(event.GetX()), static_cast<int>(event.GetY()));
 							wxPoint screenPos = m_canvas->ClientToScreen(m_lastClickPos);
 							showCubeContextMenu(screenPos);
 						}
 						else if (clickedShape == "Sphere") {
-							LOG_INF_S("MultiViewportManager: Showing context menu for sphere");
 							m_lastClickPos = wxPoint(static_cast<int>(event.GetX()), static_cast<int>(event.GetY()));
 							wxPoint screenPos = m_canvas->ClientToScreen(m_lastClickPos);
 							showSphereContextMenu(screenPos);
 						}
 					}
 					
-					// If we found an object in outline viewport, handle it regardless of cube handling
-					LOG_INF_S("MultiViewportManager: Ray penetrated through transparent cube area to outline object");
 					return true;
 				} else {
-					LOG_INF_S("MultiViewportManager: No object picked at click position");
 					// If cube handled the event but no outline object was found, return cube's result
 					if (cubeHandled) {
-						LOG_INF_S("MultiViewportManager: Cube handled click, no outline object found");
 						return true;
 					}
 				}
@@ -939,19 +825,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 						SoPath* path = pickedPoint->getPath();
 						if (path) {
 							hoveredShape = findShapeNameFromPath(path);
-							SbVec3f worldPos = pickedPoint->getPoint();
-							static std::string lastLoggedShape = "";
-							if (hoveredShape != lastLoggedShape) {
-								LOG_INF_S("MultiViewportManager: Hovering over shape '" + hoveredShape + "' at worldPos(" +
-									std::to_string(worldPos[0]) + ", " + std::to_string(worldPos[1]) + ", " + std::to_string(worldPos[2]) + ")");
-								lastLoggedShape = hoveredShape;
-							}
-						}
-					} else {
-						static bool loggedNoPick = false;
-						if (!loggedNoPick) {
-							// LOG_INF_S("MultiViewportManager: Mouse moving in viewport but no shape picked"); // Too frequent, disabled
-							loggedNoPick = true;
 						}
 					}
 
@@ -964,8 +837,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 				
 				// Update hover state if changed
 				if (hoveredShape != m_lastHoveredShape) {
-					LOG_INF_S("MultiViewportManager: Hover changed from '" + m_lastHoveredShape + "' to '" + hoveredShape + "'");
-					
 					// Restore previous shape's color
 					if (!m_lastHoveredShape.empty()) {
 						updateShapeHoverState(m_lastHoveredShape, false);
@@ -974,7 +845,6 @@ bool MultiViewportManager::handleMouseEvent(wxMouseEvent& event) {
 					// Highlight new shape
 					if (!hoveredShape.empty()) {
 						updateShapeHoverState(hoveredShape, true);
-						LOG_INF_S("MultiViewportManager: Ray penetrated through transparent cube area to hover outline object");
 					}
 					
 					m_lastHoveredShape = hoveredShape;
@@ -1153,8 +1023,6 @@ void MultiViewportManager::showCubeContextMenu(const wxPoint& screenPos) {
 }
 
 void MultiViewportManager::onMenuResetView(wxCommandEvent& event) {
-	LOG_INF_S("MultiViewportManager: Reset view requested");
-	
 	if (m_sceneManager) {
 		m_sceneManager->resetView();
 		if (m_canvas) {
@@ -1169,14 +1037,10 @@ void MultiViewportManager::onMenuToggleVisibility(wxCommandEvent& event) {
 	if (id == ID_MENU_TOGGLE_CUBE_VISIBILITY) {
 		bool newState = !m_viewports[VIEWPORT_CUBE_OUTLINE].enabled;
 		setViewportEnabled(VIEWPORT_CUBE_OUTLINE, newState);
-		LOG_INF_S("MultiViewportManager: Cube outline visibility toggled to " + 
-			std::string(newState ? "enabled" : "disabled"));
 	}
 	else if (id == ID_MENU_TOGGLE_COORD_VISIBILITY) {
 		bool newState = !m_viewports[VIEWPORT_COORDINATE_SYSTEM].enabled;
 		setViewportEnabled(VIEWPORT_COORDINATE_SYSTEM, newState);
-		LOG_INF_S("MultiViewportManager: Coordinate system visibility toggled to " + 
-			std::string(newState ? "enabled" : "disabled"));
 	}
 	
 	if (m_canvas) {
@@ -1185,8 +1049,6 @@ void MultiViewportManager::onMenuToggleVisibility(wxCommandEvent& event) {
 }
 
 void MultiViewportManager::onMenuCubeSettings(wxCommandEvent& event) {
-	LOG_INF_S("MultiViewportManager: Navigation cube settings requested");
-	
 	if (m_canvas) {
 		m_canvas->ShowNavigationCubeConfigDialog();
 	}
@@ -1200,20 +1062,14 @@ void MultiViewportManager::updateCubeHoverState(bool isHovering) {
 	m_isCubeHovered = isHovering;
 	
 	if (isHovering) {
-		LOG_INF_S("MultiViewportManager: Cube hover started - changing to hover color");
 		setCubeMaterialColor(m_hoverColor);
 	} else {
-		LOG_INF_S("MultiViewportManager: Cube hover ended - restoring normal color");
 		setCubeMaterialColor(SbColor(0.8f, 1.0f, 0.8f));  // Green
 	}
 }
 
 void MultiViewportManager::setCubeMaterialColor(const SbColor& color) {
 	if (m_cubeMaterial) {
-		LOG_INF_S("MultiViewportManager: Setting cube material color to (" + 
-			std::to_string(color[0]) + ", " + 
-			std::to_string(color[1]) + ", " + 
-			std::to_string(color[2]) + ")");
 		m_cubeMaterial->diffuseColor.setValue(color);
 	} else {
 		LOG_ERR_S("MultiViewportManager: Cube material is NULL!");
@@ -1246,17 +1102,13 @@ void MultiViewportManager::updateShapeHoverState(const std::string& shapeName, b
 	CompositeShape& compositeShape = m_compositeShapes[shapeIndex];
 	
 	if (isHovering) {
-		LOG_INF_S("MultiViewportManager: Hovering " + compositeShape.shapeName + " - changing to hover color");
-		// Batch update all materials in the shape
 		compositeShape.setAllMaterialsColor(m_hoverColor);
 	} else {
-		LOG_INF_S("MultiViewportManager: Leaving " + compositeShape.shapeName + " - restoring normal color");
 		// Restore original color based on shape type
 		SbColor restoreColor = m_normalColor;
 		if (compositeShape.shapeName == "Cube" || compositeShape.shapeName == "Sphere") {
 			restoreColor = SbColor(0.8f, 1.0f, 0.8f);  // Green
 		}
-		// Batch update all materials in the shape
 		compositeShape.setAllMaterialsColor(restoreColor);
 	}
 }

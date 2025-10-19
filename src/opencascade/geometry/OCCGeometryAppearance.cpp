@@ -63,14 +63,12 @@ void OCCGeometryAppearance::setTextureIntensity(double intensity)
 void OCCGeometryAppearance::setTextureEnabled(bool enabled)
 {
     m_textureEnabled = enabled;
-    LOG_INF_S(std::string("Texture ") + (enabled ? "enabled" : "disabled"));
 }
 
 void OCCGeometryAppearance::setTextureImagePath(const std::string& path)
 {
     m_textureImagePath = path;
     if (!path.empty()) {
-        LOG_INF_S("Texture image path set to: " + path);
     }
 }
 
@@ -109,7 +107,6 @@ void OCCGeometryAppearance::setAlphaThreshold(double threshold)
 void OCCGeometryAppearance::forceTextureUpdate()
 {
     if (m_textureEnabled) {
-        LOG_INF_S("Forcing texture update");
         // Force texture reload/update in rendering pipeline
         // This would trigger re-application of texture in the actual rendering code
     }

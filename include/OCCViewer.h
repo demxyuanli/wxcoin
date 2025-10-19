@@ -267,7 +267,7 @@ public:
 	EdgeDisplayFlags globalEdgeFlags;
 	void setShowOriginalEdges(bool show) override;
 	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,
-		bool highlightIntersectionNodes = false, const wxColour& intersectionNodeColor = wxColour(255, 0, 0), double intersectionNodeSize = 3.0);
+		bool highlightIntersectionNodes = false, const wxColour& intersectionNodeColor = wxColour(255, 0, 0), double intersectionNodeSize = 3.0, IntersectionNodeShape intersectionNodeShape = IntersectionNodeShape::Point);
 	void setShowFeatureEdges(bool show) override;
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) override;
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave,

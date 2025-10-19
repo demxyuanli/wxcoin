@@ -11,7 +11,7 @@
 #include "logger/Logger.h"
 
 bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& geom, double samplingDensity, double minLength, bool showLinesOnly, const Quantity_Color& color, double width,
-	bool highlightIntersectionNodes, const Quantity_Color& intersectionNodeColor, double intersectionNodeSize) {
+	bool highlightIntersectionNodes, const Quantity_Color& intersectionNodeColor, double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape) {
 	if (!geom) return false;
 
 	// Use the component specified by the geometry
@@ -38,7 +38,7 @@ bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& ge
 					extractor->findEdgeIntersections(geom->getShape(), intersectionPoints, 0.0); // Use adaptive tolerance
 
 					if (!intersectionPoints.empty()) {
-						comp->createIntersectionNodesNode(intersectionPoints, intersectionNodeColor, intersectionNodeSize);
+						comp->createIntersectionNodesNode(intersectionPoints, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 					}
 				}
 			} else {
@@ -55,7 +55,7 @@ bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& ge
 
 	// Node doesn't exist - generate new geometry with specified parameters
 	comp->extractOriginalEdges(geom->getShape(), samplingDensity, minLength, showLinesOnly, color, width,
-		highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize);
+		highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 	return true;
 }
 
@@ -109,8 +109,6 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 		generated = true;
 	}
 	if (needNormalLines && comp->getEdgeNode(EdgeType::NormalLine) == nullptr) {
-		LOG_INF_S("EdgeGenerationService::ensureMeshDerivedEdges - Generating normal line node, mesh has " + 
-			std::to_string(mesh.vertices.size()) + " vertices, " + std::to_string(mesh.normals.size()) + " normals");
 		comp->generateNormalLineNode(mesh, 0.5);
 		generated = true;
 	}

@@ -80,7 +80,6 @@ bool GeometryManagementService::addGeometry(std::shared_ptr<OCCGeometry> geometr
     // Rebuild selection accelerator
     rebuildSelectionAccelerator();
 
-    LOG_INF_S("Added geometry: " + geometry->getName());
     return true;
 }
 
@@ -130,7 +129,6 @@ bool GeometryManagementService::removeGeometry(std::shared_ptr<OCCGeometry> geom
     // Rebuild selection accelerator
     rebuildSelectionAccelerator();
 
-    LOG_INF_S("Removed geometry: " + geomName);
     return true;
 }
 
@@ -156,7 +154,6 @@ void GeometryManagementService::clearAll() {
     // Clear selection accelerator
     rebuildSelectionAccelerator();
 
-    LOG_INF_S("Cleared all geometries");
 }
 
 std::shared_ptr<OCCGeometry> GeometryManagementService::findGeometry(const std::string& name) const {
@@ -227,7 +224,6 @@ void GeometryManagementService::setGeometryTransparency(const std::string& name,
 void GeometryManagementService::addGeometriesBatch(const std::vector<std::shared_ptr<OCCGeometry>>& geometries) {
     if (geometries.empty()) return;
 
-    LOG_INF_S("Starting batch addition of " + std::to_string(geometries.size()) + " geometries");
 
     // Pre-allocate space
     m_geometries->reserve(m_geometries->size() + geometries.size());
@@ -270,7 +266,6 @@ void GeometryManagementService::addGeometriesBatch(const std::vector<std::shared
     // Rebuild selection accelerator
     rebuildSelectionAccelerator();
 
-    LOG_INF_S("Batch geometry addition completed");
 }
 
 void GeometryManagementService::attachGeometryToScene(std::shared_ptr<OCCGeometry> geometry) {

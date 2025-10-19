@@ -73,7 +73,6 @@ void OCCGeometryMaterial::setDefaultBrightMaterial()
     m_materialExplicitlySet = true;
     updateCoinMaterial();
     
-    LOG_INF_S("Applied default bright material");
 }
 
 void OCCGeometryMaterial::updateMaterialForLighting()

@@ -23,7 +23,6 @@ OCCGeometryDisplay::OCCGeometryDisplay()
 void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
 {
     m_displayMode = mode;
-    LOG_INF_S("Display mode changed");
 }
 
 void OCCGeometryDisplay::setShowEdges(bool enabled)
@@ -63,7 +62,6 @@ void OCCGeometryDisplay::setVertexColor(const Quantity_Color& color)
 void OCCGeometryDisplay::setWireframeMode(bool wireframe)
 {
     m_wireframeMode = wireframe;
-    LOG_INF_S(std::string("Wireframe mode: ") + (wireframe ? "ON" : "OFF"));
 }
 
 void OCCGeometryDisplay::setShowWireframe(bool enabled)
@@ -98,7 +96,6 @@ void OCCGeometryDisplay::setPointSize(double size)
 void OCCGeometryDisplay::setFaceDisplay(bool enable)
 {
     m_facesVisible = enable;
-    LOG_INF_S(std::string("Face display: ") + (enable ? "ON" : "OFF"));
 }
 
 void OCCGeometryDisplay::setFacesVisible(bool visible)
@@ -115,10 +112,8 @@ void OCCGeometryDisplay::setWireframeOverlay(bool enable)
     // Wireframe overlay means showing wireframe on top of shaded
     if (enable) {
         m_showWireframe = true;
-        LOG_INF_S("Wireframe overlay enabled");
     } else {
         m_showWireframe = false;
-        LOG_INF_S("Wireframe overlay disabled");
     }
 }
 
@@ -130,11 +125,9 @@ void OCCGeometryDisplay::setEdgeDisplay(bool enable)
 void OCCGeometryDisplay::setFeatureEdgeDisplay(bool enable)
 {
     // This would be handled by edge component
-    LOG_INF_S(std::string("Feature edge display: ") + (enable ? "ON" : "OFF"));
 }
 
 void OCCGeometryDisplay::setNormalDisplay(bool enable)
 {
     // This would be handled by normal visualization
-    LOG_INF_S(std::string("Normal display: ") + (enable ? "ON" : "OFF"));
 }

@@ -66,7 +66,6 @@ const OriginalEdgesConfig& ConfigurationManager::getOriginalEdgesConfig() const
 void ConfigurationManager::loadDefaultConfigurations()
 {
     setupDefaultConfigurations();
-    LOG_INF_S("Loaded default configurations");
 }
 
 bool ConfigurationManager::loadConfigurationFromFile(const std::string& filename)
@@ -85,7 +84,6 @@ bool ConfigurationManager::loadConfigurationFromFile(const std::string& filename
             // This would be expanded to properly parse JSON or INI format
         }
 
-        LOG_INF_S("Loaded configuration from file: " + filename);
         return validateAllConfigurations();
     }
     catch (const std::exception& e) {
@@ -107,7 +105,6 @@ bool ConfigurationManager::saveConfigurationToFile(const std::string& filename) 
         std::string json = exportConfigurationAsJson();
         file << json;
 
-        LOG_INF_S("Saved configuration to file: " + filename);
         return true;
     }
     catch (const std::exception& e) {
@@ -155,7 +152,6 @@ void ConfigurationManager::applyQualityPreset(const std::string& presetName)
         return;
     }
 
-    LOG_INF_S("Applied quality preset: " + presetName);
 }
 
 void ConfigurationManager::applyPerformancePreset(const std::string& presetName)
@@ -168,7 +164,6 @@ void ConfigurationManager::applyPerformancePreset(const std::string& presetName)
         return;
     }
 
-    LOG_INF_S("Applied performance preset: " + presetName);
 }
 
 std::vector<std::string> ConfigurationManager::getAvailablePresets() const
@@ -179,7 +174,6 @@ std::vector<std::string> ConfigurationManager::getAvailablePresets() const
 void ConfigurationManager::resetToDefaults()
 {
     setupDefaultConfigurations();
-    LOG_INF_S("Reset all configurations to defaults");
 }
 
 std::string ConfigurationManager::exportConfigurationAsJson() const
@@ -227,7 +221,6 @@ bool ConfigurationManager::importConfigurationFromJson(const std::string& jsonSt
 {
     // Placeholder implementation for JSON import
     // This would parse the JSON string and update configurations
-    LOG_INF_S("Configuration import from JSON - placeholder implementation");
     return true;
 }
 

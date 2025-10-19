@@ -80,18 +80,12 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 		return result;
 	}
 
-	LOG_INF_S("PickingService - Screen pos: (" + std::to_string(screenPos.x) + ", " + std::to_string(screenPos.y) + 
-		"), viewport: " + std::to_string(size.GetWidth()) + "x" + std::to_string(size.GetHeight()));
-
 	SbViewportRegion viewport(size.GetWidth(), size.GetHeight());
 	SoRayPickAction pick(viewport);
 	
 	int pickY = size.GetHeight() - screenPos.y; // Flip Y for OpenInventor
 	pick.setPoint(SbVec2s(screenPos.x, pickY));
 	pick.setRadius(3);
-
-	LOG_INF_S("PickingService - Coin3D pick point: (" + std::to_string(screenPos.x) + ", " + std::to_string(pickY) + 
-		"), radius: 3");
 
 	// CRITICAL: Apply pick against the scene root (which includes camera), not just objectRoot
 	// The camera is needed for ray calculation in SoRayPickAction
@@ -102,21 +96,14 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 	int sceneChildren = sceneRoot ? sceneRoot->getNumChildren() : 0;
 	int mapSize = m_nodeToGeom ? static_cast<int>(m_nodeToGeom->size()) : 0;
 	
-	LOG_INF_S("PickingService - occRoot children: " + std::to_string(occChildren) + 
-		", objectRoot children: " + std::to_string(objChildren) + 
-		", sceneRoot children: " + std::to_string(sceneChildren) + 
-		", nodeToGeom map size: " + std::to_string(mapSize));
-	
 	// Apply pick to scene root which contains camera
 	pick.apply(sceneRoot ? sceneRoot : objectRoot);
 
 	SoPickedPoint* picked = pick.getPickedPoint();
 	if (!picked) {
-		LOG_INF_S("PickingService - No picked point found by ray pick action");
 		return result;
 	}
 
-	LOG_INF_S("PickingService - Picked point found");
 
 	SoPath* p = picked->getPath();
 	if (!p) {
@@ -124,7 +111,6 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 		return result;
 	}
 
-	LOG_INF_S("PickingService - Path length: " + std::to_string(p->getLength()));
 	
 	SoSeparator* sep = findTopLevelSeparatorInPath(p, m_occRoot);
 	if (!sep) {
@@ -132,7 +118,6 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 		return result;
 	}
 
-	LOG_INF_S("PickingService - Found top-level separator");
 
 	if (!m_nodeToGeom) {
 		LOG_WRN_S("PickingService - nodeToGeom map is null");
@@ -146,7 +131,6 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 	}
 
 	result.geometry = it->second;
-	LOG_INF_S("PickingService - Found geometry: " + result.geometry->getName());
 
 	// Try to get triangle index from the picked point detail
 	const SoDetail* detail = picked->getDetail();
@@ -156,13 +140,11 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 		// Get the face index (triangle index in the mesh)
 		int triangleIndex = faceDetail->getFaceIndex();
 		result.triangleIndex = triangleIndex;
-		LOG_INF_S("PickingService - Triangle index: " + std::to_string(triangleIndex));
 
 		// Use face index mapping to get geometry face ID
 		if (result.geometry && result.geometry->hasFaceIndexMapping()) {
 			int geometryFaceId = result.geometry->getGeometryFaceIdForTriangle(triangleIndex);
 			result.geometryFaceId = geometryFaceId;
-			LOG_INF_S("PickingService - Geometry face ID: " + std::to_string(geometryFaceId));
 		} else {
 			LOG_WRN_S("PickingService - Geometry does not have face index mapping");
 		}

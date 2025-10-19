@@ -59,7 +59,6 @@ bool OCCBrepConverter::saveToSTEP(const TopoDS_Shape& shape, const std::string& 
 			return false;
 		}
 
-		LOG_INF_S("Successfully saved shape to STEP file: " + filename);
 		return true;
 	}
 	catch (const std::exception& e) {
@@ -95,7 +94,6 @@ bool OCCBrepConverter::saveToIGES(const TopoDS_Shape& shape, const std::string& 
 			return false;
 		}
 
-		LOG_INF_S("Successfully saved shape to IGES file: " + filename);
 		return true;
 	}
 	catch (const std::exception& e) {
@@ -121,7 +119,6 @@ bool OCCBrepConverter::saveToBREP(const TopoDS_Shape& shape, const std::string& 
 		BRepTools::Write(shape, file);
 		file.close();
 
-		LOG_INF_S("Successfully saved shape to BREP file: " + filename);
 		return true;
 	}
 	catch (const std::exception& e) {
@@ -179,7 +176,6 @@ TopoDS_Shape OCCBrepConverter::loadFromSTEP(const std::string& filename)
 		}
 
 		TopoDS_Shape shape = reader.OneShape();
-		LOG_INF_S("Successfully loaded shape from STEP file: " + filename);
 		return shape;
 	}
 	catch (const std::exception& e) {
@@ -218,7 +214,6 @@ TopoDS_Shape OCCBrepConverter::loadFromIGES(const std::string& filename)
 		}
 
 		TopoDS_Shape shape = reader.OneShape();
-		LOG_INF_S("Successfully loaded shape from IGES file: " + filename);
 		return shape;
 	}
 	catch (const std::exception& e) {
@@ -247,7 +242,6 @@ TopoDS_Shape OCCBrepConverter::loadFromBREP(const std::string& filename)
 			return TopoDS_Shape();
 		}
 
-		LOG_INF_S("Successfully loaded shape from BREP file: " + filename);
 		return shape;
 	}
 	catch (const std::exception& e) {
@@ -289,7 +283,6 @@ std::vector<TopoDS_Shape> OCCBrepConverter::loadMultipleFromSTEP(const std::stri
 			}
 		}
 
-		LOG_INF_S("Successfully loaded " + std::to_string(shapes.size()) + " shapes from STEP file: " + filename);
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S("Exception loading multiple shapes from STEP file: " + std::string(e.what()));
@@ -431,7 +424,6 @@ bool OCCBrepConverter::exportMeshToOBJ(const MeshData& mesh, const std::string& 
 		}
 
 		file.close();
-		LOG_INF_S("Successfully exported mesh to OBJ file: " + filename);
 		return true;
 	}
 	catch (const std::exception& e) {
@@ -488,7 +480,6 @@ bool OCCBrepConverter::saveToVRML(const TopoDS_Shape& shape, const std::string& 
 		Standard_Boolean result = writer.Write(shape, filename.c_str());
 
 		if (result) {
-			LOG_INF_S("Successfully saved shape to VRML file: " + filename);
 			return true;
 		}
 		else {
