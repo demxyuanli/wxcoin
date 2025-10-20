@@ -10,7 +10,8 @@
 /**
  * @brief Cache for edge geometry to avoid recomputation
  * 
- * Caches extracted edge points to significantly speed up edge display toggling.
+ * Caches extracted edge points AND intersection points to significantly 
+ * speed up edge display toggling and intersection detection.
  * Thread-safe singleton implementation.
  */
 class EdgeGeometryCache {
@@ -22,6 +23,20 @@ public:
         size_t memoryUsage;
 
         CacheEntry() : shapeHash(0), memoryUsage(0) {}
+    };
+    
+    /**
+     * @brief Intersection cache entry with additional metadata
+     */
+    struct IntersectionCacheEntry {
+        std::vector<gp_Pnt> intersectionPoints;
+        size_t shapeHash;
+        double tolerance;
+        std::chrono::steady_clock::time_point lastAccess;
+        size_t memoryUsage;
+        double computationTime;  // Track how long it took to compute
+        
+        IntersectionCacheEntry() : shapeHash(0), tolerance(0.0), memoryUsage(0), computationTime(0.0) {}
     };
 
     static EdgeGeometryCache& getInstance() {
@@ -40,10 +55,30 @@ public:
         std::function<std::vector<gp_Pnt>()> computeFunc);
 
     /**
+     * @brief Get cached intersections or compute if not cached
+     * @param key Unique cache key (should include shape hash and tolerance)
+     * @param computeFunc Function to compute intersection points if cache miss
+     * @param shapeHash Hash of the shape for invalidation
+     * @param tolerance Tolerance used for intersection detection
+     * @return Cached or computed intersection points
+     */
+    std::vector<gp_Pnt> getOrComputeIntersections(
+        const std::string& key,
+        std::function<std::vector<gp_Pnt>()> computeFunc,
+        size_t shapeHash,
+        double tolerance);
+
+    /**
      * @brief Invalidate specific cache entry
      * @param key Cache key to invalidate
      */
     void invalidate(const std::string& key);
+    
+    /**
+     * @brief Invalidate intersection cache for a specific shape
+     * @param shapeHash Hash of the shape to invalidate
+     */
+    void invalidateIntersections(size_t shapeHash);
 
     /**
      * @brief Clear all cache entries
@@ -79,15 +114,19 @@ public:
     void evictLRU();
 
 private:
-    EdgeGeometryCache() : m_hitCount(0), m_missCount(0), m_totalMemoryUsage(0) {}
+    EdgeGeometryCache() : m_hitCount(0), m_missCount(0), m_totalMemoryUsage(0), 
+                          m_intersectionHitCount(0), m_intersectionMissCount(0) {}
     EdgeGeometryCache(const EdgeGeometryCache&) = delete;
     EdgeGeometryCache& operator=(const EdgeGeometryCache&) = delete;
 
     std::unordered_map<std::string, CacheEntry> m_cache;
+    std::unordered_map<std::string, IntersectionCacheEntry> m_intersectionCache;
     mutable std::mutex m_mutex;
     size_t m_hitCount;
     size_t m_missCount;
     size_t m_totalMemoryUsage;
+    size_t m_intersectionHitCount;
+    size_t m_intersectionMissCount;
 };
 
 

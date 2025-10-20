@@ -1,4 +1,5 @@
 #include "edges/extractors/FeatureEdgeExtractor.h"
+#include "edges/EdgeGeometryCache.h"
 #include "logger/Logger.h"
 #include <TopoDS.hxx>
 #include <TopExp_Explorer.hxx>
@@ -9,6 +10,8 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <gp_Vec.hxx>
+#include <sstream>
+#include <iomanip>
 
 FeatureEdgeExtractor::FeatureEdgeExtractor() {}
 
@@ -27,7 +30,24 @@ std::vector<gp_Pnt> FeatureEdgeExtractor::extractTyped(
     FeatureEdgeParams defaultParams;
     const FeatureEdgeParams& p = params ? *params : defaultParams;
     
-    std::vector<gp_Pnt> points;
+    // Generate cache key based on shape and parameters
+    std::ostringstream keyStream;
+    keyStream << "feature_" 
+              << reinterpret_cast<uintptr_t>(&shape.TShape()) << "_"
+              << std::fixed << std::setprecision(6)
+              << p.featureAngle << "_"
+              << p.minLength << "_"
+              << (p.onlyConvex ? "1" : "0") << "_"
+              << (p.onlyConcave ? "1" : "0");
+    std::string cacheKey = keyStream.str();
+    
+    // Use cache to avoid recomputation
+    auto& cache = EdgeGeometryCache::getInstance();
+    return cache.getOrCompute(cacheKey, [&]() {
+        // Cache miss - perform actual feature edge extraction
+        LOG_INF_S("FeatureEdgeExtractor: Computing feature edges (cache miss)");
+        
+        std::vector<gp_Pnt> points;
     
     TopTools_IndexedDataMapOfShapeListOfShape edgeFaceMap;
     TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, edgeFaceMap);
@@ -135,8 +155,9 @@ std::vector<gp_Pnt> FeatureEdgeExtractor::extractTyped(
             }
         }
     }
-    
-    return points;
+        
+        return points;
+    });  // End of cache lambda
 }
 
 bool FeatureEdgeExtractor::isFeatureEdge(

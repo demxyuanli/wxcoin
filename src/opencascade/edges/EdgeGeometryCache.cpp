@@ -177,6 +177,115 @@ void EdgeGeometryCache::evictLRU() {
     }
 }
 
+// Intersection cache implementation
+std::vector<gp_Pnt> EdgeGeometryCache::getOrComputeIntersections(
+    const std::string& key,
+    std::function<std::vector<gp_Pnt>()> computeFunc,
+    size_t shapeHash,
+    double tolerance)
+{
+    // Check cache first
+    bool cacheHit = false;
+    std::vector<gp_Pnt> cachedPoints;
+    size_t pointsSize = 0;
+    double cachedComputationTime = 0.0;
 
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        auto it = m_intersectionCache.find(key);
+        if (it != m_intersectionCache.end()) {
+            // Verify tolerance matches (important for precision)
+            if (std::abs(it->second.tolerance - tolerance) < 1e-9) {
+                it->second.lastAccess = std::chrono::steady_clock::now();
+                m_intersectionHitCount++;
+                cacheHit = true;
+                cachedPoints = it->second.intersectionPoints;
+                pointsSize = cachedPoints.size();
+                cachedComputationTime = it->second.computationTime;
+            }
+            else {
+                // Tolerance mismatch - invalidate and recompute
+                LOG_DBG_S("IntersectionCache tolerance mismatch for " + key + 
+                         ", recomputing (cached: " + std::to_string(it->second.tolerance) +
+                         ", requested: " + std::to_string(tolerance) + ")");
+                m_totalMemoryUsage -= it->second.memoryUsage;
+                m_intersectionCache.erase(it);
+                m_intersectionMissCount++;
+            }
+        }
+        else {
+            m_intersectionMissCount++;
+        }
+    }
+
+    if (cacheHit) {
+        LOG_INF_S("IntersectionCache HIT: " + key + " (" + std::to_string(pointsSize) + 
+                  " points, saved " + std::to_string(cachedComputationTime) + "s computation)");
+        return cachedPoints;
+    }
+
+    LOG_INF_S("IntersectionCache MISS: " + key + " (computing...)");
+
+    // Compute with timing
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto points = computeFunc();
+    auto endTime = std::chrono::high_resolution_clock::now();
+    double computationTime = std::chrono::duration<double>(endTime - startTime).count();
+
+    // Cache the result
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        // Double-check
+        auto it = m_intersectionCache.find(key);
+        if (it != m_intersectionCache.end()) {
+            return it->second.intersectionPoints;
+        }
+
+        IntersectionCacheEntry entry;
+        entry.intersectionPoints = points;
+        entry.shapeHash = shapeHash;
+        entry.tolerance = tolerance;
+        entry.lastAccess = std::chrono::steady_clock::now();
+        entry.memoryUsage = estimateMemoryUsage(points);
+        entry.computationTime = computationTime;
+
+        m_intersectionCache[key] = std::move(entry);
+        m_totalMemoryUsage += entry.memoryUsage;
+        
+        LOG_INF_S("IntersectionCache stored: " + key + " (" + std::to_string(points.size()) +
+                  " points, " + std::to_string(entry.memoryUsage) + " bytes, " +
+                  std::to_string(computationTime) + "s)");
+    }
+
+    return points;
+}
+
+void EdgeGeometryCache::invalidateIntersections(size_t shapeHash) {
+    size_t removedCount = 0;
+    size_t freedMemory = 0;
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        for (auto it = m_intersectionCache.begin(); it != m_intersectionCache.end();) {
+            if (it->second.shapeHash == shapeHash) {
+                freedMemory += it->second.memoryUsage;
+                m_totalMemoryUsage -= it->second.memoryUsage;
+                it = m_intersectionCache.erase(it);
+                removedCount++;
+            }
+            else {
+                ++it;
+            }
+        }
+    }
+
+    if (removedCount > 0) {
+        LOG_INF_S("IntersectionCache invalidated " + std::to_string(removedCount) +
+                  " entries for shape (freed " + std::to_string(freedMemory) + " bytes)");
+    }
+}
 
 

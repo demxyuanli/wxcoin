@@ -65,6 +65,7 @@ set(OPENCASCADE_SOURCES
 
     # Edge intersection accelerator (performance optimization)
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeIntersectionAccelerator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeExtractionUIHelper.cpp
     
     # Edge renderers (modular)
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/renderers/BaseEdgeRenderer.cpp
@@ -115,6 +116,7 @@ set(OPENCASCADE_HEADERS
 
     # Edge intersection accelerator header
     ${CMAKE_SOURCE_DIR}/include/edges/EdgeIntersectionAccelerator.h
+    ${CMAKE_SOURCE_DIR}/include/edges/EdgeExtractionUIHelper.h
 
     # Modular renderers headers
     ${CMAKE_SOURCE_DIR}/include/edges/renderers/BaseEdgeRenderer.h

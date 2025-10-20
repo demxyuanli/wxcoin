@@ -594,37 +594,33 @@ void OriginalEdgeExtractor::findEdgeIntersections(
     LOG_INF_S("OriginalEdgeExtractor: Detecting intersections, edges=" +
               std::to_string(edges.size()));
 
-    // Strategy selection: Use BVH acceleration for larger models
-    const size_t BVH_THRESHOLD = 100;
+    // Generate cache key based on shape pointer and tolerance
+    size_t shapeHash = reinterpret_cast<size_t>(shape.TShape().get());
+    std::ostringstream keyStream;
+    keyStream << "intersections_" << shapeHash << "_" 
+              << std::fixed << std::setprecision(6) << adaptiveTolerance;
+    std::string cacheKey = keyStream.str();
 
-    if (edges.size() >= BVH_THRESHOLD) {
-        // Use BVH acceleration for large models - O(n log n) complexity
-        LOG_INF_S("Using BVH acceleration for edge intersections (" +
-                  std::to_string(edges.size()) + " edges)");
-        
-        EdgeIntersectionAccelerator accelerator;
-        accelerator.buildFromEdges(edges, 4);  // Max 4 edges per leaf
-        
-        // Extract intersections using parallel algorithm
-        auto newIntersections = accelerator.extractIntersectionsParallel(adaptiveTolerance, 0);
-        
-        // Merge with existing intersections (if any)
-        intersectionPoints.insert(intersectionPoints.end(),
-                                 newIntersections.begin(),
-                                 newIntersections.end());
-        
-        // Print statistics
-        auto stats = accelerator.getStatistics();
-        LOG_INF_S("BVH Statistics: edges=" + std::to_string(stats.totalEdges) +
-                  ", pairs=" + std::to_string(stats.potentialPairs) +
-                  ", intersections=" + std::to_string(stats.actualIntersections) +
-                  ", pruning=" + std::to_string(stats.pruningRatio * 100) + "%");
-    } else {
-        // Use optimized spatial grid method for medium-sized models
-        LOG_INF_S("Using optimized spatial grid method for edge intersections (" +
-                  std::to_string(edges.size()) + " edges)");
-        findEdgeIntersectionsFromEdges(edges, intersectionPoints, adaptiveTolerance);
-    }
+    // Try to get from cache
+    auto& cache = EdgeGeometryCache::getInstance();
+    auto cachedIntersections = cache.getOrComputeIntersections(
+        cacheKey,
+        [this, &edges, adaptiveTolerance]() -> std::vector<gp_Pnt> {
+            // Cache miss - compute intersections
+            std::vector<gp_Pnt> tempIntersections;
+            LOG_INF_S("Computing intersections (cache miss) using optimized spatial grid (" +
+                      std::to_string(edges.size()) + " edges)");
+            findEdgeIntersectionsFromEdges(edges, tempIntersections, adaptiveTolerance);
+            return tempIntersections;
+        },
+        shapeHash,
+        adaptiveTolerance
+    );
+
+    // Merge cached results into output
+    intersectionPoints.insert(intersectionPoints.end(), 
+                             cachedIntersections.begin(), 
+                             cachedIntersections.end());
 }
 
 void OriginalEdgeExtractor::findEdgeIntersectionsFromEdges(

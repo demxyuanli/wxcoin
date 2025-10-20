@@ -10,6 +10,14 @@
 #include <OpenCASCADE/Standard_Real.hxx>
 #include <vector>
 #include <memory>
+#include <functional>
+
+/**
+ * @brief Progress callback for edge extraction
+ * @param progress Progress percentage (0-100)
+ * @param message Status message describing current operation
+ */
+using EdgeExtractionProgressCallback = std::function<void(int progress, const std::string& message)>;
 
 /**
  * @brief Parameters for original edge extraction
@@ -20,6 +28,7 @@ struct OriginalEdgeParams {
     bool showLinesOnly = false;
     bool highlightIntersectionNodes = false;
     double intersectionTolerance = 0.005;
+    EdgeExtractionProgressCallback progressCallback = nullptr;
     
     OriginalEdgeParams() = default;
     OriginalEdgeParams(double density, double minLen, bool linesOnly, bool highlightNodes = false)

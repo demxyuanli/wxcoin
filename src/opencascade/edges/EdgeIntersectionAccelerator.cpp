@@ -10,9 +10,6 @@
 #include <iomanip>
 #include <mutex>
 #include <thread>
-#include <atomic>
-#include <unordered_map>
-#include <cmath>
 
 void EdgeIntersectionAccelerator::Statistics::print() const {
     std::ostringstream oss;
@@ -52,6 +49,7 @@ void EdgeIntersectionAccelerator::buildFromEdges(
         }
         
         EdgePrimitive prim;
+        prim.edgeIndex = i;
         prim.edge = edge;
         
         // Get curve
@@ -71,10 +69,6 @@ void EdgeIntersectionAccelerator::buildFromEdges(
             prim.bounds = box;
         }
         
-        // CRITICAL FIX: edgeIndex should be the index in m_edges array, not input array
-        // This ensures BVH primitive indices correctly map to m_edges
-        prim.edgeIndex = m_edges.size();  // Current position in m_edges
-        
         m_edges.push_back(prim);
         shapeEdges.push_back(edge);
     }
@@ -88,16 +82,8 @@ void EdgeIntersectionAccelerator::buildFromEdges(
     m_stats.totalEdges = m_edges.size();
     m_stats.buildTime = std::chrono::duration<double>(endTime - startTime).count();
     
-    // Validation: ensure m_edges size matches shapeEdges size
-    if (m_edges.size() != shapeEdges.size()) {
-        LOG_ERR_S("EdgeIntersectionAccelerator: SIZE MISMATCH! m_edges=" + 
-                  std::to_string(m_edges.size()) + ", shapeEdges=" + 
-                  std::to_string(shapeEdges.size()));
-    }
-    
     LOG_INF_S("EdgeIntersectionAccelerator: Built from " + 
-              std::to_string(edges.size()) + " input edges, " +
-              std::to_string(m_edges.size()) + " valid edges in " + 
+              std::to_string(m_edges.size()) + " edges in " + 
               std::to_string(m_stats.buildTime) + "s");
 }
 
@@ -120,13 +106,6 @@ EdgeIntersectionAccelerator::findPotentialIntersections() const {
         auto candidates = queryIntersectingEdges(i);
         
         for (size_t j : candidates) {
-            // Validate candidate index
-            if (j >= m_edges.size()) {
-                LOG_ERR_S("EdgeIntersectionAccelerator: Invalid candidate index " + 
-                          std::to_string(j) + " >= " + std::to_string(m_edges.size()));
-                continue;
-            }
-            
             if (j > i) { // Avoid duplicates and self-intersection
                 pairs.push_back(EdgePair(i, j));
             }
@@ -183,106 +162,31 @@ std::vector<gp_Pnt> EdgeIntersectionAccelerator::extractIntersectionsParallel(
         return {};
     }
     
-    // Thread-local result buffers (lock-free design for better performance)
-    std::vector<std::vector<gp_Pnt>> threadResults(numThreads);
-    for (auto& buf : threadResults) {
-        buf.reserve(potentialPairs.size() / numThreads / 10);  // Heuristic: ~10% hit rate
-    }
+    // Thread-safe result collection using mutex
+    // For better performance, could use lock-free structures or thread-local storage
+    std::vector<gp_Pnt> allIntersections;
+    std::mutex resultMutex;
     
     // Parallel processing using std::for_each with execution policy
     // Note: This requires C++17 and may need TBB or other parallel STL implementation
     try {
-        std::atomic<size_t> pairIndex{0};
-        
-        // Manual thread dispatch for better control
-        std::vector<std::thread> threads;
-        threads.reserve(numThreads);
-        
-        for (size_t t = 0; t < numThreads; ++t) {
-            threads.emplace_back([&, t]() {
-                auto& localResults = threadResults[t];
-                
-                try {
-                    while (true) {
-                        size_t idx = pairIndex.fetch_add(1);
-                        if (idx >= potentialPairs.size()) break;
-                        
-                        const auto& pair = potentialPairs[idx];
-                        
-                        // Validate indices before accessing m_edges
-                        if (pair.edge1Index >= m_edges.size() || 
-                            pair.edge2Index >= m_edges.size()) {
-                            LOG_WRN_S("EdgeIntersectionAccelerator: Invalid edge pair indices");
-                            continue;
-                        }
-                        
-                        gp_Pnt intersection;
-                        
-                        if (computeEdgeIntersection(m_edges[pair.edge1Index],
-                                                   m_edges[pair.edge2Index],
-                                                   tolerance,
-                                                   intersection)) {
-                            localResults.push_back(intersection);  // Lock-free!
-                        }
-                    }
-                }
-                catch (const std::exception& e) {
-                    LOG_ERR_S("EdgeIntersectionAccelerator: Thread exception: " + std::string(e.what()));
-                }
-                catch (...) {
-                    LOG_ERR_S("EdgeIntersectionAccelerator: Thread unknown exception");
+        std::for_each(std::execution::par_unseq,
+            potentialPairs.begin(), potentialPairs.end(),
+            [&](const EdgePair& pair) {
+                gp_Pnt intersection;
+                if (computeEdgeIntersection(m_edges[pair.edge1Index],
+                                           m_edges[pair.edge2Index],
+                                           tolerance,
+                                           intersection)) {
+                    std::lock_guard<std::mutex> lock(resultMutex);
+                    allIntersections.push_back(intersection);
                 }
             });
-        }
-        
-        // Wait for all threads
-        for (auto& thread : threads) {
-            if (thread.joinable()) {
-                thread.join();
-            }
-        }
     }
     catch (...) {
         // Fallback to sequential if parallel execution fails
         LOG_WRN_S("EdgeIntersectionAccelerator: Parallel execution failed, falling back to sequential");
         return extractIntersections(tolerance);
-    }
-    
-    // Merge thread-local results
-    std::vector<gp_Pnt> allIntersections;
-    size_t totalSize = 0;
-    for (const auto& results : threadResults) {
-        totalSize += results.size();
-    }
-    allIntersections.reserve(totalSize);
-    
-    for (const auto& results : threadResults) {
-        allIntersections.insert(allIntersections.end(),
-                               results.begin(), results.end());
-    }
-    
-    // Remove duplicates (spatial deduplication)
-    if (!allIntersections.empty()) {
-        std::vector<gp_Pnt> uniqueIntersections;
-        uniqueIntersections.reserve(allIntersections.size());
-        
-        for (const auto& point : allIntersections) {
-            bool isDuplicate = false;
-            
-            // Check against already added unique points
-            for (const auto& uniquePoint : uniqueIntersections) {
-                if (point.Distance(uniquePoint) < tolerance) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            
-            if (!isDuplicate) {
-                uniqueIntersections.push_back(point);
-            }
-        }
-        
-        allIntersections = std::move(uniqueIntersections);
     }
     
     m_stats.actualIntersections = allIntersections.size();
@@ -299,23 +203,6 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
     double tolerance,
     gp_Pnt& intersection) const {
     
-    // Validate input curves
-    if (edge1.curve.IsNull() || edge2.curve.IsNull()) {
-        return false;
-    }
-    
-    // Validate parameter ranges
-    if (edge1.first >= edge1.last || edge2.first >= edge2.last) {
-        return false;
-    }
-    
-    // Check if parameter ranges are valid (not too small)
-    const double MIN_PARAM_RANGE = 1e-10;
-    if ((edge1.last - edge1.first) < MIN_PARAM_RANGE || 
-        (edge2.last - edge2.first) < MIN_PARAM_RANGE) {
-        return false;
-    }
-    
     try {
         // Use OpenCASCADE's curve-curve extrema algorithm
         GeomAPI_ExtremaCurveCurve extrema(
@@ -329,54 +216,29 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
             int minIndex = -1;
             
             for (int i = 1; i <= extrema.NbExtrema(); ++i) {
-                try {
-                    double dist = extrema.Distance(i);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        minIndex = i;
-                    }
-                }
-                catch (const Standard_OutOfRange&) {
-                    // Index out of range in extrema results, skip this extremum
-                    continue;
-                }
-                catch (...) {
-                    continue;
+                double dist = extrema.Distance(i);
+                if (dist < minDist) {
+                    minDist = dist;
+                    minIndex = i;
                 }
             }
             
             if (minIndex > 0 && minDist < tolerance) {
-                try {
-                    gp_Pnt p1, p2;
-                    extrema.Points(minIndex, p1, p2);
-                    
-                    // Use midpoint as intersection
-                    intersection.SetX((p1.X() + p2.X()) / 2.0);
-                    intersection.SetY((p1.Y() + p2.Y()) / 2.0);
-                    intersection.SetZ((p1.Z() + p2.Z()) / 2.0);
-                    
-                    return true;
-                }
-                catch (const Standard_OutOfRange&) {
-                    // Points() call failed - index might be invalid
-                    return false;
-                }
+                gp_Pnt p1, p2;
+                extrema.Points(minIndex, p1, p2);
+                
+                // Use midpoint as intersection
+                intersection.SetX((p1.X() + p2.X()) / 2.0);
+                intersection.SetY((p1.Y() + p2.Y()) / 2.0);
+                intersection.SetZ((p1.Z() + p2.Z()) / 2.0);
+                
+                return true;
             }
         }
     }
-    catch (const Standard_OutOfRange& e) {
-        // Curve parameter out of range - log for debugging
-        LOG_DBG_S("EdgeIntersectionAccelerator: Standard_OutOfRange in extrema computation");
-        return false;
-    }
-    catch (const Standard_Failure& e) {
-        // Other OpenCASCADE failures - this is normal for some edge pairs
-        return false;
-    }
-    catch (...) {
-        // Unknown exception - log and return false
-        LOG_WRN_S("EdgeIntersectionAccelerator: Unknown exception in computeEdgeIntersection");
-        return false;
+    catch (const Standard_Failure&) {
+        // Silent failure - some edge pairs cannot be computed
+        // This is normal and expected
     }
     
     return false;
@@ -390,179 +252,29 @@ std::vector<size_t> EdgeIntersectionAccelerator::queryIntersectingEdges(
     }
     
     const auto& edge = m_edges[edgeIndex];
-    std::vector<size_t> primitiveIndices;
+    std::vector<size_t> results;
     
-    // Use BVH to efficiently query edges whose bounding boxes intersect
-    if (m_bvh && m_bvh->isBuilt()) {
-        // Query BVH with this edge's bounding box - O(log n) complexity
-        m_bvh->queryBoundingBox(edge.bounds, primitiveIndices);
+    // Query BVH: find all edges whose bounding boxes intersect with this edge
+    // Note: This is a simplified implementation
+    // For full BVH query support, BVHAccelerator would need to expose
+    // a bounding box query interface
+    
+    // Current fallback: test all edges (can be optimized with BVH box query)
+    for (size_t i = 0; i < m_edges.size(); ++i) {
+        if (i == edgeIndex) continue;
         
-        // Filter out self-intersection
-        primitiveIndices.erase(
-            std::remove(primitiveIndices.begin(), primitiveIndices.end(), edgeIndex),
-            primitiveIndices.end()
-        );
-    } else {
-        // Fallback: test all edges (only if BVH not built)
-        for (size_t i = 0; i < m_edges.size(); ++i) {
-            if (i == edgeIndex) continue;
-            
-            // Check bounding box intersection using OpenCASCADE API
-            if (!edge.bounds.IsOut(m_edges[i].bounds)) {
-                primitiveIndices.push_back(i);
-            }
+        // Check bounding box intersection
+        if (!edge.bounds.IsOut(m_edges[i].bounds)) {
+            results.push_back(i);
         }
     }
     
-    return primitiveIndices;
+    return results;
 }
 
 void EdgeIntersectionAccelerator::clear() {
     m_edges.clear();
     m_bvh->clear();
     m_stats = Statistics();
-}
-
-// ============================================================================
-// Advanced Algorithm Implementations
-// ============================================================================
-
-/**
- * @brief Spatial hashing for fast duplicate detection
- * 
- * Uses spatial hashing to achieve O(1) average duplicate checking
- * instead of O(n) linear search.
- */
-class SpatialHashDeduplicator {
-private:
-    std::unordered_map<size_t, std::vector<gp_Pnt>> m_hashTable;
-    double m_cellSize;
-    
-    size_t hashPosition(const gp_Pnt& p) const {
-        int64_t x = static_cast<int64_t>(std::floor(p.X() / m_cellSize));
-        int64_t y = static_cast<int64_t>(std::floor(p.Y() / m_cellSize));
-        int64_t z = static_cast<int64_t>(std::floor(p.Z() / m_cellSize));
-        
-        // Spatial hash function (prime numbers for better distribution)
-        return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
-    }
-    
-public:
-    explicit SpatialHashDeduplicator(double tolerance) 
-        : m_cellSize(tolerance * 2.0) {}
-    
-    /**
-     * @brief Check if point already exists, if not add it
-     * @return true if point is unique (was added)
-     */
-    bool addUnique(const gp_Pnt& point, double tolerance) {
-        size_t hash = hashPosition(point);
-        
-        auto& cell = m_hashTable[hash];
-        
-        // Check existing points in this cell
-        for (const auto& existing : cell) {
-            if (point.Distance(existing) < tolerance) {
-                return false;  // Duplicate found
-            }
-        }
-        
-        // Also check adjacent cells (safety margin)
-        for (int dx = -1; dx <= 1; ++dx) {
-            for (int dy = -1; dy <= 1; ++dy) {
-                for (int dz = -1; dz <= 1; ++dz) {
-                    if (dx == 0 && dy == 0 && dz == 0) continue;
-                    
-                    gp_Pnt offsetPoint(
-                        point.X() + dx * m_cellSize,
-                        point.Y() + dy * m_cellSize,
-                        point.Z() + dz * m_cellSize
-                    );
-                    size_t adjHash = hashPosition(offsetPoint);
-                    
-                    auto it = m_hashTable.find(adjHash);
-                    if (it != m_hashTable.end()) {
-                        for (const auto& existing : it->second) {
-                            if (point.Distance(existing) < tolerance) {
-                                return false;  // Duplicate in adjacent cell
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Not a duplicate, add to cell
-        cell.push_back(point);
-        return true;
-    }
-};
-
-/**
- * @brief Batch processing optimization for edge pairs
- * 
- * Groups edge pairs into batches for better cache locality
- * and reduced overhead.
- */
-std::vector<gp_Pnt> extractIntersectionsBatched(
-    const std::vector<EdgeIntersectionAccelerator::EdgePrimitive>& edges,
-    const std::vector<EdgeIntersectionAccelerator::EdgePair>& pairs,
-    double tolerance,
-    size_t batchSize = 1000) {
-    
-    std::vector<gp_Pnt> intersections;
-    intersections.reserve(pairs.size() / 10);  // Heuristic
-    
-    for (size_t batchStart = 0; batchStart < pairs.size(); batchStart += batchSize) {
-        size_t batchEnd = std::min(batchStart + batchSize, pairs.size());
-        
-        // Process batch
-        for (size_t i = batchStart; i < batchEnd; ++i) {
-            const auto& pair = pairs[i];
-            
-            try {
-                GeomAPI_ExtremaCurveCurve extrema(
-                    edges[pair.edge1Index].curve,
-                    edges[pair.edge2Index].curve,
-                    edges[pair.edge1Index].first,
-                    edges[pair.edge1Index].last,
-                    edges[pair.edge2Index].first,
-                    edges[pair.edge2Index].last
-                );
-                
-                if (extrema.NbExtrema() > 0) {
-                    double minDist = std::numeric_limits<double>::max();
-                    int minIndex = -1;
-                    
-                    for (int j = 1; j <= extrema.NbExtrema(); ++j) {
-                        double dist = extrema.Distance(j);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            minIndex = j;
-                        }
-                    }
-                    
-                    if (minIndex > 0 && minDist < tolerance) {
-                        gp_Pnt p1, p2;
-                        extrema.Points(minIndex, p1, p2);
-                        
-                        gp_Pnt intersection(
-                            (p1.X() + p2.X()) / 2.0,
-                            (p1.Y() + p2.Y()) / 2.0,
-                            (p1.Z() + p2.Z()) / 2.0
-                        );
-                        
-                        intersections.push_back(intersection);
-                    }
-                }
-            }
-            catch (const Standard_Failure&) {
-                // Geometric calculation failed, skip this pair
-                continue;
-            }
-        }
-    }
-    
-    return intersections;
 }
 

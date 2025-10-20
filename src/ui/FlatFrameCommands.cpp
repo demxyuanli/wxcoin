@@ -117,7 +117,7 @@ void FlatFrame::setupCommandSystem() {
 	auto normalFixDialogListener = std::make_shared<NormalFixDialogListener>(this, m_occViewer);
 	auto setTransparencyListener = std::make_shared<SetTransparencyListener>(this, m_occViewer);
 	auto viewModeListener = std::make_shared<ViewModeListener>(m_occViewer);
-	auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer);
+	auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer, this);
 	auto showMeshEdgesListener = std::make_shared<ShowMeshEdgesListener>(m_occViewer);
 	auto showWireFrameListener = std::make_shared<ShowWireFrameListener>(m_occViewer);
 	auto showFaceNormalsListener = std::make_shared<ShowFaceNormalsListener>(m_occViewer);
