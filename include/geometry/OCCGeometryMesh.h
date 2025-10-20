@@ -78,7 +78,10 @@ public:
 
     // Face index mapping for Coin3D triangle to geometry face mapping
     const std::vector<FaceIndexMapping>& getFaceIndexMappings() const { return m_faceIndexMappings; }
-    void setFaceIndexMappings(const std::vector<FaceIndexMapping>& mappings) { m_faceIndexMappings = mappings; }
+    void setFaceIndexMappings(const std::vector<FaceIndexMapping>& mappings);
+
+    // Build reverse mapping for fast triangle-to-face lookup
+    void buildReverseMapping();
 
     // Query methods for face index mapping
     int getGeometryFaceIdForTriangle(int triangleIndex) const;
@@ -98,11 +101,15 @@ public:
 protected:
     // Protected helper for wireframe generation
     void createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params);
-    
+
     SoSeparator* m_coinNode;
     bool m_coinNeedsUpdate;
     bool m_meshRegenerationNeeded;
     MeshParameters m_lastMeshParams;
     int m_assemblyLevel;
     std::vector<FaceIndexMapping> m_faceIndexMappings;
+
+    // Performance optimization: reverse mapping for O(1) triangle-to-face lookup
+    std::unordered_map<int, int> m_triangleToFaceMap;
+    bool m_hasReverseMapping = false;
 };

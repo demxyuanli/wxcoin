@@ -216,21 +216,8 @@ void OCCGeometryMesh::enableModularEdgeComponent(bool enable)
     useModularEdgeComponent = true;
 }
 
-int OCCGeometryMesh::getGeometryFaceIdForTriangle(int triangleIndex) const
-{
-    if (!hasFaceIndexMapping()) {
-        return -1;
-    }
-
-    for (const auto& mapping : m_faceIndexMappings) {
-        auto it = std::find(mapping.triangleIndices.begin(), mapping.triangleIndices.end(), triangleIndex);
-        if (it != mapping.triangleIndices.end()) {
-            return mapping.geometryFaceId;
-        }
-    }
-
-    return -1;
-}
+// Original getGeometryFaceIdForTriangle implementation moved to bottom of file
+// to be replaced with optimized version
 
 std::vector<int> OCCGeometryMesh::getTrianglesForGeometryFace(int geometryFaceId) const
 {
@@ -699,4 +686,68 @@ void OCCGeometryMesh::updateWireframeMaterial(const Quantity_Color& color)
             static_cast<float>(color.Blue())
         );
     }
+}
+
+// Performance optimization: reverse mapping for O(1) triangle-to-face lookup
+void OCCGeometryMesh::setFaceIndexMappings(const std::vector<FaceIndexMapping>& mappings) {
+    m_faceIndexMappings = mappings;
+
+    // Automatically build reverse mapping for fast lookup
+    buildReverseMapping();
+}
+
+void OCCGeometryMesh::buildReverseMapping() {
+    m_triangleToFaceMap.clear();
+
+    if (m_faceIndexMappings.empty()) {
+        m_hasReverseMapping = false;
+        return;
+    }
+
+    // Pre-allocate space for better performance
+    size_t totalTriangles = 0;
+    for (const auto& mapping : m_faceIndexMappings) {
+        totalTriangles += mapping.triangleIndices.size();
+    }
+    m_triangleToFaceMap.reserve(totalTriangles);
+
+    // Build the reverse mapping: triangle index -> geometry face ID
+    for (const auto& mapping : m_faceIndexMappings) {
+        for (int triangleIndex : mapping.triangleIndices) {
+            m_triangleToFaceMap[triangleIndex] = mapping.geometryFaceId;
+        }
+    }
+
+    m_hasReverseMapping = true;
+
+    LOG_INF_S("OCCGeometryMesh: Built reverse mapping for " +
+              std::to_string(m_faceIndexMappings.size()) + " faces, " +
+              std::to_string(totalTriangles) + " triangles");
+}
+
+int OCCGeometryMesh::getGeometryFaceIdForTriangle(int triangleIndex) const {
+    // Use optimized O(1) lookup if reverse mapping is available
+    if (m_hasReverseMapping) {
+        auto it = m_triangleToFaceMap.find(triangleIndex);
+        if (it != m_triangleToFaceMap.end()) {
+            return it->second;
+        }
+        return -1; // Triangle not found in any face
+    }
+
+    // Fallback to O(n) linear search for backward compatibility
+    if (!hasFaceIndexMapping()) {
+        return -1;
+    }
+
+    for (const auto& mapping : m_faceIndexMappings) {
+        auto it = std::find(mapping.triangleIndices.begin(),
+                           mapping.triangleIndices.end(),
+                           triangleIndex);
+        if (it != mapping.triangleIndices.end()) {
+            return mapping.geometryFaceId;
+        }
+    }
+
+    return -1;
 }

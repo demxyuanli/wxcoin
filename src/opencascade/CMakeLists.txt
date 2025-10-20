@@ -62,6 +62,9 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/FeatureEdgeExtractor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/MeshEdgeExtractor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/extractors/SilhouetteEdgeExtractor.cpp
+
+    # Edge intersection accelerator (performance optimization)
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeIntersectionAccelerator.cpp
     
     # Edge renderers (modular)
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/renderers/BaseEdgeRenderer.cpp
@@ -109,6 +112,9 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/edges/extractors/FeatureEdgeExtractor.h
     ${CMAKE_SOURCE_DIR}/include/edges/extractors/MeshEdgeExtractor.h
     ${CMAKE_SOURCE_DIR}/include/edges/extractors/SilhouetteEdgeExtractor.h
+
+    # Edge intersection accelerator header
+    ${CMAKE_SOURCE_DIR}/include/edges/EdgeIntersectionAccelerator.h
 
     # Modular renderers headers
     ${CMAKE_SOURCE_DIR}/include/edges/renderers/BaseEdgeRenderer.h

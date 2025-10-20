@@ -97,6 +97,14 @@ public:
     bool intersectPoint(const gp_Pnt& point, IntersectionResult& result) const;
 
     /**
+     * @brief Query all primitives whose bounding boxes intersect with given box
+     * @param queryBox Bounding box to query
+     * @param results Output vector of primitive indices
+     * @return Number of primitives found
+     */
+    size_t queryBoundingBox(const Bnd_Box& queryBox, std::vector<size_t>& results) const;
+
+    /**
      * @brief Get bounding box of the entire BVH
      * @return World bounding box
      */
@@ -159,6 +167,10 @@ private:
     bool intersectPointRecursive(const BVHNode* node, const gp_Pnt& point, IntersectionResult& result) const;
     bool intersectBoxPoint(const Bnd_Box& box, const gp_Pnt& point) const;
     bool intersectPrimitivePoint(size_t primitiveIndex, const gp_Pnt& point, IntersectionResult& result) const;
+
+    // Bounding box query
+    void queryBoundingBoxRecursive(const BVHNode* node, const Bnd_Box& queryBox, std::vector<size_t>& results) const;
+    bool intersectBoxBox(const Bnd_Box& box1, const Bnd_Box& box2) const;
 
     // Utility methods
     Bnd_Box computeBounds(const std::vector<size_t>& primitiveIndices) const;

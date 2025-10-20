@@ -12,6 +12,7 @@ set(CORE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/DPIManager.h
     ${CMAKE_SOURCE_DIR}/include/DPIAwareRendering.h
     ${CMAKE_SOURCE_DIR}/include/utils/PerformanceBus.h
+    ${CMAKE_SOURCE_DIR}/include/core/ThreadSafeCollector.h
 )
 
 # Create core static library

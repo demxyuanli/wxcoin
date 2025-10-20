@@ -553,3 +553,58 @@ double boxSurfaceArea(const Bnd_Box& box)
 
     return 2.0 * (dx * dy + dy * dz + dz * dx);
 }
+
+// Bounding box query implementation
+size_t BVHAccelerator::queryBoundingBox(const Bnd_Box& queryBox, std::vector<size_t>& results) const
+{
+    results.clear();
+    
+    if (!m_root) {
+        return 0;
+    }
+    
+    queryBoundingBoxRecursive(m_root.get(), queryBox, results);
+    return results.size();
+}
+
+void BVHAccelerator::queryBoundingBoxRecursive(const BVHNode* node, const Bnd_Box& queryBox, 
+                                                std::vector<size_t>& results) const
+{
+    if (!node) return;
+    
+    // Test query box against node bounding box
+    if (!intersectBoxBox(node->bounds, queryBox)) {
+        return;  // No intersection, prune this branch
+    }
+    
+    if (node->type == NodeType::Leaf) {
+        // Leaf node: test all primitives
+        for (size_t primitiveIdx : node->primitives) {
+            if (intersectBoxBox(m_primitives[primitiveIdx].bounds, queryBox)) {
+                results.push_back(primitiveIdx);
+            }
+        }
+    } else {
+        // Internal node: recursively test children
+        queryBoundingBoxRecursive(node->left.get(), queryBox, results);
+        queryBoundingBoxRecursive(node->right.get(), queryBox, results);
+    }
+}
+
+bool BVHAccelerator::intersectBoxBox(const Bnd_Box& box1, const Bnd_Box& box2) const
+{
+    if (box1.IsVoid() || box2.IsVoid()) {
+        return false;
+    }
+    
+    double xmin1, ymin1, zmin1, xmax1, ymax1, zmax1;
+    double xmin2, ymin2, zmin2, xmax2, ymax2, zmax2;
+    
+    box1.Get(xmin1, ymin1, zmin1, xmax1, ymax1, zmax1);
+    box2.Get(xmin2, ymin2, zmin2, xmax2, ymax2, zmax2);
+    
+    // Separating Axis Theorem (SAT) for AABBs
+    return !(xmax1 < xmin2 || xmax2 < xmin1 ||
+             ymax1 < ymin2 || ymax2 < ymin1 ||
+             zmax1 < zmin2 || zmax2 < zmin1);
+}

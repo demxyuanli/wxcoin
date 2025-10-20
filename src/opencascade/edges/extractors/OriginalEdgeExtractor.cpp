@@ -1,6 +1,7 @@
 #include "edges/extractors/OriginalEdgeExtractor.h"
 #include "edges/EdgeGeometryCache.h"
 #include "logger/Logger.h"
+#include "edges/EdgeIntersectionAccelerator.h"  // BVH acceleration
 #include <TopoDS.hxx>
 #include <TopExp_Explorer.hxx>
 #include <BRep_Tool.hxx>
@@ -590,9 +591,40 @@ void OriginalEdgeExtractor::findEdgeIntersections(
         edges.push_back(TopoDS::Edge(exp.Current()));
     }
 
-    // Call the existing intersection detection logic
-    // For now, delegate to the simple method for compatibility
-    findEdgeIntersectionsSimple(edges, intersectionPoints, adaptiveTolerance);
+    LOG_INF_S("OriginalEdgeExtractor: Detecting intersections, edges=" +
+              std::to_string(edges.size()));
+
+    // Strategy selection: Use BVH acceleration for larger models
+    const size_t BVH_THRESHOLD = 100;
+
+    if (edges.size() >= BVH_THRESHOLD) {
+        // Use BVH acceleration for large models - O(n log n) complexity
+        LOG_INF_S("Using BVH acceleration for edge intersections (" +
+                  std::to_string(edges.size()) + " edges)");
+        
+        EdgeIntersectionAccelerator accelerator;
+        accelerator.buildFromEdges(edges, 4);  // Max 4 edges per leaf
+        
+        // Extract intersections using parallel algorithm
+        auto newIntersections = accelerator.extractIntersectionsParallel(adaptiveTolerance, 0);
+        
+        // Merge with existing intersections (if any)
+        intersectionPoints.insert(intersectionPoints.end(),
+                                 newIntersections.begin(),
+                                 newIntersections.end());
+        
+        // Print statistics
+        auto stats = accelerator.getStatistics();
+        LOG_INF_S("BVH Statistics: edges=" + std::to_string(stats.totalEdges) +
+                  ", pairs=" + std::to_string(stats.potentialPairs) +
+                  ", intersections=" + std::to_string(stats.actualIntersections) +
+                  ", pruning=" + std::to_string(stats.pruningRatio * 100) + "%");
+    } else {
+        // Use optimized spatial grid method for medium-sized models
+        LOG_INF_S("Using optimized spatial grid method for edge intersections (" +
+                  std::to_string(edges.size()) + " edges)");
+        findEdgeIntersectionsFromEdges(edges, intersectionPoints, adaptiveTolerance);
+    }
 }
 
 void OriginalEdgeExtractor::findEdgeIntersectionsFromEdges(
@@ -1200,5 +1232,4 @@ void OriginalEdgeExtractor::checkEdgeIntersection(
         }
     }
 }
-
 
