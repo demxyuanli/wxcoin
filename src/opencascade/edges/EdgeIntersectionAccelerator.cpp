@@ -93,6 +93,8 @@ void EdgeIntersectionAccelerator::buildFromEdges(
         LOG_ERR_S("EdgeIntersectionAccelerator: SIZE MISMATCH! m_edges=" + 
                   std::to_string(m_edges.size()) + ", shapeEdges=" + 
                   std::to_string(shapeEdges.size()));
+    } else {
+        LOG_INF_S("EdgeIntersectionAccelerator: Index mapping validated - m_edges and shapeEdges have same size");
     }
     
     LOG_INF_S("EdgeIntersectionAccelerator: Built from " + 
@@ -120,14 +122,15 @@ EdgeIntersectionAccelerator::findPotentialIntersections() const {
         auto candidates = queryIntersectingEdges(i);
         
         for (size_t j : candidates) {
-            // Validate candidate index
+            // Validate candidate index - CRITICAL: BVH returns primitive indices, not edge indices
             if (j >= m_edges.size()) {
                 LOG_ERR_S("EdgeIntersectionAccelerator: Invalid candidate index " + 
                           std::to_string(j) + " >= " + std::to_string(m_edges.size()));
                 continue;
             }
             
-            if (j > i) { // Avoid duplicates and self-intersection
+            // Additional validation: ensure the candidate edge is different from current edge
+            if (j != i && j > i) { // Avoid duplicates and self-intersection
                 pairs.push_back(EdgePair(i, j));
             }
         }
@@ -156,6 +159,21 @@ std::vector<gp_Pnt> EdgeIntersectionAccelerator::extractIntersections(
     intersections.reserve(potentialPairs.size() / 10); // Heuristic: ~10% actual intersections
     
     for (const auto& pair : potentialPairs) {
+        // CRITICAL FIX: Validate indices before accessing m_edges
+        if (pair.edge1Index >= m_edges.size() || 
+            pair.edge2Index >= m_edges.size()) {
+            LOG_WRN_S("EdgeIntersectionAccelerator: Invalid edge pair indices in sequential processing - " +
+                      "edge1Index=" + std::to_string(pair.edge1Index) + 
+                      " edge2Index=" + std::to_string(pair.edge2Index) +
+                      " m_edges.size()=" + std::to_string(m_edges.size()));
+            continue;
+        }
+        
+        // Additional validation: ensure indices are not equal (no self-intersection)
+        if (pair.edge1Index == pair.edge2Index) {
+            continue;
+        }
+        
         gp_Pnt intersection;
         if (computeEdgeIntersection(m_edges[pair.edge1Index],
                                     m_edges[pair.edge2Index],
@@ -209,10 +227,19 @@ std::vector<gp_Pnt> EdgeIntersectionAccelerator::extractIntersectionsParallel(
                         
                         const auto& pair = potentialPairs[idx];
                         
-                        // Validate indices before accessing m_edges
+                        // CRITICAL FIX: Validate indices before accessing m_edges
                         if (pair.edge1Index >= m_edges.size() || 
                             pair.edge2Index >= m_edges.size()) {
-                            LOG_WRN_S("EdgeIntersectionAccelerator: Invalid edge pair indices");
+                            LOG_WRN_S("EdgeIntersectionAccelerator: Invalid edge pair indices - " +
+                                      "edge1Index=" + std::to_string(pair.edge1Index) + 
+                                      " edge2Index=" + std::to_string(pair.edge2Index) +
+                                      " m_edges.size()=" + std::to_string(m_edges.size()));
+                            continue;
+                        }
+                        
+                        // Additional validation: ensure indices are not equal (no self-intersection)
+                        if (pair.edge1Index == pair.edge2Index) {
+                            LOG_DBG_S("EdgeIntersectionAccelerator: Skipping self-intersection");
                             continue;
                         }
                         
@@ -306,6 +333,7 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
     
     // Validate parameter ranges
     if (edge1.first >= edge1.last || edge2.first >= edge2.last) {
+        LOG_DBG_S("EdgeIntersectionAccelerator: Invalid parameter ranges");
         return false;
     }
     
@@ -313,6 +341,29 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
     const double MIN_PARAM_RANGE = 1e-10;
     if ((edge1.last - edge1.first) < MIN_PARAM_RANGE || 
         (edge2.last - edge2.first) < MIN_PARAM_RANGE) {
+        LOG_DBG_S("EdgeIntersectionAccelerator: Parameter range too small");
+        return false;
+    }
+    
+    // CRITICAL FIX: Validate curve parameter bounds
+    try {
+        // Test curve parameter bounds by evaluating at first and last parameters
+        gp_Pnt testPnt1 = edge1.curve->Value(edge1.first);
+        gp_Pnt testPnt2 = edge1.curve->Value(edge1.last);
+        gp_Pnt testPnt3 = edge2.curve->Value(edge2.first);
+        gp_Pnt testPnt4 = edge2.curve->Value(edge2.last);
+        
+        // Check if any evaluation resulted in invalid points
+        if (testPnt1.X() != testPnt1.X() || testPnt1.Y() != testPnt1.Y() || testPnt1.Z() != testPnt1.Z() ||
+            testPnt2.X() != testPnt2.X() || testPnt2.Y() != testPnt2.Y() || testPnt2.Z() != testPnt2.Z() ||
+            testPnt3.X() != testPnt3.X() || testPnt3.Y() != testPnt3.Y() || testPnt3.Z() != testPnt3.Z() ||
+            testPnt4.X() != testPnt4.X() || testPnt4.Y() != testPnt4.Y() || testPnt4.Z() != testPnt4.Z()) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: Invalid curve evaluation");
+            return false;
+        }
+    }
+    catch (const Standard_Failure&) {
+        LOG_DBG_S("EdgeIntersectionAccelerator: Curve parameter validation failed");
         return false;
     }
     
@@ -324,12 +375,21 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
             edge2.first, edge2.last
         );
         
-        if (extrema.NbExtrema() > 0) {
+        int nbExtrema = extrema.NbExtrema();
+        if (nbExtrema > 0) {
             double minDist = std::numeric_limits<double>::max();
             int minIndex = -1;
             
-            for (int i = 1; i <= extrema.NbExtrema(); ++i) {
+            // CRITICAL FIX: Validate index range before accessing
+            for (int i = 1; i <= nbExtrema; ++i) {
                 try {
+                    // Additional validation: ensure index is within valid range
+                    if (i < 1 || i > nbExtrema) {
+                        LOG_WRN_S("EdgeIntersectionAccelerator: Index " + std::to_string(i) + 
+                                  " out of range [1, " + std::to_string(nbExtrema) + "]");
+                        continue;
+                    }
+                    
                     double dist = extrema.Distance(i);
                     if (dist < minDist) {
                         minDist = dist;
@@ -338,15 +398,26 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
                 }
                 catch (const Standard_OutOfRange&) {
                     // Index out of range in extrema results, skip this extremum
+                    LOG_DBG_S("EdgeIntersectionAccelerator: Standard_OutOfRange in Distance(" + 
+                              std::to_string(i) + ")");
                     continue;
                 }
                 catch (...) {
+                    LOG_DBG_S("EdgeIntersectionAccelerator: Unknown exception in Distance(" + 
+                              std::to_string(i) + ")");
                     continue;
                 }
             }
             
-            if (minIndex > 0 && minDist < tolerance) {
+            if (minIndex > 0 && minIndex <= nbExtrema && minDist < tolerance) {
                 try {
+                    // CRITICAL FIX: Validate minIndex before calling Points()
+                    if (minIndex < 1 || minIndex > nbExtrema) {
+                        LOG_WRN_S("EdgeIntersectionAccelerator: minIndex " + std::to_string(minIndex) + 
+                                  " out of range [1, " + std::to_string(nbExtrema) + "]");
+                        return false;
+                    }
+                    
                     gp_Pnt p1, p2;
                     extrema.Points(minIndex, p1, p2);
                     
@@ -359,6 +430,8 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
                 }
                 catch (const Standard_OutOfRange&) {
                     // Points() call failed - index might be invalid
+                    LOG_WRN_S("EdgeIntersectionAccelerator: Standard_OutOfRange in Points(" + 
+                              std::to_string(minIndex) + ")");
                     return false;
                 }
             }
@@ -397,11 +470,29 @@ std::vector<size_t> EdgeIntersectionAccelerator::queryIntersectingEdges(
         // Query BVH with this edge's bounding box - O(log n) complexity
         m_bvh->queryBoundingBox(edge.bounds, primitiveIndices);
         
-        // Filter out self-intersection
+        // CRITICAL FIX: BVH returns primitive indices that correspond to shapeEdges array
+        // We need to map these to m_edges array indices
+        // Since we built BVH with shapeEdges and m_edges in the same order,
+        // the primitive indices should directly correspond to m_edges indices
+        // But we need to validate this mapping
+        
+        // Validate and filter primitive indices
         primitiveIndices.erase(
-            std::remove(primitiveIndices.begin(), primitiveIndices.end(), edgeIndex),
+            std::remove_if(primitiveIndices.begin(), primitiveIndices.end(),
+                [this, edgeIndex](size_t primitiveIdx) {
+                    // Filter out invalid indices and self-intersection
+                    return primitiveIdx >= m_edges.size() || primitiveIdx == edgeIndex;
+                }),
             primitiveIndices.end()
         );
+        
+        // Additional validation: ensure all remaining indices are valid
+        for (size_t idx : primitiveIndices) {
+            if (idx >= m_edges.size()) {
+                LOG_ERR_S("EdgeIntersectionAccelerator: Invalid primitive index " + 
+                          std::to_string(idx) + " >= " + std::to_string(m_edges.size()));
+            }
+        }
     } else {
         // Fallback: test all edges (only if BVH not built)
         for (size_t i = 0; i < m_edges.size(); ++i) {
@@ -530,29 +621,56 @@ std::vector<gp_Pnt> extractIntersectionsBatched(
                     edges[pair.edge2Index].last
                 );
                 
-                if (extrema.NbExtrema() > 0) {
+                int nbExtrema = extrema.NbExtrema();
+                if (nbExtrema > 0) {
                     double minDist = std::numeric_limits<double>::max();
                     int minIndex = -1;
                     
-                    for (int j = 1; j <= extrema.NbExtrema(); ++j) {
-                        double dist = extrema.Distance(j);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            minIndex = j;
+                    // CRITICAL FIX: Validate index range before accessing
+                    for (int j = 1; j <= nbExtrema; ++j) {
+                        try {
+                            // Additional validation: ensure index is within valid range
+                            if (j < 1 || j > nbExtrema) {
+                                continue;
+                            }
+                            
+                            double dist = extrema.Distance(j);
+                            if (dist < minDist) {
+                                minDist = dist;
+                                minIndex = j;
+                            }
+                        }
+                        catch (const Standard_OutOfRange&) {
+                            // Index out of range in extrema results, skip this extremum
+                            continue;
+                        }
+                        catch (...) {
+                            continue;
                         }
                     }
                     
-                    if (minIndex > 0 && minDist < tolerance) {
-                        gp_Pnt p1, p2;
-                        extrema.Points(minIndex, p1, p2);
-                        
-                        gp_Pnt intersection(
-                            (p1.X() + p2.X()) / 2.0,
-                            (p1.Y() + p2.Y()) / 2.0,
-                            (p1.Z() + p2.Z()) / 2.0
-                        );
-                        
-                        intersections.push_back(intersection);
+                    if (minIndex > 0 && minIndex <= nbExtrema && minDist < tolerance) {
+                        try {
+                            // CRITICAL FIX: Validate minIndex before calling Points()
+                            if (minIndex < 1 || minIndex > nbExtrema) {
+                                continue;
+                            }
+                            
+                            gp_Pnt p1, p2;
+                            extrema.Points(minIndex, p1, p2);
+                            
+                            gp_Pnt intersection(
+                                (p1.X() + p2.X()) / 2.0,
+                                (p1.Y() + p2.Y()) / 2.0,
+                                (p1.Z() + p2.Z()) / 2.0
+                            );
+                            
+                            intersections.push_back(intersection);
+                        }
+                        catch (const Standard_OutOfRange&) {
+                            // Points() call failed - index might be invalid
+                            continue;
+                        }
                     }
                 }
             }
