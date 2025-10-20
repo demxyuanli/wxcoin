@@ -240,6 +240,12 @@ void BVHAccelerator::findBestSplit(const std::vector<size_t>& primitiveIndices,
         // Sort primitives along this axis
         std::vector<std::pair<float, size_t>> sortedPrimitives;
         for (size_t idx : primitiveIndices) {
+            // CRITICAL FIX: Validate primitive index before accessing m_primitives
+            if (idx >= m_primitives.size()) {
+                LOG_ERR_S("BVHAccelerator: Invalid primitive index " + std::to_string(idx) + 
+                          " >= " + std::to_string(m_primitives.size()) + " in findBestSplit");
+                continue;
+            }
             float pos = (axis == 0) ? m_primitives[idx].centroid.X() :
                         (axis == 1) ? m_primitives[idx].centroid.Y() :
                                       m_primitives[idx].centroid.Z();
@@ -304,6 +310,12 @@ Bnd_Box BVHAccelerator::computeBounds(const std::vector<size_t>& primitiveIndice
 {
     Bnd_Box box;
     for (size_t idx : primitiveIndices) {
+        // CRITICAL FIX: Validate primitive index before accessing m_primitives
+        if (idx >= m_primitives.size()) {
+            LOG_ERR_S("BVHAccelerator: Invalid primitive index " + std::to_string(idx) + 
+                      " >= " + std::to_string(m_primitives.size()) + " in computeBounds");
+            continue;
+        }
         box.Add(m_primitives[idx].bounds);
     }
     return box;
@@ -317,6 +329,12 @@ gp_Pnt BVHAccelerator::computeCentroid(const std::vector<size_t>& primitiveIndic
 
     double x = 0, y = 0, z = 0;
     for (size_t idx : primitiveIndices) {
+        // CRITICAL FIX: Validate primitive index before accessing m_primitives
+        if (idx >= m_primitives.size()) {
+            LOG_ERR_S("BVHAccelerator: Invalid primitive index " + std::to_string(idx) + 
+                      " >= " + std::to_string(m_primitives.size()) + " in computeCentroid");
+            continue;
+        }
         const gp_Pnt& centroid = m_primitives[idx].centroid;
         x += centroid.X();
         y += centroid.Y();
@@ -397,6 +415,13 @@ bool BVHAccelerator::intersectBoxRay(const Bnd_Box& box, const gp_Pnt& rayOrigin
 bool BVHAccelerator::intersectPrimitiveRay(size_t primitiveIndex, const gp_Pnt& rayOrigin,
                                           const gp_Vec& rayDirection, IntersectionResult& result) const
 {
+    // CRITICAL FIX: Validate primitive index before accessing m_primitives
+    if (primitiveIndex >= m_primitives.size()) {
+        LOG_ERR_S("BVHAccelerator: Invalid primitive index " + std::to_string(primitiveIndex) + 
+                  " >= " + std::to_string(m_primitives.size()) + " in intersectPrimitiveRay");
+        return false;
+    }
+    
     // For now, just test bounding box intersection
     // In a full implementation, this would test actual geometry intersection
     double tmin, tmax;
@@ -467,6 +492,13 @@ bool BVHAccelerator::intersectBoxPoint(const Bnd_Box& box, const gp_Pnt& point) 
 bool BVHAccelerator::intersectPrimitivePoint(size_t primitiveIndex, const gp_Pnt& point,
                                             IntersectionResult& result) const
 {
+    // CRITICAL FIX: Validate primitive index before accessing m_primitives
+    if (primitiveIndex >= m_primitives.size()) {
+        LOG_ERR_S("BVHAccelerator: Invalid primitive index " + std::to_string(primitiveIndex) + 
+                  " >= " + std::to_string(m_primitives.size()) + " in intersectPrimitivePoint");
+        return false;
+    }
+    
     if (intersectBoxPoint(m_primitives[primitiveIndex].bounds, point)) {
         result.hit = true;
         result.distance = 0.0;  // Point intersection has no distance
@@ -580,6 +612,13 @@ void BVHAccelerator::queryBoundingBoxRecursive(const BVHNode* node, const Bnd_Bo
     if (node->type == NodeType::Leaf) {
         // Leaf node: test all primitives
         for (size_t primitiveIdx : node->primitives) {
+            // CRITICAL FIX: Validate primitive index before accessing m_primitives
+            if (primitiveIdx >= m_primitives.size()) {
+                LOG_ERR_S("BVHAccelerator: Invalid primitive index " + std::to_string(primitiveIdx) + 
+                          " >= " + std::to_string(m_primitives.size()));
+                continue;
+            }
+            
             if (intersectBoxBox(m_primitives[primitiveIdx].bounds, queryBox)) {
                 results.push_back(primitiveIdx);
             }

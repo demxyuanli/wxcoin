@@ -54,21 +54,41 @@ void EdgeIntersectionAccelerator::buildFromEdges(
         EdgePrimitive prim;
         prim.edge = edge;
         
-        // Get curve
+        // Get curve - this can throw Standard_OutOfRange if edge is invalid
         Standard_Real first, last;
-        prim.curve = BRep_Tool::Curve(edge, first, last);
-        prim.first = first;
-        prim.last = last;
+        try {
+            prim.curve = BRep_Tool::Curve(edge, first, last);
+            prim.first = first;
+            prim.last = last;
+        }
+        catch (const Standard_OutOfRange&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: BRep_Tool::Curve failed for edge " + std::to_string(i));
+            continue;
+        }
+        catch (const Standard_Failure&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: BRep_Tool::Curve failed for edge " + std::to_string(i));
+            continue;
+        }
         
         if (prim.curve.IsNull()) {
             continue;
         }
         
-        // Compute bounding box
+        // Compute bounding box - this can throw Standard_OutOfRange if edge is invalid
         Bnd_Box box;
-        BRepBndLib::Add(edge, box);
-        if (!box.IsVoid()) {
-            prim.bounds = box;
+        try {
+            BRepBndLib::Add(edge, box);
+            if (!box.IsVoid()) {
+                prim.bounds = box;
+            }
+        }
+        catch (const Standard_OutOfRange&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: BRepBndLib::Add failed for edge " + std::to_string(i));
+            // Continue with void bounding box
+        }
+        catch (const Standard_Failure&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: BRepBndLib::Add failed for edge " + std::to_string(i));
+            // Continue with void bounding box
         }
         
         // CRITICAL FIX: edgeIndex should be the index in m_edges array, not input array
@@ -348,17 +368,43 @@ bool EdgeIntersectionAccelerator::computeEdgeIntersection(
     // CRITICAL FIX: Validate curve parameter bounds
     try {
         // Test curve parameter bounds by evaluating at first and last parameters
-        gp_Pnt testPnt1 = edge1.curve->Value(edge1.first);
-        gp_Pnt testPnt2 = edge1.curve->Value(edge1.last);
-        gp_Pnt testPnt3 = edge2.curve->Value(edge2.first);
-        gp_Pnt testPnt4 = edge2.curve->Value(edge2.last);
+        // These calls can themselves throw Standard_OutOfRange if parameters are invalid
+        gp_Pnt testPnt1, testPnt2, testPnt3, testPnt4;
         
-        // Check if any evaluation resulted in invalid points
+        try {
+            testPnt1 = edge1.curve->Value(edge1.first);
+        } catch (const Standard_OutOfRange&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: edge1.first parameter out of range");
+            return false;
+        }
+        
+        try {
+            testPnt2 = edge1.curve->Value(edge1.last);
+        } catch (const Standard_OutOfRange&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: edge1.last parameter out of range");
+            return false;
+        }
+        
+        try {
+            testPnt3 = edge2.curve->Value(edge2.first);
+        } catch (const Standard_OutOfRange&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: edge2.first parameter out of range");
+            return false;
+        }
+        
+        try {
+            testPnt4 = edge2.curve->Value(edge2.last);
+        } catch (const Standard_OutOfRange&) {
+            LOG_DBG_S("EdgeIntersectionAccelerator: edge2.last parameter out of range");
+            return false;
+        }
+        
+        // Check if any evaluation resulted in invalid points (NaN check)
         if (testPnt1.X() != testPnt1.X() || testPnt1.Y() != testPnt1.Y() || testPnt1.Z() != testPnt1.Z() ||
             testPnt2.X() != testPnt2.X() || testPnt2.Y() != testPnt2.Y() || testPnt2.Z() != testPnt2.Z() ||
             testPnt3.X() != testPnt3.X() || testPnt3.Y() != testPnt3.Y() || testPnt3.Z() != testPnt3.Z() ||
             testPnt4.X() != testPnt4.X() || testPnt4.Y() != testPnt4.Y() || testPnt4.Z() != testPnt4.Z()) {
-            LOG_DBG_S("EdgeIntersectionAccelerator: Invalid curve evaluation");
+            LOG_DBG_S("EdgeIntersectionAccelerator: Invalid curve evaluation (NaN detected)");
             return false;
         }
     }
