@@ -102,3 +102,4 @@ private:
     void disableProgressBar();
     void updateStatusText(const wxString& text);
 };
+

@@ -283,6 +283,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
 	displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	displayButtonBar->AddToggleButtonWithSVG(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", "edges", wxSize(16, 16), false, "Toggle original edge display");
+	displayButtonBar->AddButtonWithSVG(ID_CANCEL_INTERSECTION_COMPUTATION, "Cancel Intersection", "close", wxSize(16, 16), nullptr, "Cancel ongoing intersection computation");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FEATURE_EDGES, "Feature Edges", "edges", wxSize(16, 16), false, "Toggle feature edge display");
 	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_WIREFRAME, "Wireframe Mode", "triangle", wxSize(16, 16), false, "Toggle wireframe rendering mode");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_MESH_EDGES, "Show Mesh Edges", "mesh", wxSize(16, 16), false, "Show/hide mesh edges overlay");

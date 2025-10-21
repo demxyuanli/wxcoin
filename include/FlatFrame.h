@@ -92,6 +92,7 @@ enum {
 	// Removed ID_TOGGLE_SHADING - functionality not needed
 	ID_TOGGLE_EDGES,
 	ID_VIEW_SHOW_ORIGINAL_EDGES, // New: show original edges
+	ID_CANCEL_INTERSECTION_COMPUTATION, // New: cancel intersection computation
 	ID_SHOW_FEATURE_EDGES, // New: show feature edges
 	ID_SHOW_MESH_EDGES, // New: show mesh edges
 	ID_SHOW_FACE_NORMALS, // New: show face normals

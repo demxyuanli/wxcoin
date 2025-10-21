@@ -39,6 +39,7 @@ set(COMMANDS_SOURCES
     ShowMeshEdgesListener.cpp
     ShowNormalsListener.cpp
     ShowOriginalEdgesListener.cpp
+    CancelIntersectionListener.cpp
     ShowWireFrameListener.cpp
     TextureModeBlendListener.cpp
     TextureModeDecalListener.cpp
@@ -106,6 +107,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ShowMeshEdgesListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowNormalsListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowOriginalEdgesListener.h
+    ${CMAKE_SOURCE_DIR}/include/CancelIntersectionListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowWireFrameListener.h
     ${CMAKE_SOURCE_DIR}/include/TextureModeBlendListener.h
     ${CMAKE_SOURCE_DIR}/include/TextureModeDecalListener.h

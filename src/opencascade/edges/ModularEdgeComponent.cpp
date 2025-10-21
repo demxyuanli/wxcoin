@@ -87,6 +87,80 @@ void ModularEdgeComponent::extractOriginalEdges(
 
 }
 
+void ModularEdgeComponent::addSingleIntersectionNode(const gp_Pnt& point, const Quantity_Color& color, double size) {
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+    
+    if (!intersectionNodesNode) {
+        intersectionNodesNode = new SoSeparator();
+        intersectionNodesNode->ref();
+    }
+    
+    // Create sphere node for intersection point
+    SoSphere* sphere = new SoSphere();
+    sphere->radius = size;
+    
+    SoMaterial* material = new SoMaterial();
+    material->diffuseColor.setValue(color.Red(), color.Green(), color.Blue());
+    material->transparency = 0.0;
+    
+    SoTranslation* translation = new SoTranslation();
+    translation->translation.setValue(point.X(), point.Y(), point.Z());
+    
+    SoSeparator* pointNode = new SoSeparator();
+    pointNode->addChild(material);
+    pointNode->addChild(translation);
+    pointNode->addChild(sphere);
+    
+    intersectionNodesNode->addChild(pointNode);
+}
+
+void ModularEdgeComponent::addBatchIntersectionNodes(const std::vector<gp_Pnt>& points, const Quantity_Color& color, double size) {
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+    
+    if (points.empty()) return;
+    
+    if (!intersectionNodesNode) {
+        intersectionNodesNode = new SoSeparator();
+        intersectionNodesNode->ref();
+        
+        // Enable intersection nodes display
+        edgeFlags.showIntersectionNodes = true;
+    }
+    
+    // Create material once for all points in this batch
+    SoMaterial* material = new SoMaterial();
+    material->diffuseColor.setValue(color.Red(), color.Green(), color.Blue());
+    material->transparency = 0.0;
+    intersectionNodesNode->addChild(material);
+    
+    // Create coordinate node for all points
+    SoCoordinate3* coords = new SoCoordinate3();
+    for (const auto& point : points) {
+        coords->point.set1Value(coords->point.getNum(), point.X(), point.Y(), point.Z());
+    }
+    intersectionNodesNode->addChild(coords);
+    
+    // Create point set for all points
+    SoPointSet* pointSet = new SoPointSet();
+    pointSet->numPoints = points.size();
+    intersectionNodesNode->addChild(pointSet);
+    
+    // Set point size
+    SoDrawStyle* drawStyle = new SoDrawStyle();
+    drawStyle->pointSize = size;
+    intersectionNodesNode->addChild(drawStyle);
+}
+
+void ModularEdgeComponent::clearIntersectionNodes() {
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+    cleanupEdgeNode(intersectionNodesNode);
+}
+
+bool ModularEdgeComponent::hasIntersectionNodes() const {
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+    return intersectionNodesNode != nullptr && intersectionNodesNode->getNumChildren() > 0;
+}
+
 void ModularEdgeComponent::extractFeatureEdges(
     const TopoDS_Shape& shape,
     double featureAngle,

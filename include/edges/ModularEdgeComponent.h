@@ -115,6 +115,12 @@ public:
         double size,
         IntersectionNodeShape shape = IntersectionNodeShape::Point);
 
+    // Incremental intersection node API for progressive display
+    void addSingleIntersectionNode(const gp_Pnt& point, const Quantity_Color& color, double size);
+    void addBatchIntersectionNodes(const std::vector<gp_Pnt>& points, const Quantity_Color& color, double size);
+    void clearIntersectionNodes();
+    bool hasIntersectionNodes() const;
+
     // Cleanup
     void clearMeshEdgeNode();
     void clearSilhouetteEdgeNode();

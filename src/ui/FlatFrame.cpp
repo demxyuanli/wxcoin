@@ -150,6 +150,7 @@ EVT_BUTTON(ID_TOGGLE_EDGES, FlatFrame::onCommand)
 // Removed Show Faces event handler - functionality interferes with edge testing
 // EVT_BUTTON(ID_SHOW_FACES, FlatFrame::onCommand)
 EVT_BUTTON(ID_VIEW_SHOW_ORIGINAL_EDGES, FlatFrame::onCommand)
+EVT_BUTTON(ID_CANCEL_INTERSECTION_COMPUTATION, FlatFrame::onCommand)
 EVT_BUTTON(ID_SHOW_FEATURE_EDGES, FlatFrame::onCommand)
 EVT_BUTTON(ID_SHOW_MESH_EDGES, FlatFrame::onCommand)
 EVT_BUTTON(ID_OUTLINE_SETTINGS, FlatFrame::onCommand)

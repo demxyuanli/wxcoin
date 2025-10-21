@@ -262,6 +262,37 @@ std::vector<gp_Pnt> EdgeGeometryCache::getOrComputeIntersections(
     return points;
 }
 
+std::optional<std::vector<gp_Pnt>> EdgeGeometryCache::tryGetCached(const std::string& key) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    auto it = m_intersectionCache.find(key);
+    if (it != m_intersectionCache.end()) {
+        m_intersectionHitCount++;
+        LOG_INF_S("IntersectionCache HIT: " + key);
+        return it->second.intersectionPoints;
+    }
+    
+    m_intersectionMissCount++;
+    return std::nullopt;
+}
+
+void EdgeGeometryCache::storeCached(const std::string& key, const std::vector<gp_Pnt>& points,
+                                   size_t shapeHash, double tolerance) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    
+    IntersectionCacheEntry entry;
+    entry.intersectionPoints = points;
+    entry.shapeHash = shapeHash;
+    entry.tolerance = tolerance;
+    entry.computationTime = 0.0;
+    entry.memoryUsage = estimateMemoryUsage(points);
+    
+    m_intersectionCache[key] = entry;
+    m_totalMemoryUsage += entry.memoryUsage;
+    
+    LOG_INF_S("IntersectionCache STORED: " + key + " (" + std::to_string(points.size()) + " points)");
+}
+
 void EdgeGeometryCache::invalidateIntersections(size_t shapeHash) {
     size_t removedCount = 0;
     size_t freedMemory = 0;

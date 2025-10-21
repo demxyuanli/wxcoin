@@ -3,13 +3,28 @@
 #include "EdgeTypes.h"
 #include "OriginalEdgesParamDialog.h"
 #include "edges/EdgeExtractionUIHelper.h"
+#include "edges/AsyncIntersectionManager.h"
+#include "FlatFrame.h"
 #include "logger/Logger.h"
 #include <wx/frame.h>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 
 ShowOriginalEdgesListener::ShowOriginalEdgesListener(OCCViewer* viewer, wxFrame* frame) 
-	: m_viewer(viewer), m_frame(frame) {}
+	: m_viewer(viewer), m_frame(frame) 
+{
+	if (m_frame) {
+		FlatFrame* flatFrame = dynamic_cast<FlatFrame*>(m_frame);
+		if (flatFrame) {
+			m_intersectionManager = std::make_shared<AsyncIntersectionManager>(
+				m_frame,
+				flatFrame->GetFlatUIStatusBar(),
+				nullptr
+			);
+			LOG_INF_S("AsyncIntersectionManager initialized for ShowOriginalEdgesListener");
+		}
+	}
+}
 
 CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& commandType,
 	const std::unordered_map<std::string, std::string>&) {
@@ -46,13 +61,70 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 			uiHelper.beginOperation("Extracting Original Edges");
 
 			try {
-				// Apply parameters to viewer
+				// Apply parameters to viewer (without intersection highlighting initially)
 				m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth,
-					highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
+					false, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 
-				// Enable original edges display with progress updates
-				uiHelper.updateProgress(50, "Processing geometries...");
+				// Enable original edges display first
+				uiHelper.updateProgress(30, "Displaying original edges...");
 				m_viewer->setShowOriginalEdges(true);
+
+				// Progressive display: now enabled with OCCGeometry incremental API
+				if (highlightIntersectionNodes) {
+					LOG_INF_S("Progressive display: enabling async intersection computation");
+					
+					// Clear any existing intersection nodes
+					auto geometries = m_viewer->getAllGeometry();
+					for (auto& geom : geometries) {
+						geom->clearIntersectionNodes();
+					}
+					
+					// Start async intersection computation with progressive display
+					for (auto& geom : geometries) {
+						if (!geom->getShape().IsNull()) {
+						// Capture node size for lambda
+						double nodeSize = intersectionNodeSize;
+						
+						// Partial results callback: progressive rendering
+						auto onPartialResults = [this, geom, nodeSize](const std::vector<gp_Pnt>& points, size_t totalSoFar) {
+							if (!points.empty()) {
+								Quantity_Color intersectionColor(1.0, 0.0, 0.0, Quantity_TOC_RGB);
+								geom->addBatchIntersectionNodes(points, intersectionColor, nodeSize);
+								
+								// Update edge display to add intersection nodes to scene graph
+								geom->updateEdgeDisplay();
+								
+								// Request view refresh to render the new nodes
+								m_viewer->requestViewRefresh();
+								
+								LOG_INF_S("Progressive display: rendered " + std::to_string(points.size()) + 
+										 " points, total so far: " + std::to_string(totalSoFar));
+							}
+						};
+							
+							// Completion callback: final status update
+							auto onCompleted = [this, geom](const std::vector<gp_Pnt>& points) {
+								LOG_INF_S("Progressive display: intersection computation completed for " + geom->getName() + 
+										 " (" + std::to_string(points.size()) + " points)");
+							};
+							
+							// Error callback
+							auto onError = [this, geom](const std::string& error) {
+								LOG_ERR_S("Progressive display: intersection computation failed for " + geom->getName() + ": " + error);
+							};
+							
+							// Start async computation with progressive display
+							// Parameters: shape, tolerance, completionCallback, partialResultsCallback, batchSize
+							m_intersectionManager->startIntersectionComputation(
+								geom->getShape(),
+								0.0,  // adaptive tolerance
+								onCompleted,
+								onPartialResults,
+								50  // Batch size for progressive display
+							);
+						}
+					}
+				}
 
 				uiHelper.updateProgress(90, "Finalizing edge display...");
 
@@ -80,7 +152,7 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				
 				uiHelper.endOperation();
 
-				return CommandResult(true, "Original edges shown with new parameters", commandType);
+				return CommandResult(true, "Original edges shown with progressive intersection display", commandType);
 			}
 			catch (const std::exception& e) {
 				uiHelper.endOperation();

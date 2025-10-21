@@ -200,3 +200,5 @@ inline void exampleUsage() {
     auto uniquePoints = geomCollector.collectUniquePoints(1.0);
     // uniquePoints.size() == 10 (去重后)
 }
+
+

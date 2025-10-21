@@ -162,3 +162,5 @@ void EdgeExtractionUIHelper::updateStatusText(const wxString& text) {
     m_statusBar->SetStatusText(text, 0);
     m_statusBar->Refresh();
 }
+
+

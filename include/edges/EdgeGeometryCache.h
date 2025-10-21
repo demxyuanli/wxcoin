@@ -5,6 +5,7 @@
 #include <chrono>
 #include <mutex>
 #include <functional>
+#include <optional>
 #include <OpenCASCADE/gp_Pnt.hxx>
 
 /**
@@ -68,6 +69,23 @@ public:
         size_t shapeHash,
         double tolerance);
 
+    /**
+     * @brief Try to get cached intersection points without computing
+     * @param key Cache key
+     * @return Optional vector of points (empty if not cached)
+     */
+    std::optional<std::vector<gp_Pnt>> tryGetCached(const std::string& key);
+    
+    /**
+     * @brief Store intersection points in cache
+     * @param key Cache key
+     * @param points Points to cache
+     * @param shapeHash Hash of the shape
+     * @param tolerance Tolerance used
+     */
+    void storeCached(const std::string& key, const std::vector<gp_Pnt>& points,
+                    size_t shapeHash, double tolerance);
+    
     /**
      * @brief Invalidate specific cache entry
      * @param key Cache key to invalidate

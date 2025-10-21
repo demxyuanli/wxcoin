@@ -345,5 +345,31 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,
     buildCoinRepresentation(params);
 }
 
+// Incremental intersection node API implementation
+void OCCGeometry::addSingleIntersectionNode(const gp_Pnt& point, const Quantity_Color& color, double size) {
+    if (modularEdgeComponent) {
+        modularEdgeComponent->addSingleIntersectionNode(point, color, size);
+    }
+}
+
+void OCCGeometry::addBatchIntersectionNodes(const std::vector<gp_Pnt>& points, const Quantity_Color& color, double size) {
+    if (modularEdgeComponent) {
+        modularEdgeComponent->addBatchIntersectionNodes(points, color, size);
+    }
+}
+
+void OCCGeometry::clearIntersectionNodes() {
+    if (modularEdgeComponent) {
+        modularEdgeComponent->clearIntersectionNodes();
+    }
+}
+
+bool OCCGeometry::hasIntersectionNodes() const {
+    if (modularEdgeComponent) {
+        return modularEdgeComponent->hasIntersectionNodes();
+    }
+    return false;
+}
+
 // No longer needed - wireframe is handled internally by Mesh module
 
