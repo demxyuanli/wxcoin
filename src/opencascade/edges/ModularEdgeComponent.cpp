@@ -2,7 +2,11 @@
 #include "edges/EdgeProcessorFactory.h"
 #include "edges/EdgeLODManager.h"
 #include "edges/renderers/MeshEdgeRenderer.h"
+#include "edges/AsyncEdgeIntersectionComputer.h"
 #include "logger/Logger.h"
+#include <OpenCASCADE/TopExp_Explorer.hxx>
+#include <OpenCASCADE/TopoDS.hxx>
+#include <OpenCASCADE/TopAbs.hxx>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTranslation.h>
@@ -756,3 +760,71 @@ void ModularEdgeComponent::clearEdgeNode(EdgeType type) {
             break;
     }
 }
+
+void ModularEdgeComponent::computeIntersectionsAsync(
+    const TopoDS_Shape& shape,
+    double tolerance,
+    async::AsyncEngineIntegration* engine,
+    std::function<void(const std::vector<gp_Pnt>&, bool, const std::string&)> onComplete,
+    std::function<void(int, const std::string&)> onProgress)
+{
+    if (!engine) {
+        LOG_ERR_S("ModularEdgeComponent: AsyncEngineIntegration is null");
+        if (onComplete) {
+            onComplete({}, false, "AsyncEngineIntegration is null");
+        }
+        return;
+    }
+
+    if (m_computingIntersections.load()) {
+        LOG_WRN_S("ModularEdgeComponent: Intersection computation already in progress");
+        return;
+    }
+
+    // Count edges for diagnostic and decision making
+    size_t edgeCount = 0;
+    for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+        edgeCount++;
+    }
+
+    LOG_INF_S("ModularEdgeComponent: Processing shape with " + std::to_string(edgeCount) + " edges");
+
+    if (!m_asyncIntersectionComputer) {
+        m_asyncIntersectionComputer = std::make_unique<async::AsyncEdgeIntersectionComputer>(engine);
+    }
+
+    m_computingIntersections.store(true);
+
+    LOG_INF_S("ModularEdgeComponent: Starting async intersection computation (" + 
+             std::to_string(edgeCount) + " edges)");
+    
+    // Use async intersection computer (which uses optimized OriginalEdgeExtractor)
+    m_asyncIntersectionComputer->computeIntersectionsAsync(
+        shape,
+        tolerance,
+        [this, onComplete, edgeCount](const std::vector<gp_Pnt>& points, bool success, const std::string& error) {
+            m_computingIntersections.store(false);
+            
+            LOG_INF_S("ModularEdgeComponent: Processing completed for " + 
+                     std::to_string(edgeCount) + " edges: " + 
+                     std::to_string(points.size()) + " intersections found");
+            
+            if (onComplete) {
+                onComplete(points, success, error);
+            }
+        },
+        [onProgress](int progress, const std::string& message) {
+            if (onProgress) {
+                onProgress(progress, message);
+            }
+        }
+    );
+}
+
+void ModularEdgeComponent::cancelIntersectionComputation() {
+    if (m_asyncIntersectionComputer) {
+        m_asyncIntersectionComputer->cancelComputation();
+    }
+    m_computingIntersections.store(false);
+}
+

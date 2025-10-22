@@ -17,6 +17,9 @@ add_subdirectory(config)
 # 4. OpenCASCADE module (depends on core module)
 add_subdirectory(opencascade)
 
+# 4.1. Async module (depends on logger and occ modules)
+add_subdirectory(async)
+
 # 5. Geometry module (depends on core, logger, and occ modules)
 add_subdirectory(geometry)
 
@@ -60,6 +63,7 @@ set_target_properties(CADLogger PROPERTIES FOLDER "Modules")
 set_target_properties(CADParam PROPERTIES FOLDER "Modules")
 set_target_properties(CADConfig PROPERTIES FOLDER "Modules")
 set_target_properties(CADOCC PROPERTIES FOLDER "Modules")
+set_target_properties(AsyncEngine PROPERTIES FOLDER "Modules")
 set_target_properties(CADGeometry PROPERTIES FOLDER "Modules")
 set_target_properties(CADCommands PROPERTIES FOLDER "Modules")
 set_target_properties(optimizer PROPERTIES FOLDER "Modules")

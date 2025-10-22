@@ -1,5 +1,5 @@
 
-# 渲染预览模块
+# Render preview module
 add_library(RenderPreview STATIC
     RenderPreviewDialog.cpp
     PreviewCanvas.cpp

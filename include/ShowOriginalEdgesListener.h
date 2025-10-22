@@ -5,6 +5,7 @@
 
 class OCCViewer;
 class AsyncIntersectionManager;
+class FlatFrame;
 
 class ShowOriginalEdgesListener : public CommandListener {
 public:

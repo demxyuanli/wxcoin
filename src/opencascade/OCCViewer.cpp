@@ -85,7 +85,7 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
 	m_showEdges(true),
 	m_antiAliasing(true),
 	m_defaultColor(0.7, 0.7, 0.7, Quantity_TOC_RGB),
-	m_lastMeshParams{}  // 初始化为默认值，避免随机值导致的问题
+	m_lastMeshParams{}  // Initialize to default values to avoid issues caused by random values
 {
 	initializeViewer();
 	// Remove default edge display to avoid conflicts with new EdgeComponent system
@@ -100,6 +100,7 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
 	m_viewOperationsService = std::make_unique<ViewOperationsService>();
 	m_geometryFactoryService = std::make_unique<GeometryFactoryService>();
 	m_meshQualityService = std::make_unique<MeshQualityService>();
+	m_asyncEngine = std::make_unique<async::AsyncEngineIntegration>();
 
 	// Create LOD controller
 	m_lodController = std::make_unique<LODController>(this);
@@ -1181,6 +1182,58 @@ bool OCCViewer::importConfigurationFromJson(const std::string& jsonString)
 
 void OCCViewer::setShowOriginalEdges(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowOriginalEdges(show, m_meshParams);
+}
+
+void OCCViewer::computeIntersectionsAsync(
+	double tolerance,
+	std::function<void(size_t totalPoints, bool success)> onComplete,
+	std::function<void(int progress, const std::string& message)> onProgress)
+{
+	if (!m_edgeDisplayManager) {
+		LOG_ERR_S("OCCViewer: EdgeDisplayManager not initialized");
+		if (onComplete) {
+			onComplete(0, false);
+		}
+		return;
+	}
+
+	auto* frame = dynamic_cast<wxFrame*>(wxTheApp->GetTopWindow());
+	if (!frame) {
+		LOG_ERR_S("OCCViewer: Cannot get main frame");
+		if (onComplete) {
+			onComplete(0, false);
+		}
+		return;
+	}
+
+	if (!m_asyncEngine) {
+		LOG_ERR_S("OCCViewer: AsyncEngine not initialized");
+		if (onComplete) {
+			onComplete(0, false);
+		}
+		return;
+	}
+
+	m_edgeDisplayManager->computeIntersectionsAsync(
+		tolerance,
+		m_asyncEngine.get(),
+		onComplete,
+		onProgress
+	);
+}
+
+bool OCCViewer::isIntersectionComputationRunning() const {
+	return m_edgeDisplayManager ? m_edgeDisplayManager->isIntersectionComputationRunning() : false;
+}
+
+int OCCViewer::getIntersectionProgress() const {
+	return m_edgeDisplayManager ? m_edgeDisplayManager->getIntersectionProgress() : 0;
+}
+
+void OCCViewer::cancelIntersectionComputation() {
+	if (m_edgeDisplayManager) {
+		m_edgeDisplayManager->cancelIntersectionComputation();
+	}
 }
 
 void OCCViewer::setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,

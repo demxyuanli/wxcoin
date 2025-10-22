@@ -4,6 +4,11 @@
 #include "OCCGeometry.h"
 #include "rendering/GeometryProcessor.h"
 #include "edges/ModularEdgeComponent.h"
+#include <functional>
+
+namespace async {
+    class AsyncEngineIntegration;
+}
 
 // Responsible solely for generating edge nodes on a geometry
 class EdgeGenerationService {
@@ -35,4 +40,12 @@ public:
 		bool needMeshEdges,
 		bool needNormalLines,
 		bool needFaceNormalLines);
+
+	// Async intersection computation
+	void computeIntersectionsAsync(
+		std::shared_ptr<OCCGeometry>& geom,
+		double tolerance,
+		async::AsyncEngineIntegration* engine,
+		std::function<void(const std::vector<gp_Pnt>&, bool, const std::string&)> onComplete,
+		std::function<void(int, const std::string&)> onProgress = nullptr);
 };

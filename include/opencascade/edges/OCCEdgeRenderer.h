@@ -8,9 +8,9 @@ class Quantity_Color;
 struct TriangleMesh;
 
 /**
- * @brief OCCEdgeRenderer - 边缘渲染器
+ * @brief OCCEdgeRenderer - Edge renderer
  *
- * 负责将提取的边缘渲染为Coin3D节点
+ * Responsible for rendering extracted edges as Coin3D nodes
  */
 class OCCEdgeRenderer
 {
@@ -18,7 +18,7 @@ public:
     OCCEdgeRenderer();
     virtual ~OCCEdgeRenderer() = default;
 
-    // 节点生成
+    // Node creation
     virtual SoSeparator* createOriginalEdgeNode(const std::vector<TopoDS_Edge>& edges,
         const Quantity_Color& color, double width);
     virtual SoSeparator* createFeatureEdgeNode(const std::vector<TopoDS_Edge>& edges,
@@ -30,20 +30,20 @@ public:
     virtual SoSeparator* createIntersectionNode(const std::vector<gp_Pnt>& points,
         const Quantity_Color& color, double size);
 
-    // 高级渲染
+    // Advanced rendering
     virtual SoSeparator* createHighlightEdgeNode();
     virtual void applyAppearanceToEdgeNode(SoSeparator* edgeNode,
         const Quantity_Color& color, double width, int style = 0);
 
-    // 批量渲染
+    // Batch rendering
     virtual void renderAllEdges(SoSeparator* parentNode);
 
 protected:
-    // 渲染辅助方法
+    // Rendering helper methods
     virtual void setupMaterial(SoSeparator* node, const Quantity_Color& color, double transparency = 0.0);
     virtual void setupDrawStyle(SoSeparator* node, double width, int style = 0);
 
-    // 缓存的节点
+    // Cached nodes
     SoSeparator* m_originalEdgeNode;
     SoSeparator* m_featureEdgeNode;
     SoSeparator* m_meshEdgeNode;

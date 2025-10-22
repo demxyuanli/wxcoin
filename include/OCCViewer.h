@@ -14,6 +14,7 @@
 #include <Inventor/SbViewportRegion.h>
 #include "EdgeTypes.h"
 #include "edges/EdgeDisplayManager.h"
+#include "async/AsyncEngineIntegration.h"
 #include "viewer/interfaces/IGeometryApi.h"
 #include "viewer/interfaces/ISelectionApi.h"
 #include "viewer/interfaces/IRenderModesApi.h"
@@ -268,6 +269,16 @@ public:
 	void setShowOriginalEdges(bool show) override;
 	void setOriginalEdgesParameters(double samplingDensity, double minLength, bool showLinesOnly, const wxColour& color, double width,
 		bool highlightIntersectionNodes = false, const wxColour& intersectionNodeColor = wxColour(255, 0, 0), double intersectionNodeSize = 3.0, IntersectionNodeShape intersectionNodeShape = IntersectionNodeShape::Point);
+	
+	// Async intersection computation
+	void computeIntersectionsAsync(
+		double tolerance = 0.005,
+		std::function<void(size_t totalPoints, bool success)> onComplete = nullptr,
+		std::function<void(int progress, const std::string& message)> onProgress = nullptr);
+	bool isIntersectionComputationRunning() const;
+	int getIntersectionProgress() const;
+	void cancelIntersectionComputation();
+
 	void setShowFeatureEdges(bool show) override;
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave) override;
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave,
@@ -294,6 +305,10 @@ public:
 	void toggleEdgeType(EdgeType type, bool show) override;
 	bool isEdgeTypeEnabled(EdgeType type) const override;
 	void updateAllEdgeDisplays() override;
+	
+	// EdgeDisplayManager and AsyncEngine access
+	EdgeDisplayManager* getEdgeDisplayManager() const { return m_edgeDisplayManager.get(); }
+	async::AsyncEngineIntegration* getAsyncEngine() const { return m_asyncEngine.get(); }
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, bool edgesOnly) override;
 	void applyFeatureEdgeAppearance(const Quantity_Color& color, double width, int style, bool edgesOnly);
 
@@ -405,6 +420,7 @@ private:
 	std::unique_ptr<ViewOperationsService> m_viewOperationsService;
 	std::unique_ptr<GeometryFactoryService> m_geometryFactoryService;
 	std::unique_ptr<ConfigurationManager> m_configurationManager;
+	std::unique_ptr<async::AsyncEngineIntegration> m_asyncEngine;
 	std::unique_ptr<MeshQualityService> m_meshQualityService;
 
 	Quantity_Color m_defaultColor;

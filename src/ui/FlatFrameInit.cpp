@@ -13,6 +13,7 @@
 #include "flatui/UIHierarchyDebugger.h"
 #include "config/ThemeManager.h"
 #include "config/SvgIconManager.h"
+#include "async/AsyncEngineIntegration.h"
 #include <wx/display.h>
 #include "logger/Logger.h"
 #include <wx/dcbuffer.h>
@@ -95,6 +96,7 @@
 #include "ChessboardGridToggleListener.h"
 #include "widgets/FlatMessagePanel.h"
 #include "ui/PerformancePanel.h"
+#include "async/AsyncEngineIntegration.h"
 
 void FlatFrame::InitializeUI(const wxSize& size)
 {
@@ -284,6 +286,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	displayButtonBar->AddToggleButtonWithSVG(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", "edges", wxSize(16, 16), false, "Toggle original edge display");
 	displayButtonBar->AddButtonWithSVG(ID_CANCEL_INTERSECTION_COMPUTATION, "Cancel Intersection", "close", wxSize(16, 16), nullptr, "Cancel ongoing intersection computation");
+	displayButtonBar->AddButtonWithSVG(ID_COMPUTE_INTERSECTIONS, "Compute Intersections", "intersection", wxSize(16, 16), nullptr, "Compute edge intersections asynchronously");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FEATURE_EDGES, "Feature Edges", "edges", wxSize(16, 16), false, "Toggle feature edge display");
 	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_WIREFRAME, "Wireframe Mode", "triangle", wxSize(16, 16), false, "Toggle wireframe rendering mode");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_MESH_EDGES, "Show Mesh Edges", "mesh", wxSize(16, 16), false, "Show/hide mesh edges overlay");
@@ -623,6 +626,10 @@ void FlatFrame::createPanels() {
 		m_commandManager,
 		m_occViewer
 	);
+	
+	// Initialize async compute engine (event handlers are bound inside AsyncEngineIntegration)
+	m_asyncEngine = std::make_unique<async::AsyncEngineIntegration>(this);
+	LOG_INF_S("Async compute engine initialized");
 
 	if (m_canvas && m_canvas->getSceneManager()) {
 		m_canvas->getSceneManager()->resetView();

@@ -110,10 +110,12 @@ set(UIFrame_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrameCommands.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatFrameStatus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PerformancePanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/AsyncEnginePanel.cpp
 )
 set(UIFrame_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FlatFrame.h
     ${CMAKE_SOURCE_DIR}/include/ui/PerformancePanel.h
+    ${CMAKE_SOURCE_DIR}/include/ui/AsyncEnginePanel.h
 )
 add_library(UIFrame STATIC ${UIFrame_SOURCES} ${UIFrame_HEADERS})
 target_include_directories(UIFrame PUBLIC
@@ -131,6 +133,7 @@ target_link_libraries(UIFrame PUBLIC
     NavCubeLib
     CADOCC
     CADGeometry
+    AsyncEngine
     CADCommands
     RenderPreview
     CADFlatUI

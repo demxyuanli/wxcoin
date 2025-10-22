@@ -10,6 +10,9 @@
 #include "edges/EdgeGenerationService.h"
 #include "edges/EdgeRenderApplier.h"
 #include "logger/Logger.h"
+#include <OpenCASCADE/TopExp_Explorer.hxx>
+#include <OpenCASCADE/TopoDS.hxx>
+#include <OpenCASCADE/TopAbs.hxx>
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "ViewRefreshManager.h"
@@ -330,4 +333,156 @@ void EdgeDisplayManager::applyMeshEdgeAppearance(const Quantity_Color& color, do
 void EdgeDisplayManager::setMeshEdgeAppearance(const MeshEdgeAppearance& appearance) {
 	m_meshEdgeAppearance = appearance;
 	applyMeshEdgeAppearance(appearance.color, appearance.width, appearance.style, appearance.showOnlyNew);
+}
+
+void EdgeDisplayManager::computeIntersectionsAsync(
+	double tolerance,
+	async::AsyncEngineIntegration* engine,
+	std::function<void(size_t totalPoints, bool success)> onComplete,
+	std::function<void(int progress, const std::string& message)> onProgress)
+{
+	if (!m_geometries || m_geometries->empty()) {
+		LOG_WRN_S("EdgeDisplayManager: No geometries to process");
+		if (onComplete) {
+			onComplete(0, false);
+		}
+		return;
+	}
+
+	if (m_intersectionRunning.load()) {
+		LOG_WRN_S("EdgeDisplayManager: Intersection computation already running");
+		return;
+	}
+
+	m_intersectionRunning.store(true);
+	m_intersectionProgress.store(0);
+
+	// Count total edges across all geometries for diagnostic
+	size_t totalEdges = 0;
+	size_t geometriesWithEdges = 0;
+	for (const auto& geom : *m_geometries) {
+		if (!geom) continue;
+		
+		size_t edgeCount = 0;
+		for (TopExp_Explorer exp(geom->getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
+			edgeCount++;
+		}
+		if (edgeCount > 0) {
+			totalEdges += edgeCount;
+			geometriesWithEdges++;
+			LOG_INF_S("EdgeDisplayManager: Geometry '" + geom->getName() + "' has " + 
+			         std::to_string(edgeCount) + " edges");
+		}
+	}
+
+	LOG_INF_S("EdgeDisplayManager: Starting multi-geometry intersection computation");
+	LOG_INF_S("EdgeDisplayManager: Total geometries: " + std::to_string(m_geometries->size()) + 
+	         ", geometries with edges: " + std::to_string(geometriesWithEdges) + 
+	         ", total edges: " + std::to_string(totalEdges));
+
+	EdgeGenerationService generator;
+	size_t completedCount = 0;
+	size_t totalGeometries = geometriesWithEdges;
+	size_t totalIntersectionPoints = 0;
+
+	for (size_t i = 0; i < m_geometries->size(); ++i) {
+		auto& geom = (*m_geometries)[i];
+		if (!geom) continue;
+
+		// Count edges for this geometry
+		size_t edgeCount = 0;
+		for (TopExp_Explorer exp(geom->getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
+			edgeCount++;
+		}
+		
+		if (edgeCount == 0) {
+			LOG_INF_S("EdgeDisplayManager: Skipping geometry '" + geom->getName() + 
+			         "' (no edges)");
+			continue;
+		}
+
+		LOG_INF_S("EdgeDisplayManager: Processing geometry " + std::to_string(i + 1) + "/" + 
+		         std::to_string(m_geometries->size()) + " '" + geom->getName() + 
+		         "' (" + std::to_string(edgeCount) + " edges)");
+
+		generator.computeIntersectionsAsync(
+			geom,
+			tolerance,
+			engine,
+			[this, i, totalGeometries, &completedCount, &totalIntersectionPoints, onComplete, geom, edgeCount, totalEdges]
+			(const std::vector<gp_Pnt>& points, bool success, const std::string& error) {
+				completedCount++;
+				totalIntersectionPoints += points.size();
+
+				int progress = static_cast<int>((completedCount * 100.0) / totalGeometries);
+				m_intersectionProgress.store(progress);
+
+				LOG_INF_S("EdgeDisplayManager: Geometry " + std::to_string(i + 1) + "/" + 
+				         std::to_string(totalGeometries) + " '" + geom->getName() + 
+				         "' completed: " + std::to_string(points.size()) + 
+				         " intersections found from " + std::to_string(edgeCount) + " edges");
+
+				if (success && !points.empty()) {
+					if (geom->modularEdgeComponent) {
+						LOG_INF_S("EdgeDisplayManager: Creating intersection nodes for '" + geom->getName() + 
+						         "' (" + std::to_string(points.size()) + " points)");
+						
+						geom->modularEdgeComponent->createIntersectionNodesNode(
+							points,
+							m_originalEdgeParams.intersectionNodeColor,
+							m_originalEdgeParams.intersectionNodeSize,
+							m_originalEdgeParams.intersectionNodeShape
+						);
+						
+						// Update edge display to add nodes to scene graph
+						geom->updateEdgeDisplay();
+						
+						// Request view refresh to render the new nodes
+						if (m_sceneManager && m_sceneManager->getCanvas()) {
+							m_sceneManager->getCanvas()->Refresh();
+						}
+						
+						LOG_INF_S("EdgeDisplayManager: Intersection nodes displayed for '" + geom->getName() + "'");
+					}
+				} else if (!success) {
+					LOG_ERR_S("EdgeDisplayManager: Failed to compute intersections for '" + 
+					         geom->getName() + "': " + error);
+				}
+
+				if (completedCount == totalGeometries) {
+					m_intersectionRunning.store(false);
+					m_intersectionProgress.store(100);
+					
+					LOG_INF_S("EdgeDisplayManager: All geometries processed, total intersections: " + 
+					         std::to_string(totalIntersectionPoints) + " from " + 
+					         std::to_string(totalEdges) + " total edges");
+					
+					if (onComplete) {
+						onComplete(totalIntersectionPoints, true);
+					}
+				}
+			},
+			[this, onProgress, geom](int progress, const std::string& message) {
+				m_intersectionProgress.store(progress);
+				if (onProgress) {
+					onProgress(progress, "Geometry '" + geom->getName() + "': " + message);
+				}
+			}
+		);
+	}
+}
+
+void EdgeDisplayManager::cancelIntersectionComputation() {
+	if (!m_geometries) return;
+
+	for (auto& geom : *m_geometries) {
+		if (geom && geom->modularEdgeComponent) {
+			geom->modularEdgeComponent->cancelIntersectionComputation();
+		}
+	}
+
+	m_intersectionRunning.store(false);
+	m_intersectionProgress.store(0);
+	
+	LOG_INF_S("EdgeDisplayManager: Intersection computation cancelled");
 }

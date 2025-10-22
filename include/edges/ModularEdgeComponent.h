@@ -3,6 +3,8 @@
 #include <Inventor/nodes/SoSeparator.h>
 #include <memory>
 #include <mutex>
+#include <functional>
+#include <atomic>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/Quantity_Color.hxx>
@@ -18,6 +20,11 @@
 // Forward declarations
 class EdgeLODManager;
 class EdgeProcessorFactory;
+
+namespace async {
+    class AsyncEdgeIntersectionComputer;
+    class AsyncEngineIntegration;
+}
 
 /**
  * @brief Enumeration for intersection node display shapes
@@ -121,6 +128,17 @@ public:
     void clearIntersectionNodes();
     bool hasIntersectionNodes() const;
 
+    // Async intersection computation
+    void computeIntersectionsAsync(
+        const TopoDS_Shape& shape,
+        double tolerance,
+        async::AsyncEngineIntegration* engine,
+        std::function<void(const std::vector<gp_Pnt>&, bool, const std::string&)> onComplete,
+        std::function<void(int, const std::string&)> onProgress = nullptr);
+    
+    void cancelIntersectionComputation();
+    bool isComputingIntersections() const { return m_computingIntersections.load(); }
+
     // Cleanup
     void clearMeshEdgeNode();
     void clearSilhouetteEdgeNode();
@@ -157,6 +175,10 @@ private:
     SoSeparator* intersectionNodesNode = nullptr;
 
     mutable std::mutex m_nodeMutex;
+
+    // Async computation state
+    std::unique_ptr<async::AsyncEdgeIntersectionComputer> m_asyncIntersectionComputer;
+    std::atomic<bool> m_computingIntersections{false};
 
     // Helper methods
     void cleanupEdgeNode(SoSeparator*& node);

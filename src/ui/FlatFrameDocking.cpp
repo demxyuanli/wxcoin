@@ -3,6 +3,7 @@
 #include "PropertyPanel.h"
 #include "ObjectTreePanel.h"
 #include "ui/PerformancePanel.h"
+#include "ui/AsyncEnginePanel.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
 #include "InputManager.h"
@@ -549,16 +550,21 @@ DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
 DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
     DockWidget* dock = new DockWidget("Performance", m_dockManager->containerWidget());
 
-    // Create a container panel first
+    // Create a container panel with horizontal layout for both panels
     wxPanel* container = new wxPanel(dock);
-    wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
 
     // Create PerformancePanel with the container as parent
     PerformancePanel* perfPanel = new PerformancePanel(container);
     perfPanel->SetMinSize(wxSize(360, 140));
 
-    // Add performance panel to container
-    sizer->Add(perfPanel, 1, wxEXPAND);
+    // Create AsyncEnginePanel
+    AsyncEnginePanel* asyncPanel = new AsyncEnginePanel(container, m_asyncEngine.get());
+    asyncPanel->SetMinSize(wxSize(360, 140));
+
+    // Add both panels to container side by side
+    sizer->Add(perfPanel, 1, wxEXPAND | wxRIGHT, 4);
+    sizer->Add(asyncPanel, 1, wxEXPAND | wxLEFT, 4);
     container->SetSizer(sizer);
 
     // Set the container as the dock widget

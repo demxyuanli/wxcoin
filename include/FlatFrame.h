@@ -31,6 +31,10 @@ class CommandListener;
 struct CommandResult;
 class wxSplitterWindow;
 
+namespace async {
+    class AsyncEngineIntegration;
+}
+
 // ID definitions
 enum {
 	ID_SearchExecute = wxID_HIGHEST + 1000,
@@ -93,6 +97,7 @@ enum {
 	ID_TOGGLE_EDGES,
 	ID_VIEW_SHOW_ORIGINAL_EDGES, // New: show original edges
 	ID_CANCEL_INTERSECTION_COMPUTATION, // New: cancel intersection computation
+	ID_COMPUTE_INTERSECTIONS, // New: compute intersections asynchronously
 	ID_SHOW_FEATURE_EDGES, // New: show feature edges
 	ID_SHOW_MESH_EDGES, // New: show mesh edges
 	ID_SHOW_FACE_NORMALS, // New: show face normals
@@ -222,6 +227,8 @@ private:
 	wxDialog* m_explodeSliderDialog{ nullptr };  // Track the explode slider dialog
 
 protected:
+	// Async compute engine (protected for derived class access)
+	std::unique_ptr<async::AsyncEngineIntegration> m_asyncEngine;
 	// Protected members accessible to derived classes
 	wxTextCtrl* m_messageOutput;  // Message output control - accessible to derived classes
 
@@ -254,6 +261,9 @@ public:
 	
 	// Navigation mode manager access
 	NavigationModeManager* getNavigationModeManager() const { return m_navigationModeManager; }
+	
+	// Async engine access
+	async::AsyncEngineIntegration* getAsyncEngine() const { return m_asyncEngine.get(); }
 	
 	// Keyboard shortcuts
 	void SetupKeyboardShortcuts();

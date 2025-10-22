@@ -374,7 +374,7 @@ void FlatUIButtonBar::UpdateThemeValues()
 	SetBackgroundColour(m_btnBarBgColour);
 	SetMinSize(wxSize(targetH * 2, targetH));
 
-	// 优先读取ButtonbarTopMargin，没有则用ButtonbarVerticalMargin
+	// Prefer ButtonbarTopMargin, fallback to ButtonbarVerticalMargin if not available
 	int topMargin = GetThemeInt("ButtonbarTopMargin");
 	if (topMargin < 0) {
 		topMargin = GetThemeInt("ButtonbarVerticalMargin");

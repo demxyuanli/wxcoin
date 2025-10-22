@@ -46,6 +46,17 @@ public:
 	int getFeatureEdgeProgress() const { return m_featureEdgeProgress.load(); }
 	bool hasFeatureEdgeCache() const { return m_featureCacheValid; }
 
+	// Async intersection computation
+	void computeIntersectionsAsync(
+		double tolerance,
+		async::AsyncEngineIntegration* engine,
+		std::function<void(size_t totalPoints, bool success)> onComplete,
+		std::function<void(int progress, const std::string& message)> onProgress = nullptr);
+	
+	bool isIntersectionComputationRunning() const { return m_intersectionRunning.load(); }
+	void cancelIntersectionComputation();
+	int getIntersectionProgress() const { return m_intersectionProgress.load(); }
+
 	struct FeatureEdgeParams { double angleDeg{ 15.0 }; double minLength{ 0.005 }; bool onlyConvex{ false }; bool onlyConcave{ false }; };
 	FeatureEdgeParams getLastFeatureEdgeParams() const { return m_lastFeatureParams; }
 	void invalidateFeatureEdgeCache();
@@ -100,6 +111,10 @@ private:
 	FeatureEdgeParams m_lastFeatureParams{};
 	bool m_featureCacheValid{ false };
 	FeatureEdgeAppearance m_featureEdgeAppearance{};
+
+	// Async intersection computation state
+	std::atomic<bool> m_intersectionRunning{ false };
+	std::atomic<int> m_intersectionProgress{ 0 };
 
 	// Wireframe and mesh edge appearance
 	WireframeAppearance m_wireframeAppearance{};

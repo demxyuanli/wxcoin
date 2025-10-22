@@ -6,17 +6,17 @@
 #include <algorithm>
 
 /**
- * @brief 线程安全的数据收集器（无锁设计）
+ * @brief Thread-safe data collector (lock-free design)
  *
- * 每个线程维护独立的缓冲区，避免锁竞争
- * 适合多线程数据收集场景，如交点检测结果收集
+ * Each thread maintains its own buffer to avoid lock contention
+ * Suitable for multi-threaded data collection scenarios, such as intersection detection result collection
  */
 template<typename T>
 class ThreadSafeCollector {
 public:
     /**
-     * @brief 构造函数
-     * @param numThreads 线程数量（0表示自动检测）
+     * @brief Constructor
+     * @param numThreads Number of threads (0 means auto-detect)
      */
     ThreadSafeCollector(size_t numThreads = 0) {
         if (numThreads == 0) {
@@ -27,9 +27,9 @@ public:
     }
 
     /**
-     * @brief 添加元素到线程本地缓冲区
-     * @param value 要添加的值
-     * @param threadId 线程ID（必须<numThreads）
+     * @brief Add element to thread-local buffer
+     * @param value Value to add
+     * @param threadId Thread ID (must be < numThreads)
      */
     void add(const T& value, size_t threadId) {
         if (threadId < m_buffers.size()) {
@@ -38,8 +38,8 @@ public:
     }
 
     /**
-     * @brief 添加元素（自动检测线程ID）
-     * @param value 要添加的值
+     * @brief Add element (auto-detect thread ID)
+     * @param value Value to add
      */
     void add(const T& value) {
         size_t threadId = getThreadIndex();
@@ -47,20 +47,20 @@ public:
     }
 
     /**
-     * @brief 收集所有线程的结果
-     * @return 合并后的结果向量
+     * @brief Collect results from all threads
+     * @return Merged result vector
      */
     std::vector<T> collect() const {
         std::vector<T> result;
 
-        // 预分配空间
+        // Pre-allocate space
         size_t totalSize = 0;
         for (const auto& buffer : m_buffers) {
             totalSize += buffer.size();
         }
         result.reserve(totalSize);
 
-        // 合并所有缓冲区
+        // Merge all buffers
         for (const auto& buffer : m_buffers) {
             result.insert(result.end(), buffer.begin(), buffer.end());
         }
@@ -69,7 +69,7 @@ public:
     }
 
     /**
-     * @brief 清空所有缓冲区
+     * @brief Clear all buffers
      */
     void clear() {
         for (auto& buffer : m_buffers) {
@@ -78,7 +78,7 @@ public:
     }
 
     /**
-     * @brief 获取总元素数
+     * @brief Get total number of elements
      */
     size_t size() const {
         size_t total = 0;
@@ -89,14 +89,14 @@ public:
     }
 
     /**
-     * @brief 获取缓冲区数量
+     * @brief Get buffer count
      */
     size_t bufferCount() const {
         return m_buffers.size();
     }
 
     /**
-     * @brief 获取每个缓冲区的大小统计
+     * @brief Get size statistics for each buffer
      */
     std::vector<size_t> getBufferSizes() const {
         std::vector<size_t> sizes;
@@ -110,12 +110,12 @@ public:
 private:
     std::vector<std::vector<T>> m_buffers;
 
-    // 线程ID到缓冲区索引的映射
+    // Thread ID to buffer index mapping
     size_t getThreadIndex() const {
         static thread_local size_t index = SIZE_MAX;
 
         if (index == SIZE_MAX) {
-            // 首次调用：分配一个唯一索引
+            // First call: allocate a unique index
             static std::atomic<size_t> counter{0};
             index = counter.fetch_add(1) % m_buffers.size();
         }
@@ -125,8 +125,8 @@ private:
 };
 
 /**
- * @brief 专门用于几何数据的线程安全收集器
- * 提供额外的几何特定功能
+ * @brief Specialized thread-safe collector for geometric data
+ * Provides additional geometry-specific functionality
  */
 template<typename T>
 class GeometryThreadSafeCollector : public ThreadSafeCollector<T> {
@@ -135,9 +135,9 @@ public:
         : ThreadSafeCollector<T>(numThreads) {}
 
     /**
-     * @brief 收集并去重（适用于点数据）
-     * @param tolerance 去重容差
-     * @return 去重后的结果
+     * @brief Collect and deduplicate (for point data)
+     * @param tolerance Deduplication tolerance
+     * @return Deduplicated results
      */
     template<typename DistanceFunc>
     std::vector<T> collectUnique(DistanceFunc distanceFunc, double tolerance) const {
@@ -161,7 +161,7 @@ public:
     }
 
     /**
-     * @brief 几何点专用去重收集
+     * @brief Specialized deduplication collection for geometric points
      */
     template<typename PointType = T>
     std::enable_if_t<std::is_same_v<PointType, gp_Pnt>, std::vector<gp_Pnt>>
@@ -173,32 +173,32 @@ public:
 };
 
 /**
- * @brief 使用示例
+ * @brief Usage example
  */
 inline void exampleUsage() {
-    // 基本用法
-    ThreadSafeCollector<gp_Pnt> collector(4); // 4个线程
+    // Basic usage
+    ThreadSafeCollector<gp_Pnt> collector(4); // 4 threads
 
     #pragma omp parallel for num_threads(4)
     for (int i = 0; i < 1000; ++i) {
         gp_Pnt point(i, i*2, i*3);
-        collector.add(point); // 自动检测线程ID
+        collector.add(point); // Auto-detect thread ID
     }
 
     auto allPoints = collector.collect();
     // allPoints.size() == 1000
 
-    // 几何专用版本（带去重）
+    // Geometry-specific version (with deduplication)
     GeometryThreadSafeCollector<gp_Pnt> geomCollector(4);
 
     #pragma omp parallel for num_threads(4)
     for (int i = 0; i < 1000; ++i) {
-        gp_Pnt point(i % 10, (i % 10)*2, (i % 10)*3); // 重复点
+        gp_Pnt point(i % 10, (i % 10)*2, (i % 10)*3); // Duplicate points
         geomCollector.add(point);
     }
 
     auto uniquePoints = geomCollector.collectUniquePoints(1.0);
-    // uniquePoints.size() == 10 (去重后)
+    // uniquePoints.size() == 10 (after deduplication)
 }
 
 

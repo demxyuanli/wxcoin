@@ -16,6 +16,7 @@
 #include "config/SvgIconManager.h"
 #include <wx/display.h>
 #include "logger/Logger.h"
+#include "async/AsyncEngineIntegration.h"
 #include <wx/dcbuffer.h>
 #include <wx/splitter.h>
 #include <wx/sizer.h>
@@ -151,6 +152,7 @@ EVT_BUTTON(ID_TOGGLE_EDGES, FlatFrame::onCommand)
 // EVT_BUTTON(ID_SHOW_FACES, FlatFrame::onCommand)
 EVT_BUTTON(ID_VIEW_SHOW_ORIGINAL_EDGES, FlatFrame::onCommand)
 EVT_BUTTON(ID_CANCEL_INTERSECTION_COMPUTATION, FlatFrame::onCommand)
+EVT_BUTTON(ID_COMPUTE_INTERSECTIONS, FlatFrame::onCommand)
 EVT_BUTTON(ID_SHOW_FEATURE_EDGES, FlatFrame::onCommand)
 EVT_BUTTON(ID_SHOW_MESH_EDGES, FlatFrame::onCommand)
 EVT_BUTTON(ID_OUTLINE_SETTINGS, FlatFrame::onCommand)
@@ -501,6 +503,42 @@ void FlatFrame::OnButtonClick(wxCommandEvent& event)
 		// removed silhouette entry; use ID_TOGGLE_OUTLINE instead
 	case ID_VIEW_SHOW_ORIGINAL_EDGES:
 		if (m_occViewer) m_occViewer->setShowOriginalEdges(event.IsChecked());
+		break;
+	case ID_CANCEL_INTERSECTION_COMPUTATION:
+		if (m_occViewer) {
+			m_occViewer->cancelIntersectionComputation();
+			if (auto* bar = GetFlatUIStatusBar()) {
+				bar->EnableProgressGauge(false);
+			}
+		}
+		break;
+	case ID_COMPUTE_INTERSECTIONS:
+		if (m_occViewer) {
+			m_occViewer->computeIntersectionsAsync(
+				0.005, // tolerance
+				[this](size_t totalPoints, bool success) {
+					if (success) {
+						wxLogMessage("Intersection computation completed: %zu points found", totalPoints);
+					} else {
+						wxLogError("Intersection computation failed");
+					}
+					if (auto* bar = GetFlatUIStatusBar()) {
+						bar->EnableProgressGauge(false);
+					}
+				},
+				[this](int progress, const std::string& message) {
+					if (auto* bar = GetFlatUIStatusBar()) {
+						bar->EnableProgressGauge(true);
+						bar->SetGaugeRange(100);
+						bar->SetGaugeValue(progress);
+					}
+					if (m_messageOutput) {
+						wxString progressMsg = wxString::Format("Intersection: %d%% - %s", progress, message);
+						m_messageOutput->SetValue(progressMsg);
+					}
+				}
+			);
+		}
 		break;
 	case ID_TOGGLE_WIREFRAME:
 		if (m_occViewer) m_occViewer->setWireframeMode(event.IsChecked());

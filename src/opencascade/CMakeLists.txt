@@ -68,6 +68,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeExtractionUIHelper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/AsyncIntersectionTask.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/AsyncIntersectionManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/edges/AsyncEdgeIntersectionComputer.cpp
     
     # Edge renderers (modular)
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/renderers/BaseEdgeRenderer.cpp
@@ -121,6 +122,7 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/edges/EdgeExtractionUIHelper.h
     ${CMAKE_SOURCE_DIR}/include/edges/AsyncIntersectionTask.h
     ${CMAKE_SOURCE_DIR}/include/edges/AsyncIntersectionManager.h
+    ${CMAKE_SOURCE_DIR}/include/edges/AsyncEdgeIntersectionComputer.h
 
     # Modular renderers headers
     ${CMAKE_SOURCE_DIR}/include/edges/renderers/BaseEdgeRenderer.h
@@ -196,6 +198,7 @@ target_link_libraries(CADOCC PUBLIC
     CADLogger
     CADView
     CADRenderingToolkit
+    AsyncEngine
     ${wxWidgets_LIBRARIES}
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}

@@ -1,6 +1,16 @@
 cmake_minimum_required(VERSION 3.20)
 project(CADNav)
 
+# === vcpkg manifest mode configuration ===
+# Enable manifest mode for automatic dependency management
+if(NOT DEFINED VCPKG_MANIFEST_MODE)
+    set(VCPKG_MANIFEST_MODE ON CACHE BOOL "Enable vcpkg manifest mode for dependency management" FORCE)
+    message(STATUS "vcpkg manifest mode enabled for automatic dependency management")
+endif()
+
+# Reduce unnecessary CMake checks
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
+
 # Override any problematic environment variables
 if(DEFINED ENV{CMAKE_POLICY_VERSION_MINIMUM})
     unset(ENV{CMAKE_POLICY_VERSION_MINIMUM})
@@ -64,16 +74,24 @@ if(DEFINED wxWidgets_ROOT_DIR)
     message(STATUS "wxWidgets root: ${wxWidgets_ROOT_DIR}")
 endif()
 
+# Force using vcpkg packages by setting search paths
+if(CMAKE_TOOLCHAIN_FILE)
+    set(Coin_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/share/coin" CACHE PATH "Coin directory" FORCE)
+    set(OpenCASCADE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/share/opencascade" CACHE PATH "OpenCASCADE directory" FORCE)
+    # TBB uses global vcpkg installation
+    if(DEFINED ENV{VCPKG_ROOT})
+        set(TBB_DIR "$ENV{VCPKG_ROOT}/installed/x64-windows/share/tbb" CACHE PATH "TBB directory" FORCE)
+    endif()
+endif()
+
 # 查找依赖
 find_package(wxWidgets CONFIG REQUIRED)
 find_package(Coin CONFIG REQUIRED)
 
-# Force using vcpkg OpenCASCADE by setting search paths
-if(CMAKE_TOOLCHAIN_FILE)
-    set(OpenCASCADE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed/x64-windows/share/opencascade" CACHE PATH "OpenCASCADE directory" FORCE)
-endif()
-
 find_package(OpenCASCADE CONFIG REQUIRED)
+
+# Find TBB for parallel processing
+find_package(TBB CONFIG REQUIRED)
 
 # 添加源代码目录
 add_subdirectory(src)
@@ -104,7 +122,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # 链接所有模块库
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    CADUI          # UI模块（包含所有其他模块的依赖）
+    UIFrame        # UI Frame模块
     CADGeometry    # Geometry模块
     wx::core
     wx::base
@@ -144,18 +162,26 @@ if(MSVC)
         # 确保资源编译器能够找到 wxWidgets 头文件
         set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I\"${wxWidgets_INCLUDE_DIRS}\"")
     endif()
-        # 复制 config 目录及其所有子目录和文件到目标目录
-    set(CONFIG_SOURCE_DIR "${CMAKE_SOURCE_DIR}/config")
-    set(TARGET_DIR $<TARGET_FILE_DIR:${PROJECT_NAME}>)
     
-    # 使用 copy_directory 命令复制整个目录
+    # 复制 config 目录（使用stamp文件避免触发重新配置）
+    set(CONFIG_SOURCE_DIR "${CMAKE_SOURCE_DIR}/config")
+    set(CONFIG_STAMP "${CMAKE_BINARY_DIR}/config_copy.stamp")
+    
+    # 使用 OUTPUT 和 DEPENDS 来正确处理依赖，避免每次都触发
     add_custom_command(
-        TARGET ${PROJECT_NAME} POST_BUILD
+        OUTPUT ${CONFIG_STAMP}
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${CONFIG_SOURCE_DIR}"
-                "${TARGET_DIR}/config"
-        COMMENT "Copying config directory and all subdirectories to ${TARGET_DIR}/config"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config"
+        COMMAND ${CMAKE_COMMAND} -E touch ${CONFIG_STAMP}
+        DEPENDS "${CONFIG_SOURCE_DIR}"
+        COMMENT "Copying config directory (only when changed)"
+        VERBATIM
     )
+    
+    # 创建一个目标来依赖这个stamp文件
+    add_custom_target(ConfigCopy ALL DEPENDS ${CONFIG_STAMP})
+    add_dependencies(${PROJECT_NAME} ConfigCopy)
 endif()
 
 # 调试依赖路径

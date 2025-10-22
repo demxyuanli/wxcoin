@@ -165,3 +165,27 @@ bool EdgeGenerationService::forceRegenerateMeshDerivedEdges(std::shared_ptr<OCCG
 
 	return generated;
 }
+
+void EdgeGenerationService::computeIntersectionsAsync(
+	std::shared_ptr<OCCGeometry>& geom,
+	double tolerance,
+	async::AsyncEngineIntegration* engine,
+	std::function<void(const std::vector<gp_Pnt>&, bool, const std::string&)> onComplete,
+	std::function<void(int, const std::string&)> onProgress)
+{
+	if (!geom || !geom->modularEdgeComponent) {
+		LOG_ERR_S("EdgeGenerationService: Invalid geometry or component");
+		if (onComplete) {
+			onComplete({}, false, "Invalid geometry");
+		}
+		return;
+	}
+
+	geom->modularEdgeComponent->computeIntersectionsAsync(
+		geom->getShape(),
+		tolerance,
+		engine,
+		onComplete,
+		onProgress
+	);
+}

@@ -57,14 +57,14 @@ FlatUIFrame::FlatUIFrame(wxWindow* parent, wxWindowID id, const wxString& title,
 {
 	InitFrameStyle();
 
-	// 自动添加自定义主题状态栏到frame最低层
+	// Automatically add custom themed status bar to the bottom layer of frame
 	// wxBoxSizer* sizer = dynamic_cast<wxBoxSizer*>(GetSizer());
 	// if (!sizer) {
 	//     sizer = new wxBoxSizer(wxVERTICAL);
 	//     SetSizer(sizer);
 	// }
 	// m_statusBar = new FlatUIStatusBar(this);
-	// sizer->AddStretchSpacer(1); // 保证状态栏永远在最底部
+	// sizer->AddStretchSpacer(1); // Ensure status bar is always at the bottom
 	// sizer->Add(m_statusBar, 0, wxEXPAND);
 }
 

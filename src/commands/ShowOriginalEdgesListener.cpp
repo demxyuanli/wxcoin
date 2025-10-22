@@ -63,68 +63,64 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 			try {
 				// Apply parameters to viewer (without intersection highlighting initially)
 				m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth,
-					false, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
+					highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 
 				// Enable original edges display first
 				uiHelper.updateProgress(30, "Displaying original edges...");
 				m_viewer->setShowOriginalEdges(true);
 
-				// Progressive display: now enabled with OCCGeometry incremental API
-				if (highlightIntersectionNodes) {
-					LOG_INF_S("Progressive display: enabling async intersection computation");
-					
-					// Clear any existing intersection nodes
-					auto geometries = m_viewer->getAllGeometry();
-					for (auto& geom : geometries) {
-						geom->clearIntersectionNodes();
-					}
-					
-					// Start async intersection computation with progressive display
-					for (auto& geom : geometries) {
-						if (!geom->getShape().IsNull()) {
-						// Capture node size for lambda
-						double nodeSize = intersectionNodeSize;
-						
-						// Partial results callback: progressive rendering
-						auto onPartialResults = [this, geom, nodeSize](const std::vector<gp_Pnt>& points, size_t totalSoFar) {
-							if (!points.empty()) {
-								Quantity_Color intersectionColor(1.0, 0.0, 0.0, Quantity_TOC_RGB);
-								geom->addBatchIntersectionNodes(points, intersectionColor, nodeSize);
-								
-								// Update edge display to add intersection nodes to scene graph
-								geom->updateEdgeDisplay();
-								
-								// Request view refresh to render the new nodes
-								m_viewer->requestViewRefresh();
-								
-								LOG_INF_S("Progressive display: rendered " + std::to_string(points.size()) + 
-										 " points, total so far: " + std::to_string(totalSoFar));
-							}
-						};
-							
-							// Completion callback: final status update
-							auto onCompleted = [this, geom](const std::vector<gp_Pnt>& points) {
-								LOG_INF_S("Progressive display: intersection computation completed for " + geom->getName() + 
-										 " (" + std::to_string(points.size()) + " points)");
-							};
-							
-							// Error callback
-							auto onError = [this, geom](const std::string& error) {
-								LOG_ERR_S("Progressive display: intersection computation failed for " + geom->getName() + ": " + error);
-							};
-							
-							// Start async computation with progressive display
-							// Parameters: shape, tolerance, completionCallback, partialResultsCallback, batchSize
-							m_intersectionManager->startIntersectionComputation(
-								geom->getShape(),
-								0.0,  // adaptive tolerance
-								onCompleted,
-								onPartialResults,
-								50  // Batch size for progressive display
-							);
-						}
+				// Progressive display: now enabled with multi-geometry async computation
+			if (highlightIntersectionNodes) {
+				LOG_INF_S("Progressive display: enabling multi-geometry async intersection computation");
+				
+				// Use EdgeDisplayManager's multi-geometry async computation
+				auto edgeDisplayManager = m_viewer->getEdgeDisplayManager();
+				
+				// Get async engine from FlatFrame (not OCCViewer, to ensure proper main thread event handling)
+				async::AsyncEngineIntegration* asyncEngine = nullptr;
+				if (m_frame) {
+					// Cast to FlatFrame to access async engine
+					auto* flatFrame = dynamic_cast<FlatFrame*>(m_frame);
+					if (flatFrame) {
+						asyncEngine = flatFrame->getAsyncEngine();
+						LOG_INF_S("Progressive display: Using FlatFrame's async engine");
 					}
 				}
+				
+				if (!asyncEngine) {
+					// Fallback to OCCViewer's engine (headless mode)
+					asyncEngine = m_viewer->getAsyncEngine();
+					LOG_WRN_S("Progressive display: Using OCCViewer's async engine (headless mode)");
+				}
+				
+				if (edgeDisplayManager && asyncEngine) {
+					// Completion callback for all geometries
+					auto onComplete = [this](size_t totalPoints, bool success) {
+						if (success) {
+							LOG_INF_S("Multi-geometry intersection computation completed: " + 
+							         std::to_string(totalPoints) + " total intersections found");
+							m_viewer->requestViewRefresh();
+						} else {
+							LOG_ERR_S("Multi-geometry intersection computation failed");
+						}
+					};
+					
+					// Progress callback
+					auto onProgress = [this](int progress, const std::string& message) {
+						LOG_INF_S("Intersection progress: " + std::to_string(progress) + "% - " + message);
+					};
+					
+					// Start multi-geometry async intersection computation
+					edgeDisplayManager->computeIntersectionsAsync(
+						0.001,  // tolerance
+						asyncEngine,
+						onComplete,
+						onProgress
+					);
+				} else {
+					LOG_ERR_S("EdgeDisplayManager or AsyncEngine not available, skipping intersection computation");
+				}
+			}
 
 				uiHelper.updateProgress(90, "Finalizing edge display...");
 

@@ -28,7 +28,7 @@ OCCGeometryMesh::OCCGeometryMesh()
     , m_meshRegenerationNeeded(true)
     , m_assemblyLevel(0)
     , useModularEdgeComponent(true)
-    , m_lastMeshParams{}  // 初始化为默认值，避免随机值导致的问题
+    , m_lastMeshParams{}  // Initialize to default values to avoid issues caused by random values
 {
     // Use only modular edge component - migration completed
     modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
