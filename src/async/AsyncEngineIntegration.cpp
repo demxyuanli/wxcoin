@@ -155,18 +155,32 @@ void AsyncEngineIntegration::postIntersectionResult(
     }
 }
 
+void AsyncEngineIntegration::postSimpleIntersectionResult(
+    const std::string& taskId, const ComputeResult<IntersectionComputeResult>& result)
+{
+    LOG_INF_S("AsyncEngineIntegration: Executing simple intersection callback for " + taskId);
+
+    // Execute callback directly (assuming we're already on the correct thread)
+    std::lock_guard<std::mutex> lock(m_callbackMutex);
+    auto it = m_simpleIntersectionCallbacks.find(taskId);
+    if (it != m_simpleIntersectionCallbacks.end()) {
+        it->second(result.success, result.data.points, result.errorMessage);
+        m_simpleIntersectionCallbacks.erase(it);
+    }
+}
+
 void AsyncEngineIntegration::postIntersectionResultWithCallback(
     const std::string& taskId,
     const ComputeResult<IntersectionComputeResult>& result)
 {
     LOG_INF_S("AsyncEngineIntegration: Posting intersection result for " + taskId);
-    
+
     // Store result for callback execution
     {
         std::lock_guard<std::mutex> lock(m_callbackMutex);
         m_pendingResults[taskId] = result;
     }
-    
+
     // Create and post event to main thread
     auto* event = new AsyncIntersectionResultEvent(
         wxEVT_ASYNC_INTERSECTION_RESULT,
@@ -174,7 +188,7 @@ void AsyncEngineIntegration::postIntersectionResultWithCallback(
         taskId,
         result.data
     );
-    
+
     safePostEvent(event);
 }
 
@@ -291,28 +305,35 @@ void AsyncEngineIntegration::submitGenericTask(
 
 void AsyncEngineIntegration::submitIntersectionTask(
     const std::string& taskId,
-    const IntersectionComputeInput& input,
-    std::function<void(const ComputeResult<IntersectionComputeResult>&)> onComplete)
+    const TopoDS_Shape& shape,
+    double tolerance,
+    std::function<void(bool, const std::vector<gp_Pnt>&, const std::string&)> onComplete)
 {
     LOG_INF_S("AsyncEngineIntegration: Submitting intersection task " + taskId);
-    
+
     // Store user callback for later execution on main thread
     {
         std::lock_guard<std::mutex> lock(m_callbackMutex);
-        m_intersectionCallbacks[taskId] = onComplete;
+        m_simpleIntersectionCallbacks[taskId] = onComplete;
     }
-    
+
     auto task = GeometryComputeTasks::createIntersectionTask(
         taskId,
-        input.shape,
-        input.tolerance,
+        shape,
+        tolerance,
         [this, taskId](const ComputeResult<IntersectionComputeResult>& result) {
             // This runs in worker thread - must post to main thread
-            postIntersectionResultWithCallback(taskId, result);
+            postSimpleIntersectionResult(taskId, result);
         }
     );
-    
+
     m_engine->submitTask(task);
+}
+
+void AsyncEngineIntegration::setGlobalProgressCallback(
+    std::function<void(const std::string&, int, const std::string&)> callback)
+{
+    m_engine->setGlobalProgressCallback(callback);
 }
 
 void AsyncEngineIntegration::setProgressCallback(

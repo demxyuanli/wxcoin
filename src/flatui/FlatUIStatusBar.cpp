@@ -1,5 +1,5 @@
 #include "flatui/FlatUIStatusBar.h"
-#include "logger/Logger.h"
+#include "logger/AsyncLogger.h"
 
 wxBEGIN_EVENT_TABLE(FlatUIStatusBar, FlatUIThemeAware)
 EVT_PAINT(FlatUIStatusBar::OnPaint)
@@ -110,10 +110,10 @@ void FlatUIStatusBar::EnableProgressGauge(bool enable) {
 		m_progress->Show();
 		m_progress->SetValue(0); // Reset to 0
 		m_progress->Refresh();
-		LOG_INF_S("Progress gauge enabled");
+		LOG_INF_S_ASYNC("Progress gauge enabled");
 	} else {
 		m_progress->Hide();
-		LOG_INF_S("Progress gauge disabled");
+		LOG_INF_S_ASYNC("Progress gauge disabled");
 	}
 	LayoutChildren();
 	Refresh();
@@ -127,6 +127,22 @@ void FlatUIStatusBar::SetGaugeValue(int value) {
 	if (m_progress) {
 		m_progress->SetValue(value);
 		// Force refresh to ensure progress is visible
+		m_progress->Refresh();
+	}
+}
+
+void FlatUIStatusBar::SetGaugeIndeterminate(bool indeterminate) {
+	if (m_progress) {
+		if (indeterminate) {
+			// Set to indeterminate style with animation
+			m_progress->SetProgressBarStyle(FlatProgressBar::ProgressBarStyle::INDETERMINATE);
+			m_progress->SetAnimated(true);
+			m_progress->SetValue(0); // Reset value for indeterminate mode
+		} else {
+			// Set back to default style
+			m_progress->SetProgressBarStyle(FlatProgressBar::ProgressBarStyle::DEFAULT_STYLE);
+			m_progress->SetAnimated(false);
+		}
 		m_progress->Refresh();
 	}
 }

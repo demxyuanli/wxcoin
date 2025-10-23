@@ -41,8 +41,10 @@ set_target_properties(UIDialogGeometry PROPERTIES FOLDER "UI")
 add_library(UIDialogRendering STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PointViewDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/LightingSettingsDialog.h
+    ${CMAKE_SOURCE_DIR}/include/PointViewDialog.h
 )
 target_include_directories(UIDialogRendering PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
 target_link_libraries(UIDialogRendering PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})

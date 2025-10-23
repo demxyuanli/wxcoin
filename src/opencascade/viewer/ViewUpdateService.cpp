@@ -56,6 +56,13 @@ void ViewUpdateService::requestEdgesToggled(bool immediate) const {
 	}
 }
 
+void ViewUpdateService::requestPointViewToggled(bool immediate) const {
+	if (!m_sceneManager || !m_sceneManager->getCanvas()) return;
+	if (auto* refresher = m_sceneManager->getCanvas()->getRefreshManager()) {
+		refresher->requestRefresh(ViewRefreshManager::RefreshReason::POINT_VIEW_TOGGLED, immediate);
+	}
+}
+
 void ViewUpdateService::requestCameraMoved(bool immediate) const {
 	if (!m_sceneManager || !m_sceneManager->getCanvas()) return;
 	if (auto* refresher = m_sceneManager->getCanvas()->getRefreshManager()) {

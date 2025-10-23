@@ -1,10 +1,12 @@
 # Logger module - unified logging system
 set(LOGGER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Logger.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/AsyncLogger.cpp
 )
 
 set(LOGGER_HEADERS
     ${CMAKE_SOURCE_DIR}/include/logger/Logger.h
+    ${CMAKE_SOURCE_DIR}/include/logger/AsyncLogger.h
 )
 
 # Create logger static library

@@ -11,6 +11,9 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <atomic>
+#include <mutex>
+#include <tbb/tbb.h>
 
 /**
  * @brief Progress callback for edge extraction
@@ -115,6 +118,24 @@ public:
     /**
      * @brief Find edge intersections
      */
+    /**
+     * @brief Find edge intersections with progressive display support
+     * @param shape Input shape
+     * @param intersectionPoints Output intersection points
+     * @param tolerance Intersection tolerance
+     * @param onBatchComplete Callback for each batch completion
+     * @param onProgress Progress callback
+     */
+    void findEdgeIntersectionsProgressive(
+        const TopoDS_Shape& shape,
+        std::vector<gp_Pnt>& intersectionPoints,
+        double tolerance,
+        std::function<void(const std::vector<gp_Pnt>&)> onBatchComplete = nullptr,
+        std::function<void(int, const std::string&)> onProgress = nullptr);
+
+    /**
+     * @brief Find edge intersections (legacy method)
+     */
     void findEdgeIntersections(
         const TopoDS_Shape& shape,
         std::vector<gp_Pnt>& intersectionPoints,
@@ -163,6 +184,32 @@ private:
         const EdgeData& edge1,
         const EdgeData& edge2,
         std::vector<gp_Pnt>& intersectionPoints,
+        double tolerance);
+
+    /**
+     * @brief Progressive intersection detection with TBB
+     */
+    void findIntersectionsProgressiveTBB(
+        const std::vector<EdgeData>& edgeData,
+        std::vector<gp_Pnt>& intersectionPoints,
+        double tolerance,
+        std::function<void(const std::vector<gp_Pnt>&)> onBatchComplete,
+        std::function<void(int, const std::string&)> onProgress);
+
+    /**
+     * @brief Generate intersection tasks in batches
+     */
+    std::vector<std::vector<std::pair<size_t, size_t>>> generateTaskBatches(
+        const std::vector<std::vector<size_t>>& gridCells,
+        const std::vector<EdgeData>& edgeData,
+        size_t batchSize = 100);
+
+    /**
+     * @brief Process a batch of intersection tasks
+     */
+    std::vector<gp_Pnt> processIntersectionBatch(
+        const std::vector<std::pair<size_t, size_t>>& batch,
+        const std::vector<EdgeData>& edgeData,
         double tolerance);
     
 protected:

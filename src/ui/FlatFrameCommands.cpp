@@ -47,6 +47,7 @@
 #include "ShowWireFrameListener.h"
 #include "ShowFaceNormalsListener.h"
 #include "FaceQueryCommandListener.h"
+#include "ShowPointViewListener.h"
 #include "RenderPreviewSystemListener.h"
 #include "ShowFlatWidgetsExampleListener.h"
 #include "ReferenceGridToggleListener.h"
@@ -55,6 +56,7 @@
 #include "ExplodeConfigListener.h"
 #include "SliceToggleListener.h"
 #include "ToggleOutlineListener.h"
+#include "RenderModeListener.h"
 #include "UndoListener.h"
 #include "RedoListener.h"
 #include "HelpAboutListener.h"
@@ -117,7 +119,7 @@ void FlatFrame::setupCommandSystem() {
 	auto normalFixDialogListener = std::make_shared<NormalFixDialogListener>(this, m_occViewer);
 	auto setTransparencyListener = std::make_shared<SetTransparencyListener>(this, m_occViewer);
 	auto viewModeListener = std::make_shared<ViewModeListener>(m_occViewer);
-	auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer, this);
+	auto showOriginalEdgesListener = std::make_shared<ShowOriginalEdgesListener>(m_occViewer, m_asyncEngine.get(), this);
 	auto showMeshEdgesListener = std::make_shared<ShowMeshEdgesListener>(m_occViewer);
 	auto showWireFrameListener = std::make_shared<ShowWireFrameListener>(m_occViewer);
 	auto showFaceNormalsListener = std::make_shared<ShowFaceNormalsListener>(m_occViewer);
@@ -203,6 +205,7 @@ void FlatFrame::setupCommandSystem() {
 	auto coordinateSystemVisibilityListener = std::make_shared<CoordinateSystemVisibilityListener>(this, m_canvas->getSceneManager());
 	auto referenceGridToggleListener = std::make_shared<ReferenceGridToggleListener>(m_canvas->getSceneManager());
 	auto chessboardGridToggleListener = std::make_shared<ChessboardGridToggleListener>(m_canvas->getSceneManager());
+	auto showPointViewListener = std::make_shared<ShowPointViewListener>(m_occViewer, m_canvas->getRenderingEngine());
 	auto renderPreviewSystemListener = std::make_shared<RenderPreviewSystemListener>(this);
 	auto showFlatWidgetsExampleListener = std::make_shared<ShowFlatWidgetsExampleListener>(this);
 	auto explodeAssemblyListener = std::make_shared<ExplodeAssemblyListener>(this, m_occViewer);
@@ -222,12 +225,23 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::ToggleCoordinateSystem, coordinateSystemVisibilityListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleReferenceGrid, referenceGridToggleListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleChessboardGrid, chessboardGridToggleListener);
+	m_listenerManager->registerListener(cmd::CommandType::ShowPointView, showPointViewListener);
 	m_listenerManager->registerListener(cmd::CommandType::RenderPreviewSystem, renderPreviewSystemListener);
 	m_listenerManager->registerListener(cmd::CommandType::ShowFlatWidgetsExample, showFlatWidgetsExampleListener);
 	m_listenerManager->registerListener(cmd::CommandType::ExplodeAssembly, explodeAssemblyListener);
 	m_listenerManager->registerListener(cmd::CommandType::SliceToggle, sliceToggleListener);
 	auto toggleOutlineListener = std::make_shared<ToggleOutlineListener>(m_occViewer);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleOutline, toggleOutlineListener);
+
+	// Register RenderModeListener for all render mode commands
+	auto renderModeListener = std::make_shared<RenderModeListener>(m_occViewer);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModeNoShading, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModePoints, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModeWireframe, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModeFlatLines, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModeShaded, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModeShadedWireframe, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModeHiddenLine, renderModeListener);
 
 	m_commandDispatcher->setUIFeedbackHandler([this](const CommandResult& result) { this->onCommandFeedback(result); });
 	LOG_INF_S("Command system setup completed");

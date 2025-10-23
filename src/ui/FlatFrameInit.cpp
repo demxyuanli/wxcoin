@@ -241,6 +241,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	viewButtonBar->AddButtonWithSVG(ID_VIEW_FRONT, "Front", "frontview", wxSize(16, 16), nullptr, "Switch to front view");
 	viewButtonBar->AddButtonWithSVG(ID_VIEW_RIGHT, "Right", "rightview", wxSize(16, 16), nullptr, "Switch to right view");
 	viewButtonBar->AddButtonWithSVG(ID_VIEW_ISOMETRIC, "Isometric", "isoview", wxSize(16, 16), nullptr, "Switch to isometric view");
+	viewButtonBar->AddToggleButtonWithSVG(ID_SHOW_POINT_VIEW, "Point View", "pointview", wxSize(16, 16), false, "Toggle point view mode");
 	viewPanel->AddButtonBar(viewButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(viewPanel);
 
@@ -376,6 +377,31 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	navigatorPage->AddPanel(animationPanel);
 
 	m_ribbon->AddPage(navigatorPage);
+
+	// Create Render page with rendering modes (similar to FreeCAD)
+	FlatUIPage* renderPage = new FlatUIPage(m_ribbon, "Render");
+
+	// Render modes panel
+	FlatUIPanel* renderModePanel = new FlatUIPanel(renderPage, "Render Modes", wxHORIZONTAL);
+	renderModePanel->SetFont(CFG_DEFAULTFONT());
+	renderModePanel->SetPanelBorderWidths(0, 0, 0, 1);
+	renderModePanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	renderModePanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	renderModePanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	renderModePanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* renderModeButtonBar = new FlatUIButtonBar(renderModePanel);
+	renderModeButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_NO_SHADING, "No Shading", "cube", wxSize(16, 16), nullptr, "No shading mode - uniform color like FreeCAD");
+	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_POINTS, "Points", "pointview", wxSize(16, 16), nullptr, "Points mode - show only vertices");
+	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_WIREFRAME, "Wireframe", "triangle", wxSize(16, 16), nullptr, "Wireframe mode - show only edges");
+	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "edges", wxSize(16, 16), nullptr, "Flat lines mode - flat shading with edges");
+	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_SHADED, "Shaded", "palette", wxSize(16, 16), nullptr, "Shaded mode - smooth shading with lighting");
+	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_SHADED_WIREFRAME, "Shaded+Wireframe", "triangle", wxSize(16, 16), nullptr, "Shaded with wireframe overlay");
+	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_HIDDEN_LINE, "Hidden Line", "edges", wxSize(16, 16), nullptr, "Hidden line mode - edges with hidden line removal");
+	renderModePanel->AddButtonBar(renderModeButtonBar, 0, wxEXPAND | wxALL, 5);
+	renderPage->AddPanel(renderModePanel);
+
+	m_ribbon->AddPage(renderPage);
 
 	FlatUIPage* page4 = new FlatUIPage(m_ribbon, "Tools");
 	FlatUIPanel* toolsPanel = new FlatUIPanel(page4, "Tools", wxHORIZONTAL);
@@ -645,7 +671,14 @@ void FlatFrame::createPanels() {
 		bar->SetGaugeRange(100);
 		bar->SetGaugeValue(0);
 	}
-	
+
+	// Setup refresh listeners for UI state synchronization
+	if (m_canvas && m_canvas->getRefreshManager()) {
+		m_canvas->getRefreshManager()->addRefreshListener([this](ViewRefreshManager::RefreshReason reason) {
+			this->OnPointViewToggled(reason);
+		});
+	}
+
 	// Setup keyboard shortcuts
 	SetupKeyboardShortcuts();
 }

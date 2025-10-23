@@ -909,3 +909,16 @@ void FlatFrame::RegisterCommandListener(cmd::CommandType commandType, std::share
 		m_listenerManager->registerListener(commandType, listener);
 	}
 }
+
+void FlatFrame::OnPointViewToggled(ViewRefreshManager::RefreshReason reason)
+{
+	if (reason == ViewRefreshManager::RefreshReason::POINT_VIEW_TOGGLED) {
+		// Update point view button state
+		if (m_occViewer) {
+			bool isEnabled = m_occViewer->isPointViewEnabled();
+			// Note: Button state update would need access to the actual button control
+			// For now, this is a placeholder for future button state synchronization
+			appendMessage(wxString::Format("Point view %s", isEnabled ? "enabled" : "disabled"));
+		}
+	}
+}

@@ -347,13 +347,35 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	}
 
 	auto viewportStartTime = std::chrono::high_resolution_clock::now();
+
+	// Create viewport region with validation
 	SbViewportRegion viewport(size.x, size.y);
+	if (viewport.getViewportSizePixels()[0] <= 0 || viewport.getViewportSizePixels()[1] <= 0) {
+		LOG_ERR_S("SceneManager::render: Invalid viewport size: " +
+			std::to_string(size.x) + "x" + std::to_string(size.y));
+		return;
+	}
+
+	// Create render action with error checking
 	SoGLRenderAction renderAction(viewport);
-	renderAction.setSmoothing(!fastMode);
-	renderAction.setNumPasses(fastMode ? 1 : 2);
-	renderAction.setTransparencyType(
-		fastMode ? SoGLRenderAction::BLEND : SoGLRenderAction::SORTED_OBJECT_BLEND
-	);
+	try {
+		renderAction.setSmoothing(!fastMode);
+		renderAction.setNumPasses(fastMode ? 1 : 2);
+		renderAction.setTransparencyType(
+			fastMode ? SoGLRenderAction::BLEND : SoGLRenderAction::SORTED_OBJECT_BLEND
+		);
+
+		// Additional render action configuration for stability
+		renderAction.setCacheContext(1); // Use a specific cache context
+
+	} catch (const std::exception& e) {
+		LOG_ERR_S("SceneManager::render: Failed to configure SoGLRenderAction: " + std::string(e.what()));
+		return;
+	} catch (...) {
+		LOG_ERR_S("SceneManager::render: Failed to configure SoGLRenderAction (unknown exception)");
+		return;
+	}
+
 	auto viewportEndTime = std::chrono::high_resolution_clock::now();
 	auto viewportDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewportEndTime - viewportStartTime);
 
@@ -367,10 +389,20 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	glEnable(GL_TEXTURE_2D);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	// Basic OpenGL capability check
+	const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+	if (version) {
+		static std::string lastVersion;
+		if (lastVersion != version) {
+			lastVersion = version;
+			LOG_INF_S("SceneManager::render: OpenGL version: " + std::string(version));
+		}
+	}
+
 	// Reset OpenGL errors before rendering
 	GLenum err;
 	while ((err = glGetError()) != GL_NO_ERROR) {
-		LOG_ERR_S("Pre-render: OpenGL error: " + std::to_string(err));
+		LOG_WRN_S("SceneManager::render: Pre-render OpenGL error: " + std::to_string(err));
 	}
 
 	// Reset OpenGL state to prevent errors
@@ -378,9 +410,68 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	auto glSetupEndTime = std::chrono::high_resolution_clock::now();
 	auto glSetupDuration = std::chrono::duration_cast<std::chrono::microseconds>(glSetupEndTime - glSetupStartTime);
 
-	// Render the scene
+	// Render the scene with error protection
 	auto coinRenderStartTime = std::chrono::high_resolution_clock::now();
-	renderAction.apply(m_sceneRoot);
+	
+	// Check if scene root is valid before rendering
+	if (!m_sceneRoot) {
+		LOG_ERR_S("SceneManager::render: Scene root is null, skipping render");
+		return;
+	}
+
+	// Additional validation: Check if scene root has valid children
+	if (m_sceneRoot->getNumChildren() == 0) {
+		LOG_WRN_S("SceneManager::render: Scene root has no children, this may indicate an empty scene");
+	}
+
+	// Validate and repair geometry objects before rendering
+	if (m_canvas && m_canvas->getOCCViewer()) {
+		auto geometries = m_canvas->getOCCViewer()->getAllGeometry();
+		int validGeometries = 0;
+		int repairedGeometries = 0;
+
+		for (const auto& geometry : geometries) {
+			if (geometry) {
+				auto coinNode = geometry->getCoinNode();
+				if (coinNode) {
+					validGeometries++;
+				} else {
+					LOG_WRN_S("SceneManager::render: Geometry '" + geometry->getName() + "' has null Coin3D node, rebuilding...");
+					try {
+						// Force rebuild the Coin3D representation
+						MeshParameters defaultParams;
+						geometry->forceCoinRepresentationRebuild(defaultParams);
+						repairedGeometries++;
+						LOG_INF_S("SceneManager::render: Successfully rebuilt Coin3D node for geometry '" + geometry->getName() + "'");
+					} catch (const std::exception& e) {
+						LOG_ERR_S("SceneManager::render: Failed to rebuild geometry '" + geometry->getName() + "': " + std::string(e.what()));
+					} catch (...) {
+						LOG_ERR_S("SceneManager::render: Failed to rebuild geometry '" + geometry->getName() + "' (unknown exception)");
+					}
+				}
+			}
+		}
+
+		if (repairedGeometries > 0) {
+			LOG_INF_S("SceneManager::render: Repaired " + std::to_string(repairedGeometries) +
+				" geometries with invalid Coin3D nodes");
+		}
+	}
+
+	try {
+		renderAction.apply(m_sceneRoot);
+	} catch (const std::exception& e) {
+		LOG_ERR_S("SceneManager::render: Exception during Coin3D rendering: " + std::string(e.what()));
+		// Try to recover by clearing and rebuilding scene
+		rebuildScene();
+		return;
+	} catch (...) {
+		LOG_ERR_S("SceneManager::render: Unknown exception during Coin3D rendering");
+		// Try to recover by clearing and rebuilding scene
+		rebuildScene();
+		return;
+	}
+	
 	auto coinRenderEndTime = std::chrono::high_resolution_clock::now();
 	auto coinRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(coinRenderEndTime - coinRenderStartTime);
 
@@ -692,7 +783,22 @@ void SceneManager::initializeRenderingConfigCallback()
 	// Register callback to update geometries when RenderingConfig changes
 	RenderingConfig& config = RenderingConfig::getInstance();
 	config.registerSettingsChangedCallback([this]() {
-		LOG_INF_S("RenderingConfig callback triggered - updating geometries");
+		LOG_INF_S("RenderingConfig callback triggered - updating geometries and lighting");
+
+		// Check if display mode changed to/from NoShading - if so, update lighting
+		if (m_canvas && m_canvas->getOCCViewer()) {
+			auto displaySettings = m_canvas->getOCCViewer()->getDisplaySettings();
+			static RenderingConfig::DisplayMode lastDisplayMode = displaySettings.displayMode;
+
+			if (lastDisplayMode != displaySettings.displayMode) {
+				if (lastDisplayMode == RenderingConfig::DisplayMode::NoShading ||
+					displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
+					LOG_INF_S("RenderingConfig callback: Display mode changed to/from NoShading, updating lighting");
+					updateSceneLighting();
+				}
+				lastDisplayMode = displaySettings.displayMode;
+			}
+		}
 
 		if (m_canvas && m_canvas->getOCCViewer()) {
 			OCCViewer* viewer = m_canvas->getOCCViewer();
@@ -776,6 +882,13 @@ void SceneManager::updateSceneLighting() {
 
 	LOG_INF_S("Updating lighting from configuration");
 
+	// Check if we're in NoShading mode - use different lighting setup
+	bool isNoShading = false;
+	if (m_canvas && m_canvas->getOCCViewer()) {
+		auto displaySettings = m_canvas->getOCCViewer()->getDisplaySettings();
+		isNoShading = (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading);
+	}
+
 	// Clear existing environment and light nodes that were previously inserted
 	// We only remove nodes that appear before m_objectRoot to avoid touching other overlays
 	int objectIndex = m_objectRoot ? m_sceneRoot->findChild(m_objectRoot) : -1;
@@ -790,8 +903,39 @@ void SceneManager::updateSceneLighting() {
 		}
 	}
 
+	// Force rebuild geometries to apply new lighting/material settings
+	if (m_canvas && m_canvas->getOCCViewer()) {
+		OCCViewer* viewer = m_canvas->getOCCViewer();
+		auto allGeometries = viewer->getAllGeometry();
+		LOG_INF_S("Updating " + std::to_string(allGeometries.size()) + " geometries for lighting changes");
+
+		for (auto& geometry : allGeometries) {
+			if (geometry) {
+				LOG_INF_S("Updated material for lighting: " + geometry->getName());
+				geometry->forceCoinRepresentationRebuild(MeshParameters());
+		}
+	}
+	}
+
 	// Get lighting configuration
 	LightingConfig& config = LightingConfig::getInstance();
+
+	// Set light model based on display mode
+	SoLightModel* lightModel = new SoLightModel;
+	if (isNoShading) {
+		// Use BASE_COLOR for no shading - no lighting calculations, direct color
+		lightModel->model.setValue(SoLightModel::BASE_COLOR);
+		LOG_INF_S("SceneManager::updateSceneLighting: Using BASE_COLOR light model for NoShading");
+	} else {
+		// Use PHONG for normal lighting
+		lightModel->model.setValue(SoLightModel::PHONG);
+	}
+
+	// Insert light model at the beginning of scene root (after camera)
+	if (m_sceneRoot) {
+		// Insert new light model after camera (index 1)
+		m_sceneRoot->insertChild(lightModel, 1);
+	}
 
 	// Add environment settings
 	auto envSettings = config.getEnvironmentSettings();
@@ -799,9 +943,17 @@ void SceneManager::updateSceneLighting() {
 
 	// Convert Quantity_Color to SbColor
 	Standard_Real r, g, b;
-	envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-	environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-	environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
+	if (isNoShading) {
+		// For NoShading mode, use neutral ambient color with moderate intensity
+		environment->ambientColor.setValue(0.9f, 0.9f, 0.9f); // Light gray ambient
+		environment->ambientIntensity.setValue(0.5f); // Moderate ambient intensity
+		LOG_INF_S("SceneManager::updateSceneLighting: Using neutral ambient lighting for NoShading");
+	} else {
+		// Use configured ambient settings for normal modes
+		envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
+		environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+		environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
+	}
 
 	// Place environment on scene root before object root so it affects geometry
 	{
@@ -1275,4 +1427,41 @@ bool SceneManager::isCoordinateSystemVisible() const
 		return m_coordSystemRenderer->isVisible();
 	}
 	return false;
+}
+
+void SceneManager::rebuildScene()
+{
+	LOG_WRN_S("SceneManager::rebuildScene: Attempting to rebuild scene after rendering error");
+	
+	try {
+		// Clear existing scene
+		if (m_sceneRoot) {
+			m_sceneRoot->removeAllChildren();
+		}
+		
+		// Reinitialize scene components
+		initializeScene();
+		
+		// Rebuild lighting
+		initializeLightingFromConfig();
+		
+		// Rebuild coordinate system if it was visible
+		if (m_coordSystemRenderer && m_coordSystemRenderer->isVisible()) {
+			m_coordSystemRenderer->setVisible(false);
+			m_coordSystemRenderer->setVisible(true);
+		}
+		
+		// Rebuild checkerboard if it was visible
+		if (m_checkerboardVisible) {
+			setCheckerboardVisible(false);
+			setCheckerboardVisible(true);
+		}
+		
+		LOG_INF_S("SceneManager::rebuildScene: Scene rebuild completed successfully");
+		
+	} catch (const std::exception& e) {
+		LOG_ERR_S("SceneManager::rebuildScene: Exception during rebuild: " + std::string(e.what()));
+	} catch (...) {
+		LOG_ERR_S("SceneManager::rebuildScene: Unknown exception during rebuild");
+	}
 }

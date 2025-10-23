@@ -933,6 +933,25 @@ void RenderingManager::initializePresets()
 	legacyShaded.adaptiveQuality = false;
 	m_presets["Legacy Shaded"] = legacyShaded;
 
+	// NoShading Preset - similar to FreeCAD's no shading mode
+	RenderingSettings noShading;
+	noShading.name = "NoShading";
+	noShading.mode = 6; // NoShading
+	noShading.polygonMode = 0; // Fill
+	noShading.quality = 1; // Medium
+	noShading.fastMode = true;
+	noShading.transparencyType = 0; // None
+	noShading.smoothShading = false;
+	noShading.phongShading = false;
+	noShading.backfaceCulling = true;
+	noShading.depthTest = true;
+	noShading.depthWrite = true;
+	noShading.frustumCulling = false;
+	noShading.occlusionCulling = false;
+	noShading.adaptiveQuality = false;
+	noShading.backgroundColor = wxColour(240, 240, 240); // Light gray background
+	m_presets["NoShading"] = noShading;
+
 	LOG_INF_S("RenderingManager::initializePresets: Initialized " + std::to_string(m_presets.size()) + " presets");
 }
 
@@ -978,6 +997,9 @@ void RenderingManager::applyRenderingMode(const RenderingSettings& settings)
 		break;
 	case 4: // Shaded
 		applyShadedMode(settings);
+		break;
+	case 6: // NoShading
+		applyNoShadingMode(settings);
 		break;
 	default:
 		LOG_WRN_S("RenderingManager::applyRenderingMode: Unknown rendering mode " + std::to_string(settings.mode));
@@ -1091,6 +1113,28 @@ void RenderingManager::applyShadedMode(const RenderingSettings& settings)
 
 	// Configure material properties
 	configureMaterialProperties(settings);
+}
+
+void RenderingManager::applyNoShadingMode(const RenderingSettings& settings)
+{
+	// Enable solid rendering but disable lighting for no shading effect
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glDisable(GL_LIGHTING);
+	glDisable(GL_NORMALIZE);
+
+	// Set a uniform color for all surfaces (like FreeCAD's no shading mode)
+	// Use a neutral gray color
+	glColor3f(0.8f, 0.8f, 0.8f);
+
+	// Disable material properties to ensure uniform color
+	glDisable(GL_COLOR_MATERIAL);
+	glDisable(GL_TEXTURE_2D);
+
+	// Enable depth testing for proper geometry visibility
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+
+	LOG_INF_S("RenderingManager::applyNoShadingMode: Applied no shading mode");
 }
 
 void RenderingManager::applyQualitySettings(const RenderingSettings& settings)

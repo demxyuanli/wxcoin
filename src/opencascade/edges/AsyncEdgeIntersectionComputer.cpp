@@ -1,4 +1,5 @@
 #include "edges/AsyncEdgeIntersectionComputer.h"
+#include "async/AsyncEngineIntegration.h"
 #include "async/GeometryComputeTasks.h"
 #include "logger/Logger.h"
 #include <OpenCASCADE/TopExp_Explorer.hxx>
@@ -8,7 +9,7 @@
 
 namespace async {
 
-AsyncEdgeIntersectionComputer::AsyncEdgeIntersectionComputer(AsyncEngineIntegration* engine)
+AsyncEdgeIntersectionComputer::AsyncEdgeIntersectionComputer(class IAsyncEngine* engine)
     : m_engine(engine)
     , m_computing(false)
 {
@@ -56,32 +57,32 @@ void AsyncEdgeIntersectionComputer::computeIntersectionsAsync(
     try {
         m_engine->submitIntersectionTask(
             m_currentTaskId,
-            input,
-            [this, onComplete, onProgress, edgeCount](const ComputeResult<IntersectionComputeResult>& result) {
+            shape,
+            tolerance,
+            [this, onComplete, edgeCount](bool success, const std::vector<gp_Pnt>& points, const std::string& error) {
                 m_computing.store(false);
-                
-                if (result.success) {
-                    LOG_INF_S("AsyncEdgeIntersectionComputer: Found " + 
-                             std::to_string(result.data.points.size()) + " intersections from " + 
-                             std::to_string(edgeCount) + " edges in " +
-                             std::to_string(result.data.computeTime.count()) + "ms");
-                    
+
+                if (success) {
+                    LOG_INF_S("AsyncEdgeIntersectionComputer: Found " +
+                             std::to_string(points.size()) + " intersections from " +
+                             std::to_string(edgeCount) + " edges");
+
                     if (onComplete) {
-                        onComplete(result.data.points, true, "");
+                        onComplete(points, true, "");
                     }
                 } else {
-                    LOG_ERR_S("AsyncEdgeIntersectionComputer: Failed: " + result.errorMessage);
-                    
+                    LOG_ERR_S("AsyncEdgeIntersectionComputer: Failed: " + error);
+
                     if (onComplete) {
-                        onComplete({}, false, result.errorMessage);
+                        onComplete({}, false, error);
                     }
                 }
             }
         );
-        
+
         if (onProgress) {
-            m_engine->setProgressCallback([onProgress](const std::string& taskId, int progress, 
-                                                       const std::string& message) {
+            m_engine->setGlobalProgressCallback([onProgress](const std::string& taskId, int progress,
+                                                             const std::string& message) {
                 onProgress(progress, message);
             });
         }

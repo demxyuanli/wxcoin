@@ -23,6 +23,10 @@ public:
 	// Toggling APIs
 	void toggleEdgeType(EdgeType type, bool show, const MeshParameters& meshParams);
 	void setShowOriginalEdges(bool show, const MeshParameters& meshParams);
+	void extractOriginalEdgesOnly(double samplingDensity, double minLength, bool showLinesOnly,
+		const Quantity_Color& color, double width, const Quantity_Color& intersectionNodeColor,
+		double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape,
+		std::function<void(bool, const std::string&)> onComplete = nullptr);
 	void setShowFeatureEdges(bool show, const MeshParameters& meshParams);
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams);
 	void setShowFeatureEdges(bool show, double featureAngleDeg, double minLength, bool onlyConvex, bool onlyConcave, const MeshParameters& meshParams,
@@ -49,7 +53,7 @@ public:
 	// Async intersection computation
 	void computeIntersectionsAsync(
 		double tolerance,
-		async::AsyncEngineIntegration* engine,
+		class IAsyncEngine* engine,
 		std::function<void(size_t totalPoints, bool success)> onComplete,
 		std::function<void(int progress, const std::string& message)> onProgress = nullptr);
 	

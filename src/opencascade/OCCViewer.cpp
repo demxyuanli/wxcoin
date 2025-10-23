@@ -17,6 +17,7 @@
 #include "SceneManager.h"
 #include "logger/Logger.h"
 #include "Canvas.h"
+#include "config/LightingConfig.h"
 #include "ObjectTreePanel.h"
 #include "ViewRefreshManager.h"
 #include "config/EdgeSettingsConfig.h"
@@ -461,6 +462,100 @@ void OCCViewer::setAntiAliasing(bool enabled)
 	if (m_renderModeManager) {
 		m_renderModeManager->setAntiAliasing(enabled);
 	}
+}
+
+void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& settings)
+{
+	// Check if display mode actually changed to avoid unnecessary rebuilds
+	bool displayModeChanged = (m_displaySettings.displayMode != settings.displayMode);
+	bool edgeSettingsChanged = (m_displaySettings.showEdges != settings.showEdges);
+	bool pointViewSettingsChanged = (
+		m_displaySettings.showPointView != settings.showPointView ||
+		m_displaySettings.showSolidWithPointView != settings.showSolidWithPointView ||
+		m_displaySettings.pointSize != settings.pointSize ||
+		m_displaySettings.pointColor != settings.pointColor ||
+		m_displaySettings.pointShape != settings.pointShape
+	);
+
+	m_displaySettings = settings;
+
+	// Only apply changes if something actually changed
+	if (displayModeChanged) {
+		LOG_INF_S("OCCViewer::setDisplaySettings: Display mode changed, applying to geometries");
+		
+		// Apply display mode to all geometries
+		for (auto& geometry : m_geometries) {
+			if (geometry) {
+				geometry->setDisplayMode(settings.displayMode);
+				// Only force rebuild if the display mode change requires it
+				if (settings.displayMode == RenderingConfig::DisplayMode::NoShading ||
+					settings.displayMode == RenderingConfig::DisplayMode::Points ||
+					settings.displayMode == RenderingConfig::DisplayMode::Wireframe) {
+					MeshParameters defaultParams;
+					geometry->forceCoinRepresentationRebuild(defaultParams);
+				}
+			}
+		}
+	}
+
+	// Apply edge display only if changed
+	if (edgeSettingsChanged) {
+		LOG_INF_S("OCCViewer::setDisplaySettings: Edge settings changed");
+		setShowEdges(settings.showEdges);
+	}
+
+	// Apply point view settings only if changed
+	if (pointViewSettingsChanged) {
+		LOG_INF_S("OCCViewer::setDisplaySettings: Point view settings changed");
+		
+		for (auto& geometry : m_geometries) {
+			if (geometry) {
+				geometry->setShowPointView(settings.showPointView);
+				geometry->setShowSolidWithPointView(settings.showSolidWithPointView);
+				geometry->setPointViewSize(settings.pointSize);
+				geometry->setPointViewColor(settings.pointColor);
+				geometry->setPointViewShape(settings.pointShape);
+			}
+		}
+
+		// Request view update
+		if (m_viewUpdater) {
+			m_viewUpdater->requestPointViewToggled(true);
+		}
+	}
+
+	// Only request refresh if something actually changed
+	if (displayModeChanged || edgeSettingsChanged || pointViewSettingsChanged) {
+		LOG_INF_S("OCCViewer::setDisplaySettings: Settings applied successfully");
+
+		// Special handling for NoShading mode - ensure lighting is updated
+		if (displayModeChanged && settings.displayMode == RenderingConfig::DisplayMode::NoShading) {
+			LOG_INF_S("OCCViewer::setDisplaySettings: NoShading mode activated, ensuring lighting is disabled");
+
+			// Force lighting update to clear all lights for NoShading
+			if (m_sceneManager) {
+				// This will trigger the LightingConfig callback which will detect NoShading mode
+				LightingConfig& lightingConfig = LightingConfig::getInstance();
+				lightingConfig.applySettingsToScene();
+			}
+		}
+
+		if (m_viewUpdater) {
+			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::RENDERING_CHANGED), true);
+		}
+	} else {
+		LOG_INF_S("OCCViewer::setDisplaySettings: No changes detected, skipping update");
+	}
+}
+
+const RenderingConfig::DisplaySettings& OCCViewer::getDisplaySettings() const
+{
+	return m_displaySettings;
+}
+
+bool OCCViewer::isPointViewEnabled() const
+{
+	return m_displaySettings.showPointView;
 }
 
 bool OCCViewer::isWireframeMode() const

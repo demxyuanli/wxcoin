@@ -9,7 +9,7 @@
 #include "edges/ModularEdgeComponent.h"
 #include "edges/EdgeGenerationService.h"
 #include "edges/EdgeRenderApplier.h"
-#include "logger/Logger.h"
+#include "logger/AsyncLogger.h"
 #include <OpenCASCADE/TopExp_Explorer.hxx>
 #include <OpenCASCADE/TopoDS.hxx>
 #include <OpenCASCADE/TopAbs.hxx>
@@ -45,6 +45,71 @@ void EdgeDisplayManager::setShowOriginalEdges(bool show, const MeshParameters& m
     }
 
     updateAll(meshParams);
+}
+
+void EdgeDisplayManager::extractOriginalEdgesOnly(double samplingDensity, double minLength, bool showLinesOnly,
+	const Quantity_Color& color, double width, const Quantity_Color& intersectionNodeColor,
+	double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape,
+	std::function<void(bool, const std::string&)> onComplete) {
+
+	if (!m_geometries) {
+		if (onComplete) onComplete(false, "No geometries available");
+		return;
+	}
+
+	// Run extraction in a separate thread to avoid blocking UI
+	std::thread([this, samplingDensity, minLength, showLinesOnly, color, width,
+	             intersectionNodeColor, intersectionNodeSize, intersectionNodeShape, onComplete]() {
+
+		try {
+			// Store parameters for original edges (without intersection highlighting)
+			m_originalEdgeParams.samplingDensity = samplingDensity;
+			m_originalEdgeParams.minLength = minLength;
+			m_originalEdgeParams.showLinesOnly = showLinesOnly;
+			m_originalEdgeParams.color = color;
+			m_originalEdgeParams.width = width;
+			m_originalEdgeParams.highlightIntersectionNodes = false; // Key: disable intersection highlighting
+			m_originalEdgeParams.intersectionNodeColor = intersectionNodeColor;
+			m_originalEdgeParams.intersectionNodeSize = intersectionNodeSize;
+			m_originalEdgeParams.intersectionNodeShape = intersectionNodeShape;
+
+			EdgeGenerationService generator;
+			EdgeRenderApplier applier;
+
+			for (auto& g : *m_geometries) {
+				if (!g) continue;
+
+				// Ensure modular edge component exists
+				if (!g->modularEdgeComponent) {
+					g->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+				}
+
+				// Extract original edges only (without intersections)
+				generator.ensureOriginalEdges(g, samplingDensity, minLength, showLinesOnly,
+					color, width, false, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
+			}
+
+			LOG_INF_S_ASYNC("EdgeDisplayManager: Original edges extracted without intersections");
+
+			// Notify completion
+			if (onComplete) {
+				// Use wxWidgets thread-safe callback
+				wxTheApp->CallAfter([onComplete]() {
+					onComplete(true, "");
+				});
+			}
+
+		} catch (const std::exception& e) {
+			LOG_ERR_S_ASYNC("EdgeDisplayManager: Failed to extract original edges: " + std::string(e.what()));
+
+			if (onComplete) {
+				wxTheApp->CallAfter([onComplete, e]() {
+					onComplete(false, std::string(e.what()));
+				});
+			}
+		}
+
+	}).detach(); // Detach thread to run asynchronously
 }
 void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& meshParams) {
 	m_flags.showFeatureEdges = show;
@@ -293,7 +358,7 @@ void EdgeDisplayManager::applyFeatureEdgeAppearance(const Quantity_Color& color,
 void EdgeDisplayManager::setUseModularEdgeComponent(bool useModular) {
 	// Migration completed - always use modular edge component
 	if (!useModular) {
-		LOG_WRN_S("Legacy edge component no longer supported - using modular component");
+		LOG_WRN_S_ASYNC("Legacy edge component no longer supported - using modular component");
 	}
 }
 
@@ -337,12 +402,12 @@ void EdgeDisplayManager::setMeshEdgeAppearance(const MeshEdgeAppearance& appeara
 
 void EdgeDisplayManager::computeIntersectionsAsync(
 	double tolerance,
-	async::AsyncEngineIntegration* engine,
+	class IAsyncEngine* engine,
 	std::function<void(size_t totalPoints, bool success)> onComplete,
 	std::function<void(int progress, const std::string& message)> onProgress)
 {
 	if (!m_geometries || m_geometries->empty()) {
-		LOG_WRN_S("EdgeDisplayManager: No geometries to process");
+		LOG_WRN_S_ASYNC("EdgeDisplayManager: No geometries to process");
 		if (onComplete) {
 			onComplete(0, false);
 		}
@@ -350,12 +415,15 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 	}
 
 	if (m_intersectionRunning.load()) {
-		LOG_WRN_S("EdgeDisplayManager: Intersection computation already running");
+		LOG_WRN_S_ASYNC("EdgeDisplayManager: Intersection computation already running");
 		return;
 	}
 
 	m_intersectionRunning.store(true);
 	m_intersectionProgress.store(0);
+
+	// Enable intersection nodes display before starting computation
+	m_flags.showIntersectionNodes = true;
 
 	// Count total edges across all geometries for diagnostic
 	size_t totalEdges = 0;
@@ -370,13 +438,13 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 		if (edgeCount > 0) {
 			totalEdges += edgeCount;
 			geometriesWithEdges++;
-			LOG_INF_S("EdgeDisplayManager: Geometry '" + geom->getName() + "' has " + 
+			LOG_INF_S_ASYNC("EdgeDisplayManager: Geometry '" + geom->getName() + "' has " + 
 			         std::to_string(edgeCount) + " edges");
 		}
 	}
 
-	LOG_INF_S("EdgeDisplayManager: Starting multi-geometry intersection computation");
-	LOG_INF_S("EdgeDisplayManager: Total geometries: " + std::to_string(m_geometries->size()) + 
+	LOG_INF_S_ASYNC("EdgeDisplayManager: Starting multi-geometry intersection computation");
+	LOG_INF_S_ASYNC("EdgeDisplayManager: Total geometries: " + std::to_string(m_geometries->size()) + 
 	         ", geometries with edges: " + std::to_string(geometriesWithEdges) + 
 	         ", total edges: " + std::to_string(totalEdges));
 
@@ -396,12 +464,12 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 		}
 		
 		if (edgeCount == 0) {
-			LOG_INF_S("EdgeDisplayManager: Skipping geometry '" + geom->getName() + 
+			LOG_INF_S_ASYNC("EdgeDisplayManager: Skipping geometry '" + geom->getName() + 
 			         "' (no edges)");
 			continue;
 		}
 
-		LOG_INF_S("EdgeDisplayManager: Processing geometry " + std::to_string(i + 1) + "/" + 
+		LOG_INF_S_ASYNC("EdgeDisplayManager: Processing geometry " + std::to_string(i + 1) + "/" + 
 		         std::to_string(m_geometries->size()) + " '" + geom->getName() + 
 		         "' (" + std::to_string(edgeCount) + " edges)");
 
@@ -409,7 +477,7 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 			geom,
 			tolerance,
 			engine,
-			[this, i, totalGeometries, &completedCount, &totalIntersectionPoints, onComplete, geom, edgeCount, totalEdges]
+			[this, i, totalGeometries, &completedCount, &totalIntersectionPoints, onComplete, onProgress, geom, edgeCount, totalEdges]
 			(const std::vector<gp_Pnt>& points, bool success, const std::string& error) {
 				completedCount++;
 				totalIntersectionPoints += points.size();
@@ -417,15 +485,11 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 				int progress = static_cast<int>((completedCount * 100.0) / totalGeometries);
 				m_intersectionProgress.store(progress);
 
-				LOG_INF_S("EdgeDisplayManager: Geometry " + std::to_string(i + 1) + "/" + 
-				         std::to_string(totalGeometries) + " '" + geom->getName() + 
-				         "' completed: " + std::to_string(points.size()) + 
-				         " intersections found from " + std::to_string(edgeCount) + " edges");
+				LOG_INF_S_ASYNC("Found " + std::to_string(points.size()) + " intersections");
 
 				if (success && !points.empty()) {
 					if (geom->modularEdgeComponent) {
-						LOG_INF_S("EdgeDisplayManager: Creating intersection nodes for '" + geom->getName() + 
-						         "' (" + std::to_string(points.size()) + " points)");
+						LOG_INF_S_ASYNC("Creating intersection nodes");
 						
 						geom->modularEdgeComponent->createIntersectionNodesNode(
 							points,
@@ -442,10 +506,17 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 							m_sceneManager->getCanvas()->Refresh();
 						}
 						
-						LOG_INF_S("EdgeDisplayManager: Intersection nodes displayed for '" + geom->getName() + "'");
+						LOG_INF_S_ASYNC("Intersection nodes displayed");
+					}
+					
+					// Update progress callback only when computation is complete
+					if (onProgress && completedCount == totalGeometries) {
+						onProgress(100, "Processed " + std::to_string(completedCount) + "/" + 
+						          std::to_string(totalGeometries) + " geometries, " + 
+						          std::to_string(totalIntersectionPoints) + " intersections found");
 					}
 				} else if (!success) {
-					LOG_ERR_S("EdgeDisplayManager: Failed to compute intersections for '" + 
+					LOG_ERR_S_ASYNC("EdgeDisplayManager: Failed to compute intersections for '" + 
 					         geom->getName() + "': " + error);
 				}
 
@@ -453,9 +524,7 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 					m_intersectionRunning.store(false);
 					m_intersectionProgress.store(100);
 					
-					LOG_INF_S("EdgeDisplayManager: All geometries processed, total intersections: " + 
-					         std::to_string(totalIntersectionPoints) + " from " + 
-					         std::to_string(totalEdges) + " total edges");
+					LOG_INF_S_ASYNC("Found " + std::to_string(totalIntersectionPoints) + " total intersections");
 					
 					if (onComplete) {
 						onComplete(totalIntersectionPoints, true);
@@ -484,5 +553,5 @@ void EdgeDisplayManager::cancelIntersectionComputation() {
 	m_intersectionRunning.store(false);
 	m_intersectionProgress.store(0);
 	
-	LOG_INF_S("EdgeDisplayManager: Intersection computation cancelled");
+	LOG_INF_S_ASYNC("EdgeDisplayManager: Intersection computation cancelled");
 }

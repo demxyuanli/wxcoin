@@ -137,6 +137,13 @@ public:
 	void setShowEdges(bool showEdges) override;
 	void setAntiAliasing(bool enabled) override;
 	bool isWireframeMode() const override;
+
+	// Display settings
+	void setDisplaySettings(const RenderingConfig::DisplaySettings& settings) override;
+	const RenderingConfig::DisplaySettings& getDisplaySettings() const override;
+
+	// Point view helpers
+	bool isPointViewEnabled() const;
 	bool isShowEdges() const override;
 	bool isShowNormals() const;
 
@@ -396,6 +403,8 @@ private:
 	bool m_shadingMode;
 	bool m_showEdges;
 	bool m_antiAliasing;
+
+	RenderingConfig::DisplaySettings m_displaySettings;
 
 	MeshParameters m_meshParams;
 

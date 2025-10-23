@@ -95,6 +95,8 @@ public:
     // Display control
     void setEdgeDisplayType(EdgeType type, bool show);
     bool isEdgeDisplayTypeEnabled(EdgeType type) const;
+    void updateOriginalEdgesDisplay(SoSeparator* parentNode);
+    void updateIntersectionNodesDisplay(SoSeparator* parentNode);
     void updateEdgeDisplay(SoSeparator* parentNode);
 
     // Appearance control
@@ -132,7 +134,7 @@ public:
     void computeIntersectionsAsync(
         const TopoDS_Shape& shape,
         double tolerance,
-        async::AsyncEngineIntegration* engine,
+        class IAsyncEngine* engine,
         std::function<void(const std::vector<gp_Pnt>&, bool, const std::string&)> onComplete,
         std::function<void(int, const std::string&)> onProgress = nullptr);
     

@@ -305,7 +305,8 @@ std::vector<std::string> RenderingConfig::getAvailableDisplayModes()
 		"HiddenLine",
 		"SolidWireframe",
 		"Points",
-		"Transparent"
+		"Transparent",
+		"NoShading"
 	};
 }
 
@@ -318,6 +319,7 @@ std::string RenderingConfig::getDisplayModeName(DisplayMode mode)
 	case DisplayMode::SolidWireframe: return "SolidWireframe";
 	case DisplayMode::Points: return "Points";
 	case DisplayMode::Transparent: return "Transparent";
+	case DisplayMode::NoShading: return "NoShading";
 	default: return "Solid";
 	}
 }
@@ -330,6 +332,7 @@ RenderingConfig::DisplayMode RenderingConfig::getDisplayModeFromName(const std::
 	if (name == "SolidWireframe") return DisplayMode::SolidWireframe;
 	if (name == "Points") return DisplayMode::Points;
 	if (name == "Transparent") return DisplayMode::Transparent;
+	if (name == "NoShading") return DisplayMode::NoShading;
 	return DisplayMode::Solid;
 }
 

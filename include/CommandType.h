@@ -81,6 +81,7 @@ namespace cmd {
 		ShowMeshEdges, // New: show mesh edges
 		ShowFaceNormals, // New: show face normals
 		FaceQueryTool, // New: face query tool
+		ShowPointView, // New: show point view
 
 		// Texture modes
 		TextureModeDecal,
@@ -113,6 +114,15 @@ namespace cmd {
 
 		// Render Preview
 		RenderPreviewSystem,
+
+		// Render Modes (similar to FreeCAD)
+		RenderModeNoShading,
+		RenderModePoints,
+		RenderModeWireframe,
+		RenderModeFlatLines,
+		RenderModeShaded,
+		RenderModeShadedWireframe,
+		RenderModeHiddenLine,
 
 		// Flat Widgets Example
 		ShowFlatWidgetsExample,
@@ -191,6 +201,7 @@ namespace cmd {
 			{CommandType::ShowMeshEdges, "SHOW_MESH_EDGES"},
 			{CommandType::ShowFaceNormals, "SHOW_FACE_NORMALS"},
 			{CommandType::FaceQueryTool, "FACE_QUERY_TOOL"},
+			{CommandType::ShowPointView, "SHOW_POINT_VIEW"},
 
 			{CommandType::TextureModeDecal, "TEXTURE_MODE_DECAL"},
 			{CommandType::TextureModeModulate, "TEXTURE_MODE_MODULATE"},
@@ -215,6 +226,13 @@ namespace cmd {
 
 			{CommandType::HelpAbout, "HELP_ABOUT"},
 			{CommandType::RenderPreviewSystem, "RENDER_PREVIEW_SYSTEM"},
+			{CommandType::RenderModeNoShading, "RENDER_MODE_NO_SHADING"},
+			{CommandType::RenderModePoints, "RENDER_MODE_POINTS"},
+			{CommandType::RenderModeWireframe, "RENDER_MODE_WIREFRAME"},
+			{CommandType::RenderModeFlatLines, "RENDER_MODE_FLAT_LINES"},
+			{CommandType::RenderModeShaded, "RENDER_MODE_SHADED"},
+			{CommandType::RenderModeShadedWireframe, "RENDER_MODE_SHADED_WIREFRAME"},
+			{CommandType::RenderModeHiddenLine, "RENDER_MODE_HIDDEN_LINE"},
 			{CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
 			{CommandType::DockLayoutConfig, "DOCK_LAYOUT_CONFIG"},
 
@@ -290,6 +308,7 @@ namespace cmd {
 			{"SHOW_MESH_EDGES", CommandType::ShowMeshEdges},
 			{"SHOW_FACE_NORMALS", CommandType::ShowFaceNormals},
 			{"FACE_QUERY_TOOL", CommandType::FaceQueryTool},
+			{"SHOW_POINT_VIEW", CommandType::ShowPointView},
 
 			{"TEXTURE_MODE_DECAL", CommandType::TextureModeDecal},
 			{"TEXTURE_MODE_MODULATE", CommandType::TextureModeModulate},
@@ -314,6 +333,13 @@ namespace cmd {
 
 			{"HELP_ABOUT", CommandType::HelpAbout},
 			{"RENDER_PREVIEW_SYSTEM", CommandType::RenderPreviewSystem},
+			{"RENDER_MODE_NO_SHADING", CommandType::RenderModeNoShading},
+			{"RENDER_MODE_POINTS", CommandType::RenderModePoints},
+			{"RENDER_MODE_WIREFRAME", CommandType::RenderModeWireframe},
+			{"RENDER_MODE_FLAT_LINES", CommandType::RenderModeFlatLines},
+			{"RENDER_MODE_SHADED", CommandType::RenderModeShaded},
+			{"RENDER_MODE_SHADED_WIREFRAME", CommandType::RenderModeShadedWireframe},
+			{"RENDER_MODE_HIDDEN_LINE", CommandType::RenderModeHiddenLine},
 			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample},
 			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig}
 		};

@@ -77,6 +77,7 @@ public:
     void applyPointsMode(const RenderingSettings& settings);
     void applyHiddenLineMode(const RenderingSettings& settings);
     void applyShadedMode(const RenderingSettings& settings);
+    void applyNoShadingMode(const RenderingSettings& settings);
     
     // Shading and material methods
     void enablePhongShading();

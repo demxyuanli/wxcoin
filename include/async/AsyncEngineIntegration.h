@@ -1,13 +1,49 @@
 #pragma once
 
-#include "async/AsyncComputeEngine.h"
-#include "async/GeometryComputeTasks.h"
 #include <wx/event.h>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/gp_Pnt.hxx>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
+#include <functional>
+#include <string>
 
 class wxFrame;
+
+// Forward declarations
+struct IntersectionComputeResult;
+class AsyncComputeEngine;
+class GeometryComputeTasks;
+
+// Abstract interface for async engine operations
+class IAsyncEngine {
+public:
+    virtual ~IAsyncEngine() = default;
+
+    // Submit intersection task
+    virtual void submitIntersectionTask(
+        const std::string& taskId,
+        const TopoDS_Shape& shape,
+        double tolerance,
+        std::function<void(bool, const std::vector<gp_Pnt>&, const std::string&)> onComplete
+    ) = 0;
+
+    // Set global progress callback
+    virtual void setGlobalProgressCallback(
+        std::function<void(const std::string&, int, const std::string&)> callback
+    ) = 0;
+
+    // Cancel task by ID
+    virtual void cancelTask(const std::string& taskId) = 0;
+
+    // Cancel all tasks
+    virtual void cancelAllTasks() = 0;
+};
+
+// Include implementation headers after interface
+#include "async/AsyncComputeEngine.h"
+#include "async/GeometryComputeTasks.h"
 
 namespace async {
 
@@ -75,7 +111,7 @@ wxDECLARE_EVENT(wxEVT_ASYNC_INTERSECTION_RESULT, AsyncIntersectionResultEvent);
 wxDECLARE_EVENT(wxEVT_ASYNC_MESH_RESULT, AsyncMeshResultEvent);
 wxDECLARE_EVENT(wxEVT_ASYNC_TASK_PROGRESS, AsyncEngineResultEvent);
 
-class AsyncEngineIntegration {
+class AsyncEngineIntegration : public IAsyncEngine {
 public:
     // GUI mode constructor
     explicit AsyncEngineIntegration(wxFrame* mainFrame);
@@ -106,8 +142,14 @@ public:
     // Submit intersection task with callback
     void submitIntersectionTask(
         const std::string& taskId,
-        const IntersectionComputeInput& input,
-        std::function<void(const ComputeResult<IntersectionComputeResult>&)> onComplete);
+        const TopoDS_Shape& shape,
+        double tolerance,
+        std::function<void(bool, const std::vector<gp_Pnt>&, const std::string&)> onComplete) override;
+
+    // Set global progress callback
+    void setGlobalProgressCallback(
+        std::function<void(const std::string&, int, const std::string&)> callback
+    ) override;
 
     // Set progress callback
     void setProgressCallback(std::function<void(const std::string&, int, const std::string&)> callback);
@@ -127,8 +169,8 @@ public:
         m_engine->setSharedData(key, data);
     }
     
-    void cancelTask(const std::string& taskId);
-    void cancelAllTasks();
+    void cancelTask(const std::string& taskId) override;
+    void cancelAllTasks() override;
     
     TaskStatistics getStatistics() const;
     
@@ -138,6 +180,8 @@ private:
     void postIntersectionResult(const std::string& taskId,
                               const ComputeResult<IntersectionComputeResult>& result);
     
+    void postSimpleIntersectionResult(const std::string& taskId,
+                                     const ComputeResult<IntersectionComputeResult>& result);
     void postIntersectionResultWithCallback(const std::string& taskId,
                               const ComputeResult<IntersectionComputeResult>& result);
     
@@ -160,6 +204,7 @@ private:
     // Callback storage for main thread execution
     std::mutex m_callbackMutex;
     std::unordered_map<std::string, std::function<void(const ComputeResult<IntersectionComputeResult>&)>> m_intersectionCallbacks;
+    std::unordered_map<std::string, std::function<void(bool, const std::vector<gp_Pnt>&, const std::string&)>> m_simpleIntersectionCallbacks;
     std::unordered_map<std::string, ComputeResult<IntersectionComputeResult>> m_pendingResults;
 };
 

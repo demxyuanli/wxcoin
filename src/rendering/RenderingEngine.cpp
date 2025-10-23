@@ -90,11 +90,26 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
 
 	try {
 		auto contextStartTime = std::chrono::high_resolution_clock::now();
-		if (!m_canvas->SetCurrent(*m_glContext)) {
-			LOG_ERR_S("Failed to set GL context");
+		
+		// Check if GL context is still valid
+		if (!m_glContext) {
+			LOG_ERR_S("RenderingEngine::renderWithoutSwap: GL context is null");
 			m_isRendering = false;
 			return;
 		}
+		
+		if (!m_canvas->SetCurrent(*m_glContext)) {
+			LOG_ERR_S("RenderingEngine::renderWithoutSwap: Failed to set GL context");
+			m_isRendering = false;
+			return;
+		}
+		
+		// Verify OpenGL context is working
+		GLenum err = glGetError();
+		if (err != GL_NO_ERROR) {
+			LOG_WRN_S("RenderingEngine::renderWithoutSwap: OpenGL error before rendering: " + std::to_string(err));
+		}
+		
 		auto contextEndTime = std::chrono::high_resolution_clock::now();
 		auto contextDuration = std::chrono::duration_cast<std::chrono::microseconds>(contextEndTime - contextStartTime);
 

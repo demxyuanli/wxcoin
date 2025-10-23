@@ -151,7 +151,8 @@ public:
 		HiddenLine,     // Hidden line display
 		SolidWireframe, // Solid + wireframe combination
 		Points,         // Points display
-		Transparent     // Transparent display
+		Transparent,    // Transparent display
+		NoShading       // No shading display - like FreeCAD's no shading mode
 	};
 
 	struct DisplaySettings {
@@ -163,6 +164,13 @@ public:
 		Quantity_Color edgeColor;
 		Quantity_Color vertexColor;
 
+		// Point view settings
+		bool showPointView;
+		bool showSolidWithPointView; // Show solid geometry when point view is enabled
+		double pointSize;
+		Quantity_Color pointColor;
+		int pointShape; // 0 = square, 1 = circle, 2 = triangle
+
 		DisplaySettings()
 			: displayMode(DisplayMode::Solid)
 			, showEdges(false)
@@ -171,6 +179,11 @@ public:
 			, vertexSize(2.0)
 			, edgeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
 			, vertexColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
+			, showPointView(false)
+			, showSolidWithPointView(true)
+			, pointSize(3.0)
+			, pointColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
+			, pointShape(0)
 		{
 		}
 	};

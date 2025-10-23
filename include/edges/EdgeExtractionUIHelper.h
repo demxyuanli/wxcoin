@@ -65,6 +65,13 @@ public:
     void updateProgress(int progress, const std::string& message);
     
     /**
+     * @brief Set indeterminate progress (animated blue bar)
+     * @param indeterminate Whether to show indeterminate progress
+     * @param message Status message
+     */
+    void setIndeterminateProgress(bool indeterminate, const std::string& message = "");
+    
+    /**
      * @brief Set statistics
      * @param stats Operation statistics
      */

@@ -53,6 +53,7 @@ void RenderingModePanel::createUI()
 	m_renderingModeChoice->Append("Debug Points");
 	m_renderingModeChoice->Append("Legacy Solid");
 	m_renderingModeChoice->Append("Legacy Hidden Line");
+	m_renderingModeChoice->Append("NoShading");
 	m_renderingModeChoice->SetSelection(0);
 	presetsBoxSizer->Add(m_renderingModeChoice, 0, wxEXPAND | wxALL, 4);
 	renderingSizer->Add(presetsBoxSizer, 0, wxEXPAND | wxALL, 4);
@@ -81,6 +82,7 @@ void RenderingModePanel::createUI()
 	m_legacyChoice->Append("Points");
 	m_legacyChoice->Append("Hidden Line");
 	m_legacyChoice->Append("Shaded");
+	m_legacyChoice->Append("NoShading");
 	m_legacyChoice->SetSelection(4);
 	m_legacyChoice->Enable(false);
 	legacyBoxSizer->Add(m_legacyChoice, 0, wxEXPAND | wxALL, 4);
@@ -144,15 +146,21 @@ void RenderingModePanel::onLegacyModeChanged(wxCommandEvent& event)
 		int selection = m_legacyChoice->GetSelection();
 		wxString modeName = m_legacyChoice->GetString(selection);
 
+		// Map selection index to mode value
+		int modeValue = selection;
+		if (selection == 5) { // NoShading is at index 5, but mode value is 6
+			modeValue = 6;
+		}
+
 		// Use the existing setRenderingMode method
 		if (m_renderingManager->hasActiveConfiguration()) {
 			int activeId = m_renderingManager->getActiveConfigurationId();
-			m_renderingManager->setRenderingMode(activeId, selection);
+			m_renderingManager->setRenderingMode(activeId, modeValue);
 		}
 
 		notifyParameterChanged();
 
-		LOG_INF_S("RenderingModePanel::onLegacyModeChanged: Applied legacy mode '" + modeName.ToStdString() + "'");
+		LOG_INF_S("RenderingModePanel::onLegacyModeChanged: Applied legacy mode '" + modeName.ToStdString() + "' (mode=" + std::to_string(modeValue) + ")");
 	}
 	if (m_parentDialog && m_parentDialog->getRenderCanvas()) {
 		auto canvas = m_parentDialog->getRenderCanvas();
@@ -174,6 +182,8 @@ void RenderingModePanel::updateLegacyChoiceFromCurrentMode()
 		case 2: selection = 2; break;
 		case 3: selection = 3; break;
 		case 4: selection = 4; break;
+		case 6: selection = 5; break; // NoShading mode
+		default: selection = 4; break;
 		}
 		m_legacyChoice->SetSelection(selection);
 	}

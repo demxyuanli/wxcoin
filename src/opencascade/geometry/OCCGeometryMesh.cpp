@@ -1,4 +1,5 @@
 #include "geometry/OCCGeometryMesh.h"
+#include "geometry/GeometryRenderContext.h"
 #include "edges/ModularEdgeComponent.h"
 #include "logger/Logger.h"
 #include "rendering/RenderingToolkitAPI.h"
@@ -15,6 +16,11 @@
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoPointSet.h>
+#include <Inventor/nodes/SoSphere.h>
+#include <Inventor/nodes/SoCone.h>
+#include <Inventor/nodes/SoTranslation.h>
+#include <Inventor/nodes/SoScale.h>
 #include <OpenCASCADE/TopAbs.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -46,6 +52,7 @@ void OCCGeometryMesh::setCoinNode(SoSeparator* node)
 {
     if (m_coinNode) {
         m_coinNode->unref();
+        m_coinNode = nullptr;
     }
     m_coinNode = node;
     if (m_coinNode) {
@@ -383,12 +390,30 @@ void OCCGeometryMesh::buildCoinRepresentation(
         return;
     }
 
-    // Create or clear coin node
+    // Create or clear coin node with error checking
     if (!m_coinNode) {
-        m_coinNode = new SoSeparator();
-        m_coinNode->ref();
+        try {
+            m_coinNode = new SoSeparator();
+            if (m_coinNode) {
+                m_coinNode->ref();
+            } else {
+                LOG_ERR_S("OCCGeometryMesh::buildCoinRepresentation: Failed to create SoSeparator");
+                return;
+            }
+        } catch (const std::exception& e) {
+            LOG_ERR_S("OCCGeometryMesh::buildCoinRepresentation: Exception creating SoSeparator: " + std::string(e.what()));
+            return;
+        }
     } else {
-        m_coinNode->removeAllChildren();
+        try {
+            m_coinNode->removeAllChildren();
+        } catch (const std::exception& e) {
+            LOG_ERR_S("OCCGeometryMesh::buildCoinRepresentation: Exception removing children: " + std::string(e.what()));
+            // Try to recover by creating a new node
+            m_coinNode->unref();
+            m_coinNode = new SoSeparator();
+            m_coinNode->ref();
+        }
     }
 
     // Check if mesh parameters changed - if so, clear mesh-dependent edge nodes
@@ -474,6 +499,17 @@ void OCCGeometryMesh::buildCoinRepresentation(
             static_cast<float>(wColor.Blue())
         );
         material->transparency.setValue(static_cast<float>(context.material.transparency));
+    }
+    else if (context.display.displayMode == RenderingConfig::DisplayMode::NoShading) {
+        // NoShading mode: uniform color with BASE_COLOR lighting model - use diffuse color directly
+        material->diffuseColor.setValue(0.8f, 0.8f, 0.8f); // Uniform gray color
+        material->ambientColor.setValue(0.0f, 0.0f, 0.0f);  // No ambient contribution
+        material->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular
+        material->emissiveColor.setValue(0.0f, 0.0f, 0.0f); // No emissive (BASE_COLOR uses diffuse)
+        material->shininess.setValue(0.0f); // No shininess
+        material->transparency.setValue(static_cast<float>(context.material.transparency));
+
+        LOG_INF_S("OCCGeometryMesh: Applied NoShading material (BASE_COLOR model with diffuse color)");
     }
     else {
         // Solid mode: use material colors with enhancement
@@ -570,16 +606,28 @@ void OCCGeometryMesh::buildCoinRepresentation(
         auto& manager = RenderingToolkitAPI::getManager();
         auto backend = manager.getRenderBackend("Coin3D");
         if (backend) {
+            // Determine if faces should be visible
+            bool shouldShowFaces = context.display.facesVisible;
+            if (context.display.showPointView) {
+                // When point view is enabled, faces visibility depends on showSolidWithPointView
+                shouldShowFaces = shouldShowFaces && context.display.showSolidWithPointView;
+            }
+
             auto sceneNode = backend->createSceneNode(shape, params, context.display.selected,
                 context.material.diffuseColor, context.material.ambientColor,
                 context.material.specularColor, context.material.emissiveColor,
                 context.material.shininess, context.material.transparency);
-            if (sceneNode && context.display.facesVisible) {
+            if (sceneNode && shouldShowFaces) {
                 SoSeparator* meshNode = sceneNode.get();
                 meshNode->ref();
                 m_coinNode->addChild(meshNode);
             }
         }
+    }
+
+    // ===== Point view rendering =====
+    if (context.display.showPointView) {
+        createPointViewRepresentation(shape, params, context.display);
     }
 
     // ===== Set visibility =====
@@ -750,4 +798,146 @@ int OCCGeometryMesh::getGeometryFaceIdForTriangle(int triangleIndex) const {
     }
 
     return -1;
+}
+
+void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
+                                                   const ::DisplaySettings& displaySettings)
+{
+    try {
+        // Convert MeshParameters to OCCMeshConverter::MeshParameters
+        OCCMeshConverter::MeshParameters occParams;
+        occParams.deflection = params.deflection;
+        occParams.angularDeflection = params.angularDeflection;
+        occParams.relative = params.relative;
+        occParams.inParallel = params.inParallel;
+
+        // Generate mesh to extract vertices
+        TriangleMesh mesh = OCCMeshConverter::convertToMesh(shape, occParams);
+
+        if (mesh.vertices.empty()) {
+            LOG_WRN_S("No vertices found for point view");
+            return;
+        }
+
+        // Create point view separator
+        SoSeparator* pointViewSep = new SoSeparator();
+
+        // Create material for points
+        SoMaterial* pointMaterial = new SoMaterial();
+        Standard_Real r, g, b;
+        displaySettings.pointViewColor.Values(r, g, b, Quantity_TOC_RGB);
+        pointMaterial->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+        pointMaterial->emissiveColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b)); // Make points more visible
+        pointViewSep->addChild(pointMaterial);
+
+        // Create draw style for point size
+        SoDrawStyle* pointStyle = new SoDrawStyle();
+        pointStyle->pointSize.setValue(static_cast<float>(displaySettings.pointViewSize));
+        pointViewSep->addChild(pointStyle);
+
+        // Create coordinates
+        SoCoordinate3* coords = new SoCoordinate3();
+        coords->point.setNum(static_cast<int>(mesh.vertices.size()));
+
+        // Set vertex coordinates
+        SbVec3f* points = new SbVec3f[mesh.vertices.size()];
+        for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+            const gp_Pnt& vertex = mesh.vertices[i];
+            points[i].setValue(
+                static_cast<float>(vertex.X()),
+                static_cast<float>(vertex.Y()),
+                static_cast<float>(vertex.Z())
+            );
+        }
+        coords->point.setValues(0, static_cast<int>(mesh.vertices.size()), points);
+        delete[] points;
+
+        pointViewSep->addChild(coords);
+
+        // Create point set with shape-specific rendering
+        SoPointSet* pointSet = new SoPointSet();
+        pointSet->numPoints.setValue(static_cast<int>(mesh.vertices.size()));
+
+        // Add shape-specific rendering based on pointShape
+        if (displaySettings.pointViewShape == 1) { // Circle
+            // For circles, we can use SoSphere nodes at each point
+            // This is more expensive but gives true circular points
+            SoSeparator* circleSep = new SoSeparator();
+            circleSep->addChild(pointMaterial);
+            
+            for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+                const gp_Pnt& vertex = mesh.vertices[i];
+                
+                SoSeparator* sphereSep = new SoSeparator();
+                
+                // Translation to vertex position
+                SoTranslation* translation = new SoTranslation();
+                translation->translation.setValue(
+                    static_cast<float>(vertex.X()),
+                    static_cast<float>(vertex.Y()),
+                    static_cast<float>(vertex.Z())
+                );
+                sphereSep->addChild(translation);
+                
+                // Scale for point size
+                SoScale* scale = new SoScale();
+                float scaleFactor = static_cast<float>(displaySettings.pointViewSize) / 10.0f;
+                scale->scaleFactor.setValue(scaleFactor, scaleFactor, scaleFactor);
+                sphereSep->addChild(scale);
+                
+                // Create sphere
+                SoSphere* sphere = new SoSphere();
+                sphereSep->addChild(sphere);
+                
+                circleSep->addChild(sphereSep);
+            }
+            
+            pointViewSep->addChild(circleSep);
+        } else if (displaySettings.pointViewShape == 2) { // Triangle
+            // For triangles, we can use SoCone nodes (triangular cross-section)
+            SoSeparator* triangleSep = new SoSeparator();
+            triangleSep->addChild(pointMaterial);
+            
+            for (size_t i = 0; i < mesh.vertices.size(); ++i) {
+                const gp_Pnt& vertex = mesh.vertices[i];
+                
+                SoSeparator* coneSep = new SoSeparator();
+                
+                // Translation to vertex position
+                SoTranslation* translation = new SoTranslation();
+                translation->translation.setValue(
+                    static_cast<float>(vertex.X()),
+                    static_cast<float>(vertex.Y()),
+                    static_cast<float>(vertex.Z())
+                );
+                coneSep->addChild(translation);
+                
+                // Scale for point size
+                SoScale* scale = new SoScale();
+                float scaleFactor = static_cast<float>(displaySettings.pointViewSize) / 10.0f;
+                scale->scaleFactor.setValue(scaleFactor, scaleFactor, scaleFactor);
+                coneSep->addChild(scale);
+                
+                // Create cone (triangular cross-section)
+                SoCone* cone = new SoCone();
+                coneSep->addChild(cone);
+                
+                triangleSep->addChild(coneSep);
+            }
+            
+            pointViewSep->addChild(triangleSep);
+        } else {
+            // Default: Square points (SoPointSet)
+            pointViewSep->addChild(pointSet);
+        }
+
+        // Add to main coin node
+        pointViewSep->ref();
+        m_coinNode->addChild(pointViewSep);
+
+        LOG_INF_S("Created point view with " + std::to_string(mesh.vertices.size()) + " points, shape: " + std::to_string(displaySettings.pointViewShape));
+
+    } catch (const std::exception& e) {
+        LOG_ERR_S("Exception in createPointViewRepresentation: " + std::string(e.what()));
+    }
 }

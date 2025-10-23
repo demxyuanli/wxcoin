@@ -10,7 +10,9 @@
 #include "renderpreview/BackgroundManager.h"
 #include "config/ConfigManager.h"
 #include "config/LightingConfig.h"
+#include "config/RenderingConfig.h"
 #include "config/FontManager.h"
+#include "OCCViewer.h"
 #include "logger/Logger.h"
 #include <wx/msgdlg.h>
 #include <wx/filename.h>
@@ -340,46 +342,128 @@ void GlobalSettingsPanel::OnGlobalReset(wxCommandEvent& event)
 
 void GlobalSettingsPanel::OnMainApply(wxCommandEvent& event)
 {
-	// Apply preview-approved lighting to main viewport via LightingConfig
+	// Apply preview-approved settings to main viewport
 	try {
+		// Apply lighting settings
 		LightingConfig& lightingConfig = LightingConfig::getInstance();
 
-		// Clear existing lights in config
-		auto& existingLights = lightingConfig.getAllLights();
-		for (int i = static_cast<int>(existingLights.size()) - 1; i >= 0; --i) {
-			lightingConfig.removeLight(i);
-		}
+		// Get current rendering mode to determine lighting strategy
+		int renderingMode = getRenderingMode();
+		bool isNoShadingMode = (renderingMode == 6); // NoShading mode
 
-		// Convert preview RenderLightSettings to main LightSettings
-		std::vector<RenderLightSettings> previewLights = getLights();
-		for (const auto& rl : previewLights) {
-			LightSettings ls;
-			ls.enabled = rl.enabled;
-			ls.name = rl.name;
-			ls.type = rl.type; // expects "directional" | "point" | "spot"
-			ls.positionX = rl.positionX;
-			ls.positionY = rl.positionY;
-			ls.positionZ = rl.positionZ;
-			ls.directionX = rl.directionX;
-			ls.directionY = rl.directionY;
-			ls.directionZ = rl.directionZ;
-			ls.color = Quantity_Color(rl.color.Red() / 255.0, rl.color.Green() / 255.0, rl.color.Blue() / 255.0, Quantity_TOC_RGB);
-			ls.intensity = rl.intensity;
-			ls.spotAngle = rl.spotAngle;
-			ls.spotExponent = rl.spotExponent;
-			ls.constantAttenuation = rl.constantAttenuation;
-			ls.linearAttenuation = rl.linearAttenuation;
-			ls.quadraticAttenuation = rl.quadraticAttenuation;
+		if (isNoShadingMode) {
+			LOG_INF_S("GlobalSettingsPanel::OnMainApply: NoShading mode detected, preserving basic lighting");
 
-			lightingConfig.addLight(ls);
+			// For NoShading mode, keep a minimal ambient light to ensure objects remain visible
+			// Clear existing lights but add a basic ambient light
+			auto& existingLights = lightingConfig.getAllLights();
+			while (existingLights.size() > 0) {
+				lightingConfig.removeLight(0);
+			}
+
+			// Add a basic ambient light for NoShading mode
+			LightSettings ambientLight;
+			ambientLight.enabled = true;
+			ambientLight.name = "NoShading Ambient";
+			ambientLight.type = "directional";
+			ambientLight.directionX = 0.0;
+			ambientLight.directionY = 0.0;
+			ambientLight.directionZ = -1.0;
+			ambientLight.color = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB); // White
+			ambientLight.intensity = 0.8; // Moderate intensity
+			lightingConfig.addLight(ambientLight);
+
+			LOG_INF_S("GlobalSettingsPanel::OnMainApply: Added ambient light for NoShading mode");
+		} else {
+			// For other modes, apply preview lights normally
+			LOG_INF_S("GlobalSettingsPanel::OnMainApply: Applying preview lighting settings");
+
+			// Clear existing lights in config - use safer method
+			auto& existingLights = lightingConfig.getAllLights();
+			while (existingLights.size() > 0) {
+				lightingConfig.removeLight(0);
+			}
+
+			// Convert preview RenderLightSettings to main LightSettings
+			std::vector<RenderLightSettings> previewLights = getLights();
+			for (const auto& rl : previewLights) {
+				LightSettings ls;
+				ls.enabled = rl.enabled;
+				ls.name = rl.name;
+				ls.type = rl.type; // expects "directional" | "point" | "spot"
+				ls.positionX = rl.positionX;
+				ls.positionY = rl.positionY;
+				ls.positionZ = rl.positionZ;
+				ls.directionX = rl.directionX;
+				ls.directionY = rl.directionY;
+				ls.directionZ = rl.directionZ;
+				ls.color = Quantity_Color(rl.color.Red() / 255.0, rl.color.Green() / 255.0, rl.color.Blue() / 255.0, Quantity_TOC_RGB);
+				ls.intensity = rl.intensity;
+				ls.spotAngle = rl.spotAngle;
+				ls.spotExponent = rl.spotExponent;
+				ls.constantAttenuation = rl.constantAttenuation;
+				ls.linearAttenuation = rl.linearAttenuation;
+				ls.quadraticAttenuation = rl.quadraticAttenuation;
+
+				lightingConfig.addLight(ls);
+			}
 		}
 
 		// Persist and notify main scene to rebuild lighting
 		lightingConfig.saveToFile();
 		lightingConfig.applySettingsToScene();
 
-		wxMessageBox(wxT("Applied preview lighting to main viewport"), wxT("Main Apply"), wxOK | wxICON_INFORMATION);
-		LOG_INF_S("GlobalSettingsPanel::OnMainApply: Applied preview lighting to main viewport");
+		// Apply rendering mode settings to main viewport
+		RenderingConfig& renderingConfig = RenderingConfig::getInstance();
+		
+		// Convert rendering mode to DisplayMode
+		RenderingConfig::DisplayMode displayMode;
+		switch (renderingMode) {
+		case 0: displayMode = RenderingConfig::DisplayMode::Solid; break;
+		case 1: displayMode = RenderingConfig::DisplayMode::Wireframe; break;
+		case 2: displayMode = RenderingConfig::DisplayMode::Points; break;
+		case 3: displayMode = RenderingConfig::DisplayMode::HiddenLine; break;
+		case 4: displayMode = RenderingConfig::DisplayMode::Solid; break; // Shaded
+		case 5: displayMode = RenderingConfig::DisplayMode::SolidWireframe; break;
+		case 6: displayMode = RenderingConfig::DisplayMode::NoShading; break;
+		default: displayMode = RenderingConfig::DisplayMode::Solid; break;
+		}
+
+		// Get current display settings to preserve existing object states
+		auto displaySettings = renderingConfig.getDisplaySettings();
+		
+		// Only update display mode if it's actually different
+		if (displaySettings.displayMode != displayMode) {
+			LOG_INF_S("GlobalSettingsPanel::OnMainApply: Changing display mode from " + 
+				std::to_string(static_cast<int>(displaySettings.displayMode)) + 
+				" to " + std::to_string(static_cast<int>(displayMode)));
+			
+			displaySettings.displayMode = displayMode;
+			renderingConfig.setDisplaySettings(displaySettings);
+
+			// Apply to main OCCViewer if available
+			auto occViewer = RenderingConfig::getOCCViewerInstance();
+			if (occViewer) {
+				// Check if there are existing geometries before applying
+				auto existingGeometries = occViewer->getAllGeometry();
+				if (!existingGeometries.empty()) {
+					LOG_INF_S("GlobalSettingsPanel::OnMainApply: Found " + 
+						std::to_string(existingGeometries.size()) + 
+						" existing geometries, applying display mode carefully");
+					
+					occViewer->setDisplaySettings(displaySettings);
+					LOG_INF_S("GlobalSettingsPanel::OnMainApply: Applied rendering mode to main OCCViewer");
+				} else {
+					LOG_INF_S("GlobalSettingsPanel::OnMainApply: No existing geometries found, applying display mode");
+					occViewer->setDisplaySettings(displaySettings);
+				}
+			}
+		} else {
+			LOG_INF_S("GlobalSettingsPanel::OnMainApply: Display mode unchanged, skipping application");
+		}
+
+		wxMessageBox(wxT("Applied preview settings to main viewport"), wxT("Main Apply"), wxOK | wxICON_INFORMATION);
+		LOG_INF_S("GlobalSettingsPanel::OnMainApply: Applied preview lighting and rendering mode to main viewport");
 	}
 	catch (const std::exception& e) {
 		LOG_ERR_S(std::string("GlobalSettingsPanel::OnMainApply: Exception: ") + e.what());

@@ -16,6 +16,7 @@ public:
 	void requestGeometryChanged(bool immediate) const;
 	void requestNormalsToggled(bool immediate) const;
 	void requestEdgesToggled(bool immediate) const;
+	void requestPointViewToggled(bool immediate) const;
 	void requestCameraMoved(bool immediate) const;
 	void refreshCanvas(bool eraseBackground) const;
 

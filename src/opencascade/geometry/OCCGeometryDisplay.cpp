@@ -10,6 +10,11 @@ OCCGeometryDisplay::OCCGeometryDisplay()
     , m_showVertices(false)
     , m_vertexSize(3.0)
     , m_vertexColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
+    , m_showPointView(false)
+    , m_showSolidWithPointView(true)
+    , m_pointViewSize(3.0)
+    , m_pointViewColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
+    , m_pointViewShape(0)
     , m_wireframeMode(false)
     , m_wireframeWidth(1.0)
     , m_wireframeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
@@ -22,7 +27,58 @@ OCCGeometryDisplay::OCCGeometryDisplay()
 
 void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
 {
+    // Check if display mode actually changed to avoid unnecessary updates
+    if (m_displayMode == mode) {
+        LOG_INF_S("OCCGeometryDisplay::setDisplayMode: Display mode unchanged, skipping update");
+        return;
+    }
+    
+    RenderingConfig::DisplayMode oldMode = m_displayMode;
     m_displayMode = mode;
+    
+    LOG_INF_S("OCCGeometryDisplay::setDisplayMode: Changing from " + 
+        std::to_string(static_cast<int>(oldMode)) + 
+        " to " + std::to_string(static_cast<int>(mode)));
+    
+    // Apply the display mode settings
+    switch (mode) {
+    case RenderingConfig::DisplayMode::Wireframe:
+        m_wireframeMode = true;
+        m_facesVisible = false;
+        break;
+    case RenderingConfig::DisplayMode::Points:
+        m_wireframeMode = false;
+        m_facesVisible = false;
+        m_showPointView = true;
+        m_showSolidWithPointView = false; // Only show points
+        break;
+    case RenderingConfig::DisplayMode::NoShading:
+        m_wireframeMode = false;
+        m_facesVisible = true;
+        // NoShading mode will be handled by material settings
+        break;
+    case RenderingConfig::DisplayMode::HiddenLine:
+        m_wireframeMode = true;
+        m_facesVisible = false;
+        // Hidden line mode will be handled by rendering backend
+        break;
+    case RenderingConfig::DisplayMode::SolidWireframe:
+        m_wireframeMode = false;
+        m_facesVisible = true;
+        m_showEdges = true; // Show edges overlay
+        break;
+    case RenderingConfig::DisplayMode::Transparent:
+        m_wireframeMode = false;
+        m_facesVisible = true;
+        // Transparency will be handled by material settings
+        break;
+    case RenderingConfig::DisplayMode::Solid:
+    default:
+        m_wireframeMode = false;
+        m_facesVisible = true;
+        m_showPointView = false;
+        break;
+    }
 }
 
 void OCCGeometryDisplay::setShowEdges(bool enabled)
@@ -130,4 +186,33 @@ void OCCGeometryDisplay::setFeatureEdgeDisplay(bool enable)
 void OCCGeometryDisplay::setNormalDisplay(bool enable)
 {
     // This would be handled by normal visualization
+}
+
+void OCCGeometryDisplay::setShowPointView(bool enabled)
+{
+    m_showPointView = enabled;
+}
+
+void OCCGeometryDisplay::setPointViewSize(double size)
+{
+    if (size < 0.1) size = 0.1;
+    if (size > 20.0) size = 20.0;
+    m_pointViewSize = size;
+}
+
+void OCCGeometryDisplay::setPointViewColor(const Quantity_Color& color)
+{
+    m_pointViewColor = color;
+}
+
+void OCCGeometryDisplay::setShowSolidWithPointView(bool enabled)
+{
+    m_showSolidWithPointView = enabled;
+}
+
+void OCCGeometryDisplay::setPointViewShape(int shape)
+{
+    if (shape < 0) shape = 0;
+    if (shape > 2) shape = 2; // 0 = square, 1 = circle, 2 = triangle
+    m_pointViewShape = shape;
 }

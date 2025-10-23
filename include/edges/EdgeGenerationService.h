@@ -45,7 +45,7 @@ public:
 	void computeIntersectionsAsync(
 		std::shared_ptr<OCCGeometry>& geom,
 		double tolerance,
-		async::AsyncEngineIntegration* engine,
+		class IAsyncEngine* engine,
 		std::function<void(const std::vector<gp_Pnt>&, bool, const std::string&)> onComplete,
 		std::function<void(int, const std::string&)> onProgress = nullptr);
 };

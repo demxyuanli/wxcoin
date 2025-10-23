@@ -7,7 +7,7 @@
 struct RenderingSettings {
     bool enabled;
     std::string name;
-    int mode;              // 0=Solid, 1=Wireframe, 2=Points, 3=HiddenLine, 4=Shaded, 5=ShadedWireframe
+    int mode;              // 0=Solid, 1=Wireframe, 2=Points, 3=HiddenLine, 4=Shaded, 5=ShadedWireframe, 6=NoShading
     
     // Quality settings
     int quality;           // 0=Low, 1=Medium, 2=High, 3=Ultra

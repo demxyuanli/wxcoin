@@ -3,6 +3,7 @@
 #include "flatui/FlatUIFrame.h"
 #include "flatui/FlatUIBar.h"
 #include "flatui/FlatUIHomeMenu.h"
+#include "ViewRefreshManager.h"
 #include <wx/srchctrl.h>
 #include <wx/textctrl.h>
 #include <wx/panel.h>
@@ -102,6 +103,7 @@ enum {
 	ID_SHOW_MESH_EDGES, // New: show mesh edges
 	ID_SHOW_FACE_NORMALS, // New: show face normals
 	ID_FACE_QUERY_TOOL, // New: face query tool
+	ID_SHOW_POINT_VIEW, // New: show point view
 	ID_TOGGLE_SLICE,
 	ID_TOGGLE_OUTLINE, // New: toggle outline display
 
@@ -137,6 +139,15 @@ enum {
 
 	// Render Preview System
 	ID_RENDER_PREVIEW_SYSTEM,
+	
+	// Render Modes (similar to FreeCAD)
+	ID_RENDER_MODE_NO_SHADING,
+	ID_RENDER_MODE_POINTS,
+	ID_RENDER_MODE_WIREFRAME,
+	ID_RENDER_MODE_FLAT_LINES,
+	ID_RENDER_MODE_SHADED,
+	ID_RENDER_MODE_SHADED_WIREFRAME,
+	ID_RENDER_MODE_HIDDEN_LINE,
 	
     ID_DOCKING_SAVE_LAYOUT = wxID_HIGHEST + 2000,
     ID_DOCKING_LOAD_LAYOUT,
@@ -311,6 +322,9 @@ public:
 	void OnPerformancePreset(wxCommandEvent& event);
 	void OnBalancedPreset(wxCommandEvent& event);
 	void OnQualityPreset(wxCommandEvent& event);
+
+	// Point view refresh handler
+	void OnPointViewToggled(ViewRefreshManager::RefreshReason reason);
 
 	// Keyboard event handler
 	void OnKeyDown(wxKeyEvent& event);

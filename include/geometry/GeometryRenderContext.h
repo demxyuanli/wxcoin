@@ -44,6 +44,7 @@ struct TextureData {
  * @brief Display settings for geometry rendering
  */
 struct DisplaySettings {
+    RenderingConfig::DisplayMode displayMode{RenderingConfig::DisplayMode::Solid};
     bool wireframeMode{false};
     bool facesVisible{true};
     bool visible{true};
@@ -52,6 +53,13 @@ struct DisplaySettings {
     Quantity_Color wireframeColor{0.0, 0.0, 0.0, Quantity_TOC_RGB};
     bool cullFace{true};
     TopAbs_ShapeEnum shapeType{TopAbs_SOLID};
+
+        // Point view settings
+        bool showPointView{false};
+        bool showSolidWithPointView{true};
+        double pointViewSize{3.0};
+        Quantity_Color pointViewColor{1.0, 0.0, 0.0, Quantity_TOC_RGB};
+        int pointViewShape{0}; // 0 = square, 1 = circle, 2 = triangle
 };
 
 /**
@@ -103,6 +111,7 @@ struct GeometryRenderContext {
         ctx.texture.mode = geom.getTextureMode();
         
         // Display
+        ctx.display.displayMode = geom.getDisplayMode();
         ctx.display.wireframeMode = geom.isWireframeMode();
         ctx.display.facesVisible = geom.isFacesVisible();
         ctx.display.visible = geom.isVisible();
@@ -113,6 +122,13 @@ struct GeometryRenderContext {
         if (!geom.getShape().IsNull()) {
             ctx.display.shapeType = geom.getShape().ShapeType();
         }
+
+    // Point view settings
+    ctx.display.showPointView = geom.isShowPointViewEnabled();
+    ctx.display.showSolidWithPointView = geom.isShowSolidWithPointView();
+    ctx.display.pointViewSize = geom.getPointViewSize();
+    ctx.display.pointViewColor = geom.getPointViewColor();
+    ctx.display.pointViewShape = geom.getPointViewShape();
         
         // Blend
         ctx.blend.blendMode = geom.getBlendMode();

@@ -3,7 +3,7 @@
 #include "edges/EdgeLODManager.h"
 #include "edges/renderers/MeshEdgeRenderer.h"
 #include "edges/AsyncEdgeIntersectionComputer.h"
-#include "logger/Logger.h"
+#include "logger/AsyncLogger.h"
 #include <OpenCASCADE/TopExp_Explorer.hxx>
 #include <OpenCASCADE/TopoDS.hxx>
 #include <OpenCASCADE/TopAbs.hxx>
@@ -31,7 +31,7 @@ ModularEdgeComponent::ModularEdgeComponent() {
         m_featureRenderer = factory.getRenderer(EdgeType::Feature);
         m_meshRenderer = factory.getRenderer(EdgeType::Mesh);
     } catch (const std::exception& e) {
-        LOG_ERR_S("Failed to initialize edge processors: " + std::string(e.what()));
+        LOG_ERR_S_ASYNC("Failed to initialize edge processors: " + std::string(e.what()));
     }
 }
 
@@ -59,7 +59,7 @@ void ModularEdgeComponent::extractOriginalEdges(
     IntersectionNodeShape intersectionNodeShape) {
 
     if (!m_originalExtractor || !m_originalRenderer) {
-        LOG_WRN_S("Original edge extractor/renderer not available");
+        LOG_WRN_S_ASYNC("Original edge extractor/renderer not available");
         return;
     }
 
@@ -71,23 +71,8 @@ void ModularEdgeComponent::extractOriginalEdges(
     cleanupEdgeNode(originalEdgeNode);
     originalEdgeNode = m_originalRenderer->generateNode(points, color, width);
 
-    // Handle intersection node highlighting
-    if (highlightIntersectionNodes) {
-        // Extract intersection points
-        std::vector<gp_Pnt> intersectionPoints;
-        auto originalExtractor = static_cast<OriginalEdgeExtractor*>(m_originalExtractor.get());
-        originalExtractor->findEdgeIntersections(shape, intersectionPoints, 0.0); // Use adaptive tolerance
-
-        if (!intersectionPoints.empty()) {
-            cleanupEdgeNode(intersectionNodesNode);
-            intersectionNodesNode = createIntersectionNodesNode(intersectionPoints, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
-        } else {
-            cleanupEdgeNode(intersectionNodesNode);
-        }
-    } else {
-        // Clean up intersection nodes if highlighting is disabled
-        cleanupEdgeNode(intersectionNodesNode);
-    }
+    // Handle intersection node highlighting - now handled separately by async computation
+    // Do not compute intersections here to avoid premature display
 
 }
 
@@ -175,7 +160,7 @@ void ModularEdgeComponent::extractFeatureEdges(
     double width) {
 
     if (!m_featureExtractor || !m_featureRenderer) {
-        LOG_WRN_S("Feature edge extractor/renderer not available");
+        LOG_WRN_S_ASYNC("Feature edge extractor/renderer not available");
         return;
     }
 
@@ -195,7 +180,7 @@ void ModularEdgeComponent::extractMeshEdges(
     const Quantity_Color& color,
     double width) {
     if (!m_meshExtractor || !m_meshRenderer) {
-        LOG_WRN_S("Mesh edge extractor/renderer not available");
+        LOG_WRN_S_ASYNC("Mesh edge extractor/renderer not available");
         return;
     }
 
@@ -214,7 +199,7 @@ void ModularEdgeComponent::extractSilhouetteEdges(
     const gp_Pnt& cameraPos) {
 
     if (!m_silhouetteExtractor) {
-        LOG_WRN_S("Silhouette edge extractor not available");
+        LOG_WRN_S_ASYNC("Silhouette edge extractor not available");
         return;
     }
 
@@ -275,6 +260,69 @@ bool ModularEdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
     }
 }
 
+void ModularEdgeComponent::updateOriginalEdgesDisplay(SoSeparator* parentNode) {
+    if (!parentNode) return;
+
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+
+    // Remove existing edge nodes (except intersection nodes)
+    for (int i = parentNode->getNumChildren() - 1; i >= 0; --i) {
+        SoNode* child = parentNode->getChild(i);
+        if (child == originalEdgeNode || child == featureEdgeNode ||
+            child == meshEdgeNode || child == highlightEdgeNode ||
+            child == normalLineNode || child == faceNormalLineNode ||
+            child == silhouetteEdgeNode) {
+            parentNode->removeChild(i);
+        }
+    }
+
+    // Add current edge nodes (except intersection nodes)
+    if (originalEdgeNode && edgeFlags.showOriginalEdges) {
+        parentNode->addChild(originalEdgeNode);
+    }
+    if (featureEdgeNode && edgeFlags.showFeatureEdges) {
+        parentNode->addChild(featureEdgeNode);
+    }
+    if (meshEdgeNode && edgeFlags.showMeshEdges) {
+        parentNode->addChild(meshEdgeNode);
+    }
+    if (highlightEdgeNode && edgeFlags.showHighlightEdges) {
+        parentNode->addChild(highlightEdgeNode);
+    }
+    if (normalLineNode && edgeFlags.showNormalLines) {
+        parentNode->addChild(normalLineNode);
+    } else {
+        if (!normalLineNode && edgeFlags.showNormalLines) {
+            LOG_WRN_S_ASYNC("ModularEdgeComponent::updateOriginalEdgesDisplay - showNormalLines=true but normalLineNode is null");
+        }
+    }
+    if (faceNormalLineNode && edgeFlags.showFaceNormalLines) {
+        parentNode->addChild(faceNormalLineNode);
+    }
+    if (silhouetteEdgeNode) {
+        parentNode->addChild(silhouetteEdgeNode);
+    }
+}
+
+void ModularEdgeComponent::updateIntersectionNodesDisplay(SoSeparator* parentNode) {
+    if (!parentNode) return;
+
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+
+    // Remove existing intersection nodes
+    for (int i = parentNode->getNumChildren() - 1; i >= 0; --i) {
+        SoNode* child = parentNode->getChild(i);
+        if (child == intersectionNodesNode) {
+            parentNode->removeChild(i);
+        }
+    }
+
+    // Add intersection nodes if enabled
+    if (intersectionNodesNode && edgeFlags.showIntersectionNodes) {
+        parentNode->addChild(intersectionNodesNode);
+    }
+}
+
 void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
     if (!parentNode) return;
 
@@ -308,7 +356,7 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
         parentNode->addChild(normalLineNode);
     } else {
         if (!normalLineNode && edgeFlags.showNormalLines) {
-            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay - showNormalLines=true but normalLineNode is null");
+            LOG_WRN_S_ASYNC("ModularEdgeComponent::updateEdgeDisplay - showNormalLines=true but normalLineNode is null");
         }
     }
     if (faceNormalLineNode && edgeFlags.showFaceNormalLines) {
@@ -339,12 +387,12 @@ void ModularEdgeComponent::applyAppearanceToEdgeNode(
                     try {
                         m_originalRenderer->updateAppearance(originalEdgeNode, color, width, style);
                     } catch (...) {
-                        LOG_WRN_S("ModularEdgeComponent: Exception in updateAppearance for original edges");
+                        LOG_WRN_S_ASYNC("ModularEdgeComponent: Exception in updateAppearance for original edges");
                         // Node might be corrupted, clean it up
                         cleanupEdgeNode(originalEdgeNode);
                     }
                 } else {
-                    LOG_WRN_S("ModularEdgeComponent: Invalid originalEdgeNode pointer detected");
+                    LOG_WRN_S_ASYNC("ModularEdgeComponent: Invalid originalEdgeNode pointer detected");
                     cleanupEdgeNode(originalEdgeNode);
                 }
             }
@@ -356,11 +404,11 @@ void ModularEdgeComponent::applyAppearanceToEdgeNode(
                     try {
                         m_featureRenderer->updateAppearance(featureEdgeNode, color, width, style);
                     } catch (...) {
-                        LOG_WRN_S("ModularEdgeComponent: Exception in updateAppearance for feature edges");
+                        LOG_WRN_S_ASYNC("ModularEdgeComponent: Exception in updateAppearance for feature edges");
                         cleanupEdgeNode(featureEdgeNode);
                     }
                 } else {
-                    LOG_WRN_S("ModularEdgeComponent: Invalid featureEdgeNode pointer detected");
+                    LOG_WRN_S_ASYNC("ModularEdgeComponent: Invalid featureEdgeNode pointer detected");
                     cleanupEdgeNode(featureEdgeNode);
                 }
             }
@@ -372,11 +420,11 @@ void ModularEdgeComponent::applyAppearanceToEdgeNode(
                     try {
                         m_meshRenderer->updateAppearance(meshEdgeNode, color, width, style);
                     } catch (...) {
-                        LOG_WRN_S("ModularEdgeComponent: Exception in updateAppearance for mesh edges");
+                        LOG_WRN_S_ASYNC("ModularEdgeComponent: Exception in updateAppearance for mesh edges");
                         cleanupEdgeNode(meshEdgeNode);
                     }
                 } else {
-                    LOG_WRN_S("ModularEdgeComponent: Invalid meshEdgeNode pointer detected");
+                    LOG_WRN_S_ASYNC("ModularEdgeComponent: Invalid meshEdgeNode pointer detected");
                     cleanupEdgeNode(meshEdgeNode);
                 }
             }
@@ -390,11 +438,11 @@ void ModularEdgeComponent::applyAppearanceToEdgeNode(
                     try {
                         updateIntersectionNodesAppearance(intersectionNodesNode, color, width);
                     } catch (...) {
-                        LOG_WRN_S("ModularEdgeComponent: Exception in updateAppearance for intersection nodes");
+                        LOG_WRN_S_ASYNC("ModularEdgeComponent: Exception in updateAppearance for intersection nodes");
                         cleanupEdgeNode(intersectionNodesNode);
                     }
                 } else {
-                    LOG_WRN_S("ModularEdgeComponent: Invalid intersectionNodesNode pointer detected");
+                    LOG_WRN_S_ASYNC("ModularEdgeComponent: Invalid intersectionNodesNode pointer detected");
                     cleanupEdgeNode(intersectionNodesNode);
                 }
             }
@@ -447,7 +495,7 @@ void ModularEdgeComponent::generateHighlightEdgeNode() {
 
 void ModularEdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, double length) {
     if (!m_meshRenderer) {
-        LOG_WRN_S("ModularEdgeComponent::generateNormalLineNode - m_meshRenderer is null");
+        LOG_WRN_S_ASYNC("ModularEdgeComponent::generateNormalLineNode - m_meshRenderer is null");
         return;
     }
 
@@ -461,7 +509,7 @@ void ModularEdgeComponent::generateNormalLineNode(const TriangleMesh& mesh, doub
     
     if (normalLineNode) {
     } else {
-        LOG_WRN_S("ModularEdgeComponent::generateNormalLineNode - Normal line node is null after generation");
+        LOG_WRN_S_ASYNC("ModularEdgeComponent::generateNormalLineNode - Normal line node is null after generation");
     }
 }
 
@@ -667,7 +715,7 @@ void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
             ptrValue == 0xFEEEFEEEFEEEFEEEULL ||  // Other debug patterns
             ptrValue == 0xBAADF00DBAADF00DULL ||
             ptrValue == 0xDEADBEEFDEADBEEFULL) {
-            LOG_WRN_S("ModularEdgeComponent: Invalid pointer pattern detected in cleanupEdgeNode (0x" +
+            LOG_WRN_S_ASYNC("ModularEdgeComponent: Invalid pointer pattern detected in cleanupEdgeNode (0x" +
                      std::to_string(ptrValue) + "), skipping unref");
             node = nullptr;
             return;
@@ -675,7 +723,7 @@ void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
 
         // Additional check: pointer should be aligned (SoSeparator objects are typically 8-byte aligned)
         if (ptrValue % sizeof(void*) != 0) {
-            LOG_WRN_S("ModularEdgeComponent: Unaligned pointer detected in cleanupEdgeNode (0x" +
+            LOG_WRN_S_ASYNC("ModularEdgeComponent: Unaligned pointer detected in cleanupEdgeNode (0x" +
                      std::to_string(ptrValue) + "), skipping unref");
             node = nullptr;
             return;
@@ -686,7 +734,7 @@ void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
         MEMORY_BASIC_INFORMATION mbi;
         if (VirtualQuery(node, &mbi, sizeof(mbi)) == 0) {
             // VirtualQuery failed - invalid memory
-            LOG_WRN_S("ModularEdgeComponent: VirtualQuery failed for pointer in cleanupEdgeNode (0x" +
+            LOG_WRN_S_ASYNC("ModularEdgeComponent: VirtualQuery failed for pointer in cleanupEdgeNode (0x" +
                      std::to_string(ptrValue) + "), skipping unref");
             node = nullptr;
             return;
@@ -695,7 +743,7 @@ void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
         // Check if memory is committed and accessible
         if (mbi.State != MEM_COMMIT ||
             (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
-            LOG_WRN_S("ModularEdgeComponent: Invalid memory protection for pointer in cleanupEdgeNode (0x" +
+            LOG_WRN_S_ASYNC("ModularEdgeComponent: Invalid memory protection for pointer in cleanupEdgeNode (0x" +
                      std::to_string(ptrValue) + "), skipping unref");
             node = nullptr;
             return;
@@ -708,13 +756,13 @@ void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
             // This is safer than accessing vtable directly
             volatile int refCount = node->getRefCount(); // This should not crash if object is valid
             if (refCount < 0) {
-                LOG_WRN_S("ModularEdgeComponent: Invalid refCount detected in cleanupEdgeNode (" +
+                LOG_WRN_S_ASYNC("ModularEdgeComponent: Invalid refCount detected in cleanupEdgeNode (" +
                          std::to_string(refCount) + "), skipping unref");
                 node = nullptr;
                 return;
             }
         } catch (...) {
-            LOG_WRN_S("ModularEdgeComponent: Exception during refCount check in cleanupEdgeNode (0x" +
+            LOG_WRN_S_ASYNC("ModularEdgeComponent: Exception during refCount check in cleanupEdgeNode (0x" +
                      std::to_string(ptrValue) + "), skipping unref");
             node = nullptr;
             return;
@@ -723,11 +771,11 @@ void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
         // If we reach here, the pointer should be valid
         try {
             node->unref();
-            LOG_DBG_S("ModularEdgeComponent: Successfully unref'd node");
+            LOG_DBG_S_ASYNC("ModularEdgeComponent: Successfully unref'd node");
         } catch (const std::exception& e) {
-            LOG_ERR_S("ModularEdgeComponent: Exception during node->unref(): " + std::string(e.what()));
+            LOG_ERR_S_ASYNC("ModularEdgeComponent: Exception during node->unref(): " + std::string(e.what()));
         } catch (...) {
-            LOG_ERR_S("ModularEdgeComponent: Unknown exception during node->unref()");
+            LOG_ERR_S_ASYNC("ModularEdgeComponent: Unknown exception during node->unref()");
         }
         node = nullptr;
     }
@@ -764,12 +812,12 @@ void ModularEdgeComponent::clearEdgeNode(EdgeType type) {
 void ModularEdgeComponent::computeIntersectionsAsync(
     const TopoDS_Shape& shape,
     double tolerance,
-    async::AsyncEngineIntegration* engine,
+    class IAsyncEngine* engine,
     std::function<void(const std::vector<gp_Pnt>&, bool, const std::string&)> onComplete,
     std::function<void(int, const std::string&)> onProgress)
 {
     if (!engine) {
-        LOG_ERR_S("ModularEdgeComponent: AsyncEngineIntegration is null");
+        LOG_ERR_S_ASYNC("ModularEdgeComponent: AsyncEngineIntegration is null");
         if (onComplete) {
             onComplete({}, false, "AsyncEngineIntegration is null");
         }
@@ -777,7 +825,7 @@ void ModularEdgeComponent::computeIntersectionsAsync(
     }
 
     if (m_computingIntersections.load()) {
-        LOG_WRN_S("ModularEdgeComponent: Intersection computation already in progress");
+        LOG_WRN_S_ASYNC("ModularEdgeComponent: Intersection computation already in progress");
         return;
     }
 
@@ -787,7 +835,7 @@ void ModularEdgeComponent::computeIntersectionsAsync(
         edgeCount++;
     }
 
-    LOG_INF_S("ModularEdgeComponent: Processing shape with " + std::to_string(edgeCount) + " edges");
+    LOG_INF_S_ASYNC("ModularEdgeComponent: Processing shape with " + std::to_string(edgeCount) + " edges");
 
     if (!m_asyncIntersectionComputer) {
         m_asyncIntersectionComputer = std::make_unique<async::AsyncEdgeIntersectionComputer>(engine);
@@ -795,30 +843,66 @@ void ModularEdgeComponent::computeIntersectionsAsync(
 
     m_computingIntersections.store(true);
 
-    LOG_INF_S("ModularEdgeComponent: Starting async intersection computation (" + 
+    LOG_INF_S_ASYNC("ModularEdgeComponent: Starting async intersection computation (" + 
              std::to_string(edgeCount) + " edges)");
     
-    // Use async intersection computer (which uses optimized OriginalEdgeExtractor)
-    m_asyncIntersectionComputer->computeIntersectionsAsync(
-        shape,
-        tolerance,
-        [this, onComplete, edgeCount](const std::vector<gp_Pnt>& points, bool success, const std::string& error) {
-            m_computingIntersections.store(false);
-            
-            LOG_INF_S("ModularEdgeComponent: Processing completed for " + 
-                     std::to_string(edgeCount) + " edges: " + 
-                     std::to_string(points.size()) + " intersections found");
-            
-            if (onComplete) {
-                onComplete(points, success, error);
+    // Use progressive intersection detection directly
+    if (m_originalExtractor) {
+        auto originalExtractor = static_cast<OriginalEdgeExtractor*>(m_originalExtractor.get());
+        
+        std::vector<gp_Pnt> allIntersections;
+        
+        // Batch completion callback - display intersections as they're found
+        auto onBatchComplete = [this, &allIntersections](const std::vector<gp_Pnt>& batchPoints) {
+            if (!batchPoints.empty()) {
+                // Only show simple intersection count in status bar
+                LOG_INF_S_ASYNC("Found " + std::to_string(batchPoints.size()) + " intersections");
+
+                // Create intersection nodes for this batch
+                createIntersectionNodesNode(
+                    batchPoints,
+                    Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // Red color
+                    3.0, // Size
+                    IntersectionNodeShape::Point
+                );
+
+                // Request UI refresh to display the new intersection nodes
+                // Note: We can't directly update the scene graph here because we don't have the parent node context
+                // The intersection nodes will be displayed when the geometry's display is updated
+                LOG_INF_S_ASYNC("Intersection nodes created, will be displayed on next refresh");
             }
-        },
-        [onProgress](int progress, const std::string& message) {
+        };
+        
+        // Progress callback
+        auto onProgressCallback = [onProgress](int progress, const std::string& message) {
             if (onProgress) {
                 onProgress(progress, message);
             }
+        };
+        
+        // Use progressive intersection detection
+        originalExtractor->findEdgeIntersectionsProgressive(
+            shape,
+            allIntersections,
+            tolerance,
+            onBatchComplete,
+            onProgressCallback
+        );
+        
+        m_computingIntersections.store(false);
+        
+        LOG_INF_S_ASYNC("Found " + std::to_string(allIntersections.size()) + " total intersections");
+        
+        if (onComplete) {
+            onComplete(allIntersections, true, "");
         }
-    );
+    } else {
+        LOG_ERR_S_ASYNC("ModularEdgeComponent: OriginalEdgeExtractor not available");
+        m_computingIntersections.store(false);
+        if (onComplete) {
+            onComplete({}, false, "OriginalEdgeExtractor not available");
+        }
+    }
 }
 
 void ModularEdgeComponent::cancelIntersectionComputation() {

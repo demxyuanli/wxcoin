@@ -1,6 +1,6 @@
 #include "edges/extractors/OriginalEdgeExtractor.h"
 #include "edges/EdgeGeometryCache.h"
-#include "logger/Logger.h"
+#include "logger/AsyncLogger.h"
 #include "edges/EdgeIntersectionAccelerator.h"  // BVH acceleration
 #include <TopoDS.hxx>
 #include <TopExp_Explorer.hxx>
@@ -18,6 +18,10 @@
 #include <limits>
 #include <cmath>
 #include <algorithm>
+#include <tbb/tbb.h>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
+#include <tbb/concurrent_vector.h>
 #include <shared_mutex>
 
 OriginalEdgeExtractor::OriginalEdgeExtractor() {}
@@ -591,7 +595,7 @@ void OriginalEdgeExtractor::findEdgeIntersections(
         edges.push_back(TopoDS::Edge(exp.Current()));
     }
 
-    LOG_INF_S("OriginalEdgeExtractor: Detecting intersections, edges=" +
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Detecting intersections, edges=" +
               std::to_string(edges.size()));
 
     // Generate cache key based on shape pointer and tolerance
@@ -608,7 +612,7 @@ void OriginalEdgeExtractor::findEdgeIntersections(
         [this, &edges, adaptiveTolerance]() -> std::vector<gp_Pnt> {
             // Cache miss - compute intersections
             std::vector<gp_Pnt> tempIntersections;
-            LOG_INF_S("Computing intersections (cache miss) using optimized spatial grid (" +
+            LOG_INF_S_ASYNC("Computing intersections (cache miss) using optimized spatial grid (" +
                       std::to_string(edges.size()) + " edges)");
             findEdgeIntersectionsFromEdges(edges, tempIntersections, adaptiveTolerance);
             return tempIntersections;
@@ -1227,5 +1231,284 @@ void OriginalEdgeExtractor::checkEdgeIntersection(
             intersectionPoints.push_back(intersectionPoint);
         }
     }
+}
+
+// ============================================================================
+// Progressive Display Implementation
+// ============================================================================
+
+void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
+    const TopoDS_Shape& shape,
+    std::vector<gp_Pnt>& intersectionPoints,
+    double tolerance,
+    std::function<void(const std::vector<gp_Pnt>&)> onBatchComplete,
+    std::function<void(int, const std::string&)> onProgress) {
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Starting progressive intersection detection");
+    
+    // Extract edges first
+    std::vector<TopoDS_Edge> edges;
+    for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+        edges.push_back(TopoDS::Edge(exp.Current()));
+    }
+    
+    if (edges.empty()) {
+        LOG_WRN_S("OriginalEdgeExtractor: No edges found in shape");
+        return;
+    }
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Found " + std::to_string(edges.size()) + " edges");
+    
+    // For small number of edges, use simple method
+    if (edges.size() < 50) {
+        findEdgeIntersectionsSimple(edges, intersectionPoints, tolerance);
+        if (onBatchComplete && !intersectionPoints.empty()) {
+            onBatchComplete(intersectionPoints);
+        }
+        return;
+    }
+    
+    // Build spatial grid and edge data
+    std::vector<EdgeData> edgeData;
+    edgeData.reserve(edges.size());
+    
+    // Calculate global bounding box
+    AABB globalBbox;
+    for (const auto& edge : edges) {
+        Standard_Real first, last;
+        Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
+        if (curve.IsNull()) continue;
+        
+        EdgeData data(edge, tolerance * 2.0);
+        edgeData.push_back(data);
+        globalBbox.Add(gp_Pnt(data.bbox.minX, data.bbox.minY, data.bbox.minZ));
+        globalBbox.Add(gp_Pnt(data.bbox.maxX, data.bbox.maxY, data.bbox.maxZ));
+    }
+    
+    if (edgeData.empty()) {
+        LOG_WRN_S("OriginalEdgeExtractor: No valid edges found");
+        return;
+    }
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Built spatial grid with " + std::to_string(edgeData.size()) + " valid edges");
+    
+    // Use progressive TBB implementation
+    findIntersectionsProgressiveTBB(edgeData, intersectionPoints, tolerance, onBatchComplete, onProgress);
+}
+
+void OriginalEdgeExtractor::findIntersectionsProgressiveTBB(
+    const std::vector<EdgeData>& edgeData,
+    std::vector<gp_Pnt>& intersectionPoints,
+    double tolerance,
+    std::function<void(const std::vector<gp_Pnt>&)> onBatchComplete,
+    std::function<void(int, const std::string&)> onProgress) {
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Starting TBB progressive intersection detection");
+    
+    // Calculate optimal grid dimensions
+    AABB globalBbox;
+    for (const auto& data : edgeData) {
+        globalBbox.Add(gp_Pnt(data.bbox.minX, data.bbox.minY, data.bbox.minZ));
+        globalBbox.Add(gp_Pnt(data.bbox.maxX, data.bbox.maxY, data.bbox.maxZ));
+    }
+    
+    double sizeX = globalBbox.maxX - globalBbox.minX;
+    double sizeY = globalBbox.maxY - globalBbox.minY;
+    double sizeZ = globalBbox.maxZ - globalBbox.minZ;
+    
+    const int targetEdgesPerCell = 8;
+    double totalVolume = sizeX * sizeY * sizeZ;
+    double avgCellVolume = totalVolume / (edgeData.size() / targetEdgesPerCell);
+    double cellSize = std::cbrt(avgCellVolume);
+    
+    int gridSizeX = std::max(1, static_cast<int>(sizeX / cellSize));
+    int gridSizeY = std::max(1, static_cast<int>(sizeY / cellSize));
+    int gridSizeZ = std::max(1, static_cast<int>(sizeZ / cellSize));
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Grid dimensions: " + std::to_string(gridSizeX) + "x" + 
+             std::to_string(gridSizeY) + "x" + std::to_string(gridSizeZ));
+    
+    // Build spatial grid
+    int totalGridCells = gridSizeX * gridSizeY * gridSizeZ;
+    std::vector<std::vector<size_t>> gridCells(totalGridCells);
+    
+    double xmin = globalBbox.minX;
+    double ymin = globalBbox.minY;
+    double zmin = globalBbox.minZ;
+    
+    for (size_t i = 0; i < edgeData.size(); ++i) {
+        const EdgeData& data = edgeData[i];
+        
+        // Assign to grid cell based on bounding box center
+        double centerX = (data.bbox.minX + data.bbox.maxX) / 2.0 - xmin;
+        double centerY = (data.bbox.minY + data.bbox.maxY) / 2.0 - ymin;
+        double centerZ = (data.bbox.minZ + data.bbox.maxZ) / 2.0 - zmin;
+        
+        int gridX = std::max(0, std::min(gridSizeX - 1, static_cast<int>(centerX / (sizeX / gridSizeX))));
+        int gridY = std::max(0, std::min(gridSizeY - 1, static_cast<int>(centerY / (sizeY / gridSizeY))));
+        int gridZ = std::max(0, std::min(gridSizeZ - 1, static_cast<int>(centerZ / (sizeZ / gridSizeZ))));
+        
+        int gridIndex = gridX * (gridSizeY * gridSizeZ) + gridY * gridSizeZ + gridZ;
+        gridCells[gridIndex].push_back(i);
+    }
+    
+    // Generate task batches
+    auto taskBatches = generateTaskBatches(gridCells, edgeData, 100); // 100 tasks per batch
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Generated " + std::to_string(taskBatches.size()) + " task batches");
+    
+    // Process batches progressively
+    std::vector<gp_Pnt> allIntersections;
+    std::atomic<size_t> totalProcessed{0};
+    
+    for (size_t batchIndex = 0; batchIndex < taskBatches.size(); ++batchIndex) {
+        const auto& batch = taskBatches[batchIndex];
+        if (batch.empty()) continue;
+        
+        // Process batch in parallel using TBB
+        tbb::concurrent_vector<gp_Pnt> batchIntersections;
+        
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, batch.size()),
+            [&](const tbb::blocked_range<size_t>& range) {
+                for (size_t i = range.begin(); i < range.end(); ++i) {
+                    const auto& task = batch[i];
+                    size_t idx1 = task.first;
+                    size_t idx2 = task.second;
+                    
+                    // Check intersection
+                    const EdgeData& data1 = edgeData[idx1];
+                    const EdgeData& data2 = edgeData[idx2];
+                    
+                    // Use improved distance-based intersection detection
+                    const int fineSamples = 16;
+                    double minDistance = std::numeric_limits<double>::max();
+                    gp_Pnt closestPoint1, closestPoint2;
+                    
+                    for (int i = 0; i <= fineSamples; ++i) {
+                        Standard_Real t1 = data1.first + (data1.last - data1.first) * i / fineSamples;
+                        gp_Pnt p1 = data1.curve->Value(t1);
+                        
+                        for (int j = 0; j <= fineSamples; ++j) {
+                            Standard_Real t2 = data2.first + (data2.last - data2.first) * j / fineSamples;
+                            gp_Pnt p2 = data2.curve->Value(t2);
+                            
+                            double dist = p1.Distance(p2);
+                            if (dist < minDistance) {
+                                minDistance = dist;
+                                closestPoint1 = p1;
+                                closestPoint2 = p2;
+                            }
+                        }
+                    }
+                    
+                    if (minDistance < tolerance) {
+                        gp_Pnt intersectionPoint(
+                            (closestPoint1.X() + closestPoint2.X()) / 2.0,
+                            (closestPoint1.Y() + closestPoint2.Y()) / 2.0,
+                            (closestPoint1.Z() + closestPoint2.Z()) / 2.0
+                        );
+                        
+                        batchIntersections.push_back(intersectionPoint);
+                    }
+                }
+            }
+        );
+        
+        // Convert concurrent vector to regular vector
+        std::vector<gp_Pnt> batchResults(batchIntersections.begin(), batchIntersections.end());
+        
+        // Add to total results
+        allIntersections.insert(allIntersections.end(), batchResults.begin(), batchResults.end());
+        
+        // Update progress
+        totalProcessed += batch.size();
+        int progress = static_cast<int>(((batchIndex + 1) * 100) / taskBatches.size());
+        std::string message = "Processed batch " + std::to_string(batchIndex + 1) + 
+                            "/" + std::to_string(taskBatches.size()) + 
+                            ", found " + std::to_string(batchResults.size()) + " intersections";
+        
+        // Update progress callback only when computation is complete
+        if (onProgress && batchIndex + 1 == taskBatches.size()) {
+            onProgress(100, message);
+        }
+        
+        // Report batch completion
+        if (onBatchComplete && !batchResults.empty()) {
+            onBatchComplete(batchResults);
+        }
+    }
+    
+    intersectionPoints = std::move(allIntersections);
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Progressive intersection detection completed, total: " + 
+             std::to_string(intersectionPoints.size()) + " intersections");
+}
+
+std::vector<std::vector<std::pair<size_t, size_t>>> OriginalEdgeExtractor::generateTaskBatches(
+    const std::vector<std::vector<size_t>>& gridCells,
+    const std::vector<EdgeData>& edgeData,
+    size_t batchSize) {
+    
+    std::vector<std::pair<size_t, size_t>> allTasks;
+    
+    // Generate all intersection tasks
+    for (size_t cellIndex = 0; cellIndex < gridCells.size(); ++cellIndex) {
+        const auto& cellEdges = gridCells[cellIndex];
+        if (cellEdges.empty()) continue;
+        
+        // Within-cell intersections
+        for (size_t i = 0; i < cellEdges.size(); ++i) {
+            for (size_t j = i + 1; j < cellEdges.size(); ++j) {
+                allTasks.emplace_back(cellEdges[i], cellEdges[j]);
+            }
+        }
+        
+        // Cross-cell intersections with neighbors (simplified - check all cells for now)
+        for (size_t otherCellIndex = cellIndex + 1; otherCellIndex < gridCells.size(); ++otherCellIndex) {
+            const auto& otherEdges = gridCells[otherCellIndex];
+            if (otherEdges.empty()) continue;
+            
+            for (size_t i : cellEdges) {
+                for (size_t j : otherEdges) {
+                    if (i < j && edgeData[i].bbox.intersects(edgeData[j].bbox)) {
+                        allTasks.emplace_back(i, j);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Split into batches
+    std::vector<std::vector<std::pair<size_t, size_t>>> batches;
+    for (size_t i = 0; i < allTasks.size(); i += batchSize) {
+        size_t end = std::min(i + batchSize, allTasks.size());
+        batches.emplace_back(allTasks.begin() + i, allTasks.begin() + end);
+    }
+    
+    return batches;
+}
+
+std::vector<gp_Pnt> OriginalEdgeExtractor::processIntersectionBatch(
+    const std::vector<std::pair<size_t, size_t>>& batch,
+    const std::vector<EdgeData>& edgeData,
+    double tolerance) {
+    
+    std::vector<gp_Pnt> intersections;
+    
+    for (const auto& task : batch) {
+        size_t idx1 = task.first;
+        size_t idx2 = task.second;
+        
+        const EdgeData& data1 = edgeData[idx1];
+        const EdgeData& data2 = edgeData[idx2];
+        
+        // Check intersection using existing method
+        std::vector<gp_Pnt> tempIntersections;
+        checkEdgeIntersection(data1, data2, tempIntersections, tolerance);
+        
+        intersections.insert(intersections.end(), tempIntersections.begin(), tempIntersections.end());
+    }
+    
+    return intersections;
 }
 

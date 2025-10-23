@@ -88,6 +88,10 @@ public:
     std::vector<int> getTrianglesForGeometryFace(int geometryFaceId) const;
     bool hasFaceIndexMapping() const { return !m_faceIndexMappings.empty(); }
 
+    // Point view rendering
+    void createPointViewRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
+                                      const ::DisplaySettings& displaySettings);
+
     // Build face index mapping during mesh generation
     void buildFaceIndexMapping(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
 

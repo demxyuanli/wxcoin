@@ -32,6 +32,7 @@ set(COMMANDS_SOURCES
     NormalFixDialogListener.cpp
     RedoListener.cpp
     RenderingSettingsListener.cpp
+    RenderModeListener.cpp
     SetTransparencyListener.cpp
     # ShowSilhouetteEdgesListener.cpp  # removed (replaced by Outline toggle)
     ShowFaceNormalsListener.cpp
@@ -59,6 +60,7 @@ set(COMMANDS_SOURCES
     RenderPreviewSystemListener.cpp
     ShowFlatWidgetsExampleListener.cpp
     ExplodeAssemblyListener.cpp
+    ShowPointViewListener.cpp
     FaceQueryListener.cpp
     FaceQueryCommandListener.cpp
     SliceToggleListener.cpp
@@ -100,6 +102,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/NormalFixDialogListener.h
     ${CMAKE_SOURCE_DIR}/include/RedoListener.h
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsListener.h
+    ${CMAKE_SOURCE_DIR}/include/RenderModeListener.h
     ${CMAKE_SOURCE_DIR}/include/SetTransparencyListener.h
     # ${CMAKE_SOURCE_DIR}/include/ShowSilhouetteEdgesListener.h  # removed
     ${CMAKE_SOURCE_DIR}/include/ShowFaceNormalsListener.h
@@ -126,6 +129,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/RenderPreviewSystemListener.h
     ${CMAKE_SOURCE_DIR}/include/ShowFlatWidgetsExampleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeAssemblyListener.h
+    ${CMAKE_SOURCE_DIR}/include/ShowPointViewListener.h
     ${CMAKE_SOURCE_DIR}/include/FaceQueryListener.h
     ${CMAKE_SOURCE_DIR}/include/FaceQueryCommandListener.h
     ${CMAKE_SOURCE_DIR}/include/SliceToggleListener.h

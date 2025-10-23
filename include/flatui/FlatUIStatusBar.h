@@ -19,6 +19,7 @@ public:
 	void EnableProgressGauge(bool enable);
 	void SetGaugeRange(int range);
 	void SetGaugeValue(int value);
+	void SetGaugeIndeterminate(bool indeterminate);
 
 	virtual void OnThemeChanged() override;
 

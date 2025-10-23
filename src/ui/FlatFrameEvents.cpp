@@ -69,6 +69,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_SHOW_MESH_EDGES, cmd::CommandType::ShowMeshEdges},
 	{ID_SHOW_FACE_NORMALS, cmd::CommandType::ShowFaceNormals},
 	{ID_FACE_QUERY_TOOL, cmd::CommandType::FaceQueryTool},
+	{ID_SHOW_POINT_VIEW, cmd::CommandType::ShowPointView},
 	{ID_TOGGLE_SLICE, cmd::CommandType::SliceToggle},
 	{ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},
 	{ID_TEXTURE_MODE_MODULATE, cmd::CommandType::TextureModeModulate},
@@ -89,6 +90,13 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_LIGHTING_SETTINGS, cmd::CommandType::LightingSettings},
 	{ID_DOCK_LAYOUT_CONFIG, cmd::CommandType::DockLayoutConfig},
 	{ID_RENDER_PREVIEW_SYSTEM, cmd::CommandType::RenderPreviewSystem},
+	{ID_RENDER_MODE_NO_SHADING, cmd::CommandType::RenderModeNoShading},
+	{ID_RENDER_MODE_POINTS, cmd::CommandType::RenderModePoints},
+	{ID_RENDER_MODE_WIREFRAME, cmd::CommandType::RenderModeWireframe},
+	{ID_RENDER_MODE_FLAT_LINES, cmd::CommandType::RenderModeFlatLines},
+	{ID_RENDER_MODE_SHADED, cmd::CommandType::RenderModeShaded},
+	{ID_RENDER_MODE_SHADED_WIREFRAME, cmd::CommandType::RenderModeShadedWireframe},
+	{ID_RENDER_MODE_HIDDEN_LINE, cmd::CommandType::RenderModeHiddenLine},
 	{ID_SHOW_FLAT_WIDGETS_EXAMPLE, cmd::CommandType::ShowFlatWidgetsExample},
 	{wxID_ABOUT, cmd::CommandType::HelpAbout}
 };

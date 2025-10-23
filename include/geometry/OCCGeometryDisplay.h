@@ -41,6 +41,22 @@ public:
     Quantity_Color getVertexColor() const { return m_vertexColor; }
     virtual void setVertexColor(const Quantity_Color& color);
 
+        // Point view settings
+        bool isShowPointViewEnabled() const { return m_showPointView; }
+        virtual void setShowPointView(bool enabled);
+
+        bool isShowSolidWithPointView() const { return m_showSolidWithPointView; }
+        virtual void setShowSolidWithPointView(bool enabled);
+
+        double getPointViewSize() const { return m_pointViewSize; }
+        virtual void setPointViewSize(double size);
+
+        Quantity_Color getPointViewColor() const { return m_pointViewColor; }
+        virtual void setPointViewColor(const Quantity_Color& color);
+
+        int getPointViewShape() const { return m_pointViewShape; }
+        virtual void setPointViewShape(int shape);
+
     // Wireframe mode
     bool isWireframeMode() const { return m_wireframeMode; }
     virtual void setWireframeMode(bool wireframe);
@@ -84,6 +100,13 @@ protected:
     bool m_showVertices;
     double m_vertexSize;
     Quantity_Color m_vertexColor;
+
+        // Point view settings
+        bool m_showPointView;
+        bool m_showSolidWithPointView;
+        double m_pointViewSize;
+        Quantity_Color m_pointViewColor;
+        int m_pointViewShape;
 
     // Wireframe settings
     bool m_wireframeMode;

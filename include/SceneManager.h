@@ -72,6 +72,9 @@ public:
 	void setOcclusionCullingEnabled(bool enabled);
 	std::string getCullingStats() const;
 
+	// Error recovery
+	void rebuildScene();
+
 private:
 	Canvas* m_canvas;
 	SoSeparator* m_sceneRoot;
