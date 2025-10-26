@@ -96,6 +96,8 @@ void MultiViewportManager::createEquilateralTriangle(float x, float y, float ang
 
 	SoMaterial* material = new SoMaterial;
 	material->diffuseColor.setValue(m_normalColor);
+	material->shininess.setValue(0.0f); // No shading mode
+	material->transparency.setValue(0.0f); // Opaque
 	triSep->addChild(material);
 
 	SoTransform* transform = new SoTransform;
@@ -193,6 +195,8 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 	// Create material for arrow
 	SoMaterial* arrowMaterial = new SoMaterial;
 	arrowMaterial->diffuseColor.setValue(m_normalColor);
+	arrowMaterial->shininess.setValue(0.0f); // No shading mode
+	arrowMaterial->transparency.setValue(0.0f); // Opaque
 	arrowSep->addChild(arrowMaterial);
 
 	// Set the name on the root separator for easier identification
@@ -232,6 +236,8 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 		SoSeparator* headSep = new SoSeparator;
 		SoMaterial* headMat = new SoMaterial;
 		headMat->diffuseColor.setValue(m_normalColor);
+		headMat->shininess.setValue(0.0f); // No shading mode
+		headMat->transparency.setValue(0.0f); // Opaque
 		headSep->addChild(headMat);
 		SoCoordinate3* headCoords = new SoCoordinate3;
 		headCoords->point.setValues(0, 3, tri);
@@ -278,6 +284,8 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 		SoSeparator* headSep = new SoSeparator;
 		SoMaterial* headMat = new SoMaterial;
 		headMat->diffuseColor.setValue(m_normalColor);
+		headMat->shininess.setValue(0.0f); // No shading mode
+		headMat->transparency.setValue(0.0f); // Opaque
 		headSep->addChild(headMat);
 		SoCoordinate3* headCoords = new SoCoordinate3;
 		headCoords->point.setValues(0, 3, tri);
@@ -324,6 +332,8 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 		SoSeparator* headSep = new SoSeparator;
 		SoMaterial* headMat = new SoMaterial;
 		headMat->diffuseColor.setValue(m_normalColor);
+		headMat->shininess.setValue(0.0f); // No shading mode
+		headMat->transparency.setValue(0.0f); // Opaque
 		headSep->addChild(headMat);
 		SoCoordinate3* headCoords = new SoCoordinate3;
 		headCoords->point.setValues(0, 3, tri);
@@ -370,6 +380,8 @@ void MultiViewportManager::createCurvedArrow(int dir, float scale) {
 		SoSeparator* headSep = new SoSeparator;
 		SoMaterial* headMat = new SoMaterial;
 		headMat->diffuseColor.setValue(m_normalColor);
+		headMat->shininess.setValue(0.0f); // No shading mode
+		headMat->transparency.setValue(0.0f); // Opaque
 		headSep->addChild(headMat);
 		SoCoordinate3* headCoords = new SoCoordinate3;
 		headCoords->point.setValues(0, 3, tri);
@@ -402,6 +414,8 @@ void MultiViewportManager::createTopRightCircle(float scale) {
 
 	SoMaterial* mat = new SoMaterial;
 	mat->diffuseColor.setValue(0.8f, 1.0f, 0.8f);  // Keep sphere green
+	mat->shininess.setValue(0.0f); // No shading mode
+	mat->transparency.setValue(0.0f); // Opaque
 	sphereSep->addChild(mat);
 	SoTransform* transform = new SoTransform;
 	transform->translation.setValue(2.5f * scale, 2.5f * scale, 0);
@@ -435,6 +449,8 @@ void MultiViewportManager::createSmallCube(float scale) {
 	// Store material reference for hover effect
 	m_cubeMaterial = new SoMaterial;
 	m_cubeMaterial->diffuseColor.setValue(0.8f, 1.0f, 0.8f);  // Cube is green
+	m_cubeMaterial->shininess.setValue(0.0f); // No shading mode
+	m_cubeMaterial->transparency.setValue(0.0f); // Opaque
 	cubeSep->addChild(m_cubeMaterial);
 
 	SoTransform* transform = new SoTransform;
@@ -456,6 +472,8 @@ void MultiViewportManager::createSmallCube(float scale) {
 
 	SoMaterial* edgeMat = new SoMaterial;
 	edgeMat->diffuseColor.setValue(0, 0, 0);
+	edgeMat->shininess.setValue(0.0f); // No shading mode
+	edgeMat->transparency.setValue(0.0f); // Opaque
 	cubeSep->addChild(edgeMat);
 
 	SoCoordinate3* edgeCoords = new SoCoordinate3;
@@ -524,6 +542,8 @@ void MultiViewportManager::createCoordinateSystemScene() {
 	SoMaterial* xMaterial = new SoMaterial;
 	xMaterial->diffuseColor.setValue(1.0f, 0.2f, 0.2f);
 	xMaterial->emissiveColor.setValue(0.3f, 0.0f, 0.0f);
+	xMaterial->shininess.setValue(0.0f); // No shading mode
+	xMaterial->transparency.setValue(0.0f); // Opaque
 	xAxisSep->addChild(xMaterial);
 	SoCoordinate3* xCoords = new SoCoordinate3;
 	xCoords->point.setValues(0, 2, new SbVec3f[2]{
@@ -546,6 +566,8 @@ void MultiViewportManager::createCoordinateSystemScene() {
 	SoMaterial* yMaterial = new SoMaterial;
 	yMaterial->diffuseColor.setValue(0.2f, 1.0f, 0.2f);
 	yMaterial->emissiveColor.setValue(0.0f, 0.3f, 0.0f);
+	yMaterial->shininess.setValue(0.0f); // No shading mode
+	yMaterial->transparency.setValue(0.0f); // Opaque
 	yAxisSep->addChild(yMaterial);
 	SoCoordinate3* yCoords = new SoCoordinate3;
 	yCoords->point.setValues(0, 2, new SbVec3f[2]{
@@ -568,6 +590,8 @@ void MultiViewportManager::createCoordinateSystemScene() {
 	SoMaterial* zMaterial = new SoMaterial;
 	zMaterial->diffuseColor.setValue(0.2f, 0.2f, 1.0f);
 	zMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.3f);
+	zMaterial->shininess.setValue(0.0f); // No shading mode
+	zMaterial->transparency.setValue(0.0f); // Opaque
 	zAxisSep->addChild(zMaterial);
 	SoCoordinate3* zCoords = new SoCoordinate3;
 	zCoords->point.setValues(0, 2, new SbVec3f[2]{

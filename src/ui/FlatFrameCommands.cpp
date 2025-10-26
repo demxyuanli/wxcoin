@@ -19,6 +19,7 @@
 #include "CreateTorusListener.h"
 #include "CreateTruncatedCylinderListener.h"
 #include "CreateWrenchListener.h"
+#include "CreateNavCubeListener.h"
 #include "ViewAllListener.h"
 #include "ViewTopListener.h"
 #include "ViewFrontListener.h"
@@ -76,6 +77,7 @@ void FlatFrame::setupCommandSystem() {
 	auto createTorusListener = std::make_shared<CreateTorusListener>(m_mouseHandler);
 	auto createTruncatedCylinderListener = std::make_shared<CreateTruncatedCylinderListener>(m_mouseHandler);
 	auto createWrenchListener = std::make_shared<CreateWrenchListener>(m_mouseHandler, m_geometryFactory);
+	auto createNavCubeListener = std::make_shared<CreateNavCubeListener>(m_mouseHandler);
 
 	m_listenerManager = std::make_unique<CommandListenerManager>();
 	m_listenerManager->registerListener(cmd::CommandType::CreateBox, createBoxListener);
@@ -85,6 +87,7 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::CreateTorus, createTorusListener);
 	m_listenerManager->registerListener(cmd::CommandType::CreateTruncatedCylinder, createTruncatedCylinderListener);
 	m_listenerManager->registerListener(cmd::CommandType::CreateWrench, createWrenchListener);
+	m_listenerManager->registerListener(cmd::CommandType::CreateNavCube, createNavCubeListener);
 
 	auto viewAllListener = std::make_shared<ViewAllListener>(m_canvas->getInputManager()->getNavigationController());
 	auto viewTopListener = std::make_shared<ViewTopListener>(m_canvas->getInputManager()->getNavigationController());

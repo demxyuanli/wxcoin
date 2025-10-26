@@ -206,6 +206,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	createButtonBar->AddButtonWithSVG(ID_CREATE_TORUS, "Torus", "circle", wxSize(16, 16), nullptr, "Create a torus geometry");
 	createButtonBar->AddButtonWithSVG(ID_CREATE_TRUNCATED_CYLINDER, "Truncated Cylinder", "cylinder", wxSize(16, 16), nullptr, "Create a truncated cylinder geometry");
 	createButtonBar->AddButtonWithSVG(ID_CREATE_WRENCH, "Wrench", "wrench", wxSize(16, 16), nullptr, "Create a wrench geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_NAV_CUBE, "Nav Cube", "cube", wxSize(16, 16), nullptr, "Create a navigation cube geometry");
 	createPanel->AddButtonBar(createButtonBar, 0, wxEXPAND | wxALL, 5);
 	page1->AddPanel(createPanel);
 	m_ribbon->AddPage(page1);

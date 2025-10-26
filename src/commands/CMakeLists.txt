@@ -15,6 +15,7 @@ set(COMMANDS_SOURCES
     CreateTorusListener.cpp
     CreateTruncatedCylinderListener.cpp
     CreateWrenchListener.cpp
+    CreateNavCubeListener.cpp
     EdgeSettingsListener.cpp
     FileExitListener.cpp
     FileNewListener.cpp
@@ -85,6 +86,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/CreateTorusListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateTruncatedCylinderListener.h
     ${CMAKE_SOURCE_DIR}/include/CreateWrenchListener.h
+    ${CMAKE_SOURCE_DIR}/include/CreateNavCubeListener.h
     ${CMAKE_SOURCE_DIR}/include/EdgeSettingsListener.h
     ${CMAKE_SOURCE_DIR}/include/FileExitListener.h
     ${CMAKE_SOURCE_DIR}/include/FileNewListener.h

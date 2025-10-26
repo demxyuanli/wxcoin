@@ -54,6 +54,9 @@ public:
 
 	std::shared_ptr<OCCGeometry> createOCCWrench(const SbVec3f& position);
 
+	std::shared_ptr<OCCGeometry> createOCCNavCube(const SbVec3f& position);
+	std::shared_ptr<OCCGeometry> createOCCNavCube(const SbVec3f& position, double size);
+
 	// Set default geometry type
 	void setDefaultGeometryType(GeometryType type) { m_defaultGeometryType = type; }
 	GeometryType getDefaultGeometryType() const { return m_defaultGeometryType; }

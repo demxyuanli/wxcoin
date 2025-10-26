@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
+set(VcpkgEnableManifest OFF)
 project(CADNav)
 
 # === vcpkg manifest mode configuration ===
 # Enable manifest mode for automatic dependency management
-if(NOT DEFINED VCPKG_MANIFEST_MODE)
-    set(VCPKG_MANIFEST_MODE ON CACHE BOOL "Enable vcpkg manifest mode for dependency management" FORCE)
+set(VCPKG_MANIFEST_MODE ON CACHE BOOL "Enable vcpkg manifest mode" FORCE)
+if(VCPKG_MANIFEST_MODE)
     message(STATUS "vcpkg manifest mode enabled for automatic dependency management")
 endif()
 
@@ -150,12 +151,17 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT C
 
 # MSVC specific settings
 if(MSVC)
-    # Use /Zi instead of /ZI for faster compilation
-    target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:/Od>)
-    target_compile_options(${PROJECT_NAME} PRIVATE /std:c++17)
+    # Set MSBuild property globally for all targets to suppress vcpkg manifest warnings
+    set(CMAKE_VS_GLOBAL_VcpkgEnableManifest true CACHE BOOL "Enable vcpkg manifest in MSBuild" FORCE)
+    
+    # Suppress vcpkg manifest warnings by setting property
     set_target_properties(${PROJECT_NAME} PROPERTIES
         LINK_FLAGS "/SUBSYSTEM:WINDOWS"
     )
+    
+    # Use /Zi instead of /ZI for faster compilation
+    target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:/Od>)
+    target_compile_options(${PROJECT_NAME} PRIVATE /std:c++17)
 
     # Windows 资源编译设置
     if(WIN32)

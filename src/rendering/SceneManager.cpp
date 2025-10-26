@@ -942,7 +942,7 @@ void SceneManager::updateSceneLighting() {
 	SoEnvironment* environment = new SoEnvironment;
 
 	// Convert Quantity_Color to SbColor
-	Standard_Real r, g, b;
+	Standard_Real r = 0.9, g = 0.9, b = 0.9; // Default neutral values
 	if (isNoShading) {
 		// For NoShading mode, use neutral ambient color with moderate intensity
 		environment->ambientColor.setValue(0.9f, 0.9f, 0.9f); // Light gray ambient
@@ -965,9 +965,11 @@ void SceneManager::updateSceneLighting() {
 		m_sceneRoot->insertChild(environment, insertIndex);
 	}
 
+	// Use appropriate intensity value for logging
+	float logIntensity = isNoShading ? 0.5f : static_cast<float>(envSettings.ambientIntensity);
 	LOG_INF_S("Added environment lighting - ambient color: " +
 		std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) +
-		", intensity: " + std::to_string(envSettings.ambientIntensity));
+		", intensity: " + std::to_string(logIntensity));
 
 	// Add lights from configuration
 	auto lights = config.getAllLights();

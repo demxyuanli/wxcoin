@@ -26,6 +26,7 @@ namespace cmd {
 		CreateTorus,
 		CreateTruncatedCylinder,
 		CreateWrench,
+		CreateNavCube,
 
 		// View
 		ViewAll,
@@ -152,6 +153,7 @@ namespace cmd {
 			{CommandType::CreateTorus, "CREATE_TORUS"},
 			{CommandType::CreateTruncatedCylinder, "CREATE_TRUNCATED_CYLINDER"},
 			{CommandType::CreateWrench, "CREATE_WRENCH"},
+			{CommandType::CreateNavCube, "CREATE_NAV_CUBE"},
 
 			{CommandType::ViewAll, "VIEW_ALL"},
 			{CommandType::ViewTop, "VIEW_TOP"},
@@ -259,6 +261,7 @@ namespace cmd {
 			{"CREATE_TORUS", CommandType::CreateTorus},
 			{"CREATE_TRUNCATED_CYLINDER", CommandType::CreateTruncatedCylinder},
 			{"CREATE_WRENCH", CommandType::CreateWrench},
+			{"CREATE_NAV_CUBE", CommandType::CreateNavCube},
 
 			{"VIEW_ALL", CommandType::ViewAll},
 			{"VIEW_TOP", CommandType::ViewTop},

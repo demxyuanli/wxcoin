@@ -21,6 +21,7 @@
 #include <Inventor/nodes/SoLineSet.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
+#include <Inventor/nodes/SoPolygonOffset.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoNormal.h>
 #include <Inventor/nodes/SoNormalBinding.h>
@@ -50,6 +51,231 @@
 
 std::map<std::string, std::shared_ptr<CuteNavCube::TextureData>> CuteNavCube::s_textureCache;
 
+// Create cube face textures exactly like FreeCAD NaviCube
+void CuteNavCube::createCubeFaceTextures() {
+    int texSize = 192; // Same as FreeCAD: works well for the max cube size 1024
+
+    // Calculate font sizes for all main faces like FreeCAD
+    std::vector<PickId> mains = {PickId::Front, PickId::Top, PickId::Right, PickId::Rear, PickId::Bottom, PickId::Left};
+    float minFontSize = texSize;
+    float maxFontSize = 0.0f;
+
+    // First pass: calculate font sizes for each face exactly like FreeCAD
+    // Create font with texSize as point size (like FreeCAD's font.setPointSizeF(texSize))
+    wxFont measureFont(texSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Arial");
+    wxBitmap tempBitmap(1, 1);
+    wxMemoryDC tempDC;
+    tempDC.SelectObject(tempBitmap);
+    tempDC.SetFont(measureFont);
+    
+    for (PickId pickId : mains) {
+        std::string label = getFaceLabel(pickId);
+        // Measure text bounds with the texSize font (like FreeCAD's QFontMetrics)
+        wxSize textBounds = tempDC.GetTextExtent(label);
+
+        // Same calculation as FreeCAD: scale = texSize / max(width, height)
+        // But account for 8 pixel margin on all sides (16 pixels total reduction)
+        int availableSize = texSize - 16; // 8 pixels margin on each side
+        float scale = (float)availableSize / std::max(textBounds.GetWidth(), textBounds.GetHeight());
+        m_faceFontSizes[pickId] = texSize * scale;
+        minFontSize = std::min(minFontSize, m_faceFontSizes[pickId]);
+        maxFontSize = std::max(maxFontSize, m_faceFontSizes[pickId]);
+        
+    }
+
+    // Apply font zoom exactly like FreeCAD
+    if (m_fontZoom > 0.0f) {
+        maxFontSize = minFontSize + (maxFontSize - minFontSize) * m_fontZoom;
+    } else {
+        maxFontSize = minFontSize * std::pow(2.0f, m_fontZoom);
+    }
+
+    // Second pass: generate textures exactly like FreeCAD
+    for (PickId pickId : mains) {
+        std::string label = getFaceLabel(pickId);
+
+        // Create wxImage equivalent of FreeCAD's QImage
+        wxImage image(texSize, texSize);
+        if (!image.HasAlpha()) {
+            image.InitAlpha();
+        }
+        // Fill with transparent background like FreeCAD's qRgba(255, 255, 255, 0)
+        for (int y = 0; y < texSize; y++) {
+            for (int x = 0; x < texSize; x++) {
+                image.SetRGB(x, y, 255, 255, 255);
+                image.SetAlpha(x, y, 0); // Transparent
+            }
+        }
+
+        if (m_faceFontSizes[pickId] > 0.5f) {
+            // 5% margin looks nice and prevents some artifacts (FreeCAD comment)
+            float finalFontSize = std::min(m_faceFontSizes[pickId], maxFontSize) * 0.9f;
+
+            // Create bitmap and DC for drawing
+            wxBitmap bitmap(image);
+            wxMemoryDC dc;
+            dc.SelectObject(bitmap);
+
+            // Setup font like FreeCAD
+            wxFont font(static_cast<int>(finalFontSize), wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Arial");
+            dc.SetFont(font);
+            dc.SetTextForeground(wxColour(255, 255, 255)); // White text like FreeCAD's Qt::white
+            dc.SetTextBackground(wxColour(255, 255, 255, 0)); // Transparent background
+
+            // Draw text centered like FreeCAD's Qt::AlignCenter
+            wxSize textSize = dc.GetTextExtent(label);
+            int x = (texSize - textSize.GetWidth()) / 2;
+            int y = (texSize - textSize.GetHeight()) / 2;
+            
+            
+            dc.DrawText(label, x, y);
+
+            // Apply vertical balance like FreeCAD's imageVerticalBalance
+            int offset = calculateVerticalBalance(bitmap, static_cast<int>(finalFontSize));
+
+            // Redraw with vertical offset like FreeCAD
+            dc.Clear();
+            // Reset background to transparent using wxImage
+            wxImage tempImage(texSize, texSize);
+            if (!tempImage.HasAlpha()) {
+                tempImage.InitAlpha();
+            }
+            for (int yy = 0; yy < texSize; yy++) {
+                for (int xx = 0; xx < texSize; xx++) {
+                    tempImage.SetRGB(xx, yy, 255, 255, 255);
+                    tempImage.SetAlpha(xx, yy, 0);
+                }
+            }
+            bitmap = wxBitmap(tempImage);
+            dc.SetFont(font);
+            dc.SetTextForeground(wxColour(255, 255, 255));
+            dc.SetTextBackground(wxColour(255, 255, 255, 0));
+            dc.DrawText(label, x, y + offset);
+
+            // Convert back to image
+            image = bitmap.ConvertToImage();
+        }
+
+        // Apply face-specific transformations like FreeCAD
+        switch (pickId) {
+            case PickId::Rear:
+                // REAR: Mirror vertically to fix upside-down text
+                image = image.Mirror(true);
+                break;
+            case PickId::Bottom:
+                // BOTTOM: Mirror vertically to fix upside-down text
+                image = image.Mirror(true);
+                break;
+            case PickId::Top:
+                // TOP: Mirror vertically to fix upside-down text
+                image = image.Mirror(true);
+                break;
+            case PickId::Front:
+                // FRONT: Mirror vertically to fix upside-down text
+                image = image.Mirror(true);
+                break;
+            case PickId::Left:
+                // LEFT: Rotate 90 degrees clockwise for vertical text
+                image = image.Rotate90(true);
+                break;
+            case PickId::Right:
+                // RIGHT: Rotate 90 degrees counter-clockwise for vertical text
+                image = image.Rotate90(false);
+                break;
+            default:
+                // No transformation needed
+                break;
+        }
+
+        // Convert wxImage to RGBA data for Open Inventor texture
+        unsigned char* imageData = new unsigned char[texSize * texSize * 4];
+        if (!image.HasAlpha()) {
+            image.InitAlpha();
+        }
+        unsigned char* rgb = image.GetData();
+        unsigned char* alpha = image.GetAlpha();
+
+        // Copy data in RGBA format like FreeCAD
+        for (int i = 0, j = 0, k = 0; i < texSize * texSize * 4; i += 4, j += 3, k++) {
+            imageData[i] = rgb[j];     // R
+            imageData[i + 1] = rgb[j + 1]; // G
+            imageData[i + 2] = rgb[j + 2]; // B
+            imageData[i + 3] = alpha[k]; // A
+        }
+
+        // Create Open Inventor texture like FreeCAD
+        SoTexture2* texture = new SoTexture2;
+        texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
+        texture->model = SoTexture2::MODULATE; // Use MODULATE like FreeCAD's GL_MODULATE
+
+        // Note: Open Inventor SoTexture2 doesn't have direct equivalents of QOpenGLTexture filters
+        // The texture filtering is handled automatically by Open Inventor
+
+        // Cache the texture
+        if (m_normalTextures.find(label) != m_normalTextures.end()) {
+            m_normalTextures[label]->unref();
+        }
+        texture->ref();
+        m_normalTextures[label] = texture;
+
+        delete[] imageData;
+    }
+}
+
+// Get face label for a given PickId
+std::string CuteNavCube::getFaceLabel(PickId pickId) {
+    switch (pickId) {
+        case PickId::Front: return "FRONT";
+        case PickId::Top: return "TOP";
+        case PickId::Right: return "RIGHT";
+        case PickId::Rear: return "REAR";
+        case PickId::Bottom: return "BOTTOM";
+        case PickId::Left: return "LEFT";
+        default: return "";
+    }
+}
+
+// Helper function to calculate vertical balance exactly like FreeCAD's imageVerticalBalance
+int CuteNavCube::calculateVerticalBalance(const wxBitmap& bitmap, int fontSizeHint) {
+    if (fontSizeHint < 0) {
+        return 0;
+    }
+
+    wxImage image = bitmap.ConvertToImage();
+    if (!image.IsOk()) {
+        return 0;
+    }
+
+    int h = image.GetHeight();
+    int startRow = (h - fontSizeHint) / 2;
+    bool done = false;
+    int x, bottom, top;
+
+    // Find top edge of text - scan from startRow upwards
+    for (top = startRow; top < h; top++) {
+        for (x = 0; x < image.GetWidth(); x++) {
+            // Check if pixel has alpha (text content) like FreeCAD's qAlpha(p.pixel(x, top))
+            if (image.GetAlpha(x, top) > 0) {
+                done = true;
+                break;
+            }
+        }
+        if (done) break;
+    }
+
+    // Find bottom edge of text - scan from startRow downwards
+    for (bottom = startRow; bottom < h; bottom++) {
+        for (x = 0; x < image.GetWidth(); x++) {
+            // Check from bottom up like FreeCAD's qAlpha(p.pixel(x, h-1-bottom))
+            if (image.GetAlpha(x, h - 1 - bottom) > 0) {
+                return (bottom - top) / 2;
+            }
+        }
+    }
+
+    return 0;
+}
+
 CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallback, float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config)
 	: m_root(new SoSeparator)
 	, m_orthoCamera(new SoOrthographicCamera)
@@ -68,8 +294,8 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
 	, m_currentX(0.0f)
 	, m_currentY(0.0f)
-	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.75f)  // Increased from 0.50 to 0.75 for better picking
-	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.55f)  // Adjusted to 0.55f for better proportion
+	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.12f)
 	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
 	, m_needsGeometryRebuild(false)
 	, m_showEdges(config.showEdges)
@@ -88,6 +314,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_hoveredFace("")
 	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
 	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
+	, m_fontZoom(0.3f)
 	, m_canvas(nullptr)
 {
 	m_root->ref();
@@ -119,8 +346,8 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
 	, m_currentX(0.0f)
 	, m_currentY(0.0f)
-	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.75f)  // Increased from 0.50 to 0.75 for better picking
-	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.55f)  // Adjusted to 0.55f for better proportion
+	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.12f)
 	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
 	, m_needsGeometryRebuild(false)
 	, m_showEdges(config.showEdges)
@@ -139,6 +366,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_hoveredFace("")
 	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
 	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
+	, m_fontZoom(0.3f)
 	, m_canvas(nullptr)
 {
 	m_root->ref();
@@ -171,8 +399,8 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_cubeSize(config.size > 0 ? config.size : 140)  // Use config or default
 	, m_currentX(0.0f)
 	, m_currentY(0.0f)
-	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.75f)  // Increased from 0.50 to 0.75 for better picking
-	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.14f)
+	, m_geometrySize(config.cubeSize > 0.0f ? config.cubeSize : 0.55f)  // Adjusted to 0.55f for better proportion
+	, m_chamferSize(config.chamferSize > 0.0f ? config.chamferSize : 0.12f)
 	, m_cameraDistance(config.cameraDistance > 0.0f ? config.cameraDistance : 3.5f)
 	, m_needsGeometryRebuild(false)
 	, m_showEdges(config.showEdges)
@@ -191,6 +419,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_hoveredFace("")
 	, m_normalFaceColor(0.7f, 0.7f, 0.7f)
 	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
+	, m_fontZoom(0.3f)
 	, m_canvas(nullptr)
 {
 	m_root->ref();
@@ -222,12 +451,12 @@ void CuteNavCube::initialize() {
 
 	m_faceToView = {
 		// 6 Main faces - Click face -> View direction
-		{ "Front",  "Front" },
-		{ "Back",   "Back" },
-		{ "Left",   "Left" },
-		{ "Right",  "Right" },
-		{ "Top",    "Top" },
-		{ "Bottom", "Bottom" },
+		{ "FRONT",  "FRONT" },
+		{ "REAR",  "REAR" },
+		{ "LEFT",   "LEFT" },
+		{ "RIGHT",  "RIGHT" },
+		{ "TOP",    "TOP" },
+		{ "BOTTOM", "BOTTOM" },
 
 		// 8 Corner faces (triangular)
 		{ "Corner0", "Top" },        // Front-Top-Left corner -> Top view
@@ -257,12 +486,12 @@ void CuteNavCube::initialize() {
 	// Face normal vectors and center points for camera positioning
 	m_faceNormals = {
 		// 6 Main faces
-		{ "Front",  std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0, 1)) },      // +Z axis
-		{ "Back",   std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0, -1)) },    // -Z axis
-		{ "Left",   std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-1, 0, 0)) },   // -X axis
-		{ "Right",  std::make_pair(SbVec3f(1, 0, 0), SbVec3f(1, 0, 0)) },    // +X axis
-		{ "Top",    std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0, 1, 0)) },    // +Y axis
-		{ "Bottom", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0, -1, 0)) },   // -Y axis
+		{ "FRONT",  std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0, 1)) },      // +Z axis
+		{ "REAR",  std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0, -1)) },    // -Z axis
+		{ "LEFT",   std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-1, 0, 0)) },   // -X axis
+		{ "RIGHT",  std::make_pair(SbVec3f(1, 0, 0), SbVec3f(1, 0, 0)) },    // +X axis
+		{ "TOP",    std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0, 1, 0)) },    // +Y axis
+		{ "BOTTOM", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0, -1, 0)) },   // -Y axis
 
 		// 8 Corner faces (using closest main face normal)
 		{ "Corner0", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(-0.707, 0.707, 0.707)) },  // Front-Top-Left
@@ -290,7 +519,9 @@ void CuteNavCube::initialize() {
 	};
 }
 
-bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height, const wxColour& bgColor) {
+bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height, const wxColour& bgColor, float faceSize, PickId pickId) {
+	LOG_INF_S("CuteNavCube::generateFaceTexture: Generating texture for text: '" + text + "', size: " + std::to_string(width) + "x" + std::to_string(height));
+	
 	wxBitmap bitmap(width, height, 32);
 	wxMemoryDC dc;
 	dc.SelectObject(bitmap);
@@ -306,33 +537,138 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 		return true;
 	}
 
-	dc.SetBackground(wxBrush(bgColor));
-	dc.Clear();
+	// For transparent background, we need to manually set alpha values
+	// wxBitmap's SetBackground/Clear doesn't handle alpha properly
+	if (bgColor.Alpha() == 0) {
+		// Transparent background - manually clear alpha channel
+		wxImage image = bitmap.ConvertToImage();
+		if (!image.HasAlpha()) {
+			image.InitAlpha();
+		}
+		unsigned char* alpha = image.GetAlpha();
+		for (int i = 0; i < width * height; i++) {
+			alpha[i] = 0; // Set all pixels to transparent
+		}
+		bitmap = wxBitmap(image);
+		dc.SelectObject(bitmap);
+		LOG_INF_S("CuteNavCube::generateFaceTexture: Set transparent background (alpha=0)");
+	} else {
+		// Opaque background - use normal clear
+		dc.SetBackground(wxBrush(bgColor));
+		dc.Clear();
+	}
 
-	// Use high-quality font rendering for crisp text
 	auto& dpiManager = DPIManager::getInstance();
-	// Calculate optimal font size: larger fonts for better readability on small cube faces
-	// Use smaller ratios to get larger fonts for better precision
-	float fontRatio = (width >= 1024) ? 3.5f : 3.0f; // Even smaller ratio for larger, more precise fonts
-	int baseFontSize = std::max(40, static_cast<int>(width / fontRatio)); // Increased minimum font size
-	// Apply DPI scaling to font size for crisp rendering on high-DPI displays
-	baseFontSize = static_cast<int>(baseFontSize * dpiManager.getDPIScale());
-	// Font setup for texture generation
 
+	int baseFontSize;
+	if (faceSize > 0) { // Main face text - use the provided faceSize (calculated by createCubeFaceTextures)
+		baseFontSize = static_cast<int>(faceSize);
+
+		// Apply DPI scaling
+		baseFontSize = static_cast<int>(baseFontSize * dpiManager.getDPIScale());
+
+		// Ensure reasonable size limits - but don't cap at 96, use the calculated size
+		baseFontSize = std::max(8, baseFontSize); // Only minimum limit, no maximum
+	} else { // Solid color face
+		baseFontSize = 12; // Minimal size for solid color
+	}
+
+	// Font setup for texture generation
 	wxFont font(baseFontSize, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, "Arial");
 	font.SetPointSize(baseFontSize);
 
 	dc.SetFont(font);
-	dc.SetTextForeground(wxColour(0, 0, 0)); // Black text for high contrast
+	// Use blue text color for better visibility
+	dc.SetTextForeground(wxColour(0, 100, 255, 255));
+	LOG_INF_S("CuteNavCube::generateFaceTexture: Using blue text color for visibility");
+	
+	// Debug: Log texture color components
+	wxColour textColor(0, 100, 255, 255);
+	LOG_INF_S("CuteNavCube::generateFaceTexture: TextureColor=(" + 
+			  std::to_string(textColor.Red()) + "," + 
+			  std::to_string(textColor.Green()) + "," + 
+			  std::to_string(textColor.Blue()) + "," + 
+			  std::to_string(textColor.Alpha()) + ")");
 
 
 	wxSize textSize = dc.GetTextExtent(text);
+	LOG_INF_S("CuteNavCube::generateFaceTexture: Text size: " + std::to_string(textSize.GetWidth()) + "x" + std::to_string(textSize.GetHeight()) + ", Font size: " + std::to_string(baseFontSize));
+
+	// Draw text centered horizontally with 8 pixel margin, then apply vertical balance like FreeCAD
+	int margin = 8;
 	int x = (width - textSize.GetWidth()) / 2;
 	int y = (height - textSize.GetHeight()) / 2;
+	
+	// Ensure text doesn't go outside the margin bounds
+	x = std::max(margin, std::min(x, width - textSize.GetWidth() - margin));
+	y = std::max(margin, std::min(y, height - textSize.GetHeight() - margin));
+	
 	dc.DrawText(text, x, y);
+
+	// Apply vertical balance like FreeCAD's imageVerticalBalance
+	int verticalOffset = calculateVerticalBalance(bitmap, textSize.GetHeight());
+	if (verticalOffset != 0) {
+		// Redraw text with vertical offset - preserve transparent background
+		if (bgColor.Alpha() == 0) {
+			// Transparent background - manually clear alpha channel again
+			wxImage image = bitmap.ConvertToImage();
+			if (!image.HasAlpha()) {
+				image.InitAlpha();
+			}
+			unsigned char* alpha = image.GetAlpha();
+			for (int i = 0; i < width * height; i++) {
+				alpha[i] = 0; // Set all pixels to transparent
+			}
+			bitmap = wxBitmap(image);
+			dc.SelectObject(bitmap);
+		} else {
+			// Opaque background - use normal clear
+			dc.Clear();
+			dc.SetBackground(wxBrush(bgColor));
+			dc.Clear();
+		}
+		dc.SetFont(font);
+		dc.SetTextForeground(wxColour(0, 100, 255, 255)); // Use blue for visibility
+		// Apply margin constraints to vertical offset position as well
+		int finalY = std::max(margin, std::min(y + verticalOffset, height - textSize.GetHeight() - margin));
+		dc.DrawText(text, x, finalY);
+	}
+	LOG_INF_S("CuteNavCube::generateFaceTexture: Text drawn at position: (" + std::to_string(x) + ", " + std::to_string(y + verticalOffset) + "), vertical offset: " + std::to_string(verticalOffset));
 
 	// Validate bitmap content
 	wxImage image = bitmap.ConvertToImage();
+	
+	// For transparent background, ensure text areas are opaque
+	if (bgColor.Alpha() == 0) {
+		if (!image.HasAlpha()) {
+			image.InitAlpha();
+		}
+		unsigned char* alpha = image.GetAlpha();
+		unsigned char* rgb = image.GetData();
+		
+		// Find text pixels and set them to opaque
+		// FreeCAD uses white transparent background, so we need to detect text differently
+		for (int py = 0; py < height; py++) {
+			for (int px = 0; px < width; px++) {
+				int pixelIndex = (py * width + px) * 3;
+				int alphaIndex = py * width + px;
+				
+				unsigned char r = rgb[pixelIndex];
+				unsigned char g = rgb[pixelIndex + 1];
+				unsigned char b = rgb[pixelIndex + 2];
+				
+				// Check if this pixel was drawn by text (has non-zero RGB values)
+				// Since we draw blue text (0,100,255), any non-zero RGB indicates text
+				if (r != 0 || g != 0 || b != 0) {
+					alpha[alphaIndex] = 255; // Make text opaque
+				} else {
+					alpha[alphaIndex] = 0;   // Keep background transparent
+				}
+			}
+		}
+		bitmap = wxBitmap(image);
+		LOG_INF_S("CuteNavCube::generateFaceTexture: Set text areas to opaque (alpha=255)");
+	}
 	if (!image.IsOk()) {
 		LOG_ERR_S("CuteNavCube::generateFaceTexture: Failed to convert bitmap to image for texture: " + text);
 		// Fallback: Fill with white
@@ -345,19 +681,66 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 		return true;
 	}
 
-	image.InitAlpha(); // Ensure alpha channel
+	// Apply face-specific transformations like FreeCAD
+	switch (pickId) {
+		case PickId::Rear:
+			// REAR: Mirror vertically to fix upside-down text
+			image = image.Mirror(true);
+			break;
+		case PickId::Bottom:
+			// BOTTOM: Mirror vertically to fix upside-down text
+			image = image.Mirror(true);
+			break;
+		case PickId::Top:
+			// TOP: Mirror vertically to fix upside-down text
+			image = image.Mirror(true);
+			break;
+		case PickId::Front:
+			// FRONT: Mirror vertically to fix upside-down text
+			image = image.Mirror(true);
+			break;
+		case PickId::Left:
+			// LEFT: Rotate 90 degrees clockwise for vertical text
+			image = image.Rotate90(true);
+			break;
+		case PickId::Right:
+			// RIGHT: Rotate 90 degrees counter-clockwise for vertical text
+			image = image.Rotate90(false);
+			break;
+		default:
+			// No transformation needed
+			break;
+	}
+
+	if (!image.HasAlpha()) {
+		image.InitAlpha(); // Ensure alpha channel
+	}
 	unsigned char* rgb = image.GetData();
 	unsigned char* alpha = image.GetAlpha();
 
 	// Copy to imageData (RGBA) and validate
 	bool hasValidPixels = false;
-	for (int i = 0, j = 0; i < width * height * 4; i += 4, j += 3) {
+	for (int i = 0, j = 0, k = 0; i < width * height * 4; i += 4, j += 3, k++) {
 		imageData[i] = rgb[j];     // R
 		imageData[i + 1] = rgb[j + 1]; // G
 		imageData[i + 2] = rgb[j + 2]; // B
-		imageData[i + 3] = alpha[j / 3]; // A
+		imageData[i + 3] = alpha[k]; // A - use pixel index
 		if (imageData[i] != 0 || imageData[i + 1] != 0 || imageData[i + 2] != 0) {
 			hasValidPixels = true;
+		}
+	}
+
+	// DEBUG: Save texture to file for verification
+	if (!text.empty()) {
+		std::string filename = "texture_" + text + ".png";
+		// Create a copy of the image for saving
+		wxImage saveImage = image.Copy();
+		wxFileName filePath(wxGetCwd(), filename);
+		wxString fullPath = filePath.GetFullPath();
+		if (saveImage.SaveFile(fullPath, wxBITMAP_TYPE_PNG)) {
+			LOG_INF_S("CuteNavCube::generateFaceTexture: Saved texture to: " + fullPath.ToStdString());
+		} else {
+			LOG_WRN_S("CuteNavCube::generateFaceTexture: Failed to save texture to: " + fullPath.ToStdString());
 		}
 	}
 
@@ -375,7 +758,136 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 	return true;
 }
 
+void CuteNavCube::addCubeFace(const SbVec3f& x, const SbVec3f& z, ShapeId shapeType, PickId pickId, float rotZ) {
+	m_Faces[pickId].vertexArray.clear();
+	m_Faces[pickId].type = shapeType;
+
+	// Calculate y vector using cross product
+	SbVec3f y = x.cross(-z);
+
+	// Create normalized vectors for x, y and z
+	SbVec3f xN = x;
+	SbVec3f yN = y;
+	SbVec3f zN = z;
+	xN.normalize();
+	yN.normalize();
+	zN.normalize();
+
+	// Create a rotation matrix
+	SbMatrix R(xN[0], yN[0], zN[0], 0,
+	           xN[1], yN[1], zN[1], 0,
+	           xN[2], yN[2], zN[2], 0,
+	           0,     0,     0,     1);
+
+	// Store the standard orientation
+	m_Faces[pickId].rotation = (SbRotation(R) * SbRotation(SbVec3f(0, 0, 1), rotZ)).inverse();
+
+	if (shapeType == ShapeId::Corner) {
+		float chamfer = m_chamferSize;
+		float zDepth = 1.0f - 2.0f * chamfer;
+		m_Faces[pickId].vertexArray.reserve(6);
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth - 2 * x[0] * chamfer,
+		                                                  z[1] * zDepth - 2 * x[1] * chamfer,
+		                                                  z[2] * zDepth - 2 * x[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth - x[0] * chamfer - y[0] * chamfer,
+		                                                  z[1] * zDepth - x[1] * chamfer - y[1] * chamfer,
+		                                                  z[2] * zDepth - x[2] * chamfer - y[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth + x[0] * chamfer - y[0] * chamfer,
+		                                                  z[1] * zDepth + x[1] * chamfer - y[1] * chamfer,
+		                                                  z[2] * zDepth + x[2] * chamfer - y[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth + 2 * x[0] * chamfer,
+		                                                  z[1] * zDepth + 2 * x[1] * chamfer,
+		                                                  z[2] * zDepth + 2 * x[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth + x[0] * chamfer + y[0] * chamfer,
+		                                                  z[1] * zDepth + x[1] * chamfer + y[1] * chamfer,
+		                                                  z[2] * zDepth + x[2] * chamfer + y[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth - x[0] * chamfer + y[0] * chamfer,
+		                                                  z[1] * zDepth - x[1] * chamfer + y[1] * chamfer,
+		                                                  z[2] * zDepth - x[2] * chamfer + y[2] * chamfer));
+	}
+	else if (shapeType == ShapeId::Edge) {
+		float chamfer = m_chamferSize;
+		float x4_scale = 1.0f - chamfer * 4.0f;
+		float zE_scale = 1.0f - chamfer;
+		m_Faces[pickId].vertexArray.reserve(4);
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale - x[0] * x4_scale - y[0] * chamfer,
+		                                                  z[1] * zE_scale - x[1] * x4_scale - y[1] * chamfer,
+		                                                  z[2] * zE_scale - x[2] * x4_scale - y[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale + x[0] * x4_scale - y[0] * chamfer,
+		                                                  z[1] * zE_scale + x[1] * x4_scale - y[1] * chamfer,
+		                                                  z[2] * zE_scale + x[2] * x4_scale - y[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale + x[0] * x4_scale + y[0] * chamfer,
+		                                                  z[1] * zE_scale + x[1] * x4_scale + y[1] * chamfer,
+		                                                  z[2] * zE_scale + x[2] * x4_scale + y[2] * chamfer));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale - x[0] * x4_scale + y[0] * chamfer,
+		                                                  z[1] * zE_scale - x[1] * x4_scale + y[1] * chamfer,
+		                                                  z[2] * zE_scale - x[2] * x4_scale + y[2] * chamfer));
+	}
+	else if (shapeType == ShapeId::Main) {
+		float chamfer = m_chamferSize;
+		float x2_scale = 1.0f - chamfer * 2.0f;
+		float y2_scale = 1.0f - chamfer * 2.0f;
+		float x4_scale = 1.0f - chamfer * 4.0f;
+		float y4_scale = 1.0f - chamfer * 4.0f;
+		m_Faces[pickId].vertexArray.reserve(8);
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x2_scale - y[0] * y4_scale,
+		                                                  z[1] - x[1] * x2_scale - y[1] * y4_scale,
+		                                                  z[2] - x[2] * x2_scale - y[2] * y4_scale));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x4_scale - y[0] * y2_scale,
+		                                                  z[1] - x[1] * x4_scale - y[1] * y2_scale,
+		                                                  z[2] - x[2] * x4_scale - y[2] * y2_scale));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x4_scale - y[0] * y2_scale,
+		                                                  z[1] + x[1] * x4_scale - y[1] * y2_scale,
+		                                                  z[2] + x[2] * x4_scale - y[2] * y2_scale));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x2_scale - y[0] * y4_scale,
+		                                                  z[1] + x[1] * x2_scale - y[1] * y4_scale,
+		                                                  z[2] + x[2] * x2_scale - y[2] * y4_scale));
+
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x2_scale + y[0] * y4_scale,
+		                                                  z[1] + x[1] * x2_scale + y[1] * y4_scale,
+		                                                  z[2] + x[2] * x2_scale + y[2] * y4_scale));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x4_scale + y[0] * y2_scale,
+		                                                  z[1] + x[1] * x4_scale + y[1] * y2_scale,
+		                                                  z[2] + x[2] * x4_scale + y[2] * y2_scale));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x4_scale + y[0] * y2_scale,
+		                                                  z[1] - x[1] * x4_scale + y[1] * y2_scale,
+		                                                  z[2] - x[2] * x4_scale + y[2] * y2_scale));
+		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x2_scale + y[0] * y4_scale,
+		                                                  z[1] - x[1] * x2_scale + y[1] * y4_scale,
+		                                                  z[2] - x[2] * x2_scale + y[2] * y4_scale));
+
+		m_LabelTextures[pickId].vertexArray.clear();
+		// Create texture quad vertices at octagon main face diagonal edge midpoints
+		// The octagon has 8 edges: 4 connecting square corners to chamfer corners ("diagonal edges")
+		// We want the texture quad vertices to be at the midpoints of these 4 diagonal edges
+		// These edges connect: v0-v1, v2-v3, v4-v5, v6-v7
+
+		// Edge v0-v1 midpoint: between square corner (-x2_scale, -y4_scale) and chamfer corner (-x4_scale, -y2_scale)
+		auto x01_mid = x * (x2_scale + x4_scale) * 0.5f; // Average x coordinate
+		auto y01_mid = y * (y4_scale + y2_scale) * 0.5f; // Average y coordinate
+		m_LabelTextures[pickId].vertexArray.emplace_back(z - x01_mid - y01_mid);
+
+		// Edge v2-v3 midpoint: between chamfer corner (+x4_scale, -y2_scale) and square corner (+x2_scale, -y4_scale)
+		auto x23_mid = x * (x4_scale + x2_scale) * 0.5f; // Average x coordinate
+		auto y23_mid = y * (y2_scale + y4_scale) * 0.5f; // Average y coordinate
+		m_LabelTextures[pickId].vertexArray.emplace_back(z + x23_mid - y23_mid);
+
+		// Edge v4-v5 midpoint: between square corner (+x2_scale, +y4_scale) and chamfer corner (+x4_scale, +y2_scale)
+		auto x45_mid = x * (x2_scale + x4_scale) * 0.5f; // Average x coordinate
+		auto y45_mid = y * (y4_scale + y2_scale) * 0.5f; // Average y coordinate
+		m_LabelTextures[pickId].vertexArray.emplace_back(z + x45_mid + y45_mid);
+
+		// Edge v6-v7 midpoint: between chamfer corner (-x4_scale, +y2_scale) and square corner (-x2_scale, +y4_scale)
+		auto x67_mid = x * (x4_scale + x2_scale) * 0.5f; // Average x coordinate
+		auto y67_mid = y * (y2_scale + y4_scale) * 0.5f; // Average y coordinate
+		m_LabelTextures[pickId].vertexArray.emplace_back(z - x67_mid + y67_mid);
+	}
+}
+
 void CuteNavCube::setupGeometry() {
+	// Create cube face textures exactly like FreeCAD
+	createCubeFaceTextures();
+
 	// Clear existing face maps before rebuilding geometry
 	m_faceMaterials.clear();
 	m_faceBaseColors.clear();
@@ -402,6 +914,11 @@ void CuteNavCube::setupGeometry() {
 	
 	// Always add camera back to the scene
 	m_root->addChild(m_orthoCamera);
+
+	// --- Geometry Scale Transform ---
+	m_geometryTransform = new SoTransform;
+	m_geometryTransform->scaleFactor.setValue(m_geometrySize, m_geometrySize, m_geometrySize);
+	m_root->addChild(m_geometryTransform);
 
 	// --- Lighting Setup ---
 	SoEnvironment* env = new SoEnvironment;
@@ -448,111 +965,65 @@ void CuteNavCube::setupGeometry() {
 
 	updateCameraRotation();
 
+	// Create cube faces using dynamic generation (ported from FreeCAD NaviCube)
+	constexpr float pi = 3.14159265358979323846f;
+	constexpr float pi1_2 = pi / 2;
+
+	SbVec3f x(1, 0, 0);
+	SbVec3f y(0, 1, 0);
+	SbVec3f z(0, 0, 1);
+
+	// Create the main faces
+	addCubeFace( x, z, ShapeId::Main, PickId::Top);
+	addCubeFace( x,-y, ShapeId::Main, PickId::Front);
+	addCubeFace(-y,-x, ShapeId::Main, PickId::Left);
+	addCubeFace(-x, y, ShapeId::Main, PickId::Rear);
+	addCubeFace( y, x, ShapeId::Main, PickId::Right);
+	addCubeFace( x,-z, ShapeId::Main, PickId::Bottom);
+
+	// Create corner faces
+	addCubeFace(-x-y, x-y+z, ShapeId::Corner, PickId::FrontTopRight, pi);
+	addCubeFace(-x+y,-x-y+z, ShapeId::Corner, PickId::FrontTopLeft, pi);
+	addCubeFace(x+y, x-y-z, ShapeId::Corner, PickId::FrontBottomRight);
+	addCubeFace(x-y,-x-y-z, ShapeId::Corner, PickId::FrontBottomLeft);
+	addCubeFace(x-y, x+y+z, ShapeId::Corner, PickId::RearTopRight, pi);
+	addCubeFace(x+y,-x+y+z, ShapeId::Corner, PickId::RearTopLeft, pi);
+	addCubeFace(-x+y, x+y-z, ShapeId::Corner, PickId::RearBottomRight);
+	addCubeFace(-x-y,-x+y-z, ShapeId::Corner, PickId::RearBottomLeft);
+
+	// Create edge faces
+	addCubeFace(x, z-y, ShapeId::Edge, PickId::FrontTop);
+	addCubeFace(x,-z-y, ShapeId::Edge, PickId::FrontBottom);
+	addCubeFace(x, y-z, ShapeId::Edge, PickId::RearBottom, pi);
+	addCubeFace(x, y+z, ShapeId::Edge, PickId::RearTop, pi);
+	addCubeFace(z, x+y, ShapeId::Edge, PickId::RearRight, pi1_2);
+	addCubeFace(z, x-y, ShapeId::Edge, PickId::FrontRight, pi1_2);
+	addCubeFace(z,-x-y, ShapeId::Edge, PickId::FrontLeft, pi1_2);
+	addCubeFace(z, y-x, ShapeId::Edge, PickId::RearLeft, pi1_2);
+	addCubeFace(y, z-x, ShapeId::Edge, PickId::TopLeft, pi);
+	addCubeFace(y, x+z, ShapeId::Edge, PickId::TopRight);
+	addCubeFace(y, x-z, ShapeId::Edge, PickId::BottomRight);
+	addCubeFace(y,-z-x, ShapeId::Edge, PickId::BottomLeft, pi);
+
 	SoSeparator* cubeAssembly = new SoSeparator;
-
-	// --- Manual Chamfered Cube Definition with Correct Normals ---
-	const float s = m_geometrySize;   // Main size (configurable)
-	const float c = m_chamferSize;    // Chamfer size (configurable)
-
-	SbVec3f vertices[24] = {
-		// Corner 0 (+ + +): Front-Top-Right
-		SbVec3f(s,  s - c,  s - c),  // v0
-		SbVec3f(s - c,  s,  s - c),  // v1
-		SbVec3f(s - c,  s - c,  s),  // v2
-
-		// Corner 1 (- + +): Front-Top-Left
-		SbVec3f(-s,  s - c,  s - c),  // v3
-		SbVec3f(-s + c,  s,  s - c),  // v4
-		SbVec3f(-s + c,  s - c,  s),  // v5
-
-		// Corner 2 (- - +): Front-Bottom-Left
-		SbVec3f(-s, -s + c,  s - c),  // v6
-		SbVec3f(-s + c, -s,  s - c),  // v7
-		SbVec3f(-s + c, -s + c,  s),  // v8
-
-		// Corner 3 (+ - +): Front-Bottom-Right
-		SbVec3f(s, -s + c,  s - c),  // v9
-		SbVec3f(s - c, -s,  s - c),  // v10
-		SbVec3f(s - c, -s + c,  s),  // v11
-
-		// Corner 4 (+ + -): Back-Top-Right
-		SbVec3f(s,  s - c, -s + c),  // v12
-		SbVec3f(s - c,  s, -s + c),  // v13
-		SbVec3f(s - c,  s - c, -s),  // v14
-
-		// Corner 5 (- + -): Back-Top-Left
-		SbVec3f(-s,  s - c, -s + c),  // v15
-		SbVec3f(-s + c,  s, -s + c),  // v16
-		SbVec3f(-s + c,  s - c, -s),  // v17
-
-		// Corner 6 (- - -): Back-Bottom-Left
-		SbVec3f(-s, -s + c, -s + c),  // v18
-		SbVec3f(-s + c, -s, -s + c),  // v19
-		SbVec3f(-s + c, -s + c, -s),  // v20
-
-		// Corner 7 (+ - -): Back-Bottom-Right
-		SbVec3f(s, -s + c, -s + c),  // v21
-		SbVec3f(s - c, -s, -s + c),  // v22
-		SbVec3f(s - c, -s + c, -s)   // v23
-	};
-
-	struct FaceDefinition {
-		std::string name;
-		std::vector<int> indices;
-		std::string textureKey;
-		int materialType; // 0=main face, 1=edge, 2=corner
-	};
-
-	std::vector<FaceDefinition> faces = {
-		// 6 Main faces
-		{"Top",    {13, 16, 4, 1}, "Front", 0},
-		{"Bottom", {19, 22, 10, 7}, "Back", 0},
-		{"Front",  {2, 5, 8, 11}, "Top", 0},
-		{"Back",   {14, 23, 20, 17}, "Bottom", 0},
-		{"Right",  {9, 21, 12, 0}, "Left", 0},
-		{"Left",   {3, 15, 18, 6}, "Right", 0},
-
-		// 8 Corner faces (triangular)
-		{"Corner0", {0, 1, 2}, "", 2},            // Face 6
-		{"Corner1", {3, 5, 4}, "", 2},            // Face 7
-		{"Corner2", {6, 7, 8}, "", 2},            // Face 8
-		{"Corner3", {9, 11, 10}, "", 2},          // Face 9
-		{"Corner4", {12, 14, 13}, "", 2},         // Face 10
-		{"Corner5", {15, 16, 17}, "", 2},         // Face 11
-		{"Corner6", {20, 19, 18}, "", 2},         // Face 12
-		{"Corner7", {22, 23, 21}, "", 2},         // Face 13
-
-		// 12 Edge faces (rectangular)
-		{"EdgeTF", {1, 4, 5, 2}, "", 1},          // Face 14: Top-Front edge
-		{"EdgeTR", {13, 1, 0, 12}, "", 1},        // Face 15: Top-Right edge
-		{"EdgeTB", {16, 13, 14, 17}, "", 1},      // Face 16: Top-Back edge
-		{"EdgeTL", {4, 16, 15, 3}, "", 1},        // Face 17: Top-Left edge
-		{"EdgeBF", {7, 10, 11, 8}, "", 1},        // Face 18: Bottom-Front edge
-		{"EdgeBR", {10, 22, 21, 9}, "", 1},       // Face 19: Bottom-Right edge
-		{"EdgeBB", {20, 23, 22, 19}, "", 1},      // Face 20: Bottom-Back edge
-		{"EdgeBL", {6, 18, 19, 7}, "", 1},        // Face 21: Bottom-Left edge
-		{"EdgeFR", {2, 11, 9, 0}, "", 1},         // Face 22: Front-Right edge
-		{"EdgeFL", {3, 6, 8, 5}, "", 1},          // Face 23: Front-Left edge
-		{"EdgeBL2", {17, 20, 18, 15}, "", 1},     // Face 24: Back-Left edge
-		{"EdgeBR2", {12, 21, 23, 14}, "", 1}      // Face 25: Back-Right edge
-	};
 
 	auto& dpiManager = DPIManager::getInstance();
 
+	// Create coordinate system and materials for the cube
+	// Define texture coordinates for label textures like FreeCAD
+	// Fixed UV coordinates: {0,0, 1,0, 1,1, 0,1} for all texture quads
 	SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
 	texCoords->point.setValues(0, 4, new SbVec2f[4]{
-		SbVec2f(0, 0), SbVec2f(1, 0), SbVec2f(1, 1), SbVec2f(0, 1)
+		SbVec2f(0.0f, 0.0f),      // 0: bottom-left
+		SbVec2f(1.0f, 0.0f),      // 1: bottom-right
+		SbVec2f(1.0f, 1.0f),      // 2: top-right
+		SbVec2f(0.0f, 1.0f)       // 3: top-left
 		});
 	cubeAssembly->addChild(texCoords);
 
+	// Create coordinate node for all faces
 	SoCoordinate3* coords = new SoCoordinate3;
-	coords->point.setNum(24);
-	for (int i = 0; i < 24; i++) {
-		coords->point.set1Value(i, vertices[i]);
-	}
 	cubeAssembly->addChild(coords);
-
-	int faceIndex = 0;
 
 	SoMaterial* mainFaceMaterial = new SoMaterial;
 	// Frosted glass material for main faces - read all properties from config
@@ -566,34 +1037,27 @@ void CuteNavCube::setupGeometry() {
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialAmbientG", 0.6)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialAmbientB", 0.4))
 	);
-	mainFaceMaterial->specularColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialSpecularR", 0.8)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialSpecularG", 1.0)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialSpecularB", 0.8))
-	);
+	mainFaceMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for no shading mode
 	mainFaceMaterial->emissiveColor.setValue(
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialEmissiveR", 0.05)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialEmissiveG", 0.15)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialEmissiveB", 0.05))
 	);
-	mainFaceMaterial->shininess.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialShininess", 0.4))
-	);
-	mainFaceMaterial->transparency.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialTransparency", 0.15))
-	);
+	mainFaceMaterial->shininess.setValue(0.0f); // No shading mode
+	mainFaceMaterial->transparency.setValue(0.0f); // Opaque
+
 	// Store base colors for hover effects from config
 	SbColor baseColor(
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorR", 0.6)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorG", 0.8)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorB", 0.6))
 	);
-	m_faceBaseColors["Front"] = baseColor;
-	m_faceBaseColors["Back"] = baseColor;
-	m_faceBaseColors["Left"] = baseColor;
-	m_faceBaseColors["Right"] = baseColor;
-	m_faceBaseColors["Top"] = baseColor;
-	m_faceBaseColors["Bottom"] = baseColor;
+	m_faceBaseColors["FRONT"] = baseColor;
+	m_faceBaseColors["REAR"] = baseColor;
+	m_faceBaseColors["LEFT"] = baseColor;
+	m_faceBaseColors["RIGHT"] = baseColor;
+	m_faceBaseColors["TOP"] = baseColor;
+	m_faceBaseColors["BOTTOM"] = baseColor;
 
 	SoMaterial* edgeAndCornerMaterial = new SoMaterial;
 	// Frosted glass material for edges and corners - read all properties from config
@@ -607,22 +1071,15 @@ void CuteNavCube::setupGeometry() {
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientG", 0.5)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientB", 0.3))
 	);
-	edgeAndCornerMaterial->specularColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialSpecularR", 0.7)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialSpecularG", 0.9)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialSpecularB", 0.7))
-	);
+	edgeAndCornerMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for no shading mode
 	edgeAndCornerMaterial->emissiveColor.setValue(
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveR", 0.04)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveG", 0.12)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveB", 0.04))
 	);
-	edgeAndCornerMaterial->shininess.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialShininess", 0.35))
-	);
-	edgeAndCornerMaterial->transparency.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialTransparency", 0.1))
-	);
+	edgeAndCornerMaterial->shininess.setValue(0.0f); // No shading mode
+	edgeAndCornerMaterial->transparency.setValue(0.0f); // Opaque
+
 	// Store base colors for edges and corners from config
 	SbColor edgeBaseColor(
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeHoverColorR", 0.5)),
@@ -641,6 +1098,7 @@ void CuteNavCube::setupGeometry() {
 	m_faceBaseColors["EdgeFL"] = edgeBaseColor;
 	m_faceBaseColors["EdgeBL2"] = edgeBaseColor;
 	m_faceBaseColors["EdgeBR2"] = edgeBaseColor;
+
 	// Corner faces use the same material but slightly different base color for hover effect from config
 	SbColor cornerBaseColor(
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CornerHoverColorR", 0.4)),
@@ -656,76 +1114,160 @@ void CuteNavCube::setupGeometry() {
 	m_faceBaseColors["Corner6"] = cornerBaseColor;
 	m_faceBaseColors["Corner7"] = cornerBaseColor;
 
-	// --- Pre-generate high-quality textures for edges and corners ---
-	// Use DPI manager for optimal texture resolution (already declared above)
-	// Load texture size from config (default 512 to save memory)
-	// Navigation cube is typically 80-150px, so 512px texture is more than sufficient
-	// Memory usage: 256=256KB, 512=1MB, 1024=4MB, 2048=16MB per texture
-	const int baseTexSize = ConfigManager::getInstance().getInt("NavigationCube", "TextureBaseSize", 512);
-	const int texWidth = dpiManager.getScaledTextureSize(baseTexSize);
-	const int texHeight = dpiManager.getScaledTextureSize(baseTexSize);
-	// Textures will be generated and cached later in generateAndCacheTextures()
-	for (const auto& faceDef : faces) {
+	// Create faces using dynamic generation
+	int vertexIndex = 0;
+
+	// Define face creation helper - now takes PickId directly
+	auto createFaceFromVertices = [&](const std::string& faceName, PickId pickId, int materialType) {
 		// Skip faces based on display options
-		if (faceDef.materialType == 1 && !m_showEdges) continue;    // Skip edge faces if edges are disabled
-		if (faceDef.materialType == 2 && !m_showCorners) continue;  // Skip corner faces if corners are disabled
-		std::string indices_str;
-		for (int idx : faceDef.indices) { indices_str += std::to_string(idx) + " "; }
+		if (materialType == 1 && !m_showEdges) return;    // Skip edge faces if edges are disabled
+		if (materialType == 2 && !m_showCorners) return;  // Skip corner faces if corners are disabled
 
 		SoSeparator* faceSep = new SoSeparator;
-		faceSep->setName(SbName(faceDef.name.c_str()));
+		faceSep->setName(SbName(faceName.c_str()));
 		
 		// Store the separator for later texture replacement
-		m_faceSeparators[faceDef.name] = faceSep;
+		m_faceSeparators[faceName] = faceSep;
 
-		SoIndexedFaceSet* face = new SoIndexedFaceSet;
-		for (size_t i = 0; i < faceDef.indices.size(); i++) {
-			face->coordIndex.set1Value(i, faceDef.indices[i]);
-		}
-		face->coordIndex.set1Value(faceDef.indices.size(), -1); // End marker
-
-		if (faceDef.materialType == 0) { // Main face
-			// Use the pre-defined frosted glass material for main faces
+		// Add appropriate material
+		if (materialType == 0) { // Main face
 			faceSep->addChild(mainFaceMaterial);
-			m_faceMaterials[faceDef.name] = mainFaceMaterial;
-			// Base colors are already set above
-			// Texture will be added later in generateAndCacheTextures()
-
-			// Set texture coordinate indices for main faces (quads)
-			face->textureCoordIndex.set1Value(0, 0);
-			face->textureCoordIndex.set1Value(1, 1);
-			face->textureCoordIndex.set1Value(2, 2);
-			face->textureCoordIndex.set1Value(3, 3);
-			face->textureCoordIndex.set1Value(4, -1);
-		}
-		else { // Edges and Corners
-			// Use the pre-defined frosted glass material for edges and corners
+			m_faceMaterials[faceName] = mainFaceMaterial;
+		} else { // Edges and Corners
 			faceSep->addChild(edgeAndCornerMaterial);
-			m_faceMaterials[faceDef.name] = edgeAndCornerMaterial;
-			// Base colors are already set above
-			// Texture will be added later in generateAndCacheTextures()
+			m_faceMaterials[faceName] = edgeAndCornerMaterial;
+		}
 
-			if (faceDef.indices.size() == 4) { // Edge faces (quads)
-				face->textureCoordIndex.set1Value(0, 0);
-				face->textureCoordIndex.set1Value(1, 1);
-				face->textureCoordIndex.set1Value(2, 2);
-				face->textureCoordIndex.set1Value(3, 3);
-				face->textureCoordIndex.set1Value(4, -1);
+		// Create indexed face set
+		SoIndexedFaceSet* face = new SoIndexedFaceSet;
+
+		// Add vertices to coordinate node
+		auto& vertices = m_Faces[pickId].vertexArray;
+		for (size_t i = 0; i < vertices.size(); i++) {
+			coords->point.set1Value(vertexIndex + i, vertices[i]);
+			face->coordIndex.set1Value(i, vertexIndex + i);
+		}
+		face->coordIndex.set1Value(vertices.size(), -1); // End marker
+		vertexIndex += vertices.size();
+
+		// Set texture coordinates based on face type
+		if (materialType == 0) { // Main face (octagon) - no texture, only material
+			// Main faces don't use texture coordinates - they use material color only
+			// Texture will be applied as separate quad overlay
+		} else {
+			// Edge and corner faces - use single color
+			for (size_t i = 0; i < vertices.size(); ++i) {
+				face->textureCoordIndex.set1Value(i, 0);
 			}
-			else if (faceDef.indices.size() == 3) { // Corner faces (triangles)
-				face->textureCoordIndex.set1Value(0, 0);
-				face->textureCoordIndex.set1Value(1, 1);
-				face->textureCoordIndex.set1Value(2, 3);
-				face->textureCoordIndex.set1Value(3, -1);
-			}
+			face->textureCoordIndex.set1Value(vertices.size(), -1);
 		}
 
 		faceSep->addChild(face);
-
 		cubeAssembly->addChild(faceSep);
+		
+		// For main faces, create separate texture quad overlay using LabelTextures vertices
+		if (materialType == 0) {
+			SoSeparator* textureSep = new SoSeparator;
+			textureSep->setName(SbName((faceName + "_Texture").c_str()));
 
-		faceIndex++;
-	}
+			// Disable polygon offset to prevent z-fighting with main face
+			SoPolygonOffset* polygonOffset = new SoPolygonOffset;
+			polygonOffset->factor.setValue(-1.0f); // Negative offset to bring texture slightly forward
+			polygonOffset->units.setValue(-1.0f);
+			textureSep->addChild(polygonOffset);
+
+			// Add material for texture overlay - use same color as main face material
+			SoMaterial* textureMaterial = new SoMaterial;
+			// Use the same diffuse color as main face material to prevent color change
+			float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialDiffuseR", 0.7));
+			float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialDiffuseG", 0.9));
+			float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceMaterialDiffuseB", 0.7));
+			
+			textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
+			textureMaterial->transparency.setValue(0.0f);
+			textureMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
+			textureSep->addChild(textureMaterial);
+			
+			// Debug: Log material color and texture color multiplication
+			LOG_INF_S("CuteNavCube::setupGeometry: Face=" + faceName + 
+					  ", MaterialColor=(" + std::to_string(materialR) + "," + std::to_string(materialG) + "," + std::to_string(materialB) + ")");
+
+			// Create texture quad using LabelTextures vertices
+			SoIndexedFaceSet* textureFace = new SoIndexedFaceSet;
+
+			// Add LabelTextures vertices to coordinate node
+			auto& labelVertices = m_LabelTextures[pickId].vertexArray;
+			int labelVertexIndex = vertexIndex;
+			for (size_t i = 0; i < labelVertices.size(); i++) {
+				coords->point.set1Value(labelVertexIndex + i, labelVertices[i]);
+				textureFace->coordIndex.set1Value(i, labelVertexIndex + i);
+			}
+			textureFace->coordIndex.set1Value(labelVertices.size(), -1);
+
+			// Set texture coordinates for quad like FreeCAD (fixed UV: 0,0,1,0,1,1,0,1)
+			textureFace->textureCoordIndex.set1Value(0, 0); // bottom-left: (0,0)
+			textureFace->textureCoordIndex.set1Value(1, 1); // bottom-right: (1,0)
+			textureFace->textureCoordIndex.set1Value(2, 2); // top-right: (1,1)
+			textureFace->textureCoordIndex.set1Value(3, 3); // top-left: (0,1)
+			textureFace->textureCoordIndex.set1Value(4, -1);
+
+			textureSep->addChild(textureFace);
+			cubeAssembly->addChild(textureSep);
+
+			// Debug: Log MODULATE mode result like FreeCAD
+			// In MODULATE mode: FinalColor = MaterialColor * TextureColor
+			// MaterialColor: (0.9, 0.95, 1.0) - light blue-green
+			// TextureBackground: (1.0, 1.0, 1.0, 0.0) - white transparent background
+			// TextureText: (0, 100/255, 1.0, 1.0) - blue text, opaque
+			// Background Result: (0.9*1.0, 0.95*1.0, 1.0*1.0) = (0.9, 0.95, 1.0) - material color preserved
+			// Background Alpha: 0.0 * 0.0 = 0.0 (transparent) - shows material color
+			// Text Result: (0.9*0, 0.95*100/255, 1.0*1.0) = (0, 0.37, 1.0) - dark blue-green
+			// Text Alpha: 0.0 * 1.0 = 0.0 (opaque) - text visible
+			LOG_INF_S("CuteNavCube::setupGeometry: Face=" + faceName + 
+					  ", MODULATE_Mode: Like FreeCAD's GL_MODULATE" +
+					  ", Background: white transparent (preserves material color)" +
+					  ", Text: blue visible");
+
+			// Update vertexIndex for next face
+			vertexIndex += labelVertices.size();
+
+			// Store texture separator for later texture replacement
+			m_faceSeparators[faceName + "_Texture"] = textureSep;
+		}
+	};
+
+	// Create all faces in the correct order with their PickId
+	// Main faces
+	createFaceFromVertices("TOP", PickId::Top, 0);
+	createFaceFromVertices("BOTTOM", PickId::Bottom, 0);
+	createFaceFromVertices("FRONT", PickId::Front, 0);
+	createFaceFromVertices("REAR", PickId::Rear, 0);
+	createFaceFromVertices("RIGHT", PickId::Right, 0);
+	createFaceFromVertices("LEFT", PickId::Left, 0);
+
+	// Corner faces
+	createFaceFromVertices("Corner0", PickId::FrontTopRight, 2);
+	createFaceFromVertices("Corner1", PickId::FrontTopLeft, 2);
+	createFaceFromVertices("Corner2", PickId::FrontBottomRight, 2);
+	createFaceFromVertices("Corner3", PickId::FrontBottomLeft, 2);
+	createFaceFromVertices("Corner4", PickId::RearTopRight, 2);
+	createFaceFromVertices("Corner5", PickId::RearTopLeft, 2);
+	createFaceFromVertices("Corner6", PickId::RearBottomRight, 2);
+	createFaceFromVertices("Corner7", PickId::RearBottomLeft, 2);
+
+	// Edge faces
+	createFaceFromVertices("EdgeTF", PickId::FrontTop, 1);
+	createFaceFromVertices("EdgeTB", PickId::RearTop, 1);
+	createFaceFromVertices("EdgeTL", PickId::TopLeft, 1);
+	createFaceFromVertices("EdgeTR", PickId::TopRight, 1);
+	createFaceFromVertices("EdgeBF", PickId::FrontBottom, 1);
+	createFaceFromVertices("EdgeBB", PickId::RearBottom, 1);
+	createFaceFromVertices("EdgeBL", PickId::BottomLeft, 1);
+	createFaceFromVertices("EdgeBR", PickId::BottomRight, 1);
+	createFaceFromVertices("EdgeFR", PickId::FrontRight, 1);
+	createFaceFromVertices("EdgeFL", PickId::FrontLeft, 1);
+	createFaceFromVertices("EdgeBL2", PickId::RearLeft, 1);
+	createFaceFromVertices("EdgeBR2", PickId::RearRight, 1);
 
 	m_root->addChild(cubeAssembly);
 
@@ -747,7 +1289,10 @@ void CuteNavCube::setupGeometry() {
 
 	// Define the material for the outlines
 	SoMaterial* outlineMaterial = new SoMaterial;
-	outlineMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f); // Black
+	outlineMaterial->diffuseColor.setValue(0.4f, 0.6f, 0.9f); // Light blue
+	outlineMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for no shading mode
+	outlineMaterial->shininess.setValue(0.0f); // No shading mode
+	outlineMaterial->transparency.setValue(0.0f); // Opaque
 	outlineSep->addChild(outlineMaterial);
 
 	// Re-use the same coordinates but re-draw all faces as lines
@@ -755,12 +1300,34 @@ void CuteNavCube::setupGeometry() {
 
 	SoIndexedFaceSet* outlineFaceSet = new SoIndexedFaceSet;
 	std::vector<int32_t> all_indices;
-	for (const auto& faceDef : faces) {
-		for (int index : faceDef.indices) {
-			all_indices.push_back(index);
+
+	// Define the faces to draw outlines for (same order as creation)
+	std::vector<std::pair<PickId, int>> outlineFaces = {
+		// Main faces (6 faces)
+		{PickId::Top, 8}, {PickId::Bottom, 8}, {PickId::Front, 8}, {PickId::Rear, 8}, {PickId::Right, 8}, {PickId::Left, 8},
+		// Corner faces (8 faces)
+		{PickId::FrontTopRight, 6}, {PickId::FrontTopLeft, 6}, {PickId::FrontBottomRight, 6}, {PickId::FrontBottomLeft, 6},
+		{PickId::RearTopRight, 6}, {PickId::RearTopLeft, 6}, {PickId::RearBottomRight, 6}, {PickId::RearBottomLeft, 6},
+		// Edge faces (12 faces)
+		{PickId::FrontTop, 4}, {PickId::RearTop, 4}, {PickId::TopLeft, 4}, {PickId::TopRight, 4},
+		{PickId::FrontBottom, 4}, {PickId::RearBottom, 4}, {PickId::BottomLeft, 4}, {PickId::BottomRight, 4},
+		{PickId::FrontRight, 4}, {PickId::FrontLeft, 4}, {PickId::RearLeft, 4}, {PickId::RearRight, 4}
+	};
+
+	int vertexOffset = 0;
+	for (const auto& [pickId, vertexCount] : outlineFaces) {
+		// Skip faces based on display options
+		if ((pickId >= PickId::FrontTop && pickId <= PickId::RearRight) && !m_showEdges) continue;    // Skip edge faces
+		if ((pickId >= PickId::FrontTopRight && pickId <= PickId::RearBottomLeft) && !m_showCorners) continue;  // Skip corner faces
+
+		// Add all vertices of this face for outline drawing
+		for (int i = 0; i < vertexCount; i++) {
+			all_indices.push_back(vertexOffset + i);
 		}
 		all_indices.push_back(-1); // Separator for each face
+		vertexOffset += vertexCount;
 	}
+
 	outlineFaceSet->coordIndex.setValues(0, all_indices.size(), all_indices.data());
 	outlineSep->addChild(outlineFaceSet);
 
@@ -856,7 +1423,7 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 // Calculate camera position based on clicked face
 void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const {
 	// Handle main faces (6 faces) - use standard positioning
-	static const std::set<std::string> mainFaces = {"Front", "Back", "Left", "Right", "Top", "Bottom"};
+	static const std::set<std::string> mainFaces = {"FRONT", "REAR", "LEFT", "RIGHT", "TOP", "BOTTOM"};
 	if (mainFaces.find(faceName) != mainFaces.end()) {
 		auto it = m_faceNormals.find(faceName);
 		if (it != m_faceNormals.end()) {
@@ -1167,11 +1734,9 @@ void CuteNavCube::updateSeparatorMaterials(SoSeparator* sep) {
 		if (child->isOfType(SoMaterial::getClassTypeId())) {
 			SoMaterial* material = static_cast<SoMaterial*>(child);
 
-			// Apply transparency
-			material->transparency.setValue(m_transparency);
-
-			// Apply shininess
-			material->shininess.setValue(m_shininess);
+			// Force opaque and no shading mode
+			material->transparency.setValue(0.0f); // Always opaque
+			material->shininess.setValue(0.0f); // Always no shading
 
 			// Update colors based on material context
 			float r, g, b;
@@ -1253,6 +1818,10 @@ void CuteNavCube::applyConfig(const CubeConfig& config) {
 
 	// Apply geometry changes if needed (requires rebuild)
 	if (geometryChanged || displayChanged || colorChanged || materialChanged || circleChanged) {
+		// Update geometry transform immediately if it exists
+		if (m_geometryTransform) {
+			m_geometryTransform->scaleFactor.setValue(m_geometrySize, m_geometrySize, m_geometrySize);
+		}
 		// Mark for geometry rebuild on next render
 		m_needsGeometryRebuild = true;
 	}
@@ -1292,8 +1861,8 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 		textureColor = wxColour(hoverR, hoverG, hoverB, hoverA);
 	} else {
 		// Use normal color based on face type from config
-		if (faceName == "Front" || faceName == "Back" || faceName == "Left" || 
-			faceName == "Right" || faceName == "Top" || faceName == "Bottom") {
+		if (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" || 
+			faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM") {
 			// Main faces
 			int mainR = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorR", 180);
 			int mainG = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorG", 220);
@@ -1328,22 +1897,24 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 	auto& dpiManager = DPIManager::getInstance();
 	
 	// Check if this face has text (main faces only)
-	bool hasText = (faceName == "Front" || faceName == "Back" || faceName == "Left" || 
-	                faceName == "Right" || faceName == "Top" || faceName == "Bottom");
+	bool hasText = (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" || 
+	                faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM");
+	
+	// For MODULATE mode, use white transparent background like FreeCAD
+	// Background: white transparent (255,255,255,0) - will multiply with material color
+	// Text: blue opaque (0,100,255,255) - will be visible
+	wxColour backgroundColor = wxColour(255, 255, 255, 0); // White background, transparent like FreeCAD
 	
 	int texWidth, texHeight;
+	int texSize = 192; // Like FreeCAD, use 192x192 texture size for main faces
 	
 	if (hasText) {
-		// Main faces with text need high resolution texture
-		// Load texture size from config (default 512 to save memory)
-		// Memory usage: 256=256KB, 512=1MB, 1024=4MB, 2048=16MB per texture
-		const int baseTexSize = ConfigManager::getInstance().getInt("NavigationCube", "TextureBaseSize", 512);
-		texWidth = dpiManager.getScaledTextureSize(baseTexSize);
-		texHeight = dpiManager.getScaledTextureSize(baseTexSize);
+		// Main faces with text use fixed 192x192 texture like FreeCAD
+		texWidth = texSize;
+		texHeight = texSize;
 	} else {
 		// Edge and corner faces are solid color - use tiny 2x2 texture for massive memory saving
-		// Memory usage: 2x2x4 = 16 bytes per texture (vs 1MB for 512x512)
-		// This saves ~40 textures x 1MB = 40MB of memory!
+		// Memory usage: 2x2x4 = 16 bytes per texture (vs ~35KB for 192x192)
 		texWidth = 2;
 		texHeight = 2;
 	}
@@ -1352,15 +1923,44 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 	
 	// Generate texture with appropriate text and color
 	std::string textureText = hasText ? faceName : "";
+	LOG_INF_S("CuteNavCube::createTextureForFace: faceName=" + faceName + ", hasText=" + std::to_string(hasText) + ", textureText='" + textureText + "'");
 	
-	if (generateFaceTexture(textureText, imageData.data(), texWidth, texHeight, textureColor)) {
+	// DEBUG: Force text for testing
+	if (hasText && textureText.empty()) {
+		textureText = "TEST";
+		LOG_WRN_S("CuteNavCube::createTextureForFace: Empty texture text, using 'TEST' instead");
+	}
+	
+	// Get the correct font size for this face
+	float correctFontSize = 0;
+	PickId pickId = PickId::Front; // Default
+	
+	if (hasText) {
+		// Find the corresponding PickId for this face
+		if (faceName == "FRONT") pickId = PickId::Front;
+		else if (faceName == "REAR") pickId = PickId::Rear;
+		else if (faceName == "LEFT") pickId = PickId::Left;
+		else if (faceName == "RIGHT") pickId = PickId::Right;
+		else if (faceName == "TOP") pickId = PickId::Top;
+		else if (faceName == "BOTTOM") pickId = PickId::Bottom;
+		
+		// Get the calculated font size for this face
+		auto it = m_faceFontSizes.find(pickId);
+		if (it != m_faceFontSizes.end()) {
+			correctFontSize = it->second;
+		} else {
+			correctFontSize = texSize; // Fallback
+		}
+	}
+	
+	if (generateFaceTexture(textureText, imageData.data(), texWidth, texHeight, backgroundColor, correctFontSize, pickId)) {
 		// Create new texture
 		SoTexture2* texture = new SoTexture2;
 		texture->image.setValue(SbVec2s(texWidth, texHeight), 4, imageData.data());
 		
 		if (hasText) {
-			// Text textures use DECAL mode (no tiling)
-			texture->model = SoTexture2::DECAL;
+			// Text textures use MODULATE mode like FreeCAD's GL_MODULATE
+			texture->model = SoTexture2::MODULATE;
 		} else {
 			// Solid color textures use MODULATE with repeat wrapping for tiling
 			texture->model = SoTexture2::MODULATE;
@@ -1379,7 +1979,7 @@ void CuteNavCube::generateAndCacheTextures() {
 	// Generate textures for all faces in both normal and hover states
 	std::vector<std::string> allFaces = {
 		// Main faces
-		"Front", "Back", "Left", "Right", "Top", "Bottom",
+		"FRONT", "REAR", "LEFT", "RIGHT", "TOP", "BOTTOM",
 		// Edge faces
 		"EdgeTF", "EdgeTB", "EdgeTL", "EdgeTR", "EdgeBF", "EdgeBB", "EdgeBL", "EdgeBR",
 		"EdgeFR", "EdgeFL", "EdgeBL2", "EdgeBR2",
@@ -1398,6 +1998,10 @@ void CuteNavCube::generateAndCacheTextures() {
 			continue; // Skip if separator doesn't exist (face might be hidden)
 		}
 		
+		// Determine if this is a main face
+		bool isMainFace = (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" || 
+		                   faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM");
+		
 		// Generate normal state texture
 		SoTexture2* normalTexture = createTextureForFace(faceName, false);
 		if (normalTexture) {
@@ -1405,12 +2009,27 @@ void CuteNavCube::generateAndCacheTextures() {
 			m_normalTextures[faceName] = normalTexture;
 			normalCount++;
 			
-			// Add the normal texture to the face separator
-			SoSeparator* faceSep = sepIt->second;
-			// Insert texture after material node (which should be the first child)
-			if (faceSep->getNumChildren() > 0) {
-				faceSep->insertChild(normalTexture, 1); // Insert at index 1 (after material)
-				addedCount++;
+			// For main faces, add texture to texture separator
+			// For edges/corners, add texture to face separator
+			if (isMainFace) {
+				// Find texture separator
+				auto textureSepIt = m_faceSeparators.find(faceName + "_Texture");
+				if (textureSepIt != m_faceSeparators.end()) {
+					SoSeparator* textureSep = textureSepIt->second;
+					// Insert texture after material node (which should be the first child)
+					if (textureSep->getNumChildren() > 0) {
+						textureSep->insertChild(normalTexture, 1); // Insert at index 1 (after material)
+						addedCount++;
+					}
+				}
+			} else {
+				// Add the normal texture to the face separator
+				SoSeparator* faceSep = sepIt->second;
+				// Insert texture after material node (which should be the first child)
+				if (faceSep->getNumChildren() > 0) {
+					faceSep->insertChild(normalTexture, 1); // Insert at index 1 (after material)
+					addedCount++;
+				}
 			}
 		}
 		
@@ -1426,10 +2045,16 @@ void CuteNavCube::generateAndCacheTextures() {
 }
 
 void CuteNavCube::regenerateFaceTexture(const std::string& faceName, bool isHover) {
-	// Find the face separator node
-	auto faceIt = m_faceSeparators.find(faceName);
+	// Determine if this is a main face
+	bool isMainFace = (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" || 
+	                   faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM");
+	
+	// For main faces, use texture separator; for others, use face separator
+	std::string separatorName = isMainFace ? (faceName + "_Texture") : faceName;
+	
+	auto faceIt = m_faceSeparators.find(separatorName);
 	if (faceIt == m_faceSeparators.end()) {
-		LOG_WRN_S("CuteNavCube::regenerateFaceTexture: Face separator not found: " + faceName);
+		LOG_WRN_S("CuteNavCube::regenerateFaceTexture: Separator not found: " + separatorName);
 		return;
 	}
 	

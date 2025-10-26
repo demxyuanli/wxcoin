@@ -24,6 +24,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_CREATE_TORUS, cmd::CommandType::CreateTorus},
 	{ID_CREATE_TRUNCATED_CYLINDER, cmd::CommandType::CreateTruncatedCylinder},
 	{ID_CREATE_WRENCH, cmd::CommandType::CreateWrench},
+	{ID_CREATE_NAV_CUBE, cmd::CommandType::CreateNavCube},
 	{ID_VIEW_ALL, cmd::CommandType::ViewAll},
 	{ID_VIEW_TOP, cmd::CommandType::ViewTop},
 	{ID_VIEW_FRONT, cmd::CommandType::ViewFront},

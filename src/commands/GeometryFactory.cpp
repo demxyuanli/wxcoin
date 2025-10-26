@@ -53,6 +53,9 @@ void GeometryFactory::createOCCGeometry(const std::string& type, const SbVec3f& 
 	else if (type == "Wrench") {
 		geometry = createOCCWrench(position);
 	}
+	else if (type == "NavCube") {
+		geometry = createOCCNavCube(position);
+	}
 	else {
 		LOG_ERR_S("Unknown geometry type: " + type);
 		return;
@@ -105,6 +108,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCGeometryWithParameters(co
 	}
 	else if (type == "Wrench") {
 		geometry = createOCCWrench(position);
+	}
+	else if (type == "NavCube") {
+		geometry = createOCCNavCube(position, params.width); // Use width as size parameter
 	}
 	else {
 		LOG_ERR_S("Unknown geometry type: " + type);
@@ -626,3 +632,38 @@ void GeometryFactory::addGeometryToCullingSystem(const std::shared_ptr<OCCGeomet
 		LOG_ERR_S("Failed to add geometry to culling system: " + std::string(e.what()));
 	}
 }
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCNavCube(const SbVec3f& position) {
+	return createOCCNavCube(position, 2.0); // Default size 2.0
+}
+
+std::shared_ptr<OCCGeometry> GeometryFactory::createOCCNavCube(const SbVec3f& position, double size) {
+	static int navCubeCounter = 0;
+	std::string name = "OCCNavCube_" + std::to_string(++navCubeCounter);
+
+	try {
+		// Create a 26-faced polyhedron (rhombicuboctahedron) for navigation cube
+		// This is a complex shape with 6 square faces and 12 rectangular faces and 8 triangular faces
+
+		auto navCube = std::make_shared<OCCNavCube>(name, size);
+
+		if (navCube && !navCube->getShape().IsNull()) {
+			// Set position AFTER creation to apply transformation
+			navCube->setPosition(gp_Pnt(position[0], position[1], position[2]));
+
+			LOG_INF_S("Created OCCNavCube: " + name + " at position (" +
+				std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) +
+				") with size " + std::to_string(size));
+			return navCube;
+		}
+		else {
+			LOG_ERR_S("Failed to create nav cube shape");
+			return nullptr;
+		}
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("Exception creating OCCNavCube: " + std::string(e.what()));
+		return nullptr;
+	}
+}
+

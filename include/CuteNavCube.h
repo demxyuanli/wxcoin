@@ -14,10 +14,57 @@
 #include <functional>
 #include <Inventor/SbLinear.h>
 #include <memory>
+#include <Eigen/Dense>
 
 struct CubeConfig;
 
 class CuteNavCube {
+public:
+    enum class ShapeId {
+        None, Main, Edge, Corner, Button
+    };
+    enum class PickId {
+        None,
+        Front,
+        Top,
+        Right,
+        Rear,
+        Bottom,
+        Left,
+        FrontTop,
+        FrontBottom,
+        FrontRight,
+        FrontLeft,
+        RearTop,
+        RearBottom,
+        RearRight,
+        RearLeft,
+        TopRight,
+        TopLeft,
+        BottomRight,
+        BottomLeft,
+        FrontTopRight,
+        FrontTopLeft,
+        FrontBottomRight,
+        FrontBottomLeft,
+        RearTopRight,
+        RearTopLeft,
+        RearBottomRight,
+        RearBottomLeft,
+        ArrowNorth,
+        ArrowSouth,
+        ArrowEast,
+        ArrowWest,
+        ArrowLeft,
+        ArrowRight,
+        DotBackside,
+        ViewMenu
+    };
+    struct Face {
+        ShapeId type;
+        std::vector<SbVec3f> vertexArray;
+        SbRotation rotation;
+    };
 public:
 	CuteNavCube(std::function<void(const std::string&)> viewChangeCallback, float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config);
 	CuteNavCube(std::function<void(const std::string&)> viewChangeCallback,
@@ -62,10 +109,14 @@ public:
 
 private:
 	void setupGeometry();
+	void addCubeFace(const SbVec3f& x, const SbVec3f& z, ShapeId shapeType, PickId pickId, float rotZ = 0.0f);
 	std::string pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize);
 	void updateCameraRotation();
 	void updateSeparatorMaterials(SoSeparator* sep);
-	bool generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height, const wxColour& bgColor);
+	bool generateFaceTexture(const std::string& text, unsigned char* imageData, int width, int height, const wxColour& bgColor, float faceSize = 0.55f, PickId pickId = PickId::Front);
+	static int calculateVerticalBalance(const wxBitmap& bitmap, int fontSizeHint);
+	void createCubeFaceTextures();
+	std::string getFaceLabel(PickId pickId);
 	void regenerateFaceTexture(const std::string& faceName, bool isHover);
 	void calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const;
 	void generateAndCacheTextures();  // Generate and cache all textures at initialization
@@ -85,6 +136,7 @@ private:
 	SoDirectionalLight* m_fillLight;
 	SoDirectionalLight* m_sideLight;
 	SoTransform* m_cameraTransform;
+	SoTransform* m_geometryTransform;
 	bool m_enabled;
 	float m_dpiScale;
 	std::map<std::string, std::string> m_faceToView;
@@ -153,6 +205,20 @@ private:
 
 	// Face normal vectors and center points for camera positioning
 	std::map<std::string, std::pair<SbVec3f, SbVec3f>> m_faceNormals;
+
+	// Face vertex data (ported from FreeCAD NaviCube)
+	std::map<PickId, Face> m_Faces;
+
+	// Label textures for main faces
+	struct LabelTexture {
+		std::vector<SbVec3f> vertexArray;
+		float fontSize;
+	};
+	std::map<PickId, LabelTexture> m_LabelTextures;
+
+	// Font settings like FreeCAD
+	float m_fontZoom;
+	std::map<PickId, float> m_faceFontSizes;
 
 	// Static texture cache
 	static std::map<std::string, std::shared_ptr<TextureData>> s_textureCache;
