@@ -361,8 +361,8 @@ void OCCNavCube::setSize(double size) {
     buildShape();
 }
 
-double OCCNavCube::getSize() const {
-    return m_size;
+void OCCNavCube::getSize(double& size) const {
+    size = m_size;
 }
 
 // Enumeration for face types in rhombicuboctahedron
@@ -382,14 +382,13 @@ struct NavCubeFace {
 std::vector<TopoDS_Face> createRhombicuboctahedronFaces(double size, double chamferSize);
 TopoDS_Face createMainFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scale, double chamfer);
 TopoDS_Face createCornerFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scale, double chamfer, double rotZ);
-TopoDS_Face createEdgeFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scale, double chamfer, double rotZ);
+TopoDS_Face createEdgeFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scale, double chamfer, double rotZ, int edgeIndex);
 TopoDS_Face createFaceFromVertices(const std::vector<gp_Pnt>& vertices);
 
 void OCCNavCube::buildShape() {
     try {
         double size = std::max(m_size, 0.1); // Ensure minimum size of 0.1
         double chamferSize = 0.12 * size; // Chamfer size proportional to cube size
-        LOG_INF_S("Creating OCCNavCube rhombicuboctahedron with size: " + std::to_string(size));
 
         // Create all 26 faces of the rhombicuboctahedron
         std::vector<TopoDS_Face> faces = createRhombicuboctahedronFaces(size, chamferSize);
@@ -488,8 +487,6 @@ std::vector<TopoDS_Face> createRhombicuboctahedronFaces(double size, double cham
     int cornerFaces = 0;
     int edgeFaces = 0;
 
-    LOG_INF_S("=== Creating Rhombicuboctahedron Faces ===");
-    LOG_INF_S("Size: " + std::to_string(size) + ", ChamferSize: " + std::to_string(chamferSize));
 
     // Normalize size to 1.0 for calculations, then scale
     double scale = size / 1.0;
@@ -500,13 +497,8 @@ std::vector<TopoDS_Face> createRhombicuboctahedronFaces(double size, double cham
     gp_Vec y(0, 1, 0);
     gp_Vec z(0, 0, 1);
 
-    LOG_INF_S("Base vectors - x: (" + std::to_string(x.X()) + ", " + std::to_string(x.Y()) + ", " + std::to_string(x.Z()) +
-              "), y: (" + std::to_string(y.X()) + ", " + std::to_string(y.Y()) + ", " + std::to_string(y.Z()) +
-              "), z: (" + std::to_string(z.X()) + ", " + std::to_string(z.Y()) + ", " + std::to_string(z.Z()) + ")");
-    LOG_INF_S("Scale: " + std::to_string(scale) + ", Normalized chamfer: " + std::to_string(chamfer));
 
     try {
-        LOG_INF_S("Creating 6 MAIN FACES (octagons)...");
         // Create 6 main faces (octagons)
         faces.push_back(::createMainFace(x, z, scale, chamfer));      // Top
         faces.push_back(::createMainFace(x, -y, scale, chamfer));     // Front
@@ -516,7 +508,6 @@ std::vector<TopoDS_Face> createRhombicuboctahedronFaces(double size, double cham
         faces.push_back(::createMainFace(x, -z, scale, chamfer));     // Bottom
         mainFaces = 6;
 
-        LOG_INF_S("Creating 8 CORNER FACES (hexagons)...");
         // Create 8 corner faces (hexagons)
         faces.push_back(::createCornerFace(-x-y, x-y+z, scale, chamfer, M_PI));     // Front-Top-Right
         faces.push_back(::createCornerFace(-x+y, -x-y+z, scale, chamfer, M_PI));    // Front-Top-Left
@@ -528,47 +519,26 @@ std::vector<TopoDS_Face> createRhombicuboctahedronFaces(double size, double cham
         faces.push_back(::createCornerFace(-x-y, -x+y-z, scale, chamfer, 0));       // Rear-Bottom-Left
         cornerFaces = 8;
 
-        LOG_INF_S("Creating 12 EDGE FACES (quadrilaterals)...");
         // Create 12 edge faces (quadrilaterals)
         // Edge 0-3: X-axis edges
-        LOG_INF_S("Edge 0: Front-Top");
-        faces.push_back(::createEdgeFace(x, z-y, scale, chamfer, 0));             // Front-Top
-        LOG_INF_S("Edge 1: Front-Bottom");
-        faces.push_back(::createEdgeFace(x, -z-y, scale, chamfer, 0));            // Front-Bottom
-        LOG_INF_S("Edge 2: Rear-Bottom");
-        faces.push_back(::createEdgeFace(x, y-z, scale, chamfer, M_PI));           // Rear-Bottom
-        LOG_INF_S("Edge 3: Rear-Top");
-        faces.push_back(::createEdgeFace(x, y+z, scale, chamfer, M_PI));           // Rear-Top
+        faces.push_back(::createEdgeFace(x, z-y, scale, chamfer, 0, 0));             // Front-Top
+        faces.push_back(::createEdgeFace(x, -z-y, scale, chamfer, 0, 1));            // Front-Bottom
+        faces.push_back(::createEdgeFace(x, -y+z, scale, chamfer, M_PI, 2));          // Rear-Bottom
+        faces.push_back(::createEdgeFace(x, -y-z, scale, chamfer, M_PI, 3));          // Rear-Top
         
         // Edge 4-7: Z-axis edges  
-        LOG_INF_S("Edge 4: Rear-Right");
-        faces.push_back(::createEdgeFace(z, x+y, scale, chamfer, M_PI/2));         // Rear-Right
-        LOG_INF_S("Edge 5: Front-Right");
-        faces.push_back(::createEdgeFace(z, x-y, scale, chamfer, M_PI/2));         // Front-Right
-        LOG_INF_S("Edge 6: Front-Left");
-        faces.push_back(::createEdgeFace(z, -x-y, scale, chamfer, M_PI/2));        // Front-Left
-        LOG_INF_S("Edge 7: Rear-Left");
-        faces.push_back(::createEdgeFace(z, y-x, scale, chamfer, M_PI/2));         // Rear-Left
+        faces.push_back(::createEdgeFace(z, x+y, scale, chamfer, M_PI/2, 4));         // Rear-Right
+        faces.push_back(::createEdgeFace(z, x-y, scale, chamfer, M_PI/2, 5));         // Front-Right
+        faces.push_back(::createEdgeFace(z, -x-y, scale, chamfer, M_PI/2, 6));        // Front-Left
+        faces.push_back(::createEdgeFace(z, y-x, scale, chamfer, M_PI/2, 7));         // Rear-Left
         
         // Edge 8-11: Y-axis edges
-        LOG_INF_S("Edge 8: Top-Left");
-        faces.push_back(::createEdgeFace(y, z-x, scale, chamfer, M_PI));           // Top-Left
-        LOG_INF_S("Edge 9: Top-Right");
-        faces.push_back(::createEdgeFace(y, x+z, scale, chamfer, 0));              // Top-Right
-        LOG_INF_S("Edge 10: Bottom-Right");
-        faces.push_back(::createEdgeFace(y, x-z, scale, chamfer, 0));              // Bottom-Right
-        LOG_INF_S("Edge 11: Bottom-Left");
-        faces.push_back(::createEdgeFace(y, -z-x, scale, chamfer, M_PI));          // Bottom-Left
+        faces.push_back(::createEdgeFace(y, -z+x, scale, chamfer, M_PI, 8));          // Top-Left
+        faces.push_back(::createEdgeFace(y, x+z, scale, chamfer, 0, 9));              // Top-Right
+        faces.push_back(::createEdgeFace(y, x-z, scale, chamfer, 0, 10));              // Bottom-Right
+        faces.push_back(::createEdgeFace(y, z+x, scale, chamfer, M_PI, 11));           // Bottom-Left
         edgeFaces = 12;
 
-        LOG_INF_S("=== Face Creation Complete ===");
-        LOG_INF_S("Total faces created: " + std::to_string(faces.size()) + " (expected: 26)");
-        LOG_INF_S("Face breakdown:");
-        LOG_INF_S("  - Main faces (octagons): " + std::to_string(mainFaces));
-        LOG_INF_S("  - Corner faces (hexagons): " + std::to_string(cornerFaces));
-        LOG_INF_S("  - Edge faces (quadrilaterals): " + std::to_string(edgeFaces));
-        LOG_INF_S("  - Total hexagons: " + std::to_string(cornerFaces));
-        LOG_INF_S("  - Total quadrilaterals: " + std::to_string(edgeFaces));
 
     } catch (const std::exception& e) {
         LOG_ERR_S("Exception in createRhombicuboctahedronFaces: " + std::string(e.what()));
@@ -581,7 +551,6 @@ std::vector<TopoDS_Face> createRhombicuboctahedronFaces(double size, double cham
 TopoDS_Face createMainFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scale, double chamfer) {
     gp_Vec yAxis = xAxis.Crossed(zAxis); // Calculate y axis
 
-    LOG_INF_S("MAIN_FACE - Octagon");
 
     // Calculate octagon vertices based on CuteNavCube's implementation
     double x2_scale = 1.0 - chamfer * 2.0;
@@ -610,7 +579,6 @@ TopoDS_Face createCornerFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double sc
     gp_Vec yAxis = xAxis.Crossed(zAxis);
     gp_Vec zAxisRot = zAxis;
 
-    LOG_INF_S("CORNER_FACE - Hexagon");
 
     // Apply rotation if needed
     if (rotZ != 0) {
@@ -639,17 +607,11 @@ TopoDS_Face createCornerFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double sc
 }
 
 // Create an edge face (quadrilateral)
-TopoDS_Face createEdgeFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scale, double chamfer, double rotZ) {
-    // Fix: Calculate yAxis before rotation, using -zAxis to match CuteNavCube convention
+TopoDS_Face createEdgeFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scale, double chamfer, double rotZ, int edgeIndex) {
+    // Calculate yAxis before rotation, using -zAxis to match CuteNavCube convention
     gp_Vec yAxis = xAxis.Crossed(-zAxis);
     gp_Vec xAxisRot = xAxis;
     gp_Vec zAxisRot = zAxis;
-
-    LOG_INF_S("EDGE_FACE - Quadrilateral");
-    LOG_INF_S("  xAxis: (" + std::to_string(xAxis.X()) + "," + std::to_string(xAxis.Y()) + "," + std::to_string(xAxis.Z()) + ")");
-    LOG_INF_S("  zAxis: (" + std::to_string(zAxis.X()) + "," + std::to_string(zAxis.Y()) + "," + std::to_string(zAxis.Z()) + ")");
-    LOG_INF_S("  rotZ: " + std::to_string(rotZ));
-    LOG_INF_S("  Initial yAxis: (" + std::to_string(yAxis.X()) + "," + std::to_string(yAxis.Y()) + "," + std::to_string(yAxis.Z()) + ")");
 
     // Apply rotation to all axes
     if (rotZ != 0) {
@@ -657,9 +619,7 @@ TopoDS_Face createEdgeFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scal
         rotation.SetRotation(gp_Ax1(gp_Pnt(0,0,0), gp_Dir(0,0,1)), rotZ);
         xAxisRot.Transform(rotation);
         zAxisRot.Transform(rotation);
-        yAxis.Transform(rotation);  // Important: rotate yAxis too
-        LOG_INF_S("  After rotation - xAxisRot: (" + std::to_string(xAxisRot.X()) + "," + std::to_string(xAxisRot.Y()) + "," + std::to_string(xAxisRot.Z()) + ")");
-        LOG_INF_S("  After rotation - yAxis: (" + std::to_string(yAxis.X()) + "," + std::to_string(yAxis.Y()) + "," + std::to_string(yAxis.Z()) + ")");
+        yAxis.Transform(rotation);
     }
 
     // Calculate quadrilateral vertices based on CuteNavCube's implementation
@@ -674,6 +634,7 @@ TopoDS_Face createEdgeFace(const gp_Vec& xAxis, const gp_Vec& zAxis, double scal
         gp_Pnt((zAxisRot * zE_scale * scale - xAxisRot * x4_scale * scale + yAxis * chamfer * scale).XYZ())  // Bottom-right
     };
 
+
     return ::createFaceFromVertices(vertices);
 }
 
@@ -685,25 +646,6 @@ TopoDS_Face createFaceFromVertices(const std::vector<gp_Pnt>& vertices) {
     }
 
     try {
-        // Calculate face normal using first three vertices
-        gp_Vec v1(vertices[1].XYZ() - vertices[0].XYZ());
-        gp_Vec v2(vertices[2].XYZ() - vertices[0].XYZ());
-        gp_Vec normal = v1.Crossed(v2);
-        normal.Normalize();
-
-        // Log simplified vertex info and normal
-        std::string faceLog = "Face[" + std::to_string(vertices.size()) + "]: ";
-        for (size_t i = 0; i < vertices.size(); ++i) {
-            if (i > 0) faceLog += " -> ";
-            faceLog += "(" + std::to_string(int(vertices[i].X()*100)/100.0) + "," +
-                      std::to_string(int(vertices[i].Y()*100)/100.0) + "," +
-                      std::to_string(int(vertices[i].Z()*100)/100.0) + ")";
-        }
-        faceLog += " | Normal: (" + std::to_string(int(normal.X()*100)/100.0) + "," +
-                  std::to_string(int(normal.Y()*100)/100.0) + "," +
-                  std::to_string(int(normal.Z()*100)/100.0) + ")";
-        LOG_INF_S(faceLog);
-
         // Create wire from vertices in REVERSE order to ensure outward normals
         // OpenCascade uses right-hand rule: counter-clockwise vertex order = outward normal
         BRepBuilderAPI_MakeWire wireMaker;

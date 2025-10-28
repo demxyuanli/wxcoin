@@ -101,6 +101,7 @@ public:
 	void setSize(int size) { m_cubeSize = size; }
 	int getSize() const { return m_cubeSize; }
 
+
 	// Hover effect configuration
 	void setHoverColors(const SbColor& normalColor, const SbColor& hoverColor) {
 		m_normalFaceColor = normalColor;

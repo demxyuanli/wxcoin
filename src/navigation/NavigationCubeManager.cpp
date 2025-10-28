@@ -24,12 +24,10 @@ void NavigationCubeManager::Layout::update(int newX_logical, int newY_logical, i
 NavigationCubeManager::NavigationCubeManager(Canvas* canvas, SceneManager* sceneManager)
 	: m_canvas(canvas), m_sceneManager(sceneManager), m_isEnabled(true)
 {
-	LOG_INF_S("NavigationCubeManager: Initializing");
 	// Initialize default configuration
 	m_cubeConfig = CubeConfig{};
 
-	// Load configuration from persistent storage
-	loadConfigFromPersistent();
+	// Load configuration from persistent storage (quietly)
 
 	// Override default configuration values
 	m_cubeConfig.size = 80;        // geometry size
@@ -49,10 +47,6 @@ NavigationCubeManager::NavigationCubeManager(Canvas* canvas, SceneManager* scene
 		m_marginy = dpiManager.getScaledSize(20);
 	}
 
-	LOG_INF_S("NavigationCubeManager: Initialized with margins from config: " +
-		std::to_string(m_marginx) + "x" + std::to_string(m_marginy) +
-		", config size: " + std::to_string(m_cubeConfig.size));
-
 	// Don't initialize immediately - wait for proper canvas sizing
 	// initCube() will be called when needed
 }
@@ -63,18 +57,16 @@ NavigationCubeManager::~NavigationCubeManager()
 }
 
 void NavigationCubeManager::initCube() {
-	if (!m_isEnabled || m_navCube) return; // Already initialized
+	if (!m_isEnabled || m_navCube) {
+		// Skip initialization - already done or disabled
+		return;
+	}
 
 	// Check if canvas has valid size
 	wxSize clientSize = m_canvas->GetClientSize();
 	if (clientSize.x <= 50 || clientSize.y <= 50) {
-		LOG_INF_S("NavigationCubeManager::initCube: Skipping initialization - canvas size too small: " +
-			std::to_string(clientSize.x) + "x" + std::to_string(clientSize.y));
 		return;
 	}
-
-	LOG_INF_S("NavigationCubeManager::initCube: Initializing with valid canvas size: " +
-		std::to_string(clientSize.x) + "x" + std::to_string(clientSize.y));
 
 	try {
 		auto cubeCallback = [this](const std::string& faceName) {
@@ -264,16 +256,6 @@ void NavigationCubeManager::render() {
 		                (currentSize != lastSize);
 
 		if (shouldLog) {
-		float dpiScale = m_canvas->getDPIScale();
-			LOG_INF_S(std::string("NavigationCubeManager::render: Cube position updated - ") +
-				"clientSize: " + std::to_string(currentClientSize.x) + "x" + std::to_string(currentClientSize.y) +
-				", position: x=" + std::to_string(m_cubeLayout.x) + ", y=" + std::to_string(m_cubeLayout.y) +
-				", size=" + std::to_string(m_cubeLayout.cubeSize) +
-				", physical: " + std::to_string(m_cubeLayout.x * dpiScale) + "x" +
-				std::to_string(m_cubeLayout.y * dpiScale) + " to " +
-				std::to_string((m_cubeLayout.x + m_cubeLayout.cubeSize) * dpiScale) + "x" +
-				std::to_string((m_cubeLayout.y + m_cubeLayout.cubeSize) * dpiScale));
-
 			lastClientSize = currentClientSize;
 			lastPosition = currentPosition;
 			lastSize = currentSize;
@@ -530,8 +512,6 @@ void NavigationCubeManager::showConfigDialog() {
 
 		// Save configuration to persistent storage
 		saveConfigToPersistent();
-
-		LOG_INF_S("NavigationCubeManager::showConfigDialog: Configuration updated and saved");
 	}
 }
 
@@ -545,15 +525,6 @@ CubeConfig NavigationCubeManager::getConfig() const {
 }
 
 void NavigationCubeManager::applyConfig(const CubeConfig& config) {
-	// Log configuration being applied
-	LOG_INF_S(std::string("NavigationCubeManager::applyConfig: Applying configuration - ") +
-		"position: (" + std::to_string(config.x) + "," + std::to_string(config.y) + "), " +
-		"size: " + std::to_string(config.size) + ", " +
-		"viewportSize: " + std::to_string(config.viewportSize) + ", " +
-		"cubeSize: " + std::to_string(config.cubeSize) + ", " +
-		"showEdges: " + std::string(config.showEdges ? "true" : "false") + ", " +
-		"showCorners: " + std::string(config.showCorners ? "true" : "false") + ", " +
-		"showTextures: " + std::string(config.showTextures ? "true" : "false"));
 
 	// Apply position and size
 	// Convert margins to coordinates: X is margin from right edge, Y is margin from top edge
@@ -568,8 +539,6 @@ void NavigationCubeManager::applyConfig(const CubeConfig& config) {
 	// size affects cube internal geometry, not layout position
 	if (m_navCube && config.size != m_navCube->getSize()) {
 		m_navCube->setSize(config.size);
-		LOG_INF_S("NavigationCubeManager::applyConfig: Updated cube geometric size to " + std::to_string(config.size) +
-			" (layout viewport size: " + std::to_string(config.viewportSize) + ")");
 	}
 	
 	// Update layout size using viewportSize
@@ -581,13 +550,10 @@ void NavigationCubeManager::applyConfig(const CubeConfig& config) {
 	// Apply colors and material properties to the cube
 	if (m_navCube) {
 		m_navCube->applyConfig(config);
-		LOG_INF_S("NavigationCubeManager::applyConfig: Applied cube-specific configuration");
 	}
 
 	// Refresh display
 	m_canvas->Refresh(true);
-	LOG_INF_S("NavigationCubeManager::applyConfig: Applied new configuration - final position: (" +
-		std::to_string(m_cubeLayout.x) + "," + std::to_string(m_cubeLayout.y) + "), size: " + std::to_string(m_cubeLayout.cubeSize));
 }
 
 void NavigationCubeManager::centerCubeInViewport() {
@@ -609,13 +575,6 @@ void NavigationCubeManager::centerCubeInViewport() {
 
 	// Apply the centered position
 	setRect(centeredX, centeredY, m_cubeLayout.cubeSize);
-
-	LOG_INF_S("NavigationCubeManager::centerCubeInViewport: Centered cube at x=" +
-		std::to_string(centeredX) + ", y=" + std::to_string(centeredY) +
-		", logical position: " + std::to_string(centeredX * dpiScale) + "x" +
-		std::to_string(centeredY * dpiScale) + " to " +
-		std::to_string((centeredX + m_cubeLayout.cubeSize) * dpiScale) + "x" +
-		std::to_string((centeredY + m_cubeLayout.cubeSize) * dpiScale));
 }
 
 void NavigationCubeManager::calculateCenteredPosition(int& x, int& y, int cubeSize, const wxSize& windowSize) {
@@ -660,11 +619,6 @@ void NavigationCubeManager::calculateCenteredPosition(int& x, int& y, int cubeSi
 	// Ensure cube stays within window bounds
 	x = std::max(0, std::min(x, windowWidthLogical - cubeSize));
 	y = std::max(0, std::min(y, windowHeightLogical - cubeSize));
-
-	LOG_INF_S("NavigationCubeManager::calculateCenteredPosition: Using circle-centered fallback: x=" +
-		std::to_string(x) + ", y=" + std::to_string(y) +
-		" (circle center: " + std::to_string(circleCenterX) + "," + std::to_string(circleCenterY) + ")" +
-		" (window: " + std::to_string(windowWidthLogical) + "x" + std::to_string(windowHeightLogical) + ")");
 }
 
 void NavigationCubeManager::saveConfigToPersistent() {
@@ -717,9 +671,7 @@ void NavigationCubeManager::saveConfigToPersistent() {
 	configManager.setInt(section, "CircleMarginY", m_cubeConfig.circleMarginY);
 	
 	// Save to file
-	if (configManager.save()) {
-		LOG_INF_S("NavigationCubeManager::saveConfigToPersistent: Configuration saved successfully");
-	} else {
+	if (!configManager.save()) {
 		LOG_ERR_S("NavigationCubeManager::saveConfigToPersistent: Failed to save configuration");
 	}
 }
@@ -776,6 +728,4 @@ void NavigationCubeManager::loadConfigFromPersistent() {
 	m_cubeConfig.circleRadius = configManager.getInt(section, "CircleRadius", m_cubeConfig.circleRadius);
 	m_cubeConfig.circleMarginX = configManager.getInt(section, "CircleMarginX", m_cubeConfig.circleMarginX);
 	m_cubeConfig.circleMarginY = configManager.getInt(section, "CircleMarginY", m_cubeConfig.circleMarginY);
-	
-	LOG_INF_S("NavigationCubeManager::loadConfigFromPersistent: Configuration loaded from persistent storage");
 }
