@@ -75,6 +75,7 @@ public:
 
 	// Face info overlay
 	FaceInfoOverlay* getFaceInfoOverlay() { return &m_faceInfoOverlay; }
+
 private:
 	void initializeSubsystems();
 	void connectSubsystems();

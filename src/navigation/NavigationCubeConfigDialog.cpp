@@ -18,7 +18,7 @@ enum {
     ID_CHAMFER_SIZE_SLIDER,
     ID_CAMERA_DISTANCE_SLIDER,
     ID_CENTER_CUBE_BUTTON
-};
+}; 
 
 BEGIN_EVENT_TABLE(NavigationCubeConfigDialog, FramelessModalPopup)
 EVT_BUTTON(wxID_OK, NavigationCubeConfigDialog::OnOK)

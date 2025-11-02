@@ -1,11 +1,15 @@
 #include "renderpreview/PreviewCanvas.h"
 #include "renderpreview/LightManager.h"
+#include "renderpreview/BackgroundConfigListener.h"
+#include "RenderingEngine.h"
 #include "logger/Logger.h"
 #include "OCCGeometry.h"
 #include "OCCMeshConverter.h"
 #include "rendering/RenderingToolkitAPI.h"
 #include "rendering/GeometryProcessor.h"
 #include "config/RenderingConfig.h"
+#include "config/ConfigManager.h"
+#include "SoFCBackgroundGradient.h"
 #include <wx/dcclient.h>
 #include <wx/image.h>
 #include <wx/filename.h>
@@ -39,6 +43,7 @@
 #include <Inventor/SoOffscreenRenderer.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoSearchAction.h>
+#include <Inventor/SbViewportRegion.h>
 #include <GL/gl.h>
 #include <GL/glext.h>
 
@@ -71,13 +76,29 @@ PreviewCanvas::PreviewCanvas(wxWindow* parent, wxWindowID id, const wxPoint& pos
 	, m_sceneRoot(nullptr)
 	, m_camera(nullptr)
 	, m_objectRoot(nullptr)
+	, m_backgroundRoot(nullptr)
 	, m_lightMaterial(nullptr)
+	, m_backgroundGradient(nullptr)
+	, m_backgroundImage(nullptr)
 	, m_glContext(nullptr)
 	, m_initialized(false)
 	, m_mouseDown(false)
 	, m_lastMousePos(0, 0)
 	, m_cameraDistance(15.0f)
 	, m_cameraCenter(0.0f, 0.0f, 0.0f)
+	, m_runtimeConfigId(-1)
+	, m_configBackgroundMode(0)
+	, m_configBackgroundColorR(1.0)
+	, m_configBackgroundColorG(1.0)
+	, m_configBackgroundColorB(1.0)
+	, m_configGradientTopR(0.7)
+	, m_configGradientTopG(0.7)
+	, m_configGradientTopB(0.9)
+	, m_configGradientBottomR(0.5)
+	, m_configGradientBottomG(0.5)
+	, m_configGradientBottomB(0.8)
+	, m_configBackgroundTexturePath("")
+	, m_backgroundConfigListener(nullptr)
 {
 	LOG_INF_S("PreviewCanvas::PreviewCanvas: Initializing");
 	SetName("PreviewCanvas");
@@ -114,6 +135,27 @@ PreviewCanvas::PreviewCanvas(wxWindow* parent, wxWindowID id, const wxPoint& pos
 PreviewCanvas::~PreviewCanvas()
 {
 	LOG_INF_S("PreviewCanvas::~PreviewCanvas: Destroying");
+
+	// Clean up background configuration listener
+	if (m_backgroundConfigListener) {
+		delete m_backgroundConfigListener;
+		m_backgroundConfigListener = nullptr;
+	}
+
+	// Clean up background nodes
+	if (m_backgroundImage) {
+		m_backgroundImage->unref();
+		m_backgroundImage = nullptr;
+	}
+	if (m_backgroundGradient) {
+		m_backgroundGradient->unref();
+		m_backgroundGradient = nullptr;
+	}
+	if (m_backgroundRoot) {
+		m_backgroundRoot->unref();
+		m_backgroundRoot = nullptr;
+	}
+
 	if (m_glContext) {
 		delete m_glContext;
 	}
@@ -122,6 +164,14 @@ PreviewCanvas::~PreviewCanvas()
 void PreviewCanvas::initializeScene()
 {
 	LOG_INF_S("PreviewCanvas::initializeScene: Creating scene graph");
+
+	// Initialize SoFCBackgroundGradient and SoFCBackgroundImage classes
+	if (SoFCBackgroundGradient::getClassTypeId() == SoType::badType()) {
+		SoFCBackgroundGradient::initClass();
+	}
+	if (SoFCBackgroundImage::getClassTypeId() == SoType::badType()) {
+		SoFCBackgroundImage::initClass();
+	}
 
 	// Create scene root
 	m_sceneRoot = new SoSeparator;
@@ -141,11 +191,34 @@ void PreviewCanvas::initializeScene()
 	SbVec3f defaultDir(0, 0, -1);
 	SbRotation rotation(defaultDir, viewDir);
 	m_camera->orientation.setValue(rotation);
+
+	// Add camera first (must be before objects that use perspective projection)
 	m_sceneRoot->addChild(m_camera);
+
+	// Set up background scenegraph with gradient/image in it (FreeCAD style)
+	// Background root is added after camera, but background nodes will render before camera affects state
+	m_backgroundRoot = new SoSeparator;
+	m_backgroundRoot->ref();
+	m_backgroundRoot->setName("backgroundroot");
+
+	// Background gradient node (FreeCAD style)
+	m_backgroundGradient = new SoFCBackgroundGradient;
+	m_backgroundGradient->ref();
+	// Don't add to backgroundRoot yet - will be added/removed based on mode
+
+	// Background image node (FreeCAD style)
+	m_backgroundImage = new SoFCBackgroundImage;
+	m_backgroundImage->ref();
+	// Don't add to backgroundRoot yet - will be added/removed based on mode
 
 	// Create object root
 	m_objectRoot = new SoSeparator;
 	m_objectRoot->ref();
+
+	// Add background root and object root to main scene
+	// Note: backgroundGradient renders with its own projection, then restores state
+	// Camera sets projection for subsequent objects
+	m_sceneRoot->addChild(m_backgroundRoot);
 	m_sceneRoot->addChild(m_objectRoot);
 
 	// Set light model to enable proper lighting calculation (must be before lights)
@@ -153,12 +226,18 @@ void PreviewCanvas::initializeScene()
 	lightModel->model.setValue(SoLightModel::PHONG);
 	m_sceneRoot->addChild(lightModel);
 
-	// Initialize managers
-	m_objectManager = std::make_unique<ObjectManager>(m_sceneRoot, m_objectRoot);
-	m_lightManager = std::make_unique<LightManager>(m_sceneRoot, m_objectRoot);
-	m_antiAliasingManager = std::make_unique<AntiAliasingManager>(this, m_glContext);
-	m_renderingManager = std::make_unique<RenderingManager>(m_sceneRoot, this, m_glContext);
-	m_backgroundManager = std::make_unique<BackgroundManager>(this);
+		// Initialize managers
+		m_objectManager = std::make_unique<ObjectManager>(m_sceneRoot, m_objectRoot);
+		m_lightManager = std::make_unique<LightManager>(m_sceneRoot, m_objectRoot);
+		m_antiAliasingManager = std::make_unique<AntiAliasingManager>(this, m_glContext);
+		m_renderingManager = std::make_unique<RenderingManager>(m_sceneRoot, this, m_glContext);
+		m_backgroundManager = std::make_unique<BackgroundManager>(this);
+
+		// Initialize background configuration listener
+		m_backgroundConfigListener = new BackgroundConfigListener(this);
+
+		// Initialize background settings from config
+		updateBackgroundFromConfig();
 
 	// Create default scene
 	createDefaultScene();
@@ -583,105 +662,13 @@ void PreviewCanvas::render(bool fastMode)
 		fastMode ? SoGLRenderAction::BLEND : SoGLRenderAction::SORTED_OBJECT_BLEND
 	);
 
-	// Set up OpenGL state for proper lighting
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glEnable(GL_LIGHTING); // Enable lighting
-	glEnable(GL_NORMALIZE); // Enable normal normalization for proper lighting
-	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE); // Enable two-sided lighting for shell models
-	glEnable(GL_TEXTURE_2D);
+	// Set viewport for rendering
+	glViewport(0, 0, size.GetWidth(), size.GetHeight());
 
-	// Handle background rendering based on RenderingManager settings
-	if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
-		RenderingSettings settings = m_renderingManager->getActiveConfiguration();
-
-		// Render background based on style BEFORE clearing the buffer
-		switch (settings.backgroundStyle) {
-		case 0: // Solid Color
-			// Clear with solid background color
-		{
-			float r = settings.backgroundColor.Red() / 255.0f;
-			float g = settings.backgroundColor.Green() / 255.0f;
-			float b = settings.backgroundColor.Blue() / 255.0f;
-			glClearColor(r, g, b, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied solid background color");
-		}
-		break;
-		case 1: // Gradient
-			// Clear with a neutral color first
-			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			// Then render gradient background
-			renderGradientBackground(settings.gradientTopColor, settings.gradientBottomColor);
-			LOG_INF_S("PreviewCanvas::render: Applied gradient background");
-			break;
-		case 2: // Image
-			// Clear with a neutral color first
-			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			// Render image background
-			if (settings.backgroundImageEnabled && !settings.backgroundImagePath.empty()) {
-				renderImageBackground(settings.backgroundImagePath,
-					settings.backgroundImageOpacity,
-					settings.backgroundImageFit,
-					settings.backgroundImageMaintainAspect);
-				LOG_INF_S("PreviewCanvas::render: Applied image background");
-			}
-			else {
-				LOG_INF_S("PreviewCanvas::render: Image background not enabled or no path specified");
-			}
-			break;
-		case 3: // Environment
-			// Use environment color (sky blue)
-			glClearColor(0.53f, 0.81f, 0.92f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied environment background");
-			break;
-		case 4: // Studio
-			// Use studio color (light blue)
-			glClearColor(0.94f, 0.97f, 1.0f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied studio background");
-			break;
-		case 5: // Outdoor
-			// Use outdoor color (light yellow)
-			glClearColor(1.0f, 1.0f, 0.88f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied outdoor background");
-			break;
-		case 6: // Industrial
-			// Use industrial color (light gray)
-			glClearColor(0.96f, 0.96f, 0.96f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied industrial background");
-			break;
-		case 7: // CAD
-			// Use CAD color (light cream)
-			glClearColor(1.0f, 0.97f, 0.86f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied CAD background");
-			break;
-		case 8: // Dark
-			// Use dark color (dark gray)
-			glClearColor(0.16f, 0.16f, 0.16f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied dark background");
-			break;
-		default:
-			// Default light blue background
-			glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			LOG_INF_S("PreviewCanvas::render: Applied default background");
-			break;
-		}
-	}
-	else {
-		// Default light blue background
-		glClearColor(0.6f, 0.8f, 1.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		LOG_INF_S("PreviewCanvas::render: Applied default background (no RenderingManager)");
-	}
+	// Render background BEFORE scene graph (same as main view RenderingEngine)
+	// This ensures background is rendered correctly and doesn't interfere with scene rendering
+	LOG_INF_S("render: calling renderBackgroundDirectly, fastMode=" + std::to_string(fastMode));
+	renderBackgroundDirectly(size);
 
 	// Reset OpenGL errors before rendering
 	GLenum err;
@@ -689,14 +676,24 @@ void PreviewCanvas::render(bool fastMode)
 		LOG_ERR_S("Pre-render: OpenGL error: " + std::to_string(err));
 	}
 
-	// Apply rendering mode settings before rendering the scene
-	if (m_renderingManager && m_renderingManager->hasActiveConfiguration()) {
-		RenderingSettings settings = m_renderingManager->getActiveConfiguration();
-		applyRenderingModeSettings(settings);
-	}
+	// Set up OpenGL state for proper lighting and scene rendering
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glEnable(GL_LIGHTING); // Enable lighting
+	glEnable(GL_NORMALIZE); // Enable normal normalization for proper lighting
+	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE); // Enable two-sided lighting for shell models
+	glEnable(GL_TEXTURE_2D);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glColor3f(1.0f, 1.0f, 1.0f); // Reset color to white
 
-	// Reset OpenGL state to prevent errors
-	glDisable(GL_TEXTURE_2D);
+	// Debug: Check scene graph structure
+	LOG_INF_S("PreviewCanvas::render: Scene root children: " + std::to_string(m_sceneRoot->getNumChildren()));
+	if (m_backgroundRoot) {
+		LOG_INF_S("PreviewCanvas::render: Background root children: " + std::to_string(m_backgroundRoot->getNumChildren()));
+	}
+	if (m_objectRoot) {
+		LOG_INF_S("PreviewCanvas::render: Object root children: " + std::to_string(m_objectRoot->getNumChildren()));
+	}
 
 	// Render the scene
 	try {
@@ -885,7 +882,36 @@ void PreviewCanvas::onSize(wxSizeEvent& event)
 
 void PreviewCanvas::onEraseBackground(wxEraseEvent& event)
 {
-	// Do nothing to prevent flickering
+	// Clear with our background color to prevent flickering and ensure proper background
+	if (m_glContext && m_initialized) {
+		SetCurrent(*m_glContext);
+		switch (m_configBackgroundMode) {
+		case 0: // Solid color
+			glClearColor(static_cast<float>(m_configBackgroundColorR),
+				static_cast<float>(m_configBackgroundColorG),
+				static_cast<float>(m_configBackgroundColorB), 1.0f);
+			break;
+		case 1: // Linear Gradient
+		case 2: // Radial Gradient
+			// For gradients, use the top color as erase background
+			glClearColor(static_cast<float>(m_configGradientTopR),
+				static_cast<float>(m_configGradientTopG),
+				static_cast<float>(m_configGradientTopB), 1.0f);
+			break;
+		case 3: // Texture
+			// For texture, use solid background color
+			glClearColor(static_cast<float>(m_configBackgroundColorR),
+				static_cast<float>(m_configBackgroundColorG),
+				static_cast<float>(m_configBackgroundColorB), 1.0f);
+			break;
+		default:
+			glClearColor(0.7f, 0.7f, 0.9f, 1.0f); // Default light blue
+			break;
+		}
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		SwapBuffers();
+	}
+	// Don't skip the event to prevent wxWidgets default behavior
 }
 
 void PreviewCanvas::onMouseDown(wxMouseEvent& event)
@@ -1426,6 +1452,446 @@ std::vector<ObjectSettings> PreviewCanvas::getAllObjects() const
 	return m_objectManager->getAllObjectSettings();
 }
 
+void PreviewCanvas::updateBackgroundFromConfig()
+{
+	if (!m_backgroundRoot || !m_backgroundGradient || !m_backgroundImage) {
+		LOG_ERR_S("PreviewCanvas::updateBackgroundFromConfig: Background nodes not initialized");
+		return;
+	}
+
+	// Read background settings from config
+	int backgroundMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 0);
+
+	// Store current settings
+	m_configBackgroundMode = backgroundMode;
+	m_configBackgroundColorR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorR", 1.0);
+	m_configBackgroundColorG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 1.0);
+	m_configBackgroundColorB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 1.0);
+
+	m_configGradientTopR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.7);
+	m_configGradientTopG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.7);
+	m_configGradientTopB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 0.9);
+
+	m_configGradientBottomR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.5);
+	m_configGradientBottomG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.5);
+	m_configGradientBottomB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 0.8);
+
+	m_configBackgroundTexturePath = ConfigManager::getInstance().getString("Canvas", "BackgroundTexturePath", "");
+
+	// Update background gradient node based on mode (FreeCAD style)
+	switch (backgroundMode) {
+	case 0: // Solid Color
+	{
+		// Remove gradient and image from scene graph
+		if (m_backgroundRoot->findChild(m_backgroundGradient) != -1) {
+			m_backgroundRoot->removeChild(m_backgroundGradient);
+			LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Removed gradient from scene graph");
+		}
+		if (m_backgroundRoot->findChild(m_backgroundImage) != -1) {
+			m_backgroundRoot->removeChild(m_backgroundImage);
+			LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Removed image from scene graph");
+		}
+		break;
+	}
+
+	case 1: // Linear Gradient
+	{
+		// Remove image from scene graph
+		if (m_backgroundRoot->findChild(m_backgroundImage) != -1) {
+			m_backgroundRoot->removeChild(m_backgroundImage);
+		}
+		
+		// Set gradient type and colors
+		m_backgroundGradient->setGradient(SoFCBackgroundGradient::LINEAR);
+		SbColor fromColor(static_cast<float>(m_configGradientTopR),
+			static_cast<float>(m_configGradientTopG),
+			static_cast<float>(m_configGradientTopB));
+		SbColor toColor(static_cast<float>(m_configGradientBottomR),
+			static_cast<float>(m_configGradientBottomG),
+			static_cast<float>(m_configGradientBottomB));
+		m_backgroundGradient->setColorGradient(fromColor, toColor);
+		
+		// Add to scene graph if not already present
+		if (m_backgroundRoot->findChild(m_backgroundGradient) == -1) {
+			m_backgroundRoot->addChild(m_backgroundGradient);
+			LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Added linear gradient to scene graph");
+		}
+		break;
+	}
+
+	case 2: // Radial Gradient
+	{
+		// Remove image from scene graph
+		if (m_backgroundRoot->findChild(m_backgroundImage) != -1) {
+			m_backgroundRoot->removeChild(m_backgroundImage);
+		}
+		
+		// Set gradient type and colors
+		m_backgroundGradient->setGradient(SoFCBackgroundGradient::RADIAL);
+		SbColor fromColor2(static_cast<float>(m_configGradientTopR),
+			static_cast<float>(m_configGradientTopG),
+			static_cast<float>(m_configGradientTopB));
+		SbColor toColor2(static_cast<float>(m_configGradientBottomR),
+			static_cast<float>(m_configGradientBottomG),
+			static_cast<float>(m_configGradientBottomB));
+		m_backgroundGradient->setColorGradient(fromColor2, toColor2);
+		
+		// Add to scene graph if not already present
+		if (m_backgroundRoot->findChild(m_backgroundGradient) == -1) {
+			m_backgroundRoot->addChild(m_backgroundGradient);
+			LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Added radial gradient to scene graph");
+		}
+		break;
+	}
+
+	case 3: // Texture
+	{
+		// Remove gradient from scene graph
+		if (m_backgroundRoot->findChild(m_backgroundGradient) != -1) {
+			m_backgroundRoot->removeChild(m_backgroundGradient);
+			LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Removed gradient for texture mode");
+		}
+		
+		// Set image path and add to scene graph (FreeCAD style)
+		if (!m_configBackgroundTexturePath.empty()) {
+			m_backgroundImage->setImagePath(m_configBackgroundTexturePath);
+			
+			// Get fit mode and maintain aspect from BackgroundManager if available
+			// BackgroundStylePanel uses: 0=Fill, 1=Fit, 2=Stretch
+			// SoFCBackgroundImage uses: 0=Fill/Tile, 1=Fit, 2=Stretch
+			// They match directly
+			int imageFit = 0; // Default: Fill (0=Fill/Tile, 1=Fit, 2=Stretch)
+			bool maintainAspect = true;
+			float imageOpacity = 1.0f;
+			
+			if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
+				BackgroundSettings settings = m_backgroundManager->getActiveConfiguration();
+				imageFit = settings.imageFit;
+				maintainAspect = settings.imageMaintainAspect;
+				imageOpacity = settings.imageOpacity;
+				
+				// Map BackgroundManager fit mode to SoFCBackgroundImage fit mode
+				// BackgroundSettings defines: 0=Stretch, 1=Fit, 2=Center, 3=Tile
+				// But BackgroundStylePanel passes: 0=Fill, 1=Fit, 2=Stretch directly
+				// So we need to check which convention is actually used
+				// For now, assume BackgroundStylePanel convention (0=Fill, 1=Fit, 2=Stretch)
+				// and map accordingly
+				int mappedFit = imageFit;
+				if (imageFit >= 0 && imageFit <= 2) {
+					// Already in correct format from BackgroundStylePanel
+					mappedFit = imageFit;
+				} else {
+					// Fallback: try to map from BackgroundSettings convention
+					if (imageFit == 3) mappedFit = 0; // Tile -> Fill
+					else if (imageFit == 1) mappedFit = 1; // Fit
+					else mappedFit = 2; // Stretch or Center
+				}
+				
+				m_backgroundImage->setFitMode(mappedFit);
+				m_backgroundImage->setMaintainAspect(maintainAspect);
+				m_backgroundImage->setOpacity(imageOpacity);
+			} else {
+				// Default values
+				m_backgroundImage->setFitMode(0); // Fill/Tile
+				m_backgroundImage->setMaintainAspect(true);
+				m_backgroundImage->setOpacity(1.0f);
+			}
+			
+			// Add to scene graph if not already present
+			if (m_backgroundRoot->findChild(m_backgroundImage) == -1) {
+				m_backgroundRoot->addChild(m_backgroundImage);
+				LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Added image to scene graph with fit mode " + std::to_string(imageFit));
+			}
+		} else {
+			// Remove image if no path
+			if (m_backgroundRoot->findChild(m_backgroundImage) != -1) {
+				m_backgroundRoot->removeChild(m_backgroundImage);
+				LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Removed image (no path)");
+			}
+		}
+		break;
+	}
+
+	default:
+	{
+		// Remove gradient and image for unknown modes
+		if (m_backgroundRoot->findChild(m_backgroundGradient) != -1) {
+			m_backgroundRoot->removeChild(m_backgroundGradient);
+		}
+		if (m_backgroundRoot->findChild(m_backgroundImage) != -1) {
+			m_backgroundRoot->removeChild(m_backgroundImage);
+		}
+		break;
+	}
+	}
+
+	// Background is now rendered directly in renderBackgroundDirectly(), not as scene graph nodes
+	// But we still need to remove background nodes from scene graph to avoid conflicts
+	// Remove any background nodes from scene graph (background is rendered before scene graph)
+	if (m_backgroundRoot->findChild(m_backgroundGradient) != -1) {
+		m_backgroundRoot->removeChild(m_backgroundGradient);
+	}
+	if (m_backgroundRoot->findChild(m_backgroundImage) != -1) {
+		m_backgroundRoot->removeChild(m_backgroundImage);
+	}
+
+	LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Updated background mode to " + std::to_string(backgroundMode));
+}
+
+void PreviewCanvas::applyMainView(class RenderingEngine* mainViewEngine)
+{
+	if (!mainViewEngine) {
+		LOG_ERR_S("PreviewCanvas::applyMainView: Main view engine is null");
+		return;
+	}
+
+	LOG_INF_S("PreviewCanvas::applyMainView: Applying main view background settings");
+
+	// Get background settings from main view (they should already be in ConfigManager)
+	// But we can also directly read from ConfigManager to ensure consistency
+	updateBackgroundFromConfig();
+
+	// Force a re-render to apply the new background
+	render(true);
+
+	LOG_INF_S("PreviewCanvas::applyMainView: Applied main view background settings");
+}
+
+void PreviewCanvas::applyToMainView(class RenderingEngine* mainViewEngine)
+{
+	if (!mainViewEngine) {
+		LOG_ERR_S("PreviewCanvas::applyToMainView: Main view engine is null");
+		return;
+	}
+
+	LOG_INF_S("PreviewCanvas::applyToMainView: Applying preview canvas background settings to main view");
+
+	// First, ensure we have the latest config values from ConfigManager
+	// This ensures any recent UI changes are captured
+	updateBackgroundFromConfig();
+
+	// Write current PreviewCanvas background configuration to ConfigManager
+	// This ensures the settings are saved and can be applied to main view
+	// Use the member variables that were just updated by updateBackgroundFromConfig()
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", m_configBackgroundMode);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", m_configBackgroundColorR);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", m_configBackgroundColorG);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", m_configBackgroundColorB);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopR", m_configGradientTopR);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopG", m_configGradientTopG);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopB", m_configGradientTopB);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomR", m_configGradientBottomR);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomG", m_configGradientBottomG);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomB", m_configGradientBottomB);
+	ConfigManager::getInstance().setString("Canvas", "BackgroundTexturePath", m_configBackgroundTexturePath);
+
+	// Save config to file to persist changes
+	ConfigManager::getInstance().save();
+
+	// Reload background configuration in main view RenderingEngine
+	mainViewEngine->reloadBackgroundConfig();
+
+	// Force main view to re-render
+	mainViewEngine->triggerRefresh();
+
+	LOG_INF_S("PreviewCanvas::applyToMainView: Applied preview canvas background settings to main view (mode: " + std::to_string(m_configBackgroundMode) + ")");
+}
+
+void PreviewCanvas::renderBackgroundDirectly(const wxSize& size)
+{
+	// Render background directly using OpenGL (same approach as RenderingEngine)
+	// This is called BEFORE scene graph rendering to ensure correct background display
+
+	LOG_INF_S("renderBackgroundDirectly: mode=" + std::to_string(m_configBackgroundMode) +
+	          ", gradient=" + std::string(m_backgroundGradient ? "valid" : "null"));
+
+	switch (m_configBackgroundMode) {
+	case 0: // Solid color
+		glClearColor(static_cast<float>(m_configBackgroundColorR),
+			static_cast<float>(m_configBackgroundColorG),
+			static_cast<float>(m_configBackgroundColorB), 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		break;
+
+	case 1: // Linear Gradient
+		if (m_backgroundGradient) {
+			LOG_INF_S("renderBackgroundDirectly: Rendering linear gradient");
+			// Set gradient type if not already set
+			if (m_backgroundGradient->getGradient() != SoFCBackgroundGradient::LINEAR) {
+				m_backgroundGradient->setGradient(SoFCBackgroundGradient::LINEAR);
+				LOG_INF_S("renderBackgroundDirectly: Set gradient type to LINEAR");
+			}
+			// Set gradient colors
+			SbColor fromColor(static_cast<float>(m_configGradientTopR),
+				static_cast<float>(m_configGradientTopG),
+				static_cast<float>(m_configGradientTopB));
+			SbColor toColor(static_cast<float>(m_configGradientBottomR),
+				static_cast<float>(m_configGradientBottomG),
+				static_cast<float>(m_configGradientBottomB));
+			m_backgroundGradient->setColorGradient(fromColor, toColor);
+			LOG_INF_S("renderBackgroundDirectly: Set gradient colors");
+
+			// Create viewport region with correct size
+			SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
+			SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
+			m_backgroundGradient->GLRender(action);
+			delete action;
+			LOG_INF_S("renderBackgroundDirectly: Rendered linear gradient");
+
+			// Clear depth buffer after gradient rendering
+			glClear(GL_DEPTH_BUFFER_BIT);
+		} else {
+			LOG_WRN_S("renderBackgroundDirectly: m_backgroundGradient is null, using fallback");
+			// Fallback to solid color
+			glClearColor(static_cast<float>(m_configBackgroundColorR),
+				static_cast<float>(m_configBackgroundColorG),
+				static_cast<float>(m_configBackgroundColorB), 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		}
+		break;
+
+	case 2: // Radial Gradient
+		if (m_backgroundGradient) {
+			LOG_INF_S("renderBackgroundDirectly: Rendering radial gradient");
+			// Set gradient type if not already set
+			if (m_backgroundGradient->getGradient() != SoFCBackgroundGradient::RADIAL) {
+				m_backgroundGradient->setGradient(SoFCBackgroundGradient::RADIAL);
+				LOG_INF_S("renderBackgroundDirectly: Set gradient type to RADIAL");
+			}
+			// Set gradient colors
+			SbColor fromColor(static_cast<float>(m_configGradientTopR),
+				static_cast<float>(m_configGradientTopG),
+				static_cast<float>(m_configGradientTopB));
+			SbColor toColor(static_cast<float>(m_configGradientBottomR),
+				static_cast<float>(m_configGradientBottomG),
+				static_cast<float>(m_configGradientBottomB));
+			m_backgroundGradient->setColorGradient(fromColor, toColor);
+			LOG_INF_S("renderBackgroundDirectly: Set gradient colors");
+
+			// Create viewport region with correct size
+			SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
+			SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
+			m_backgroundGradient->GLRender(action);
+			delete action;
+			LOG_INF_S("renderBackgroundDirectly: Rendered radial gradient");
+
+			// Clear depth buffer after gradient rendering
+			glClear(GL_DEPTH_BUFFER_BIT);
+		} else {
+			LOG_WRN_S("renderBackgroundDirectly: m_backgroundGradient is null, using fallback");
+			// Fallback to solid color
+			glClearColor(static_cast<float>(m_configBackgroundColorR),
+				static_cast<float>(m_configBackgroundColorG),
+				static_cast<float>(m_configBackgroundColorB), 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		}
+		break;
+
+	case 3: // Texture
+		if (!m_configBackgroundTexturePath.empty() && m_backgroundImage) {
+			// Clear color buffer first with solid background color for uncovered areas
+			glClearColor(static_cast<float>(m_configBackgroundColorR),
+				static_cast<float>(m_configBackgroundColorG),
+				static_cast<float>(m_configBackgroundColorB), 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			// Set image properties
+			m_backgroundImage->setImagePath(m_configBackgroundTexturePath);
+
+			// Get fit mode and maintain aspect from BackgroundManager if available
+			int imageFit = 0;
+			bool maintainAspect = true;
+			float imageOpacity = 1.0f;
+
+			if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
+				BackgroundSettings settings = m_backgroundManager->getActiveConfiguration();
+				imageFit = settings.imageFit;
+				maintainAspect = settings.imageMaintainAspect;
+				imageOpacity = settings.imageOpacity;
+
+				// Map fit mode
+				int mappedFit = imageFit;
+				if (imageFit >= 0 && imageFit <= 2) {
+					mappedFit = imageFit;
+				} else {
+					if (imageFit == 3) mappedFit = 0;
+					else if (imageFit == 1) mappedFit = 1;
+					else mappedFit = 2;
+				}
+
+				m_backgroundImage->setFitMode(mappedFit);
+				m_backgroundImage->setMaintainAspect(maintainAspect);
+				m_backgroundImage->setOpacity(imageOpacity);
+			}
+
+			// Render image background directly
+			SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
+			SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
+			m_backgroundImage->GLRender(action);
+			delete action;
+
+			// Clear depth buffer after image rendering
+			glClear(GL_DEPTH_BUFFER_BIT);
+		} else {
+			// Fallback to solid color if no texture path
+			glClearColor(static_cast<float>(m_configBackgroundColorR),
+				static_cast<float>(m_configBackgroundColorG),
+				static_cast<float>(m_configBackgroundColorB), 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		}
+		break;
+
+	default:
+		// Fallback to solid color
+		glClearColor(static_cast<float>(m_configBackgroundColorR),
+			static_cast<float>(m_configBackgroundColorG),
+			static_cast<float>(m_configBackgroundColorB), 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		break;
+	}
+}
+
+void PreviewCanvas::renderGradientBackgroundFromConfig()
+{
+	// Use SoFCBackgroundGradient for consistent rendering with main canvas
+	if (SoFCBackgroundGradient::getClassTypeId() == SoType::badType()) {
+		SoFCBackgroundGradient::initClass();
+	}
+	SoFCBackgroundGradient* gradient = new SoFCBackgroundGradient;
+	gradient->ref();
+
+	// Set gradient type based on config mode
+	if (m_configBackgroundMode == 2) {
+		gradient->setGradient(SoFCBackgroundGradient::RADIAL);
+	} else {
+		gradient->setGradient(SoFCBackgroundGradient::LINEAR);
+	}
+
+	// Set gradient colors from config
+	SbColor fromColor(static_cast<float>(m_configGradientTopR),
+		static_cast<float>(m_configGradientTopG),
+		static_cast<float>(m_configGradientTopB));
+	SbColor toColor(static_cast<float>(m_configGradientBottomR),
+		static_cast<float>(m_configGradientBottomG),
+		static_cast<float>(m_configGradientBottomB));
+	gradient->setColorGradient(fromColor, toColor);
+
+	// Get current viewport size (already set by caller)
+	GLint viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	int width = viewport[2];
+	int height = viewport[3];
+
+	// Render the gradient with current viewport
+	SbViewportRegion vpRegion(width, height);
+	SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
+	gradient->GLRender(action);
+	delete action;
+
+	// Clean up
+	gradient->unref();
+}
+
 void PreviewCanvas::renderGradientBackground(const wxColour& topColor, const wxColour& bottomColor)
 {
 	// Save current OpenGL state
@@ -1518,6 +1984,23 @@ void PreviewCanvas::renderImageBackground(const std::string& imagePath, float op
 	// Bind texture
 	glBindTexture(GL_TEXTURE_2D, textureId);
 
+	// Get viewport size in pixels
+	int viewportWidth, viewportHeight;
+	GetSize(&viewportWidth, &viewportHeight);
+
+	// Query texture size from OpenGL
+	GLint textureWidth = 0, textureHeight = 0;
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &textureWidth);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &textureHeight);
+
+	// Calculate tiling based on viewport and texture sizes
+	float tileX = 1.0f;
+	float tileY = 1.0f;
+	if (textureWidth > 0 && textureHeight > 0 && viewportWidth > 0 && viewportHeight > 0) {
+		tileX = static_cast<float>(viewportWidth) / static_cast<float>(textureWidth);
+		tileY = static_cast<float>(viewportHeight) / static_cast<float>(textureHeight);
+	}
+
 	// Set up orthographic projection for full-screen quad
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
@@ -1528,36 +2011,24 @@ void PreviewCanvas::renderImageBackground(const std::string& imagePath, float op
 	glPushMatrix();
 	glLoadIdentity();
 
-	// Calculate texture coordinates based on fit mode
-	float texLeft = 0.0f, texRight = 1.0f, texTop = 1.0f, texBottom = 0.0f;
-
-	if (fit == 1) { // Fit mode
-		// Calculate aspect ratio to fit image within viewport
-		int viewportWidth, viewportHeight;
-		GetSize(&viewportWidth, &viewportHeight);
-
-		if (viewportWidth > 0 && viewportHeight > 0) {
-			float viewportAspect = static_cast<float>(viewportWidth) / viewportHeight;
-			// For now, we'll use the full texture. In a more sophisticated implementation,
-			// we would calculate the actual image aspect ratio and adjust accordingly
-		}
-	}
-
-	// Draw fullscreen quad with texture
+	// Draw fullscreen quad with tiled texture coordinates
 	glColor4f(1.0f, 1.0f, 1.0f, opacity);
 	glBegin(GL_QUADS);
 
-	// Since we flipped the Y coordinates during texture loading, we can use standard coordinates
-	glTexCoord2f(texLeft, texBottom);  // Bottom-left
+	// Bottom-left: texture coordinates (0, 0)
+	glTexCoord2f(0.0f, 0.0f);
 	glVertex2f(-1.0f, -1.0f);
 
-	glTexCoord2f(texRight, texBottom); // Bottom-right
+	// Bottom-right: texture coordinates (tileX, 0)
+	glTexCoord2f(tileX, 0.0f);
 	glVertex2f(1.0f, -1.0f);
 
-	glTexCoord2f(texRight, texTop);    // Top-right
+	// Top-right: texture coordinates (tileX, tileY)
+	glTexCoord2f(tileX, tileY);
 	glVertex2f(1.0f, 1.0f);
 
-	glTexCoord2f(texLeft, texTop);     // Top-left
+	// Top-left: texture coordinates (0, tileY)
+	glTexCoord2f(0.0f, tileY);
 	glVertex2f(-1.0f, 1.0f);
 
 	glEnd();
@@ -1661,9 +2132,9 @@ bool PreviewCanvas::loadTexture(const std::string& imagePath, unsigned int& text
 	glGenTextures(1, &textureId);
 	glBindTexture(GL_TEXTURE_2D, textureId);
 
-	// Set texture parameters
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	// Set texture parameters for tiling (GL_REPEAT instead of GL_CLAMP_TO_EDGE)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 

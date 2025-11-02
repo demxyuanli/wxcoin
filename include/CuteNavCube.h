@@ -177,7 +177,8 @@ private:
 	bool m_showTextures;
 	bool m_enableAnimation;
 
-	// Colors
+	// Colors - DEPRECATED: Colors are now read directly from ConfigManager
+	// These fields are kept for backward compatibility only
 	wxColour m_textColor;
 	wxColour m_edgeColor;
 	wxColour m_cornerColor;

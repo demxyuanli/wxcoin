@@ -3,7 +3,9 @@
 #include <wx/glcanvas.h>
 #include <memory>
 #include <wx/longlong.h>
+#include <Inventor/nodes/SoTexture2.h>
 #include "interfaces/IRenderingEngine.h"
+#include "SoFCBackgroundGradient.h"
 
 // Forward declarations
 class SceneManager;
@@ -30,15 +32,35 @@ public:
 	void setSceneManager(ISceneManager* sceneManager) override { m_sceneManager = reinterpret_cast<SceneManager*>(sceneManager); }
 	void setNavigationCubeManager(NavigationCubeManager* navCubeManager) { m_navigationCubeManager = navCubeManager; }
 
+	// Background rendering - public methods for external access
+	void renderBackground();
+	void reloadBackgroundConfig();
+	void triggerRefresh();
+
 private:
+	void renderBackground(const wxSize& size);
 	void setupGLContext();
 	void clearBuffers();
 	void presentFrame();
+	bool loadBackgroundTexture(const std::string& texturePath);
+	void renderGradientBackground(const wxSize& size);
+	void renderTextureBackground(const wxSize& size);
 
 	wxGLCanvas* m_canvas;
 	std::unique_ptr<wxGLContext> m_glContext;
 	SceneManager* m_sceneManager;
 	NavigationCubeManager* m_navigationCubeManager;
+
+	// Background rendering
+	int m_backgroundMode;
+	float m_backgroundColor[3];
+	float m_backgroundGradientTop[3];
+	float m_backgroundGradientBottom[3];
+	SoTexture2* m_backgroundTexture;
+	bool m_backgroundTextureLoaded;
+	
+	// FreeCAD-style background gradient
+	SoFCBackgroundGradient* m_backgroundGradient;
 
 	bool m_isInitialized;
 	bool m_isRendering;

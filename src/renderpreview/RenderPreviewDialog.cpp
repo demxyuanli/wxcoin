@@ -314,8 +314,10 @@ void RenderPreviewDialog::applyGlobalSettingsToCanvas()
 		}
 	}
 
-	// Force canvas refresh to apply background changes
+	// Update background configuration from BackgroundManager
 	if (m_renderCanvas) {
+		m_renderCanvas->updateBackgroundFromConfig();
+		m_renderCanvas->render(true);
 		m_renderCanvas->Refresh();
 		m_renderCanvas->Update();
 	}

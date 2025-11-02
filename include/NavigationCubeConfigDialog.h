@@ -17,7 +17,8 @@ struct CubeConfig {
     int size = 280;
     int viewportSize = 280;
     
-    // Colors
+    // Colors - DEPRECATED: Colors are now read directly from ConfigManager
+    // These fields are kept for backward compatibility only
     wxColour backgroundColor = wxColour(240, 240, 240);
     wxColour textColor = wxColour(0, 0, 0);
     wxColour edgeColor = wxColour(128, 128, 128);

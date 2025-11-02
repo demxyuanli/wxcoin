@@ -11,6 +11,8 @@
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbColor.h>
 #include <Inventor/actions/SoSearchAction.h>
+#include "SoFCBackgroundGradient.h"
+#include "SoFCBackgroundImage.h"
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -28,6 +30,8 @@
 class OCCBox;
 class OCCSphere;
 class OCCCone;
+class BackgroundConfigListener;
+class RenderingEngine;
 
 
 
@@ -98,10 +102,22 @@ private:
     void setupDefaultCamera();
     void setupDefaultLighting();
     void renderGradientBackground(const wxColour& topColor, const wxColour& bottomColor);
+    void renderGradientBackgroundFromConfig();
+    void renderBackgroundDirectly(const wxSize& size);
+
+public:
+    // Configuration update methods
+    void updateBackgroundFromConfig();
     void renderImageBackground(const std::string& imagePath, float opacity, int fit, bool maintainAspect);
     bool loadTexture(const std::string& imagePath, unsigned int& textureId);
     void drawFullscreenQuad();
     void applyRenderingModeSettings(const RenderingSettings& settings);
+    
+    // Apply main view background settings
+    void applyMainView(RenderingEngine* mainViewEngine);
+    
+    // Apply preview canvas background settings to main view
+    void applyToMainView(RenderingEngine* mainViewEngine);
 
     
     // Event handlers
@@ -119,7 +135,10 @@ private:
     SoSeparator* m_sceneRoot;
     SoCamera* m_camera;
     SoSeparator* m_objectRoot;
+    SoSeparator* m_backgroundRoot;  // Background scene graph root
     SoMaterial* m_lightMaterial;
+    SoFCBackgroundGradient* m_backgroundGradient;  // FreeCAD-style background gradient node
+    SoFCBackgroundImage* m_backgroundImage;  // FreeCAD-style background image node
     
     // OCCGeometry objects for basic shapes
     std::unique_ptr<OCCBox> m_occBox;
@@ -132,6 +151,9 @@ private:
     std::unique_ptr<RenderingManager> m_renderingManager;
     std::unique_ptr<ObjectManager> m_objectManager;  // New object manager
     std::unique_ptr<BackgroundManager> m_backgroundManager; // New background manager
+
+    // Configuration listener for dynamic background updates
+    BackgroundConfigListener* m_backgroundConfigListener;
 
     // OpenGL context
     wxGLContext* m_glContext;
@@ -147,6 +169,19 @@ private:
     
     // Runtime configuration management
     int m_runtimeConfigId = -1;  // ID for runtime rendering configuration
+
+    // Configuration-based background settings
+    int m_configBackgroundMode = 0;
+    double m_configBackgroundColorR = 0.6;
+    double m_configBackgroundColorG = 0.8;
+    double m_configBackgroundColorB = 1.0;
+    double m_configGradientTopR = 0.7;
+    double m_configGradientTopG = 0.7;
+    double m_configGradientTopB = 0.9;
+    double m_configGradientBottomR = 0.5;
+    double m_configGradientBottomG = 0.5;
+    double m_configGradientBottomB = 0.8;
+    std::string m_configBackgroundTexturePath = "";
     
     // Texture cache for background images
     std::unordered_map<std::string, unsigned int> m_textureCache;

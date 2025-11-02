@@ -12,6 +12,7 @@
 #include "config/LightingConfig.h"
 #include "config/RenderingConfig.h"
 #include "config/FontManager.h"
+#include "Canvas.h"
 #include "OCCViewer.h"
 #include "logger/Logger.h"
 #include <wx/msgdlg.h>
@@ -460,6 +461,42 @@ void GlobalSettingsPanel::OnMainApply(wxCommandEvent& event)
 			}
 		} else {
 			LOG_INF_S("GlobalSettingsPanel::OnMainApply: Display mode unchanged, skipping application");
+		}
+
+		// Apply background settings to main view
+		if (m_parentDialog && m_parentDialog->getRenderCanvas()) {
+			PreviewCanvas* previewCanvas = m_parentDialog->getRenderCanvas();
+			
+			// Ensure PreviewCanvas has latest config values before applying to main view
+			previewCanvas->updateBackgroundFromConfig();
+			
+			// Get main Canvas through parent window hierarchy
+			wxWindow* parent = GetParent();
+			bool mainCanvasFound = false;
+			while (parent && !mainCanvasFound) {
+				// Try to find Canvas widget by name
+				wxWindow* canvasWindow = wxWindow::FindWindowByName("Canvas", parent);
+				if (canvasWindow) {
+					Canvas* mainCanvas = dynamic_cast<Canvas*>(canvasWindow);
+					if (mainCanvas && mainCanvas->getRenderingEngine()) {
+						RenderingEngine* mainRenderingEngine = mainCanvas->getRenderingEngine();
+						
+						// Apply preview canvas background settings to main view
+						previewCanvas->applyToMainView(mainRenderingEngine);
+						
+						LOG_INF_S("GlobalSettingsPanel::OnMainApply: Applied preview background settings to main Canvas");
+						mainCanvasFound = true;
+						break;
+					}
+				}
+				
+				// Try parent's parent
+				parent = parent->GetParent();
+			}
+			
+			if (!mainCanvasFound) {
+				LOG_WRN_S("GlobalSettingsPanel::OnMainApply: Could not find main Canvas, config written to ConfigManager");
+			}
 		}
 
 		wxMessageBox(wxT("Applied preview settings to main viewport"), wxT("Main Apply"), wxOK | wxICON_INFORMATION);

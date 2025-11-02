@@ -318,9 +318,6 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_showCorners(config.showCorners)
 	, m_showTextures(config.showTextures)
 	, m_enableAnimation(config.enableAnimation)
-	, m_textColor(config.textColor)
-	, m_edgeColor(config.edgeColor)
-	, m_cornerColor(config.cornerColor)
 	, m_transparency(config.transparency >= 0.0f ? config.transparency : 0.0f)
 	, m_shininess(config.shininess >= 0.0f ? config.shininess : 0.5f)
 	, m_ambientIntensity(config.ambientIntensity >= 0.0f ? config.ambientIntensity : 0.8f)
@@ -370,9 +367,6 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_showCorners(config.showCorners)
 	, m_showTextures(config.showTextures)
 	, m_enableAnimation(config.enableAnimation)
-	, m_textColor(config.textColor)
-	, m_edgeColor(config.edgeColor)
-	, m_cornerColor(config.cornerColor)
 	, m_transparency(config.transparency >= 0.0f ? config.transparency : 0.0f)
 	, m_shininess(config.shininess >= 0.0f ? config.shininess : 0.5f)
 	, m_ambientIntensity(config.ambientIntensity >= 0.0f ? config.ambientIntensity : 0.8f)
@@ -423,9 +417,6 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_showCorners(config.showCorners)
 	, m_showTextures(config.showTextures)
 	, m_enableAnimation(config.enableAnimation)
-	, m_textColor(config.textColor)
-	, m_edgeColor(config.edgeColor)
-	, m_cornerColor(config.cornerColor)
 	, m_transparency(config.transparency >= 0.0f ? config.transparency : 0.0f)
 	, m_shininess(config.shininess >= 0.0f ? config.shininess : 0.5f)
 	, m_ambientIntensity(config.ambientIntensity >= 0.0f ? config.ambientIntensity : 0.8f)
@@ -1057,55 +1048,55 @@ void CuteNavCube::setupGeometry() {
 
 	SoMaterial* mainFaceMaterial = new SoMaterial;
 	// Frosted glass material for main faces - read all properties from config
-	// Use unified cube material color since navigation cube is now a single body
+	// Use unified cube body color
 	mainFaceMaterial->diffuseColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseR", 0.9)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseG", 0.95)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseB", 1.0))
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0))
 	);
-	// Use unified cube material properties from config
+	// Use unified cube body properties from config
 	mainFaceMaterial->ambientColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialAmbientR", 0.7)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialAmbientG", 0.8)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialAmbientB", 0.9))
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientR", 0.7)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientG", 0.8)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientB", 0.9))
 	);
 	mainFaceMaterial->specularColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialSpecularR", 0.95)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialSpecularG", 0.98)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialSpecularB", 1.0))
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularR", 0.95)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularG", 0.98)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularB", 1.0))
 	);
 	mainFaceMaterial->emissiveColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialEmissiveR", 0.02)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialEmissiveG", 0.05)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialEmissiveB", 0.1))
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveR", 0.02)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveG", 0.05)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveB", 0.1))
 	);
 	mainFaceMaterial->shininess.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialShininess", 0.0f))
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyShininess", 0.0f))
 	);
 	mainFaceMaterial->transparency.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialTransparency", 0.0f))
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyTransparency", 0.0f))
 	);
 
-	// Store base colors for hover effects from config - use unified hover color
-	SbColor baseColor(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorR", 0.7)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorG", 0.85)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "MainFaceHoverColorB", 0.95))
+	// Store unified hover color for all faces
+	SbColor hoverColor(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorR", 0.7)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorG", 0.85)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorB", 0.95))
 	);
-	m_faceBaseColors["FRONT"] = baseColor;
-	m_faceBaseColors["REAR"] = baseColor;
-	m_faceBaseColors["LEFT"] = baseColor;
-	m_faceBaseColors["RIGHT"] = baseColor;
-	m_faceBaseColors["TOP"] = baseColor;
-	m_faceBaseColors["BOTTOM"] = baseColor;
+	m_faceBaseColors["FRONT"] = hoverColor;
+	m_faceBaseColors["REAR"] = hoverColor;
+	m_faceBaseColors["LEFT"] = hoverColor;
+	m_faceBaseColors["RIGHT"] = hoverColor;
+	m_faceBaseColors["TOP"] = hoverColor;
+	m_faceBaseColors["BOTTOM"] = hoverColor;
 
 	// Note: edgeAndCornerMaterial is no longer used since navigation cube is now a single body
 	// It's kept for backward compatibility but won't affect rendering
 	SoMaterial* edgeAndCornerMaterial = new SoMaterial;
 	edgeAndCornerMaterial->diffuseColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseR", 0.9)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseG", 0.95)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseB", 1.0))
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0))
 	);
 	edgeAndCornerMaterial->ambientColor.setValue(
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientR", 0.3)),
@@ -1121,39 +1112,29 @@ void CuteNavCube::setupGeometry() {
 	edgeAndCornerMaterial->shininess.setValue(0.0f); // No shading mode
 	edgeAndCornerMaterial->transparency.setValue(0.0f); // Opaque
 
-	// Store base colors for edges and corners from config
-	SbColor edgeBaseColor(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeHoverColorR", 0.5)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeHoverColorG", 0.7)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeHoverColorB", 0.5))
-	);
-	m_faceBaseColors["EdgeTF"] = edgeBaseColor;
-	m_faceBaseColors["EdgeTB"] = edgeBaseColor;
-	m_faceBaseColors["EdgeTL"] = edgeBaseColor;
-	m_faceBaseColors["EdgeTR"] = edgeBaseColor;
-	m_faceBaseColors["EdgeBF"] = edgeBaseColor;
-	m_faceBaseColors["EdgeBB"] = edgeBaseColor;
-	m_faceBaseColors["EdgeBL"] = edgeBaseColor;
-	m_faceBaseColors["EdgeBR"] = edgeBaseColor;
-	m_faceBaseColors["EdgeFR"] = edgeBaseColor;
-	m_faceBaseColors["EdgeFL"] = edgeBaseColor;
-	m_faceBaseColors["EdgeBL2"] = edgeBaseColor;
-	m_faceBaseColors["EdgeBR2"] = edgeBaseColor;
+	// Store unified hover color for all edges and corners (same as main faces)
+	m_faceBaseColors["EdgeTF"] = hoverColor;
+	m_faceBaseColors["EdgeTB"] = hoverColor;
+	m_faceBaseColors["EdgeTL"] = hoverColor;
+	m_faceBaseColors["EdgeTR"] = hoverColor;
+	m_faceBaseColors["EdgeBF"] = hoverColor;
+	m_faceBaseColors["EdgeBB"] = hoverColor;
+	m_faceBaseColors["EdgeBL"] = hoverColor;
+	m_faceBaseColors["EdgeBR"] = hoverColor;
+	m_faceBaseColors["EdgeFR"] = hoverColor;
+	m_faceBaseColors["EdgeFL"] = hoverColor;
+	m_faceBaseColors["EdgeBL2"] = hoverColor;
+	m_faceBaseColors["EdgeBR2"] = hoverColor;
 
-	// Corner faces use the same material but slightly different base color for hover effect from config
-	SbColor cornerBaseColor(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CornerHoverColorR", 0.4)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CornerHoverColorG", 0.6)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CornerHoverColorB", 0.4))
-	);
-	m_faceBaseColors["Corner0"] = cornerBaseColor;
-	m_faceBaseColors["Corner1"] = cornerBaseColor;
-	m_faceBaseColors["Corner2"] = cornerBaseColor;
-	m_faceBaseColors["Corner3"] = cornerBaseColor;
-	m_faceBaseColors["Corner4"] = cornerBaseColor;
-	m_faceBaseColors["Corner5"] = cornerBaseColor;
-	m_faceBaseColors["Corner6"] = cornerBaseColor;
-	m_faceBaseColors["Corner7"] = cornerBaseColor;
+	// Corner faces use the same unified hover color
+	m_faceBaseColors["Corner0"] = hoverColor;
+	m_faceBaseColors["Corner1"] = hoverColor;
+	m_faceBaseColors["Corner2"] = hoverColor;
+	m_faceBaseColors["Corner3"] = hoverColor;
+	m_faceBaseColors["Corner4"] = hoverColor;
+	m_faceBaseColors["Corner5"] = hoverColor;
+	m_faceBaseColors["Corner6"] = hoverColor;
+	m_faceBaseColors["Corner7"] = hoverColor;
 
 	// Create faces using dynamic generation
 	int vertexIndex = 0;
@@ -1219,10 +1200,10 @@ void CuteNavCube::setupGeometry() {
 
 			// Add material for texture overlay - use same color as main face material
 			SoMaterial* textureMaterial = new SoMaterial;
-			// Use the unified cube material color from config to match the solid body appearance
-			float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseR", 0.9));
-			float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseG", 0.95));
-			float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseB", 1.0));
+			// Use the unified cube body color from config to match the solid body appearance
+			float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
+			float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
+			float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
 			
 			textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
 			textureMaterial->transparency.setValue(0.0f);
@@ -1290,12 +1271,21 @@ void CuteNavCube::setupGeometry() {
 	solidBodySep->addChild(coords);
 
 	// Use shared texture coordinates
-	solidBodySep->addChild(texCoords);
+	solidBodySep->addChild(texCoords); 
 
-	// Create material for solid body
+	// Create material for solid body - use unified body color from config
 	SoMaterial* solidMaterial = new SoMaterial;
-	solidMaterial->diffuseColor.setValue(0.8f, 0.8f, 0.9f); // Light blue-gray
-	solidMaterial->ambientColor.setValue(0.6f, 0.6f, 0.7f);
+	// Use the unified cube body color from config
+	float bodyR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
+	float bodyG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
+	float bodyB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
+	solidMaterial->diffuseColor.setValue(bodyR, bodyG, bodyB);
+
+	float ambientR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientR", 0.7));
+	float ambientG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientG", 0.8));
+	float ambientB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientB", 0.9));
+	solidMaterial->ambientColor.setValue(ambientR, ambientG, ambientB);
+
 	solidMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for solid
 	solidMaterial->shininess.setValue(0.0f); // No shading
 	solidMaterial->transparency.setValue(0.0f); // Opaque
@@ -1382,12 +1372,12 @@ void CuteNavCube::setupGeometry() {
 		polygonOffset->units.setValue(1.0f);   // Small offset units
 		textureFaceSep->addChild(polygonOffset);
 
-		// Create material for the texture face - use main face material color from config
+		// Create material for the texture face - use cube body color from config
 		SoMaterial* textureMaterial = new SoMaterial;
-		// Use the unified cube material color from config to match the solid body appearance
-		float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseR", 0.9));
-		float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseG", 0.95));
-		float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeMaterialDiffuseB", 1.0));
+		// Use the unified cube body color from config to match the solid body appearance
+		float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
+		float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
+		float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
 		textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
 		textureMaterial->transparency.setValue(0.0f); // Opaque
 		textureMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f); // No emissive
@@ -1455,7 +1445,11 @@ void CuteNavCube::setupGeometry() {
 
 	// Define the material for the outlines
 	SoMaterial* outlineMaterial = new SoMaterial;
-	outlineMaterial->diffuseColor.setValue(0.4f, 0.6f, 0.9f); // Light blue
+	// Use outline color from config
+	float outlineR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorR", 0.4));
+	float outlineG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorG", 0.6));
+	float outlineB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorB", 0.9));
+	outlineMaterial->diffuseColor.setValue(outlineR, outlineG, outlineB);
 	outlineMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for no shading mode
 	outlineMaterial->shininess.setValue(0.0f); // No shading mode
 	outlineMaterial->transparency.setValue(0.0f); // Opaque
@@ -1987,27 +1981,17 @@ void CuteNavCube::updateSeparatorMaterials(SoSeparator* sep) {
 			material->transparency.setValue(0.0f); // Always opaque
 			material->shininess.setValue(0.0f); // Always no shading
 
-			// Update colors based on material context
-			float r, g, b;
-			if (sepName.find("Edge") != std::string::npos) {
-				// Edge material
-				r = m_edgeColor.Red() / 255.0f;
-				g = m_edgeColor.Green() / 255.0f;
-				b = m_edgeColor.Blue() / 255.0f;
-			}
-			else if (sepName.find("Corner") != std::string::npos) {
-				// Corner material
-				r = m_cornerColor.Red() / 255.0f;
-				g = m_cornerColor.Green() / 255.0f;
-				b = m_cornerColor.Blue() / 255.0f;
-			}
-			else {
-				// Main face material - using text color for main faces
-				r = m_textColor.Red() / 255.0f;
-				g = m_textColor.Green() / 255.0f;
-				b = m_textColor.Blue() / 255.0f;
-			}
+			// Use unified body color for all materials
+			float r = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
+			float g = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
+			float b = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
 			material->diffuseColor.setValue(r, g, b);
+
+			// Update ambient color as well
+			float ar = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientR", 0.7));
+			float ag = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientG", 0.8));
+			float ab = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientB", 0.9));
+			material->ambientColor.setValue(ar, ag, ab);
 		}
 
 		// Recursively update nested separators
@@ -2025,9 +2009,7 @@ void CuteNavCube::applyConfig(const CubeConfig& config) {
 	bool displayChanged = (m_showEdges != config.showEdges ||
 	                      m_showCorners != config.showCorners ||
 	                      m_showTextures != config.showTextures);
-	bool colorChanged = (m_textColor.GetRGB() != config.textColor.GetRGB() ||
-	                    m_edgeColor.GetRGB() != config.edgeColor.GetRGB() ||
-	                    m_cornerColor.GetRGB() != config.cornerColor.GetRGB());
+	bool colorChanged = false; // Colors are now read from ConfigManager, not from CubeConfig
 	bool materialChanged = (m_transparency != config.transparency ||
 	                       m_shininess != config.shininess ||
 	                       m_ambientIntensity != config.ambientIntensity);
@@ -2043,9 +2025,6 @@ void CuteNavCube::applyConfig(const CubeConfig& config) {
 	m_showCorners = config.showCorners;
 	m_showTextures = config.showTextures;
 	m_enableAnimation = config.enableAnimation;
-	m_textColor = config.textColor;
-	m_edgeColor = config.edgeColor;
-	m_cornerColor = config.cornerColor;
 
 	// Update material properties
 	m_transparency = config.transparency;
@@ -2104,45 +2083,27 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 
 	// Determine texture color based on hover state and face type
 	wxColour textureColor;
-	if (isHover) {
-		// Use hover color from config
-		int hoverR = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorR", 255);
-		int hoverG = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorG", 200);
-		int hoverB = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorB", 150);
-		int hoverA = ConfigManager::getInstance().getInt("NavigationCube", "HoverTextureColorA", 160);
-		textureColor = wxColour(hoverR, hoverG, hoverB, hoverA);
-	} else {
-		// Use normal color based on face type from config
-		if (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" || 
-			faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM") {
-			// Main faces
-			int mainR = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorR", 180);
-			int mainG = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorG", 220);
-			int mainB = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorB", 180);
-			int mainA = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorA", 160);
-			textureColor = wxColour(mainR, mainG, mainB, mainA);
-		} else if (faceName.find("Edge") != std::string::npos) {
-			// Edge faces
-			int edgeR = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorR", 150);
-			int edgeG = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorG", 200);
-			int edgeB = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorB", 150);
-			int edgeA = ConfigManager::getInstance().getInt("NavigationCube", "EdgeFaceTextureColorA", 160);
-			textureColor = wxColour(edgeR, edgeG, edgeB, edgeA);
-		} else if (faceName.find("Corner") != std::string::npos) {
-			// Corner faces
-			int cornerR = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorR", 170);
-			int cornerG = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorG", 210);
-			int cornerB = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorB", 170);
-			int cornerA = ConfigManager::getInstance().getInt("NavigationCube", "CornerFaceTextureColorA", 160);
-			textureColor = wxColour(cornerR, cornerG, cornerB, cornerA);
+	// Use text color from config (only for main faces with text)
+	if (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" ||
+		faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM") {
+		if (isHover) {
+			// Use hover text color for main faces
+			int textR = ConfigManager::getInstance().getInt("NavigationCube", "CubeTextHoverColorR", 0);
+			int textG = ConfigManager::getInstance().getInt("NavigationCube", "CubeTextHoverColorG", 128);
+			int textB = ConfigManager::getInstance().getInt("NavigationCube", "CubeTextHoverColorB", 255);
+			int textA = 255; // Opaque for text
+			textureColor = wxColour(textR, textG, textB, textA);
 		} else {
-			// Default to main face color
-			int mainR = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorR", 180);
-			int mainG = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorG", 220);
-			int mainB = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorB", 180);
-			int mainA = ConfigManager::getInstance().getInt("NavigationCube", "MainFaceTextureColorA", 160);
-			textureColor = wxColour(mainR, mainG, mainB, mainA);
+			// Use normal text color for main faces
+			int textR = ConfigManager::getInstance().getInt("NavigationCube", "CubeTextColorR", 0);
+			int textG = ConfigManager::getInstance().getInt("NavigationCube", "CubeTextColorG", 128);
+			int textB = ConfigManager::getInstance().getInt("NavigationCube", "CubeTextColorB", 255);
+			int textA = 255; // Opaque for text
+			textureColor = wxColour(textR, textG, textB, textA);
 		}
+	} else {
+		// For edges and corners, use transparent (no text)
+		textureColor = wxColour(255, 255, 255, 0); // Transparent
 	}
 	
 	// Generate texture

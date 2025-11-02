@@ -3,6 +3,7 @@
 add_library(RenderPreview STATIC
     RenderPreviewDialog.cpp
     PreviewCanvas.cpp
+    BackgroundConfigListener.cpp
     LightManager.cpp
     AntiAliasingManager.cpp
     RenderingManager.cpp

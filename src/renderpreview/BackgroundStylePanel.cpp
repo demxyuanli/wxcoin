@@ -2,6 +2,7 @@
 #include "renderpreview/RenderPreviewDialog.h"
 #include "renderpreview/BackgroundManager.h"
 #include "config/FontManager.h"
+#include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include <wx/colordlg.h>
 #include <wx/filedlg.h>
@@ -64,7 +65,8 @@ void BackgroundStylePanel::createUI()
 	wxStaticBoxSizer* styleBoxSizer = new wxStaticBoxSizer(wxVERTICAL, this, "Background Style");
 	m_backgroundStyleChoice = new wxChoice(this, wxID_ANY);
 	m_backgroundStyleChoice->Append("Solid Color");
-	m_backgroundStyleChoice->Append("Gradient");
+	m_backgroundStyleChoice->Append("Linear Gradient");
+	m_backgroundStyleChoice->Append("Radial Gradient");
 	m_backgroundStyleChoice->Append("Image");
 	m_backgroundStyleChoice->SetSelection(0);
 	styleBoxSizer->Add(m_backgroundStyleChoice, 0, wxEXPAND | wxALL, 4);
@@ -121,7 +123,7 @@ void BackgroundStylePanel::createUI()
 	// Background color button with color display
 	wxBoxSizer* backgroundColorSizer = new wxBoxSizer(wxHORIZONTAL);
 	m_backgroundColorButton = new wxButton(this, wxID_ANY, "Background Color", wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-	m_backgroundColorButton->SetBackgroundColour(wxColour(173, 204, 255)); // Default light blue
+	m_backgroundColorButton->SetBackgroundColour(wxColour(255, 255, 255)); // Default white
 	m_backgroundColorButton->SetForegroundColour(wxColour(0, 0, 0));
 	backgroundColorSizer->Add(m_backgroundColorButton, 1, wxEXPAND | wxALL, 2);
 	colorBoxSizer->Add(backgroundColorSizer, 0, wxEXPAND | wxALL, 4);
@@ -189,11 +191,10 @@ void BackgroundStylePanel::updateControlStates()
 	int selection = m_backgroundStyleChoice->GetSelection();
 
 	// Enable/disable controls based on selection
-	// 0 = Solid Color, 1 = Gradient, 2 = Image, 3 = Environment, 4 = Studio, 5 = Outdoor, 6 = Industrial, 7 = CAD, 8 = Dark
+	// 0 = Solid Color, 1 = Linear Gradient, 2 = Radial Gradient, 3 = Image
 	bool isSolidColor = (selection == 0);
-	bool isGradient = (selection == 1);
-	bool isImage = (selection == 2);
-	bool isPreset = (selection >= 3 && selection <= 8); // Environment, Studio, Outdoor, Industrial, CAD, Dark
+	bool isGradient = (selection == 1 || selection == 2); // Linear or Radial Gradient
+	bool isImage = (selection == 3);
 
 	m_backgroundColorButton->Enable(isSolidColor);
 	m_gradientTopColorButton->Enable(isGradient);
@@ -213,80 +214,108 @@ void BackgroundStylePanel::notifyParameterChanged()
 
 void BackgroundStylePanel::onBackgroundStyleChanged(wxCommandEvent& event)
 {
+	int selection = m_backgroundStyleChoice->GetSelection();
+	updateControlStates(); // Update UI controls based on selection
+
+	// Update ConfigManager and apply changes
+	wxColour presetColor;
+	switch (selection) {
+	case 0: // Solid Color
+		presetColor = wxColour(255, 255, 255); // White
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+		break;
+	case 1: // Linear Gradient
+		presetColor = wxColour(200, 220, 255); // Light blue
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 1); // Linear gradient
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopR", 0.7);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopG", 0.7);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopB", 0.9);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomR", 0.5);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomG", 0.5);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomB", 0.8);
+		break;
+	case 2: // Radial Gradient
+		presetColor = wxColour(200, 220, 255); // Light blue
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 2); // Radial gradient
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopR", 0.7);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopG", 0.7);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopB", 0.9);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomR", 0.5);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomG", 0.5);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomB", 0.8);
+		break;
+	case 3: // Image
+		presetColor = wxColour(255, 255, 255); // White (fallback when no image)
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 3); // Texture
+		// If image path is already set, keep it; otherwise it will be set when user selects an image
+		break;
+	default:
+		presetColor = wxColour(255, 255, 255); // White
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+		break;
+	}
+
+	// Update BackgroundManager if available
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		int selection = m_backgroundStyleChoice->GetSelection();
 		m_backgroundManager->setStyle(activeId, selection);
-
-		// Set background color based on selection
-		wxColour presetColor;
-		switch (selection) {
-		case 0: // Solid Color
-			presetColor = wxColour(173, 204, 255); // Default light blue
-			break;
-		case 1: // Gradient
-			presetColor = wxColour(200, 220, 255); // Light blue
-			break;
-		case 2: // Image
-			presetColor = wxColour(173, 204, 255); // Default light blue
-			break;
-		case 3: // Environment
-			presetColor = wxColour(135, 206, 235); // Sky blue
-			break;
-		case 4: // Studio
-			presetColor = wxColour(240, 248, 255); // Light blue
-			break;
-		case 5: // Outdoor
-			presetColor = wxColour(255, 255, 224); // Light yellow
-			break;
-		case 6: // Industrial
-			presetColor = wxColour(245, 245, 245); // Light gray
-			break;
-		case 7: // CAD
-			presetColor = wxColour(255, 248, 220); // Light cream
-			break;
-		case 8: // Dark
-			presetColor = wxColour(40, 40, 40); // Dark gray
-			break;
-		default:
-			presetColor = wxColour(173, 204, 255); // Default light blue
-			break;
-		}
 		m_backgroundManager->setBackgroundColor(activeId, presetColor);
-
-		// Apply the background changes immediately
 		m_backgroundManager->renderBackground();
-
-		notifyParameterChanged();
-
-		std::ostringstream oss;
-		oss << selection;
-		LOG_INF_S("BackgroundStylePanel::onBackgroundStyleChanged: Applied background style " + oss.str());
+		updateButtonColors();
 	}
+
+	// Apply changes to PreviewCanvas
 	if (m_parentDialog) {
 		m_parentDialog->applyGlobalSettingsToCanvas();
 	}
+
+	notifyParameterChanged();
+	LOG_INF_S("BackgroundStylePanel::onBackgroundStyleChanged: Applied background style " + std::to_string(selection) + " and updated config");
 }
 
 void BackgroundStylePanel::onBackgroundColorButton(wxCommandEvent& event)
 {
 	wxColourDialog dialog(this);
 	if (dialog.ShowModal() == wxID_OK) {
+		wxColour selectedColor = dialog.GetColourData().GetColour();
+		
+		// Update ConfigManager
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0); // Solid color
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", selectedColor.Red() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", selectedColor.Green() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", selectedColor.Blue() / 255.0);
+		
+		// Update style choice to Solid Color
+		if (m_backgroundStyleChoice) {
+			m_backgroundStyleChoice->SetSelection(0);
+			updateControlStates();
+		}
+		
+		// Update BackgroundManager if available
 		if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 			int activeId = m_backgroundManager->getActiveConfigurationId();
-			wxColour selectedColor = dialog.GetColourData().GetColour();
 			m_backgroundManager->setBackgroundColor(activeId, selectedColor);
-			m_backgroundColorButton->SetBackgroundColour(selectedColor);
-			m_backgroundColorButton->SetForegroundColour(wxColour(0, 0, 0));
 			m_backgroundManager->renderBackground();
-
-			notifyParameterChanged();
-
-			LOG_INF_S("BackgroundStylePanel::onBackgroundColorButton: Applied background color");
 		}
+		
+		// Update UI
+		m_backgroundColorButton->SetBackgroundColour(selectedColor);
+		int brightness = (selectedColor.Red() + selectedColor.Green() + selectedColor.Blue()) / 3;
+		m_backgroundColorButton->SetForegroundColour(brightness > 128 ? wxColour(0, 0, 0) : wxColour(255, 255, 255));
+
+		// Apply changes to PreviewCanvas
 		if (m_parentDialog) {
 			m_parentDialog->applyGlobalSettingsToCanvas();
 		}
+
+		notifyParameterChanged();
+		LOG_INF_S("BackgroundStylePanel::onBackgroundColorButton: Applied background color and updated config");
 	}
 }
 
@@ -294,21 +323,44 @@ void BackgroundStylePanel::onGradientTopColorButton(wxCommandEvent& event)
 {
 	wxColourDialog dialog(this);
 	if (dialog.ShowModal() == wxID_OK) {
+		wxColour selectedColor = dialog.GetColourData().GetColour();
+		
+		// Get current background mode from ConfigManager
+		int currentMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 1);
+		
+		// Determine gradient type: 1 = Linear, 2 = Radial
+		int gradientMode = (currentMode == 2) ? 2 : 1; // Default to Linear if not Radial
+		
+		// If style choice indicates gradient, use that instead
+		int selection = m_backgroundStyleChoice->GetSelection();
+		if (selection == 1) gradientMode = 1; // Linear
+		else if (selection == 2) gradientMode = 2; // Radial
+		
+		// Update ConfigManager with gradient mode and top color
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", gradientMode);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopR", selectedColor.Red() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopG", selectedColor.Green() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientTopB", selectedColor.Blue() / 255.0);
+		
+		// Update BackgroundManager if available
 		if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 			int activeId = m_backgroundManager->getActiveConfigurationId();
-			wxColour selectedColor = dialog.GetColourData().GetColour();
 			m_backgroundManager->setGradientTopColor(activeId, selectedColor);
-			m_gradientTopColorButton->SetBackgroundColour(selectedColor);
-			m_gradientTopColorButton->SetForegroundColour(wxColour(0, 0, 0));
 			m_backgroundManager->renderBackground();
-
-			notifyParameterChanged();
-
-			LOG_INF_S("BackgroundStylePanel::onGradientTopColorButton: Applied gradient top color");
 		}
+		
+		// Update UI
+		m_gradientTopColorButton->SetBackgroundColour(selectedColor);
+		int brightness = (selectedColor.Red() + selectedColor.Green() + selectedColor.Blue()) / 3;
+		m_gradientTopColorButton->SetForegroundColour(brightness > 128 ? wxColour(0, 0, 0) : wxColour(255, 255, 255));
+
+		// Apply changes to PreviewCanvas
 		if (m_parentDialog) {
 			m_parentDialog->applyGlobalSettingsToCanvas();
 		}
+
+		notifyParameterChanged();
+		LOG_INF_S("BackgroundStylePanel::onGradientTopColorButton: Applied gradient top color and updated config");
 	}
 }
 
@@ -316,21 +368,44 @@ void BackgroundStylePanel::onGradientBottomColorButton(wxCommandEvent& event)
 {
 	wxColourDialog dialog(this);
 	if (dialog.ShowModal() == wxID_OK) {
+		wxColour selectedColor = dialog.GetColourData().GetColour();
+		
+		// Get current background mode from ConfigManager
+		int currentMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 1);
+		
+		// Determine gradient type: 1 = Linear, 2 = Radial
+		int gradientMode = (currentMode == 2) ? 2 : 1; // Default to Linear if not Radial
+		
+		// If style choice indicates gradient, use that instead
+		int selection = m_backgroundStyleChoice->GetSelection();
+		if (selection == 1) gradientMode = 1; // Linear
+		else if (selection == 2) gradientMode = 2; // Radial
+		
+		// Update ConfigManager with gradient mode and bottom color
+		ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", gradientMode);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomR", selectedColor.Red() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomG", selectedColor.Green() / 255.0);
+		ConfigManager::getInstance().setDouble("Canvas", "BackgroundGradientBottomB", selectedColor.Blue() / 255.0);
+		
+		// Update BackgroundManager if available
 		if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 			int activeId = m_backgroundManager->getActiveConfigurationId();
-			wxColour selectedColor = dialog.GetColourData().GetColour();
 			m_backgroundManager->setGradientBottomColor(activeId, selectedColor);
-			m_gradientBottomColorButton->SetBackgroundColour(selectedColor);
-			m_gradientBottomColorButton->SetForegroundColour(wxColour(255, 255, 255));
 			m_backgroundManager->renderBackground();
-
-			notifyParameterChanged();
-
-			LOG_INF_S("BackgroundStylePanel::onGradientBottomColorButton: Applied gradient bottom color");
 		}
+		
+		// Update UI
+		m_gradientBottomColorButton->SetBackgroundColour(selectedColor);
+		int brightness = (selectedColor.Red() + selectedColor.Green() + selectedColor.Blue()) / 3;
+		m_gradientBottomColorButton->SetForegroundColour(brightness > 128 ? wxColour(0, 0, 0) : wxColour(255, 255, 255));
+
+		// Apply changes to PreviewCanvas
 		if (m_parentDialog) {
 			m_parentDialog->applyGlobalSettingsToCanvas();
 		}
+
+		notifyParameterChanged();
+		LOG_INF_S("BackgroundStylePanel::onGradientBottomColorButton: Applied gradient bottom color and updated config");
 	}
 }
 
@@ -356,9 +431,13 @@ void BackgroundStylePanel::onBackgroundImageButton(wxCommandEvent& event)
 			m_backgroundImagePathLabel->SetLabel(fileName.GetFullName());
 			m_backgroundManager->renderBackground();
 
+			// Update ConfigManager
+			ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 3); // Texture
+			ConfigManager::getInstance().setString("Canvas", "BackgroundTexturePath", normalizedPath);
+
 			notifyParameterChanged();
 
-			LOG_INF_S("BackgroundStylePanel::onBackgroundImageButton: Applied background image: " + normalizedPath);
+			LOG_INF_S("BackgroundStylePanel::onBackgroundImageButton: Applied background image and updated config: " + normalizedPath);
 		}
 		if (m_parentDialog) {
 			m_parentDialog->applyGlobalSettingsToCanvas();
@@ -461,156 +540,260 @@ void BackgroundStylePanel::updateButtonColors()
 
 void BackgroundStylePanel::onEnvironmentPresetButton(wxCommandEvent& event)
 {
+	wxColour presetColor = wxColour(135, 206, 235); // Sky blue
+	
+	// Update ConfigManager
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0); // Solid color
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+	
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setStyle(activeId, 3); // Environment style
-		m_backgroundManager->setBackgroundColor(activeId, wxColour(135, 206, 235)); // Sky blue
+		m_backgroundManager->setStyle(activeId, 0); // Solid color
+		m_backgroundManager->setBackgroundColor(activeId, presetColor);
 		m_backgroundManager->renderBackground();
-
-		// Update UI
-		m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
-		updateControlStates();
-		updateButtonColors();
-
-		notifyParameterChanged();
-
-		LOG_INF_S("BackgroundStylePanel::onEnvironmentPresetButton: Applied environment preset");
 	}
+
+	// Update UI
+	m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
+	updateControlStates();
+	m_backgroundColorButton->SetBackgroundColour(presetColor);
+	m_backgroundColorButton->SetForegroundColour(wxColour(0, 0, 0));
+
+	// Apply changes to PreviewCanvas
 	if (m_parentDialog) {
 		m_parentDialog->applyGlobalSettingsToCanvas();
 	}
+
+	notifyParameterChanged();
+	LOG_INF_S("BackgroundStylePanel::onEnvironmentPresetButton: Applied environment preset");
 }
 
 void BackgroundStylePanel::onStudioPresetButton(wxCommandEvent& event)
 {
+	wxColour presetColor = wxColour(240, 248, 255); // Light blue
+	
+	// Update ConfigManager
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0); // Solid color
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+	
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setStyle(activeId, 4); // Studio style
-		m_backgroundManager->setBackgroundColor(activeId, wxColour(240, 248, 255)); // Light blue
+		m_backgroundManager->setStyle(activeId, 0); // Solid color
+		m_backgroundManager->setBackgroundColor(activeId, presetColor);
 		m_backgroundManager->renderBackground();
-
-		// Update UI
-		m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
-		updateControlStates();
-		updateButtonColors();
-
-		notifyParameterChanged();
-
-		LOG_INF_S("BackgroundStylePanel::onStudioPresetButton: Applied studio preset");
 	}
+
+	// Update UI
+	m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
+	updateControlStates();
+	m_backgroundColorButton->SetBackgroundColour(presetColor);
+	m_backgroundColorButton->SetForegroundColour(wxColour(0, 0, 0));
+
+	// Apply changes to PreviewCanvas
 	if (m_parentDialog) {
 		m_parentDialog->applyGlobalSettingsToCanvas();
 	}
+
+	notifyParameterChanged();
+	LOG_INF_S("BackgroundStylePanel::onStudioPresetButton: Applied studio preset");
 }
 
 void BackgroundStylePanel::onOutdoorPresetButton(wxCommandEvent& event)
 {
+	wxColour presetColor = wxColour(255, 255, 224); // Light yellow
+	
+	// Update ConfigManager
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0); // Solid color
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+	
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setStyle(activeId, 5); // Outdoor style
-		m_backgroundManager->setBackgroundColor(activeId, wxColour(255, 255, 224)); // Light yellow
+		m_backgroundManager->setStyle(activeId, 0); // Solid color
+		m_backgroundManager->setBackgroundColor(activeId, presetColor);
 		m_backgroundManager->renderBackground();
-
-		// Update UI
-		m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
-		updateControlStates();
-		updateButtonColors();
-
-		notifyParameterChanged();
-
-		LOG_INF_S("BackgroundStylePanel::onOutdoorPresetButton: Applied outdoor preset");
 	}
+
+	// Update UI
+	m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
+	updateControlStates();
+	m_backgroundColorButton->SetBackgroundColour(presetColor);
+	m_backgroundColorButton->SetForegroundColour(wxColour(0, 0, 0));
+
+	// Apply changes to PreviewCanvas
 	if (m_parentDialog) {
 		m_parentDialog->applyGlobalSettingsToCanvas();
 	}
+
+	notifyParameterChanged();
+	LOG_INF_S("BackgroundStylePanel::onOutdoorPresetButton: Applied outdoor preset");
 }
 
 void BackgroundStylePanel::onIndustrialPresetButton(wxCommandEvent& event)
 {
+	wxColour presetColor = wxColour(245, 245, 245); // Light gray
+	
+	// Update ConfigManager
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0); // Solid color
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+	
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setStyle(activeId, 6); // Industrial style
-		m_backgroundManager->setBackgroundColor(activeId, wxColour(245, 245, 245)); // Light gray
+		m_backgroundManager->setStyle(activeId, 0); // Solid color
+		m_backgroundManager->setBackgroundColor(activeId, presetColor);
 		m_backgroundManager->renderBackground();
-
-		// Update UI
-		m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
-		updateControlStates();
-		updateButtonColors();
-
-		notifyParameterChanged();
-
-		LOG_INF_S("BackgroundStylePanel::onIndustrialPresetButton: Applied industrial preset");
 	}
+
+	// Update UI
+	m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
+	updateControlStates();
+	m_backgroundColorButton->SetBackgroundColour(presetColor);
+	m_backgroundColorButton->SetForegroundColour(wxColour(0, 0, 0));
+
+	// Apply changes to PreviewCanvas
 	if (m_parentDialog) {
 		m_parentDialog->applyGlobalSettingsToCanvas();
 	}
+
+	notifyParameterChanged();
+	LOG_INF_S("BackgroundStylePanel::onIndustrialPresetButton: Applied industrial preset");
 }
 
 void BackgroundStylePanel::onCadPresetButton(wxCommandEvent& event)
 {
+	wxColour presetColor = wxColour(255, 248, 220); // Light cream
+	
+	// Update ConfigManager
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0); // Solid color
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+	
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setStyle(activeId, 7); // CAD style
-		m_backgroundManager->setBackgroundColor(activeId, wxColour(255, 248, 220)); // Light cream
+		m_backgroundManager->setStyle(activeId, 0); // Solid color
+		m_backgroundManager->setBackgroundColor(activeId, presetColor);
 		m_backgroundManager->renderBackground();
-
-		// Update UI
-		m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
-		updateControlStates();
-		updateButtonColors();
-
-		notifyParameterChanged();
-
-		LOG_INF_S("BackgroundStylePanel::onCadPresetButton: Applied CAD preset");
 	}
+
+	// Update UI
+	m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
+	updateControlStates();
+	m_backgroundColorButton->SetBackgroundColour(presetColor);
+	m_backgroundColorButton->SetForegroundColour(wxColour(0, 0, 0));
+
+	// Apply changes to PreviewCanvas
 	if (m_parentDialog) {
 		m_parentDialog->applyGlobalSettingsToCanvas();
 	}
+
+	notifyParameterChanged();
+	LOG_INF_S("BackgroundStylePanel::onCadPresetButton: Applied CAD preset");
 }
 
 void BackgroundStylePanel::onDarkPresetButton(wxCommandEvent& event)
 {
+	wxColour presetColor = wxColour(40, 40, 40); // Dark gray
+	
+	// Update ConfigManager
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundMode", 0); // Solid color
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorR", presetColor.Red() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorG", presetColor.Green() / 255.0);
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundColorB", presetColor.Blue() / 255.0);
+	
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setStyle(activeId, 8); // Dark style
-		m_backgroundManager->setBackgroundColor(activeId, wxColour(40, 40, 40)); // Dark gray
+		m_backgroundManager->setStyle(activeId, 0); // Solid color
+		m_backgroundManager->setBackgroundColor(activeId, presetColor);
 		m_backgroundManager->renderBackground();
-
-		// Update UI
-		m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
-		updateControlStates();
-		updateButtonColors();
-
-		notifyParameterChanged();
-
-		LOG_INF_S("BackgroundStylePanel::onDarkPresetButton: Applied dark preset");
 	}
+
+	// Update UI
+	m_backgroundStyleChoice->SetSelection(0); // Set to Solid Color
+	updateControlStates();
+	m_backgroundColorButton->SetBackgroundColour(presetColor);
+	m_backgroundColorButton->SetForegroundColour(wxColour(255, 255, 255)); // White text for dark background
+
+	// Apply changes to PreviewCanvas
 	if (m_parentDialog) {
 		m_parentDialog->applyGlobalSettingsToCanvas();
 	}
+
+	notifyParameterChanged();
+	LOG_INF_S("BackgroundStylePanel::onDarkPresetButton: Applied dark preset");
 }
 
 void BackgroundStylePanel::setBackgroundManager(BackgroundManager* manager)
 {
 	m_backgroundManager = manager;
 
-	// Sync UI with current background settings
+	// Sync UI with current background settings from ConfigManager
+	// Read current background mode from config
+	int backgroundMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 0);
+	
+	// Map config mode to style choice: 0=Solid, 1=Linear, 2=Radial, 3=Image
+	int styleSelection = 0;
+	if (backgroundMode == 0) styleSelection = 0; // Solid Color
+	else if (backgroundMode == 1) styleSelection = 1; // Linear Gradient
+	else if (backgroundMode == 2) styleSelection = 2; // Radial Gradient
+	else if (backgroundMode == 3) styleSelection = 3; // Image
+	
+	// Update UI controls
+	if (m_backgroundStyleChoice) {
+		m_backgroundStyleChoice->SetSelection(styleSelection);
+	}
+
+	// Update control states based on current style
+	updateControlStates();
+
+		// Update button colors from ConfigManager
+		if (m_backgroundColorButton) {
+			double r = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorR", 1.0);
+			double g = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 1.0);
+			double b = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 1.0);
+		wxColour bgColor(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
+		m_backgroundColorButton->SetBackgroundColour(bgColor);
+		int brightness = (bgColor.Red() + bgColor.Green() + bgColor.Blue()) / 3;
+		m_backgroundColorButton->SetForegroundColour(brightness > 128 ? wxColour(0, 0, 0) : wxColour(255, 255, 255));
+	}
+
+	if (m_gradientTopColorButton) {
+		double r = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.7);
+		double g = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.7);
+		double b = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 0.9);
+		wxColour topColor(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
+		m_gradientTopColorButton->SetBackgroundColour(topColor);
+		int brightness = (topColor.Red() + topColor.Green() + topColor.Blue()) / 3;
+		m_gradientTopColorButton->SetForegroundColour(brightness > 128 ? wxColour(0, 0, 0) : wxColour(255, 255, 255));
+	}
+
+	if (m_gradientBottomColorButton) {
+		double r = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.5);
+		double g = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.5);
+		double b = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 0.8);
+		wxColour bottomColor(static_cast<int>(r * 255), static_cast<int>(g * 255), static_cast<int>(b * 255));
+		m_gradientBottomColorButton->SetBackgroundColour(bottomColor);
+		int brightness = (bottomColor.Red() + bottomColor.Green() + bottomColor.Blue()) / 3;
+		m_gradientBottomColorButton->SetForegroundColour(brightness > 128 ? wxColour(0, 0, 0) : wxColour(255, 255, 255));
+	}
+
+	// Update image path label if image is set
+	std::string imagePath = ConfigManager::getInstance().getString("Canvas", "BackgroundTexturePath", "");
+	if (!imagePath.empty() && m_backgroundImagePathLabel) {
+		wxFileName fileName(wxString::FromUTF8(imagePath));
+		m_backgroundImagePathLabel->SetLabel(fileName.GetFullName());
+	}
+
+	// Also sync with BackgroundManager if available
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		BackgroundSettings settings = m_backgroundManager->getActiveConfiguration();
-
-		// Update UI controls
-		if (m_backgroundStyleChoice) {
-			m_backgroundStyleChoice->SetSelection(settings.style);
-		}
-
-		// Update control states based on current style
-		updateControlStates();
-
-		// Update image path label if image is set
-		if (settings.imageEnabled && !settings.imagePath.empty() && m_backgroundImagePathLabel) {
-			m_backgroundImagePathLabel->SetLabel(wxString::FromUTF8(settings.imagePath));
-		}
 
 		// Update image opacity slider
 		if (m_backgroundImageOpacitySlider) {
@@ -626,12 +809,9 @@ void BackgroundStylePanel::setBackgroundManager(BackgroundManager* manager)
 		if (m_backgroundImageMaintainAspectCheckBox) {
 			m_backgroundImageMaintainAspectCheckBox->SetValue(settings.imageMaintainAspect);
 		}
-
-		// Update button colors
-		updateButtonColors();
-
-		LOG_INF_S("BackgroundStylePanel::setBackgroundManager: Synced UI with background settings");
 	}
+
+	LOG_INF_S("BackgroundStylePanel::setBackgroundManager: Synced UI with background settings from ConfigManager");
 }
 
 int BackgroundStylePanel::getBackgroundStyle() const
