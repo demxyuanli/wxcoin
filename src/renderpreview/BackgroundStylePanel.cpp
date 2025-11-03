@@ -447,9 +447,14 @@ void BackgroundStylePanel::onBackgroundImageButton(wxCommandEvent& event)
 
 void BackgroundStylePanel::onBackgroundImageOpacityChanged(wxCommandEvent& event)
 {
+	float opacity = m_backgroundImageOpacitySlider->GetValue() / 100.0f;
+
+	// Update ConfigManager
+	ConfigManager::getInstance().setDouble("Canvas", "BackgroundImageOpacity", opacity);
+
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setImageOpacity(activeId, m_backgroundImageOpacitySlider->GetValue() / 100.0f);
+		m_backgroundManager->setImageOpacity(activeId, opacity);
 
 		// Apply the background changes immediately
 		m_backgroundManager->renderBackground();
@@ -467,9 +472,14 @@ void BackgroundStylePanel::onBackgroundImageOpacityChanged(wxCommandEvent& event
 
 void BackgroundStylePanel::onBackgroundImageFitChanged(wxCommandEvent& event)
 {
+	int fit = m_backgroundImageFitChoice->GetSelection();
+
+	// Update ConfigManager
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundImageFit", fit);
+
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setImageFit(activeId, m_backgroundImageFitChoice->GetSelection());
+		m_backgroundManager->setImageFit(activeId, fit);
 
 		// Apply the background changes immediately
 		m_backgroundManager->renderBackground();
@@ -477,7 +487,7 @@ void BackgroundStylePanel::onBackgroundImageFitChanged(wxCommandEvent& event)
 		notifyParameterChanged();
 
 		std::ostringstream oss;
-		oss << m_backgroundImageFitChoice->GetSelection();
+		oss << fit;
 		LOG_INF_S("BackgroundStylePanel::onBackgroundImageFitChanged: Applied image fit " + oss.str());
 	}
 	if (m_parentDialog) {
@@ -487,9 +497,14 @@ void BackgroundStylePanel::onBackgroundImageFitChanged(wxCommandEvent& event)
 
 void BackgroundStylePanel::onBackgroundImageMaintainAspectChanged(wxCommandEvent& event)
 {
+	bool maintainAspect = m_backgroundImageMaintainAspectCheckBox->GetValue();
+
+	// Update ConfigManager (use int for bool)
+	ConfigManager::getInstance().setInt("Canvas", "BackgroundImageMaintainAspect", maintainAspect ? 1 : 0);
+
 	if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
 		int activeId = m_backgroundManager->getActiveConfigurationId();
-		m_backgroundManager->setImageMaintainAspect(activeId, m_backgroundImageMaintainAspectCheckBox->GetValue());
+		m_backgroundManager->setImageMaintainAspect(activeId, maintainAspect);
 
 		// Apply the background changes immediately
 		m_backgroundManager->renderBackground();
@@ -497,7 +512,7 @@ void BackgroundStylePanel::onBackgroundImageMaintainAspectChanged(wxCommandEvent
 		notifyParameterChanged();
 
 		std::ostringstream oss;
-		oss << m_backgroundImageMaintainAspectCheckBox->GetValue();
+		oss << maintainAspect;
 		LOG_INF_S("BackgroundStylePanel::onBackgroundImageMaintainAspectChanged: Applied image maintain aspect " + oss.str());
 	}
 	if (m_parentDialog) {

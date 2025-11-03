@@ -192,14 +192,14 @@ void PreviewCanvas::initializeScene()
 	SbRotation rotation(defaultDir, viewDir);
 	m_camera->orientation.setValue(rotation);
 
-	// Add camera first (must be before objects that use perspective projection)
-	m_sceneRoot->addChild(m_camera);
-
 	// Set up background scenegraph with gradient/image in it (FreeCAD style)
-	// Background root is added after camera, but background nodes will render before camera affects state
+	// Background root is added before camera, but background nodes will render before camera affects state
 	m_backgroundRoot = new SoSeparator;
 	m_backgroundRoot->ref();
 	m_backgroundRoot->setName("backgroundroot");
+
+	// Add camera first (must be before objects that use perspective projection)
+	m_sceneRoot->addChild(m_camera);
 
 	// Background gradient node (FreeCAD style)
 	m_backgroundGradient = new SoFCBackgroundGradient;
@@ -665,37 +665,24 @@ void PreviewCanvas::render(bool fastMode)
 	// Set viewport for rendering
 	glViewport(0, 0, size.GetWidth(), size.GetHeight());
 
-	// Render background BEFORE scene graph (same as main view RenderingEngine)
-	// This ensures background is rendered correctly and doesn't interfere with scene rendering
-	LOG_INF_S("render: calling renderBackgroundDirectly, fastMode=" + std::to_string(fastMode));
-	renderBackgroundDirectly(size);
-
 	// Reset OpenGL errors before rendering
 	GLenum err;
 	while ((err = glGetError()) != GL_NO_ERROR) {
 		LOG_ERR_S("Pre-render: OpenGL error: " + std::to_string(err));
 	}
 
-	// Set up OpenGL state for proper lighting and scene rendering
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glEnable(GL_LIGHTING); // Enable lighting
-	glEnable(GL_NORMALIZE); // Enable normal normalization for proper lighting
-	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE); // Enable two-sided lighting for shell models
-	glEnable(GL_TEXTURE_2D);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	glColor3f(1.0f, 1.0f, 1.0f); // Reset color to white
-
-	// Debug: Check scene graph structure
-	LOG_INF_S("PreviewCanvas::render: Scene root children: " + std::to_string(m_sceneRoot->getNumChildren()));
-	if (m_backgroundRoot) {
-		LOG_INF_S("PreviewCanvas::render: Background root children: " + std::to_string(m_backgroundRoot->getNumChildren()));
-	}
-	if (m_objectRoot) {
-		LOG_INF_S("PreviewCanvas::render: Object root children: " + std::to_string(m_objectRoot->getNumChildren()));
+	// For solid color background, clear with background color
+	if (m_configBackgroundMode == 0) {
+		glClearColor(static_cast<float>(m_configBackgroundColorR),
+			static_cast<float>(m_configBackgroundColorG),
+			static_cast<float>(m_configBackgroundColorB), 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	} else {
+		// For gradient/image backgrounds, clear depth buffer only
+		glClear(GL_DEPTH_BUFFER_BIT);
 	}
 
-	// Render the scene
+	// Render the scene - Coin3D will handle background nodes in scene graph automatically
 	try {
 		renderAction.apply(m_sceneRoot);
 	}
@@ -882,36 +869,7 @@ void PreviewCanvas::onSize(wxSizeEvent& event)
 
 void PreviewCanvas::onEraseBackground(wxEraseEvent& event)
 {
-	// Clear with our background color to prevent flickering and ensure proper background
-	if (m_glContext && m_initialized) {
-		SetCurrent(*m_glContext);
-		switch (m_configBackgroundMode) {
-		case 0: // Solid color
-			glClearColor(static_cast<float>(m_configBackgroundColorR),
-				static_cast<float>(m_configBackgroundColorG),
-				static_cast<float>(m_configBackgroundColorB), 1.0f);
-			break;
-		case 1: // Linear Gradient
-		case 2: // Radial Gradient
-			// For gradients, use the top color as erase background
-			glClearColor(static_cast<float>(m_configGradientTopR),
-				static_cast<float>(m_configGradientTopG),
-				static_cast<float>(m_configGradientTopB), 1.0f);
-			break;
-		case 3: // Texture
-			// For texture, use solid background color
-			glClearColor(static_cast<float>(m_configBackgroundColorR),
-				static_cast<float>(m_configBackgroundColorG),
-				static_cast<float>(m_configBackgroundColorB), 1.0f);
-			break;
-		default:
-			glClearColor(0.7f, 0.7f, 0.9f, 1.0f); // Default light blue
-			break;
-		}
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		SwapBuffers();
-	}
-	// Don't skip the event to prevent wxWidgets default behavior
+	// Do nothing to prevent flickering
 }
 
 void PreviewCanvas::onMouseDown(wxMouseEvent& event)
@@ -1510,8 +1468,8 @@ void PreviewCanvas::updateBackgroundFromConfig()
 			static_cast<float>(m_configGradientBottomG),
 			static_cast<float>(m_configGradientBottomB));
 		m_backgroundGradient->setColorGradient(fromColor, toColor);
-		
-		// Add to scene graph if not already present
+
+		// Add to scene graph (FreeCAD style - Coin3D will render it automatically)
 		if (m_backgroundRoot->findChild(m_backgroundGradient) == -1) {
 			m_backgroundRoot->addChild(m_backgroundGradient);
 			LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Added linear gradient to scene graph");
@@ -1535,8 +1493,8 @@ void PreviewCanvas::updateBackgroundFromConfig()
 			static_cast<float>(m_configGradientBottomG),
 			static_cast<float>(m_configGradientBottomB));
 		m_backgroundGradient->setColorGradient(fromColor2, toColor2);
-		
-		// Add to scene graph if not already present
+
+		// Add to scene graph (FreeCAD style - Coin3D will render it automatically)
 		if (m_backgroundRoot->findChild(m_backgroundGradient) == -1) {
 			m_backgroundRoot->addChild(m_backgroundGradient);
 			LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Added radial gradient to scene graph");
@@ -1596,8 +1554,8 @@ void PreviewCanvas::updateBackgroundFromConfig()
 				m_backgroundImage->setMaintainAspect(true);
 				m_backgroundImage->setOpacity(1.0f);
 			}
-			
-			// Add to scene graph if not already present
+
+			// Add to scene graph (FreeCAD style - Coin3D will render it automatically)
 			if (m_backgroundRoot->findChild(m_backgroundImage) == -1) {
 				m_backgroundRoot->addChild(m_backgroundImage);
 				LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Added image to scene graph with fit mode " + std::to_string(imageFit));
@@ -1625,15 +1583,8 @@ void PreviewCanvas::updateBackgroundFromConfig()
 	}
 	}
 
-	// Background is now rendered directly in renderBackgroundDirectly(), not as scene graph nodes
-	// But we still need to remove background nodes from scene graph to avoid conflicts
-	// Remove any background nodes from scene graph (background is rendered before scene graph)
-	if (m_backgroundRoot->findChild(m_backgroundGradient) != -1) {
-		m_backgroundRoot->removeChild(m_backgroundGradient);
-	}
-	if (m_backgroundRoot->findChild(m_backgroundImage) != -1) {
-		m_backgroundRoot->removeChild(m_backgroundImage);
-	}
+	// Trigger immediate re-render to apply background changes
+	render(true);
 
 	LOG_INF_S("PreviewCanvas::updateBackgroundFromConfig: Updated background mode to " + std::to_string(backgroundMode));
 }
@@ -1699,12 +1650,7 @@ void PreviewCanvas::applyToMainView(class RenderingEngine* mainViewEngine)
 
 void PreviewCanvas::renderBackgroundDirectly(const wxSize& size)
 {
-	// Render background directly using OpenGL (same approach as RenderingEngine)
-	// This is called BEFORE scene graph rendering to ensure correct background display
-
-	LOG_INF_S("renderBackgroundDirectly: mode=" + std::to_string(m_configBackgroundMode) +
-	          ", gradient=" + std::string(m_backgroundGradient ? "valid" : "null"));
-
+	// Solid color background only - gradients and images are rendered by Coin3D scene graph
 	switch (m_configBackgroundMode) {
 	case 0: // Solid color
 		glClearColor(static_cast<float>(m_configBackgroundColorR),
@@ -1713,140 +1659,10 @@ void PreviewCanvas::renderBackgroundDirectly(const wxSize& size)
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		break;
 
-	case 1: // Linear Gradient
-		if (m_backgroundGradient) {
-			LOG_INF_S("renderBackgroundDirectly: Rendering linear gradient");
-			// Set gradient type if not already set
-			if (m_backgroundGradient->getGradient() != SoFCBackgroundGradient::LINEAR) {
-				m_backgroundGradient->setGradient(SoFCBackgroundGradient::LINEAR);
-				LOG_INF_S("renderBackgroundDirectly: Set gradient type to LINEAR");
-			}
-			// Set gradient colors
-			SbColor fromColor(static_cast<float>(m_configGradientTopR),
-				static_cast<float>(m_configGradientTopG),
-				static_cast<float>(m_configGradientTopB));
-			SbColor toColor(static_cast<float>(m_configGradientBottomR),
-				static_cast<float>(m_configGradientBottomG),
-				static_cast<float>(m_configGradientBottomB));
-			m_backgroundGradient->setColorGradient(fromColor, toColor);
-			LOG_INF_S("renderBackgroundDirectly: Set gradient colors");
-
-			// Create viewport region with correct size
-			SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
-			SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
-			m_backgroundGradient->GLRender(action);
-			delete action;
-			LOG_INF_S("renderBackgroundDirectly: Rendered linear gradient");
-
-			// Clear depth buffer after gradient rendering
-			glClear(GL_DEPTH_BUFFER_BIT);
-		} else {
-			LOG_WRN_S("renderBackgroundDirectly: m_backgroundGradient is null, using fallback");
-			// Fallback to solid color
-			glClearColor(static_cast<float>(m_configBackgroundColorR),
-				static_cast<float>(m_configBackgroundColorG),
-				static_cast<float>(m_configBackgroundColorB), 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		}
-		break;
-
-	case 2: // Radial Gradient
-		if (m_backgroundGradient) {
-			LOG_INF_S("renderBackgroundDirectly: Rendering radial gradient");
-			// Set gradient type if not already set
-			if (m_backgroundGradient->getGradient() != SoFCBackgroundGradient::RADIAL) {
-				m_backgroundGradient->setGradient(SoFCBackgroundGradient::RADIAL);
-				LOG_INF_S("renderBackgroundDirectly: Set gradient type to RADIAL");
-			}
-			// Set gradient colors
-			SbColor fromColor(static_cast<float>(m_configGradientTopR),
-				static_cast<float>(m_configGradientTopG),
-				static_cast<float>(m_configGradientTopB));
-			SbColor toColor(static_cast<float>(m_configGradientBottomR),
-				static_cast<float>(m_configGradientBottomG),
-				static_cast<float>(m_configGradientBottomB));
-			m_backgroundGradient->setColorGradient(fromColor, toColor);
-			LOG_INF_S("renderBackgroundDirectly: Set gradient colors");
-
-			// Create viewport region with correct size
-			SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
-			SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
-			m_backgroundGradient->GLRender(action);
-			delete action;
-			LOG_INF_S("renderBackgroundDirectly: Rendered radial gradient");
-
-			// Clear depth buffer after gradient rendering
-			glClear(GL_DEPTH_BUFFER_BIT);
-		} else {
-			LOG_WRN_S("renderBackgroundDirectly: m_backgroundGradient is null, using fallback");
-			// Fallback to solid color
-			glClearColor(static_cast<float>(m_configBackgroundColorR),
-				static_cast<float>(m_configBackgroundColorG),
-				static_cast<float>(m_configBackgroundColorB), 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		}
-		break;
-
-	case 3: // Texture
-		if (!m_configBackgroundTexturePath.empty() && m_backgroundImage) {
-			// Clear color buffer first with solid background color for uncovered areas
-			glClearColor(static_cast<float>(m_configBackgroundColorR),
-				static_cast<float>(m_configBackgroundColorG),
-				static_cast<float>(m_configBackgroundColorB), 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			// Set image properties
-			m_backgroundImage->setImagePath(m_configBackgroundTexturePath);
-
-			// Get fit mode and maintain aspect from BackgroundManager if available
-			int imageFit = 0;
-			bool maintainAspect = true;
-			float imageOpacity = 1.0f;
-
-			if (m_backgroundManager && m_backgroundManager->hasActiveConfiguration()) {
-				BackgroundSettings settings = m_backgroundManager->getActiveConfiguration();
-				imageFit = settings.imageFit;
-				maintainAspect = settings.imageMaintainAspect;
-				imageOpacity = settings.imageOpacity;
-
-				// Map fit mode
-				int mappedFit = imageFit;
-				if (imageFit >= 0 && imageFit <= 2) {
-					mappedFit = imageFit;
-				} else {
-					if (imageFit == 3) mappedFit = 0;
-					else if (imageFit == 1) mappedFit = 1;
-					else mappedFit = 2;
-				}
-
-				m_backgroundImage->setFitMode(mappedFit);
-				m_backgroundImage->setMaintainAspect(maintainAspect);
-				m_backgroundImage->setOpacity(imageOpacity);
-			}
-
-			// Render image background directly
-			SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
-			SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
-			m_backgroundImage->GLRender(action);
-			delete action;
-
-			// Clear depth buffer after image rendering
-			glClear(GL_DEPTH_BUFFER_BIT);
-		} else {
-			// Fallback to solid color if no texture path
-			glClearColor(static_cast<float>(m_configBackgroundColorR),
-				static_cast<float>(m_configBackgroundColorG),
-				static_cast<float>(m_configBackgroundColorB), 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		}
-		break;
-
 	default:
-		// Fallback to solid color
-		glClearColor(static_cast<float>(m_configBackgroundColorR),
-			static_cast<float>(m_configBackgroundColorG),
-			static_cast<float>(m_configBackgroundColorB), 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		// For gradient and image backgrounds, Coin3D scene graph handles rendering
+		// Just clear depth buffer
+		glClear(GL_DEPTH_BUFFER_BIT);
 		break;
 	}
 }
