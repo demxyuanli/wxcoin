@@ -6,6 +6,7 @@
 #include <Inventor/nodes/SoTexture2.h>
 #include "interfaces/IRenderingEngine.h"
 #include "SoFCBackgroundGradient.h"
+#include "SoFCBackgroundImage.h"
 
 // Forward declarations
 class SceneManager;
@@ -61,6 +62,9 @@ private:
 	
 	// FreeCAD-style background gradient
 	SoFCBackgroundGradient* m_backgroundGradient;
+	
+	// FreeCAD-style background image
+	SoFCBackgroundImage* m_backgroundImage;
 
 	bool m_isInitialized;
 	bool m_isRendering;

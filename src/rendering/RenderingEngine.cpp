@@ -23,6 +23,7 @@ RenderingEngine::RenderingEngine(wxGLCanvas* canvas)
 	, m_backgroundTexture(nullptr)
 	, m_backgroundTextureLoaded(false)
 	, m_backgroundGradient(nullptr)
+	, m_backgroundImage(nullptr)
 	, m_isInitialized(false)
 	, m_isRendering(false)
 	, m_lastRenderTime(0)
@@ -48,6 +49,12 @@ RenderingEngine::~RenderingEngine() {
 		m_backgroundGradient = nullptr;
 	}
 
+	// Clean up background image
+	if (m_backgroundImage) {
+		m_backgroundImage->unref();
+		m_backgroundImage = nullptr;
+	}
+
 	LOG_INF_S("RenderingEngine::~RenderingEngine: Destroying");
 }
 
@@ -67,46 +74,62 @@ bool RenderingEngine::initialize() {
 		m_backgroundColor[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 1.0));
 		m_backgroundColor[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 1.0));
 
-		m_backgroundGradientTop[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.9));
-		m_backgroundGradientTop[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.95));
-		m_backgroundGradientTop[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 1.0));
+	m_backgroundGradientTop[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.9));
+	m_backgroundGradientTop[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.95));
+	m_backgroundGradientTop[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 1.0));
 
-		m_backgroundGradientBottom[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.6));
-		m_backgroundGradientBottom[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.8));
-		m_backgroundGradientBottom[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 1.0));
+	m_backgroundGradientBottom[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.6));
+	m_backgroundGradientBottom[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.8));
+	m_backgroundGradientBottom[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 1.0));
+
+	LOG_INF_S("RenderingEngine::initialize: Loaded background config - mode: " + std::to_string(m_backgroundMode) +
+		", solid color: (" + std::to_string(m_backgroundColor[0]) + ", " + std::to_string(m_backgroundColor[1]) + ", " + std::to_string(m_backgroundColor[2]) + ")" +
+		", gradient top: (" + std::to_string(m_backgroundGradientTop[0]) + ", " + std::to_string(m_backgroundGradientTop[1]) + ", " + std::to_string(m_backgroundGradientTop[2]) + ")" +
+		", gradient bottom: (" + std::to_string(m_backgroundGradientBottom[0]) + ", " + std::to_string(m_backgroundGradientBottom[1]) + ", " + std::to_string(m_backgroundGradientBottom[2]) + ")");
 
 		// Initialize and configure FreeCAD background gradient node for gradient mode
 		if (m_backgroundMode == 1) {
-			SoFCBackgroundGradient::initClass();
+			if (SoFCBackgroundGradient::getClassTypeId() == SoType::badType()) {
+				SoFCBackgroundGradient::initClass();
+			}
 			m_backgroundGradient = new SoFCBackgroundGradient;
 			m_backgroundGradient->ref();
+		LOG_INF_S("RenderingEngine::initialize: Created gradient node for mode 1");
 
-			// Configure gradient colors: from (top) to (bottom)
-			SbColor fromColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
-			SbColor toColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
-			m_backgroundGradient->setGradient(SoFCBackgroundGradient::LINEAR);
-			m_backgroundGradient->setColorGradient(fromColor, toColor);
+		// Configure gradient colors: fCol is bottom, tCol is top
+		SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
+		SbColor topColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
+		m_backgroundGradient->setGradient(SoFCBackgroundGradient::LINEAR);
+		m_backgroundGradient->setColorGradient(bottomColor, topColor);
 		}
 
 		// Initialize FreeCAD gradient for radial mode too
 		if (m_backgroundMode == 2) {
 			if (!m_backgroundGradient) {
-				SoFCBackgroundGradient::initClass();
-				m_backgroundGradient = new SoFCBackgroundGradient;
-				m_backgroundGradient->ref();
-			}
-			
-			SbColor fromColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
-			SbColor toColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
-			m_backgroundGradient->setGradient(SoFCBackgroundGradient::RADIAL);
-			m_backgroundGradient->setColorGradient(fromColor, toColor);
+				if (SoFCBackgroundGradient::getClassTypeId() == SoType::badType()) {
+					SoFCBackgroundGradient::initClass();
+				}
+		m_backgroundGradient = new SoFCBackgroundGradient;
+		m_backgroundGradient->ref();
+	}
+	
+	SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
+	SbColor topColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
+	m_backgroundGradient->setGradient(SoFCBackgroundGradient::RADIAL);
+	m_backgroundGradient->setColorGradient(bottomColor, topColor);
 		}
 
-		// Load background texture if needed
+		// Initialize and configure FreeCAD background image node for image mode
 		if (m_backgroundMode == 3) {
+			if (SoFCBackgroundImage::getClassTypeId() == SoType::badType()) {
+				SoFCBackgroundImage::initClass();
+			}
+			m_backgroundImage = new SoFCBackgroundImage;
+			m_backgroundImage->ref();
+			
 			std::string texturePath = ConfigManager::getInstance().getString("Canvas", "BackgroundTexturePath", "");
 			if (!texturePath.empty()) {
-				loadBackgroundTexture(texturePath);
+				m_backgroundImage->setImagePath(texturePath);
 			}
 		}
 
@@ -255,23 +278,16 @@ void RenderingEngine::swapBuffers() {
 }
 
 void RenderingEngine::clearBuffers() {
-	// Save current states before rendering background
-	GLboolean depthTestEnabled = glIsEnabled(GL_DEPTH_TEST);
-	
-	// Get viewport size and set it before rendering background
+	// Get viewport size and set it
 	wxSize size = m_canvas->GetClientSize();
 	glViewport(0, 0, size.x, size.y);
 	
 	// Render background based on mode (with correct viewport)
 	renderBackground(size);
 
-	// Clear depth buffer only (color buffer already cleared/rendered by renderBackground)
+	// After background rendering (mode 0: solid color clears both, modes 1/2: gradient clears depth, mode 3: image clears both)
+	// Clear depth buffer to ensure clean state for scene rendering
 	glClear(GL_DEPTH_BUFFER_BIT);
-
-	// Restore depth test state
-	if (!depthTestEnabled) {
-		glDisable(GL_DEPTH_TEST);
-	}
 }
 
 void RenderingEngine::presentFrame() {
@@ -302,7 +318,9 @@ void RenderingEngine::renderBackground(const wxSize& size) {
 				SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
 				m_backgroundGradient->GLRender(action);
 				delete action;
+				LOG_INF_S("RenderingEngine::renderBackground: Rendered linear gradient");
 			} else {
+				LOG_WRN_S("RenderingEngine::renderBackground: No gradient node available, using fallback");
 				renderGradientBackground(size);
 			}
 			break;
@@ -318,13 +336,23 @@ void RenderingEngine::renderBackground(const wxSize& size) {
 				SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
 				m_backgroundGradient->GLRender(action);
 				delete action;
+				LOG_INF_S("RenderingEngine::renderBackground: Rendered radial gradient");
 			} else {
+				LOG_WRN_S("RenderingEngine::renderBackground: No gradient node available, using fallback");
 				renderGradientBackground(size);
 			}
 			break;
 
-		case 3: // Texture
-			renderTextureBackground(size);
+		case 3: // Texture - use FreeCAD-style image
+			if (m_backgroundImage) {
+				// Create viewport region with correct size
+				SbViewportRegion vpRegion(size.x, size.y);
+				SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
+				m_backgroundImage->GLRender(action);
+				delete action;
+			} else {
+				renderTextureBackground(size);
+			}
 			break;
 
 		default:
@@ -529,23 +557,52 @@ void RenderingEngine::reloadBackgroundConfig() {
 	m_backgroundGradientBottom[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.8));
 	m_backgroundGradientBottom[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 1.0));
 
-	// Handle mode changes: create or destroy gradient node as needed
+	// Handle mode changes: create or destroy background nodes as needed
 	if (newBackgroundMode != m_backgroundMode) {
-		// Mode changed - handle gradient node lifecycle
+		// Mode changed - handle node lifecycle
 		if (newBackgroundMode == 1 || newBackgroundMode == 2) {
 			// Switching to gradient mode - create node if not exists
 			if (!m_backgroundGradient) {
-				SoFCBackgroundGradient::initClass();
+				if (SoFCBackgroundGradient::getClassTypeId() == SoType::badType()) {
+					SoFCBackgroundGradient::initClass();
+				}
 				m_backgroundGradient = new SoFCBackgroundGradient;
 				m_backgroundGradient->ref();
 				LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Created gradient node for mode " + std::to_string(newBackgroundMode));
 			}
-		} else {
-			// Switching away from gradient mode - cleanup node
+			// Clean up image node if exists
+			if (m_backgroundImage) {
+				m_backgroundImage->unref();
+				m_backgroundImage = nullptr;
+				LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Removed image node");
+			}
+		} else if (newBackgroundMode == 3) {
+			// Switching to image mode - create node if not exists
+			if (!m_backgroundImage) {
+				if (SoFCBackgroundImage::getClassTypeId() == SoType::badType()) {
+					SoFCBackgroundImage::initClass();
+				}
+				m_backgroundImage = new SoFCBackgroundImage;
+				m_backgroundImage->ref();
+				LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Created image node");
+			}
+			// Clean up gradient node if exists
 			if (m_backgroundGradient) {
 				m_backgroundGradient->unref();
 				m_backgroundGradient = nullptr;
 				LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Removed gradient node");
+			}
+		} else {
+			// Switching to solid color - cleanup all nodes
+			if (m_backgroundGradient) {
+				m_backgroundGradient->unref();
+				m_backgroundGradient = nullptr;
+				LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Removed gradient node");
+			}
+			if (m_backgroundImage) {
+				m_backgroundImage->unref();
+				m_backgroundImage = nullptr;
+				LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Removed image node");
 			}
 		}
 		m_backgroundMode = newBackgroundMode;
@@ -556,24 +613,19 @@ void RenderingEngine::reloadBackgroundConfig() {
 		SoFCBackgroundGradient::Gradient gradType = (m_backgroundMode == 1) ? SoFCBackgroundGradient::LINEAR : SoFCBackgroundGradient::RADIAL;
 		m_backgroundGradient->setGradient(gradType);
 		
-		SbColor fromColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
-		SbColor toColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
-		m_backgroundGradient->setColorGradient(fromColor, toColor);
+		SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
+		SbColor topColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
+		m_backgroundGradient->setColorGradient(bottomColor, topColor);
 		LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Updated gradient colors");
 	}
 
-	// Reload background texture if needed
-	if (m_backgroundMode == 3) {
+	// Update image node if exists and mode requires it
+	if (m_backgroundImage && m_backgroundMode == 3) {
 		std::string texturePath = ConfigManager::getInstance().getString("Canvas", "BackgroundTexturePath", "");
 		if (!texturePath.empty()) {
-			loadBackgroundTexture(texturePath);
-		} else {
-			m_backgroundTextureLoaded = false;
-			LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Texture mode but no path specified");
+			m_backgroundImage->setImagePath(texturePath);
+			LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Updated image path");
 		}
-	} else {
-		// Not texture mode - clear texture state
-		m_backgroundTextureLoaded = false;
 	}
 
 	LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Background configuration reloaded - mode: " + std::to_string(m_backgroundMode));

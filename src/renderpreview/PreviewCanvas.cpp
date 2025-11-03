@@ -677,8 +677,14 @@ void PreviewCanvas::render(bool fastMode)
 			static_cast<float>(m_configBackgroundColorG),
 			static_cast<float>(m_configBackgroundColorB), 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	} else if (m_configBackgroundMode == 3) {
+		// For image background, clear with background color to prevent artifacts in uncovered areas
+		glClearColor(static_cast<float>(m_configBackgroundColorR),
+			static_cast<float>(m_configBackgroundColorG),
+			static_cast<float>(m_configBackgroundColorB), 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	} else {
-		// For gradient/image backgrounds, clear depth buffer only
+		// For gradient backgrounds, clear depth buffer only
 		glClear(GL_DEPTH_BUFFER_BIT);
 	}
 

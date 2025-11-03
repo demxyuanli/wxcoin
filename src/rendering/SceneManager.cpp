@@ -387,7 +387,9 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	glEnable(GL_NORMALIZE);
 	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE); // allow two-sided lighting for CAD meshes
 	glEnable(GL_TEXTURE_2D);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// Note: Color buffer was already cleared by RenderingEngine::clearBuffers() with background
+	// Only clear depth buffer here to maintain proper depth testing for scene rendering
+	glClear(GL_DEPTH_BUFFER_BIT);
 
 	// Basic OpenGL capability check
 	const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
