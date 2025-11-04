@@ -36,6 +36,7 @@ public:
 	// Background rendering - public methods for external access
 	void renderBackground();
 	void reloadBackgroundConfig();
+	void updateCoordinateSystemColorsForBackground();
 	void triggerRefresh();
 
 private:
@@ -65,6 +66,7 @@ private:
 	
 	// FreeCAD-style background image
 	SoFCBackgroundImage* m_backgroundImage;
+	int m_backgroundTextureFitMode;
 
 	bool m_isInitialized;
 	bool m_isRendering;

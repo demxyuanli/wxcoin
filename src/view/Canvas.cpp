@@ -75,6 +75,11 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 			throw std::runtime_error("Scene initialization failed");
 		}
 
+		// Update coordinate system colors after SceneManager and CoordinateSystemRenderer are initialized
+		if (m_renderingEngine) {
+			m_renderingEngine->updateCoordinateSystemColorsForBackground();
+		}
+
 		Refresh(true);
 		Update();
 		LOG_INF_S("Canvas::Canvas: Initialized successfully");

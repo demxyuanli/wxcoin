@@ -23,6 +23,10 @@ CoordinateSystemRenderer::CoordinateSystemRenderer(SoSeparator* objectRoot)
 	, m_currentPlaneSize(DEFAULT_COORD_PLANE_SIZE)
 	, m_visible(true)
 {
+	// Initialize with default colors (assuming light background)
+	m_planeColor[0] = m_planeColor[1] = m_planeColor[2] = 0.7f;  // Light gray for planes
+	m_lineColor[0] = m_lineColor[1] = m_lineColor[2] = 0.5f;    // Medium gray for lines
+
 	LOG_INF_S("CoordinateSystemRenderer initializing");
 	createCoordinateSystem();
 }
@@ -89,10 +93,10 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 	// Use current plane size instead of constant
 	float s = m_currentPlaneSize / 2.0f;
 
-	// X plane (YZ plane) - use red color
+	// X plane (YZ plane) - use dynamic color
 	SoSeparator* xPlaneSep = new SoSeparator;
 	SoMaterial* xMaterial = new SoMaterial;
-	xMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	xMaterial->diffuseColor.setValue(m_planeColor[0], m_planeColor[1], m_planeColor[2]);
 	xMaterial->transparency.setValue(COORD_PLANE_TRANSPARENCY);
 	xPlaneSep->addChild(xMaterial);
 
@@ -112,7 +116,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
 	SoSeparator* xLineSep = new SoSeparator;
 	SoMaterial* xLineMaterial = new SoMaterial;
-	xLineMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	xLineMaterial->diffuseColor.setValue(m_lineColor[0], m_lineColor[1], m_lineColor[2]);
 	xLineMaterial->transparency.setValue(0.0f);
 	xLineSep->addChild(xLineMaterial);
 
@@ -132,10 +136,10 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 	xPlaneSep->addChild(xLineSep);
 	m_coordSystemSeparator->addChild(xPlaneSep);
 
-	// Y plane (XZ plane) - use green color
+	// Y plane (XZ plane) - use dynamic color
 	SoSeparator* yPlaneSep = new SoSeparator;
 	SoMaterial* yMaterial = new SoMaterial;
-	yMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	yMaterial->diffuseColor.setValue(m_planeColor[0], m_planeColor[1], m_planeColor[2]);
 	yMaterial->transparency.setValue(COORD_PLANE_TRANSPARENCY);
 	yPlaneSep->addChild(yMaterial);
 
@@ -155,7 +159,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
 	SoSeparator* yLineSep = new SoSeparator;
 	SoMaterial* yLineMaterial = new SoMaterial;
-	yLineMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	yLineMaterial->diffuseColor.setValue(m_lineColor[0], m_lineColor[1], m_lineColor[2]);
 	yLineMaterial->transparency.setValue(0.0f);
 	yLineSep->addChild(yLineMaterial);
 
@@ -175,10 +179,10 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 	yPlaneSep->addChild(yLineSep);
 	m_coordSystemSeparator->addChild(yPlaneSep);
 
-	// Z plane (XY plane) - use blue color
+	// Z plane (XY plane) - use dynamic color
 	SoSeparator* zPlaneSep = new SoSeparator;
 	SoMaterial* zMaterial = new SoMaterial;
-	zMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	zMaterial->diffuseColor.setValue(m_planeColor[0], m_planeColor[1], m_planeColor[2]);
 	zMaterial->transparency.setValue(COORD_PLANE_TRANSPARENCY);
 	zPlaneSep->addChild(zMaterial);
 
@@ -198,7 +202,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
 	SoSeparator* zLineSep = new SoSeparator;
 	SoMaterial* zLineMaterial = new SoMaterial;
-	zLineMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	zLineMaterial->diffuseColor.setValue(m_lineColor[0], m_lineColor[1], m_lineColor[2]);
 	zLineMaterial->transparency.setValue(0.0f);
 	zLineSep->addChild(zLineMaterial);
 
@@ -220,7 +224,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
 	SoSeparator* xAxisSep = new SoSeparator;
 	SoMaterial* xAxisMaterial = new SoMaterial;
-	xAxisMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	xAxisMaterial->diffuseColor.setValue(m_lineColor[0], m_lineColor[1], m_lineColor[2]);
 	xAxisMaterial->transparency.setValue(0.0f);
 	xAxisSep->addChild(xAxisMaterial);
 
@@ -239,7 +243,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
 	SoSeparator* yAxisSep = new SoSeparator;
 	SoMaterial* yAxisMaterial = new SoMaterial;
-	yAxisMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	yAxisMaterial->diffuseColor.setValue(m_lineColor[0], m_lineColor[1], m_lineColor[2]);
 	yAxisMaterial->transparency.setValue(0.0f);
 	yAxisSep->addChild(yAxisMaterial);
 
@@ -258,7 +262,7 @@ void CoordinateSystemRenderer::createCoordinateSystem() {
 
 	SoSeparator* zAxisSep = new SoSeparator;
 	SoMaterial* zAxisMaterial = new SoMaterial;
-	zAxisMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+	zAxisMaterial->diffuseColor.setValue(m_lineColor[0], m_lineColor[1], m_lineColor[2]);
 	zAxisMaterial->transparency.setValue(0.0f);
 	zAxisSep->addChild(zAxisMaterial);
 
@@ -307,5 +311,37 @@ void CoordinateSystemRenderer::setVisible(bool visible)
 		{
 			LOG_ERR_S("Coordinate system switch is null, cannot set visibility");
 		}
+	}
+}
+
+void CoordinateSystemRenderer::calculateColorsForBackground(float backgroundBrightness)
+{
+	// Calculate contrast colors based on background brightness
+	// If background is bright (>0.5), use dark colors
+	// If background is dark (<=0.5), use light colors
+
+	if (backgroundBrightness > 0.5f) {
+		// Light background - use dark colors
+		m_planeColor[0] = m_planeColor[1] = m_planeColor[2] = 0.7f;  // Light gray for planes
+		m_lineColor[0] = m_lineColor[1] = m_lineColor[2] = 0.5f;    // Medium gray for lines
+	} else {
+		// Dark background - use light colors
+		m_planeColor[0] = m_planeColor[1] = m_planeColor[2] = 0.7f;  // Light gray for planes
+		m_lineColor[0] = m_lineColor[1] = m_lineColor[2] = 0.9f;    // Very light for lines
+	}
+
+	LOG_INF_S("CoordinateSystemRenderer: Updated colors for background brightness: " +
+		std::to_string(backgroundBrightness) +
+		" (plane RGB: " + std::to_string(m_planeColor[0]) + "," + std::to_string(m_planeColor[1]) + "," + std::to_string(m_planeColor[2]) +
+		", lines RGB: " + std::to_string(m_lineColor[0]) + "," + std::to_string(m_lineColor[1]) + "," + std::to_string(m_lineColor[2]) + ")");
+}
+
+void CoordinateSystemRenderer::updateColorsForBackground(float backgroundBrightness)
+{
+	calculateColorsForBackground(backgroundBrightness);
+
+	// Rebuild coordinate system with new colors
+	if (m_coordSystemSeparator) {
+		rebuildCoordinateSystem();
 	}
 }

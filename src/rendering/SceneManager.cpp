@@ -1433,6 +1433,16 @@ bool SceneManager::isCoordinateSystemVisible() const
 	return false;
 }
 
+void SceneManager::updateCoordinateSystemColorsForBackground(float backgroundBrightness)
+{
+	if (m_coordSystemRenderer) {
+		m_coordSystemRenderer->updateColorsForBackground(backgroundBrightness);
+		LOG_INF_S("Updated coordinate system colors for background brightness: " + std::to_string(backgroundBrightness));
+	} else {
+		LOG_WRN_S("Coordinate system renderer not available for color update");
+	}
+}
+
 void SceneManager::rebuildScene()
 {
 	LOG_WRN_S("SceneManager::rebuildScene: Attempting to rebuild scene after rendering error");

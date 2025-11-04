@@ -24,6 +24,7 @@ RenderingEngine::RenderingEngine(wxGLCanvas* canvas)
 	, m_backgroundTextureLoaded(false)
 	, m_backgroundGradient(nullptr)
 	, m_backgroundImage(nullptr)
+	, m_backgroundTextureFitMode(1)
 	, m_isInitialized(false)
 	, m_isRendering(false)
 	, m_lastRenderTime(0)
@@ -119,6 +120,9 @@ bool RenderingEngine::initialize() {
 	m_backgroundGradient->setColorGradient(bottomColor, topColor);
 		}
 
+		// Load background image fit mode
+		m_backgroundTextureFitMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundTextureFitMode", 1);
+
 		// Initialize and configure FreeCAD background image node for image mode
 		if (m_backgroundMode == 3) {
 			if (SoFCBackgroundImage::getClassTypeId() == SoType::badType()) {
@@ -131,6 +135,7 @@ bool RenderingEngine::initialize() {
 			if (!texturePath.empty()) {
 				m_backgroundImage->setImagePath(texturePath);
 			}
+			m_backgroundImage->setFitMode(m_backgroundTextureFitMode);
 		}
 
 		m_isInitialized = true;
@@ -344,6 +349,9 @@ void RenderingEngine::renderBackground(const wxSize& size) {
 			break;
 
 		case 3: // Texture - use FreeCAD-style image
+			// Clear with background color first (for uncovered areas in fit mode)
+			glClearColor(m_backgroundColor[0], m_backgroundColor[1], m_backgroundColor[2], 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
 			if (m_backgroundImage) {
 				// Create viewport region with correct size
 				SbViewportRegion vpRegion(size.x, size.y);
@@ -535,6 +543,40 @@ void RenderingEngine::updateViewport(const wxSize& size, float dpiScale) {
 	glViewport(0, 0, static_cast<int>(size.x * dpiScale), static_cast<int>(size.y * dpiScale));
 }
 
+void RenderingEngine::updateCoordinateSystemColorsForBackground()
+{
+	LOG_INF_S("RenderingEngine::updateCoordinateSystemColorsForBackground: Called");
+	
+	if (!m_sceneManager) {
+		LOG_WRN_S("RenderingEngine::updateCoordinateSystemColorsForBackground: SceneManager is null!");
+		return;
+	}
+
+	// Calculate average background brightness
+	float avgBrightness = 0.0f;
+
+	switch (m_backgroundMode) {
+	case 0: // Solid color
+		avgBrightness = (m_backgroundColor[0] + m_backgroundColor[1] + m_backgroundColor[2]) / 3.0f;
+		break;
+	case 1: // Linear gradient
+	case 2: // Radial gradient
+		avgBrightness = ((m_backgroundGradientTop[0] + m_backgroundGradientTop[1] + m_backgroundGradientTop[2]) +
+			(m_backgroundGradientBottom[0] + m_backgroundGradientBottom[1] + m_backgroundGradientBottom[2])) / 6.0f;
+		break;
+	case 3: // Texture/Image
+		// For images, assume medium brightness (will adjust if needed)
+		avgBrightness = 0.5f;
+		break;
+	default:
+		avgBrightness = 0.5f;
+		break;
+	}
+
+	// Update coordinate system colors via SceneManager
+	m_sceneManager->updateCoordinateSystemColorsForBackground(avgBrightness);
+}
+
 void RenderingEngine::reloadBackgroundConfig() {
 	if (!m_isInitialized) {
 		return;
@@ -626,6 +668,15 @@ void RenderingEngine::reloadBackgroundConfig() {
 			m_backgroundImage->setImagePath(texturePath);
 			LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Updated image path");
 		}
+		m_backgroundTextureFitMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundTextureFitMode", 1);
+		m_backgroundImage->setFitMode(m_backgroundTextureFitMode);
+		LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Updated fit mode to " + std::to_string(m_backgroundTextureFitMode));
+	}
+
+	// Update coordinate system colors based on new background
+	// Only update if SceneManager is available (it may not be during early initialization)
+	if (m_sceneManager) {
+		updateCoordinateSystemColorsForBackground();
 	}
 
 	LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Background configuration reloaded - mode: " + std::to_string(m_backgroundMode));

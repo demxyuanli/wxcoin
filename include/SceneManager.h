@@ -46,6 +46,9 @@ public:
 	void setCoordinateSystemVisible(bool visible);
 	bool isCoordinateSystemVisible() const;
 
+	// Coordinate system color adaptation
+	void updateCoordinateSystemColorsForBackground(float backgroundBrightness);
+
 	// Checkerboard plane control
 	void setCheckerboardVisible(bool visible);
 	bool isCheckerboardVisible() const;

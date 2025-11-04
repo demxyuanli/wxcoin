@@ -18,8 +18,14 @@ public:
 	void setVisible(bool visible);
 	bool isVisible() const { return m_visible; }
 
+	// Color adaptation based on background brightness
+	void updateColorsForBackground(float backgroundBrightness);
+
 private:
 	void rebuildCoordinateSystem();
+
+	// Calculate appropriate colors based on background brightness
+	void calculateColorsForBackground(float backgroundBrightness);
 
 	static const float DEFAULT_COORD_PLANE_SIZE;
 	static const float COORD_PLANE_TRANSPARENCY;
@@ -28,4 +34,8 @@ private:
 	SoSwitch* m_coordSystemSwitch;
 	float m_currentPlaneSize;
 	bool m_visible;
+
+	// Dynamic colors based on background
+	float m_planeColor[3];  // Plane transparency color
+	float m_lineColor[3];   // Line and axis color
 };
