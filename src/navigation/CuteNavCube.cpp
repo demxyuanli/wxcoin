@@ -115,11 +115,11 @@ void CuteNavCube::createCubeFaceTextures() {
         if (!image.HasAlpha()) {
             image.InitAlpha();
         }
-        // Fill with opaque white background to maintain cube body visibility
+        // Fill with white background, TEST: Set alpha to fully transparent (0)
         for (int y = 0; y < texSize; y++) {
             for (int x = 0; x < texSize; x++) {
                 image.SetRGB(x, y, 255, 255, 255);
-                image.SetAlpha(x, y, 255); // Opaque
+                image.SetAlpha(x, y, 0); // TEST: Fully transparent
             }
         }
 
@@ -151,7 +151,7 @@ void CuteNavCube::createCubeFaceTextures() {
 
             // Redraw with vertical offset like FreeCAD
             dc.Clear();
-            // Reset background to opaque white using wxImage
+            // Reset background to white, TEST: Set alpha to fully transparent (0)
             wxImage tempImage(texSize, texSize);
             if (!tempImage.HasAlpha()) {
                 tempImage.InitAlpha();
@@ -159,7 +159,7 @@ void CuteNavCube::createCubeFaceTextures() {
             for (int yy = 0; yy < texSize; yy++) {
                 for (int xx = 0; xx < texSize; xx++) {
                     tempImage.SetRGB(xx, yy, 255, 255, 255);
-                    tempImage.SetAlpha(xx, yy, 255); // Opaque
+                    tempImage.SetAlpha(xx, yy, 0); // TEST: Fully transparent
                 }
             }
             bitmap = wxBitmap(tempImage);
@@ -170,6 +170,32 @@ void CuteNavCube::createCubeFaceTextures() {
 
             // Convert back to image
             image = bitmap.ConvertToImage();
+            
+            // Set background transparent (alpha=0) and text opaque (alpha=255)
+            if (!image.HasAlpha()) {
+                image.InitAlpha();
+            }
+            unsigned char* alpha = image.GetAlpha();
+            unsigned char* rgb = image.GetData();
+            
+            for (int py = 0; py < texSize; py++) {
+                for (int px = 0; px < texSize; px++) {
+                    int pixelIndex = (py * texSize + px) * 3;
+                    int alphaIndex = py * texSize + px;
+                    
+                    unsigned char r = rgb[pixelIndex];
+                    unsigned char g = rgb[pixelIndex + 1];
+                    unsigned char b = rgb[pixelIndex + 2];
+                    
+                    // Check if this pixel is text (has non-zero RGB values)
+                    // Since we draw blue text (0,100,255), any non-zero RGB indicates text
+                    if (r != 0 || g != 0 || b != 0) {
+                        alpha[alphaIndex] = 255; // Text: opaque
+                    } else {
+                        alpha[alphaIndex] = 0;   // Background: transparent
+                    }
+                }
+            }
         }
 
         // Apply face-specific transformations like FreeCAD
@@ -212,17 +238,21 @@ void CuteNavCube::createCubeFaceTextures() {
         unsigned char* alpha = image.GetAlpha();
 
         // Copy data in RGBA format like FreeCAD
+        // Background is transparent (alpha=0), text is opaque (alpha=255)
         for (int i = 0, j = 0, k = 0; i < texSize * texSize * 4; i += 4, j += 3, k++) {
             imageData[i] = rgb[j];     // R
             imageData[i + 1] = rgb[j + 1]; // G
             imageData[i + 2] = rgb[j + 2]; // B
-            imageData[i + 3] = alpha[k]; // A
+            imageData[i + 3] = alpha[k]; // A - use alpha from image (background=0, text=255)
         }
 
         // Create Open Inventor texture with optimized settings
         SoTexture2* texture = new SoTexture2;
         texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
-        texture->model = SoTexture2::MODULATE; // Use MODULATE like FreeCAD's GL_MODULATE
+        // Use DECAL mode instead of MODULATE for better alpha handling
+        // DECAL mode: When texture alpha=0, shows material color; when alpha=1, shows texture color
+        // This ensures alpha=0 displays body material color instead of background color
+        texture->model = SoTexture2::DECAL;
         
         // Set texture wrapping for better quality sampling
         // CLAMP mode prevents texture edge artifacts and ensures clean text rendering
@@ -230,7 +260,7 @@ void CuteNavCube::createCubeFaceTextures() {
         texture->wrapT = SoTexture2::CLAMP;
 
         // Note: Coin3D will handle texture compression internally if GPU supports it
-        // The CLAMP wrap mode ensures high-quality filtering for text clarity
+        // DECAL mode ensures proper alpha handling: alpha=0 shows material, alpha=1 shows texture
 
         // Cache the texture
         if (m_normalTextures.find(label) != m_normalTextures.end()) {
@@ -569,15 +599,15 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 		// Opaque background - use normal clear with background color
 		dc.SetBackground(wxBrush(bgColor));
 		dc.Clear();
-		// Ensure bitmap has alpha channel initialized to opaque
+		// TEST: Set alpha channel to fully transparent (0)
 		wxImage image = bitmap.ConvertToImage();
 		if (!image.HasAlpha()) {
 			image.InitAlpha();
 		}
-		// For opaque background, set all alpha to 255 (fully opaque)
+		// TEST: Set all alpha to 0 (fully transparent)
 		unsigned char* alpha = image.GetAlpha();
 		for (int i = 0; i < width * height; i++) {
-			alpha[i] = 255; // Set all pixels to opaque
+			alpha[i] = 0; // TEST: Fully transparent
 		}
 		bitmap = wxBitmap(image);
 		dc.SelectObject(bitmap);
@@ -641,14 +671,14 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 			dc.Clear();
 			dc.SetBackground(wxBrush(bgColor));
 			dc.Clear();
-			// Ensure bitmap has alpha channel set to opaque
+			// TEST: Set alpha channel to fully transparent (0)
 			wxImage image = bitmap.ConvertToImage();
 			if (!image.HasAlpha()) {
 				image.InitAlpha();
 			}
 			unsigned char* alpha = image.GetAlpha();
 			for (int i = 0; i < width * height; i++) {
-				alpha[i] = 255; // Set all pixels to opaque
+				alpha[i] = 0; // TEST: Fully transparent
 			}
 			bitmap = wxBitmap(image);
 			dc.SelectObject(bitmap);
@@ -663,8 +693,38 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 	// Validate bitmap content
 	wxImage image = bitmap.ConvertToImage();
 	
+	// For opaque background, set background transparent and text opaque
+	if (bgColor.Alpha() == 255) {
+		if (!image.HasAlpha()) {
+			image.InitAlpha();
+		}
+		unsigned char* alpha = image.GetAlpha();
+		unsigned char* rgb = image.GetData();
+		
+		// Set background transparent (alpha=0) and text opaque (alpha=255)
+		for (int py = 0; py < height; py++) {
+			for (int px = 0; px < width; px++) {
+				int pixelIndex = (py * width + px) * 3;
+				int alphaIndex = py * width + px;
+				
+				unsigned char r = rgb[pixelIndex];
+				unsigned char g = rgb[pixelIndex + 1];
+				unsigned char b = rgb[pixelIndex + 2];
+				
+				// Check if this pixel is text (has non-zero RGB values)
+				// Since we draw blue text (0,100,255), any non-zero RGB indicates text
+				if (r != 0 || g != 0 || b != 0) {
+					alpha[alphaIndex] = 255; // Text: opaque
+				} else {
+					alpha[alphaIndex] = 0;   // Background: transparent
+				}
+			}
+		}
+		bitmap = wxBitmap(image);
+		image = bitmap.ConvertToImage(); // Refresh image after alpha fix
+	}
 	// For transparent background, ensure text areas are opaque
-	if (bgColor.Alpha() == 0) {
+	else if (bgColor.Alpha() == 0) {
 		if (!image.HasAlpha()) {
 			image.InitAlpha();
 		}
@@ -692,6 +752,7 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 			}
 		}
 		bitmap = wxBitmap(image);
+		image = bitmap.ConvertToImage(); // Refresh image after alpha fix
 	}
 	if (!image.IsOk()) {
 		LOG_ERR_S("CuteNavCube::generateFaceTexture: Failed to convert bitmap to image for texture: " + text);
@@ -720,12 +781,8 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 		imageData[i] = rgb[j];     // R
 		imageData[i + 1] = rgb[j + 1]; // G
 		imageData[i + 2] = rgb[j + 2]; // B
-		// For opaque background, ensure all pixels are opaque
-		if (bgColor.Alpha() == 255) {
-			imageData[i + 3] = 255; // Force opaque for all pixels
-		} else {
-			imageData[i + 3] = alpha[k]; // Use alpha from image
-		}
+		// Use alpha from image (background=0 transparent, text=255 opaque)
+		imageData[i + 3] = alpha[k];
 		if (imageData[i] != 0 || imageData[i + 1] != 0 || imageData[i + 2] != 0) {
 			hasValidPixels = true;
 		}
@@ -734,12 +791,12 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 
 	if (!hasValidPixels) {
 		LOG_WRN_S("CuteNavCube::generateFaceTexture: All pixels are black for texture: " + text);
-		// Fallback: Fill with white
+		// Fallback: Fill with white background (transparent)
 		for (int i = 0; i < width * height * 4; i += 4) {
 			imageData[i] = 255; // R
 			imageData[i + 1] = 255; // G
 			imageData[i + 2] = 255; // B
-			imageData[i + 3] = 255; // A
+			imageData[i + 3] = 0; // Background: transparent
 		}
 	}
 
@@ -1948,7 +2005,11 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 	glPushAttrib(GL_SCISSOR_BIT | GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_SCISSOR_TEST);
 	glScissor(xPx, yBottomPx, widthPx, heightPx);
-	// Don't clear color buffer to maintain transparency, only clear depth buffer
+	// NOTE: When texture alpha=0 in DECAL mode:
+	//   - DECAL mode: When texture alpha=0, FinalColor = MaterialColor (shows body material color)
+	//   - When texture alpha=1, FinalColor = TextureColor (shows texture color)
+	//   - This ensures alpha=0 displays body material color instead of background color
+	// Don't clear color buffer to maintain transparent background, only clear depth buffer
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glDisable(GL_SCISSOR_TEST);
 	glPopAttrib();
@@ -1961,6 +2022,9 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 	GLboolean wasTex2D = glIsEnabled(GL_TEXTURE_2D);
 	GLboolean wasBlend = glIsEnabled(GL_BLEND);
 	GLboolean wasMSAA = glIsEnabled(GL_MULTISAMPLE);
+	GLboolean wasDepthTest = glIsEnabled(GL_DEPTH_TEST);
+	GLint prevDepthFunc = GL_LEQUAL;
+	glGetIntegerv(GL_DEPTH_FUNC, &prevDepthFunc);
 	GLint prevSrc = 0, prevDst = 0;
 	glGetIntegerv(GL_BLEND_SRC, &prevSrc);
 	glGetIntegerv(GL_BLEND_DST, &prevDst);
@@ -1968,8 +2032,13 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 	glEnable(GL_TEXTURE_2D);
 	// Enable MSAA if available
 	glEnable(GL_MULTISAMPLE);
+	// Since navigation cube textures are fully opaque (alpha=255), we can use standard blending
+	// This ensures correct rendering without showing background through transparent areas
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	// Ensure depth testing is enabled to prevent rendering through opaque surfaces
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
 
 	renderAction.apply(m_root);
 
@@ -1978,6 +2047,8 @@ void CuteNavCube::render(int x, int y, const wxSize& size) {
 	if (!wasBlend) glDisable(GL_BLEND);
 	if (!wasTex2D) glDisable(GL_TEXTURE_2D);
 	if (!wasMSAA) glDisable(GL_MULTISAMPLE);
+	glDepthFunc(prevDepthFunc);
+	if (!wasDepthTest) glDisable(GL_DEPTH_TEST);
 }
 
 void CuteNavCube::setEnabled(bool enabled) {
@@ -2258,12 +2329,17 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 		texture->image.setValue(SbVec2s(texWidth, texHeight), 4, flippedImageData.data());
 		
 		if (hasText) {
-			// Text textures use MODULATE mode like FreeCAD's GL_MODULATE
-			texture->model = SoTexture2::MODULATE;
+			// Text textures use DECAL mode for proper alpha handling
+			// DECAL mode behavior:
+			//   - When texture alpha=0: FinalColor = MaterialColor (shows body material color)
+			//   - When texture alpha=1: FinalColor = TextureColor (shows texture color)
+			//   - When texture alpha=0.5: FinalColor = MaterialColor × 0.5 + TextureColor × 0.5 (blends)
+			// This ensures alpha=0 displays body material color instead of background color
+			texture->model = SoTexture2::DECAL;
 			// CLAMP mode prevents texture edge artifacts and ensures clean text rendering
 			texture->wrapS = SoTexture2::CLAMP;
 			texture->wrapT = SoTexture2::CLAMP;
-			LOG_INF_S("    Texture mode: MODULATE + CLAMP (text texture, " + std::to_string(texWidth) + "x" + std::to_string(texHeight) + ")");
+			LOG_INF_S("    Texture mode: DECAL + CLAMP (text texture, " + std::to_string(texWidth) + "x" + std::to_string(texHeight) + ")");
 		} else {
 			// Solid color textures use MODULATE with repeat wrapping for tiling
 			texture->model = SoTexture2::MODULATE;

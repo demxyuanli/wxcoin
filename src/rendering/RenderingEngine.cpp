@@ -323,7 +323,7 @@ void RenderingEngine::renderBackground(const wxSize& size) {
 				SoGLRenderAction* action = new SoGLRenderAction(vpRegion);
 				m_backgroundGradient->GLRender(action);
 				delete action;
-				LOG_INF_S("RenderingEngine::renderBackground: Rendered linear gradient");
+				LOG_DBG_S("RenderingEngine::renderBackground: Rendered linear gradient");
 			} else {
 				LOG_WRN_S("RenderingEngine::renderBackground: No gradient node available, using fallback");
 				renderGradientBackground(size);
