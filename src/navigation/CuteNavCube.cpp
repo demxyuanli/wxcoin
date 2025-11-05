@@ -56,7 +56,7 @@ std::map<std::string, std::shared_ptr<CuteNavCube::TextureData>> CuteNavCube::s_
 // Create cube face textures exactly like FreeCAD NaviCube
 void CuteNavCube::createCubeFaceTextures() {
     LOG_INF_S("=== TEXTURE GENERATION (6 main face textures) ===");
-    int texSize = 192; // Same as FreeCAD: works well for the max cube size 1024
+    int texSize = 256; // Increased size for better text clarity
 
     // Calculate font sizes for all main faces like FreeCAD
     std::vector<PickId> mains = {PickId::Front, PickId::Top, PickId::Right, PickId::Rear, PickId::Bottom, PickId::Left};
@@ -115,11 +115,11 @@ void CuteNavCube::createCubeFaceTextures() {
         if (!image.HasAlpha()) {
             image.InitAlpha();
         }
-        // Fill with transparent background like FreeCAD's qRgba(255, 255, 255, 0)
+        // Fill with opaque white background to maintain cube body visibility
         for (int y = 0; y < texSize; y++) {
             for (int x = 0; x < texSize; x++) {
                 image.SetRGB(x, y, 255, 255, 255);
-                image.SetAlpha(x, y, 0); // Transparent
+                image.SetAlpha(x, y, 255); // Opaque
             }
         }
 
@@ -135,8 +135,8 @@ void CuteNavCube::createCubeFaceTextures() {
             // Setup font like FreeCAD
             wxFont font(static_cast<int>(finalFontSize), wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Arial");
             dc.SetFont(font);
-            dc.SetTextForeground(wxColour(255, 255, 255)); // White text like FreeCAD's Qt::white
-            dc.SetTextBackground(wxColour(255, 255, 255, 0)); // Transparent background
+            dc.SetTextForeground(wxColour(0, 100, 255, 255)); // Blue text for visibility
+            dc.SetTextBackground(wxColour(255, 255, 255, 255)); // Opaque white background
 
             // Draw text centered like FreeCAD's Qt::AlignCenter
             wxSize textSize = dc.GetTextExtent(label);
@@ -151,7 +151,7 @@ void CuteNavCube::createCubeFaceTextures() {
 
             // Redraw with vertical offset like FreeCAD
             dc.Clear();
-            // Reset background to transparent using wxImage
+            // Reset background to opaque white using wxImage
             wxImage tempImage(texSize, texSize);
             if (!tempImage.HasAlpha()) {
                 tempImage.InitAlpha();
@@ -159,13 +159,13 @@ void CuteNavCube::createCubeFaceTextures() {
             for (int yy = 0; yy < texSize; yy++) {
                 for (int xx = 0; xx < texSize; xx++) {
                     tempImage.SetRGB(xx, yy, 255, 255, 255);
-                    tempImage.SetAlpha(xx, yy, 0);
+                    tempImage.SetAlpha(xx, yy, 255); // Opaque
                 }
             }
             bitmap = wxBitmap(tempImage);
             dc.SetFont(font);
-            dc.SetTextForeground(wxColour(255, 255, 255));
-            dc.SetTextBackground(wxColour(255, 255, 255, 0));
+            dc.SetTextForeground(wxColour(0, 100, 255, 255)); // Blue text for visibility
+            dc.SetTextBackground(wxColour(255, 255, 255, 255)); // Opaque white background
             dc.DrawText(label, x, y + offset);
 
             // Convert back to image
@@ -219,13 +219,18 @@ void CuteNavCube::createCubeFaceTextures() {
             imageData[i + 3] = alpha[k]; // A
         }
 
-        // Create Open Inventor texture like FreeCAD
+        // Create Open Inventor texture with optimized settings
         SoTexture2* texture = new SoTexture2;
         texture->image.setValue(SbVec2s(texSize, texSize), 4, imageData);
         texture->model = SoTexture2::MODULATE; // Use MODULATE like FreeCAD's GL_MODULATE
+        
+        // Set texture wrapping for better quality sampling
+        // CLAMP mode prevents texture edge artifacts and ensures clean text rendering
+        texture->wrapS = SoTexture2::CLAMP;
+        texture->wrapT = SoTexture2::CLAMP;
 
-        // Note: Open Inventor SoTexture2 doesn't have direct equivalents of QOpenGLTexture filters
-        // The texture filtering is handled automatically by Open Inventor
+        // Note: Coin3D will handle texture compression internally if GPU supports it
+        // The CLAMP wrap mode ensures high-quality filtering for text clarity
 
         // Cache the texture
         if (m_normalTextures.find(label) != m_normalTextures.end()) {
@@ -561,9 +566,21 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 		bitmap = wxBitmap(image);
 		dc.SelectObject(bitmap);
 	} else {
-		// Opaque background - use normal clear
+		// Opaque background - use normal clear with background color
 		dc.SetBackground(wxBrush(bgColor));
 		dc.Clear();
+		// Ensure bitmap has alpha channel initialized to opaque
+		wxImage image = bitmap.ConvertToImage();
+		if (!image.HasAlpha()) {
+			image.InitAlpha();
+		}
+		// For opaque background, set all alpha to 255 (fully opaque)
+		unsigned char* alpha = image.GetAlpha();
+		for (int i = 0; i < width * height; i++) {
+			alpha[i] = 255; // Set all pixels to opaque
+		}
+		bitmap = wxBitmap(image);
+		dc.SelectObject(bitmap);
 	}
 
 	auto& dpiManager = DPIManager::getInstance();
@@ -606,7 +623,7 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 	// Apply vertical balance like FreeCAD's imageVerticalBalance
 	int verticalOffset = calculateVerticalBalance(bitmap, textSize.GetHeight());
 	if (verticalOffset != 0) {
-		// Redraw text with vertical offset - preserve transparent background
+		// Redraw text with vertical offset - preserve background transparency/opacity
 		if (bgColor.Alpha() == 0) {
 			// Transparent background - manually clear alpha channel again
 			wxImage image = bitmap.ConvertToImage();
@@ -620,10 +637,21 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 			bitmap = wxBitmap(image);
 			dc.SelectObject(bitmap);
 		} else {
-			// Opaque background - use normal clear
+			// Opaque background - use normal clear and ensure alpha is set to opaque
 			dc.Clear();
 			dc.SetBackground(wxBrush(bgColor));
 			dc.Clear();
+			// Ensure bitmap has alpha channel set to opaque
+			wxImage image = bitmap.ConvertToImage();
+			if (!image.HasAlpha()) {
+				image.InitAlpha();
+			}
+			unsigned char* alpha = image.GetAlpha();
+			for (int i = 0; i < width * height; i++) {
+				alpha[i] = 255; // Set all pixels to opaque
+			}
+			bitmap = wxBitmap(image);
+			dc.SelectObject(bitmap);
 		}
 		dc.SetFont(font);
 		dc.SetTextForeground(wxColour(0, 100, 255, 255)); // Use blue for visibility
@@ -692,7 +720,12 @@ bool CuteNavCube::generateFaceTexture(const std::string& text, unsigned char* im
 		imageData[i] = rgb[j];     // R
 		imageData[i + 1] = rgb[j + 1]; // G
 		imageData[i + 2] = rgb[j + 2]; // B
-		imageData[i + 3] = alpha[k]; // A - use pixel index
+		// For opaque background, ensure all pixels are opaque
+		if (bgColor.Alpha() == 255) {
+			imageData[i + 3] = 255; // Force opaque for all pixels
+		} else {
+			imageData[i + 3] = alpha[k]; // Use alpha from image
+		}
 		if (imageData[i] != 0 || imageData[i + 1] != 0 || imageData[i + 2] != 0) {
 			hasValidPixels = true;
 		}
@@ -1279,6 +1312,10 @@ void CuteNavCube::setupGeometry() {
 	float bodyR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
 	float bodyG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
 	float bodyB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
+
+	// DEBUG: Log the actual color values being used
+	LOG_INF_S("Solid body material color - R:" + std::to_string(bodyR) + " G:" + std::to_string(bodyG) + " B:" + std::to_string(bodyB));
+
 	solidMaterial->diffuseColor.setValue(bodyR, bodyG, bodyB);
 
 	float ambientR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientR", 0.7));
@@ -1378,6 +1415,10 @@ void CuteNavCube::setupGeometry() {
 		float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
 		float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
 		float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
+
+		// DEBUG: Log texture material color
+		LOG_INF_S("Texture material color for " + faceName + " - R:" + std::to_string(materialR) + " G:" + std::to_string(materialG) + " B:" + std::to_string(materialB));
+
 		textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
 		textureMaterial->transparency.setValue(0.0f); // Opaque
 		textureMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f); // No emissive
@@ -2113,16 +2154,16 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 	bool hasText = (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" || 
 	                faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM");
 	
-	// For MODULATE mode, use white transparent background like FreeCAD
-	// Background: white transparent (255,255,255,0) - will multiply with material color
-	// Text: blue opaque (0,100,255,255) - will be visible
-	wxColour backgroundColor = wxColour(255, 255, 255, 0); // White background, transparent like FreeCAD
+	// For MODULATE mode, use white opaque background to maintain cube body visibility
+	// Background: white opaque (255,255,255,255) - will multiply with material color to preserve body opacity
+	// Text: blue opaque (0,100,255,255) - will be visible on top
+	wxColour backgroundColor = wxColour(255, 255, 255, 255); // White background, opaque to maintain body visibility
 	
 	int texWidth, texHeight;
-	int texSize = ConfigManager::getInstance().getInt("NavigationCube", "TextureBaseSize", 192); // Configurable texture size
+	int texSize = ConfigManager::getInstance().getInt("NavigationCube", "TextureBaseSize", 312); // Configurable texture size
 	
 	if (hasText) {
-		// Main faces with text use configurable texture size (default 192x192)
+		// Main faces with text use configurable texture size (default 312x312)
 		texWidth = texSize;
 		texHeight = texSize;
 	} else {
@@ -2209,22 +2250,20 @@ SoTexture2* CuteNavCube::createTextureForFace(const std::string& faceName, bool 
 			}
 		}
 
-		// Compress texture data using DXT5 compression for reduced memory usage
-		// DXT5 compression reduces memory footprint significantly
+		// Create texture with optimized compression and sampling settings
 		SoTexture2* texture = new SoTexture2;
 		
-		// Convert RGBA to DXT5 compressed format
-		// Note: Coin3D will handle DXT compression internally if supported
-		// For now, use RGBA format but with optimized data transfer
+		// Set texture image with RGBA format
+		// Coin3D will handle compression internally if GPU supports it
 		texture->image.setValue(SbVec2s(texWidth, texHeight), 4, flippedImageData.data());
-		
-		// Enable internal texture compression if available
-		// Coin3D will use GPU compression if hardware supports it
 		
 		if (hasText) {
 			// Text textures use MODULATE mode like FreeCAD's GL_MODULATE
 			texture->model = SoTexture2::MODULATE;
-			LOG_INF_S("    Texture mode: MODULATE (text texture, " + std::to_string(texWidth) + "x" + std::to_string(texHeight) + ")");
+			// CLAMP mode prevents texture edge artifacts and ensures clean text rendering
+			texture->wrapS = SoTexture2::CLAMP;
+			texture->wrapT = SoTexture2::CLAMP;
+			LOG_INF_S("    Texture mode: MODULATE + CLAMP (text texture, " + std::to_string(texWidth) + "x" + std::to_string(texHeight) + ")");
 		} else {
 			// Solid color textures use MODULATE with repeat wrapping for tiling
 			texture->model = SoTexture2::MODULATE;
