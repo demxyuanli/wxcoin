@@ -119,6 +119,7 @@ private:
 	void createCubeFaceTextures();
 	std::string getFaceLabel(PickId pickId);
 	void regenerateFaceTexture(const std::string& faceName, bool isHover);
+	void updateFaceMaterialColor(const std::string& faceName, bool isHover);  // FreeCAD-style direct material color update
 	void calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const;
 	void generateAndCacheTextures();  // Generate and cache all textures at initialization
 	SoTexture2* createTextureForFace(const std::string& faceName, bool isHover);  // Helper to create a texture
@@ -198,6 +199,7 @@ private:
 	std::map<std::string, SoMaterial*> m_faceMaterials;          // Materials for each face
 	std::map<std::string, SoSeparator*> m_faceSeparators;        // Separators for each face (for texture replacement)
 	std::map<std::string, SbColor> m_faceBaseColors;             // Base color for each face
+	std::map<std::string, SbColor> m_faceHoverColors;            // Hover color for each face (FreeCAD-style direct color switching)
 	SbColor m_normalFaceColor;                                   // Normal face color
 	SbColor m_hoverFaceColor;                                    // Hover face color
 	

@@ -992,6 +992,7 @@ void CuteNavCube::setupGeometry() {
 	// Clear existing face maps before rebuilding geometry
 	m_faceMaterials.clear();
 	m_faceBaseColors.clear();
+	m_faceHoverColors.clear(); // Clear hover colors map
 
 	// Safely clear previous geometry while preserving camera
 	bool cameraWasInScene = false;
@@ -1167,18 +1168,33 @@ void CuteNavCube::setupGeometry() {
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyTransparency", 0.0f))
 	);
 
-	// Store unified hover color for all faces
+	// Store base color and hover color for all faces (FreeCAD-style direct color switching)
+	SbColor baseColor(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0))
+	);
 	SbColor hoverColor(
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorR", 0.7)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorG", 0.85)),
 		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorB", 0.95))
 	);
-	m_faceBaseColors["FRONT"] = hoverColor;
-	m_faceBaseColors["REAR"] = hoverColor;
-	m_faceBaseColors["LEFT"] = hoverColor;
-	m_faceBaseColors["RIGHT"] = hoverColor;
-	m_faceBaseColors["TOP"] = hoverColor;
-	m_faceBaseColors["BOTTOM"] = hoverColor;
+	
+	// Store base colors for all faces
+	m_faceBaseColors["FRONT"] = baseColor;
+	m_faceBaseColors["REAR"] = baseColor;
+	m_faceBaseColors["LEFT"] = baseColor;
+	m_faceBaseColors["RIGHT"] = baseColor;
+	m_faceBaseColors["TOP"] = baseColor;
+	m_faceBaseColors["BOTTOM"] = baseColor;
+	
+	// Store hover colors for all faces
+	m_faceHoverColors["FRONT"] = hoverColor;
+	m_faceHoverColors["REAR"] = hoverColor;
+	m_faceHoverColors["LEFT"] = hoverColor;
+	m_faceHoverColors["RIGHT"] = hoverColor;
+	m_faceHoverColors["TOP"] = hoverColor;
+	m_faceHoverColors["BOTTOM"] = hoverColor;
 
 	// Note: edgeAndCornerMaterial is no longer used since navigation cube is now a single body
 	// It's kept for backward compatibility but won't affect rendering
@@ -1202,29 +1218,49 @@ void CuteNavCube::setupGeometry() {
 	edgeAndCornerMaterial->shininess.setValue(0.0f); // No shading mode
 	edgeAndCornerMaterial->transparency.setValue(0.0f); // Opaque
 
-	// Store unified hover color for all edges and corners (same as main faces)
-	m_faceBaseColors["EdgeTF"] = hoverColor;
-	m_faceBaseColors["EdgeTB"] = hoverColor;
-	m_faceBaseColors["EdgeTL"] = hoverColor;
-	m_faceBaseColors["EdgeTR"] = hoverColor;
-	m_faceBaseColors["EdgeBF"] = hoverColor;
-	m_faceBaseColors["EdgeBB"] = hoverColor;
-	m_faceBaseColors["EdgeBL"] = hoverColor;
-	m_faceBaseColors["EdgeBR"] = hoverColor;
-	m_faceBaseColors["EdgeFR"] = hoverColor;
-	m_faceBaseColors["EdgeFL"] = hoverColor;
-	m_faceBaseColors["EdgeBL2"] = hoverColor;
-	m_faceBaseColors["EdgeBR2"] = hoverColor;
+	// Store base and hover colors for all edges and corners
+	m_faceBaseColors["EdgeTF"] = baseColor;
+	m_faceBaseColors["EdgeTB"] = baseColor;
+	m_faceBaseColors["EdgeTL"] = baseColor;
+	m_faceBaseColors["EdgeTR"] = baseColor;
+	m_faceBaseColors["EdgeBF"] = baseColor;
+	m_faceBaseColors["EdgeBB"] = baseColor;
+	m_faceBaseColors["EdgeBL"] = baseColor;
+	m_faceBaseColors["EdgeBR"] = baseColor;
+	m_faceBaseColors["EdgeFR"] = baseColor;
+	m_faceBaseColors["EdgeFL"] = baseColor;
+	m_faceBaseColors["EdgeBL2"] = baseColor;
+	m_faceBaseColors["EdgeBR2"] = baseColor;
+	m_faceHoverColors["EdgeTF"] = hoverColor;
+	m_faceHoverColors["EdgeTB"] = hoverColor;
+	m_faceHoverColors["EdgeTL"] = hoverColor;
+	m_faceHoverColors["EdgeTR"] = hoverColor;
+	m_faceHoverColors["EdgeBF"] = hoverColor;
+	m_faceHoverColors["EdgeBB"] = hoverColor;
+	m_faceHoverColors["EdgeBL"] = hoverColor;
+	m_faceHoverColors["EdgeBR"] = hoverColor;
+	m_faceHoverColors["EdgeFR"] = hoverColor;
+	m_faceHoverColors["EdgeFL"] = hoverColor;
+	m_faceHoverColors["EdgeBL2"] = hoverColor;
+	m_faceHoverColors["EdgeBR2"] = hoverColor;
 
-	// Corner faces use the same unified hover color
-	m_faceBaseColors["Corner0"] = hoverColor;
-	m_faceBaseColors["Corner1"] = hoverColor;
-	m_faceBaseColors["Corner2"] = hoverColor;
-	m_faceBaseColors["Corner3"] = hoverColor;
-	m_faceBaseColors["Corner4"] = hoverColor;
-	m_faceBaseColors["Corner5"] = hoverColor;
-	m_faceBaseColors["Corner6"] = hoverColor;
-	m_faceBaseColors["Corner7"] = hoverColor;
+	// Corner faces use the same base and hover colors
+	m_faceBaseColors["Corner0"] = baseColor;
+	m_faceBaseColors["Corner1"] = baseColor;
+	m_faceBaseColors["Corner2"] = baseColor;
+	m_faceBaseColors["Corner3"] = baseColor;
+	m_faceBaseColors["Corner4"] = baseColor;
+	m_faceBaseColors["Corner5"] = baseColor;
+	m_faceBaseColors["Corner6"] = baseColor;
+	m_faceBaseColors["Corner7"] = baseColor;
+	m_faceHoverColors["Corner0"] = hoverColor;
+	m_faceHoverColors["Corner1"] = hoverColor;
+	m_faceHoverColors["Corner2"] = hoverColor;
+	m_faceHoverColors["Corner3"] = hoverColor;
+	m_faceHoverColors["Corner4"] = hoverColor;
+	m_faceHoverColors["Corner5"] = hoverColor;
+	m_faceHoverColors["Corner6"] = hoverColor;
+	m_faceHoverColors["Corner7"] = hoverColor;
 
 	// Create faces using dynamic generation
 	int vertexIndex = 0;
@@ -1241,14 +1277,25 @@ void CuteNavCube::setupGeometry() {
 		// Store the separator for later texture replacement
 		m_faceSeparators[faceName] = faceSep;
 
-		// Add appropriate material
-		if (materialType == 0) { // Main face
-			faceSep->addChild(mainFaceMaterial);
-			m_faceMaterials[faceName] = mainFaceMaterial;
-		} else { // Edges and Corners
-			faceSep->addChild(edgeAndCornerMaterial);
-			m_faceMaterials[faceName] = edgeAndCornerMaterial;
+		// Create independent material for each face (FreeCAD-style direct color switching)
+		SoMaterial* faceMaterial = new SoMaterial;
+		if (materialType == 0) { // Main face - copy properties from mainFaceMaterial
+			faceMaterial->diffuseColor.setValue(mainFaceMaterial->diffuseColor[0]);
+			faceMaterial->ambientColor.setValue(mainFaceMaterial->ambientColor[0]);
+			faceMaterial->specularColor.setValue(mainFaceMaterial->specularColor[0]);
+			faceMaterial->emissiveColor.setValue(mainFaceMaterial->emissiveColor[0]);
+			faceMaterial->shininess.setValue(mainFaceMaterial->shininess[0]);
+			faceMaterial->transparency.setValue(mainFaceMaterial->transparency[0]);
+		} else { // Edges and Corners - copy properties from edgeAndCornerMaterial
+			faceMaterial->diffuseColor.setValue(edgeAndCornerMaterial->diffuseColor[0]);
+			faceMaterial->ambientColor.setValue(edgeAndCornerMaterial->ambientColor[0]);
+			faceMaterial->specularColor.setValue(edgeAndCornerMaterial->specularColor[0]);
+			faceMaterial->emissiveColor.setValue(edgeAndCornerMaterial->emissiveColor[0]);
+			faceMaterial->shininess.setValue(edgeAndCornerMaterial->shininess[0]);
+			faceMaterial->transparency.setValue(edgeAndCornerMaterial->transparency[0]);
 		}
+		faceSep->addChild(faceMaterial);
+		m_faceMaterials[faceName] = faceMaterial; // Store for direct color updates
 
 		// Create indexed face set
 		SoIndexedFaceSet* face = new SoIndexedFaceSet;
@@ -1275,6 +1322,45 @@ void CuteNavCube::setupGeometry() {
 		}
 
 		faceSep->addChild(face);
+
+		// Create outline for this face (independent from other faces)
+		SoSeparator* outlineSep = new SoSeparator;
+		outlineSep->setName(SbName((faceName + "_Outline").c_str()));
+
+		// Use line style for outline
+		SoDrawStyle* lineStyle = new SoDrawStyle;
+		lineStyle->style = SoDrawStyle::LINES;
+		lineStyle->lineWidth = 1.0f;
+		outlineSep->addChild(lineStyle);
+
+		// Outline material (black by default, will be overridden by global outline material)
+		SoMaterial* outlineMaterial = new SoMaterial;
+		float outlineR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorR", 0.4));
+		float outlineG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorG", 0.6));
+		float outlineB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorB", 0.9));
+		outlineMaterial->diffuseColor.setValue(outlineR, outlineG, outlineB);
+		outlineMaterial->transparency.setValue(0.0f);
+		outlineSep->addChild(outlineMaterial);
+
+		// Create outline line set for this face
+		SoIndexedLineSet* faceOutline = new SoIndexedLineSet;
+		int faceStartIndex = vertexIndex - vertices.size(); // Start of this face's vertices
+		int vertexCount = static_cast<int>(vertices.size());
+
+		// Create closed loop outline: 0-1-2-3-...-(n-1)-0
+		std::vector<int32_t> outlineIndices;
+		for (int i = 0; i < vertexCount; i++) {
+			outlineIndices.push_back(faceStartIndex + i);
+		}
+		outlineIndices.push_back(faceStartIndex); // Close the loop
+		outlineIndices.push_back(-1); // End marker
+
+		faceOutline->coordIndex.setValues(0, outlineIndices.size(), outlineIndices.data());
+		outlineSep->addChild(faceOutline);
+
+		// Add outline to face separator
+		faceSep->addChild(outlineSep);
+
 		cubeAssembly->addChild(faceSep);
 		
 		// For main faces, create separate texture quad overlay using LabelTextures vertices
@@ -1340,101 +1426,47 @@ void CuteNavCube::setupGeometry() {
 		}
 	};
 
-	// NOTE: Individual faces are now combined into a single solid body below
-	// The createFaceFromVertices calls are disabled to avoid duplication
+	// Create individual faces (FreeCAD-style: each face is independent)
+	// This allows per-face hover effects and easier picking
+	
+	// Add light model and coordinate nodes to assembly
+	cubeAssembly->addChild(lightModel);
+	cubeAssembly->addChild(coords);
 
-	// Create a solid body by combining all faces into one indexed face set
-	SoSeparator* solidBodySep = new SoSeparator;
-	solidBodySep->setName("SolidBody");
+	// Create main faces (6 faces)
+	createFaceFromVertices("FRONT", PickId::Front, 0);
+	createFaceFromVertices("REAR", PickId::Rear, 0);
+	createFaceFromVertices("LEFT", PickId::Left, 0);
+	createFaceFromVertices("RIGHT", PickId::Right, 0);
+	createFaceFromVertices("TOP", PickId::Top, 0);
+	createFaceFromVertices("BOTTOM", PickId::Bottom, 0);
 
-	// Add shape hints for solid body
-	SoShapeHints* shapeHints = new SoShapeHints;
-	shapeHints->shapeType = SoShapeHints::SOLID;
-	shapeHints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE; // Ensure outward normals
-	shapeHints->faceType = SoShapeHints::CONVEX; // All faces are convex
-	solidBodySep->addChild(shapeHints);
+	// Create corner faces (8 faces)
+	createFaceFromVertices("Corner0", PickId::FrontTopRight, 2);
+	createFaceFromVertices("Corner1", PickId::FrontTopLeft, 2);
+	createFaceFromVertices("Corner2", PickId::FrontBottomRight, 2);
+	createFaceFromVertices("Corner3", PickId::FrontBottomLeft, 2);
+	createFaceFromVertices("Corner4", PickId::RearTopRight, 2);
+	createFaceFromVertices("Corner5", PickId::RearTopLeft, 2);
+	createFaceFromVertices("Corner6", PickId::RearBottomRight, 2);
+	createFaceFromVertices("Corner7", PickId::RearBottomLeft, 2);
 
-	// Add no-shading light model for solid appearance
-	solidBodySep->addChild(lightModel);
-
-	// Use shared coordinate node
-	solidBodySep->addChild(coords);
-
-	// Use shared texture coordinates
-	solidBodySep->addChild(texCoords); 
-
-	// Create material for solid body - use unified body color from config
-	SoMaterial* solidMaterial = new SoMaterial;
-	// Use the unified cube body color from config
-	float bodyR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
-	float bodyG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
-	float bodyB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
-
-	// DEBUG: Log the actual color values being used
-	LOG_INF_S("Solid body material color - R:" + std::to_string(bodyR) + " G:" + std::to_string(bodyG) + " B:" + std::to_string(bodyB));
-
-	solidMaterial->diffuseColor.setValue(bodyR, bodyG, bodyB);
-
-	float ambientR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientR", 0.7));
-	float ambientG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientG", 0.8));
-	float ambientB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientB", 0.9));
-	solidMaterial->ambientColor.setValue(ambientR, ambientG, ambientB);
-
-	solidMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for solid
-	solidMaterial->shininess.setValue(0.0f); // No shading
-	solidMaterial->transparency.setValue(0.0f); // Opaque
-	solidBodySep->addChild(solidMaterial);
-
-	// Create the solid indexed face set with all faces
-	SoIndexedFaceSet* solidBody = new SoIndexedFaceSet;
-	solidBody->setName("Rhombicuboctahedron");
-
-	// First, add all vertices to the shared coordinate node
-	int totalVertices = 0;
-	std::vector<PickId> allFaceIds = {
-		// Main faces (6)
-		PickId::Top, PickId::Bottom, PickId::Front, PickId::Rear, PickId::Right, PickId::Left,
-		// Corner faces (8)
-		PickId::FrontTopRight, PickId::FrontTopLeft, PickId::FrontBottomRight, PickId::FrontBottomLeft,
-		PickId::RearTopRight, PickId::RearTopLeft, PickId::RearBottomRight, PickId::RearBottomLeft,
-		// Edge faces (12)
-		PickId::FrontTop, PickId::RearTop, PickId::TopLeft, PickId::TopRight,
-		PickId::FrontBottom, PickId::RearBottom, PickId::BottomLeft, PickId::BottomRight,
-		PickId::FrontRight, PickId::FrontLeft, PickId::RearLeft, PickId::RearRight
-	};
-
-	// Add all vertices to coords in order
-	for (PickId faceId : allFaceIds) {
-		auto& vertices = m_Faces[faceId].vertexArray;
-		for (const auto& vertex : vertices) {
-			coords->point.set1Value(totalVertices++, vertex);
-		}
-	}
-
-	// Create face indices
-	std::vector<int32_t> allFaceIndices;
-	int currentVertexIndex = 0;
-
-	for (PickId faceId : allFaceIds) {
-		auto& vertices = m_Faces[faceId].vertexArray;
-		if (!vertices.empty()) {
-			// Add vertex indices for this face (counter-clockwise for outward normals)
-			for (int i = static_cast<int>(vertices.size()) - 1; i >= 0; --i) {
-				allFaceIndices.push_back(currentVertexIndex + i);
-			}
-			allFaceIndices.push_back(-1); // Face separator
-			currentVertexIndex += vertices.size();
-		}
-	}
-
-	solidBody->coordIndex.setValues(0, allFaceIndices.size(), allFaceIndices.data());
-	solidBodySep->addChild(solidBody);
-
-	// Add solid body to assembly instead of individual faces
-	cubeAssembly->addChild(solidBodySep);
+	// Create edge faces (12 faces)
+	createFaceFromVertices("EdgeTF", PickId::FrontTop, 1);
+	createFaceFromVertices("EdgeTB", PickId::RearTop, 1);
+	createFaceFromVertices("EdgeTL", PickId::TopLeft, 1);
+	createFaceFromVertices("EdgeTR", PickId::TopRight, 1);
+	createFaceFromVertices("EdgeBF", PickId::FrontBottom, 1);
+	createFaceFromVertices("EdgeBB", PickId::RearBottom, 1);
+	createFaceFromVertices("EdgeBL", PickId::BottomLeft, 1);
+	createFaceFromVertices("EdgeBR", PickId::BottomRight, 1);
+	createFaceFromVertices("EdgeFR", PickId::FrontRight, 1);
+	createFaceFromVertices("EdgeFL", PickId::FrontLeft, 1);
+	createFaceFromVertices("EdgeBL2", PickId::RearLeft, 1);
+	createFaceFromVertices("EdgeBR2", PickId::RearRight, 1);
 
 	// Create textured quad faces for main faces - actual geometry with texture mapping
-	int currentTextureVertexIndex = totalVertices; // Track current vertex index for textures
+	int currentTextureVertexIndex = vertexIndex; // Track current vertex index for textures
 	std::vector<PickId> mainFaceIds = {PickId::Front, PickId::Top, PickId::Right, PickId::Rear, PickId::Bottom, PickId::Left};
 
 	for (PickId pickId : mainFaceIds) {
@@ -1526,70 +1558,8 @@ void CuteNavCube::setupGeometry() {
 	m_root->addChild(cubeAssembly);
 
 
-	// --- Add black outlines to all faces ---
-	SoSeparator* outlineSep = new SoSeparator;
-
-	// Enable line smoothing for anti-aliasing
-	SoShapeHints* hints = new SoShapeHints;
-	hints->shapeType = SoShapeHints::SOLID;
-	hints->vertexOrdering = SoShapeHints::COUNTERCLOCKWISE;
-	outlineSep->addChild(hints);
-
-	// Define the style for the outlines
-	SoDrawStyle* drawStyle = new SoDrawStyle;
-	drawStyle->style = SoDrawStyle::LINES;
-	drawStyle->lineWidth = 1.0f;
-	outlineSep->addChild(drawStyle);
-
-	// Define the material for the outlines
-	SoMaterial* outlineMaterial = new SoMaterial;
-	// Use outline color from config
-	float outlineR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorR", 0.4));
-	float outlineG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorG", 0.6));
-	float outlineB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorB", 0.9));
-	outlineMaterial->diffuseColor.setValue(outlineR, outlineG, outlineB);
-	outlineMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for no shading mode
-	outlineMaterial->shininess.setValue(0.0f); // No shading mode
-	outlineMaterial->transparency.setValue(0.0f); // Opaque
-	outlineSep->addChild(outlineMaterial);
-
-	// Re-use the same coordinates but re-draw all faces as lines
-	outlineSep->addChild(coords); // Re-use the same SoCoordinate3 node
-
-	SoIndexedFaceSet* outlineFaceSet = new SoIndexedFaceSet;
-	std::vector<int32_t> all_indices;
-
-	// Define the faces to draw outlines for (same order as creation)
-	std::vector<std::pair<PickId, int>> outlineFaces = {
-		// Main faces (6 faces)
-		{PickId::Top, 8}, {PickId::Bottom, 8}, {PickId::Front, 8}, {PickId::Rear, 8}, {PickId::Right, 8}, {PickId::Left, 8},
-		// Corner faces (8 faces)
-		{PickId::FrontTopRight, 6}, {PickId::FrontTopLeft, 6}, {PickId::FrontBottomRight, 6}, {PickId::FrontBottomLeft, 6},
-		{PickId::RearTopRight, 6}, {PickId::RearTopLeft, 6}, {PickId::RearBottomRight, 6}, {PickId::RearBottomLeft, 6},
-		// Edge faces (12 faces)
-		{PickId::FrontTop, 4}, {PickId::RearTop, 4}, {PickId::TopLeft, 4}, {PickId::TopRight, 4},
-		{PickId::FrontBottom, 4}, {PickId::RearBottom, 4}, {PickId::BottomLeft, 4}, {PickId::BottomRight, 4},
-		{PickId::FrontRight, 4}, {PickId::FrontLeft, 4}, {PickId::RearLeft, 4}, {PickId::RearRight, 4}
-	};
-
-	int vertexOffset = 0;
-	for (const auto& [pickId, vertexCount] : outlineFaces) {
-		// Skip faces based on display options
-		if ((pickId >= PickId::FrontTop && pickId <= PickId::RearRight) && !m_showEdges) continue;    // Skip edge faces
-		if ((pickId >= PickId::FrontTopRight && pickId <= PickId::RearBottomLeft) && !m_showCorners) continue;  // Skip corner faces
-
-		// Add all vertices of this face for outline drawing
-		for (int i = 0; i < vertexCount; i++) {
-			all_indices.push_back(vertexOffset + i);
-		}
-		all_indices.push_back(-1); // Separator for each face
-		vertexOffset += vertexCount;
-	}
-
-	outlineFaceSet->coordIndex.setValues(0, all_indices.size(), all_indices.data());
-	outlineSep->addChild(outlineFaceSet);
-
-	m_root->addChild(outlineSep);
+	// Note: Outlines are now drawn per-face in createFaceFromVertices()
+	// No global outline needed since each face has its own outline
 	
 	// Generate and cache all textures after geometry setup
 	LOG_INF_S("=== TEXTURE SYSTEM CHECK ===");
@@ -1606,8 +1576,8 @@ void CuteNavCube::setupGeometry() {
 	}
 
 	// Summary and validation log
-	LOG_INF_S("=== RHOMBICUBOCTAHEDRON SOLID BODY CREATED ===");
-	LOG_INF_S("Geometry: Single SoIndexedFaceSet with 26 faces forming a closed solid");
+	LOG_INF_S("=== RHOMBICUBOCTAHEDRON INDIVIDUAL FACES CREATED ===");
+	LOG_INF_S("Geometry: 26 independent faces (FreeCAD-style), each with its own separator and material");
 
 	// Reuse the totalVertices count from earlier
 	int mainFaces = 0, cornerFaces = 0, edgeFaces = 0;
@@ -1634,9 +1604,9 @@ void CuteNavCube::setupGeometry() {
 	LOG_INF_S("Vertex counts - Main: " + std::to_string(vertexCounts[ShapeId::Main]) +
 			  ", Corner: " + std::to_string(vertexCounts[ShapeId::Corner]) +
 			  ", Edge: " + std::to_string(vertexCounts[ShapeId::Edge]) + " (total: " + std::to_string(recalculatedTotalVertices) + ")");
-	LOG_INF_S("Solid body: " + std::to_string(recalculatedTotalVertices) + " vertices, 26 faces, counter-clockwise winding for outward normals");
+	LOG_INF_S("Individual faces: " + std::to_string(recalculatedTotalVertices) + " vertices, 26 independent faces (FreeCAD-style)");
 	LOG_INF_S("Texture quads: " + std::to_string(totalTextureVertices) + " texture vertices for " + std::to_string(m_showTextures ? 6 : 0) + " main face overlays");
-	LOG_INF_S("Total geometry: " + std::to_string(recalculatedTotalVertices + totalTextureVertices) + " vertices, 26 solid faces + 6 texture quads");
+	LOG_INF_S("Total geometry: " + std::to_string(recalculatedTotalVertices + totalTextureVertices) + " vertices, 26 independent faces + 6 texture quads");
 
 	// Validation checks
 	bool valid = true;
@@ -1658,7 +1628,7 @@ void CuteNavCube::setupGeometry() {
 		PickId::FrontRight, PickId::FrontLeft, PickId::RearLeft, PickId::RearRight
 	};
 
-	for (PickId faceId : allFaceIds) {
+	for (PickId faceId : debugFaceIds) {
 		if (m_Faces.count(faceId) > 0) {
 			int vertexCount = m_Faces[faceId].vertexArray.size();
 			std::string shapeStr = (m_Faces[faceId].type == ShapeId::Main) ? "Main" : (m_Faces[faceId].type == ShapeId::Corner) ? "Corner" : "Edge";
@@ -1674,9 +1644,9 @@ void CuteNavCube::setupGeometry() {
 	if (vertexCounts[ShapeId::Edge] != 48) { LOG_WRN_S("ERROR: Expected 48 edge face vertices (12x4), got " + std::to_string(vertexCounts[ShapeId::Edge])); valid = false; }
 
 	if (valid) {
-		LOG_INF_S("[PASS] Rhombicuboctahedron solid body validation PASSED - all faces properly formed");
+		LOG_INF_S("[PASS] Rhombicuboctahedron individual faces validation PASSED - all 26 faces properly formed");
 	} else {
-		LOG_ERR_S("[FAIL] Rhombicuboctahedron solid body validation FAILED - geometry errors detected");
+		LOG_ERR_S("[FAIL] Rhombicuboctahedron individual faces validation FAILED - geometry errors detected");
 	}
 }
 
@@ -1840,6 +1810,45 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 	orientation = SbRotation::identity();
 }
 
+// FreeCAD-style direct material color update (no texture switching)
+void CuteNavCube::updateFaceMaterialColor(const std::string& faceName, bool isHover) {
+	auto materialIt = m_faceMaterials.find(faceName);
+	if (materialIt == m_faceMaterials.end()) {
+		return; // Face material not found
+	}
+	
+	SoMaterial* material = materialIt->second;
+	if (!material) {
+		return;
+	}
+	
+	// Get the appropriate color (base or hover)
+	SbColor color;
+	if (isHover) {
+		auto hoverIt = m_faceHoverColors.find(faceName);
+		if (hoverIt != m_faceHoverColors.end()) {
+			color = hoverIt->second;
+		} else {
+			return; // Hover color not found
+		}
+	} else {
+		auto baseIt = m_faceBaseColors.find(faceName);
+		if (baseIt != m_faceBaseColors.end()) {
+			color = baseIt->second;
+		} else {
+			return; // Base color not found
+		}
+	}
+	
+	// Update material diffuse color directly (FreeCAD-style)
+	material->diffuseColor.setValue(color);
+	
+	// Trigger refresh if callback is set
+	if (m_refreshCallback) {
+		m_refreshCallback();
+	}
+}
+
 bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& viewportSize) {
 	std::string eventType = event.Moving() ? "MOVING" : event.Leaving() ? "LEAVING" : event.LeftDown() ? "LEFT_DOWN" : event.LeftUp() ? "LEFT_UP" : "OTHER";
 
@@ -1854,7 +1863,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 		static_cast<short>(event.GetY())
 	);
 
-	// Handle mouse movement (hover detection)
+	// Handle mouse movement (hover detection) - FreeCAD-style direct color switching
 	// Check for motion events (both Moving() and Dragging())
 	if (event.GetEventType() == wxEVT_MOTION) {
 		// Convert coordinates for picking - NavigationCubeManager already converted to cube-local coordinates
@@ -1862,22 +1871,16 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 		SbVec2s pickPos(currentPos[0], static_cast<short>(viewportSize.y - currentPos[1]));
 		std::string hoveredFace = pickRegion(pickPos, viewportSize);
 
-		// Update hover state
+		// Update hover state using direct material color switching (FreeCAD-style)
 		if (hoveredFace != m_hoveredFace) {
-			// Restore previous face color by regenerating texture
+			// Restore previous face color
 			if (!m_hoveredFace.empty()) {
-				regenerateFaceTexture(m_hoveredFace, false);
-				if (m_refreshCallback) {
-					m_refreshCallback();
-				}
+				updateFaceMaterialColor(m_hoveredFace, false);
 			}
 
-			// Set new hovered face color by regenerating texture
+			// Set new hovered face color
 			if (!hoveredFace.empty()) {
-				regenerateFaceTexture(hoveredFace, true);
-				if (m_refreshCallback) {
-					m_refreshCallback();
-				}
+				updateFaceMaterialColor(hoveredFace, true);
 			}
 
 			m_hoveredFace = hoveredFace;
@@ -1892,10 +1895,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 	// When mouse leaves window, restore all face colors
 	if (event.Leaving()) {
 		if (!m_hoveredFace.empty()) {
-			regenerateFaceTexture(m_hoveredFace, false);
-			if (m_refreshCallback) {
-				m_refreshCallback();
-			}
+			updateFaceMaterialColor(m_hoveredFace, false);
 			m_hoveredFace = "";
 		}
 		return true; // Mouse leaving is always handled
