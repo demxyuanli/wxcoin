@@ -107,6 +107,10 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
 	, m_fontZoom(0.3f)
 	, m_canvas(nullptr)
+	, m_cameraAnimator(nullptr)
+	, m_animationDuration(0.2f)
+	, m_animationType(CameraAnimation::SMOOTH)
+	, m_pendingViewName("")
 {
 	m_root->ref();
 	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
@@ -157,6 +161,10 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
 	, m_fontZoom(0.3f)
 	, m_canvas(nullptr)
+	, m_cameraAnimator(nullptr)
+	, m_animationDuration(0.2f)
+	, m_animationType(CameraAnimation::SMOOTH)
+	, m_pendingViewName("")
 {
 	m_root->ref();
 	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
@@ -208,6 +216,10 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	, m_hoverFaceColor(1.0f, 0.2f, 0.2f)
 	, m_fontZoom(0.3f)
 	, m_canvas(nullptr)
+	, m_cameraAnimator(nullptr)
+	, m_animationDuration(0.2f)
+	, m_animationType(CameraAnimation::SMOOTH)
+	, m_pendingViewName("")
 {
 	m_root->ref();
 	m_orthoCamera->ref(); // Add reference to camera to prevent premature deletion
@@ -215,6 +227,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 }
 
 CuteNavCube::~CuteNavCube() {
+	stopCameraAnimation();
 	m_orthoCamera->unref(); // Release camera reference
 	m_root->unref();
 }
@@ -295,6 +308,33 @@ void CuteNavCube::initialize() {
 		{ "EdgeBL2", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, 0, -0.707)) },   // Back-Left
 		{ "EdgeBR2", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, 0, -0.707)) }      // Back-Right
 	};
+
+	if (!m_cameraAnimator) {
+		m_cameraAnimator = std::make_unique<CameraAnimation>();
+		m_cameraAnimator->setCamera(m_orthoCamera);
+		m_cameraAnimator->setAnimationType(m_animationType);
+		m_cameraAnimator->setViewRefreshCallback([this]() {
+			if (m_refreshCallback) {
+				m_refreshCallback();
+			}
+		});
+		m_cameraAnimator->setProgressCallback([this](float) {
+			if (m_cameraMoveCallback) {
+				m_cameraMoveCallback(m_orthoCamera->position.getValue(), m_orthoCamera->orientation.getValue());
+			}
+		});
+		m_cameraAnimator->setCompletionCallback([this]() {
+			if (m_cameraMoveCallback) {
+				m_cameraMoveCallback(m_orthoCamera->position.getValue(), m_orthoCamera->orientation.getValue());
+			} else if (!m_pendingViewName.empty() && m_viewChangeCallback) {
+				m_viewChangeCallback(m_pendingViewName);
+			}
+			m_pendingViewName.clear();
+		});
+	} else {
+		m_cameraAnimator->setCamera(m_orthoCamera);
+		m_cameraAnimator->setAnimationType(m_animationType);
+	}
 }
 
 
@@ -741,6 +781,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 	}
 
 	if (event.LeftDown()) {
+		stopCameraAnimation();
 		m_isDragging = true;
 		m_lastMousePos = currentPos;
 		dragStartPos = currentPos; // Capture position at the start of a potential drag/click
@@ -771,10 +812,14 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 					std::string viewName = (viewIt != m_faceToView.end()) ? viewIt->second : region;
 
 					// Call camera move callback if available, otherwise use view change callback
-					if (m_cameraMoveCallback) {
-						m_cameraMoveCallback(cameraPos, cameraOrient);
-					} else if (m_viewChangeCallback) {
-						m_viewChangeCallback(region);
+					if (m_enableAnimation) {
+						startCameraAnimation(cameraPos, cameraOrient, region);
+					} else {
+						if (m_cameraMoveCallback) {
+							m_cameraMoveCallback(cameraPos, cameraOrient);
+						} else if (m_viewChangeCallback) {
+							m_viewChangeCallback(region);
+						}
 					}
 					return true;
 				} else {
@@ -784,6 +829,9 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 		}
 	}
 	else if (event.Dragging() && m_isDragging) {
+		if (m_cameraAnimator && m_cameraAnimator->isAnimating()) {
+			stopCameraAnimation();
+		}
 		SbVec2s delta = currentPos - m_lastMousePos;
 		if (delta[0] == 0 && delta[1] == 0) return true; // Ignore no-movement events
 
@@ -976,6 +1024,9 @@ void CuteNavCube::applyConfig(const CubeConfig& config) {
 	m_showCorners = config.showCorners;
 	m_showTextures = config.showTextures;
 	m_enableAnimation = config.enableAnimation;
+	if (!m_enableAnimation) {
+		stopCameraAnimation();
+	}
 
 	// Update material properties
 	m_transparency = config.transparency;
@@ -1077,6 +1128,61 @@ void CuteNavCube::applyInitialTextures() {
 		textureSep->insertChild(textureNode, insertIndex);
 		LOG_INF_S("applyInitialTextures: attached texture node for face " + faceName + " at index " + std::to_string(insertIndex));
 	}
+}
+
+void CuteNavCube::startCameraAnimation(const SbVec3f& position, const SbRotation& orientation, const std::string& faceName) {
+	if (!m_enableAnimation || !m_cameraAnimator || !m_orthoCamera) {
+		if (m_cameraMoveCallback) {
+			m_cameraMoveCallback(position, orientation);
+		} else if (m_viewChangeCallback) {
+			m_viewChangeCallback(faceName);
+		}
+		return;
+	}
+
+	SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_orthoCamera);
+	if (!orthoCam) {
+		if (m_cameraMoveCallback) {
+			m_cameraMoveCallback(position, orientation);
+		} else if (m_viewChangeCallback) {
+			m_viewChangeCallback(faceName);
+		}
+		return;
+	}
+
+	m_cameraAnimator->stopAnimation();
+
+	CameraAnimation::CameraState startState(
+		orthoCam->position.getValue(),
+		orthoCam->orientation.getValue(),
+		orthoCam->focalDistance.getValue(),
+		orthoCam->height.getValue());
+
+	CameraAnimation::CameraState endState(position, orientation, startState.focalDistance, startState.height);
+
+	if (!m_cameraMoveCallback) {
+		m_pendingViewName = faceName;
+	} else {
+		m_pendingViewName.clear();
+	}
+
+	m_cameraAnimator->setAnimationType(m_animationType);
+	m_cameraAnimator->setCamera(m_orthoCamera);
+
+	if (!m_cameraAnimator->startAnimation(startState, endState, m_animationDuration)) {
+		if (m_cameraMoveCallback) {
+			m_cameraMoveCallback(position, orientation);
+		} else if (m_viewChangeCallback) {
+			m_viewChangeCallback(faceName);
+		}
+	}
+}
+
+void CuteNavCube::stopCameraAnimation() {
+	if (m_cameraAnimator && m_cameraAnimator->isAnimating()) {
+		m_cameraAnimator->stopAnimation();
+	}
+	m_pendingViewName.clear();
 }
 
 

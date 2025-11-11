@@ -19,6 +19,7 @@
 
 #include "NavigationCubeGeometryBuilder.h"
 #include "NavigationCubeTypes.h" // For ShapeId and PickId enums
+#include "CameraAnimation.h"
 
 class NavigationCubeTextureGenerator;
 struct CubeConfig;
@@ -82,6 +83,8 @@ private:
 	void generateAndCacheTextures();  // Generate and cache all textures at initialization
 	SoTexture2* createTextureForFace(const std::string& faceName, bool isHover);  // Helper to create a texture
 	void applyInitialTextures();
+	void startCameraAnimation(const SbVec3f& position, const SbRotation& orientation, const std::string& faceName);
+	void stopCameraAnimation();
 
 	using FaceData = NavigationCubeGeometryBuilder::FaceData;
 	using LabelTextureData = NavigationCubeGeometryBuilder::LabelTextureData;
@@ -181,4 +184,10 @@ private:
 
 	// Font settings like FreeCAD
 	float m_fontZoom;
+
+	// Animation
+	std::unique_ptr<CameraAnimation> m_cameraAnimator;
+	float m_animationDuration;
+	CameraAnimation::AnimationType m_animationType;
+	std::string m_pendingViewName;
 };
