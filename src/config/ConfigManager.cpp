@@ -167,7 +167,17 @@ bool ConfigManager::getBool(const std::string& section, const std::string& key, 
 
 	bool value;
 	fileConfig->SetPath("/" + wxString(section));
-	fileConfig->Read(wxString(key), &value, defaultValue);
+
+	// Debug: check what wxFileConfig reads
+	wxString wxKey = wxString(key);
+	wxString readValue;
+	bool found = fileConfig->Read(wxKey, &readValue);
+	if (found) {
+		value = readValue.IsSameAs("true", false);
+	} else {
+		value = defaultValue;
+	}
+
 	return value;
 }
 

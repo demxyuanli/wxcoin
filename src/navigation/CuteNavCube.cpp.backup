@@ -73,6 +73,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	: m_root(new SoSeparator)
 	, m_orthoCamera(new SoOrthographicCamera)
 	, m_textureGenerator(std::make_unique<NavigationCubeTextureGenerator>())
+	, m_geometryGenerator(std::make_unique<NavigationCubeGeometryGenerator>())
 	, m_enabled(true)
 	, m_dpiScale(dpiScale)
 	, m_viewChangeCallback(viewChangeCallback)
@@ -120,6 +121,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	: m_root(new SoSeparator)
 	, m_orthoCamera(new SoOrthographicCamera)
 	, m_textureGenerator(std::make_unique<NavigationCubeTextureGenerator>())
+	, m_geometryGenerator(std::make_unique<NavigationCubeGeometryGenerator>())
 	, m_enabled(true)
 	, m_dpiScale(dpiScale)
 	, m_viewChangeCallback(viewChangeCallback)
@@ -171,6 +173,7 @@ CuteNavCube::CuteNavCube(std::function<void(const std::string&)> viewChangeCallb
 	: m_root(new SoSeparator)
 	, m_orthoCamera(new SoOrthographicCamera)
 	, m_textureGenerator(std::make_unique<NavigationCubeTextureGenerator>())
+	, m_geometryGenerator(std::make_unique<NavigationCubeGeometryGenerator>())
 	, m_enabled(true)
 	, m_dpiScale(dpiScale)
 	, m_viewChangeCallback(viewChangeCallback)
@@ -225,6 +228,11 @@ void CuteNavCube::initialize() {
 	// Initialize texture generator font sizes
 	if (m_textureGenerator) {
 		m_textureGenerator->initializeFontSizes();
+	}
+
+	// Initialize geometry generator
+	if (m_geometryGenerator && m_textureGenerator) {
+		m_geometryGenerator->initialize(m_textureGenerator.get());
 	}
 
 	m_faceToView = {
@@ -464,15 +472,10 @@ void CuteNavCube::addCubeFace(const SbVec3f& x, const SbVec3f& z, ShapeId shapeT
 
 
 void CuteNavCube::setupGeometry() {
-	// Create cube face textures using the texture generator
+	// Generate textures using the texture generator
 	if (m_textureGenerator) {
-		m_textureGenerator->createCubeFaceTextures();
+		m_textureGenerator->generateAndCacheTextures();
 	}
-
-	// Clear existing face maps before rebuilding geometry
-	m_faceMaterials.clear();
-	m_faceBaseColors.clear();
-	m_faceHoverColors.clear(); // Clear hover colors map
 
 	// Safely clear previous geometry while preserving camera
 	bool cameraWasInScene = false;
@@ -484,7 +487,7 @@ void CuteNavCube::setupGeometry() {
 				break;
 			}
 		}
-	m_root->removeAllChildren(); // Clear previous geometry
+		m_root->removeAllChildren(); // Clear previous geometry
 	}
 
 	// Setup camera properties
@@ -493,7 +496,7 @@ void CuteNavCube::setupGeometry() {
 	m_orthoCamera->farDistance = 15.0f;  // Increased to include all geometry
 	m_orthoCamera->position.setValue(0.0f, 0.0f, 5.0f); // Initial position
 	m_orthoCamera->orientation.setValue(SbRotation(SbVec3f(1, 0, 0), -M_PI / 2)); // Rotate to make Z up
-	
+
 	// Always add camera back to the scene
 	m_root->addChild(m_orthoCamera);
 
@@ -547,53 +550,61 @@ void CuteNavCube::setupGeometry() {
 
 	updateCameraRotation();
 
-	// Create cube faces using dynamic generation (ported from FreeCAD NaviCube)
-	constexpr float pi = 3.14159265358979323846f;
-	constexpr float pi1_2 = pi / 2;
+	// Create materials for geometry generator
+	SoMaterial* mainFaceMaterial = new SoMaterial;
+	mainFaceMaterial->diffuseColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0))
+	);
+	mainFaceMaterial->ambientColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientR", 0.8)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientG", 0.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientB", 0.0))
+	);
+	mainFaceMaterial->specularColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularR", 1.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularG", 0.2)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularB", 0.2))
+	);
+	mainFaceMaterial->emissiveColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveR", 0.1)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveG", 0.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveB", 0.0))
+	);
+	mainFaceMaterial->shininess.setValue(static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyShininess", 0.0)));
+	mainFaceMaterial->transparency.setValue(static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyTransparency", 0.0)));
 
-	SbVec3f x(1, 0, 0);
-	SbVec3f y(0, 1, 0);
-	SbVec3f z(0, 0, 1);
+	SoMaterial* edgeAndCornerMaterial = new SoMaterial;
+	edgeAndCornerMaterial->diffuseColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorR", 0.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorG", 0.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorB", 1.0))
+	);
+	edgeAndCornerMaterial->transparency.setValue(0.0f);
 
-	// ===== MAIN FACES (6 faces) =====
-	LOG_INF_S("=== MAIN FACES (6 faces) ===");
-	addCubeFace( x, z, ShapeId::Main, PickId::Top);
-	addCubeFace( x,-y, ShapeId::Main, PickId::Front);
-	addCubeFace(-y,-x, ShapeId::Main, PickId::Left);
-	addCubeFace(-x, y, ShapeId::Main, PickId::Rear);
-	addCubeFace( y, x, ShapeId::Main, PickId::Right);
-	addCubeFace( x,-z, ShapeId::Main, PickId::Bottom);
+	SoMaterial* globalOutlineMaterial = new SoMaterial;
+	globalOutlineMaterial->diffuseColor.setValue(
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorR", 0.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorG", 0.0)),
+		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorB", 1.0))
+	);
+	globalOutlineMaterial->transparency.setValue(0.0f);
 
-	// ===== CORNER FACES (8 faces) =====
-	LOG_INF_S("=== CORNER FACES (8 faces) ===");
-	addCubeFace(-x-y, x-y+z, ShapeId::Corner, PickId::FrontTopRight, pi);
-	addCubeFace(-x+y,-x-y+z, ShapeId::Corner, PickId::FrontTopLeft, pi);
-	addCubeFace(x+y, x-y-z, ShapeId::Corner, PickId::FrontBottomRight);
-	addCubeFace(x-y,-x-y-z, ShapeId::Corner, PickId::FrontBottomLeft);
-	addCubeFace(x-y, x+y+z, ShapeId::Corner, PickId::RearTopRight, pi);
-	addCubeFace(x+y,-x+y+z, ShapeId::Corner, PickId::RearTopLeft, pi);
-	addCubeFace(-x+y, x+y-z, ShapeId::Corner, PickId::RearBottomRight);
-	addCubeFace(-x-y,-x+y-z, ShapeId::Corner, PickId::RearBottomLeft);
+	// Configure geometry generator
+	if (m_geometryGenerator) {
+		m_geometryGenerator->setDisplayOptions(m_showEdges, m_showCorners);
+		m_geometryGenerator->setGeometrySize(m_geometrySize);
+		m_geometryGenerator->setMaterials(mainFaceMaterial, edgeAndCornerMaterial, globalOutlineMaterial);
 
-	// ===== EDGE FACES (12 faces) =====
-	LOG_INF_S("=== EDGE FACES (12 faces) ===");
-	addCubeFace(x, z-y, ShapeId::Edge, PickId::FrontTop);
-	addCubeFace(x,-z-y, ShapeId::Edge, PickId::FrontBottom);
-	addCubeFace(x, y-z, ShapeId::Edge, PickId::RearBottom, pi);
-	addCubeFace(x, y+z, ShapeId::Edge, PickId::RearTop, pi);
-	addCubeFace(z, x+y, ShapeId::Edge, PickId::RearRight, pi1_2);
-	addCubeFace(z, x-y, ShapeId::Edge, PickId::FrontRight, pi1_2);
-	addCubeFace(z,-x-y, ShapeId::Edge, PickId::FrontLeft, pi1_2);
-	addCubeFace(z, y-x, ShapeId::Edge, PickId::RearLeft, pi1_2);
-	addCubeFace(y, z-x, ShapeId::Edge, PickId::TopLeft, pi);
-	addCubeFace(y, x+z, ShapeId::Edge, PickId::TopRight);
-	addCubeFace(y, x-z, ShapeId::Edge, PickId::BottomRight);
-	addCubeFace(y,-z-x, ShapeId::Edge, PickId::BottomLeft, pi);
+		// Create cube assembly and generate geometry
+		SoSeparator* cubeAssembly = new SoSeparator;
+		m_geometryGenerator->generateGeometry(cubeAssembly);
+		m_root->addChild(cubeAssembly);
+	}
 
 
-	SoSeparator* cubeAssembly = new SoSeparator;
-
-	auto& dpiManager = DPIManager::getInstance();
+}
 
 	// Create coordinate system and materials for the cube
 	// Define texture coordinates for label textures like FreeCAD
@@ -850,7 +861,7 @@ void CuteNavCube::setupGeometry() {
 
 			// Disable polygon offset to prevent z-fighting with main face
 			SoPolygonOffset* polygonOffset = new SoPolygonOffset;
-			polygonOffset->factor.setValue(-1.0f);  // Negative offset to pull texture slightly forward
+			polygonOffset->factor.setValue(-1.0f); // Negative offset to bring texture slightly forward
 			polygonOffset->units.setValue(-1.0f);
 			textureSep->addChild(polygonOffset);
 
@@ -862,11 +873,8 @@ void CuteNavCube::setupGeometry() {
 			float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
 			
 			textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
-			textureMaterial->ambientColor.setValue(materialR, materialG, materialB);
-			textureMaterial->specularColor.setValue(materialR, materialG, materialB);
 			textureMaterial->transparency.setValue(0.0f);
 			textureMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
-			m_faceTextureMaterials[faceName] = textureMaterial;
 			textureSep->addChild(textureMaterial);
 
 			// Create texture quad using LabelTextures vertices
@@ -977,8 +985,8 @@ void CuteNavCube::setupGeometry() {
 
 		// Small polygon offset to ensure texture renders on top when at same depth
 		SoPolygonOffset* polygonOffset = new SoPolygonOffset;
-		polygonOffset->factor.setValue(-1.0f);  // Negative offset to pull texture slightly forward
-		polygonOffset->units.setValue(-1.0f);
+		polygonOffset->factor.setValue(0.1f);  // Small offset factor
+		polygonOffset->units.setValue(1.0f);   // Small offset units
 		textureFaceSep->addChild(polygonOffset);
 
 		// Create material for the texture face - use cube body color from config
@@ -992,11 +1000,8 @@ void CuteNavCube::setupGeometry() {
 		LOG_INF_S("Texture material color for " + faceName + " - R:" + std::to_string(materialR) + " G:" + std::to_string(materialG) + " B:" + std::to_string(materialB));
 
 		textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
-		textureMaterial->ambientColor.setValue(materialR, materialG, materialB);
-		textureMaterial->specularColor.setValue(materialR, materialG, materialB);
 		textureMaterial->transparency.setValue(0.0f); // Opaque
 		textureMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f); // No emissive
-		m_faceTextureMaterials[faceName] = textureMaterial;
 		textureFaceSep->addChild(textureMaterial);
 
 		// Create the textured quad face using LabelTextures vertices
@@ -1057,7 +1062,6 @@ void CuteNavCube::setupGeometry() {
 		if (m_textureGenerator) {
 			m_textureGenerator->initializeFontSizes(); // Initialize font sizes first
 			m_textureGenerator->generateAndCacheTextures();
-			applyInitialTextures();
 		}
 		LOG_INF_S("Texture generation completed");
 	} else {
@@ -1331,14 +1335,6 @@ void CuteNavCube::updateFaceMaterialColor(const std::string& faceName, bool isHo
 	
 	// Update material diffuse color directly (FreeCAD-style)
 	material->diffuseColor.setValue(color);
-
-	auto textureMatIt = m_faceTextureMaterials.find(faceName);
-	if (textureMatIt != m_faceTextureMaterials.end() && textureMatIt->second) {
-		SoMaterial* textureMaterial = textureMatIt->second;
-		textureMaterial->diffuseColor.setValue(color);
-		textureMaterial->ambientColor.setValue(color);
-		textureMaterial->specularColor.setValue(color);
-	}
 	
 	// Trigger refresh if callback is set
 	if (m_refreshCallback) {
@@ -1683,57 +1679,6 @@ void CuteNavCube::setCameraOrientation(const SbRotation& orientation) {
 	}
 	else {
 		LOG_WRN_S("CuteNavCube::setCameraOrientation: Camera not initialized");
-	}
-}
-
-void CuteNavCube::applyInitialTextures() {
-	if (!m_textureGenerator) {
-		LOG_WRN_S("applyInitialTextures skipped: texture generator is null");
-		return;
-	}
-
-	std::vector<std::string> mainFaceNames = {"FRONT", "REAR", "LEFT", "RIGHT", "TOP", "BOTTOM"};
-
-	for (const auto& faceName : mainFaceNames) {
-		SoTexture2* textureNode = m_textureGenerator->getNormalTexture(faceName);
-		if (!textureNode) {
-			LOG_WRN_S("applyInitialTextures: missing cached texture for face " + faceName);
-			continue;
-		}
-
-		std::string separatorKey = faceName + "_Texture";
-		auto sepIt = m_faceSeparators.find(separatorKey);
-		if (sepIt == m_faceSeparators.end() || sepIt->second == nullptr) {
-			LOG_WRN_S("applyInitialTextures: texture separator not found for key " + separatorKey);
-			continue;
-		}
-
-		SoSeparator* textureSep = sepIt->second;
-
-		// Avoid adding duplicate texture nodes
-		bool alreadyAttached = false;
-		for (int i = 0; i < textureSep->getNumChildren(); ++i) {
-			if (textureSep->getChild(i) == textureNode) {
-				alreadyAttached = true;
-				break;
-			}
-		}
-		if (alreadyAttached) {
-			continue;
-		}
-
-		int insertIndex = textureSep->getNumChildren();
-		for (int i = 0; i < textureSep->getNumChildren(); ++i) {
-			SoNode* child = textureSep->getChild(i);
-			if (child->isOfType(SoTextureCoordinate2::getClassTypeId()) ||
-				child->isOfType(SoIndexedFaceSet::getClassTypeId())) {
-				insertIndex = i;
-				break;
-			}
-		}
-
-		textureSep->insertChild(textureNode, insertIndex);
-		LOG_INF_S("applyInitialTextures: attached texture node for face " + faceName + " at index " + std::to_string(insertIndex));
 	}
 }
 

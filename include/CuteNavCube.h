@@ -15,56 +15,14 @@
 #include <Inventor/SbLinear.h>
 #include <memory>
 #include <Eigen/Dense>
+#include <vector>
 
+#include "NavigationCubeTypes.h" // For ShapeId and PickId enums
+
+class NavigationCubeTextureGenerator;
 struct CubeConfig;
 
 class CuteNavCube {
-public:
-    enum class ShapeId {
-        None, Main, Edge, Corner, Button
-    };
-    enum class PickId {
-        None,
-        Front,
-        Top,
-        Right,
-        Rear,
-        Bottom,
-        Left,
-        FrontTop,
-        FrontBottom,
-        FrontRight,
-        FrontLeft,
-        RearTop,
-        RearBottom,
-        RearRight,
-        RearLeft,
-        TopRight,
-        TopLeft,
-        BottomRight,
-        BottomLeft,
-        FrontTopRight,
-        FrontTopLeft,
-        FrontBottomRight,
-        FrontBottomLeft,
-        RearTopRight,
-        RearTopLeft,
-        RearBottomRight,
-        RearBottomLeft,
-        ArrowNorth,
-        ArrowSouth,
-        ArrowEast,
-        ArrowWest,
-        ArrowLeft,
-        ArrowRight,
-        DotBackside,
-        ViewMenu
-    };
-    struct Face {
-        ShapeId type;
-        std::vector<SbVec3f> vertexArray;
-        SbRotation rotation;
-    };
 public:
 	CuteNavCube(std::function<void(const std::string&)> viewChangeCallback, float dpiScale, int windowWidth, int windowHeight, const CubeConfig& config);
 	CuteNavCube(std::function<void(const std::string&)> viewChangeCallback,
@@ -123,6 +81,7 @@ private:
 	void calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const;
 	void generateAndCacheTextures();  // Generate and cache all textures at initialization
 	SoTexture2* createTextureForFace(const std::string& faceName, bool isHover);  // Helper to create a texture
+	void applyInitialTextures();
 
 	// Texture cache entry
 	struct TextureData {
@@ -130,6 +89,17 @@ private:
 		int width, height;
 		TextureData(unsigned char* d, int w, int h) : data(d), width(w), height(h) {}
 		~TextureData() { delete[] data; }
+	};
+
+	struct FaceData {
+		FaceData() : type(ShapeId::Main) {}
+		ShapeId type;
+		SbRotation rotation;
+		std::vector<SbVec3f> vertexArray;
+	};
+
+	struct LabelTextureData {
+		std::vector<SbVec3f> vertexArray;
 	};
 
 	SoSeparator* m_root;
@@ -200,30 +170,23 @@ private:
 	std::map<std::string, SoSeparator*> m_faceSeparators;        // Separators for each face (for texture replacement)
 	std::map<std::string, SbColor> m_faceBaseColors;             // Base color for each face
 	std::map<std::string, SbColor> m_faceHoverColors;            // Hover color for each face (FreeCAD-style direct color switching)
+	std::map<std::string, SoMaterial*> m_faceTextureMaterials;   // Materials for texture overlays per face
 	SbColor m_normalFaceColor;                                   // Normal face color
 	SbColor m_hoverFaceColor;                                    // Hover face color
 	
-	// Texture cache for each face (normal and hover states)
-	std::map<std::string, SoTexture2*> m_normalTextures;         // Normal state textures for each face
-	std::map<std::string, SoTexture2*> m_hoverTextures;          // Hover state textures for each face
+
+	// Texture generator
+	std::unique_ptr<NavigationCubeTextureGenerator> m_textureGenerator; // Texture generation tool
 
 	// Face normal vectors and center points for camera positioning
 	std::map<std::string, std::pair<SbVec3f, SbVec3f>> m_faceNormals;
 
-	// Face vertex data (ported from FreeCAD NaviCube)
-	std::map<PickId, Face> m_Faces;
+	// Face vertex data for each pickable region
+	std::map<PickId, FaceData> m_Faces;
 
-	// Label textures for main faces
-	struct LabelTexture {
-		std::vector<SbVec3f> vertexArray;
-		float fontSize;
-	};
-	std::map<PickId, LabelTexture> m_LabelTextures;
+	// Label texture quad vertices for main faces
+	std::map<PickId, LabelTextureData> m_LabelTextures;
 
 	// Font settings like FreeCAD
 	float m_fontZoom;
-	std::map<PickId, float> m_faceFontSizes;
-
-	// Static texture cache
-	static std::map<std::string, std::shared_ptr<TextureData>> s_textureCache;
 };
