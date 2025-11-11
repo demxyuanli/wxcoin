@@ -298,755 +298,105 @@ void CuteNavCube::initialize() {
 }
 
 
-void CuteNavCube::addCubeFace(const SbVec3f& x, const SbVec3f& z, ShapeId shapeType, PickId pickId, float rotZ) {
-	m_Faces[pickId].vertexArray.clear();
-	m_Faces[pickId].type = shapeType;
-
-	// Log face creation with type and pickId
-	std::string faceTypeStr = (shapeType == ShapeId::Main) ? "MAIN" : (shapeType == ShapeId::Corner) ? "CORNER" : "EDGE";
-	std::string pickIdStr;
-	switch (pickId) {
-		case PickId::Top: pickIdStr = "Top"; break;
-		case PickId::Bottom: pickIdStr = "Bottom"; break;
-		case PickId::Front: pickIdStr = "Front"; break;
-		case PickId::Rear: pickIdStr = "Rear"; break;
-		case PickId::Left: pickIdStr = "Left"; break;
-		case PickId::Right: pickIdStr = "Right"; break;
-		case PickId::FrontTopRight: pickIdStr = "FrontTopRight"; break;
-		case PickId::FrontTopLeft: pickIdStr = "FrontTopLeft"; break;
-		case PickId::FrontBottomRight: pickIdStr = "FrontBottomRight"; break;
-		case PickId::FrontBottomLeft: pickIdStr = "FrontBottomLeft"; break;
-		case PickId::RearTopRight: pickIdStr = "RearTopRight"; break;
-		case PickId::RearTopLeft: pickIdStr = "RearTopLeft"; break;
-		case PickId::RearBottomRight: pickIdStr = "RearBottomRight"; break;
-		case PickId::RearBottomLeft: pickIdStr = "RearBottomLeft"; break;
-		case PickId::FrontTop: pickIdStr = "FrontTop"; break;
-		case PickId::FrontBottom: pickIdStr = "FrontBottom"; break;
-		case PickId::RearTop: pickIdStr = "RearTop"; break;
-		case PickId::RearBottom: pickIdStr = "RearBottom"; break;
-		case PickId::FrontRight: pickIdStr = "FrontRight"; break;
-		case PickId::FrontLeft: pickIdStr = "FrontLeft"; break;
-		case PickId::RearRight: pickIdStr = "RearRight"; break;
-		case PickId::RearLeft: pickIdStr = "RearLeft"; break;
-		case PickId::TopRight: pickIdStr = "TopRight"; break;
-		case PickId::TopLeft: pickIdStr = "TopLeft"; break;
-		case PickId::BottomRight: pickIdStr = "BottomRight"; break;
-		case PickId::BottomLeft: pickIdStr = "BottomLeft"; break;
-	}
-	LOG_INF_S("Creating " + faceTypeStr + " face: " + pickIdStr);
-
-	// Calculate y vector using cross product
-	SbVec3f y = x.cross(-z);
-
-	// Create normalized vectors for x, y and z
-	SbVec3f xN = x;
-	SbVec3f yN = y;
-	SbVec3f zN = z;
-	xN.normalize();
-	yN.normalize();
-	zN.normalize();
-
-	// Create a rotation matrix
-	SbMatrix R(xN[0], yN[0], zN[0], 0,
-	           xN[1], yN[1], zN[1], 0,
-	           xN[2], yN[2], zN[2], 0,
-	           0,     0,     0,     1);
-
-	// Store the standard orientation
-	m_Faces[pickId].rotation = (SbRotation(R) * SbRotation(SbVec3f(0, 0, 1), rotZ)).inverse();
-
-	if (shapeType == ShapeId::Corner) {
-		float chamfer = m_chamferSize;
-		float zDepth = 1.0f - 2.0f * chamfer;
-		m_Faces[pickId].vertexArray.reserve(6);
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth - 2 * x[0] * chamfer,
-		                                                  z[1] * zDepth - 2 * x[1] * chamfer,
-		                                                  z[2] * zDepth - 2 * x[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth - x[0] * chamfer - y[0] * chamfer,
-		                                                  z[1] * zDepth - x[1] * chamfer - y[1] * chamfer,
-		                                                  z[2] * zDepth - x[2] * chamfer - y[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth + x[0] * chamfer - y[0] * chamfer,
-		                                                  z[1] * zDepth + x[1] * chamfer - y[1] * chamfer,
-		                                                  z[2] * zDepth + x[2] * chamfer - y[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth + 2 * x[0] * chamfer,
-		                                                  z[1] * zDepth + 2 * x[1] * chamfer,
-		                                                  z[2] * zDepth + 2 * x[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth + x[0] * chamfer + y[0] * chamfer,
-		                                                  z[1] * zDepth + x[1] * chamfer + y[1] * chamfer,
-		                                                  z[2] * zDepth + x[2] * chamfer + y[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zDepth - x[0] * chamfer + y[0] * chamfer,
-		                                                  z[1] * zDepth - x[1] * chamfer + y[1] * chamfer,
-		                                                  z[2] * zDepth - x[2] * chamfer + y[2] * chamfer));
-	}
-	else if (shapeType == ShapeId::Edge) {
-		float chamfer = m_chamferSize;
-		float x4_scale = 1.0f - chamfer * 4.0f;
-		float zE_scale = 1.0f - chamfer;
-		m_Faces[pickId].vertexArray.reserve(4);
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale - x[0] * x4_scale - y[0] * chamfer,
-		                                                  z[1] * zE_scale - x[1] * x4_scale - y[1] * chamfer,
-		                                                  z[2] * zE_scale - x[2] * x4_scale - y[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale + x[0] * x4_scale - y[0] * chamfer,
-		                                                  z[1] * zE_scale + x[1] * x4_scale - y[1] * chamfer,
-		                                                  z[2] * zE_scale + x[2] * x4_scale - y[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale + x[0] * x4_scale + y[0] * chamfer,
-		                                                  z[1] * zE_scale + x[1] * x4_scale + y[1] * chamfer,
-		                                                  z[2] * zE_scale + x[2] * x4_scale + y[2] * chamfer));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] * zE_scale - x[0] * x4_scale + y[0] * chamfer,
-		                                                  z[1] * zE_scale - x[1] * x4_scale + y[1] * chamfer,
-		                                                  z[2] * zE_scale - x[2] * x4_scale + y[2] * chamfer));
-	}
-	else if (shapeType == ShapeId::Main) {
-		float chamfer = m_chamferSize;
-		float x2_scale = 1.0f - chamfer * 2.0f;
-		float y2_scale = 1.0f - chamfer * 2.0f;
-		float x4_scale = 1.0f - chamfer * 4.0f;
-		float y4_scale = 1.0f - chamfer * 4.0f;
-		m_Faces[pickId].vertexArray.reserve(8);
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x2_scale - y[0] * y4_scale,
-		                                                  z[1] - x[1] * x2_scale - y[1] * y4_scale,
-		                                                  z[2] - x[2] * x2_scale - y[2] * y4_scale));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x4_scale - y[0] * y2_scale,
-		                                                  z[1] - x[1] * x4_scale - y[1] * y2_scale,
-		                                                  z[2] - x[2] * x4_scale - y[2] * y2_scale));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x4_scale - y[0] * y2_scale,
-		                                                  z[1] + x[1] * x4_scale - y[1] * y2_scale,
-		                                                  z[2] + x[2] * x4_scale - y[2] * y2_scale));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x2_scale - y[0] * y4_scale,
-		                                                  z[1] + x[1] * x2_scale - y[1] * y4_scale,
-		                                                  z[2] + x[2] * x2_scale - y[2] * y4_scale));
-
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x2_scale + y[0] * y4_scale,
-		                                                  z[1] + x[1] * x2_scale + y[1] * y4_scale,
-		                                                  z[2] + x[2] * x2_scale + y[2] * y4_scale));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] + x[0] * x4_scale + y[0] * y2_scale,
-		                                                  z[1] + x[1] * x4_scale + y[1] * y2_scale,
-		                                                  z[2] + x[2] * x4_scale + y[2] * y2_scale));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x4_scale + y[0] * y2_scale,
-		                                                  z[1] - x[1] * x4_scale + y[1] * y2_scale,
-		                                                  z[2] - x[2] * x4_scale + y[2] * y2_scale));
-		m_Faces[pickId].vertexArray.emplace_back(SbVec3f(z[0] - x[0] * x2_scale + y[0] * y4_scale,
-		                                                  z[1] - x[1] * x2_scale + y[1] * y4_scale,
-		                                                  z[2] - x[2] * x2_scale + y[2] * y4_scale));
-
-		m_LabelTextures[pickId].vertexArray.clear();
-		// Create texture quad vertices at octagon main face diagonal edge midpoints
-		// The octagon has 8 edges: 4 connecting square corners to chamfer corners ("diagonal edges")
-		// We want the texture quad vertices to be at the midpoints of these 4 diagonal edges
-		// These edges connect: v0-v1, v2-v3, v4-v5, v6-v7
-
-		// Edge v0-v1 midpoint: between square corner (-x2_scale, -y4_scale) and chamfer corner (-x4_scale, -y2_scale)
-		auto x01_mid = x * (x2_scale + x4_scale) * 0.5f; // Average x coordinate
-		auto y01_mid = y * (y4_scale + y2_scale) * 0.5f; // Average y coordinate
-		m_LabelTextures[pickId].vertexArray.emplace_back(z - x01_mid - y01_mid);
-
-		// Edge v2-v3 midpoint: between chamfer corner (+x4_scale, -y2_scale) and square corner (+x2_scale, -y4_scale)
-		auto x23_mid = x * (x4_scale + x2_scale) * 0.5f; // Average x coordinate
-		auto y23_mid = y * (y2_scale + y4_scale) * 0.5f; // Average y coordinate
-		m_LabelTextures[pickId].vertexArray.emplace_back(z + x23_mid - y23_mid);
-
-		// Edge v4-v5 midpoint: between square corner (+x2_scale, +y4_scale) and chamfer corner (+x4_scale, +y2_scale)
-		auto x45_mid = x * (x2_scale + x4_scale) * 0.5f; // Average x coordinate
-		auto y45_mid = y * (y4_scale + y2_scale) * 0.5f; // Average y coordinate
-		m_LabelTextures[pickId].vertexArray.emplace_back(z + x45_mid + y45_mid);
-
-		// Edge v6-v7 midpoint: between chamfer corner (-x4_scale, +y2_scale) and square corner (-x2_scale, +y4_scale)
-		auto x67_mid = x * (x4_scale + x2_scale) * 0.5f; // Average x coordinate
-		auto y67_mid = y * (y2_scale + y4_scale) * 0.5f; // Average y coordinate
-		m_LabelTextures[pickId].vertexArray.emplace_back(z - x67_mid + y67_mid);
-	}
-
-	// Log all vertices for this face
-	const auto& vertices = m_Faces[pickId].vertexArray;
-	// Log texture vertices if available
-	const auto& texVertices = m_LabelTextures[pickId].vertexArray;
-}
-
-
 void CuteNavCube::setupGeometry() {
 	// Create cube face textures using the texture generator
 	if (m_textureGenerator) {
 		m_textureGenerator->createCubeFaceTextures();
 	}
 
-	// Clear existing face maps before rebuilding geometry
+	// Clear previous face mappings
 	m_faceMaterials.clear();
 	m_faceBaseColors.clear();
-	m_faceHoverColors.clear(); // Clear hover colors map
+	m_faceHoverColors.clear();
+	m_faceTextureMaterials.clear();
+	m_faceSeparators.clear();
+	m_Faces.clear();
+	m_LabelTextures.clear();
 
-	// Safely clear previous geometry while preserving camera
-	bool cameraWasInScene = false;
+	// Safely clear previous geometry
 	if (m_root->getNumChildren() > 0) {
-		// Check if camera is already in the scene
-		for (int i = 0; i < m_root->getNumChildren(); i++) {
-			if (m_root->getChild(i) == m_orthoCamera) {
-				cameraWasInScene = true;
-				break;
-			}
-		}
-	m_root->removeAllChildren(); // Clear previous geometry
+		m_root->removeAllChildren();
 	}
 
 	// Setup camera properties
 	m_orthoCamera->viewportMapping = SoOrthographicCamera::ADJUST_CAMERA;
-	m_orthoCamera->nearDistance = 0.05f; // Reduced to ensure all faces are visible
-	m_orthoCamera->farDistance = 15.0f;  // Increased to include all geometry
-	m_orthoCamera->position.setValue(0.0f, 0.0f, 5.0f); // Initial position
-	m_orthoCamera->orientation.setValue(SbRotation(SbVec3f(1, 0, 0), -M_PI / 2)); // Rotate to make Z up
-	
+	m_orthoCamera->nearDistance = 0.05f;
+	m_orthoCamera->farDistance = 15.0f;
+	m_orthoCamera->position.setValue(0.0f, 0.0f, 5.0f);
+	m_orthoCamera->orientation.setValue(SbRotation(SbVec3f(1, 0, 0), -M_PI / 2));
+
 	// Always add camera back to the scene
 	m_root->addChild(m_orthoCamera);
 
-	// --- Geometry Scale Transform ---
-	m_geometryTransform = new SoTransform;
-	m_geometryTransform->scaleFactor.setValue(m_geometrySize, m_geometrySize, m_geometrySize);
-	m_root->addChild(m_geometryTransform);
-
-	// --- Lighting Setup ---
+	// Lighting setup
 	SoEnvironment* env = new SoEnvironment;
-	env->ambientColor.setValue(0.8f, 0.8f, 0.85f); // Brighter and more neutral ambient color
-	env->ambientIntensity.setValue(m_ambientIntensity); // Use config value
+	env->ambientColor.setValue(0.8f, 0.8f, 0.85f);
+	env->ambientIntensity.setValue(m_ambientIntensity);
 	m_root->addChild(env);
 
 	m_mainLight = new SoDirectionalLight;
-	m_mainLight->direction.setValue(0.5f, 0.5f, -0.5f); // Main light from top-right-front
-	m_mainLight->intensity.setValue(0.4f); // Reduced from 0.6
+	m_mainLight->direction.setValue(0.5f, 0.5f, -0.5f);
+	m_mainLight->intensity.setValue(0.4f);
 	m_mainLight->color.setValue(1.0f, 1.0f, 1.0f);
 	m_root->addChild(m_mainLight);
 
 	m_fillLight = new SoDirectionalLight;
-	m_fillLight->direction.setValue(-0.5f, -0.5f, 0.5f); // Fill light from bottom-left-back
-	m_fillLight->intensity.setValue(0.4f); // Reduced from 0.6
-	m_fillLight->color.setValue(0.95f, 0.95f, 1.0f); // Slightly cool
+	m_fillLight->direction.setValue(-0.5f, -0.5f, 0.5f);
+	m_fillLight->intensity.setValue(0.4f);
+	m_fillLight->color.setValue(0.95f, 0.95f, 1.0f);
 	m_root->addChild(m_fillLight);
 
 	m_sideLight = new SoDirectionalLight;
-	m_sideLight->direction.setValue(-0.8f, 0.2f, -0.3f); // Side light from left
-	m_sideLight->intensity.setValue(0.3f); // Reduced from 0.4
-	m_sideLight->color.setValue(1.0f, 1.0f, 0.95f); // Slightly warm
+	m_sideLight->direction.setValue(-0.8f, 0.2f, -0.3f);
+	m_sideLight->intensity.setValue(0.3f);
+	m_sideLight->color.setValue(1.0f, 1.0f, 0.95f);
 	m_root->addChild(m_sideLight);
 
-	// --- Add more lights for better coverage ---
 	SoDirectionalLight* backLight = new SoDirectionalLight;
-	backLight->direction.setValue(0.0f, 0.0f, 1.0f); // Directly from back
-	backLight->intensity.setValue(0.3f); // Reduced from 0.5
+	backLight->direction.setValue(0.0f, 0.0f, 1.0f);
+	backLight->intensity.setValue(0.3f);
 	backLight->color.setValue(0.9f, 0.9f, 1.0f);
 	m_root->addChild(backLight);
 
 	SoDirectionalLight* bottomLight = new SoDirectionalLight;
-	bottomLight->direction.setValue(0.4f, -0.8f, 0.2f); // From bottom-right
-	bottomLight->intensity.setValue(0.2f); // Reduced from 0.4
+	bottomLight->direction.setValue(0.4f, -0.8f, 0.2f);
+	bottomLight->intensity.setValue(0.2f);
 	bottomLight->color.setValue(1.0f, 0.95f, 0.95f);
 	m_root->addChild(bottomLight);
 
 	SoDirectionalLight* topSideLight = new SoDirectionalLight;
-	topSideLight->direction.setValue(0.8f, 0.3f, 0.3f); // From top-left
-	topSideLight->intensity.setValue(0.2f); // Reduced from 0.4
+	topSideLight->direction.setValue(0.8f, 0.3f, 0.3f);
+	topSideLight->intensity.setValue(0.2f);
 	topSideLight->color.setValue(0.95f, 1.0f, 0.95f);
 	m_root->addChild(topSideLight);
 
 	updateCameraRotation();
 
-	// Create cube faces using dynamic generation (ported from FreeCAD NaviCube)
-	constexpr float pi = 3.14159265358979323846f;
-	constexpr float pi1_2 = pi / 2;
+	// Delegate geometry creation to the builder
+	NavigationCubeGeometryBuilder builder;
+	NavigationCubeGeometryBuilder::BuildParams params;
+	params.chamferSize = m_chamferSize;
+	params.geometrySize = m_geometrySize;
+	params.showEdges = m_showEdges;
+	params.showCorners = m_showCorners;
 
-	SbVec3f x(1, 0, 0);
-	SbVec3f y(0, 1, 0);
-	SbVec3f z(0, 0, 1);
+	auto geometryResult = builder.build(params);
 
-	// ===== MAIN FACES (6 faces) =====
-	LOG_INF_S("=== MAIN FACES (6 faces) ===");
-	addCubeFace( x, z, ShapeId::Main, PickId::Top);
-	addCubeFace( x,-y, ShapeId::Main, PickId::Front);
-	addCubeFace(-y,-x, ShapeId::Main, PickId::Left);
-	addCubeFace(-x, y, ShapeId::Main, PickId::Rear);
-	addCubeFace( y, x, ShapeId::Main, PickId::Right);
-	addCubeFace( x,-z, ShapeId::Main, PickId::Bottom);
+	m_Faces = std::move(geometryResult.faces);
+	m_LabelTextures = std::move(geometryResult.labelTextures);
+	m_faceMaterials = std::move(geometryResult.faceMaterials);
+	m_faceSeparators = std::move(geometryResult.faceSeparators);
+	m_faceBaseColors = std::move(geometryResult.faceBaseColors);
+	m_faceHoverColors = std::move(geometryResult.faceHoverColors);
+	m_faceTextureMaterials = std::move(geometryResult.faceTextureMaterials);
+	m_geometryTransform = geometryResult.geometryTransform;
 
-	// ===== CORNER FACES (8 faces) =====
-	LOG_INF_S("=== CORNER FACES (8 faces) ===");
-	addCubeFace(-x-y, x-y+z, ShapeId::Corner, PickId::FrontTopRight, pi);
-	addCubeFace(-x+y,-x-y+z, ShapeId::Corner, PickId::FrontTopLeft, pi);
-	addCubeFace(x+y, x-y-z, ShapeId::Corner, PickId::FrontBottomRight);
-	addCubeFace(x-y,-x-y-z, ShapeId::Corner, PickId::FrontBottomLeft);
-	addCubeFace(x-y, x+y+z, ShapeId::Corner, PickId::RearTopRight, pi);
-	addCubeFace(x+y,-x+y+z, ShapeId::Corner, PickId::RearTopLeft, pi);
-	addCubeFace(-x+y, x+y-z, ShapeId::Corner, PickId::RearBottomRight);
-	addCubeFace(-x-y,-x+y-z, ShapeId::Corner, PickId::RearBottomLeft);
-
-	// ===== EDGE FACES (12 faces) =====
-	LOG_INF_S("=== EDGE FACES (12 faces) ===");
-	addCubeFace(x, z-y, ShapeId::Edge, PickId::FrontTop);
-	addCubeFace(x,-z-y, ShapeId::Edge, PickId::FrontBottom);
-	addCubeFace(x, y-z, ShapeId::Edge, PickId::RearBottom, pi);
-	addCubeFace(x, y+z, ShapeId::Edge, PickId::RearTop, pi);
-	addCubeFace(z, x+y, ShapeId::Edge, PickId::RearRight, pi1_2);
-	addCubeFace(z, x-y, ShapeId::Edge, PickId::FrontRight, pi1_2);
-	addCubeFace(z,-x-y, ShapeId::Edge, PickId::FrontLeft, pi1_2);
-	addCubeFace(z, y-x, ShapeId::Edge, PickId::RearLeft, pi1_2);
-	addCubeFace(y, z-x, ShapeId::Edge, PickId::TopLeft, pi);
-	addCubeFace(y, x+z, ShapeId::Edge, PickId::TopRight);
-	addCubeFace(y, x-z, ShapeId::Edge, PickId::BottomRight);
-	addCubeFace(y,-z-x, ShapeId::Edge, PickId::BottomLeft, pi);
-
-
-	SoSeparator* cubeAssembly = new SoSeparator;
-
-	auto& dpiManager = DPIManager::getInstance();
-
-	// Create coordinate system and materials for the cube
-	// Define texture coordinates for label textures like FreeCAD
-	// Fixed UV coordinates: {0,0, 1,0, 1,1, 0,1} for all texture quads
-	SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
-	texCoords->point.setValues(0, 4, new SbVec2f[4]{
-		SbVec2f(0.0f, 0.0f),      // 0: bottom-left
-		SbVec2f(1.0f, 0.0f),      // 1: bottom-right
-		SbVec2f(1.0f, 1.0f),      // 2: top-right
-		SbVec2f(0.0f, 1.0f)       // 3: top-left
-		});
-	cubeAssembly->addChild(texCoords);
-
-	// Force no shading mode for navigation cube - use BASE_COLOR light model
-	// This ensures the cube displays with uniform colors without any lighting calculations
-	SoLightModel* lightModel = new SoLightModel;
-	lightModel->model = SoLightModel::BASE_COLOR; // No shading, direct color display
-	cubeAssembly->addChild(lightModel);
-
-	// Create coordinate node for all faces
-	SoCoordinate3* coords = new SoCoordinate3;
-	cubeAssembly->addChild(coords);
-
-	SoMaterial* mainFaceMaterial = new SoMaterial;
-	// Frosted glass material for main faces - read all properties from config
-	// Use unified cube body color
-	mainFaceMaterial->diffuseColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0))
-	);
-	// Use unified cube body properties from config
-	mainFaceMaterial->ambientColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientR", 0.7)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientG", 0.8)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyAmbientB", 0.9))
-	);
-	mainFaceMaterial->specularColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularR", 0.95)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularG", 0.98)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodySpecularB", 1.0))
-	);
-	mainFaceMaterial->emissiveColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveR", 0.02)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveG", 0.05)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyEmissiveB", 0.1))
-	);
-	mainFaceMaterial->shininess.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyShininess", 0.0f))
-	);
-	mainFaceMaterial->transparency.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyTransparency", 0.0f))
-	);
-
-	// Store base color and hover color for all faces (FreeCAD-style direct color switching)
-	SbColor baseColor(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0))
-	);
-	SbColor hoverColor(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorR", 0.7)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorG", 0.85)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeHoverColorB", 0.95))
-	);
-	
-	// Store base colors for all faces
-	m_faceBaseColors["FRONT"] = baseColor;
-	m_faceBaseColors["REAR"] = baseColor;
-	m_faceBaseColors["LEFT"] = baseColor;
-	m_faceBaseColors["RIGHT"] = baseColor;
-	m_faceBaseColors["TOP"] = baseColor;
-	m_faceBaseColors["BOTTOM"] = baseColor;
-	
-	// Store hover colors for all faces
-	m_faceHoverColors["FRONT"] = hoverColor;
-	m_faceHoverColors["REAR"] = hoverColor;
-	m_faceHoverColors["LEFT"] = hoverColor;
-	m_faceHoverColors["RIGHT"] = hoverColor;
-	m_faceHoverColors["TOP"] = hoverColor;
-	m_faceHoverColors["BOTTOM"] = hoverColor;
-
-	// Note: edgeAndCornerMaterial is no longer used since navigation cube is now a single body
-	// It's kept for backward compatibility but won't affect rendering
-	SoMaterial* edgeAndCornerMaterial = new SoMaterial;
-	edgeAndCornerMaterial->diffuseColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0))
-	);
-	edgeAndCornerMaterial->ambientColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientR", 0.3)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientG", 0.5)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialAmbientB", 0.3))
-	);
-	edgeAndCornerMaterial->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular for no shading mode
-	edgeAndCornerMaterial->emissiveColor.setValue(
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveR", 0.04)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveG", 0.12)),
-		static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "EdgeCornerMaterialEmissiveB", 0.04))
-	);
-	edgeAndCornerMaterial->shininess.setValue(0.0f); // No shading mode
-	edgeAndCornerMaterial->transparency.setValue(0.0f); // Opaque
-
-	// Store base and hover colors for all edges and corners
-	m_faceBaseColors["EdgeTF"] = baseColor;
-	m_faceBaseColors["EdgeTB"] = baseColor;
-	m_faceBaseColors["EdgeTL"] = baseColor;
-	m_faceBaseColors["EdgeTR"] = baseColor;
-	m_faceBaseColors["EdgeBF"] = baseColor;
-	m_faceBaseColors["EdgeBB"] = baseColor;
-	m_faceBaseColors["EdgeBL"] = baseColor;
-	m_faceBaseColors["EdgeBR"] = baseColor;
-	m_faceBaseColors["EdgeFR"] = baseColor;
-	m_faceBaseColors["EdgeFL"] = baseColor;
-	m_faceBaseColors["EdgeBL2"] = baseColor;
-	m_faceBaseColors["EdgeBR2"] = baseColor;
-	m_faceHoverColors["EdgeTF"] = hoverColor;
-	m_faceHoverColors["EdgeTB"] = hoverColor;
-	m_faceHoverColors["EdgeTL"] = hoverColor;
-	m_faceHoverColors["EdgeTR"] = hoverColor;
-	m_faceHoverColors["EdgeBF"] = hoverColor;
-	m_faceHoverColors["EdgeBB"] = hoverColor;
-	m_faceHoverColors["EdgeBL"] = hoverColor;
-	m_faceHoverColors["EdgeBR"] = hoverColor;
-	m_faceHoverColors["EdgeFR"] = hoverColor;
-	m_faceHoverColors["EdgeFL"] = hoverColor;
-	m_faceHoverColors["EdgeBL2"] = hoverColor;
-	m_faceHoverColors["EdgeBR2"] = hoverColor;
-
-	// Corner faces use the same base and hover colors
-	m_faceBaseColors["Corner0"] = baseColor;
-	m_faceBaseColors["Corner1"] = baseColor;
-	m_faceBaseColors["Corner2"] = baseColor;
-	m_faceBaseColors["Corner3"] = baseColor;
-	m_faceBaseColors["Corner4"] = baseColor;
-	m_faceBaseColors["Corner5"] = baseColor;
-	m_faceBaseColors["Corner6"] = baseColor;
-	m_faceBaseColors["Corner7"] = baseColor;
-	m_faceHoverColors["Corner0"] = hoverColor;
-	m_faceHoverColors["Corner1"] = hoverColor;
-	m_faceHoverColors["Corner2"] = hoverColor;
-	m_faceHoverColors["Corner3"] = hoverColor;
-	m_faceHoverColors["Corner4"] = hoverColor;
-	m_faceHoverColors["Corner5"] = hoverColor;
-	m_faceHoverColors["Corner6"] = hoverColor;
-	m_faceHoverColors["Corner7"] = hoverColor;
-
-	// Create faces using dynamic generation
-	int vertexIndex = 0;
-
-	// Define face creation helper - now takes PickId directly
-	auto createFaceFromVertices = [&](const std::string& faceName, PickId pickId, int materialType) {
-		// Skip faces based on display options
-		if (materialType == 1 && !m_showEdges) return;    // Skip edge faces if edges are disabled
-		if (materialType == 2 && !m_showCorners) return;  // Skip corner faces if corners are disabled
-
-		SoSeparator* faceSep = new SoSeparator;
-		faceSep->setName(SbName(faceName.c_str()));
-		
-		// Store the separator for later texture replacement
-		m_faceSeparators[faceName] = faceSep;
-
-		// Create independent material for each face (FreeCAD-style direct color switching)
-		SoMaterial* faceMaterial = new SoMaterial;
-		if (materialType == 0) { // Main face - copy properties from mainFaceMaterial
-			faceMaterial->diffuseColor.setValue(mainFaceMaterial->diffuseColor[0]);
-			faceMaterial->ambientColor.setValue(mainFaceMaterial->ambientColor[0]);
-			faceMaterial->specularColor.setValue(mainFaceMaterial->specularColor[0]);
-			faceMaterial->emissiveColor.setValue(mainFaceMaterial->emissiveColor[0]);
-			faceMaterial->shininess.setValue(mainFaceMaterial->shininess[0]);
-			faceMaterial->transparency.setValue(mainFaceMaterial->transparency[0]);
-		} else { // Edges and Corners - copy properties from edgeAndCornerMaterial
-			faceMaterial->diffuseColor.setValue(edgeAndCornerMaterial->diffuseColor[0]);
-			faceMaterial->ambientColor.setValue(edgeAndCornerMaterial->ambientColor[0]);
-			faceMaterial->specularColor.setValue(edgeAndCornerMaterial->specularColor[0]);
-			faceMaterial->emissiveColor.setValue(edgeAndCornerMaterial->emissiveColor[0]);
-			faceMaterial->shininess.setValue(edgeAndCornerMaterial->shininess[0]);
-			faceMaterial->transparency.setValue(edgeAndCornerMaterial->transparency[0]);
-		}
-		faceSep->addChild(faceMaterial);
-		m_faceMaterials[faceName] = faceMaterial; // Store for direct color updates
-
-		// Create indexed face set
-		SoIndexedFaceSet* face = new SoIndexedFaceSet;
-
-		// Add vertices to coordinate node
-		auto& vertices = m_Faces[pickId].vertexArray;
-		for (size_t i = 0; i < vertices.size(); i++) {
-			coords->point.set1Value(vertexIndex + i, vertices[i]);
-			face->coordIndex.set1Value(i, vertexIndex + i);
-		}
-		face->coordIndex.set1Value(vertices.size(), -1); // End marker
-		vertexIndex += vertices.size();
-
-		// Set texture coordinates based on face type
-		if (materialType == 0) { // Main face (octagon) - no texture, only material
-			// Main faces don't use texture coordinates - they use material color only
-			// Texture will be applied as separate quad overlay
-		} else {
-			// Edge and corner faces - use single color
-			for (size_t i = 0; i < vertices.size(); ++i) {
-				face->textureCoordIndex.set1Value(i, 0);
-			}
-			face->textureCoordIndex.set1Value(vertices.size(), -1);
-		}
-
-		faceSep->addChild(face);
-
-		// Create outline for this face (independent from other faces)
-		SoSeparator* outlineSep = new SoSeparator;
-		outlineSep->setName(SbName((faceName + "_Outline").c_str()));
-
-		// Use line style for outline
-		SoDrawStyle* lineStyle = new SoDrawStyle;
-		lineStyle->style = SoDrawStyle::LINES;
-		lineStyle->lineWidth = 1.0f;
-		outlineSep->addChild(lineStyle);
-
-		// Outline material (black by default, will be overridden by global outline material)
-		SoMaterial* outlineMaterial = new SoMaterial;
-		float outlineR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorR", 0.4));
-		float outlineG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorG", 0.6));
-		float outlineB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeOutlineColorB", 0.9));
-		outlineMaterial->diffuseColor.setValue(outlineR, outlineG, outlineB);
-		outlineMaterial->transparency.setValue(0.0f);
-		outlineSep->addChild(outlineMaterial);
-
-		// Create outline line set for this face
-		SoIndexedLineSet* faceOutline = new SoIndexedLineSet;
-		int faceStartIndex = vertexIndex - vertices.size(); // Start of this face's vertices
-		int vertexCount = static_cast<int>(vertices.size());
-
-		// Create closed loop outline: 0-1-2-3-...-(n-1)-0
-		std::vector<int32_t> outlineIndices;
-		for (int i = 0; i < vertexCount; i++) {
-			outlineIndices.push_back(faceStartIndex + i);
-		}
-		outlineIndices.push_back(faceStartIndex); // Close the loop
-		outlineIndices.push_back(-1); // End marker
-
-		faceOutline->coordIndex.setValues(0, outlineIndices.size(), outlineIndices.data());
-		outlineSep->addChild(faceOutline);
-
-		// Add outline to face separator
-		faceSep->addChild(outlineSep);
-
-		cubeAssembly->addChild(faceSep);
-		
-		// For main faces, create separate texture quad overlay using LabelTextures vertices
-		if (materialType == 0) {
-			SoSeparator* textureSep = new SoSeparator;
-			textureSep->setName(SbName((faceName + "_Texture").c_str()));
-
-			// Disable polygon offset to prevent z-fighting with main face
-			SoPolygonOffset* polygonOffset = new SoPolygonOffset;
-			polygonOffset->factor.setValue(-1.0f);  // Negative offset to pull texture slightly forward
-			polygonOffset->units.setValue(-1.0f);
-			textureSep->addChild(polygonOffset);
-
-			// Add material for texture overlay - use same color as main face material
-			SoMaterial* textureMaterial = new SoMaterial;
-			// Use the unified cube body color from config to match the solid body appearance
-			float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
-			float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
-			float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
-			
-			textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
-			textureMaterial->ambientColor.setValue(materialR, materialG, materialB);
-			textureMaterial->specularColor.setValue(materialR, materialG, materialB);
-			textureMaterial->transparency.setValue(0.0f);
-			textureMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
-			m_faceTextureMaterials[faceName] = textureMaterial;
-			textureSep->addChild(textureMaterial);
-
-			// Create texture quad using LabelTextures vertices
-			SoIndexedFaceSet* textureFace = new SoIndexedFaceSet;
-
-			// Add LabelTextures vertices to coordinate node
-			auto& labelVertices = m_LabelTextures[pickId].vertexArray;
-			int labelVertexIndex = vertexIndex;
-			for (size_t i = 0; i < labelVertices.size(); i++) {
-				coords->point.set1Value(labelVertexIndex + i, labelVertices[i]);
-				textureFace->coordIndex.set1Value(i, labelVertexIndex + i);
-			}
-			textureFace->coordIndex.set1Value(labelVertices.size(), -1);
-
-			// Set texture coordinates for quad like FreeCAD (fixed UV: 0,0,1,0,1,1,0,1)
-			textureFace->textureCoordIndex.set1Value(0, 0); // bottom-left: (0,0)
-			textureFace->textureCoordIndex.set1Value(1, 1); // bottom-right: (1,0)
-			textureFace->textureCoordIndex.set1Value(2, 2); // top-right: (1,1)
-			textureFace->textureCoordIndex.set1Value(3, 3); // top-left: (0,1)
-			textureFace->textureCoordIndex.set1Value(4, -1);
-
-			textureSep->addChild(textureFace);
-			cubeAssembly->addChild(textureSep);
-
-			// Debug: Log MODULATE mode result like FreeCAD
-			// In MODULATE mode: FinalColor = MaterialColor * TextureColor
-			// MaterialColor: (0.9, 0.95, 1.0) - light blue-green
-			// TextureBackground: (1.0, 1.0, 1.0, 0.0) - white transparent background
-			// TextureText: (0, 100/255, 1.0, 1.0) - blue text, opaque
-			// Background Result: (0.9*1.0, 0.95*1.0, 1.0*1.0) = (0.9, 0.95, 1.0) - material color preserved
-			// Background Alpha: 0.0 * 0.0 = 0.0 (transparent) - shows material color
-			// Text Result: (0.9*0, 0.95*100/255, 1.0*1.0) = (0, 0.37, 1.0) - dark blue-green
-			// Text Alpha: 0.0 * 1.0 = 0.0 (opaque) - text visible
-
-			// Update vertexIndex for next face
-			vertexIndex += labelVertices.size();
-
-			// Store texture separator for later texture replacement
-			m_faceSeparators[faceName + "_Texture"] = textureSep;
-		}
-	};
-
-	// Create individual faces (FreeCAD-style: each face is independent)
-	// This allows per-face hover effects and easier picking
-	
-	// Add light model and coordinate nodes to assembly
-	cubeAssembly->addChild(lightModel);
-	cubeAssembly->addChild(coords);
-
-	// Create main faces (6 faces)
-	createFaceFromVertices("FRONT", PickId::Front, 0);
-	createFaceFromVertices("REAR", PickId::Rear, 0);
-	createFaceFromVertices("LEFT", PickId::Left, 0);
-	createFaceFromVertices("RIGHT", PickId::Right, 0);
-	createFaceFromVertices("TOP", PickId::Top, 0);
-	createFaceFromVertices("BOTTOM", PickId::Bottom, 0);
-
-	// Create corner faces (8 faces)
-	createFaceFromVertices("Corner0", PickId::FrontTopRight, 2);
-	createFaceFromVertices("Corner1", PickId::FrontTopLeft, 2);
-	createFaceFromVertices("Corner2", PickId::FrontBottomRight, 2);
-	createFaceFromVertices("Corner3", PickId::FrontBottomLeft, 2);
-	createFaceFromVertices("Corner4", PickId::RearTopRight, 2);
-	createFaceFromVertices("Corner5", PickId::RearTopLeft, 2);
-	createFaceFromVertices("Corner6", PickId::RearBottomRight, 2);
-	createFaceFromVertices("Corner7", PickId::RearBottomLeft, 2);
-
-	// Create edge faces (12 faces)
-	createFaceFromVertices("EdgeTF", PickId::FrontTop, 1);
-	createFaceFromVertices("EdgeTB", PickId::RearTop, 1);
-	createFaceFromVertices("EdgeTL", PickId::TopLeft, 1);
-	createFaceFromVertices("EdgeTR", PickId::TopRight, 1);
-	createFaceFromVertices("EdgeBF", PickId::FrontBottom, 1);
-	createFaceFromVertices("EdgeBB", PickId::RearBottom, 1);
-	createFaceFromVertices("EdgeBL", PickId::BottomLeft, 1);
-	createFaceFromVertices("EdgeBR", PickId::BottomRight, 1);
-	createFaceFromVertices("EdgeFR", PickId::FrontRight, 1);
-	createFaceFromVertices("EdgeFL", PickId::FrontLeft, 1);
-	createFaceFromVertices("EdgeBL2", PickId::RearLeft, 1);
-	createFaceFromVertices("EdgeBR2", PickId::RearRight, 1);
-
-	// Create textured quad faces for main faces - actual geometry with texture mapping
-	int currentTextureVertexIndex = vertexIndex; // Track current vertex index for textures
-	std::vector<PickId> mainFaceIds = {PickId::Front, PickId::Top, PickId::Right, PickId::Rear, PickId::Bottom, PickId::Left};
-
-	for (PickId pickId : mainFaceIds) {
-		std::string faceName;
-		switch (pickId) {
-			case PickId::Front: faceName = "FRONT"; break;
-			case PickId::Rear: faceName = "REAR"; break;
-			case PickId::Left: faceName = "LEFT"; break;
-			case PickId::Right: faceName = "RIGHT"; break;
-			case PickId::Top: faceName = "TOP"; break;
-			case PickId::Bottom: faceName = "BOTTOM"; break;
-			default: continue;
-		}
-
-		SoSeparator* textureFaceSep = new SoSeparator;
-		textureFaceSep->setName(SbName((faceName + "_Texture").c_str()));
-
-		// Create proper depth testing setup for texture faces
-		// Use both depth buffer and polygon offset for reliable occlusion
-		SoDepthBuffer* depthBuffer = new SoDepthBuffer;
-		depthBuffer->test.setValue(true);
-		depthBuffer->write.setValue(false); // Don't write to depth buffer (let solid geometry control depth)
-		depthBuffer->function.setValue(SoDepthBufferElement::LEQUAL); // Less or equal depth test
-		textureFaceSep->addChild(depthBuffer);
-
-		// Small polygon offset to ensure texture renders on top when at same depth
-		SoPolygonOffset* polygonOffset = new SoPolygonOffset;
-		polygonOffset->factor.setValue(-1.0f);  // Negative offset to pull texture slightly forward
-		polygonOffset->units.setValue(-1.0f);
-		textureFaceSep->addChild(polygonOffset);
-
-		// Create material for the texture face - use cube body color from config
-		SoMaterial* textureMaterial = new SoMaterial;
-		// Use the unified cube body color from config to match the solid body appearance
-		float materialR = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseR", 0.9));
-		float materialG = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseG", 0.95));
-		float materialB = static_cast<float>(ConfigManager::getInstance().getDouble("NavigationCube", "CubeBodyDiffuseB", 1.0));
-
-		// DEBUG: Log texture material color
-		LOG_INF_S("Texture material color for " + faceName + " - R:" + std::to_string(materialR) + " G:" + std::to_string(materialG) + " B:" + std::to_string(materialB));
-
-		textureMaterial->diffuseColor.setValue(materialR, materialG, materialB);
-		textureMaterial->ambientColor.setValue(materialR, materialG, materialB);
-		textureMaterial->specularColor.setValue(materialR, materialG, materialB);
-		textureMaterial->transparency.setValue(0.0f); // Opaque
-		textureMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f); // No emissive
-		m_faceTextureMaterials[faceName] = textureMaterial;
-		textureFaceSep->addChild(textureMaterial);
-
-		// Create the textured quad face using LabelTextures vertices
-		SoIndexedFaceSet* textureQuad = new SoIndexedFaceSet;
-
-		// Add LabelTextures vertices to the shared coordinate node (unique indices for each face)
-		auto& labelVertices = m_LabelTextures[pickId].vertexArray;
-		if (labelVertices.size() >= 4) {
-			for (size_t i = 0; i < labelVertices.size(); ++i) {
-				coords->point.set1Value(currentTextureVertexIndex + i, labelVertices[i]);
-				textureQuad->coordIndex.set1Value(i, currentTextureVertexIndex + i);
-			}
-			textureQuad->coordIndex.set1Value(labelVertices.size(), -1);
-			currentTextureVertexIndex += labelVertices.size(); // Update for next face
-			LOG_INF_S("Added texture quad for " + faceName + " with " + std::to_string(labelVertices.size()) + " vertices");
-		} else {
-			LOG_WRN_S("LabelTextures for " + faceName + " has insufficient vertices: " + std::to_string(labelVertices.size()));
-		}
-
-		// Only add texture coordinates and quad if we have valid vertices
-		if (labelVertices.size() >= 4) {
-			// Set up texture coordinates
-			SoTextureCoordinate2* texCoords = new SoTextureCoordinate2;
-			texCoords->point.set1Value(0, 0.0f, 0.0f); // bottom-left
-			texCoords->point.set1Value(1, 1.0f, 0.0f); // bottom-right
-			texCoords->point.set1Value(2, 1.0f, 1.0f); // top-right
-			texCoords->point.set1Value(3, 0.0f, 1.0f); // top-left
-			textureFaceSep->addChild(texCoords);
-
-			// Set texture coordinate indices for the quad
-			textureQuad->textureCoordIndex.set1Value(0, 0); // bottom-left
-			textureQuad->textureCoordIndex.set1Value(1, 1); // bottom-right
-			textureQuad->textureCoordIndex.set1Value(2, 2); // top-right
-			textureQuad->textureCoordIndex.set1Value(3, 3); // top-left
-			textureQuad->textureCoordIndex.set1Value(4, -1);
-
-			textureFaceSep->addChild(textureQuad);
-			cubeAssembly->addChild(textureFaceSep);
-		}
-
-		// Store texture separator for later texture replacement
-		m_faceSeparators[faceName + "_Texture"] = textureFaceSep;
+	if (geometryResult.geometryRoot) {
+		m_root->addChild(geometryResult.geometryRoot);
 	}
 
-	m_root->addChild(cubeAssembly);
+	// Note: Outlines are now drawn per-face in the builder
 
-
-	// Note: Outlines are now drawn per-face in createFaceFromVertices()
-	// No global outline needed since each face has its own outline
-	
 	// Generate and cache all textures after geometry setup
 	LOG_INF_S("=== TEXTURE SYSTEM CHECK ===");
 	LOG_INF_S("m_showTextures: " + std::string(m_showTextures ? "true" : "false"));
@@ -1055,7 +405,7 @@ void CuteNavCube::setupGeometry() {
 	if (m_showTextures) {
 		LOG_INF_S("Starting texture generation...");
 		if (m_textureGenerator) {
-			m_textureGenerator->initializeFontSizes(); // Initialize font sizes first
+			m_textureGenerator->initializeFontSizes();
 			m_textureGenerator->generateAndCacheTextures();
 			applyInitialTextures();
 		}
@@ -1068,50 +418,42 @@ void CuteNavCube::setupGeometry() {
 	LOG_INF_S("=== RHOMBICUBOCTAHEDRON INDIVIDUAL FACES CREATED ===");
 	LOG_INF_S("Geometry: 26 independent faces (FreeCAD-style), each with its own separator and material");
 
-	// Reuse the totalVertices count from earlier
 	int mainFaces = 0, cornerFaces = 0, edgeFaces = 0;
 	std::map<ShapeId, int> vertexCounts;
 
-	// Recalculate total vertices
 	int recalculatedTotalVertices = 0;
 	for (const auto& pair : m_Faces) {
-		recalculatedTotalVertices += pair.second.vertexArray.size();
-		vertexCounts[pair.second.type] += pair.second.vertexArray.size();
+		recalculatedTotalVertices += static_cast<int>(pair.second.vertexArray.size());
+		vertexCounts[pair.second.type] += static_cast<int>(pair.second.vertexArray.size());
 		switch (pair.second.type) {
-			case ShapeId::Main: mainFaces++; break;
-			case ShapeId::Corner: cornerFaces++; break;
-			case ShapeId::Edge: edgeFaces++; break;
+		case ShapeId::Main: mainFaces++; break;
+		case ShapeId::Corner: cornerFaces++; break;
+		case ShapeId::Edge: edgeFaces++; break;
 		}
 	}
 
 	int totalTextureVertices = 0;
 	for (const auto& pair : m_LabelTextures) {
-		totalTextureVertices += pair.second.vertexArray.size();
+		totalTextureVertices += static_cast<int>(pair.second.vertexArray.size());
 	}
 
 	LOG_INF_S("Face counts - Main: " + std::to_string(mainFaces) + ", Corner: " + std::to_string(cornerFaces) + ", Edge: " + std::to_string(edgeFaces));
 	LOG_INF_S("Vertex counts - Main: " + std::to_string(vertexCounts[ShapeId::Main]) +
-			  ", Corner: " + std::to_string(vertexCounts[ShapeId::Corner]) +
-			  ", Edge: " + std::to_string(vertexCounts[ShapeId::Edge]) + " (total: " + std::to_string(recalculatedTotalVertices) + ")");
+		", Corner: " + std::to_string(vertexCounts[ShapeId::Corner]) +
+		", Edge: " + std::to_string(vertexCounts[ShapeId::Edge]) + " (total: " + std::to_string(recalculatedTotalVertices) + ")");
 	LOG_INF_S("Individual faces: " + std::to_string(recalculatedTotalVertices) + " vertices, 26 independent faces (FreeCAD-style)");
 	LOG_INF_S("Texture quads: " + std::to_string(totalTextureVertices) + " texture vertices for " + std::to_string(m_showTextures ? 6 : 0) + " main face overlays");
 	LOG_INF_S("Total geometry: " + std::to_string(recalculatedTotalVertices + totalTextureVertices) + " vertices, 26 independent faces + 6 texture quads");
 
-	// Validation checks
 	bool valid = true;
 	LOG_INF_S("=== VALIDATION CHECKS ===");
 	LOG_INF_S("Face counts - Main: " + std::to_string(mainFaces) + "/6, Corner: " + std::to_string(cornerFaces) + "/8, Edge: " + std::to_string(edgeFaces) + "/12");
 	LOG_INF_S("Vertex counts - Main: " + std::to_string(vertexCounts[ShapeId::Main]) + "/48, Corner: " + std::to_string(vertexCounts[ShapeId::Corner]) + "/48, Edge: " + std::to_string(vertexCounts[ShapeId::Edge]) + "/48");
 
-	// Debug: Check individual face vertex counts
-	LOG_INF_S("=== INDIVIDUAL FACE VERTEX COUNTS ===");
 	std::vector<PickId> debugFaceIds = {
-		// Main faces (6)
 		PickId::Top, PickId::Front, PickId::Left, PickId::Rear, PickId::Right, PickId::Bottom,
-		// Corner faces (8)
 		PickId::FrontTopRight, PickId::FrontTopLeft, PickId::FrontBottomRight, PickId::FrontBottomLeft,
 		PickId::RearTopRight, PickId::RearTopLeft, PickId::RearBottomRight, PickId::RearBottomLeft,
-		// Edge faces (12)
 		PickId::FrontTop, PickId::RearTop, PickId::TopLeft, PickId::TopRight,
 		PickId::FrontBottom, PickId::RearBottom, PickId::BottomLeft, PickId::BottomRight,
 		PickId::FrontRight, PickId::FrontLeft, PickId::RearLeft, PickId::RearRight
@@ -1119,7 +461,7 @@ void CuteNavCube::setupGeometry() {
 
 	for (PickId faceId : debugFaceIds) {
 		if (m_Faces.count(faceId) > 0) {
-			int vertexCount = m_Faces[faceId].vertexArray.size();
+			int vertexCount = static_cast<int>(m_Faces[faceId].vertexArray.size());
 			std::string shapeStr = (m_Faces[faceId].type == ShapeId::Main) ? "Main" : (m_Faces[faceId].type == ShapeId::Corner) ? "Corner" : "Edge";
 			LOG_INF_S("Face " + std::to_string(static_cast<int>(faceId)) + " (" + shapeStr + "): " + std::to_string(vertexCount) + " vertices");
 		}

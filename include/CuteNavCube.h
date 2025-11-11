@@ -17,6 +17,7 @@
 #include <Eigen/Dense>
 #include <vector>
 
+#include "NavigationCubeGeometryBuilder.h"
 #include "NavigationCubeTypes.h" // For ShapeId and PickId enums
 
 class NavigationCubeTextureGenerator;
@@ -68,7 +69,6 @@ public:
 
 private:
 	void setupGeometry();
-	void addCubeFace(const SbVec3f& x, const SbVec3f& z, ShapeId shapeType, PickId pickId, float rotZ = 0.0f);
 	std::string pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize);
 	void updateCameraRotation();
 	void updateSeparatorMaterials(SoSeparator* sep);
@@ -83,23 +83,15 @@ private:
 	SoTexture2* createTextureForFace(const std::string& faceName, bool isHover);  // Helper to create a texture
 	void applyInitialTextures();
 
+	using FaceData = NavigationCubeGeometryBuilder::FaceData;
+	using LabelTextureData = NavigationCubeGeometryBuilder::LabelTextureData;
+
 	// Texture cache entry
 	struct TextureData {
 		unsigned char* data;
 		int width, height;
 		TextureData(unsigned char* d, int w, int h) : data(d), width(w), height(h) {}
 		~TextureData() { delete[] data; }
-	};
-
-	struct FaceData {
-		FaceData() : type(ShapeId::Main) {}
-		ShapeId type;
-		SbRotation rotation;
-		std::vector<SbVec3f> vertexArray;
-	};
-
-	struct LabelTextureData {
-		std::vector<SbVec3f> vertexArray;
 	};
 
 	SoSeparator* m_root;

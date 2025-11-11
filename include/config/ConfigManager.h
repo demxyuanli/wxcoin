@@ -33,6 +33,7 @@ public:
 	std::string getConfigFilePath() const;
 	std::vector<std::string> getSections();
 	std::vector<std::string> getKeys(const std::string& section);
+	bool isInitialized() const { return initialized; }
 };
 
 #endif // CONFIG_MANAGER_H

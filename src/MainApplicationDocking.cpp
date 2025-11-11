@@ -1,22 +1,18 @@
 #include <wx/wx.h>
 #include <wx/display.h>
-#include <cstdio>
-#include <string>
-#include <algorithm>
+
 #include "MainApplication.h"
 #include "config/ConfigManager.h"
-#include "config/LoggerConfig.h"
 #include "config/ConstantsConfig.h"
-#include "logger/Logger.h"
-#include "FlatFrameDocking.h"  // Use docking version
-#include "rendering/RenderingToolkitAPI.h"
-#include "interfaces/ISubsystemFactory.h"
+#include "config/FontManager.h"
 #include "interfaces/DefaultSubsystemFactory.h"
 #include "interfaces/ServiceLocator.h"
-#include "config/FontManager.h"
+#include "logger/Logger.h"
+#include "rendering/RenderingToolkitAPI.h"
+#include "FlatFrameDocking.h"
+#include "SplashScreen.h"
+
 #include <Inventor/SoDB.h>
-#include <Inventor/SoInput.h>
-#include <Inventor/nodes/SoSeparator.h>
 
 // Define a new app class that uses docking
 class MainApplicationDocking : public MainApplication {
@@ -28,52 +24,85 @@ wxIMPLEMENT_APP(MainApplicationDocking);
 
 bool MainApplicationDocking::OnInit()
 {
+	ConfigManager& cm = ConfigManager::getInstance();
+	bool initialConfigLoaded = cm.initialize("");
+
+	SplashScreen splash;
+	size_t stageProgress = 0;
+
+	if (initialConfigLoaded) {
+		splash.ReloadFromConfig(stageProgress);
+	}
+
+	auto showStageMessage = [&](const char* fallback) {
+		if (!splash.ShowNextConfiguredMessage()) {
+			splash.ShowMessage(wxString::FromUTF8(fallback));
+		}
+		++stageProgress;
+	};
+
 	// Initialize Coin3D first - this must happen before any SoBase-derived objects are created
+	showStageMessage("Initializing Coin3D...");
 	try {
 		SoDB::init();
 		LOG_INF("Coin3D initialized successfully", "MainApplicationDocking");
 	}
 	catch (const std::exception& e) {
+		splash.Finish();
 		wxMessageBox("Failed to initialize Coin3D library: " + wxString(e.what()), "Initialization Error", wxOK | wxICON_ERROR);
 		return false;
 	}
 
 	// Initialize rendering toolkit
+	showStageMessage("Initializing rendering toolkit...");
 	try {
 		if (!RenderingToolkitAPI::initialize()) {
+			splash.Finish();
 			wxMessageBox("Failed to initialize rendering toolkit", "Initialization Error", wxOK | wxICON_ERROR);
 			return false;
 		}
 		LOG_INF("Rendering toolkit initialized successfully", "MainApplicationDocking");
 	}
 	catch (const std::exception& e) {
+		splash.Finish();
 		wxMessageBox("Failed to initialize rendering toolkit: " + wxString(e.what()), "Initialization Error", wxOK | wxICON_ERROR);
 		return false;
 	}
 
 	// Set default subsystem factory (can be replaced by tests or other compositions)
+	showStageMessage("Configuring subsystem factory...");
 	static DefaultSubsystemFactory s_factory;
 	ServiceLocator::setFactory(&s_factory);
 
-	ConfigManager& cm = ConfigManager::getInstance();
-	// Try to initialize with config/config.ini first
-	if (!cm.initialize("")) {
-		// If that fails, try ./config.ini
-		if (!cm.initialize("./config.ini")) {
+	showStageMessage("Loading configuration...");
+	if (!cm.isInitialized()) {
+		bool configInitialized = cm.initialize("");
+		if (!configInitialized) {
+			configInitialized = cm.initialize("./config.ini");
+		}
+		if (!configInitialized) {
+			splash.Finish();
 			wxMessageBox("Cannot find config.ini in config/ or current directory",
 				"Configuration Error", wxOK | wxICON_ERROR);
 			return false;
+		}
+		else {
+			splash.ReloadFromConfig(stageProgress);
 		}
 	}
 
 	ConstantsConfig::getInstance().initialize(cm);
 
 	// Initialize FontManager after ConfigManager
+	showStageMessage("Initializing font subsystem...");
 	FontManager& fontManager = FontManager::getInstance();
 	if (!fontManager.initialize("config/config.ini")) { // Pass the path to config.ini
+		splash.Finish();
 		wxMessageBox("Failed to initialize font manager", "Initialization Error", wxOK | wxICON_ERROR);
 		return false;
 	}
+
+	showStageMessage("Preparing user interface...");
 
 	// Create main frame with docking system
 	FlatFrameDocking* frame = new FlatFrameDocking("CAD Navigator - Docking Edition",
@@ -85,8 +114,11 @@ bool MainApplicationDocking::OnInit()
 	wxRect screenRect = display.GetGeometry();
 	frame->Centre();
 
+	showStageMessage("Starting application...");
 	frame->Show(true);
 	SetTopWindow(frame);
+
+	splash.Finish();
 
 	LOG_INF("Application started with docking system", "MainApplicationDocking");
 

@@ -8,6 +8,7 @@ set(NAVIGATION_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/CuteNavCube.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCubeTextureGenerator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCubeConfigDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/NavigationCubeGeometryBuilder.cpp
 )
 
 set(NAVIGATION_HEADERS
@@ -20,6 +21,7 @@ set(NAVIGATION_HEADERS
     ${CMAKE_SOURCE_DIR}/include/NavigationCubeTextureGenerator.h
     ${CMAKE_SOURCE_DIR}/include/NavigationCubeTypes.h
     ${CMAKE_SOURCE_DIR}/include/NavigationCubeConfigDialog.h
+    ${CMAKE_SOURCE_DIR}/include/NavigationCubeGeometryBuilder.h
 )
 
 # Create navigation static library
