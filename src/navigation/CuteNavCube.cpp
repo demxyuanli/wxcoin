@@ -276,37 +276,37 @@ void CuteNavCube::initialize() {
 
 	// Face normal vectors and center points for camera positioning
 	m_faceNormals = {
-		// 6 Main faces
-		{ "FRONT",  std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0, 1)) },      // +Z axis
-		{ "REAR",  std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0, -1)) },    // -Z axis
+		// 6 Main faces - corrected to match FreeCAD coordinate convention
+		{ "FRONT",  std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0, -1, 0)) },    // -Y axis (towards viewer)
+		{ "REAR",   std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0, 1, 0)) },     // +Y axis (away from viewer)
 		{ "LEFT",   std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-1, 0, 0)) },   // -X axis
 		{ "RIGHT",  std::make_pair(SbVec3f(1, 0, 0), SbVec3f(1, 0, 0)) },    // +X axis
-		{ "TOP",    std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0, 1, 0)) },    // +Y axis
-		{ "BOTTOM", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0, -1, 0)) },   // -Y axis
+		{ "TOP",    std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0, 1)) },    // +Z axis (up)
+		{ "BOTTOM", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0, -1)) },   // -Z axis (down)
 
 		// 8 Corner faces (using closest main face normal)
-		{ "Corner0", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(-0.707, 0.707, 0.707)) },  // Front-Top-Left
-		{ "Corner1", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0.707, 0.707, 0.707)) },   // Front-Top-Right
-		{ "Corner2", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0.707, 0.707, -0.707)) },  // Back-Top-Right
-		{ "Corner3", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(-0.707, 0.707, -0.707)) }, // Back-Top-Left
-		{ "Corner4", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(-0.707, -0.707, 0.707)) }, // Front-Bottom-Left
-		{ "Corner5", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0.707, -0.707, 0.707)) },  // Front-Bottom-Right
-		{ "Corner6", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0.707, -0.707, -0.707)) }, // Back-Bottom-Right
-		{ "Corner7", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(-0.707, -0.707, -0.707)) }, // Back-Bottom-Left
+		{ "Corner0", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(-0.707, 0.707, 0.707)) },  // Front-Top-Left -> Front normal
+		{ "Corner1", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0.707, 0.707, 0.707)) },   // Front-Top-Right -> Front normal
+		{ "Corner2", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0.707, 0.707, -0.707)) },   // Back-Top-Right -> Rear normal
+		{ "Corner3", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(-0.707, 0.707, -0.707)) },  // Back-Top-Left -> Rear normal
+		{ "Corner4", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(-0.707, -0.707, 0.707)) }, // Front-Bottom-Left -> Front normal
+		{ "Corner5", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0.707, -0.707, 0.707)) },  // Front-Bottom-Right -> Front normal
+		{ "Corner6", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0.707, -0.707, -0.707)) },  // Back-Bottom-Right -> Rear normal
+		{ "Corner7", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(-0.707, -0.707, -0.707)) }, // Back-Bottom-Left -> Rear normal
 
-		// 12 Edge faces (using average of adjacent faces)
-		{ "EdgeTF", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0.707, 0.707)) },       // Top-Front
-		{ "EdgeTB", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0.707, -0.707)) },      // Top-Back
-		{ "EdgeTL", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, 0.707, 0)) },     // Top-Left
-		{ "EdgeTR", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, 0.707, 0)) },      // Top-Right
-		{ "EdgeBF", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, -0.707, 0.707)) },      // Bottom-Front
-		{ "EdgeBB", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, -0.707, -0.707)) },     // Bottom-Back
-		{ "EdgeBL", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, -0.707, 0)) },    // Bottom-Left
-		{ "EdgeBR", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, -0.707, 0)) },     // Bottom-Right
-		{ "EdgeFR", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, 0, 0.707)) },      // Front-Right
-		{ "EdgeFL", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, 0, 0.707)) },    // Front-Left
-		{ "EdgeBL2", std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-0.707, 0, -0.707)) },   // Back-Left
-		{ "EdgeBR2", std::make_pair(SbVec3f(1, 0, 0), SbVec3f(0.707, 0, -0.707)) }      // Back-Right
+		// 12 Edge faces (using closest main face normal)
+		{ "EdgeTF", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0.707, 0.707)) },       // Top-Front -> Top normal
+		{ "EdgeTB", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0.707, -0.707)) },      // Top-Back -> Top normal
+		{ "EdgeTL", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(-0.707, 0.707, 0)) },     // Top-Left -> Top normal
+		{ "EdgeTR", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0.707, 0.707, 0)) },      // Top-Right -> Top normal
+		{ "EdgeBF", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, -0.707, 0.707)) },     // Bottom-Front -> Bottom normal
+		{ "EdgeBB", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, -0.707, -0.707)) },    // Bottom-Back -> Bottom normal
+		{ "EdgeBL", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(-0.707, -0.707, 0)) },    // Bottom-Left -> Bottom normal
+		{ "EdgeBR", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0.707, -0.707, 0)) },     // Bottom-Right -> Bottom normal
+		{ "EdgeFR", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0.707, 0, 0.707)) },     // Front-Right -> Front normal
+		{ "EdgeFL", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(-0.707, 0, 0.707)) },    // Front-Left -> Front normal
+		{ "EdgeBL2", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(-0.707, 0, -0.707)) },    // Back-Left -> Rear normal
+		{ "EdgeBR2", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0.707, 0, -0.707)) }      // Back-Right -> Rear normal
 	};
 
 	if (!m_cameraAnimator) {

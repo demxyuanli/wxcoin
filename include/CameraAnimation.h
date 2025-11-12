@@ -5,6 +5,7 @@
 #include <wx/event.h>
 #include <functional>
 #include <memory>
+#include <limits>
 
 class SoCamera;
 
@@ -85,7 +86,9 @@ public:
 
     // Quick animations
     void animateToPosition(const SbVec3f& targetPosition, const SbRotation& targetRotation,
-                          float duration = 1.0f);
+                          float duration = 1.0f,
+                          float targetFocalDistance = std::numeric_limits<float>::quiet_NaN(),
+                          float targetHeight = std::numeric_limits<float>::quiet_NaN());
     void animateToBookmark(const wxString& bookmarkName, float duration = 1.5f);
 
     // Animation control
@@ -96,7 +99,7 @@ public:
     void setCamera(SoCamera* camera);
 
     // View refresh callback
-    void setViewRefreshCallback(std::function<void()> callback) { m_viewRefreshCallback = callback; }
+    void setViewRefreshCallback(std::function<void()> callback);
 
     // Animation settings
     void setDefaultDuration(float seconds) { m_defaultDuration = seconds; }

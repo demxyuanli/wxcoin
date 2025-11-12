@@ -19,6 +19,7 @@
 #include "utils/PerformanceBus.h"
 #include "logger/Logger.h"
 #include <map>
+#include <cmath>
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
@@ -36,6 +37,8 @@
 #include <Inventor/nodes/SoDirectionalLight.h>
 #include "rendering/RenderingToolkitAPI.h"
 #include <chrono>
+#include "CameraAnimation.h"
+#include "config/ConfigManager.h"
 
 SceneManager::SceneManager(Canvas* canvas)
 	: m_canvas(canvas)
@@ -47,6 +50,8 @@ SceneManager::SceneManager(Canvas* canvas)
 	, m_isPerspectiveCamera(true)
 	, m_cullingEnabled(true)
 	, m_lastCullingUpdateValid(false)
+	, m_enableViewAnimation(true)
+	, m_viewAnimationDuration(0.2f)
 {
 	LOG_INF_S("SceneManager initializing");
 
@@ -89,6 +94,27 @@ bool SceneManager::initScene() {
 		SbRotation s_rotation(s_defaultDir, s_viewDir);
 		m_camera->orientation.setValue(s_rotation);
 		m_sceneRoot->addChild(m_camera);
+
+		ConfigManager& configManager = ConfigManager::getInstance();
+		m_enableViewAnimation = configManager.getBool("NavigationCube", "EnableAnimation", true);
+		m_viewAnimationDuration = static_cast<float>(configManager.getDouble("NavigationCube", "MenuAnimationDuration", 0.3));
+		if (m_viewAnimationDuration <= 0.0f) {
+			m_viewAnimationDuration = 0.3f;
+		}
+
+		auto& navigationAnimator = NavigationAnimator::getInstance();
+		navigationAnimator.setCamera(m_camera);
+		navigationAnimator.setAnimationType(CameraAnimation::SMOOTH);
+		navigationAnimator.setViewRefreshCallback([this]() {
+			if (!m_canvas) {
+				return;
+			}
+			if (m_canvas->getRefreshManager()) {
+				m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
+			} else {
+				m_canvas->Refresh(true);
+			}
+		});
 
 		// Set a light model to enable proper lighting calculation
 		// Place on scene root (not inside lightRoot) so the lighting model applies globally to subsequent nodes
@@ -186,12 +212,19 @@ void SceneManager::cleanup() {
 	}
 }
 
-void SceneManager::resetView() {
+void SceneManager::resetView(bool animate) {
 	if (!m_camera || !m_sceneRoot) {
 		LOG_ERR_S("Failed to reset view: Invalid camera or scene");
 		return;
 	}
 
+	bool shouldAnimate = animate && m_enableViewAnimation;
+	CameraAnimation::CameraState originalState;
+	if (shouldAnimate) {
+		originalState = captureCameraState();
+	}
+
+	// Apply default orientation and fit scene
 	m_camera->position.setValue(5.0f, -5.0f, 5.0f);
 	SbVec3f r_position = m_camera->position.getValue();
 	SbVec3f r_viewDir(-r_position[0], -r_position[1], -r_position[2]);
@@ -200,19 +233,53 @@ void SceneManager::resetView() {
 	SbRotation r_rotation(r_defaultDir, r_viewDir);
 	m_camera->orientation.setValue(r_rotation);
 	m_camera->focalDistance.setValue(8.66f);
+	if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+		SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
+		orthoCam->height.setValue(8.66f);
+	}
 
 	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
-
 	m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
+
+	CameraAnimation::CameraState targetState;
+	if (shouldAnimate) {
+		targetState = captureCameraState();
+	}
 
 	// Update scene bounds and clipping planes dynamically
 	updateSceneBounds(); // This will call updateCameraClippingPlanes() automatically
 
-	if (m_canvas->getRefreshManager()) {
-		m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
-	}
-	else {
-		m_canvas->Refresh(true);
+	if (shouldAnimate) {
+		// Restore original camera state before starting animation
+		m_camera->position.setValue(originalState.position);
+		m_camera->orientation.setValue(originalState.rotation);
+
+		if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
+			auto* perspCam = static_cast<SoPerspectiveCamera*>(m_camera);
+			perspCam->focalDistance.setValue(originalState.focalDistance);
+		} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+			auto* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
+			orthoCam->focalDistance.setValue(originalState.focalDistance);
+			orthoCam->height.setValue(originalState.height);
+		}
+
+		auto& animator = NavigationAnimator::getInstance();
+		animator.stopCurrentAnimation();
+		animator.setCamera(m_camera);
+		animator.setAnimationType(CameraAnimation::SMOOTH);
+		animator.animateToPosition(
+			targetState.position,
+			targetState.rotation,
+			m_viewAnimationDuration,
+			targetState.focalDistance,
+			targetState.height);
+	} else {
+		if (m_canvas->getRefreshManager()) {
+			m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
+		}
+		else {
+			m_canvas->Refresh(true);
+		}
 	}
 }
 
@@ -270,55 +337,107 @@ void SceneManager::setView(const std::string& viewName) {
 		return;
 	}
 
-	// Define view directions (direction, up vector)
-	std::map<std::string, std::pair<SbVec3f, SbVec3f>> viewDirections = {
-		{ "Top", { SbVec3f(0, 0, -1), SbVec3f(0, 1, 0) } },
-		{ "Bottom", { SbVec3f(0, 0, 1), SbVec3f(0, 1, 0) } },
-		{ "Front", { SbVec3f(0, -1, 0), SbVec3f(0, 0, 1) } },
-		{ "Back", { SbVec3f(0, 1, 0), SbVec3f(0, 0, 1) } },
-		{ "Left", { SbVec3f(-1, 0, 0), SbVec3f(0, 0, 1) } },
-		{ "Right", { SbVec3f(1, 0, 0), SbVec3f(0, 0, 1) } },
-		{ "Isometric", { SbVec3f(1, 1, 1), SbVec3f(0, 0, 1) } }
+	// Define camera positions on a circle around the origin for orbital rotation effect
+	static const std::map<std::string, SbVec3f> viewDirections = {
+		{ "Top", SbVec3f(0, 0, -1) },
+		{ "Bottom", SbVec3f(0, 0, 1) },
+		{ "Front", SbVec3f(0, -1, 0) },
+		{ "Back", SbVec3f(0, 1, 0) },
+		{ "Left", SbVec3f(-1, 0, 0) },
+		{ "Right", SbVec3f(1, 0, 0) },
+		{ "Isometric", SbVec3f(1, 1, 1) }
 	};
 
-	auto it = viewDirections.find(viewName);
-	if (it == viewDirections.end()) {
+	// Define camera directions on a sphere for orbital camera movement
+	// Each pair contains: (camera_direction_from_center, rotation_to_look_at_center)
+	// Camera position = center + direction * distance, camera looks toward center
+	static const std::map<std::string, std::pair<SbVec3f, SbRotation>> viewPositions = {
+		{ "Top", {SbVec3f(0, 0, 1), SbRotation::identity()} },                    // From +Z, look toward origin (-Z direction), no rotation needed
+		{ "Bottom", {SbVec3f(0, 0, -1), SbRotation(SbVec3f(1, 0, 0), M_PI)} },   // From -Z, look toward origin (+Z direction), rotate 180° around X
+		{ "Front", {SbVec3f(0, 1, 0), SbRotation(SbVec3f(1, 0, 0), -M_PI/2)} },  // From +Y, look toward origin (-Y direction), rotate -90° around X
+		{ "Back", {SbVec3f(0, -1, 0), SbRotation(SbVec3f(1, 0, 0), M_PI/2)} },   // From -Y, look toward origin (+Y direction), rotate +90° around X
+		{ "Left", {SbVec3f(-1, 0, 0), SbRotation(SbVec3f(0, 1, 0), -M_PI/2)} },  // From -X, look toward origin (+X direction), rotate -90° around Y
+		{ "Right", {SbVec3f(1, 0, 0), SbRotation(SbVec3f(0, 1, 0), M_PI/2)} },   // From +X, look toward origin (-X direction), rotate +90° around Y
+		{ "Isometric", {SbVec3f(0.577f, 0.577f, 0.577f), SbRotation(SbVec3f(0.577f, 0.577f, -0.577f), SbVec3f(0, 0, -1))} } // From (1,1,1), look at origin
+	};
+
+	auto positionIt = viewPositions.find(viewName);
+	if (positionIt == viewPositions.end()) {
 		LOG_WRN_S("Invalid view name: " + viewName);
 		return;
 	}
 
-	const auto& [direction, up] = it->second;
+	const auto& [direction, orientation] = positionIt->second;
 
-	// Set camera orientation
-	SbRotation rotation(SbVec3f(0, 0, -1), direction);
-	m_camera->orientation.setValue(rotation);
+	// Preserve original camera state so we can animate from it
+	CameraAnimation::CameraState originalState = captureCameraState();
 
-	// Always ensure we have a reasonable default position regardless of scene content
-	float defaultDistance = 10.0f;
-	m_camera->position.setValue(direction * defaultDistance);
-	m_camera->focalDistance.setValue(defaultDistance);
-
-	// Get scene bounding box from the entire scene root, not just object root
-	SoGetBoundingBoxAction bboxAction(SbViewportRegion(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y));
+	wxSize clientSize = m_canvas ? m_canvas->GetClientSize() : wxSize(1, 1);
+	SoGetBoundingBoxAction bboxAction(SbViewportRegion(clientSize.x, clientSize.y));
 	bboxAction.apply(m_sceneRoot);
 	SbBox3f bbox = bboxAction.getBoundingBox();
-
 	if (!bbox.isEmpty()) {
 		SbVec3f center = bbox.getCenter();
 		float radius = (bbox.getMax() - bbox.getMin()).length() / 2.0f;
+		if (radius < 2.0f) {
+			radius = 2.0f;
+		}
 
-		// Ensure minimum radius for consistency
-		if (radius < 2.0f) radius = 2.0f;
+		// Calculate camera position on a sphere around the center for orbital rotation effect
+		float cameraDistance = radius * 2.5f; // Increased distance for better orbital effect
+		SbVec3f cameraDirection = direction; // direction is already normalized
+		SbVec3f cameraPosition = center + cameraDirection * cameraDistance;
 
-		m_camera->position.setValue(center + direction * (radius * 2.0f));
-		m_camera->focalDistance.setValue(radius * 2.0f);
+		// Set camera position and orientation for orbital movement
+		m_camera->position.setValue(cameraPosition);
+		m_camera->pointAt(center); // Automatically orient camera to look at center
+		m_camera->focalDistance.setValue(cameraDistance);
+
+		if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+			static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(radius * 2.0f);
+		}
 	}
 
-	// View the entire scene root, not just object root
-	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
-	m_camera->viewAll(m_sceneRoot, viewport, 1.1f); // 1.1 factor to add some margin
+	SbViewportRegion viewport(clientSize.x, clientSize.y);
+	m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
 
-	// Update clipping planes based on scene bounds
+	// Capture resulting state as animation target
+	CameraAnimation::CameraState targetState = captureCameraState();
+
+	// Restore original state prior to animation/direct application
+	m_camera->position.setValue(originalState.position);
+	m_camera->orientation.setValue(originalState.rotation);
+	if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
+		static_cast<SoPerspectiveCamera*>(m_camera)->focalDistance.setValue(originalState.focalDistance);
+	} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+		SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
+		orthoCam->focalDistance.setValue(originalState.focalDistance);
+		orthoCam->height.setValue(originalState.height);
+	}
+
+	if (m_enableViewAnimation) {
+		auto& animator = NavigationAnimator::getInstance();
+		animator.stopCurrentAnimation();
+		animator.setCamera(m_camera);
+		animator.setAnimationType(CameraAnimation::SMOOTH);
+		animator.animateToPosition(
+			targetState.position,
+			targetState.rotation,
+			m_viewAnimationDuration,
+			targetState.focalDistance,
+			targetState.height);
+	} else {
+		m_camera->position.setValue(targetState.position);
+		m_camera->orientation.setValue(targetState.rotation);
+		if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
+			static_cast<SoPerspectiveCamera*>(m_camera)->focalDistance.setValue(targetState.focalDistance);
+		} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+			SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
+			orthoCam->focalDistance.setValue(targetState.focalDistance);
+			orthoCam->height.setValue(targetState.height);
+		}
+	}
+
 	updateSceneBounds();
 
 	LOG_INF_S("Switched to view: " + viewName);
@@ -329,6 +448,27 @@ void SceneManager::setView(const std::string& viewName) {
 	else {
 		m_canvas->Refresh(true);
 	}
+}
+
+CameraAnimation::CameraState SceneManager::captureCameraState() const {
+	CameraAnimation::CameraState state;
+	if (!m_camera) {
+		return state;
+	}
+
+	state.position = m_camera->position.getValue();
+	state.rotation = m_camera->orientation.getValue();
+
+	if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
+		const auto* perspCam = static_cast<const SoPerspectiveCamera*>(m_camera);
+		state.focalDistance = perspCam->focalDistance.getValue();
+	} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+		const auto* orthoCam = static_cast<const SoOrthographicCamera*>(m_camera);
+		state.focalDistance = orthoCam->focalDistance.getValue();
+		state.height = orthoCam->height.getValue();
+	}
+
+	return state;
 }
 
 void SceneManager::render(const wxSize& size, bool fastMode) {

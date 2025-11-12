@@ -2,6 +2,7 @@
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "logger/Logger.h"
+#include "CameraAnimation.h"
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/SbRotation.h>
 #include <cmath>
@@ -64,6 +65,9 @@ void NavigationController::handleMouseWheel(wxMouseEvent& event) {
 }
 
 void NavigationController::rotateCamera(const wxPoint& currentPos, const wxPoint& lastPos) {
+	// Stop any ongoing camera animation when user starts manual rotation
+	NavigationAnimator::getInstance().stopCurrentAnimation();
+
 	SoCamera* camera = m_sceneManager->getCamera();
 	if (!camera) {
 		LOG_ERR_S("Cannot rotate: Invalid camera");
@@ -105,6 +109,9 @@ void NavigationController::rotateCamera(const wxPoint& currentPos, const wxPoint
 }
 
 void NavigationController::panCamera(const wxPoint& currentPos, const wxPoint& lastPos) {
+	// Stop any ongoing camera animation when user starts manual panning
+	NavigationAnimator::getInstance().stopCurrentAnimation();
+
 	SoCamera* camera = m_sceneManager->getCamera();
 	if (!camera) {
 		LOG_ERR_S("Cannot pan: Invalid camera");
@@ -123,6 +130,9 @@ void NavigationController::panCamera(const wxPoint& currentPos, const wxPoint& l
 }
 
 void NavigationController::zoomCamera(float delta) {
+	// Stop any ongoing camera animation when user starts manual zooming
+	NavigationAnimator::getInstance().stopCurrentAnimation();
+
 	SoCamera* camera = m_sceneManager->getCamera();
 	if (!camera) {
 		LOG_ERR_S("Cannot zoom: Invalid camera");
@@ -142,7 +152,11 @@ void NavigationController::zoomCamera(float delta) {
 }
 
 void NavigationController::viewAll() {
-	m_sceneManager->resetView();
+	if (!m_sceneManager) {
+		LOG_ERR_S("NavigationController::viewAll: Scene manager unavailable");
+		return;
+	}
+	m_sceneManager->resetView(true);
 }
 
 void NavigationController::viewTop() {

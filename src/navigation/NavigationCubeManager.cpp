@@ -7,6 +7,7 @@
 #include "NavigationCubeConfigDialog.h"
 #include "config/ConfigManager.h"
 #include "ViewRefreshManager.h"
+#include "CameraAnimation.h"
 #include <wx/wx.h>
 #include <Inventor/nodes/SoCamera.h>
 #include <Inventor/SbRotation.h>
@@ -129,6 +130,9 @@ void NavigationCubeManager::initCube() {
 
 		// Create camera move callback that sets navigation cube camera position and orientation
 		auto cameraMoveCallback = [this](const SbVec3f& position, const SbRotation& orientation) {
+			// Stop any ongoing main camera animation when navigation cube camera moves
+			NavigationAnimator::getInstance().stopCurrentAnimation();
+
 			// Set navigation cube camera position and orientation
 			if (m_navCube) {
 				m_navCube->setCameraPosition(position);
@@ -414,6 +418,11 @@ void NavigationCubeManager::setViewportSize(int size) {
 void NavigationCubeManager::syncCubeCameraToMain() {
 	if (!m_navCube || !m_sceneManager) {
 		LOG_WRN_S("NavigationCubeManager::syncCubeCameraToMain: Skipped: components missing");
+		return;
+	}
+
+	// Skip synchronization during camera animation to prevent conflicts
+	if (NavigationAnimator::getInstance().isAnimating()) {
 		return;
 	}
 

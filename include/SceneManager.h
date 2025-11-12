@@ -9,6 +9,7 @@
 #include <memory>
 #include "rendering/RenderingToolkitAPI.h"
 #include "interfaces/ISceneManager.h"
+#include "CameraAnimation.h"
 
 class Canvas;
 class CoordinateSystemRenderer;
@@ -24,7 +25,7 @@ public:
 	bool initScene() override;
 	void initializeScene();  // Add missing method declaration
 	void cleanup();
-	void resetView() override;
+	void resetView(bool animate = false) override;
 	void toggleCameraMode();
 	void setView(const std::string& viewName);
 	void render(const wxSize& size, bool fastMode) override;
@@ -102,4 +103,10 @@ private:
 	// Culling state
 	bool m_cullingEnabled;
 	bool m_lastCullingUpdateValid;
+
+	// View animation settings
+	bool m_enableViewAnimation;
+	float m_viewAnimationDuration;
+
+	CameraAnimation::CameraState captureCameraState() const;
 };

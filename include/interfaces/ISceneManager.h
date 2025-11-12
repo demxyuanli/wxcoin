@@ -10,7 +10,7 @@ public:
 
     virtual bool initScene() = 0;
     virtual void render(const wxSize& size, bool fastMode) = 0;
-    virtual void resetView() = 0;
+    virtual void resetView(bool animate = false) = 0;
     virtual void updateAspectRatio(const wxSize& size) = 0;
 
     virtual SoSeparator* getObjectRoot() const = 0;

@@ -205,7 +205,9 @@ NavigationAnimator::NavigationAnimator()
 
 void NavigationAnimator::animateToPosition(const SbVec3f& targetPosition,
                                          const SbRotation& targetRotation,
-                                         float duration) {
+                                         float duration,
+                                         float targetFocalDistance,
+                                         float targetHeight) {
     if (!m_camera) {
         wxLogWarning("NavigationAnimator: No camera set for animation");
         return;
@@ -228,9 +230,17 @@ void NavigationAnimator::animateToPosition(const SbVec3f& targetPosition,
     // Create end state
     CameraAnimation::CameraState endState(targetPosition, targetRotation);
 
-    // Copy focal distance/height to end state
-    endState.focalDistance = startState.focalDistance;
-    endState.height = startState.height;
+    // Apply target focal distance/height when provided
+    if (std::isnan(targetFocalDistance)) {
+        endState.focalDistance = startState.focalDistance;
+    } else {
+        endState.focalDistance = targetFocalDistance;
+    }
+    if (std::isnan(targetHeight)) {
+        endState.height = startState.height;
+    } else {
+        endState.height = targetHeight;
+    }
 
     // Start animation
     m_currentAnimation->startAnimation(startState, endState, duration);
@@ -269,7 +279,17 @@ void NavigationAnimator::setAnimationType(CameraAnimation::AnimationType type) {
     }
 }
 
+void NavigationAnimator::setViewRefreshCallback(std::function<void()> callback) {
+    m_viewRefreshCallback = callback;
+    if (m_currentAnimation) {
+        m_currentAnimation->setViewRefreshCallback(callback);
+    }
+}
+
 void NavigationAnimator::onAnimationCompleted() {
     wxLogDebug("NavigationAnimator: Animation completed");
-    // Could emit events or call additional callbacks here
+    // Call view refresh callback if set
+    if (m_viewRefreshCallback) {
+        m_viewRefreshCallback();
+    }
 }
