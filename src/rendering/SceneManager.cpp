@@ -19,7 +19,6 @@
 #include "utils/PerformanceBus.h"
 #include "logger/Logger.h"
 #include <map>
-#include <cmath>
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
@@ -337,7 +336,6 @@ void SceneManager::setView(const std::string& viewName) {
 		return;
 	}
 
-	// Define camera positions on a circle around the origin for orbital rotation effect
 	static const std::map<std::string, SbVec3f> viewDirections = {
 		{ "Top", SbVec3f(0, 0, -1) },
 		{ "Bottom", SbVec3f(0, 0, 1) },
@@ -348,29 +346,30 @@ void SceneManager::setView(const std::string& viewName) {
 		{ "Isometric", SbVec3f(1, 1, 1) }
 	};
 
-	// Define camera directions on a sphere for orbital camera movement
-	// Each pair contains: (camera_direction_from_center, rotation_to_look_at_center)
-	// Camera position = center + direction * distance, camera looks toward center
-	static const std::map<std::string, std::pair<SbVec3f, SbRotation>> viewPositions = {
-		{ "Top", {SbVec3f(0, 0, 1), SbRotation::identity()} },                    // From +Z, look toward origin (-Z direction), no rotation needed
-		{ "Bottom", {SbVec3f(0, 0, -1), SbRotation(SbVec3f(1, 0, 0), M_PI)} },   // From -Z, look toward origin (+Z direction), rotate 180° around X
-		{ "Front", {SbVec3f(0, 1, 0), SbRotation(SbVec3f(1, 0, 0), -M_PI/2)} },  // From +Y, look toward origin (-Y direction), rotate -90° around X
-		{ "Back", {SbVec3f(0, -1, 0), SbRotation(SbVec3f(1, 0, 0), M_PI/2)} },   // From -Y, look toward origin (+Y direction), rotate +90° around X
-		{ "Left", {SbVec3f(-1, 0, 0), SbRotation(SbVec3f(0, 1, 0), -M_PI/2)} },  // From -X, look toward origin (+X direction), rotate -90° around Y
-		{ "Right", {SbVec3f(1, 0, 0), SbRotation(SbVec3f(0, 1, 0), M_PI/2)} },   // From +X, look toward origin (-X direction), rotate +90° around Y
-		{ "Isometric", {SbVec3f(0.577f, 0.577f, 0.577f), SbRotation(SbVec3f(0.577f, 0.577f, -0.577f), SbVec3f(0, 0, -1))} } // From (1,1,1), look at origin
-	};
-
-	auto positionIt = viewPositions.find(viewName);
-	if (positionIt == viewPositions.end()) {
+	auto directionIt = viewDirections.find(viewName);
+	if (directionIt == viewDirections.end()) {
 		LOG_WRN_S("Invalid view name: " + viewName);
 		return;
 	}
 
-	const auto& [direction, orientation] = positionIt->second;
+	SbVec3f direction = directionIt->second;
+	if (direction.normalize() == 0.0f) {
+		LOG_WRN_S("SceneManager::setView: Direction for view '" + viewName + "' is zero vector");
+		return;
+	}
 
 	// Preserve original camera state so we can animate from it
 	CameraAnimation::CameraState originalState = captureCameraState();
+
+	// Apply temporary state to leverage Inventor's viewAll for fitting
+	SbRotation rotation(SbVec3f(0, 0, -1), direction);
+	m_camera->orientation.setValue(rotation);
+	float defaultDistance = 10.0f;
+	m_camera->position.setValue(direction * defaultDistance);
+	m_camera->focalDistance.setValue(defaultDistance);
+	if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+		static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(defaultDistance);
+	}
 
 	wxSize clientSize = m_canvas ? m_canvas->GetClientSize() : wxSize(1, 1);
 	SoGetBoundingBoxAction bboxAction(SbViewportRegion(clientSize.x, clientSize.y));
@@ -382,17 +381,8 @@ void SceneManager::setView(const std::string& viewName) {
 		if (radius < 2.0f) {
 			radius = 2.0f;
 		}
-
-		// Calculate camera position on a sphere around the center for orbital rotation effect
-		float cameraDistance = radius * 2.5f; // Increased distance for better orbital effect
-		SbVec3f cameraDirection = direction; // direction is already normalized
-		SbVec3f cameraPosition = center + cameraDirection * cameraDistance;
-
-		// Set camera position and orientation for orbital movement
-		m_camera->position.setValue(cameraPosition);
-		m_camera->pointAt(center); // Automatically orient camera to look at center
-		m_camera->focalDistance.setValue(cameraDistance);
-
+		m_camera->position.setValue(center + direction * (radius * 2.0f));
+		m_camera->focalDistance.setValue(radius * 2.0f);
 		if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
 			static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(radius * 2.0f);
 		}

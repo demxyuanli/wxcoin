@@ -313,6 +313,7 @@ void CuteNavCube::initialize() {
 		m_cameraAnimator = std::make_unique<CameraAnimation>();
 		m_cameraAnimator->setCamera(m_orthoCamera);
 		m_cameraAnimator->setAnimationType(m_animationType);
+		m_cameraAnimator->setAlignOrientationToOrbit(true);
 		m_cameraAnimator->setViewRefreshCallback([this]() {
 			if (m_refreshCallback) {
 				m_refreshCallback();

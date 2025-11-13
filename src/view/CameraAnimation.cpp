@@ -16,6 +16,8 @@ wxEND_EVENT_TABLE()
 CameraAnimation::CameraAnimation()
     : m_camera(nullptr)
     , m_animationType(SMOOTH)
+    , m_orbitCenter(0.0f, 0.0f, 0.0f)
+    , m_alignOrientationToOrbit(false)
     , m_duration(1.0f)
     , m_elapsedTime(0.0f)
     , m_isAnimating(false)
@@ -35,6 +37,14 @@ bool CameraAnimation::startAnimation(const CameraState& startState, const Camera
 
     m_startState = startState;
     m_endState = endState;
+
+    if (m_alignOrientationToOrbit) {
+        alignStateWithOrbitCenter(m_startState);
+        alignStateWithOrbitCenter(m_endState);
+    }
+
+    m_currentState = m_startState;
+
     m_duration = durationSeconds;
     m_animationType = type;
     m_elapsedTime = 0.0f;
@@ -136,16 +146,79 @@ float CameraAnimation::calculateEasing(float t) const {
     }
 }
 
+void CameraAnimation::alignStateWithOrbitCenter(CameraState& state) const {
+    SbVec3f lookDir = m_orbitCenter - state.position;
+    if (lookDir.normalize() == 0.0f) {
+        return;
+    }
+    SbVec3f defaultDir(0.0f, 0.0f, -1.0f);
+    state.rotation = SbRotation(defaultDir, lookDir);
+}
+
 CameraAnimation::CameraState CameraAnimation::interpolateStates(
     const CameraState& start, const CameraState& end, float t) const {
 
     CameraState result;
 
-    // Interpolate position
-    result.position = start.position + (end.position - start.position) * t;
+    // Interpolate position using spherical path around orbit center when possible
+    const float epsilon = 1e-5f;
+    SbVec3f startOffset = start.position - m_orbitCenter;
+    SbVec3f endOffset = end.position - m_orbitCenter;
+    float startRadius = startOffset.length();
+    float endRadius = endOffset.length();
 
-    // Interpolate rotation (spherical linear interpolation)
-    result.rotation = SbRotation::slerp(start.rotation, end.rotation, t);
+    if (startRadius > epsilon && endRadius > epsilon) {
+        SbVec3f startDir = startOffset;
+        startDir.normalize();
+        SbVec3f endDir = endOffset;
+        endDir.normalize();
+
+        float dot = startDir.dot(endDir);
+        if (dot > 1.0f) {
+            dot = 1.0f;
+        } else if (dot < -1.0f) {
+            dot = -1.0f;
+        }
+
+        SbVec3f interpolatedDir;
+        if (dot < -0.999f) {
+            // Handle nearly opposite vectors by rotating around an orthogonal axis
+            SbVec3f axis(0.0f, 0.0f, 1.0f);
+            if (std::fabs(startDir.dot(axis)) > 0.9f) {
+                axis.setValue(0.0f, 1.0f, 0.0f);
+            }
+            const float pi = 3.14159265358979323846f;
+            SbRotation halfTurn(axis, pi);
+            SbRotation identityRotation;
+            SbRotation slerpRotation = SbRotation::slerp(identityRotation, halfTurn, t);
+            interpolatedDir = startDir;
+            slerpRotation.multVec(interpolatedDir, interpolatedDir);
+        } else {
+            SbRotation rotation(startDir, endDir);
+            SbRotation identityRotation;
+            SbRotation slerpRotation = SbRotation::slerp(identityRotation, rotation, t);
+            interpolatedDir = startDir;
+            slerpRotation.multVec(interpolatedDir, interpolatedDir);
+        }
+
+        float radius = startRadius + (endRadius - startRadius) * t;
+        result.position = m_orbitCenter + interpolatedDir * radius;
+    } else {
+        result.position = start.position + (end.position - start.position) * t;
+    }
+
+    // Interpolate rotation
+    if (m_alignOrientationToOrbit) {
+        SbVec3f lookDir = m_orbitCenter - result.position;
+        if (lookDir.normalize() != 0.0f) {
+            SbVec3f defaultDir(0.0f, 0.0f, -1.0f);
+            result.rotation = SbRotation(defaultDir, lookDir);
+        } else {
+            result.rotation = SbRotation::slerp(start.rotation, end.rotation, t);
+        }
+    } else {
+        result.rotation = SbRotation::slerp(start.rotation, end.rotation, t);
+    }
 
     // Interpolate focal distance
     result.focalDistance = start.focalDistance + (end.focalDistance - start.focalDistance) * t;
@@ -196,18 +269,23 @@ NavigationAnimator::NavigationAnimator()
     : m_currentAnimation(std::make_unique<CameraAnimation>())
     , m_camera(nullptr)
     , m_defaultDuration(1.0f)
+    , m_orbitCenter(0.0f, 0.0f, 0.0f)
+    , m_alignOrientationToOrbit(true)
 {
     // Set completion callback
     m_currentAnimation->setCompletionCallback([this]() {
         onAnimationCompleted();
     });
+    m_currentAnimation->setOrbitCenter(m_orbitCenter);
+    m_currentAnimation->setAlignOrientationToOrbit(m_alignOrientationToOrbit);
 }
 
 void NavigationAnimator::animateToPosition(const SbVec3f& targetPosition,
                                          const SbRotation& targetRotation,
                                          float duration,
                                          float targetFocalDistance,
-                                         float targetHeight) {
+                                         float targetHeight,
+                                         bool alignOrientationToOrbit) {
     if (!m_camera) {
         wxLogWarning("NavigationAnimator: No camera set for animation");
         return;
@@ -243,6 +321,9 @@ void NavigationAnimator::animateToPosition(const SbVec3f& targetPosition,
     }
 
     // Start animation
+    m_currentAnimation->setOrbitCenter(m_orbitCenter);
+    m_alignOrientationToOrbit = alignOrientationToOrbit;
+    m_currentAnimation->setAlignOrientationToOrbit(m_alignOrientationToOrbit);
     m_currentAnimation->startAnimation(startState, endState, duration);
 }
 
@@ -255,7 +336,10 @@ void NavigationAnimator::animateToBookmark(const wxString& bookmarkName, float d
         return;
     }
 
-    animateToPosition(bookmark->getPosition(), bookmark->getRotation(), duration);
+    animateToPosition(bookmark->getPosition(), bookmark->getRotation(), duration,
+        std::numeric_limits<float>::quiet_NaN(),
+        std::numeric_limits<float>::quiet_NaN(),
+        false);
 }
 
 void NavigationAnimator::stopCurrentAnimation() {
@@ -276,6 +360,13 @@ void NavigationAnimator::setCamera(SoCamera* camera) {
 void NavigationAnimator::setAnimationType(CameraAnimation::AnimationType type) {
     if (m_currentAnimation) {
         m_currentAnimation->setAnimationType(type);
+    }
+}
+
+void NavigationAnimator::setOrbitCenter(const SbVec3f& center) {
+    m_orbitCenter = center;
+    if (m_currentAnimation) {
+        m_currentAnimation->setOrbitCenter(m_orbitCenter);
     }
 }
 

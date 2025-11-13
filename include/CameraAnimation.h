@@ -46,6 +46,8 @@ public:
 
     // Camera update
     void setCamera(SoCamera* camera) { m_camera = camera; }
+    void setOrbitCenter(const SbVec3f& center) { m_orbitCenter = center; }
+    void setAlignOrientationToOrbit(bool enable) { m_alignOrientationToOrbit = enable; }
     void updateCamera();
 
     // Animation parameters
@@ -56,6 +58,7 @@ private:
     void onTimer(wxTimerEvent& event);
     float calculateEasing(float t) const;
     CameraState interpolateStates(const CameraState& start, const CameraState& end, float t) const;
+    void alignStateWithOrbitCenter(CameraState& state) const;
 
     wxTimer m_timer;
     CameraState m_startState;
@@ -64,6 +67,8 @@ private:
 
     SoCamera* m_camera;
     AnimationType m_animationType;
+    SbVec3f m_orbitCenter;
+    bool m_alignOrientationToOrbit;
 
     float m_duration;
     float m_elapsedTime;
@@ -88,7 +93,8 @@ public:
     void animateToPosition(const SbVec3f& targetPosition, const SbRotation& targetRotation,
                           float duration = 1.0f,
                           float targetFocalDistance = std::numeric_limits<float>::quiet_NaN(),
-                          float targetHeight = std::numeric_limits<float>::quiet_NaN());
+                          float targetHeight = std::numeric_limits<float>::quiet_NaN(),
+                          bool alignOrientationToOrbit = true);
     void animateToBookmark(const wxString& bookmarkName, float duration = 1.5f);
 
     // Animation control
@@ -104,6 +110,7 @@ public:
     // Animation settings
     void setDefaultDuration(float seconds) { m_defaultDuration = seconds; }
     void setAnimationType(CameraAnimation::AnimationType type);
+    void setOrbitCenter(const SbVec3f& center);
 
 private:
     NavigationAnimator();
@@ -113,6 +120,8 @@ private:
     SoCamera* m_camera;
     float m_defaultDuration;
     std::function<void()> m_viewRefreshCallback;
+    SbVec3f m_orbitCenter;
+    bool m_alignOrientationToOrbit;
 
     void onAnimationCompleted();
 };
