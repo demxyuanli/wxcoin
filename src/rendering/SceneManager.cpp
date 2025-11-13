@@ -784,10 +784,10 @@ void SceneManager::updateCameraClippingPlanes() {
 	m_camera->nearDistance.setValue(optimalNear);
 	m_camera->farDistance.setValue(optimalFar);
 
-	LOG_INF_S("Updated clipping planes - Near: " + std::to_string(optimalNear) +
-	          ", Far: " + std::to_string(optimalFar) +
-	          ", Scene radius: " + std::to_string(sceneRadius) +
-	          ", Camera dist to scene: " + std::to_string(cameraDist));
+	// LOG_INF_S("Updated clipping planes - Near: " + std::to_string(optimalNear) +
+	//           ", Far: " + std::to_string(optimalFar) +
+	//           ", Scene radius: " + std::to_string(sceneRadius) +
+	//           ", Camera dist to scene: " + std::to_string(cameraDist));
 }
 
 float SceneManager::getSceneBoundingBoxSize() const {

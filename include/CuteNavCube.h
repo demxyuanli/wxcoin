@@ -80,6 +80,7 @@ private:
 	void regenerateFaceTexture(const std::string& faceName, bool isHover);
 	void updateFaceMaterialColor(const std::string& faceName, bool isHover);  // FreeCAD-style direct material color update
 	void calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const;
+	std::string findFaceFromCameraDirection(const SbVec3f& cameraPos, const SbRotation& cameraOrient) const;
 	void generateAndCacheTextures();  // Generate and cache all textures at initialization
 	SoTexture2* createTextureForFace(const std::string& faceName, bool isHover);  // Helper to create a texture
 	void applyInitialTextures();
@@ -168,6 +169,7 @@ private:
 	std::map<std::string, SoMaterial*> m_faceTextureMaterials;   // Materials for texture overlays per face
 	SbColor m_normalFaceColor;                                   // Normal face color
 	SbColor m_hoverFaceColor;                                    // Hover face color
+	std::string m_lastLoggedFacing;
 	
 
 	// Texture generator

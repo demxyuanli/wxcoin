@@ -160,15 +160,22 @@ void NavigationCubeTextureGenerator::createCubeFaceTextures() {
             }
 
             image = bitmap.ConvertToImage();
+        }
 
-            // Set all pixels to fully opaque
-            if (!image.HasAlpha()) {
-                image.InitAlpha();
-            }
-            unsigned char* finalAlpha = image.GetAlpha();
-            for (int i = 0; i < texSize * texSize; i++) {
-                finalAlpha[i] = 255;
-            }
+        if (pickId == PickId::Bottom || pickId == PickId::Rear) {
+            image = image.Mirror(false);
+        } else if (pickId == PickId::Left) {
+            image = image.Rotate90(false);
+        } else if (pickId == PickId::Right) {
+            image = image.Rotate90(true);
+        }
+
+        if (!image.HasAlpha()) {
+            image.InitAlpha();
+        }
+        unsigned char* finalAlpha = image.GetAlpha();
+        for (int i = 0; i < texSize * texSize; i++) {
+            finalAlpha[i] = 255;
         }
 
         // Convert wxImage to RGBA data
@@ -179,7 +186,7 @@ void NavigationCubeTextureGenerator::createCubeFaceTextures() {
         unsigned char* rgb = image.GetData();
         unsigned char* alpha = image.GetAlpha();
 
-        for (int i = 0, j = 0, k = 0; i < texSize * texSize * 4; i += 4, j += 3, k++) {
+        for (int i = 0, j = 0; i < texSize * texSize * 4; i += 4, j += 3) {
             imageData[i] = rgb[j];
             imageData[i + 1] = rgb[j + 1];
             imageData[i + 2] = rgb[j + 2];

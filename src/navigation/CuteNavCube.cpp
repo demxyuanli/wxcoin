@@ -53,6 +53,10 @@
 #define GL_MULTISAMPLE 0x809D
 #endif
 
+namespace {
+std::string pickIdToFaceName(PickId id);
+}
+
 
 
 // Get face label for a given PickId
@@ -274,40 +278,46 @@ void CuteNavCube::initialize() {
 		{ "EdgeBR2", "Back" }        // Back-Right edge -> Back view
 	};
 
-	// Face normal vectors and center points for camera positioning
-	m_faceNormals = {
-		// 6 Main faces - corrected to match FreeCAD coordinate convention
-		{ "FRONT",  std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0, -1, 0)) },    // -Y axis (towards viewer)
-		{ "REAR",   std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0, 1, 0)) },     // +Y axis (away from viewer)
-		{ "LEFT",   std::make_pair(SbVec3f(-1, 0, 0), SbVec3f(-1, 0, 0)) },   // -X axis
-		{ "RIGHT",  std::make_pair(SbVec3f(1, 0, 0), SbVec3f(1, 0, 0)) },    // +X axis
-		{ "TOP",    std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0, 1)) },    // +Z axis (up)
-		{ "BOTTOM", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, 0, -1)) },   // -Z axis (down)
+	m_faceNormals.clear();
+	for (const auto& faceEntry : m_Faces) {
+		const auto& faceData = faceEntry.second;
+		const auto& vertices = faceData.vertexArray;
+		if (vertices.empty()) {
+			continue;
+		}
 
-		// 8 Corner faces (using closest main face normal)
-		{ "Corner0", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(-0.707, 0.707, 0.707)) },  // Front-Top-Left -> Front normal
-		{ "Corner1", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0.707, 0.707, 0.707)) },   // Front-Top-Right -> Front normal
-		{ "Corner2", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0.707, 0.707, -0.707)) },   // Back-Top-Right -> Rear normal
-		{ "Corner3", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(-0.707, 0.707, -0.707)) },  // Back-Top-Left -> Rear normal
-		{ "Corner4", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(-0.707, -0.707, 0.707)) }, // Front-Bottom-Left -> Front normal
-		{ "Corner5", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0.707, -0.707, 0.707)) },  // Front-Bottom-Right -> Front normal
-		{ "Corner6", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0.707, -0.707, -0.707)) },  // Back-Bottom-Right -> Rear normal
-		{ "Corner7", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(-0.707, -0.707, -0.707)) }, // Back-Bottom-Left -> Rear normal
+		std::string faceName = pickIdToFaceName(faceEntry.first);
+		if (faceName.empty()) {
+			continue;
+		}
 
-		// 12 Edge faces (using closest main face normal)
-		{ "EdgeTF", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0.707, 0.707)) },       // Top-Front -> Top normal
-		{ "EdgeTB", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0, 0.707, -0.707)) },      // Top-Back -> Top normal
-		{ "EdgeTL", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(-0.707, 0.707, 0)) },     // Top-Left -> Top normal
-		{ "EdgeTR", std::make_pair(SbVec3f(0, 0, 1), SbVec3f(0.707, 0.707, 0)) },      // Top-Right -> Top normal
-		{ "EdgeBF", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, -0.707, 0.707)) },     // Bottom-Front -> Bottom normal
-		{ "EdgeBB", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0, -0.707, -0.707)) },    // Bottom-Back -> Bottom normal
-		{ "EdgeBL", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(-0.707, -0.707, 0)) },    // Bottom-Left -> Bottom normal
-		{ "EdgeBR", std::make_pair(SbVec3f(0, 0, -1), SbVec3f(0.707, -0.707, 0)) },     // Bottom-Right -> Bottom normal
-		{ "EdgeFR", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(0.707, 0, 0.707)) },     // Front-Right -> Front normal
-		{ "EdgeFL", std::make_pair(SbVec3f(0, -1, 0), SbVec3f(-0.707, 0, 0.707)) },    // Front-Left -> Front normal
-		{ "EdgeBL2", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(-0.707, 0, -0.707)) },    // Back-Left -> Rear normal
-		{ "EdgeBR2", std::make_pair(SbVec3f(0, 1, 0), SbVec3f(0.707, 0, -0.707)) }      // Back-Right -> Rear normal
-	};
+		SbVec3f center(0.0f, 0.0f, 0.0f);
+		for (const auto& vertex : vertices) {
+			center += vertex;
+		}
+		center /= static_cast<float>(vertices.size());
+
+		SbVec3f normal(0.0f, 0.0f, 0.0f);
+		if (vertices.size() >= 3) {
+			SbVec3f v0 = vertices[0];
+			SbVec3f v1 = vertices[1];
+			SbVec3f v2 = vertices[2];
+			normal = (v1 - v0).cross(v2 - v0);
+		}
+
+		if (normal.sqrLength() < 1e-6f) {
+			normal = center;
+		}
+
+		if (normal.sqrLength() > 1e-6f) {
+			normal.normalize();
+			if (normal.dot(center) < 0.0f) {
+				normal = -normal;
+			}
+		}
+
+		m_faceNormals[faceName] = std::make_pair(normal, center);
+	}
 
 	if (!m_cameraAnimator) {
 		m_cameraAnimator = std::make_unique<CameraAnimation>();
@@ -329,6 +339,15 @@ void CuteNavCube::initialize() {
 				m_cameraMoveCallback(m_orthoCamera->position.getValue(), m_orthoCamera->orientation.getValue());
 			} else if (!m_pendingViewName.empty() && m_viewChangeCallback) {
 				m_viewChangeCallback(m_pendingViewName);
+			}
+			if (m_orthoCamera) {
+				std::string finalFacing = findFaceFromCameraDirection(
+					m_orthoCamera->position.getValue(),
+					m_orthoCamera->orientation.getValue());
+				if (finalFacing != m_lastLoggedFacing) {
+					LOG_INF_S("Camera final facing face: " + finalFacing);
+					m_lastLoggedFacing = finalFacing;
+				}
 			}
 			m_pendingViewName.clear();
 		});
@@ -603,10 +622,144 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 	return "";
 }
 
+namespace {
+
+SbRotation createLookAtOrientation(const SbVec3f& position, const SbVec3f& target, const SbVec3f& upHint) {
+	SbVec3f forward = target - position;
+	if (forward.sqrLength() < 1e-6f) {
+		return SbRotation::identity();
+	}
+	forward.normalize();
+
+	SbVec3f up = upHint;
+	if (up.sqrLength() < 1e-6f) {
+		up = SbVec3f(0.0f, 1.0f, 0.0f);
+	}
+	up.normalize();
+
+	SbVec3f right = forward.cross(up);
+	if (right.sqrLength() < 1e-6f) {
+		SbVec3f fallback = (std::fabs(forward[2]) < 0.99f) ? SbVec3f(0.0f, 0.0f, 1.0f) : SbVec3f(1.0f, 0.0f, 0.0f);
+		right = forward.cross(fallback);
+		if (right.sqrLength() < 1e-6f) {
+			right = SbVec3f(1.0f, 0.0f, 0.0f);
+		}
+	}
+	right.normalize();
+
+	up = right.cross(forward);
+	if (up.sqrLength() < 1e-6f) {
+		return SbRotation::identity();
+	}
+	up.normalize();
+
+	SbMatrix orientationMatrix(
+		right[0], up[0], -forward[0], 0.0f,
+		right[1], up[1], -forward[1], 0.0f,
+		right[2], up[2], -forward[2], 0.0f,
+		0.0f, 0.0f, 0.0f, 1.0f);
+
+	SbRotation orientation;
+	orientation.setValue(orientationMatrix);
+	return orientation;
+}
+
+std::string pickIdToFaceName(PickId id) {
+	switch (id) {
+	case PickId::Front: return "FRONT";
+	case PickId::Rear: return "REAR";
+	case PickId::Left: return "LEFT";
+	case PickId::Right: return "RIGHT";
+	case PickId::Top: return "TOP";
+	case PickId::Bottom: return "BOTTOM";
+	case PickId::FrontTopRight: return "Corner0";
+	case PickId::FrontTopLeft: return "Corner1";
+	case PickId::FrontBottomRight: return "Corner2";
+	case PickId::FrontBottomLeft: return "Corner3";
+	case PickId::RearTopRight: return "Corner4";
+	case PickId::RearTopLeft: return "Corner5";
+	case PickId::RearBottomRight: return "Corner6";
+	case PickId::RearBottomLeft: return "Corner7";
+	case PickId::FrontTop: return "EdgeTF";
+	case PickId::RearTop: return "EdgeTB";
+	case PickId::TopLeft: return "EdgeTL";
+	case PickId::TopRight: return "EdgeTR";
+	case PickId::FrontBottom: return "EdgeBF";
+	case PickId::RearBottom: return "EdgeBB";
+	case PickId::BottomLeft: return "EdgeBL";
+	case PickId::BottomRight: return "EdgeBR";
+	case PickId::FrontRight: return "EdgeFR";
+	case PickId::FrontLeft: return "EdgeFL";
+	case PickId::RearLeft: return "EdgeBL2";
+	case PickId::RearRight: return "EdgeBR2";
+	default:
+		return "";
+	}
+}
+
+} // namespace
+
+// Helper function to find which face the camera is actually looking at
+std::string CuteNavCube::findFaceFromCameraDirection(const SbVec3f& cameraPos, const SbRotation& cameraOrient) const {
+	SbVec3f direction = cameraPos;
+	if (direction.sqrLength() < 1e-6f) {
+		// Fallback to orientation if position is not informative
+		SbVec3f localForward(0.0f, 0.0f, -1.0f);
+		SbMatrix orientMatrix;
+		cameraOrient.getValue(orientMatrix);
+		orientMatrix.multDirMatrix(localForward, direction);
+	}
+
+	if (direction.sqrLength() < 1e-6f) {
+		direction = SbVec3f(0.0f, 0.0f, 1.0f);
+	}
+
+	direction.normalize();
+
+	// Find the face whose center direction is closest to the camera position direction
+	std::string closestFace = "";
+	float maxDot = -1.0f;
+
+	for (const auto& pair : m_faceNormals) {
+		SbVec3f faceDir = pair.second.second;
+		if (faceDir.sqrLength() < 1e-6f) {
+			faceDir = pair.second.first;
+		}
+		if (faceDir.sqrLength() < 1e-6f) {
+			continue;
+		}
+		faceDir.normalize();
+
+		float dot = direction.dot(faceDir);
+		if (dot > maxDot) {
+			maxDot = dot;
+			closestFace = pair.first;
+		}
+	}
+
+	return closestFace;
+}
+
 // Calculate camera position based on clicked face
 void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const {
+	LOG_INF_S("=== calculateCameraPositionForFace ===");
+	LOG_INF_S("Clicked face: " + faceName);
+
 	// Handle main faces (6 faces) - use standard positioning
 	static const std::set<std::string> mainFaces = {"FRONT", "REAR", "LEFT", "RIGHT", "TOP", "BOTTOM"};
+	static const std::set<std::string> edgeFaces = {
+		"EdgeTF", "EdgeTB", "EdgeTL", "EdgeTR",
+		"EdgeBF", "EdgeBB", "EdgeBL", "EdgeBR",
+		"EdgeFR", "EdgeFL", "EdgeBL2", "EdgeBR2",
+		"FrontTop", "FrontBottom", "RearBottom", "RearTop",
+		"RearRight", "FrontRight", "FrontLeft", "RearLeft",
+		"TopLeft", "TopRight", "BottomRight", "BottomLeft"
+	};
+	static const std::set<std::string> cornerFaces = {
+		"Corner0", "Corner1", "Corner2", "Corner3",
+		"Corner4", "Corner5", "Corner6", "Corner7"
+	};
+
 	if (mainFaces.find(faceName) != mainFaces.end()) {
 		auto it = m_faceNormals.find(faceName);
 		if (it != m_faceNormals.end()) {
@@ -615,7 +768,7 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 
 			// Camera position: move back along the normal direction by camera distance
 			float distance = m_cameraDistance * 1.5f;
-			position = center - normal * distance;
+			position = center + normal * distance;
 
 			// Camera orientation: look at the center point
 			SbVec3f upVector = SbVec3f(0, 1, 0); // Default up vector
@@ -624,55 +777,54 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 				upVector = SbVec3f(1, 0, 0);
 			}
 
-			SbVec3f direction = center - position;
-			orientation.setValue(SbVec3f(0, 0, -1), direction);
+			orientation = createLookAtOrientation(position, center, upVector);
+			
+			LOG_INF_S("Main face calculation - Position: (" + 
+				std::to_string(position[0]) + ", " + 
+				std::to_string(position[1]) + ", " + 
+				std::to_string(position[2]) + "), Center: (" +
+				std::to_string(center[0]) + ", " +
+				std::to_string(center[1]) + ", " +
+				std::to_string(center[2]) + ")");
 			return;
 		}
 	}
 
-	// Handle edge faces (12 faces) - calculate position to view the edge
-	static const std::map<std::string, std::pair<SbVec3f, SbVec3f>> edgeFacePositions = {
-		{ "EdgeTF", std::make_pair(SbVec3f(0, 0.5, 1.2), SbVec3f(0, -1, 0)) },   // Top-Front edge: look down at front-top
-		{ "EdgeTB", std::make_pair(SbVec3f(0, 0.5, -1.2), SbVec3f(0, -1, 0)) },  // Top-Back edge: look down at back-top
-		{ "EdgeTL", std::make_pair(SbVec3f(-1.2, 0.5, 0), SbVec3f(1, 0, 0)) },  // Top-Left edge: look right at top-left
-		{ "EdgeTR", std::make_pair(SbVec3f(1.2, 0.5, 0), SbVec3f(-1, 0, 0)) },  // Top-Right edge: look left at top-right
-		{ "EdgeBF", std::make_pair(SbVec3f(0, -0.5, 1.2), SbVec3f(0, 1, 0)) },   // Bottom-Front edge: look up at bottom-front
-		{ "EdgeBB", std::make_pair(SbVec3f(0, -0.5, -1.2), SbVec3f(0, 1, 0)) },  // Bottom-Back edge: look up at bottom-back
-		{ "EdgeBL", std::make_pair(SbVec3f(-1.2, -0.5, 0), SbVec3f(1, 0, 0)) },  // Bottom-Left edge: look right at bottom-left
-		{ "EdgeBR", std::make_pair(SbVec3f(1.2, -0.5, 0), SbVec3f(-1, 0, 0)) },  // Bottom-Right edge: look left at bottom-right
-		{ "EdgeFR", std::make_pair(SbVec3f(1.2, 0, 1), SbVec3f(-1, 0, 0)) },    // Front-Right edge: look left at front-right
-		{ "EdgeFL", std::make_pair(SbVec3f(-1.2, 0, 1), SbVec3f(1, 0, 0)) },    // Front-Left edge: look right at front-left
-		{ "EdgeBL2", std::make_pair(SbVec3f(-1.2, 0, -1), SbVec3f(1, 0, 0)) },   // Back-Left edge: look right at back-left
-		{ "EdgeBR2", std::make_pair(SbVec3f(1.2, 0, -1), SbVec3f(-1, 0, 0)) }    // Back-Right edge: look left at back-right
-	};
+	auto normalIt = m_faceNormals.find(faceName);
+	if (normalIt != m_faceNormals.end()) {
+		const SbVec3f& storedNormal = normalIt->second.first;
+		const SbVec3f& faceCenter = normalIt->second.second;
 
-	auto edgeIt = edgeFacePositions.find(faceName);
-	if (edgeIt != edgeFacePositions.end()) {
-		position = edgeIt->second.first;
-		SbVec3f upVector = edgeIt->second.second;
-		SbVec3f direction = -position; // Look at origin
-		orientation.setValue(upVector, direction);
-		return;
-	}
+		SbVec3f viewDirection = faceCenter;
+		if (viewDirection.sqrLength() < 1e-6f) {
+			viewDirection = storedNormal;
+		}
+		if (viewDirection.sqrLength() < 1e-6f) {
+			viewDirection = SbVec3f(0.0f, 0.0f, 1.0f);
+		}
+		viewDirection.normalize();
 
-	// Handle corner faces (8 faces) - calculate position to view the corner
-	static const std::map<std::string, std::pair<SbVec3f, SbVec3f>> cornerFacePositions = {
-		{ "Corner0", std::make_pair(SbVec3f(-1.2, 1.2, 1.2), SbVec3f(0, 0, -1)) },  // Front-Top-Left: look towards origin
-		{ "Corner1", std::make_pair(SbVec3f(1.2, 1.2, 1.2), SbVec3f(0, 0, -1)) },   // Front-Top-Right: look towards origin
-		{ "Corner2", std::make_pair(SbVec3f(1.2, 1.2, -1.2), SbVec3f(0, 0, 1)) },   // Back-Top-Right: look towards origin
-		{ "Corner3", std::make_pair(SbVec3f(-1.2, 1.2, -1.2), SbVec3f(0, 0, 1)) },  // Back-Top-Left: look towards origin
-		{ "Corner4", std::make_pair(SbVec3f(-1.2, -1.2, 1.2), SbVec3f(0, 0, -1)) }, // Front-Bottom-Left: look towards origin
-		{ "Corner5", std::make_pair(SbVec3f(1.2, -1.2, 1.2), SbVec3f(0, 0, -1)) },  // Front-Bottom-Right: look towards origin
-		{ "Corner6", std::make_pair(SbVec3f(1.2, -1.2, -1.2), SbVec3f(0, 0, 1)) },  // Back-Bottom-Right: look towards origin
-		{ "Corner7", std::make_pair(SbVec3f(-1.2, -1.2, -1.2), SbVec3f(0, 0, 1)) }  // Back-Bottom-Left: look towards origin
-	};
+		float distanceMultiplier = 1.7f;
+		if (cornerFaces.find(faceName) != cornerFaces.end()) {
+			distanceMultiplier = 2.0f;
+		} else if (edgeFaces.find(faceName) != edgeFaces.end()) {
+			distanceMultiplier = 1.8f;
+		}
 
-	auto cornerIt = cornerFacePositions.find(faceName);
-	if (cornerIt != cornerFacePositions.end()) {
-		position = cornerIt->second.first;
-		SbVec3f upVector = cornerIt->second.second;
-		SbVec3f direction = -position; // Look at origin
-		orientation.setValue(upVector, direction);
+		float distance = m_cameraDistance * distanceMultiplier;
+		position = viewDirection * distance;
+		orientation = createLookAtOrientation(position, faceCenter, SbVec3f(0.0f, 1.0f, 0.0f));
+		
+		LOG_INF_S("Edge/Corner face calculation - Position: (" + 
+			std::to_string(position[0]) + ", " + 
+			std::to_string(position[1]) + ", " + 
+			std::to_string(position[2]) + "), FaceCenter: (" +
+			std::to_string(faceCenter[0]) + ", " +
+			std::to_string(faceCenter[1]) + ", " +
+			std::to_string(faceCenter[2]) + "), ViewDirection: (" +
+			std::to_string(viewDirection[0]) + ", " +
+			std::to_string(viewDirection[1]) + ", " +
+			std::to_string(viewDirection[2]) + ")");
 		return;
 	}
 
@@ -753,6 +905,9 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 		// Update hover state using direct material color switching (FreeCAD-style)
 		if (hoveredFace != m_hoveredFace) {
+			if (!m_hoveredFace.empty()) {
+				LOG_INF_S("Hover leave face: " + m_hoveredFace);
+			}
 			// Restore previous face color
 			if (!m_hoveredFace.empty()) {
 				updateFaceMaterialColor(m_hoveredFace, false);
@@ -761,6 +916,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 			// Set new hovered face color
 			if (!hoveredFace.empty()) {
 				updateFaceMaterialColor(hoveredFace, true);
+				LOG_INF_S("Hover enter face: " + hoveredFace);
 			}
 
 			m_hoveredFace = hoveredFace;
@@ -776,6 +932,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 	if (event.Leaving()) {
 		if (!m_hoveredFace.empty()) {
 			updateFaceMaterialColor(m_hoveredFace, false);
+			LOG_INF_S("Hover leave face: " + m_hoveredFace);
 			m_hoveredFace = "";
 		}
 		return true; // Mouse leaving is always handled
@@ -803,10 +960,46 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 				std::string region = pickRegion(pickPos, viewportSize);
 				if (!region.empty()) {
+					LOG_INF_S("=== FACE CLICK DETECTED ===");
+					LOG_INF_S("Clicked face ID: " + region);
+
+					std::string currentFacing;
+					if (m_orthoCamera) {
+						currentFacing = findFaceFromCameraDirection(
+							m_orthoCamera->position.getValue(),
+							m_orthoCamera->orientation.getValue());
+						LOG_INF_S("Current camera facing face at click: " + currentFacing);
+						m_lastLoggedFacing = currentFacing;
+					}
+
 					// Calculate camera position for clicked face
 					SbVec3f cameraPos;
 					SbRotation cameraOrient;
 					calculateCameraPositionForFace(region, cameraPos, cameraOrient);
+
+					// Find which face the camera is actually looking at
+					std::string actualFacingFace = findFaceFromCameraDirection(cameraPos, cameraOrient);
+					LOG_INF_S("Camera will face towards: " + actualFacingFace);
+					
+					if (region != actualFacingFace) {
+						LOG_WRN_S("MISMATCH: Clicked face (" + region + ") != Camera facing face (" + actualFacingFace + ")");
+					} else {
+						LOG_INF_S("MATCH: Clicked face matches camera facing face");
+					}
+
+					if (!currentFacing.empty() && currentFacing == region) {
+						LOG_INF_S("Click target already aligned with current camera face, skipping rotation.");
+						if (m_cameraMoveCallback) {
+							m_cameraMoveCallback(m_orthoCamera->position.getValue(), m_orthoCamera->orientation.getValue());
+						} else if (m_viewChangeCallback) {
+							m_viewChangeCallback(region);
+						}
+						if (!currentFacing.empty() && currentFacing != m_lastLoggedFacing) {
+							LOG_INF_S("Camera final facing face: " + currentFacing);
+							m_lastLoggedFacing = currentFacing;
+						}
+						return true;
+					}
 
 					// Get the mapped view name for logging
 					auto viewIt = m_faceToView.find(region);
@@ -1138,6 +1331,15 @@ void CuteNavCube::startCameraAnimation(const SbVec3f& position, const SbRotation
 		} else if (m_viewChangeCallback) {
 			m_viewChangeCallback(faceName);
 		}
+		if (m_orthoCamera) {
+			m_orthoCamera->position.setValue(position);
+			m_orthoCamera->orientation.setValue(orientation);
+			std::string finalFacing = findFaceFromCameraDirection(position, orientation);
+			if (finalFacing != m_lastLoggedFacing) {
+				LOG_INF_S("Camera final facing face: " + finalFacing);
+				m_lastLoggedFacing = finalFacing;
+			}
+		}
 		return;
 	}
 
@@ -1147,6 +1349,11 @@ void CuteNavCube::startCameraAnimation(const SbVec3f& position, const SbRotation
 			m_cameraMoveCallback(position, orientation);
 		} else if (m_viewChangeCallback) {
 			m_viewChangeCallback(faceName);
+		}
+		std::string finalFacing = findFaceFromCameraDirection(position, orientation);
+		if (finalFacing != m_lastLoggedFacing) {
+			LOG_INF_S("Camera final facing face: " + finalFacing);
+			m_lastLoggedFacing = finalFacing;
 		}
 		return;
 	}
@@ -1175,6 +1382,13 @@ void CuteNavCube::startCameraAnimation(const SbVec3f& position, const SbRotation
 			m_cameraMoveCallback(position, orientation);
 		} else if (m_viewChangeCallback) {
 			m_viewChangeCallback(faceName);
+		}
+		orthoCam->position.setValue(position);
+		orthoCam->orientation.setValue(orientation);
+		std::string finalFacing = findFaceFromCameraDirection(position, orientation);
+		if (finalFacing != m_lastLoggedFacing) {
+			LOG_INF_S("Camera final facing face: " + finalFacing);
+			m_lastLoggedFacing = finalFacing;
 		}
 	}
 }
