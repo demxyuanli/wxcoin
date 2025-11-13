@@ -18,14 +18,15 @@ enum class ButtonDisplayStyle {
 	ICON_TEXT_BELOW
 };
 
-enum class ButtonType {
-	NORMAL,         // Standard button
-	TOGGLE,         // Toggle button (on/off state)
-	CHECKBOX,       // Checkbox
-	RADIO,          // Radio button (part of radio group)
-	CHOICE,         // Choice/dropdown control
-	SEPARATOR       // Visual separator
-};
+	enum class ButtonType {
+		NORMAL,         // Standard button
+		TOGGLE,         // Toggle button (on/off state)
+		CHECKBOX,       // Checkbox
+		RADIO,          // Radio button (part of radio group)
+		TOGGLE_GROUP,   // Toggle button that belongs to a mutually exclusive group
+		CHOICE,         // Choice/dropdown control
+		SEPARATOR       // Visual separator
+	};
 
 class FlatUIButtonBar : public FlatUIThemeAware
 {
@@ -65,6 +66,7 @@ public:
 		bool checked = false;               // For toggle, checkbox, radio
 		bool enabled = true;                // Control enabled/disabled state
 		int radioGroup = -1;                // Radio button group ID (-1 means no group)
+		int toggleGroup = -1;               // Toggle group ID (-1 means no group)
 		wxArrayString choiceItems;          // Items for choice control
 		int selectedChoice = -1;            // Selected item index for choice control
 		wxString value;                     // Current value (for complex controls)
@@ -100,10 +102,12 @@ public:
 	void AddToggleButton(int id, const wxString& label, bool initialState = false, const wxBitmap& bitmap = wxNullBitmap, const wxString& tooltip = wxEmptyString);
 	void AddCheckBox(int id, const wxString& label, bool initialState = false, const wxString& tooltip = wxEmptyString);
 	void AddRadioButton(int id, const wxString& label, int radioGroup, bool initialState = false, const wxString& tooltip = wxEmptyString);
+	void AddToggleGroupButton(int id, const wxString& label, int toggleGroup, bool initialState = false, const wxBitmap& bitmap = wxNullBitmap, const wxString& tooltip = wxEmptyString);
 
 	// SVG icon methods for theme-aware icons
 	void AddButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, wxMenu* menu = nullptr, const wxString& tooltip = wxEmptyString);
 	void AddToggleButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, bool initialState = false, const wxString& tooltip = wxEmptyString);
+	void AddToggleGroupButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, int toggleGroup, bool initialState = false, const wxString& tooltip = wxEmptyString);
 	void SetButtonSVGIcon(int id, const wxString& iconName, const wxSize& iconSize);
 	void AddChoiceControl(int id, const wxString& label, const wxArrayString& choices, int initialSelection = 0, const wxString& tooltip = wxEmptyString);
 	void AddSeparator();
@@ -126,6 +130,8 @@ public:
 	// Radio button group management
 	void SetRadioGroupSelection(int radioGroup, int selectedId);
 	int GetRadioGroupSelection(int radioGroup) const;
+	void SetToggleGroupSelection(int toggleGroup, int selectedId);
+	int GetToggleGroupSelection(int toggleGroup) const;
 
 	// Button value and properties
 	void SetButtonValue(int id, const wxString& value);
@@ -230,6 +236,7 @@ public:
 	void HandleToggleButton(ButtonInfo& button);
 	void HandleCheckBox(ButtonInfo& button);
 	void HandleRadioButton(ButtonInfo& button);
+	void HandleToggleGroupButton(ButtonInfo& button);
 	void HandleChoiceControl(ButtonInfo& button, const wxPoint& mousePos);
 
 private:
@@ -275,6 +282,7 @@ private:
 
 	// Radio button group tracking
 	std::map<int, std::vector<int>> m_radioGroups; // radioGroup -> button IDs
+	std::map<int, std::vector<int>> m_toggleGroups; // toggleGroup -> button IDs
 
 protected:
 	int m_topMargin = 0;

@@ -482,147 +482,218 @@ void OCCGeometryMesh::buildCoinRepresentation(
     }
     m_coinNode->addChild(hints);
 
-    // ===== Draw style =====
-    SoDrawStyle* drawStyle = new SoDrawStyle();
-    drawStyle->style = context.display.wireframeMode ? SoDrawStyle::LINES : SoDrawStyle::FILLED;
-    drawStyle->lineWidth = context.display.wireframeMode ? static_cast<float>(context.display.wireframeWidth) : 0.0f;
-    m_coinNode->addChild(drawStyle);
+    auto createDrawStyleNode = [&](const GeometryRenderContext& ctx) {
+        SoDrawStyle* node = new SoDrawStyle();
+        node->style = ctx.display.wireframeMode ? SoDrawStyle::LINES : SoDrawStyle::FILLED;
+        node->lineWidth = ctx.display.wireframeMode ? static_cast<float>(ctx.display.wireframeWidth) : 0.0f;
+        return node;
+    };
 
-    // ===== Material =====
-    SoMaterial* material = new SoMaterial();
-    if (context.display.wireframeMode) {
-        // Wireframe mode: use configured wireframe color
-        const Quantity_Color& wColor = context.display.wireframeColor;
-        material->diffuseColor.setValue(
-            static_cast<float>(wColor.Red()),
-            static_cast<float>(wColor.Green()),
-            static_cast<float>(wColor.Blue())
-        );
-        material->transparency.setValue(static_cast<float>(context.material.transparency));
-    }
-    else if (context.display.displayMode == RenderingConfig::DisplayMode::NoShading) {
-        // NoShading mode: uniform color with BASE_COLOR lighting model - use diffuse color directly
-        material->diffuseColor.setValue(0.8f, 0.8f, 0.8f); // Uniform gray color
-        material->ambientColor.setValue(0.0f, 0.0f, 0.0f);  // No ambient contribution
-        material->specularColor.setValue(0.0f, 0.0f, 0.0f); // No specular
-        material->emissiveColor.setValue(0.0f, 0.0f, 0.0f); // No emissive (BASE_COLOR uses diffuse)
-        material->shininess.setValue(0.0f); // No shininess
-        material->transparency.setValue(static_cast<float>(context.material.transparency));
-
-        LOG_INF_S("OCCGeometryMesh: Applied NoShading material (BASE_COLOR model with diffuse color)");
-    }
-    else {
-        // Solid mode: use material colors with enhancement
-        Standard_Real r, g, b;
-        
-        // Enhanced ambient color (increase by 50%)
-        context.material.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->ambientColor.setValue(
-            static_cast<float>(r * 1.5),
-            static_cast<float>(g * 1.5),
-            static_cast<float>(b * 1.5)
-        );
-        
-        // Slightly reduce diffuse (reduce by 20%)
-        context.material.diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->diffuseColor.setValue(
-            static_cast<float>(r * 0.8),
-            static_cast<float>(g * 0.8),
-            static_cast<float>(b * 0.8)
-        );
-        
-        // Keep specular unchanged
-        context.material.specularColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->specularColor.setValue(
-            static_cast<float>(r),
-            static_cast<float>(g),
-            static_cast<float>(b)
-        );
-        
-        material->shininess.setValue(static_cast<float>(context.material.shininess / 100.0));
-        
-        // Hide faces when requested
-        double appliedTransparency = context.display.facesVisible ? context.material.transparency : 1.0;
-        material->transparency.setValue(static_cast<float>(appliedTransparency));
-        
-        // Emissive color
-        context.material.emissiveColor.Values(r, g, b, Quantity_TOC_RGB);
-        material->emissiveColor.setValue(
-            static_cast<float>(r),
-            static_cast<float>(g),
-            static_cast<float>(b)
-        );
-    }
-    m_coinNode->addChild(material);
-
-    // ===== Texture support =====
-    if (context.texture.enabled && !context.texture.imagePath.empty()) {
-        std::ifstream fileCheck(context.texture.imagePath);
-        if (!fileCheck.good()) {
-            LOG_WRN_S("Texture file not found: " + context.texture.imagePath);
-        } else {
-            fileCheck.close();
-            try {
-                SoTexture2* texture = new SoTexture2();
-                texture->filename.setValue(context.texture.imagePath.c_str());
-                
-                // Set texture mode
-                switch (context.texture.mode) {
-                    case RenderingConfig::TextureMode::Replace:
-                        texture->model.setValue(SoTexture2::DECAL);
-                        break;
-                    case RenderingConfig::TextureMode::Modulate:
-                        texture->model.setValue(SoTexture2::MODULATE);
-                        break;
-                    case RenderingConfig::TextureMode::Blend:
-                        texture->model.setValue(SoTexture2::BLEND);
-                        break;
-                    default:
-                        texture->model.setValue(SoTexture2::DECAL);
-                        break;
-                }
-                
-                m_coinNode->addChild(texture);
-                m_coinNode->addChild(new SoTextureCoordinate2());
-            }
-            catch (const std::exception& e) {
-                LOG_ERR_S("Exception loading texture: " + std::string(e.what()));
-            }
+    auto createMaterialNode = [&](const GeometryRenderContext& ctx) {
+        SoMaterial* node = new SoMaterial();
+        if (ctx.display.wireframeMode) {
+            const Quantity_Color& wColor = ctx.display.wireframeColor;
+            node->diffuseColor.setValue(
+                static_cast<float>(wColor.Red()),
+                static_cast<float>(wColor.Green()),
+                static_cast<float>(wColor.Blue())
+            );
+            node->transparency.setValue(static_cast<float>(ctx.material.transparency));
         }
-    }
+        else if (ctx.display.displayMode == RenderingConfig::DisplayMode::NoShading) {
+            node->diffuseColor.setValue(0.8f, 0.8f, 0.8f);
+            node->ambientColor.setValue(0.0f, 0.0f, 0.0f);
+            node->specularColor.setValue(0.0f, 0.0f, 0.0f);
+            node->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
+            node->shininess.setValue(0.0f);
+            node->transparency.setValue(static_cast<float>(ctx.material.transparency));
+        }
+        else {
+            Standard_Real r, g, b;
+            ctx.material.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
+            node->ambientColor.setValue(
+                static_cast<float>(r * 1.5),
+                static_cast<float>(g * 1.5),
+                static_cast<float>(b * 1.5)
+            );
 
-    // ===== Blend settings =====
-    if (context.blend.blendMode != RenderingConfig::BlendMode::None && context.material.transparency > 0.0) {
+            ctx.material.diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
+            node->diffuseColor.setValue(
+                static_cast<float>(r * 0.8),
+                static_cast<float>(g * 0.8),
+                static_cast<float>(b * 0.8)
+            );
+
+            ctx.material.specularColor.Values(r, g, b, Quantity_TOC_RGB);
+            node->specularColor.setValue(
+                static_cast<float>(r),
+                static_cast<float>(g),
+                static_cast<float>(b)
+            );
+
+            node->shininess.setValue(static_cast<float>(ctx.material.shininess / 100.0));
+            double appliedTransparency = ctx.display.facesVisible ? ctx.material.transparency : 1.0;
+            node->transparency.setValue(static_cast<float>(appliedTransparency));
+
+            ctx.material.emissiveColor.Values(r, g, b, Quantity_TOC_RGB);
+            node->emissiveColor.setValue(
+                static_cast<float>(r),
+                static_cast<float>(g),
+                static_cast<float>(b)
+            );
+        }
+        return node;
+    };
+
+    auto appendTextureNodes = [&](const GeometryRenderContext& ctx) {
+        if (!ctx.texture.enabled || ctx.texture.imagePath.empty()) {
+            return;
+        }
+
+        std::ifstream fileCheck(ctx.texture.imagePath);
+        if (!fileCheck.good()) {
+            LOG_WRN_S("Texture file not found: " + ctx.texture.imagePath);
+            return;
+        }
+
+        fileCheck.close();
+        try {
+            SoTexture2* texture = new SoTexture2();
+            texture->filename.setValue(ctx.texture.imagePath.c_str());
+
+            switch (ctx.texture.mode) {
+                case RenderingConfig::TextureMode::Replace:
+                    texture->model.setValue(SoTexture2::DECAL);
+                    break;
+                case RenderingConfig::TextureMode::Modulate:
+                    texture->model.setValue(SoTexture2::MODULATE);
+                    break;
+                case RenderingConfig::TextureMode::Blend:
+                    texture->model.setValue(SoTexture2::BLEND);
+                    break;
+                default:
+                    texture->model.setValue(SoTexture2::DECAL);
+                    break;
+            }
+
+            m_coinNode->addChild(texture);
+            m_coinNode->addChild(new SoTextureCoordinate2());
+        }
+        catch (const std::exception& e) {
+            LOG_ERR_S("Exception loading texture: " + std::string(e.what()));
+        }
+    };
+
+    auto appendBlendHints = [&](const GeometryRenderContext& ctx) {
+        if (ctx.blend.blendMode == RenderingConfig::BlendMode::None || ctx.material.transparency <= 0.0) {
+            return;
+        }
+
         SoShapeHints* blendHints = new SoShapeHints();
         blendHints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
         blendHints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
         m_coinNode->addChild(blendHints);
-    }
+    };
 
-    // ===== Add shape geometry =====
-    if (context.display.wireframeMode) {
-        createWireframeRepresentation(shape, params);
-    } else {
+    auto appendSurfaceGeometry = [&](const GeometryRenderContext& ctx) {
         auto& manager = RenderingToolkitAPI::getManager();
         auto backend = manager.getRenderBackend("Coin3D");
-        if (backend) {
-            // Determine if faces should be visible
-            bool shouldShowFaces = context.display.facesVisible;
-            if (context.display.showPointView) {
-                // When point view is enabled, faces visibility depends on showSolidWithPointView
-                shouldShowFaces = shouldShowFaces && context.display.showSolidWithPointView;
-            }
-
-            auto sceneNode = backend->createSceneNode(shape, params, context.display.selected,
-                context.material.diffuseColor, context.material.ambientColor,
-                context.material.specularColor, context.material.emissiveColor,
-                context.material.shininess, context.material.transparency);
-            if (sceneNode && shouldShowFaces) {
-                SoSeparator* meshNode = sceneNode.get();
-                meshNode->ref();
-                m_coinNode->addChild(meshNode);
-            }
+        if (!backend) {
+            return;
         }
+
+        bool shouldShowFaces = ctx.display.facesVisible;
+        if (ctx.display.showPointView) {
+            shouldShowFaces = shouldShowFaces && ctx.display.showSolidWithPointView;
+        }
+
+        auto sceneNode = backend->createSceneNode(shape, params, ctx.display.selected,
+            ctx.material.diffuseColor, ctx.material.ambientColor,
+            ctx.material.specularColor, ctx.material.emissiveColor,
+            ctx.material.shininess, ctx.material.transparency);
+        if (sceneNode && shouldShowFaces) {
+            SoSeparator* meshNode = sceneNode.get();
+            meshNode->ref();
+            m_coinNode->addChild(meshNode);
+        }
+    };
+
+    auto appendSurfacePass = [&](const GeometryRenderContext& ctx) {
+        m_coinNode->addChild(createDrawStyleNode(ctx));
+        m_coinNode->addChild(createMaterialNode(ctx));
+        appendTextureNodes(ctx);
+        appendBlendHints(ctx);
+        appendSurfaceGeometry(ctx);
+    };
+
+    auto appendWireframePass = [&](const GeometryRenderContext& ctx) {
+        m_coinNode->addChild(createDrawStyleNode(ctx));
+        m_coinNode->addChild(createMaterialNode(ctx));
+        createWireframeRepresentation(shape, params);
+    };
+
+    const RenderingConfig::DisplayMode displayMode = context.display.displayMode;
+
+    switch (displayMode) {
+    case RenderingConfig::DisplayMode::Wireframe: {
+        if (context.display.facesVisible) {
+            GeometryRenderContext surfaceContext = context;
+            surfaceContext.display.wireframeMode = false;
+            surfaceContext.display.displayMode = RenderingConfig::DisplayMode::NoShading;
+            surfaceContext.display.facesVisible = true;
+            surfaceContext.texture.enabled = false;
+            surfaceContext.material.ambientColor = Quantity_Color(0.1, 0.1, 0.1, Quantity_TOC_RGB);
+            surfaceContext.material.diffuseColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+            surfaceContext.material.specularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+            surfaceContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+            surfaceContext.material.shininess = 0.0;
+
+            appendSurfacePass(surfaceContext);
+        }
+
+        GeometryRenderContext wireContext = context;
+        wireContext.display.wireframeMode = true;
+        wireContext.display.facesVisible = false;
+        appendWireframePass(wireContext);
+        break;
+    }
+    case RenderingConfig::DisplayMode::SolidWireframe: {
+        GeometryRenderContext surfaceContext = context;
+        surfaceContext.display.wireframeMode = false;
+        appendSurfacePass(surfaceContext);
+
+        GeometryRenderContext wireContext = context;
+        wireContext.display.wireframeMode = true;
+        wireContext.display.facesVisible = false;
+        wireContext.display.displayMode = RenderingConfig::DisplayMode::Wireframe;
+        appendWireframePass(wireContext);
+        break;
+    }
+    case RenderingConfig::DisplayMode::HiddenLine: {
+        GeometryRenderContext surfaceContext = context;
+        surfaceContext.display.wireframeMode = false;
+        surfaceContext.display.displayMode = RenderingConfig::DisplayMode::NoShading;
+        surfaceContext.display.facesVisible = true;
+        surfaceContext.texture.enabled = false;
+        surfaceContext.material.ambientColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+        surfaceContext.material.diffuseColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+        surfaceContext.material.specularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        surfaceContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        surfaceContext.material.shininess = 0.0;
+        appendSurfacePass(surfaceContext);
+
+        GeometryRenderContext wireContext = context;
+        wireContext.display.wireframeMode = true;
+        wireContext.display.facesVisible = false;
+        wireContext.display.displayMode = RenderingConfig::DisplayMode::Wireframe;
+        appendWireframePass(wireContext);
+        break;
+    }
+    default: {
+        GeometryRenderContext surfaceContext = context;
+        appendSurfacePass(surfaceContext);
+        break;
+    }
     }
 
     // ===== Point view rendering =====

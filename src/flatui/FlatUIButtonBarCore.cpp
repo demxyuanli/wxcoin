@@ -158,6 +158,32 @@ void FlatUIButtonBar::AddToggleButtonWithSVG(int id, const wxString& label, cons
 	Refresh();
 }
 
+void FlatUIButtonBar::AddToggleGroupButtonWithSVG(int id, const wxString& label, const wxString& iconName, const wxSize& iconSize, int toggleGroup, bool initialState, const wxString& tooltip) {
+	ButtonInfo button(id, ButtonType::TOGGLE_GROUP);
+	button.label = label;
+	button.iconName = iconName;
+	button.iconSize = iconSize;
+	button.icon = SvgIconManager::GetInstance().GetIconBitmap(iconName, iconSize);
+	button.toggleGroup = toggleGroup;
+	button.checked = initialState;
+	button.tooltip = tooltip;
+
+	if (toggleGroup >= 0) {
+		for (auto& existingButton : m_buttons) {
+			if (existingButton.type == ButtonType::TOGGLE_GROUP && existingButton.toggleGroup == toggleGroup) {
+				if (initialState) {
+					existingButton.checked = false;
+				}
+			}
+		}
+		m_toggleGroups[toggleGroup].push_back(id);
+	}
+
+	m_buttons.push_back(button);
+	RecalculateLayout();
+	Refresh();
+}
+
 void FlatUIButtonBar::SetButtonSVGIcon(int id, const wxString& iconName, const wxSize& iconSize) {
 	ButtonInfo* button = FindButton(id);
 	if (button) {

@@ -44,6 +44,10 @@ void FlatUIButtonBar::AddRadioButton(int id, const wxString& label, int radioGro
 		}
 	}
 
+	if (radioGroup >= 0) {
+		m_radioGroups[radioGroup].push_back(id);
+	}
+
 	m_buttons.push_back(button);
 	RecalculateLayout();
 	Refresh();
@@ -64,18 +68,48 @@ void FlatUIButtonBar::AddChoiceControl(int id, const wxString& label, const wxAr
 	Refresh();
 }
 
+void FlatUIButtonBar::AddToggleGroupButton(int id, const wxString& label, int toggleGroup, bool initialState, const wxBitmap& bitmap, const wxString& tooltip) {
+	ButtonInfo button(id, ButtonType::TOGGLE_GROUP);
+	button.label = label;
+	button.icon = bitmap;
+	button.toggleGroup = toggleGroup;
+	button.checked = initialState;
+	button.tooltip = tooltip;
+
+	if (toggleGroup >= 0) {
+		for (auto& existingButton : m_buttons) {
+			if (existingButton.type == ButtonType::TOGGLE_GROUP && existingButton.toggleGroup == toggleGroup) {
+				if (initialState) {
+					existingButton.checked = false;
+				}
+			}
+		}
+		m_toggleGroups[toggleGroup].push_back(id);
+	}
+
+	m_buttons.push_back(button);
+	RecalculateLayout();
+	Refresh();
+}
+
 // Control state management
 void FlatUIButtonBar::SetButtonChecked(int id, bool checked) {
 	ButtonInfo* button = FindButton(id);
 	if (button && (button->type == ButtonType::TOGGLE ||
 		button->type == ButtonType::CHECKBOX ||
-		button->type == ButtonType::RADIO)) {
-		if (button->type == ButtonType::RADIO && checked && button->radioGroup >= 0) {
-			// Uncheck all other radio buttons in the same group
-			for (auto& otherButton : m_buttons) {
-				if (otherButton.type == ButtonType::RADIO &&
-					otherButton.radioGroup == button->radioGroup) {
-					otherButton.checked = false;
+		button->type == ButtonType::RADIO ||
+		button->type == ButtonType::TOGGLE_GROUP)) {
+		if ((button->type == ButtonType::RADIO || button->type == ButtonType::TOGGLE_GROUP) && checked) {
+			const int groupId = (button->type == ButtonType::RADIO) ? button->radioGroup : button->toggleGroup;
+			if (groupId >= 0) {
+				for (auto& otherButton : m_buttons) {
+					const bool sameGroup = (otherButton.type == button->type) &&
+						((button->type == ButtonType::RADIO && otherButton.radioGroup == groupId) ||
+							(button->type == ButtonType::TOGGLE_GROUP && otherButton.toggleGroup == groupId));
+
+					if (sameGroup) {
+						otherButton.checked = false;
+					}
 				}
 			}
 		}
@@ -178,6 +212,24 @@ int FlatUIButtonBar::GetRadioGroupSelection(int radioGroup) const {
 	return -1;
 }
 
+void FlatUIButtonBar::SetToggleGroupSelection(int toggleGroup, int selectedId) {
+	for (auto& button : m_buttons) {
+		if (button.type == ButtonType::TOGGLE_GROUP && button.toggleGroup == toggleGroup) {
+			button.checked = (button.id == selectedId);
+		}
+	}
+	Refresh();
+}
+
+int FlatUIButtonBar::GetToggleGroupSelection(int toggleGroup) const {
+	for (const auto& button : m_buttons) {
+		if (button.type == ButtonType::TOGGLE_GROUP && button.toggleGroup == toggleGroup && button.checked) {
+			return button.id;
+		}
+	}
+	return -1;
+}
+
 // Button value and properties
 void FlatUIButtonBar::SetButtonValue(int id, const wxString& value) {
 	ButtonInfo* button = FindButton(id);
@@ -207,15 +259,12 @@ void FlatUIButtonBar::DrawToggleButton(wxDC& dc, const ButtonInfo& button, const
 	bool isHovered = m_hoverEffectsEnabled && FindButtonIndex(button.id) == m_hoveredButtonIndex;
 	bool isPressed = button.pressed;
 
-	// Use different colors for toggled state
+	// Use consistent colours with standard toggle buttons
 	wxColour bgColour;
 	if (button.customBgColor.IsOk()) {
 		bgColour = button.customBgColor;
 	}
-	else if (button.checked) {
-		bgColour = m_buttonPressedBgColour; // Use pressed color for checked state
-	}
-	else if (isPressed) {
+	else if (button.checked || isPressed) {
 		bgColour = m_buttonPressedBgColour;
 	}
 	else if (isHovered) {
@@ -235,10 +284,10 @@ void FlatUIButtonBar::DrawToggleButton(wxDC& dc, const ButtonInfo& button, const
 		dc.DrawRectangle(rect);
 	}
 
-	// Draw border - always draw for checked toggle buttons to show state
 	if (m_buttonBorderWidth > 0 || button.checked) {
-		wxColour borderColour = button.customBorderColor.IsOk() ? button.customBorderColor : m_buttonBorderColour;
-		int borderWidth = button.checked ? (m_buttonBorderWidth > 0 ? m_buttonBorderWidth + 1 : 2) : m_buttonBorderWidth;
+		const wxColour borderColour = button.customBorderColor.IsOk() ? button.customBorderColor : m_buttonBorderColour;
+		const int borderWidth = button.checked ? std::max(m_buttonBorderWidth, 1) : m_buttonBorderWidth;
+
 		dc.SetPen(wxPen(borderColour, borderWidth));
 		dc.SetBrush(*wxTRANSPARENT_BRUSH);
 

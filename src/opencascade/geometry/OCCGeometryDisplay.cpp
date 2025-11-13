@@ -44,7 +44,7 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
     switch (mode) {
     case RenderingConfig::DisplayMode::Wireframe:
         m_wireframeMode = true;
-        m_facesVisible = false;
+        m_facesVisible = true;
         break;
     case RenderingConfig::DisplayMode::Points:
         m_wireframeMode = false;
@@ -59,13 +59,13 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
         break;
     case RenderingConfig::DisplayMode::HiddenLine:
         m_wireframeMode = true;
-        m_facesVisible = false;
+        m_facesVisible = true;
         // Hidden line mode will be handled by rendering backend
         break;
     case RenderingConfig::DisplayMode::SolidWireframe:
         m_wireframeMode = false;
         m_facesVisible = true;
-        m_showEdges = true; // Show edges overlay
+        // Note: m_showEdges will be set by setShowEdges() call from DisplaySettings
         break;
     case RenderingConfig::DisplayMode::Transparent:
         m_wireframeMode = false;

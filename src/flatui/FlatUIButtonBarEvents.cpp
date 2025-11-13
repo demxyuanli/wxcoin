@@ -69,6 +69,10 @@ void FlatUIButtonBar::OnMouseDown(wxMouseEvent& evt) {
 				HandleRadioButton(button);
 				break;
 
+			case ButtonType::TOGGLE_GROUP:
+				HandleToggleGroupButton(button);
+				break;
+
 			case ButtonType::CHOICE:
 				HandleChoiceControl(button, pos);
 				break;
@@ -111,6 +115,11 @@ void FlatUIButtonBar::OnMouseDown(wxMouseEvent& evt) {
 					break;
 
 				case ButtonType::RADIO:
+					event.SetEventType(wxEVT_COMMAND_BUTTON_CLICKED);
+					event.SetInt(button.checked ? 1 : 0);
+					break;
+
+				case ButtonType::TOGGLE_GROUP:
 					event.SetEventType(wxEVT_COMMAND_BUTTON_CLICKED);
 					event.SetInt(button.checked ? 1 : 0);
 					break;
@@ -162,6 +171,21 @@ void FlatUIButtonBar::HandleRadioButton(ButtonInfo& button) {
 			}
 		}
 		// Check this button
+		button.checked = true;
+		Refresh();
+	}
+}
+
+void FlatUIButtonBar::HandleToggleGroupButton(ButtonInfo& button) {
+	if (!button.checked) {
+		if (button.toggleGroup >= 0) {
+			for (auto& otherButton : m_buttons) {
+				if (otherButton.type == ButtonType::TOGGLE_GROUP &&
+					otherButton.toggleGroup == button.toggleGroup) {
+					otherButton.checked = false;
+				}
+			}
+		}
 		button.checked = true;
 		Refresh();
 	}

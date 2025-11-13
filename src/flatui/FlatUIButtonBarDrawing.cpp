@@ -41,6 +41,7 @@ void FlatUIButtonBar::DrawButton(wxDC& dc, const ButtonInfo& button, int index) 
 	// Draw button based on type
 	switch (button.type) {
 	case ButtonType::TOGGLE:
+	case ButtonType::TOGGLE_GROUP:
 		DrawToggleButton(dc, button, button.rect);
 		break;
 	case ButtonType::CHECKBOX:

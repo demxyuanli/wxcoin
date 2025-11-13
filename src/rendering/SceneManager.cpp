@@ -917,17 +917,16 @@ void SceneManager::initializeRenderingConfigCallback()
 	config.registerSettingsChangedCallback([this]() {
 		LOG_INF_S("RenderingConfig callback triggered - updating geometries and lighting");
 
-		// Check if display mode changed to/from NoShading - if so, update lighting
+		// Check if display mode changed - always update lighting to ensure correct light model
 		if (m_canvas && m_canvas->getOCCViewer()) {
 			auto displaySettings = m_canvas->getOCCViewer()->getDisplaySettings();
 			static RenderingConfig::DisplayMode lastDisplayMode = displaySettings.displayMode;
 
 			if (lastDisplayMode != displaySettings.displayMode) {
-				if (lastDisplayMode == RenderingConfig::DisplayMode::NoShading ||
-					displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
-					LOG_INF_S("RenderingConfig callback: Display mode changed to/from NoShading, updating lighting");
-					updateSceneLighting();
-				}
+				LOG_INF_S("RenderingConfig callback: Display mode changed from " + 
+					std::to_string(static_cast<int>(lastDisplayMode)) + " to " + 
+					std::to_string(static_cast<int>(displaySettings.displayMode)) + ", updating lighting");
+				updateSceneLighting();
 				lastDisplayMode = displaySettings.displayMode;
 			}
 		}
@@ -1021,13 +1020,14 @@ void SceneManager::updateSceneLighting() {
 		isNoShading = (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading);
 	}
 
-	// Clear existing environment and light nodes that were previously inserted
+	// Clear existing environment, light model and light nodes that were previously inserted
 	// We only remove nodes that appear before m_objectRoot to avoid touching other overlays
 	int objectIndex = m_objectRoot ? m_sceneRoot->findChild(m_objectRoot) : -1;
 	for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
 		if (objectIndex >= 0 && i >= objectIndex) continue; // do not remove anything after objects
 		SoNode* child = m_sceneRoot->getChild(i);
-		if (child->isOfType(SoEnvironment::getClassTypeId()) ||
+		if (child->isOfType(SoLightModel::getClassTypeId()) ||
+			child->isOfType(SoEnvironment::getClassTypeId()) ||
 			child->isOfType(SoDirectionalLight::getClassTypeId()) ||
 			child->isOfType(SoPointLight::getClassTypeId()) ||
 			child->isOfType(SoSpotLight::getClassTypeId())) {
@@ -1035,19 +1035,7 @@ void SceneManager::updateSceneLighting() {
 		}
 	}
 
-	// Force rebuild geometries to apply new lighting/material settings
-	if (m_canvas && m_canvas->getOCCViewer()) {
-		OCCViewer* viewer = m_canvas->getOCCViewer();
-		auto allGeometries = viewer->getAllGeometry();
-		LOG_INF_S("Updating " + std::to_string(allGeometries.size()) + " geometries for lighting changes");
-
-		for (auto& geometry : allGeometries) {
-			if (geometry) {
-				LOG_INF_S("Updated material for lighting: " + geometry->getName());
-				geometry->forceCoinRepresentationRebuild(MeshParameters());
-		}
-	}
-	}
+	// Note: Geometry rebuild will be triggered after lighting update is complete
 
 	// Get lighting configuration
 	LightingConfig& config = LightingConfig::getInstance();

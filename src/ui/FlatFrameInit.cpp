@@ -13,6 +13,7 @@
 #include "flatui/UIHierarchyDebugger.h"
 #include "config/ThemeManager.h"
 #include "config/SvgIconManager.h"
+#include "config/RenderingConfig.h"
 #include "async/AsyncEngineIntegration.h"
 #include <wx/display.h>
 #include "logger/Logger.h"
@@ -392,13 +393,68 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	renderModePanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* renderModeButtonBar = new FlatUIButtonBar(renderModePanel);
 	renderModeButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_NO_SHADING, "No Shading", "cube", wxSize(16, 16), nullptr, "No shading mode - uniform color like FreeCAD");
-	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_POINTS, "Points", "pointview", wxSize(16, 16), nullptr, "Points mode - show only vertices");
-	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_WIREFRAME, "Wireframe", "triangle", wxSize(16, 16), nullptr, "Wireframe mode - show only edges");
-	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "edges", wxSize(16, 16), nullptr, "Flat lines mode - flat shading with edges");
-	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_SHADED, "Shaded", "palette", wxSize(16, 16), nullptr, "Shaded mode - smooth shading with lighting");
-	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_SHADED_WIREFRAME, "Shaded+Wireframe", "triangle", wxSize(16, 16), nullptr, "Shaded with wireframe overlay");
-	renderModeButtonBar->AddButtonWithSVG(ID_RENDER_MODE_HIDDEN_LINE, "Hidden Line", "edges", wxSize(16, 16), nullptr, "Hidden line mode - edges with hidden line removal");
+
+	const struct RenderModeToggleDescriptor {
+		int id;
+		const char* label;
+		const char* iconName;
+		const char* tooltip;
+	} renderModeButtons[] = {
+		{ ID_RENDER_MODE_NO_SHADING, "No Shading", "cube", "No shading mode - uniform color like FreeCAD" },
+		{ ID_RENDER_MODE_POINTS, "Points", "pointview", "Points mode - show only vertices" },
+		{ ID_RENDER_MODE_WIREFRAME, "Wireframe", "triangle", "Wireframe mode - show only edges" },
+		{ ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "edges", "Flat lines mode - flat shading with edges" },
+		{ ID_RENDER_MODE_SHADED, "Shaded", "palette", "Shaded mode - smooth shading with lighting" },
+		{ ID_RENDER_MODE_SHADED_WIREFRAME, "Shaded+Wireframe", "triangle", "Shaded with wireframe overlay" },
+		{ ID_RENDER_MODE_HIDDEN_LINE, "Hidden Line", "edges", "Hidden line mode - edges with hidden line removal" },
+	};
+
+	constexpr int kRenderModeToggleGroup = 0;
+	for (const auto& button : renderModeButtons) {
+		renderModeButtonBar->AddToggleGroupButtonWithSVG(
+			button.id,
+			button.label,
+			button.iconName,
+			wxSize(16, 16),
+			kRenderModeToggleGroup,
+			false,
+			button.tooltip);
+	}
+
+	const RenderingConfig& renderingConfig = RenderingConfig::getInstance();
+	const auto displaySettings = renderingConfig.getDisplaySettings();
+	const auto shadingSettings = renderingConfig.getShadingSettings();
+
+	int selectedRenderModeId = ID_RENDER_MODE_SHADED;
+	switch (displaySettings.displayMode) {
+	case RenderingConfig::DisplayMode::NoShading:
+		selectedRenderModeId = ID_RENDER_MODE_NO_SHADING;
+		break;
+	case RenderingConfig::DisplayMode::Points:
+		selectedRenderModeId = ID_RENDER_MODE_POINTS;
+		break;
+	case RenderingConfig::DisplayMode::Wireframe:
+		selectedRenderModeId = ID_RENDER_MODE_WIREFRAME;
+		break;
+	case RenderingConfig::DisplayMode::Solid:
+		selectedRenderModeId = ID_RENDER_MODE_SHADED;
+		break;
+	case RenderingConfig::DisplayMode::SolidWireframe:
+		if (shadingSettings.shadingMode == RenderingConfig::ShadingMode::Flat) {
+			selectedRenderModeId = ID_RENDER_MODE_FLAT_LINES;
+		} else {
+			selectedRenderModeId = ID_RENDER_MODE_SHADED_WIREFRAME;
+		}
+		break;
+	case RenderingConfig::DisplayMode::HiddenLine:
+		selectedRenderModeId = ID_RENDER_MODE_HIDDEN_LINE;
+		break;
+	default:
+		selectedRenderModeId = ID_RENDER_MODE_SHADED;
+		break;
+	}
+
+	renderModeButtonBar->SetToggleGroupSelection(kRenderModeToggleGroup, selectedRenderModeId);
 	renderModePanel->AddButtonBar(renderModeButtonBar, 0, wxEXPAND | wxALL, 5);
 	renderPage->AddPanel(renderModePanel);
 
