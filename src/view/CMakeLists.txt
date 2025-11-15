@@ -5,6 +5,7 @@ set(CADVIEW_SOURCES
     ${CMAKE_SOURCE_DIR}/src/view/CanvasOptimized.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/MultiViewportManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/view/SplitViewportManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/CoordinateTransformer.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewBookmark.cpp
     ${CMAKE_SOURCE_DIR}/src/view/CameraAnimation.cpp
@@ -22,6 +23,7 @@ set(CADVIEW_HEADERS
     ${CMAKE_SOURCE_DIR}/include/view/CanvasOptimized.h
     ${CMAKE_SOURCE_DIR}/include/ViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/MultiViewportManager.h
+    ${CMAKE_SOURCE_DIR}/include/SplitViewportManager.h
     ${CMAKE_SOURCE_DIR}/include/CoordinateTransformer.h
     ${CMAKE_SOURCE_DIR}/include/ViewportConfig.h
     ${CMAKE_SOURCE_DIR}/include/ViewBookmark.h
@@ -33,6 +35,7 @@ set(CADVIEW_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FaceInfoOverlay.h
     ${CMAKE_SOURCE_DIR}/include/SoFCBackgroundGradient.h
     ${CMAKE_SOURCE_DIR}/include/SoFCBackgroundImage.h
+    ${CMAKE_SOURCE_DIR}/include/interfaces/ISplitViewportManager.h
 )
 
 add_library(CADView STATIC ${CADVIEW_SOURCES} ${CADVIEW_HEADERS})

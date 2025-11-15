@@ -1,6 +1,9 @@
 #pragma once
 
 #include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/gp_Dir.hxx>
+#include <vector>
+#include <string>
 
 // Shared explode mode enum used by viewer and controllers
 enum class ExplodeMode {
@@ -12,7 +15,8 @@ enum class ExplodeMode {
 	StackY,
 	StackZ,
 	Diagonal,
-	Assembly
+	Assembly,
+	Smart  // Smart mode using direction clustering
 };
 
 // Center selection for explode computation
@@ -27,6 +31,27 @@ enum class ExplodeScope {
 	All,
 	SelectionOnly,
 	SelectionSubtree
+};
+
+// Constraint types for assembly relationships
+enum class ConstraintType {
+	MATE,
+	INSERT,
+	FASTENER,
+	UNKNOWN
+};
+
+// Represents assembly constraint between two parts
+struct AssemblyConstraint {
+	std::string part1;
+	std::string part2;
+	ConstraintType type{ ConstraintType::UNKNOWN };
+	gp_Dir direction{ 0, 0, 1 };  // Separation direction
+	
+	AssemblyConstraint() = default;
+	AssemblyConstraint(const std::string& p1, const std::string& p2, 
+	                   ConstraintType t, const gp_Dir& d)
+		: part1(p1), part2(p2), type(t), direction(d) {}
 };
 
 struct ExplodeWeights {
@@ -56,4 +81,10 @@ struct ExplodeParams {
 	gp_Pnt customCenter{ 0.0, 0.0, 0.0 };
 	// Compatibility primary mode (optional hint)
 	ExplodeMode primaryMode{ ExplodeMode::Radial };
+	// Assembly constraints (optional, for smart mode)
+	std::vector<AssemblyConstraint> constraints{};
+	// Enable collision detection and resolution
+	bool enableCollisionResolution{ false };
+	// Collision resolution threshold (fraction of bbox diagonal)
+	double collisionThreshold{ 0.6 };
 };

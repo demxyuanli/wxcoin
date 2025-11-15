@@ -65,6 +65,7 @@
 #include "ZoomSpeedListener.h"
 #include "NavigationModeListener.h"
 #include "FileExitListener.h"
+#include "SplitViewToggleListener.h"
 
 void FlatFrame::setupCommandSystem() {
 	LOG_INF_S("Setting up command system");
@@ -213,6 +214,7 @@ void FlatFrame::setupCommandSystem() {
 	auto showFlatWidgetsExampleListener = std::make_shared<ShowFlatWidgetsExampleListener>(this);
 	auto explodeAssemblyListener = std::make_shared<ExplodeAssemblyListener>(this, m_occViewer);
 	auto sliceToggleListener = std::make_shared<SliceToggleListener>(m_occViewer);
+	auto splitViewToggleListener = std::make_shared<SplitViewToggleListener>(m_canvas);
 
 	m_listenerManager->registerListener(cmd::CommandType::Undo, undoListener);
 	m_listenerManager->registerListener(cmd::CommandType::Redo, redoListener);
@@ -233,6 +235,12 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::ShowFlatWidgetsExample, showFlatWidgetsExampleListener);
 	m_listenerManager->registerListener(cmd::CommandType::ExplodeAssembly, explodeAssemblyListener);
 	m_listenerManager->registerListener(cmd::CommandType::SliceToggle, sliceToggleListener);
+	m_listenerManager->registerListener(cmd::CommandType::SplitViewSingle, splitViewToggleListener);
+	m_listenerManager->registerListener(cmd::CommandType::SplitViewHorizontal2, splitViewToggleListener);
+	m_listenerManager->registerListener(cmd::CommandType::SplitViewVertical2, splitViewToggleListener);
+	m_listenerManager->registerListener(cmd::CommandType::SplitViewQuad, splitViewToggleListener);
+	m_listenerManager->registerListener(cmd::CommandType::SplitViewSix, splitViewToggleListener);
+	m_listenerManager->registerListener(cmd::CommandType::SplitViewToggleSync, splitViewToggleListener);
 	auto toggleOutlineListener = std::make_shared<ToggleOutlineListener>(m_occViewer);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleOutline, toggleOutlineListener);
 

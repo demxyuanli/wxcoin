@@ -22,6 +22,7 @@ class IViewportManager;
 class IMultiViewportManager;
 class ViewportManager;        // concrete, kept as member type
 class MultiViewportManager;   // concrete, kept as member type
+class SplitViewportManager;   // concrete, kept as member type
 class ViewRefreshManager;
 class UnifiedRefreshSystem;
 class CommandDispatcher;
@@ -75,6 +76,13 @@ public:
 
 	// Face info overlay
 	FaceInfoOverlay* getFaceInfoOverlay() { return &m_faceInfoOverlay; }
+	
+	// Split viewport methods
+	SplitViewportManager* getSplitViewportManager() const { return m_splitViewportManager.get(); }
+	void setSplitViewportEnabled(bool enabled);
+	bool isSplitViewportEnabled() const { return m_splitViewportEnabled; }
+	void setSplitViewportCameraSyncEnabled(bool enabled);
+	bool isSplitViewportCameraSyncEnabled() const;
 
 private:
 	void initializeSubsystems();
@@ -109,6 +117,8 @@ private:
 private:
 	std::unique_ptr<MultiViewportManager> m_multiViewportManager;
 	bool m_multiViewportEnabled;
+	std::unique_ptr<SplitViewportManager> m_splitViewportManager;
+	bool m_splitViewportEnabled;
 	std::unique_ptr<ViewRefreshManager> m_refreshManager;
 	
 	// Mouse hover optimization

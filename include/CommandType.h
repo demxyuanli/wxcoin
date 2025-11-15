@@ -131,6 +131,14 @@ namespace cmd {
 		// Docking
 		DockLayoutConfig,
 
+		// Split View
+		SplitViewSingle,
+		SplitViewHorizontal2,
+		SplitViewVertical2,
+		SplitViewQuad,
+		SplitViewSix,
+		SplitViewToggleSync,
+
 		// Sentinel
 		Unknown
 	};
@@ -238,6 +246,13 @@ namespace cmd {
 			{CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
 			{CommandType::DockLayoutConfig, "DOCK_LAYOUT_CONFIG"},
 
+			{CommandType::SplitViewSingle, "SPLIT_VIEW_SINGLE"},
+			{CommandType::SplitViewHorizontal2, "SPLIT_VIEW_HORIZONTAL_2"},
+			{CommandType::SplitViewVertical2, "SPLIT_VIEW_VERTICAL_2"},
+			{CommandType::SplitViewQuad, "SPLIT_VIEW_QUAD"},
+			{CommandType::SplitViewSix, "SPLIT_VIEW_SIX"},
+			{CommandType::SplitViewToggleSync, "SPLIT_VIEW_TOGGLE_SYNC"},
+
 			{CommandType::Unknown, "UNKNOWN"}
 		};
 		auto it = kEnumToString.find(type);
@@ -344,7 +359,14 @@ namespace cmd {
 			{"RENDER_MODE_SHADED_WIREFRAME", CommandType::RenderModeShadedWireframe},
 			{"RENDER_MODE_HIDDEN_LINE", CommandType::RenderModeHiddenLine},
 			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample},
-			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig}
+			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig},
+
+			{"SPLIT_VIEW_SINGLE", CommandType::SplitViewSingle},
+			{"SPLIT_VIEW_HORIZONTAL_2", CommandType::SplitViewHorizontal2},
+			{"SPLIT_VIEW_VERTICAL_2", CommandType::SplitViewVertical2},
+			{"SPLIT_VIEW_QUAD", CommandType::SplitViewQuad},
+			{"SPLIT_VIEW_SIX", CommandType::SplitViewSix},
+			{"SPLIT_VIEW_TOGGLE_SYNC", CommandType::SplitViewToggleSync}
 		};
 		auto it = kStringToEnum.find(str);
 		return it == kStringToEnum.end() ? CommandType::Unknown : it->second;

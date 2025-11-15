@@ -247,6 +247,24 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	viewPanel->AddButtonBar(viewButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(viewPanel);
 
+	FlatUIPanel* splitViewPanel = new FlatUIPanel(page3, "Split View", wxHORIZONTAL);
+	splitViewPanel->SetFont(CFG_DEFAULTFONT());
+	splitViewPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	splitViewPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	splitViewPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	splitViewPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	splitViewPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* splitViewButtonBar = new FlatUIButtonBar(splitViewPanel);
+	splitViewButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_SINGLE, "Single View", "square", wxSize(16, 16), nullptr, "Single viewport mode");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_HORIZONTAL_2, "Horizontal Split", "layout", wxSize(16, 16), nullptr, "Split viewport horizontally (2 views)");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_VERTICAL_2, "Vertical Split", "layout", wxSize(16, 16), nullptr, "Split viewport vertically (2 views)");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_QUAD, "Quad View", "grid", wxSize(16, 16), nullptr, "Quad viewport mode (4 views)");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_SIX, "Six View", "grid", wxSize(16, 16), nullptr, "Six viewport mode (6 views)");
+	splitViewButtonBar->AddToggleButtonWithSVG(ID_SPLIT_VIEW_TOGGLE_SYNC, "Sync Views", "link", wxSize(16, 16), true, "Toggle camera synchronization across split views");
+	splitViewPanel->AddButtonBar(splitViewButtonBar, 0, wxEXPAND | wxALL, 5);
+	page3->AddPanel(splitViewPanel);
+
 	FlatUIPanel* assemblyPanel = new FlatUIPanel(page3, "Assembly", wxHORIZONTAL);
 	assemblyPanel->SetFont(CFG_DEFAULTFONT());
 	assemblyPanel->SetPanelBorderWidths(0, 0, 0, 1);
@@ -277,6 +295,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_CHESSBOARD_GRID, "Chessboard Grid", "grid", wxSize(16, 16), false, "Toggle chessboard ground plane");
 	assiPanel->AddButtonBar(AssiButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(assiPanel);
+
 
 	FlatUIPanel* displayPanel = new FlatUIPanel(page3, "Geom Display", wxHORIZONTAL);
 	displayPanel->SetFont(CFG_DEFAULTFONT());

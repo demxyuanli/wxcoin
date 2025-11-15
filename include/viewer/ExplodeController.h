@@ -3,6 +3,8 @@
 #include <memory>
 #include <unordered_map>
 #include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/gp_Dir.hxx>
+#include <OpenCASCADE/gp_Vec.hxx>
 #include "viewer/ExplodeTypes.h"
 
 class OCCGeometry;
@@ -27,6 +29,20 @@ public:
 
 private:
 	void computeAndApplyOffsets(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
+	
+	// Direction clustering algorithm (K-Means)
+	gp_Dir clusterDirections(const std::vector<gp_Dir>& directions, int maxIterations = 20);
+	
+	// Collision detection and resolution
+	void resolveCollisions(std::vector<gp_Vec>& offsets, 
+	                       const std::vector<std::shared_ptr<OCCGeometry>>& geometries,
+	                       const gp_Dir& mainDirection);
+	
+	// Smart mode: analyze constraints to determine main direction
+	gp_Dir analyzeConstraintsDirection(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
+	
+	// Helper to get bounding box diagonal
+	double getBBoxDiagonal(const std::shared_ptr<OCCGeometry>& geom);
 
 private:
 	SoSeparator* m_root{ nullptr };

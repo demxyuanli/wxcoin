@@ -324,6 +324,7 @@ FlatFrame::~FlatFrame()
 		}
 	}
 
+
 	LOG_DBG("FlatFrame destruction completed.", "FlatFrame");
 	delete m_commandManager;
 }
@@ -394,7 +395,7 @@ void FlatFrame::OnGlobalPinStateChanged(wxCommandEvent& event)
 		// Force frame to recalculate its layout and ensure main work area fills remaining space
 		Layout();
 		Refresh();
-		Update();
+		Update(); 
 
 		// Additional deferred update to ensure proper space allocation
 		CallAfter([this]() {

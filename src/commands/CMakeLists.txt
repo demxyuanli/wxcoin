@@ -66,6 +66,7 @@ set(COMMANDS_SOURCES
     FaceQueryCommandListener.cpp
     SliceToggleListener.cpp
     DockLayoutConfigListener.cpp
+    SplitViewToggleListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -138,6 +139,7 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ExplodeConfigListener.h
     ${CMAKE_SOURCE_DIR}/include/ToggleOutlineListener.h
     ${CMAKE_SOURCE_DIR}/include/DockLayoutConfigListener.h
+    ${CMAKE_SOURCE_DIR}/include/SplitViewToggleListener.h
 )
 
 # Create command static library

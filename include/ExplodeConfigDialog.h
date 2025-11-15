@@ -4,6 +4,7 @@
 #include <wx/radiobox.h>
 #include <wx/spinctrl.h>
 #include <wx/slider.h>
+#include <wx/checkbox.h>
 #include "viewer/ExplodeTypes.h"
 
 class ExplodeConfigDialog : public FramelessModalPopup {
@@ -37,6 +38,9 @@ private:
     wxSlider* m_sizeInfluence{ nullptr };   // 0-200 => 0.0-2.0
     wxSlider* m_jitter{ nullptr };          // 0-100 => 0.0-1.0
     wxSlider* m_minSpacing{ nullptr };      // 0-200 => 0.0-2.0
+    // Collision detection
+    wxCheckBox* m_enableCollision{ nullptr };
+    wxSlider* m_collisionThreshold{ nullptr };  // 0-100 => 0.0-1.0
 };
 
 

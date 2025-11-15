@@ -37,6 +37,7 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     modes.Add("Stack Z");
     modes.Add("Diagonal");
     modes.Add("Assembly");
+    modes.Add("Smart");
 
     m_mode = new wxRadioBox(scrolledWindow, wxID_ANY, "Mode", wxDefaultPosition, wxDefaultSize, modes, 3, wxRA_SPECIFY_COLS);
     m_mode->SetSelection(modeToSelection(currentMode));
@@ -91,6 +92,17 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     
     contentSizer->Add(advancedBox, 0, wxEXPAND | wxALL, 5);
 
+    // Collision detection section
+    wxStaticBoxSizer* collisionBox = new wxStaticBoxSizer(wxVERTICAL, scrolledWindow, "Collision Detection");
+    
+    m_enableCollision = new wxCheckBox(scrolledWindow, wxID_ANY, "Enable Collision Resolution");
+    m_enableCollision->SetValue(false);
+    collisionBox->Add(m_enableCollision, 0, wxALL, 5);
+    
+    collisionBox->Add(makeSliderRow("Collision Threshold", &m_collisionThreshold, 60, 0, 100), 0, wxEXPAND);
+    
+    contentSizer->Add(collisionBox, 0, wxEXPAND | wxALL, 5);
+
     // Set sizer for scrolled window
     scrolledWindow->SetSizer(contentSizer);
     scrolledWindow->FitInside();
@@ -122,7 +134,8 @@ void ExplodeConfigDialog::updateSliderEnableByMode() {
     bool enY = (sel == 2 || sel == 5);
     bool enZ = (sel == 3 || sel == 6);
     bool enDiag = (sel == 7);
-    if (m_weightRadial) m_weightRadial->Enable(enRadial);
+    bool enSmart = (sel == 9);
+    if (m_weightRadial) m_weightRadial->Enable(enRadial || enSmart);
     if (m_weightX) m_weightX->Enable(enX);
     if (m_weightY) m_weightY->Enable(enY);
     if (m_weightZ) m_weightZ->Enable(enZ);
@@ -151,6 +164,9 @@ ExplodeParams ExplodeConfigDialog::getParams() const {
     p.centerMode = ExplodeCenterMode::GlobalCenter;
     p.scope = ExplodeScope::All;
     p.customCenter = gp_Pnt(0,0,0);
+    p.enableCollisionResolution = m_enableCollision ? m_enableCollision->GetValue() : false;
+    p.collisionThreshold = v100(m_collisionThreshold);
+    if (p.collisionThreshold < 0.1) p.collisionThreshold = 0.6;
     return p;
 }
 
@@ -164,6 +180,7 @@ int ExplodeConfigDialog::modeToSelection(ExplodeMode mode) {
     case ExplodeMode::StackZ: return 6;
     case ExplodeMode::Diagonal: return 7;
     case ExplodeMode::Assembly: return 8;
+    case ExplodeMode::Smart: return 9;
     case ExplodeMode::Radial:
     default:
         return 0;
@@ -179,6 +196,7 @@ ExplodeMode ExplodeConfigDialog::selectionToMode(int sel) {
     if (sel == 6) return ExplodeMode::StackZ;
     if (sel == 7) return ExplodeMode::Diagonal;
     if (sel == 8) return ExplodeMode::Assembly;
+    if (sel == 9) return ExplodeMode::Smart;
     return ExplodeMode::Radial;
 }
 

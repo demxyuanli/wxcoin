@@ -22,6 +22,7 @@
 #include <wx/dcgraph.h>
 #include <wx/msgdlg.h>
 #include "MultiViewportManager.h"
+#include "SplitViewportManager.h"
 #include <chrono>
 const int Canvas::s_canvasAttribs[] = {
 	WX_GL_RGBA,
@@ -54,6 +55,8 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 	, m_objectTreePanel(nullptr)
 	, m_commandManager(nullptr)
 	, m_occViewer(nullptr)
+	, m_multiViewportEnabled(false)
+	, m_splitViewportEnabled(false)
 {
 	LOG_INF_S("Canvas::Canvas: Initializing");
 
@@ -178,6 +181,14 @@ void Canvas::render(bool fastMode) {
 				m_multiViewportManager = std::make_unique<MultiViewportManager>(this, m_sceneManager.get());
 				m_multiViewportManager->setNavigationCubeManager(m_navigationCubeManager.get());
 				m_multiViewportManager->handleSizeChange(GetClientSize());
+				
+				// If split viewport is active, immediately disable all MultiViewportManager viewports
+				if (m_splitViewportEnabled) {
+					m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_NAVIGATION_CUBE, false);
+					m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_CUBE_OUTLINE, false);
+					m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_COORDINATE_SYSTEM, false);
+				}
+				
 				auto multiViewportEndTime = std::chrono::high_resolution_clock::now();
 				auto multiViewportDuration = std::chrono::duration_cast<std::chrono::milliseconds>(multiViewportEndTime - multiViewportStartTime);
 				LOG_INF_S("MultiViewportManager created in " + std::to_string(multiViewportDuration.count()) + "ms");
@@ -188,14 +199,22 @@ void Canvas::render(bool fastMode) {
 			}
 		}
 
-		// Render main scene first (without swapping buffers)
+		// Render based on active viewport mode
 		auto mainRenderStartTime = std::chrono::high_resolution_clock::now();
-		m_renderingEngine->renderWithoutSwap(fastMode);
+		
+		if (m_splitViewportEnabled && m_splitViewportManager) {
+			// When split viewport is enabled, it handles all rendering
+			m_splitViewportManager->render();
+		} else {
+			// Normal rendering: main scene first
+			m_renderingEngine->renderWithoutSwap(fastMode);
+		}
+		
 		auto mainRenderEndTime = std::chrono::high_resolution_clock::now();
 		auto mainRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(mainRenderEndTime - mainRenderStartTime);
 
-		// Render additional viewports on top of main scene
-		if (m_multiViewportEnabled && m_multiViewportManager) {
+		// Render additional viewports on top of main scene (only if not using split viewport)
+		if (!m_splitViewportEnabled && m_multiViewportEnabled && m_multiViewportManager) {
 			auto multiRenderStartTime = std::chrono::high_resolution_clock::now();
 			m_multiViewportManager->render();
 			auto multiRenderEndTime = std::chrono::high_resolution_clock::now();
@@ -254,6 +273,9 @@ void Canvas::onSize(wxSizeEvent& event) {
 	if (m_multiViewportManager) {
 		m_multiViewportManager->handleSizeChange(size);
 	}
+	if (m_splitViewportManager) {
+		m_splitViewportManager->handleSizeChange(size);
+	}
 	if (m_eventCoordinator) {
 		m_eventCoordinator->handleSizeEvent(event);
 	}
@@ -300,7 +322,15 @@ void Canvas::onMouseEvent(wxMouseEvent& event) {
 	// 	m_occViewer->updateHoverSilhouetteAt(wxPoint(-1, -1)); // Invalid position to clear
 	// }
 
-	// Check multi-viewport first - this should have higher priority
+	// Check split viewport first - this should have highest priority when enabled
+	if (m_splitViewportEnabled && m_splitViewportManager) {
+		bool handled = m_splitViewportManager->handleMouseEvent(event);
+		if (handled) {
+			return; // Event was handled, don't propagate further
+		}
+	}
+	
+	// Check multi-viewport - should have higher priority
 	if (m_multiViewportEnabled && m_multiViewportManager) {
 		bool handled = m_multiViewportManager->handleMouseEvent(event);
 		if (handled) {
@@ -330,6 +360,68 @@ void Canvas::setMultiViewportEnabled(bool enabled) {
 
 bool Canvas::isMultiViewportEnabled() const {
 	return m_multiViewportEnabled;
+}
+
+void Canvas::setSplitViewportEnabled(bool enabled) {
+	if (m_splitViewportEnabled == enabled) {
+		return;
+	}
+	
+	m_splitViewportEnabled = enabled;
+	
+	if (enabled) {
+		if (!m_splitViewportManager) {
+			try {
+				m_splitViewportManager = std::make_unique<SplitViewportManager>(this, m_sceneManager.get());
+				m_splitViewportManager->handleSizeChange(GetClientSize());
+				LOG_INF_S("SplitViewportManager created and enabled");
+			}
+			catch (const std::exception& e) {
+				LOG_ERR_S("Failed to create SplitViewportManager: " + std::string(e.what()));
+				m_splitViewportEnabled = false;
+				return;
+			}
+		}
+		m_splitViewportManager->setEnabled(true);
+		
+		// Completely disable MultiViewportManager and all its sub-viewports
+		if (m_multiViewportEnabled) {
+			setMultiViewportEnabled(false);
+		}
+		// Also disable navigation cube and other small viewports
+		if (m_multiViewportManager) {
+			m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_NAVIGATION_CUBE, false);
+			m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_CUBE_OUTLINE, false);
+			m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_COORDINATE_SYSTEM, false);
+		}
+	} else {
+		if (m_splitViewportManager) {
+			m_splitViewportManager->setEnabled(false);
+		}
+		// Re-enable MultiViewportManager when split view is disabled
+		if (m_multiViewportManager) {
+			setMultiViewportEnabled(true);
+			m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_NAVIGATION_CUBE, true);
+			m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_CUBE_OUTLINE, true);
+			m_multiViewportManager->setViewportEnabled(MultiViewportManager::VIEWPORT_COORDINATE_SYSTEM, true);
+		}
+	}
+	
+	Refresh();
+}
+
+void Canvas::setSplitViewportCameraSyncEnabled(bool enabled) {
+	if (m_splitViewportManager) {
+		m_splitViewportManager->setCameraSyncEnabled(enabled);
+		Refresh();
+	}
+}
+
+bool Canvas::isSplitViewportCameraSyncEnabled() const {
+	if (m_splitViewportManager) {
+		return m_splitViewportManager->isCameraSyncEnabled();
+	}
+	return true;
 }
 
 void Canvas::setPickingCursor(bool enable) {
