@@ -175,11 +175,8 @@ void SplitViewportManager::render() {
     
     wxSize canvasSize = m_canvas->GetClientSize();
     
-    // CRITICAL: Set viewport to full canvas before rendering background
-    // Otherwise background will only render in last viewport's size
-    glViewport(0, 0, canvasSize.x, canvasSize.y);
-    
-    // Log gradient values for each split render (reads from shared config)
+    // Read background mode and colors from config
+    int backgroundMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 1);
     double splitGradTopR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.7);
     double splitGradTopG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.8);
     double splitGradTopB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 0.95);
@@ -188,19 +185,44 @@ void SplitViewportManager::render() {
     double splitGradBottomB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 0.9);
     double splitGradientTop[3] = { splitGradTopR, splitGradTopG, splitGradTopB };
     double splitGradientBottom[3] = { splitGradBottomR, splitGradBottomG, splitGradBottomB };
-    LOG_INF_S("SplitViewportManager::render: gradient top=(" +
-        std::to_string(splitGradTopR) + "," +
+    
+    LOG_INF_S("SplitViewportManager::render: mode=" + std::to_string(backgroundMode) +
+        " gradient top=(" + std::to_string(splitGradTopR) + "," +
         std::to_string(splitGradTopG) + "," +
         std::to_string(splitGradTopB) + ") bottom=(" +
         std::to_string(splitGradBottomR) + "," +
         std::to_string(splitGradBottomG) + "," +
         std::to_string(splitGradBottomB) + ")");
     
-    glClearColor(static_cast<float>(splitGradBottomR),
-                 static_cast<float>(splitGradBottomG),
-                 static_cast<float>(splitGradBottomB),
-                 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // Set viewport to full canvas for any global clear / background
+    glViewport(0, 0, canvasSize.x, canvasSize.y);
+    
+    bool usePerViewportBackground = (backgroundMode == 1 || backgroundMode == 2);
+    
+    if (!usePerViewportBackground) {
+        // For solid color (0) and texture/image (3), delegate to RenderingEngine
+        if (auto renderingEngine = m_canvas->getRenderingEngine()) {
+            renderingEngine->renderBackground();
+            glClear(GL_DEPTH_BUFFER_BIT);
+        } else {
+            // Fallback: clear with solid background color from config
+            double bgR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorR", 0.0);
+            double bgG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 0.0);
+            double bgB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 0.0);
+            glClearColor(static_cast<float>(bgR),
+                         static_cast<float>(bgG),
+                         static_cast<float>(bgB),
+                         1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        }
+    } else {
+        // For gradient modes, clear once with bottom color; each viewport will draw its own gradient patch
+        glClearColor(static_cast<float>(splitGradBottomR),
+                     static_cast<float>(splitGradBottomG),
+                     static_cast<float>(splitGradBottomB),
+                     1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
     
     if (m_cameraSyncEnabled) {
         // When sync is enabled, all viewport cameras follow the main camera
@@ -243,7 +265,9 @@ void SplitViewportManager::render() {
     
     for (int i = 0; i < numViewports; i++) {
         if (i < static_cast<int>(m_viewports.size())) {
-            drawViewportBackground(m_viewports[i], splitGradientTop, splitGradientBottom);
+            if (usePerViewportBackground) {
+                drawViewportBackground(m_viewports[i], splitGradientTop, splitGradientBottom);
+            }
             renderViewport(m_viewports[i]);
         }
     }
@@ -313,6 +337,8 @@ void SplitViewportManager::drawViewportBackground(const SplitViewportInfo& viewp
         return;
     }
 
+    int backgroundMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 1);
+
     glPushAttrib(GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT);
     glDisable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
@@ -332,14 +358,31 @@ void SplitViewportManager::drawViewportBackground(const SplitViewportInfo& viewp
     glPushMatrix();
     glLoadIdentity();
 
-    glBegin(GL_QUADS);
-    glColor3d(topColor[0], topColor[1], topColor[2]);
-    glVertex2f(0.0f, 1.0f);
-    glVertex2f(1.0f, 1.0f);
-    glColor3d(bottomColor[0], bottomColor[1], bottomColor[2]);
-    glVertex2f(1.0f, 0.0f);
-    glVertex2f(0.0f, 0.0f);
-    glEnd();
+    if (backgroundMode == 1) {
+        // Linear gradient: top -> bottom
+        glBegin(GL_QUADS);
+        glColor3d(topColor[0], topColor[1], topColor[2]);
+        glVertex2f(0.0f, 1.0f);
+        glVertex2f(1.0f, 1.0f);
+        glColor3d(bottomColor[0], bottomColor[1], bottomColor[2]);
+        glVertex2f(1.0f, 0.0f);
+        glVertex2f(0.0f, 0.0f);
+        glEnd();
+    } else if (backgroundMode == 2) {
+        // Radial gradient: center = top color, edges = bottom color
+        glBegin(GL_TRIANGLE_FAN);
+        glColor3d(topColor[0], topColor[1], topColor[2]);
+        glVertex2f(0.5f, 0.5f);
+        glColor3d(bottomColor[0], bottomColor[1], bottomColor[2]);
+        const int segments = 64;
+        for (int i = 0; i <= segments; ++i) {
+            double angle = (2.0 * M_PI * i) / segments;
+            double x = 0.5 + 0.5 * cos(angle);
+            double y = 0.5 + 0.5 * sin(angle);
+            glVertex2f(static_cast<float>(x), static_cast<float>(y));
+        }
+        glEnd();
+    }
 
     // Reset current color to neutral to avoid tinting scene geometry
     glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
