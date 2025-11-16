@@ -2,6 +2,7 @@
 #include "Canvas.h"
 #include "SceneManager.h"
 #include "RenderingEngine.h"
+#include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include "DPIManager.h"
 
@@ -10,6 +11,7 @@
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/SbViewportRegion.h>
 #include <GL/gl.h>
+#include <string>
 
 SplitViewportManager::SplitViewportManager(Canvas* canvas, SceneManager* sceneManager)
     : m_canvas(canvas)
@@ -177,17 +179,28 @@ void SplitViewportManager::render() {
     // Otherwise background will only render in last viewport's size
     glViewport(0, 0, canvasSize.x, canvasSize.y);
     
-    bool backgroundRendered = false;
-    if (auto renderingEngine = m_canvas->getRenderingEngine()) {
-        renderingEngine->renderBackground();
-        glClear(GL_DEPTH_BUFFER_BIT);
-        backgroundRendered = true;
-    }
-
-    if (!backgroundRendered) {
-        glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    }
+    // Log gradient values for each split render (reads from shared config)
+    double splitGradTopR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.7);
+    double splitGradTopG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.8);
+    double splitGradTopB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 0.95);
+    double splitGradBottomR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.7);
+    double splitGradBottomG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.5);
+    double splitGradBottomB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 0.9);
+    double splitGradientTop[3] = { splitGradTopR, splitGradTopG, splitGradTopB };
+    double splitGradientBottom[3] = { splitGradBottomR, splitGradBottomG, splitGradBottomB };
+    LOG_INF_S("SplitViewportManager::render: gradient top=(" +
+        std::to_string(splitGradTopR) + "," +
+        std::to_string(splitGradTopG) + "," +
+        std::to_string(splitGradTopB) + ") bottom=(" +
+        std::to_string(splitGradBottomR) + "," +
+        std::to_string(splitGradBottomG) + "," +
+        std::to_string(splitGradBottomB) + ")");
+    
+    glClearColor(static_cast<float>(splitGradBottomR),
+                 static_cast<float>(splitGradBottomG),
+                 static_cast<float>(splitGradBottomB),
+                 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     if (m_cameraSyncEnabled) {
         // When sync is enabled, all viewport cameras follow the main camera
@@ -230,6 +243,7 @@ void SplitViewportManager::render() {
     
     for (int i = 0; i < numViewports; i++) {
         if (i < static_cast<int>(m_viewports.size())) {
+            drawViewportBackground(m_viewports[i], splitGradientTop, splitGradientBottom);
             renderViewport(m_viewports[i]);
         }
     }
@@ -260,18 +274,83 @@ void SplitViewportManager::renderViewport(const SplitViewportInfo& viewport) {
     
     glDisable(GL_SCISSOR_TEST);
     
-    // Render the scene
+    // Match SceneManager render state to ensure correct transparency sorting
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_NORMALIZE);
+    glEnable(GL_LIGHTING);
+    glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+    
+    // Keep viewport camera aspect ratio in sync with its region
+    if (viewport.height > 0) {
+        float aspect = static_cast<float>(viewport.width) / static_cast<float>(viewport.height);
+        viewport.camera->aspectRatio.setValue(aspect);
+    }
+    
+    // Render the scene using high-quality transparency sorting like the main view
     SbViewportRegion viewportRegion;
     viewportRegion.setWindowSize(SbVec2s(canvasSize.x, canvasSize.y));
     viewportRegion.setViewportPixels(viewport.x, viewport.y, viewport.width, viewport.height);
     
     SoGLRenderAction renderAction(viewportRegion);
     renderAction.setSmoothing(true);
-    renderAction.setTransparencyType(SoGLRenderAction::BLEND);
+    // Use single-pass sorted-object blending to avoid over-brightening geometry
+    renderAction.setNumPasses(1);
+    renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
+    renderAction.setCacheContext(1);
     
     renderAction.apply(viewport.sceneRoot);
     
     glPopMatrix();
+    glPopAttrib();
+}
+
+void SplitViewportManager::drawViewportBackground(const SplitViewportInfo& viewport,
+                                                  const double topColor[3],
+                                                  const double bottomColor[3]) {
+    if (viewport.width <= 0 || viewport.height <= 0) {
+        return;
+    }
+
+    glPushAttrib(GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT);
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_BLEND);
+    glEnable(GL_SCISSOR_TEST);
+    glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
+    glScissor(viewport.x, viewport.y, viewport.width, viewport.height);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0.0, 1.0, 0.0, 1.0, -1.0, 1.0);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glBegin(GL_QUADS);
+    glColor3d(topColor[0], topColor[1], topColor[2]);
+    glVertex2f(0.0f, 1.0f);
+    glVertex2f(1.0f, 1.0f);
+    glColor3d(bottomColor[0], bottomColor[1], bottomColor[2]);
+    glVertex2f(1.0f, 0.0f);
+    glVertex2f(0.0f, 0.0f);
+    glEnd();
+
+    // Reset current color to neutral to avoid tinting scene geometry
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    glDisable(GL_SCISSOR_TEST);
+    glDepthMask(GL_TRUE);
     glPopAttrib();
 }
 

@@ -97,11 +97,18 @@ bool RenderingEngine::initialize() {
 			m_backgroundGradient->ref();
 		LOG_INF_S("RenderingEngine::initialize: Created gradient node for mode 1");
 
-		// Configure gradient colors: fCol is bottom, tCol is top
-		SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
+		// Configure gradient colors: first parameter must be top color
 		SbColor topColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
+		SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
 		m_backgroundGradient->setGradient(SoFCBackgroundGradient::LINEAR);
-		m_backgroundGradient->setColorGradient(bottomColor, topColor);
+		m_backgroundGradient->setColorGradient(topColor, bottomColor);
+		LOG_INF_S("RenderingEngine::initialize: Linear gradient top=(" +
+			std::to_string(m_backgroundGradientTop[0]) + "," +
+			std::to_string(m_backgroundGradientTop[1]) + "," +
+			std::to_string(m_backgroundGradientTop[2]) + ") bottom=(" +
+			std::to_string(m_backgroundGradientBottom[0]) + "," +
+			std::to_string(m_backgroundGradientBottom[1]) + "," +
+			std::to_string(m_backgroundGradientBottom[2]) + ")");
 		}
 
 		// Initialize FreeCAD gradient for radial mode too
@@ -114,10 +121,17 @@ bool RenderingEngine::initialize() {
 		m_backgroundGradient->ref();
 	}
 	
-	SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
 	SbColor topColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
+	SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
 	m_backgroundGradient->setGradient(SoFCBackgroundGradient::RADIAL);
-	m_backgroundGradient->setColorGradient(bottomColor, topColor);
+	m_backgroundGradient->setColorGradient(topColor, bottomColor);
+	LOG_INF_S("RenderingEngine::initialize: Radial gradient top=(" +
+		std::to_string(m_backgroundGradientTop[0]) + "," +
+		std::to_string(m_backgroundGradientTop[1]) + "," +
+		std::to_string(m_backgroundGradientTop[2]) + ") bottom=(" +
+		std::to_string(m_backgroundGradientBottom[0]) + "," +
+		std::to_string(m_backgroundGradientBottom[1]) + "," +
+		std::to_string(m_backgroundGradientBottom[2]) + ")");
 		}
 
 		// Load background image fit mode
@@ -655,10 +669,16 @@ void RenderingEngine::reloadBackgroundConfig() {
 		SoFCBackgroundGradient::Gradient gradType = (m_backgroundMode == 1) ? SoFCBackgroundGradient::LINEAR : SoFCBackgroundGradient::RADIAL;
 		m_backgroundGradient->setGradient(gradType);
 		
-		SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
 		SbColor topColor(m_backgroundGradientTop[0], m_backgroundGradientTop[1], m_backgroundGradientTop[2]);
-		m_backgroundGradient->setColorGradient(bottomColor, topColor);
-		LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Updated gradient colors");
+		SbColor bottomColor(m_backgroundGradientBottom[0], m_backgroundGradientBottom[1], m_backgroundGradientBottom[2]);
+		m_backgroundGradient->setColorGradient(topColor, bottomColor);
+		LOG_INF_S("RenderingEngine::reloadBackgroundConfig: Updated gradient colors top=(" +
+			std::to_string(m_backgroundGradientTop[0]) + "," +
+			std::to_string(m_backgroundGradientTop[1]) + "," +
+			std::to_string(m_backgroundGradientTop[2]) + ") bottom=(" +
+			std::to_string(m_backgroundGradientBottom[0]) + "," +
+			std::to_string(m_backgroundGradientBottom[1]) + "," +
+			std::to_string(m_backgroundGradientBottom[2]) + ")");
 	}
 
 	// Update image node if exists and mode requires it

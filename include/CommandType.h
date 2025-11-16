@@ -199,7 +199,7 @@ namespace cmd {
 
 			{CommandType::ShowNormals, "SHOW_NORMALS"},
 			{CommandType::ShowFaces, "SHOW_FACES"},
-			{CommandType::FixNormals, "FIX_NORMALS"},
+			{CommandType::FixNormals, "FIX_NORMALS"}, 
 			// {CommandType::ShowSilhouetteEdges, "SHOW_SILHOUETTE_EDGES"},
 			{CommandType::ToggleOutline, "TOGGLE_OUTLINE"},
 			{CommandType::SetTransparency, "SET_TRANSPARENCY"},

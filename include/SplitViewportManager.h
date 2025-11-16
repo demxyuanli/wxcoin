@@ -72,6 +72,9 @@ private:
     void setViewport(const SplitViewportInfo& viewport);
     void syncCameraToMain(SoCamera* targetCamera);
     void syncMainCameraToViewport(int viewportIndex);
+    void drawViewportBackground(const SplitViewportInfo& viewport,
+                                const double topColor[3],
+                                const double bottomColor[3]);
     
     void drawViewportBorders();
     void drawBorder(int x, int y, int width, int height, bool isActive);

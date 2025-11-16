@@ -549,8 +549,8 @@ void CuteNavCube::updateCameraRotation() {
 
 	// Calculate position in spherical coordinates
 	float x = distance * sin(radY) * cos(radX);
-	float y = distance * sin(radX);
-	float z = distance * cos(radY) * cos(radX);
+	float y = distance * sin(radX); 
+	float z = distance * cos(radY) * cos(radX); 
 
 	m_orthoCamera->position.setValue(x, y, z);
 	m_orthoCamera->pointAt(SbVec3f(0, 0, 0)); // Always look at the origin (cube center)
