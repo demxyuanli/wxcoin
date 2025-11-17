@@ -23,3 +23,4 @@ public:
     virtual void setEnabled(bool enabled) = 0;
 };
 
+

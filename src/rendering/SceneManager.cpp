@@ -40,34 +40,18 @@
 #include "config/ConfigManager.h"
 #include "RenderingEngine.h"
 
-// Structure to track pass state for callback
-struct PassCallbackState {
-	SceneManager* sceneManager;
-	int passCount;
-	
-	PassCallbackState(SceneManager* sm) : sceneManager(sm), passCount(0) {}
-};
-
-// Static pass callback to redraw background before second pass only
-// This avoids redundant background rendering in first pass
+// Optimized pass callback that avoids redundant background rendering
+// Background is only drawn once at the beginning, preserving it across passes
 static void renderPassCallback(void* userdata) {
 	PassCallbackState* state = static_cast<PassCallbackState*>(userdata);
 	if (state && state->sceneManager) {
 		state->passCount++;
-		
-		// Only redraw background before second pass to prevent darkening
-		// First pass already has background from clearBuffers()
-		if (state->passCount == 2) {
-			Canvas* canvas = state->sceneManager->getCanvas();
-			if (canvas) {
-				auto* renderingEngine = canvas->getRenderingEngine();
-				if (renderingEngine) {
-					// Redraw background before second pass to prevent darkening
-					renderingEngine->renderBackground();
-					// Clear only depth buffer, preserve color buffer (background)
-					glClear(GL_DEPTH_BUFFER_BIT);
-				}
-			}
+
+		// For multi-pass rendering, we only clear depth buffer between passes
+		// Background was already rendered once in clearBuffers(), no need to redraw
+		if (state->passCount > 1) {
+			// Only clear depth buffer to separate layers, preserve background
+			glClear(GL_DEPTH_BUFFER_BIT);
 		}
 	}
 }
@@ -151,13 +135,16 @@ bool SceneManager::initScene() {
 		// Set a light model to enable proper lighting calculation
 		// Place on scene root (not inside lightRoot) so the lighting model applies globally to subsequent nodes
 		SoLightModel* lightModel = new SoLightModel;
+		lightModel->ref(); // Reference for our management
 		lightModel->model.setValue(SoLightModel::PHONG);
 		if (m_sceneRoot) {
 			// Insert at the beginning to ensure it precedes lights and objects
 			m_sceneRoot->insertChild(lightModel, 0);
+			lightModel->unref(); // Scene graph now holds the reference
 
 			// Ensure at least one fallback light exists even if configuration is empty
 			SoDirectionalLight* fallbackLight = new SoDirectionalLight;
+			fallbackLight->ref(); // Reference for our management
 			fallbackLight->direction.setValue(0.5f, 0.5f, -0.7f);
 			fallbackLight->intensity.setValue(1.0f);
 			int insertIndex = m_sceneRoot->getNumChildren();
@@ -166,6 +153,7 @@ bool SceneManager::initScene() {
 				if (objectIndex >= 0) insertIndex = objectIndex;
 			}
 			m_sceneRoot->insertChild(fallbackLight, insertIndex);
+			fallbackLight->unref(); // Scene graph now holds the reference
 		}
 
 		// Initialize lighting from configuration instead of hardcoded values
@@ -257,21 +245,15 @@ void SceneManager::resetView(bool animate) {
 	}
 
 	// Apply default orientation and fit scene
-	m_camera->position.setValue(5.0f, -5.0f, 5.0f);
-	SbVec3f r_position = m_camera->position.getValue();
-	SbVec3f r_viewDir(-r_position[0], -r_position[1], -r_position[2]);
-	r_viewDir.normalize();
-	SbVec3f r_defaultDir(0, 0, -1);
-	SbRotation r_rotation(r_defaultDir, r_viewDir);
-	m_camera->orientation.setValue(r_rotation);
-	m_camera->focalDistance.setValue(8.66f);
-	if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
-		SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
-		orthoCam->height.setValue(8.66f);
-	}
+	SbVec3f defaultPos(5.0f, -5.0f, 5.0f);
+	SbVec3f viewDir(-defaultPos[0], -defaultPos[1], -defaultPos[2]);
+	viewDir.normalize();
+	SbVec3f defaultDir(0, 0, -1);
+	SbRotation rotation(defaultDir, viewDir);
 
-	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
-	m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
+	applyCameraState(defaultPos, rotation, 8.66f, 8.66f);
+	setupCameraForViewAll();
+	performViewAll();
 
 	CameraAnimation::CameraState targetState;
 	if (shouldAnimate) {
@@ -279,21 +261,11 @@ void SceneManager::resetView(bool animate) {
 	}
 
 	// Update scene bounds and clipping planes dynamically
-	updateSceneBounds(); // This will call updateCameraClippingPlanes() automatically
+	forceBoundsUpdate(); // Force bounds update when resetting view
 
 	if (shouldAnimate) {
 		// Restore original camera state before starting animation
-		m_camera->position.setValue(originalState.position);
-		m_camera->orientation.setValue(originalState.rotation);
-
-		if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
-			auto* perspCam = static_cast<SoPerspectiveCamera*>(m_camera);
-			perspCam->focalDistance.setValue(originalState.focalDistance);
-		} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
-			auto* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
-			orthoCam->focalDistance.setValue(originalState.focalDistance);
-			orthoCam->height.setValue(originalState.height);
-		}
+		restoreCameraState(originalState);
 
 		auto& animator = NavigationAnimator::getInstance();
 		animator.stopCurrentAnimation();
@@ -321,13 +293,20 @@ void SceneManager::toggleCameraMode() {
 		return;
 	}
 
+	// Capture current camera state
 	SbVec3f oldPosition = m_camera->position.getValue();
 	SbRotation oldOrientation = m_camera->orientation.getValue();
 	float oldFocalDistance = m_camera->focalDistance.getValue();
+	float oldHeight = 0.0f;
+	if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+		oldHeight = static_cast<SoOrthographicCamera*>(m_camera)->height.getValue();
+	}
 
+	// Remove old camera
 	m_sceneRoot->removeChild(m_camera);
 	m_camera->unref();
 
+	// Create new camera of opposite type
 	m_isPerspectiveCamera = !m_isPerspectiveCamera;
 	if (m_isPerspectiveCamera) {
 		m_camera = new SoPerspectiveCamera;
@@ -337,22 +316,18 @@ void SceneManager::toggleCameraMode() {
 	}
 	m_camera->ref();
 
-	m_camera->position.setValue(oldPosition);
-	m_camera->orientation.setValue(oldOrientation);
-	m_camera->focalDistance.setValue(oldFocalDistance);
+	// Restore camera state to new camera
+	applyCameraState(oldPosition, oldOrientation, oldFocalDistance, oldHeight);
+	setupCameraForViewAll();
 
-	wxSize size = m_canvas->GetClientSize();
-	if (size.x > 0 && size.y > 0) {
-		m_camera->aspectRatio.setValue(static_cast<float>(size.x) / static_cast<float>(size.y));
-	}
-
+	// Add new camera to scene
 	m_sceneRoot->insertChild(m_camera, 0);
 
-	SbViewportRegion viewportToggle(size.x, size.y);
-	m_camera->viewAll(m_sceneRoot, viewportToggle);
+	// Fit view to scene
+	performViewAll();
 
 	// Update clipping planes based on scene bounds
-	updateSceneBounds();
+	forceBoundsUpdate();
 
 	if (m_canvas->getRefreshManager()) {
 		m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
@@ -394,49 +369,22 @@ void SceneManager::setView(const std::string& viewName) {
 	// Preserve original camera state so we can animate from it
 	CameraAnimation::CameraState originalState = captureCameraState();
 
-	// Apply temporary state to leverage Inventor's viewAll for fitting
+	// Position camera for the desired direction
+	positionCameraForDirection(direction, m_sceneBoundingBox);
+
+	// Set camera orientation
 	SbRotation rotation(SbVec3f(0, 0, -1), direction);
 	m_camera->orientation.setValue(rotation);
-	float defaultDistance = 10.0f;
-	m_camera->position.setValue(direction * defaultDistance);
-	m_camera->focalDistance.setValue(defaultDistance);
-	if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
-		static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(defaultDistance);
-	}
 
-	wxSize clientSize = m_canvas ? m_canvas->GetClientSize() : wxSize(1, 1);
-	SoGetBoundingBoxAction bboxAction(SbViewportRegion(clientSize.x, clientSize.y));
-	bboxAction.apply(m_sceneRoot);
-	SbBox3f bbox = bboxAction.getBoundingBox();
-	if (!bbox.isEmpty()) {
-		SbVec3f center = bbox.getCenter();
-		float radius = (bbox.getMax() - bbox.getMin()).length() / 2.0f;
-		if (radius < 2.0f) {
-			radius = 2.0f;
-		}
-		m_camera->position.setValue(center + direction * (radius * 2.0f));
-		m_camera->focalDistance.setValue(radius * 2.0f);
-		if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
-			static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(radius * 2.0f);
-		}
-	}
-
-	SbViewportRegion viewport(clientSize.x, clientSize.y);
-	m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
+	// Setup aspect ratio and perform view all
+	setupCameraForViewAll();
+	performViewAll();
 
 	// Capture resulting state as animation target
 	CameraAnimation::CameraState targetState = captureCameraState();
 
 	// Restore original state prior to animation/direct application
-	m_camera->position.setValue(originalState.position);
-	m_camera->orientation.setValue(originalState.rotation);
-	if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
-		static_cast<SoPerspectiveCamera*>(m_camera)->focalDistance.setValue(originalState.focalDistance);
-	} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
-		SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
-		orthoCam->focalDistance.setValue(originalState.focalDistance);
-		orthoCam->height.setValue(originalState.height);
-	}
+	restoreCameraState(originalState);
 
 	if (m_enableViewAnimation) {
 		auto& animator = NavigationAnimator::getInstance();
@@ -450,18 +398,11 @@ void SceneManager::setView(const std::string& viewName) {
 			targetState.focalDistance,
 			targetState.height);
 	} else {
-		m_camera->position.setValue(targetState.position);
-		m_camera->orientation.setValue(targetState.rotation);
-		if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
-			static_cast<SoPerspectiveCamera*>(m_camera)->focalDistance.setValue(targetState.focalDistance);
-		} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
-			SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
-			orthoCam->focalDistance.setValue(targetState.focalDistance);
-			orthoCam->height.setValue(targetState.height);
-		}
+		// Apply target state directly
+		applyCameraState(targetState.position, targetState.rotation, targetState.focalDistance, targetState.height);
 	}
 
-	updateSceneBounds();
+	forceBoundsUpdate();
 
 	LOG_INF_S("Switched to view: " + viewName);
 
@@ -497,70 +438,33 @@ CameraAnimation::CameraState SceneManager::captureCameraState() const {
 void SceneManager::render(const wxSize& size, bool fastMode) {
 	auto sceneRenderStartTime = std::chrono::high_resolution_clock::now();
 
+	// Set camera aspect ratio and update culling
 	if (m_camera) {
 		m_camera->aspectRatio.setValue(static_cast<float>(size.x) / static_cast<float>(size.y));
 	}
-
-	// Update culling system before rendering
 	if (m_cullingEnabled && RenderingToolkitAPI::isInitialized()) {
-		auto cullingStartTime = std::chrono::high_resolution_clock::now();
 		updateCulling();
-		auto cullingEndTime = std::chrono::high_resolution_clock::now();
-		auto cullingDuration = std::chrono::duration_cast<std::chrono::microseconds>(cullingEndTime - cullingStartTime);
 	}
-
-	auto viewportStartTime = std::chrono::high_resolution_clock::now();
 
 	// Create viewport region with validation
 	SbViewportRegion viewport(size.x, size.y);
 	if (viewport.getViewportSizePixels()[0] <= 0 || viewport.getViewportSizePixels()[1] <= 0) {
+#ifdef _DEBUG
 		LOG_ERR_S("SceneManager::render: Invalid viewport size: " +
 			std::to_string(size.x) + "x" + std::to_string(size.y));
+#endif
 		return;
 	}
 
+	// Setup OpenGL state
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_LIGHTING);
 	glEnable(GL_NORMALIZE);
 	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 	glEnable(GL_TEXTURE_2D);
 	glClear(GL_DEPTH_BUFFER_BIT);
-	
-	// Save current blend state to restore later
-	GLboolean blendEnabled = glIsEnabled(GL_BLEND);
-	GLint blendSrc, blendDst;
-	glGetIntegerv(GL_BLEND_SRC, &blendSrc);
-	glGetIntegerv(GL_BLEND_DST, &blendDst);
-	
-	// Set up blending for multi-pass rendering
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	
-	// Create pass callback state to track pass count and avoid redundant background rendering
-	PassCallbackState passState(this);
-	
-	SoGLRenderAction renderAction(viewport);
-	try {
-		renderAction.setSmoothing(true);
-		// Use SORTED_OBJECT_BLEND with 2 passes for proper transparency sorting
-		// Pass callback will redraw background before second pass only to prevent darkening
-		renderAction.setNumPasses(2);
-		renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
-		renderAction.setPassCallback(renderPassCallback, &passState);
-		renderAction.setCacheContext(1);
-	} catch (const std::exception& e) {
-		LOG_ERR_S("SceneManager::render: Failed to configure SoGLRenderAction: " + std::string(e.what()));
-		return;
-	} catch (...) {
-		LOG_ERR_S("SceneManager::render: Failed to configure SoGLRenderAction (unknown exception)");
-		return;
-	}
-
-	auto viewportEndTime = std::chrono::high_resolution_clock::now();
-	auto viewportDuration = std::chrono::duration_cast<std::chrono::microseconds>(viewportEndTime - viewportStartTime);
-
-	// Explicitly enable blending for line smoothing
-	auto glSetupStartTime = std::chrono::high_resolution_clock::now();
 
 	// Basic OpenGL capability check
 	const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
@@ -572,66 +476,72 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		}
 	}
 
-	// Reset OpenGL errors before rendering
+	// Reset OpenGL errors before rendering (only log in debug builds)
 	GLenum err;
 	while ((err = glGetError()) != GL_NO_ERROR) {
-		LOG_WRN_S("SceneManager::render: Pre-render OpenGL error: " + std::to_string(err));
+#ifdef _DEBUG
+		static int errorCount = 0;
+		if (errorCount < 5) { // Limit error messages to prevent spam
+			LOG_WRN_S("SceneManager::render: Pre-render OpenGL error: " + std::to_string(err));
+			errorCount++;
+		}
+#endif
 	}
 
 	// Reset OpenGL state to prevent errors
 	glDisable(GL_TEXTURE_2D);
-	auto glSetupEndTime = std::chrono::high_resolution_clock::now();
-	auto glSetupDuration = std::chrono::duration_cast<std::chrono::microseconds>(glSetupEndTime - glSetupStartTime);
 
-	// Render the scene with error protection
-	auto coinRenderStartTime = std::chrono::high_resolution_clock::now();
-	
-	// Check if scene root is valid before rendering
-	if (!m_sceneRoot) {
-		LOG_ERR_S("SceneManager::render: Scene root is null, skipping render");
-		return;
-	}
+	// Save current blend state to restore later
+	bool blendEnabled = glIsEnabled(GL_BLEND);
+	int blendSrc, blendDst;
+	glGetIntegerv(GL_BLEND_SRC, &blendSrc);
+	glGetIntegerv(GL_BLEND_DST, &blendDst);
 
-	// Additional validation: Check if scene root has valid children
-	if (m_sceneRoot->getNumChildren() == 0) {
-		LOG_WRN_S("SceneManager::render: Scene root has no children, this may indicate an empty scene");
-	}
+	// Create pass callback state for rendering
+	PassCallbackState passState(this);
 
-	// Validate and repair geometry objects before rendering
-	if (m_canvas && m_canvas->getOCCViewer()) {
-		auto geometries = m_canvas->getOCCViewer()->getAllGeometry();
-		int validGeometries = 0;
-		int repairedGeometries = 0;
+	// Validate and repair geometries (extracted to separate method)
+	validateAndRepairGeometries();
 
-		for (const auto& geometry : geometries) {
-			if (geometry) {
-				auto coinNode = geometry->getCoinNode();
-				if (coinNode) {
-					validGeometries++;
-				} else {
-					LOG_WRN_S("SceneManager::render: Geometry '" + geometry->getName() + "' has null Coin3D node, rebuilding...");
-					try {
-						// Force rebuild the Coin3D representation
-						MeshParameters defaultParams;
-						geometry->forceCoinRepresentationRebuild(defaultParams);
-						repairedGeometries++;
-						LOG_INF_S("SceneManager::render: Successfully rebuilt Coin3D node for geometry '" + geometry->getName() + "'");
-					} catch (const std::exception& e) {
-						LOG_ERR_S("SceneManager::render: Failed to rebuild geometry '" + geometry->getName() + "': " + std::string(e.what()));
-					} catch (...) {
-						LOG_ERR_S("SceneManager::render: Failed to rebuild geometry '" + geometry->getName() + "' (unknown exception)");
-					}
-				}
-			}
-		}
+	// Process any deferred updates before rendering
+	processDeferredUpdates();
 
-		if (repairedGeometries > 0) {
-			LOG_INF_S("SceneManager::render: Repaired " + std::to_string(repairedGeometries) +
-				" geometries with invalid Coin3D nodes");
-		}
-	}
-
+	// Configure optimized multi-pass rendering with adaptive pass count
+	SoGLRenderAction renderAction(viewport);
 	try {
+		renderAction.setSmoothing(true);
+
+		// Dynamically determine optimal pass count based on scene content
+		int optimalPasses = determineOptimalPassCount();
+		renderAction.setNumPasses(optimalPasses);
+
+		// Optimize transparency rendering based on pass count and scene complexity
+		if (optimalPasses > 2 && hasTransparentObjects()) {
+			// Use more sophisticated transparency sorting for complex scenes with transparency
+			renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_SORTED_TRIANGLE_BLEND);
+		} else {
+			// Use standard transparency method for simpler scenes
+			renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
+		}
+
+		renderAction.setPassCallback(renderPassCallback, &passState);
+		renderAction.setCacheContext(1);
+
+		// Check if scene root is valid before rendering
+		if (!m_sceneRoot) {
+#ifdef _DEBUG
+			LOG_ERR_S("SceneManager::render: Scene root is null, skipping render");
+#endif
+			return;
+		}
+
+		// Additional validation: Check if scene root has valid children
+		if (m_sceneRoot->getNumChildren() == 0) {
+#ifdef _DEBUG
+			LOG_WRN_S("SceneManager::render: Scene root has no children, this may indicate an empty scene");
+#endif
+		}
+
 		renderAction.apply(m_sceneRoot);
 	} catch (const std::exception& e) {
 		// Restore blend state before returning
@@ -639,9 +549,10 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		if (!blendEnabled) {
 			glDisable(GL_BLEND);
 		}
-		LOG_ERR_S("SceneManager::render: Exception during Coin3D rendering: " + std::string(e.what()));
-		// Try to recover by clearing and rebuilding scene
-		rebuildScene();
+
+		handleError(ErrorCategory::RENDERING, ErrorSeverity::HIGH,
+			"Exception during Coin3D rendering", &e,
+			[this]() { deferUpdate(UpdateType::FULL_REBUILD, [this]() { rebuildScene(); }, 10, "Full scene rebuild after rendering error"); });
 		return;
 	} catch (...) {
 		// Restore blend state before returning
@@ -649,37 +560,40 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		if (!blendEnabled) {
 			glDisable(GL_BLEND);
 		}
-		LOG_ERR_S("SceneManager::render: Unknown exception during Coin3D rendering");
-		// Try to recover by clearing and rebuilding scene
-		rebuildScene();
+
+		handleError(ErrorCategory::RENDERING, ErrorSeverity::HIGH,
+			"Unknown exception during Coin3D rendering", nullptr,
+			[this]() { deferUpdate(UpdateType::FULL_REBUILD, [this]() { rebuildScene(); }, 10, "Full scene rebuild after unknown rendering error"); });
 		return;
 	}
-	
-	auto coinRenderEndTime = std::chrono::high_resolution_clock::now();
-	auto coinRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(coinRenderEndTime - coinRenderStartTime);
 
 	// Restore previous blend state
 	glBlendFunc(blendSrc, blendDst);
 	if (!blendEnabled) {
 		glDisable(GL_BLEND);
 	}
-	
-	// Check for OpenGL errors after rendering
-	while ((err = glGetError()) != GL_NO_ERROR) {
-		LOG_ERR_S("Post-render: OpenGL error: " + std::to_string(err));
-	}
 
-	auto sceneRenderEndTime = std::chrono::high_resolution_clock::now();
-	auto sceneRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(sceneRenderEndTime - sceneRenderStartTime);
+	// Check for OpenGL errors after rendering (only log in debug builds)
+	while ((err = glGetError()) != GL_NO_ERROR) {
+#ifdef _DEBUG
+		static int postErrorCount = 0;
+		if (postErrorCount < 5) { // Limit error messages to prevent spam
+			LOG_ERR_S("Post-render: OpenGL error: " + std::to_string(err));
+			postErrorCount++;
+		}
+#endif
+	}
 
 	// Publish to PerformanceDataBus instead of logging
 	perf::ScenePerfSample s;
 	s.width = size.x;
 	s.height = size.y;
 	s.mode = fastMode ? "FAST" : "QUALITY";
-	s.viewportUs = static_cast<int>(viewportDuration.count());
-	s.glSetupUs = static_cast<int>(glSetupDuration.count());
-	s.coinSceneMs = static_cast<int>(coinRenderDuration.count());
+	s.viewportUs = 0;
+	s.glSetupUs = 0;
+	s.coinSceneMs = 0;
+	auto sceneRenderEndTime = std::chrono::high_resolution_clock::now();
+	auto sceneRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(sceneRenderEndTime - sceneRenderStartTime);
 	s.totalSceneMs = static_cast<int>(sceneRenderDuration.count());
 	s.fps = 1000.0 / std::max(1, s.totalSceneMs);
 	perf::PerformanceBus::instance().setScene(s);
@@ -771,29 +685,56 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
 	return true;
 }
 
+// Optimized scene bounds calculation with caching and frame skipping
 void SceneManager::updateSceneBounds() {
+	// Always update if forced, or if no valid bounds exist, or periodically
+	bool needsUpdate = m_forceBoundsUpdate ||
+		m_sceneBoundingBox.isEmpty() ||
+		(++m_boundsUpdateFrameSkip >= BOUNDS_UPDATE_INTERVAL);
+
+	if (!needsUpdate) {
+		return; // Skip bounds update this frame
+	}
+
+	// Reset update state
+	m_forceBoundsUpdate = false;
+	m_boundsUpdateFrameSkip = 0;
+
+	// Check if we have valid objects to bound
 	if (!m_objectRoot || m_objectRoot->getNumChildren() == 0) {
 		m_sceneBoundingBox.makeEmpty();
 		return;
 	}
 
+	// Perform expensive bounds calculation
 	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
 	SoGetBoundingBoxAction bboxAction(viewport);
 	bboxAction.apply(m_objectRoot);
-	m_sceneBoundingBox = bboxAction.getBoundingBox();
+	SbBox3f newBounds = bboxAction.getBoundingBox();
 
-	if (!m_sceneBoundingBox.isEmpty()) {
-		LOG_INF_S("Scene bounds updated.");
-		if (m_coordSystemRenderer) {
-			m_coordSystemRenderer->updateCoordinateSystemSize(getSceneBoundingBoxSize());
-		}
-		// Add this line to update reference grid
-		if (m_pickingAidManager) {
-			m_pickingAidManager->updateReferenceGrid();
-		}
+	// Only update if bounds actually changed (to avoid unnecessary updates)
+	if (newBounds != m_sceneBoundingBox) {
+		m_sceneBoundingBox = newBounds;
 
-		// Update camera clipping planes based on scene bounds
-		updateCameraClippingPlanes();
+		if (!m_sceneBoundingBox.isEmpty()) {
+#ifdef _DEBUG
+			static int boundsUpdateCount = 0;
+			if (boundsUpdateCount < 5) { // Limit bounds update messages
+				LOG_INF_S("Scene bounds updated.");
+				boundsUpdateCount++;
+			}
+#endif
+			// Update dependent systems only when bounds actually change
+			if (m_coordSystemRenderer) {
+				m_coordSystemRenderer->updateCoordinateSystemSize(getSceneBoundingBoxSize());
+			}
+			if (m_pickingAidManager) {
+				m_pickingAidManager->updateReferenceGrid();
+			}
+
+			// Update camera clipping planes based on scene bounds
+			updateCameraClippingPlanes();
+		}
 	}
 }
 
@@ -935,22 +876,25 @@ void SceneManager::createCheckerboardPlane(float planeZ) {
 }
 
 void SceneManager::setCheckerboardVisible(bool visible) {
-	if (visible) {
-		if (!m_checkerboardSeparator) createCheckerboardPlane(0.0f);
-		if (!m_checkerboardVisible && m_objectRoot && m_checkerboardSeparator) {
-			m_objectRoot->addChild(m_checkerboardSeparator);
-			m_checkerboardVisible = true;
+	// Use deferred update to avoid immediate canvas refresh
+	deferUpdate(UpdateType::CHECKERBOARD_UPDATE, [this, visible]() {
+		if (visible) {
+			if (!m_checkerboardSeparator) createCheckerboardPlane(0.0f);
+			if (!m_checkerboardVisible && m_objectRoot && m_checkerboardSeparator) {
+				m_objectRoot->addChild(m_checkerboardSeparator);
+				m_checkerboardVisible = true;
+			}
 		}
-	}
-	else {
-		if (m_checkerboardSeparator && m_objectRoot && m_checkerboardVisible) {
-			m_objectRoot->removeChild(m_checkerboardSeparator);
-			m_checkerboardVisible = false;
+		else {
+			if (m_checkerboardSeparator && m_objectRoot && m_checkerboardVisible) {
+				m_objectRoot->removeChild(m_checkerboardSeparator);
+				m_checkerboardVisible = false;
+			}
 		}
-	}
-	if (m_canvas) {
-		m_canvas->Refresh(true);
-	}
+		if (m_canvas) {
+			m_canvas->Refresh(true);
+		}
+	}, 1, "Set checkerboard visibility to " + std::string(visible ? "visible" : "hidden"));
 }
 
 bool SceneManager::isCheckerboardVisible() const {
@@ -1063,425 +1007,280 @@ void SceneManager::initializeLightingConfigCallback() {
 }
 
 void SceneManager::updateSceneLighting() {
-	if (!m_sceneRoot) {
-		LOG_ERR_S("Cannot update lighting: Scene root not available");
-		return;
-	}
-
-	LOG_INF_S("Updating lighting from configuration");
-
-	// Check if we're in NoShading mode - use different lighting setup
-	bool isNoShading = false;
-	if (m_canvas && m_canvas->getOCCViewer()) {
-		auto displaySettings = m_canvas->getOCCViewer()->getDisplaySettings();
-		isNoShading = (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading);
-	}
-
-	// Clear existing environment, light model and light nodes that were previously inserted
-	// We only remove nodes that appear before m_objectRoot to avoid touching other overlays
-	int objectIndex = m_objectRoot ? m_sceneRoot->findChild(m_objectRoot) : -1;
-	for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
-		if (objectIndex >= 0 && i >= objectIndex) continue; // do not remove anything after objects
-		SoNode* child = m_sceneRoot->getChild(i);
-		if (child->isOfType(SoLightModel::getClassTypeId()) ||
-			child->isOfType(SoEnvironment::getClassTypeId()) ||
-			child->isOfType(SoDirectionalLight::getClassTypeId()) ||
-			child->isOfType(SoPointLight::getClassTypeId()) ||
-			child->isOfType(SoSpotLight::getClassTypeId())) {
-			m_sceneRoot->removeChild(i);
-		}
-	}
-
-	// Note: Geometry rebuild will be triggered after lighting update is complete
-
-	// Get lighting configuration
-	LightingConfig& config = LightingConfig::getInstance();
-
-	// Set light model based on display mode
-	SoLightModel* lightModel = new SoLightModel;
-	if (isNoShading) {
-		// Use BASE_COLOR for no shading - no lighting calculations, direct color
-		lightModel->model.setValue(SoLightModel::BASE_COLOR);
-		LOG_INF_S("SceneManager::updateSceneLighting: Using BASE_COLOR light model for NoShading");
-	} else {
-		// Use PHONG for normal lighting
-		lightModel->model.setValue(SoLightModel::PHONG);
-	}
-
-	// Insert light model at the beginning of scene root (after camera)
-	if (m_sceneRoot) {
-		// Insert new light model after camera (index 1)
-		m_sceneRoot->insertChild(lightModel, 1);
-	}
-
-	// Add environment settings
-	auto envSettings = config.getEnvironmentSettings();
-	SoEnvironment* environment = new SoEnvironment;
-
-	// Convert Quantity_Color to SbColor
-	Standard_Real r = 0.9, g = 0.9, b = 0.9; // Default neutral values
-	if (isNoShading) {
-		// For NoShading mode, use neutral ambient color with moderate intensity
-		environment->ambientColor.setValue(0.9f, 0.9f, 0.9f); // Light gray ambient
-		environment->ambientIntensity.setValue(0.5f); // Moderate ambient intensity
-		LOG_INF_S("SceneManager::updateSceneLighting: Using neutral ambient lighting for NoShading");
-	} else {
-		// Use configured ambient settings for normal modes
-		envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-		environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-		environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
-	}
-
-	// Place environment on scene root before object root so it affects geometry
-	{
-		int insertIndex = m_sceneRoot->getNumChildren();
-		if (m_objectRoot) {
-			int objIdx = m_sceneRoot->findChild(m_objectRoot);
-			if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-		}
-		m_sceneRoot->insertChild(environment, insertIndex);
-	}
-
-	// Use appropriate intensity value for logging
-	float logIntensity = isNoShading ? 0.5f : static_cast<float>(envSettings.ambientIntensity);
-	LOG_INF_S("Added environment lighting - ambient color: " +
-		std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) +
-		", intensity: " + std::to_string(logIntensity));
-
-	// Add lights from configuration
-	auto lights = config.getAllLights();
-	LOG_INF_S("Adding " + std::to_string(lights.size()) + " lights from configuration");
-
-	for (const auto& lightSettings : lights) {
-		if (!lightSettings.enabled) {
-			LOG_INF_S("Skipping disabled light: " + lightSettings.name);
-			continue;
+	// Use deferred update for lighting changes to avoid blocking the main thread
+	deferUpdate(UpdateType::LIGHTING_UPDATE, [this]() {
+		// Check if we're in NoShading mode - use different lighting setup
+		bool isNoShading = false;
+		if (m_canvas && m_canvas->getOCCViewer()) {
+			auto displaySettings = m_canvas->getOCCViewer()->getDisplaySettings();
+			isNoShading = (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading);
 		}
 
-		try {
-			if (lightSettings.type == "directional") {
-				SoDirectionalLight* light = new SoDirectionalLight;
+		// Use unified lighting setup method
+		setupLightingFromConfig(true, isNoShading);
 
-				// Set light properties
-				light->direction.setValue(static_cast<float>(lightSettings.directionX),
-					static_cast<float>(lightSettings.directionY),
-					static_cast<float>(lightSettings.directionZ));
+		// Update all geometries to respond to lighting changes (only for updates)
+		if (m_canvas && m_canvas->getOCCViewer()) {
+			OCCViewer* viewer = m_canvas->getOCCViewer();
+			auto allGeometries = viewer->getAllGeometry();
+			LOG_INF_S("Updating " + std::to_string(allGeometries.size()) + " geometries for lighting changes");
 
-				Standard_Real r, g, b;
-				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
-				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
-				light->on.setValue(true);
-
-				// Place lights on scene root before object root so they affect subsequent geometry
-				{
-					int insertIndex = m_sceneRoot->getNumChildren();
-					if (m_objectRoot) {
-						int objIdx = m_sceneRoot->findChild(m_objectRoot);
-						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-					}
-					m_sceneRoot->insertChild(light, insertIndex);
+			for (auto& geometry : allGeometries) {
+				if (geometry) {
+					// Update material properties for better lighting response
+					geometry->updateMaterialForLighting();
+					LOG_INF_S("Updated material for lighting: " + geometry->getName());
 				}
-
-				// Store reference to main light for compatibility
-				if (lightSettings.name == "Main Light") {
-					if (m_light) { m_light->unref(); }
-					m_light = light;
-					m_light->ref();
-				}
-
-				LOG_INF_S("Added directional light: " + lightSettings.name);
-			}
-			else if (lightSettings.type == "point") {
-				SoPointLight* light = new SoPointLight;
-
-				// Set light properties
-				light->location.setValue(static_cast<float>(lightSettings.positionX),
-					static_cast<float>(lightSettings.positionY),
-					static_cast<float>(lightSettings.positionZ));
-
-				Standard_Real r, g, b;
-				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
-				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
-				light->on.setValue(true);
-
-				{
-					int insertIndex = m_sceneRoot->getNumChildren();
-					if (m_objectRoot) {
-						int objIdx = m_sceneRoot->findChild(m_objectRoot);
-						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-					}
-					m_sceneRoot->insertChild(light, insertIndex);
-				}
-
-				LOG_INF_S("Added point light: " + lightSettings.name);
-			}
-			else if (lightSettings.type == "spot") {
-				SoSpotLight* light = new SoSpotLight;
-
-				// Set light properties
-				light->location.setValue(static_cast<float>(lightSettings.positionX),
-					static_cast<float>(lightSettings.positionY),
-					static_cast<float>(lightSettings.positionZ));
-				light->direction.setValue(static_cast<float>(lightSettings.directionX),
-					static_cast<float>(lightSettings.directionY),
-					static_cast<float>(lightSettings.directionZ));
-
-				Standard_Real r, g, b;
-				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
-				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
-				light->on.setValue(true);
-
-				{
-					int insertIndex = m_sceneRoot->getNumChildren();
-					if (m_objectRoot) {
-						int objIdx = m_sceneRoot->findChild(m_objectRoot);
-						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-					}
-					m_sceneRoot->insertChild(light, insertIndex);
-				}
-
-				LOG_INF_S("Added spot light: " + lightSettings.name);
 			}
 		}
-		catch (const std::exception& e) {
-			LOG_ERR_S("Exception while creating light " + lightSettings.name + ": " + std::string(e.what()));
-		}
-		catch (...) {
-			LOG_ERR_S("Unknown exception while creating light " + lightSettings.name);
-		}
-	}
 
-	// Ensure we have a main light reference for compatibility
-	if (!m_light) {
-		// Create a default main light if none exists
-		m_light = new SoDirectionalLight;
-		m_light->ref();
-		m_light->direction.setValue(0.5f, 0.5f, -0.7f);
-		m_light->intensity.setValue(1.0f);
-		m_light->color.setValue(1.0f, 1.0f, 1.0f);
-		m_light->on.setValue(true);
-		{
-			int insertIndex = m_sceneRoot->getNumChildren();
-			if (m_objectRoot) {
-				int objIdx = m_sceneRoot->findChild(m_objectRoot);
-				if (objIdx >= 0) insertIndex = objIdx;
+		// Request refresh
+		if (m_canvas) {
+			if (m_canvas->getRefreshManager()) {
+				m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::LIGHTING_CHANGED, true);
 			}
-			m_sceneRoot->insertChild(m_light, insertIndex);
-		}
-		LOG_INF_S("Created default main light for compatibility");
-	}
-
-	// Force scene update
-	if (m_sceneRoot) {
-		m_sceneRoot->touch();
-		LOG_INF_S("Touched scene root to force lighting update");
-	}
-
-	// Update all geometries to respond to lighting changes
-	if (m_canvas && m_canvas->getOCCViewer()) {
-		OCCViewer* viewer = m_canvas->getOCCViewer();
-		auto allGeometries = viewer->getAllGeometry();
-		LOG_INF_S("Updating " + std::to_string(allGeometries.size()) + " geometries for lighting changes");
-
-		for (auto& geometry : allGeometries) {
-			if (geometry) {
-				// Update material properties for better lighting response
-				geometry->updateMaterialForLighting();
-				LOG_INF_S("Updated material for lighting: " + geometry->getName());
+			else {
+				m_canvas->Refresh(true);
 			}
+			LOG_INF_S("Requested scene refresh for lighting changes");
 		}
-	}
 
-	// Request refresh
-	if (m_canvas) {
-		if (m_canvas->getRefreshManager()) {
-			m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::LIGHTING_CHANGED, true);
-		}
-		else {
-			m_canvas->Refresh(true);
-		}
-		LOG_INF_S("Requested scene refresh for lighting changes");
-	}
-
-	LOG_INF_S("Scene lighting updated successfully");
+		LOG_INF_S("Scene lighting updated successfully");
+	}, 2, "Update scene lighting configuration"); // Higher priority for lighting updates
 }
 
 void SceneManager::initializeLightingFromConfig() {
-	if (!m_sceneRoot) {
-		LOG_ERR_S("Cannot initialize lighting: Scene root not available");
+	// Use unified lighting setup method for initialization (no update-specific features)
+	setupLightingFromConfig(false, false);
+
+	LOG_INF_S("Lighting initialization from configuration completed");
+}
+
+// Camera state management utilities
+void SceneManager::applyCameraState(const SbVec3f& position, const SbRotation& orientation, float focalDistance, float height) {
+	if (!m_camera) return;
+
+	m_camera->position.setValue(position);
+	m_camera->orientation.setValue(orientation);
+	m_camera->focalDistance.setValue(focalDistance);
+
+	if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId()) && height > 0.0f) {
+		static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(height);
+	}
+}
+
+void SceneManager::restoreCameraState(const CameraAnimation::CameraState& state) {
+	if (!m_camera) return;
+
+	m_camera->position.setValue(state.position);
+	m_camera->orientation.setValue(state.rotation);
+
+	if (m_camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
+		static_cast<SoPerspectiveCamera*>(m_camera)->focalDistance.setValue(state.focalDistance);
+	} else if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+		SoOrthographicCamera* orthoCam = static_cast<SoOrthographicCamera*>(m_camera);
+		orthoCam->focalDistance.setValue(state.focalDistance);
+		orthoCam->height.setValue(state.height);
+	}
+}
+
+void SceneManager::setupCameraForViewAll() {
+	if (!m_camera || !m_canvas) return;
+
+	wxSize size = m_canvas->GetClientSize();
+	if (size.x > 0 && size.y > 0) {
+		m_camera->aspectRatio.setValue(static_cast<float>(size.x) / static_cast<float>(size.y));
+	}
+}
+
+void SceneManager::performViewAll() {
+	if (!m_camera || !m_sceneRoot || !m_canvas) return;
+
+	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
+	m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
+}
+
+void SceneManager::positionCameraForDirection(const SbVec3f& direction, const SbBox3f& sceneBounds) {
+	if (!m_camera) return;
+
+	float defaultDistance = 10.0f;
+	m_camera->position.setValue(direction * defaultDistance);
+	m_camera->focalDistance.setValue(defaultDistance);
+
+	if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+		static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(defaultDistance);
+	}
+
+	// If we have valid scene bounds, position camera based on scene size
+	if (!sceneBounds.isEmpty()) {
+		SbVec3f center = sceneBounds.getCenter();
+		float radius = (sceneBounds.getMax() - sceneBounds.getMin()).length() / 2.0f;
+		if (radius < 2.0f) {
+			radius = 2.0f;
+		}
+		m_camera->position.setValue(center + direction * (radius * 2.0f));
+		m_camera->focalDistance.setValue(radius * 2.0f);
+		if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+			static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(radius * 2.0f);
+		}
+	}
+}
+
+// Unified error handling implementation
+void SceneManager::handleError(ErrorCategory category, ErrorSeverity severity, const std::string& message,
+	const std::exception* e, std::function<void()> recoveryAction) {
+
+	// Build error message
+	std::string fullMessage = message;
+	if (e) {
+		fullMessage += ": " + std::string(e->what());
+	}
+
+	// Category-specific error counting and limits
+	static std::map<ErrorCategory, int> errorCounts;
+	static std::map<ErrorCategory, int> errorLimits = {
+		{ErrorCategory::RENDERING, 3},
+		{ErrorCategory::GEOMETRY, 5},
+		{ErrorCategory::LIGHTING, 3},
+		{ErrorCategory::GENERAL, 10}
+	};
+
+	// Check if we should log this error
+	bool shouldLog = true;
+	auto it = errorCounts.find(category);
+	if (it != errorCounts.end() && it->second >= errorLimits[category]) {
+		shouldLog = false;
+	}
+
+	// Log error if appropriate
+	if (shouldLog) {
+		switch (severity) {
+		case ErrorSeverity::LOW:
+#ifdef _DEBUG
+			LOG_WRN_S("[LOW] " + fullMessage);
+#endif
+			break;
+		case ErrorSeverity::MEDIUM:
+			LOG_WRN_S("[MEDIUM] " + fullMessage);
+			break;
+		case ErrorSeverity::HIGH:
+			LOG_ERR_S("[HIGH] " + fullMessage);
+			break;
+		case ErrorSeverity::CRITICAL:
+			LOG_ERR_S("[CRITICAL] " + fullMessage);
+			break;
+		}
+		errorCounts[category]++;
+	}
+
+	// Execute recovery action if provided
+	if (recoveryAction) {
+		try {
+			recoveryAction();
+		} catch (const std::exception& recoveryException) {
+#ifdef _DEBUG
+			LOG_ERR_S("Error during recovery action: " + std::string(recoveryException.what()));
+#endif
+		}
+	}
+}
+
+// Multi-pass rendering optimization methods
+int SceneManager::determineOptimalPassCount() {
+	// Base pass count for anti-aliasing
+	int passCount = 2;
+
+	// Increase passes for scenes with transparent objects
+	if (hasTransparentObjects()) {
+		passCount = 3; // Additional pass for better transparency sorting
+	}
+
+	// Cap at reasonable maximum for performance
+	return std::min(passCount, 4);
+}
+
+bool SceneManager::hasTransparentObjects() const {
+	// TODO: Implement proper transparency detection
+	// For now, assume no transparent objects to keep simple
+	// This can be enhanced later by checking material properties
+	// or geometry appearance settings
+	return false;
+}
+
+// Deferred update system implementation
+void SceneManager::deferUpdate(UpdateType type, std::function<void()> action, int priority, const std::string& description) {
+	// Check if we already have a similar update pending
+	for (auto& update : m_deferredUpdates) {
+		if (update.type == type) {
+			// Replace with higher priority update if this one has higher priority
+			if (priority > update.priority) {
+				update.action = action;
+				update.priority = priority;
+				update.description = description;
+			}
+			return;
+		}
+	}
+
+	// Add new deferred update
+	m_deferredUpdates.push_back({type, action, priority, description});
+#ifdef _DEBUG
+	LOG_INF_S("Deferred update queued: " + description + " (priority: " + std::to_string(priority) + ")");
+#endif
+}
+
+void SceneManager::processDeferredUpdates() {
+	if (m_deferredUpdates.empty()) {
 		return;
 	}
 
-	LOG_INF_S("Initializing lighting from configuration");
+#ifdef _DEBUG
+	LOG_INF_S("Processing " + std::to_string(m_deferredUpdates.size()) + " deferred updates");
+#endif
 
-	// Clear existing environment and light nodes before objects
-	int objectIndex = m_objectRoot ? m_sceneRoot->findChild(m_objectRoot) : -1;
-	for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
-		if (objectIndex >= 0 && i >= objectIndex) continue;
-		SoNode* child = m_sceneRoot->getChild(i);
-		if (child->isOfType(SoEnvironment::getClassTypeId()) ||
-			child->isOfType(SoDirectionalLight::getClassTypeId()) ||
-			child->isOfType(SoPointLight::getClassTypeId()) ||
-			child->isOfType(SoSpotLight::getClassTypeId())) {
-			m_sceneRoot->removeChild(i);
-		}
-	}
+	// Sort by priority (higher priority first)
+	std::sort(m_deferredUpdates.begin(), m_deferredUpdates.end(),
+		[](const DeferredUpdate& a, const DeferredUpdate& b) {
+			return a.priority > b.priority;
+		});
 
-	// Get lighting configuration
-	LightingConfig& config = LightingConfig::getInstance();
+	// Execute updates, but limit to prevent frame drops
+	const size_t maxUpdatesPerFrame = 5;
+	size_t processed = 0;
 
-	// Add environment settings
-	auto envSettings = config.getEnvironmentSettings();
-	SoEnvironment* environment = new SoEnvironment;
-
-	// Convert Quantity_Color to SbColor
-	Standard_Real r, g, b;
-	envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-	environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-	environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
-
-	// Place environment on scene root before object root so it affects geometry
-	{
-		int insertIndex = m_sceneRoot->getNumChildren();
-		if (m_objectRoot) {
-			int objIdx = m_sceneRoot->findChild(m_objectRoot);
-			if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-		}
-		m_sceneRoot->insertChild(environment, insertIndex);
-	}
-
-	LOG_INF_S("Added environment lighting - ambient color: " +
-		std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) +
-		", intensity: " + std::to_string(envSettings.ambientIntensity));
-
-	// Add lights from configuration
-	auto lights = config.getAllLights();
-	LOG_INF_S("Adding " + std::to_string(lights.size()) + " lights from configuration");
-
-	for (const auto& lightSettings : lights) {
-		if (!lightSettings.enabled) {
-			LOG_INF_S("Skipping disabled light: " + lightSettings.name);
-			continue;
-		}
-
+	for (auto it = m_deferredUpdates.begin(); it != m_deferredUpdates.end() && processed < maxUpdatesPerFrame; ) {
 		try {
-			if (lightSettings.type == "directional") {
-				SoDirectionalLight* light = new SoDirectionalLight;
-
-				// Set light properties
-				light->direction.setValue(static_cast<float>(lightSettings.directionX),
-					static_cast<float>(lightSettings.directionY),
-					static_cast<float>(lightSettings.directionZ));
-
-				Standard_Real r, g, b;
-				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
-				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
-				light->on.setValue(true);
-
-				{
-					int insertIndex = m_sceneRoot->getNumChildren();
-					if (m_objectRoot) {
-						int objIdx = m_sceneRoot->findChild(m_objectRoot);
-						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-					}
-					m_sceneRoot->insertChild(light, insertIndex);
-				}
-
-				// Store reference to main light for compatibility
-				if (lightSettings.name == "Main Light") {
-					m_light = light;
-					m_light->ref();
-				}
-
-				LOG_INF_S("Added directional light: " + lightSettings.name);
-			}
-			else if (lightSettings.type == "point") {
-				SoPointLight* light = new SoPointLight;
-
-				// Set light properties
-				light->location.setValue(static_cast<float>(lightSettings.positionX),
-					static_cast<float>(lightSettings.positionY),
-					static_cast<float>(lightSettings.positionZ));
-
-				Standard_Real r, g, b;
-				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
-				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
-				light->on.setValue(true);
-
-				{
-					int insertIndex = m_sceneRoot->getNumChildren();
-					if (m_objectRoot) {
-						int objIdx = m_sceneRoot->findChild(m_objectRoot);
-						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-					}
-					m_sceneRoot->insertChild(light, insertIndex);
-				}
-
-				LOG_INF_S("Added point light: " + lightSettings.name);
-			}
-			else if (lightSettings.type == "spot") {
-				SoSpotLight* light = new SoSpotLight;
-
-				// Set light properties
-				light->location.setValue(static_cast<float>(lightSettings.positionX),
-					static_cast<float>(lightSettings.positionY),
-					static_cast<float>(lightSettings.positionZ));
-				light->direction.setValue(static_cast<float>(lightSettings.directionX),
-					static_cast<float>(lightSettings.directionY),
-					static_cast<float>(lightSettings.directionZ));
-
-				Standard_Real r, g, b;
-				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
-				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
-				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
-				light->on.setValue(true);
-
-				{
-					int insertIndex = m_sceneRoot->getNumChildren();
-					if (m_objectRoot) {
-						int objIdx = m_sceneRoot->findChild(m_objectRoot);
-						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
-					}
-					m_sceneRoot->insertChild(light, insertIndex);
-				}
-
-				LOG_INF_S("Added spot light: " + lightSettings.name);
-			}
-		}
-		catch (const std::exception& e) {
-			LOG_ERR_S("Exception while creating light " + lightSettings.name + ": " + std::string(e.what()));
-		}
-		catch (...) {
-			LOG_ERR_S("Unknown exception while creating light " + lightSettings.name);
+			it->action();
+#ifdef _DEBUG
+			LOG_INF_S("Executed deferred update: " + it->description);
+#endif
+			it = m_deferredUpdates.erase(it);
+			processed++;
+		} catch (const std::exception& e) {
+			handleError(ErrorCategory::GENERAL, ErrorSeverity::HIGH,
+				"Exception during deferred update: " + it->description, &e);
+			it = m_deferredUpdates.erase(it);
+			processed++;
 		}
 	}
 
-	// Ensure we have a main light reference for compatibility
-	if (!m_light) {
-		// Create a default main light if none exists
-		m_light = new SoDirectionalLight;
-		m_light->ref();
-		m_light->direction.setValue(0.5f, 0.5f, -0.7f);
-		m_light->intensity.setValue(1.0f);
-		m_light->color.setValue(1.0f, 1.0f, 1.0f);
-		m_light->on.setValue(true);
-		{
-			int insertIndex = m_sceneRoot->getNumChildren();
-			if (m_objectRoot) {
-				int objIdx = m_sceneRoot->findChild(m_objectRoot);
-				if (objIdx >= 0) insertIndex = objIdx;
-			}
-			m_sceneRoot->insertChild(m_light, insertIndex);
-		}
-		LOG_INF_S("Created default main light for compatibility");
+	// If we still have updates remaining, they'll be processed in the next frame
+	if (!m_deferredUpdates.empty()) {
+#ifdef _DEBUG
+		LOG_INF_S(std::to_string(m_deferredUpdates.size()) + " deferred updates remaining for next frame");
+#endif
 	}
+}
 
-	LOG_INF_S("Lighting initialization from configuration completed");
+bool SceneManager::hasDeferredUpdates() const {
+	return !m_deferredUpdates.empty();
+}
+
+void SceneManager::clearDeferredUpdates() {
+	if (!m_deferredUpdates.empty()) {
+		LOG_WRN_S("Clearing " + std::to_string(m_deferredUpdates.size()) + " pending deferred updates");
+		m_deferredUpdates.clear();
+	}
 }
 
 // Culling system integration methods
@@ -1568,36 +1367,28 @@ void SceneManager::debugLightingState() const
 
 void SceneManager::setCoordinateSystemVisible(bool visible)
 {
-	if (m_coordSystemRenderer) {
-		m_coordSystemRenderer->setVisible(visible);
+	// Use deferred update to batch visibility changes and reduce refresh calls
+	deferUpdate(UpdateType::COORDINATE_SYSTEM_UPDATE, [this, visible]() {
+		if (m_coordSystemRenderer) {
+			m_coordSystemRenderer->setVisible(visible);
 
-		// Force multiple refresh methods to ensure update
-		LOG_INF_S("Forcing scene refresh for coordinate system visibility change");
+			// Single refresh call instead of multiple methods
+			if (m_sceneRoot) {
+				m_sceneRoot->touch();
+			}
+			if (m_canvas) {
+				m_canvas->Refresh(true);
+			}
+			if (m_canvas && m_canvas->getRefreshManager()) {
+				m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+			}
 
-		// Method 1: Touch the scene root to force Coin3D update
-		if (m_sceneRoot) {
-			m_sceneRoot->touch();
-			LOG_INF_S("Touched scene root for coordinate system visibility");
+			LOG_INF_S("Set coordinate system visibility: " + std::string(visible ? "visible" : "hidden"));
 		}
-
-		// Method 2: Force immediate render update
-		if (m_canvas) {
-			m_canvas->Refresh(true);
-			m_canvas->Update();
-			LOG_INF_S("Forced canvas refresh and update for coordinate system visibility");
+		else {
+			LOG_WRN_S("Coordinate system renderer not available");
 		}
-
-		// Method 3: RefreshManager
-		if (m_canvas && m_canvas->getRefreshManager()) {
-			m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
-			LOG_INF_S("Requested refresh via RefreshManager for coordinate system visibility");
-		}
-
-		LOG_INF_S("Set coordinate system visibility: " + std::string(visible ? "visible" : "hidden"));
-	}
-	else {
-		LOG_WRN_S("Coordinate system renderer not available");
-	}
+	}, 1, "Set coordinate system visibility to " + std::string(visible ? "visible" : "hidden"));
 }
 
 bool SceneManager::isCoordinateSystemVisible() const
@@ -1649,8 +1440,336 @@ void SceneManager::rebuildScene()
 		LOG_INF_S("SceneManager::rebuildScene: Scene rebuild completed successfully");
 		
 	} catch (const std::exception& e) {
-		LOG_ERR_S("SceneManager::rebuildScene: Exception during rebuild: " + std::string(e.what()));
+		handleError(ErrorCategory::GENERAL, ErrorSeverity::HIGH,
+			"Exception during scene rebuild", &e);
 	} catch (...) {
-		LOG_ERR_S("SceneManager::rebuildScene: Unknown exception during rebuild");
+		handleError(ErrorCategory::GENERAL, ErrorSeverity::HIGH,
+			"Unknown exception during scene rebuild");
+	}
+}
+
+// Geometry validation optimization methods
+void SceneManager::markGeometryDirty() {
+	m_forceGeometryValidation = true;
+}
+
+void SceneManager::invalidateGeometryCache() {
+	m_lastGeometryCount = 0; // Reset cache to force recount
+	m_forceGeometryValidation = true;
+}
+
+// Scene bounds optimization methods
+void SceneManager::markBoundsDirty() {
+	m_forceBoundsUpdate = true;
+}
+
+void SceneManager::forceBoundsUpdate() {
+	m_forceBoundsUpdate = true;
+	updateSceneBounds();
+}
+
+// Optimized geometry validation with caching and frame skipping
+void SceneManager::validateAndRepairGeometries() {
+	if (!m_canvas || !m_canvas->getOCCViewer()) {
+		return;
+	}
+
+	// Check if validation is needed
+	auto geometries = m_canvas->getOCCViewer()->getAllGeometry();
+	size_t currentGeometryCount = geometries.size();
+
+	// Always validate if forced, or if geometry count changed, or periodically
+	bool needsValidation = m_forceGeometryValidation ||
+		(currentGeometryCount != m_lastGeometryCount) ||
+		(++m_geometryValidationFrameSkip >= GEOMETRY_VALIDATION_INTERVAL);
+
+	if (!needsValidation) {
+		return; // Skip validation this frame
+	}
+
+	// Reset validation state
+	m_forceGeometryValidation = false;
+	m_lastGeometryCount = currentGeometryCount;
+	m_geometryValidationFrameSkip = 0;
+
+	// Perform actual validation
+	int validGeometries = 0;
+	int repairedGeometries = 0;
+
+	for (const auto& geometry : geometries) {
+		if (geometry) {
+			auto coinNode = geometry->getCoinNode();
+			if (coinNode) {
+				validGeometries++;
+			} else {
+#ifdef _DEBUG
+				static int rebuildWarningCount = 0;
+				if (rebuildWarningCount < 3) { // Limit rebuild warnings
+					LOG_WRN_S("SceneManager::render: Geometry '" + geometry->getName() + "' has null Coin3D node, rebuilding...");
+					rebuildWarningCount++;
+				}
+#endif
+				try {
+					// Force rebuild the Coin3D representation
+					MeshParameters defaultParams;
+					geometry->forceCoinRepresentationRebuild(defaultParams);
+					repairedGeometries++;
+#ifdef _DEBUG
+					static int rebuildSuccessCount = 0;
+					if (rebuildSuccessCount < 3) { // Limit success messages
+						LOG_INF_S("SceneManager::render: Successfully rebuilt Coin3D node for geometry '" + geometry->getName() + "'");
+						rebuildSuccessCount++;
+					}
+#endif
+				} catch (const std::exception& e) {
+					handleError(ErrorCategory::GEOMETRY, ErrorSeverity::MEDIUM,
+						"Failed to rebuild geometry '" + geometry->getName() + "'", &e);
+				} catch (...) {
+					handleError(ErrorCategory::GEOMETRY, ErrorSeverity::MEDIUM,
+						"Failed to rebuild geometry '" + geometry->getName() + "' (unknown exception)");
+				}
+			}
+		}
+	}
+
+	if (repairedGeometries > 0) {
+#ifdef _DEBUG
+		static int repairStatsCount = 0;
+		if (repairStatsCount < 5) { // Limit repair statistics messages
+			LOG_INF_S("SceneManager::render: Repaired " + std::to_string(repairedGeometries) +
+				" geometries with invalid Coin3D nodes");
+			repairStatsCount++;
+		}
+#endif
+	}
+}
+
+// Unified lighting configuration method
+void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
+	if (!m_sceneRoot) {
+		LOG_ERR_S("Cannot setup lighting: Scene root not available");
+		return;
+	}
+
+	if (isUpdate) {
+		LOG_INF_S("Updating lighting from configuration");
+	} else {
+		LOG_INF_S("Initializing lighting from configuration");
+	}
+
+	// Clear existing lighting nodes
+	int objectIndex = m_objectRoot ? m_sceneRoot->findChild(m_objectRoot) : -1;
+	for (int i = m_sceneRoot->getNumChildren() - 1; i >= 0; --i) {
+		if (objectIndex >= 0 && i >= objectIndex) continue; // do not remove anything after objects
+		SoNode* child = m_sceneRoot->getChild(i);
+		if (child->isOfType(SoLightModel::getClassTypeId()) ||
+			child->isOfType(SoEnvironment::getClassTypeId()) ||
+			child->isOfType(SoDirectionalLight::getClassTypeId()) ||
+			child->isOfType(SoPointLight::getClassTypeId()) ||
+			child->isOfType(SoSpotLight::getClassTypeId())) {
+			m_sceneRoot->removeChild(i);
+		}
+	}
+
+	// Get lighting configuration
+	LightingConfig& config = LightingConfig::getInstance();
+
+	// Set light model based on display mode (only for updates)
+	if (isUpdate) {
+		SoLightModel* lightModel = new SoLightModel;
+		lightModel->ref(); // Reference for our management
+		if (isNoShading) {
+			// Use BASE_COLOR for no shading - no lighting calculations, direct color
+			lightModel->model.setValue(SoLightModel::BASE_COLOR);
+			LOG_INF_S("SceneManager::setupLightingFromConfig: Using BASE_COLOR light model for NoShading");
+		} else {
+			// Use PHONG for normal lighting
+			lightModel->model.setValue(SoLightModel::PHONG);
+		}
+
+		// Insert light model at the beginning of scene root (after camera)
+		m_sceneRoot->insertChild(lightModel, 1);
+		lightModel->unref(); // Scene graph now holds the reference
+	}
+
+	// Add environment settings
+	auto envSettings = config.getEnvironmentSettings();
+	SoEnvironment* environment = new SoEnvironment;
+	environment->ref(); // Reference for our management
+
+	// Convert Quantity_Color to SbColor
+	Standard_Real r = 0.9, g = 0.9, b = 0.9; // Default neutral values
+	if (isUpdate && isNoShading) {
+		// For NoShading mode, use neutral ambient color with moderate intensity
+		environment->ambientColor.setValue(0.9f, 0.9f, 0.9f); // Light gray ambient
+		environment->ambientIntensity.setValue(0.5f); // Moderate ambient intensity
+		LOG_INF_S("SceneManager::setupLightingFromConfig: Using neutral ambient lighting for NoShading");
+	} else {
+		// Use configured ambient settings for normal modes
+		envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
+		environment->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+		environment->ambientIntensity.setValue(static_cast<float>(envSettings.ambientIntensity));
+	}
+
+	// Place environment on scene root before object root so it affects geometry
+	{
+		int insertIndex = m_sceneRoot->getNumChildren();
+		if (m_objectRoot) {
+			int objIdx = m_sceneRoot->findChild(m_objectRoot);
+			if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+		}
+		m_sceneRoot->insertChild(environment, insertIndex);
+		environment->unref(); // Scene graph now holds the reference
+	}
+
+	// Use appropriate intensity value for logging
+	float logIntensity = (isUpdate && isNoShading) ? 0.5f : static_cast<float>(envSettings.ambientIntensity);
+	LOG_INF_S("Added environment lighting - ambient color: " +
+		std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) +
+		", intensity: " + std::to_string(logIntensity));
+
+	// Add lights from configuration
+	auto lights = config.getAllLights();
+	LOG_INF_S("Adding " + std::to_string(lights.size()) + " lights from configuration");
+
+	for (const auto& lightSettings : lights) {
+		if (!lightSettings.enabled) {
+			LOG_INF_S("Skipping disabled light: " + lightSettings.name);
+			continue;
+		}
+
+		try {
+			if (lightSettings.type == "directional") {
+				SoDirectionalLight* light = new SoDirectionalLight;
+				light->ref(); // Reference for our management
+
+				// Set light properties
+				light->direction.setValue(static_cast<float>(lightSettings.directionX),
+					static_cast<float>(lightSettings.directionY),
+					static_cast<float>(lightSettings.directionZ));
+
+				Standard_Real r, g, b;
+				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+				light->on.setValue(true);
+
+				// Place lights on scene root before object root so they affect subsequent geometry
+				{
+					int insertIndex = m_sceneRoot->getNumChildren();
+					if (m_objectRoot) {
+						int objIdx = m_sceneRoot->findChild(m_objectRoot);
+						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+					}
+					m_sceneRoot->insertChild(light, insertIndex);
+					light->unref(); // Scene graph now holds the reference
+				}
+
+				// Store reference to main light for compatibility
+				if (lightSettings.name == "Main Light") {
+					if (isUpdate && m_light) { m_light->unref(); }
+					m_light = light;
+					m_light->ref(); // Keep our own reference for main light
+				}
+
+				LOG_INF_S("Added directional light: " + lightSettings.name);
+			}
+			else if (lightSettings.type == "point") {
+				SoPointLight* light = new SoPointLight;
+				light->ref(); // Reference for our management
+
+				// Set light properties
+				light->location.setValue(static_cast<float>(lightSettings.positionX),
+					static_cast<float>(lightSettings.positionY),
+					static_cast<float>(lightSettings.positionZ));
+
+				Standard_Real r, g, b;
+				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+				light->on.setValue(true);
+
+				{
+					int insertIndex = m_sceneRoot->getNumChildren();
+					if (m_objectRoot) {
+						int objIdx = m_sceneRoot->findChild(m_objectRoot);
+						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+					}
+					m_sceneRoot->insertChild(light, insertIndex);
+					light->unref(); // Scene graph now holds the reference
+				}
+
+				LOG_INF_S("Added point light: " + lightSettings.name);
+			}
+			else if (lightSettings.type == "spot") {
+				SoSpotLight* light = new SoSpotLight;
+				light->ref(); // Reference for our management
+
+				// Set light properties
+				light->location.setValue(static_cast<float>(lightSettings.positionX),
+					static_cast<float>(lightSettings.positionY),
+					static_cast<float>(lightSettings.positionZ));
+				light->direction.setValue(static_cast<float>(lightSettings.directionX),
+					static_cast<float>(lightSettings.directionY),
+					static_cast<float>(lightSettings.directionZ));
+
+				Standard_Real r, g, b;
+				lightSettings.color.Values(r, g, b, Quantity_TOC_RGB);
+				light->color.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+				light->intensity.setValue(static_cast<float>(lightSettings.intensity));
+				light->on.setValue(true);
+
+				{
+					int insertIndex = m_sceneRoot->getNumChildren();
+					if (m_objectRoot) {
+						int objIdx = m_sceneRoot->findChild(m_objectRoot);
+						if (objIdx >= 0) insertIndex = objIdx; // insert before objects
+					}
+					m_sceneRoot->insertChild(light, insertIndex);
+					light->unref(); // Scene graph now holds the reference
+				}
+
+				LOG_INF_S("Added spot light: " + lightSettings.name);
+			}
+		}
+		catch (const std::exception& e) {
+			handleError(ErrorCategory::LIGHTING, ErrorSeverity::HIGH,
+				"Exception while creating light " + lightSettings.name, &e);
+		}
+		catch (...) {
+			handleError(ErrorCategory::LIGHTING, ErrorSeverity::HIGH,
+				"Unknown exception while creating light " + lightSettings.name);
+		}
+	}
+
+	// Ensure we have a main light reference for compatibility
+	if (!m_light) {
+		// Create a default main light if none exists
+		m_light = new SoDirectionalLight;
+		m_light->ref(); // Our reference
+		m_light->direction.setValue(0.5f, 0.5f, -0.7f);
+		m_light->intensity.setValue(1.0f);
+		m_light->color.setValue(1.0f, 1.0f, 1.0f);
+		m_light->on.setValue(true);
+		{
+			int insertIndex = m_sceneRoot->getNumChildren();
+			if (m_objectRoot) {
+				int objIdx = m_sceneRoot->findChild(m_objectRoot);
+				if (objIdx >= 0) insertIndex = objIdx;
+			}
+			m_sceneRoot->insertChild(m_light, insertIndex);
+			// Don't unref here - we keep our own reference for main light
+		}
+		if (isUpdate) {
+			LOG_INF_S("Created default main light for compatibility");
+		}
+	}
+
+	// Force scene update
+	if (m_sceneRoot) {
+		m_sceneRoot->touch();
+		if (isUpdate) {
+			LOG_INF_S("Touched scene root to force lighting update");
+		}
 	}
 }
