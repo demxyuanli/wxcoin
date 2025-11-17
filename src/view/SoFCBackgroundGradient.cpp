@@ -47,8 +47,8 @@ void SoFCBackgroundGradient::finish()
 SoFCBackgroundGradient::SoFCBackgroundGradient()
 {
     SO_NODE_CONSTRUCTOR(SoFCBackgroundGradient);
-    fCol.setValue(0.5f, 0.5f, 0.8f);  // Default from color
-    tCol.setValue(0.7f, 0.7f, 0.9f);  // Default to color
+    fCol.setValue(0.6f, 0.8f, 1.0f);  // Default from color (bottom)
+    tCol.setValue(0.9f, 0.95f, 1.0f);  // Default to color (top)
     mCol.setValue(1.0f, 1.0f, 1.0f);  // Default mid color
     gradient = Gradient::LINEAR;
 }
