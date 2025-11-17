@@ -29,8 +29,8 @@ public:
 	bool isInitialized() const { return m_isInitialized; }
 	bool isRendering() const { return m_isRendering; }
 
-	void setSceneManager(SceneManager* sceneManager) { m_sceneManager = sceneManager; }
-	void setSceneManager(ISceneManager* sceneManager) override { m_sceneManager = reinterpret_cast<SceneManager*>(sceneManager); }
+	void setSceneManager(SceneManager* sceneManager);
+	void setSceneManager(ISceneManager* sceneManager) override;
 	void setNavigationCubeManager(NavigationCubeManager* navCubeManager) { m_navigationCubeManager = navCubeManager; }
 
 	// Background rendering - public methods for external access

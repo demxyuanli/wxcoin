@@ -20,8 +20,6 @@ void LoggerConfig::configureLoggerLevels(const std::string& logLevelStr) {
 	std::set<Logger::LogLevel> logLevels;
 	bool isSingleLevel = true;
 
-	logLevels.insert(Logger::LogLevel::ERR);
-
 	// Parse comma-separated log levels
 	std::stringstream ss(logLevelStr);
 	std::string level;
@@ -34,25 +32,25 @@ void LoggerConfig::configureLoggerLevels(const std::string& logLevelStr) {
 
 		if (level == "WRN") {
 			logLevels.insert(Logger::LogLevel::WRN);
-			logLevels.insert(Logger::LogLevel::DBG);
-			logLevels.insert(Logger::LogLevel::INF);
 		}
 		else if (level == "DBG") {
 			logLevels.insert(Logger::LogLevel::DBG);
-			logLevels.insert(Logger::LogLevel::INF);
 		}
 		else if (level == "INF") {
 			logLevels.insert(Logger::LogLevel::INF);
 		}
-		else if (level != "ERR") {
+		else if (level == "ERR") {
+			logLevels.insert(Logger::LogLevel::ERR);
+		}
+		else {
 			LOG_WRN("Unknown log level in config: " + level, "LoggerConfig");
 		}
 	}
 
-	if (logLevels.size() == 1) {
+	if (logLevels.empty()) {
+		// Fallback to default warning level when config is invalid
 		logLevels.insert(Logger::LogLevel::WRN);
-		logLevels.insert(Logger::LogLevel::DBG);
-		logLevels.insert(Logger::LogLevel::INF);
+		isSingleLevel = true;
 		LOG_INF("Using default log level: WRN", "LoggerConfig");
 	}
 

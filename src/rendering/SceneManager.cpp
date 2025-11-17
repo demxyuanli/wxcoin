@@ -38,6 +38,39 @@
 #include <chrono>
 #include "CameraAnimation.h"
 #include "config/ConfigManager.h"
+#include "RenderingEngine.h"
+
+// Structure to track pass state for callback
+struct PassCallbackState {
+	SceneManager* sceneManager;
+	int passCount;
+	
+	PassCallbackState(SceneManager* sm) : sceneManager(sm), passCount(0) {}
+};
+
+// Static pass callback to redraw background before second pass only
+// This avoids redundant background rendering in first pass
+static void renderPassCallback(void* userdata) {
+	PassCallbackState* state = static_cast<PassCallbackState*>(userdata);
+	if (state && state->sceneManager) {
+		state->passCount++;
+		
+		// Only redraw background before second pass to prevent darkening
+		// First pass already has background from clearBuffers()
+		if (state->passCount == 2) {
+			Canvas* canvas = state->sceneManager->getCanvas();
+			if (canvas) {
+				auto* renderingEngine = canvas->getRenderingEngine();
+				if (renderingEngine) {
+					// Redraw background before second pass to prevent darkening
+					renderingEngine->renderBackground();
+					// Clear only depth buffer, preserve color buffer (background)
+					glClear(GL_DEPTH_BUFFER_BIT);
+				}
+			}
+		}
+	}
+}
 
 SceneManager::SceneManager(Canvas* canvas)
 	: m_canvas(canvas)
@@ -486,18 +519,35 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		return;
 	}
 
-	// Create render action with error checking
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_LIGHTING);
+	glEnable(GL_NORMALIZE);
+	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+	glEnable(GL_TEXTURE_2D);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	
+	// Save current blend state to restore later
+	GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+	GLint blendSrc, blendDst;
+	glGetIntegerv(GL_BLEND_SRC, &blendSrc);
+	glGetIntegerv(GL_BLEND_DST, &blendDst);
+	
+	// Set up blending for multi-pass rendering
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	
+	// Create pass callback state to track pass count and avoid redundant background rendering
+	PassCallbackState passState(this);
+	
 	SoGLRenderAction renderAction(viewport);
 	try {
-		renderAction.setSmoothing(!fastMode);
-		renderAction.setNumPasses(fastMode ? 1 : 2);
-		renderAction.setTransparencyType(
-			fastMode ? SoGLRenderAction::BLEND : SoGLRenderAction::SORTED_OBJECT_BLEND
-		);
-
-		// Additional render action configuration for stability
-		renderAction.setCacheContext(1); // Use a specific cache context
-
+		renderAction.setSmoothing(true);
+		// Use SORTED_OBJECT_BLEND with 2 passes for proper transparency sorting
+		// Pass callback will redraw background before second pass only to prevent darkening
+		renderAction.setNumPasses(2);
+		renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
+		renderAction.setPassCallback(renderPassCallback, &passState);
+		renderAction.setCacheContext(1);
 	} catch (const std::exception& e) {
 		LOG_ERR_S("SceneManager::render: Failed to configure SoGLRenderAction: " + std::string(e.what()));
 		return;
@@ -511,15 +561,6 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 
 	// Explicitly enable blending for line smoothing
 	auto glSetupStartTime = std::chrono::high_resolution_clock::now();
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glEnable(GL_LIGHTING);
-	glEnable(GL_NORMALIZE);
-	glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE); // allow two-sided lighting for CAD meshes
-	glEnable(GL_TEXTURE_2D);
-	// Note: Color buffer was already cleared by RenderingEngine::clearBuffers() with background
-	// Only clear depth buffer here to maintain proper depth testing for scene rendering
-	glClear(GL_DEPTH_BUFFER_BIT);
 
 	// Basic OpenGL capability check
 	const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
@@ -593,11 +634,21 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	try {
 		renderAction.apply(m_sceneRoot);
 	} catch (const std::exception& e) {
+		// Restore blend state before returning
+		glBlendFunc(blendSrc, blendDst);
+		if (!blendEnabled) {
+			glDisable(GL_BLEND);
+		}
 		LOG_ERR_S("SceneManager::render: Exception during Coin3D rendering: " + std::string(e.what()));
 		// Try to recover by clearing and rebuilding scene
 		rebuildScene();
 		return;
 	} catch (...) {
+		// Restore blend state before returning
+		glBlendFunc(blendSrc, blendDst);
+		if (!blendEnabled) {
+			glDisable(GL_BLEND);
+		}
 		LOG_ERR_S("SceneManager::render: Unknown exception during Coin3D rendering");
 		// Try to recover by clearing and rebuilding scene
 		rebuildScene();
@@ -607,6 +658,12 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	auto coinRenderEndTime = std::chrono::high_resolution_clock::now();
 	auto coinRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(coinRenderEndTime - coinRenderStartTime);
 
+	// Restore previous blend state
+	glBlendFunc(blendSrc, blendDst);
+	if (!blendEnabled) {
+		glDisable(GL_BLEND);
+	}
+	
 	// Check for OpenGL errors after rendering
 	while ((err = glGetError()) != GL_NO_ERROR) {
 		LOG_ERR_S("Post-render: OpenGL error: " + std::to_string(err));

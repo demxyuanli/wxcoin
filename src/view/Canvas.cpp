@@ -174,8 +174,13 @@ void Canvas::render(bool fastMode) {
 	auto renderStartTime = std::chrono::high_resolution_clock::now();
 
 	if (m_renderingEngine) {
+		// Optional debug flag: disable creation/rendering of MultiViewportManager to
+		// check whether small auxiliary viewports affect the perceived background.
+		const int debugDisableMultiViewport =
+			ConfigManager::getInstance().getInt("Canvas", "DebugDisableMultiViewport", 0);
+
 		// Create MultiViewportManager on first render when GL context is active
-		if (m_multiViewportEnabled && !m_multiViewportManager) {
+		if (m_multiViewportEnabled && !m_multiViewportManager && debugDisableMultiViewport == 0) {
 			auto multiViewportStartTime = std::chrono::high_resolution_clock::now();
 			try {
 				m_multiViewportManager = std::make_unique<MultiViewportManager>(this, m_sceneManager.get());
@@ -214,7 +219,10 @@ void Canvas::render(bool fastMode) {
 		auto mainRenderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(mainRenderEndTime - mainRenderStartTime);
 
 		// Render additional viewports on top of main scene (only if not using split viewport)
-		if (!m_splitViewportEnabled && m_multiViewportEnabled && m_multiViewportManager) {
+		if (!m_splitViewportEnabled &&
+			m_multiViewportEnabled &&
+			m_multiViewportManager &&
+			debugDisableMultiViewport == 0) {
 			auto multiRenderStartTime = std::chrono::high_resolution_clock::now();
 			m_multiViewportManager->render();
 			auto multiRenderEndTime = std::chrono::high_resolution_clock::now();

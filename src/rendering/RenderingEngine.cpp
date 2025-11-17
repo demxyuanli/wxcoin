@@ -59,6 +59,39 @@ RenderingEngine::~RenderingEngine() {
 	LOG_INF_S("RenderingEngine::~RenderingEngine: Destroying");
 }
 
+void RenderingEngine::setSceneManager(SceneManager* sceneManager)
+{
+	m_sceneManager = sceneManager;
+
+	// If we already have a gradient node, keep its colors in sync with the
+	// current configuration and, for gradient modes, attach it to the scene
+	// graph so Coin3D renders the background (like PreviewCanvas).
+	if (!m_sceneManager || !m_backgroundGradient) {
+		return;
+	}
+
+	SoSeparator* root = m_sceneManager->getSceneRoot();
+	if (!root) {
+		return;
+	}
+
+	int idx = root->findChild(m_backgroundGradient);
+	if (m_backgroundMode == 1 || m_backgroundMode == 2) {
+		if (idx < 0) {
+			// Insert at the beginning so it renders before lights and geometry.
+			root->insertChild(m_backgroundGradient, 0);
+		}
+	} else if (idx >= 0) {
+		root->removeChild(idx);
+	}
+}
+
+void RenderingEngine::setSceneManager(ISceneManager* sceneManager)
+{
+	// In this project ISceneManager is implemented by SceneManager.
+	setSceneManager(static_cast<SceneManager*>(sceneManager));
+}
+
 bool RenderingEngine::initialize() {
 	if (m_isInitialized) {
 		LOG_WRN_S("RenderingEngine::initialize: Already initialized");
@@ -68,20 +101,22 @@ bool RenderingEngine::initialize() {
 	try {
 		setupGLContext();
 
-		// Load background configuration
+		// Load background configuration (keep defaults in sync with PreviewCanvas)
 		m_backgroundMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 0);
 
 		m_backgroundColor[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorR", 1.0));
 		m_backgroundColor[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 1.0));
 		m_backgroundColor[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 1.0));
 
-	m_backgroundGradientTop[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.9));
-	m_backgroundGradientTop[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.95));
-	m_backgroundGradientTop[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 1.0));
+		// Default gradient matches BackgroundStylePanel / PreviewCanvas:
+		// top = (0.7, 0.7, 0.9), bottom = (0.5, 0.5, 0.8)
+		m_backgroundGradientTop[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.7));
+		m_backgroundGradientTop[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.7));
+		m_backgroundGradientTop[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 0.9));
 
-	m_backgroundGradientBottom[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.6));
-	m_backgroundGradientBottom[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.8));
-	m_backgroundGradientBottom[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 1.0));
+		m_backgroundGradientBottom[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.5));
+		m_backgroundGradientBottom[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.5));
+		m_backgroundGradientBottom[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 0.8));
 
 	LOG_INF_S("RenderingEngine::initialize: Loaded background config - mode: " + std::to_string(m_backgroundMode) +
 		", solid color: (" + std::to_string(m_backgroundColor[0]) + ", " + std::to_string(m_backgroundColor[1]) + ", " + std::to_string(m_backgroundColor[2]) + ")" +
@@ -183,6 +218,7 @@ void RenderingEngine::setupGLContext() {
 }
 
 void RenderingEngine::render(bool fastMode) {
+	// Convenience wrapper: perform a full frame render (background + scene + swap)
 	renderWithoutSwap(fastMode);
 	presentFrame();
 }
@@ -242,7 +278,7 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
 		}
 
 		auto clearStartTime = std::chrono::high_resolution_clock::now();
-		// clearBuffers() will set viewport internally
+		// clearBuffers() will render the background and clear the depth buffer
 		clearBuffers();
 		auto clearEndTime = std::chrono::high_resolution_clock::now();
 		auto clearDuration = std::chrono::duration_cast<std::chrono::microseconds>(clearEndTime - clearStartTime);
@@ -250,14 +286,34 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
 		// Viewport is already set in clearBuffers(), no need to set again
 		std::chrono::microseconds viewportDuration(0);
 
+		// Optional debug path: render background only (no scene), controlled by config.
+		int debugBackgroundOnly = ConfigManager::getInstance().getInt("Canvas", "DebugBackgroundOnly", 0);
+		if (debugBackgroundOnly != 0) {
+			auto renderEndTime = std::chrono::high_resolution_clock::now();
+			auto renderDuration = std::chrono::duration_cast<std::chrono::milliseconds>(renderEndTime - renderStartTime);
+
+			perf::EnginePerfSample e;
+			e.contextUs = static_cast<int>(contextDuration.count());
+			e.clearUs = static_cast<int>(clearDuration.count());
+			e.viewportUs = static_cast<int>(viewportDuration.count());
+			e.sceneMs = 0;
+			e.totalMs = static_cast<int>(renderDuration.count());
+			e.fps = 1000.0 / std::max(1, e.totalMs);
+			perf::PerformanceBus::instance().setEngine(e);
+
+			m_isRendering = false;
+			return;
+		}
+
 		// Render main scene
 		auto sceneStartTime = std::chrono::high_resolution_clock::now();
 		m_sceneManager->render(size, fastMode);
 		auto sceneEndTime = std::chrono::high_resolution_clock::now();
 		auto sceneDuration = std::chrono::duration_cast<std::chrono::milliseconds>(sceneEndTime - sceneStartTime);
 
-		// Render navigation cube
-		if (m_navigationCubeManager) {
+		// Render navigation cube (optional debug flag to disable it)
+		int debugDisableNavigationCube = ConfigManager::getInstance().getInt("Canvas", "DebugDisableNavigationCube", 0);
+		if (m_navigationCubeManager && debugDisableNavigationCube == 0) {
 			auto navCubeStartTime = std::chrono::high_resolution_clock::now();
 			m_navigationCubeManager->render();
 			auto navCubeEndTime = std::chrono::high_resolution_clock::now();
@@ -297,15 +353,27 @@ void RenderingEngine::swapBuffers() {
 }
 
 void RenderingEngine::clearBuffers() {
-	// Get viewport size and set it
+	if (!m_isInitialized || !m_canvas || !m_glContext) {
+		return;
+	}
+
+	if (!m_canvas->IsShown()) {
+		return;
+	}
+
+	if (!m_canvas->SetCurrent(*m_glContext)) {
+		LOG_ERR_S("RenderingEngine::clearBuffers: Failed to make GL context current");
+		return;
+	}
+
 	wxSize size = m_canvas->GetClientSize();
+	if (size.x <= 0 || size.y <= 0) {
+		return;
+	}
+
 	glViewport(0, 0, size.x, size.y);
-	
-	// Render background based on mode (with correct viewport)
 	renderBackground(size);
 
-	// After background rendering (mode 0: solid color clears both, modes 1/2: gradient clears depth, mode 3: image clears both)
-	// Clear depth buffer to ensure clean state for scene rendering
 	glClear(GL_DEPTH_BUFFER_BIT);
 }
 
@@ -314,8 +382,28 @@ void RenderingEngine::presentFrame() {
 }
 
 void RenderingEngine::renderBackground() {
-	// Get canvas size for background rendering
+	if (!m_isInitialized || !m_canvas || !m_glContext) {
+		return;
+	}
+
+	if (!m_canvas->IsShown()) {
+		return;
+	}
+
+	// Ensure the correct OpenGL context is current before drawing the background
+	if (!m_canvas->SetCurrent(*m_glContext)) {
+		LOG_ERR_S("RenderingEngine::renderBackground: Failed to make GL context current");
+		return;
+	}
+
 	wxSize size = m_canvas->GetClientSize();
+	if (size.x <= 0 || size.y <= 0) {
+		return;
+	}
+
+	// Set viewport to cover the full canvas
+	glViewport(0, 0, size.x, size.y);
+
 	renderBackground(size);
 }
 
@@ -605,13 +693,15 @@ void RenderingEngine::reloadBackgroundConfig() {
 	m_backgroundColor[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 1.0));
 	m_backgroundColor[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 1.0));
 
-	m_backgroundGradientTop[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.9));
-	m_backgroundGradientTop[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.95));
-	m_backgroundGradientTop[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 1.0));
+	// Default gradient matches BackgroundStylePanel / PreviewCanvas:
+	// top = (0.7, 0.7, 0.9), bottom = (0.5, 0.5, 0.8)
+	m_backgroundGradientTop[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.7));
+	m_backgroundGradientTop[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.7));
+	m_backgroundGradientTop[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 0.9));
 
-	m_backgroundGradientBottom[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.6));
-	m_backgroundGradientBottom[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.8));
-	m_backgroundGradientBottom[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 1.0));
+	m_backgroundGradientBottom[0] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.5));
+	m_backgroundGradientBottom[1] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.5));
+	m_backgroundGradientBottom[2] = static_cast<float>(ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 0.8));
 
 	// Handle mode changes: create or destroy background nodes as needed
 	if (newBackgroundMode != m_backgroundMode) {

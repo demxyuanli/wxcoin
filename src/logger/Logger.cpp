@@ -50,15 +50,29 @@ void Logger::SetLogLevels(const std::set<LogLevel>& levels, bool isSingleLevel) 
 		allowedLogLevels.insert(LogLevel::ERR);
 	}
 	else if (isSingleLevel && levels.size() == 1) {
-		// Single level: include the specified level and above
-		auto level = *levels.begin();
-		if (level <= LogLevel::INF) allowedLogLevels.insert(LogLevel::INF);
-		if (level <= LogLevel::DBG) allowedLogLevels.insert(LogLevel::DBG);
-		if (level <= LogLevel::WRN) allowedLogLevels.insert(LogLevel::WRN);
-		allowedLogLevels.insert(LogLevel::ERR); // Always include ERR
+		// Single level: treat as minimum level and include that level and above.
+		auto baseLevel = *levels.begin();
+
+		auto getRank = [](LogLevel lvl) {
+			switch (lvl) {
+			case LogLevel::DBG: return 0;
+			case LogLevel::INF: return 1;
+			case LogLevel::WRN: return 2;
+			case LogLevel::ERR: return 3;
+			default: return 3;
+			}
+		};
+
+		int baseRank = getRank(baseLevel);
+
+		for (LogLevel lvl : { LogLevel::DBG, LogLevel::INF, LogLevel::WRN, LogLevel::ERR }) {
+			if (getRank(lvl) >= baseRank) {
+				allowedLogLevels.insert(lvl);
+			}
+		}
 	}
 	else {
-		// Multiple levels: include only specified levels and ERR
+		// Multiple levels: include only specified levels and always ERR
 		allowedLogLevels = levels;
 		allowedLogLevels.insert(LogLevel::ERR);
 	}

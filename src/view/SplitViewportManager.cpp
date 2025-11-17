@@ -173,53 +173,23 @@ void SplitViewportManager::render() {
         return;
     }
     
-    wxSize canvasSize = m_canvas->GetClientSize();
-    
-    // Read background mode and colors from config
-    int backgroundMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 1);
-    double splitGradTopR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopR", 0.7);
-    double splitGradTopG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopG", 0.8);
-    double splitGradTopB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientTopB", 0.95);
-    double splitGradBottomR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomR", 0.7);
-    double splitGradBottomG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomG", 0.5);
-    double splitGradBottomB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundGradientBottomB", 0.9);
-    double splitGradientTop[3] = { splitGradTopR, splitGradTopG, splitGradTopB };
-    double splitGradientBottom[3] = { splitGradBottomR, splitGradBottomG, splitGradBottomB };
-    
-    LOG_INF_S("SplitViewportManager::render: mode=" + std::to_string(backgroundMode) +
-        " gradient top=(" + std::to_string(splitGradTopR) + "," +
-        std::to_string(splitGradTopG) + "," +
-        std::to_string(splitGradTopB) + ") bottom=(" +
-        std::to_string(splitGradBottomR) + "," +
-        std::to_string(splitGradBottomG) + "," +
-        std::to_string(splitGradBottomB) + ")");
-    
-    // Set viewport to full canvas for any global clear / background
-    glViewport(0, 0, canvasSize.x, canvasSize.y);
-    
-    bool usePerViewportBackground = (backgroundMode == 1 || backgroundMode == 2);
-    
-    if (!usePerViewportBackground) {
-        // For solid color (0) and texture/image (3), delegate to RenderingEngine
-        if (auto renderingEngine = m_canvas->getRenderingEngine()) {
-            renderingEngine->renderBackground();
-            glClear(GL_DEPTH_BUFFER_BIT);
-        } else {
-            // Fallback: clear with solid background color from config
-            double bgR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorR", 0.0);
-            double bgG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 0.0);
-            double bgB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 0.0);
-            glClearColor(static_cast<float>(bgR),
-                         static_cast<float>(bgG),
-                         static_cast<float>(bgB),
-                         1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        }
+    // Render the global background once using the main RenderingEngine so that
+    // split view uses the same background (solid / gradient / image) as the
+    // primary canvas and preview views.
+    if (auto renderingEngine = m_canvas->getRenderingEngine()) {
+        renderingEngine->renderBackground();
+        // Start with a clean depth buffer for per-viewport 3D rendering
+        glClear(GL_DEPTH_BUFFER_BIT);
     } else {
-        // For gradient modes, clear once with bottom color; each viewport will draw its own gradient patch
-        glClearColor(static_cast<float>(splitGradBottomR),
-                     static_cast<float>(splitGradBottomG),
-                     static_cast<float>(splitGradBottomB),
+        // Fallback: clear with solid background color from config
+        wxSize canvasSize = m_canvas->GetClientSize();
+        double bgR = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorR", 0.0);
+        double bgG = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorG", 0.0);
+        double bgB = ConfigManager::getInstance().getDouble("Canvas", "BackgroundColorB", 0.0);
+        glViewport(0, 0, canvasSize.x, canvasSize.y);
+        glClearColor(static_cast<float>(bgR),
+                     static_cast<float>(bgG),
+                     static_cast<float>(bgB),
                      1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
@@ -256,18 +226,17 @@ void SplitViewportManager::render() {
     
     int numViewports = 0;
     switch (m_currentMode) {
-        case SplitMode::SINGLE: numViewports = 1; break;
+        case SplitMode::SINGLE:       numViewports = 1; break;
         case SplitMode::HORIZONTAL_2: numViewports = 2; break;
-        case SplitMode::VERTICAL_2: numViewports = 2; break;
-        case SplitMode::QUAD: numViewports = 4; break;
-        case SplitMode::SIX: numViewports = 6; break;
+        case SplitMode::VERTICAL_2:   numViewports = 2; break;
+        case SplitMode::QUAD:         numViewports = 4; break;
+        case SplitMode::SIX:          numViewports = 6; break;
     }
     
     for (int i = 0; i < numViewports; i++) {
         if (i < static_cast<int>(m_viewports.size())) {
-            if (usePerViewportBackground) {
-                drawViewportBackground(m_viewports[i], splitGradientTop, splitGradientBottom);
-            }
+            // Background is already rendered once for the full canvas; each
+            // viewport only needs to render its own scene.
             renderViewport(m_viewports[i]);
         }
     }
@@ -333,68 +302,13 @@ void SplitViewportManager::renderViewport(const SplitViewportInfo& viewport) {
 void SplitViewportManager::drawViewportBackground(const SplitViewportInfo& viewport,
                                                   const double topColor[3],
                                                   const double bottomColor[3]) {
-    if (viewport.width <= 0 || viewport.height <= 0) {
-        return;
-    }
-
-    int backgroundMode = ConfigManager::getInstance().getInt("Canvas", "BackgroundMode", 1);
-
-    glPushAttrib(GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT | GL_TRANSFORM_BIT);
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_LIGHTING);
-    glDisable(GL_TEXTURE_2D);
-    glDisable(GL_BLEND);
-    glEnable(GL_SCISSOR_TEST);
-    glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
-    glScissor(viewport.x, viewport.y, viewport.width, viewport.height);
-
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0.0, 1.0, 0.0, 1.0, -1.0, 1.0);
-
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-
-    if (backgroundMode == 1) {
-        // Linear gradient: top -> bottom
-        glBegin(GL_QUADS);
-        glColor3d(topColor[0], topColor[1], topColor[2]);
-        glVertex2f(0.0f, 1.0f);
-        glVertex2f(1.0f, 1.0f);
-        glColor3d(bottomColor[0], bottomColor[1], bottomColor[2]);
-        glVertex2f(1.0f, 0.0f);
-        glVertex2f(0.0f, 0.0f);
-        glEnd();
-    } else if (backgroundMode == 2) {
-        // Radial gradient: center = top color, edges = bottom color
-        glBegin(GL_TRIANGLE_FAN);
-        glColor3d(topColor[0], topColor[1], topColor[2]);
-        glVertex2f(0.5f, 0.5f);
-        glColor3d(bottomColor[0], bottomColor[1], bottomColor[2]);
-        const int segments = 64;
-        for (int i = 0; i <= segments; ++i) {
-            double angle = (2.0 * M_PI * i) / segments;
-            double x = 0.5 + 0.5 * cos(angle);
-            double y = 0.5 + 0.5 * sin(angle);
-            glVertex2f(static_cast<float>(x), static_cast<float>(y));
-        }
-        glEnd();
-    }
-
-    // Reset current color to neutral to avoid tinting scene geometry
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-
-    glDisable(GL_SCISSOR_TEST);
-    glDepthMask(GL_TRUE);
-    glPopAttrib();
+    // Background for split view is now rendered once per frame by
+    // RenderingEngine::renderBackground() to ensure consistent visuals with
+    // the main canvas and preview views. This function is kept only for
+    // backward compatibility and intentionally does nothing.
+    (void)viewport;
+    (void)topColor;
+    (void)bottomColor;
 }
 
 void SplitViewportManager::handleSizeChange(const wxSize& canvasSize) {
