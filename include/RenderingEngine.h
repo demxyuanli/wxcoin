@@ -42,6 +42,8 @@ public:
 private:
 	void renderBackground(const wxSize& size);
 	void setupGLContext();
+	bool ensureGLContext() const; // Unified GL context management
+	void loadBackgroundConfig(); // Unified configuration loading
 	void clearBuffers();
 	void presentFrame();
 	bool loadBackgroundTexture(const std::string& texturePath);
@@ -71,4 +73,30 @@ private:
 	bool m_isInitialized;
 	bool m_isRendering;
 	wxLongLong m_lastRenderTime;
+
+	// Configuration caching for performance
+	struct BackgroundConfig {
+		int mode;
+		float color[3];
+		float gradientTop[3];
+		float gradientBottom[3];
+		int textureFitMode;
+		std::string texturePath;
+		bool isValid;
+
+		BackgroundConfig() : mode(0), textureFitMode(1), isValid(false) {
+			color[0] = color[1] = color[2] = 1.0f;
+			gradientTop[0] = 0.9f; gradientTop[1] = 0.95f; gradientTop[2] = 1.0f;
+			gradientBottom[0] = 0.6f; gradientBottom[1] = 0.8f; gradientBottom[2] = 1.0f;
+		}
+	};
+
+	BackgroundConfig m_cachedConfig;
+
+	// Logging optimization - limit spam in debug builds
+#ifdef _DEBUG
+	static int s_glErrorLogCount;
+	static int s_contextErrorLogCount;
+	static int s_configLoadLogCount;
+#endif
 };
