@@ -11,6 +11,7 @@
 #include <wx/frame.h>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <memory>
 
 ShowOriginalEdgesListener::ShowOriginalEdgesListener(OCCViewer* viewer, IAsyncEngine* asyncEngine, wxFrame* frame)
 	: m_viewer(viewer), m_asyncEngine(asyncEngine), m_frame(frame)
@@ -53,8 +54,9 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				", nodeSize=" + std::to_string(intersectionNodeSize));
 
 			// Create UI helper for progress tracking
-			EdgeExtractionUIHelper uiHelper(m_frame);
-			uiHelper.beginOperation("Extracting Original Edges");
+			// Use shared_ptr to ensure lifetime extends to async callbacks
+			auto uiHelper = std::make_shared<EdgeExtractionUIHelper>(m_frame);
+			uiHelper->beginOperation("Extracting Original Edges");
 
 			try {
 				// Apply parameters to viewer (without intersection highlighting initially)
@@ -62,7 +64,7 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 					highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 
 			// Step 1: Extract and display original edges only (without intersections)
-			uiHelper.updateProgress(20, "Extracting original edges...");
+			uiHelper->updateProgress(20, "Extracting original edges...");
 			LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Extracting original edges without intersections");
 
 			// Extract edges without intersection highlighting (async)
@@ -73,9 +75,11 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
 
 				// Async extraction with completion callback
+				// Note: highlightIntersectionNodes and edgeDisplayManager must be captured by value, not by reference,
+				// because the lambda is executed asynchronously and the local variable may be out of scope
 				edgeDisplayManager->extractOriginalEdgesOnly(samplingDensity, minLength, showLinesOnly,
 					occColor, edgeWidth, intersectionNodeOccColor, intersectionNodeSize, intersectionNodeShape,
-					[this, &uiHelper, &edgeColor, &edgeWidth, &highlightIntersectionNodes, &edgeDisplayManager,
+					[this, uiHelper, &edgeColor, &edgeWidth, highlightIntersectionNodes, edgeDisplayManager,
 					 &intersectionNodeColor, &intersectionNodeSize, &intersectionNodeShape,
 					 samplingDensity, minLength, showLinesOnly](bool success, const std::string& error) {
 
@@ -89,10 +93,13 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 								m_viewer->getSceneManager()->getCanvas()->Refresh();
 							}
 								m_viewer->requestViewRefresh();
-							uiHelper.updateProgress(40, "Original edges displayed");
+							uiHelper->updateProgress(40, "Original edges displayed");
 							LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Original edges displayed successfully");
 
 							// Continue to step 2 if intersection computation is needed
+							LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Checking intersection computation - highlightIntersectionNodes=" + 
+								std::string(highlightIntersectionNodes ? "true" : "false") + 
+								", edgeDisplayManager=" + (edgeDisplayManager ? "valid" : "null"));
 							if (highlightIntersectionNodes && edgeDisplayManager) {
 								LOG_INF_S_ASYNC("Progressive display: starting async intersection computation with batch display");
 
@@ -100,45 +107,65 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 								IAsyncEngine* asyncEngine = m_asyncEngine;
 								if (!asyncEngine) {
 									// Fallback to OCCViewer's engine if not injected (for backward compatibility)
-									asyncEngine = m_viewer->getAsyncEngine();
-									LOG_WRN_S("Progressive display: Using OCCViewer's async engine (fallback mode)");
+									if (m_viewer) {
+										asyncEngine = m_viewer->getAsyncEngine();
+									}
+									if (asyncEngine) {
+										LOG_WRN_S("Progressive display: Using OCCViewer's async engine (fallback mode)");
+									}
 								} else {
 									LOG_INF_S_ASYNC("Progressive display: Using injected async engine");
 								}
 
-								if (edgeDisplayManager && asyncEngine) {
+								// Double-check edgeDisplayManager is still valid before using it
+								if (edgeDisplayManager && asyncEngine && m_viewer) {
+									// Verify edgeDisplayManager is still the same instance
+									auto currentEdgeDisplayManager = m_viewer->getEdgeDisplayManager();
+									if (currentEdgeDisplayManager != edgeDisplayManager) {
+										LOG_WRN_S_ASYNC("ShowOriginalEdgesListener: EdgeDisplayManager changed, skipping intersection computation");
+										uiHelper->updateProgress(100, "EdgeDisplayManager changed, skipping intersection computation");
+										return;
+									}
 									// Show indeterminate progress bar immediately when starting computation
-									uiHelper.setIndeterminateProgress(true, "Computing intersections...");
+									uiHelper->setIndeterminateProgress(true, "Computing intersections...");
 									LOG_INF_S_ASYNC("Progressive display: Indeterminate progress bar shown, starting computation");
 
 									// Completion callback for all geometries
-									auto onComplete = [this, &uiHelper](size_t totalPoints, bool success) {
+									// Note: uiHelper is captured by value (shared_ptr) to ensure lifetime extends to async callbacks
+									auto onComplete = [this, uiHelper](size_t totalPoints, bool success) {
+										if (!uiHelper) return; // Safety check
+										
 										if (success) {
 											LOG_INF_S_ASYNC("Multi-geometry intersection computation completed: " +
 											         std::to_string(totalPoints) + " total intersections found");
 
 											// Hide progress bar when computation is complete
-											uiHelper.setIndeterminateProgress(false);
-											uiHelper.updateProgress(100, "Intersection computation completed");
+											uiHelper->setIndeterminateProgress(false);
+											uiHelper->updateProgress(100, "Intersection computation completed");
 											LOG_INF_S_ASYNC("Progressive display: Progress bar hidden, computation completed");
 
-											m_viewer->requestViewRefresh();
+											if (m_viewer) {
+												m_viewer->requestViewRefresh();
+											}
 										} else {
 											LOG_ERR_S("Multi-geometry intersection computation failed");
-											uiHelper.setIndeterminateProgress(false);
-											uiHelper.updateProgress(100, "Intersection computation failed");
+											uiHelper->setIndeterminateProgress(false);
+											uiHelper->updateProgress(100, "Intersection computation failed");
 										}
 									};
 
 									// Progress callback - shows computation progress and batch updates
-									auto onProgress = [this, &uiHelper](int progress, const std::string& message) {
+									// Note: uiHelper is captured by value (shared_ptr) to ensure lifetime extends to async callbacks
+									auto onProgress = [this, uiHelper](int progress, const std::string& message) {
+										if (!uiHelper) return; // Safety check
+										
 										LOG_INF_S_ASYNC("Intersection progress: " + std::to_string(progress) + "% - " + message);
 
 										// Keep indeterminate progress animation during computation
 										// Only update to determinate when computation is complete
 										if (progress >= 100) {
-											uiHelper.setIndeterminateProgress(false);
-											uiHelper.updateProgress(100, message);
+											uiHelper->setIndeterminateProgress(false);
+											uiHelper->updateProgress(100, message);
 										}
 									};
 
@@ -151,15 +178,20 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 									);
 								} else {
 									LOG_ERR_S("EdgeDisplayManager or AsyncEngine not available, skipping intersection computation");
-									uiHelper.updateProgress(100, "Intersection computation skipped");
+									uiHelper->updateProgress(100, "Intersection computation skipped");
 								}
 							} else {
 								// No intersection computation, just show edges
-								uiHelper.updateProgress(100, "Edge display completed");
+								if (!highlightIntersectionNodes) {
+									LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Intersection computation skipped - highlightIntersectionNodes is false");
+								} else if (!edgeDisplayManager) {
+									LOG_WRN_S_ASYNC("ShowOriginalEdgesListener: Intersection computation skipped - edgeDisplayManager is null");
+								}
+								uiHelper->updateProgress(100, "Edge display completed");
 							}
 						} else {
 							LOG_ERR_S_ASYNC("Failed to extract original edges: " + error);
-							uiHelper.updateProgress(100, "Edge extraction failed: " + error);
+							uiHelper->updateProgress(100, "Edge extraction failed: " + error);
 						}
 					});
 			}
@@ -167,7 +199,7 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 			// Intersection computation is now handled in the async completion callback above
 
 			// Step 3: Collect statistics from all geometries
-			uiHelper.updateProgress(90, "Collecting statistics...");
+			uiHelper->updateProgress(90, "Collecting statistics...");
 			LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Collecting edge statistics");
 
 				// Collect statistics from all geometries
@@ -190,14 +222,14 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				auto endTime = std::chrono::high_resolution_clock::now();
 				totalStats.extractionTime = std::chrono::duration<double>(endTime - startTime).count();
 				totalStats.processedEdges = totalStats.totalEdges;
-				uiHelper.setStatistics(totalStats);
+				uiHelper->setStatistics(totalStats);
 				
-				uiHelper.endOperation();
+				uiHelper->endOperation();
 
 				return CommandResult(true, "Original edges shown with progressive intersection display", commandType);
 			}
 			catch (const std::exception& e) {
-				uiHelper.endOperation();
+				uiHelper->endOperation();
 				LOG_ERR_S("Error extracting original edges: " + std::string(e.what()));
 				return CommandResult(false, "Failed to extract original edges: " + std::string(e.what()), commandType);
 			}

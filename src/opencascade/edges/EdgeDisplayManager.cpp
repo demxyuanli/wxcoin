@@ -16,6 +16,7 @@
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "ViewRefreshManager.h"
+#include <atomic>
 
 EdgeDisplayManager::EdgeDisplayManager(SceneManager* sceneManager,
 	std::vector<std::shared_ptr<OCCGeometry>>* geometries)
@@ -449,9 +450,10 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 	         ", total edges: " + std::to_string(totalEdges));
 
 	EdgeGenerationService generator;
-	size_t completedCount = 0;
+	// Use atomic counters for thread-safe access in async callbacks
+	std::atomic<size_t> completedCount(0);
 	size_t totalGeometries = geometriesWithEdges;
-	size_t totalIntersectionPoints = 0;
+	std::atomic<size_t> totalIntersectionPoints(0);
 
 	for (size_t i = 0; i < m_geometries->size(); ++i) {
 		auto& geom = (*m_geometries)[i];
@@ -479,59 +481,84 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 			engine,
 			[this, i, totalGeometries, &completedCount, &totalIntersectionPoints, onComplete, onProgress, geom, edgeCount, totalEdges]
 			(const std::vector<gp_Pnt>& points, bool success, const std::string& error) {
-				completedCount++;
-				totalIntersectionPoints += points.size();
+				// Safety check: ensure this object is still valid
+				if (!m_geometries) {
+					LOG_WRN_S_ASYNC("EdgeDisplayManager: Object invalidated, skipping callback");
+					return;
+				}
+				
+				size_t currentCompleted = completedCount.fetch_add(1) + 1;
+				size_t currentTotalPoints = totalIntersectionPoints.fetch_add(points.size()) + points.size();
 
-				int progress = static_cast<int>((completedCount * 100.0) / totalGeometries);
+				int progress = static_cast<int>((currentCompleted * 100.0) / totalGeometries);
 				m_intersectionProgress.store(progress);
 
 				LOG_INF_S_ASYNC("Found " + std::to_string(points.size()) + " intersections");
 
 				if (success && !points.empty()) {
 					if (geom->modularEdgeComponent) {
-						LOG_INF_S_ASYNC("Creating intersection nodes");
+						LOG_INF_S_ASYNC("Creating intersection nodes for geometry '" + geom->getName() + "'");
 						
-						geom->modularEdgeComponent->createIntersectionNodesNode(
+						auto node = geom->modularEdgeComponent->createIntersectionNodesNode(
 							points,
 							m_originalEdgeParams.intersectionNodeColor,
 							m_originalEdgeParams.intersectionNodeSize,
 							m_originalEdgeParams.intersectionNodeShape
 						);
 						
-						// Update edge display to add nodes to scene graph
-						geom->updateEdgeDisplay();
-						
-						// Request view refresh to render the new nodes
-						if (m_sceneManager && m_sceneManager->getCanvas()) {
-							m_sceneManager->getCanvas()->Refresh();
+						if (node) {
+							LOG_INF_S_ASYNC("Intersection nodes node created successfully, updating display");
+							
+							// Update edge display to add nodes to scene graph
+							geom->updateEdgeDisplay();
+							
+							// Request view refresh to render the new nodes
+							if (m_sceneManager && m_sceneManager->getCanvas()) {
+								m_sceneManager->getCanvas()->Refresh();
+							}
+							
+							LOG_INF_S_ASYNC("Intersection nodes displayed for geometry '" + geom->getName() + "'");
+						} else {
+							LOG_WRN_S_ASYNC("Failed to create intersection nodes node for geometry '" + geom->getName() + "'");
 						}
-						
-						LOG_INF_S_ASYNC("Intersection nodes displayed");
+					} else {
+						LOG_WRN_S_ASYNC("Geometry '" + geom->getName() + "' has no modularEdgeComponent");
 					}
 					
 					// Update progress callback only when computation is complete
-					if (onProgress && completedCount == totalGeometries) {
-						onProgress(100, "Processed " + std::to_string(completedCount) + "/" + 
+					if (onProgress && currentCompleted == totalGeometries) {
+						onProgress(100, "Processed " + std::to_string(currentCompleted) + "/" + 
 						          std::to_string(totalGeometries) + " geometries, " + 
-						          std::to_string(totalIntersectionPoints) + " intersections found");
+						          std::to_string(currentTotalPoints) + " intersections found");
 					}
 				} else if (!success) {
 					LOG_ERR_S_ASYNC("EdgeDisplayManager: Failed to compute intersections for '" + 
 					         geom->getName() + "': " + error);
 				}
 
-				if (completedCount == totalGeometries) {
+				if (currentCompleted == totalGeometries) {
 					m_intersectionRunning.store(false);
 					m_intersectionProgress.store(100);
 					
-					LOG_INF_S_ASYNC("Found " + std::to_string(totalIntersectionPoints) + " total intersections");
+					LOG_INF_S_ASYNC("Found " + std::to_string(currentTotalPoints) + " total intersections");
+					
+					// Final view refresh after all geometries processed
+					if (m_sceneManager && m_sceneManager->getCanvas()) {
+						m_sceneManager->getCanvas()->Refresh();
+					}
+					LOG_INF_S_ASYNC("EdgeDisplayManager: Final view refresh after intersection computation");
 					
 					if (onComplete) {
-						onComplete(totalIntersectionPoints, true);
+						onComplete(currentTotalPoints, true);
 					}
 				}
 			},
 			[this, onProgress, geom](int progress, const std::string& message) {
+				// Safety check: ensure this object is still valid
+				if (!m_geometries) {
+					return;
+				}
+				
 				m_intersectionProgress.store(progress);
 				if (onProgress) {
 					onProgress(progress, "Geometry '" + geom->getName() + "': " + message);

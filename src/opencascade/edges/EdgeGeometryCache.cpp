@@ -1,4 +1,8 @@
 #include "edges/EdgeGeometryCache.h"
+#include <BRep_Tool.hxx>
+#include <TopoDS.hxx>
+#include <functional>
+#include <string>
 #include "logger/Logger.h"
 #include <sstream>
 #include <algorithm>
@@ -203,10 +207,13 @@ std::vector<gp_Pnt> EdgeGeometryCache::getOrComputeIntersections(
                 cachedPoints = it->second.intersectionPoints;
                 pointsSize = cachedPoints.size();
                 cachedComputationTime = it->second.computationTime;
+                LOG_INF_S("IntersectionCache: Found entry for key=" + key + 
+                         ", shapeHash=" + std::to_string(shapeHash) + 
+                         ", tolerance=" + std::to_string(tolerance));
             }
             else {
                 // Tolerance mismatch - invalidate and recompute
-                LOG_DBG_S("IntersectionCache tolerance mismatch for " + key + 
+                LOG_INF_S("IntersectionCache tolerance mismatch for " + key + 
                          ", recomputing (cached: " + std::to_string(it->second.tolerance) +
                          ", requested: " + std::to_string(tolerance) + ")");
                 m_totalMemoryUsage -= it->second.memoryUsage;
@@ -215,6 +222,10 @@ std::vector<gp_Pnt> EdgeGeometryCache::getOrComputeIntersections(
             }
         }
         else {
+            LOG_INF_S("IntersectionCache: No entry found for key=" + key + 
+                     ", shapeHash=" + std::to_string(shapeHash) + 
+                     ", tolerance=" + std::to_string(tolerance) + 
+                     ", cache size=" + std::to_string(m_intersectionCache.size()));
             m_intersectionMissCount++;
         }
     }
@@ -317,6 +328,111 @@ void EdgeGeometryCache::invalidateIntersections(size_t shapeHash) {
         LOG_INF_S("IntersectionCache invalidated " + std::to_string(removedCount) +
                   " entries for shape (freed " + std::to_string(freedMemory) + " bytes)");
     }
+}
+
+size_t EdgeGeometryCache::computeEdgeHash(const TopoDS_Edge& edge) {
+    // Use TShape pointer as primary hash (unique per edge instance)
+    size_t hash = std::hash<const void*>{}(edge.TShape().get());
+    
+    // Add curve type and parameter range for better change detection
+    Standard_Real first, last;
+    Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
+    if (!curve.IsNull()) {
+        // Use type name string for hashing instead of type pointer
+        std::string typeName = curve->DynamicType()->Name();
+        hash ^= std::hash<std::string>{}(typeName);
+        hash ^= std::hash<double>{}(first);
+        hash ^= std::hash<double>{}(last);
+    }
+    
+    return hash;
+}
+
+EdgeGeometryCache::IncrementalUpdateResult EdgeGeometryCache::updateIntersectionsIncremental(
+    const std::string& key,
+    const std::vector<TopoDS_Edge>& currentEdges,
+    double tolerance,
+    std::function<std::vector<gp_Pnt>(const std::vector<size_t>&)> computeFunc) {
+    
+    IncrementalUpdateResult result;
+    std::vector<size_t> changedEdgeIndices;
+    bool needFullComputation = false;
+    
+    // Lock scope for cache access
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        
+        auto it = m_intersectionCache.find(key);
+        if (it == m_intersectionCache.end()) {
+            // Cache miss - need full computation
+            LOG_INF_S("IncrementalUpdate: Cache miss for " + key + ", full computation needed");
+            needFullComputation = true;
+        } else {
+            auto& entry = it->second;
+            
+            // Check tolerance match
+            if (std::abs(entry.tolerance - tolerance) > 1e-9) {
+                LOG_INF_S("IncrementalUpdate: Tolerance mismatch, full recomputation");
+                needFullComputation = true;
+            } else {
+                // Check which edges changed
+                std::vector<bool> edgeChanged(currentEdges.size(), true);
+                
+                // Compute hashes for current edges
+                std::vector<size_t> currentHashes;
+                currentHashes.reserve(currentEdges.size());
+                for (const auto& edge : currentEdges) {
+                    currentHashes.push_back(computeEdgeHash(edge));
+                }
+                
+                // Compare with cached hashes
+                if (currentEdges.size() != entry.edgeHashes.size()) {
+                    LOG_INF_S("IncrementalUpdate: Edge count changed (" + 
+                              std::to_string(entry.edgeHashes.size()) + " -> " + 
+                              std::to_string(currentEdges.size()) + "), full recomputation");
+                    needFullComputation = true;
+                } else {
+                    for (size_t i = 0; i < currentEdges.size(); ++i) {
+                        if (currentHashes[i] == entry.edgeHashes[i]) {
+                            edgeChanged[i] = false;
+                        } else {
+                            changedEdgeIndices.push_back(i);
+                        }
+                    }
+                    
+                    // Keep valid intersections (both edges unchanged)
+                    for (const auto& ei : entry.edgeIntersections) {
+                        if (ei.edge1Index < edgeChanged.size() && ei.edge2Index < edgeChanged.size()) {
+                            if (!edgeChanged[ei.edge1Index] && !edgeChanged[ei.edge2Index]) {
+                                result.validIntersections.push_back(ei.intersectionPoint);
+                            }
+                        }
+                    }
+                    
+                    // If no edges changed, return cached results
+                    if (changedEdgeIndices.empty()) {
+                        LOG_INF_S("IncrementalUpdate: No edges changed, using " + 
+                                  std::to_string(result.validIntersections.size()) + " cached intersections");
+                        return result;
+                    }
+                    
+                    LOG_INF_S("IncrementalUpdate: " + std::to_string(changedEdgeIndices.size()) + 
+                              " edges changed, " + std::to_string(result.validIntersections.size()) + 
+                              " intersections still valid");
+                }
+            }
+        }
+    } // Lock released here
+    
+    // Compute intersections (outside lock)
+    if (needFullComputation) {
+        result.newIntersections = computeFunc({});
+    } else {
+        result.invalidatedEdgeIndices = changedEdgeIndices;
+        result.newIntersections = computeFunc(changedEdgeIndices);
+    }
+    
+    return result;
 }
 
 

@@ -521,6 +521,11 @@ SoSeparator* ModularEdgeComponent::createIntersectionNodesNode(
 
     if (intersectionPoints.empty()) return nullptr;
 
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+
+    // Clean up existing intersection nodes
+    cleanupEdgeNode(intersectionNodesNode);
+
     SoSeparator* node = new SoSeparator();
     node->ref();
 
@@ -647,6 +652,13 @@ SoSeparator* ModularEdgeComponent::createIntersectionNodesNode(
             break;
         }
     }
+
+    // Save to member variable and enable display
+    intersectionNodesNode = node;
+    edgeFlags.showIntersectionNodes = true;
+
+    LOG_INF_S_ASYNC("ModularEdgeComponent: Created intersection nodes node with " + 
+                    std::to_string(intersectionPoints.size()) + " points");
 
     return node;
 }

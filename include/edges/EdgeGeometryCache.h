@@ -7,6 +7,7 @@
 #include <functional>
 #include <optional>
 #include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/TopoDS_Edge.hxx>
 
 /**
  * @brief Cache for edge geometry to avoid recomputation
@@ -27,7 +28,21 @@ public:
     };
     
     /**
-     * @brief Intersection cache entry with additional metadata
+     * @brief Edge-intersection relationship for incremental updates
+     */
+    struct EdgeIntersection {
+        size_t edge1Index;      // Index in edge list
+        size_t edge2Index;      // Index in edge list
+        gp_Pnt intersectionPoint;
+        double distance;         // Distance between edges at intersection
+        
+        EdgeIntersection() : edge1Index(0), edge2Index(0), distance(0.0) {}
+        EdgeIntersection(size_t i1, size_t i2, const gp_Pnt& pt, double dist)
+            : edge1Index(i1), edge2Index(i2), intersectionPoint(pt), distance(dist) {}
+    };
+    
+    /**
+     * @brief Intersection cache entry with additional metadata and edge relationships
      */
     struct IntersectionCacheEntry {
         std::vector<gp_Pnt> intersectionPoints;
@@ -36,6 +51,10 @@ public:
         std::chrono::steady_clock::time_point lastAccess;
         size_t memoryUsage;
         double computationTime;  // Track how long it took to compute
+        
+        // NEW: Edge-intersection relationships for incremental updates
+        std::vector<EdgeIntersection> edgeIntersections;  // Which edges produce which intersections
+        std::vector<size_t> edgeHashes;  // Hash of each edge for change detection
         
         IntersectionCacheEntry() : shapeHash(0), tolerance(0.0), memoryUsage(0), computationTime(0.0) {}
     };
@@ -130,6 +149,38 @@ public:
      * @brief Evict least recently used entry
      */
     void evictLRU();
+    
+    /**
+     * @brief Result of incremental intersection update
+     */
+    struct IncrementalUpdateResult {
+        std::vector<gp_Pnt> validIntersections;  // Still valid intersections
+        std::vector<gp_Pnt> newIntersections;     // Need to compute
+        std::vector<size_t> invalidatedEdgeIndices;  // Edges that changed
+        
+        IncrementalUpdateResult() {}
+    };
+    
+    /**
+     * @brief Compute hash for an edge (for change detection)
+     * @param edge Edge to hash
+     * @return Hash value
+     */
+    static size_t computeEdgeHash(const TopoDS_Edge& edge);
+    
+    /**
+     * @brief Update intersections incrementally when geometry changes
+     * @param key Cache key
+     * @param currentEdges Current edge list
+     * @param tolerance Tolerance for intersection detection
+     * @param computeFunc Function to compute intersections for changed edges
+     * @return Update result with valid and new intersections
+     */
+    IncrementalUpdateResult updateIntersectionsIncremental(
+        const std::string& key,
+        const std::vector<TopoDS_Edge>& currentEdges,
+        double tolerance,
+        std::function<std::vector<gp_Pnt>(const std::vector<size_t>&)> computeFunc);
 
 private:
     EdgeGeometryCache() : m_hitCount(0), m_missCount(0), m_totalMemoryUsage(0), 

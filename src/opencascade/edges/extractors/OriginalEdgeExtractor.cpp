@@ -3,6 +3,7 @@
 #include "logger/AsyncLogger.h"
 #include "edges/EdgeIntersectionAccelerator.h"  // BVH acceleration
 #include <TopoDS.hxx>
+#include <GeomAPI_ExtremaCurveCurve.hxx>
 #include <TopExp_Explorer.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepAdaptor_Curve.hxx>
@@ -605,6 +606,11 @@ void OriginalEdgeExtractor::findEdgeIntersections(
               << std::fixed << std::setprecision(6) << adaptiveTolerance;
     std::string cacheKey = keyStream.str();
 
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Checking cache for key=" + cacheKey + 
+                   ", shapeHash=" + std::to_string(shapeHash) + 
+                   ", tolerance=" + std::to_string(adaptiveTolerance) + 
+                   ", edges=" + std::to_string(edges.size()));
+
     // Try to get from cache
     auto& cache = EdgeGeometryCache::getInstance();
     auto cachedIntersections = cache.getOrComputeIntersections(
@@ -620,6 +626,9 @@ void OriginalEdgeExtractor::findEdgeIntersections(
         shapeHash,
         adaptiveTolerance
     );
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Cache lookup complete, got " + 
+                   std::to_string(cachedIntersections.size()) + " intersections");
 
     // Merge cached results into output
     intersectionPoints.insert(intersectionPoints.end(), 
@@ -632,9 +641,26 @@ void OriginalEdgeExtractor::findEdgeIntersectionsFromEdges(
     std::vector<gp_Pnt>& intersectionPoints,
     double tolerance) {
 
-    // For small number of edges, use simpler approach
-    if (edges.size() < 50) {
+    // For very small number of edges, use simpler approach
+    if (edges.size() < 20) {
         findEdgeIntersectionsSimple(edges, intersectionPoints, tolerance);
+        return;
+    }
+    
+    // For larger models (>= 100 edges), use BVH acceleration
+    if (edges.size() >= 100) {
+        LOG_INF_S_ASYNC("Using BVH acceleration for " + std::to_string(edges.size()) + " edges");
+        
+        EdgeIntersectionAccelerator accelerator;
+        accelerator.buildFromEdges(edges);
+        
+        // Extract intersections using BVH (handles duplicate checking internally)
+        intersectionPoints = accelerator.extractIntersectionsParallel(tolerance);
+        
+        const auto& stats = accelerator.getStatistics();
+        LOG_INF_S_ASYNC("BVH computation complete: " + std::to_string(intersectionPoints.size()) + 
+                       " intersections found, pruning ratio: " + 
+                       std::to_string(stats.pruningRatio * 100) + "%");
         return;
     }
 
@@ -1109,42 +1135,95 @@ void OriginalEdgeExtractor::findEdgeIntersectionsSimple(
 
             if (curve1.IsNull() || curve2.IsNull()) continue;
 
-            // Sample more points for better accuracy
-            const int samples = 10;
-            std::vector<gp_Pnt> points1, points2;
+            // Use OpenCASCADE's native extrema algorithm instead of sampling
+            try {
+                GeomAPI_ExtremaCurveCurve extrema(curve1, curve2, first1, last1, first2, last2);
+                
+                if (extrema.NbExtrema() > 0) {
+                    double minDist = std::numeric_limits<double>::max();
+                    int minIndex = -1;
+                    
+                    for (int k = 1; k <= extrema.NbExtrema(); ++k) {
+                        double dist = extrema.Distance(k);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            minIndex = k;
+                        }
+                    }
+                    
+                    if (minIndex > 0 && minDist < tolerance) {
+                        gp_Pnt p1, p2;
+                        extrema.Points(minIndex, p1, p2);
+                        
+                        // Use midpoint as intersection
+                        gp_Pnt intersectionPoint(
+                            (p1.X() + p2.X()) / 2.0,
+                            (p1.Y() + p2.Y()) / 2.0,
+                            (p1.Z() + p2.Z()) / 2.0
+                        );
 
-            for (int k = 0; k <= samples; ++k) {
-                Standard_Real t1 = first1 + (last1 - first1) * k / samples;
-                Standard_Real t2 = first2 + (last2 - first2) * k / samples;
-                points1.push_back(curve1->Value(t1));
-                points2.push_back(curve2->Value(t2));
-            }
+                        // Check if already found
+                        bool alreadyFound = false;
+                        for (const auto& existingPoint : intersectionPoints) {
+                            if (intersectionPoint.Distance(existingPoint) < tolerance) {
+                                alreadyFound = true;
+                                break;
+                            }
+                        }
 
-            double minDistance = std::numeric_limits<double>::max();
-            gp_Pnt closestPoint1, closestPoint2;
-
-            for (const auto& p1 : points1) {
-                for (const auto& p2 : points2) {
-                    double dist = p1.Distance(p2);
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        closestPoint1 = p1;
-                        closestPoint2 = p2;
+                        if (!alreadyFound) {
+                            intersectionPoints.push_back(intersectionPoint);
+                        }
                     }
                 }
+            } catch (const Standard_Failure&) {
+                // Some edge pairs cannot be computed - this is normal
+                continue;
             }
+        }
+    }
+}
 
-            if (minDistance < tolerance) {
+void OriginalEdgeExtractor::checkEdgeIntersection(
+    const EdgeData& edge1, const EdgeData& edge2,
+    std::vector<gp_Pnt>& intersectionPoints, double tolerance) {
+
+    // Use OpenCASCADE's native extrema algorithm for accurate intersection
+    try {
+        GeomAPI_ExtremaCurveCurve extrema(
+            edge1.curve, edge2.curve,
+            edge1.first, edge1.last,
+            edge2.first, edge2.last
+        );
+        
+        if (extrema.NbExtrema() > 0) {
+            double minDist = std::numeric_limits<double>::max();
+            int minIndex = -1;
+            
+            for (int i = 1; i <= extrema.NbExtrema(); ++i) {
+                double dist = extrema.Distance(i);
+                if (dist < minDist) {
+                    minDist = dist;
+                    minIndex = i;
+                }
+            }
+            
+            if (minIndex > 0 && minDist < tolerance) {
+                gp_Pnt p1, p2;
+                extrema.Points(minIndex, p1, p2);
+                
+                // Use midpoint as intersection point
                 gp_Pnt intersectionPoint(
-                    (closestPoint1.X() + closestPoint2.X()) / 2.0,
-                    (closestPoint1.Y() + closestPoint2.Y()) / 2.0,
-                    (closestPoint1.Z() + closestPoint2.Z()) / 2.0
+                    (p1.X() + p2.X()) / 2.0,
+                    (p1.Y() + p2.Y()) / 2.0,
+                    (p1.Z() + p2.Z()) / 2.0
                 );
 
-                // Check if already found
+                // Check if already found (optimize by checking recent points first)
                 bool alreadyFound = false;
-                for (const auto& existingPoint : intersectionPoints) {
-                    if (intersectionPoint.Distance(existingPoint) < tolerance) {
+                const size_t maxCheck = std::min(size_t(10), intersectionPoints.size()); // Only check last 10 points
+                for (size_t k = intersectionPoints.size() - maxCheck; k < intersectionPoints.size(); ++k) {
+                    if (intersectionPoint.Distance(intersectionPoints[k]) < tolerance) {
                         alreadyFound = true;
                         break;
                     }
@@ -1155,81 +1234,9 @@ void OriginalEdgeExtractor::findEdgeIntersectionsSimple(
                 }
             }
         }
-    }
-}
-
-void OriginalEdgeExtractor::checkEdgeIntersection(
-    const EdgeData& edge1, const EdgeData& edge2,
-    std::vector<gp_Pnt>& intersectionPoints, double tolerance) {
-
-    // Two-stage approach: fast coarse check + refined check
-    const int coarseSamples = 6;  // Very fast initial check
-    double minDistance = std::numeric_limits<double>::max();
-
-    // Stage 1: Coarse check with fewer samples
-    for (int i = 0; i <= coarseSamples; ++i) {
-        Standard_Real t1 = edge1.first + (edge1.last - edge1.first) * i / coarseSamples;
-        gp_Pnt p1 = edge1.curve->Value(t1);
-
-        for (int j = 0; j <= coarseSamples; ++j) {
-            Standard_Real t2 = edge2.first + (edge2.last - edge2.first) * j / coarseSamples;
-            gp_Pnt p2 = edge2.curve->Value(t2);
-
-            double dist = p1.Distance(p2);
-            if (dist < minDistance) {
-                minDistance = dist;
-            }
-        }
-    }
-
-    // Early exit if clearly not intersecting
-    if (minDistance > tolerance * 2.0) {
+    } catch (const Standard_Failure&) {
+        // Some edge pairs cannot be computed - this is normal
         return;
-    }
-
-    // Stage 2: Refined check with more samples only if needed
-    const int fineSamples = 8;
-    minDistance = std::numeric_limits<double>::max();
-    gp_Pnt closestPoint1, closestPoint2;
-
-    for (int i = 0; i <= fineSamples; ++i) {
-        Standard_Real t1 = edge1.first + (edge1.last - edge1.first) * i / fineSamples;
-        gp_Pnt p1 = edge1.curve->Value(t1);
-
-        for (int j = 0; j <= fineSamples; ++j) {
-            Standard_Real t2 = edge2.first + (edge2.last - edge2.first) * j / fineSamples;
-            gp_Pnt p2 = edge2.curve->Value(t2);
-
-            double dist = p1.Distance(p2);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestPoint1 = p1;
-                closestPoint2 = p2;
-            }
-        }
-    }
-
-    if (minDistance < tolerance) {
-        // Use simple average for intersection point
-        gp_Pnt intersectionPoint(
-            (closestPoint1.X() + closestPoint2.X()) / 2.0,
-            (closestPoint1.Y() + closestPoint2.Y()) / 2.0,
-            (closestPoint1.Z() + closestPoint2.Z()) / 2.0
-        );
-
-        // Check if already found (optimize by checking recent points first)
-        bool alreadyFound = false;
-        const size_t maxCheck = std::min(size_t(10), intersectionPoints.size()); // Only check last 10 points
-        for (size_t k = intersectionPoints.size() - maxCheck; k < intersectionPoints.size(); ++k) {
-            if (intersectionPoint.Distance(intersectionPoints[k]) < tolerance) {
-                alreadyFound = true;
-                break;
-            }
-        }
-
-        if (!alreadyFound) {
-            intersectionPoints.push_back(intersectionPoint);
-        }
     }
 }
 
@@ -1245,6 +1252,37 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
     std::function<void(int, const std::string&)> onProgress) {
     
     LOG_INF_S_ASYNC("OriginalEdgeExtractor: Starting progressive intersection detection");
+    
+    // Check cache first - if cached, use cached results and call batch callback
+    size_t shapeHash = reinterpret_cast<size_t>(shape.TShape().get());
+    std::ostringstream keyStream;
+    keyStream << "intersections_" << shapeHash << "_" 
+              << std::fixed << std::setprecision(6) << tolerance;
+    std::string cacheKey = keyStream.str();
+    
+    auto& cache = EdgeGeometryCache::getInstance();
+    auto cachedPoints = cache.tryGetCached(cacheKey);
+    if (cachedPoints && !cachedPoints->empty()) {
+        LOG_INF_S_ASYNC("OriginalEdgeExtractor: Using cached intersections (" + 
+                       std::to_string(cachedPoints->size()) + " points)");
+        
+        // Use cached results
+        intersectionPoints = *cachedPoints;
+        
+        // Call batch callback with all cached points (for progressive display)
+        if (onBatchComplete) {
+            onBatchComplete(intersectionPoints);
+        }
+        
+        // Call progress callback
+        if (onProgress) {
+            onProgress(100, "Using cached intersections");
+        }
+        
+        return;
+    }
+    
+    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Cache miss, computing intersections");
     
     // Extract edges first
     std::vector<TopoDS_Edge> edges;
@@ -1262,6 +1300,14 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
     // For small number of edges, use simple method
     if (edges.size() < 50) {
         findEdgeIntersectionsSimple(edges, intersectionPoints, tolerance);
+        
+        // Store in cache after computation
+        if (!intersectionPoints.empty()) {
+            cache.storeCached(cacheKey, intersectionPoints, shapeHash, tolerance);
+            LOG_INF_S_ASYNC("OriginalEdgeExtractor: Stored " + std::to_string(intersectionPoints.size()) + 
+                           " intersections in cache");
+        }
+        
         if (onBatchComplete && !intersectionPoints.empty()) {
             onBatchComplete(intersectionPoints);
         }
@@ -1294,6 +1340,13 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
     
     // Use progressive TBB implementation
     findIntersectionsProgressiveTBB(edgeData, intersectionPoints, tolerance, onBatchComplete, onProgress);
+    
+    // Store in cache after computation
+    if (!intersectionPoints.empty()) {
+        cache.storeCached(cacheKey, intersectionPoints, shapeHash, tolerance);
+        LOG_INF_S_ASYNC("OriginalEdgeExtractor: Stored " + std::to_string(intersectionPoints.size()) + 
+                       " intersections in cache");
+    }
 }
 
 void OriginalEdgeExtractor::findIntersectionsProgressiveTBB(
