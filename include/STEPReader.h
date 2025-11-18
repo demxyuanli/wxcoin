@@ -259,6 +259,106 @@ private:
 	);
 
 	/**
+	 * @brief Validate input file and check basic requirements
+	 * @param filePath Path to the STEP file
+	 * @param result ReadResult to store error messages
+	 * @return true if file is valid, false otherwise
+	 */
+	static bool validateFile(const std::string& filePath, ReadResult& result);
+
+	/**
+	 * @brief Read and parse STEP file using standard OCCT reader
+	 * @param filePath Path to the STEP file
+	 * @param options Optimization options
+	 * @param result ReadResult to store results
+	 * @param progress Progress callback
+	 * @return true if successful, false otherwise
+	 */
+	static bool readSTEPFileCore(const std::string& filePath, const OptimizationOptions& options,
+		ReadResult& result, ProgressCallback progress);
+
+	/**
+	 * @brief Assemble shapes from STEP reader results
+	 * @param reader The STEP reader instance
+	 * @param result ReadResult to store assembled shape
+	 * @param progress Progress callback
+	 * @return true if successful, false otherwise
+	 */
+	static bool assembleShapes(const STEPControl_Reader& reader, ReadResult& result, ProgressCallback progress);
+
+	/**
+	 * @brief Extract metadata from STEP file
+	 * @param reader The STEP reader instance
+	 * @param result ReadResult to store metadata
+	 * @param progress Progress callback
+	 */
+	static void extractMetadata(const STEPControl_Reader& reader, ReadResult& result, ProgressCallback progress);
+
+	/**
+	 * @brief Try to read file with CAF reader for enhanced color/material support
+	 * @param filePath Path to the STEP file
+	 * @param options Optimization options
+	 * @param result ReadResult to store results
+	 * @param progress Progress callback
+	 * @return true if CAF reader succeeded and provided useful data, false otherwise
+	 */
+	static bool tryCAFReader(const std::string& filePath, const OptimizationOptions& options,
+		ReadResult& result, ProgressCallback progress);
+
+	/**
+	 * @brief Convert shape to geometries using decomposition and coloring
+	 * @param shape The root shape
+	 * @param baseName Base name for geometries
+	 * @param options Optimization options
+	 * @param result ReadResult to store geometries
+	 * @param progress Progress callback
+	 * @param progressStart Starting progress percentage
+	 * @param progressSpan Progress span for this operation
+	 */
+	static void convertToGeometries(const TopoDS_Shape& shape, const std::string& baseName,
+		const OptimizationOptions& options, ReadResult& result,
+		ProgressCallback progress, int progressStart, int progressSpan);
+
+	/**
+	 * @brief Apply post-processing to geometries
+	 * @param result ReadResult containing geometries to post-process
+	 * @param progress Progress callback
+	 */
+	static void postProcessGeometries(ReadResult& result, ProgressCallback progress);
+
+	/**
+	 * @brief Decompose shape according to specified options
+	 * @param shape Input shape
+	 * @param options Decomposition options
+	 * @return Vector of decomposed shapes
+	 */
+	static std::vector<TopoDS_Shape> decomposeShape(const TopoDS_Shape& shape, const OptimizationOptions& options);
+
+	/**
+	 * @brief Apply decomposition heuristics when basic decomposition yields single component
+	 * @param shapes Current shapes vector
+	 * @param options Decomposition options
+	 * @return Updated shapes vector with applied heuristics
+	 */
+	static std::vector<TopoDS_Shape> applyDecompositionHeuristics(std::vector<TopoDS_Shape> shapes, const OptimizationOptions& options);
+
+	/**
+	 * @brief Create geometries from shapes with coloring
+	 * @param shapes Vector of shapes to convert
+	 * @param baseName Base name for geometries
+	 * @param options Optimization options
+	 * @param palette Color palette
+	 * @param hasher Hash function for consistent coloring
+	 * @return Vector of created geometries
+	 */
+	static std::vector<std::shared_ptr<OCCGeometry>> createGeometriesFromShapes(
+		const std::vector<TopoDS_Shape>& shapes,
+		const std::string& baseName,
+		const OptimizationOptions& options,
+		const std::vector<Quantity_Color>& palette,
+		const std::hash<std::string>& hasher);
+
+	/**
 	 * @brief Generate distinct colors for assembly components
 	 * @param componentCount Number of components
 	 * @return Vector of distinct colors

@@ -140,38 +140,41 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			calculateNormals(mesh);
 		}
 
-		// Apply smoothing if enabled - read from RenderingToolkitAPI config
-		auto& config = configRef; // Reuse the config reference from earlier
-		auto& smoothingSettings = config.getSmoothingSettings();
-		auto& subdivisionSettings = config.getSubdivisionSettings();
+		// Only apply smoothing/subdivision if mesh is not empty
+		if (!mesh.vertices.empty() && !mesh.triangles.empty()) {
+			// Apply smoothing if enabled - read from RenderingToolkitAPI config
+			auto& config = configRef; // Reuse the config reference from earlier
+			auto& smoothingSettings = config.getSmoothingSettings();
+			auto& subdivisionSettings = config.getSubdivisionSettings();
 
-		// Read custom parameters
-		double smoothingStrength = 0.5;
-		try {
-			smoothingStrength = std::stod(config.getParameter("smoothing_strength", "0.5"));
-		} catch (...) {
-			smoothingStrength = 0.5;
-		}
-
-		if (smoothingSettings.enabled) {
-			// Use smoothing strength to modify iterations based on strength
-			int adjustedIterations = smoothingSettings.iterations;
-			if (smoothingStrength > 0.7) {
-				adjustedIterations = std::max(adjustedIterations + 1, 1);
-			} else if (smoothingStrength < 0.3) {
-				adjustedIterations = std::max(adjustedIterations - 1, 1);
+			// Read custom parameters
+			double smoothingStrength = 0.5;
+			try {
+				smoothingStrength = std::stod(config.getParameter("smoothing_strength", "0.5"));
+			} catch (...) {
+				smoothingStrength = 0.5;
 			}
 
-			mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
-			LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
-				", iterations=" + std::to_string(adjustedIterations) +
-				", strength=" + std::to_string(smoothingStrength));
-		}
+			if (smoothingSettings.enabled) {
+				// Use smoothing strength to modify iterations based on strength
+				int adjustedIterations = smoothingSettings.iterations;
+				if (smoothingStrength > 0.7) {
+					adjustedIterations = std::max(adjustedIterations + 1, 1);
+				} else if (smoothingStrength < 0.3) {
+					adjustedIterations = std::max(adjustedIterations - 1, 1);
+				}
 
-		// Apply subdivision if enabled - read from RenderingToolkitAPI config
-		if (subdivisionSettings.enabled) {
-			mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
-			LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
+				mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
+				LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
+					", iterations=" + std::to_string(adjustedIterations) +
+					", strength=" + std::to_string(smoothingStrength));
+			}
+
+			// Apply subdivision if enabled - read from RenderingToolkitAPI config
+			if (subdivisionSettings.enabled) {
+				mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
+				LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
+			}
 		}
 
 		LOG_DBG_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) +
@@ -301,37 +304,40 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 			calculateNormals(mesh);
 		}
 
-		// Apply smoothing if enabled - read from RenderingToolkitAPI config
-		auto& smoothingSettings = configRef.getSmoothingSettings();
-		auto& subdivisionSettings = configRef.getSubdivisionSettings();
+		// Only apply smoothing/subdivision if mesh is not empty
+		if (!mesh.vertices.empty() && !mesh.triangles.empty()) {
+			// Apply smoothing if enabled - read from RenderingToolkitAPI config
+			auto& smoothingSettings = configRef.getSmoothingSettings();
+			auto& subdivisionSettings = configRef.getSubdivisionSettings();
 
-		// Read custom parameters
-		double smoothingStrength = 0.5;
-		try {
-			smoothingStrength = std::stod(configRef.getParameter("smoothing_strength", "0.5"));
-		} catch (...) {
-			smoothingStrength = 0.5;
-		}
-
-		if (smoothingSettings.enabled) {
-			// Use smoothing strength to modify iterations based on strength
-			int adjustedIterations = smoothingSettings.iterations;
-			if (smoothingStrength > 0.7) {
-				adjustedIterations = std::max(adjustedIterations + 1, 1);
-			} else if (smoothingStrength < 0.3) {
-				adjustedIterations = std::max(adjustedIterations - 1, 1);
+			// Read custom parameters
+			double smoothingStrength = 0.5;
+			try {
+				smoothingStrength = std::stod(configRef.getParameter("smoothing_strength", "0.5"));
+			} catch (...) {
+				smoothingStrength = 0.5;
 			}
 
-			mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
-			LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
-				", iterations=" + std::to_string(adjustedIterations) +
-				", strength=" + std::to_string(smoothingStrength));
-		}
+			if (smoothingSettings.enabled) {
+				// Use smoothing strength to modify iterations based on strength
+				int adjustedIterations = smoothingSettings.iterations;
+				if (smoothingStrength > 0.7) {
+					adjustedIterations = std::max(adjustedIterations + 1, 1);
+				} else if (smoothingStrength < 0.3) {
+					adjustedIterations = std::max(adjustedIterations - 1, 1);
+				}
 
-		// Apply subdivision if enabled - read from RenderingToolkitAPI config
-		if (subdivisionSettings.enabled) {
-			mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
-			LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
+				mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
+				LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
+					", iterations=" + std::to_string(adjustedIterations) +
+					", strength=" + std::to_string(smoothingStrength));
+			}
+
+			// Apply subdivision if enabled - read from RenderingToolkitAPI config
+			if (subdivisionSettings.enabled) {
+				mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
+				LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
+			}
 		}
 
 	}
@@ -404,7 +410,7 @@ TriangleMesh OpenCASCADEProcessor::smoothNormals(const TriangleMesh& mesh,
 	double creaseAngle,
 	int iterations) {
 	if (mesh.vertices.empty() || mesh.triangles.empty() || mesh.normals.empty()) {
-		LOG_WRN_S("Cannot smooth normals for empty mesh");
+		// Silent return - this is expected when called with empty mesh (caller should check first)
 		return mesh;
 	}
 

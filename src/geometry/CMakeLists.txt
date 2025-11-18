@@ -5,6 +5,12 @@
 set(GEOMETRY_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryReader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPReader.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/STEPGeometryDecomposer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/STEPReaderUtils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/STEPGeometryConverter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/STEPColorManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/STEPMetadataExtractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/STEPCAFProcessor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/STEPImportOptimizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryImportOptimizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/IGESReader.cpp
@@ -22,6 +28,10 @@ set(GEOMETRY_SOURCES
 set(GEOMETRY_HEADERS
     ${CMAKE_SOURCE_DIR}/include/GeometryReader.h
     ${CMAKE_SOURCE_DIR}/include/STEPReader.h
+    ${CMAKE_SOURCE_DIR}/include/STEPGeometryDecomposer.h
+    ${CMAKE_SOURCE_DIR}/include/STEPColorManager.h
+    ${CMAKE_SOURCE_DIR}/include/STEPMetadataExtractor.h
+    ${CMAKE_SOURCE_DIR}/include/STEPCAFProcessor.h
     ${CMAKE_SOURCE_DIR}/include/STEPImportOptimizer.h
     ${CMAKE_SOURCE_DIR}/include/GeometryImportOptimizer.h
     ${CMAKE_SOURCE_DIR}/include/FastSTEPReader.h
@@ -58,6 +68,7 @@ target_link_libraries(CADGeometry PUBLIC
     CADParam
     CADOCC
     ${OpenCASCADE_LIBRARIES}
+    TBB::tbb
 )
 
 # Compiler definitions

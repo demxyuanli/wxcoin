@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <algorithm>
 #include "GeometryObject.h"
 #include "PropertyPanel.h"
 #include "OCCGeometry.h"
@@ -117,13 +118,22 @@ private:
 		void addGeometry(std::shared_ptr<OCCGeometry> geometry) {
 			if (!geometry) return;
 			
+			// Check for duplicates in file groups
 			std::string fileName = geometry->getFileName();
 			if (!fileName.empty()) {
-				fileGroups[fileName].push_back(geometry);
+				auto& group = fileGroups[fileName];
+				// Check if geometry already exists in this file group
+				if (std::find(group.begin(), group.end(), geometry) == group.end()) {
+					group.push_back(geometry);
+					needsUpdate = true;
+				}
 			} else {
-				ungroupedGeometries.push_back(geometry);
+				// Check if geometry already exists in ungrouped geometries
+				if (std::find(ungroupedGeometries.begin(), ungroupedGeometries.end(), geometry) == ungroupedGeometries.end()) {
+					ungroupedGeometries.push_back(geometry);
+					needsUpdate = true;
+				}
 			}
-			needsUpdate = true;
 		}
 		
 		void removeGeometry(std::shared_ptr<OCCGeometry> geometry) {

@@ -264,7 +264,6 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry, std:
 		return;
 	}
 	if (m_occGeometryMap.find(geometry) != m_occGeometryMap.end()) {
-		LOG_WRN_S("OCCGeometry already exists in tree: " + geometry->getName());
 		return;
 	}
 
@@ -436,9 +435,8 @@ void ObjectTreePanel::addOCCGeometryToNode(std::shared_ptr<FlatTreeItem> parentN
 		return;
 	}
 	
-	// Check if geometry already exists
+	// Check if geometry already exists (silent check - this is expected during refresh)
 	if (m_occGeometryMap.find(geometry) != m_occGeometryMap.end()) {
-		LOG_WRN_S("OCCGeometry already exists in tree: " + geometry->getName());
 		return;
 	}
 	
