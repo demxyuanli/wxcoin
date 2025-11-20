@@ -64,6 +64,8 @@ set(COMMANDS_SOURCES
     ShowPointViewListener.cpp
     FaceQueryListener.cpp
     FaceQueryCommandListener.cpp
+    FaceSelectionListener.cpp
+    FaceSelectionCommandListener.cpp
     SliceToggleListener.cpp
     DockLayoutConfigListener.cpp
     SplitViewToggleListener.cpp
@@ -135,6 +137,8 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ShowPointViewListener.h
     ${CMAKE_SOURCE_DIR}/include/FaceQueryListener.h
     ${CMAKE_SOURCE_DIR}/include/FaceQueryCommandListener.h
+    ${CMAKE_SOURCE_DIR}/include/FaceSelectionListener.h
+    ${CMAKE_SOURCE_DIR}/include/FaceSelectionCommandListener.h
     ${CMAKE_SOURCE_DIR}/include/SliceToggleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeConfigListener.h
     ${CMAKE_SOURCE_DIR}/include/ToggleOutlineListener.h
@@ -157,6 +161,7 @@ target_link_libraries(CADCommands PUBLIC
     CADLogger
     CADOCC
     CADGeometry
+    CADMod
     UIDialogMesh
     ${wxWidgets_LIBRARIES}
     Coin::Coin

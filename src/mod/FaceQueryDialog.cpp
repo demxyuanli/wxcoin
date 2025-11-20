@@ -1,4 +1,4 @@
-#include "FaceQueryDialog.h"
+#include "mod/FaceQueryDialog.h"
 #include "OCCGeometry.h"
 #include <wx/sizer.h>
 
@@ -83,3 +83,5 @@ void FaceQueryDialog::layoutControls()
 	SetSizer(mainSizer);
 	Layout();
 }
+
+

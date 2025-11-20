@@ -24,6 +24,27 @@ struct FaceIndexMapping {
 };
 
 /**
+ * @brief Edge index mapping structure for Coin3D line to geometry edge mapping
+ */
+struct EdgeIndexMapping {
+    int geometryEdgeId;  // Index of the edge in the original geometry (from TopExp_Explorer)
+    std::vector<int> lineIndices;  // Indices of lines in Coin3D mesh that belong to this edge
+
+    EdgeIndexMapping(int edgeId = -1) : geometryEdgeId(edgeId) {}
+};
+
+/**
+ * @brief Vertex index mapping structure for Coin3D point to geometry vertex mapping
+ */
+struct VertexIndexMapping {
+    int geometryVertexId;  // Index of the vertex in the original geometry (from TopExp_Explorer)
+    int coordinateIndex;   // Index of the coordinate in Coin3D mesh that represents this vertex
+
+    VertexIndexMapping(int vertexId = -1, int coordIdx = -1)
+        : geometryVertexId(vertexId), coordinateIndex(coordIdx) {}
+};
+
+/**
  * @brief Geometry mesh generation and management
  * 
  * Manages Coin3D mesh representation, regeneration, and face index mapping
@@ -80,13 +101,31 @@ public:
     const std::vector<FaceIndexMapping>& getFaceIndexMappings() const { return m_faceIndexMappings; }
     void setFaceIndexMappings(const std::vector<FaceIndexMapping>& mappings);
 
-    // Build reverse mapping for fast triangle-to-face lookup
+    // Edge index mapping for Coin3D line to geometry edge mapping
+    const std::vector<EdgeIndexMapping>& getEdgeIndexMappings() const { return m_edgeIndexMappings; }
+    void setEdgeIndexMappings(const std::vector<EdgeIndexMapping>& mappings);
+
+    // Vertex index mapping for Coin3D point to geometry vertex mapping
+    const std::vector<VertexIndexMapping>& getVertexIndexMappings() const { return m_vertexIndexMappings; }
+    void setVertexIndexMappings(const std::vector<VertexIndexMapping>& mappings);
+
+    // Build reverse mapping for fast lookups
     void buildReverseMapping();
 
     // Query methods for face index mapping
     int getGeometryFaceIdForTriangle(int triangleIndex) const;
     std::vector<int> getTrianglesForGeometryFace(int geometryFaceId) const;
     bool hasFaceIndexMapping() const { return !m_faceIndexMappings.empty(); }
+
+    // Query methods for edge index mapping
+    int getGeometryEdgeIdForLine(int lineIndex) const;
+    std::vector<int> getLinesForGeometryEdge(int geometryEdgeId) const;
+    bool hasEdgeIndexMapping() const { return !m_edgeIndexMappings.empty(); }
+
+    // Query methods for vertex index mapping
+    int getGeometryVertexIdForCoordinate(int coordinateIndex) const;
+    int getCoordinateForGeometryVertex(int geometryVertexId) const;
+    bool hasVertexIndexMapping() const { return !m_vertexIndexMappings.empty(); }
 
     // Point view rendering
     void createPointViewRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
@@ -112,8 +151,12 @@ protected:
     MeshParameters m_lastMeshParams;
     int m_assemblyLevel;
     std::vector<FaceIndexMapping> m_faceIndexMappings;
+    std::vector<EdgeIndexMapping> m_edgeIndexMappings;
+    std::vector<VertexIndexMapping> m_vertexIndexMappings;
 
-    // Performance optimization: reverse mapping for O(1) triangle-to-face lookup
+    // Performance optimization: reverse mapping for O(1) lookups
     std::unordered_map<int, int> m_triangleToFaceMap;
+    std::unordered_map<int, int> m_lineToEdgeMap;
+    std::unordered_map<int, int> m_coordinateToVertexMap;
     bool m_hasReverseMapping = false;
 };

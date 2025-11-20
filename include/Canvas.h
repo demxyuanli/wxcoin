@@ -7,7 +7,7 @@
 #include "interfaces/IViewportManager.h"
 #include "interfaces/IMultiViewportManager.h"
 #include "interfaces/IViewRefresher.h"
-#include "FaceInfoOverlay.h"
+#include "mod/FaceInfoOverlay.h"
 
 // Forward declarations
 class OCCViewer;

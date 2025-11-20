@@ -34,6 +34,7 @@ OCCGeometryMesh::OCCGeometryMesh()
     , m_meshRegenerationNeeded(true)
     , m_assemblyLevel(0)
     , useModularEdgeComponent(true)
+    , m_hasReverseMapping(false)
     , m_lastMeshParams{}  // Initialize to default values to avoid issues caused by random values
 {
     // Use only modular edge component - migration completed
@@ -257,6 +258,8 @@ void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const Mes
             faces.push_back(TopoDS::Face(exp.Current()));
         }
 
+        LOG_INF_S("Face index mapping: found " + std::to_string(faces.size()) + " faces in shape");
+
         if (faces.empty()) {
             LOG_WRN_S("No faces found in shape for index mapping");
             return;
@@ -271,19 +274,24 @@ void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const Mes
         if (processor) {
             std::vector<std::pair<int, std::vector<int>>> faceMappings;
             TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
-            
+
+            LOG_INF_S("Face index mapping: processor returned " + std::to_string(faceMappings.size()) + " face mappings");
+
             if (!faceMappings.empty()) {
                 // Build face index mappings
                 m_faceIndexMappings.reserve(faceMappings.size());
-                
+
                 for (const auto& [faceId, triangleIndices] : faceMappings) {
                     FaceIndexMapping mapping(faceId);
                     mapping.triangleIndices = triangleIndices;
                     m_faceIndexMappings.push_back(mapping);
+                    LOG_INF_S("Face mapping: face " + std::to_string(faceId) + " has " + std::to_string(triangleIndices.size()) + " triangles");
                 }
-                
+
+                LOG_INF_S("Face index mapping: successfully created " + std::to_string(m_faceIndexMappings.size()) + " mappings");
+
             } else {
-                LOG_WRN_S("No face mappings generated");
+                LOG_WRN_S("No face mappings generated - this will prevent face highlighting");
             }
         } else {
             LOG_ERR_S("OpenCASCADE processor not available for face mapping");
@@ -428,6 +436,27 @@ void OCCGeometryMesh::buildCoinRepresentation(
             // Also clear normal-related nodes since they depend on mesh quality
             modularEdgeComponent->clearEdgeNode(EdgeType::NormalLine);
             modularEdgeComponent->clearEdgeNode(EdgeType::FaceNormalLine);
+        }
+        // Clear face index mapping when mesh parameters change
+        // It will be rebuilt with new parameters below
+        m_faceIndexMappings.clear();
+        m_hasReverseMapping = false;
+        m_triangleToFaceMap.clear();
+        LOG_INF_S("Cleared face index mapping due to mesh parameter change");
+    }
+    
+    // ===== Build face index mapping BEFORE building Coin3D node =====
+    // This ensures the mapping matches the mesh used for rendering
+    // The mapping must be built with the same mesh parameters as the Coin3D node
+    if (m_faceIndexMappings.empty()) {
+        LOG_INF_S("Building face index mapping for geometry (before Coin3D node creation)");
+        buildFaceIndexMapping(shape, params);
+        
+        // Verify mapping was created
+        if (m_faceIndexMappings.empty()) {
+            LOG_WRN_S("Face index mapping is still empty after buildFaceIndexMapping - face highlighting may not work");
+        } else {
+            LOG_INF_S("Face index mapping built successfully: " + std::to_string(m_faceIndexMappings.size()) + " faces");
         }
     }
 
@@ -765,9 +794,19 @@ void OCCGeometryMesh::buildCoinRepresentation(
         }
     }
 
-    // ===== Build face index mapping =====
-    if (m_faceIndexMappings.empty()) {
+    // ===== Build face index mapping BEFORE building Coin3D node =====
+    // This ensures the mapping matches the mesh used for rendering
+    // The mapping must be built with the same mesh parameters as the Coin3D node
+    if (m_faceIndexMappings.empty() || meshParamsChanged) {
+        LOG_INF_S("Building face index mapping for geometry (before Coin3D node creation)");
         buildFaceIndexMapping(shape, params);
+        
+        // Verify mapping was created
+        if (m_faceIndexMappings.empty()) {
+            LOG_WRN_S("Face index mapping is still empty after buildFaceIndexMapping");
+        } else {
+            LOG_INF_S("Face index mapping built successfully: " + std::to_string(m_faceIndexMappings.size()) + " faces");
+        }
     }
 
     // Update flags
@@ -1011,4 +1050,47 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
     } catch (const std::exception& e) {
         LOG_ERR_S("Exception in createPointViewRepresentation: " + std::string(e.what()));
     }
+}
+
+// Edge and vertex index mapping implementations
+void OCCGeometryMesh::setEdgeIndexMappings(const std::vector<EdgeIndexMapping>& mappings) {
+    m_edgeIndexMappings = mappings;
+    m_hasReverseMapping = false; // Need to rebuild reverse mapping
+}
+
+void OCCGeometryMesh::setVertexIndexMappings(const std::vector<VertexIndexMapping>& mappings) {
+    m_vertexIndexMappings = mappings;
+    m_hasReverseMapping = false; // Need to rebuild reverse mapping
+}
+
+int OCCGeometryMesh::getGeometryEdgeIdForLine(int lineIndex) const {
+    if (!m_hasReverseMapping) return -1;
+
+    auto it = m_lineToEdgeMap.find(lineIndex);
+    return (it != m_lineToEdgeMap.end()) ? it->second : -1;
+}
+
+std::vector<int> OCCGeometryMesh::getLinesForGeometryEdge(int geometryEdgeId) const {
+    for (const auto& mapping : m_edgeIndexMappings) {
+        if (mapping.geometryEdgeId == geometryEdgeId) {
+            return mapping.lineIndices;
+        }
+    }
+    return {};
+}
+
+int OCCGeometryMesh::getGeometryVertexIdForCoordinate(int coordinateIndex) const {
+    if (!m_hasReverseMapping) return -1;
+
+    auto it = m_coordinateToVertexMap.find(coordinateIndex);
+    return (it != m_coordinateToVertexMap.end()) ? it->second : -1;
+}
+
+int OCCGeometryMesh::getCoordinateForGeometryVertex(int geometryVertexId) const {
+    for (const auto& mapping : m_vertexIndexMappings) {
+        if (mapping.geometryVertexId == geometryVertexId) {
+            return mapping.coordinateIndex;
+        }
+    }
+    return -1;
 }

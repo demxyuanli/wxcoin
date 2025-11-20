@@ -8,10 +8,12 @@
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
 #include "OCCShapeBuilder.h"
+#include "OCCMeshConverter.h" // For MeshParameters
 #include "PositionBasicDialog.h" // For BasicGeometryParameters
 #include <gp_Dir.hxx>
 #include <memory>
 #include <gp_Pnt.hxx>
+#include <opencascade/TopExp_Explorer.hxx>
 
 GeometryFactory::GeometryFactory(SoSeparator* root, ObjectTreePanel* treePanel, PropertyPanel* propPanel,
 	CommandManager* cmdManager, OCCViewer* occViewer)
@@ -23,6 +25,32 @@ GeometryFactory::GeometryFactory(SoSeparator* root, ObjectTreePanel* treePanel, 
 	, m_defaultGeometryType(GeometryType::OPENCASCADE)
 {
 	LOG_INF_S("GeometryFactory initializing with OCC support");
+}
+
+// Helper function to build high-quality face index mapping for system-created geometries
+void GeometryFactory::buildFaceIndexMappingForSystemGeometry(std::shared_ptr<OCCGeometry> geometry, const std::string& geometryName) {
+	if (!geometry) {
+		return;
+	}
+
+	// Build face index mapping with high quality parameters (same as STEP import)
+	// This is crucial for face picking to work properly on system-created geometries
+	MeshParameters faceMappingParams;
+	faceMappingParams.deflection = 0.001;  // High quality mesh for face mapping
+	faceMappingParams.angularDeflection = 0.5;
+	faceMappingParams.relative = true;
+	faceMappingParams.inParallel = true;
+
+	LOG_INF_S("Building face index mapping for " + geometryName + " with high quality parameters");
+	geometry->buildFaceIndexMapping(faceMappingParams);
+
+	// Verify face index mapping was built
+	if (geometry->hasFaceIndexMapping()) {
+		auto mappings = geometry->getFaceIndexMappings();
+		LOG_INF_S("Face index mapping built successfully for " + geometryName + ": " + std::to_string(mappings.size()) + " faces mapped");
+	} else {
+		LOG_WRN_S("Failed to build face index mapping for " + geometryName + " - face highlighting may not work properly");
+	}
 }
 
 GeometryFactory::~GeometryFactory() {
@@ -165,7 +193,10 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& positi
 			box->setPosition(gp_Pnt(position[0], position[1], position[2]));
 			// Rebuild shape at new position
 			box->setDimensions(width, height, depth);
-			
+
+			// Build face index mapping for system-created geometry
+			// buildFaceIndexMappingForSystemGeometry(box, "box");
+
 			LOG_INF_S("Created OCCBox: " + name + " at position (" +
 				std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) +
 				") with dimensions " + std::to_string(width) + "x" + std::to_string(height) + "x" + std::to_string(depth));
@@ -195,6 +226,10 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCSphere(const SbVec3f& pos
 
 		if (sphere && !sphere->getShape().IsNull()) {
 			sphere->setPosition(gp_Pnt(position[0], position[1], position[2]));
+
+			// Build face index mapping for system-created geometry
+			// buildFaceIndexMappingForSystemGeometry(sphere, "sphere");
+
 			LOG_INF_S("Created OCCSphere: " + name + " with radius " + std::to_string(radius));
 			return sphere;
 		}
@@ -222,6 +257,10 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCylinder(const SbVec3f& p
 
 		if (cylinder && !cylinder->getShape().IsNull()) {
 			cylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
+
+			// Build face index mapping for system-created geometry
+			// buildFaceIndexMappingForSystemGeometry(cylinder, "cylinder");
+
 			LOG_INF_S("Created OCCCylinder: " + name + " with radius " + std::to_string(radius) + " height " + std::to_string(height));
 			return cylinder;
 		}
@@ -249,6 +288,10 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& posit
 
 		if (cone && !cone->getShape().IsNull()) {
 			cone->setPosition(gp_Pnt(position[0], position[1], position[2]));
+
+			// Build face index mapping for system-created geometry
+			// buildFaceIndexMappingForSystemGeometry(cone, "cone");
+
 			LOG_INF_S("Created OCCCone: " + name + " with bottom radius " + std::to_string(bottomRadius) +
 				" top radius " + std::to_string(topRadius) + " height " + std::to_string(height));
 			return cone;
@@ -277,6 +320,10 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTorus(const SbVec3f& posi
 
 		if (torus && !torus->getShape().IsNull()) {
 			torus->setPosition(gp_Pnt(position[0], position[1], position[2]));
+
+			// Build face index mapping for system-created geometry
+			// buildFaceIndexMappingForSystemGeometry(torus, "torus");
+
 			LOG_INF_S("Created OCCTorus: " + name + " with major radius " + std::to_string(majorRadius) +
 				" minor radius " + std::to_string(minorRadius));
 			return torus;
@@ -305,6 +352,10 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTruncatedCylinder(const S
 
 		if (truncatedCylinder && !truncatedCylinder->getShape().IsNull()) {
 			truncatedCylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
+
+			// Build face index mapping for system-created geometry
+			// buildFaceIndexMappingForSystemGeometry(truncatedCylinder, "truncated cylinder");
+
 			LOG_INF_S("Created OCCTruncatedCylinder: " + name + " with bottom radius " + std::to_string(bottomRadius) +
 				" top radius " + std::to_string(topRadius) + " height " + std::to_string(height));
 			return truncatedCylinder;
@@ -597,11 +648,21 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCWrench(const SbVec3f& pos
 		OCCShapeBuilder::outputFaceNormalsAndIndices(wrenchBody, name);
 		OCCShapeBuilder::analyzeShapeProperties(wrenchBody, name);
 
+		// Additional debugging for face mapping issues
+		int faceCount = 0;
+		for (TopExp_Explorer exp(wrenchBody, TopAbs_FACE); exp.More(); exp.Next()) {
+			faceCount++;
+		}
+		LOG_INF_S("Wrench created with " + std::to_string(faceCount) + " faces");
+
 		auto geometry = std::make_shared<OCCGeometry>(name);
 		geometry->setShape(wrenchBody);
 		// Set position to the specified location - this ensures the geometry is properly positioned
 		geometry->setPosition(gp_Pnt(position[0], position[1], position[2]));
 		LOG_INF_S("[GeometryFactoryDebug] Final wrench position set to: (" + std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) + ")");
+
+		// Build face index mapping for system-created geometry
+		// buildFaceIndexMappingForSystemGeometry(geometry, "wrench");
 
 		LOG_INF_S("Created connected professional wrench model: " + name);
 		return geometry;
@@ -650,6 +711,9 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCNavCube(const SbVec3f& po
 		if (navCube && !navCube->getShape().IsNull()) {
 			// Set position AFTER creation to apply transformation
 			navCube->setPosition(gp_Pnt(position[0], position[1], position[2]));
+
+			// Build face index mapping for system-created geometry
+			// buildFaceIndexMappingForSystemGeometry(navCube, "nav cube");
 
 			LOG_INF_S("Created OCCNavCube: " + name + " at position (" +
 				std::to_string(position[0]) + ", " + std::to_string(position[1]) + ", " + std::to_string(position[2]) +

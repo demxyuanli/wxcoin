@@ -70,6 +70,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_SHOW_MESH_EDGES, cmd::CommandType::ShowMeshEdges},
 	{ID_SHOW_FACE_NORMALS, cmd::CommandType::ShowFaceNormals},
 	{ID_FACE_QUERY_TOOL, cmd::CommandType::FaceQueryTool},
+	{ID_FACE_SELECTION_TOOL, cmd::CommandType::FaceSelectionTool},
 	{ID_SHOW_POINT_VIEW, cmd::CommandType::ShowPointView},
 	{ID_TOGGLE_SLICE, cmd::CommandType::SliceToggle},
 	{ID_TEXTURE_MODE_DECAL, cmd::CommandType::TextureModeDecal},

@@ -23,6 +23,9 @@ add_subdirectory(async)
 # 5. Geometry module (depends on core, logger, and occ modules)
 add_subdirectory(geometry)
 
+# 5.1. Mod module (depends on core, logger, occ, geometry, and rendering_toolkit modules)
+add_subdirectory(mod)
+
 # 6. Commands module (depends on core and occ)
 add_subdirectory(commands)
 
@@ -65,6 +68,7 @@ set_target_properties(CADConfig PROPERTIES FOLDER "Modules")
 set_target_properties(CADOCC PROPERTIES FOLDER "Modules")
 set_target_properties(AsyncEngine PROPERTIES FOLDER "Modules")
 set_target_properties(CADGeometry PROPERTIES FOLDER "Modules")
+set_target_properties(CADMod PROPERTIES FOLDER "Modules")
 set_target_properties(CADCommands PROPERTIES FOLDER "Modules")
 set_target_properties(optimizer PROPERTIES FOLDER "Modules")
 set_target_properties(CADRendering PROPERTIES FOLDER "Modules")

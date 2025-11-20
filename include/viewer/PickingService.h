@@ -13,8 +13,15 @@ class SoSeparator;
  */
 struct PickingResult {
 	std::shared_ptr<OCCGeometry> geometry;
-	int triangleIndex = -1;  // Index of clicked triangle in mesh
+	int triangleIndex = -1;  // Index of clicked triangle in mesh (for faces)
 	int geometryFaceId = -1; // Corresponding face ID in original geometry
+	int lineIndex = -1;      // Index of clicked line in mesh (for edges)
+	int geometryEdgeId = -1; // Corresponding edge ID in original geometry
+	int vertexIndex = -1;    // Index of clicked vertex in mesh (for vertices)
+	int geometryVertexId = -1; // Corresponding vertex ID in original geometry
+	std::string subElementName; // Sub-element name like "Face5", "Edge12", "Vertex3" (FreeCAD style)
+	std::string elementType; // Type of element: "Face", "Edge", "Vertex", or empty
+	float x = 0.0f, y = 0.0f, z = 0.0f; // 3D coordinates where picking occurred
 
 	PickingResult() = default;
 	PickingResult(std::shared_ptr<OCCGeometry> geom, int triIdx = -1, int faceId = -1)

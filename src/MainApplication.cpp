@@ -17,6 +17,9 @@
 #include <Inventor/SoDB.h>
 #include <Inventor/SoInput.h>
 #include <Inventor/nodes/SoSeparator.h>
+#include "mod/SoHighlightElementAction.h"
+#include "mod/SoSelectionElementAction.h"
+#include "mod/SoFCUnifiedSelection.h"
 
 bool MainApplication::OnInit()
 {
@@ -24,6 +27,13 @@ bool MainApplication::OnInit()
     try {
         SoDB::init();
         LOG_INF("Coin3D initialized successfully", "MainApplication");
+
+        // Initialize selection action classes after Coin3D
+        SoHighlightElementAction::initClass();
+        SoSelectionElementAction::initClass();
+        SoFCUnifiedSelection::initClass();
+        LOG_INF("Selection action classes initialized successfully", "MainApplication");
+
     } catch (const std::exception& e) {
         wxMessageBox("Failed to initialize Coin3D library: " + wxString(e.what()), "Initialization Error", wxOK | wxICON_ERROR);
         return false;

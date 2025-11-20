@@ -4,12 +4,12 @@
 #include "InputManager.h"
 
 /**
- * @brief Command listener for face query tool activation
+ * @brief Command listener for face selection tool activation
  */
-class FaceQueryCommandListener : public CommandListener
+class FaceSelectionCommandListener : public CommandListener
 {
 public:
-	FaceQueryCommandListener(InputManager* inputManager, class PickingService* pickingService);
+	FaceSelectionCommandListener(InputManager* inputManager, class PickingService* pickingService, class OCCViewer* occViewer);
 
 	CommandResult executeCommand(const std::string& commandType,
 		const std::unordered_map<std::string, std::string>& parameters) override;
@@ -19,6 +19,11 @@ public:
 private:
 	InputManager* m_inputManager;
 	class PickingService* m_pickingService;
+	class OCCViewer* m_occViewer;
 	bool m_coordinateSystemVisibilitySaved;
 	bool m_savedCoordinateSystemVisibility;
+	bool m_originalEdgesStateSaved;
+	bool m_savedOriginalEdgesState;
 };
+
+

@@ -19,3 +19,4 @@ private:
 	wxPropertyGrid* m_propGrid;
 };
 
+

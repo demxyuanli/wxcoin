@@ -33,3 +33,4 @@ private:
     int m_autoHideSeconds; // 0 = no auto-hide
 };
 
+

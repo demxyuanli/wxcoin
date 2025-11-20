@@ -2,7 +2,7 @@
 #include "viewer/PickingService.h"
 #include "logger/Logger.h"
 #include "Canvas.h"
-#include "FaceQueryDialog.h"
+#include "mod/FaceQueryDialog.h"
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
 

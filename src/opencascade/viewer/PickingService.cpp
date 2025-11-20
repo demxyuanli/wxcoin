@@ -17,6 +17,9 @@
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/details/SoFaceDetail.h>
+#include <Inventor/details/SoLineDetail.h>
+#include <Inventor/details/SoPointDetail.h>
+#include <wx/msgdlg.h>
 
 PickingService::PickingService(SceneManager* sceneManager,
 	SoSeparator* occRoot,
@@ -132,24 +135,120 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 
 	result.geometry = it->second;
 
-	// Try to get triangle index from the picked point detail
+	// Try to get element information from the picked point detail
 	const SoDetail* detail = picked->getDetail();
-	if (detail && detail->isOfType(SoFaceDetail::getClassTypeId())) {
-		const SoFaceDetail* faceDetail = static_cast<const SoFaceDetail*>(detail);
+	if (detail) {
+		// Handle face picking
+		if (detail->isOfType(SoFaceDetail::getClassTypeId())) {
+			const SoFaceDetail* faceDetail = static_cast<const SoFaceDetail*>(detail);
 
-		// Get the face index (triangle index in the mesh)
-		int triangleIndex = faceDetail->getFaceIndex();
-		result.triangleIndex = triangleIndex;
+			// Get the face index (triangle index in the mesh)
+			int triangleIndex = faceDetail->getFaceIndex();
+			result.triangleIndex = triangleIndex;
 
-		// Use face index mapping to get geometry face ID
-		if (result.geometry && result.geometry->hasFaceIndexMapping()) {
-			int geometryFaceId = result.geometry->getGeometryFaceIdForTriangle(triangleIndex);
-			result.geometryFaceId = geometryFaceId;
+			// Use face index mapping to get geometry face ID
+			if (result.geometry && result.geometry->hasFaceIndexMapping()) {
+				int geometryFaceId = result.geometry->getGeometryFaceIdForTriangle(triangleIndex);
+				result.geometryFaceId = geometryFaceId;
+
+			// Generate sub-element name in FreeCAD style: "Face5"
+			if (geometryFaceId >= 0) {
+				result.elementType = "Face";
+				result.subElementName = "Face" + std::to_string(geometryFaceId);
+				LOG_INF_S("PickingService - Successfully picked face " + std::to_string(geometryFaceId) +
+					" (triangle " + std::to_string(triangleIndex) + ") in geometry " + result.geometry->getName());
+			} else {
+				LOG_WRN_S("PickingService - Invalid face ID returned from mapping for triangle " + std::to_string(triangleIndex));
+				// Fallback: use triangle index as face ID for debugging
+				result.elementType = "Face";
+				result.subElementName = "Face" + std::to_string(triangleIndex);
+				result.geometryFaceId = triangleIndex;
+				LOG_WRN_S("PickingService - Using fallback face ID " + std::to_string(triangleIndex));
+			}
+			} else {
+				LOG_WRN_S("PickingService - Geometry does not have face index mapping");
+			}
+
+		// Handle edge picking
+		} else if (detail->isOfType(SoLineDetail::getClassTypeId())) {
+			const SoLineDetail* lineDetail = static_cast<const SoLineDetail*>(detail);
+
+			// Get the line index (edge index in the mesh)
+			int lineIndex = lineDetail->getLineIndex();
+			result.lineIndex = lineIndex;
+
+			// Use edge index mapping to get geometry edge ID
+			if (result.geometry && result.geometry->hasEdgeIndexMapping()) {
+				int geometryEdgeId = result.geometry->getGeometryEdgeIdForLine(lineIndex);
+				result.geometryEdgeId = geometryEdgeId;
+
+				// Generate sub-element name in FreeCAD style: "Edge5"
+				if (geometryEdgeId >= 0) {
+					result.elementType = "Edge";
+					result.subElementName = "Edge" + std::to_string(geometryEdgeId);
+					LOG_INF_S("PickingService - Successfully picked edge " + std::to_string(geometryEdgeId) +
+						" in geometry " + result.geometry->getName());
+				} else {
+					// Fallback to line index
+					result.elementType = "Edge";
+					result.subElementName = "Edge" + std::to_string(lineIndex);
+					result.geometryEdgeId = lineIndex;
+					LOG_WRN_S("PickingService - Edge mapping failed, using line index " + std::to_string(lineIndex));
+				}
+			} else {
+				// Fallback to line index when no mapping available
+				result.elementType = "Edge";
+				result.subElementName = "Edge" + std::to_string(lineIndex);
+				result.geometryEdgeId = lineIndex;
+				LOG_WRN_S("PickingService - Geometry does not have edge mapping, using line index " + std::to_string(lineIndex));
+			}
+
+		// Handle vertex picking
+		} else if (detail->isOfType(SoPointDetail::getClassTypeId())) {
+			const SoPointDetail* pointDetail = static_cast<const SoPointDetail*>(detail);
+
+			// Get the coordinate index (vertex index in the mesh)
+			int coordinateIndex = pointDetail->getCoordinateIndex();
+			result.vertexIndex = coordinateIndex;
+
+			// Use vertex index mapping to get geometry vertex ID
+			if (result.geometry && result.geometry->hasVertexIndexMapping()) {
+				int geometryVertexId = result.geometry->getGeometryVertexIdForCoordinate(coordinateIndex);
+				result.geometryVertexId = geometryVertexId;
+
+				// Generate sub-element name in FreeCAD style: "Vertex5"
+				if (geometryVertexId >= 0) {
+					result.elementType = "Vertex";
+					result.subElementName = "Vertex" + std::to_string(geometryVertexId);
+					LOG_INF_S("PickingService - Successfully picked vertex " + std::to_string(geometryVertexId) +
+						" in geometry " + result.geometry->getName());
+				} else {
+					// Fallback to coordinate index
+					result.elementType = "Vertex";
+					result.subElementName = "Vertex" + std::to_string(coordinateIndex);
+					result.geometryVertexId = coordinateIndex;
+					LOG_WRN_S("PickingService - Vertex mapping failed, using coordinate index " + std::to_string(coordinateIndex));
+				}
+			} else {
+				// Fallback to coordinate index when no mapping available
+				result.elementType = "Vertex";
+				result.subElementName = "Vertex" + std::to_string(coordinateIndex);
+				result.geometryVertexId = coordinateIndex;
+				LOG_WRN_S("PickingService - Geometry does not have vertex mapping, using coordinate index " + std::to_string(coordinateIndex));
+			}
+
 		} else {
-			LOG_WRN_S("PickingService - Geometry does not have face index mapping");
+			LOG_WRN_S("PickingService - Unknown detail type: " + std::string(detail->getTypeId().getName().getString()));
 		}
+
+		// Get 3D coordinates from picked point (common for all types)
+		const SbVec3f& point = picked->getPoint();
+		result.x = point[0];
+		result.y = point[1];
+		result.z = point[2];
+
 	} else {
-		LOG_WRN_S("PickingService - No face detail found in picked point");
+		LOG_WRN_S("PickingService - No detail found in picked point");
 	}
 
 	return result;

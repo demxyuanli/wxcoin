@@ -12,7 +12,6 @@ set(CADVIEW_SOURCES
     ${CMAKE_SOURCE_DIR}/src/view/ZoomController.cpp
     ${CMAKE_SOURCE_DIR}/src/view/ViewRefreshManager.cpp
     ${CMAKE_SOURCE_DIR}/src/view/DynamicSilhouetteRenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/view/FaceInfoOverlay.cpp
     ${CMAKE_SOURCE_DIR}/src/view/SoFCBackgroundGradient.cpp
     ${CMAKE_SOURCE_DIR}/src/view/SoFCBackgroundImage.cpp
     # ${CMAKE_SOURCE_DIR}/src/view/NavigationFeaturesTest.cpp  # Uncomment to enable tests
@@ -32,7 +31,6 @@ set(CADVIEW_HEADERS
     ${CMAKE_SOURCE_DIR}/include/ViewRefreshManager.h
     ${CMAKE_SOURCE_DIR}/include/EventCoordinator.h
     ${CMAKE_SOURCE_DIR}/include/DynamicSilhouetteRenderer.h
-    ${CMAKE_SOURCE_DIR}/include/FaceInfoOverlay.h
     ${CMAKE_SOURCE_DIR}/include/SoFCBackgroundGradient.h
     ${CMAKE_SOURCE_DIR}/include/SoFCBackgroundImage.h
     ${CMAKE_SOURCE_DIR}/include/interfaces/ISplitViewportManager.h
@@ -52,6 +50,7 @@ target_link_libraries(CADView PUBLIC
     CADRendering
     CADInput
     CADOCC
+    CADMod
     ${wxWidgets_LIBRARIES}
 )
 

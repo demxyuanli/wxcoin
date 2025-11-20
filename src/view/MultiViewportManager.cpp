@@ -514,6 +514,13 @@ void MultiViewportManager::createSmallCube(float scale) {
 }
 
 void MultiViewportManager::createCoordinateSystemScene() {
+	// Prevent duplicate creation - cleanup existing scene if any
+	if (m_coordinateSystemRoot) {
+		LOG_WRN_S("MultiViewportManager: Coordinate system scene already exists, cleaning up");
+		m_coordinateSystemRoot->unref();
+		m_coordinateSystemRoot = nullptr;
+	}
+	
 	m_coordinateSystemRoot = new SoSeparator;
 	m_coordinateSystemRoot->ref();
 
@@ -670,6 +677,12 @@ void MultiViewportManager::renderCubeOutline() {
 void MultiViewportManager::renderCoordinateSystem() {
 	if (!m_coordinateSystemRoot || !m_coordinateSystemCamera) {
 		LOG_WRN_S("MultiViewportManager: Coordinate system scene not initialized");
+		return;
+	}
+
+	// Safety check: ensure root is valid
+	if (m_coordinateSystemRoot->getRefCount() <= 0) {
+		LOG_ERR_S("MultiViewportManager: Invalid coordinate system root reference count");
 		return;
 	}
 

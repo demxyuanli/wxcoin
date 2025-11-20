@@ -81,6 +81,7 @@ namespace cmd {
 		ShowFeatureEdges, // New: show feature edges
 		ShowMeshEdges, // New: show mesh edges
 		ShowFaceNormals, // New: show face normals
+		FaceSelectionTool, // New: face selection tool
 		FaceQueryTool, // New: face query tool
 		ShowPointView, // New: show point view
 
@@ -110,6 +111,14 @@ namespace cmd {
 		ToggleReferenceGrid,
 		ToggleChessboardGrid,
 
+		// Split View
+		SplitViewSingle,
+		SplitViewHorizontal2,
+		SplitViewVertical2,
+		SplitViewQuad,
+		SplitViewSix,
+		SplitViewToggleSync,
+
 		// Help
 		HelpAbout,
 
@@ -130,14 +139,6 @@ namespace cmd {
 
 		// Docking
 		DockLayoutConfig,
-
-		// Split View
-		SplitViewSingle,
-		SplitViewHorizontal2,
-		SplitViewVertical2,
-		SplitViewQuad,
-		SplitViewSix,
-		SplitViewToggleSync,
 
 		// Sentinel
 		Unknown
@@ -199,7 +200,7 @@ namespace cmd {
 
 			{CommandType::ShowNormals, "SHOW_NORMALS"},
 			{CommandType::ShowFaces, "SHOW_FACES"},
-			{CommandType::FixNormals, "FIX_NORMALS"}, 
+			{CommandType::FixNormals, "FIX_NORMALS"},
 			// {CommandType::ShowSilhouetteEdges, "SHOW_SILHOUETTE_EDGES"},
 			{CommandType::ToggleOutline, "TOGGLE_OUTLINE"},
 			{CommandType::SetTransparency, "SET_TRANSPARENCY"},
@@ -210,6 +211,7 @@ namespace cmd {
 			{CommandType::ShowFeatureEdges, "SHOW_FEATURE_EDGES"},
 			{CommandType::ShowMeshEdges, "SHOW_MESH_EDGES"},
 			{CommandType::ShowFaceNormals, "SHOW_FACE_NORMALS"},
+			{CommandType::FaceSelectionTool, "FACE_SELECTION_TOOL"},
 			{CommandType::FaceQueryTool, "FACE_QUERY_TOOL"},
 			{CommandType::ShowPointView, "SHOW_POINT_VIEW"},
 
@@ -234,6 +236,13 @@ namespace cmd {
 			{CommandType::ToggleReferenceGrid, "TOGGLE_REFERENCE_GRID"},
 			{CommandType::ToggleChessboardGrid, "TOGGLE_CHESSBOARD_GRID"},
 
+			{CommandType::SplitViewSingle, "SPLIT_VIEW_SINGLE"},
+			{CommandType::SplitViewHorizontal2, "SPLIT_VIEW_HORIZONTAL_2"},
+			{CommandType::SplitViewVertical2, "SPLIT_VIEW_VERTICAL_2"},
+			{CommandType::SplitViewQuad, "SPLIT_VIEW_QUAD"},
+			{CommandType::SplitViewSix, "SPLIT_VIEW_SIX"},
+			{CommandType::SplitViewToggleSync, "SPLIT_VIEW_TOGGLE_SYNC"},
+
 			{CommandType::HelpAbout, "HELP_ABOUT"},
 			{CommandType::RenderPreviewSystem, "RENDER_PREVIEW_SYSTEM"},
 			{CommandType::RenderModeNoShading, "RENDER_MODE_NO_SHADING"},
@@ -245,13 +254,6 @@ namespace cmd {
 			{CommandType::RenderModeHiddenLine, "RENDER_MODE_HIDDEN_LINE"},
 			{CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
 			{CommandType::DockLayoutConfig, "DOCK_LAYOUT_CONFIG"},
-
-			{CommandType::SplitViewSingle, "SPLIT_VIEW_SINGLE"},
-			{CommandType::SplitViewHorizontal2, "SPLIT_VIEW_HORIZONTAL_2"},
-			{CommandType::SplitViewVertical2, "SPLIT_VIEW_VERTICAL_2"},
-			{CommandType::SplitViewQuad, "SPLIT_VIEW_QUAD"},
-			{CommandType::SplitViewSix, "SPLIT_VIEW_SIX"},
-			{CommandType::SplitViewToggleSync, "SPLIT_VIEW_TOGGLE_SYNC"},
 
 			{CommandType::Unknown, "UNKNOWN"}
 		};
@@ -325,6 +327,7 @@ namespace cmd {
 			{"SHOW_FEATURE_EDGES", CommandType::ShowFeatureEdges},
 			{"SHOW_MESH_EDGES", CommandType::ShowMeshEdges},
 			{"SHOW_FACE_NORMALS", CommandType::ShowFaceNormals},
+			{"FACE_SELECTION_TOOL", CommandType::FaceSelectionTool},
 			{"FACE_QUERY_TOOL", CommandType::FaceQueryTool},
 			{"SHOW_POINT_VIEW", CommandType::ShowPointView},
 
@@ -349,6 +352,13 @@ namespace cmd {
 			{"TOGGLE_REFERENCE_GRID", CommandType::ToggleReferenceGrid},
 			{"TOGGLE_CHESSBOARD_GRID", CommandType::ToggleChessboardGrid},
 
+			{"SPLIT_VIEW_SINGLE", CommandType::SplitViewSingle},
+			{"SPLIT_VIEW_HORIZONTAL_2", CommandType::SplitViewHorizontal2},
+			{"SPLIT_VIEW_VERTICAL_2", CommandType::SplitViewVertical2},
+			{"SPLIT_VIEW_QUAD", CommandType::SplitViewQuad},
+			{"SPLIT_VIEW_SIX", CommandType::SplitViewSix},
+			{"SPLIT_VIEW_TOGGLE_SYNC", CommandType::SplitViewToggleSync},
+
 			{"HELP_ABOUT", CommandType::HelpAbout},
 			{"RENDER_PREVIEW_SYSTEM", CommandType::RenderPreviewSystem},
 			{"RENDER_MODE_NO_SHADING", CommandType::RenderModeNoShading},
@@ -359,14 +369,7 @@ namespace cmd {
 			{"RENDER_MODE_SHADED_WIREFRAME", CommandType::RenderModeShadedWireframe},
 			{"RENDER_MODE_HIDDEN_LINE", CommandType::RenderModeHiddenLine},
 			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample},
-			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig},
-
-			{"SPLIT_VIEW_SINGLE", CommandType::SplitViewSingle},
-			{"SPLIT_VIEW_HORIZONTAL_2", CommandType::SplitViewHorizontal2},
-			{"SPLIT_VIEW_VERTICAL_2", CommandType::SplitViewVertical2},
-			{"SPLIT_VIEW_QUAD", CommandType::SplitViewQuad},
-			{"SPLIT_VIEW_SIX", CommandType::SplitViewSix},
-			{"SPLIT_VIEW_TOGGLE_SYNC", CommandType::SplitViewToggleSync}
+			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig}
 		};
 		auto it = kStringToEnum.find(str);
 		return it == kStringToEnum.end() ? CommandType::Unknown : it->second;

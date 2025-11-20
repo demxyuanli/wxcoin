@@ -1,4 +1,4 @@
-#include "FaceInfoOverlay.h"
+#include "mod/FaceInfoOverlay.h"
 #include "OCCGeometry.h"
 #include "config/FontManager.h"
 #include <wx/dcbuffer.h>
@@ -125,4 +125,5 @@ void FaceInfoOverlay::draw(wxDC& dc, const wxSize& canvasSize) {
         dc.DrawText("No geometry selected", xPos + padding, textY);
     }
 }
+
 

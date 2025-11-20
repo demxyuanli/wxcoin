@@ -319,7 +319,6 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_SLICE, "Slice", "layout", wxSize(16, 16), false, "Toggle slicing plane and drag to move");
 	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_OUTLINE, "Outline", "edges", wxSize(16, 16), false, "Toggle geometry outline rendering");
 	displayButtonBar->AddButtonWithSVG(ID_OUTLINE_SETTINGS, "Outline Settings", "settings", wxSize(16, 16), nullptr, "Open outline settings");
-	displayButtonBar->AddToggleButtonWithSVG(ID_FACE_QUERY_TOOL, "Face Query", "search", wxSize(16, 16), false, "Activate face query tool - left-click or middle-click on faces to view information");
 	displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(displayPanel);
 	m_ribbon->AddPage(page3);
@@ -516,6 +515,23 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	textureTestPanel->AddButtonBar(textureTestButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(textureTestPanel);
 	m_ribbon->AddPage(page4);
+
+	// Create Editor page
+	FlatUIPage* editorPage = new FlatUIPage(m_ribbon, "Editor");
+	FlatUIPanel* editorPanel = new FlatUIPanel(editorPage, "Face Selection", wxHORIZONTAL);
+	editorPanel->SetFont(CFG_DEFAULTFONT());
+	editorPanel->SetPanelBorderWidths(0, 0, 0, 1);
+	editorPanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	editorPanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	editorPanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	editorPanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* editorButtonBar = new FlatUIButtonBar(editorPanel);
+	editorButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	editorButtonBar->AddToggleButtonWithSVG(ID_FACE_SELECTION_TOOL, "Face Selection", "select", wxSize(16, 16), false, "Select geometry faces - hover to highlight, click to select, right-click for menu");
+	editorButtonBar->AddToggleButtonWithSVG(ID_FACE_QUERY_TOOL, "Face Query", "search", wxSize(16, 16), false, "Activate face query tool - left-click or middle-click on faces to view information");
+	editorPanel->AddButtonBar(editorButtonBar, 0, wxEXPAND | wxALL, 5);
+	editorPage->AddPanel(editorPanel);
+	m_ribbon->AddPage(editorPage);
 	
 	// Add Docking page
 	FlatUIPage* dockingPage = new FlatUIPage(m_ribbon, "Docking");

@@ -82,7 +82,6 @@ set(UIDialogMesh_SOURCES
     ImportStatisticsDialog.cpp
     NormalFixDialog.cpp
     GeometryDecompositionDialog.cpp
-    FaceQueryDialog.cpp
     SliceParamDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
@@ -90,7 +89,6 @@ set(UIDialogMesh_SOURCES
     ${CMAKE_SOURCE_DIR}/include/ImportStatisticsDialog.h
     ${CMAKE_SOURCE_DIR}/include/NormalFixDialog.h
     ${CMAKE_SOURCE_DIR}/include/GeometryDecompositionDialog.h
-    ${CMAKE_SOURCE_DIR}/include/FaceQueryDialog.h
     ${CMAKE_SOURCE_DIR}/include/SliceParamDialog.h
 )
 

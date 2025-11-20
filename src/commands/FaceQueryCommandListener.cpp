@@ -4,11 +4,13 @@
 #include "viewer/PickingService.h"
 #include "Canvas.h"
 #include "MouseHandler.h"
+#include "SceneManager.h"
 #include "logger/Logger.h"
 
 FaceQueryCommandListener::FaceQueryCommandListener(InputManager* inputManager,
 	PickingService* pickingService)
 	: m_inputManager(inputManager), m_pickingService(pickingService)
+	, m_coordinateSystemVisibilitySaved(false), m_savedCoordinateSystemVisibility(false)
 {
 	LOG_INF_S("FaceQueryCommandListener created");
 }
@@ -52,6 +54,14 @@ CommandResult FaceQueryCommandListener::executeCommand(const std::string& comman
 				canvas->Refresh(false); // Refresh to remove overlay display
 				LOG_INF_S("FaceQueryCommandListener::executeCommand - Cleared face info overlay");
 			}
+
+			// Restore coordinate system visibility if it was saved
+			if (m_coordinateSystemVisibilitySaved && canvas && canvas->getSceneManager()) {
+				canvas->getSceneManager()->setCoordinateSystemVisible(m_savedCoordinateSystemVisibility);
+				LOG_INF_S("FaceQueryCommandListener::executeCommand - Restored coordinate system visibility: " + 
+					std::string(m_savedCoordinateSystemVisibility ? "visible" : "hidden"));
+				m_coordinateSystemVisibilitySaved = false;
+			}
 		}
 
 		// Verify deactivation
@@ -83,6 +93,15 @@ CommandResult FaceQueryCommandListener::executeCommand(const std::string& comman
 		if (canvas->getFaceInfoOverlay()) {
 			canvas->getFaceInfoOverlay()->clear();
 			LOG_INF_S("FaceQueryCommandListener::executeCommand - Cleared previous face info overlay");
+		}
+
+		// Save and hide coordinate system to avoid interference with face picking
+		if (canvas && canvas->getSceneManager()) {
+			m_savedCoordinateSystemVisibility = canvas->getSceneManager()->isCoordinateSystemVisible();
+			m_coordinateSystemVisibilitySaved = true;
+			canvas->getSceneManager()->setCoordinateSystemVisible(false);
+			LOG_INF_S("FaceQueryCommandListener::executeCommand - Saved and hidden coordinate system (was: " + 
+				std::string(m_savedCoordinateSystemVisibility ? "visible" : "hidden") + ")");
 		}
 
 		// Create face query input state

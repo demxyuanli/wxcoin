@@ -65,6 +65,8 @@ public:
 	void addGeometryToCullingSystem(const std::shared_ptr<OCCGeometry>& geometry);
 
 private:
+	// Helper function to build high-quality face index mapping for system-created geometries
+	void buildFaceIndexMappingForSystemGeometry(std::shared_ptr<OCCGeometry> geometry, const std::string& geometryName);
 
 	SoSeparator* m_root;
 	ObjectTreePanel* m_treePanel;
