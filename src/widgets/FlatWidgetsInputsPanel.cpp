@@ -6,7 +6,6 @@
 
 wxBEGIN_EVENT_TABLE(FlatWidgetsInputsPanel, wxPanel)
 EVT_TEXT(wxID_ANY, FlatWidgetsInputsPanel::OnLineEditTextChanged)
-EVT_COMBOBOX(wxID_ANY, FlatWidgetsInputsPanel::OnComboBoxSelectionChanged)
 wxEND_EVENT_TABLE()
 
 FlatWidgetsInputsPanel::FlatWidgetsInputsPanel(wxWindow* parent)
@@ -48,27 +47,61 @@ void FlatWidgetsInputsPanel::CreateControls()
 	m_clearableLineEdit->SetPlaceholderText("Type and clear...");
 
 	// Create FlatComboBox examples on the scrolled window
-	m_normalComboBox = new FlatComboBox(m_scrolledWindow, wxID_ANY, "Select item",
+	m_normalComboBox = new FlatComboBox(m_scrolledWindow, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxSize(200, -1),
 		FlatComboBox::ComboBoxStyle::DEFAULT_STYLE);
-	m_normalComboBox->Append("Item 1");
-	m_normalComboBox->Append("Item 2");
-	m_normalComboBox->Append("Item 3");
-	m_normalComboBox->Append("Item 4");
+	m_normalComboBox->Append("Apple");
+	m_normalComboBox->Append("Banana");
+	m_normalComboBox->Append("Cherry");
+	m_normalComboBox->Append("Date");
+	m_normalComboBox->Append("Elderberry");
+	m_normalComboBox->Append("Fig");
+	m_normalComboBox->SetSelection(0);
 
-	m_editableComboBox = new FlatComboBox(m_scrolledWindow, wxID_ANY, "Editable combo",
+	m_editableComboBox = new FlatComboBox(m_scrolledWindow, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxSize(200, -1),
 		FlatComboBox::ComboBoxStyle::EDITABLE);
-	m_editableComboBox->Append("Option 1");
-	m_editableComboBox->Append("Option 2");
-	m_editableComboBox->Append("Option 3");
+	m_editableComboBox->Append("Red");
+	m_editableComboBox->Append("Green");
+	m_editableComboBox->Append("Blue");
+	m_editableComboBox->Append("Yellow");
+	m_editableComboBox->Append("Purple");
+	m_editableComboBox->SetSelection(0);
 
-	m_searchComboBox = new FlatComboBox(m_scrolledWindow, wxID_ANY, "Search combo",
+	m_searchComboBox = new FlatComboBox(m_scrolledWindow, wxID_ANY, wxEmptyString,
 		wxDefaultPosition, wxSize(200, -1),
 		FlatComboBox::ComboBoxStyle::SEARCH);
-	m_searchComboBox->Append("Search Item 1");
-	m_searchComboBox->Append("Search Item 2");
-	m_searchComboBox->Append("Search Item 3");
+
+	// Add normal items
+	m_searchComboBox->Append("Monday");
+	m_searchComboBox->Append("Tuesday");
+	m_searchComboBox->Append("Wednesday");
+
+	// Add separator
+	m_searchComboBox->AppendSeparator();
+
+	// Add color picker items
+	m_searchComboBox->AppendColorPicker("Red", wxColour(255, 0, 0));
+	m_searchComboBox->AppendColorPicker("Green", wxColour(0, 255, 0));
+	m_searchComboBox->AppendColorPicker("Blue", wxColour(0, 0, 255));
+
+	// Add separator
+	m_searchComboBox->AppendSeparator();
+
+	// Add checkbox items
+	m_searchComboBox->AppendCheckbox("Bold", true);
+	m_searchComboBox->AppendCheckbox("Italic", false);
+	m_searchComboBox->AppendCheckbox("Underline", false);
+
+	// Add separator
+	m_searchComboBox->AppendSeparator();
+
+	// Add radio button items (grouped)
+	m_searchComboBox->AppendRadioButton("Small", "size", false);
+	m_searchComboBox->AppendRadioButton("Medium", "size", true);
+	m_searchComboBox->AppendRadioButton("Large", "size", false);
+
+	m_searchComboBox->SetSelection(0);
 }
 
 void FlatWidgetsInputsPanel::LayoutPanel()
@@ -102,7 +135,7 @@ void FlatWidgetsInputsPanel::LayoutPanel()
 	comboBoxRow->Add(m_normalComboBox, 0, wxALL, 5);
 	comboBoxRow->Add(new wxStaticText(m_scrolledWindow, wxID_ANY, "Editable:"), 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 5);
 	comboBoxRow->Add(m_editableComboBox, 0, wxALL, 5);
-	comboBoxRow->Add(new wxStaticText(m_scrolledWindow, wxID_ANY, "Search:"), 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 5);
+	comboBoxRow->Add(new wxStaticText(m_scrolledWindow, wxID_ANY, "Advanced:"), 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 5);
 	comboBoxRow->Add(m_searchComboBox, 0, wxALL, 5);
 
 	comboBoxSizer->Add(comboBoxRow, 0, wxEXPAND);
@@ -123,9 +156,16 @@ void FlatWidgetsInputsPanel::BindEvents()
 	m_passwordLineEdit->Bind(wxEVT_TEXT, &FlatWidgetsInputsPanel::OnLineEditTextChanged, this);
 	m_clearableLineEdit->Bind(wxEVT_TEXT, &FlatWidgetsInputsPanel::OnLineEditTextChanged, this);
 
-	m_normalComboBox->Bind(wxEVT_COMBOBOX, &FlatWidgetsInputsPanel::OnComboBoxSelectionChanged, this);
-	m_editableComboBox->Bind(wxEVT_COMBOBOX, &FlatWidgetsInputsPanel::OnComboBoxSelectionChanged, this);
-	m_searchComboBox->Bind(wxEVT_COMBOBOX, &FlatWidgetsInputsPanel::OnComboBoxSelectionChanged, this);
+	m_normalComboBox->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, &FlatWidgetsInputsPanel::OnComboBoxSelectionChanged, this);
+	m_editableComboBox->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, &FlatWidgetsInputsPanel::OnComboBoxSelectionChanged, this);
+	m_searchComboBox->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, &FlatWidgetsInputsPanel::OnComboBoxSelectionChanged, this);
+	
+	m_normalComboBox->Bind(wxEVT_FLAT_COMBO_BOX_DROPDOWN_OPENED, [this](wxCommandEvent&) {
+	});
+	m_editableComboBox->Bind(wxEVT_FLAT_COMBO_BOX_DROPDOWN_OPENED, [this](wxCommandEvent&) {
+	});
+	m_searchComboBox->Bind(wxEVT_FLAT_COMBO_BOX_DROPDOWN_OPENED, [this](wxCommandEvent&) {
+	});
 }
 
 void FlatWidgetsInputsPanel::OnLineEditTextChanged(wxCommandEvent& event)
@@ -137,6 +177,49 @@ void FlatWidgetsInputsPanel::OnLineEditTextChanged(wxCommandEvent& event)
 
 void FlatWidgetsInputsPanel::OnComboBoxSelectionChanged(wxCommandEvent& event)
 {
-	wxString selection = event.GetString();
-	wxMessageBox("ComboBox selection changed to: " + selection, "FlatWidgetsInputsPanel", wxOK | wxICON_INFORMATION);
+	wxString senderName = "Unknown";
+	FlatComboBox* comboBox = nullptr;
+
+	if (event.GetEventObject() == m_normalComboBox) {
+		senderName = "Normal ComboBox";
+		comboBox = m_normalComboBox;
+	}
+	else if (event.GetEventObject() == m_editableComboBox) {
+		senderName = "Editable ComboBox";
+		comboBox = m_editableComboBox;
+	}
+	else if (event.GetEventObject() == m_searchComboBox) {
+		senderName = "Advanced ComboBox";
+		comboBox = m_searchComboBox;
+	}
+
+	if (comboBox) {
+		int selection = comboBox->GetSelection();
+		if (selection >= 0) {
+			wxString itemText = comboBox->GetString(selection);
+			FlatComboBox::ItemType itemType = comboBox->GetItemType(selection);
+
+			wxString typeStr;
+			switch (itemType) {
+			case FlatComboBox::ItemType::NORMAL:
+				typeStr = "Normal";
+				break;
+			case FlatComboBox::ItemType::COLOR_PICKER:
+				typeStr = "Color Picker";
+				break;
+			case FlatComboBox::ItemType::CHECKBOX:
+				typeStr = comboBox->IsItemChecked(selection) ? "Checkbox (Checked)" : "Checkbox (Unchecked)";
+				break;
+			case FlatComboBox::ItemType::RADIO_BUTTON:
+				typeStr = comboBox->IsItemChecked(selection) ? "Radio Button (Selected)" : "Radio Button";
+				break;
+			case FlatComboBox::ItemType::SEPARATOR:
+				typeStr = "Separator";
+				break;
+			}
+
+			wxString message = wxString::Format("%s\nItem: %s\nType: %s",
+				senderName, itemText, typeStr);
+		}
+	}
 }

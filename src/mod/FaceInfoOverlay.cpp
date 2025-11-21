@@ -127,3 +127,5 @@ void FaceInfoOverlay::draw(wxDC& dc, const wxSize& canvasSize) {
 }
 
 
+
+

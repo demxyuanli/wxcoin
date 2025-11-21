@@ -42,8 +42,8 @@ FlatWidgetsExampleDialog::~FlatWidgetsExampleDialog()
 
 void FlatWidgetsExampleDialog::CreateControls()
 {
-	// Create notebook for tabs
-	m_notebook = new wxNotebook(this, wxID_ANY);
+	// Create notebook for tabs (parent must be m_contentPanel)
+	m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
 	
 	// Create different category panels
 	m_buttonsPanel = new FlatWidgetsButtonsPanel(m_notebook);
@@ -91,6 +91,13 @@ void FlatWidgetsExampleDialog::LayoutDialog()
 	mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 10);
 
 	m_contentPanel->SetSizer(mainSizer);
+	m_contentPanel->Layout();
+	m_notebook->Refresh();
+	
+	// Start progress timer if needed
+	if (m_progressTimer) {
+		m_progressTimer->Start(50); // Update every 50ms
+	}
 }
 
 void FlatWidgetsExampleDialog::OnProgressTimer(wxTimerEvent& event)

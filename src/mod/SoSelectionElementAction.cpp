@@ -49,3 +49,5 @@ void SoSelectionElementAction::apply(const SoPathList& pathList, SbBool obeysRul
     }
 }
 
+
+

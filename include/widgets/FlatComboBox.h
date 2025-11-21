@@ -37,17 +37,60 @@ public:
 		DISABLED
 	};
 
+	// Item types for different kinds of combo box items
+	enum class ItemType {
+		NORMAL,         // Regular text item
+		COLOR_PICKER,   // Color picker item
+		CHECKBOX,       // Checkbox item
+		RADIO_BUTTON,   // Radio button item
+		SEPARATOR       // Separator line
+	};
+
 	struct ComboBoxItem {
+		ItemType type;
 		wxString text;
 		wxBitmap icon;
 		wxVariant data;
 		bool enabled;
-		bool selected;
+		bool checked;       // For checkbox/radio items
+		wxColour color;     // For color picker items
+		wxString group;     // For grouping radio buttons
 
-		ComboBoxItem(const wxString& itemText = wxEmptyString,
+		ComboBoxItem(ItemType itemType = ItemType::NORMAL,
+			const wxString& itemText = wxEmptyString,
 			const wxBitmap& itemIcon = wxNullBitmap,
-			const wxVariant& itemData = wxVariant())
-			: text(itemText), icon(itemIcon), data(itemData), enabled(true), selected(false) {
+			const wxVariant& itemData = wxVariant(),
+			bool itemEnabled = true,
+			bool itemChecked = false,
+			const wxColour& itemColor = wxTransparentColour,
+			const wxString& itemGroup = wxEmptyString)
+			: type(itemType), text(itemText), icon(itemIcon), data(itemData),
+			  enabled(itemEnabled), checked(itemChecked), color(itemColor), group(itemGroup) {
+		}
+
+		// Convenience constructors
+		static ComboBoxItem Normal(const wxString& text, const wxBitmap& icon = wxNullBitmap,
+			const wxVariant& data = wxVariant(), bool enabled = true) {
+			return ComboBoxItem(ItemType::NORMAL, text, icon, data, enabled);
+		}
+
+		static ComboBoxItem ColorPicker(const wxString& text, const wxColour& color,
+			const wxBitmap& icon = wxNullBitmap, bool enabled = true) {
+			return ComboBoxItem(ItemType::COLOR_PICKER, text, icon, wxVariant(), enabled, false, color);
+		}
+
+		static ComboBoxItem Checkbox(const wxString& text, bool checked = false,
+			const wxBitmap& icon = wxNullBitmap, bool enabled = true) {
+			return ComboBoxItem(ItemType::CHECKBOX, text, icon, wxVariant(), enabled, checked);
+		}
+
+		static ComboBoxItem RadioButton(const wxString& text, const wxString& group,
+			bool checked = false, const wxBitmap& icon = wxNullBitmap, bool enabled = true) {
+			return ComboBoxItem(ItemType::RADIO_BUTTON, text, icon, wxVariant(), enabled, checked, wxTransparentColour, group);
+		}
+
+		static ComboBoxItem Separator() {
+			return ComboBoxItem(ItemType::SEPARATOR, wxEmptyString);
 		}
 	};
 
@@ -67,8 +110,26 @@ public:
 	void Insert(const wxString& item, unsigned int pos, const wxBitmap& icon = wxNullBitmap, const wxVariant& data = wxVariant());
 	void Delete(unsigned int n);
 	unsigned int GetCount() const;
+	const std::vector<ComboBoxItem>& GetItems() const;
 	wxString GetString(unsigned int n) const;
 	void SetString(unsigned int n, const wxString& s);
+
+	// Advanced item management
+	void Append(const ComboBoxItem& item);
+	void Insert(const ComboBoxItem& item, unsigned int pos);
+
+	// Convenience methods for different item types
+	void AppendColorPicker(const wxString& text, const wxColour& color, const wxBitmap& icon = wxNullBitmap);
+	void AppendCheckbox(const wxString& text, bool checked = false, const wxBitmap& icon = wxNullBitmap);
+	void AppendRadioButton(const wxString& text, const wxString& group, bool checked = false, const wxBitmap& icon = wxNullBitmap);
+	void AppendSeparator();
+
+	// Item state management
+	bool IsItemChecked(unsigned int n) const;
+	void SetItemChecked(unsigned int n, bool checked);
+	wxColour GetItemColor(unsigned int n) const;
+	void SetItemColor(unsigned int n, const wxColour& color);
+	ItemType GetItemType(unsigned int n) const;
 
 	// Selection
 	void SetSelection(int n);
@@ -102,6 +163,21 @@ public:
 
 	void SetDropdownBorderColor(const wxColour& color);
 	wxColour GetDropdownBorderColor() const { return m_dropdownBorderColor; }
+
+	void SetHoverColor(const wxColour& color);
+	wxColour GetHoverColor() const { return m_hoverColor; }
+
+	void SetDisabledBackgroundColor(const wxColour& color);
+	wxColour GetDisabledBackgroundColor() const { return m_disabledBackgroundColor; }
+
+	void SetDisabledTextColor(const wxColour& color);
+	wxColour GetDisabledTextColor() const { return m_disabledTextColor; }
+
+	void SetDisabledBorderColor(const wxColour& color);
+	wxColour GetDisabledBorderColor() const { return m_disabledBorderColor; }
+
+	void SetDropdownHoverColor(const wxColour& color);
+	wxColour GetDropdownHoverColor() const { return m_dropdownHoverColor; }
 
 	// Dimensions
 	void SetBorderWidth(int width);
@@ -146,6 +222,7 @@ protected:
 	void OnPaint(wxPaintEvent& event);
 	void OnSize(wxSizeEvent& event);
 	void OnMouseDown(wxMouseEvent& event);
+	void OnMouseUp(wxMouseEvent& event);
 	void OnMouseMove(wxMouseEvent& event);
 	void OnMouseLeave(wxMouseEvent& event);
 	void OnMouseEnter(wxMouseEvent& event);
@@ -168,6 +245,7 @@ protected:
 	void UpdateState(ComboBoxState newState);
 	void UpdateLayout();
 	void HandleDropdownClick();
+	void OnThemeChange();
 	wxRect GetTextRect() const;
 	wxRect GetDropdownButtonRect() const;
 	wxColour GetCurrentBackgroundColor() const;
@@ -191,10 +269,15 @@ private:
 	// Colors
 	wxColour m_backgroundColor;
 	wxColour m_focusedColor;
+	wxColour m_hoverColor;
 	wxColour m_borderColor;
 	wxColour m_textColor;
+	wxColour m_disabledBackgroundColor;
+	wxColour m_disabledTextColor;
+	wxColour m_disabledBorderColor;
 	wxColour m_dropdownBackgroundColor;
 	wxColour m_dropdownBorderColor;
+	wxColour m_dropdownHoverColor;
 
 	// Dimensions
 	int m_borderWidth;
@@ -235,7 +318,7 @@ private:
 };
 
 // Popup window for dropdown
-class FlatComboBoxPopup : public wxPopupWindow
+class FlatComboBoxPopup : public wxPopupTransientWindow
 {
 public:
 	FlatComboBoxPopup(FlatComboBox* parent);
@@ -250,6 +333,8 @@ public:
 	void SetTextColor(const wxColour& color);
 	void SetHoverColor(const wxColour& color);
 
+	void ClearParent() { m_parent = nullptr; }
+
 	wxSize GetBestSize() const;
 
 protected:
@@ -257,7 +342,6 @@ protected:
 	void OnMouseDown(wxMouseEvent& event);
 	void OnMouseMove(wxMouseEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
-	void OnKillFocus(wxFocusEvent& event);
 
 	void DrawItems(wxDC& dc);
 	int HitTest(const wxPoint& pos) const;

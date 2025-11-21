@@ -201,18 +201,18 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	FlatUIButtonBar* createButtonBar = new FlatUIButtonBar(createPanel);
 	createButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	createButtonBar->AddButtonWithSVG(ID_CREATE_BOX, "Box", "cube", wxSize(16, 16), nullptr, "Create a box geometry");
-	createButtonBar->AddButtonWithSVG(ID_CREATE_SPHERE, "Sphere", "circle", wxSize(16, 16), nullptr, "Create a sphere geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_SPHERE, "Sphere", "sphere", wxSize(16, 16), nullptr, "Create a sphere geometry");
 	createButtonBar->AddButtonWithSVG(ID_CREATE_CYLINDER, "Cylinder", "cylinder", wxSize(16, 16), nullptr, "Create a cylinder geometry");
 	createButtonBar->AddButtonWithSVG(ID_CREATE_CONE, "Cone", "cone", wxSize(16, 16), nullptr, "Create a cone geometry");
-	createButtonBar->AddButtonWithSVG(ID_CREATE_TORUS, "Torus", "circle", wxSize(16, 16), nullptr, "Create a torus geometry");
-	createButtonBar->AddButtonWithSVG(ID_CREATE_TRUNCATED_CYLINDER, "Truncated Cylinder", "cylinder", wxSize(16, 16), nullptr, "Create a truncated cylinder geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_TORUS, "Torus", "torus", wxSize(16, 16), nullptr, "Create a torus geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_TRUNCATED_CYLINDER, "trapezoid", "trapezoid", wxSize(16, 16), nullptr, "Create a truncated cylinder geometry");
 	createButtonBar->AddButtonWithSVG(ID_CREATE_WRENCH, "Wrench", "wrench", wxSize(16, 16), nullptr, "Create a wrench geometry");
-	createButtonBar->AddButtonWithSVG(ID_CREATE_NAV_CUBE, "Nav Cube", "cube", wxSize(16, 16), nullptr, "Create a navigation cube geometry");
+	createButtonBar->AddButtonWithSVG(ID_CREATE_NAV_CUBE, "Nav Cube", "m-cube", wxSize(16, 16), nullptr, "Create a navigation cube geometry");
 	createPanel->AddButtonBar(createButtonBar, 0, wxEXPAND | wxALL, 5);
 	page1->AddPanel(createPanel);
 	m_ribbon->AddPage(page1);
 
-	FlatUIPage* page2 = new FlatUIPage(m_ribbon, "Edit");
+	FlatUIPage* page2 = new FlatUIPage(m_ribbon, "WorkShop");
 	FlatUIPanel* editPanel = new FlatUIPanel(page2, "Edit", wxHORIZONTAL);
 	editPanel->SetFont(CFG_DEFAULTFONT());
 	editPanel->SetPanelBorderWidths(0, 0, 0, 1);
@@ -256,12 +256,12 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	splitViewPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* splitViewButtonBar = new FlatUIButtonBar(splitViewPanel);
 	splitViewButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_SINGLE, "Single View", "square", wxSize(16, 16), nullptr, "Single viewport mode");
-	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_HORIZONTAL_2, "Horizontal Split", "layout", wxSize(16, 16), nullptr, "Split viewport horizontally (2 views)");
-	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_VERTICAL_2, "Vertical Split", "layout", wxSize(16, 16), nullptr, "Split viewport vertically (2 views)");
-	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_QUAD, "Quad View", "grid", wxSize(16, 16), nullptr, "Quad viewport mode (4 views)");
-	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_SIX, "Six View", "grid", wxSize(16, 16), nullptr, "Six viewport mode (6 views)");
-	splitViewButtonBar->AddToggleButtonWithSVG(ID_SPLIT_VIEW_TOGGLE_SYNC, "Sync Views", "link", wxSize(16, 16), true, "Toggle camera synchronization across split views");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_SINGLE, "Single View", "one-split", wxSize(16, 16), nullptr, "Single viewport mode");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_HORIZONTAL_2, "Horizontal Split", "h-split", wxSize(16, 16), nullptr, "Split viewport horizontally (2 views)");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_VERTICAL_2, "Vertical Split", "v-split", wxSize(16, 16), nullptr, "Split viewport vertically (2 views)");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_QUAD, "Quad View", "four-split", wxSize(16, 16), nullptr, "Quad viewport mode (4 views)");
+	splitViewButtonBar->AddButtonWithSVG(ID_SPLIT_VIEW_SIX, "Six View", "six-split", wxSize(16, 16), nullptr, "Six viewport mode (6 views)");
+	splitViewButtonBar->AddToggleButtonWithSVG(ID_SPLIT_VIEW_TOGGLE_SYNC, "Sync Views", "sync-view", wxSize(16, 16), true, "Toggle camera synchronization across split views");
 	splitViewPanel->AddButtonBar(splitViewButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(splitViewPanel);
 
@@ -274,7 +274,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	assemblyPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* assemblyButtonBar = new FlatUIButtonBar(assemblyPanel);
 	assemblyButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	assemblyButtonBar->AddToggleButtonWithSVG(ID_EXPLODE_ASSEMBLY, "Explode", "expand", wxSize(16, 16), false, "Toggle exploded view for assemblies");
+	assemblyButtonBar->AddToggleButtonWithSVG(ID_EXPLODE_ASSEMBLY, "Explode", "explode", wxSize(16, 16), false, "Toggle exploded view for assemblies");
 	// Extra: we will open a small slider when explode is active
 	// Remove separate config button to match requirement: clicking Explode opens config first
 	assemblyPanel->AddButtonBar(assemblyButtonBar, 0, wxEXPAND | wxALL, 5);
@@ -290,9 +290,9 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	FlatUIButtonBar* AssiButtonBar = new FlatUIButtonBar(assiPanel);
 	AssiButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	AssiButtonBar->AddButtonWithSVG(ID_SET_TRANSPARENCY, "Set Transparency", "transparency", wxSize(16, 16), nullptr, "Set object transparency");
-	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_COORDINATE_SYSTEM, "Toggle Coordinate System", "grid", wxSize(16, 16), false, "Toggle coordinate system display");
+	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_COORDINATE_SYSTEM, "Toggle Coordinate System", "coordinate", wxSize(16, 16), false, "Toggle coordinate system display");
 	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_REFERENCE_GRID, "Reference Grid", "grid", wxSize(16, 16), false, "Toggle reference grid plane");
-	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_CHESSBOARD_GRID, "Chessboard Grid", "grid", wxSize(16, 16), false, "Toggle chessboard ground plane");
+	AssiButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_CHESSBOARD_GRID, "Chessboard Grid", "chessboard", wxSize(16, 16), false, "Toggle chessboard ground plane");
 	assiPanel->AddButtonBar(AssiButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(assiPanel);
 
@@ -306,19 +306,19 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
 	displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	displayButtonBar->AddToggleButtonWithSVG(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", "edges", wxSize(16, 16), false, "Toggle original edge display");
-	displayButtonBar->AddButtonWithSVG(ID_CANCEL_INTERSECTION_COMPUTATION, "Cancel Intersection", "close", wxSize(16, 16), nullptr, "Cancel ongoing intersection computation");
+	displayButtonBar->AddToggleButtonWithSVG(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", "ori-edge", wxSize(16, 16), false, "Toggle original edge display");
+	displayButtonBar->AddButtonWithSVG(ID_CANCEL_INTERSECTION_COMPUTATION, "Cancel Intersection", "cancel", wxSize(16, 16), nullptr, "Cancel ongoing intersection computation");
 	displayButtonBar->AddButtonWithSVG(ID_COMPUTE_INTERSECTIONS, "Compute Intersections", "intersection", wxSize(16, 16), nullptr, "Compute edge intersections asynchronously");
-	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FEATURE_EDGES, "Feature Edges", "edges", wxSize(16, 16), false, "Toggle feature edge display");
-	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_WIREFRAME, "Wireframe Mode", "triangle", wxSize(16, 16), false, "Toggle wireframe rendering mode");
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FEATURE_EDGES, "Feature Edges", "feature-edges", wxSize(16, 16), false, "Toggle feature edge display");
+	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_WIREFRAME, "Wireframe Mode", "wireframe-view", wxSize(16, 16), false, "Toggle wireframe rendering mode");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_MESH_EDGES, "Show Mesh Edges", "mesh", wxSize(16, 16), false, "Show/hide mesh edges overlay");
-	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_NORMALS, "Show Normals", "normals", wxSize(16, 16), false, "Toggle normal vectors display");
-	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FACE_NORMALS, "Show Face Normals", "normals", wxSize(16, 16), false, "Toggle face normal vectors display");
-	displayButtonBar->AddButtonWithSVG(ID_FIX_NORMALS, "Fix Normals", "fixnormals", wxSize(16, 16), nullptr, "Fix normal vectors orientation");
-	displayButtonBar->AddButtonWithSVG(ID_NORMAL_FIX_DIALOG, "Normal Fix Dialog", "settings", wxSize(16, 16), nullptr, "Open normal fix settings dialog");
-	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_SLICE, "Slice", "layout", wxSize(16, 16), false, "Toggle slicing plane and drag to move");
-	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_OUTLINE, "Outline", "edges", wxSize(16, 16), false, "Toggle geometry outline rendering");
-	displayButtonBar->AddButtonWithSVG(ID_OUTLINE_SETTINGS, "Outline Settings", "settings", wxSize(16, 16), nullptr, "Open outline settings");
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_NORMALS, "Show Normals", "point-normals", wxSize(16, 16), false, "Toggle normal vectors display");
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FACE_NORMALS, "Show Face Normals", "face-normals", wxSize(16, 16), false, "Toggle face normal vectors display");
+	displayButtonBar->AddButtonWithSVG(ID_FIX_NORMALS, "Fix Normals", "fix-normals", wxSize(16, 16), nullptr, "Fix normal vectors orientation");
+	displayButtonBar->AddButtonWithSVG(ID_NORMAL_FIX_DIALOG, "Normal Fix Dialog", "normals-settings", wxSize(16, 16), nullptr, "Open normal fix settings dialog");
+	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_SLICE, "Slice", "slice", wxSize(16, 16), false, "Toggle slicing plane and drag to move");
+	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_OUTLINE, "Outline", "outline", wxSize(16, 16), false, "Toggle geometry outline rendering");
+	displayButtonBar->AddButtonWithSVG(ID_OUTLINE_SETTINGS, "Outline Settings", "outline-settings", wxSize(16, 16), nullptr, "Open outline settings");
 	displayPanel->AddButtonBar(displayButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(displayPanel);
 	m_ribbon->AddPage(page3);
@@ -351,13 +351,13 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	standardViewPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* standardViewButtonBar = new FlatUIButtonBar(standardViewPanel);
 	standardViewButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_FRONT, "Front", "frontview", wxSize(16, 16), nullptr, "Animate to front view");
-	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_BACK, "Back", "backview", wxSize(16, 16), nullptr, "Animate to back view");
-	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_LEFT, "Left", "leftview", wxSize(16, 16), nullptr, "Animate to left view");
-	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_RIGHT, "Right", "rightview", wxSize(16, 16), nullptr, "Animate to right view");
-	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_TOP, "Top", "topview", wxSize(16, 16), nullptr, "Animate to top view");
-	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_BOTTOM, "Bottom", "bottomview", wxSize(16, 16), nullptr, "Animate to bottom view");
-	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_ISOMETRIC, "Isometric", "isoview", wxSize(16, 16), nullptr, "Animate to isometric view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_FRONT, "Front", "front-view", wxSize(16, 16), nullptr, "Animate to front view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_BACK, "Back", "back-view", wxSize(16, 16), nullptr, "Animate to back view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_LEFT, "Left", "left-view", wxSize(16, 16), nullptr, "Animate to left view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_RIGHT, "Right", "right-view", wxSize(16, 16), nullptr, "Animate to right view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_TOP, "Top", "top-view", wxSize(16, 16), nullptr, "Animate to top view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_BOTTOM, "Bottom", "bottom-view", wxSize(16, 16), nullptr, "Animate to bottom view");
+	standardViewButtonBar->AddButtonWithSVG(ID_VIEW_BOOKMARK_ISOMETRIC, "Isometric", "iso-view", wxSize(16, 16), nullptr, "Animate to isometric view");
 	standardViewPanel->AddButtonBar(standardViewButtonBar, 0, wxEXPAND | wxALL, 5);
 	navigatorPage->AddPanel(standardViewPanel);
 
@@ -371,10 +371,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	zoomPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* zoomButtonBar = new FlatUIButtonBar(zoomPanel);
 	zoomButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_IN, "Zoom In", "zoom_in", wxSize(16, 16), nullptr, "Zoom in");
-	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_OUT, "Zoom Out", "zoom_out", wxSize(16, 16), nullptr, "Zoom out");
-	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_RESET, "Reset Zoom", "zoom_reset", wxSize(16, 16), nullptr, "Reset zoom to 100%");
-	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_SETTINGS, "Zoom Settings", "settings", wxSize(16, 16), nullptr, "Configure zoom settings");
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_IN, "Zoom In", "zoom-in", wxSize(16, 16), nullptr, "Zoom in");
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_OUT, "Zoom Out", "zoom-out", wxSize(16, 16), nullptr, "Zoom out");
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_RESET, "Reset Zoom", "zoom-reset", wxSize(16, 16), nullptr, "Reset zoom to 100%");
+	zoomButtonBar->AddButtonWithSVG(ID_ZOOM_SETTINGS, "Zoom Settings", "zoom-settings", wxSize(16, 16), nullptr, "Configure zoom settings");
 	zoomPanel->AddButtonBar(zoomButtonBar, 0, wxEXPAND | wxALL, 5);
 	navigatorPage->AddPanel(zoomPanel);
 
@@ -388,10 +388,10 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	animationPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* animationButtonBar = new FlatUIButtonBar(animationPanel);
 	animationButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_LINEAR, "Linear", "line", wxSize(16, 16), nullptr, "Set linear animation");
-	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_SMOOTH, "Smooth", "wave", wxSize(16, 16), nullptr, "Set smooth animation");
-	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_IN, "Ease In", "arrow_up", wxSize(16, 16), nullptr, "Set ease-in animation");
-	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_OUT, "Ease Out", "arrow_down", wxSize(16, 16), nullptr, "Set ease-out animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_LINEAR, "Linear", "linear", wxSize(16, 16), nullptr, "Set linear animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_SMOOTH, "Smooth", "smooth", wxSize(16, 16), nullptr, "Set smooth animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_IN, "Ease In", "ease-in", wxSize(16, 16), nullptr, "Set ease-in animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_OUT, "Ease Out", "ease-out", wxSize(16, 16), nullptr, "Set ease-out animation");
 	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_BOUNCE, "Bounce", "bounce", wxSize(16, 16), nullptr, "Set bounce animation");
 	animationPanel->AddButtonBar(animationButtonBar, 0, wxEXPAND | wxALL, 5);
 	navigatorPage->AddPanel(animationPanel);
@@ -420,11 +420,11 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	} renderModeButtons[] = {
 		{ ID_RENDER_MODE_NO_SHADING, "No Shading", "cube", "No shading mode - uniform color like FreeCAD" },
 		{ ID_RENDER_MODE_POINTS, "Points", "pointview", "Points mode - show only vertices" },
-		{ ID_RENDER_MODE_WIREFRAME, "Wireframe", "triangle", "Wireframe mode - show only edges" },
-		{ ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "edges", "Flat lines mode - flat shading with edges" },
-		{ ID_RENDER_MODE_SHADED, "Shaded", "palette", "Shaded mode - smooth shading with lighting" },
-		{ ID_RENDER_MODE_SHADED_WIREFRAME, "Shaded+Wireframe", "triangle", "Shaded with wireframe overlay" },
-		{ ID_RENDER_MODE_HIDDEN_LINE, "Hidden Line", "edges", "Hidden line mode - edges with hidden line removal" },
+		{ ID_RENDER_MODE_WIREFRAME, "Wireframe", "wireframe", "Wireframe mode - show only edges" },
+		{ ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "flat-shading", "Flat lines mode - flat shading with edges" },
+		{ ID_RENDER_MODE_SHADED, "Shaded", "shaded", "Shaded mode - smooth shading with lighting" },
+		{ ID_RENDER_MODE_SHADED_WIREFRAME, "Shaded+Wireframe", "wireframe-shading", "Shaded with wireframe overlay" },
+		{ ID_RENDER_MODE_HIDDEN_LINE, "Hidden Line", "hidden-line", "Hidden line mode - edges with hidden line removal" },
 	};
 
 	constexpr int kRenderModeToggleGroup = 0;
@@ -489,13 +489,13 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	FlatUIButtonBar* toolsButtonBar = new FlatUIButtonBar(toolsPanel);
 	toolsButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
 	toolsButtonBar->AddButtonWithSVG(ID_MESH_QUALITY_DIALOG, "Mesh Quality", "mesh", wxSize(16, 16), nullptr, "Open mesh quality dialog");
-	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", "cube", wxSize(16, 16), nullptr, "Configure navigation cube");
-	toolsButtonBar->AddButtonWithSVG(ID_ZOOM_SPEED, "Zoom Speed", "pulse", wxSize(16, 16), nullptr, "Adjust zoom speed settings");
-	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_MODE, "Navigation Mode", "compass", wxSize(16, 16), nullptr, "Switch between Gesture and Inventor navigation modes");
-	toolsButtonBar->AddButtonWithSVG(ID_RENDERING_SETTINGS, "Rendering Settings", "palette", wxSize(16, 16), nullptr, "Configure material, lighting and texture settings");
+	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", "navi", wxSize(16, 16), nullptr, "Configure navigation cube");
+	toolsButtonBar->AddButtonWithSVG(ID_ZOOM_SPEED, "Zoom Speed", "zoom-settings", wxSize(16, 16), nullptr, "Adjust zoom speed settings");
+	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_MODE, "Navigation Mode", "mouse-circle", wxSize(16, 16), nullptr, "Switch between Gesture and Inventor navigation modes");
+	toolsButtonBar->AddButtonWithSVG(ID_RENDERING_SETTINGS, "Rendering Settings", "rendering", wxSize(16, 16), nullptr, "Configure material, lighting and texture settings");
 	toolsButtonBar->AddButtonWithSVG(ID_LIGHTING_SETTINGS, "Lighting Settings", "light", wxSize(16, 16), nullptr, "Configure scene lighting and environment settings");
-	toolsButtonBar->AddButtonWithSVG(ID_EDGE_SETTINGS, "Edge Settings", "edges", wxSize(16, 16), nullptr, "Configure edge color, width and style settings");
-	toolsButtonBar->AddButtonWithSVG(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", "palette", wxSize(16, 16), nullptr, "Open render preview system");
+	toolsButtonBar->AddButtonWithSVG(ID_EDGE_SETTINGS, "Edge Settings", "edge-settings", wxSize(16, 16), nullptr, "Configure edge color, width and style settings");
+	toolsButtonBar->AddButtonWithSVG(ID_RENDER_PREVIEW_SYSTEM, "Render Preview", "preview", wxSize(16, 16), nullptr, "Open render preview system");
 	toolsPanel->AddButtonBar(toolsButtonBar, 0, wxEXPAND | wxALL, 5);
 	page4->AddPanel(toolsPanel);
 

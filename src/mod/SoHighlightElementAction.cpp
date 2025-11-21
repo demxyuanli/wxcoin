@@ -48,3 +48,5 @@ void SoHighlightElementAction::apply(const SoPathList& pathList, SbBool obeysRul
     }
 }
 
+
+

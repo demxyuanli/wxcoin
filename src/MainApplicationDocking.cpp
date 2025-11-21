@@ -105,14 +105,14 @@ bool MainApplicationDocking::OnInit()
 	showStageMessage("Preparing user interface...");
 
 	// Create main frame with docking system
-	FlatFrameDocking* frame = new FlatFrameDocking("CAD Navigator - Docking Edition",
-		wxDefaultPosition,
-		wxSize(1200, 800));
-
-	// Center on primary display
+	// Get screen client area (work area excluding taskbar)
 	wxDisplay display;
-	wxRect screenRect = display.GetGeometry();
-	frame->Centre();
+	wxRect clientRect = display.GetClientArea();
+	wxSize clientSize = clientRect.GetSize();
+
+	FlatFrameDocking* frame = new FlatFrameDocking("CAD Navigator - Docking Edition",
+		wxPoint(clientRect.GetLeft(), clientRect.GetTop()),
+		clientSize);
 
 	showStageMessage("Starting application...");
 	frame->Show(true);

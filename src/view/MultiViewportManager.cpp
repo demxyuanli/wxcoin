@@ -4,6 +4,7 @@
 #include "NavigationCubeManager.h"
 #include "DPIManager.h"
 #include "FlatFrame.h"
+#include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
@@ -560,13 +561,18 @@ void MultiViewportManager::createCoordinateSystemScene() {
 	SoLineSet* xLine = new SoLineSet;
 	xLine->numVertices.setValue(2);
 	xAxisSep->addChild(xLine);
-	// X label
-	SoTranslation* xTrans = new SoTranslation;
-	xTrans->translation.setValue(axisLength + 0.2f, 0, 0);
-	xAxisSep->addChild(xTrans);
-	SoText2* xText = new SoText2;
-	xText->string.setValue("X");
-	xAxisSep->addChild(xText);
+	// X label - conditionally add text to prevent rendering issues
+	bool showAxisLabels = ConfigManager::getInstance().getBool("View", "ShowAxisLabels", true);
+	if (showAxisLabels) {
+		SoTranslation* xTrans = new SoTranslation;
+		xTrans->translation.setValue(axisLength + 0.2f, 0, 0);
+		xAxisSep->addChild(xTrans);
+		SoText2* xText = new SoText2;
+		xText->string.setValue("X");
+		// Set safe text properties to prevent rendering issues
+		xText->justification.setValue(SoText2::LEFT);
+		xAxisSep->addChild(xText);
+	}
 	axesSep->addChild(xAxisSep);
 	// Y axis
 	SoSeparator* yAxisSep = new SoSeparator;
@@ -584,13 +590,17 @@ void MultiViewportManager::createCoordinateSystemScene() {
 	SoLineSet* yLine = new SoLineSet;
 	yLine->numVertices.setValue(2);
 	yAxisSep->addChild(yLine);
-	// Y label
-	SoTranslation* yTrans = new SoTranslation;
-	yTrans->translation.setValue(0, axisLength + 0.2f, 0);
-	yAxisSep->addChild(yTrans);
-	SoText2* yText = new SoText2;
-	yText->string.setValue("Y");
-	yAxisSep->addChild(yText);
+	// Y label - conditionally add text to prevent rendering issues
+	if (showAxisLabels) {
+		SoTranslation* yTrans = new SoTranslation;
+		yTrans->translation.setValue(0, axisLength + 0.2f, 0);
+		yAxisSep->addChild(yTrans);
+		SoText2* yText = new SoText2;
+		yText->string.setValue("Y");
+		// Set safe text properties to prevent rendering issues
+		yText->justification.setValue(SoText2::LEFT);
+		yAxisSep->addChild(yText);
+	}
 	axesSep->addChild(yAxisSep);
 	// Z axis
 	SoSeparator* zAxisSep = new SoSeparator;
@@ -608,13 +618,17 @@ void MultiViewportManager::createCoordinateSystemScene() {
 	SoLineSet* zLine = new SoLineSet;
 	zLine->numVertices.setValue(2);
 	zAxisSep->addChild(zLine);
-	// Z label
-	SoTranslation* zTrans = new SoTranslation;
-	zTrans->translation.setValue(0, 0, axisLength + 0.2f);
-	zAxisSep->addChild(zTrans);
-	SoText2* zText = new SoText2;
-	zText->string.setValue("Z");
-	zAxisSep->addChild(zText);
+	// Z label - conditionally add text to prevent rendering issues
+	if (showAxisLabels) {
+		SoTranslation* zTrans = new SoTranslation;
+		zTrans->translation.setValue(0, 0, axisLength + 0.2f);
+		zAxisSep->addChild(zTrans);
+		SoText2* zText = new SoText2;
+		zText->string.setValue("Z");
+		// Set safe text properties to prevent rendering issues
+		zText->justification.setValue(SoText2::LEFT);
+		zAxisSep->addChild(zText);
+	}
 	axesSep->addChild(zAxisSep);
 	m_coordinateSystemRoot->addChild(axesSep);
 }
@@ -702,10 +716,15 @@ void MultiViewportManager::renderViewport(const ViewportInfo& viewport, SoSepara
 	glPushAttrib(GL_ALL_ATTRIB_BITS);
 	glPushMatrix();
 
-	glEnable(GL_SCISSOR_TEST);
-	glScissor(viewport.x, viewport.y, viewport.width, viewport.height);
+	// For coordinate system viewport, disable scissor test to prevent text rendering issues
+	bool isCoordinateSystem = (viewport.x == m_viewports[VIEWPORT_COORDINATE_SYSTEM].x &&
+							   viewport.y == m_viewports[VIEWPORT_COORDINATE_SYSTEM].y);
+
+	if (!isCoordinateSystem) {
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(viewport.x, viewport.y, viewport.width, viewport.height);
+	}
 	glClear(GL_DEPTH_BUFFER_BIT);
-	glDisable(GL_SCISSOR_TEST);
 
 	SbViewportRegion viewportRegion;
 	viewportRegion.setWindowSize(SbVec2s(canvasSize.x, canvasSize.y));
