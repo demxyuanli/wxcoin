@@ -689,18 +689,21 @@ void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, s
 		return;
 	}
 
-	// Use a set to track already added faces (by TShape pointer and orientation) to avoid duplicates
-	// For simple shapes like cones/cylinders, different faces may share the same TShape but have different orientations
-	// So we need to track both TShape pointer and orientation to properly distinguish faces
-	std::set<std::pair<const void*, TopAbs_Orientation>> addedFaces;
+	// Use IsSame() to track already added faces to avoid duplicates
+	// IsSame() compares both TShape and Location, which is more accurate than just TShape pointer
+	// This ensures each topological face gets its own unique index, even if they share the same geometry
 	auto addFaceIfNew = [&](const TopoDS_Face& face) {
 		if (!face.IsNull()) {
-			const void* tshapePtr = face.TShape().get();
-			TopAbs_Orientation orientation = face.Orientation();
-			std::pair<const void*, TopAbs_Orientation> key(tshapePtr, orientation);
-			if (addedFaces.find(key) == addedFaces.end()) {
+			// Check if this exact face (same TShape and Location) is already added
+			bool alreadyAdded = false;
+			for (const auto& existingFace : faces) {
+				if (face.IsSame(existingFace)) {
+					alreadyAdded = true;
+					break;
+				}
+			}
+			if (!alreadyAdded) {
 				faces.push_back(face);
-				addedFaces.insert(key);
 			}
 		}
 	};
