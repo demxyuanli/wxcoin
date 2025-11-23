@@ -1,5 +1,4 @@
 #include "FaceSelectionListener.h"
-#include "mod/FaceHighlightManager.h"
 #include "mod/Selection.h"
 #include "viewer/PickingService.h"
 #include "logger/Logger.h"
@@ -182,11 +181,19 @@ void FaceSelectionListener::onMouseMotion(wxMouseEvent& event) {
 		// Also update local state for backward compatibility
 		bool highlightSuccess = false;
 		if (result.geometryFaceId >= 0) {
+			// Get triangle count for logging
+			auto faceTriangles = result.geometry->getTrianglesForGeometryFace(result.geometryFaceId);
+			int triangleCount = faceTriangles.size();
+
 			// Check if this is a different face than currently highlighted
 			if (!m_highlightedGeometry || m_highlightedGeometry != result.geometry || 
 				m_highlightedFaceId != result.geometryFaceId) {
 				highlightFace(result.geometry, result.geometryFaceId);
 				highlightSuccess = true;
+
+				LOG_INF_S("FaceSelectionListener::onMouseMotion - Highlighting face " +
+					std::to_string(result.geometryFaceId) + " with " + std::to_string(triangleCount) +
+					" triangles in geometry " + result.geometry->getName());
 			}
 		}
 		
@@ -300,6 +307,13 @@ void FaceSelectionListener::selectFace(std::shared_ptr<OCCGeometry> geometry, in
 		LOG_WRN_S("FaceSelectionListener::selectFace - Invalid parameters");
 		return;
 	}
+
+	// Get triangle count for logging
+	auto faceTriangles = geometry->getTrianglesForGeometryFace(faceId);
+	int triangleCount = faceTriangles.size();
+
+	LOG_INF_S("FaceSelectionListener::selectFace - Selecting face " + std::to_string(faceId) +
+		" with " + std::to_string(triangleCount) + " triangles in geometry " + geometry->getName());
 
 	// Clear previous selection
 	clearSelection();
@@ -601,6 +615,10 @@ bool FaceSelectionListener::extractFaceMesh(std::shared_ptr<OCCGeometry> geometr
 		}
 	}
 
+	LOG_INF_S("extractFaceMesh: Processing face " + std::to_string(faceId) + " with " +
+		std::to_string(triangleIndices.size()) + " triangles, " +
+		std::to_string(usedVertexIndices.size()) + " unique vertices");
+
 	// Create vertex mapping: original index -> new index
 	std::map<int, int> vertexMapping;
 	int newIndex = 0;
@@ -616,14 +634,25 @@ bool FaceSelectionListener::extractFaceMesh(std::shared_ptr<OCCGeometry> geometr
 		}
 	}
 
-	// Extract normals if available
+	// Extract normals if available - normals must be remapped to match new vertex indices
 	if (!fullMesh.normals.empty() && fullMesh.normals.size() == fullMesh.vertices.size()) {
 		faceMesh.normals.reserve(usedVertexIndices.size());
+		// Extract normals in the same order as vertices for proper indexing
 		for (int origIdx : usedVertexIndices) {
 			if (origIdx >= 0 && origIdx < static_cast<int>(fullMesh.normals.size())) {
 				faceMesh.normals.push_back(fullMesh.normals[origIdx]);
+			} else {
+				// Fallback: calculate face normal if vertex normal not available
+				// This should not happen in a properly constructed mesh
+				gp_Vec fallbackNormal(0, 0, 1); // Default normal
+				faceMesh.normals.push_back(fallbackNormal);
+				LOG_WRN_S("FaceSelectionListener: Missing normal for vertex " + std::to_string(origIdx));
 			}
 		}
+	} else {
+		// If no vertex normals available, we could calculate face normals here
+		// But for now, we'll let the shader handle flat shading
+		LOG_WRN_S("FaceSelectionListener: No vertex normals available for face highlighting");
 	}
 
 	// Extract and remap triangles

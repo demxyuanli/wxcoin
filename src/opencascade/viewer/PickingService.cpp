@@ -151,12 +151,17 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 				int geometryFaceId = result.geometry->getGeometryFaceIdForTriangle(triangleIndex);
 				result.geometryFaceId = geometryFaceId;
 
+				// Get triangle count for this face to log
+				auto faceTriangles = result.geometry->getTrianglesForGeometryFace(geometryFaceId);
+				int triangleCount = faceTriangles.size();
+
 			// Generate sub-element name in FreeCAD style: "Face5"
 			if (geometryFaceId >= 0) {
 				result.elementType = "Face";
 				result.subElementName = "Face" + std::to_string(geometryFaceId);
 				LOG_INF_S("PickingService - Successfully picked face " + std::to_string(geometryFaceId) +
-					" (triangle " + std::to_string(triangleIndex) + ") in geometry " + result.geometry->getName());
+					" (triangle " + std::to_string(triangleIndex) + ") with " + std::to_string(triangleCount) +
+					" triangles in geometry " + result.geometry->getName());
 			} else {
 				LOG_WRN_S("PickingService - Invalid face ID returned from mapping for triangle " + std::to_string(triangleIndex));
 				// Fallback: use triangle index as face ID for debugging

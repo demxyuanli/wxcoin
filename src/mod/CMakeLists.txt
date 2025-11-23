@@ -1,9 +1,11 @@
 # Mod module - face selection and highlighting functionality
 set(MOD_SOURCES
-    FaceHighlightManager.cpp
+    EventConverter.cpp
     FaceInfoOverlay.cpp
     FaceQueryDialog.cpp
     Selection.cpp
+    SoFCSelection.cpp
+    SoFCSelectionContext.cpp
     SoFCUnifiedSelection.cpp
     SoHighlightElementAction.cpp
     SoSelectionElementAction.cpp
@@ -11,14 +13,29 @@ set(MOD_SOURCES
 )
 
 set(MOD_HEADERS
-    ${CMAKE_SOURCE_DIR}/include/mod/FaceHighlightManager.h
+    ${CMAKE_SOURCE_DIR}/include/mod/EventConverter.h
     ${CMAKE_SOURCE_DIR}/include/mod/FaceInfoOverlay.h
     ${CMAKE_SOURCE_DIR}/include/mod/FaceQueryDialog.h
     ${CMAKE_SOURCE_DIR}/include/mod/Selection.h
+    ${CMAKE_SOURCE_DIR}/include/mod/SoFCSelection.h
+    ${CMAKE_SOURCE_DIR}/include/mod/SoFCSelectionContext.h
     ${CMAKE_SOURCE_DIR}/include/mod/SoFCUnifiedSelection.h
     ${CMAKE_SOURCE_DIR}/include/mod/SoHighlightElementAction.h
     ${CMAKE_SOURCE_DIR}/include/mod/SoSelectionElementAction.h
     ${CMAKE_SOURCE_DIR}/include/mod/ViewProvider.h
+)
+
+set(MOD_SOURCES
+    EventConverter.cpp
+    FaceInfoOverlay.cpp
+    FaceQueryDialog.cpp
+    Selection.cpp
+    SoFCSelection.cpp
+    SoFCSelectionContext.cpp
+    SoFCUnifiedSelection.cpp
+    SoHighlightElementAction.cpp
+    SoSelectionElementAction.cpp
+    ViewProvider.cpp
 )
 
 # Create mod static library

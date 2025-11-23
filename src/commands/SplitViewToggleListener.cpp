@@ -34,6 +34,9 @@ CommandResult SplitViewToggleListener::executeCommand(const std::string& command
             splitManager->setSplitMode(SplitMode::HORIZONTAL_2);
             LOG_INF_S("Split view mode: Horizontal 2");
             return CommandResult(true, "Horizontal split (2 views) enabled", commandType);
+        } else {
+            LOG_ERR_S("Failed to get split viewport manager after enabling split viewport");
+            return CommandResult(false, "Failed to initialize split viewport manager", commandType);
         }
     }
     
@@ -47,6 +50,9 @@ CommandResult SplitViewToggleListener::executeCommand(const std::string& command
             splitManager->setSplitMode(SplitMode::VERTICAL_2);
             LOG_INF_S("Split view mode: Vertical 2");
             return CommandResult(true, "Vertical split (2 views) enabled", commandType);
+        } else {
+            LOG_ERR_S("Failed to get split viewport manager after enabling split viewport");
+            return CommandResult(false, "Failed to initialize split viewport manager", commandType);
         }
     }
     
@@ -60,6 +66,9 @@ CommandResult SplitViewToggleListener::executeCommand(const std::string& command
             splitManager->setSplitMode(SplitMode::QUAD);
             LOG_INF_S("Split view mode: Quad");
             return CommandResult(true, "Quad view (4 views) enabled", commandType);
+        } else {
+            LOG_ERR_S("Failed to get split viewport manager after enabling split viewport");
+            return CommandResult(false, "Failed to initialize split viewport manager", commandType);
         }
     }
     
@@ -73,6 +82,9 @@ CommandResult SplitViewToggleListener::executeCommand(const std::string& command
             splitManager->setSplitMode(SplitMode::SIX);
             LOG_INF_S("Split view mode: Six");
             return CommandResult(true, "Six view mode enabled", commandType);
+        } else {
+            LOG_ERR_S("Failed to get split viewport manager after enabling split viewport");
+            return CommandResult(false, "Failed to initialize split viewport manager", commandType);
         }
     }
 

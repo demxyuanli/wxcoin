@@ -32,7 +32,6 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPGeometryConverter::shapeToGeometri
     std::vector<std::shared_ptr<OCCGeometry>> geometries;
 
     if (shape.IsNull()) {
-        LOG_WRN_S("Cannot convert null shape to geometries");
         return geometries;
     }
 
@@ -139,7 +138,6 @@ std::shared_ptr<OCCGeometry> STEPGeometryConverter::processSingleShape(
     size_t colorIndex)
 {
     if (shape.IsNull()) {
-        LOG_WRN_S("Skipping null shape for: " + name);
         return nullptr;
     }
 
@@ -189,7 +187,6 @@ std::shared_ptr<OCCGeometry> STEPGeometryConverter::processSingleShape(
         meshParams.relative = true;
         meshParams.inParallel = true;
 
-        LOG_INF_S("Building face index mapping for geometry: " + name);
         geometry->buildFaceIndexMapping(meshParams);
 
         return geometry;
@@ -256,7 +253,6 @@ bool STEPGeometryConverter::detectShellModel(const TopoDS_Shape& shape)
 
         // Check shape type - if it's a shell, it's definitely a shell model
         if (shape.ShapeType() == TopAbs_SHELL) {
-            LOG_INF_S("Shape is a shell (TopAbs_SHELL)");
             return true;
         }
 
@@ -283,10 +279,7 @@ bool STEPGeometryConverter::detectShellModel(const TopoDS_Shape& shape)
             faceCount++;
         }
 
-        LOG_INF_S("Shape analysis - Solids: " + std::to_string(solidCount) + 
-            ", Shells: " + std::to_string(shellCount) + 
-            ", Open shells: " + std::to_string(openShellCount) +
-            ", Faces: " + std::to_string(faceCount));
+        // Shape analysis removed
 
         // If we have shells but no solids, it's likely a shell model
         if (shellCount > 0 && solidCount == 0) {
@@ -326,7 +319,6 @@ bool STEPGeometryConverter::detectShellModel(const TopoDS_Shape& shape)
         return false;
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Error detecting shell model: " + std::string(e.what()));
         return false;
     }
 }
@@ -343,7 +335,6 @@ double STEPGeometryConverter::scaleGeometriesToReasonableSize(
         // Use simplified bounding box calculation
         gp_Pnt overallMin, overallMax;
         if (!calculateCombinedBoundingBox(geometries, overallMin, overallMax)) {
-            LOG_WRN_S("No valid bounds found for scaling");
             return 1.0;
         }
 

@@ -111,7 +111,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeShape(
                         }
                         
                         if (result.empty()) {
-                            LOG_WRN_S("Face-level decomposition failed - no faces found, keeping original shape");
                             result.push_back(shape);
                         }
                     }
@@ -127,7 +126,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeShape(
                     // Apply decomposition based on user-selected level
                     switch (options.decomposition.level) {
                         case GeometryReader::DecompositionLevel::NO_DECOMPOSITION:
-                            LOG_INF_S("No decomposition requested - keeping single part");
                             break;
 
                         case GeometryReader::DecompositionLevel::SHAPE_LEVEL:
@@ -181,7 +179,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeShape(
         }
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Shape decomposition failed: " + std::string(e.what()));
         result.push_back(shape); // Fallback to original shape
     }
 
@@ -244,7 +241,6 @@ bool STEPGeometryDecomposer::areFacesConnected(const TopoDS_Face& face1, const T
 
         return false;
     } catch (const std::exception& e) {
-        LOG_WRN_S("Face connectivity check failed: " + std::string(e.what()));
         return false;
     }
 }
@@ -310,7 +306,6 @@ bool STEPGeometryDecomposer::areFacesSimilar(const TopoDS_Face& face1, const Top
         LOG_INF_S("Surface similarity check: Same type (" + type1 + "), considering similar");
         return true;
     } catch (const std::exception& e) {
-        LOG_WRN_S("Face similarity check failed: " + std::string(e.what()));
         return false;
     }
 }
@@ -345,7 +340,6 @@ std::string STEPGeometryDecomposer::classifyFaceType(const TopoDS_Face& face) {
         }
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Failed to classify face type: " + std::string(e.what()));
         return "UNKNOWN";
     }
 }
@@ -369,7 +363,6 @@ gp_Pnt STEPGeometryDecomposer::calculateFaceCentroid(const TopoDS_Face& face) {
         return props.CentreOfMass();
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Failed to calculate face centroid: " + std::string(e.what()));
         return gp_Pnt(0, 0, 0);
     }
 }
@@ -401,7 +394,6 @@ gp_Dir STEPGeometryDecomposer::calculateFaceNormal(const TopoDS_Face& face) {
         return gp_Dir(normal);
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Failed to calculate face normal: " + std::string(e.what()));
         return gp_Dir(0, 0, 1);
     }
 }
@@ -424,7 +416,6 @@ bool STEPGeometryDecomposer::areFacesAdjacent(const TopoDS_Face& face1, const To
         return false;
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Failed to check face adjacency: " + std::string(e.what()));
         return false;
     }
 }
@@ -448,7 +439,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByFaceGroups(
         }
 
         if (allFaces.empty()) {
-            LOG_WRN_S("No faces found for decomposition");
             return subShapes;
         }
 
@@ -611,7 +601,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByConnectivity(
 
         // Cache string conversion to avoid repeated allocations
         std::string facesCountStr = std::to_string(allFaces.size());
-        LOG_INF_S("Collected " + facesCountStr + " faces for connectivity analysis");
 
         if (allFaces.empty()) {
             subShapes.push_back(shape);
@@ -661,7 +650,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByConnectivity(
             }
         }
 
-        LOG_INF_S("Created " + std::to_string(faceGroups.size()) + " connectivity groups");
 
         // Convert face groups to shapes
         for (const auto& group : faceGroups) {
@@ -717,7 +705,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
                     surfaceTypeGroups[surfaceType].push_back(face);
                 }
             } catch (const std::exception& e) {
-                LOG_WRN_S("Failed to get surface type for face: " + std::string(e.what()));
             }
         }
 
@@ -727,7 +714,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
         logBuffer.reserve(256);
         for (const auto& group : surfaceTypeGroups) {
             logBuffer = "  " + group.first + ": " + std::to_string(group.second.size()) + " faces";
-            LOG_INF_S(logBuffer);
         }
 
         // Second pass: for planes, group by normal direction
@@ -749,7 +735,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
                             planeGroups[normalKey].push_back(face);
                         }
                     } catch (const std::exception& e) {
-                        LOG_WRN_S("Failed to process plane face: " + std::string(e.what()));
                     }
                 }
 
@@ -791,7 +776,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
 
         // If we still have too few groups, try more aggressive decomposition
         if (subShapes.size() <= 2 && allFaces.size() > 50) {
-            LOG_INF_S("Too few groups (" + std::to_string(subShapes.size()) + "), trying aggressive decomposition");
 
             // Try decomposing by face area (large vs small faces)
             std::vector<TopoDS_Face> largeFaces, smallFaces;
@@ -809,7 +793,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
                     area = props.Mass();
                     totalArea += area;
                 } catch (const std::exception& e) {
-                    LOG_WRN_S("Failed to calculate face area: " + std::string(e.what()));
                     area = 0.0; // Default area for failed calculations
                 }
                 faceAreas.push_back(area);
@@ -817,7 +800,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
 
             double averageArea = totalArea / allFaces.size();
             std::string avgAreaStr = std::to_string(averageArea);
-            LOG_INF_S("Average face area: " + avgAreaStr);
 
             // Classify faces based on pre-calculated areas
             for (size_t i = 0; i < allFaces.size(); ++i) {
@@ -828,8 +810,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
                 }
             }
 
-            LOG_INF_S("Area-based grouping: " + std::to_string(largeFaces.size()) + " large faces, " +
-                std::to_string(smallFaces.size()) + " small faces");
 
             // Create shapes from area groups
             subShapes.clear();
@@ -891,7 +871,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByShellGroups(
 
         // If we have few shells, try to group them by volume and connectivity
         if (allShells.size() <= 3) {
-            LOG_INF_S("Few shells (" + std::to_string(allShells.size()) + "), grouping by volume and connectivity");
 
             // Group shells by volume (large vs small shells)
             std::vector<TopoDS_Shell> largeShells, smallShells;
@@ -903,12 +882,10 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByShellGroups(
                     BRepGProp::VolumeProperties(shell, props);
                     totalVolume += props.Mass();
                 } catch (const std::exception& e) {
-                    LOG_WRN_S("Failed to calculate shell volume: " + std::string(e.what()));
                 }
             }
 
             double averageVolume = totalVolume / allShells.size();
-            LOG_INF_S("Average shell volume: " + std::to_string(averageVolume));
 
             for (const auto& shell : allShells) {
                 try {
@@ -924,8 +901,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByShellGroups(
                 }
             }
 
-            LOG_INF_S("Volume-based grouping: " + std::to_string(largeShells.size()) + " large shells, " +
-                std::to_string(smallShells.size()) + " small shells");
 
             // Create shapes from volume groups
             if (!largeShells.empty()) {
@@ -957,7 +932,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByShellGroups(
             }
         } else {
             // Many shells - group by face count (complex vs simple shells)
-            LOG_INF_S("Many shells (" + std::to_string(allShells.size()) + "), grouping by complexity");
 
             std::vector<TopoDS_Shell> complexShells, simpleShells;
 
@@ -982,8 +956,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByShellGroups(
                 }
             }
 
-            LOG_INF_S("Complexity-based grouping: " + std::to_string(complexShells.size()) + " complex shells, " +
-                std::to_string(simpleShells.size()) + " simple shells");
 
             // Create shapes from complexity groups
             if (!complexShells.empty()) {
@@ -1061,7 +1033,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeShape(
             subShapes.push_back(shape);
         }
     } catch (const std::exception& e) {
-        LOG_WRN_S("Failed to decompose shape: " + std::string(e.what()));
         subShapes.push_back(shape);
     }
 
@@ -1087,7 +1058,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByFeatureRecognition(
         }
 
         if (faces.empty()) {
-            LOG_INF_S("No faces found for feature-based decomposition");
             components.push_back(shape);
             return components;
         }
@@ -1140,12 +1110,10 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByAdjacentFacesCluste
         }
 
         if (faces.empty()) {
-            LOG_INF_S("No faces found for adjacent faces clustering");
             components.push_back(shape);
             return components;
         }
 
-        LOG_INF_S("Analyzing " + std::to_string(faces.size()) + " faces for adjacent clustering");
 
         // Adjacency graph building (optimized with spatial filtering for large datasets)
         std::vector<std::vector<int>> adjacencyGraph(faces.size());
@@ -1162,7 +1130,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByAdjacentFacesCluste
         // Post-process: filter and refine components
         refineComponents(components);
 
-        LOG_INF_S("Adjacent faces clustering created " + std::to_string(components.size()) + " components");
         
         if (components.empty()) {
             components.push_back(shape);
@@ -1303,7 +1270,6 @@ void STEPGeometryDecomposer::clusterFacesByFeaturesOptimized(
             }
         }
 
-        LOG_INF_S("Optimized clustering created " + std::to_string(featureGroups.size()) + " groups");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Optimized feature clustering failed: " + std::string(e.what()));
@@ -1419,7 +1385,6 @@ void STEPGeometryDecomposer::createComponentsFromGroups(
             }
         }
         catch (const std::exception& e) {
-            LOG_WRN_S("Failed to create component from face group: " + std::string(e.what()));
         }
     }
 }
@@ -1454,7 +1419,6 @@ TopoDS_Shape STEPGeometryDecomposer::tryCreateSolidFromFaces(
         return closedShell;
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Failed to create solid from faces: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -1612,7 +1576,6 @@ void STEPGeometryDecomposer::buildFaceAdjacencyGraphOptimized(
             totalConnections += connections.size();
         }
 
-        LOG_INF_S("Built optimized adjacency graph: " + std::to_string(totalConnections / 2) + " connections");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Optimized adjacency graph building failed: " + std::string(e.what()));
@@ -1704,7 +1667,6 @@ bool STEPGeometryDecomposer::isValidCluster(const std::vector<int>& cluster, con
         return true;
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Cluster validation failed: " + std::string(e.what()));
         return false;
     }
 }
@@ -1731,7 +1693,6 @@ void STEPGeometryDecomposer::createValidatedComponentsFromClusters(
             }
         }
         catch (const std::exception& e) {
-            LOG_WRN_S("Failed to create component from validated cluster: " + std::string(e.what()));
         }
     }
 }
@@ -1766,7 +1727,6 @@ TopoDS_Shape STEPGeometryDecomposer::tryCreateSolidFromFaceCluster(
         return closedShell;
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Failed to create solid from face cluster: " + std::string(e.what()));
         return TopoDS_Shape();
     }
 }
@@ -1789,7 +1749,6 @@ void STEPGeometryDecomposer::refineComponents(std::vector<TopoDS_Shape>& compone
                 }
             }
             catch (const std::exception& e) {
-                LOG_WRN_S("Component refinement failed for one component: " + std::string(e.what()));
             }
         }
 
@@ -1850,7 +1809,6 @@ void STEPGeometryDecomposer::clusterFacesByFeatures(
             }
         }
 
-        LOG_INF_S("Feature clustering created " + std::to_string(featureGroups.size()) + " groups");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Feature clustering failed: " + std::string(e.what()));
@@ -1874,7 +1832,6 @@ void STEPGeometryDecomposer::buildFaceAdjacencyGraph(
             }
         }
 
-        LOG_INF_S("Built adjacency graph for " + std::to_string(faces.size()) + " faces");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Failed to build adjacency graph: " + std::string(e.what()));

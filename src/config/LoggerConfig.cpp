@@ -20,6 +20,9 @@ void LoggerConfig::configureLoggerLevels(const std::string& logLevelStr) {
 	std::set<Logger::LogLevel> logLevels;
 	bool isSingleLevel = true;
 
+	// ERR should always be included to ensure error messages are always logged
+	logLevels.insert(Logger::LogLevel::ERR);
+
 	// Parse comma-separated log levels
 	std::stringstream ss(logLevelStr);
 	std::string level;
@@ -47,11 +50,11 @@ void LoggerConfig::configureLoggerLevels(const std::string& logLevelStr) {
 		}
 	}
 
-	if (logLevels.empty()) {
-		// Fallback to default warning level when config is invalid
+	if (logLevels.size() == 1 && logLevels.count(Logger::LogLevel::ERR)) {
+		// Only ERR was specified, fallback to default warning level
 		logLevels.insert(Logger::LogLevel::WRN);
 		isSingleLevel = true;
-		LOG_INF("Using default log level: WRN", "LoggerConfig");
+		LOG_INF("Using default log level: WRN (ERR always included)", "LoggerConfig");
 	}
 
 	isSingleLevel = (logLevelStr.find(',') == std::string::npos);

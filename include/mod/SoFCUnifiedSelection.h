@@ -6,6 +6,11 @@
 #include <Inventor/fields/SoSFColor.h>
 #include <Inventor/fields/SoSFBool.h>
 #include <Inventor/fields/SoSFString.h>
+#include <Inventor/actions/SoHandleEventAction.h>
+#include <Inventor/events/SoEvent.h>
+#include <Inventor/events/SoLocation2Event.h>
+#include <Inventor/events/SoMouseButtonEvent.h>
+#include <Inventor/SoPickedPoint.h>
 #include <memory>
 #include <string>
 
@@ -68,6 +73,11 @@ protected:
     virtual void doAction(SoAction* action);
     virtual void GLRender(SoGLRenderAction* action);
     virtual void pick(SoPickAction* action);
+    virtual void handleEvent(SoHandleEventAction* action);
+
+private:
+    const SoPickedPoint* getPickedPoint(SoHandleEventAction* action) const;
+    static int getPriority(const SoPickedPoint* p);
 
 private:
     // Internal state

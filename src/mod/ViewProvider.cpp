@@ -1,6 +1,5 @@
 #include "mod/ViewProvider.h"
 #include "OCCGeometry.h"
-#include "mod/FaceHighlightManager.h"
 #include "mod/Selection.h"
 #include "mod/SoHighlightElementAction.h"
 #include "mod/SoSelectionElementAction.h"
@@ -14,9 +13,7 @@
 #include <wx/msgdlg.h>
 
 ViewProvider::ViewProvider(std::shared_ptr<OCCGeometry> geometry)
-	: m_geometry(geometry), m_root(nullptr), m_modeSwitch(nullptr)
-	, m_preselectionManager(std::make_unique<FaceHighlightManager>())
-	, m_selectionManager(std::make_unique<FaceHighlightManager>()) {
+	: m_geometry(geometry), m_root(nullptr), m_modeSwitch(nullptr) {
 	
 	if (!geometry) {
 		LOG_ERR_S("ViewProvider::ViewProvider - Null geometry");
@@ -46,7 +43,6 @@ ViewProvider::ViewProvider(std::shared_ptr<OCCGeometry> geometry)
 		this->onSelectionChange(change);
 	});
 	
-	LOG_INF_S("ViewProvider::ViewProvider - Created for geometry: " + geometry->getName());
 }
 
 ViewProvider::~ViewProvider() {
@@ -90,7 +86,7 @@ void ViewProvider::highlightPreselection(const std::string& subElementName) {
 	path->ref();
 	SoDetail* detail = nullptr;
 
-	if (getDetailPath(subElementName, path, detail)) {
+	if (getDetailPath(subElementName, path, false, detail)) {
 		// Apply highlight action
 		SoHighlightElementAction highlightAction;
 		highlightAction.setHighlighted(true);
@@ -99,27 +95,10 @@ void ViewProvider::highlightPreselection(const std::string& subElementName) {
 		highlightAction.apply(path);
 
 		m_currentPreselection = subElementName;
-		LOG_INF_S("ViewProvider::highlightPreselection - Highlighted: " + subElementName);
 
 		delete detail;
 		path->unref();
 	} else {
-		LOG_WRN_S("ViewProvider::highlightPreselection - Failed to get detail path for: " + subElementName);
-		// Fallback to old method for faces only
-		if (subElementName.length() >= 4 && subElementName.substr(0, 4) == "Face") {
-			try {
-				int elementId = std::stoi(subElementName.substr(4));
-				SoSeparator* geometryNode = m_geometry->getCoinNode();
-				if (geometryNode && m_preselectionManager) {
-					if (m_preselectionManager->highlightFace(m_geometry, elementId, geometryNode)) {
-						m_currentPreselection = subElementName;
-						LOG_INF_S("ViewProvider::highlightPreselection - Fallback highlight successful: " + subElementName);
-					}
-				}
-			} catch (...) {
-				// Ignore parsing errors
-			}
-		}
 	}
 }
 
@@ -131,7 +110,7 @@ void ViewProvider::clearPreselection() {
 	path->ref();
 	SoDetail* detail = nullptr;
 
-	if (getDetailPath(m_currentPreselection, path, detail)) {
+	if (getDetailPath(m_currentPreselection, path, false, detail)) {
 		// Apply clear highlight action
 		SoHighlightElementAction highlightAction;
 		highlightAction.setHighlighted(false); // Clear highlight
@@ -140,11 +119,6 @@ void ViewProvider::clearPreselection() {
 
 		delete detail;
 		path->unref();
-	} else {
-		// Fallback to old method for faces
-		if (m_preselectionManager) {
-			m_preselectionManager->clearHighlight();
-		}
 	}
 
 	m_currentPreselection.clear();
@@ -163,7 +137,7 @@ void ViewProvider::highlightSelection(const std::string& subElementName) {
 	path->ref();
 	SoDetail* detail = nullptr;
 
-	if (getDetailPath(subElementName, path, detail)) {
+	if (getDetailPath(subElementName, path, false, detail)) {
 		// Apply selection action
 		SoSelectionElementAction selectionAction(SoSelectionElementAction::Append);
 		selectionAction.setColor(SbColor(0.0f, 0.5f, 1.0f)); // Blue selection
@@ -171,27 +145,10 @@ void ViewProvider::highlightSelection(const std::string& subElementName) {
 		selectionAction.apply(path);
 
 		m_currentSelection.push_back(subElementName);
-		LOG_INF_S("ViewProvider::highlightSelection - Selected: " + subElementName);
 
 		delete detail;
 		path->unref();
 	} else {
-		LOG_WRN_S("ViewProvider::highlightSelection - Failed to get detail path for: " + subElementName);
-		// Fallback to old method for faces only
-		if (subElementName.length() >= 4 && subElementName.substr(0, 4) == "Face") {
-			try {
-				int elementId = std::stoi(subElementName.substr(4));
-				SoSeparator* geometryNode = m_geometry->getCoinNode();
-				if (geometryNode && m_selectionManager) {
-					if (m_selectionManager->selectFace(m_geometry, elementId, geometryNode)) {
-						m_currentSelection.push_back(subElementName);
-						LOG_INF_S("ViewProvider::highlightSelection - Fallback selection successful: " + subElementName);
-					}
-				}
-			} catch (...) {
-				// Ignore parsing errors
-			}
-		}
 	}
 }
 
@@ -204,7 +161,7 @@ void ViewProvider::clearSelection() {
 		path->ref();
 		SoDetail* detail = nullptr;
 
-		if (getDetailPath(subElementName, path, detail)) {
+		if (getDetailPath(subElementName, path, false, detail)) {
 			// Apply clear selection action
 			SoSelectionElementAction selectionAction(SoSelectionElementAction::Remove);
 			selectionAction.setElement(detail);
@@ -213,11 +170,6 @@ void ViewProvider::clearSelection() {
 			delete detail;
 			path->unref();
 		}
-	}
-
-	// Fallback: clear any remaining highlights
-	if (m_selectionManager) {
-		m_selectionManager->clearSelection();
 	}
 
 	m_currentSelection.clear();
@@ -242,21 +194,24 @@ bool ViewProvider::canSelectElement(const std::string& subElementName) const {
 	return false;
 }
 
-bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path, SoDetail*& detail) const {
+bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path, bool append, SoDetail*& detail) const {
 	if (!path || !m_root || !m_geometry) {
-		LOG_WRN_S("ViewProvider::getDetailPath - Invalid parameters or missing root/geometry");
 		return false;
 	}
 
 	// Path should be properly cast to SoFullPath by caller
+	if (!append) {
+		path->truncate(0);
+	}
 
 	// Handle whole object selection (no sub-element)
 	if (subElementName.empty()) {
 		// For whole object, we just need the path to the geometry node
 		// and no detail (nullptr)
 		detail = nullptr;
-		path->truncate(0);
-		path->append(m_root);
+		if (path->getLength() == 0) {
+			path->append(m_root);
+		}
 		if (m_modeSwitch) {
 			path->append(m_modeSwitch);
 		}
@@ -294,40 +249,39 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 			elementId = -1;
 		}
 	} else {
-		LOG_WRN_S("ViewProvider::getDetailPath - Unsupported sub-element name format: " + subElementName);
 		return false;
 	}
 
 	if (elementId < 0) {
-		LOG_WRN_S("ViewProvider::getDetailPath - Invalid element ID in: " + subElementName);
 		return false;
 	}
 
 	// Build path to geometry node
-	path->truncate(0);
 	if (!m_root || !m_modeSwitch) {
-		LOG_WRN_S("ViewProvider::getDetailPath - Missing root or mode switch");
 		return false;
 	}
 
-	path->append(m_root);
-	path->append(m_modeSwitch);
+	if (path->getLength() == 0) {
+		path->append(m_root);
+	}
+	if (path->getTail() != m_modeSwitch) {
+		path->append(m_modeSwitch);
+	}
 
 	SoSeparator* geometryNode = m_geometry->getCoinNode();
 	if (!geometryNode) {
-		LOG_WRN_S("ViewProvider::getDetailPath - Geometry has no Coin3D node");
 		return false;
 	}
 
-	path->append(geometryNode);
+	if (path->getTail() != geometryNode) {
+		path->append(geometryNode);
+	}
 
 	// Create appropriate detail based on element type
 	if (elementType == "Face") {
 		// For faces, we need to find the first triangle index that belongs to this face
 		std::vector<int> triangleIndices = m_geometry->getTrianglesForGeometryFace(elementId);
 		if (triangleIndices.empty()) {
-			LOG_WRN_S("ViewProvider::getDetailPath - No triangles found for face " + std::to_string(elementId) +
-				" in geometry '" + m_geometry->getName() + "'");
 			return false;
 		}
 
@@ -336,8 +290,6 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 		static_cast<SoFaceDetail*>(detail)->setFaceIndex(triangleIndices[0]);
 		static_cast<SoFaceDetail*>(detail)->setPartIndex(0); // Not used in our implementation
 
-		LOG_INF_S("ViewProvider::getDetailPath - Created face detail for " + subElementName +
-			", triangle index: " + std::to_string(triangleIndices[0]));
 		return true;
 
 	} else if (elementType == "Edge") {
@@ -345,8 +297,6 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 		// Get the first line index that belongs to this edge
 		std::vector<int> lineIndices = m_geometry->getLinesForGeometryEdge(elementId);
 		if (lineIndices.empty()) {
-			LOG_WRN_S("ViewProvider::getDetailPath - No lines found for edge " + std::to_string(elementId) +
-				" in geometry '" + m_geometry->getName() + "'");
 			return false;
 		}
 
@@ -354,8 +304,6 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 		static_cast<SoLineDetail*>(detail)->setLineIndex(lineIndices[0]);
 		static_cast<SoLineDetail*>(detail)->setPartIndex(0);
 
-		LOG_INF_S("ViewProvider::getDetailPath - Created edge detail for " + subElementName +
-			", line index: " + std::to_string(lineIndices[0]));
 		return true;
 
 	} else if (elementType == "Vertex") {
@@ -363,8 +311,6 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 		// Get the coordinate index for this vertex
 		int coordinateIndex = m_geometry->getCoordinateForGeometryVertex(elementId);
 		if (coordinateIndex < 0) {
-			LOG_WRN_S("ViewProvider::getDetailPath - No coordinate found for vertex " + std::to_string(elementId) +
-				" in geometry '" + m_geometry->getName() + "'");
 			return false;
 		}
 
@@ -374,12 +320,9 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 		static_cast<SoPointDetail*>(detail)->setNormalIndex(0);
 		static_cast<SoPointDetail*>(detail)->setTextureCoordIndex(0);
 
-		LOG_INF_S("ViewProvider::getDetailPath - Created vertex detail for " + subElementName +
-			", coordinate index: " + std::to_string(coordinateIndex));
 		return true;
 	}
 
-	LOG_WRN_S("ViewProvider::getDetailPath - Unknown element type: " + elementType);
 	return false;
 }
 

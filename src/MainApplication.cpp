@@ -19,6 +19,7 @@
 #include <Inventor/nodes/SoSeparator.h>
 #include "mod/SoHighlightElementAction.h"
 #include "mod/SoSelectionElementAction.h"
+#include "mod/SoFCSelection.h"
 #include "mod/SoFCUnifiedSelection.h"
 
 bool MainApplication::OnInit()
@@ -31,6 +32,7 @@ bool MainApplication::OnInit()
         // Initialize selection action classes after Coin3D
         SoHighlightElementAction::initClass();
         SoSelectionElementAction::initClass();
+        mod::SoFCSelection::initClass();
         SoFCUnifiedSelection::initClass();
         LOG_INF("Selection action classes initialized successfully", "MainApplication");
 

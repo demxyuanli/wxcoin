@@ -51,6 +51,9 @@ public:
 	void setSubdivisionLevels(int levels);
 	void setCreaseAngle(double angle);
 
+	// Face extraction method (public for consistency with face mapping)
+	void extractAllFacesRecursive(const TopoDS_Shape& shape, std::vector<TopoDS_Face>& faces);
+
 private:
 	// Helper methods
 	void meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, const MeshParameters& params);
@@ -65,6 +68,15 @@ private:
 		const gp_Pnt& p2, int levels);
 	std::set<std::pair<int, int>> findBoundaryEdges(const TriangleMesh& mesh);
 	gp_Vec calculateTriangleNormalVec(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3);
+	
+	// Face splitting based on boundary wires (geometric boundaries)
+	std::vector<std::vector<int>> splitFaceByBoundaryWires(
+		const TopoDS_Face& face, const std::vector<int>& triangleIndices, const TriangleMesh& mesh);
+	
+private:
+	// Helper: Split face by disconnected components (used internally)
+	std::vector<std::vector<int>> splitFaceByDisconnectedComponents(
+		const std::vector<int>& triangleIndices, const TriangleMesh& mesh);
 
 	// Configuration
 	bool m_showEdges;

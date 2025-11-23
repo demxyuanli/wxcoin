@@ -45,12 +45,17 @@ void Logger::SetLogLevels(const std::set<LogLevel>& levels, bool isSingleLevel) 
 	isSingleLevelMode = isSingleLevel;
 	allowedLogLevels.clear();
 
+	// ERR must ALWAYS be logged regardless of configuration - this is critical for error tracking
+	// We ensure this at the start so it's never missed in any code path
+	allowedLogLevels.insert(LogLevel::ERR);
+
 	if (levels.empty()) {
-		// Empty config: only ERR
-		allowedLogLevels.insert(LogLevel::ERR);
+		// Empty config: only ERR (already added above)
+		// No additional levels to add
 	}
 	else if (isSingleLevel && levels.size() == 1) {
 		// Single level: treat as minimum level and include that level and above.
+		// ERR is already included above, now add the cascading levels.
 		auto baseLevel = *levels.begin();
 
 		auto getRank = [](LogLevel lvl) {
@@ -65,6 +70,7 @@ void Logger::SetLogLevels(const std::set<LogLevel>& levels, bool isSingleLevel) 
 
 		int baseRank = getRank(baseLevel);
 
+		// Add all levels at or above the base level
 		for (LogLevel lvl : { LogLevel::DBG, LogLevel::INF, LogLevel::WRN, LogLevel::ERR }) {
 			if (getRank(lvl) >= baseRank) {
 				allowedLogLevels.insert(lvl);
@@ -72,8 +78,12 @@ void Logger::SetLogLevels(const std::set<LogLevel>& levels, bool isSingleLevel) 
 		}
 	}
 	else {
-		// Multiple levels: include only specified levels and always ERR
-		allowedLogLevels = levels;
+		// Multiple levels: include specified levels and always include ERR
+		// ERR is already included above, now add the specified levels
+		for (LogLevel lvl : levels) {
+			allowedLogLevels.insert(lvl);
+		}
+		// Ensure ERR is explicitly included (redundant but makes intent clear)
 		allowedLogLevels.insert(LogLevel::ERR);
 	}
 

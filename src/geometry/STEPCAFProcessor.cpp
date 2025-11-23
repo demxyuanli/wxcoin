@@ -129,8 +129,7 @@ STEPReader::ReadResult STEPCAFProcessor::processSTEPFileWithCAF(
         auto totalDuration = std::chrono::duration_cast<std::chrono::milliseconds>(totalEndTime - totalStartTime);
         result.importTime = static_cast<double>(totalDuration.count());
 
-        LOG_INF_S("CAF import completed successfully: " + std::to_string(result.geometries.size()) +
-            " colored components in " + std::to_string(result.importTime) + "ms");
+
 
         if (progress) progress(100, "done");
     }
@@ -231,7 +230,6 @@ int STEPCAFProcessor::processAssemblyTree(
     shapeTool->GetFreeShapes(freeShapes);
 
     if (freeShapes.Length() == 0) {
-        LOG_WRN_S("No free shapes found in CAF document");
         return componentIndex;
     }
 
@@ -452,7 +450,6 @@ bool STEPCAFProcessor::detectShellModel(const TopoDS_Shape& shape)
 
         // Check shape type - if it's a shell, it's definitely a shell model
         if (shape.ShapeType() == TopAbs_SHELL) {
-            LOG_INF_S("Shape is a shell (TopAbs_SHELL)");
             return true;
         }
 
@@ -618,10 +615,6 @@ int STEPCAFProcessor::processLabel(
     TopLoc_Location globLoc = parentLoc * ownLoc;
 
     // Debug: Log label information
-    LOG_INF_S("Processing label at level " + std::to_string(level) +
-        " - IsAssembly: " + std::string(shapeTool->IsAssembly(label) ? "true" : "false") +
-        ", IsShape: " + std::string(shapeTool->IsShape(label) ? "true" : "false") +
-        ", IsReference: " + std::string(shapeTool->IsReference(label) ? "true" : "false"));
 
     if (shapeTool->IsAssembly(label)) {
         TDF_LabelSequence children;
@@ -635,7 +628,6 @@ int STEPCAFProcessor::processLabel(
     }
 
     if (!shapeTool->IsShape(label)) {
-        LOG_INF_S("Label is not a shape, skipping");
         return componentIndex;
     }
 

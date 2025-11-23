@@ -54,6 +54,9 @@ public:
     static void initClass();
 
 private:
+    static void nullAction(SoAction*, SoNode*) {}
+    static void callDoAction(SoAction* action, SoNode* node);
+
     Type m_actionType;
     SbColor m_selectionColor;
     const SoDetail* m_elementDetail;

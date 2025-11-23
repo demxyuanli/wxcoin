@@ -39,7 +39,6 @@ std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromShape(
             // Perform shape analysis and fixing if needed
             BRepCheck_Analyzer analyzer(shape);
             if (!analyzer.IsValid()) {
-                LOG_WRN_S("Shape analysis failed for " + name + ", attempting to fix");
                 ShapeFix_Shape fixer(shape);
                 fixer.Perform();
                 // Use the fixed shape if available

@@ -43,6 +43,9 @@ public:
     static void initClass();
 
 private:
+    static void nullAction(SoAction*, SoNode*) {}
+    static void callDoAction(SoAction* action, SoNode* node);
+
     bool m_highlighted;
     SbColor m_highlightColor;
     const SoDetail* m_elementDetail;

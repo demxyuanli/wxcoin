@@ -11,6 +11,7 @@ class PropertyPanel;
 class CommandManager;
 class OCCViewer;
 class OCCGeometry;
+class GeometryCreator; // Forward declaration
 struct BasicGeometryParameters; // Forward declaration
 
 enum class GeometryType {

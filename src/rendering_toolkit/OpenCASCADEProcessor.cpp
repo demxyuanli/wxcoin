@@ -278,10 +278,9 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 		}
 
 		// Extract triangles from all faces with face index tracking
+		// Use recursive traversal to ensure all faces are found, including nested ones
 		std::vector<TopoDS_Face> allFaces;
-		for (TopExp_Explorer faceExplorer(shape, TopAbs_FACE); faceExplorer.More(); faceExplorer.Next()) {
-			allFaces.push_back(TopoDS::Face(faceExplorer.Current()));
-		}
+		extractAllFacesRecursive(shape, allFaces);
 
 		faceMappings.clear();
 		faceMappings.reserve(allFaces.size());
@@ -680,5 +679,60 @@ void OpenCASCADEProcessor::extractTriangulationWithIndexTracking(const Handle(Po
 		// Track triangle index for this face
 		int triangleIndex = startTriangleIndex + (i - triangles.Lower());
 		triangleIndices.push_back(triangleIndex);
+	}
+}
+
+// Recursive face extraction to handle nested compounds, solids, and shells
+// TopExp_Explorer recursively traverses sub-shapes, but for nested compounds we need explicit recursion
+void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, std::vector<TopoDS_Face>& faces) {
+	if (shape.IsNull()) {
+		return;
+	}
+
+	// Use a set to track already added faces (by TShape pointer and orientation) to avoid duplicates
+	// For simple shapes like cones/cylinders, different faces may share the same TShape but have different orientations
+	// So we need to track both TShape pointer and orientation to properly distinguish faces
+	std::set<std::pair<const void*, TopAbs_Orientation>> addedFaces;
+	auto addFaceIfNew = [&](const TopoDS_Face& face) {
+		if (!face.IsNull()) {
+			const void* tshapePtr = face.TShape().get();
+			TopAbs_Orientation orientation = face.Orientation();
+			std::pair<const void*, TopAbs_Orientation> key(tshapePtr, orientation);
+			if (addedFaces.find(key) == addedFaces.end()) {
+				faces.push_back(face);
+				addedFaces.insert(key);
+			}
+		}
+	};
+
+	// Extract all faces from the shape (TopExp_Explorer is recursive for direct sub-shapes)
+	// But we need to handle nested compounds explicitly
+	if (shape.ShapeType() == TopAbs_COMPOUND) {
+		// For compounds, recursively process each sub-shape
+		for (TopExp_Explorer exp(shape, TopAbs_SHAPE); exp.More(); exp.Next()) {
+			const TopoDS_Shape& subShape = exp.Current();
+			if (subShape.ShapeType() == TopAbs_COMPOUND) {
+				// Recursively process nested compounds
+				extractAllFacesRecursive(subShape, faces);
+			} else if (subShape.ShapeType() == TopAbs_FACE) {
+				// Add face directly
+				addFaceIfNew(TopoDS::Face(subShape));
+			} else if (subShape.ShapeType() == TopAbs_SOLID) {
+				// Extract faces from solid
+				for (TopExp_Explorer faceExp(subShape, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+					addFaceIfNew(TopoDS::Face(faceExp.Current()));
+				}
+			} else if (subShape.ShapeType() == TopAbs_SHELL) {
+				// Extract faces from shell
+				for (TopExp_Explorer faceExp(subShape, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+					addFaceIfNew(TopoDS::Face(faceExp.Current()));
+				}
+			}
+		}
+	} else {
+		// For non-compound shapes, TopExp_Explorer handles recursion automatically
+		for (TopExp_Explorer faceExp(shape, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+			addFaceIfNew(TopoDS::Face(faceExp.Current()));
+		}
 	}
 }

@@ -16,7 +16,9 @@
 #include <Inventor/nodes/SoNode.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/nodes/SoPointSet.h>
+#include <Inventor/actions/SoSearchAction.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoCone.h>
 #include <Inventor/nodes/SoTranslation.h>
@@ -24,8 +26,12 @@
 #include <OpenCASCADE/TopAbs.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Shell.hxx>
+#include <TopoDS_Solid.hxx>
 #include <chrono>
 #include <algorithm>
+#include <set>
+#include <map>
 #include <fstream>
 
 OCCGeometryMesh::OCCGeometryMesh()
@@ -73,7 +79,6 @@ void OCCGeometryMesh::buildCoinRepresentation(const TopoDS_Shape& shape, const M
     auto buildStartTime = std::chrono::high_resolution_clock::now();
     
     if (shape.IsNull()) {
-        LOG_WRN_S("Cannot build coin representation for null shape");
         return;
     }
     
@@ -132,7 +137,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
     auto buildStartTime = std::chrono::high_resolution_clock::now();
 
     if (shape.IsNull()) {
-        LOG_WRN_S("Cannot build coin representation for null shape");
         return;
     }
 
@@ -219,7 +223,6 @@ void OCCGeometryMesh::enableModularEdgeComponent(bool enable)
 {
     // Migration completed - always use modular edge component
     if (!enable) {
-        LOG_WRN_S("Legacy edge component no longer supported - using modular component");
     }
     useModularEdgeComponent = true;
 }
@@ -246,27 +249,13 @@ void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const Mes
 {
     try {
         if (shape.IsNull()) {
-            LOG_WRN_S("Cannot build face index mapping for null shape");
             return;
         }
 
         m_faceIndexMappings.clear();
 
-        // Extract all faces from the shape
-        std::vector<TopoDS_Face> faces;
-        for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
-            faces.push_back(TopoDS::Face(exp.Current()));
-        }
-
-        LOG_INF_S("Face index mapping: found " + std::to_string(faces.size()) + " faces in shape");
-
-        if (faces.empty()) {
-            LOG_WRN_S("No faces found in shape for index mapping");
-            return;
-        }
-
-
         // Use the processor to generate mesh with face mapping
+        // The processor's extractAllFacesRecursive will extract faces consistently
         auto& manager = RenderingToolkitAPI::getManager();
         auto* baseProcessor = manager.getGeometryProcessor("OpenCASCADE");
         auto* processor = dynamic_cast<OpenCASCADEProcessor*>(baseProcessor);
@@ -275,23 +264,92 @@ void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const Mes
             std::vector<std::pair<int, std::vector<int>>> faceMappings;
             TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
 
-            LOG_INF_S("Face index mapping: processor returned " + std::to_string(faceMappings.size()) + " face mappings");
+            // Extract faces using the same method as the processor to verify consistency
+            std::vector<TopoDS_Face> faces;
+            processor->extractAllFacesRecursive(shape, faces);
+            
+            // Compare face counts - this is critical for debugging
+            if (faces.size() != faceMappings.size()) {
+                LOG_WRN_S("Face count mismatch in buildFaceIndexMapping: extracted " + 
+                    std::to_string(faces.size()) + " faces, but processor returned " + 
+                    std::to_string(faceMappings.size()) + " face mappings");
+            }
 
             if (!faceMappings.empty()) {
                 // Build face index mappings
                 m_faceIndexMappings.reserve(faceMappings.size());
 
+                // Get actual mesh triangle count
+                int actualMeshTriangleCount = static_cast<int>(meshWithMapping.triangles.size() / 3);
+
+                // Build face index mappings and check for duplicates
+                m_faceIndexMappings.reserve(faceMappings.size());
+                
+                int totalTrianglesInMappings = 0;
+                std::set<int> allTriangleIndices;
+                std::map<int, std::vector<int>> triangleToFaces;  // Track which faces reference each triangle
+                
                 for (const auto& [faceId, triangleIndices] : faceMappings) {
                     FaceIndexMapping mapping(faceId);
                     mapping.triangleIndices = triangleIndices;
                     m_faceIndexMappings.push_back(mapping);
-                    LOG_INF_S("Face mapping: face " + std::to_string(faceId) + " has " + std::to_string(triangleIndices.size()) + " triangles");
+                    
+                    totalTrianglesInMappings += static_cast<int>(triangleIndices.size());
+                    
+                    // Track triangle usage
+                    for (int triIdx : triangleIndices) {
+                        allTriangleIndices.insert(triIdx);
+                        triangleToFaces[triIdx].push_back(faceId);
+                    }
+                    
                 }
 
-                LOG_INF_S("Face index mapping: successfully created " + std::to_string(m_faceIndexMappings.size()) + " mappings");
+                // Check for duplicates
+                int duplicateCount = 0;
+                for (const auto& [triIdx, faces] : triangleToFaces) {
+                    if (faces.size() > 1) {
+                        duplicateCount++;
+                        // Triangle mapped to multiple faces
+                    }
+                }
+                
+                // Triangle duplicates found
+
+                
+                // Triangle count validation removed
+
+
+                // Count actual triangles from Coin3D node after it's built
+                int actualCoinTriangles = 0;
+                if (m_coinNode) {
+                    SoSearchAction searchFaces;
+                    searchFaces.setType(SoIndexedFaceSet::getClassTypeId());
+                    searchFaces.setInterest(SoSearchAction::ALL);
+                    searchFaces.apply(m_coinNode);
+                    
+                    SoPathList& facePaths = searchFaces.getPaths();
+                    for (int i = 0; i < facePaths.getLength(); ++i) {
+                        SoPath* path = facePaths[i];
+                        SoIndexedFaceSet* faceSet = static_cast<SoIndexedFaceSet*>(path->getTail());
+                        if (faceSet) {
+                            // Count triangles in this face set
+                            const int32_t* indices = faceSet->coordIndex.getValues(0);
+                            int numIndices = faceSet->coordIndex.getNum();
+                            int trianglesInSet = 0;
+                            for (int j = 0; j < numIndices; ++j) {
+                                if (indices[j] == -1) {
+                                    trianglesInSet++;
+                                }
+                            }
+                            actualCoinTriangles += trianglesInSet;
+                        }
+                    }
+                }
+                
+
+                // Face mapping summary removed
 
             } else {
-                LOG_WRN_S("No face mappings generated - this will prevent face highlighting");
             }
         } else {
             LOG_ERR_S("OpenCASCADE processor not available for face mapping");
@@ -317,7 +375,6 @@ void OCCGeometryMesh::optimizeMemory()
 void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     if (shape.IsNull()) {
-        LOG_WRN_S("Cannot create wireframe for null shape");
         return;
     }
 
@@ -336,7 +393,6 @@ void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, c
 
     TriangleMesh mesh = processor->convertToMesh(shape, params);
     if (mesh.isEmpty()) {
-        LOG_WRN_S("Empty mesh generated for wireframe representation");
         return;
     }
 
@@ -394,7 +450,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
     auto buildStartTime = std::chrono::high_resolution_clock::now();
 
     if (shape.IsNull()) {
-        LOG_WRN_S("Cannot build coin representation for null shape");
         return;
     }
 
@@ -442,21 +497,17 @@ void OCCGeometryMesh::buildCoinRepresentation(
         m_faceIndexMappings.clear();
         m_hasReverseMapping = false;
         m_triangleToFaceMap.clear();
-        LOG_INF_S("Cleared face index mapping due to mesh parameter change");
     }
     
     // ===== Build face index mapping BEFORE building Coin3D node =====
     // This ensures the mapping matches the mesh used for rendering
     // The mapping must be built with the same mesh parameters as the Coin3D node
     if (m_faceIndexMappings.empty()) {
-        LOG_INF_S("Building face index mapping for geometry (before Coin3D node creation)");
         buildFaceIndexMapping(shape, params);
         
         // Verify mapping was created
         if (m_faceIndexMappings.empty()) {
-            LOG_WRN_S("Face index mapping is still empty after buildFaceIndexMapping - face highlighting may not work");
-        } else {
-            LOG_INF_S("Face index mapping built successfully: " + std::to_string(m_faceIndexMappings.size()) + " faces");
+            // Face index mapping is empty - face highlighting may not work
         }
     }
 
@@ -581,7 +632,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
 
         std::ifstream fileCheck(ctx.texture.imagePath);
         if (!fileCheck.good()) {
-            LOG_WRN_S("Texture file not found: " + ctx.texture.imagePath);
             return;
         }
 
@@ -798,14 +848,11 @@ void OCCGeometryMesh::buildCoinRepresentation(
     // This ensures the mapping matches the mesh used for rendering
     // The mapping must be built with the same mesh parameters as the Coin3D node
     if (m_faceIndexMappings.empty() || meshParamsChanged) {
-        LOG_INF_S("Building face index mapping for geometry (before Coin3D node creation)");
         buildFaceIndexMapping(shape, params);
         
         // Verify mapping was created
         if (m_faceIndexMappings.empty()) {
-            LOG_WRN_S("Face index mapping is still empty after buildFaceIndexMapping");
-        } else {
-            LOG_INF_S("Face index mapping built successfully: " + std::to_string(m_faceIndexMappings.size()) + " faces");
+            // Face index mapping is empty
         }
     }
 
@@ -878,9 +925,6 @@ void OCCGeometryMesh::buildReverseMapping() {
 
     m_hasReverseMapping = true;
 
-    LOG_INF_S("OCCGeometryMesh: Built reverse mapping for " +
-              std::to_string(m_faceIndexMappings.size()) + " faces, " +
-              std::to_string(totalTriangles) + " triangles");
 }
 
 int OCCGeometryMesh::getGeometryFaceIdForTriangle(int triangleIndex) const {
@@ -925,7 +969,6 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
         TriangleMesh mesh = OCCMeshConverter::convertToMesh(shape, occParams);
 
         if (mesh.vertices.empty()) {
-            LOG_WRN_S("No vertices found for point view");
             return;
         }
 
@@ -1045,7 +1088,6 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
         pointViewSep->ref();
         m_coinNode->addChild(pointViewSep);
 
-        LOG_INF_S("Created point view with " + std::to_string(mesh.vertices.size()) + " points, shape: " + std::to_string(displaySettings.pointViewShape));
 
     } catch (const std::exception& e) {
         LOG_ERR_S("Exception in createPointViewRepresentation: " + std::string(e.what()));

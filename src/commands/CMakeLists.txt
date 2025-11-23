@@ -162,6 +162,7 @@ target_link_libraries(CADCommands PUBLIC
     CADOCC
     CADGeometry
     CADMod
+    CADCreators
     UIDialogMesh
     ${wxWidgets_LIBRARIES}
     Coin::Coin

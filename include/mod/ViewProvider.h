@@ -42,7 +42,8 @@ public:
 	virtual bool canSelectElement(const std::string& subElementName) const;
 
 	// Convert sub-element name to Coin3D path and detail (FreeCAD-style getDetailPath)
-	virtual bool getDetailPath(const std::string& subElementName, SoPath* path, SoDetail*& detail) const;
+	// append: if true, append to existing path; if false, truncate path first
+	virtual bool getDetailPath(const std::string& subElementName, SoPath* path, bool append, SoDetail*& detail) const;
 
 	// Handle selection change notifications from Selection system
 	void onSelectionChange(const mod::SelectionChange& change);
@@ -66,7 +67,5 @@ protected:
 	std::vector<std::string> m_currentSelection;
 	
 	// Highlight managers (one per ViewProvider instance)
-	std::unique_ptr<class FaceHighlightManager> m_preselectionManager;
-	std::unique_ptr<class FaceHighlightManager> m_selectionManager;
 };
 

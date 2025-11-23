@@ -33,9 +33,6 @@ bool Selection::addSelection(const std::string& geometryName, const std::string&
 	SelectionChange change(SelectionChangeType::AddSelection, geometryName, subElementName, elementType, x, y, z);
 	m_selection.push_back(change);
 	
-	LOG_INF_S("Selection::addSelection - Added: " + geometryName + 
-		(subElementName.empty() ? "" : ("." + subElementName)));
-	
 	notifyObservers(change);
 	return true;
 }
@@ -50,9 +47,6 @@ bool Selection::removeSelection(const std::string& geometryName, const std::stri
 	if (it != m_selection.end()) {
 		SelectionChange change(SelectionChangeType::RemoveSelection, geometryName, subElementName);
 		m_selection.erase(it, m_selection.end());
-		
-		LOG_INF_S("Selection::removeSelection - Removed: " + geometryName + 
-			(subElementName.empty() ? "" : ("." + subElementName)));
 		
 		notifyObservers(change);
 		return true;
@@ -73,8 +67,6 @@ void Selection::clearSelection() {
 	m_selection.clear();
 	SelectionChange change(SelectionChangeType::ClearSelection);
 	
-	LOG_INF_S("Selection::clearSelection - Cleared all");
-	
 	notifyObservers(change);
 }
 
@@ -94,9 +86,6 @@ int Selection::setPreselect(const std::string& geometryName, const std::string& 
 	
 	m_preselection = SelectionChange(SelectionChangeType::SetPreselect, geometryName, subElementName, elementType, x, y, z);
 	
-	LOG_INF_S("Selection::setPreselect - Set: " + geometryName + 
-		(subElementName.empty() ? "" : ("." + subElementName)));
-	
 	notifyObservers(m_preselection);
 	return 1; // Changed
 }
@@ -107,8 +96,6 @@ void Selection::removePreselect() {
 	SelectionChange change = m_preselection;
 	change.type = SelectionChangeType::RemovePreselect;
 	m_preselection = SelectionChange();
-	
-	LOG_INF_S("Selection::removePreselect - Removed");
 	
 	notifyObservers(change);
 }
