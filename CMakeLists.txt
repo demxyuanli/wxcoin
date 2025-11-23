@@ -125,7 +125,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     UIFrame        # UI Frame模块
     CADGeometry    # Geometry模块
-    CADMod         # Mod模块 (包含FaceHighlightManager)
+    CADMod         # Mod模块 (选择和高亮功能)
     wx::core
     wx::base
     wx::webview
