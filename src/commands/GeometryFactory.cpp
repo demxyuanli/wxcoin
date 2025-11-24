@@ -46,10 +46,10 @@ void GeometryFactory::buildFaceIndexMappingForSystemGeometry(std::shared_ptr<OCC
 	LOG_INF_S("Building face index mapping for " + geometryName + " with high quality parameters");
 	geometry->buildFaceIndexMapping(faceMappingParams);
 
-	// Verify face index mapping was built
-	if (geometry->hasFaceIndexMapping()) {
-		auto mappings = geometry->getFaceIndexMappings();
-		LOG_INF_S("Face index mapping built successfully for " + geometryName + ": " + std::to_string(mappings.size()) + " faces mapped");
+	// Verify face domain mapping was built
+	if (geometry->hasFaceDomainMapping()) {
+		auto segments = geometry->getTriangleSegments();
+		LOG_INF_S("Face domain mapping built successfully for " + geometryName + ": " + std::to_string(segments.size()) + " segments created");
 	} else {
 		LOG_WRN_S("Failed to build face index mapping for " + geometryName + " - face highlighting may not work properly");
 	}

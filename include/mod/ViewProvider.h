@@ -66,6 +66,7 @@ protected:
 	std::string m_currentPreselection;
 	std::vector<std::string> m_currentSelection;
 	
-	// Highlight managers (one per ViewProvider instance)
+	// Lifecycle flag to prevent accessing destroyed object
+	std::shared_ptr<bool> m_isAlive;
 };
 

@@ -3,6 +3,10 @@
 #include <memory>
 #include <vector>
 #include <OpenCASCADE/Quantity_Color.hxx>
+#include <OpenCASCADE/gp_Pnt.hxx>
+#include <OpenCASCADE/TopoDS_Face.hxx>
+#include <OpenCASCADE/Poly_Triangulation.hxx>
+#include <OpenCASCADE/BRep_Tool.hxx>
 #include "rendering/GeometryProcessor.h"
 #include "EdgeTypes.h"
 #include "geometry/GeometryRenderContext.h"
@@ -13,14 +17,82 @@ class EdgeComponent;
 class ModularEdgeComponent;
 class TopoDS_Shape;
 
-/**
- * @brief Face index mapping structure for Coin3D triangle to geometry face mapping
- */
-struct FaceIndexMapping {
-    int geometryFaceId;  // Index of the face in the original geometry (from TopExp_Explorer)
-    std::vector<int> triangleIndices;  // Indices of triangles in Coin3D mesh that belong to this face
 
-    FaceIndexMapping(int faceId = -1) : geometryFaceId(faceId) {}
+/**
+ * @brief Triangle definition (equivalent to FreeCAD's Facet)
+ */
+struct MeshTriangle {
+    uint32_t I1, I2, I3;  // Vertex indices
+
+    MeshTriangle(uint32_t i1 = 0, uint32_t i2 = 0, uint32_t i3 = 0)
+        : I1(i1), I2(i2), I3(i3) {}
+};
+
+/**
+ * @brief Face domain structure - independent mesh container for each geometry face
+ * Similar to FreeCAD's Domain structure but adapted for wxcoin architecture
+ */
+struct FaceDomain {
+    int geometryFaceId;              // Index of the face in the original geometry
+    std::vector<gp_Pnt> points;      // Vertices specific to this face (using OpenCASCADE gp_Pnt)
+    std::vector<MeshTriangle> triangles;   // Triangles specific to this face
+    bool isValid;                    // Whether this face was successfully triangulated
+
+    FaceDomain(int faceId = -1)
+        : geometryFaceId(faceId), isValid(false) {}
+
+    bool isEmpty() const {
+        return points.empty() || triangles.empty();
+    }
+
+    std::size_t getTriangleCount() const {
+        return triangles.size();
+    }
+
+    std::size_t getVertexCount() const {
+        return points.size();
+    }
+
+    // Convert to Coin3D compatible format
+    void toCoin3DFormat(std::vector<SbVec3f>& vertices, std::vector<int>& indices) const;
+};
+
+/**
+ * @brief Triangle segment defining the triangles belonging to a face
+ * Can handle both contiguous and non-contiguous triangle indices
+ * Similar to FreeCAD's segment management but more flexible
+ */
+struct TriangleSegment {
+    int geometryFaceId;              // Which face this segment belongs to
+    std::vector<int> triangleIndices; // Actual triangle indices (supports non-contiguous)
+
+    TriangleSegment(int faceId = -1) : geometryFaceId(faceId) {}
+    TriangleSegment(int faceId, const std::vector<int>& indices)
+        : geometryFaceId(faceId), triangleIndices(indices) {}
+
+    std::size_t getTriangleCount() const {
+        return triangleIndices.size();
+    }
+
+    bool isEmpty() const {
+        return triangleIndices.empty();
+    }
+
+    bool contains(int triangleIndex) const {
+        return std::find(triangleIndices.begin(), triangleIndices.end(), triangleIndex) != triangleIndices.end();
+    }
+};
+
+/**
+ * @brief Boundary triangle information for triangles shared by multiple faces
+ */
+struct BoundaryTriangle {
+    int triangleIndex;           // Global triangle index
+    std::vector<int> faceIds;    // All faces that contain this triangle
+    bool isBoundary;             // Whether this is a true boundary triangle
+
+    BoundaryTriangle(int triIdx = -1)
+        : triangleIndex(triIdx), isBoundary(false) {}
 };
 
 /**
@@ -97,42 +169,48 @@ public:
     int getAssemblyLevel() const { return m_assemblyLevel; }
     void setAssemblyLevel(int level) { m_assemblyLevel = level; }
 
-    // Face index mapping for Coin3D triangle to geometry face mapping
-    const std::vector<FaceIndexMapping>& getFaceIndexMappings() const { return m_faceIndexMappings; }
-    void setFaceIndexMappings(const std::vector<FaceIndexMapping>& mappings);
+    // New Domain-based face mapping system
+    const std::vector<FaceDomain>& getFaceDomains() const { return m_faceDomains; }
+    const std::vector<TriangleSegment>& getTriangleSegments() const { return m_triangleSegments; }
+    const std::vector<BoundaryTriangle>& getBoundaryTriangles() const { return m_boundaryTriangles; }
 
-    // Edge index mapping for Coin3D line to geometry edge mapping
-    const std::vector<EdgeIndexMapping>& getEdgeIndexMappings() const { return m_edgeIndexMappings; }
-    void setEdgeIndexMappings(const std::vector<EdgeIndexMapping>& mappings);
+    // Query methods for new Domain-based system
+    const FaceDomain* getFaceDomain(int geometryFaceId) const;
+    const TriangleSegment* getTriangleSegment(int geometryFaceId) const;
+    bool isBoundaryTriangle(int triangleIndex) const;
+    const BoundaryTriangle* getBoundaryTriangle(int triangleIndex) const;
 
-    // Vertex index mapping for Coin3D point to geometry vertex mapping
-    const std::vector<VertexIndexMapping>& getVertexIndexMappings() const { return m_vertexIndexMappings; }
-    void setVertexIndexMappings(const std::vector<VertexIndexMapping>& mappings);
-
-    // Build reverse mapping for fast lookups
-    void buildReverseMapping();
-
-    // Query methods for face index mapping
+    // Enhanced face-triangle mapping with boundary triangle awareness
     int getGeometryFaceIdForTriangle(int triangleIndex) const;
+    std::vector<int> getGeometryFaceIdsForTriangle(int triangleIndex) const;
     std::vector<int> getTrianglesForGeometryFace(int geometryFaceId) const;
-    bool hasFaceIndexMapping() const { return !m_faceIndexMappings.empty(); }
+    bool hasFaceDomainMapping() const { return !m_faceDomains.empty(); }
 
-    // Query methods for edge index mapping
-    int getGeometryEdgeIdForLine(int lineIndex) const;
-    std::vector<int> getLinesForGeometryEdge(int geometryEdgeId) const;
-    bool hasEdgeIndexMapping() const { return !m_edgeIndexMappings.empty(); }
+    // Legacy compatibility method - now delegates to domain system
+    bool hasFaceIndexMapping() const { return hasFaceDomainMapping(); }
 
-    // Query methods for vertex index mapping
-    int getGeometryVertexIdForCoordinate(int coordinateIndex) const;
-    int getCoordinateForGeometryVertex(int geometryVertexId) const;
-    bool hasVertexIndexMapping() const { return !m_vertexIndexMappings.empty(); }
+
+
+
 
     // Point view rendering
     void createPointViewRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
                                       const ::DisplaySettings& displaySettings);
 
-    // Build face index mapping during mesh generation
-    void buildFaceIndexMapping(const TopoDS_Shape& shape, const MeshParameters& params = MeshParameters());
+
+protected:
+    // Helper function for face triangulation
+    bool triangulateFace(const TopoDS_Face& face, FaceDomain& domain);
+
+    // Domain-based mapping system helper functions
+    void buildFaceDomains(const TopoDS_Shape& shape,
+                         const std::vector<TopoDS_Face>& faces,
+                         const MeshParameters& params);
+    void buildTriangleSegments(const std::vector<std::pair<int, std::vector<int>>>& faceMappings);
+    void identifyBoundaryTriangles(const std::vector<std::pair<int, std::vector<int>>>& faceMappings);
+
+    // Protected helper for wireframe generation
+    void createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params);
 
     // Wireframe appearance update
     void updateWireframeMaterial(const Quantity_Color& color);
@@ -141,22 +219,17 @@ public:
     void releaseTemporaryData();
     void optimizeMemory();
 
-protected:
-    // Protected helper for wireframe generation
-    void createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params);
-
+    // Coin3D scene graph
     SoSeparator* m_coinNode;
     bool m_coinNeedsUpdate;
     bool m_meshRegenerationNeeded;
     MeshParameters m_lastMeshParams;
     int m_assemblyLevel;
-    std::vector<FaceIndexMapping> m_faceIndexMappings;
-    std::vector<EdgeIndexMapping> m_edgeIndexMappings;
-    std::vector<VertexIndexMapping> m_vertexIndexMappings;
 
-    // Performance optimization: reverse mapping for O(1) lookups
-    std::unordered_map<int, int> m_triangleToFaceMap;
-    std::unordered_map<int, int> m_lineToEdgeMap;
-    std::unordered_map<int, int> m_coordinateToVertexMap;
-    bool m_hasReverseMapping = false;
+    // New Domain-based mapping system (FreeCAD-inspired)
+    std::vector<FaceDomain> m_faceDomains;              // Independent mesh containers per face
+    std::vector<TriangleSegment> m_triangleSegments;    // Triangle index ranges per face
+    std::vector<BoundaryTriangle> m_boundaryTriangles;  // Triangles shared by multiple faces
+
+    // Domain system only - no legacy mappings
 };

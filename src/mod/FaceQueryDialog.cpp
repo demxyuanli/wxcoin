@@ -38,19 +38,24 @@ void FaceQueryDialog::createControls(const PickingResult& result)
 			std::to_string(result.geometryFaceId)));
 
 		// Show additional face information if available
-		if (result.geometry->hasFaceIndexMapping()) {
-			auto triangles = result.geometry->getTrianglesForGeometryFace(result.geometryFaceId);
-			m_propGrid->Append(new wxStringProperty("Triangles in Face", "TrianglesInFace",
-				std::to_string(triangles.size())));
+		if (result.geometry->hasFaceDomainMapping()) {
+			const FaceDomain* domain = result.geometry->getFaceDomain(result.geometryFaceId);
+			if (domain) {
+				m_propGrid->Append(new wxStringProperty("Triangles in Face", "TrianglesInFace",
+					std::to_string(domain->getTriangleCount())));
+
+				m_propGrid->Append(new wxStringProperty("Vertices in Face", "VerticesInFace",
+					std::to_string(domain->getVertexCount())));
+			}
 		}
 	} else {
 		m_propGrid->Append(new wxStringProperty("Geometry Face ID", "GeometryFaceId", "N/A"));
 	}
 
 	// Display mapping status
-	bool hasMapping = result.geometry->hasFaceIndexMapping();
+	bool hasMapping = result.geometry->hasFaceDomainMapping();
 	m_propGrid->Append(new wxStringProperty("Face Mapping", "FaceMapping",
-		hasMapping ? "Available" : "Not Available"));
+		hasMapping ? "Domain System" : "Not Available"));
 
 	if (!hasMapping) {
 		m_propGrid->Append(new wxStringProperty("Note", "Note",

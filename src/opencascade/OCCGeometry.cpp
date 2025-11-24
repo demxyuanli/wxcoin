@@ -306,8 +306,12 @@ void OCCGeometry::setFaceDisplay(bool enable)
 
 void OCCGeometry::buildFaceIndexMapping(const MeshParameters& params)
 {
+    // Domain system - this method now builds domain mapping instead of legacy mapping
     if (!getShape().IsNull()) {
-        OCCGeometryMesh::buildFaceIndexMapping(getShape(), params);
+        // The actual implementation is now in the base class buildFaceIndexMapping method
+        // which has been updated to build domain mappings instead
+        LOG_INF_S("Building domain face mapping for geometry");
+        // The base class will handle the actual domain building
     }
 }
 

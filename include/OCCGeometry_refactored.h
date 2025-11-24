@@ -101,12 +101,13 @@ public:
     using OCCGeometryMesh::isEdgeDisplayTypeEnabled;
     using OCCGeometryMesh::updateEdgeDisplay;
 
-    // Face index mapping
-    using OCCGeometryMesh::getFaceIndexMappings;
-    using OCCGeometryMesh::setFaceIndexMappings;
+    // Face domain mapping (replaces legacy face index mapping)
+    using OCCGeometryMesh::getTriangleSegments;
+    using OCCGeometryMesh::getTriangleSegment;
     using OCCGeometryMesh::getGeometryFaceIdForTriangle;
     using OCCGeometryMesh::getTrianglesForGeometryFace;
-    using OCCGeometryMesh::hasFaceIndexMapping;
+    using OCCGeometryMesh::hasFaceDomainMapping;
+    using OCCGeometryMesh::hasFaceIndexMapping; // For compatibility
     void buildFaceIndexMapping(const MeshParameters& params = MeshParameters());
 
     // Assembly level

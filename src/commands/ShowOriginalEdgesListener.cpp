@@ -79,8 +79,7 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				// because the lambda is executed asynchronously and the local variable may be out of scope
 				edgeDisplayManager->extractOriginalEdgesOnly(samplingDensity, minLength, showLinesOnly,
 					occColor, edgeWidth, intersectionNodeOccColor, intersectionNodeSize, intersectionNodeShape,
-					[this, uiHelper, &edgeColor, &edgeWidth, highlightIntersectionNodes, edgeDisplayManager,
-					 &intersectionNodeColor, &intersectionNodeSize, &intersectionNodeShape,
+					[this, uiHelper, highlightIntersectionNodes, edgeDisplayManager,
 					 samplingDensity, minLength, showLinesOnly](bool success, const std::string& error) {
 
 						if (success) {

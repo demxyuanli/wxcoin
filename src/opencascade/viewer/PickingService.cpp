@@ -146,14 +146,14 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			int triangleIndex = faceDetail->getFaceIndex();
 			result.triangleIndex = triangleIndex;
 
-			// Use face index mapping to get geometry face ID
-			if (result.geometry && result.geometry->hasFaceIndexMapping()) {
+			// Use face domain mapping to get geometry face ID
+			if (result.geometry && result.geometry->hasFaceDomainMapping()) {
 				int geometryFaceId = result.geometry->getGeometryFaceIdForTriangle(triangleIndex);
 				result.geometryFaceId = geometryFaceId;
 
-				// Get triangle count for this face to log
-				auto faceTriangles = result.geometry->getTrianglesForGeometryFace(geometryFaceId);
-				int triangleCount = faceTriangles.size();
+				// Get triangle count from FaceDomain
+				const FaceDomain* domain = result.geometry->getFaceDomain(geometryFaceId);
+				int triangleCount = domain ? domain->getTriangleCount() : 0;
 
 			// Generate sub-element name in FreeCAD style: "Face5"
 			if (geometryFaceId >= 0) {
@@ -182,31 +182,12 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			int lineIndex = lineDetail->getLineIndex();
 			result.lineIndex = lineIndex;
 
-			// Use edge index mapping to get geometry edge ID
-			if (result.geometry && result.geometry->hasEdgeIndexMapping()) {
-				int geometryEdgeId = result.geometry->getGeometryEdgeIdForLine(lineIndex);
-				result.geometryEdgeId = geometryEdgeId;
-
-				// Generate sub-element name in FreeCAD style: "Edge5"
-				if (geometryEdgeId >= 0) {
-					result.elementType = "Edge";
-					result.subElementName = "Edge" + std::to_string(geometryEdgeId);
-					LOG_INF_S("PickingService - Successfully picked edge " + std::to_string(geometryEdgeId) +
-						" in geometry " + result.geometry->getName());
-				} else {
-					// Fallback to line index
-					result.elementType = "Edge";
-					result.subElementName = "Edge" + std::to_string(lineIndex);
-					result.geometryEdgeId = lineIndex;
-					LOG_WRN_S("PickingService - Edge mapping failed, using line index " + std::to_string(lineIndex));
-				}
-			} else {
-				// Fallback to line index when no mapping available
-				result.elementType = "Edge";
-				result.subElementName = "Edge" + std::to_string(lineIndex);
-				result.geometryEdgeId = lineIndex;
-				LOG_WRN_S("PickingService - Geometry does not have edge mapping, using line index " + std::to_string(lineIndex));
-			}
+			// Edge picking - use line index as edge ID (domain system doesn't support edge mapping)
+			result.elementType = "Edge";
+			result.subElementName = "Edge" + std::to_string(lineIndex);
+			result.geometryEdgeId = lineIndex;
+			LOG_INF_S("PickingService - Picked edge (line " + std::to_string(lineIndex) +
+				") in geometry " + result.geometry->getName() + " (domain system)");
 
 		// Handle vertex picking
 		} else if (detail->isOfType(SoPointDetail::getClassTypeId())) {
@@ -216,31 +197,12 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			int coordinateIndex = pointDetail->getCoordinateIndex();
 			result.vertexIndex = coordinateIndex;
 
-			// Use vertex index mapping to get geometry vertex ID
-			if (result.geometry && result.geometry->hasVertexIndexMapping()) {
-				int geometryVertexId = result.geometry->getGeometryVertexIdForCoordinate(coordinateIndex);
-				result.geometryVertexId = geometryVertexId;
-
-				// Generate sub-element name in FreeCAD style: "Vertex5"
-				if (geometryVertexId >= 0) {
-					result.elementType = "Vertex";
-					result.subElementName = "Vertex" + std::to_string(geometryVertexId);
-					LOG_INF_S("PickingService - Successfully picked vertex " + std::to_string(geometryVertexId) +
-						" in geometry " + result.geometry->getName());
-				} else {
-					// Fallback to coordinate index
-					result.elementType = "Vertex";
-					result.subElementName = "Vertex" + std::to_string(coordinateIndex);
-					result.geometryVertexId = coordinateIndex;
-					LOG_WRN_S("PickingService - Vertex mapping failed, using coordinate index " + std::to_string(coordinateIndex));
-				}
-			} else {
-				// Fallback to coordinate index when no mapping available
-				result.elementType = "Vertex";
-				result.subElementName = "Vertex" + std::to_string(coordinateIndex);
-				result.geometryVertexId = coordinateIndex;
-				LOG_WRN_S("PickingService - Geometry does not have vertex mapping, using coordinate index " + std::to_string(coordinateIndex));
-			}
+			// Vertex picking - use coordinate index as vertex ID (domain system doesn't support vertex mapping)
+			result.elementType = "Vertex";
+			result.subElementName = "Vertex" + std::to_string(coordinateIndex);
+			result.geometryVertexId = coordinateIndex;
+			LOG_INF_S("PickingService - Picked vertex (coordinate " + std::to_string(coordinateIndex) +
+				") in geometry " + result.geometry->getName() + " (domain system)");
 
 		} else {
 			LOG_WRN_S("PickingService - Unknown detail type: " + std::string(detail->getTypeId().getName().getString()));

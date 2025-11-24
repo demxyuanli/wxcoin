@@ -28,6 +28,12 @@
 #include <TopoDS.hxx>
 #include <TopoDS_Shell.hxx>
 #include <TopoDS_Solid.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopLoc_Location.hxx>
+#include <BRep_Tool.hxx>
+#include <Poly_Triangulation.hxx>
+#include <Poly_Triangle.hxx>
+#include <gp_Trsf.hxx>
 #include <chrono>
 #include <algorithm>
 #include <set>
@@ -40,7 +46,6 @@ OCCGeometryMesh::OCCGeometryMesh()
     , m_meshRegenerationNeeded(true)
     , m_assemblyLevel(0)
     , useModularEdgeComponent(true)
-    , m_hasReverseMapping(false)
     , m_lastMeshParams{}  // Initialize to default values to avoid issues caused by random values
 {
     // Use only modular edge component - migration completed
@@ -228,138 +233,6 @@ void OCCGeometryMesh::enableModularEdgeComponent(bool enable)
 }
 
 // Original getGeometryFaceIdForTriangle implementation moved to bottom of file
-// to be replaced with optimized version
-
-std::vector<int> OCCGeometryMesh::getTrianglesForGeometryFace(int geometryFaceId) const
-{
-    if (!hasFaceIndexMapping()) {
-        return {};
-    }
-
-    for (const auto& mapping : m_faceIndexMappings) {
-        if (mapping.geometryFaceId == geometryFaceId) {
-            return mapping.triangleIndices;
-        }
-    }
-
-    return {};
-}
-
-void OCCGeometryMesh::buildFaceIndexMapping(const TopoDS_Shape& shape, const MeshParameters& params)
-{
-    try {
-        if (shape.IsNull()) {
-            return;
-        }
-
-        m_faceIndexMappings.clear();
-
-        // Use the processor to generate mesh with face mapping
-        // The processor's extractAllFacesRecursive will extract faces consistently
-        auto& manager = RenderingToolkitAPI::getManager();
-        auto* baseProcessor = manager.getGeometryProcessor("OpenCASCADE");
-        auto* processor = dynamic_cast<OpenCASCADEProcessor*>(baseProcessor);
-        
-        if (processor) {
-            std::vector<std::pair<int, std::vector<int>>> faceMappings;
-            TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
-
-            // Extract faces using the same method as the processor to verify consistency
-            std::vector<TopoDS_Face> faces;
-            processor->extractAllFacesRecursive(shape, faces);
-            
-            // Compare face counts - this is critical for debugging
-            if (faces.size() != faceMappings.size()) {
-                LOG_WRN_S("Face count mismatch in buildFaceIndexMapping: extracted " + 
-                    std::to_string(faces.size()) + " faces, but processor returned " + 
-                    std::to_string(faceMappings.size()) + " face mappings");
-            }
-
-            if (!faceMappings.empty()) {
-                // Build face index mappings
-                m_faceIndexMappings.reserve(faceMappings.size());
-
-                // Get actual mesh triangle count
-                int actualMeshTriangleCount = static_cast<int>(meshWithMapping.triangles.size() / 3);
-
-                // Build face index mappings and check for duplicates
-                m_faceIndexMappings.reserve(faceMappings.size());
-                
-                int totalTrianglesInMappings = 0;
-                std::set<int> allTriangleIndices;
-                std::map<int, std::vector<int>> triangleToFaces;  // Track which faces reference each triangle
-                
-                for (const auto& [faceId, triangleIndices] : faceMappings) {
-                    FaceIndexMapping mapping(faceId);
-                    mapping.triangleIndices = triangleIndices;
-                    m_faceIndexMappings.push_back(mapping);
-                    
-                    totalTrianglesInMappings += static_cast<int>(triangleIndices.size());
-                    
-                    // Track triangle usage
-                    for (int triIdx : triangleIndices) {
-                        allTriangleIndices.insert(triIdx);
-                        triangleToFaces[triIdx].push_back(faceId);
-                    }
-                    
-                }
-
-                // Check for duplicates
-                int duplicateCount = 0;
-                for (const auto& [triIdx, faces] : triangleToFaces) {
-                    if (faces.size() > 1) {
-                        duplicateCount++;
-                        // Triangle mapped to multiple faces
-                    }
-                }
-                
-                // Triangle duplicates found
-
-                
-                // Triangle count validation removed
-
-
-                // Count actual triangles from Coin3D node after it's built
-                int actualCoinTriangles = 0;
-                if (m_coinNode) {
-                    SoSearchAction searchFaces;
-                    searchFaces.setType(SoIndexedFaceSet::getClassTypeId());
-                    searchFaces.setInterest(SoSearchAction::ALL);
-                    searchFaces.apply(m_coinNode);
-                    
-                    SoPathList& facePaths = searchFaces.getPaths();
-                    for (int i = 0; i < facePaths.getLength(); ++i) {
-                        SoPath* path = facePaths[i];
-                        SoIndexedFaceSet* faceSet = static_cast<SoIndexedFaceSet*>(path->getTail());
-                        if (faceSet) {
-                            // Count triangles in this face set
-                            const int32_t* indices = faceSet->coordIndex.getValues(0);
-                            int numIndices = faceSet->coordIndex.getNum();
-                            int trianglesInSet = 0;
-                            for (int j = 0; j < numIndices; ++j) {
-                                if (indices[j] == -1) {
-                                    trianglesInSet++;
-                                }
-                            }
-                            actualCoinTriangles += trianglesInSet;
-                        }
-                    }
-                }
-                
-
-                // Face mapping summary removed
-
-            } else {
-            }
-        } else {
-            LOG_ERR_S("OpenCASCADE processor not available for face mapping");
-        }
-    }
-    catch (const std::exception& e) {
-        LOG_ERR_S("Failed to build face index mapping: " + std::string(e.what()));
-        m_faceIndexMappings.clear();
-    }
-}
 
 void OCCGeometryMesh::releaseTemporaryData()
 {
@@ -369,7 +242,33 @@ void OCCGeometryMesh::releaseTemporaryData()
 void OCCGeometryMesh::optimizeMemory()
 {
     // Optimize memory usage
-    m_faceIndexMappings.shrink_to_fit();
+    // FaceDomains can be large, but we keep them for face highlighting
+    // TriangleSegments are lightweight, keep them
+}
+
+void FaceDomain::toCoin3DFormat(std::vector<SbVec3f>& vertices, std::vector<int>& indices) const
+{
+    if (isEmpty()) {
+        return;
+    }
+
+    // Reserve space
+    vertices.reserve(vertices.size() + points.size());
+    indices.reserve(indices.size() + triangles.size() * 3);
+
+    // Add vertices
+    size_t vertexOffset = vertices.size();
+    for (const auto& point : points) {
+        vertices.emplace_back(point.X(), point.Y(), point.Z());
+    }
+
+    // Add triangles (convert from MeshTriangle to indices)
+    for (const auto& triangle : triangles) {
+        indices.push_back(static_cast<int>(vertexOffset + triangle.I1));
+        indices.push_back(static_cast<int>(vertexOffset + triangle.I2));
+        indices.push_back(static_cast<int>(vertexOffset + triangle.I3));
+        indices.push_back(-1); // Triangle separator for Coin3D
+    }
 }
 
 void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
@@ -492,22 +391,105 @@ void OCCGeometryMesh::buildCoinRepresentation(
             modularEdgeComponent->clearEdgeNode(EdgeType::NormalLine);
             modularEdgeComponent->clearEdgeNode(EdgeType::FaceNormalLine);
         }
-        // Clear face index mapping when mesh parameters change
-        // It will be rebuilt with new parameters below
-        m_faceIndexMappings.clear();
-        m_hasReverseMapping = false;
-        m_triangleToFaceMap.clear();
+        // Clear reverse mapping when mesh parameters change
     }
     
-    // ===== Build face index mapping BEFORE building Coin3D node =====
+    // ===== Build face domain mapping BEFORE building Coin3D node =====
     // This ensures the mapping matches the mesh used for rendering
     // The mapping must be built with the same mesh parameters as the Coin3D node
-    if (m_faceIndexMappings.empty()) {
-        buildFaceIndexMapping(shape, params);
-        
-        // Verify mapping was created
-        if (m_faceIndexMappings.empty()) {
-            // Face index mapping is empty - face highlighting may not work
+    if (!hasFaceDomainMapping()) {
+        // Build face domain mapping using the same logic as buildFaceIndexMapping
+        try {
+            if (shape.IsNull()) {
+                return;
+            }
+
+            // Clear all mapping data
+            m_faceDomains.clear();
+            m_triangleSegments.clear();
+            m_boundaryTriangles.clear();
+
+            // Extract all faces from the shape using recursive traversal
+            std::vector<TopoDS_Face> faces;
+
+            // First, try direct face extraction from shape
+            for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+                TopoDS_Face face = TopoDS::Face(exp.Current());
+                if (!face.IsNull()) {
+                    faces.push_back(face);
+                }
+            }
+
+            // If no faces found directly, try extracting from shells (for nested structures)
+            if (faces.empty()) {
+                for (TopExp_Explorer shellExp(shape, TopAbs_SHELL); shellExp.More(); shellExp.Next()) {
+                    TopoDS_Shell shell = TopoDS::Shell(shellExp.Current());
+                    for (TopExp_Explorer faceExp(shell, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+                        TopoDS_Face face = TopoDS::Face(faceExp.Current());
+                        if (!face.IsNull()) {
+                            faces.push_back(face);
+                        }
+                    }
+                }
+            }
+
+            // If still no faces, try extracting from solids (for nested structures)
+            if (faces.empty()) {
+                for (TopExp_Explorer solidExp(shape, TopAbs_SOLID); solidExp.More(); solidExp.Next()) {
+                    TopoDS_Solid solid = TopoDS::Solid(solidExp.Current());
+                    for (TopExp_Explorer faceExp(solid, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+                        TopoDS_Face face = TopoDS::Face(faceExp.Current());
+                        if (!face.IsNull()) {
+                            faces.push_back(face);
+                        }
+                    }
+                }
+            }
+
+            if (faces.empty()) {
+                return;
+            }
+
+            // Use the processor to generate mesh with face mapping
+            auto& manager = RenderingToolkitAPI::getManager();
+            auto* baseProcessor = manager.getGeometryProcessor("OpenCASCADE");
+            auto* processor = dynamic_cast<OpenCASCADEProcessor*>(baseProcessor);
+
+            if (processor) {
+                std::vector<std::pair<int, std::vector<int>>> faceMappings;
+                TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
+
+                // Compare face counts - this is critical for debugging
+                if (faces.size() != faceMappings.size()) {
+                    LOG_WRN_S("Face count mismatch: found " + std::to_string(faces.size()) +
+                             " faces but got " + std::to_string(faceMappings.size()) + " mappings");
+                }
+
+                // ===== Build Face Domains =====
+                buildFaceDomains(shape, faces, params);
+
+                // ===== Build Triangle Segments =====
+                buildTriangleSegments(faceMappings);
+
+                // ===== Identify Boundary Triangles =====
+                identifyBoundaryTriangles(faceMappings);
+
+                LOG_INF_S("Built domain mapping with " + std::to_string(m_triangleSegments.size()) + " segments");
+
+            } else {
+                LOG_ERR_S("OpenCASCADE processor not available for domain mapping");
+            }
+        }
+        catch (const std::exception& e) {
+            LOG_ERR_S("Failed to build face domain mapping: " + std::string(e.what()));
+            m_faceDomains.clear();
+            m_triangleSegments.clear();
+            m_boundaryTriangles.clear();
+        }
+
+        // Verify domain mapping was created
+        if (!hasFaceDomainMapping()) {
+            LOG_WRN_S("Face domain mapping is empty - face highlighting may not work");
         }
     }
 
@@ -844,15 +826,102 @@ void OCCGeometryMesh::buildCoinRepresentation(
         }
     }
 
-    // ===== Build face index mapping BEFORE building Coin3D node =====
+    // ===== Build face domain mapping BEFORE building Coin3D node =====
     // This ensures the mapping matches the mesh used for rendering
     // The mapping must be built with the same mesh parameters as the Coin3D node
-    if (m_faceIndexMappings.empty() || meshParamsChanged) {
-        buildFaceIndexMapping(shape, params);
-        
-        // Verify mapping was created
-        if (m_faceIndexMappings.empty()) {
-            // Face index mapping is empty
+    if (!hasFaceDomainMapping() || meshParamsChanged) {
+        // Build face domain mapping using the same logic as buildFaceIndexMapping
+        try {
+            if (shape.IsNull()) {
+                return;
+            }
+
+            // Clear all mapping data
+            m_faceDomains.clear();
+            m_triangleSegments.clear();
+            m_boundaryTriangles.clear();
+
+            // Extract all faces from the shape using recursive traversal
+            std::vector<TopoDS_Face> faces;
+
+            // First, try direct face extraction from shape
+            for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next()) {
+                TopoDS_Face face = TopoDS::Face(exp.Current());
+                if (!face.IsNull()) {
+                    faces.push_back(face);
+                }
+            }
+
+            // If no faces found directly, try extracting from shells (for nested structures)
+            if (faces.empty()) {
+                for (TopExp_Explorer shellExp(shape, TopAbs_SHELL); shellExp.More(); shellExp.Next()) {
+                    TopoDS_Shell shell = TopoDS::Shell(shellExp.Current());
+                    for (TopExp_Explorer faceExp(shell, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+                        TopoDS_Face face = TopoDS::Face(faceExp.Current());
+                        if (!face.IsNull()) {
+                            faces.push_back(face);
+                        }
+                    }
+                }
+            }
+
+            // If still no faces, try extracting from solids (for nested structures)
+            if (faces.empty()) {
+                for (TopExp_Explorer solidExp(shape, TopAbs_SOLID); solidExp.More(); solidExp.Next()) {
+                    TopoDS_Solid solid = TopoDS::Solid(solidExp.Current());
+                    for (TopExp_Explorer faceExp(solid, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+                        TopoDS_Face face = TopoDS::Face(faceExp.Current());
+                        if (!face.IsNull()) {
+                            faces.push_back(face);
+                        }
+                    }
+                }
+            }
+
+            if (faces.empty()) {
+                return;
+            }
+
+            // Use the processor to generate mesh with face mapping
+            auto& manager = RenderingToolkitAPI::getManager();
+            auto* baseProcessor = manager.getGeometryProcessor("OpenCASCADE");
+            auto* processor = dynamic_cast<OpenCASCADEProcessor*>(baseProcessor);
+
+            if (processor) {
+                std::vector<std::pair<int, std::vector<int>>> faceMappings;
+                TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
+
+                // Compare face counts - this is critical for debugging
+                if (faces.size() != faceMappings.size()) {
+                    LOG_WRN_S("Face count mismatch: found " + std::to_string(faces.size()) +
+                             " faces but got " + std::to_string(faceMappings.size()) + " mappings");
+                }
+
+                // ===== Build Face Domains =====
+                buildFaceDomains(shape, faces, params);
+
+                // ===== Build Triangle Segments =====
+                buildTriangleSegments(faceMappings);
+
+                // ===== Identify Boundary Triangles =====
+                identifyBoundaryTriangles(faceMappings);
+
+                LOG_INF_S("Built domain mapping with " + std::to_string(m_triangleSegments.size()) + " segments");
+
+            } else {
+                LOG_ERR_S("OpenCASCADE processor not available for domain mapping");
+            }
+        }
+        catch (const std::exception& e) {
+            LOG_ERR_S("Failed to build face domain mapping: " + std::string(e.what()));
+            m_faceDomains.clear();
+            m_triangleSegments.clear();
+            m_boundaryTriangles.clear();
+        }
+
+        // Verify domain mapping was created
+        if (!hasFaceDomainMapping()) {
+            LOG_WRN_S("Face domain mapping is empty - face highlighting may not work");
         }
     }
 
@@ -893,61 +962,18 @@ void OCCGeometryMesh::updateWireframeMaterial(const Quantity_Color& color)
     }
 }
 
-// Performance optimization: reverse mapping for O(1) triangle-to-face lookup
-void OCCGeometryMesh::setFaceIndexMappings(const std::vector<FaceIndexMapping>& mappings) {
-    m_faceIndexMappings = mappings;
 
-    // Automatically build reverse mapping for fast lookup
-    buildReverseMapping();
-}
-
-void OCCGeometryMesh::buildReverseMapping() {
-    m_triangleToFaceMap.clear();
-
-    if (m_faceIndexMappings.empty()) {
-        m_hasReverseMapping = false;
-        return;
-    }
-
-    // Pre-allocate space for better performance
-    size_t totalTriangles = 0;
-    for (const auto& mapping : m_faceIndexMappings) {
-        totalTriangles += mapping.triangleIndices.size();
-    }
-    m_triangleToFaceMap.reserve(totalTriangles);
-
-    // Build the reverse mapping: triangle index -> geometry face ID
-    for (const auto& mapping : m_faceIndexMappings) {
-        for (int triangleIndex : mapping.triangleIndices) {
-            m_triangleToFaceMap[triangleIndex] = mapping.geometryFaceId;
-        }
-    }
-
-    m_hasReverseMapping = true;
-
-}
 
 int OCCGeometryMesh::getGeometryFaceIdForTriangle(int triangleIndex) const {
-    // Use optimized O(1) lookup if reverse mapping is available
-    if (m_hasReverseMapping) {
-        auto it = m_triangleToFaceMap.find(triangleIndex);
-        if (it != m_triangleToFaceMap.end()) {
-            return it->second;
-        }
-        return -1; // Triangle not found in any face
-    }
-
-    // Fallback to O(n) linear search for backward compatibility
-    if (!hasFaceIndexMapping()) {
+    // Use domain system to find which face contains this triangle
+    if (!hasFaceDomainMapping()) {
         return -1;
     }
 
-    for (const auto& mapping : m_faceIndexMappings) {
-        auto it = std::find(mapping.triangleIndices.begin(),
-                           mapping.triangleIndices.end(),
-                           triangleIndex);
-        if (it != mapping.triangleIndices.end()) {
-            return mapping.geometryFaceId;
+    // Search through triangle segments to find which face contains this triangle
+    for (const auto& segment : m_triangleSegments) {
+        if (segment.contains(triangleIndex)) {
+            return segment.geometryFaceId;
         }
     }
 
@@ -1094,45 +1120,192 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
     }
 }
 
-// Edge and vertex index mapping implementations
-void OCCGeometryMesh::setEdgeIndexMappings(const std::vector<EdgeIndexMapping>& mappings) {
-    m_edgeIndexMappings = mappings;
-    m_hasReverseMapping = false; // Need to rebuild reverse mapping
-}
 
-void OCCGeometryMesh::setVertexIndexMappings(const std::vector<VertexIndexMapping>& mappings) {
-    m_vertexIndexMappings = mappings;
-    m_hasReverseMapping = false; // Need to rebuild reverse mapping
-}
+// ===== New Domain-based Implementation =====
 
-int OCCGeometryMesh::getGeometryEdgeIdForLine(int lineIndex) const {
-    if (!m_hasReverseMapping) return -1;
+void OCCGeometryMesh::buildFaceDomains(const TopoDS_Shape& shape,
+                                      const std::vector<TopoDS_Face>& faces,
+                                      const MeshParameters& params)
+{
+    m_faceDomains.reserve(faces.size());
 
-    auto it = m_lineToEdgeMap.find(lineIndex);
-    return (it != m_lineToEdgeMap.end()) ? it->second : -1;
-}
+    // Create domains for all faces (similar to FreeCAD's getDomains approach)
+    for (std::size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex) {
+        const TopoDS_Face& face = faces[faceIndex];
+        FaceDomain domain(static_cast<int>(faceIndex));
 
-std::vector<int> OCCGeometryMesh::getLinesForGeometryEdge(int geometryEdgeId) const {
-    for (const auto& mapping : m_edgeIndexMappings) {
-        if (mapping.geometryEdgeId == geometryEdgeId) {
-            return mapping.lineIndices;
+        // Try to triangulate this face using OpenCASCADE directly
+        if (triangulateFace(face, domain)) {
+            domain.isValid = true;
+        } else {
+            // Face could not be triangulated - create empty domain
+            // This maintains the 1:1 mapping between faces and domains
+            domain.isValid = false;
         }
+
+        m_faceDomains.push_back(std::move(domain));
+    }
+}
+
+bool OCCGeometryMesh::triangulateFace(const TopoDS_Face& face, FaceDomain& domain)
+{
+    try {
+        TopLoc_Location loc;
+        Handle(Poly_Triangulation) hTria = BRep_Tool::Triangulation(face, loc);
+        if (hTria.IsNull()) {
+            return false;
+        }
+
+        // Getting the transformation of the face
+        gp_Trsf transf;
+        bool identity = true;
+        if (!loc.IsIdentity()) {
+            identity = false;
+            transf = loc.Transformation();
+        }
+
+        // Check orientation
+        TopAbs_Orientation orient = face.Orientation();
+
+        Standard_Integer nbNodes = hTria->NbNodes();
+        Standard_Integer nbTriangles = hTria->NbTriangles();
+
+        // Reserve space for points and triangles
+        domain.points.reserve(nbNodes);
+        domain.triangles.reserve(nbTriangles);
+
+        // Cycling through the poly mesh
+        for (int i = 1; i <= nbNodes; i++) {
+            gp_Pnt p = hTria->Node(i);
+
+            // Transform the vertices to the location of the face
+            if (!identity) {
+                p.Transform(transf);
+            }
+
+            domain.points.push_back(p);
+        }
+
+        for (int i = 1; i <= nbTriangles; i++) {
+            // Get the triangle
+            Standard_Integer n1, n2, n3;
+            hTria->Triangle(i).Get(n1, n2, n3);
+
+            // Adjust for 0-based indexing
+            --n1; --n2; --n3;
+
+            // Change orientation of the triangles
+            if (orient != TopAbs_FORWARD) {
+                std::swap(n1, n2);
+            }
+
+            domain.triangles.emplace_back(n1, n2, n3);
+        }
+
+        return true;
+    }
+    catch (const std::exception& e) {
+        return false;
+    }
+}
+
+void OCCGeometryMesh::buildTriangleSegments(const std::vector<std::pair<int, std::vector<int>>>& faceMappings)
+{
+    // Build TriangleSegment for each face using actual triangle indices
+    // This supports non-contiguous triangle indices unlike the old range-based approach
+    m_triangleSegments.clear();
+    m_triangleSegments.reserve(faceMappings.size());
+
+    for (const auto& [faceId, triangleIndices] : faceMappings) {
+        TriangleSegment segment(faceId, triangleIndices);
+        m_triangleSegments.push_back(std::move(segment));
+
+        LOG_INF_S("Domain System: Built TriangleSegment for face " + std::to_string(faceId) +
+                 " with " + std::to_string(triangleIndices.size()) + " triangles");
+    }
+
+    LOG_INF_S("Built " + std::to_string(m_triangleSegments.size()) + " triangle segments for domain system");
+}
+
+void OCCGeometryMesh::identifyBoundaryTriangles(const std::vector<std::pair<int, std::vector<int>>>& faceMappings)
+{
+    // Track which triangles are used by which faces
+    std::map<int, std::vector<int>> triangleToFacesMap;
+
+    for (const auto& [faceId, triangleIndices] : faceMappings) {
+        for (int triangleIndex : triangleIndices) {
+            triangleToFacesMap[triangleIndex].push_back(faceId);
+        }
+    }
+
+    // Identify boundary triangles (those shared by multiple faces)
+    for (const auto& [triangleIndex, faceIds] : triangleToFacesMap) {
+        if (faceIds.size() > 1) {
+            BoundaryTriangle boundaryTri(triangleIndex);
+            boundaryTri.faceIds = faceIds;
+            boundaryTri.isBoundary = true;
+            m_boundaryTriangles.push_back(boundaryTri);
+        }
+    }
+}
+
+// ===== Query Methods for New Domain System =====
+
+const FaceDomain* OCCGeometryMesh::getFaceDomain(int geometryFaceId) const
+{
+    for (const auto& domain : m_faceDomains) {
+        if (domain.geometryFaceId == geometryFaceId) {
+            return &domain;
+        }
+    }
+    return nullptr;
+}
+
+const TriangleSegment* OCCGeometryMesh::getTriangleSegment(int geometryFaceId) const
+{
+    for (const auto& segment : m_triangleSegments) {
+        if (segment.geometryFaceId == geometryFaceId) {
+            return &segment;
+        }
+    }
+    return nullptr;
+}
+
+bool OCCGeometryMesh::isBoundaryTriangle(int triangleIndex) const
+{
+    for (const auto& boundaryTri : m_boundaryTriangles) {
+        if (boundaryTri.triangleIndex == triangleIndex) {
+            return boundaryTri.isBoundary;
+        }
+    }
+    return false;
+}
+
+const BoundaryTriangle* OCCGeometryMesh::getBoundaryTriangle(int triangleIndex) const
+{
+    for (const auto& boundaryTri : m_boundaryTriangles) {
+        if (boundaryTri.triangleIndex == triangleIndex) {
+            return &boundaryTri;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<int> OCCGeometryMesh::getGeometryFaceIdsForTriangle(int triangleIndex) const
+{
+    // Domain system doesn't support multiple faces per triangle efficiently
+    // Return single face if found
+    int faceId = getGeometryFaceIdForTriangle(triangleIndex);
+    if (faceId >= 0) {
+        return {faceId};
     }
     return {};
 }
 
-int OCCGeometryMesh::getGeometryVertexIdForCoordinate(int coordinateIndex) const {
-    if (!m_hasReverseMapping) return -1;
-
-    auto it = m_coordinateToVertexMap.find(coordinateIndex);
-    return (it != m_coordinateToVertexMap.end()) ? it->second : -1;
-}
-
-int OCCGeometryMesh::getCoordinateForGeometryVertex(int geometryVertexId) const {
-    for (const auto& mapping : m_vertexIndexMappings) {
-        if (mapping.geometryVertexId == geometryVertexId) {
-            return mapping.coordinateIndex;
-        }
-    }
-    return -1;
+std::vector<int> OCCGeometryMesh::getTrianglesForGeometryFace(int geometryFaceId) const
+{
+    // Deprecated: Now we use FaceDomain directly instead of triangle indices
+    // This method is kept for backward compatibility but should not be used
+    LOG_WRN_S("getTrianglesForGeometryFace is deprecated - use getFaceDomain instead for face " + std::to_string(geometryFaceId));
+    return {};
 }

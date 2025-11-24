@@ -51,12 +51,10 @@ public:
 	void setSubdivisionLevels(int levels);
 	void setCreaseAngle(double angle);
 
-	// Face extraction method (public for consistency with face mapping)
-	void extractAllFacesRecursive(const TopoDS_Shape& shape, std::vector<TopoDS_Face>& faces);
-
 private:
 	// Helper methods
 	void meshFace(const TopoDS_Shape& face, TriangleMesh& mesh, const MeshParameters& params);
+	void extractAllFacesRecursive(const TopoDS_Shape& shape, std::vector<TopoDS_Face>& faces);
 	void meshFaceWithIndexTracking(const TopoDS_Face& face, TriangleMesh& mesh,
 		const MeshParameters& params, std::vector<int>& triangleIndices, int& currentTriangleIndex);
 	void extractTriangulation(const Handle(Poly_Triangulation)& triangulation,

@@ -93,7 +93,7 @@ void FaceQueryListener::onMouseButton(wxMouseEvent& event) {
 		std::string fileName = result.geometry->getFileName();
 		int triangleIdx = result.triangleIndex;
 		int faceId = result.geometryFaceId;
-		bool hasMapping = result.geometry->hasFaceIndexMapping();
+		bool hasMapping = result.geometry->hasFaceDomainMapping();
 
 		LOG_INF_S("FaceQueryListener::onMouseButton - Picking successful:");
 		LOG_INF_S("  Geometry: " + geomName + " (file: " + fileName + ")");

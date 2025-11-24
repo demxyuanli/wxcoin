@@ -43,7 +43,7 @@ void FaceInfoOverlay::draw(wxDC& dc, const wxSize& canvasSize) {
         numLines = 2; // Geometry name + file
         if (m_result.triangleIndex >= 0) numLines++;
         if (m_result.geometryFaceId >= 0) numLines++;
-        if (m_result.geometry->hasFaceIndexMapping()) {
+        if (m_result.geometry->hasFaceDomainMapping()) {
             numLines++; // Face mapping status
             if (m_result.geometryFaceId >= 0) {
                 numLines++; // Triangles in face
@@ -106,7 +106,7 @@ void FaceInfoOverlay::draw(wxDC& dc, const wxSize& canvasSize) {
         }
         
         // Face mapping status
-        bool hasMapping = m_result.geometry->hasFaceIndexMapping();
+        bool hasMapping = m_result.geometry->hasFaceDomainMapping();
         if (hasMapping) {
             dc.DrawText("Face Mapping: Available", xPos + padding, textY);
             textY += lineHeight;

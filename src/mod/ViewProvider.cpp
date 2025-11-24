@@ -13,7 +13,8 @@
 #include <wx/msgdlg.h>
 
 ViewProvider::ViewProvider(std::shared_ptr<OCCGeometry> geometry)
-	: m_geometry(geometry), m_root(nullptr), m_modeSwitch(nullptr) {
+	: m_geometry(geometry), m_root(nullptr), m_modeSwitch(nullptr)
+	, m_isAlive(std::make_shared<bool>(true)) {
 	
 	if (!geometry) {
 		LOG_ERR_S("ViewProvider::ViewProvider - Null geometry");
@@ -38,14 +39,25 @@ ViewProvider::ViewProvider(std::shared_ptr<OCCGeometry> geometry)
 	m_root->addChild(m_modeSwitch);
 	
 	// Register with Selection system to receive selection change notifications
+	// Use weak reference to prevent accessing destroyed object
 	auto& selection = mod::Selection::getInstance();
-	selection.addObserver([this](const mod::SelectionChange& change) {
+	auto isAlive = m_isAlive;
+	selection.addObserver([this, isAlive](const mod::SelectionChange& change) {
+		// Check if object is still alive before accessing
+		if (!*isAlive) {
+			return; // Object has been destroyed, ignore callback
+		}
 		this->onSelectionChange(change);
 	});
 	
 }
 
 ViewProvider::~ViewProvider() {
+	// Mark object as destroyed first to prevent callbacks from accessing it
+	if (m_isAlive) {
+		*m_isAlive = false;
+	}
+
 	clearPreselection();
 	clearSelection();
 	
@@ -293,9 +305,9 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 		return true;
 
 	} else if (elementType == "Edge") {
-		// For edges, create SoLineDetail
-		// Get the first line index that belongs to this edge
-		std::vector<int> lineIndices = m_geometry->getLinesForGeometryEdge(elementId);
+		// For edges, create SoLineDetail (domain system doesn't support edge mapping)
+		// Use elementId as fallback line index
+		std::vector<int> lineIndices = {elementId};
 		if (lineIndices.empty()) {
 			return false;
 		}
@@ -307,9 +319,9 @@ bool ViewProvider::getDetailPath(const std::string& subElementName, SoPath* path
 		return true;
 
 	} else if (elementType == "Vertex") {
-		// For vertices, create SoPointDetail
-		// Get the coordinate index for this vertex
-		int coordinateIndex = m_geometry->getCoordinateForGeometryVertex(elementId);
+		// For vertices, create SoPointDetail (domain system doesn't support vertex mapping)
+		// Use elementId as fallback coordinate index
+		int coordinateIndex = elementId;
 		if (coordinateIndex < 0) {
 			return false;
 		}

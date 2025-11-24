@@ -59,5 +59,8 @@ private:
 
 	// Cache for highlight nodes
 	std::unordered_map<std::string, SoSwitch*> m_highlightCache;
+
+	// Lifecycle flag to prevent accessing destroyed object
+	std::shared_ptr<bool> m_isAlive;
 };
 

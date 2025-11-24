@@ -31,18 +31,30 @@ FaceSelectionListener::FaceSelectionListener(Canvas* canvas, PickingService* pic
 	, m_highlightedGeometry(nullptr), m_highlightedFaceId(-1)
 	, m_selectedGeometry(nullptr), m_selectedFaceId(-1)
 	, m_highlightNode(nullptr), m_selectedNode(nullptr)
+	, m_isAlive(std::make_shared<bool>(true))
 {
 	LOG_INF_S("FaceSelectionListener created");
 
 	// Register selection observer to handle preselection and selection changes
+	// Use weak reference to prevent accessing destroyed object
 	auto& selection = mod::Selection::getInstance();
-	selection.addObserver([this](const mod::SelectionChange& change) {
+	auto isAlive = m_isAlive;
+	selection.addObserver([this, isAlive](const mod::SelectionChange& change) {
+		// Check if object is still alive before accessing
+		if (!*isAlive) {
+			return; // Object has been destroyed, ignore callback
+		}
 		this->onSelectionChanged(change);
 	});
 }
 
 FaceSelectionListener::~FaceSelectionListener()
 {
+	// Mark object as destroyed first to prevent callbacks from accessing it
+	if (m_isAlive) {
+		*m_isAlive = false;
+	}
+
 	clearHighlight();
 	clearSelection();
 
@@ -291,6 +303,11 @@ void FaceSelectionListener::highlightFace(std::shared_ptr<OCCGeometry> geometry,
 }
 
 void FaceSelectionListener::clearHighlight() {
+	// Safety check: ensure object is still valid
+	if (!m_isAlive || !*m_isAlive) {
+		return;
+	}
+
 	if (m_highlightNode) {
 		// Hide highlight by setting switch to NONE (don't remove from scene graph)
 		m_highlightNode->whichChild.setValue(SO_SWITCH_NONE);
@@ -354,6 +371,11 @@ void FaceSelectionListener::selectFace(std::shared_ptr<OCCGeometry> geometry, in
 }
 
 void FaceSelectionListener::clearSelection() {
+	// Safety check: ensure object is still valid
+	if (!m_isAlive || !*m_isAlive) {
+		return;
+	}
+
 	if (m_selectedNode) {
 		// Hide selection by setting switch to NONE (don't remove from scene graph)
 		m_selectedNode->whichChild.setValue(SO_SWITCH_NONE);
@@ -561,118 +583,80 @@ bool FaceSelectionListener::extractFaceMesh(std::shared_ptr<OCCGeometry> geometr
 		return false;
 	}
 
-	if (!geometry->hasFaceIndexMapping()) {
-		LOG_WRN_S("FaceSelectionListener::extractFaceMesh - Geometry '" + geometry->getName() + "' has no face mapping");
+	if (!geometry->hasFaceDomainMapping()) {
+		LOG_WRN_S("FaceSelectionListener::extractFaceMesh - Geometry '" + geometry->getName() + "' has no domain face mapping");
 		return false;
 	}
 
-	// Get triangle indices for this face
-	std::vector<int> triangleIndices = geometry->getTrianglesForGeometryFace(faceId);
-	if (triangleIndices.empty()) {
-		LOG_WRN_S("FaceSelectionListener::extractFaceMesh - No triangles found for face " + std::to_string(faceId) +
+	// Get the FaceDomain directly - much simpler than index mapping
+	const FaceDomain* domain = geometry->getFaceDomain(faceId);
+	if (!domain || domain->isEmpty() || !domain->isValid) {
+		LOG_WRN_S("FaceSelectionListener::extractFaceMesh - No valid FaceDomain found for face " + std::to_string(faceId) +
 			" in geometry '" + geometry->getName() + "'");
 		return false;
 	}
 
-	LOG_INF_S("FaceSelectionListener::extractFaceMesh - Found " + std::to_string(triangleIndices.size()) +
-		" triangles for face " + std::to_string(faceId) + " in geometry '" + geometry->getName() + "'");
+	LOG_INF_S("FaceSelectionListener::extractFaceMesh - Using FaceDomain for face " + std::to_string(faceId) +
+		" with " + std::to_string(domain->getVertexCount()) + " vertices, " +
+		std::to_string(domain->getTriangleCount()) + " triangles");
 
-	// CRITICAL BUG FIX: Extract mesh data directly from geometry's Coin3D node
-	// This ensures we use the exact same mesh data used for rendering
-	SoSeparator* geometryNode = geometry->getCoinNode();
-	if (!geometryNode) {
-		LOG_WRN_S("FaceSelectionListener::extractFaceMesh - Geometry has no Coin3D node");
-		return false;
+	// Convert FaceDomain data directly to TriangleMesh format
+	faceMesh.vertices.reserve(domain->points.size());
+	faceMesh.triangles.reserve(domain->triangles.size() * 3);
+
+	// Convert vertices from gp_Pnt to SbVec3f
+	for (const auto& point : domain->points) {
+		faceMesh.vertices.emplace_back(
+			static_cast<float>(point.X()),
+			static_cast<float>(point.Y()),
+			static_cast<float>(point.Z())
+		);
 	}
 
-	TriangleMesh fullMesh;
-	if (!extractMeshFromCoinNode(geometryNode, fullMesh)) {
-		LOG_WRN_S("FaceSelectionListener::extractFaceMesh - Failed to extract mesh from Coin node");
-		return false;
+	// Convert triangles from MeshTriangle to flat index array
+	for (const auto& triangle : domain->triangles) {
+		faceMesh.triangles.push_back(triangle.I1);
+		faceMesh.triangles.push_back(triangle.I2);
+		faceMesh.triangles.push_back(triangle.I3);
 	}
 
-	if (fullMesh.vertices.empty() || fullMesh.triangles.empty()) {
-		LOG_WRN_S("FaceSelectionListener::extractFaceMesh - Extracted mesh is empty");
-		return false;
-	}
+	// Calculate face normals for proper shading
+	faceMesh.normals.clear();
+	faceMesh.normals.reserve(faceMesh.vertices.size());
 
-	LOG_INF_S("FaceSelectionListener::extractFaceMesh - Extracted mesh with " +
-		std::to_string(fullMesh.vertices.size()) + " vertices, " +
-		std::to_string(fullMesh.triangles.size() / 3) + " triangles");
+	// Calculate simple face normal (flat shading) using domain points
+	if (!domain->points.empty() && domain->points.size() >= 3) {
+		// Use the first three points to calculate face normal
+		const gp_Pnt& p0 = domain->points[0];
+		const gp_Pnt& p1 = domain->points[1];
+		const gp_Pnt& p2 = domain->points[2];
 
-	// Extract vertices and triangles for this face
-	std::set<int> usedVertexIndices;
+		// Calculate normal vector
+		gp_Vec v1(p0, p1);
+		gp_Vec v2(p0, p2);
+		gp_Vec normalVec = v1.Crossed(v2);
 
-	// Collect all vertex indices used by face triangles
-	// triangleIndices contains triangle indices (not vertex indices)
-	for (int triIdx : triangleIndices) {
-		// Each triangle has 3 vertex indices in the triangles array
-		int baseIdx = triIdx * 3;
-		if (baseIdx + 2 < static_cast<int>(fullMesh.triangles.size())) {
-			usedVertexIndices.insert(fullMesh.triangles[baseIdx]);
-			usedVertexIndices.insert(fullMesh.triangles[baseIdx + 1]);
-			usedVertexIndices.insert(fullMesh.triangles[baseIdx + 2]);
+		float nx = static_cast<float>(normalVec.X());
+		float ny = static_cast<float>(normalVec.Y());
+		float nz = static_cast<float>(normalVec.Z());
+
+		float length = sqrtf(nx*nx + ny*ny + nz*nz);
+		if (length > 0.0001f) {
+			nx /= length;
+			ny /= length;
+			nz /= length;
+		} else {
+			nx = 0.0f; ny = 0.0f; nz = 1.0f; // Default normal
 		}
-	}
 
-	LOG_INF_S("extractFaceMesh: Processing face " + std::to_string(faceId) + " with " +
-		std::to_string(triangleIndices.size()) + " triangles, " +
-		std::to_string(usedVertexIndices.size()) + " unique vertices");
-
-	// Create vertex mapping: original index -> new index
-	std::map<int, int> vertexMapping;
-	int newIndex = 0;
-	for (int origIdx : usedVertexIndices) {
-		vertexMapping[origIdx] = newIndex++;
-	}
-
-	// Extract vertices
-	faceMesh.vertices.reserve(usedVertexIndices.size());
-	for (int origIdx : usedVertexIndices) {
-		if (origIdx >= 0 && origIdx < static_cast<int>(fullMesh.vertices.size())) {
-			faceMesh.vertices.push_back(fullMesh.vertices[origIdx]);
-		}
-	}
-
-	// Extract normals if available - normals must be remapped to match new vertex indices
-	if (!fullMesh.normals.empty() && fullMesh.normals.size() == fullMesh.vertices.size()) {
-		faceMesh.normals.reserve(usedVertexIndices.size());
-		// Extract normals in the same order as vertices for proper indexing
-		for (int origIdx : usedVertexIndices) {
-			if (origIdx >= 0 && origIdx < static_cast<int>(fullMesh.normals.size())) {
-				faceMesh.normals.push_back(fullMesh.normals[origIdx]);
-			} else {
-				// Fallback: calculate face normal if vertex normal not available
-				// This should not happen in a properly constructed mesh
-				gp_Vec fallbackNormal(0, 0, 1); // Default normal
-				faceMesh.normals.push_back(fallbackNormal);
-				LOG_WRN_S("FaceSelectionListener: Missing normal for vertex " + std::to_string(origIdx));
-			}
+		// Use the same normal for all vertices (flat shading)
+		for (size_t i = 0; i < faceMesh.vertices.size(); ++i) {
+			faceMesh.normals.emplace_back(nx, ny, nz);
 		}
 	} else {
-		// If no vertex normals available, we could calculate face normals here
-		// But for now, we'll let the shader handle flat shading
-		LOG_WRN_S("FaceSelectionListener: No vertex normals available for face highlighting");
-	}
-
-	// Extract and remap triangles
-	faceMesh.triangles.reserve(triangleIndices.size() * 3);
-	for (int triIdx : triangleIndices) {
-		int baseIdx = triIdx * 3;
-		if (baseIdx + 2 < static_cast<int>(fullMesh.triangles.size())) {
-			int v0 = fullMesh.triangles[baseIdx];
-			int v1 = fullMesh.triangles[baseIdx + 1];
-			int v2 = fullMesh.triangles[baseIdx + 2];
-
-			auto it0 = vertexMapping.find(v0);
-			auto it1 = vertexMapping.find(v1);
-			auto it2 = vertexMapping.find(v2);
-
-			if (it0 != vertexMapping.end() && it1 != vertexMapping.end() && it2 != vertexMapping.end()) {
-				faceMesh.triangles.push_back(it0->second);
-				faceMesh.triangles.push_back(it1->second);
-				faceMesh.triangles.push_back(it2->second);
-			}
+		// Fallback: default normal
+		for (size_t i = 0; i < faceMesh.vertices.size(); ++i) {
+			faceMesh.normals.emplace_back(0.0f, 0.0f, 1.0f);
 		}
 	}
 
@@ -738,7 +722,7 @@ bool FaceSelectionListener::extractMeshFromCoinNode(SoSeparator* rootNode, Trian
 			faceVertices.push_back(indices[i]);
 			i++;
 		}
-		if (indices[i] == -1) i++; // Skip separator
+		if (i < numIndices && indices[i] == -1) i++; // Skip separator
 
 		// Triangulate the face (simple fan triangulation for convex faces)
 		if (faceVertices.size() >= 3) {
