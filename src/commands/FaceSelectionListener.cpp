@@ -645,7 +645,7 @@ bool FaceSelectionListener::extractFaceMesh(std::shared_ptr<OCCGeometry> geometr
 			nx /= length;
 			ny /= length;
 			nz /= length;
-		} else {
+			} else {
 			nx = 0.0f; ny = 0.0f; nz = 1.0f; // Default normal
 		}
 

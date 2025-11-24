@@ -183,9 +183,9 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			result.lineIndex = lineIndex;
 
 			// Edge picking - use line index as edge ID (domain system doesn't support edge mapping)
-			result.elementType = "Edge";
-			result.subElementName = "Edge" + std::to_string(lineIndex);
-			result.geometryEdgeId = lineIndex;
+					result.elementType = "Edge";
+					result.subElementName = "Edge" + std::to_string(lineIndex);
+					result.geometryEdgeId = lineIndex;
 			LOG_INF_S("PickingService - Picked edge (line " + std::to_string(lineIndex) +
 				") in geometry " + result.geometry->getName() + " (domain system)");
 
@@ -198,9 +198,9 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			result.vertexIndex = coordinateIndex;
 
 			// Vertex picking - use coordinate index as vertex ID (domain system doesn't support vertex mapping)
-			result.elementType = "Vertex";
-			result.subElementName = "Vertex" + std::to_string(coordinateIndex);
-			result.geometryVertexId = coordinateIndex;
+					result.elementType = "Vertex";
+					result.subElementName = "Vertex" + std::to_string(coordinateIndex);
+					result.geometryVertexId = coordinateIndex;
 			LOG_INF_S("PickingService - Picked vertex (coordinate " + std::to_string(coordinateIndex) +
 				") in geometry " + result.geometry->getName() + " (domain system)");
 

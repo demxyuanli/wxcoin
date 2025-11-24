@@ -282,10 +282,14 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 		std::vector<TopoDS_Face> allFaces;
 		extractAllFacesRecursive(shape, allFaces);
 
+		LOG_INF_S("OpenCASCADEProcessor::convertToMeshWithFaceMapping - Extracted " + 
+		          std::to_string(allFaces.size()) + " faces from shape");
+
 		faceMappings.clear();
 		faceMappings.reserve(allFaces.size());
 
 		int currentTriangleIndex = 0;
+		int facesWithTriangles = 0;
 
 		for (size_t faceIndex = 0; faceIndex < allFaces.size(); ++faceIndex) {
 			const TopoDS_Face& face = allFaces[faceIndex];
@@ -296,7 +300,15 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 
 			// Store face-triangle mapping
 			faceMappings.emplace_back(static_cast<int>(faceIndex), faceTriangleIndices);
+
+			if (!faceTriangleIndices.empty()) {
+				facesWithTriangles++;
+			}
 		}
+
+		LOG_INF_S("OpenCASCADEProcessor::convertToMeshWithFaceMapping - Built mappings for " +
+		          std::to_string(facesWithTriangles) + " faces with triangles out of " +
+		          std::to_string(allFaces.size()) + " total faces");
 
 		// Calculate normals if not already done
 		if (mesh.normals.empty() && !mesh.vertices.empty()) {
@@ -563,13 +575,21 @@ void OpenCASCADEProcessor::meshFaceWithIndexTracking(const TopoDS_Face& face, Tr
 	}
 	else {
 		// If no triangulation exists, create one
-		BRepMesh_IncrementalMesh mesher(face, params.deflection, params.relative, params.angularDeflection,
-			params.inParallel);
-		triangulation = BRep_Tool::Triangulation(face, location);
-		if (!triangulation.IsNull()) {
-			int startTriangleIndex = currentTriangleIndex;
-			extractTriangulationWithIndexTracking(triangulation, location, mesh, face.Orientation(), triangleIndices);
-			currentTriangleIndex += triangulation->NbTriangles();
+		try {
+			BRepMesh_IncrementalMesh mesher(face, params.deflection, params.relative, params.angularDeflection,
+				params.inParallel);
+			triangulation = BRep_Tool::Triangulation(face, location);
+			if (!triangulation.IsNull()) {
+				int startTriangleIndex = currentTriangleIndex;
+				extractTriangulationWithIndexTracking(triangulation, location, mesh, face.Orientation(), triangleIndices);
+				currentTriangleIndex += triangulation->NbTriangles();
+			} else {
+				LOG_WRN_S("meshFaceWithIndexTracking - Failed to create triangulation for face");
+			}
+		} catch (const std::exception& e) {
+			LOG_WRN_S("meshFaceWithIndexTracking - Exception creating triangulation: " + std::string(e.what()));
+		} catch (...) {
+			LOG_WRN_S("meshFaceWithIndexTracking - Unknown exception creating triangulation");
 		}
 	}
 }
@@ -686,8 +706,24 @@ void OpenCASCADEProcessor::extractTriangulationWithIndexTracking(const Handle(Po
 // TopExp_Explorer recursively traverses sub-shapes, but for nested compounds we need explicit recursion
 void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, std::vector<TopoDS_Face>& faces) {
 	if (shape.IsNull()) {
+		LOG_WRN_S("extractAllFacesRecursive - Shape is null");
 		return;
 	}
+
+	// Log shape type for debugging
+	const char* shapeTypeName = "UNKNOWN";
+	switch (shape.ShapeType()) {
+		case TopAbs_COMPOUND: shapeTypeName = "COMPOUND"; break;
+		case TopAbs_COMPSOLID: shapeTypeName = "COMPSOLID"; break;
+		case TopAbs_SOLID: shapeTypeName = "SOLID"; break;
+		case TopAbs_SHELL: shapeTypeName = "SHELL"; break;
+		case TopAbs_FACE: shapeTypeName = "FACE"; break;
+		case TopAbs_WIRE: shapeTypeName = "WIRE"; break;
+		case TopAbs_EDGE: shapeTypeName = "EDGE"; break;
+		case TopAbs_VERTEX: shapeTypeName = "VERTEX"; break;
+		case TopAbs_SHAPE: shapeTypeName = "SHAPE"; break;
+	}
+	LOG_INF_S("extractAllFacesRecursive - Shape type: " + std::string(shapeTypeName));
 
 	// Use IsSame() to track already added faces to avoid duplicates
 	// IsSame() compares both TShape and Location, which is more accurate than just TShape pointer
@@ -708,12 +744,43 @@ void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, s
 		}
 	};
 
-	// Extract all faces from the shape (TopExp_Explorer is recursive for direct sub-shapes)
-	// But we need to handle nested compounds explicitly
-	if (shape.ShapeType() == TopAbs_COMPOUND) {
-		// For compounds, recursively process each sub-shape
+	// Extract all faces from the shape
+	// TopExp_Explorer automatically handles recursion for COMPOUND, SOLID, SHELL, etc.
+	// For COMPOUND, we can directly traverse FACE and it will recursively find all faces
+	int faceCountBefore = static_cast<int>(faces.size());
+	for (TopExp_Explorer faceExp(shape, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+		addFaceIfNew(TopoDS::Face(faceExp.Current()));
+	}
+	int faceCountAfter = static_cast<int>(faces.size());
+	
+	if (faceCountAfter > faceCountBefore) {
+		LOG_INF_S("extractAllFacesRecursive - Extracted " + std::to_string(faceCountAfter - faceCountBefore) +
+		          " faces from " + std::string(shapeTypeName));
+	} else if (shape.ShapeType() == TopAbs_COMPOUND) {
+		// For COMPOUND, if no faces found with direct traversal, try alternative approach
+		LOG_WRN_S("extractAllFacesRecursive - No faces found with direct traversal, trying alternative approach");
+		
+		// Try traversing sub-shapes explicitly
+		int subShapeCount = 0;
 		for (TopExp_Explorer exp(shape, TopAbs_SHAPE); exp.More(); exp.Next()) {
+			subShapeCount++;
 			const TopoDS_Shape& subShape = exp.Current();
+			
+			const char* subShapeTypeName = "UNKNOWN";
+			switch (subShape.ShapeType()) {
+				case TopAbs_COMPOUND: subShapeTypeName = "COMPOUND"; break;
+				case TopAbs_COMPSOLID: subShapeTypeName = "COMPSOLID"; break;
+				case TopAbs_SOLID: subShapeTypeName = "SOLID"; break;
+				case TopAbs_SHELL: subShapeTypeName = "SHELL"; break;
+				case TopAbs_FACE: subShapeTypeName = "FACE"; break;
+				case TopAbs_WIRE: subShapeTypeName = "WIRE"; break;
+				case TopAbs_EDGE: subShapeTypeName = "EDGE"; break;
+				case TopAbs_VERTEX: subShapeTypeName = "VERTEX"; break;
+				case TopAbs_SHAPE: subShapeTypeName = "SHAPE"; break;
+			}
+			
+			int facesBeforeAlt = static_cast<int>(faces.size());
+			
 			if (subShape.ShapeType() == TopAbs_COMPOUND) {
 				// Recursively process nested compounds
 				extractAllFacesRecursive(subShape, faces);
@@ -731,11 +798,27 @@ void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, s
 					addFaceIfNew(TopoDS::Face(faceExp.Current()));
 				}
 			}
+			
+			int facesAfterAlt = static_cast<int>(faces.size());
+			if (facesAfterAlt > facesBeforeAlt) {
+				LOG_INF_S("extractAllFacesRecursive - Sub-shape " + std::to_string(subShapeCount) + 
+				          " (type: " + std::string(subShapeTypeName) + ") added " + 
+				          std::to_string(facesAfterAlt - facesBeforeAlt) + " faces");
+			}
 		}
-	} else {
+		LOG_INF_S("extractAllFacesRecursive - Alternative approach processed " + std::to_string(subShapeCount) + " sub-shapes");
+	}
+	
+	if (shape.ShapeType() != TopAbs_COMPOUND) {
 		// For non-compound shapes, TopExp_Explorer handles recursion automatically
+		int faceCountBefore = static_cast<int>(faces.size());
 		for (TopExp_Explorer faceExp(shape, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
 			addFaceIfNew(TopoDS::Face(faceExp.Current()));
 		}
+		int faceCountAfter = static_cast<int>(faces.size());
+		LOG_INF_S("extractAllFacesRecursive - Extracted " + std::to_string(faceCountAfter - faceCountBefore) +
+		          " faces from " + std::string(shapeTypeName));
 	}
+	
+	LOG_INF_S("extractAllFacesRecursive - Total faces extracted: " + std::to_string(faces.size()));
 }
