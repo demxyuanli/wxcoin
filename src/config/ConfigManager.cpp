@@ -4,6 +4,7 @@
 #include "config/Coin3DConfig.h"
 #include "config/ThemeManager.h"
 #include "config/SelectionColorConfig.h"
+#include "config/SelectionHighlightConfig.h"
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 #include <wx/ffile.h>
@@ -92,6 +93,9 @@ bool ConfigManager::initialize(const std::string& configFilePath) {
 
 	// Initialize Selection color configuration
 	SelectionColorConfig::getInstance().initialize(*this);
+
+	// Initialize Selection highlight configuration
+	SelectionHighlightConfigManager::getInstance().initialize(*this);
 
 	return true;
 }

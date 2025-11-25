@@ -82,6 +82,8 @@ namespace cmd {
 		ShowMeshEdges, // New: show mesh edges
 		ShowFaceNormals, // New: show face normals
 		FaceSelectionTool, // New: face selection tool
+		EdgeSelectionTool, // New: edge selection tool
+		VertexSelectionTool, // New: vertex selection tool
 		FaceQueryTool, // New: face query tool
 		ShowPointView, // New: show point view
 
@@ -107,6 +109,7 @@ namespace cmd {
 		RenderingSettings,
 		EdgeSettings,
 		LightingSettings,
+		SelectionHighlightConfig,
 		ToggleCoordinateSystem,
 		ToggleReferenceGrid,
 		ToggleChessboardGrid,
@@ -212,6 +215,8 @@ namespace cmd {
 			{CommandType::ShowMeshEdges, "SHOW_MESH_EDGES"},
 			{CommandType::ShowFaceNormals, "SHOW_FACE_NORMALS"},
 			{CommandType::FaceSelectionTool, "FACE_SELECTION_TOOL"},
+			{CommandType::EdgeSelectionTool, "EDGE_SELECTION_TOOL"},
+			{CommandType::VertexSelectionTool, "VERTEX_SELECTION_TOOL"},
 			{CommandType::FaceQueryTool, "FACE_QUERY_TOOL"},
 			{CommandType::ShowPointView, "SHOW_POINT_VIEW"},
 
@@ -231,6 +236,7 @@ namespace cmd {
 			{CommandType::MeshQualityDialog, "MESH_QUALITY_DIALOG"},
 			{CommandType::RenderingSettings, "RENDERING_SETTINGS"},
 			{CommandType::EdgeSettings, "EDGE_SETTINGS"},
+			{CommandType::SelectionHighlightConfig, "SELECTION_HIGHLIGHT_CONFIG"},
 			{CommandType::LightingSettings, "LIGHTING_SETTINGS"},
 			{CommandType::ToggleCoordinateSystem, "TOGGLE_COORDINATE_SYSTEM"},
 			{CommandType::ToggleReferenceGrid, "TOGGLE_REFERENCE_GRID"},
@@ -328,6 +334,8 @@ namespace cmd {
 			{"SHOW_MESH_EDGES", CommandType::ShowMeshEdges},
 			{"SHOW_FACE_NORMALS", CommandType::ShowFaceNormals},
 			{"FACE_SELECTION_TOOL", CommandType::FaceSelectionTool},
+			{"EDGE_SELECTION_TOOL", CommandType::EdgeSelectionTool},
+			{"VERTEX_SELECTION_TOOL", CommandType::VertexSelectionTool},
 			{"FACE_QUERY_TOOL", CommandType::FaceQueryTool},
 			{"SHOW_POINT_VIEW", CommandType::ShowPointView},
 
@@ -348,6 +356,7 @@ namespace cmd {
 			{"RENDERING_SETTINGS", CommandType::RenderingSettings},
 			{"EDGE_SETTINGS", CommandType::EdgeSettings},
 			{"LIGHTING_SETTINGS", CommandType::LightingSettings},
+			{"SELECTION_HIGHLIGHT_CONFIG", CommandType::SelectionHighlightConfig},
 			{"TOGGLE_COORDINATE_SYSTEM", CommandType::ToggleCoordinateSystem},
 			{"TOGGLE_REFERENCE_GRID", CommandType::ToggleReferenceGrid},
 			{"TOGGLE_CHESSBOARD_GRID", CommandType::ToggleChessboardGrid},

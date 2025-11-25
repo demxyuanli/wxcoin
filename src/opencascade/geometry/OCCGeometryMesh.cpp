@@ -249,8 +249,8 @@ void OCCGeometryMesh::optimizeMemory()
 void FaceDomain::toCoin3DFormat(std::vector<SbVec3f>& vertices, std::vector<int>& indices) const
 {
     if (isEmpty()) {
-        return;
-    }
+            return;
+        }
 
     // Reserve space
     vertices.reserve(vertices.size() + points.size());
@@ -459,32 +459,10 @@ void OCCGeometryMesh::buildCoinRepresentation(
                 std::vector<std::pair<int, std::vector<int>>> faceMappings;
                 TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
 
-                LOG_INF_S("OCCGeometryMesh::buildFaceDomainMapping - Got " + 
-                          std::to_string(faceMappings.size()) + " face mappings from processor");
-
                 // Compare face counts - this is critical for debugging
                 if (faces.size() != faceMappings.size()) {
                     LOG_WRN_S("Face count mismatch: found " + std::to_string(faces.size()) +
                              " faces but got " + std::to_string(faceMappings.size()) + " mappings");
-                }
-
-                // Check if faceMappings is empty
-                if (faceMappings.empty()) {
-                    LOG_ERR_S(std::string("OCCGeometryMesh::buildFaceDomainMapping - faceMappings is empty! ") +
-                             "Found " + std::to_string(faces.size()) + " faces but no mappings generated");
-                } else {
-                    // Count faces with triangles
-                    int facesWithTriangles = 0;
-                    int totalTriangles = 0;
-                    for (const auto& [faceId, triangleIndices] : faceMappings) {
-                        if (!triangleIndices.empty()) {
-                            facesWithTriangles++;
-                            totalTriangles += static_cast<int>(triangleIndices.size());
-                        }
-                    }
-                    LOG_INF_S("OCCGeometryMesh::buildFaceDomainMapping - " +
-                             std::to_string(facesWithTriangles) + " faces have triangles, " +
-                             std::to_string(totalTriangles) + " total triangles");
                 }
 
                 // ===== Build Face Domains =====
@@ -862,7 +840,7 @@ void OCCGeometryMesh::buildCoinRepresentation(
             m_faceDomains.clear();
             m_triangleSegments.clear();
             m_boundaryTriangles.clear();
-
+        
             // Extract all faces from the shape using recursive traversal
             std::vector<TopoDS_Face> faces;
 
@@ -913,32 +891,10 @@ void OCCGeometryMesh::buildCoinRepresentation(
                 std::vector<std::pair<int, std::vector<int>>> faceMappings;
                 TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
 
-                LOG_INF_S("OCCGeometryMesh::buildFaceDomainMapping - Got " + 
-                          std::to_string(faceMappings.size()) + " face mappings from processor");
-
                 // Compare face counts - this is critical for debugging
                 if (faces.size() != faceMappings.size()) {
                     LOG_WRN_S("Face count mismatch: found " + std::to_string(faces.size()) +
                              " faces but got " + std::to_string(faceMappings.size()) + " mappings");
-                }
-
-                // Check if faceMappings is empty
-                if (faceMappings.empty()) {
-                    LOG_ERR_S(std::string("OCCGeometryMesh::buildFaceDomainMapping - faceMappings is empty! ") +
-                             "Found " + std::to_string(faces.size()) + " faces but no mappings generated");
-                } else {
-                    // Count faces with triangles
-                    int facesWithTriangles = 0;
-                    int totalTriangles = 0;
-                    for (const auto& [faceId, triangleIndices] : faceMappings) {
-                        if (!triangleIndices.empty()) {
-                            facesWithTriangles++;
-                            totalTriangles += static_cast<int>(triangleIndices.size());
-                        }
-                    }
-                    LOG_INF_S("OCCGeometryMesh::buildFaceDomainMapping - " +
-                             std::to_string(facesWithTriangles) + " faces have triangles, " +
-                             std::to_string(totalTriangles) + " total triangles");
                 }
 
                 // ===== Build Face Domains =====

@@ -42,6 +42,7 @@
 #include "RenderingSettingsListener.h"
 #include "MeshQualityDialogListener.h"
 #include "CoordinateSystemVisibilityListener.h"
+#include "SelectionHighlightConfigListener.h"
 #include "ShowOriginalEdgesListener.h"
 #include "ShowFeatureEdgesListener.h"
 #include "ShowMeshEdgesListener.h"
@@ -177,6 +178,8 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::ShowFaceNormals, showFaceNormalsListener);
 	m_listenerManager->registerListener(cmd::CommandType::FaceQueryTool, faceQueryCommandListener);
 	m_listenerManager->registerListener(cmd::CommandType::FaceSelectionTool, faceSelectionCommandListener);
+	m_listenerManager->registerListener(cmd::CommandType::EdgeSelectionTool, faceSelectionCommandListener);
+	m_listenerManager->registerListener(cmd::CommandType::VertexSelectionTool, faceSelectionCommandListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleWireframe, showWireFrameListener);
 
 	auto textureModeDecalListener = std::make_shared<TextureModeDecalListener>(this, m_occViewer);
@@ -211,6 +214,7 @@ void FlatFrame::setupCommandSystem() {
 	auto edgeSettingsListener = std::make_shared<EdgeSettingsListener>(this, m_occViewer);
 	auto lightingSettingsListener = std::make_shared<LightingSettingsListener>(this);
 	auto coordinateSystemVisibilityListener = std::make_shared<CoordinateSystemVisibilityListener>(this, m_canvas->getSceneManager());
+	auto selectionHighlightConfigListener = std::make_shared<SelectionHighlightConfigListener>(this);
 	auto referenceGridToggleListener = std::make_shared<ReferenceGridToggleListener>(m_canvas->getSceneManager());
 	auto chessboardGridToggleListener = std::make_shared<ChessboardGridToggleListener>(m_canvas->getSceneManager());
 	auto showPointViewListener = std::make_shared<ShowPointViewListener>(m_occViewer, m_canvas->getRenderingEngine());
@@ -231,6 +235,7 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::RenderingSettings, renderingSettingsListener);
 	m_listenerManager->registerListener(cmd::CommandType::EdgeSettings, edgeSettingsListener);
 	m_listenerManager->registerListener(cmd::CommandType::LightingSettings, lightingSettingsListener);
+	m_listenerManager->registerListener(cmd::CommandType::SelectionHighlightConfig, selectionHighlightConfigListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleCoordinateSystem, coordinateSystemVisibilityListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleReferenceGrid, referenceGridToggleListener);
 	m_listenerManager->registerListener(cmd::CommandType::ToggleChessboardGrid, chessboardGridToggleListener);

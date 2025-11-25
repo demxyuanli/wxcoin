@@ -42,12 +42,14 @@ add_library(UIDialogRendering STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/RenderingSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LightingSettingsDialog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PointViewDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SelectionHighlightConfigDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/RenderingSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/LightingSettingsDialog.h
     ${CMAKE_SOURCE_DIR}/include/PointViewDialog.h
+    ${CMAKE_SOURCE_DIR}/include/SelectionHighlightConfigDialog.h
 )
 target_include_directories(UIDialogRendering PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogRendering PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogRendering PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets CADCommands ${wxWidgets_LIBRARIES})
 set_target_properties(UIDialogRendering PROPERTIES FOLDER "UI")
 
 add_library(UIDialogEdges STATIC

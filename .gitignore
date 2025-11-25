@@ -42,3 +42,5 @@ backup/EdgeComponent.h
 backup/OCCGeometry_original.cpp.bak
 backup/OCCGeometry.cpp.old
 /.gitignore
+/.vs
+/.vs

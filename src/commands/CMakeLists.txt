@@ -66,9 +66,13 @@ set(COMMANDS_SOURCES
     FaceQueryCommandListener.cpp
     FaceSelectionListener.cpp
     FaceSelectionCommandListener.cpp
+    EdgeSelectionListener.cpp
+    VertexSelectionListener.cpp
+    BaseSelectionListener.cpp
     SliceToggleListener.cpp
     DockLayoutConfigListener.cpp
     SplitViewToggleListener.cpp
+    SelectionHighlightConfigListener.cpp
 )
 
 set(COMMANDS_HEADERS
@@ -139,11 +143,15 @@ set(COMMANDS_HEADERS
     ${CMAKE_SOURCE_DIR}/include/FaceQueryCommandListener.h
     ${CMAKE_SOURCE_DIR}/include/FaceSelectionListener.h
     ${CMAKE_SOURCE_DIR}/include/FaceSelectionCommandListener.h
+    ${CMAKE_SOURCE_DIR}/include/EdgeSelectionListener.h
+    ${CMAKE_SOURCE_DIR}/include/VertexSelectionListener.h
+    ${CMAKE_SOURCE_DIR}/include/BaseSelectionListener.h
     ${CMAKE_SOURCE_DIR}/include/SliceToggleListener.h
     ${CMAKE_SOURCE_DIR}/include/ExplodeConfigListener.h
     ${CMAKE_SOURCE_DIR}/include/ToggleOutlineListener.h
     ${CMAKE_SOURCE_DIR}/include/DockLayoutConfigListener.h
     ${CMAKE_SOURCE_DIR}/include/SplitViewToggleListener.h
+    ${CMAKE_SOURCE_DIR}/include/SelectionHighlightConfigListener.h
 )
 
 # Create command static library

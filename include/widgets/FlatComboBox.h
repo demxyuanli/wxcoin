@@ -343,6 +343,10 @@ protected:
 	void OnMouseMove(wxMouseEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
 
+	// Override to control dismissal behavior
+	bool ProcessLeftDown(wxMouseEvent& event) override;
+	void OnDismiss() override;
+
 	void DrawItems(wxDC& dc);
 	int HitTest(const wxPoint& pos) const;
 	void SetHoverItem(int item);

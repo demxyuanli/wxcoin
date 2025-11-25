@@ -24,6 +24,7 @@ public:
 	void enterPickingState();
 	void setCustomInputState(std::unique_ptr<InputState> state);
 	bool isCustomInputStateActive() const { return m_currentState == m_customState.get(); }
+	InputState* getCurrentInputState() const { return m_currentState; }
 
 	// Event handlers
 	void onMouseButton(wxMouseEvent& event);

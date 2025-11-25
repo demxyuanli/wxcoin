@@ -134,6 +134,7 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 	}
 
 	result.geometry = it->second;
+	result.pickedPath = p; // Save path for edge/vertex extraction
 
 	// Try to get element information from the picked point detail
 	const SoDetail* detail = picked->getDetail();

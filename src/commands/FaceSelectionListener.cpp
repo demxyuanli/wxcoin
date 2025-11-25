@@ -1,16 +1,19 @@
 #include "FaceSelectionListener.h"
+#include "BaseSelectionListener.h"
 #include "mod/Selection.h"
-#include "viewer/PickingService.h"
 #include "logger/Logger.h"
 #include "Canvas.h"
 #include "OCCGeometry.h"
 #include "OCCViewer.h"
 #include "rendering/GeometryProcessor.h"
+#include "config/SelectionHighlightConfig.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoSwitch.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
+#include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoNormal.h>
 #include <Inventor/nodes/SoNormalBinding.h>
 #include <Inventor/nodes/SoShapeHints.h>
@@ -27,44 +30,18 @@
 #include <unordered_map>
 
 FaceSelectionListener::FaceSelectionListener(Canvas* canvas, PickingService* pickingService, OCCViewer* occViewer)
-	: m_canvas(canvas), m_pickingService(pickingService), m_occViewer(occViewer)
+	: BaseSelectionListener(canvas, pickingService, occViewer)
 	, m_highlightedGeometry(nullptr), m_highlightedFaceId(-1)
 	, m_selectedGeometry(nullptr), m_selectedFaceId(-1)
 	, m_highlightNode(nullptr), m_selectedNode(nullptr)
-	, m_isAlive(std::make_shared<bool>(true))
 {
 	LOG_INF_S("FaceSelectionListener created");
-
-	// Register selection observer to handle preselection and selection changes
-	// Use weak reference to prevent accessing destroyed object
-	auto& selection = mod::Selection::getInstance();
-	auto isAlive = m_isAlive;
-	selection.addObserver([this, isAlive](const mod::SelectionChange& change) {
-		// Check if object is still alive before accessing
-		if (!*isAlive) {
-			return; // Object has been destroyed, ignore callback
-		}
-		this->onSelectionChanged(change);
-	});
 }
 
 FaceSelectionListener::~FaceSelectionListener()
 {
-	// Mark object as destroyed first to prevent callbacks from accessing it
-	if (m_isAlive) {
-		*m_isAlive = false;
-	}
-
 	clearHighlight();
 	clearSelection();
-
-	// Clean up cache
-	for (auto& pair : m_highlightCache) {
-		if (pair.second) {
-			pair.second->unref();
-		}
-	}
-	m_highlightCache.clear();
 }
 
 void FaceSelectionListener::onMouseButton(wxMouseEvent& event) {
@@ -97,72 +74,43 @@ void FaceSelectionListener::onMouseButton(wxMouseEvent& event) {
 
 	PickingResult result = m_pickingService->pickDetailedAtScreen(mousePos);
 
-	if (result.geometry && !result.subElementName.empty()) {
+	if (result.geometry && !result.subElementName.empty() && result.elementType == "Face" && result.geometryFaceId >= 0) {
 		// Use Selection system to manage selection
 		auto& selection = mod::Selection::getInstance();
 		selection.setSelection(result.geometry->getName(), result.subElementName, 
 			result.elementType, result.x, result.y, result.z);
-		bool selectionSuccess = true; // setSelection always succeeds (it clears and sets)
 		
-		// Also update local state for backward compatibility
-		// Note: Currently only Face highlighting is implemented
-		bool highlightSuccess = false;
-		if (result.elementType == "Face" && result.geometryFaceId >= 0) {
-			selectFace(result.geometry, result.geometryFaceId);
-			highlightSuccess = true;
-		} else if (result.elementType == "Edge" || result.elementType == "Vertex") {
-			// TODO: Implement edge and vertex highlighting
-			LOG_INF_S("FaceSelectionListener::onMouseButton - " + result.elementType +
-				" selection not yet implemented for highlighting");
-		}
+		// Update local state
+		selectFace(result.geometry, result.geometryFaceId);
 		
 		LOG_INF_S("FaceSelectionListener::onMouseButton - Selected " + result.subElementName + 
 			" in geometry " + result.geometry->getName());
 		
 		// Show information message for selection result
 		if (m_canvas) {
-			wxString elementInfo;
-			if (result.elementType == "Face") {
-				elementInfo = wxString::Format("Face ID: %d", result.geometryFaceId);
-			} else if (result.elementType == "Edge") {
-				elementInfo = wxString::Format("Edge Index: %d", result.lineIndex);
-			} else if (result.elementType == "Vertex") {
-				elementInfo = wxString::Format("Vertex Index: %d", result.vertexIndex);
-			} else {
-				elementInfo = "Unknown element";
-			}
-
 			wxString msg = wxString::Format(
-				"Selection Operation:\n\n"
-				"Status: %s\n"
+				"Face Selection:\n\n"
 				"Geometry: %s\n"
-				"Element: %s\n"
-				"Type: %s\n"
-				"%s\n"
-				"Position: (%.3f, %.3f, %.3f)\n\n"
-				"Selection System: %s\n"
-				"Highlight Manager: %s",
-				(selectionSuccess && (highlightSuccess || result.elementType != "Face")) ? "SUCCESS" : "PARTIAL",
+				"Face: %s\n"
+				"Face ID: %d\n"
+				"Position: (%.3f, %.3f, %.3f)",
 				result.geometry->getName(),
 				result.subElementName,
-				result.elementType.empty() ? "Unknown" : result.elementType,
-				elementInfo,
-				result.x, result.y, result.z,
-				selectionSuccess ? "OK" : "FAILED",
-				(highlightSuccess || result.elementType != "Face") ? "OK" : "FAILED"
+				result.geometryFaceId,
+				result.x, result.y, result.z
 			);
-			wxMessageBox(msg, "Element Selection Result", wxOK | wxICON_INFORMATION, m_canvas);
+			wxMessageBox(msg, "Face Selection Result", wxOK | wxICON_INFORMATION, m_canvas);
 		}
 	} else {
-		// Clicked on empty space, clear selection
+		// Clicked on empty space or non-face element, clear selection
 		auto& selection = mod::Selection::getInstance();
 		selection.clearSelection();
 		clearSelection();
 		LOG_INF_S("FaceSelectionListener::onMouseButton - Cleared selection");
 		
 		// Show information message for picking failure
-		if (m_canvas) {
-			wxMessageBox("No geometry element picked at this position.\n\n"
+		if (m_canvas && (!result.geometry || result.elementType != "Face")) {
+			wxMessageBox("No face picked at this position.\n\n"
 				"Please click on a visible face to select it.",
 				"Picking Info", wxOK | wxICON_INFORMATION, m_canvas);
 		}
@@ -190,9 +138,8 @@ void FaceSelectionListener::onMouseMotion(wxMouseEvent& event) {
 		int changed = selection.setPreselect(result.geometry->getName(), result.subElementName,
 			result.elementType, result.x, result.y, result.z);
 		
-		// Also update local state for backward compatibility
-		bool highlightSuccess = false;
-		if (result.geometryFaceId >= 0) {
+		// Only handle face preselection
+		if (result.elementType == "Face" && result.geometryFaceId >= 0) {
 			// Get triangle count for logging
 			auto faceTriangles = result.geometry->getTrianglesForGeometryFace(result.geometryFaceId);
 			int triangleCount = faceTriangles.size();
@@ -200,38 +147,13 @@ void FaceSelectionListener::onMouseMotion(wxMouseEvent& event) {
 			// Check if this is a different face than currently highlighted
 			if (!m_highlightedGeometry || m_highlightedGeometry != result.geometry || 
 				m_highlightedFaceId != result.geometryFaceId) {
+				clearHighlight();
 				highlightFace(result.geometry, result.geometryFaceId);
-				highlightSuccess = true;
 
 				LOG_INF_S("FaceSelectionListener::onMouseMotion - Highlighting face " +
 					std::to_string(result.geometryFaceId) + " with " + std::to_string(triangleCount) +
 					" triangles in geometry " + result.geometry->getName());
 			}
-		}
-		
-		// Show information message for preselection (only on change, to avoid spam)
-		if (changed > 0 && m_canvas) {
-			wxString msg = wxString::Format(
-				"Preselection (Hover):\n\n"
-				"Status: %s\n"
-				"Geometry: %s\n"
-				"Element: %s\n"
-				"Type: %s\n"
-				"Face ID: %d\n"
-				"Position: (%.3f, %.3f, %.3f)\n\n"
-				"Selection System: OK\n"
-				"Highlight Manager: %s",
-				highlightSuccess ? "SUCCESS" : "FAILED",
-				result.geometry->getName(),
-				result.subElementName,
-				result.elementType.empty() ? "Unknown" : result.elementType,
-				result.geometryFaceId,
-				result.x, result.y, result.z,
-				highlightSuccess ? "OK" : "FAILED"
-			);
-			// Use a less intrusive notification for hover (could be a tooltip or status bar instead)
-			// For now, we'll log it but not show a message box to avoid spam
-			LOG_INF_S("FaceSelectionListener::onMouseMotion - Preselected: " + result.subElementName);
 		}
 	} else {
 		// Not hovering over any face, clear preselection
@@ -245,9 +167,6 @@ void FaceSelectionListener::onMouseMotion(wxMouseEvent& event) {
 	event.Skip();
 }
 
-void FaceSelectionListener::onMouseWheel(wxMouseEvent& event) {
-	event.Skip();
-}
 
 void FaceSelectionListener::highlightFace(std::shared_ptr<OCCGeometry> geometry, int faceId) {
 	if (!geometry || faceId < 0) {
@@ -492,24 +411,37 @@ SoSeparator* FaceSelectionListener::createHighlightGeometry(std::shared_ptr<OCCG
 	drawStyle->lineWidth = 1.0f;
 	highlightSeparator->addChild(drawStyle);
 
-	// Add highlight material
+	// Add highlight material - use configured colors
 	SoMaterial* material = new SoMaterial;
+	auto& configManager = SelectionHighlightConfigManager::getInstance();
+	const auto& faceHighlight = configManager.getFaceHighlight();
+	
 	if (isSelection) {
-		// Selection: brighter, more opaque blue-green
-		material->diffuseColor.setValue(0.2f, 0.8f, 1.0f);  // Cyan-blue
-		material->ambientColor.setValue(0.1f, 0.4f, 0.5f);
-		material->specularColor.setValue(0.3f, 0.9f, 1.0f);
-		material->emissiveColor.setValue(0.1f, 0.3f, 0.4f);
-		material->shininess.setValue(0.8f);
-		material->transparency.setValue(0.2f);  // Less transparent for selection
+		// Selection: use configured selection colors
+		const auto& sel = faceHighlight.selectionDiffuse;
+		const auto& amb = faceHighlight.selectionAmbient;
+		const auto& spec = faceHighlight.selectionSpecular;
+		const auto& emis = faceHighlight.selectionEmissive;
+		
+		material->diffuseColor.setValue(sel.r, sel.g, sel.b);
+		material->ambientColor.setValue(amb.r, amb.g, amb.b);
+		material->specularColor.setValue(spec.r, spec.g, spec.b);
+		material->emissiveColor.setValue(emis.r, emis.g, emis.b);
+		material->shininess.setValue(faceHighlight.selectionShininess);
+		material->transparency.setValue(faceHighlight.selectionTransparency);
 	} else {
-		// Preselection (hover): semi-transparent yellow/orange
-		material->diffuseColor.setValue(1.0f, 0.8f, 0.2f);  // Yellow-orange
-		material->ambientColor.setValue(0.5f, 0.4f, 0.1f);
-		material->specularColor.setValue(1.0f, 0.9f, 0.3f);
-		material->emissiveColor.setValue(0.3f, 0.2f, 0.05f);  // Slight glow
-		material->shininess.setValue(0.7f);
-		material->transparency.setValue(0.3f);  // Semi-transparent
+		// Preselection (hover): use configured hover colors
+		const auto& hover = faceHighlight.hoverDiffuse;
+		const auto& amb = faceHighlight.hoverAmbient;
+		const auto& spec = faceHighlight.hoverSpecular;
+		const auto& emis = faceHighlight.hoverEmissive;
+		
+		material->diffuseColor.setValue(hover.r, hover.g, hover.b);
+		material->ambientColor.setValue(amb.r, amb.g, amb.b);
+		material->specularColor.setValue(spec.r, spec.g, spec.b);
+		material->emissiveColor.setValue(emis.r, emis.g, emis.b);
+		material->shininess.setValue(faceHighlight.hoverShininess);
+		material->transparency.setValue(faceHighlight.hoverTransparency);
 	}
 	highlightSeparator->addChild(material);
 

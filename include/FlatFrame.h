@@ -105,6 +105,8 @@ enum {
 	ID_SHOW_FACE_NORMALS, // New: show face normals
 	ID_FACE_QUERY_TOOL, // New: face query tool
 	ID_FACE_SELECTION_TOOL, // New: face selection tool for editing
+	ID_EDGE_SELECTION_TOOL, // New: edge selection tool for editing
+	ID_VERTEX_SELECTION_TOOL, // New: vertex selection tool for editing
 	ID_SHOW_POINT_VIEW, // New: show point view
 	ID_TOGGLE_SLICE,
 	ID_TOGGLE_OUTLINE, // New: toggle outline display
@@ -119,6 +121,7 @@ enum {
 	ID_EDGE_SETTINGS,
 	ID_OUTLINE_SETTINGS,
 	ID_LIGHTING_SETTINGS,
+	ID_SELECTION_HIGHLIGHT_CONFIG,
 	ID_DOCK_LAYOUT_CONFIG,
 	ID_TEST_WIDGETS, // New: test widgets window
 	ID_SAVE_AS,

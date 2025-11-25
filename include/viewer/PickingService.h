@@ -7,6 +7,7 @@
 class OCCGeometry;
 class SceneManager;
 class SoSeparator;
+class SoPath;
 
 /**
  * @brief Detailed picking result containing geometry and face information
@@ -22,6 +23,7 @@ struct PickingResult {
 	std::string subElementName; // Sub-element name like "Face5", "Edge12", "Vertex3" (FreeCAD style)
 	std::string elementType; // Type of element: "Face", "Edge", "Vertex", or empty
 	float x = 0.0f, y = 0.0f, z = 0.0f; // 3D coordinates where picking occurred
+	SoPath* pickedPath = nullptr; // Path to the picked node (for edge/vertex extraction)
 
 	PickingResult() = default;
 	PickingResult(std::shared_ptr<OCCGeometry> geom, int triIdx = -1, int faceId = -1)

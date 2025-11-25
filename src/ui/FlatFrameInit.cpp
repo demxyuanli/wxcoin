@@ -527,11 +527,14 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	editorPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* editorButtonBar = new FlatUIButtonBar(editorPanel);
 	editorButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	editorButtonBar->AddToggleButtonWithSVG(ID_FACE_SELECTION_TOOL, "Face Selection", "select", wxSize(16, 16), false, "Select geometry faces - hover to highlight, click to select, right-click for menu");
-	editorButtonBar->AddToggleButtonWithSVG(ID_FACE_QUERY_TOOL, "Face Query", "search", wxSize(16, 16), false, "Activate face query tool - left-click or middle-click on faces to view information");
+	editorButtonBar->AddToggleButtonWithSVG(ID_FACE_SELECTION_TOOL, "Face Selection", "select-face", wxSize(16, 16), false, "Select geometry faces - hover to highlight, click to select, right-click for menu");
+	editorButtonBar->AddToggleButtonWithSVG(ID_EDGE_SELECTION_TOOL, "Edge Selection", "select-edge", wxSize(16, 16), false, "Select geometry edges - hover to highlight, click to select original edges");
+	editorButtonBar->AddToggleButtonWithSVG(ID_VERTEX_SELECTION_TOOL, "Vertex Selection", "select-vertex", wxSize(16, 16), false, "Select geometry vertices - hover to highlight, click to select vertices");
+	editorButtonBar->AddToggleButtonWithSVG(ID_FACE_QUERY_TOOL, "Face Query", "query-face", wxSize(16, 16), false, "Activate face query tool - left-click or middle-click on faces to view information");
+	editorButtonBar->AddButtonWithSVG(ID_SELECTION_HIGHLIGHT_CONFIG, "Selection Highlight Config", "settings-highlight", wxSize(16, 16), nullptr, "Configure selection highlight colors and parameters");
 	editorPanel->AddButtonBar(editorButtonBar, 0, wxEXPAND | wxALL, 5);
 	editorPage->AddPanel(editorPanel);
-	m_ribbon->AddPage(editorPage);
+	m_ribbon->AddPage(editorPage); 
 	
 	// Add Docking page
 	FlatUIPage* dockingPage = new FlatUIPage(m_ribbon, "Docking");

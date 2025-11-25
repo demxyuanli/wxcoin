@@ -4,7 +4,7 @@
 #include "InputManager.h"
 
 /**
- * @brief Command listener for face selection tool activation
+ * @brief Command listener for selection tool activation (face, edge, vertex)
  */
 class FaceSelectionCommandListener : public CommandListener
 {
@@ -17,6 +17,11 @@ public:
 	std::string getListenerName() const override;
 
 private:
+	void saveGeometryDisplayStates();
+	void restoreGeometryDisplayStates();
+	void setGeometryDisplayForEdgeSelection();
+	void setGeometryDisplayForVertexSelection();
+
 	InputManager* m_inputManager;
 	class PickingService* m_pickingService;
 	class OCCViewer* m_occViewer;
@@ -24,6 +29,10 @@ private:
 	bool m_savedCoordinateSystemVisibility;
 	bool m_originalEdgesStateSaved;
 	bool m_savedOriginalEdgesState;
+	bool m_geometryDisplayStatesSaved;
+	std::unordered_map<std::string, bool> m_savedFacesVisibleStates;
+	std::unordered_map<std::string, bool> m_savedVerticesVisibleStates;
+	std::unordered_map<std::string, bool> m_savedPointViewStates;
 };
 
 

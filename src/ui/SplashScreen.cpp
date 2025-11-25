@@ -46,8 +46,9 @@ public:
 private:
     void OnPaint(wxPaintEvent&) {
         wxAutoBufferedPaintDC dc(this);
-        dc.SetBackground(wxBrush(wxColour(0, 0, 0, 0)));
-        dc.Clear();
+        // Note: Do not call dc.Clear() for transparent backgrounds on Windows
+        // as it may fill transparent areas with black before the bitmap is drawn
+        // The wxBG_STYLE_PAINT style and OnEraseBackground handler prevent background erasure
         if (m_bitmap.IsOk()) {
             dc.DrawBitmap(m_bitmap, 0, 0, true);
         }

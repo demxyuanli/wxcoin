@@ -607,7 +607,9 @@ void FlatComboBox::ShowDropdown()
 
 		m_popup->SetSize(popupSize);
 		m_popup->Move(pos);
-		m_popup->Show();
+		// Use Popup() instead of Show() for wxPopupTransientWindow
+		// Pass 'this' as focus window so popup stays open when focus is on combo box or popup
+		m_popup->Popup(this);
 
 		// Send dropdown opened event
 		wxCommandEvent event(wxEVT_FLAT_COMBO_BOX_DROPDOWN_OPENED, this->GetId());
@@ -726,6 +728,8 @@ FlatComboBoxPopup::FlatComboBoxPopup(FlatComboBox* parent)
 {
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 	SetDoubleBuffered(true);
+	// Ensure popup can receive focus for keyboard navigation
+	SetCanFocus(true);
 }
 
 FlatComboBoxPopup::~FlatComboBoxPopup()
@@ -847,9 +851,10 @@ void FlatComboBoxPopup::OnMouseDown(wxMouseEvent& event)
 			m_selection = item;
 			if (m_parent) {
 				m_parent->SetSelection(item);
+				// Use HideDropdown() to ensure proper state synchronization
+				// This will also call Hide() on the popup
+				m_parent->HideDropdown();
 			}
-			Refresh();
-			Hide();
 			return;
 		}
 
@@ -870,15 +875,19 @@ void FlatComboBoxPopup::OnKeyDown(wxKeyEvent& event)
 {
 	switch (event.GetKeyCode()) {
 	case WXK_ESCAPE:
-		Hide();
+		if (m_parent) {
+			m_parent->HideDropdown();
+		} else {
+			Hide();
+		}
 		break;
 	case WXK_RETURN:
 	case WXK_SPACE:
 		if (m_selection >= 0 && m_selection < static_cast<int>(m_items.size()) && m_parent) {
-			wxCommandEvent evt(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, m_parent->GetId());
-			evt.SetString(m_items[m_selection].text);
-			m_parent->ProcessWindowEvent(evt);
-			Hide();
+			// Set selection first
+			m_parent->SetSelection(m_selection);
+			// Use HideDropdown() to ensure proper state synchronization
+			m_parent->HideDropdown();
 		}
 		break;
 	case WXK_UP:
@@ -896,6 +905,33 @@ void FlatComboBoxPopup::OnKeyDown(wxKeyEvent& event)
 	default:
 		event.Skip();
 		break;
+	}
+}
+
+bool FlatComboBoxPopup::ProcessLeftDown(wxMouseEvent& event)
+{
+	// Check if the click is inside the popup window
+	wxPoint pos = event.GetPosition();
+	wxRect clientRect = GetClientRect();
+	
+	if (clientRect.Contains(pos)) {
+		// Click is inside the popup - prevent auto-dismissal
+		// The event will still be processed normally by OnMouseDown handler
+		return true; // Return true to prevent dismissal
+	}
+	
+	// Click is outside the popup - allow dismissal
+	return false; // Return false to allow dismissal
+}
+
+void FlatComboBoxPopup::OnDismiss()
+{
+	// Notify parent that popup was dismissed
+	// This is called automatically by wxPopupTransientWindow when the popup is dismissed
+	if (m_parent && m_parent->IsDropdownShown()) {
+		// Only update parent state if dropdown is still marked as shown
+		// This prevents double-processing when Hide() is called explicitly
+		m_parent->HideDropdown();
 	}
 }
 

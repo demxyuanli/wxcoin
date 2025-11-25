@@ -11,6 +11,7 @@ set(CONFIG_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/LightingConfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FontManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SelectionColorConfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SelectionHighlightConfig.cpp
 )
 
 set(CONFIG_HEADERS
@@ -26,6 +27,7 @@ set(CONFIG_HEADERS
     ${CMAKE_SOURCE_DIR}/include/config/ThemeUIInterface.h
     ${CMAKE_SOURCE_DIR}/include/config/FontManager.h
     ${CMAKE_SOURCE_DIR}/include/config/SelectionColorConfig.h
+    ${CMAKE_SOURCE_DIR}/include/config/SelectionHighlightConfig.h
 )
 
 # Create config static library
