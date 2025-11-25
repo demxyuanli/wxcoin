@@ -20,6 +20,7 @@ set(WIDGETS_SRC
     ${CMAKE_CURRENT_SOURCE_DIR}/FlatMessagePanel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FramelessModalPopup.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WebViewPanel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ButtonGroup.cpp
 
     # Modern Docking System
     ${CMAKE_CURRENT_SOURCE_DIR}/ModernDockManager.cpp
@@ -62,6 +63,7 @@ set(WIDGETS_HDRS
     ${CMAKE_SOURCE_DIR}/include/widgets/FlatMessagePanel.h
     ${CMAKE_SOURCE_DIR}/include/widgets/FramelessModalPopup.h
     ${CMAKE_SOURCE_DIR}/include/WebViewPanel.h
+    ${CMAKE_SOURCE_DIR}/include/widgets/ButtonGroup.h
 
     # Modern Docking System
     ${CMAKE_SOURCE_DIR}/include/widgets/ModernDockManager.h

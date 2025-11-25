@@ -12,6 +12,7 @@
 #include "flatui/FlatUICustomControl.h"
 #include "flatui/UIHierarchyDebugger.h"
 #include "widgets/FlatWidgetsExampleDialog.h"
+#include "widgets/ButtonGroup.h"
 #include "config/ThemeManager.h"
 #include "config/SvgIconManager.h"
 #include <wx/display.h>
@@ -241,7 +242,8 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_leftSplitter(nullptr),
 	m_commandManager(new CommandManager()),
 	m_prevFeatureEdgesRunning(false),
-	m_featureProgressHoldTicks(0)
+	m_featureProgressHoldTicks(0),
+	m_renderModeButtonGroup(nullptr)
 {
 	wxInitAllImageHandlers();
 	// PlatUIFrame::InitFrameStyle() is called by base constructor.
@@ -927,4 +929,49 @@ void FlatFrame::OnPointViewToggled(ViewRefreshManager::RefreshReason reason)
 			appendMessage(wxString::Format("Point view %s", isEnabled ? "enabled" : "disabled"));
 		}
 	}
+}
+
+void FlatFrame::UpdateRenderModeButtonState()
+{
+	if (!m_renderModeButtonGroup) {
+		return;
+	}
+
+	const RenderingConfig& renderingConfig = RenderingConfig::getInstance();
+	const auto displaySettings = renderingConfig.getDisplaySettings();
+	const auto shadingSettings = renderingConfig.getShadingSettings();
+
+	// Determine which button should be selected based on current rendering config
+	int selectedRenderModeId = ID_RENDER_MODE_SHADED;
+	switch (displaySettings.displayMode) {
+	case RenderingConfig::DisplayMode::NoShading:
+		selectedRenderModeId = ID_RENDER_MODE_NO_SHADING;
+		break;
+	case RenderingConfig::DisplayMode::Points:
+		selectedRenderModeId = ID_RENDER_MODE_POINTS;
+		break;
+	case RenderingConfig::DisplayMode::Wireframe:
+		selectedRenderModeId = ID_RENDER_MODE_WIREFRAME;
+		break;
+	case RenderingConfig::DisplayMode::Solid:
+		selectedRenderModeId = ID_RENDER_MODE_SHADED;
+		break;
+	case RenderingConfig::DisplayMode::SolidWireframe:
+		if (shadingSettings.shadingMode == RenderingConfig::ShadingMode::Flat) {
+			selectedRenderModeId = ID_RENDER_MODE_FLAT_LINES;
+		} else {
+			selectedRenderModeId = ID_RENDER_MODE_SHADED_WIREFRAME;
+		}
+		break;
+	case RenderingConfig::DisplayMode::HiddenLine:
+		selectedRenderModeId = ID_RENDER_MODE_HIDDEN_LINE;
+		break;
+	default:
+		selectedRenderModeId = ID_RENDER_MODE_SHADED;
+		break;
+	}
+
+	// Update ButtonGroup to ensure only one button is active
+	// Use notify=false to avoid triggering callback during programmatic updates
+	m_renderModeButtonGroup->setSelectedButton(selectedRenderModeId, false);
 }

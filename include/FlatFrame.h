@@ -250,6 +250,9 @@ private:
 	// Explode slider tracking
 	wxDialog* m_explodeSliderDialog{ nullptr };  // Track the explode slider dialog
 
+	// Button group for render mode buttons (mutually exclusive)
+	class ButtonGroup* m_renderModeButtonGroup;  // Manages render mode toggle button group
+
 protected:
 	// Async compute engine (protected for derived class access)
 	std::unique_ptr<async::AsyncEngineIntegration> m_asyncEngine;
@@ -341,6 +344,9 @@ public:
 
 	// Keyboard event handler
 	void OnKeyDown(wxKeyEvent& event);
+
+	// Render mode UI state synchronization
+	void UpdateRenderModeButtonState();
 
 	// Override OnGlobalPinStateChanged to handle main work area layout
 	virtual void OnGlobalPinStateChanged(wxCommandEvent& event) override;

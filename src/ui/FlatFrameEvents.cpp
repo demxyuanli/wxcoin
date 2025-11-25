@@ -6,6 +6,7 @@
 #include "CommandListenerManager.h"
 #include "logger/Logger.h"
 #include "ui/OutlineSettingsDialog.h"
+#include "widgets/ButtonGroup.h"
 #include <unordered_map>
 #include <wx/splitter.h>
 
@@ -247,6 +248,16 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
 		//     m_ribbon->SetToggleButtonState(ID_FACE_QUERY_TOOL, isActive);
 		// }
 		LOG_INF_S("Face query tool state updated: " + std::string(isActive ? "active" : "inactive"));
+	}
+
+	// Handle render mode changes - update ButtonGroup state to ensure mutual exclusivity
+	if (result.success && result.commandId.find("RENDER_MODE_") == 0) {
+		// Sync ButtonGroup state from button bar after command execution
+		if (m_renderModeButtonGroup) {
+			m_renderModeButtonGroup->syncFromButtonBar();
+		}
+		UpdateRenderModeButtonState();
+		LOG_INF_S("Render mode changed, ButtonGroup state synchronized: " + result.commandId);
 	}
 
 	if (m_canvas && (

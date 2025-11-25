@@ -3,6 +3,8 @@
 #include "logger/Logger.h"
 #include "OCCViewer.h"
 #include "config/RenderingConfig.h"
+#include <wx/colour.h>
+#include "EdgeTypes.h"
 
 RenderModeListener::RenderModeListener(OCCViewer* viewer)
 	: m_viewer(viewer)
@@ -20,15 +22,24 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 	RenderingConfig::DisplaySettings baseConfigSettings = renderingConfig.getDisplaySettings();
 	RenderingConfig::ShadingSettings shadingSettings = renderingConfig.getShadingSettings();
 
+	// Create a clean base display settings that clears all mode-specific states
+	// This ensures only one render mode is active at a time
 	auto makeBaseDisplaySettings = [&]() {
-		RenderingConfig::DisplaySettings result = baseConfigSettings;
+		RenderingConfig::DisplaySettings result;
+		// Preserve only non-mode-specific settings
+		result.edgeWidth = baseConfigSettings.edgeWidth;
+		result.vertexSize = baseConfigSettings.vertexSize;
+		result.edgeColor = baseConfigSettings.edgeColor;
+		result.vertexColor = baseConfigSettings.vertexColor;
+		result.pointSize = baseConfigSettings.pointSize;
+		result.pointColor = baseConfigSettings.pointColor;
+		result.pointShape = baseConfigSettings.pointShape;
+		// Clear all mode-specific states to ensure mutual exclusivity
 		result.displayMode = RenderingConfig::DisplayMode::Solid;
 		result.showEdges = false;
 		result.showVertices = false;
 		result.showPointView = false;
 		result.showSolidWithPointView = true;
-		result.pointSize = baseConfigSettings.pointSize;
-		result.showPointView = false;
 		return result;
 	};
 
@@ -38,19 +49,33 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 		LOG_INF_S(std::string("RenderModeListener: Set to ") + modeLabel);
 	};
 
+	// Apply shading mode and ensure it's properly set
 	auto applyShadingMode = [&](RenderingConfig::ShadingMode mode, bool smoothNormals) {
-		if (shadingSettings.shadingMode != mode || shadingSettings.smoothNormals != smoothNormals) {
-			shadingSettings.shadingMode = mode;
-			shadingSettings.smoothNormals = smoothNormals;
-			renderingConfig.setShadingSettings(shadingSettings);
-		}
+		shadingSettings.shadingMode = mode;
+		shadingSettings.smoothNormals = smoothNormals;
+		renderingConfig.setShadingSettings(shadingSettings);
 	};
 
 	if (commandType == cmd::to_string(cmd::CommandType::RenderModeNoShading)) {
 		auto settings = makeBaseDisplaySettings();
 		settings.displayMode = RenderingConfig::DisplayMode::NoShading;
+		settings.showEdges = true;  // Enable original edges display for No Shading mode
 		applyShadingMode(RenderingConfig::ShadingMode::Flat, false);
 		applyDisplaySettings(settings, "NoShading mode");
+		// Explicitly enable original edges display with default parameters
+		// Use default parameters: samplingDensity=80.0, minLength=0.01, black color for edges
+		m_viewer->setOriginalEdgesParameters(
+			80.0,  // samplingDensity
+			0.01,  // minLength
+			false, // showLinesOnly
+			wxColour(0, 0, 0), // black color for edges
+			1.0,   // width
+			false, // highlightIntersectionNodes
+			wxColour(255, 0, 0), // intersectionNodeColor (not used)
+			3.0,   // intersectionNodeSize (not used)
+			IntersectionNodeShape::Point // intersectionNodeShape (not used)
+		);
+		m_viewer->setShowOriginalEdges(true);
 		return CommandResult(true, "NoShading mode enabled", commandType);
 	}
 

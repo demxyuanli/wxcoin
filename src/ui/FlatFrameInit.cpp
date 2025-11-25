@@ -93,6 +93,7 @@
 #include "ShowFlatWidgetsExampleListener.h"
 #include "widgets/FlatWidgetsExampleDialog.h"
 #include "widgets/ModernDockAdapter.h"
+#include "widgets/ButtonGroup.h"
 #include "ReferenceGridToggleListener.h"
 #include "ChessboardGridToggleListener.h"
 #include "widgets/FlatMessagePanel.h"
@@ -420,12 +421,12 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	} renderModeButtons[] = {
 		{ ID_RENDER_MODE_NO_SHADING, "No Shading", "cube", "No shading mode - uniform color like FreeCAD" },
 		{ ID_RENDER_MODE_POINTS, "Points", "pointview", "Points mode - show only vertices" },
-		{ ID_RENDER_MODE_WIREFRAME, "Wireframe", "wireframe", "Wireframe mode - show only edges" },
+		{ ID_RENDER_MODE_WIREFRAME, "Wireframe", "wireframe-mod", "Wireframe mode - show only edges" },
 		{ ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "flat-shading", "Flat lines mode - flat shading with edges" },
 		{ ID_RENDER_MODE_SHADED, "Shaded", "shaded", "Shaded mode - smooth shading with lighting" },
 		{ ID_RENDER_MODE_SHADED_WIREFRAME, "Shaded+Wireframe", "wireframe-shading", "Shaded with wireframe overlay" },
 		{ ID_RENDER_MODE_HIDDEN_LINE, "Hidden Line", "hidden-line", "Hidden line mode - edges with hidden line removal" },
-	};
+	}; 
 
 	constexpr int kRenderModeToggleGroup = 0;
 	for (const auto& button : renderModeButtons) {
@@ -475,6 +476,15 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	renderModeButtonBar->SetToggleGroupSelection(kRenderModeToggleGroup, selectedRenderModeId);
 	renderModePanel->AddButtonBar(renderModeButtonBar, 0, wxEXPAND | wxALL, 5);
 	renderPage->AddPanel(renderModePanel);
+
+	// Create ButtonGroup to manage render mode buttons with mutual exclusivity
+	std::vector<int> renderModeButtonIds;
+	for (const auto& button : renderModeButtons) {
+		renderModeButtonIds.push_back(button.id);
+	}
+	m_renderModeButtonGroup = new ButtonGroup(renderModeButtonBar, kRenderModeToggleGroup);
+	m_renderModeButtonGroup->registerButtons(renderModeButtonIds);
+	m_renderModeButtonGroup->setSelectedButton(selectedRenderModeId, false); // Set initial state without notification
 
 	m_ribbon->AddPage(renderPage);
 
