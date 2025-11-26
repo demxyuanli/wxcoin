@@ -153,13 +153,6 @@ IGESReader::ReadResult IGESReader::readFile(const std::string& filePath,
             return result;
         }
 
-        // Log color tool status
-        if (colorTool.IsNull()) {
-            LOG_WRN_S("IGES: Color tool is null - colors may not be available");
-        } else {
-            LOG_INF_S("IGES: Color tool initialized successfully");
-        }
-
         // Extract all free shapes (top-level shapes)
         TDF_LabelSequence labels;
         shapeTool->GetFreeShapes(labels);
@@ -168,24 +161,6 @@ IGESReader::ReadResult IGESReader::readFile(const std::string& filePath,
             result.errorMessage = "No shapes found in IGES file";
             LOG_ERR_S(result.errorMessage);
             return result;
-        }
-
-        LOG_INF_S("IGES: Found " + std::to_string(labels.Length()) + " top-level shapes");
-
-        // Check if any labels have colors
-        int colorCount = 0;
-        if (!colorTool.IsNull()) {
-            for (Standard_Integer i = 1; i <= labels.Length(); ++i) {
-                TDF_Label label = labels.Value(i);
-                Quantity_Color testColor;
-                if (colorTool->GetColor(label, XCAFDoc_ColorGen, testColor) ||
-                    colorTool->GetColor(label, XCAFDoc_ColorSurf, testColor) ||
-                    colorTool->GetColor(label, XCAFDoc_ColorCurv, testColor)) {
-                    colorCount++;
-                }
-            }
-            LOG_INF_S("IGES: Found colors on " + std::to_string(colorCount) + " out of " + 
-                     std::to_string(labels.Length()) + " labels");
         }
 
         if (progress) progress(50, "Extracting shapes");
@@ -286,7 +261,6 @@ void IGESReader::initialize()
         // Initialize IGES controller following FreeCAD approach
         IGESControl_Controller::Init();
         s_initialized = true;
-        LOG_INF_S("IGES reader initialized");
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Failed to initialize IGES reader: " + std::string(e.what()));
@@ -449,16 +423,6 @@ std::vector<std::shared_ptr<OCCGeometry>> IGESReader::processShapesWithCAF(
             }
         }
         
-        // Log color extraction for debugging
-        if (hasColor) {
-            LOG_DBG_S("IGES: Found color for shape " + name + ": R=" + 
-                     std::to_string(color.Red()) + " G=" + 
-                     std::to_string(color.Green()) + " B=" + 
-                     std::to_string(color.Blue()));
-        } else {
-            LOG_DBG_S("IGES: No color found for shape " + name);
-        }
-
         // Apply decomposition if enabled (including FACE_LEVEL)
         std::vector<TopoDS_Shape> decomposedShapes;
         if (options.decomposition.enableDecomposition) {

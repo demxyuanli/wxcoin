@@ -48,10 +48,6 @@ void AsyncEdgeIntersectionComputer::computeIntersectionsAsync(
         edgeCount++;
     }
 
-    LOG_INF_S("AsyncEdgeIntersectionComputer: Starting async intersection computation");
-    LOG_INF_S("AsyncEdgeIntersectionComputer: Shape has " + std::to_string(edgeCount) + 
-             " edges, tolerance: " + std::to_string(tolerance));
-
     IntersectionComputeInput input(shape, tolerance);
 
     try {
@@ -63,10 +59,6 @@ void AsyncEdgeIntersectionComputer::computeIntersectionsAsync(
                 m_computing.store(false);
 
                 if (success) {
-                    LOG_INF_S("AsyncEdgeIntersectionComputer: Found " +
-                             std::to_string(points.size()) + " intersections from " +
-                             std::to_string(edgeCount) + " edges");
-
                     if (onComplete) {
                         onComplete(points, true, "");
                     }
@@ -99,7 +91,6 @@ void AsyncEdgeIntersectionComputer::computeIntersectionsAsync(
 
 void AsyncEdgeIntersectionComputer::cancelComputation() {
     if (m_computing.load() && m_engine && !m_currentTaskId.empty()) {
-        LOG_INF_S("AsyncEdgeIntersectionComputer: Cancelling: " + m_currentTaskId);
         m_engine->cancelTask(m_currentTaskId);
         m_computing.store(false);
         m_currentTaskId.clear();

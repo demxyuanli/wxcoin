@@ -474,7 +474,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
                 // ===== Identify Boundary Triangles =====
                 identifyBoundaryTriangles(faceMappings);
 
-                LOG_INF_S("Built domain mapping with " + std::to_string(m_triangleSegments.size()) + " segments");
 
             } else {
                 LOG_ERR_S("OpenCASCADE processor not available for domain mapping");
@@ -906,7 +905,6 @@ void OCCGeometryMesh::buildCoinRepresentation(
                 // ===== Identify Boundary Triangles =====
                 identifyBoundaryTriangles(faceMappings);
 
-                LOG_INF_S("Built domain mapping with " + std::to_string(m_triangleSegments.size()) + " segments");
 
             } else {
                 LOG_ERR_S("OpenCASCADE processor not available for domain mapping");
@@ -1220,11 +1218,7 @@ void OCCGeometryMesh::buildTriangleSegments(const std::vector<std::pair<int, std
         TriangleSegment segment(faceId, triangleIndices);
         m_triangleSegments.push_back(std::move(segment));
 
-        LOG_INF_S("Domain System: Built TriangleSegment for face " + std::to_string(faceId) +
-                 " with " + std::to_string(triangleIndices.size()) + " triangles");
     }
-
-    LOG_INF_S("Built " + std::to_string(m_triangleSegments.size()) + " triangle segments for domain system");
 }
 
 void OCCGeometryMesh::identifyBoundaryTriangles(const std::vector<std::pair<int, std::vector<int>>>& faceMappings)

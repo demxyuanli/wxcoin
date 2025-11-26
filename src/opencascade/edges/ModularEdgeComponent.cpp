@@ -657,9 +657,6 @@ SoSeparator* ModularEdgeComponent::createIntersectionNodesNode(
     intersectionNodesNode = node;
     edgeFlags.showIntersectionNodes = true;
 
-    LOG_INF_S_ASYNC("ModularEdgeComponent: Created intersection nodes node with " + 
-                    std::to_string(intersectionPoints.size()) + " points");
-
     return node;
 }
 
@@ -783,7 +780,6 @@ void ModularEdgeComponent::cleanupEdgeNode(SoSeparator*& node) {
         // If we reach here, the pointer should be valid
         try {
             node->unref();
-            LOG_DBG_S_ASYNC("ModularEdgeComponent: Successfully unref'd node");
         } catch (const std::exception& e) {
             LOG_ERR_S_ASYNC("ModularEdgeComponent: Exception during node->unref(): " + std::string(e.what()));
         } catch (...) {
@@ -847,16 +843,11 @@ void ModularEdgeComponent::computeIntersectionsAsync(
         edgeCount++;
     }
 
-    LOG_INF_S_ASYNC("ModularEdgeComponent: Processing shape with " + std::to_string(edgeCount) + " edges");
-
     if (!m_asyncIntersectionComputer) {
         m_asyncIntersectionComputer = std::make_unique<async::AsyncEdgeIntersectionComputer>(engine);
     }
 
     m_computingIntersections.store(true);
-
-    LOG_INF_S_ASYNC("ModularEdgeComponent: Starting async intersection computation (" + 
-             std::to_string(edgeCount) + " edges)");
     
     // Use progressive intersection detection directly
     if (m_originalExtractor) {
@@ -902,8 +893,6 @@ void ModularEdgeComponent::computeIntersectionsAsync(
         );
         
         m_computingIntersections.store(false);
-        
-        LOG_INF_S_ASYNC("Found " + std::to_string(allIntersections.size()) + " total intersections");
         
         if (onComplete) {
             onComplete(allIntersections, true, "");

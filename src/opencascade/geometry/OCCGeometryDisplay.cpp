@@ -29,16 +29,10 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
 {
     // Check if display mode actually changed to avoid unnecessary updates
     if (m_displayMode == mode) {
-        LOG_INF_S("OCCGeometryDisplay::setDisplayMode: Display mode unchanged, skipping update");
         return;
     }
     
-    RenderingConfig::DisplayMode oldMode = m_displayMode;
     m_displayMode = mode;
-    
-    LOG_INF_S("OCCGeometryDisplay::setDisplayMode: Changing from " + 
-        std::to_string(static_cast<int>(oldMode)) + 
-        " to " + std::to_string(static_cast<int>(mode)));
     
     // Apply the display mode settings
     switch (mode) {

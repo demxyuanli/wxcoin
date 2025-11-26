@@ -160,16 +160,12 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			if (geometryFaceId >= 0) {
 				result.elementType = "Face";
 				result.subElementName = "Face" + std::to_string(geometryFaceId);
-				LOG_INF_S("PickingService - Successfully picked face " + std::to_string(geometryFaceId) +
-					" (triangle " + std::to_string(triangleIndex) + ") with " + std::to_string(triangleCount) +
-					" triangles in geometry " + result.geometry->getName());
 			} else {
 				LOG_WRN_S("PickingService - Invalid face ID returned from mapping for triangle " + std::to_string(triangleIndex));
 				// Fallback: use triangle index as face ID for debugging
 				result.elementType = "Face";
 				result.subElementName = "Face" + std::to_string(triangleIndex);
 				result.geometryFaceId = triangleIndex;
-				LOG_WRN_S("PickingService - Using fallback face ID " + std::to_string(triangleIndex));
 			}
 			} else {
 				LOG_WRN_S("PickingService - Geometry does not have face index mapping");
@@ -184,11 +180,9 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			result.lineIndex = lineIndex;
 
 			// Edge picking - use line index as edge ID (domain system doesn't support edge mapping)
-					result.elementType = "Edge";
-					result.subElementName = "Edge" + std::to_string(lineIndex);
-					result.geometryEdgeId = lineIndex;
-			LOG_INF_S("PickingService - Picked edge (line " + std::to_string(lineIndex) +
-				") in geometry " + result.geometry->getName() + " (domain system)");
+			result.elementType = "Edge";
+			result.subElementName = "Edge" + std::to_string(lineIndex);
+			result.geometryEdgeId = lineIndex;
 
 		// Handle vertex picking
 		} else if (detail->isOfType(SoPointDetail::getClassTypeId())) {
@@ -199,11 +193,9 @@ PickingResult PickingService::pickDetailedAtScreen(const wxPoint& screenPos) con
 			result.vertexIndex = coordinateIndex;
 
 			// Vertex picking - use coordinate index as vertex ID (domain system doesn't support vertex mapping)
-					result.elementType = "Vertex";
-					result.subElementName = "Vertex" + std::to_string(coordinateIndex);
-					result.geometryVertexId = coordinateIndex;
-			LOG_INF_S("PickingService - Picked vertex (coordinate " + std::to_string(coordinateIndex) +
-				") in geometry " + result.geometry->getName() + " (domain system)");
+			result.elementType = "Vertex";
+			result.subElementName = "Vertex" + std::to_string(coordinateIndex);
+			result.geometryVertexId = coordinateIndex;
 
 		} else {
 			LOG_WRN_S("PickingService - Unknown detail type: " + std::string(detail->getTypeId().getName().getString()));

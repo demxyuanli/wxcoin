@@ -644,7 +644,6 @@ int STEPCAFProcessor::processLabel(
 
     TopoDS_Shape shape = shapeTool->GetShape(srcLabel);
     if (shape.IsNull()) {
-        LOG_INF_S("Shape is null, skipping");
         return componentIndex;
     }
 

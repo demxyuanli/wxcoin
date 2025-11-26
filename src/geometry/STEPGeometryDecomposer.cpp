@@ -252,7 +252,6 @@ bool STEPGeometryDecomposer::areFacesSimilar(const TopoDS_Face& face1, const Top
         Handle(Geom_Surface) surf2 = BRep_Tool::Surface(face2);
 
         if (surf1.IsNull() || surf2.IsNull()) {
-            LOG_INF_S("Face similarity check: One or both surfaces are null");
             return false;
         }
 
@@ -261,11 +260,8 @@ bool STEPGeometryDecomposer::areFacesSimilar(const TopoDS_Face& face1, const Top
 
         // Check if surfaces are of the same type
         if (surf1->DynamicType() != surf2->DynamicType()) {
-            LOG_INF_S("Face similarity check: Different surface types - " + type1 + " vs " + type2);
             return false;
         }
-
-        LOG_INF_S("Face similarity check: Both faces are " + type1);
 
         // For planes, check if they are parallel
         if (surf1->DynamicType() == STANDARD_TYPE(Geom_Plane)) {
@@ -279,8 +275,6 @@ bool STEPGeometryDecomposer::areFacesSimilar(const TopoDS_Face& face1, const Top
                 // Check if normals are parallel (within tolerance)
                 double dotProduct = normal1.Dot(normal2);
                 bool isParallel = std::abs(dotProduct) > 0.7; // 70% parallel (more lenient)
-                LOG_INF_S("Plane similarity check: dot product = " + std::to_string(dotProduct) +
-                    ", parallel = " + (isParallel ? "true" : "false"));
                 return isParallel;
             }
         }
@@ -296,14 +290,11 @@ bool STEPGeometryDecomposer::areFacesSimilar(const TopoDS_Face& face1, const Top
 
                 double dotProduct = axis1.Dot(axis2);
                 bool isParallel = std::abs(dotProduct) > 0.7; // 70% parallel (more lenient)
-                LOG_INF_S("Cylinder similarity check: dot product = " + std::to_string(dotProduct) +
-                    ", parallel = " + (isParallel ? "true" : "false"));
                 return isParallel;
             }
         }
 
         // For other surface types, consider them similar if they're the same type
-        LOG_INF_S("Surface similarity check: Same type (" + type1 + "), considering similar");
         return true;
     } catch (const std::exception& e) {
         return false;
@@ -482,12 +473,8 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByFaceGroups(
 
                     if (belongsToGroup) {
                         currentGroup.push_back(face);
-                        LOG_INF_S("Face " + std::to_string(faceIndex) + " added to current group (similar to " +
-                            std::to_string(similarFaces) + " faces in group)");
                     } else {
                         // Start a new group
-                        LOG_INF_S("Face " + std::to_string(faceIndex) + " starts new group (current group has " +
-                            std::to_string(currentGroup.size()) + " faces)");
                         faceGroups.push_back(currentGroup);
                         currentGroup.clear();
                         currentGroup.push_back(face);
@@ -499,18 +486,12 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByFaceGroups(
 
         // Add the last group
         if (!currentGroup.empty()) {
-            LOG_INF_S("Adding final group with " + std::to_string(currentGroup.size()) + " faces");
             faceGroups.push_back(currentGroup);
         }
 
-        LOG_INF_S("Created " + std::to_string(faceGroups.size()) + " face groups");
-
         // Convert face groups to shapes
-        int groupIndex = 0;
         for (const auto& group : faceGroups) {
             if (group.size() > 0) {
-                LOG_INF_S("Processing group " + std::to_string(groupIndex) + " with " +
-                    std::to_string(group.size()) + " faces");
 
                 // Create a compound from the face group
                 TopoDS_Compound compound;
@@ -522,12 +503,8 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByFaceGroups(
                 }
 
                 subShapes.push_back(compound);
-                groupIndex++;
             }
         }
-
-        LOG_INF_S("Face group decomposition completed: " + std::to_string(faceGroups.size()) +
-            " groups converted to " + std::to_string(subShapes.size()) + " shapes");
     } catch (const std::exception& e) {
         LOG_WRN_S("Face group decomposition failed: " + std::string(e.what()));
         subShapes.push_back(shape); // Fallback
@@ -578,7 +555,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeShapeFreeCADLike(
             subShapes.push_back(shape);
         }
 
-        LOG_INF_S("FreeCAD-like decomposition result: " + std::to_string(subShapes.size()) + " sub-shapes");
     } catch (const std::exception& e) {
         LOG_WRN_S("Failed FreeCAD-like decomposition: " + std::string(e.what()));
         subShapes.push_back(shape);
@@ -666,7 +642,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByConnectivity(
             }
         }
 
-        LOG_INF_S("Connectivity decomposition completed: " + std::to_string(subShapes.size()) + " shapes");
     } catch (const std::exception& e) {
         LOG_WRN_S("Connectivity decomposition failed: " + std::string(e.what()));
         subShapes.push_back(shape);
@@ -738,9 +713,7 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
                     }
                 }
 
-                LOG_INF_S("Plane normal groups: " + std::to_string(planeGroups.size()));
                 for (const auto& planeGroup : planeGroups) {
-                    LOG_INF_S("  Normal " + planeGroup.first + ": " + std::to_string(planeGroup.second.size()) + " faces");
                     normalGroups["Plane_" + planeGroup.first] = planeGroup.second;
                 }
             } else {
@@ -843,7 +816,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByGeometricFeatures(
             }
         }
 
-        LOG_INF_S("Geometric feature decomposition completed: " + std::to_string(subShapes.size()) + " shapes");
     } catch (const std::exception& e) {
         LOG_WRN_S("Geometric feature decomposition failed: " + std::string(e.what()));
         subShapes.push_back(shape);
@@ -987,7 +959,6 @@ std::vector<TopoDS_Shape> STEPGeometryDecomposer::decomposeByShellGroups(
             }
         }
 
-        LOG_INF_S("Shell group decomposition completed: " + std::to_string(subShapes.size()) + " shapes");
     } catch (const std::exception& e) {
         LOG_WRN_S("Shell group decomposition failed: " + std::string(e.what()));
         subShapes.push_back(shape);
@@ -1484,8 +1455,7 @@ void STEPGeometryDecomposer::mergeSmallComponents(std::vector<TopoDS_Shape>& com
         }
 
         components = std::move(mergedComponents);
-        LOG_INF_S("Component merging reduced count from " + std::to_string(merged.size()) +
-            " to " + std::to_string(components.size()));
+
     }
     catch (const std::exception& e) {
         LOG_WRN_S("Component merging failed: " + std::string(e.what()));
@@ -1753,7 +1723,6 @@ void STEPGeometryDecomposer::refineComponents(std::vector<TopoDS_Shape>& compone
         }
 
         components = std::move(refinedComponents);
-        LOG_INF_S("Component refinement kept " + std::to_string(components.size()) + " valid components");
     }
     catch (const std::exception& e) {
         LOG_WRN_S("Component refinement failed: " + std::string(e.what()));

@@ -596,20 +596,12 @@ void OriginalEdgeExtractor::findEdgeIntersections(
         edges.push_back(TopoDS::Edge(exp.Current()));
     }
 
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Detecting intersections, edges=" +
-              std::to_string(edges.size()));
-
     // Generate cache key based on shape pointer and tolerance
     size_t shapeHash = reinterpret_cast<size_t>(shape.TShape().get());
     std::ostringstream keyStream;
     keyStream << "intersections_" << shapeHash << "_" 
               << std::fixed << std::setprecision(6) << adaptiveTolerance;
     std::string cacheKey = keyStream.str();
-
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Checking cache for key=" + cacheKey + 
-                   ", shapeHash=" + std::to_string(shapeHash) + 
-                   ", tolerance=" + std::to_string(adaptiveTolerance) + 
-                   ", edges=" + std::to_string(edges.size()));
 
     // Try to get from cache
     auto& cache = EdgeGeometryCache::getInstance();
@@ -618,17 +610,12 @@ void OriginalEdgeExtractor::findEdgeIntersections(
         [this, &edges, adaptiveTolerance]() -> std::vector<gp_Pnt> {
             // Cache miss - compute intersections
             std::vector<gp_Pnt> tempIntersections;
-            LOG_INF_S_ASYNC("Computing intersections (cache miss) using optimized spatial grid (" +
-                      std::to_string(edges.size()) + " edges)");
             findEdgeIntersectionsFromEdges(edges, tempIntersections, adaptiveTolerance);
             return tempIntersections;
         },
         shapeHash,
         adaptiveTolerance
     );
-    
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Cache lookup complete, got " + 
-                   std::to_string(cachedIntersections.size()) + " intersections");
 
     // Merge cached results into output
     intersectionPoints.insert(intersectionPoints.end(), 
@@ -649,18 +636,11 @@ void OriginalEdgeExtractor::findEdgeIntersectionsFromEdges(
     
     // For larger models (>= 100 edges), use BVH acceleration
     if (edges.size() >= 100) {
-        LOG_INF_S_ASYNC("Using BVH acceleration for " + std::to_string(edges.size()) + " edges");
-        
         EdgeIntersectionAccelerator accelerator;
         accelerator.buildFromEdges(edges);
         
         // Extract intersections using BVH (handles duplicate checking internally)
         intersectionPoints = accelerator.extractIntersectionsParallel(tolerance);
-        
-        const auto& stats = accelerator.getStatistics();
-        LOG_INF_S_ASYNC("BVH computation complete: " + std::to_string(intersectionPoints.size()) + 
-                       " intersections found, pruning ratio: " + 
-                       std::to_string(stats.pruningRatio * 100) + "%");
         return;
     }
 
@@ -1251,8 +1231,6 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
     std::function<void(const std::vector<gp_Pnt>&)> onBatchComplete,
     std::function<void(int, const std::string&)> onProgress) {
     
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Starting progressive intersection detection");
-    
     // Check cache first - if cached, use cached results and call batch callback
     size_t shapeHash = reinterpret_cast<size_t>(shape.TShape().get());
     std::ostringstream keyStream;
@@ -1263,9 +1241,6 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
     auto& cache = EdgeGeometryCache::getInstance();
     auto cachedPoints = cache.tryGetCached(cacheKey);
     if (cachedPoints && !cachedPoints->empty()) {
-        LOG_INF_S_ASYNC("OriginalEdgeExtractor: Using cached intersections (" + 
-                       std::to_string(cachedPoints->size()) + " points)");
-        
         // Use cached results
         intersectionPoints = *cachedPoints;
         
@@ -1282,8 +1257,6 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
         return;
     }
     
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Cache miss, computing intersections");
-    
     // Extract edges first
     std::vector<TopoDS_Edge> edges;
     for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
@@ -1295,8 +1268,6 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
         return;
     }
     
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Found " + std::to_string(edges.size()) + " edges");
-    
     // For small number of edges, use simple method
     if (edges.size() < 50) {
         findEdgeIntersectionsSimple(edges, intersectionPoints, tolerance);
@@ -1304,8 +1275,6 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
         // Store in cache after computation
         if (!intersectionPoints.empty()) {
             cache.storeCached(cacheKey, intersectionPoints, shapeHash, tolerance);
-            LOG_INF_S_ASYNC("OriginalEdgeExtractor: Stored " + std::to_string(intersectionPoints.size()) + 
-                           " intersections in cache");
         }
         
         if (onBatchComplete && !intersectionPoints.empty()) {
@@ -1335,8 +1304,6 @@ void OriginalEdgeExtractor::findEdgeIntersectionsProgressive(
         LOG_WRN_S("OriginalEdgeExtractor: No valid edges found");
         return;
     }
-    
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Built spatial grid with " + std::to_string(edgeData.size()) + " valid edges");
     
     // Use progressive TBB implementation
     findIntersectionsProgressiveTBB(edgeData, intersectionPoints, tolerance, onBatchComplete, onProgress);
@@ -1378,9 +1345,6 @@ void OriginalEdgeExtractor::findIntersectionsProgressiveTBB(
     int gridSizeY = std::max(1, static_cast<int>(sizeY / cellSize));
     int gridSizeZ = std::max(1, static_cast<int>(sizeZ / cellSize));
     
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Grid dimensions: " + std::to_string(gridSizeX) + "x" + 
-             std::to_string(gridSizeY) + "x" + std::to_string(gridSizeZ));
-    
     // Build spatial grid
     int totalGridCells = gridSizeX * gridSizeY * gridSizeZ;
     std::vector<std::vector<size_t>> gridCells(totalGridCells);
@@ -1407,8 +1371,6 @@ void OriginalEdgeExtractor::findIntersectionsProgressiveTBB(
     
     // Generate task batches
     auto taskBatches = generateTaskBatches(gridCells, edgeData, 100); // 100 tasks per batch
-    
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Generated " + std::to_string(taskBatches.size()) + " task batches");
     
     // Process batches progressively
     std::vector<gp_Pnt> allIntersections;
@@ -1493,8 +1455,6 @@ void OriginalEdgeExtractor::findIntersectionsProgressiveTBB(
     }
     
     intersectionPoints = std::move(allIntersections);
-    LOG_INF_S_ASYNC("OriginalEdgeExtractor: Progressive intersection detection completed, total: " + 
-             std::to_string(intersectionPoints.size()) + " intersections");
 }
 
 std::vector<std::vector<std::pair<size_t, size_t>>> OriginalEdgeExtractor::generateTaskBatches(

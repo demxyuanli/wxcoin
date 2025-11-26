@@ -481,8 +481,6 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Only apply changes if something actually changed
 	if (displayModeChanged) {
-		LOG_INF_S("OCCViewer::setDisplaySettings: Display mode changed, applying to geometries");
-		
 		// Apply display mode to all geometries
 		for (auto& geometry : m_geometries) {
 			if (geometry) {
@@ -500,14 +498,11 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Apply edge display only if changed
 	if (edgeSettingsChanged) {
-		LOG_INF_S("OCCViewer::setDisplaySettings: Edge settings changed");
 		setShowEdges(settings.showEdges);
 	}
 
 	// Apply point view settings only if changed
 	if (pointViewSettingsChanged) {
-		LOG_INF_S("OCCViewer::setDisplaySettings: Point view settings changed");
-		
 		for (auto& geometry : m_geometries) {
 			if (geometry) {
 				geometry->setShowPointView(settings.showPointView);
@@ -526,12 +521,8 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Only request refresh if something actually changed
 	if (displayModeChanged || edgeSettingsChanged || pointViewSettingsChanged) {
-		LOG_INF_S("OCCViewer::setDisplaySettings: Settings applied successfully");
-
 		// Special handling for NoShading mode - ensure lighting is updated
 		if (displayModeChanged && settings.displayMode == RenderingConfig::DisplayMode::NoShading) {
-			LOG_INF_S("OCCViewer::setDisplaySettings: NoShading mode activated, ensuring lighting is disabled");
-
 			// Force lighting update to clear all lights for NoShading
 			if (m_sceneManager) {
 				// This will trigger the LightingConfig callback which will detect NoShading mode
@@ -543,8 +534,6 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 		if (m_viewUpdater) {
 			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::RENDERING_CHANGED), true);
 		}
-	} else {
-		LOG_INF_S("OCCViewer::setDisplaySettings: No changes detected, skipping update");
 	}
 }
 
@@ -853,9 +842,6 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 			if (!bbox.IsVoid()) {
 				double xmin, ymin, zmin, xmax, ymax, zmax;
 				bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-				LOG_DBG_S("Geometry '" + geometry->getName() + "' bounds: [" +
-						 std::to_string(xmin) + "," + std::to_string(ymin) + "," + std::to_string(zmin) + "] to [" +
-						 std::to_string(xmax) + "," + std::to_string(ymax) + "," + std::to_string(zmax) + "]");
 			}
 		}
 

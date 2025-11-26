@@ -280,8 +280,6 @@ bool STEPReader::tryCAFReader(const std::string& filePath, const OptimizationOpt
 		};
 		
 		try {
-			LOG_INF_S("Attempting to read STEP file with CAF reader: " + filePath + 
-					 " (size: " + std::to_string(fileSize / (1024 * 1024)) + " MB)");
 			
 			ReadResult cafResult = STEPCAFProcessor::processSTEPFileWithCAF(filePath, options, progress);
 			
@@ -294,26 +292,9 @@ bool STEPReader::tryCAFReader(const std::string& filePath, const OptimizationOpt
 					result.geometries = cafResult.geometries;
 					result.entityMetadata = cafResult.entityMetadata;
 					result.assemblyStructure = cafResult.assemblyStructure;
-					LOG_INF_S("CAF reader successful with color information - using CAF results (" + 
-						std::to_string(result.geometries.size()) + " colored components)");
 					
-					// Log color information for debugging
-					int coloredCount = 0;
-					for (size_t i = 0; i < result.geometries.size(); i++) {
-						Quantity_Color color = result.geometries[i]->getColor();
-						if (std::abs(color.Red() - 0.7) > 0.01 || 
-							std::abs(color.Green() - 0.7) > 0.01 || 
-							std::abs(color.Blue() - 0.7) > 0.01) {
-							LOG_DBG_S("Component " + std::to_string(i) + " color: R=" + 
-								std::to_string(color.Red()) + " G=" + std::to_string(color.Green()) + 
-								" B=" + std::to_string(color.Blue()));
-							coloredCount++;
-						}
-					}
-					STEPReaderUtils::logCount("Found ", coloredCount, " components with custom colors");
 		return true;
 				} else {
-					LOG_INF_S("CAF reader returned only default colors - falling back to standard reader with decomposition");
 				return false;
 				}
 			} else {
@@ -323,7 +304,6 @@ bool STEPReader::tryCAFReader(const std::string& filePath, const OptimizationOpt
 			}
 		} catch (const std::exception& e) {
 			LOG_WRN_S("CAF reader exception: " + std::string(e.what()));
-			LOG_INF_S("Falling back to standard reader with decomposition");
 		return false;
 	}
 }

@@ -18,11 +18,6 @@ void SceneAttachmentService::attach(std::shared_ptr<OCCGeometry> geometry) {
 	int existingIndex = m_occRoot->findChild(coin);
 	if (existingIndex < 0) {
 		m_occRoot->addChild(coin);
-		LOG_DBG_S("SceneAttachmentService: attached geometry '" + geometry->getName() + 
-				 "' to scene (children: " + std::to_string(m_occRoot->getNumChildren()) + ")");
-	} else {
-		LOG_DBG_S("SceneAttachmentService: geometry '" + geometry->getName() + 
-				 "' already attached at index " + std::to_string(existingIndex));
 	}
 	
 	if (m_nodeToGeom) (*m_nodeToGeom)[coin] = geometry;

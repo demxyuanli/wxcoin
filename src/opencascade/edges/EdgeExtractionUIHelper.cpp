@@ -42,8 +42,6 @@ EdgeExtractionUIHelper::EdgeExtractionUIHelper(wxFrame* frame)
         
         if (!m_statusBar) {
             LOG_WRN_S_ASYNC("EdgeExtractionUIHelper: Status bar not available, progress will not be shown");
-        } else {
-            LOG_INF_S_ASYNC("EdgeExtractionUIHelper: Status bar available");
         }
         
         // Save original cursor
@@ -63,8 +61,6 @@ void EdgeExtractionUIHelper::beginOperation(const std::string& operationName) {
     enableProgressBar();
     
     updateProgress(0, operationName + " starting...");
-    
-    LOG_INF_S_ASYNC("EdgeExtraction: " + operationName + " started");
 }
 
 void EdgeExtractionUIHelper::endOperation() {
@@ -82,9 +78,6 @@ void EdgeExtractionUIHelper::endOperation() {
     
     auto endTime = std::chrono::high_resolution_clock::now();
     double totalTime = std::chrono::duration<double>(endTime - m_startTime).count();
-    
-    LOG_INF_S_ASYNC("EdgeExtraction: " + m_operationName + " completed in " + 
-              std::to_string(totalTime) + "s");
 }
 
 void EdgeExtractionUIHelper::updateProgress(int progress, const std::string& message) {
@@ -109,11 +102,9 @@ void EdgeExtractionUIHelper::setIndeterminateProgress(bool indeterminate, const 
 		
 		// Set to indeterminate mode with animation
 		m_statusBar->SetGaugeIndeterminate(true);
-		LOG_INF_S_ASYNC("EdgeExtraction: Indeterminate progress enabled");
 	} else {
 		// Set back to normal progress mode
 		m_statusBar->SetGaugeIndeterminate(false);
-		LOG_INF_S_ASYNC("EdgeExtraction: Indeterminate progress disabled");
 	}
 	
 	if (!message.empty()) {
@@ -139,8 +130,6 @@ void EdgeExtractionUIHelper::showFinalStatistics() {
     std::string statsText = m_stats.toString();
     m_statusBar->SetStatusText(wxString::FromUTF8(statsText), 0);
     m_statusBar->Refresh();
-    
-    LOG_INF_S_ASYNC("EdgeExtraction Statistics: " + statsText);
 }
 
 void EdgeExtractionUIHelper::setWaitingCursor() {
@@ -148,8 +137,6 @@ void EdgeExtractionUIHelper::setWaitingCursor() {
     
     m_frame->SetCursor(wxCURSOR_WAIT);
     m_cursorChanged = true;
-    
-    LOG_DBG_S_ASYNC("EdgeExtraction: Set waiting cursor");
 }
 
 void EdgeExtractionUIHelper::restoreCursor() {
@@ -157,8 +144,6 @@ void EdgeExtractionUIHelper::restoreCursor() {
     
     m_frame->SetCursor(m_originalCursor);
     m_cursorChanged = false;
-    
-    LOG_DBG_S_ASYNC("EdgeExtraction: Restored cursor");
 }
 
 void EdgeExtractionUIHelper::enableProgressBar() {
@@ -168,8 +153,6 @@ void EdgeExtractionUIHelper::enableProgressBar() {
     m_statusBar->SetGaugeRange(100);
     m_statusBar->SetGaugeValue(0);
     m_progressEnabled = true;
-    
-    LOG_DBG_S_ASYNC("EdgeExtraction: Progress bar enabled");
 }
 
 void EdgeExtractionUIHelper::disableProgressBar() {
@@ -177,8 +160,6 @@ void EdgeExtractionUIHelper::disableProgressBar() {
     
     m_statusBar->EnableProgressGauge(false);
     m_progressEnabled = false;
-    
-    LOG_DBG_S_ASYNC("EdgeExtraction: Progress bar disabled");
 }
 
 void EdgeExtractionUIHelper::updateStatusText(const wxString& text) {

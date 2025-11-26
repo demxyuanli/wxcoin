@@ -34,13 +34,9 @@ std::vector<gp_Pnt> EdgeGeometryCache::getOrCompute(
     }
     // Lock is released here
 
-    // Log after releasing lock to avoid potential deadlock
     if (cacheHit) {
-        LOG_DBG_S("EdgeCache HIT: " + key + " (points: " + std::to_string(pointsSize) + ")");
         return cachedPoints;
     }
-
-    LOG_DBG_S("EdgeCache MISS: " + key + " (computing...)");
 
     // Compute new data WITHOUT holding the lock
     // This prevents recursive locking if computeFunc accesses the cache
@@ -96,7 +92,7 @@ void EdgeGeometryCache::invalidate(const std::string& key) {
     }
 
     if (found) {
-        LOG_DBG_S("EdgeCache invalidated: " + key + " (freed: " + std::to_string(freedMemory) + " bytes)");
+        // Cache invalidated
     }
 }
 
@@ -112,8 +108,6 @@ void EdgeGeometryCache::clear() {
         m_hitCount = 0;
         m_missCount = 0;
     }
-
-    LOG_DBG_S("EdgeCache cleared: " + std::to_string(oldSize) + " entries (" + std::to_string(freedMemory) + " bytes)");
 }
 
 void EdgeGeometryCache::evictOldEntries(std::chrono::seconds maxAge) {
@@ -140,7 +134,7 @@ void EdgeGeometryCache::evictOldEntries(std::chrono::seconds maxAge) {
     }
 
     if (evicted > 0) {
-        LOG_DBG_S("EdgeCache evicted: " + std::to_string(evicted) + " old entries (" + std::to_string(freedMemory) + " bytes), " + std::to_string(remaining) + " remaining");
+        // Cache entries evicted
     }
 }
 
@@ -176,8 +170,6 @@ void EdgeGeometryCache::evictLRU() {
         m_totalMemoryUsage -= freedMemory;
         std::string key = lruIt->first;
         m_cache.erase(lruIt);
-
-        LOG_DBG_S("EdgeCache LRU evicted: " + key + " (" + std::to_string(freedMemory) + " bytes)");
     }
 }
 
@@ -213,30 +205,19 @@ std::vector<gp_Pnt> EdgeGeometryCache::getOrComputeIntersections(
             }
             else {
                 // Tolerance mismatch - invalidate and recompute
-                LOG_INF_S("IntersectionCache tolerance mismatch for " + key + 
-                         ", recomputing (cached: " + std::to_string(it->second.tolerance) +
-                         ", requested: " + std::to_string(tolerance) + ")");
                 m_totalMemoryUsage -= it->second.memoryUsage;
                 m_intersectionCache.erase(it);
                 m_intersectionMissCount++;
             }
         }
         else {
-            LOG_INF_S("IntersectionCache: No entry found for key=" + key + 
-                     ", shapeHash=" + std::to_string(shapeHash) + 
-                     ", tolerance=" + std::to_string(tolerance) + 
-                     ", cache size=" + std::to_string(m_intersectionCache.size()));
             m_intersectionMissCount++;
         }
     }
 
     if (cacheHit) {
-        LOG_INF_S("IntersectionCache HIT: " + key + " (" + std::to_string(pointsSize) + 
-                  " points, saved " + std::to_string(cachedComputationTime) + "s computation)");
         return cachedPoints;
     }
-
-    LOG_INF_S("IntersectionCache MISS: " + key + " (computing...)");
 
     // Compute with timing
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -264,10 +245,6 @@ std::vector<gp_Pnt> EdgeGeometryCache::getOrComputeIntersections(
 
         m_intersectionCache[key] = std::move(entry);
         m_totalMemoryUsage += entry.memoryUsage;
-        
-        LOG_INF_S("IntersectionCache stored: " + key + " (" + std::to_string(points.size()) +
-                  " points, " + std::to_string(entry.memoryUsage) + " bytes, " +
-                  std::to_string(computationTime) + "s)");
     }
 
     return points;
@@ -279,7 +256,6 @@ std::optional<std::vector<gp_Pnt>> EdgeGeometryCache::tryGetCached(const std::st
     auto it = m_intersectionCache.find(key);
     if (it != m_intersectionCache.end()) {
         m_intersectionHitCount++;
-        LOG_INF_S("IntersectionCache HIT: " + key);
         return it->second.intersectionPoints;
     }
     
@@ -325,8 +301,7 @@ void EdgeGeometryCache::invalidateIntersections(size_t shapeHash) {
     }
 
     if (removedCount > 0) {
-        LOG_INF_S("IntersectionCache invalidated " + std::to_string(removedCount) +
-                  " entries for shape (freed " + std::to_string(freedMemory) + " bytes)");
+        // Cache entries invalidated
     }
 }
 
@@ -387,9 +362,6 @@ EdgeGeometryCache::IncrementalUpdateResult EdgeGeometryCache::updateIntersection
                 
                 // Compare with cached hashes
                 if (currentEdges.size() != entry.edgeHashes.size()) {
-                    LOG_INF_S("IncrementalUpdate: Edge count changed (" + 
-                              std::to_string(entry.edgeHashes.size()) + " -> " + 
-                              std::to_string(currentEdges.size()) + "), full recomputation");
                     needFullComputation = true;
                 } else {
                     for (size_t i = 0; i < currentEdges.size(); ++i) {

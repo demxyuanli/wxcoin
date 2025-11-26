@@ -462,13 +462,6 @@ void OCCNavCube::buildShape() {
             }
 
             setShape(sewnShape);
-            LOG_INF_S("Created rhombicuboctahedron OCCNavCube with " + std::to_string(faces.size()) + " faces");
-            LOG_INF_S("Actual face types created:");
-            LOG_INF_S("  - Triangular faces: " + std::to_string(triangles));
-            LOG_INF_S("  - Quadrilateral faces: " + std::to_string(quadrilaterals));
-            LOG_INF_S("  - Hexagonal faces: " + std::to_string(hexagons));
-            LOG_INF_S("  - Octagonal faces: " + std::to_string(octagons));
-            LOG_INF_S("  - Total: " + std::to_string(triangles + quadrilaterals + hexagons + octagons));
             } else {
             LOG_ERR_S("Sewing failed for OCCNavCube - no valid shape created");
         }
