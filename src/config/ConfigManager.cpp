@@ -5,6 +5,7 @@
 #include "config/ThemeManager.h"
 #include "config/SelectionColorConfig.h"
 #include "config/SelectionHighlightConfig.h"
+#include "config/UnifiedConfigManager.h"
 #include <wx/stdpaths.h>
 #include <wx/filename.h>
 #include <wx/ffile.h>
@@ -96,6 +97,9 @@ bool ConfigManager::initialize(const std::string& configFilePath) {
 
 	// Initialize Selection highlight configuration
 	SelectionHighlightConfigManager::getInstance().initialize(*this);
+
+	// Initialize Unified Configuration Manager
+	UnifiedConfigManager::getInstance().initialize(*this);
 
 	return true;
 }
@@ -258,14 +262,24 @@ std::vector<std::string> ConfigManager::getSections() {
 		return sections;
 	}
 
+	// Save current path and ensure we're at root
+	wxString oldPath = fileConfig->GetPath();
+	fileConfig->SetPath("/");
+
 	wxString str;
 	long index;
 	bool cont = fileConfig->GetFirstGroup(str, index);
+	int count = 0;
 	while (cont) {
 		sections.push_back(str.ToStdString());
+		count++;
 		cont = fileConfig->GetNextGroup(str, index);
 	}
 
+	// Restore path
+	fileConfig->SetPath(oldPath);
+
+	LOG_INF("ConfigManager found " + std::to_string(count) + " sections", "ConfigManager");
 	return sections;
 }
 
@@ -277,15 +291,25 @@ std::vector<std::string> ConfigManager::getKeys(const std::string& section) {
 		return keys;
 	}
 
+	// Save current path
+	wxString oldPath = fileConfig->GetPath();
+
+	// Set path to section
 	fileConfig->SetPath("/" + wxString(section));
 
 	wxString str;
 	long index;
 	bool cont = fileConfig->GetFirstEntry(str, index);
+	int count = 0;
 	while (cont) {
 		keys.push_back(str.ToStdString());
+		count++;
 		cont = fileConfig->GetNextEntry(str, index);
 	}
 
+	// Restore path
+	fileConfig->SetPath(oldPath);
+
+	LOG_INF("Section '" + section + "' has " + std::to_string(count) + " keys", "ConfigManager");
 	return keys;
 }

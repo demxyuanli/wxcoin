@@ -12,6 +12,19 @@ set(CONFIG_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FontManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SelectionColorConfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SelectionHighlightConfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/UnifiedConfigManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ConfigManagerDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/ConfigCategoryEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/GeneralConfigEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/ThemeConfigEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/RenderingConfigEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/LightingConfigEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/TypographyConfigEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/LayoutConfigEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/LightingSettingsEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/EdgeSettingsEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/RenderPreviewEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/ConfigEditorFactory.cpp
 )
 
 set(CONFIG_HEADERS
@@ -28,6 +41,19 @@ set(CONFIG_HEADERS
     ${CMAKE_SOURCE_DIR}/include/config/FontManager.h
     ${CMAKE_SOURCE_DIR}/include/config/SelectionColorConfig.h
     ${CMAKE_SOURCE_DIR}/include/config/SelectionHighlightConfig.h
+    ${CMAKE_SOURCE_DIR}/include/config/UnifiedConfigManager.h
+    ${CMAKE_SOURCE_DIR}/include/config/ConfigManagerDialog.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/ConfigCategoryEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/GeneralConfigEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/ThemeConfigEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/RenderingConfigEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/LightingConfigEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/TypographyConfigEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/LayoutConfigEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/LightingSettingsEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/EdgeSettingsEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/RenderPreviewEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/ConfigEditorFactory.h
 )
 
 # Create config static library
@@ -39,6 +65,20 @@ target_include_directories(CADConfig PUBLIC
     ${wxWidgets_INCLUDE_DIRS}
     ${Coin3D_INCLUDE_DIRS}
 )
+
+# Link dependencies
+target_link_libraries(CADConfig PUBLIC
+    CADCore
+    CADLogger
+    ${wxWidgets_LIBRARIES}
+    Coin::Coin
+)
+
+# Set library export properties
+set_target_properties(CADConfig PROPERTIES
+    FOLDER "Config"
+    EXPORT_NAME Config
+) 
 
 # Link dependencies
 target_link_libraries(CADConfig PUBLIC

@@ -31,6 +31,7 @@ private:
 	void initializeFrame(const wxString& title);
 	void loadConfiguredMessages();
 	void loadBackgroundImage();
+	void loadBackgroundImageFromPath(const wxString& imagePath);
 
 	wxFrame* m_frame;
 	wxPanel* m_panel;
@@ -43,4 +44,6 @@ private:
 	std::vector<wxString> m_configMessages;
 	size_t m_nextMessageIndex;
 	bool m_configLoaded;
+
+	wxString m_selectedBackgroundImage;  // Store the selected background image path to avoid re-selection
 };

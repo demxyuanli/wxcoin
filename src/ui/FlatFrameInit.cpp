@@ -128,6 +128,8 @@ void FlatFrame::InitializeUI(const wxSize& size)
 		m_homeMenu->AddSeparator();
 		m_homeMenu->AddMenuItem("Test &Widgets\tCtrl-W", ID_TEST_WIDGETS);
 		m_homeMenu->AddSeparator();
+		m_homeMenu->AddMenuItem("&Configuration Manager...\tCtrl+Shift+C", ID_CONFIG_MANAGER);
+		m_homeMenu->AddSeparator();
 		m_homeMenu->AddMenuItem("Print Frame All wxCtr", ID_Menu_PrintLayout_MainFrame);
 		m_homeMenu->BuildMenuLayout();
 		homeSpace->SetHomeMenu(m_homeMenu);

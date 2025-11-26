@@ -104,7 +104,7 @@ SelectionHighlightConfigDialog::~SelectionHighlightConfigDialog() {
 
 void SelectionHighlightConfigDialog::CreateFaceTab(wxPanel* panel) {
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
-    wxGridSizer* gridSizer = new wxGridSizer(3, 2, 5, 5);
+    wxGridSizer* gridSizer = new wxGridSizer(4, 2, 5, 5);
     
     // Hover color
     gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Hover Highlight Color:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);

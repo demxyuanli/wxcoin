@@ -18,6 +18,7 @@
 #include <wx/filename.h>
 
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <random>
 #include <string>
@@ -124,6 +125,7 @@ SplashScreen::SplashScreen()
     , m_finished(false)
     , m_nextMessageIndex(0)
     , m_configLoaded(false)
+    , m_selectedBackgroundImage(wxEmptyString)
 {
     static bool imageHandlersInitialized = false;
     if (!imageHandlersInitialized) {
@@ -198,7 +200,13 @@ void SplashScreen::ReloadFromConfig(size_t messagesAlreadyShown) {
         return;
     }
 
-    loadBackgroundImage();
+    // Don't reset selected background image - keep the same image throughout the application launch
+    // This ensures only one random image is shown per launch, even if config is reloaded
+    // Only reload the background if it hasn't been selected yet
+    if (m_selectedBackgroundImage.IsEmpty()) {
+        loadBackgroundImage();
+    }
+
     loadConfiguredMessages();
     m_configLoaded = true;
     m_nextMessageIndex = std::min(messagesAlreadyShown, m_configMessages.size());
@@ -282,6 +290,13 @@ void SplashScreen::loadConfiguredMessages() {
 void SplashScreen::loadBackgroundImage() {
     ConfigManager& cm = ConfigManager::getInstance();
     if (!cm.isInitialized()) {
+        return;
+    }
+
+    // If we already have a selected image, always reuse it to avoid showing different images
+    // This ensures that during a single application launch, only one random image is shown
+    if (!m_selectedBackgroundImage.IsEmpty()) {
+        loadBackgroundImageFromPath(m_selectedBackgroundImage);
         return;
     }
 
@@ -385,8 +400,11 @@ void SplashScreen::loadBackgroundImage() {
     }
 #endif
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    // Use current time as additional seed for better randomness across launches
+    auto now = std::chrono::high_resolution_clock::now();
+    auto seed = static_cast<unsigned int>(now.time_since_epoch().count());
+
+    std::mt19937 gen(seed);
     std::uniform_int_distribution<size_t> dist(0, backgrounds.size() - 1);
     const BackgroundEntry& entry = backgrounds[dist(gen)];
 
@@ -401,9 +419,16 @@ void SplashScreen::loadBackgroundImage() {
         return;
     }
 
+    // Store the selected image path to avoid re-selection on config reload
+    m_selectedBackgroundImage = selected;
+
+    loadBackgroundImageFromPath(selected);
+}
+
+void SplashScreen::loadBackgroundImageFromPath(const wxString& imagePath) {
     wxImage image;
-    if (!image.LoadFile(selected)) {
-        LOG_WRN("SplashScreen", std::string("Failed to load splash background: ") + selected.ToStdString());
+    if (!image.LoadFile(imagePath)) {
+        LOG_WRN("SplashScreen", std::string("Failed to load splash background: ") + imagePath.ToStdString());
         return;
     }
 

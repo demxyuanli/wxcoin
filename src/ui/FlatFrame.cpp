@@ -15,6 +15,7 @@
 #include "widgets/ButtonGroup.h"
 #include "config/ThemeManager.h"
 #include "config/SvgIconManager.h"
+#include "config/ConfigManagerDialog.h"
 #include <wx/display.h>
 #include "logger/Logger.h"
 #include "async/AsyncEngineIntegration.h"
@@ -283,6 +284,7 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	eventManager.bindMenuEvent(this, &FlatFrame::OnMenuOpenProject, ID_Menu_OpenProject_MainFrame);
 	eventManager.bindMenuEvent(this, &FlatFrame::OnShowUIHierarchy, ID_ShowUIHierarchy);
 	eventManager.bindMenuEvent(this, &FlatFrame::OnTestWidgets, ID_TEST_WIDGETS);
+	eventManager.bindMenuEvent(this, &FlatFrame::OnConfigManager, ID_CONFIG_MANAGER);
 	eventManager.bindMenuEvent(this, &FlatFrame::PrintUILayout, ID_Menu_PrintLayout_MainFrame);
 	eventManager.bindMenuEvent(this, &FlatFrame::OnMenuExit, wxID_EXIT);
 
@@ -317,6 +319,12 @@ FlatFrame::~FlatFrame()
 	if (m_explodeSliderDialog) {
 		m_explodeSliderDialog->Destroy();
 		m_explodeSliderDialog = nullptr;
+	}
+
+	// Clean up render mode button group
+	if (m_renderModeButtonGroup) {
+		delete m_renderModeButtonGroup;
+		m_renderModeButtonGroup = nullptr;
 	}
 
 	// Unbind events to prevent access violations
@@ -670,6 +678,11 @@ void FlatFrame::OnTestWidgets(wxCommandEvent& event)
 	ShowTestWidgets();
 }
 
+void FlatFrame::OnConfigManager(wxCommandEvent& event)
+{
+	ShowConfigManager();
+}
+
 void FlatFrame::ShowTestWidgets()
 {
 	// Create the widgets example dialog with tabs
@@ -678,6 +691,13 @@ void FlatFrame::ShowTestWidgets()
 	// Show the dialog
 	testDialog->ShowModal();
 	delete testDialog;
+}
+
+void FlatFrame::ShowConfigManager()
+{
+	ConfigManagerDialog* configDialog = new ConfigManagerDialog(this);
+	configDialog->ShowModal();
+	delete configDialog;
 }
 
 void FlatFrame::ShowUIHierarchy()

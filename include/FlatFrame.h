@@ -124,6 +124,7 @@ enum {
 	ID_SELECTION_HIGHLIGHT_CONFIG,
 	ID_DOCK_LAYOUT_CONFIG,
 	ID_TEST_WIDGETS, // New: test widgets window
+	ID_CONFIG_MANAGER, // Configuration Manager
 	ID_SAVE_AS,
 	ID_LOD_ENABLE,
 	ID_LOD_CONFIG,
@@ -319,11 +320,13 @@ public:
 	void OnToggleProfileSpace(wxCommandEvent& event);
 	void OnShowUIHierarchy(wxCommandEvent& event);
 	void OnTestWidgets(wxCommandEvent& event); // New: test widgets window
+	void OnConfigManager(wxCommandEvent& event); // Configuration Manager
 	void PrintUILayout(wxCommandEvent& event);
 	void OnThemeChanged(wxCommandEvent& event);
 	
 	// Helper methods
 	void ShowTestWidgets(); // New: show test widgets dialog
+	void ShowConfigManager(); // Show configuration manager dialog
 
 	// Message output control button event handlers
 	void OnMessageOutputFloat(wxCommandEvent& event);

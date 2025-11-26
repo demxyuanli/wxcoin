@@ -22,14 +22,30 @@ TransparencyDialog::TransparencyDialog(wxWindow* parent, OCCViewer* occViewer,
 		return;
 	}
 
-	if (m_selectedGeometries.empty()) {
-		LOG_ERR_S("No selected geometries in TransparencyDialog");
-		return;
-	}
-
 	// Set up title bar with icon
 	SetTitleIcon("eye", wxSize(20, 20));
 	ShowTitleIcon(true);
+
+	if (m_selectedGeometries.empty()) {
+		LOG_WRN_S("No selected geometries in TransparencyDialog, showing message");
+		// Create a simple message dialog instead of empty dialog
+		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+		wxStaticText* messageText = new wxStaticText(m_contentPanel, wxID_ANY,
+			"No objects available for transparency settings.\n\nPlease select objects in the view first.");
+		messageText->SetFont(messageText->GetFont().MakeLarger());
+		mainSizer->Add(messageText, 1, wxALIGN_CENTER | wxALL, 20);
+		
+		wxButton* okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
+		wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+		buttonSizer->AddStretchSpacer();
+		buttonSizer->Add(okButton, 0, wxALIGN_CENTER);
+		buttonSizer->AddStretchSpacer();
+		mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 10);
+		
+		m_contentPanel->SetSizer(mainSizer);
+		okButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(wxID_OK); });
+		return;
+	}
 
 	// Get current transparency from the first selected geometry
 	// In a real implementation, you might want to handle mixed transparency values

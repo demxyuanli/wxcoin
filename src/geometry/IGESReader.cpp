@@ -138,8 +138,10 @@ IGESReader::ReadResult IGESReader::readFile(const std::string& filePath,
 
         // Memory leak fix following FreeCAD approach
         // http://opencascade.blogspot.de/2009/03/unnoticeable-memory-leaks-part-2.html
-        Handle(IGESToBRep_Actor)::DownCast(aReader.WS()->TransferReader()->Actor())
-            ->SetModel(new IGESData_IGESModel);
+        Handle(IGESToBRep_Actor) actor = Handle(IGESToBRep_Actor)::DownCast(aReader.WS()->TransferReader()->Actor());
+        if (!actor.IsNull()) {
+            actor->SetModel(new IGESData_IGESModel);
+        }
 
         if (progress) progress(40, "Transferring shapes");
 
