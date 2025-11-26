@@ -11,6 +11,10 @@
 #include <OpenCASCADE/Standard_Failure.hxx>
 #include <OpenCASCADE/ShapeFix_Shape.hxx>
 #include <OpenCASCADE/BRepCheck_Analyzer.hxx>
+#include <OpenCASCADE/TDF_LabelSequence.hxx>
+#include <OpenCASCADE/XCAFDoc_ShapeTool.hxx>
+#include <OpenCASCADE/XCAFDoc_ColorTool.hxx>
+#include <OpenCASCADE/Quantity_Color.hxx>
 #include <mutex>
 #include <future>
 #include <thread>
@@ -110,6 +114,27 @@ private:
         const std::string& name,
         const std::string& baseName,
         const OptimizationOptions& options
+    );
+
+    /**
+     * @brief Process shapes with CAF color and name information
+     * @param shapes Vector of shapes to process
+     * @param labels CAF labels corresponding to shapes
+     * @param shapeTool CAF shape tool
+     * @param colorTool CAF color tool
+     * @param baseName Base name for geometry objects
+     * @param options Optimization options
+     * @param progress Progress callback
+     * @return Vector of processed geometry objects with colors and names
+     */
+    std::vector<std::shared_ptr<OCCGeometry>> processShapesWithCAF(
+        const std::vector<TopoDS_Shape>& shapes,
+        const TDF_LabelSequence& labels,
+        const Handle(XCAFDoc_ShapeTool)& shapeTool,
+        const Handle(XCAFDoc_ColorTool)& colorTool,
+        const std::string& baseName,
+        const OptimizationOptions& options,
+        ProgressCallback progress = nullptr
     );
 
     // Static members for caching
