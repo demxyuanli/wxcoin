@@ -9,7 +9,10 @@ PerformancePanel::PerformancePanel(wxWindow* parent)
 {
 	SetBackgroundStyle(wxBG_STYLE_PAINT);
 	SetDoubleBuffered(true);
-	SetMinSize(wxSize(360, 180));
+	SetMinSize(wxSize(280, 160));
+
+	// Set minimum client size for responsive behavior
+	SetSizeHints(wxSize(280, 160), wxDefaultSize);
 
 	// Set light background color
 	SetBackgroundColour(wxColour(245, 245, 245));
@@ -60,8 +63,8 @@ void PerformancePanel::OnPaint(wxPaintEvent&) {
 	const int cardPad = 6;
 	const int sparkH = 24;
 
-	// Responsive columns: 3 / 2 / 1 by width
-	int cols = (w >= 900) ? 3 : (w >= 600 ? 2 : 1);
+	// Responsive columns: 3 / 2 / 1 by width with improved breakpoints
+	int cols = (w >= 750) ? 3 : (w >= 450 ? 2 : 1);
 	const int totalCards = 3;
 	int rows = (totalCards + cols - 1) / cols;
 	int cardW = (w - (cols + 1) * margin) / cols;

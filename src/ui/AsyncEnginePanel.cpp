@@ -18,7 +18,10 @@ AsyncEnginePanel::AsyncEnginePanel(wxWindow* parent, async::AsyncEngineIntegrati
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetDoubleBuffered(true);
-    SetMinSize(wxSize(360, 200));
+    SetMinSize(wxSize(280, 180));
+
+    // Set minimum client size for responsive behavior
+    SetSizeHints(wxSize(280, 180), wxDefaultSize);
     
     SetBackgroundColour(wxColour(245, 245, 245));
     
@@ -122,8 +125,8 @@ void AsyncEnginePanel::OnPaint(wxPaintEvent&) {
     
     int yPos = margin + headerHeight;
     
-    // Calculate layout
-    int cols = (w >= 900) ? 4 : (w >= 600 ? 2 : 1);
+    // Calculate layout with improved responsive breakpoints
+    int cols = (w >= 700) ? 4 : (w >= 450 ? 2 : 1);
     int cardW = (w - (cols + 1) * margin) / cols;
     int cardH = 80;
     

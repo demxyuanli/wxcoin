@@ -28,6 +28,77 @@
 
 using namespace ads;
 
+/**
+ * @brief Responsive sizer that dynamically adjusts layout based on available width
+ *
+ * This sizer switches between horizontal and vertical layout based on the container width,
+ * ensuring optimal use of space for performance and async engine panels.
+ */
+class ResponsiveDockSizer : public wxBoxSizer {
+public:
+    ResponsiveDockSizer(int orient) : wxBoxSizer(orient), m_defaultOrient(orient) {}
+
+    virtual wxSize CalcMin() override {
+        // Update orientation before calculating min size
+        wxWindow* parent = nullptr;
+        if (!m_children.empty() && m_children[0]->GetWindow()) {
+            parent = m_children[0]->GetWindow()->GetParent();
+        }
+
+        if (parent) {
+            wxSize parentSize = parent->GetClientSize();
+            // Use a more conservative threshold for switching to vertical layout
+            int currentOrient = (parentSize.x < 650) ? wxVERTICAL : m_defaultOrient;
+            if (currentOrient != GetOrientation()) {
+                SetOrientation(currentOrient);
+                // Force layout recalculation when orientation changes
+                if (parent->GetSizer() == this) {
+                    parent->Layout();
+                }
+            }
+        }
+
+        wxSize minSize = wxBoxSizer::CalcMin();
+        // Ensure minimum size for proper display
+        minSize.IncTo(wxSize(300, 200));
+        return minSize;
+    }
+
+    virtual void RecalcSizes() override {
+        wxWindow* parent = nullptr;
+        if (!m_children.empty() && m_children[0]->GetWindow()) {
+            parent = m_children[0]->GetWindow()->GetParent();
+        }
+
+        if (parent) {
+            wxSize parentSize = parent->GetClientSize();
+
+            // Switch to vertical layout if width is too narrow for horizontal
+            int currentOrient = (parentSize.x < 650) ? wxVERTICAL : m_defaultOrient;
+
+            if (currentOrient != GetOrientation()) {
+                SetOrientation(currentOrient);
+                // Force layout recalculation when orientation changes
+                parent->Layout();
+            }
+
+            // Update virtual size for scrolled window
+            wxScrolledWindow* scrolledParent = wxDynamicCast(parent, wxScrolledWindow);
+            if (scrolledParent) {
+                wxSize minSize = CalcMin();
+                scrolledParent->SetVirtualSize(minSize);
+                scrolledParent->AdjustScrollbars();
+            }
+        }
+
+        // Call parent implementation
+        wxBoxSizer::RecalcSizes();
+    }
+
+private:
+    int m_defaultOrient;
+};
+
 // Event table
 wxBEGIN_EVENT_TABLE(FlatFrameDocking, FlatFrame)
 EVT_BUTTON(ID_DOCKING_SAVE_LAYOUT, FlatFrameDocking::OnDockingSaveLayout)
@@ -550,21 +621,25 @@ DockWidget* FlatFrameDocking::CreateMessageDockWidget() {
 DockWidget* FlatFrameDocking::CreatePerformanceDockWidget() {
     DockWidget* dock = new DockWidget("Performance", m_dockManager->containerWidget());
 
-    // Create a container panel with horizontal layout for both panels
-    wxPanel* container = new wxPanel(dock);
-    wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
+    // Create a scrolled container panel with responsive layout for both panels
+    wxScrolledWindow* container = new wxScrolledWindow(dock, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                                       wxHSCROLL | wxVSCROLL | wxBORDER_NONE);
+    container->SetScrollRate(10, 10);
+    container->SetMinSize(wxSize(300, 200));  // Minimum size for the scrolled container
+
+    ResponsiveDockSizer* sizer = new ResponsiveDockSizer(wxHORIZONTAL);
 
     // Create PerformancePanel with the container as parent
     PerformancePanel* perfPanel = new PerformancePanel(container);
-    perfPanel->SetMinSize(wxSize(360, 140));
+    perfPanel->SetMinSize(wxSize(280, 140));
 
     // Create AsyncEnginePanel
     AsyncEnginePanel* asyncPanel = new AsyncEnginePanel(container, m_asyncEngine.get());
-    asyncPanel->SetMinSize(wxSize(360, 140));
+    asyncPanel->SetMinSize(wxSize(280, 140));
 
-    // Add both panels to container side by side
-    sizer->Add(perfPanel, 1, wxEXPAND | wxRIGHT, 4);
-    sizer->Add(asyncPanel, 1, wxEXPAND | wxLEFT, 4);
+    // Add both panels to container side by side with improved proportions
+    sizer->Add(perfPanel, 1, wxEXPAND | wxRIGHT, 2);
+    sizer->Add(asyncPanel, 1, wxEXPAND | wxLEFT, 2);
     container->SetSizer(sizer);
 
     // Set the container as the dock widget
