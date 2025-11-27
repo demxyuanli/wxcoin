@@ -5,23 +5,26 @@
 #include "config/editor/ConfigCategoryEditor.h"
 #include "widgets/FlatProgressBar.h"
 #include "config/ThemeManager.h"
+#include "config/SvgIconManager.h"
 #include "logger/Logger.h"
 #include <wx/sizer.h>
 #include <wx/msgdlg.h>
 #include <wx/spinctrl.h>
 #include <wx/colordlg.h>
 #include <wx/dialog.h>
+#include <wx/statline.h>
 #include <sstream>
+#include <iomanip>
+#include <algorithm>
 
 wxBEGIN_EVENT_TABLE(ConfigManagerDialog, FramelessModalPopup)
-    EVT_TREE_SEL_CHANGED(wxID_ANY, ConfigManagerDialog::onCategorySelected)
 wxEND_EVENT_TABLE()
 
 ConfigManagerDialog::ConfigManagerDialog(wxWindow* parent)
-    : FramelessModalPopup(parent, "Configuration Manager", wxSize(1200, 700))
-    , m_categoryTree(nullptr)
+    : FramelessModalPopup(parent, "Configuration Manager", wxSize(1400, 800))
+    , m_categoryScrollPanel(nullptr)
+    , m_searchCtrl(nullptr)
     , m_scrolledPanel(nullptr)
-    , m_splitter(nullptr)
     , m_applyButton(nullptr)
     , m_okButton(nullptr)
     , m_cancelButton(nullptr)
@@ -36,7 +39,7 @@ ConfigManagerDialog::ConfigManagerDialog(wxWindow* parent)
 
     // Create UI on the content panel provided by FramelessModalPopup
     createUI();
-    populateCategoryTree();
+    populateCategoryList();
     
     // Load all configurations with flat progress bar first (before showing main window)
     loadAllConfigurations();
@@ -45,8 +48,9 @@ ConfigManagerDialog::ConfigManagerDialog(wxWindow* parent)
     Show();
     wxSafeYield();  // Allow window to render
 
-    if (m_categoryTree->GetCount() > 0) {
-        m_categoryTree->SelectItem(m_categoryTree->GetFirstVisibleItem());
+    // Select first category if available
+    if (!m_categoryButtons.empty()) {
+        onCategoryMenuSelected(m_categoryButtons[0]);
     }
 }
 
@@ -63,45 +67,88 @@ ConfigManagerDialog::~ConfigManagerDialog() {
 
 void ConfigManagerDialog::createUI() {
     // Use the content panel provided by FramelessModalPopup
-    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    m_splitter = new wxSplitterWindow(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-                                       wxSP_3D | wxSP_LIVE_UPDATE);
-    m_splitter->SetMinimumPaneSize(200);
+    // Left navigation panel with modern style
+    wxPanel* navPanel = new wxPanel(m_contentPanel, wxID_ANY);
+    navPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
+    wxBoxSizer* navSizer = new wxBoxSizer(wxVERTICAL);
 
-    m_categoryTree = new wxTreeCtrl(m_splitter, wxID_ANY, wxDefaultPosition, wxSize(200, -1),
-                                      wxTR_DEFAULT_STYLE | wxTR_HIDE_ROOT | wxTR_SINGLE);
+    // Search box
+    wxStaticText* searchLabel = new wxStaticText(navPanel, wxID_ANY, "Search settings");
+    wxFont searchLabelFont = CFG_DEFAULTFONT();
+    searchLabelFont.SetPointSize(searchLabelFont.GetPointSize() - 1);
+    searchLabel->SetFont(searchLabelFont);
+    searchLabel->SetForegroundColour(wxColour(128, 128, 128)); // Gray for normal text
+    navSizer->Add(searchLabel, 0, wxLEFT | wxTOP | wxRIGHT, 12);
 
-    m_scrolledPanel = new wxScrolledWindow(m_splitter, wxID_ANY);
+    m_searchCtrl = new wxTextCtrl(navPanel, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 28),
+                                   wxTE_PROCESS_ENTER);
+    m_searchCtrl->SetHint("Ctrl+F");
+    m_searchCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { onSearch(); });
+    m_searchCtrl->Bind(wxEVT_KEY_DOWN, [this](wxKeyEvent& event) {
+        if (event.GetKeyCode() == WXK_ESCAPE) {
+            m_searchCtrl->Clear();
+            onSearch();
+        }
+        event.Skip();
+    });
+    navSizer->Add(m_searchCtrl, 0, wxEXPAND | wxLEFT | wxTOP | wxRIGHT | wxBOTTOM, 12);
+
+    // Category menu list (custom menu-style with icons and groups)
+    m_categoryScrollPanel = new wxScrolledWindow(navPanel, wxID_ANY);
+    m_categoryScrollPanel->SetScrollRate(10, 10);
+    m_categoryScrollPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
+    m_categoryScrollPanel->SetMinSize(wxSize(240, -1));
+    
+    wxBoxSizer* categorySizer = new wxBoxSizer(wxVERTICAL);
+    m_categoryScrollPanel->SetSizer(categorySizer);
+    
+    navSizer->Add(m_categoryScrollPanel, 1, wxEXPAND | wxLEFT | wxRIGHT, 12);
+    navSizer->AddSpacer(12);
+
+    navPanel->SetSizer(navSizer);
+
+    // Right content panel
+    m_scrolledPanel = new wxScrolledWindow(m_contentPanel, wxID_ANY);
     m_scrolledPanel->SetScrollRate(10, 10);
+    m_scrolledPanel->SetBackgroundColour(CFG_COLOUR("PrimaryBackgroundColour"));
 
     wxPanel* editorContainer = new wxPanel(m_scrolledPanel);
     wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
     editorContainer->SetSizer(contentSizer);
 
     wxBoxSizer* scrolledSizer = new wxBoxSizer(wxVERTICAL);
-    scrolledSizer->Add(editorContainer, 1, wxEXPAND | wxALL, 5);
+    scrolledSizer->Add(editorContainer, 1, wxEXPAND | wxALL, 20);
     m_scrolledPanel->SetSizer(scrolledSizer);
 
-    m_splitter->SplitVertically(m_categoryTree, m_scrolledPanel, 250);
+    // Split layout
+    mainSizer->Add(navPanel, 0, wxEXPAND | wxALL, 0);
+    mainSizer->Add(m_scrolledPanel, 1, wxEXPAND | wxALL, 0);
 
-    mainSizer->Add(m_splitter, 1, wxEXPAND | wxALL, 5);
-
+    // Bottom button bar (minimal, only essential buttons)
+    wxPanel* buttonPanel = new wxPanel(m_contentPanel, wxID_ANY);
+    buttonPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_resetButton = new wxButton(m_contentPanel, wxID_ANY, "Reset");
-    m_applyButton = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
-    m_okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
-    m_cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
+    
+    m_resetButton = new wxButton(buttonPanel, wxID_ANY, "Reset");
+    m_applyButton = new wxButton(buttonPanel, wxID_APPLY, "Apply");
+    m_okButton = new wxButton(buttonPanel, wxID_OK, "OK");
+    m_cancelButton = new wxButton(buttonPanel, wxID_CANCEL, "Cancel");
 
-    buttonSizer->Add(m_resetButton, 0, wxALL, 5);
+    buttonSizer->Add(m_resetButton, 0, wxALL, 8);
     buttonSizer->AddStretchSpacer();
-    buttonSizer->Add(m_applyButton, 0, wxALL, 5);
-    buttonSizer->Add(m_okButton, 0, wxALL, 5);
-    buttonSizer->Add(m_cancelButton, 0, wxALL, 5);
+    buttonSizer->Add(m_applyButton, 0, wxALL, 8);
+    buttonSizer->Add(m_okButton, 0, wxALL, 8);
+    buttonSizer->Add(m_cancelButton, 0, wxALL, 8);
 
-    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
+    buttonPanel->SetSizer(buttonSizer);
 
-    m_contentPanel->SetSizer(mainSizer);
+    // Main layout
+    wxBoxSizer* outerSizer = new wxBoxSizer(wxVERTICAL);
+    outerSizer->Add(mainSizer, 1, wxEXPAND);
+    outerSizer->Add(buttonPanel, 0, wxEXPAND);
+    m_contentPanel->SetSizer(outerSizer);
 
     m_resetButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { onReset(); });
     m_applyButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent& event) { onApply(event); });
@@ -112,31 +159,253 @@ void ConfigManagerDialog::createUI() {
     m_editorContainer = editorContainer;
 }
 
-void ConfigManagerDialog::populateCategoryTree() {
-    m_categoryTree->DeleteAllItems();
-    wxTreeItemId root = m_categoryTree->AddRoot("Categories");
+void ConfigManagerDialog::populateCategoryList() {
+    // Clear existing buttons
+    wxSizer* sizer = m_categoryScrollPanel->GetSizer();
+    sizer->Clear(true);
+    m_categoryButtonMap.clear();
+    m_categoryButtons.clear();
 
     auto categories = m_configManager->getCategories();
-    LOG_INF("Populating category tree with " + std::to_string(categories.size()) + " categories", "ConfigManagerDialog");
+    LOG_INF("Populating category menu with " + std::to_string(categories.size()) + " categories", "ConfigManagerDialog");
 
-    std::map<std::string, wxTreeItemId> categoryItems;
+    // Group categories by similarity (like catalog grouping)
+    struct CategoryGroup {
+        std::string groupName;
+        std::vector<ConfigCategory> items;
+    };
 
+    std::vector<CategoryGroup> groups = {
+        {"System", {}},
+        {"Appearance", {}},
+        {"Rendering", {}},
+        {"User Interface", {}},
+        {"Other", {}}
+    };
+
+    // Categorize items by similarity
     for (const auto& category : categories) {
-        LOG_INF("Adding category '" + category.id + "' with " + std::to_string(category.items.size()) + " items", "ConfigManagerDialog");
-        wxTreeItemId catItem = m_categoryTree->AppendItem(root, category.displayName);
-        // Use custom tree item data to store category ID
-        CategoryTreeItemData* data = new CategoryTreeItemData(category.id);
-        m_categoryTree->SetItemData(catItem, data);
-        categoryItems[category.id] = catItem;
+        std::string id = category.id;
+        if (id == "System" || id == "General") {
+            groups[0].items.push_back(category);
+        } else if (id == "Appearance") {
+            groups[1].items.push_back(category);
+        } else if (id == "Rendering" || id == "Lighting" || id == "Edge Settings" || id == "Render Preview") {
+            groups[2].items.push_back(category);
+        } else if (id == "UI Components" || id == "Layout" || id == "Dock Layout" || id == "Typography" || id == "Navigation") {
+            groups[3].items.push_back(category);
+        } else {
+            groups[4].items.push_back(category);
+        }
     }
 
-    // Expand all child items instead of the hidden root
-    wxTreeItemIdValue cookie;
-    wxTreeItemId child = m_categoryTree->GetFirstChild(root, cookie);
-    while (child.IsOk()) {
-        m_categoryTree->Expand(child);
-        child = m_categoryTree->GetNextChild(root, cookie);
+    // Sort items within each group alphabetically
+    for (auto& group : groups) {
+        std::sort(group.items.begin(), group.items.end(), 
+            [](const ConfigCategory& a, const ConfigCategory& b) {
+                return a.displayName < b.displayName;
+            });
     }
+
+    // Create menu items for each group
+    for (const auto& group : groups) {
+        if (group.items.empty()) continue;
+
+        // Add group header (always show for clarity)
+        wxStaticText* groupHeader = new wxStaticText(m_categoryScrollPanel, wxID_ANY, group.groupName);
+        wxFont headerFont = CFG_DEFAULTFONT();
+        headerFont.SetPointSize(headerFont.GetPointSize() - 1);
+        headerFont.SetWeight(wxFONTWEIGHT_BOLD);
+        groupHeader->SetFont(headerFont);
+        groupHeader->SetForegroundColour(wxColour(128, 128, 128)); // Gray for normal text
+        sizer->Add(groupHeader, 0, wxLEFT | wxTOP | wxRIGHT, 12);
+        sizer->AddSpacer(4);
+
+        // Add menu items for each category in group
+        for (const auto& category : group.items) {
+            createCategoryMenuItem(category, sizer);
+        }
+
+        // Add separator after group (except last)
+        if (&group != &groups.back() && !group.items.empty()) {
+            sizer->AddSpacer(8);
+            // Add subtle separator line
+            wxStaticLine* separator = new wxStaticLine(m_categoryScrollPanel, wxID_ANY, 
+                                                       wxDefaultPosition, wxSize(-1, 1));
+            separator->SetBackgroundColour(CFG_COLOUR("BorderColour"));
+            sizer->Add(separator, 0, wxEXPAND | wxLEFT | wxRIGHT, 12);
+            sizer->AddSpacer(8);
+        }
+    }
+
+    sizer->Layout();
+    m_categoryScrollPanel->FitInside();
+}
+
+void ConfigManagerDialog::createCategoryMenuItem(const ConfigCategory& category, wxSizer* sizer) {
+    // Create menu item panel
+    wxPanel* itemPanel = new wxPanel(m_categoryScrollPanel, wxID_ANY);
+    itemPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
+    itemPanel->SetMinSize(wxSize(-1, 24)); // Menu item height: 24px
+    
+    wxBoxSizer* itemSizer = new wxBoxSizer(wxHORIZONTAL);
+    itemSizer->AddSpacer(12); // Left padding: 12px
+
+    // Load icon
+    wxBitmap iconBitmap;
+    try {
+        SvgIconManager& iconMgr = SvgIconManager::GetInstance();
+        iconBitmap = iconMgr.GetIconBitmap(category.icon, wxSize(12, 12)); // Icon size: 12x12
+    } catch (...) {
+        // Fallback to default icon
+    }
+
+    // Icon
+    if (iconBitmap.IsOk()) {
+        wxStaticBitmap* iconStatic = new wxStaticBitmap(itemPanel, wxID_ANY, iconBitmap);
+        itemSizer->Add(iconStatic, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
+    } else {
+        // Placeholder for missing icon
+        itemSizer->AddSpacer(20); // 12px icon + 8px spacing
+    }
+
+    // Label with theme font
+    wxStaticText* label = new wxStaticText(itemPanel, wxID_ANY, category.displayName);
+    label->SetFont(CFG_DEFAULTFONT()); // Use theme font
+    label->SetForegroundColour(wxColour(128, 128, 128)); // Gray for normal text
+    itemSizer->Add(label, 1, wxALIGN_CENTER_VERTICAL);
+    itemSizer->AddSpacer(12); // Right padding: 12px
+
+    itemPanel->SetSizer(itemSizer);
+
+    // Store mapping
+    m_categoryButtonMap[itemPanel] = category.id;
+    m_categoryButtons.push_back(itemPanel);
+
+    // Bind events for selection
+    itemPanel->Bind(wxEVT_LEFT_DOWN, [this, itemPanel](wxMouseEvent&) {
+        onCategoryMenuSelected(itemPanel);
+    });
+    label->Bind(wxEVT_LEFT_DOWN, [this, itemPanel](wxMouseEvent&) {
+        onCategoryMenuSelected(itemPanel);
+    });
+
+    // Hover effect - only apply if not selected
+    itemPanel->Bind(wxEVT_ENTER_WINDOW, [itemPanel](wxMouseEvent&) {
+        wxColour currentBg = itemPanel->GetBackgroundColour();
+        wxColour accentColor = CFG_COLOUR("AccentColour");
+        // Only apply hover if not already selected (accent color)
+        if (currentBg != accentColor) {
+            itemPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour").ChangeLightness(105));
+            itemPanel->Refresh();
+        }
+    });
+    itemPanel->Bind(wxEVT_LEAVE_WINDOW, [itemPanel](wxMouseEvent&) {
+        wxColour currentBg = itemPanel->GetBackgroundColour();
+        wxColour accentColor = CFG_COLOUR("AccentColour");
+        // Only restore if not selected
+        if (currentBg != accentColor) {
+            itemPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
+            itemPanel->Refresh();
+        }
+    });
+
+    sizer->Add(itemPanel, 0, wxEXPAND | wxLEFT | wxRIGHT, 4);
+    sizer->AddSpacer(2); // Spacing between items: 2px
+}
+
+void ConfigManagerDialog::onCategoryMenuSelected(wxWindow* itemPanel) {
+    auto it = m_categoryButtonMap.find(itemPanel);
+    if (it == m_categoryButtonMap.end()) return;
+
+    // Update visual selection - highlight selected item
+    wxColour accentColor = CFG_COLOUR("AccentColour");
+    wxColour normalBg = CFG_COLOUR("SecondaryBackgroundColour");
+    wxColour normalText = wxColour(128, 128, 128); // Gray for normal text
+    wxColour selectedText = wxColour(0, 0, 0); // Black for emphasized text
+
+    for (wxWindow* btn : m_categoryButtons) {
+        if (btn == itemPanel) {
+            // Selected item - accent background, black text
+            btn->SetBackgroundColour(accentColor);
+            wxWindowList& children = btn->GetChildren();
+            for (wxWindow* child : children) {
+                if (wxStaticText* text = dynamic_cast<wxStaticText*>(child)) {
+                    text->SetForegroundColour(selectedText);
+                }
+            }
+        } else {
+            // Unselected items - normal background, gray text
+            btn->SetBackgroundColour(normalBg);
+            wxWindowList& children = btn->GetChildren();
+            for (wxWindow* child : children) {
+                if (wxStaticText* text = dynamic_cast<wxStaticText*>(child)) {
+                    text->SetForegroundColour(normalText);
+                }
+            }
+        }
+        btn->Refresh();
+    }
+
+    std::string categoryId = it->second;
+    m_currentCategory = categoryId;
+    refreshItemEditors();
+}
+
+void ConfigManagerDialog::onSearch() {
+    wxString searchText = m_searchCtrl->GetValue().Lower();
+    
+    // Filter category menu based on search
+    if (searchText.IsEmpty()) {
+        // Show all categories
+        for (wxWindow* btn : m_categoryButtons) {
+            btn->Show();
+        }
+    } else {
+        // Filter categories
+        for (wxWindow* btn : m_categoryButtons) {
+            auto it = m_categoryButtonMap.find(btn);
+            if (it == m_categoryButtonMap.end()) {
+                btn->Show(false);
+                continue;
+            }
+
+            std::string categoryId = it->second;
+            auto categories = m_configManager->getCategories();
+            ConfigCategory* category = nullptr;
+            for (auto& cat : categories) {
+                if (cat.id == categoryId) {
+                    category = &cat;
+                    break;
+                }
+            }
+
+            bool matches = false;
+            if (category) {
+                // Check category name
+                if (wxString(category->displayName).Lower().Contains(searchText)) {
+                    matches = true;
+                }
+                
+                // Check items in category
+                if (!matches) {
+                    auto items = m_configManager->getItemsForCategory(categoryId);
+                    for (const auto& item : items) {
+                        if (wxString(item.displayName).Lower().Contains(searchText) ||
+                            wxString(item.description).Lower().Contains(searchText)) {
+                            matches = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            btn->Show(matches);
+        }
+    }
+
+    m_categoryScrollPanel->GetSizer()->Layout();
+    m_categoryScrollPanel->FitInside();
 }
 
 void ConfigManagerDialog::loadAllConfigurations() {
@@ -239,7 +508,15 @@ void ConfigManagerDialog::loadAllConfigurations() {
         ConfigCategoryEditor* editor = ConfigEditorFactory::createEditor(m_editorContainer, m_configManager, category.id);
         if (editor) {
             editor->setChangeCallback([this]() {
-                if (m_currentEditor && m_currentEditor->hasChanges()) {
+                // Check all cached editors for changes, not just the current one
+                bool hasAnyChanges = false;
+                for (auto& pair : m_editorCache) {
+                    if (pair.second && pair.second->hasChanges()) {
+                        hasAnyChanges = true;
+                        break;
+                    }
+                }
+                if (hasAnyChanges) {
                     m_applyButton->Enable(true);
                 }
             });
@@ -268,30 +545,61 @@ void ConfigManagerDialog::loadAllConfigurations() {
     m_allConfigsLoaded = true;
 }
 
-void ConfigManagerDialog::onCategorySelected(wxTreeEvent& event) {
-    wxTreeItemId item = event.GetItem();
-    if (!item.IsOk()) return;
-
-    // Get tree item data
-    wxTreeItemData* itemData = m_categoryTree->GetItemData(item);
-    if (!itemData) return;
-
-    CategoryTreeItemData* data = dynamic_cast<CategoryTreeItemData*>(itemData);
-    if (!data) return;
-
-    std::string categoryId = data->GetCategoryId();
-    m_currentCategory = categoryId;
-
-    refreshItemEditors();
-}
 
 void ConfigManagerDialog::refreshItemEditors() {
     wxSizer* sizer = m_editorContainer->GetSizer();
     
-    // Hide current editor if exists
+    // Hide and detach current editor if exists (but don't delete it - it's cached)
     if (m_currentEditor) {
         m_currentEditor->Hide();
         sizer->Detach(m_currentEditor);
+    }
+    
+    // Remove title and spacer if exists
+    // First, find the title window and spacer index to remove
+    wxStaticText* titleToRemove = nullptr;
+    int spacerIndexToRemove = -1;
+    wxSizerItem* spacerItemPtr = nullptr;  // Save pointer before removal
+    
+    // Find title window and spacer
+    wxSizerItemList& items = sizer->GetChildren();
+    for (size_t i = 0; i < items.size(); ++i) {
+        wxSizerItem* item = items[i];
+        if (!item) continue;
+        
+        // Check if this is a spacer after title
+        if (spacerIndexToRemove < 0 && item->IsSpacer() && item->GetMinSize().y >= 20) {
+            spacerIndexToRemove = static_cast<int>(i);
+            spacerItemPtr = item;  // Save pointer before removal
+        }
+        
+        // Check if this is the title window
+        if (!titleToRemove) {
+            wxWindow* win = item->GetWindow();
+            if (win) {
+                if (wxStaticText* text = dynamic_cast<wxStaticText*>(win)) {
+                    wxFont font = text->GetFont();
+                    if (font.GetWeight() == wxFONTWEIGHT_BOLD && 
+                        font.GetPointSize() >= GetFont().GetPointSize() + 2) {
+                        titleToRemove = text;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Remove spacer first (before removing title window)
+    if (spacerIndexToRemove >= 0 && spacerItemPtr) {
+        // Remove the item from sizer (this doesn't delete it, just removes from list)
+        sizer->Remove(spacerIndexToRemove);
+        // Now safely delete the removed item using the saved pointer
+        delete spacerItemPtr;
+    }
+    
+    // Remove title window
+    if (titleToRemove) {
+        sizer->Detach(titleToRemove);
+        titleToRemove->Destroy();
     }
 
     if (m_currentCategory.empty()) {
@@ -299,6 +607,25 @@ void ConfigManagerDialog::refreshItemEditors() {
         m_scrolledPanel->FitInside();
         return;
     }
+
+    // Add category title
+    auto categories = m_configManager->getCategories();
+    std::string categoryDisplayName = m_currentCategory;
+    for (const auto& cat : categories) {
+        if (cat.id == m_currentCategory) {
+            categoryDisplayName = cat.displayName;
+            break;
+        }
+    }
+    
+    wxStaticText* titleText = new wxStaticText(m_editorContainer, wxID_ANY, categoryDisplayName);
+    wxFont titleFont = CFG_DEFAULTFONT();
+    titleFont.SetPointSize(titleFont.GetPointSize() + 4);
+    titleFont.SetWeight(wxFONTWEIGHT_BOLD);
+    titleText->SetFont(titleFont);
+    titleText->SetForegroundColour(CFG_COLOUR("PrimaryTextColour"));
+    sizer->Add(titleText, 0, wxLEFT | wxRIGHT | wxTOP, 0);
+    sizer->AddSpacer(24); // Spacing after title
 
     // All editors should be pre-loaded, just get from cache
     auto cacheIt = m_editorCache.find(m_currentCategory);
@@ -308,7 +635,7 @@ void ConfigManagerDialog::refreshItemEditors() {
             // Refresh values from config manager (in case config was changed externally)
             m_currentEditor->refreshValues();
             m_currentEditor->Show();
-            sizer->Add(m_currentEditor, 1, wxEXPAND | wxALL, 5);
+            sizer->Add(m_currentEditor, 1, wxEXPAND | wxLEFT | wxRIGHT, 0);
         }
     } else {
         // Fallback: if editor not in cache (shouldn't happen if loadAllConfigurations worked)
@@ -316,13 +643,21 @@ void ConfigManagerDialog::refreshItemEditors() {
         m_currentEditor = ConfigEditorFactory::createEditor(m_editorContainer, m_configManager, m_currentCategory);
         if (m_currentEditor) {
             m_currentEditor->setChangeCallback([this]() {
-                if (m_currentEditor && m_currentEditor->hasChanges()) {
+                // Check all cached editors for changes, not just the current one
+                bool hasAnyChanges = false;
+                for (auto& pair : m_editorCache) {
+                    if (pair.second && pair.second->hasChanges()) {
+                        hasAnyChanges = true;
+                        break;
+                    }
+                }
+                if (hasAnyChanges) {
                     m_applyButton->Enable(true);
                 }
             });
             m_currentEditor->loadConfig();
             m_editorCache[m_currentCategory] = m_currentEditor;
-            sizer->Add(m_currentEditor, 1, wxEXPAND | wxALL, 5);
+            sizer->Add(m_currentEditor, 1, wxEXPAND | wxLEFT | wxRIGHT, 0);
         }
     }
 
@@ -405,67 +740,158 @@ ConfigItemEditor::ConfigItemEditor(wxWindow* parent, const ConfigItem& item,
     , m_sizeSeparator(nullptr)
     , m_originalValue(item.currentValue)
     , m_modified(false)
+    , m_originalBgColor()
 {
     createUI();
     setValue(item.currentValue);
+
+    // Add hover effect for better user feedback
+    Bind(wxEVT_ENTER_WINDOW, [this](wxMouseEvent&) {
+        wxColour hoverBg = CFG_COLOUR("SecondaryBackgroundColour");
+        hoverBg = hoverBg.ChangeLightness(105); // Slightly lighter
+        SetBackgroundColour(hoverBg);
+        Refresh();
+    });
+
+    Bind(wxEVT_LEAVE_WINDOW, [this](wxMouseEvent&) {
+        SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
+        Refresh();
+    });
 }
 
 ConfigItemEditor::~ConfigItemEditor() {
 }
 
 void ConfigItemEditor::createUI() {
-    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+    // Modern card-style layout with theme colors
+    wxColour bgColor = CFG_COLOUR("SecondaryBackgroundColour");
+    wxColour textColor = CFG_COLOUR("PrimaryTextColour");
+    wxColour descColor = CFG_COLOUR("SecondaryTextColour");
+    wxColour borderColor = CFG_COLOUR("BorderColour");
 
+    SetBackgroundColour(bgColor);
+    SetMinSize(wxSize(-1, 60)); // Minimum height for card
+
+    // Create main horizontal sizer - card layout
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
+    mainSizer->AddSpacer(16); // Left padding
+
+    // Left section: Title and description
+    wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
+    leftSizer->AddSpacer(8); // Top padding
+
+    // Main label - bold, larger
     m_label = new wxStaticText(this, wxID_ANY, m_item.displayName);
-    wxFont boldFont = m_label->GetFont();
-    boldFont.SetWeight(wxFONTWEIGHT_BOLD);
-    m_label->SetFont(boldFont);
-    mainSizer->Add(m_label, 0, wxALL, 5);
+    wxFont labelFont = m_label->GetFont();
+    labelFont.SetWeight(wxFONTWEIGHT_BOLD);
+    labelFont.SetPointSize(labelFont.GetPointSize() + 1);
+    m_label->SetFont(labelFont);
+    m_label->SetForegroundColour(textColor);
+    leftSizer->Add(m_label, 0, wxLEFT | wxRIGHT, 0);
 
+    // Description - smaller font, gray color, with spacing
     if (!m_item.description.empty()) {
+        leftSizer->AddSpacer(4);
         m_description = new wxStaticText(this, wxID_ANY, m_item.description);
-        m_description->SetForegroundColour(wxColour(100, 100, 100));
-        mainSizer->Add(m_description, 0, wxLEFT | wxRIGHT | wxBOTTOM, 5);
+        wxFont descFont = m_description->GetFont();
+        descFont.SetPointSize(descFont.GetPointSize() - 1);
+        m_description->SetFont(descFont);
+        m_description->SetForegroundColour(descColor);
+        m_description->Wrap(400); // Allow wrapping for long descriptions
+        leftSizer->Add(m_description, 0, wxLEFT | wxRIGHT | wxBOTTOM, 0);
     }
 
+    leftSizer->AddSpacer(8); // Bottom padding
+    mainSizer->Add(leftSizer, 1, wxEXPAND | wxTOP | wxBOTTOM, 0);
+
+    // Spacer to push controls to the right
+    mainSizer->AddStretchSpacer();
+
+    // Right section: Control widget
     wxBoxSizer* valueSizer = new wxBoxSizer(wxHORIZONTAL);
 
     switch (m_item.type) {
         case ConfigValueType::Bool: {
+            // For boolean values, use checkbox styled as toggle switch
             m_checkBox = new wxCheckBox(this, wxID_ANY, "");
             m_checkBox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { onValueChanged(); });
-            valueSizer->Add(m_checkBox, 0, wxALL, 5);
+            // Style checkbox to look more like a toggle switch
+            wxFont checkFont = m_checkBox->GetFont();
+            checkFont.SetPointSize(checkFont.GetPointSize() + 2);
+            m_checkBox->SetFont(checkFont);
+            valueSizer->Add(m_checkBox, 0, wxALIGN_CENTER_VERTICAL);
             break;
         }
         case ConfigValueType::Int: {
-            m_spinCtrl = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+            m_spinCtrl = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1),
                                        wxSP_ARROW_KEYS, (int)m_item.minValue, (int)m_item.maxValue);
             m_spinCtrl->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { onValueChanged(); });
-            valueSizer->Add(m_spinCtrl, 1, wxALL | wxEXPAND, 5);
+            valueSizer->Add(m_spinCtrl, 0, wxALIGN_CENTER_VERTICAL);
             break;
         }
         case ConfigValueType::Double: {
-            m_spinCtrlDouble = new wxSpinCtrlDouble(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+            m_spinCtrlDouble = new wxSpinCtrlDouble(this, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1),
                                                    wxSP_ARROW_KEYS, m_item.minValue, m_item.maxValue, 0.0, 0.1);
             m_spinCtrlDouble->Bind(wxEVT_SPINCTRLDOUBLE, [this](wxSpinDoubleEvent&) { onValueChanged(); });
-            valueSizer->Add(m_spinCtrlDouble, 1, wxALL | wxEXPAND, 5);
+            valueSizer->Add(m_spinCtrlDouble, 0, wxALIGN_CENTER_VERTICAL);
             break;
         }
         case ConfigValueType::Enum: {
-            m_choice = new wxChoice(this, wxID_ANY);
+            m_choice = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(150, -1));
             for (const auto& val : m_item.enumValues) {
                 m_choice->Append(val);
             }
             m_choice->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) { onValueChanged(); });
-            valueSizer->Add(m_choice, 1, wxALL | wxEXPAND, 5);
+            valueSizer->Add(m_choice, 0, wxALIGN_CENTER_VERTICAL);
             break;
         }
         case ConfigValueType::Color: {
-            m_colorPreview = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(30, 20));
-            m_colorButton = new wxButton(this, wxID_ANY, "Choose Color");
+            // Compact color picker: preview and button in a tight horizontal layout
+            m_colorPreview = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(24, 20));
+            // Set initial color to gray to indicate it's not set yet
+            m_colorPreview->SetBackgroundColour(wxColour(160, 160, 160));
+
+            // Add custom paint handler for color preview with border and checkerboard pattern
+            m_colorPreview->Bind(wxEVT_PAINT, [this](wxPaintEvent& event) {
+                wxPaintDC dc(m_colorPreview);
+                wxRect rect = m_colorPreview->GetClientRect();
+
+                // Fill with current background color first
+                dc.SetPen(*wxTRANSPARENT_PEN);
+                dc.SetBrush(wxBrush(m_colorPreview->GetBackgroundColour()));
+                dc.DrawRectangle(rect);
+
+                // Draw border
+                dc.SetPen(wxPen(wxColour(100, 100, 100), 1));
+                dc.SetBrush(*wxTRANSPARENT_BRUSH);
+                dc.DrawRectangle(rect);
+            });
+
+            valueSizer->Add(m_colorPreview, 0, wxRIGHT, 3);
+
+            m_colorButton = new wxButton(this, wxID_ANY, "...", wxDefaultPosition, wxSize(35, 22));
+            wxFont btnFont = m_colorButton->GetFont();
+            btnFont.SetPointSize(btnFont.GetPointSize() - 1);
+            m_colorButton->SetFont(btnFont);
             m_colorButton->Bind(wxEVT_BUTTON, &ConfigItemEditor::onColorButton, this);
-            valueSizer->Add(m_colorPreview, 0, wxALL, 5);
-            valueSizer->Add(m_colorButton, 0, wxALL, 5);
+
+            // Check if this is a multi-theme color (contains semicolons)
+            bool isMultiTheme = m_item.currentValue.find(';') != std::string::npos;
+            if (isMultiTheme) {
+                // For multi-theme colors, show current theme indicator
+                std::string currentTheme = "default";
+                try {
+                    currentTheme = ThemeManager::getInstance().getCurrentTheme();
+                } catch (...) {}
+                wxString themeLabel = wxString::Format(" (%s)", currentTheme);
+                m_colorButton->SetLabel("...");
+                m_colorButton->SetToolTip("Click to choose color" + themeLabel +
+                                        "\nThis color supports multiple themes");
+            } else {
+                m_colorButton->SetToolTip("Click to choose color");
+            }
+
+            valueSizer->Add(m_colorButton, 0);
             break;
         }
         case ConfigValueType::Size: {
@@ -480,43 +906,65 @@ void ConfigItemEditor::createUI() {
                 try { width = std::stoi(widthStr); } catch (...) {}
                 try { height = std::stoi(heightStr); } catch (...) {}
 
-                m_sizeSpinCtrl1 = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1),
+                m_sizeSpinCtrl1 = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(50, -1),
                                                 wxSP_ARROW_KEYS, 0, 10000, width);
-                m_sizeSpinCtrl2 = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(60, -1),
+                m_sizeSpinCtrl2 = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(50, -1),
                                                 wxSP_ARROW_KEYS, 0, 10000, height);
-                m_sizeSeparator = new wxStaticText(this, wxID_ANY, "x");
+                m_sizeSeparator = new wxStaticText(this, wxID_ANY, "×");
 
                 m_sizeSpinCtrl1->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { onSizeValueChanged(); });
                 m_sizeSpinCtrl2->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { onSizeValueChanged(); });
 
-                valueSizer->Add(m_sizeSpinCtrl1, 0, wxALL, 2);
+                wxFont sepFont = m_sizeSeparator->GetFont();
+                sepFont.SetPointSize(sepFont.GetPointSize() - 1);
+                m_sizeSeparator->SetFont(sepFont);
+                m_sizeSeparator->SetForegroundColour(descColor);
+
+                valueSizer->Add(m_sizeSpinCtrl1, 0, wxRIGHT, 1);
                 valueSizer->Add(m_sizeSeparator, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxRIGHT, 2);
-                valueSizer->Add(m_sizeSpinCtrl2, 0, wxALL, 2);
+                valueSizer->Add(m_sizeSpinCtrl2, 0, wxLEFT, 1);
             } else {
                 // Fallback to single spin control
-                m_spinCtrl = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize,
+                m_spinCtrl = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(120, -1),
                                            wxSP_ARROW_KEYS, 0, 10000);
                 m_spinCtrl->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { onValueChanged(); });
-                valueSizer->Add(m_spinCtrl, 1, wxALL | wxEXPAND, 5);
+                valueSizer->Add(m_spinCtrl, 0, wxALIGN_CENTER_VERTICAL);
             }
             break;
         }
         default: {
-            m_textCtrl = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxDefaultSize);
+            m_textCtrl = new wxTextCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(200, -1));
             m_textCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { onValueChanged(); });
-            valueSizer->Add(m_textCtrl, 1, wxALL | wxEXPAND, 5);
+            valueSizer->Add(m_textCtrl, 0, wxALIGN_CENTER_VERTICAL);
             break;
         }
     }
 
-    mainSizer->Add(valueSizer, 0, wxEXPAND | wxALL, 5);
+    valueSizer->AddSpacer(8);
+    mainSizer->Add(valueSizer, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 16);
+    mainSizer->AddSpacer(16); // Right padding
 
     SetSizer(mainSizer);
-    SetBackgroundColour(wxColour(250, 250, 250));
+
+    // Add subtle border for card effect
+    SetWindowStyle(GetWindowStyle() | wxBORDER_NONE);
+    
+    // Custom paint for card border
+    Bind(wxEVT_PAINT, [this, borderColor](wxPaintEvent& event) {
+        wxPaintDC dc(this);
+        wxRect rect = GetClientRect();
+        dc.SetPen(wxPen(borderColor, 1));
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        dc.DrawRectangle(rect);
+    });
+
+    // Store original background color for change indication
+    m_originalBgColor = bgColor;
 }
 
 void ConfigItemEditor::setValue(const std::string& value) {
-    m_originalValue = value;
+    // Don't modify m_originalValue here - it should only be set in constructor and reset()
+    // This method only updates the UI controls
     m_modified = false;
 
     switch (m_item.type) {
@@ -527,12 +975,22 @@ void ConfigItemEditor::setValue(const std::string& value) {
             break;
         case ConfigValueType::Int:
             if (m_spinCtrl) {
-                m_spinCtrl->SetValue(std::stoi(value));
+                try {
+                    m_spinCtrl->SetValue(std::stoi(value));
+                } catch (...) {
+                    // Invalid integer, set to 0
+                    m_spinCtrl->SetValue(0);
+                }
             }
             break;
         case ConfigValueType::Double:
             if (m_spinCtrlDouble) {
-                m_spinCtrlDouble->SetValue(std::stod(value));
+                try {
+                    m_spinCtrlDouble->SetValue(std::stod(value));
+                } catch (...) {
+                    // Invalid double, set to 0.0
+                    m_spinCtrlDouble->SetValue(0.0);
+                }
             }
             break;
         case ConfigValueType::Enum:
@@ -540,6 +998,11 @@ void ConfigItemEditor::setValue(const std::string& value) {
                 int index = m_choice->FindString(value);
                 if (index != wxNOT_FOUND) {
                     m_choice->SetSelection(index);
+                } else {
+                    // If value not found in choices, select first item
+                    if (m_choice->GetCount() > 0) {
+                        m_choice->SetSelection(0);
+                    }
                 }
             }
             break;
@@ -548,6 +1011,11 @@ void ConfigItemEditor::setValue(const std::string& value) {
             if (m_colorPreview) {
                 m_colorPreview->SetBackgroundColour(color);
                 m_colorPreview->Refresh();
+                // Force repaint to ensure color shows immediately
+                m_colorPreview->Update();
+            } else {
+                // Color preview not created yet, this shouldn't happen
+                // since createUI is called before setValue
             }
             break;
         }
@@ -589,7 +1057,12 @@ std::string ConfigItemEditor::getValue() const {
             }
             return "";
         case ConfigValueType::Color:
-            return m_originalValue;
+            // Get current color from preview panel, not from m_originalValue
+            if (m_colorPreview) {
+                wxColour currentColor = m_colorPreview->GetBackgroundColour();
+                return colorToString(currentColor);
+            }
+            return m_originalValue; // Fallback to original if preview not available
         case ConfigValueType::Size:
             if (m_sizeSpinCtrl1 && m_sizeSpinCtrl2) {
                 return std::to_string(m_sizeSpinCtrl1->GetValue()) + "," +
@@ -602,6 +1075,16 @@ std::string ConfigItemEditor::getValue() const {
 }
 
 bool ConfigItemEditor::isModified() const {
+    // For color types, compare actual color values instead of strings to avoid precision issues
+    if (m_item.type == ConfigValueType::Color) {
+        wxColour currentColor = stringToColor(getValue());
+        wxColour originalColor = stringToColor(m_originalValue);
+        // Compare RGB values directly to avoid string precision issues
+        return (currentColor.Red() != originalColor.Red() ||
+                currentColor.Green() != originalColor.Green() ||
+                currentColor.Blue() != originalColor.Blue());
+    }
+    // For other types, use string comparison
     return getValue() != m_originalValue;
 }
 
@@ -611,10 +1094,30 @@ void ConfigItemEditor::reset() {
 
 void ConfigItemEditor::onValueChanged() {
     std::string newValue = getValue();
+    bool wasModified = m_modified;
     m_modified = (newValue != m_originalValue);
+
+    // Update visual indication if modification state changed
+    if (m_modified != wasModified) {
+        updateVisualIndication();
+    }
+
     if (m_onChange) {
         m_onChange(newValue);
     }
+}
+
+void ConfigItemEditor::updateVisualIndication() {
+    if (m_modified) {
+        // Show modified state with a slightly different background
+        wxColour modifiedBg = m_originalBgColor;
+        modifiedBg = modifiedBg.ChangeLightness(110); // Slightly lighter for modified items
+        SetBackgroundColour(modifiedBg);
+    } else {
+        // Restore original background
+        SetBackgroundColour(m_originalBgColor);
+    }
+    Refresh();
 }
 
 void ConfigItemEditor::onSizeValueChanged() {
@@ -626,7 +1129,9 @@ void ConfigItemEditor::onSizeValueChanged() {
 }
 
 void ConfigItemEditor::onColorButton(wxCommandEvent& event) {
-    wxColour currentColor = stringToColor(m_originalValue);
+    // Get current color from preview panel (not original value) to show user's current selection
+    std::string currentValue = getValue();
+    wxColour currentColor = stringToColor(currentValue);
     wxColourDialog dlg(this);
     dlg.GetColourData().SetColour(currentColor);
 
@@ -639,7 +1144,10 @@ void ConfigItemEditor::onColorButton(wxCommandEvent& event) {
 }
 
 std::string ConfigItemEditor::colorToString(const wxColour& color) const {
+    // Use fixed precision with 6 decimal places to avoid rounding errors
+    // This ensures that color values can be converted back and forth without precision loss
     std::ostringstream oss;
+    oss << std::fixed << std::setprecision(6);
     oss << (color.Red() / 255.0) << ","
         << (color.Green() / 255.0) << ","
         << (color.Blue() / 255.0);
@@ -647,27 +1155,113 @@ std::string ConfigItemEditor::colorToString(const wxColour& color) const {
 }
 
 wxColour ConfigItemEditor::stringToColor(const std::string& str) const {
-    std::istringstream iss(str);
+    if (str.empty()) {
+        return wxColour(128, 128, 128); // Default gray for empty values
+    }
+
+    // Handle multi-theme format (value1;value2;value3) - select based on current theme
+    std::string colorStr = getCurrentThemeColor(str);
+
+    std::istringstream iss(colorStr);
     std::string token;
     std::vector<double> values;
 
     while (std::getline(iss, token, ',')) {
+        // Trim whitespace
+        token.erase(token.begin(), std::find_if(token.begin(), token.end(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }));
+        token.erase(std::find_if(token.rbegin(), token.rend(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }).base(), token.end());
+
         try {
             values.push_back(std::stod(token));
         } catch (...) {
-            return wxColour(0, 0, 0);
+            // If parsing fails, try to parse as 0-255 integer values
+            try {
+                int intVal = std::stoi(token);
+                values.push_back(intVal / 255.0); // Convert to 0.0-1.0 range
+            } catch (...) {
+                return wxColour(255, 0, 0); // Red for invalid values
+            }
         }
     }
 
     if (values.size() >= 3) {
-        int r = (int)(values[0] * 255.0);
-        int g = (int)(values[1] * 255.0);
-        int b = (int)(values[2] * 255.0);
+        // Check if values are in 0-1 range or 0-255 range
+        bool isNormalized = true;
+        for (double val : values) {
+            if (val > 1.0) {
+                isNormalized = false;
+                break;
+            }
+        }
+
+        int r, g, b;
+        if (isNormalized) {
+            // Values are in 0.0-1.0 range
+            r = (int)(values[0] * 255.0);
+            g = (int)(values[1] * 255.0);
+            b = (int)(values[2] * 255.0);
+        } else {
+            // Values are in 0-255 range
+            r = (int)values[0];
+            g = (int)values[1];
+            b = (int)values[2];
+        }
+
         r = std::max(0, std::min(255, r));
         g = std::max(0, std::min(255, g));
         b = std::max(0, std::min(255, b));
         return wxColour(r, g, b);
     }
 
-    return wxColour(0, 0, 0);
+    // Fallback for invalid format
+    return wxColour(255, 192, 203); // Pink for unrecognized format
+}
+
+std::string ConfigItemEditor::getCurrentThemeColor(const std::string& multiThemeValue) const {
+    // Check if this is a multi-theme value (contains semicolons)
+    size_t firstSemicolon = multiThemeValue.find(';');
+    if (firstSemicolon == std::string::npos) {
+        // Not a multi-theme value, return as-is
+        return multiThemeValue;
+    }
+
+    // This is a multi-theme value: theme1;theme2;theme3
+    // Get current theme from ThemeManager
+    std::string currentTheme = "default"; // fallback
+    try {
+        currentTheme = ThemeManager::getInstance().getCurrentTheme();
+    } catch (...) {
+        // If ThemeManager not available, use default
+        currentTheme = "default";
+    }
+
+    // Parse the multi-theme value
+    std::vector<std::string> themeColors;
+    std::string remaining = multiThemeValue;
+    size_t pos = 0;
+    while ((pos = remaining.find(';')) != std::string::npos) {
+        themeColors.push_back(remaining.substr(0, pos));
+        remaining = remaining.substr(pos + 1);
+    }
+    themeColors.push_back(remaining); // Last part
+
+    // Map theme names to indices
+    std::map<std::string, int> themeIndex = {
+        {"default", 0},
+        {"dark", 1},
+        {"blue", 2}
+    };
+
+    // Get the color for current theme, fallback to first if not found
+    int index = themeIndex.count(currentTheme) ? themeIndex[currentTheme] : 0;
+    if (index < (int)themeColors.size()) {
+        return themeColors[index];
+    }
+
+    // Fallback to first theme color
+    return themeColors.empty() ? multiThemeValue : themeColors[0];
 }

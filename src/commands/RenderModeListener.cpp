@@ -25,15 +25,8 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 	// Create a clean base display settings that clears all mode-specific states
 	// This ensures only one render mode is active at a time
 	auto makeBaseDisplaySettings = [&]() {
-		RenderingConfig::DisplaySettings result;
-		// Preserve only non-mode-specific settings
-		result.edgeWidth = baseConfigSettings.edgeWidth;
-		result.vertexSize = baseConfigSettings.vertexSize;
-		result.edgeColor = baseConfigSettings.edgeColor;
-		result.vertexColor = baseConfigSettings.vertexColor;
-		result.pointSize = baseConfigSettings.pointSize;
-		result.pointColor = baseConfigSettings.pointColor;
-		result.pointShape = baseConfigSettings.pointShape;
+		// Start with a copy of base configuration to ensure all fields are initialized
+		RenderingConfig::DisplaySettings result = baseConfigSettings;
 		// Clear all mode-specific states to ensure mutual exclusivity
 		result.displayMode = RenderingConfig::DisplayMode::Solid;
 		result.showEdges = false;

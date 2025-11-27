@@ -31,7 +31,7 @@ void RenderPreviewEditor::createUI() {
     wxBoxSizer* topSizer = new wxBoxSizer(wxHORIZONTAL);
     
     // Left panel: Configuration tabs (fixed 450px width)
-    wxPanel* leftPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(450, -1), wxBORDER_SUNKEN);
+    wxPanel* leftPanel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(400, -1), wxBORDER_SUNKEN);
     m_notebook = new wxNotebook(leftPanel, wxID_ANY);
     
     // Create panel instances

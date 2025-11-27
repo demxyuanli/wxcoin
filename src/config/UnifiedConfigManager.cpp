@@ -52,6 +52,7 @@ void UnifiedConfigManager::registerBuiltinCategories() {
 
 
     addCategory("Layout", "Layout & Sizes", "size");
+    addCategory("Dock Layout", "Dock Layout", "layout");
     addCategory("Typography", "Typography", "font");
 
 
@@ -282,8 +283,13 @@ std::string UnifiedConfigManager::determineCategoryFromSection(const std::string
     }
 
     // === System and Application ===
-    else if (section == "Logger" || section == "MainApplication" || section == "SplashScreen") {
+    else if (section == "Logger" || section == "SplashScreen") {
         return "System";
+    }
+    
+    // === General (Application-wide settings) ===
+    else if (section == "MainApplication") {
+        return "General";
     }
 
     // === Typography ===
@@ -291,6 +297,11 @@ std::string UnifiedConfigManager::determineCategoryFromSection(const std::string
         return "Typography";
     }
 
+    // === Dock Layout ===
+    else if (section == "DockLayout") {
+        return "Dock Layout";
+    }
+    
     // === Layout and Sizes ===
     else if (section.find("Size") != std::string::npos ||
              section == "BarSizes" || section == "ButtonBarSizes" || section == "PanelSizes" ||

@@ -21,6 +21,7 @@ set(CONFIG_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/editor/LightingConfigEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/editor/TypographyConfigEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/editor/LayoutConfigEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/editor/DockLayoutConfigEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/editor/LightingSettingsEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/editor/EdgeSettingsEditor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/editor/RenderPreviewEditor.cpp
@@ -50,6 +51,7 @@ set(CONFIG_HEADERS
     ${CMAKE_SOURCE_DIR}/include/config/editor/LightingConfigEditor.h
     ${CMAKE_SOURCE_DIR}/include/config/editor/TypographyConfigEditor.h
     ${CMAKE_SOURCE_DIR}/include/config/editor/LayoutConfigEditor.h
+    ${CMAKE_SOURCE_DIR}/include/config/editor/DockLayoutConfigEditor.h
     ${CMAKE_SOURCE_DIR}/include/config/editor/LightingSettingsEditor.h
     ${CMAKE_SOURCE_DIR}/include/config/editor/EdgeSettingsEditor.h
     ${CMAKE_SOURCE_DIR}/include/config/editor/RenderPreviewEditor.h
@@ -70,20 +72,7 @@ target_include_directories(CADConfig PUBLIC
 target_link_libraries(CADConfig PUBLIC
     CADCore
     CADLogger
-    ${wxWidgets_LIBRARIES}
-    Coin::Coin
-)
-
-# Set library export properties
-set_target_properties(CADConfig PROPERTIES
-    FOLDER "Config"
-    EXPORT_NAME Config
-) 
-
-# Link dependencies
-target_link_libraries(CADConfig PUBLIC
-    CADCore
-    CADLogger
+    docking
     ${wxWidgets_LIBRARIES}
     Coin::Coin
 )

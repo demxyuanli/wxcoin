@@ -119,7 +119,7 @@ void ObjectSettingsPanel::createUI()
 	SetSizer(mainSizer);
 
 	// Set minimum size to ensure all controls are visible
-	SetMinSize(wxSize(500, 700));
+	SetMinSize(wxSize(400, 600));
 
 	// Force layout update
 	Layout();

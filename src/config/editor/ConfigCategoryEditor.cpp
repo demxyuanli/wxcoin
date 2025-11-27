@@ -1,6 +1,7 @@
 #include "config/editor/ConfigCategoryEditor.h"
 #include "config/ConfigManagerDialog.h"
 #include "config/UnifiedConfigManager.h"
+#include "config/ThemeManager.h"
 #include "logger/Logger.h"
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -13,7 +14,7 @@ ConfigCategoryEditor::ConfigCategoryEditor(wxWindow* parent, UnifiedConfigManage
     , m_categoryId(categoryId)
     , m_changeCallback(nullptr)
 {
-    SetBackgroundColour(wxColour(250, 250, 250));
+    SetBackgroundColour(CFG_COLOUR("PrimaryBackgroundColour"));
     SetScrollRate(10, 10);
 
     // Create main sizer for this scrolled window
@@ -47,23 +48,23 @@ void ConfigCategoryEditor::onItemChanged(const std::string& key, const std::stri
 }
 
 void ConfigCategoryEditor::addSectionHeader(wxSizer* sizer, const std::string& sectionName) {
-    wxPanel* headerPanel = new wxPanel(this, wxID_ANY);
-    headerPanel->SetBackgroundColour(wxColour(230, 230, 230));
-    wxBoxSizer* headerSizer = new wxBoxSizer(wxHORIZONTAL);
-
-    wxStaticText* headerLabel = new wxStaticText(headerPanel, wxID_ANY, sectionName);
+    // Modern section header with spacing
+    wxStaticText* headerLabel = new wxStaticText(this, wxID_ANY, sectionName);
     wxFont headerFont = headerLabel->GetFont();
     headerFont.SetWeight(wxFONTWEIGHT_BOLD);
-    headerFont.SetPointSize(headerFont.GetPointSize() + 1);
+    headerFont.SetPointSize(headerFont.GetPointSize() + 2);
     headerLabel->SetFont(headerFont);
-
-    headerSizer->Add(headerLabel, 0, wxALL, 8);
-    headerPanel->SetSizer(headerSizer);
-    sizer->Add(headerPanel, 0, wxEXPAND | wxTOP | wxLEFT | wxRIGHT, 5);
+    headerLabel->SetForegroundColour(CFG_COLOUR("PrimaryTextColour"));
+    
+    sizer->AddSpacer(24); // Top spacing before section
+    sizer->Add(headerLabel, 0, wxLEFT | wxRIGHT, 0);
+    sizer->AddSpacer(12); // Spacing after header
 }
 
 void ConfigCategoryEditor::addItemEditor(wxSizer* sizer, ConfigItemEditor* editor) {
-    sizer->Add(editor, 0, wxEXPAND | wxALL, 3);
+    // Card-style spacing between items
+    sizer->Add(editor, 0, wxEXPAND | wxLEFT | wxRIGHT, 0);
+    sizer->AddSpacer(8); // Spacing between cards
 }
 
 void ConfigCategoryEditor::saveConfig() {
