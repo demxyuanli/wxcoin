@@ -39,11 +39,8 @@ bool EdgeSettingsConfig::loadFromFile(const std::string& filename)
 	std::ifstream file(configPath);
 
 	if (!file.is_open()) {
-		LOG_INF_S("EdgeSettingsConfig: No config file found, using defaults: " + configPath);
 		return false;
 	}
-
-	LOG_INF_S("EdgeSettingsConfig: Loading configuration from: " + configPath);
 
 	std::string line;
 	std::string currentSection;
@@ -126,7 +123,6 @@ bool EdgeSettingsConfig::loadFromFile(const std::string& filename)
 	}
 
 	file.close();
-	LOG_INF_S("EdgeSettingsConfig: Configuration loaded successfully");
 
 	// Notify listeners of settings change
 	notifySettingsChanged();
@@ -144,7 +140,6 @@ bool EdgeSettingsConfig::saveToFile(const std::string& filename) const
 		return false;
 	}
 
-	LOG_INF_S("EdgeSettingsConfig: Saving configuration to: " + configPath);
 
 	// Save Global settings
 	file << "[Global]\n";
@@ -179,7 +174,6 @@ bool EdgeSettingsConfig::saveToFile(const std::string& filename) const
 	file << "EdgeOpacity=" << m_hoverSettings.edgeOpacity << "\n";
 
 	file.close();
-	LOG_INF_S("EdgeSettingsConfig: Configuration saved successfully");
 	return true;
 }
 
@@ -240,7 +234,6 @@ void EdgeSettingsConfig::applySettingsToGeometries()
 	// This method will be called when settings are applied
 	// The actual geometry update is handled by OCCMeshConverter and OCCViewer
 	// This method serves as a notification point for settings application
-	LOG_INF_S("EdgeSettingsConfig: Applying settings to geometries");
 	notifySettingsChanged();
 }
 

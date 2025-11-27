@@ -167,7 +167,6 @@ void ConfigManagerDialog::populateCategoryList() {
     m_categoryButtons.clear();
 
     auto categories = m_configManager->getCategories();
-    LOG_INF("Populating category menu with " + std::to_string(categories.size()) + " categories", "ConfigManagerDialog");
 
     // Group categories by similarity (like catalog grouping)
     struct CategoryGroup {
@@ -253,15 +252,26 @@ void ConfigManagerDialog::createCategoryMenuItem(const ConfigCategory& category,
 
     // Load icon
     wxBitmap iconBitmap;
+    bool iconLoaded = false;
     try {
         SvgIconManager& iconMgr = SvgIconManager::GetInstance();
         iconBitmap = iconMgr.GetIconBitmap(category.icon, wxSize(12, 12)); // Icon size: 12x12
+        if (iconBitmap.IsOk()) {
+            iconLoaded = true;
+        } else {
+            LOG_WRN(wxString::Format("ConfigManagerDialog: Failed to load SVG icon '%s' for category '%s'",
+                category.icon.c_str(), category.displayName.c_str()), "ConfigManagerDialog");
+        }
+    } catch (const std::exception& e) {
+        LOG_ERR(wxString::Format("ConfigManagerDialog: Exception loading SVG icon '%s' for category '%s': %s",
+            category.icon.c_str(), category.displayName.c_str(), e.what()), "ConfigManagerDialog");
     } catch (...) {
-        // Fallback to default icon
+        LOG_ERR(wxString::Format("ConfigManagerDialog: Unknown exception loading SVG icon '%s' for category '%s'",
+            category.icon.c_str(), category.displayName.c_str()), "ConfigManagerDialog");
     }
 
     // Icon
-    if (iconBitmap.IsOk()) {
+    if (iconLoaded && iconBitmap.IsOk()) {
         wxStaticBitmap* iconStatic = new wxStaticBitmap(itemPanel, wxID_ANY, iconBitmap);
         itemSizer->Add(iconStatic, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 8);
     } else {
@@ -548,38 +558,36 @@ void ConfigManagerDialog::loadAllConfigurations() {
 
 void ConfigManagerDialog::refreshItemEditors() {
     wxSizer* sizer = m_editorContainer->GetSizer();
-    
+
     // Hide and detach current editor if exists (but don't delete it - it's cached)
     if (m_currentEditor) {
         m_currentEditor->Hide();
         sizer->Detach(m_currentEditor);
     }
-    
+
     // Remove title and spacer if exists
-    // First, find the title window and spacer index to remove
-    wxStaticText* titleToRemove = nullptr;
-    int spacerIndexToRemove = -1;
-    wxSizerItem* spacerItemPtr = nullptr;  // Save pointer before removal
-    
-    // Find title window and spacer
+    // Find and remove them directly after detaching m_currentEditor
     wxSizerItemList& items = sizer->GetChildren();
+    wxStaticText* titleToRemove = nullptr;
+    wxSizerItem* spacerToRemove = nullptr;
+
+    // Find title window and spacer in current sizer state
     for (size_t i = 0; i < items.size(); ++i) {
         wxSizerItem* item = items[i];
         if (!item) continue;
-        
+
         // Check if this is a spacer after title
-        if (spacerIndexToRemove < 0 && item->IsSpacer() && item->GetMinSize().y >= 20) {
-            spacerIndexToRemove = static_cast<int>(i);
-            spacerItemPtr = item;  // Save pointer before removal
+        if (!spacerToRemove && item->IsSpacer() && item->GetMinSize().y >= 20) {
+            spacerToRemove = item;
         }
-        
+
         // Check if this is the title window
         if (!titleToRemove) {
             wxWindow* win = item->GetWindow();
             if (win) {
                 if (wxStaticText* text = dynamic_cast<wxStaticText*>(win)) {
                     wxFont font = text->GetFont();
-                    if (font.GetWeight() == wxFONTWEIGHT_BOLD && 
+                    if (font.GetWeight() == wxFONTWEIGHT_BOLD &&
                         font.GetPointSize() >= GetFont().GetPointSize() + 2) {
                         titleToRemove = text;
                     }
@@ -587,13 +595,25 @@ void ConfigManagerDialog::refreshItemEditors() {
             }
         }
     }
-    
+
     // Remove spacer first (before removing title window)
-    if (spacerIndexToRemove >= 0 && spacerItemPtr) {
-        // Remove the item from sizer (this doesn't delete it, just removes from list)
-        sizer->Remove(spacerIndexToRemove);
-        // Now safely delete the removed item using the saved pointer
-        delete spacerItemPtr;
+    if (spacerToRemove) {
+        // Find the index of the spacer in current sizer
+        int spacerIndex = -1;
+        for (size_t i = 0; i < items.size(); ++i) {
+            if (items[i] == spacerToRemove) {
+                spacerIndex = static_cast<int>(i);
+                break;
+            }
+        }
+
+        if (spacerIndex >= 0) {
+            // Detach by index - this removes the item from sizer but doesn't delete it
+            if (sizer->Detach(spacerIndex)) {
+                // Now safely delete the detached item
+                spacerToRemove ->DetachSizer();
+            }
+        }
     }
     
     // Remove title window
@@ -780,23 +800,23 @@ void ConfigItemEditor::createUI() {
     wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
     leftSizer->AddSpacer(8); // Top padding
 
-    // Main label - bold, larger
+    // Main label - bold, larger, black color
     m_label = new wxStaticText(this, wxID_ANY, m_item.displayName);
-    wxFont labelFont = m_label->GetFont();
+    wxFont labelFont = CFG_DEFAULTFONT();
     labelFont.SetWeight(wxFONTWEIGHT_BOLD);
     labelFont.SetPointSize(labelFont.GetPointSize() + 1);
     m_label->SetFont(labelFont);
-    m_label->SetForegroundColour(textColor);
+    m_label->SetForegroundColour(wxColour(0, 0, 0)); // Black color
     leftSizer->Add(m_label, 0, wxLEFT | wxRIGHT, 0);
 
     // Description - smaller font, gray color, with spacing
     if (!m_item.description.empty()) {
         leftSizer->AddSpacer(4);
         m_description = new wxStaticText(this, wxID_ANY, m_item.description);
-        wxFont descFont = m_description->GetFont();
+        wxFont descFont = CFG_DEFAULTFONT();
         descFont.SetPointSize(descFont.GetPointSize() - 1);
         m_description->SetFont(descFont);
-        m_description->SetForegroundColour(descColor);
+        m_description->SetForegroundColour(wxColour(128, 128, 128)); // Gray color
         m_description->Wrap(400); // Allow wrapping for long descriptions
         leftSizer->Add(m_description, 0, wxLEFT | wxRIGHT | wxBOTTOM, 0);
     }
@@ -910,12 +930,12 @@ void ConfigItemEditor::createUI() {
                                                 wxSP_ARROW_KEYS, 0, 10000, width);
                 m_sizeSpinCtrl2 = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(50, -1),
                                                 wxSP_ARROW_KEYS, 0, 10000, height);
-                m_sizeSeparator = new wxStaticText(this, wxID_ANY, "×");
+                m_sizeSeparator = new wxStaticText(this, wxID_ANY, "x");
 
                 m_sizeSpinCtrl1->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { onSizeValueChanged(); });
                 m_sizeSpinCtrl2->Bind(wxEVT_SPINCTRL, [this](wxSpinEvent&) { onSizeValueChanged(); });
 
-                wxFont sepFont = m_sizeSeparator->GetFont();
+                wxFont sepFont = CFG_DEFAULTFONT();
                 sepFont.SetPointSize(sepFont.GetPointSize() - 1);
                 m_sizeSeparator->SetFont(sepFont);
                 m_sizeSeparator->SetForegroundColour(descColor);

@@ -112,7 +112,6 @@ void RenderPreviewEditor::saveConfiguration() {
         }
         
         configManager.save();
-        LOG_INF("RenderPreviewEditor: Configuration saved successfully", "RenderPreviewEditor");
     } catch (const std::exception& e) {
         LOG_ERR("RenderPreviewEditor: Failed to save configuration: " + std::string(e.what()), "RenderPreviewEditor");
     }
@@ -132,7 +131,6 @@ void RenderPreviewEditor::loadConfiguration() {
             m_objectSettingsPanel->loadSettings();
         }
         
-        LOG_INF("RenderPreviewEditor: Configuration loaded successfully", "RenderPreviewEditor");
         
         // Apply loaded configuration to the preview canvas immediately
         applyLoadedConfigurationToCanvas();
@@ -152,7 +150,6 @@ void RenderPreviewEditor::resetToDefaults() {
         m_objectSettingsPanel->resetToDefaults();
     }
     
-    LOG_INF("RenderPreviewEditor: Configuration reset to defaults", "RenderPreviewEditor");
 }
 
 void RenderPreviewEditor::applyGlobalSettingsToCanvas() {
@@ -254,7 +251,6 @@ void RenderPreviewEditor::applyObjectSettingsToCanvas() {
 }
 
 void RenderPreviewEditor::applyLoadedConfigurationToCanvas() {
-    LOG_INF("RenderPreviewEditor: Applying loaded configuration to preview canvas", "RenderPreviewEditor");
     
     if (!m_renderCanvas) {
         LOG_ERR("RenderPreviewEditor: No render canvas available", "RenderPreviewEditor");
@@ -267,6 +263,5 @@ void RenderPreviewEditor::applyLoadedConfigurationToCanvas() {
     // Apply object settings to canvas
     applyObjectSettingsToCanvas();
     
-    LOG_INF("RenderPreviewEditor: Configuration applied successfully", "RenderPreviewEditor");
 }
 

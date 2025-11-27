@@ -9,7 +9,6 @@ Coin3DConfig& Coin3DConfig::getInstance() {
 
 void Coin3DConfig::initialize(ConfigManager& configManager) {
 	this->configManager = &configManager;
-	LOG_INF("Coin3D configuration initialized", "Coin3DConfig");
 }
 
 std::string Coin3DConfig::getSceneGraphPath() const {

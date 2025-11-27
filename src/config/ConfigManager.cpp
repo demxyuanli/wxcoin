@@ -30,12 +30,10 @@ bool ConfigManager::initialize(const std::string& configFilePath) {
 	// Use provided config file path if available
 	if (!configFilePath.empty()) {
 		this->configFilePath = configFilePath;
-		LOG_INF("Using provided config file path: " + this->configFilePath, "ConfigManager");
 	}
 	else {
 		// Otherwise, find the config file
 		this->configFilePath = findConfigFile();
-		LOG_INF("Found config file path: " + (this->configFilePath.empty() ? "none" : this->configFilePath), "ConfigManager");
 	}
 
 	// Create a new config file if none found
@@ -113,7 +111,6 @@ std::string ConfigManager::findConfigFile() {
 	// Check config/config.ini in current directory
 	wxString configPath = currentDir + wxFileName::GetPathSeparator() + "config" + wxFileName::GetPathSeparator() + "config.ini";
 	if (wxFileExists(configPath)) {
-		LOG_INF("Found config file in config directory: " + configPath.ToStdString(), "ConfigManager");
 		return configPath.ToStdString();
 	}
 
@@ -122,7 +119,6 @@ std::string ConfigManager::findConfigFile() {
 	wxString appName = exeDir.GetName();
 	configPath = userConfigDir + wxFileName::GetPathSeparator() + appName + wxFileName::GetPathSeparator() + "config.ini";
 	if (wxFileExists(configPath)) {
-		LOG_INF("Found config file in user config directory: " + configPath.ToStdString(), "ConfigManager");
 		return configPath.ToStdString();
 	}
 
@@ -279,7 +275,6 @@ std::vector<std::string> ConfigManager::getSections() {
 	// Restore path
 	fileConfig->SetPath(oldPath);
 
-	LOG_INF("ConfigManager found " + std::to_string(count) + " sections", "ConfigManager");
 	return sections;
 }
 
@@ -310,6 +305,5 @@ std::vector<std::string> ConfigManager::getKeys(const std::string& section) {
 	// Restore path
 	fileConfig->SetPath(oldPath);
 
-	LOG_INF("Section '" + section + "' has " + std::to_string(count) + " keys", "ConfigManager");
 	return keys;
 }

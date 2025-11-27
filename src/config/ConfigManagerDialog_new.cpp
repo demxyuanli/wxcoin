@@ -98,12 +98,10 @@ void ConfigManagerDialog::populateCategoryTree() {
     wxTreeItemId root = m_categoryTree->AddRoot("Categories");
 
     auto categories = m_configManager->getCategories();
-    LOG_INF("Populating category tree with " + std::to_string(categories.size()) + " categories", "ConfigManagerDialog");
 
     std::map<std::string, wxTreeItemId> categoryItems;
 
     for (const auto& category : categories) {
-        LOG_INF("Adding category '" + category.id + "' with " + std::to_string(category.items.size()) + " items", "ConfigManagerDialog");
         wxTreeItemId catItem = m_categoryTree->AppendItem(root, category.displayName);
         // Use custom tree item data to store category ID
         CategoryTreeItemData* data = new CategoryTreeItemData(category.id);

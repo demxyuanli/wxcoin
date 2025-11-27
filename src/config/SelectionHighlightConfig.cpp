@@ -139,7 +139,6 @@ void SelectionHighlightConfigManager::initialize(ConfigManager& configManager) {
         return;
     }
 
-    LOG_INF("Initializing SelectionHighlightConfigManager", "SelectionHighlightConfigManager");
 
     try {
         // Load face highlight settings
@@ -199,7 +198,6 @@ void SelectionHighlightConfigManager::initialize(ConfigManager& configManager) {
         parseColorString(vertexColorStr, config.vertexColor.r, config.vertexColor.g, config.vertexColor.b);
         
         initialized = true;
-        LOG_INF("SelectionHighlightConfigManager initialized successfully", "SelectionHighlightConfigManager");
     }
     catch (const std::exception& e) {
         LOG_ERR("Failed to initialize SelectionHighlightConfigManager: " + std::string(e.what()), 
@@ -267,7 +265,6 @@ void SelectionHighlightConfigManager::save(ConfigManager& configManager) {
             std::to_string(config.vertexColor.b);
         configManager.setString("SelectionHighlight", "VertexColor", vertexColor);
         
-        LOG_INF("SelectionHighlightConfigManager configuration saved", "SelectionHighlightConfigManager");
     }
     catch (const std::exception& e) {
         LOG_ERR("Failed to save SelectionHighlightConfigManager: " + std::string(e.what()), 

@@ -22,12 +22,10 @@ void SelectionColorConfig::initialize(ConfigManager& configManager) {
         return;
     }
 
-    LOG_INF("Initializing SelectionColorConfig", "SelectionColorConfig");
 
     try {
         // Get current theme
         std::string currentTheme = ThemeManager::getInstance().getCurrentTheme();
-        LOG_INF("Current theme: " + currentTheme, "SelectionColorConfig");
 
         // Read selected geometry diffuse color
         std::string diffuseColorStr = configManager.getString("GeometrySelectionColors", 
@@ -75,7 +73,6 @@ void SelectionColorConfig::initialize(ConfigManager& configManager) {
         parseColorString(getCurrentThemeValue(highlightEdgeColorStr), settings.highlightEdgeR, settings.highlightEdgeG, settings.highlightEdgeB);
 
         initialized = true;
-        LOG_INF("SelectionColorConfig initialized successfully", "SelectionColorConfig");
         LOG_INF("Selected geometry diffuse color: " + std::to_string(settings.diffuseR) + "," + 
                 std::to_string(settings.diffuseG) + "," + std::to_string(settings.diffuseB), "SelectionColorConfig");
     }

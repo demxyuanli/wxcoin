@@ -486,7 +486,6 @@ void EdgeSettingsEditor::applySettings() {
         }
     }
     
-    LOG_INF("Edge settings applied successfully", "EdgeSettingsEditor");
 }
 
 // Event handlers - Global page

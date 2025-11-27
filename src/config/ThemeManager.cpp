@@ -36,7 +36,6 @@ void ThemeManager::initialize(ConfigManager& config) {
 	}
 
 	m_initialized = true;
-	LOG_INF("Theme manager initialized with theme: " + m_currentTheme, "ThemeManager");
 }
 
 void ThemeManager::loadBuiltinThemes() {
@@ -115,7 +114,6 @@ void ThemeManager::loadBuiltinThemes() {
 		m_themes["dark"] = darkTheme;
 		m_themes["blue"] = blueTheme;
 
-		LOG_INF("Loaded themes with new configuration format", "ThemeManager");
 	}
 	else {
 		LOG_ERR("ConfigManager not available for loading themes", "ThemeManager");
@@ -264,7 +262,6 @@ bool ThemeManager::setCurrentTheme(const std::string& themeName) {
 	// Notify listeners
 	notifyThemeChange();
 
-	LOG_INF("Theme changed to: " + themeName, "ThemeManager");
 	return true;
 }
 
@@ -396,12 +393,10 @@ void ThemeManager::notifyThemeChange() {
 	lastNotification = now;
 
 	// Log the number of listeners
-	LOG_INF("Notifying theme change to " + std::to_string(m_listeners.size()) + " listeners", "ThemeManager");
 
 	// Clear SVG theme cache when theme changes
 	try {
 		SvgIconManager::GetInstance().ClearThemeCache();
-		LOG_INF("SVG theme cache cleared on theme change", "ThemeManager");
 	}
 	catch (const std::exception& e) {
 		LOG_ERR(wxString::Format("Error clearing SVG theme cache: %s", e.what()).ToStdString(), "ThemeManager");

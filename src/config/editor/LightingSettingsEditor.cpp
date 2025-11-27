@@ -660,6 +660,5 @@ void LightingSettingsEditor::applyPresetAndUpdate(const std::string& presetName,
         m_changeCallback();
     }
     
-    LOG_INF("Applied " + presetName + " lighting preset", "LightingSettingsEditor");
 }
 

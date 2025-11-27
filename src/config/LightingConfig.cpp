@@ -92,11 +92,8 @@ bool LightingConfig::loadFromFile(const std::string& filename)
 	std::ifstream file(configPath);
 
 	if (!file.is_open()) {
-		LOG_INF_S("LightingConfig: No config file found, using defaults: " + configPath);
 		return false;
 	}
-
-	LOG_INF_S("LightingConfig: Loading configuration from: " + configPath);
 
 	std::string line;
 	std::string currentSection;
@@ -208,7 +205,6 @@ bool LightingConfig::loadFromFile(const std::string& filename)
 	}
 
 	file.close();
-	LOG_INF_S("LightingConfig: Configuration loaded successfully");
 
 	// Notify listeners of settings change
 	notifySettingsChanged();
@@ -226,7 +222,6 @@ bool LightingConfig::saveToFile(const std::string& filename) const
 		return false;
 	}
 
-	LOG_INF_S("LightingConfig: Saving configuration to: " + configPath);
 
 	// Save Environment settings
 	file << "[Environment]\n";
@@ -256,7 +251,6 @@ bool LightingConfig::saveToFile(const std::string& filename) const
 	}
 
 	file.close();
-	LOG_INF_S("LightingConfig: Configuration saved successfully");
 	return true;
 }
 
@@ -698,7 +692,6 @@ void LightingConfig::applyFreeCADThreeLightPreset()
 
 	notifySettingsChanged();
 
-	LOG_INF_S("Applied FreeCAD Three-Light Model preset");
 }
 
 void LightingConfig::applyNavigationCubePreset()
@@ -796,15 +789,9 @@ void LightingConfig::applySettingsToScene()
 	// This method will be called when settings are applied
 	// The actual scene update is handled by SceneManager
 	// This method serves as a notification point for settings application
-	LOG_INF_S("LightingConfig: Applying settings to scene");
 
 	// Force immediate application of settings
 	notifySettingsChanged();
-
-	// Additional logging for debugging
-	LOG_INF_S("LightingConfig: Settings applied - " +
-		std::to_string(m_lights.size()) + " lights, " +
-		"ambient intensity: " + std::to_string(m_environmentSettings.ambientIntensity));
 }
 
 void LightingConfig::notifySettingsChanged()

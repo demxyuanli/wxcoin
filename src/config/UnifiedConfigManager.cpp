@@ -30,13 +30,6 @@ void UnifiedConfigManager::initialize(ConfigManager& configManager) {
     registerBuiltinCategories();
     scanAndRegisterAllConfigs(configManager);
 
-    // Debug: Log all categories and their item counts
-    LOG_INF("UnifiedConfigManager initialized with " + std::to_string(m_categories.size()) + " categories", "UnifiedConfigManager");
-    for (const auto& cat : m_categories) {
-        LOG_INF("Category '" + cat.first + "' has " + std::to_string(cat.second.items.size()) + " items", "UnifiedConfigManager");
-    }
-
-    LOG_INF("UnifiedConfigManager initialized", "UnifiedConfigManager");
 }
 
 void UnifiedConfigManager::registerBuiltinCategories() {
@@ -133,14 +126,12 @@ void UnifiedConfigManager::scanAdditionalConfigFiles() {
                     hasKeys = additionalConfig.GetNextEntry(keyStr, keyIndex);
                 }
 
-                LOG_INF("Scanned " + std::to_string(keyCount) + " keys from " + configFile + " [" + sectionName + "]", "UnifiedConfigManager");
 
                 // Restore path and get next section
                 additionalConfig.SetPath("/");
                 hasSections = additionalConfig.GetNextGroup(sectionStr, sectionIndex);
             }
 
-            LOG_INF("Successfully scanned additional config file: " + configFile, "UnifiedConfigManager");
 
         } catch (const std::exception& e) {
             LOG_WRN("Failed to scan additional config file '" + configFile + "': " + e.what(), "UnifiedConfigManager");
@@ -169,7 +160,6 @@ void UnifiedConfigManager::scanAndRegisterAllConfigs(ConfigManager& configManage
 
 void UnifiedConfigManager::registerConfigManagerItems(ConfigManager& configManager) {
     auto sections = configManager.getSections();
-    LOG_INF("Found " + std::to_string(sections.size()) + " sections in config file", "UnifiedConfigManager");
     for (const auto& section : sections) {
         // Determine category for this section
         std::string category = determineCategoryFromSection(section);
@@ -180,7 +170,6 @@ void UnifiedConfigManager::registerConfigManagerItems(ConfigManager& configManag
         }
         
         auto keys = configManager.getKeys(section);
-        LOG_INF("Section '" + section + "' has " + std::to_string(keys.size()) + " keys", "UnifiedConfigManager");
         for (const auto& key : keys) {
             ConfigItem item;
             item.key = section + "." + key;
@@ -1009,21 +998,5 @@ void UnifiedConfigManager::removeChangeListener(const std::string& key, std::fun
 }
 
 void UnifiedConfigManager::printDiagnostics() const {
-    LOG_INF("=== UnifiedConfigManager Diagnostics ===", "UnifiedConfigManager");
-    LOG_INF("Total categories: " + std::to_string(m_categories.size()), "UnifiedConfigManager");
-    LOG_INF("Total items: " + std::to_string(m_items.size()), "UnifiedConfigManager");
-
-    for (const auto& cat : m_categories) {
-        LOG_INF("Category '" + cat.first + "': " + std::to_string(cat.second.items.size()) + " items", "UnifiedConfigManager");
-        for (const auto& itemKey : cat.second.items) {
-            auto it = m_items.find(itemKey);
-            if (it != m_items.end()) {
-                LOG_INF("  - " + itemKey + " (" + it->second.currentValue + ")", "UnifiedConfigManager");
-            } else {
-                LOG_INF("  - " + itemKey + " (NOT FOUND)", "UnifiedConfigManager");
-            }
-        }
-    }
-    LOG_INF("=== End Diagnostics ===", "UnifiedConfigManager");
 }
 

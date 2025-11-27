@@ -474,11 +474,8 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
 	std::ifstream file(configPath);
 
 	if (!file.is_open()) {
-		LOG_INF_S("RenderingConfig: No config file found, using defaults: " + configPath);
 		return false;
 	}
-
-	LOG_INF_S("RenderingConfig: Loading configuration from: " + configPath);
 
 	std::string line;
 	std::string section;
@@ -670,7 +667,6 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
 	}
 
 	file.close();
-	LOG_INF_S("RenderingConfig: Configuration loaded successfully");
 
 	// Notify listeners of settings change
 	notifySettingsChanged();
@@ -688,7 +684,6 @@ bool RenderingConfig::saveToFile(const std::string& filename) const
 		return false;
 	}
 
-	LOG_INF_S("RenderingConfig: Saving configuration to: " + configPath);
 
 	// Write header
 	file << "# Rendering Settings Configuration\n";
@@ -768,7 +763,6 @@ bool RenderingConfig::saveToFile(const std::string& filename) const
 	file << "SubsurfaceScattering=" << m_lightingModelSettings.subsurfaceScattering << "\n";
 
 	file.close();
-	LOG_INF_S("RenderingConfig: Configuration saved successfully");
 
 	// Notify listeners of settings change
 	notifySettingsChanged();
@@ -1300,21 +1294,17 @@ void RenderingConfig::resetToDefaults()
 void RenderingConfig::registerSettingsChangedCallback(SettingsChangedCallback callback)
 {
 	m_settingsChangedCallback = callback;
-	LOG_INF_S("RenderingConfig: Settings changed callback registered");
 }
 
 void RenderingConfig::unregisterSettingsChangedCallback()
 {
 	m_settingsChangedCallback = nullptr;
-	LOG_INF_S("RenderingConfig: Settings changed callback unregistered");
 }
 
 void RenderingConfig::notifySettingsChanged() const
 {
 	if (m_settingsChangedCallback) {
-		LOG_INF_S("RenderingConfig: Notifying settings changed - callback is registered");
 		m_settingsChangedCallback();
-		LOG_INF_S("RenderingConfig: Settings change notification completed");
 	}
 	else {
 		LOG_WRN_S("RenderingConfig: Settings changed but no callback is registered");
@@ -1567,8 +1557,4 @@ void RenderingConfig::showTestFeedback() const
 	std::string status = getCurrentSelectionStatus();
 	std::string settings = getCurrentRenderingSettings();
 
-	LOG_INF_S("=== RenderingConfig Test Feedback ===");
-	LOG_INF_S(status);
-	LOG_INF_S(settings);
-	LOG_INF_S("=== End Test Feedback ===");
 }

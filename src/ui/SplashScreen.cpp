@@ -204,7 +204,7 @@ void SplashScreen::ReloadFromConfig(size_t messagesAlreadyShown) {
     // This ensures only one random image is shown per launch, even if config is reloaded
     // Only reload the background if it hasn't been selected yet
     if (m_selectedBackgroundImage.IsEmpty()) {
-        loadBackgroundImage();
+    loadBackgroundImage();
     }
 
     loadConfiguredMessages();

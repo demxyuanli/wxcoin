@@ -27,11 +27,9 @@ OpenCASCADEProcessor::OpenCASCADEProcessor()
 	, m_subdivisionEnabled(false)
 	, m_subdivisionLevels(2)
 	, m_creaseAngle(30.0) {
-	LOG_INF_S("OpenCASCADEProcessor created");
 }
 
 OpenCASCADEProcessor::~OpenCASCADEProcessor() {
-	LOG_INF_S("OpenCASCADEProcessor destroyed");
 }
 
 TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
@@ -39,7 +37,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 	TriangleMesh mesh;
 
 	if (shape.IsNull()) {
-		LOG_WRN_S("Cannot convert null shape to mesh");
 		return mesh;
 	}
 
@@ -72,12 +69,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 		// Use config setting if available, otherwise use parameter setting
 		bool useParallel = parallelProcessingConfig && params.inParallel;
 
-		// Log additional tessellation parameters for debugging
-		LOG_DBG_S("Tessellation parameters: quality=" + std::to_string(tessellationQuality) +
-			", adaptive=" + std::string(adaptiveMeshing ? "true" : "false") +
-			", method=" + std::to_string(tessellationMethod) +
-			", featurePreservation=" + std::to_string(featurePreservation) +
-			", parallel=" + std::string(useParallel ? "true" : "false"));
 
 		// Adjust basic parameters based on advanced settings
 		double adjustedDeflection = params.deflection;
@@ -92,7 +83,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			double qualityFactor = 1.0 / (1.0 + (tessellationQuality - 2));
 			adjustedDeflection *= qualityFactor;
 			adjustedAngularDeflection *= qualityFactor;
-			LOG_DBG_S("Applied high quality tessellation adjustment: factor=" + std::to_string(qualityFactor));
 		}
 		
 		// Only apply adaptive meshing adjustment if explicitly enabled AND quality is high
@@ -100,12 +90,8 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 			// Adaptive meshing uses even smaller deflection for better quality
 			adjustedDeflection *= 0.7; // Less aggressive than 0.5
 			adjustedAngularDeflection *= 0.7;
-			LOG_DBG_S("Applied adaptive meshing adjustment");
 		}
 		
-		LOG_DBG_S("Adjusted mesh parameters: deflection=" + std::to_string(adjustedDeflection) +
-			", angularDeflection=" + std::to_string(adjustedAngularDeflection) +
-			" (original: " + std::to_string(params.deflection) + ", " + std::to_string(params.angularDeflection) + ")");
 
 		// Create incremental mesh with adjusted parameters
 		// Use IMeshTools_Parameters for better control over meshing
@@ -124,7 +110,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 		meshGen.Perform();
 
 		if (!meshGen.IsDone()) {
-			LOG_ERR_S("Failed to generate mesh for shape");
 			return mesh;
 		}
 
@@ -165,23 +150,16 @@ TriangleMesh OpenCASCADEProcessor::convertToMesh(const TopoDS_Shape& shape,
 				}
 
 				mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
-				LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
-					", iterations=" + std::to_string(adjustedIterations) +
-					", strength=" + std::to_string(smoothingStrength));
 			}
 
 			// Apply subdivision if enabled - read from RenderingToolkitAPI config
 			if (subdivisionSettings.enabled) {
 				mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
-				LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
 			}
 		}
 
-		LOG_DBG_S("Generated mesh with " + std::to_string(mesh.getVertexCount()) +
-			" vertices and " + std::to_string(mesh.getTriangleCount()) + " triangles");
 	}
 	catch (const std::exception& e) {
-		LOG_ERR_S("Exception in mesh conversion: " + std::string(e.what()));
 		mesh.clear();
 	}
 
@@ -195,7 +173,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 	TriangleMesh mesh;
 
 	if (shape.IsNull()) {
-		LOG_WRN_S("Cannot convert null shape to mesh");
 		return mesh;
 	}
 
@@ -228,12 +205,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 		// Use config setting if available, otherwise use parameter setting
 		bool useParallel = parallelProcessingConfig && params.inParallel;
 
-		// Log additional tessellation parameters for debugging
-		LOG_DBG_S("Tessellation parameters: quality=" + std::to_string(tessellationQuality) +
-			", adaptive=" + std::string(adaptiveMeshing ? "true" : "false") +
-			", method=" + std::to_string(tessellationMethod) +
-			", featurePreservation=" + std::to_string(featurePreservation) +
-			", parallel=" + std::string(useParallel ? "true" : "false"));
 
 		// Adjust basic parameters based on advanced settings
 		double adjustedDeflection = params.deflection;
@@ -248,7 +219,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 			double qualityFactor = 1.0 / (1.0 + (tessellationQuality - 2));
 			adjustedDeflection *= qualityFactor;
 			adjustedAngularDeflection *= qualityFactor;
-			LOG_DBG_S("Applied high quality tessellation adjustment: factor=" + std::to_string(qualityFactor));
 		}
 
 		// Only apply adaptive meshing adjustment if explicitly enabled AND quality is high
@@ -273,7 +243,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 		meshGen.Perform();
 
 		if (!meshGen.IsDone()) {
-			LOG_ERR_S("Failed to generate mesh for shape");
 			return mesh;
 		}
 
@@ -282,8 +251,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 		std::vector<TopoDS_Face> allFaces;
 		extractAllFacesRecursive(shape, allFaces);
 
-		LOG_INF_S("OpenCASCADEProcessor::convertToMeshWithFaceMapping - Extracted " + 
-		          std::to_string(allFaces.size()) + " faces from shape");
 
 		faceMappings.clear();
 		faceMappings.reserve(allFaces.size());
@@ -306,9 +273,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 			}
 		}
 
-		LOG_INF_S("OpenCASCADEProcessor::convertToMeshWithFaceMapping - Built mappings for " +
-		          std::to_string(facesWithTriangles) + " faces with triangles out of " +
-		          std::to_string(allFaces.size()) + " total faces");
 
 		// Calculate normals if not already done
 		if (mesh.normals.empty() && !mesh.vertices.empty()) {
@@ -339,21 +303,16 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 				}
 
 				mesh = smoothNormals(mesh, smoothingSettings.creaseAngle, adjustedIterations);
-				LOG_DBG_S("Applied mesh smoothing: creaseAngle=" + std::to_string(smoothingSettings.creaseAngle) +
-					", iterations=" + std::to_string(adjustedIterations) +
-					", strength=" + std::to_string(smoothingStrength));
 			}
 
 			// Apply subdivision if enabled - read from RenderingToolkitAPI config
 			if (subdivisionSettings.enabled) {
 				mesh = createSubdivisionSurface(mesh, subdivisionSettings.levels);
-				LOG_DBG_S("Applied mesh subdivision: levels=" + std::to_string(subdivisionSettings.levels));
 			}
 		}
 
 	}
 	catch (const std::exception& e) {
-		LOG_ERR_S("Exception in mesh conversion with face mapping: " + std::string(e.what()));
 		mesh.clear();
 	}
 
@@ -362,7 +321,6 @@ TriangleMesh OpenCASCADEProcessor::convertToMeshWithFaceMapping(const TopoDS_Sha
 
 void OpenCASCADEProcessor::calculateNormals(TriangleMesh& mesh) {
 	if (mesh.vertices.empty() || mesh.triangles.empty()) {
-		LOG_WRN_S("Cannot calculate normals for empty mesh");
 		return;
 	}
 
@@ -414,7 +372,6 @@ void OpenCASCADEProcessor::calculateNormals(TriangleMesh& mesh) {
 		}
 	}
 
-	LOG_DBG_S("Calculated normals for " + std::to_string(mesh.normals.size()) + " vertices");
 }
 
 TriangleMesh OpenCASCADEProcessor::smoothNormals(const TriangleMesh& mesh,
@@ -495,13 +452,11 @@ TriangleMesh OpenCASCADEProcessor::smoothNormals(const TriangleMesh& mesh,
 		}
 	}
 
-	LOG_DBG_S("Smoothed normals with " + std::to_string(iterations) + " iterations, crease angle: " + std::to_string(creaseAngle));
 	return result;
 }
 
 TriangleMesh OpenCASCADEProcessor::createSubdivisionSurface(const TriangleMesh& mesh, int levels) {
 	// This is a placeholder implementation
-	LOG_WRN_S("OpenCASCADEProcessor::createSubdivisionSurface not fully implemented yet");
 
 	TriangleMesh result = mesh;
 	return result;
@@ -509,7 +464,6 @@ TriangleMesh OpenCASCADEProcessor::createSubdivisionSurface(const TriangleMesh& 
 
 void OpenCASCADEProcessor::flipNormals(TriangleMesh& mesh) {
 	// This is a placeholder implementation
-	LOG_WRN_S("OpenCASCADEProcessor::flipNormals not fully implemented yet");
 }
 
 void OpenCASCADEProcessor::setShowEdges(bool show) {
@@ -583,13 +537,9 @@ void OpenCASCADEProcessor::meshFaceWithIndexTracking(const TopoDS_Face& face, Tr
 				int startTriangleIndex = currentTriangleIndex;
 				extractTriangulationWithIndexTracking(triangulation, location, mesh, face.Orientation(), triangleIndices);
 				currentTriangleIndex += triangulation->NbTriangles();
-			} else {
-				LOG_WRN_S("meshFaceWithIndexTracking - Failed to create triangulation for face");
 			}
 		} catch (const std::exception& e) {
-			LOG_WRN_S("meshFaceWithIndexTracking - Exception creating triangulation: " + std::string(e.what()));
 		} catch (...) {
-			LOG_WRN_S("meshFaceWithIndexTracking - Unknown exception creating triangulation");
 		}
 	}
 }
@@ -706,11 +656,10 @@ void OpenCASCADEProcessor::extractTriangulationWithIndexTracking(const Handle(Po
 // TopExp_Explorer recursively traverses sub-shapes, but for nested compounds we need explicit recursion
 void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, std::vector<TopoDS_Face>& faces) {
 	if (shape.IsNull()) {
-		LOG_WRN_S("extractAllFacesRecursive - Shape is null");
 		return;
 	}
 
-	// Log shape type for debugging
+	// Get shape type
 	const char* shapeTypeName = "UNKNOWN";
 	switch (shape.ShapeType()) {
 		case TopAbs_COMPOUND: shapeTypeName = "COMPOUND"; break;
@@ -723,7 +672,6 @@ void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, s
 		case TopAbs_VERTEX: shapeTypeName = "VERTEX"; break;
 		case TopAbs_SHAPE: shapeTypeName = "SHAPE"; break;
 	}
-	LOG_INF_S("extractAllFacesRecursive - Shape type: " + std::string(shapeTypeName));
 
 	// Use IsSame() to track already added faces to avoid duplicates
 	// IsSame() compares both TShape and Location, which is more accurate than just TShape pointer
@@ -754,11 +702,8 @@ void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, s
 	int faceCountAfter = static_cast<int>(faces.size());
 	
 	if (faceCountAfter > faceCountBefore) {
-		LOG_INF_S("extractAllFacesRecursive - Extracted " + std::to_string(faceCountAfter - faceCountBefore) +
-		          " faces from " + std::string(shapeTypeName));
 	} else if (shape.ShapeType() == TopAbs_COMPOUND) {
 		// For COMPOUND, if no faces found with direct traversal, try alternative approach
-		LOG_WRN_S("extractAllFacesRecursive - No faces found with direct traversal, trying alternative approach");
 		
 		// Try traversing sub-shapes explicitly
 		int subShapeCount = 0;
@@ -800,13 +745,7 @@ void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, s
 			}
 			
 			int facesAfterAlt = static_cast<int>(faces.size());
-			if (facesAfterAlt > facesBeforeAlt) {
-				LOG_INF_S("extractAllFacesRecursive - Sub-shape " + std::to_string(subShapeCount) + 
-				          " (type: " + std::string(subShapeTypeName) + ") added " + 
-				          std::to_string(facesAfterAlt - facesBeforeAlt) + " faces");
-			}
 		}
-		LOG_INF_S("extractAllFacesRecursive - Alternative approach processed " + std::to_string(subShapeCount) + " sub-shapes");
 	}
 	
 	if (shape.ShapeType() != TopAbs_COMPOUND) {
@@ -816,9 +755,5 @@ void OpenCASCADEProcessor::extractAllFacesRecursive(const TopoDS_Shape& shape, s
 			addFaceIfNew(TopoDS::Face(faceExp.Current()));
 		}
 		int faceCountAfter = static_cast<int>(faces.size());
-		LOG_INF_S("extractAllFacesRecursive - Extracted " + std::to_string(faceCountAfter - faceCountBefore) +
-		          " faces from " + std::string(shapeTypeName));
 	}
-	
-	LOG_INF_S("extractAllFacesRecursive - Total faces extracted: " + std::to_string(faces.size()));
 }

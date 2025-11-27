@@ -202,6 +202,8 @@ enum {
 class FlatFrame : public FlatUIFrame
 {
 public:
+	// Static icon cache
+	static wxIcon s_applicationIcon;
 	FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& size);
 	virtual ~FlatFrame();
 
@@ -350,6 +352,9 @@ public:
 
 	// Render mode UI state synchronization
 	void UpdateRenderModeButtonState();
+
+	// Application icon management
+	void SetApplicationIcon();
 
 	// Override OnGlobalPinStateChanged to handle main work area layout
 	virtual void OnGlobalPinStateChanged(wxCommandEvent& event) override;

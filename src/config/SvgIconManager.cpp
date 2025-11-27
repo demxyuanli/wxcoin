@@ -354,7 +354,6 @@ void SvgIconManager::PreloadCommonIcons(const wxSize& size)
 		GetIconBitmap(iconName, size, true); // This will cache the bitmap
 	}
 
-	LOG_INF(wxString::Format("SvgIconManager: Preloaded %u common icons", (unsigned int)commonIcons.size()), "SvgIconManager");
 }
 
 // Enhanced color detection and mapping methods

@@ -1,4 +1,9 @@
 #include "FlatFrame.h"
+#include "resources/cadnav_icon.h"
+#include <wx/mstream.h>
+
+// Static member for icon caching
+wxIcon FlatFrame::s_applicationIcon;
 #include "flatui/FlatUIPanel.h"
 #include "flatui/FlatUIPage.h"
 #include "flatui/FlatUIButtonBar.h"
@@ -247,6 +252,10 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_renderModeButtonGroup(nullptr)
 {
 	wxInitAllImageHandlers();
+
+	// Set application icon (cached in the application)
+	SetApplicationIcon();
+
 	// PlatUIFrame::InitFrameStyle() is called by base constructor.
 	// FlatFrame specific UI initialization
 	InitializeUI(size);
@@ -994,4 +1003,25 @@ void FlatFrame::UpdateRenderModeButtonState()
 	// Update ButtonGroup to ensure only one button is active
 	// Use notify=false to avoid triggering callback during programmatic updates
 	m_renderModeButtonGroup->setSelectedButton(selectedRenderModeId, false);
+}
+
+void FlatFrame::SetApplicationIcon()
+{
+	// Check if icon is already cached
+	if (s_applicationIcon.IsOk()) {
+		SetIcon(s_applicationIcon);
+		return;
+	}
+
+	// Load icon from embedded data
+	wxMemoryInputStream iconStream(cadnav_icon_data, cadnav_icon_data_size);
+	wxImage iconImage(iconStream, wxBITMAP_TYPE_ICO);
+	if (iconImage.IsOk()) {
+		// Create icon from image
+		wxBitmap iconBitmap(iconImage);
+		if (iconBitmap.IsOk()) {
+			s_applicationIcon.CopyFromBitmap(iconBitmap);
+			SetIcon(s_applicationIcon);
+		}
+	}
 }

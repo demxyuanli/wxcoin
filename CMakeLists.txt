@@ -100,6 +100,7 @@ add_subdirectory(src)
 # 主程序源文件
 set(MAIN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/MainApplicationDocking.cpp
+    ${CMAKE_SOURCE_DIR}/include/resources/cadnav_icon.cpp
 )
 
 # 创建可执行文件
