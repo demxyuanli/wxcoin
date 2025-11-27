@@ -3,8 +3,8 @@
 
 #include <wx/msw/wx.rc>
 
-// Application icon (optional)
-// IDI_MAIN_ICON ICON "resources/icon.ico"
+// Application icon
+IDI_MAIN_ICON ICON "../config/cadnav.ico"
 
 // Version information
 VS_VERSION_INFO VERSIONINFO
@@ -24,13 +24,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "CADNav Team"
-            VALUE "FileDescription", "CADNav - Advanced CAD Navigation Tool"
+            VALUE "CompanyName", "CAD VisBird Team"
+            VALUE "FileDescription", "CADVisBird - Advanced CAD visualization Tool"
             VALUE "FileVersion", "1.0.0.0"
-            VALUE "InternalName", "CADNav"
-            VALUE "LegalCopyright", "Copyright (C) 2024 CADNav Team"
-            VALUE "OriginalFilename", "CADNav.exe"
-            VALUE "ProductName", "CADNav"
+            VALUE "InternalName", "CADVisBird"
+            VALUE "LegalCopyright", "Copyright (C) 2025 CADVisBird Team"
+            VALUE "OriginalFilename", "CADVisBird.exe"
+            VALUE "ProductName", "CADVisBird"
             VALUE "ProductVersion", "1.0.0.0"
         END
     END

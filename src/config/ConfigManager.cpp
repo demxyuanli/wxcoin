@@ -48,7 +48,6 @@ bool ConfigManager::initialize(const std::string& configFilePath) {
 		}
 
 		this->configFilePath = (configDir + wxFileName::GetPathSeparator() + "config.ini").ToStdString();
-		LOG_INF("Created new config file path: " + this->configFilePath, "ConfigManager");
 	}
 
 	// Verify file exists and is readable
@@ -78,7 +77,6 @@ bool ConfigManager::initialize(const std::string& configFilePath) {
 		wxCONFIG_USE_LOCAL_FILE);
 
 	initialized = true;
-	LOG_INF("Configuration manager initialized successfully, config file: " + this->configFilePath, "ConfigManager");
 
 	// Initialize Logger configuration
 	LoggerConfig::getInstance().initialize(*this);
@@ -135,7 +133,6 @@ std::string ConfigManager::getString(const std::string& section, const std::stri
 	wxString value;
 	fileConfig->SetPath("/" + wxString(section));
 	bool success = fileConfig->Read(wxString(key), &value, wxString(defaultValue));
-	//LOG_INF_S("Reading config [" + section + "][" + key + "]: " + (success ? value.ToStdString() : "default: " + defaultValue), "ConfigManager");
 	return value.ToStdString();
 }
 

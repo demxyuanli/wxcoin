@@ -477,6 +477,7 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
 		return false;
 	}
 
+
 	std::string line;
 	std::string section;
 

@@ -56,6 +56,14 @@ void LoggerConfig::configureLoggerLevels(const std::string& logLevelStr) {
 
 	isSingleLevel = (logLevelStr.find(',') == std::string::npos);
 
+	// Log parsed levels
+	std::string levelsStr;
+	if (logLevels.count(Logger::LogLevel::ERR)) levelsStr += "ERR ";
+	if (logLevels.count(Logger::LogLevel::WRN)) levelsStr += "WRN ";
+	if (logLevels.count(Logger::LogLevel::DBG)) levelsStr += "DBG ";
+	if (logLevels.count(Logger::LogLevel::INF)) levelsStr += "INF ";
+
+
 	// Set log levels in Logger
 	Logger::getLogger().SetLogLevels(logLevels, isSingleLevel);
 }

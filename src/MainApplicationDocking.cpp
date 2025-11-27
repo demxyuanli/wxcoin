@@ -110,7 +110,7 @@ bool MainApplicationDocking::OnInit()
 	wxRect clientRect = display.GetClientArea();
 	wxSize clientSize = clientRect.GetSize();
 
-	FlatFrameDocking* frame = new FlatFrameDocking("CAD Navigator - Docking Edition",
+	FlatFrameDocking* frame = new FlatFrameDocking("CAD VisBird - Docking Edition",
 		wxPoint(clientRect.GetLeft(), clientRect.GetTop()),
 		clientSize);
 

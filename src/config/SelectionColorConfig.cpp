@@ -73,8 +73,6 @@ void SelectionColorConfig::initialize(ConfigManager& configManager) {
         parseColorString(getCurrentThemeValue(highlightEdgeColorStr), settings.highlightEdgeR, settings.highlightEdgeG, settings.highlightEdgeB);
 
         initialized = true;
-        LOG_INF("Selected geometry diffuse color: " + std::to_string(settings.diffuseR) + "," + 
-                std::to_string(settings.diffuseG) + "," + std::to_string(settings.diffuseB), "SelectionColorConfig");
     }
     catch (const std::exception& e) {
         LOG_ERR("Failed to initialize SelectionColorConfig: " + std::string(e.what()), "SelectionColorConfig");

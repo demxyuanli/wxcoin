@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 set(VcpkgEnableManifest OFF)
-project(CADNav)
+project(CADVisBird)
 
 # === vcpkg manifest mode configuration ===
 # Enable manifest mode for automatic dependency management
@@ -100,7 +100,7 @@ add_subdirectory(src)
 # 主程序源文件
 set(MAIN_SOURCES
     ${CMAKE_SOURCE_DIR}/src/MainApplicationDocking.cpp
-    ${CMAKE_SOURCE_DIR}/include/resources/cadnav_icon.cpp
+    ${CMAKE_SOURCE_DIR}/src/resources/cadnav_icon.cpp
 )
 
 # 创建可执行文件
@@ -167,8 +167,8 @@ if(MSVC)
 
     # Windows 资源编译设置
     if(WIN32)
-        # 确保资源编译器能够找到 wxWidgets 头文件
-        set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I\"${wxWidgets_INCLUDE_DIRS}\"")
+        # 确保资源编译器能够找到 wxWidgets 头文件和项目根目录
+        set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I\"${wxWidgets_INCLUDE_DIRS}\" /I\"${CMAKE_SOURCE_DIR}\"")
     endif()
     
     # 复制 config 目录（使用stamp文件避免触发重新配置）

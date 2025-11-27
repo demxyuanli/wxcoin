@@ -95,6 +95,7 @@ bool LightingConfig::loadFromFile(const std::string& filename)
 		return false;
 	}
 
+
 	std::string line;
 	std::string currentSection;
 	int currentLightIndex = -1;
