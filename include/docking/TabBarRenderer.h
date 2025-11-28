@@ -18,15 +18,23 @@ struct TabBarTabInfo {
     bool isHovered = false;
     bool closeButtonHovered = false;
     bool showCloseButton = true;
+    
+    TabBarTabInfo() = default;
+    TabBarTabInfo(DockWidget* w, const wxRect& r, const wxRect& closeRect, 
+                  bool current, bool hovered, bool closeHovered, bool showClose)
+        : widget(w), rect(r), closeButtonRect(closeRect), isCurrent(current),
+          isHovered(hovered), closeButtonHovered(closeHovered), showCloseButton(showClose) {}
 };
 
 struct TabBarRenderContext {
     wxRect clientRect;
     TabPosition tabPosition;
-    const DockStyleConfig& style;
+    const DockStyleConfig* style;
     std::vector<TabBarTabInfo> tabs;
     wxRect overflowButtonRect;
     bool hasOverflow = false;
+    
+    TabBarRenderContext() : style(nullptr), hasOverflow(false) {}
 };
 
 class TabBarRenderer {
@@ -38,6 +46,7 @@ public:
     void renderTab(wxDC& dc, const TabBarTabInfo& tabInfo, const DockStyleConfig& style);
     void renderTabs(wxDC& dc, const TabBarRenderContext& context);
     void renderOverflowButton(wxDC& dc, const wxRect& rect, const DockStyleConfig& style);
+    void render(wxDC& dc, const TabBarRenderContext& context);
 
 private:
     void renderHorizontalTab(wxDC& dc, const TabBarTabInfo& tabInfo, const DockStyleConfig& style);

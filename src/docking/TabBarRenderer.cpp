@@ -14,14 +14,28 @@ TabBarRenderer::~TabBarRenderer() {
 }
 
 void TabBarRenderer::renderBackground(wxDC& dc, const TabBarRenderContext& context) {
+    if (!context.style) {
+        return;
+    }
     wxColour tabBarBg = CFG_COLOUR("DockTabBarBgColour");
     dc.SetBrush(wxBrush(tabBarBg));
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.DrawRectangle(context.clientRect);
 }
 
+void TabBarRenderer::render(wxDC& dc, const TabBarRenderContext& context) {
+    if (!context.style) {
+        return;
+    }
+    renderBackground(dc, context);
+    renderTabs(dc, context);
+    if (context.hasOverflow) {
+        renderOverflowButton(dc, context.overflowButtonRect, *context.style);
+    }
+}
+
 void TabBarRenderer::renderTab(wxDC& dc, const TabBarTabInfo& tabInfo, const DockStyleConfig& style) {
-    if (tabInfo.rect.IsEmpty()) {
+    if (tabInfo.rect.IsEmpty() || !tabInfo.widget) {
         return;
     }
 
@@ -46,16 +60,19 @@ void TabBarRenderer::renderTab(wxDC& dc, const TabBarTabInfo& tabInfo, const Doc
     dc.DrawLabel(title, textRect, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
 
     if (isCurrent && tabInfo.widget->hasFeature(DockWidgetClosable)) {
-        DrawSvgButton(dc, tabInfo.closeButtonRect, style.closeIconName, style, false);
+        DrawSvgButton(dc, tabInfo.closeButtonRect, style.closeIconName, style, tabInfo.closeButtonHovered);
     }
 }
 
 void TabBarRenderer::renderTabs(wxDC& dc, const TabBarRenderContext& context) {
+    if (!context.style) {
+        return;
+    }
     for (const auto& tab : context.tabs) {
         if (tab.rect.IsEmpty()) {
             continue;
         }
-        renderTab(dc, tab, context.style);
+        renderTab(dc, tab, *context.style);
     }
 }
 

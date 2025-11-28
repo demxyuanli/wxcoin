@@ -34,6 +34,13 @@ set(DOCKING_SOURCES
     DragSystemManager.cpp
     OverlayRenderer.cpp
     OverlayStateManager.cpp
+    TabBarRenderer.cpp
+    DockStateManager.cpp
+    IDragHandler.cpp
+    PerformanceMonitor.cpp
+    BatchRefreshManager.cpp
+    RenderOptimizer.cpp
+    RenderObjectPool.cpp
 )
 
 set(DOCKING_HEADERS

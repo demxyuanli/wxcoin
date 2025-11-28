@@ -4,6 +4,8 @@
 #include "docking/DockContainerWidget.h"
 #include "docking/OverlayRenderer.h"
 #include "docking/OverlayStateManager.h"
+#include "docking/RenderOptimizer.h"
+#include "docking/PerformanceMonitor.h"
 #include <wx/dcbuffer.h>
 #include "config/ThemeManager.h"
 #include <memory>
@@ -120,7 +122,7 @@ DockWidgetArea DockOverlay::dropAreaUnderCursor() {
     // Refresh only if highlights changed
     if (needsRefresh) {
         wxLogDebug("DockOverlay::dropAreaUnderCursor - Highlights changed, refreshing");
-        Refresh(); // Force immediate refresh for hover feedback
+        RenderOptimizer::getInstance().optimizeRefresh(this, nullptr);
     }
     
     return area;
@@ -215,6 +217,7 @@ void DockOverlay::setAllowedAreas(int areas) {
 }
 
 void DockOverlay::onPaint(wxPaintEvent& event) {
+    ScopedPerformanceTimer timer("DockOverlay::onPaint");
     wxAutoBufferedPaintDC dc(this);
 
     if (!m_targetWidget || !m_renderer || !m_stateManager) {
@@ -664,6 +667,7 @@ DockWidgetArea DockOverlayCross::cursorLocation() const {
 }
 
 void DockOverlayCross::onPaint(wxPaintEvent& event) {
+    ScopedPerformanceTimer timer("DockOverlayCross::onPaint");
     wxAutoBufferedPaintDC dc(this);
     dc.Clear();
     
@@ -682,7 +686,8 @@ void DockOverlayCross::onMouseMove(wxMouseEvent& event) {
         // Only refresh the affected areas instead of the whole window
         wxRect oldRect = areaRect(oldArea);
         wxRect newRect = areaRect(newArea);
-        RefreshRect(oldRect.Union(newRect), false);
+        wxRect refreshRect = oldRect.Union(newRect);
+        RenderOptimizer::getInstance().optimizeRefresh(this, &refreshRect);
     }
 }
 
@@ -972,7 +977,7 @@ void DockOverlay::onRefreshTimer(wxTimerEvent& event) {
 
         // Check if we should actually refresh (performance optimization)
         if (shouldRefreshNow()) {
-            Refresh();
+            RenderOptimizer::getInstance().optimizeRefresh(this, nullptr);
             Update();
             m_lastRefreshTime = wxGetLocalTimeMillis();
             m_refreshCount++;

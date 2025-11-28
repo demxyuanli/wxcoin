@@ -29,6 +29,7 @@ enum DockWidgetFeature {
     NoTab = 0x80,
     DeleteContentOnClose = 0x100,
     DockWidgetPositionLocked = 0x200,  // Position locked - cannot be moved
+    DockWidgetPinned = 0x400,           // Pinned - tab is pinned to its position
 
     DefaultDockWidgetFeatures = DockWidgetClosable | DockWidgetMovable | DockWidgetFloatable | DockWidgetFocusable,
     AllDockWidgetFeatures = DefaultDockWidgetFeatures | DockWidgetDeleteOnClose | CustomCloseHandling,
@@ -100,6 +101,10 @@ public:
     // Position locking
     void setPositionLocked(bool locked) { setFeature(DockWidgetPositionLocked, locked); }
     bool isPositionLocked() const { return hasFeature(DockWidgetPositionLocked); }
+
+    // Pinning
+    void setPinned(bool pinned) { setFeature(DockWidgetPinned, pinned); }
+    bool isPinned() const { return hasFeature(DockWidgetPinned); }
 
     // Orientation preferences
     void setOrientation(DockWidgetOrientation orientation) { m_orientation = orientation; }

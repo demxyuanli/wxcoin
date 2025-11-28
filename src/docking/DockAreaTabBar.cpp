@@ -6,12 +6,14 @@
 #include "docking/DockContainerWidget.h"
 #include "docking/FloatingDockContainer.h"
 #include "docking/DockOverlay.h"
+#include "docking/TabBarRenderer.h"
 #include "config/SvgIconManager.h"
 #include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
 #include <wx/menu.h>
 #include <wx/cursor.h>
 #include <algorithm>
+#include <memory>
 
 namespace ads {
 
@@ -26,6 +28,7 @@ wxBEGIN_EVENT_TABLE(DockAreaTabBar, wxPanel)
     EVT_ENTER_WINDOW(DockAreaTabBar::onMouseEnter)
     EVT_SET_CURSOR(DockAreaTabBar::onSetCursor)
     EVT_SIZE(DockAreaTabBar::onSize)
+    EVT_MOUSE_CAPTURE_LOST(DockAreaTabBar::onMouseCaptureLost)
 wxEND_EVENT_TABLE()
 
 DockAreaTabBar::DockAreaTabBar(DockArea* dockArea)
@@ -38,6 +41,7 @@ DockAreaTabBar::DockAreaTabBar(DockArea* dockArea)
     , m_dragPreview(nullptr)
     , m_hasOverflow(false)
     , m_firstVisibleTab(0)
+    , m_renderer(std::make_unique<TabBarRenderer>())
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetMinSize(wxSize(-1, 30));
@@ -111,25 +115,36 @@ void DockAreaTabBar::onPaint(wxPaintEvent& event) {
     // Get style config with theme initialization
     const DockStyleConfig& style = GetDockStyleConfig();
 
-    // Clear background using themed colour (DockTabBarBgColour)
-    // Do not use system colours to ensure dark theme consistency
-    wxColour tabBarBg = CFG_COLOUR("DockTabBarBgColour");
-    dc.SetBrush(wxBrush(tabBarBg));
-    dc.SetPen(*wxTRANSPARENT_PEN);
-    dc.DrawRectangle(GetClientRect());
+    // Prepare render context
+    TabBarRenderContext context;
+    context.clientRect = GetClientRect();
+    context.tabPosition = m_dockArea->tabPosition();
+    context.style = &style;
+    context.hasOverflow = m_hasOverflow;
+    context.overflowButtonRect = m_overflowButtonRect;
 
-    // Draw tabs
+    // Convert TabInfo to TabBarTabInfo
     for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
-        if (m_tabs[i].rect.IsEmpty()) {
-            continue; // Skip non-visible tabs
+        const TabInfo& tab = m_tabs[i];
+        if (tab.rect.IsEmpty()) {
+            continue;
         }
-        drawTab(dc, i);
+        
+        TabBarTabInfo tabInfo(
+            tab.widget,
+            tab.rect,
+            tab.closeButtonRect,
+            (i == m_currentIndex),
+            (i == m_hoveredTab),
+            tab.closeButtonHovered,
+            true
+        );
+        context.tabs.push_back(tabInfo);
     }
 
-    // Draw overflow button if needed
-    if (m_hasOverflow) {
-        // Use SVG icon for dropdown button
-        DrawSvgButton(dc, m_overflowButtonRect, "down", style, false);  // Use "down" SVG icon
+    // Render using TabBarRenderer
+    if (m_renderer) {
+        m_renderer->render(dc, context);
     }
 }
 
@@ -176,6 +191,38 @@ void DockAreaTabBar::onMouseLeftDown(wxMouseEvent& event) {
             CaptureMouse();
         }
     }
+}
+
+void DockAreaTabBar::onMouseCaptureLost(wxMouseCaptureLostEvent& event) {
+    // Clean up drag state when mouse capture is lost
+    if (m_dragStarted && m_draggedTab >= 0) {
+        // Clean up drag preview
+        if (m_dragPreview) {
+            m_dragPreview->finishDrag();
+            m_dragPreview->Destroy();
+            m_dragPreview = nullptr;
+        }
+        
+        // Hide any overlays
+        if (m_dockArea && m_dockArea->dockManager()) {
+            DockOverlay* areaOverlay = m_dockArea->dockManager()->dockAreaOverlay();
+            if (areaOverlay) {
+                areaOverlay->hideOverlay();
+            }
+            DockOverlay* containerOverlay = m_dockArea->dockManager()->containerOverlay();
+            if (containerOverlay) {
+                containerOverlay->hideOverlay();
+            }
+        }
+        
+        m_draggedTab = -1;
+        m_dragStarted = false;
+    }
+    
+    // Restore default cursor
+    SetCursor(wxCursor(wxCURSOR_ARROW));
+    
+    event.Skip();
 }
 
 void DockAreaTabBar::onMouseLeftUp(wxMouseEvent& event) {

@@ -26,6 +26,7 @@ class DockAreaTitleBar;
 class DockAreaMergedTitleBar;
 class FloatingDockContainer;
 class FloatingDragPreview;
+class TabBarRenderer;
 class TitleBarRenderer;
 class TabLayoutCalculator;
 class TabDragHandler;
@@ -330,6 +331,7 @@ protected:
     void onLockButtonClicked();
     void onResizeRefreshTimer(wxTimerEvent& event);
     void onIdleRefresh(wxIdleEvent& event);
+    void onMouseCaptureLost(wxMouseCaptureLostEvent& event);
 
 private:
     struct TabInfo {
@@ -409,6 +411,7 @@ private:
     wxRect getButtonRect(int buttonIndex) const; // 0=pin, 1=close, 2=auto hide, 3=lock
     void showTabOverflowMenu();
     bool isAnyTabLocked() const;
+    bool isAnyTabPinned() const;
 
     // Drag and drop helpers
     bool isDraggingTab() const;
@@ -460,6 +463,7 @@ protected:
     void onMouseEnter(wxMouseEvent& event);
     void onSetCursor(wxSetCursorEvent& event);
     void onSize(wxSizeEvent& event);
+    void onMouseCaptureLost(wxMouseCaptureLostEvent& event);
     
 private:
     struct TabInfo {
@@ -480,6 +484,8 @@ private:
     bool m_hasOverflow;
     int m_firstVisibleTab;
     wxRect m_overflowButtonRect;
+    
+    std::unique_ptr<TabBarRenderer> m_renderer;
     
     int getTabAt(const wxPoint& pos);
     void updateTabRects();

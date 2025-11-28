@@ -10,6 +10,9 @@
 #include "docking/TabLayoutCalculator.h"
 #include "docking/TabDragHandler.h"
 #include "docking/ButtonLayoutCalculator.h"
+#include "docking/RenderOptimizer.h"
+#include "docking/PerformanceMonitor.h"
+#include "docking/RenderObjectPool.h"
 #include "config/SvgIconManager.h"
 #include "config/ThemeManager.h"
 #include <wx/dcbuffer.h>
@@ -32,6 +35,7 @@ wxBEGIN_EVENT_TABLE(DockAreaMergedTitleBar, wxPanel)
     EVT_SET_CURSOR(DockAreaMergedTitleBar::onSetCursor)
     EVT_SIZE(DockAreaMergedTitleBar::onSize)
     EVT_TIMER(wxID_ANY, DockAreaMergedTitleBar::onResizeRefreshTimer)
+    EVT_MOUSE_CAPTURE_LOST(DockAreaMergedTitleBar::onMouseCaptureLost)
 wxEND_EVENT_TABLE()
 
 // DockAreaMergedTitleBar implementation
@@ -174,6 +178,7 @@ DockWidget* DockAreaMergedTitleBar::getTabWidget(int index) const {
 }
 
 void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
+    ScopedPerformanceTimer timer("DockAreaMergedTitleBar::onPaint");
     wxAutoBufferedPaintDC dc(this);
     wxRect clientRect = GetClientRect();
 
@@ -198,8 +203,11 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
     }
     
     if (!skipHeavyDecor && m_renderer) {
+        // Use object pool for render info vectors
+        auto tabRenderInfos = RenderObjectPool::getInstance().acquireTabRenderInfoVector();
+        auto buttonRenderInfos = RenderObjectPool::getInstance().acquireButtonRenderInfoVector();
+
         // Prepare tab render info
-        std::vector<TabRenderInfo> tabRenderInfos;
         for (size_t i = 0; i < m_tabs.size(); ++i) {
             TabRenderInfo info;
             info.widget = m_tabs[i].widget;
@@ -209,41 +217,44 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
             info.isHovered = m_tabs[i].hovered;
             info.closeButtonHovered = m_tabs[i].closeButtonHovered;
             info.showCloseButton = m_tabs[i].showCloseButton;
-            tabRenderInfos.push_back(info);
+            tabRenderInfos->push_back(info);
         }
 
         // Prepare button render info
-        std::vector<ButtonRenderInfo> buttonRenderInfos;
         if (m_showLockButton && !m_lockButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_lockButtonRect;
             info.isHovered = m_lockButtonHovered;
-            info.iconName = isAnyTabLocked() ? "lock" : "unlock";
-            buttonRenderInfos.push_back(info);
+            info.iconName = isAnyTabLocked() ? "lock" : "lock";
+            buttonRenderInfos->push_back(info);
         }
         if (m_showPinButton && !m_pinButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_pinButtonRect;
             info.isHovered = m_pinButtonHovered;
-            info.iconName = "pin";
-            buttonRenderInfos.push_back(info);
+            info.iconName = isAnyTabPinned() ? "pinned" : "pin";
+            buttonRenderInfos->push_back(info);
         }
         if (m_showCloseButton && !m_closeButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_closeButtonRect;
             info.isHovered = m_closeButtonHovered;
             info.iconName = "close";
-            buttonRenderInfos.push_back(info);
+            buttonRenderInfos->push_back(info);
         }
         if (m_showAutoHideButton && !m_autoHideButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_autoHideButtonRect;
             info.isHovered = m_autoHideButtonHovered;
             info.iconName = "auto_hide";
-            buttonRenderInfos.push_back(info);
+            buttonRenderInfos->push_back(info);
         }
 
-        m_renderer->renderTitleBarPattern(dc, clientRect, tabRenderInfos, buttonRenderInfos);
+        m_renderer->renderTitleBarPattern(dc, clientRect, *tabRenderInfos, *buttonRenderInfos);
+
+        // Release vectors back to pool
+        RenderObjectPool::getInstance().releaseTabRenderInfoVector(std::move(tabRenderInfos));
+        RenderObjectPool::getInstance().releaseButtonRenderInfoVector(std::move(buttonRenderInfos));
     }
 
     // Draw tabs using TitleBarRenderer
@@ -271,38 +282,43 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
 
     // Draw buttons using TitleBarRenderer
     if (m_renderer) {
-        std::vector<ButtonRenderInfo> buttonInfos;
+        // Use object pool for button render info vector
+        auto buttonInfos = RenderObjectPool::getInstance().acquireButtonRenderInfoVector();
+        
         if (m_showLockButton && !m_lockButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_lockButtonRect;
             info.isHovered = m_lockButtonHovered;
             info.iconName = isAnyTabLocked() ? "lock" : "unlock";
-            buttonInfos.push_back(info);
+            buttonInfos->push_back(info);
         }
         if (m_showPinButton && !m_pinButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_pinButtonRect;
             info.isHovered = m_pinButtonHovered;
-            info.iconName = "pin";
-            buttonInfos.push_back(info);
+            info.iconName = isAnyTabPinned() ? "pinned" : "pin";
+            buttonInfos->push_back(info);
         }
         if (m_showCloseButton && !m_closeButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_closeButtonRect;
             info.isHovered = m_closeButtonHovered;
             info.iconName = "close";
-            buttonInfos.push_back(info);
+            buttonInfos->push_back(info);
         }
         if (m_showAutoHideButton && !m_autoHideButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_autoHideButtonRect;
             info.isHovered = m_autoHideButtonHovered;
             info.iconName = "auto_hide";
-            buttonInfos.push_back(info);
+            buttonInfos->push_back(info);
         }
 
         const DockStyleConfig& style = GetDockStyleConfig();
-        m_renderer->renderButtons(dc, clientRect, buttonInfos, m_tabPosition, style);
+        m_renderer->renderButtons(dc, clientRect, *buttonInfos, m_tabPosition, style);
+
+        // Release vector back to pool
+        RenderObjectPool::getInstance().releaseButtonRenderInfoVector(std::move(buttonInfos));
     }
 
     // Redraw bottom border last so it's not covered by subsequent drawing
@@ -359,6 +375,34 @@ void DockAreaMergedTitleBar::onMouseLeftDown(wxMouseEvent& event) {
     } else if (m_showLockButton && m_lockButtonRect.Contains(pos)) {
         onLockButtonClicked();
     }
+}
+
+void DockAreaMergedTitleBar::onMouseCaptureLost(wxMouseCaptureLostEvent& event) {
+    // Clean up drag state when mouse capture is lost
+    if (m_dragHandler && m_dragHandler->hasDraggedTab()) {
+        // Cancel drag operation
+        m_dragHandler->cancelDrag();
+        
+        // Hide any overlays
+        if (m_dockArea && m_dockArea->dockManager()) {
+            DockOverlay* areaOverlay = m_dockArea->dockManager()->dockAreaOverlay();
+            if (areaOverlay) {
+                areaOverlay->hideOverlay();
+            }
+            DockOverlay* containerOverlay = m_dockArea->dockManager()->containerOverlay();
+            if (containerOverlay) {
+                containerOverlay->hideOverlay();
+            }
+        }
+    }
+    
+    // Restore default cursor
+    SetCursor(wxCursor(wxCURSOR_ARROW));
+    
+    // Clear tooltip
+    UnsetToolTip();
+    
+    event.Skip();
 }
 
 void DockAreaMergedTitleBar::onMouseLeftUp(wxMouseEvent& event) {
@@ -418,7 +462,7 @@ void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
             m_dockArea->dockWidget(i)->hasFeature(DockWidgetClosable));
 
         if (wasHovered != m_tabs[i].closeButtonHovered) {
-            RefreshRect(m_tabs[i].closeButtonRect);
+            RenderOptimizer::getInstance().optimizeRefresh(this, &m_tabs[i].closeButtonRect);
         }
     }
 
@@ -441,23 +485,23 @@ void DockAreaMergedTitleBar::onMouseMotion(wxMouseEvent& event) {
         // Use targeted refresh instead of refreshing the whole bar
         if (oldHoveredTab != m_hoveredTab) {
             if (oldHoveredTab >= 0 && oldHoveredTab < static_cast<int>(m_tabs.size())) {
-                RefreshRect(m_tabs[oldHoveredTab].rect);
+                RenderOptimizer::getInstance().optimizeRefresh(this, &m_tabs[oldHoveredTab].rect);
             }
             if (m_hoveredTab >= 0 && m_hoveredTab < static_cast<int>(m_tabs.size())) {
-                RefreshRect(m_tabs[m_hoveredTab].rect);
+                RenderOptimizer::getInstance().optimizeRefresh(this, &m_tabs[m_hoveredTab].rect);
             }
         }
         if (oldPinHovered != m_pinButtonHovered) {
-            RefreshRect(m_pinButtonRect);
+            RenderOptimizer::getInstance().optimizeRefresh(this, &m_pinButtonRect);
         }
         if (oldCloseHovered != m_closeButtonHovered) {
-            RefreshRect(m_closeButtonRect);
+            RenderOptimizer::getInstance().optimizeRefresh(this, &m_closeButtonRect);
         }
         if (oldAutoHideHovered != m_autoHideButtonHovered) {
-            RefreshRect(m_autoHideButtonRect);
+            RenderOptimizer::getInstance().optimizeRefresh(this, &m_autoHideButtonRect);
         }
         if (oldLockHovered != m_lockButtonHovered) {
-            RefreshRect(m_lockButtonRect);
+            RenderOptimizer::getInstance().optimizeRefresh(this, &m_lockButtonRect);
         }
     }
 
@@ -514,7 +558,7 @@ void DockAreaMergedTitleBar::onMouseLeave(wxMouseEvent& event) {
         }
     }
 
-    Refresh();
+    RenderOptimizer::getInstance().optimizeRefresh(this, nullptr);
 
     // Restore default cursor when leaving title bar
     SetCursor(wxCursor(wxCURSOR_ARROW));
@@ -678,12 +722,21 @@ void DockAreaMergedTitleBar::onLockButtonClicked() {
         }
     }
 
-    Refresh(); // Refresh to update button appearance
+    RenderOptimizer::getInstance().optimizeRefresh(this, nullptr); // Refresh to update button appearance
 }
 
 bool DockAreaMergedTitleBar::isAnyTabLocked() const {
     for (const auto& tab : m_tabs) {
         if (tab.widget && tab.widget->isPositionLocked()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DockAreaMergedTitleBar::isAnyTabPinned() const {
+    for (const auto& tab : m_tabs) {
+        if (tab.widget && tab.widget->isPinned()) {
             return true;
         }
     }
@@ -793,7 +846,7 @@ void DockAreaMergedTitleBar::scheduleRefresh(unsigned int flags) {
 
 void DockAreaMergedTitleBar::performRefresh() {
     if (m_refreshFlags != 0) {
-        Refresh();
+        RenderOptimizer::getInstance().optimizeRefresh(this, nullptr);
         m_refreshFlags = 0;
         m_pendingRefresh = false;
         Unbind(wxEVT_IDLE, &DockAreaMergedTitleBar::onIdleRefresh, this);
@@ -807,7 +860,7 @@ void DockAreaMergedTitleBar::onIdleRefresh(wxIdleEvent& event) {
 
 void DockAreaMergedTitleBar::onResizeRefreshTimer(wxTimerEvent& event) {
     // Perform the deferred refresh after resize debounce period
-    Refresh();
+    RenderOptimizer::getInstance().optimizeRefresh(this, nullptr);
     Update();
 }
 
@@ -816,7 +869,7 @@ void DockAreaMergedTitleBar::RefreshTheme() {
     SetBackgroundColour(CFG_COLOUR("DockTitleBarBgColour"));
 
     // Refresh the display to apply new theme colors
-    Refresh(true);
+    RenderOptimizer::getInstance().optimizeRefresh(this, nullptr);
     Update();
 }
 
