@@ -4,7 +4,7 @@ project(CADVisBird)
 
 # === vcpkg manifest mode configuration ===
 # Enable manifest mode for automatic dependency management
-set(VCPKG_MANIFEST_MODE ON CACHE BOOL "Enable vcpkg manifest mode" FORCE)
+set(VCPKG_MANIFEST_MODE OFF CACHE BOOL "Enable vcpkg manifest mode" FORCE)
 if(VCPKG_MANIFEST_MODE)
     message(STATUS "vcpkg manifest mode enabled for automatic dependency management")
 endif()
@@ -149,7 +149,7 @@ if(DEBUG_VIEWPORT_LOGS)
     message(STATUS "Viewport debug logging enabled")
 endif()
 
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CADNav)
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CADVisBird)
 
 # MSVC specific settings
 if(MSVC)

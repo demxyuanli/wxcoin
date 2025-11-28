@@ -232,8 +232,17 @@ void DockArea::insertDockWidget(int index, DockWidget* dockWidget, bool activate
         m_tabBar->insertTab(index, dockWidget);
     }
 
-    // Reparent widget to content area
-    dockWidget->Reparent(m_contentArea);
+    // Reparent widget to content area BEFORE adding to sizer
+    // This ensures the sizer's containing window matches the widget's parent
+    if (dockWidget->GetParent() != m_contentArea) {
+        dockWidget->Reparent(m_contentArea);
+    }
+    
+    // Ensure sizer's containing window is set correctly
+    if (m_contentSizer->GetContainingWindow() != m_contentArea) {
+        m_contentSizer->SetContainingWindow(m_contentArea);
+    }
+    
     m_contentSizer->Add(dockWidget, 1, wxEXPAND);
     dockWidget->Hide(); // Initially hidden until activated
 

@@ -24,6 +24,16 @@ set(DOCKING_SOURCES
     DockResizeMonitor.cpp
     DockLayoutCache.cpp
     SmartLayoutStrategy.cpp
+    TitleBarRenderer.cpp
+    TabBarRenderer.cpp
+    TabLayoutCalculator.cpp
+    TabDragHandler.cpp
+    ButtonLayoutCalculator.cpp
+    SplitterLayoutAlgorithm.cpp
+    LayoutOptimizer.cpp
+    DragSystemManager.cpp
+    OverlayRenderer.cpp
+    OverlayStateManager.cpp
 )
 
 set(DOCKING_HEADERS

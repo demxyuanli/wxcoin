@@ -17,6 +17,8 @@ class DockSplitter;
 class FloatingDockContainer;
 class DockOverlay;
 class DockLayoutConfig;
+class LayoutOptimizer;
+class DragSystemManager;
 
 // Dock widget area flags
 enum DockWidgetArea {
@@ -191,14 +193,18 @@ private:
     wxString m_styleSheet;
     std::unique_ptr<DockLayoutConfig> m_layoutConfig;
 
-    // Performance optimization variables
+    // Delegated components for separation of concerns
+    std::unique_ptr<LayoutOptimizer> m_layoutOptimizer;
+    std::unique_ptr<DragSystemManager> m_dragSystemManager;
+
+    // Legacy performance optimization variables (kept for backward compatibility)
     wxTimer* m_layoutUpdateTimer;
     int m_batchOperationCount;
     bool m_isProcessingDrag;
     wxPoint m_lastMousePos;
     std::vector<wxWindow*> m_cachedDropTargets;
 
-    // Enhanced drag state enumeration
+    // Enhanced drag state enumeration (kept for backward compatibility)
     enum DragState {
         DragInactive,
         DragStarted,
@@ -207,7 +213,7 @@ private:
     };
     DragState m_dragState;
 
-    // Drag context structure for enhanced drag management
+    // Drag context structure (kept for backward compatibility)
     struct DragContext {
         DockWidget* draggedWidget = nullptr;
         wxLongLong startTime = 0;

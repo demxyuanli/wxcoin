@@ -88,6 +88,9 @@ public:
     // Helper methods to identify splitters that control fixed docks
     bool isLeftDockSplitter(DockSplitter* splitter) const;
     bool isBottomDockSplitter(DockSplitter* splitter) const;
+    
+    // Public access for layout algorithms
+    int getConfiguredAreaSize(DockWidgetArea area) const;
 
     // Global docking support
     void enableGlobalDockingMode(bool enable);
@@ -173,7 +176,6 @@ private:
     void addToHorizontalLayout(DockSplitter* splitter, DockArea* dockArea, DockWidgetArea area);
     void restructureForTopBottom(DockSplitter* rootSplitter, DockArea* dockArea, DockWidgetArea area);
     void ensureAllChildrenVisible(wxWindow* window);
-    int getConfiguredAreaSize(DockWidgetArea area) const;
     
     friend class DockManager;
     friend class DockArea;

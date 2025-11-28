@@ -14,6 +14,8 @@ class DockWidget;
 class DockArea;
 class DockContainerWidget;
 class FloatingDragPreview;
+class OverlayRenderer;
+class OverlayStateManager;
 
 /**
  * @brief Drop area for dock overlay
@@ -86,7 +88,7 @@ public:
     eMode mode() const { return m_mode; }
     
     // Allowed areas
-    void setAllowedAreas(int areas) { m_allowedAreas = areas; updateDropAreas(); }
+    void setAllowedAreas(int areas);
     int allowedAreas() const { return m_allowedAreas; }
 
     // Global docking mode
@@ -134,11 +136,15 @@ protected:
     wxRect getPreviewRect(DockWidgetArea area) const;
 
 private:
+    // Delegated components for separation of concerns
+    std::unique_ptr<OverlayRenderer> m_renderer;
+    std::unique_ptr<OverlayStateManager> m_stateManager;
+    
     // Member variables
     eMode m_mode;
     wxWindow* m_targetWidget;
     int m_allowedAreas;
-    std::vector<std::unique_ptr<DockOverlayDropArea>> m_dropAreas;
+    // Note: m_dropAreas is now managed by m_stateManager
     DockWidgetArea m_lastHoveredArea;
     wxColour m_frameColor;
     wxColour m_areaColor;

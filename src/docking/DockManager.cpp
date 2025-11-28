@@ -8,9 +8,12 @@
 #include "docking/AutoHideContainer.h"
 #include "docking/PerspectiveManager.h"
 #include "docking/DockLayoutConfig.h"
+#include "docking/LayoutOptimizer.h"
+#include "docking/DragSystemManager.h"
 #include <wx/xml/xml.h>
 #include <wx/sstream.h>
 #include <algorithm>
+#include <memory>
 
 namespace ads {
 
@@ -57,7 +60,11 @@ DockManager::DockManager(wxWindow* parent)
     m_layoutConfig = std::make_unique<DockLayoutConfig>();
     m_layoutConfig->LoadFromConfig();
 
-    // Initialize performance monitoring
+    // Initialize delegated components
+    m_layoutOptimizer = std::make_unique<LayoutOptimizer>(this);
+    m_dragSystemManager = std::make_unique<DragSystemManager>(this);
+
+    // Initialize performance monitoring (legacy, will be removed)
     m_layoutUpdateTimer = new wxTimer(this);
     Bind(wxEVT_TIMER, &DockManager::onLayoutUpdateTimer, this, m_layoutUpdateTimer->GetId());
 
@@ -557,73 +564,42 @@ DockOverlay* DockManager::containerOverlay() const {
     return d->containerOverlay;
 }
 
-// Performance optimization methods
+// Performance optimization methods - delegated to LayoutOptimizer
 void DockManager::beginBatchOperation() {
-    m_batchOperationCount++;
-    if (m_batchOperationCount == 1) {
-        // Pause layout updates during batch operations
-        if (m_layoutUpdateTimer && m_layoutUpdateTimer->IsRunning()) {
-            m_layoutUpdateTimer->Stop();
-        }
+    if (m_layoutOptimizer) {
+        m_layoutOptimizer->beginBatchOperation();
     }
+    // Legacy support
+    m_batchOperationCount++;
 }
 
 void DockManager::endBatchOperation() {
+    if (m_layoutOptimizer) {
+        m_layoutOptimizer->endBatchOperation();
+    }
+    // Legacy support
     if (m_batchOperationCount > 0) {
         m_batchOperationCount--;
-        if (m_batchOperationCount == 0) {
-            // Resume layout updates and trigger a refresh
-            updateLayout();
-        }
     }
 }
 
 void DockManager::updateLayout() {
-    if (m_batchOperationCount > 0) {
-        // Defer layout update until batch operation completes
-        return;
-    }
-
-    if (m_containerWidget) {
-        // Freeze/thaw to prevent intermediate repaints
-        m_containerWidget->Freeze();
-        
-        m_containerWidget->Layout();
-        
-        // Only refresh the client area, not the entire window hierarchy
-        wxRect clientRect = m_containerWidget->GetClientRect();
-        m_containerWidget->RefreshRect(clientRect, false);
-        
-        m_containerWidget->Thaw();
+    if (m_layoutOptimizer) {
+        m_layoutOptimizer->updateLayout();
     }
 }
 
 void DockManager::onLayoutUpdateTimer(wxTimerEvent& event) {
-    updateLayout();
+    if (m_layoutOptimizer) {
+        m_layoutOptimizer->onLayoutUpdateTimer(event);
+    }
 }
 
-// Enhanced drag and drop optimization with global docking support
+// Enhanced drag and drop optimization - delegated to DragSystemManager
 void DockManager::optimizeDragOperation(DockWidget* draggedWidget) {
-    if (!draggedWidget || m_isProcessingDrag) {
-        return;
+    if (m_dragSystemManager) {
+        m_dragSystemManager->optimizeDragOperation(draggedWidget);
     }
-
-    m_isProcessingDrag = true;
-
-    // Cache frequently used values
-    m_lastMousePos = wxGetMousePosition();
-
-    // Use cached window hierarchy for faster lookups
-    updateDragTargets();
-
-    // Enhanced drag state management
-    if (m_dragState == DragInactive) {
-        startDragOperation(draggedWidget);
-    } else {
-        updateDragOperation(draggedWidget);
-    }
-
-    m_isProcessingDrag = false;
 }
 
 // New drag operation management methods
@@ -875,14 +851,17 @@ void DockManager::cleanupUnusedResources() {
 }
 
 void DockManager::optimizeMemoryUsage() {
-    cleanupUnusedResources();
-
-    // Optimize overlay rendering
-    if (d->dockAreaOverlay) {
-        d->dockAreaOverlay->optimizeRendering();
-    }
-    if (d->containerOverlay) {
-        d->containerOverlay->optimizeRendering();
+    if (m_layoutOptimizer) {
+        m_layoutOptimizer->optimizeMemoryUsage();
+    } else {
+        // Legacy fallback
+        cleanupUnusedResources();
+        if (d->dockAreaOverlay) {
+            d->dockAreaOverlay->optimizeRendering();
+        }
+        if (d->containerOverlay) {
+            d->containerOverlay->optimizeRendering();
+        }
     }
 }
 

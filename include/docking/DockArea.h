@@ -26,6 +26,10 @@ class DockAreaTitleBar;
 class DockAreaMergedTitleBar;
 class FloatingDockContainer;
 class FloatingDragPreview;
+class TitleBarRenderer;
+class TabLayoutCalculator;
+class TabDragHandler;
+class ButtonLayoutCalculator;
 
 // Docking Styles - Similar to FlatUIBar Tab Styles
 enum class DockStyle {
@@ -294,6 +298,7 @@ public:
     void setCurrentIndex(int index);
     int getTabCount() const { return static_cast<int>(m_tabs.size()); }
     DockWidget* getTabWidget(int index) const;
+    wxRect getTabRect(int tabIndex) const;
 
     void showCloseButton(bool show) { m_showCloseButton = show; Refresh(); }
     void showAutoHideButton(bool show) { m_showAutoHideButton = show; Refresh(); }
@@ -306,6 +311,12 @@ public:
 
     // Theme support
     void RefreshTheme();
+
+    // Access dock area (for TabDragHandler)
+    DockArea* dockArea() const { return m_dockArea; }
+    
+    // Drag feedback (public for TabDragHandler access)
+    void showDragFeedback(bool showMergeHint = false);
 
 protected:
     void onPaint(wxPaintEvent& event);
@@ -345,7 +356,8 @@ private:
     bool m_showPinButton;
     bool m_showLockButton;
 
-    // Drag and drop support
+    // Drag and drop support (now handled by TabDragHandler)
+    // Keep for backward compatibility during transition
     int m_draggedTab;
     wxPoint m_dragStartPos;
     bool m_dragStarted;
@@ -372,6 +384,12 @@ private:
     bool m_pendingRefresh;
     unsigned int m_refreshFlags;
 
+    // Delegated components for separation of concerns
+    std::unique_ptr<TitleBarRenderer> m_renderer;
+    std::unique_ptr<TabLayoutCalculator> m_layoutCalculator;
+    std::unique_ptr<TabDragHandler> m_dragHandler;
+    std::unique_ptr<ButtonLayoutCalculator> m_buttonLayoutCalculator;
+
     // Refresh flags
     enum RefreshFlag {
         RefreshTabs = 0x01,
@@ -381,34 +399,22 @@ private:
     };
 
     void updateTabRects();
+    void updateButtonRects();
     void scheduleRefresh(unsigned int flags = RefreshAll);
     void performRefresh();
-    void drawTab(wxDC& dc, int index);
-    void drawButton(wxDC& dc, const wxRect& rect, const wxString& text, bool hovered);
-    void drawTitleBarPattern(wxDC& dc, const wxRect& rect);
+    // Removed: drawTab, drawButton, drawTitleBarPattern - replaced by TitleBarRenderer
+    // Removed: updateHorizontalTabRects, updateVerticalTabRects - replaced by TabLayoutCalculator
+    // Removed: drawButtons, drawHorizontalButtons, drawVerticalButtons - replaced by TitleBarRenderer
     int getTabAt(const wxPoint& pos) const;
     wxRect getButtonRect(int buttonIndex) const; // 0=pin, 1=close, 2=auto hide, 3=lock
     void showTabOverflowMenu();
-    
-    // Tab layout helpers
-    void updateHorizontalTabRects(const wxSize& size, const DockStyleConfig& style, 
-                                  int tabSpacing, int textPadding, bool isTop);
-    void updateVerticalTabRects(const wxSize& size, const DockStyleConfig& style, 
-                               int tabSpacing, int textPadding, bool isLeft);
-    
-    // Button drawing helpers
-    void drawButtons(wxDC& dc, const wxRect& clientRect);
-    void drawHorizontalButtons(wxDC& dc, const wxRect& clientRect, const DockStyleConfig& style);
-    void drawVerticalButtons(wxDC& dc, const wxRect& clientRect, const DockStyleConfig& style);
     bool isAnyTabLocked() const;
 
     // Drag and drop helpers
-    bool isDraggingTab() const { return m_dragStarted && m_draggedTab >= 0; }
+    bool isDraggingTab() const;
     void updateDragCursor(int dropArea);
-    void showDragFeedback(bool showMergeHint = false);
 
-    // Target detection
-    wxWindow* findTargetWindowUnderMouse(const wxPoint& screenPos, wxWindow* dragPreview) const;
+    // Removed: findTargetWindowUnderMouse - moved to TabDragHandler
 
     wxDECLARE_EVENT_TABLE();
 };

@@ -117,19 +117,34 @@ void DockWidget::setWidget(wxWindow* widget, InsertMode insertMode) {
                 wxScrolledWindow* scrollArea = new wxScrolledWindow(this);
                 scrollArea->SetScrollRate(10, 10);
                 
+                // Reparent widget to scrollArea BEFORE creating sizer
+                // This ensures the sizer's containing window matches the widget's parent
+                widget->Reparent(scrollArea);
+                
+                // Create sizer and set it to scrollArea first
+                // This ensures the sizer's containing window is set correctly
                 wxBoxSizer* scrollSizer = new wxBoxSizer(wxVERTICAL);
-                scrollSizer->Add(widget, 1, wxEXPAND);
                 scrollArea->SetSizer(scrollSizer);
                 
+                // Now add widget to sizer - sizer's containing window is already set to scrollArea
+                scrollSizer->Add(widget, 1, wxEXPAND);
+                
                 contentToAdd = scrollArea;
+            } else {
+                // If no scroll area, ensure widget is parented to DockWidget
+                if (widget->GetParent() != this) {
+                    widget->Reparent(this);
+                }
             }
         }
         
-        GetSizer()->Add(contentToAdd, 1, wxEXPAND);
-        if (contentToAdd != widget) {
-            // Only reparent if we created a scroll area
-            widget->Reparent(contentToAdd);
+        // Ensure sizer's containing window matches the content's parent
+        wxSizer* sizer = GetSizer();
+        if (sizer && sizer->GetContainingWindow() != this) {
+            sizer->SetContainingWindow(this);
         }
+        
+        GetSizer()->Add(contentToAdd, 1, wxEXPAND);
     }
     
     Layout();

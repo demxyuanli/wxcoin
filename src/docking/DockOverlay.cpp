@@ -2,8 +2,11 @@
 #include "docking/DockWidget.h"
 #include "docking/DockArea.h"
 #include "docking/DockContainerWidget.h"
+#include "docking/OverlayRenderer.h"
+#include "docking/OverlayStateManager.h"
 #include <wx/dcbuffer.h>
 #include "config/ThemeManager.h"
+#include <memory>
 
 namespace ads {
 
@@ -72,11 +75,30 @@ DockOverlay::DockOverlay(wxWindow* parent, eMode mode)
     // Initialize refresh timer for debouncing
     m_refreshTimer = new wxTimer(this);
 
-    // Create drop areas
-    createDropAreas();
+    // Initialize delegated components
+    m_renderer = std::make_unique<OverlayRenderer>(this);
+    m_stateManager = std::make_unique<OverlayStateManager>(this);
+    
+    // Configure renderer with colors
+    m_renderer->setFrameColor(m_frameColor);
+    m_renderer->setAreaColor(m_areaColor);
+    m_renderer->setFrameWidth(m_frameWidth);
+    m_renderer->setBackgroundColor(m_backgroundColor);
+    m_renderer->setGlobalBackgroundColor(m_globalBackgroundColor);
+    m_renderer->setBorderColor(m_borderColor);
+    m_renderer->setBorderWidth(m_borderWidth);
+    m_renderer->setCornerRadius(m_cornerRadius);
+    m_renderer->setDropAreaColors(m_dropAreaNormalBg, m_dropAreaNormalBorder,
+                                  m_dropAreaHighlightBg, m_dropAreaHighlightBorder,
+                                  m_dropAreaIconColor, m_dropAreaHighlightIconColor);
+    
+    // Set overlay mode in state manager
+    m_stateManager->setOverlayMode(mode == ModeDockAreaOverlay ? 
+                                   DockOverlayMode::ModeDockAreaOverlay : 
+                                   DockOverlayMode::ModeContainerOverlay);
 
     // Set initial visibility based on allowed areas
-    updateDropAreas();
+    m_stateManager->updateDropAreas(m_allowedAreas);
 }
 
 DockOverlay::~DockOverlay() {
@@ -87,48 +109,21 @@ DockOverlay::~DockOverlay() {
 }
 
 DockWidgetArea DockOverlay::dropAreaUnderCursor() {
+    if (!m_stateManager) {
+        return InvalidDockWidgetArea;
+    }
+    
     wxPoint mousePos = wxGetMousePosition();
-    wxPoint localPos = ScreenToClient(mousePos);
-
-    wxLogDebug("DockOverlay::dropAreaUnderCursor - mouse pos: %d,%d local: %d,%d",
-        mousePos.x, mousePos.y, localPos.x, localPos.y);
-
-    // Track which areas should be highlighted
-    std::vector<DockWidgetArea> areasToHighlight;
-
-    for (const auto& dropArea : m_dropAreas) {
-        wxRect rect = dropArea->rect();
-        bool isMouseOver = dropArea->isVisible() && isMouseOverIcon(localPos, dropArea->rect(), dropArea->area());
-        wxLogDebug("  Area %d: rect(%d,%d,%d,%d) visible:%d mouseOver:%d",
-            dropArea->area(), rect.x, rect.y, rect.width, rect.height,
-            dropArea->isVisible(), isMouseOver);
-
-        if (isMouseOver) {
-            areasToHighlight.push_back(dropArea->area());
-        }
-    }
-
-    // Update highlights for all areas independently
     bool needsRefresh = false;
-    for (auto& dropArea : m_dropAreas) {
-        bool shouldHighlight = std::find(areasToHighlight.begin(), areasToHighlight.end(), dropArea->area()) != areasToHighlight.end();
-        bool wasHighlighted = dropArea->isHighlighted();
-
-        if (shouldHighlight != wasHighlighted) {
-            dropArea->setHighlighted(shouldHighlight);
-            wxLogDebug("  Area %d: highlight changed %d -> %d", dropArea->area(), wasHighlighted, shouldHighlight);
-            needsRefresh = true;
-        }
-    }
-
+    DockWidgetArea area = m_stateManager->dropAreaUnderCursor(mousePos, this, needsRefresh);
+    
     // Refresh only if highlights changed
     if (needsRefresh) {
         wxLogDebug("DockOverlay::dropAreaUnderCursor - Highlights changed, refreshing");
         Refresh(); // Force immediate refresh for hover feedback
     }
-
-    // Return the primary hovered area (first one found, if any)
-    return areasToHighlight.empty() ? InvalidDockWidgetArea : areasToHighlight[0];
+    
+    return area;
 }
 
 DockWidgetArea DockOverlay::showOverlay(wxWindow* target) {
@@ -179,72 +174,79 @@ void DockOverlay::hideOverlay() {
     m_targetWidget = nullptr;
     
     // Clear highlights
-    for (auto& dropArea : m_dropAreas) {
-        dropArea->setHighlighted(false);
+    if (m_stateManager) {
+        for (auto& dropArea : m_stateManager->dropAreas()) {
+            dropArea->setHighlighted(false);
+        }
     }
 }
 
 void DockOverlay::updatePosition() {
-    if (!m_targetWidget) {
+    if (!m_targetWidget || !m_stateManager) {
         return;
     }
     
-    wxRect rect = targetRect();
+    wxRect rect = m_stateManager->targetRect(m_targetWidget);
     wxLogDebug("DockOverlay::updatePosition - target rect: %d,%d %dx%d", 
         rect.x, rect.y, rect.width, rect.height);
         
     SetPosition(rect.GetPosition());
     SetSize(rect.GetSize());
     
-    updateDropAreaPositions();
+    // Update drop area positions using state manager
+    DockOverlayMode mode = (m_mode == ModeDockAreaOverlay) ? 
+                           DockOverlayMode::ModeDockAreaOverlay : 
+                           DockOverlayMode::ModeContainerOverlay;
+    m_stateManager->updateDropAreaPositions(GetClientSize(), mode);
 }
 
 void DockOverlay::updateDropAreas() {
-    for (auto& dropArea : m_dropAreas) {
-        DockWidgetArea area = dropArea->area();
-        bool allowed = (m_allowedAreas & area) == area;
-        dropArea->setVisible(allowed);
+    if (m_stateManager) {
+        m_stateManager->updateDropAreas(m_allowedAreas);
+    }
+}
+
+void DockOverlay::setAllowedAreas(int areas) {
+    m_allowedAreas = areas;
+    if (m_stateManager) {
+        m_stateManager->setAllowedAreas(areas);
+        m_stateManager->updateDropAreas(areas);
     }
 }
 
 void DockOverlay::onPaint(wxPaintEvent& event) {
     wxAutoBufferedPaintDC dc(this);
 
-    if (!m_targetWidget) {
+    if (!m_targetWidget || !m_renderer || !m_stateManager) {
         return;
     }
 
-    // Optimized background rendering based on mode
-    if (m_isGlobalMode) {
-        // Global mode: more prominent background
-        dc.SetBrush(wxBrush(m_globalBackgroundColor));
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(GetClientRect());
-
-        // Add subtle border for global mode
-        dc.SetPen(wxPen(wxColour(m_borderColor.Red(), m_borderColor.Green(), m_borderColor.Blue(), 200), m_borderWidth));
-        dc.SetBrush(*wxTRANSPARENT_BRUSH);
-        dc.DrawRectangle(wxRect(0, 0, GetSize().GetWidth() - 1, GetSize().GetHeight() - 1));
-    } else {
-        // Normal mode: subtle background
-        dc.SetBrush(wxBrush(m_backgroundColor));
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.DrawRectangle(GetClientRect());
-    }
+    wxRect clientRect = GetClientRect();
+    
+    // Update renderer with current size
+    m_renderer->setOverlaySize(GetSize());
+    m_renderer->setOverlayClientRect(clientRect);
+    
+    // Set drop areas for hover checking
+    m_renderer->setDropAreasForHoverCheck(&m_stateManager->dropAreas());
 
     wxLogDebug("DockOverlay::onPaint - size: %dx%d, global mode: %d",
                GetSize().GetWidth(), GetSize().GetHeight(), m_isGlobalMode);
 
-    // Draw drop areas with VS-style appearance (without direction indicators)
-    paintDropAreas(dc);
+    // Render background and drop areas using OverlayRenderer
+    m_renderer->render(dc, clientRect, m_isGlobalMode);
+    
+    // Render drop areas
+    m_renderer->renderDropAreas(dc, m_stateManager->dropAreas());
 
     // Draw additional hints in global mode
     if (m_isGlobalMode) {
-        drawGlobalModeHints(dc);
+        m_renderer->renderGlobalModeHints(dc, clientRect);
+        m_renderer->renderGlobalModeTextHints(dc, clientRect);
     }
 
     // Draw direction indicators on top of everything else
-    drawDirectionIndicators(dc);
+    m_renderer->renderDirectionIndicators(dc, m_stateManager->dropAreas());
 }
 
 void DockOverlay::onMouseMove(wxMouseEvent& event) {
@@ -280,8 +282,10 @@ void DockOverlay::onMouseMove(wxMouseEvent& event) {
 
 void DockOverlay::onMouseLeave(wxMouseEvent& event) {
     // Clear all highlights
-    for (auto& dropArea : m_dropAreas) {
-        dropArea->setHighlighted(false);
+    if (m_stateManager) {
+        for (auto& dropArea : m_stateManager->dropAreas()) {
+            dropArea->setHighlighted(false);
+        }
     }
     
     m_lastHoveredArea = InvalidDockWidgetArea;
@@ -289,49 +293,27 @@ void DockOverlay::onMouseLeave(wxMouseEvent& event) {
 }
 
 void DockOverlay::createDropAreas() {
-    m_dropAreas.clear();
-    
-    // Create drop areas for each dock area
-    m_dropAreas.push_back(std::make_unique<DockOverlayDropArea>(
-        TopDockWidgetArea, wxRect()));
-    m_dropAreas.push_back(std::make_unique<DockOverlayDropArea>(
-        BottomDockWidgetArea, wxRect()));
-    m_dropAreas.push_back(std::make_unique<DockOverlayDropArea>(
-        LeftDockWidgetArea, wxRect()));
-    m_dropAreas.push_back(std::make_unique<DockOverlayDropArea>(
-        RightDockWidgetArea, wxRect()));
-    m_dropAreas.push_back(std::make_unique<DockOverlayDropArea>(
-        CenterDockWidgetArea, wxRect()));
+    // Drop areas are now created by OverlayStateManager
+    // This method is kept for backward compatibility but does nothing
+    // The state manager creates drop areas in its constructor
 }
 
 void DockOverlay::updateDropAreaPositions() {
-    wxSize size = GetClientSize();
-    int dropSize = 32;  // Larger size for VS-style indicators
-    int margin = 8;     // Slightly larger margin for better spacing
-
-    // Update positions for each drop area
-    for (size_t i = 0; i < m_dropAreas.size(); ++i) {
-        DockWidgetArea area = m_dropAreas[i]->area();
-        bool visible = m_dropAreas[i]->isVisible();
-        wxRect rect = areaRect(area);
-
-        // Create new drop area with updated rect but preserve visibility
-        m_dropAreas[i] = std::make_unique<DockOverlayDropArea>(area, rect);
-        m_dropAreas[i]->setVisible(visible);
+    if (!m_stateManager) {
+        return;
     }
-
-    // Make sure allowed areas are visible
-    updateDropAreas();
+    
+    DockOverlayMode mode = (m_mode == ModeDockAreaOverlay) ? 
+                           DockOverlayMode::ModeDockAreaOverlay : 
+                           DockOverlayMode::ModeContainerOverlay;
+    m_stateManager->updateDropAreaPositions(GetClientSize(), mode);
 }
 
 void DockOverlay::paintDropAreas(wxDC& dc) {
-    wxLogDebug("DockOverlay::paintDropAreas - %d areas", (int)m_dropAreas.size());
-    
-    for (const auto& dropArea : m_dropAreas) {
-        wxLogDebug("  Area %d visible: %d", dropArea->area(), dropArea->isVisible());
-        if (dropArea->isVisible()) {
-            paintDropIndicator(dc, *dropArea);
-        }
+    // This method is now handled by OverlayRenderer
+    // Kept for backward compatibility but delegates to renderer
+    if (m_renderer && m_stateManager) {
+        m_renderer->renderDropAreas(dc, m_stateManager->dropAreas());
     }
 }
 
@@ -429,10 +411,12 @@ void DockOverlay::drawAreaIcon(wxDC& dc, const wxRect& rect, DockWidgetArea area
 
     // Check if this area is currently hovered for red feedback
     bool isHovered = false;
-    for (const auto& dropArea : m_dropAreas) {
-        if (dropArea->area() == area && dropArea->isHighlighted()) {
-            isHovered = true;
-            break;
+    if (m_stateManager) {
+        for (const auto& dropArea : m_stateManager->dropAreas()) {
+            if (dropArea->area() == area && dropArea->isHighlighted()) {
+                isHovered = true;
+                break;
+            }
         }
     }
 
@@ -831,18 +815,20 @@ void DockOverlay::drawGlobalModeHints(wxDC& dc) {
                     edgeThickness, clientRect.GetHeight() - 2 * edgeOffset);
 
     // Draw center area hint with special styling for global mode
-    for (const auto& dropArea : m_dropAreas) {
-        if (dropArea->area() == CenterDockWidgetArea && dropArea->isVisible()) {
-            wxRect centerRect = dropArea->rect();
-            // Inflate center area slightly in global mode for better visibility
-            centerRect.Inflate(2);
+    if (m_stateManager) {
+        for (const auto& dropArea : m_stateManager->dropAreas()) {
+            if (dropArea->area() == CenterDockWidgetArea && dropArea->isVisible()) {
+                wxRect centerRect = dropArea->rect();
+                // Inflate center area slightly in global mode for better visibility
+                centerRect.Inflate(2);
 
-            // Draw enhanced center indicator
-            dc.SetPen(wxPen(wxColour(0, 122, 204, 102), 2));
-            dc.SetBrush(wxBrush(wxColour(0, 122, 204, 102)));
-            dc.DrawRoundedRectangle(centerRect, 6);
+                // Draw enhanced center indicator
+                dc.SetPen(wxPen(wxColour(0, 122, 204, 102), 2));
+                dc.SetBrush(wxBrush(wxColour(0, 122, 204, 102)));
+                dc.DrawRoundedRectangle(centerRect, 6);
 
-            break;
+                break;
+            }
         }
     }
 
@@ -875,38 +861,12 @@ void DockOverlay::drawGlobalModeTextHints(wxDC& dc) {
 }
 
 wxRect DockOverlay::getPreviewRect(DockWidgetArea area) const {
-    if (!m_targetWidget) {
+    if (!m_stateManager) {
         return wxRect();
     }
     
     wxRect clientRect = GetClientRect();
-    wxRect previewRect;
-    int splitRatio = 50; // 50% split
-    
-    switch (area) {
-    case TopDockWidgetArea:
-        previewRect = wxRect(0, 0, clientRect.width, clientRect.height * splitRatio / 100);
-        break;
-    case BottomDockWidgetArea:
-        previewRect = wxRect(0, clientRect.height * (100 - splitRatio) / 100, 
-                           clientRect.width, clientRect.height * splitRatio / 100);
-        break;
-    case LeftDockWidgetArea:
-        previewRect = wxRect(0, 0, clientRect.width * splitRatio / 100, clientRect.height);
-        break;
-    case RightDockWidgetArea:
-        previewRect = wxRect(clientRect.width * (100 - splitRatio) / 100, 0, 
-                           clientRect.width * splitRatio / 100, clientRect.height);
-        break;
-    case CenterDockWidgetArea:
-        // For center, show the entire area
-        previewRect = clientRect;
-        break;
-    default:
-        break;
-    }
-    
-    return previewRect;
+    return m_stateManager->getPreviewRect(area, clientRect);
 }
 
 // Performance optimization methods
@@ -1142,11 +1102,10 @@ void DockOverlay::setRefreshDelay(int delayMs) {
 
 // Draw direction indicators on top of everything else
 void DockOverlay::drawDirectionIndicators(wxDC& dc) {
-    // Only draw direction indicators for highlighted drop areas
-    for (const auto& dropArea : m_dropAreas) {
-        if (dropArea->isVisible() && dropArea->isHighlighted()) {
-            drawPreviewArea(dc, dropArea->area(), true);  // Direction indicator preview
-        }
+    // This method is now handled by OverlayRenderer
+    // Kept for backward compatibility but delegates to renderer
+    if (m_renderer && m_stateManager) {
+        m_renderer->renderDirectionIndicators(dc, m_stateManager->dropAreas());
     }
 }
 
@@ -1158,10 +1117,12 @@ void DockOverlay::drawDirectionArrow(wxDC& dc, const wxRect& rect, DockWidgetAre
     
     // Check if this area is currently hovered for red feedback
     bool isHovered = false;
-    for (const auto& dropArea : m_dropAreas) {
-        if (dropArea->area() == area && dropArea->isHighlighted()) {
-            isHovered = true;
-            break;
+    if (m_stateManager) {
+        for (const auto& dropArea : m_stateManager->dropAreas()) {
+            if (dropArea->area() == area && dropArea->isHighlighted()) {
+                isHovered = true;
+                break;
+            }
         }
     }
     
