@@ -178,6 +178,17 @@ DockWidget* DockAreaMergedTitleBar::getTabWidget(int index) const {
 }
 
 void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
+    // Safety check: ensure window is not being deleted
+    if (IsBeingDeleted()) {
+        return;
+    }
+    if (!GetParent() || GetParent()->IsBeingDeleted()) {
+        return;
+    }
+    if (!m_dockArea || m_dockArea->IsBeingDeleted()) {
+        return;
+    }
+    
     ScopedPerformanceTimer timer("DockAreaMergedTitleBar::onPaint");
     wxAutoBufferedPaintDC dc(this);
     wxRect clientRect = GetClientRect();
@@ -202,13 +213,23 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
         }
     }
     
+    // Use local vectors instead of object pool to avoid potential issues during drag operations
+    std::vector<TabRenderInfo> tabRenderInfos;
+    std::vector<ButtonRenderInfo> buttonRenderInfos;
+    std::vector<ButtonRenderInfo> buttonInfos;
+    
     if (!skipHeavyDecor && m_renderer) {
-        // Use object pool for render info vectors
-        auto tabRenderInfos = RenderObjectPool::getInstance().acquireTabRenderInfoVector();
-        auto buttonRenderInfos = RenderObjectPool::getInstance().acquireButtonRenderInfoVector();
+        // Reserve space to avoid reallocation
+        tabRenderInfos.reserve(m_tabs.size());
+        buttonRenderInfos.reserve(4);
 
         // Prepare tab render info
         for (size_t i = 0; i < m_tabs.size(); ++i) {
+            // Safety check: skip invalid widgets
+            if (!m_tabs[i].widget || m_tabs[i].widget->IsBeingDeleted()) {
+                continue;
+            }
+            
             TabRenderInfo info;
             info.widget = m_tabs[i].widget;
             info.rect = m_tabs[i].rect;
@@ -217,7 +238,7 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
             info.isHovered = m_tabs[i].hovered;
             info.closeButtonHovered = m_tabs[i].closeButtonHovered;
             info.showCloseButton = m_tabs[i].showCloseButton;
-            tabRenderInfos->push_back(info);
+            tabRenderInfos.push_back(info);
         }
 
         // Prepare button render info
@@ -226,41 +247,42 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
             info.rect = m_lockButtonRect;
             info.isHovered = m_lockButtonHovered;
             info.iconName = isAnyTabLocked() ? "lock" : "lock";
-            buttonRenderInfos->push_back(info);
+            buttonRenderInfos.push_back(info);
         }
         if (m_showPinButton && !m_pinButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_pinButtonRect;
             info.isHovered = m_pinButtonHovered;
             info.iconName = isAnyTabPinned() ? "pinned" : "pin";
-            buttonRenderInfos->push_back(info);
+            buttonRenderInfos.push_back(info);
         }
         if (m_showCloseButton && !m_closeButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_closeButtonRect;
             info.isHovered = m_closeButtonHovered;
             info.iconName = "close";
-            buttonRenderInfos->push_back(info);
+            buttonRenderInfos.push_back(info);
         }
         if (m_showAutoHideButton && !m_autoHideButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_autoHideButtonRect;
             info.isHovered = m_autoHideButtonHovered;
             info.iconName = "auto_hide";
-            buttonRenderInfos->push_back(info);
+            buttonRenderInfos.push_back(info);
         }
 
-        m_renderer->renderTitleBarPattern(dc, clientRect, *tabRenderInfos, *buttonRenderInfos);
-
-        // Release vectors back to pool
-        RenderObjectPool::getInstance().releaseTabRenderInfoVector(std::move(tabRenderInfos));
-        RenderObjectPool::getInstance().releaseButtonRenderInfoVector(std::move(buttonRenderInfos));
+        // Render pattern - vectors must remain valid during this call
+        m_renderer->renderTitleBarPattern(dc, clientRect, tabRenderInfos, buttonRenderInfos);
     }
 
     // Draw tabs using TitleBarRenderer
     if (m_renderer) {
-    for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
-        if (!m_tabs[i].rect.IsEmpty()) {
+        for (int i = 0; i < static_cast<int>(m_tabs.size()); ++i) {
+            // Safety check: skip invalid widgets
+            if (!m_tabs[i].widget || m_tabs[i].widget->IsBeingDeleted()) {
+                continue;
+            }
+            if (!m_tabs[i].rect.IsEmpty()) {
                 TabRenderInfo info;
                 info.widget = m_tabs[i].widget;
                 info.rect = m_tabs[i].rect;
@@ -282,43 +304,39 @@ void DockAreaMergedTitleBar::onPaint(wxPaintEvent& event) {
 
     // Draw buttons using TitleBarRenderer
     if (m_renderer) {
-        // Use object pool for button render info vector
-        auto buttonInfos = RenderObjectPool::getInstance().acquireButtonRenderInfoVector();
+        buttonInfos.reserve(4);
         
         if (m_showLockButton && !m_lockButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_lockButtonRect;
             info.isHovered = m_lockButtonHovered;
             info.iconName = isAnyTabLocked() ? "lock" : "unlock";
-            buttonInfos->push_back(info);
+            buttonInfos.push_back(info);
         }
         if (m_showPinButton && !m_pinButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_pinButtonRect;
             info.isHovered = m_pinButtonHovered;
             info.iconName = isAnyTabPinned() ? "pinned" : "pin";
-            buttonInfos->push_back(info);
+            buttonInfos.push_back(info);
         }
         if (m_showCloseButton && !m_closeButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_closeButtonRect;
             info.isHovered = m_closeButtonHovered;
             info.iconName = "close";
-            buttonInfos->push_back(info);
+            buttonInfos.push_back(info);
         }
         if (m_showAutoHideButton && !m_autoHideButtonRect.IsEmpty()) {
             ButtonRenderInfo info;
             info.rect = m_autoHideButtonRect;
             info.isHovered = m_autoHideButtonHovered;
             info.iconName = "auto_hide";
-            buttonInfos->push_back(info);
+            buttonInfos.push_back(info);
         }
 
         const DockStyleConfig& style = GetDockStyleConfig();
-        m_renderer->renderButtons(dc, clientRect, *buttonInfos, m_tabPosition, style);
-
-        // Release vector back to pool
-        RenderObjectPool::getInstance().releaseButtonRenderInfoVector(std::move(buttonInfos));
+        m_renderer->renderButtons(dc, clientRect, buttonInfos, m_tabPosition, style);
     }
 
     // Redraw bottom border last so it's not covered by subsequent drawing

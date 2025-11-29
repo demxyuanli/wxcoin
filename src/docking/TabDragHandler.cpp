@@ -378,6 +378,9 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
     DockManager* manager = dockArea ? dockArea->dockManager() : nullptr;
     
     if (!draggedWidget || !manager) {
+        // Reset drag state if widget or manager is invalid
+        m_draggedTab = -1;
+        m_dragStarted = false;
         return;
     }
 
@@ -489,6 +492,9 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
                         } else if (originalArea && !originalAreaWillBeDestroyed) {
                             originalArea->addDockWidget(draggedWidget);
                         }
+                        // Reset drag state even on failure
+                        m_draggedTab = -1;
+                        m_dragStarted = false;
                         return;
                     }
                 } else {
@@ -512,6 +518,9 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
                         } else if (originalArea && !originalAreaWillBeDestroyed) {
                             originalArea->addDockWidget(draggedWidget);
                         }
+                        // Reset drag state even on failure
+                        m_draggedTab = -1;
+                        m_dragStarted = false;
                         return;
                     }
                 }
@@ -527,6 +536,10 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
                         containerOverlay->hideOverlay();
                     }
                 }
+
+                // Reset drag state immediately after successful drop to target area
+                m_draggedTab = -1;
+                m_dragStarted = false;
 
                 // Return early since the area might be destroyed
                 return;
@@ -565,6 +578,10 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
                     manager->addDockWidget(dropArea, draggedWidget);
                     docked = true;
                     wxLogDebug("TabDragHandler::handleDrop - Successfully docked widget to container");
+                    
+                    // Reset drag state immediately after successful drop to container
+                    m_draggedTab = -1;
+                    m_dragStarted = false;
                 } else {
                     wxLogDebug("TabDragHandler::handleDrop - ERROR: Widget invalid after removal, restoring to original position");
                     // Restore to original position
@@ -573,6 +590,9 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
                     } else if (originalArea && !originalAreaWillBeDestroyed) {
                         originalArea->addDockWidget(draggedWidget);
                     }
+                    // Reset drag state even on failure
+                    m_draggedTab = -1;
+                    m_dragStarted = false;
                     return;
                 }
 
@@ -644,6 +664,10 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
             }
         }
 
+        // Reset drag state after restoring
+        m_draggedTab = -1;
+        m_dragStarted = false;
+
         // Return early since the area might be destroyed
         return;
     }
@@ -659,6 +683,11 @@ void TabDragHandler::handleDrop(const wxPoint& screenPos) {
             containerOverlay->hideOverlay();
         }
     }
+    
+    // Final cleanup: reset drag state if not already reset
+    // This is a safety net in case we reach here without resetting
+    m_draggedTab = -1;
+    m_dragStarted = false;
 }
 
 DockArea* TabDragHandler::findTargetArea(const wxPoint& screenPos) {
