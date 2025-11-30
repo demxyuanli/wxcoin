@@ -65,10 +65,10 @@ void UnifiedConfigManager::addCategory(const std::string& id, const std::string&
 
 void UnifiedConfigManager::scanAdditionalConfigFiles() {
     // List of additional config files to scan
+    // Note: rendering_settings.ini is now managed by ConfigManager, no longer scanned separately
     std::vector<std::string> additionalFiles = {
         "config/lighting_settings.ini",
-        "config/rendering_presets.ini",
-        "config/rendering_settings.ini"
+        "config/rendering_presets.ini"
     };
 
     for (const auto& configFile : additionalFiles) {

@@ -1132,6 +1132,9 @@ void DockContainerWidget::applyProportionalResize(const wxSize& oldSize, const w
         splitter->SetSashPosition(newPosition);
     }
     
+    // Apply fixed-size docks after proportional resize
+    applyFixedSizeDocks();
+    
     // Update layout without full refresh
     Layout();
     
@@ -1215,6 +1218,62 @@ void DockContainerWidget::markUserAdjustedLayout() {
     cacheSplitterRatios();
     
     wxLogDebug("DockContainerWidget::markUserAdjustedLayout - User adjusted layout, cached ratios");
+}
+
+void DockContainerWidget::applyFixedSizeDocks() {
+    if (!m_dockManager || !m_rootSplitter) {
+        return;
+    }
+
+    const DockLayoutConfig& config = m_dockManager->getLayoutConfig();
+    wxSize containerSize = GetSize();
+    if (containerSize.GetWidth() <= 0 || containerSize.GetHeight() <= 0) {
+        return;
+    }
+
+    DockSplitter* rootSplitter = dynamic_cast<DockSplitter*>(m_rootSplitter);
+    if (!rootSplitter || !rootSplitter->IsSplit()) {
+        return;
+    }
+
+    // Apply fixed-size docks based on splitter orientation
+    if (rootSplitter->GetSplitMode() == wxSPLIT_VERTICAL) {
+        // Vertical splitter - controls left/right docks
+        wxWindow* w1 = rootSplitter->GetWindow1();
+        wxWindow* w2 = rootSplitter->GetWindow2();
+
+        // Check if left dock is fixed
+        if (config.showLeftArea && config.leftAreaFixed) {
+            int leftWidth = calculateAreaSizeBasedOnFixedDocks(LeftDockWidgetArea, containerSize, config);
+            leftWidth = std::max(leftWidth, 240); // Ensure minimum width
+            rootSplitter->SetSashPosition(leftWidth);
+        }
+
+        // Check if we have a sub-splitter for center+right
+        if (DockSplitter* subSplitter = dynamic_cast<DockSplitter*>(w2)) {
+            // Check if right dock is fixed
+            if (subSplitter->IsSplit() && config.showRightArea && config.rightAreaFixed) {
+                wxSize subSize = subSplitter->GetSize();
+                if (subSize.GetWidth() > 0) {
+                    int rightWidth = calculateAreaSizeBasedOnFixedDocks(RightDockWidgetArea, containerSize, config);
+                    subSplitter->SetSashPosition(subSize.GetWidth() - rightWidth);
+                }
+            }
+        } else if (config.showRightArea && config.rightAreaFixed) {
+            // Simple left/right split with fixed right
+            int rightWidth = calculateAreaSizeBasedOnFixedDocks(RightDockWidgetArea, containerSize, config);
+            rootSplitter->SetSashPosition(containerSize.GetWidth() - rightWidth);
+        }
+    } else {
+        // Horizontal splitter - controls top/bottom docks
+        if (config.showTopArea && config.topAreaFixed) {
+            int topHeight = calculateAreaSizeBasedOnFixedDocks(TopDockWidgetArea, containerSize, config);
+            rootSplitter->SetSashPosition(topHeight);
+        } else if (config.showBottomArea && config.bottomAreaFixed) {
+            int bottomHeight = calculateAreaSizeBasedOnFixedDocks(BottomDockWidgetArea, containerSize, config);
+            rootSplitter->SetSashPosition(containerSize.GetHeight() - bottomHeight);
+        }
+    }
 }
 
 } // namespace ads

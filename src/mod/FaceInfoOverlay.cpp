@@ -30,100 +30,144 @@ void FaceInfoOverlay::update() {
 }
 
 void FaceInfoOverlay::draw(wxDC& dc, const wxSize& canvasSize) {
-    if (!m_visible) return;
-    
-    // Panel dimensions and position (left-bottom corner)
-    const int padding = 10;
-    const int lineHeight = 20;
-    const int panelWidth = 300;
-    int numLines = 0;
-    
-    // Count lines based on available information
-    if (m_result.geometry) {
-        numLines = 2; // Geometry name + file
-        if (m_result.triangleIndex >= 0) numLines++;
-        if (m_result.geometryFaceId >= 0) numLines++;
-        if (m_result.geometry->hasFaceDomainMapping()) {
-            numLines++; // Face mapping status
-            if (m_result.geometryFaceId >= 0) {
-                numLines++; // Triangles in face
-            }
-        } else {
-            numLines++; // Note about mapping
-        }
-    } else {
-        numLines = 1; // No geometry selected
-    }
-    
-    const int panelHeight = numLines * lineHeight + padding * 2;
-    const int xPos = padding;
-    const int yPos = canvasSize.GetHeight() - panelHeight - padding;
-    
-    // Draw semi-transparent background (80% transparent = 20% opaque)
-    wxColour bgColor(40, 40, 40, 51); // Dark gray with 80% transparency
-    dc.SetBrush(wxBrush(bgColor));
-    dc.SetPen(wxPen(wxColour(100, 100, 100, 51), 1)); // Border also 80% transparent
-    dc.DrawRectangle(xPos, yPos, panelWidth, panelHeight);
-    
-    // Draw text with better contrast for transparent background
-    // Use small font from theme manager
-    wxFont overlayFont = FontManager::getInstance().getSmallFont();
-    overlayFont.SetWeight(wxFONTWEIGHT_BOLD); // Make bold for better visibility on transparent background
-    dc.SetFont(overlayFont);
-    dc.SetTextForeground(wxColour(255, 255, 255)); // Bright white for better visibility
-    
-    int textY = yPos + padding;
-    
-    if (m_result.geometry) {
-        // Geometry name
-        wxString geometryText = "Geometry: " + m_result.geometry->getName();
-        dc.DrawText(geometryText, xPos + padding, textY);
-        textY += lineHeight;
-        
-        // File name
-        wxString fileText = "File: " + m_result.geometry->getFileName();
-        if (fileText.length() > 35) {
-            fileText = fileText.substr(0, 32) + "...";
-        }
-        dc.DrawText(fileText, xPos + padding, textY);
-        textY += lineHeight;
-        
-        // Triangle index
-        if (m_result.triangleIndex >= 0) {
-            dc.DrawText(wxString::Format("Triangle Index: %d", m_result.triangleIndex), 
-                       xPos + padding, textY);
-            textY += lineHeight;
-        }
-        
-        // Geometry face ID
-        if (m_result.geometryFaceId >= 0) {
-            dc.DrawText(wxString::Format("Geometry Face ID: %d", m_result.geometryFaceId), 
-                       xPos + padding, textY);
-            textY += lineHeight;
-        } else {
-            dc.DrawText("Geometry Face ID: N/A", xPos + padding, textY);
-            textY += lineHeight;
-        }
-        
-        // Face mapping status
-        bool hasMapping = m_result.geometry->hasFaceDomainMapping();
-        if (hasMapping) {
-            dc.DrawText("Face Mapping: Available", xPos + padding, textY);
-            textY += lineHeight;
-            
-            if (m_result.geometryFaceId >= 0) {
-                auto triangles = m_result.geometry->getTrianglesForGeometryFace(m_result.geometryFaceId);
-                dc.DrawText(wxString::Format("Triangles in Face: %zu", triangles.size()), 
-                           xPos + padding, textY);
-                textY += lineHeight;
-            }
-        } else {
-            dc.DrawText("Face Mapping: Not Available", xPos + padding, textY);
-            textY += lineHeight;
-        }
-    } else {
-        dc.DrawText("No geometry selected", xPos + padding, textY);
-    }
+	if (!m_visible) return;
+
+	// Panel dimensions and position (left-bottom corner)
+	const int padding = 10;
+	const int lineHeight = 20;
+	const int panelWidth = 320;
+	int numLines = 0;
+
+	// Count lines based on available information and element type
+	if (m_result.geometry) {
+		// Geometry name + file
+		numLines += 2;
+
+		if (m_result.elementType == "Face") {
+			// Face-specific information
+			if (m_result.triangleIndex >= 0) {
+				numLines++;
+			}
+			// Geometry face id line
+			numLines++;
+
+			// Mapping information
+			if (m_result.geometry->hasFaceDomainMapping()) {
+				numLines++; // Face mapping status
+				if (m_result.geometryFaceId >= 0) {
+					numLines++; // Triangles in face
+				}
+			} else {
+				numLines++; // Mapping not available note
+			}
+		} else if (m_result.elementType == "Edge") {
+			// Edge-specific information
+			numLines += 2; // Edge id + edge index
+		} else if (m_result.elementType == "Vertex") {
+			// Vertex-specific information
+			numLines += 2; // Vertex id + vertex index
+		}
+	} else {
+		numLines = 1; // No geometry selected
+	}
+
+	const int panelHeight = numLines * lineHeight + padding * 2;
+	const int xPos = padding;
+	const int yPos = canvasSize.GetHeight() - panelHeight - padding;
+
+	// Draw semi-transparent background (80% transparent = 20% opaque)
+	wxColour bgColor(40, 40, 40, 51);
+	dc.SetBrush(wxBrush(bgColor));
+	dc.SetPen(wxPen(wxColour(100, 100, 100, 51), 1));
+	dc.DrawRectangle(xPos, yPos, panelWidth, panelHeight);
+
+	// Draw text with better contrast for transparent background
+	wxFont overlayFont = FontManager::getInstance().getSmallFont();
+	overlayFont.SetWeight(wxFONTWEIGHT_BOLD);
+	dc.SetFont(overlayFont);
+	dc.SetTextForeground(wxColour(255, 255, 255));
+
+	int textY = yPos + padding;
+
+	if (m_result.geometry) {
+		// Geometry name
+		wxString geometryText = "Geometry: " + m_result.geometry->getName();
+		dc.DrawText(geometryText, xPos + padding, textY);
+		textY += lineHeight;
+
+		// File name
+		wxString fileText = "File: " + m_result.geometry->getFileName();
+		if (fileText.length() > 40) {
+			fileText = fileText.substr(0, 37) + "...";
+		}
+		dc.DrawText(fileText, xPos + padding, textY);
+		textY += lineHeight;
+
+		// Element-type specific information
+		if (m_result.elementType == "Face") {
+			// Triangle index
+			if (m_result.triangleIndex >= 0) {
+				dc.DrawText(wxString::Format("Triangle Index: %d", m_result.triangleIndex),
+					xPos + padding, textY);
+				textY += lineHeight;
+			}
+
+			// Geometry face ID
+			if (m_result.geometryFaceId >= 0) {
+				dc.DrawText(wxString::Format("Geometry Face ID: %d", m_result.geometryFaceId),
+					xPos + padding, textY);
+				textY += lineHeight;
+			} else {
+				dc.DrawText("Geometry Face ID: N/A", xPos + padding, textY);
+				textY += lineHeight;
+			}
+
+			// Face mapping status
+			bool hasMapping = m_result.geometry->hasFaceDomainMapping();
+			if (hasMapping) {
+				dc.DrawText("Face Mapping: Available", xPos + padding, textY);
+				textY += lineHeight;
+
+				if (m_result.geometryFaceId >= 0) {
+					auto triangles = m_result.geometry->getTrianglesForGeometryFace(m_result.geometryFaceId);
+					dc.DrawText(wxString::Format("Triangles in Face: %zu", triangles.size()),
+						xPos + padding, textY);
+					textY += lineHeight;
+				}
+			} else {
+				dc.DrawText("Face Mapping: Not Available", xPos + padding, textY);
+				textY += lineHeight;
+			}
+		} else if (m_result.elementType == "Edge") {
+			// Edge information
+			if (m_result.geometryEdgeId >= 0) {
+				dc.DrawText(wxString::Format("Geometry Edge ID: %d", m_result.geometryEdgeId),
+					xPos + padding, textY);
+				textY += lineHeight;
+			}
+
+			if (m_result.lineIndex >= 0) {
+				dc.DrawText(wxString::Format("Edge Index: %d", m_result.lineIndex),
+					xPos + padding, textY);
+				textY += lineHeight;
+			}
+		} else if (m_result.elementType == "Vertex") {
+			// Vertex information
+			if (m_result.geometryVertexId >= 0) {
+				dc.DrawText(wxString::Format("Geometry Vertex ID: %d", m_result.geometryVertexId),
+					xPos + padding, textY);
+				textY += lineHeight;
+			}
+
+			if (m_result.vertexIndex >= 0) {
+				dc.DrawText(wxString::Format("Vertex Index: %d", m_result.vertexIndex),
+					xPos + padding, textY);
+				textY += lineHeight;
+			}
+		}
+	} else {
+		dc.DrawText("No geometry selected", xPos + padding, textY);
+	}
 }
 
 

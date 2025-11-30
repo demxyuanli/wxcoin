@@ -206,12 +206,22 @@ void NavigationStyle::zoomCamera(int delta)
 			}
 		}
 		camera->position.setValue(newCamPos);
-		camera->focalDistance.setValue((focalPoint - newCamPos).length());
+		newDistToFocal = (focalPoint - newCamPos).length();
+		camera->focalDistance.setValue(newDistToFocal);
+		
+		// Update far distance to ensure geometry is not clipped when zooming out
+		// Use a larger multiplier to provide more safety margin
+		// FreeCAD approach: Ensure far plane is always large enough to avoid clipping
 		if (SoPerspectiveCamera* persCamera = dynamic_cast<SoPerspectiveCamera*>(camera)) {
-			persCamera->farDistance.setValue(newDistToFocal * 2.0f);
+			// Use larger multiplier (10.0f instead of 2.0f) to prevent clipping when zooming out
+			// Also ensure minimum far distance to handle very large scenes
+			float farDist = std::max(newDistToFocal * 10.0f, 100000.0f);
+			persCamera->farDistance.setValue(farDist);
 		}
 		else if (SoOrthographicCamera* orthoCamera = dynamic_cast<SoOrthographicCamera*>(camera)) {
-			orthoCamera->farDistance.setValue(newDistToFocal * 2.0f);
+			// Use larger multiplier for orthographic camera as well
+			float farDist = std::max(newDistToFocal * 10.0f, 100000.0f);
+			orthoCamera->farDistance.setValue(farDist);
 		}
 	}
 

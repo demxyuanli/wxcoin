@@ -85,6 +85,9 @@ set(UIDialogMesh_SOURCES
     NormalFixDialog.cpp
     GeometryDecompositionDialog.cpp
     SliceParamDialog.cpp
+    SelectionInfoDialog.cpp
+    SliceParamDialog.cpp
+    SelectionInfoDialog.cpp
     ${CMAKE_SOURCE_DIR}/include/MeshQualityDialog.h
     ${CMAKE_SOURCE_DIR}/include/TransparencyDialog.h
     ${CMAKE_SOURCE_DIR}/include/ImportSettingsDialog.h
@@ -92,6 +95,7 @@ set(UIDialogMesh_SOURCES
     ${CMAKE_SOURCE_DIR}/include/NormalFixDialog.h
     ${CMAKE_SOURCE_DIR}/include/GeometryDecompositionDialog.h
     ${CMAKE_SOURCE_DIR}/include/SliceParamDialog.h
+    ${CMAKE_SOURCE_DIR}/include/SelectionInfoDialog.h
 )
 
 add_library(UIDialogMesh STATIC ${UIDialogMesh_SOURCES})

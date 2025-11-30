@@ -58,21 +58,10 @@ void VertexSelectionListener::onMouseButton(wxMouseEvent& event) {
 			
 			LOG_INF_S("VertexSelectionListener::onMouseButton - Selected " + result.subElementName + 
 				" in geometry " + result.geometry->getName());
-			
-			// Show information message for selection result
-			if (m_canvas) {
-				wxString msg = wxString::Format(
-					"Vertex Selection:\n\n"
-					"Geometry: %s\n"
-					"Vertex: %s\n"
-					"Vertex Index: %d\n"
-					"Position: (%.3f, %.3f, %.3f)",
-					result.geometry->getName(),
-					result.subElementName,
-					result.vertexIndex,
-					result.x, result.y, result.z
-				);
-				wxMessageBox(msg, "Vertex Selection Result", wxOK | wxICON_INFORMATION, m_canvas);
+
+			// Show selection result in floating info window (top-left of canvas)
+			if (m_canvas && m_canvas->getSelectionInfoDialog()) {
+				m_canvas->getSelectionInfoDialog()->SetPickingResult(result);
 			}
 		} else {
 			// Clicked on empty space or non-vertex element, clear selection
@@ -80,12 +69,10 @@ void VertexSelectionListener::onMouseButton(wxMouseEvent& event) {
 			selection.clearSelection();
 			clearSelection();
 			LOG_INF_S("VertexSelectionListener::onMouseButton - Cleared selection");
-			
-			// Show information message for picking failure
-			if (m_canvas && (!result.geometry || result.elementType != "Vertex")) {
-				wxMessageBox("No vertex picked at this position.\n\n"
-					"Please click on a visible vertex to select it.",
-					"Picking Info", wxOK | wxICON_INFORMATION, m_canvas);
+
+			// Show picking failure in floating info window
+			if (m_canvas && m_canvas->getSelectionInfoDialog()) {
+				m_canvas->getSelectionInfoDialog()->SetPickingResult(result);
 			}
 		}
 

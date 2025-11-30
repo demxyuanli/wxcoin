@@ -124,6 +124,27 @@ void ButtonGroup::syncFromButtonBar()
 	}
 }
 
+void ButtonGroup::clearSelection(bool notify)
+{
+	if (!m_buttonBar) {
+		return;
+	}
+
+	// Clear selection by setting to -1 (no button selected)
+	// This will deselect all buttons in the toggle group
+	int previousId = m_selectedButtonId;
+	m_buttonBar->SetToggleGroupSelection(m_toggleGroupId, -1);
+	m_selectedButtonId = -1;
+
+	// Notify if requested
+	if (notify && previousId >= 0) {
+		notifySelectionChanged(-1, previousId);
+	}
+
+	LOG_INF_S("ButtonGroup: Cleared selection (previous: " + 
+		(previousId >= 0 ? std::to_string(previousId) : "none") + ")");
+}
+
 void ButtonGroup::setEnabled(bool enabled)
 {
 	if (!m_buttonBar) {

@@ -2,6 +2,7 @@
 #include "renderpreview/RenderPreviewDialog.h"
 #include "renderpreview/AntiAliasingManager.h"
 #include "config/FontManager.h"
+#include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -232,44 +233,38 @@ void AntiAliasingPanel::onAntiAliasingChanged(wxCommandEvent& event)
 void AntiAliasingPanel::loadSettings()
 {
 	try {
-		wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-		wxFileName exeFile(exePath);
-		wxString exeDir = exeFile.GetPath();
-		wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
-		wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
+		ConfigManager& cm = ConfigManager::getInstance();
+		if (!cm.isInitialized()) {
+			LOG_WRN_S("AntiAliasingPanel::loadSettings: ConfigManager not initialized, using defaults");
+			return;
+		}
 
 		if (this->m_antiAliasingChoice) {
-			int method;
-			if (renderConfig.Read("Global.AntiAliasing.Method", &method, 2)) {
-				if (method >= 0 && method < this->m_antiAliasingChoice->GetCount()) {
-					this->m_antiAliasingChoice->SetSelection(method);
-				}
-				else {
-					this->m_antiAliasingChoice->SetSelection(2);
-					LOG_WRN_S("AntiAliasingPanel::loadSettings: Invalid anti-aliasing method " + std::to_string(method) + ", defaulting to MSAA 4x");
-				}
+			int method = cm.getInt("Global", "AntiAliasing.Method", 2);
+			if (method >= 0 && method < this->m_antiAliasingChoice->GetCount()) {
+				this->m_antiAliasingChoice->SetSelection(method);
+			}
+			else {
+				this->m_antiAliasingChoice->SetSelection(2);
+				LOG_WRN_S("AntiAliasingPanel::loadSettings: Invalid anti-aliasing method " + std::to_string(method) + ", defaulting to MSAA 4x");
 			}
 		}
 		if (this->m_msaaSamplesSlider) {
-			int samples;
-			if (renderConfig.Read("Global.AntiAliasing.MSAASamples", &samples, 4)) {
-				// Convert samples to slider value
-				int sliderValue = 1; // Default to 4x
-				switch (samples) {
-				case 2: sliderValue = 0; break;
-				case 4: sliderValue = 1; break;
-				case 8: sliderValue = 2; break;
-				case 16: sliderValue = 3; break;
-				default: sliderValue = 1; break; // Default to 4x
-				}
-				this->m_msaaSamplesSlider->SetValue(sliderValue);
+			int samples = cm.getInt("Global", "AntiAliasing.MSAASamples", 4);
+			// Convert samples to slider value
+			int sliderValue = 1; // Default to 4x
+			switch (samples) {
+			case 2: sliderValue = 0; break;
+			case 4: sliderValue = 1; break;
+			case 8: sliderValue = 2; break;
+			case 16: sliderValue = 3; break;
+			default: sliderValue = 1; break; // Default to 4x
 			}
+			this->m_msaaSamplesSlider->SetValue(sliderValue);
 		}
 		if (this->m_fxaaCheckBox) {
-			bool enabled;
-			if (renderConfig.Read("Global.AntiAliasing.FXAAEnabled", &enabled, false)) {
-				this->m_fxaaCheckBox->SetValue(enabled);
-			}
+			bool enabled = cm.getBool("Global", "AntiAliasing.FXAAEnabled", false);
+			this->m_fxaaCheckBox->SetValue(enabled);
 		}
 		LOG_INF_S("AntiAliasingPanel::loadSettings: Settings loaded successfully");
 	}
@@ -281,23 +276,23 @@ void AntiAliasingPanel::loadSettings()
 void AntiAliasingPanel::saveSettings()
 {
 	try {
-		wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-		wxFileName exeFile(exePath);
-		wxString exeDir = exeFile.GetPath();
-		wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
-		wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
+		ConfigManager& cm = ConfigManager::getInstance();
+		if (!cm.isInitialized()) {
+			LOG_WRN_S("AntiAliasingPanel::saveSettings: ConfigManager not initialized");
+			return;
+		}
 
 		if (this->m_antiAliasingChoice) {
-			renderConfig.Write("Global.AntiAliasing.Method", this->m_antiAliasingChoice->GetSelection());
+			cm.setInt("Global", "AntiAliasing.Method", this->m_antiAliasingChoice->GetSelection());
 		}
 		if (this->m_msaaSamplesSlider) {
 			int samples = getMSAASamples(); // This will convert slider value to actual samples
-			renderConfig.Write("Global.AntiAliasing.MSAASamples", samples);
+			cm.setInt("Global", "AntiAliasing.MSAASamples", samples);
 		}
 		if (this->m_fxaaCheckBox) {
-			renderConfig.Write("Global.AntiAliasing.FXAAEnabled", this->m_fxaaCheckBox->GetValue());
+			cm.setBool("Global", "AntiAliasing.FXAAEnabled", this->m_fxaaCheckBox->GetValue());
 		}
-		renderConfig.Flush();
+		cm.save();
 		LOG_INF_S("AntiAliasingPanel::saveSettings: Settings saved successfully");
 	}
 	catch (const std::exception& e) {

@@ -148,6 +148,11 @@ SplashScreen::SplashScreen()
         m_configLoaded = true;
     }
 
+    // Show frame only after background image and shape are set up
+    // This prevents black background flash on high CPU load
+    m_frame->Show();
+    wxSafeYield(m_frame, true);
+
     ShowMessage(initialMessage);
 }
 
@@ -268,8 +273,6 @@ void SplashScreen::initializeFrame(const wxString& title) {
     m_frame->SetSizer(frameSizer);
 
     m_frame->CentreOnScreen();
-    m_frame->Show();
-    wxSafeYield(m_frame, true);
 }
 
 void SplashScreen::loadConfiguredMessages() {
@@ -466,6 +469,13 @@ void SplashScreen::loadBackgroundImageFromPath(const wxString& imagePath) {
 
     m_frame->SetClientSize(m_panel->GetBestSize());
 
+    // Freeze window updates to prevent black background flash during shape setup
+    bool wasShown = m_frame->IsShown();
+    if (wasShown) {
+        m_frame->Freeze();
+        m_frame->Hide();
+    }
+
 #ifdef __WXMSW__
     if (image.HasAlpha()) {
         const int w = image.GetWidth();
@@ -505,6 +515,15 @@ void SplashScreen::loadBackgroundImageFromPath(const wxString& imagePath) {
 #endif
 
     m_frame->CentreOnScreen();
+    
+    // Thaw and show window after shape is set to prevent black background flash
+    if (wasShown) {
+        m_frame->Thaw();
+        m_frame->Show();
+        // Force immediate update to ensure proper rendering
+        m_frame->Update();
+        wxSafeYield(m_frame, true);
+    }
 }
 
 int SplashScreen::GetBackgroundHeight() const {

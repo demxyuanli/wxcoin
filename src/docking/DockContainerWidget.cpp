@@ -330,6 +330,9 @@ void DockContainerWidget::onResizeTimer(wxTimerEvent& event) {
         // Apply layout configuration efficiently
         applyLayoutConfig();
         
+        // Always apply fixed-size docks to ensure they maintain their fixed width/height
+        applyFixedSizeDocks();
+        
         // Clear resizing flag
         m_isResizing = false;
         
@@ -376,6 +379,7 @@ void DockContainerWidget::onSize(wxSizeEvent& event) {
         // Rebuild ratios to avoid dangling splitter pointers after structural changes
         cacheSplitterRatios();
         applyProportionalResize(m_lastContainerSize, newSize);
+        // applyProportionalResize already calls applyFixedSizeDocks internally
         m_lastContainerSize = newSize;
         event.Skip();
         return;

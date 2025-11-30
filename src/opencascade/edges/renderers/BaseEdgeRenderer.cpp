@@ -4,6 +4,7 @@
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoPolygonOffset.h>
 
 BaseEdgeRenderer::BaseEdgeRenderer() {}
 
@@ -17,6 +18,11 @@ SoSeparator* BaseEdgeRenderer::createLineNode(
     
     SoSeparator* separator = new SoSeparator();
     separator->ref();
+    
+    // Note: Polygon offset is NOT added here for edges
+    // FreeCAD approach: Polygon offset is added BEFORE faces in the scene graph
+    // This pushes faces slightly back, allowing edges (rendered AFTER faces) to appear on top
+    // Edges themselves don't need polygon offset when rendered after faces with offset
     
     // Material
     SoMaterial* material = new SoMaterial();

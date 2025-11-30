@@ -1,4 +1,5 @@
 #include "config/RenderingConfig.h"
+#include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include <fstream>
 #include <sstream>
@@ -456,218 +457,150 @@ void RenderingConfig::applyMaterialPreset(MaterialPreset preset)
 
 std::string RenderingConfig::getConfigFilePath() const
 {
-	// Save to local root directory instead of user config directory
-	wxString currentDir = wxGetCwd();
-	wxFileName configFile(currentDir, "rendering_settings.ini");
-
-	// Create directory if it doesn't exist (should always exist for current directory)
-	if (!configFile.DirExists()) {
-		configFile.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
-	}
-
-	return configFile.GetFullPath().ToStdString();
+	// Use ConfigManager's config file path instead of independent file
+	ConfigManager& cm = ConfigManager::getInstance();
+	return cm.getConfigFilePath();
 }
 
 bool RenderingConfig::loadFromFile(const std::string& filename)
 {
-	std::string configPath = filename.empty() ? getConfigFilePath() : filename;
-	std::ifstream file(configPath);
-
-	if (!file.is_open()) {
+	// Use ConfigManager instead of independent file
+	ConfigManager& cm = ConfigManager::getInstance();
+	if (!cm.isInitialized()) {
+		LOG_WRN_S("RenderingConfig: ConfigManager not initialized, using defaults");
 		return false;
 	}
 
+	// Load from ConfigManager sections
+	// Material section
+	{
+		std::string value = cm.getString("Material", "AmbientColor", "");
+		if (!value.empty()) {
+			m_materialSettings.ambientColor = parseColor(value, m_materialSettings.ambientColor);
+		}
+		value = cm.getString("Material", "DiffuseColor", "");
+		if (!value.empty()) {
+			m_materialSettings.diffuseColor = parseColor(value, m_materialSettings.diffuseColor);
+		}
+		value = cm.getString("Material", "SpecularColor", "");
+		if (!value.empty()) {
+			m_materialSettings.specularColor = parseColor(value, m_materialSettings.specularColor);
+		}
+		m_materialSettings.shininess = cm.getDouble("Material", "Shininess", m_materialSettings.shininess);
+		m_materialSettings.transparency = cm.getDouble("Material", "Transparency", m_materialSettings.transparency);
+	}
 
-	std::string line;
-	std::string section;
+	// Lighting section
+	{
+		std::string value = cm.getString("Lighting", "AmbientColor", "");
+		if (!value.empty()) {
+			m_lightingSettings.ambientColor = parseColor(value, m_lightingSettings.ambientColor);
+		}
+		value = cm.getString("Lighting", "DiffuseColor", "");
+		if (!value.empty()) {
+			m_lightingSettings.diffuseColor = parseColor(value, m_lightingSettings.diffuseColor);
+		}
+		value = cm.getString("Lighting", "SpecularColor", "");
+		if (!value.empty()) {
+			m_lightingSettings.specularColor = parseColor(value, m_lightingSettings.specularColor);
+		}
+		m_lightingSettings.intensity = cm.getDouble("Lighting", "Intensity", m_lightingSettings.intensity);
+		m_lightingSettings.ambientIntensity = cm.getDouble("Lighting", "AmbientIntensity", m_lightingSettings.ambientIntensity);
+	}
 
-	while (std::getline(file, line)) {
-		// Skip empty lines and comments
-		if (line.empty() || line[0] == '#' || line[0] == ';') {
-			continue;
+	// Texture section
+	{
+		std::string value = cm.getString("Texture", "Color", "");
+		if (!value.empty()) {
+			m_textureSettings.color = parseColor(value, m_textureSettings.color);
 		}
-
-		// Check for section headers
-		if (line[0] == '[' && line.back() == ']') {
-			section = line.substr(1, line.length() - 2);
-			continue;
-		}
-
-		// Parse key=value pairs
-		size_t pos = line.find('=');
-		if (pos == std::string::npos) {
-			continue;
-		}
-
-		std::string key = line.substr(0, pos);
-		std::string value = line.substr(pos + 1);
-
-		// Remove whitespace
-		key.erase(0, key.find_first_not_of(" \t"));
-		key.erase(key.find_last_not_of(" \t") + 1);
-		value.erase(0, value.find_first_not_of(" \t"));
-		value.erase(value.find_last_not_of(" \t") + 1);
-
-		// Parse values based on section
-		if (section == "Material") {
-			if (key == "AmbientColor") {
-				m_materialSettings.ambientColor = parseColor(value, m_materialSettings.ambientColor);
-			}
-			else if (key == "DiffuseColor") {
-				m_materialSettings.diffuseColor = parseColor(value, m_materialSettings.diffuseColor);
-			}
-			else if (key == "SpecularColor") {
-				m_materialSettings.specularColor = parseColor(value, m_materialSettings.specularColor);
-			}
-			else if (key == "Shininess") {
-				m_materialSettings.shininess = std::stod(value);
-			}
-			else if (key == "Transparency") {
-				m_materialSettings.transparency = std::stod(value);
-			}
-		}
-		else if (section == "Lighting") {
-			if (key == "AmbientColor") {
-				m_lightingSettings.ambientColor = parseColor(value, m_lightingSettings.ambientColor);
-			}
-			else if (key == "DiffuseColor") {
-				m_lightingSettings.diffuseColor = parseColor(value, m_lightingSettings.diffuseColor);
-			}
-			else if (key == "SpecularColor") {
-				m_lightingSettings.specularColor = parseColor(value, m_lightingSettings.specularColor);
-			}
-			else if (key == "Intensity") {
-				m_lightingSettings.intensity = std::stod(value);
-			}
-			else if (key == "AmbientIntensity") {
-				m_lightingSettings.ambientIntensity = std::stod(value);
-			}
-		}
-		else if (section == "Texture") {
-			if (key == "Color") {
-				m_textureSettings.color = parseColor(value, m_textureSettings.color);
-			}
-			else if (key == "Intensity") {
-				m_textureSettings.intensity = std::stod(value);
-			}
-			else if (key == "Enabled") {
-				m_textureSettings.enabled = (value == "true" || value == "1");
-			}
-			else if (key == "ImagePath") {
-				m_textureSettings.imagePath = value;
-			}
-			else if (key == "TextureMode") {
-				m_textureSettings.textureMode = getTextureModeFromName(value);
-			}
-		}
-		else if (section == "Blend") {
-			if (key == "BlendMode") {
-				m_blendSettings.blendMode = getBlendModeFromName(value);
-			}
-			else if (key == "DepthTest") {
-				m_blendSettings.depthTest = (value == "true" || value == "1");
-			}
-			else if (key == "DepthWrite") {
-				m_blendSettings.depthWrite = (value == "true" || value == "1");
-			}
-			else if (key == "CullFace") {
-				m_blendSettings.cullFace = (value == "true" || value == "1");
-			}
-			else if (key == "AlphaThreshold") {
-				m_blendSettings.alphaThreshold = std::stod(value);
-			}
-		}
-		else if (section == "Shading") {
-			if (key == "ShadingMode") {
-				m_shadingSettings.shadingMode = getShadingModeFromName(value);
-			}
-			else if (key == "SmoothNormals") {
-				m_shadingSettings.smoothNormals = (value == "true" || value == "1");
-			}
-			else if (key == "WireframeWidth") {
-				m_shadingSettings.wireframeWidth = std::stod(value);
-			}
-			else if (key == "PointSize") {
-				m_shadingSettings.pointSize = std::stod(value);
-			}
-		}
-		else if (section == "Display") {
-			if (key == "DisplayMode") {
-				m_displaySettings.displayMode = getDisplayModeFromName(value);
-			}
-			else if (key == "ShowEdges") {
-				m_displaySettings.showEdges = (value == "true" || value == "1");
-			}
-			else if (key == "ShowVertices") {
-				m_displaySettings.showVertices = (value == "true" || value == "1");
-			}
-			else if (key == "EdgeWidth") {
-				m_displaySettings.edgeWidth = std::stod(value);
-			}
-			else if (key == "VertexSize") {
-				m_displaySettings.vertexSize = std::stod(value);
-			}
-			else if (key == "EdgeColor") {
-				m_displaySettings.edgeColor = parseColor(value, m_displaySettings.edgeColor);
-			}
-			else if (key == "VertexColor") {
-				m_displaySettings.vertexColor = parseColor(value, m_displaySettings.vertexColor);
-			}
-		}
-		else if (section == "Quality") {
-			if (key == "Quality") {
-				m_qualitySettings.quality = getQualityModeFromName(value);
-			}
-			else if (key == "TessellationLevel") {
-				m_qualitySettings.tessellationLevel = std::stoi(value);
-			}
-			else if (key == "AntiAliasingSamples") {
-				m_qualitySettings.antiAliasingSamples = std::stoi(value);
-			}
-			else if (key == "EnableLOD") {
-				m_qualitySettings.enableLOD = (value == "true" || value == "1");
-			}
-			else if (key == "LODDistance") {
-				m_qualitySettings.lodDistance = std::stod(value);
-			}
-		}
-		else if (section == "Shadow") {
-			if (key == "ShadowMode") {
-				m_shadowSettings.shadowMode = getShadowModeFromName(value);
-			}
-			else if (key == "ShadowIntensity") {
-				m_shadowSettings.shadowIntensity = std::stod(value);
-			}
-			else if (key == "ShadowSoftness") {
-				m_shadowSettings.shadowSoftness = std::stod(value);
-			}
-			else if (key == "ShadowMapSize") {
-				m_shadowSettings.shadowMapSize = std::stoi(value);
-			}
-			else if (key == "ShadowBias") {
-				m_shadowSettings.shadowBias = std::stod(value);
-			}
-		}
-		else if (section == "LightingModel") {
-			if (key == "LightingModel") {
-				m_lightingModelSettings.lightingModel = getLightingModelFromName(value);
-			}
-			else if (key == "Roughness") {
-				m_lightingModelSettings.roughness = std::stod(value);
-			}
-			else if (key == "Metallic") {
-				m_lightingModelSettings.metallic = std::stod(value);
-			}
-			else if (key == "Fresnel") {
-				m_lightingModelSettings.fresnel = std::stod(value);
-			}
-			else if (key == "SubsurfaceScattering") {
-				m_lightingModelSettings.subsurfaceScattering = std::stod(value);
-			}
+		m_textureSettings.intensity = cm.getDouble("Texture", "Intensity", m_textureSettings.intensity);
+		m_textureSettings.enabled = cm.getBool("Texture", "Enabled", m_textureSettings.enabled);
+		m_textureSettings.imagePath = cm.getString("Texture", "ImagePath", m_textureSettings.imagePath);
+		value = cm.getString("Texture", "TextureMode", "");
+		if (!value.empty()) {
+			m_textureSettings.textureMode = getTextureModeFromName(value);
 		}
 	}
 
-	file.close();
+	// Blend section
+	{
+		std::string value = cm.getString("Blend", "BlendMode", "");
+		if (!value.empty()) {
+			m_blendSettings.blendMode = getBlendModeFromName(value);
+		}
+		m_blendSettings.depthTest = cm.getBool("Blend", "DepthTest", m_blendSettings.depthTest);
+		m_blendSettings.depthWrite = cm.getBool("Blend", "DepthWrite", m_blendSettings.depthWrite);
+		m_blendSettings.cullFace = cm.getBool("Blend", "CullFace", m_blendSettings.cullFace);
+		m_blendSettings.alphaThreshold = cm.getDouble("Blend", "AlphaThreshold", m_blendSettings.alphaThreshold);
+	}
+
+	// Shading section
+	{
+		std::string value = cm.getString("Shading", "ShadingMode", "");
+		if (!value.empty()) {
+			m_shadingSettings.shadingMode = getShadingModeFromName(value);
+		}
+		m_shadingSettings.smoothNormals = cm.getBool("Shading", "SmoothNormals", m_shadingSettings.smoothNormals);
+		m_shadingSettings.wireframeWidth = cm.getDouble("Shading", "WireframeWidth", m_shadingSettings.wireframeWidth);
+		m_shadingSettings.pointSize = cm.getDouble("Shading", "PointSize", m_shadingSettings.pointSize);
+	}
+
+	// Display section
+	{
+		std::string value = cm.getString("Display", "DisplayMode", "");
+		if (!value.empty()) {
+			m_displaySettings.displayMode = getDisplayModeFromName(value);
+		}
+		m_displaySettings.showEdges = cm.getBool("Display", "ShowEdges", m_displaySettings.showEdges);
+		m_displaySettings.showVertices = cm.getBool("Display", "ShowVertices", m_displaySettings.showVertices);
+		m_displaySettings.edgeWidth = cm.getDouble("Display", "EdgeWidth", m_displaySettings.edgeWidth);
+		m_displaySettings.vertexSize = cm.getDouble("Display", "VertexSize", m_displaySettings.vertexSize);
+		value = cm.getString("Display", "EdgeColor", "");
+		if (!value.empty()) {
+			m_displaySettings.edgeColor = parseColor(value, m_displaySettings.edgeColor);
+		}
+		value = cm.getString("Display", "VertexColor", "");
+		if (!value.empty()) {
+			m_displaySettings.vertexColor = parseColor(value, m_displaySettings.vertexColor);
+		}
+	}
+
+	// Quality section
+	{
+		std::string value = cm.getString("Quality", "Quality", "");
+		if (!value.empty()) {
+			m_qualitySettings.quality = getQualityModeFromName(value);
+		}
+		m_qualitySettings.tessellationLevel = cm.getInt("Quality", "TessellationLevel", m_qualitySettings.tessellationLevel);
+		m_qualitySettings.antiAliasingSamples = cm.getInt("Quality", "AntiAliasingSamples", m_qualitySettings.antiAliasingSamples);
+		m_qualitySettings.enableLOD = cm.getBool("Quality", "EnableLOD", m_qualitySettings.enableLOD);
+		m_qualitySettings.lodDistance = cm.getDouble("Quality", "LODDistance", m_qualitySettings.lodDistance);
+	}
+
+	// Shadow section
+	{
+		std::string value = cm.getString("Shadow", "ShadowMode", "");
+		if (!value.empty()) {
+			m_shadowSettings.shadowMode = getShadowModeFromName(value);
+		}
+		m_shadowSettings.shadowIntensity = cm.getDouble("Shadow", "ShadowIntensity", m_shadowSettings.shadowIntensity);
+		m_shadowSettings.shadowSoftness = cm.getDouble("Shadow", "ShadowSoftness", m_shadowSettings.shadowSoftness);
+		m_shadowSettings.shadowMapSize = cm.getInt("Shadow", "ShadowMapSize", m_shadowSettings.shadowMapSize);
+		m_shadowSettings.shadowBias = cm.getDouble("Shadow", "ShadowBias", m_shadowSettings.shadowBias);
+	}
+
+	// LightingModel section
+	{
+		std::string value = cm.getString("LightingModel", "LightingModel", "");
+		if (!value.empty()) {
+			m_lightingModelSettings.lightingModel = getLightingModelFromName(value);
+		}
+		m_lightingModelSettings.roughness = cm.getDouble("LightingModel", "Roughness", m_lightingModelSettings.roughness);
+		m_lightingModelSettings.metallic = cm.getDouble("LightingModel", "Metallic", m_lightingModelSettings.metallic);
+		m_lightingModelSettings.fresnel = cm.getDouble("LightingModel", "Fresnel", m_lightingModelSettings.fresnel);
+		m_lightingModelSettings.subsurfaceScattering = cm.getDouble("LightingModel", "SubsurfaceScattering", m_lightingModelSettings.subsurfaceScattering);
+	}
 
 	// Notify listeners of settings change
 	notifySettingsChanged();
@@ -677,93 +610,80 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
 
 bool RenderingConfig::saveToFile(const std::string& filename) const
 {
-	std::string configPath = filename.empty() ? getConfigFilePath() : filename;
-	std::ofstream file(configPath);
-
-	if (!file.is_open()) {
-		LOG_ERR_S("RenderingConfig: Failed to save configuration to: " + configPath);
+	// Use ConfigManager instead of independent file
+	ConfigManager& cm = ConfigManager::getInstance();
+	if (!cm.isInitialized()) {
+		LOG_ERR_S("RenderingConfig: ConfigManager not initialized, cannot save");
 		return false;
 	}
 
+	// Save to ConfigManager sections
+	// Material section
+	cm.setString("Material", "AmbientColor", colorToString(m_materialSettings.ambientColor));
+	cm.setString("Material", "DiffuseColor", colorToString(m_materialSettings.diffuseColor));
+	cm.setString("Material", "SpecularColor", colorToString(m_materialSettings.specularColor));
+	cm.setDouble("Material", "Shininess", m_materialSettings.shininess);
+	cm.setDouble("Material", "Transparency", m_materialSettings.transparency);
 
-	// Write header
-	file << "# Rendering Settings Configuration\n";
-	file << "# This file is automatically generated\n\n";
+	// Lighting section
+	cm.setString("Lighting", "AmbientColor", colorToString(m_lightingSettings.ambientColor));
+	cm.setString("Lighting", "DiffuseColor", colorToString(m_lightingSettings.diffuseColor));
+	cm.setString("Lighting", "SpecularColor", colorToString(m_lightingSettings.specularColor));
+	cm.setDouble("Lighting", "Intensity", m_lightingSettings.intensity);
+	cm.setDouble("Lighting", "AmbientIntensity", m_lightingSettings.ambientIntensity);
 
-	// Write Material section
-	file << "[Material]\n";
-	file << "AmbientColor=" << colorToString(m_materialSettings.ambientColor) << "\n";
-	file << "DiffuseColor=" << colorToString(m_materialSettings.diffuseColor) << "\n";
-	file << "SpecularColor=" << colorToString(m_materialSettings.specularColor) << "\n";
-	file << "Shininess=" << m_materialSettings.shininess << "\n";
-	file << "Transparency=" << m_materialSettings.transparency << "\n\n";
+	// Texture section
+	cm.setString("Texture", "Color", colorToString(m_textureSettings.color));
+	cm.setDouble("Texture", "Intensity", m_textureSettings.intensity);
+	cm.setBool("Texture", "Enabled", m_textureSettings.enabled);
+	cm.setString("Texture", "ImagePath", m_textureSettings.imagePath);
+	cm.setString("Texture", "TextureMode", getTextureModeName(m_textureSettings.textureMode));
 
-	// Write Lighting section
-	file << "[Lighting]\n";
-	file << "AmbientColor=" << colorToString(m_lightingSettings.ambientColor) << "\n";
-	file << "DiffuseColor=" << colorToString(m_lightingSettings.diffuseColor) << "\n";
-	file << "SpecularColor=" << colorToString(m_lightingSettings.specularColor) << "\n";
-	file << "Intensity=" << m_lightingSettings.intensity << "\n";
-	file << "AmbientIntensity=" << m_lightingSettings.ambientIntensity << "\n\n";
+	// Blend section
+	cm.setString("Blend", "BlendMode", getBlendModeName(m_blendSettings.blendMode));
+	cm.setBool("Blend", "DepthTest", m_blendSettings.depthTest);
+	cm.setBool("Blend", "DepthWrite", m_blendSettings.depthWrite);
+	cm.setBool("Blend", "CullFace", m_blendSettings.cullFace);
+	cm.setDouble("Blend", "AlphaThreshold", m_blendSettings.alphaThreshold);
 
-	// Write Texture section
-	file << "[Texture]\n";
-	file << "Color=" << colorToString(m_textureSettings.color) << "\n";
-	file << "Intensity=" << m_textureSettings.intensity << "\n";
-	file << "Enabled=" << (m_textureSettings.enabled ? "true" : "false") << "\n";
-	file << "ImagePath=" << m_textureSettings.imagePath << "\n";
-	file << "TextureMode=" << getTextureModeName(m_textureSettings.textureMode) << "\n\n";
+	// Shading section
+	cm.setString("Shading", "ShadingMode", getShadingModeName(m_shadingSettings.shadingMode));
+	cm.setBool("Shading", "SmoothNormals", m_shadingSettings.smoothNormals);
+	cm.setDouble("Shading", "WireframeWidth", m_shadingSettings.wireframeWidth);
+	cm.setDouble("Shading", "PointSize", m_shadingSettings.pointSize);
 
-	// Write Blend section
-	file << "[Blend]\n";
-	file << "BlendMode=" << getBlendModeName(m_blendSettings.blendMode) << "\n";
-	file << "DepthTest=" << (m_blendSettings.depthTest ? "true" : "false") << "\n";
-	file << "DepthWrite=" << (m_blendSettings.depthWrite ? "true" : "false") << "\n";
-	file << "CullFace=" << (m_blendSettings.cullFace ? "true" : "false") << "\n";
-	file << "AlphaThreshold=" << m_blendSettings.alphaThreshold << "\n";
+	// Display section
+	cm.setString("Display", "DisplayMode", getDisplayModeName(m_displaySettings.displayMode));
+	cm.setBool("Display", "ShowEdges", m_displaySettings.showEdges);
+	cm.setBool("Display", "ShowVertices", m_displaySettings.showVertices);
+	cm.setDouble("Display", "EdgeWidth", m_displaySettings.edgeWidth);
+	cm.setDouble("Display", "VertexSize", m_displaySettings.vertexSize);
+	cm.setString("Display", "EdgeColor", colorToString(m_displaySettings.edgeColor));
+	cm.setString("Display", "VertexColor", colorToString(m_displaySettings.vertexColor));
 
-	// Write Shading section
-	file << "\n[Shading]\n";
-	file << "ShadingMode=" << getShadingModeName(m_shadingSettings.shadingMode) << "\n";
-	file << "SmoothNormals=" << (m_shadingSettings.smoothNormals ? "true" : "false") << "\n";
-	file << "WireframeWidth=" << m_shadingSettings.wireframeWidth << "\n";
-	file << "PointSize=" << m_shadingSettings.pointSize << "\n";
+	// Quality section
+	cm.setString("Quality", "Quality", getQualityModeName(m_qualitySettings.quality));
+	cm.setInt("Quality", "TessellationLevel", m_qualitySettings.tessellationLevel);
+	cm.setInt("Quality", "AntiAliasingSamples", m_qualitySettings.antiAliasingSamples);
+	cm.setBool("Quality", "EnableLOD", m_qualitySettings.enableLOD);
+	cm.setDouble("Quality", "LODDistance", m_qualitySettings.lodDistance);
 
-	// Write Display section
-	file << "\n[Display]\n";
-	file << "DisplayMode=" << getDisplayModeName(m_displaySettings.displayMode) << "\n";
-	file << "ShowEdges=" << (m_displaySettings.showEdges ? "true" : "false") << "\n";
-	file << "ShowVertices=" << (m_displaySettings.showVertices ? "true" : "false") << "\n";
-	file << "EdgeWidth=" << m_displaySettings.edgeWidth << "\n";
-	file << "VertexSize=" << m_displaySettings.vertexSize << "\n";
-	file << "EdgeColor=" << colorToString(m_displaySettings.edgeColor) << "\n";
-	file << "VertexColor=" << colorToString(m_displaySettings.vertexColor) << "\n";
+	// Shadow section
+	cm.setString("Shadow", "ShadowMode", getShadowModeName(m_shadowSettings.shadowMode));
+	cm.setDouble("Shadow", "ShadowIntensity", m_shadowSettings.shadowIntensity);
+	cm.setDouble("Shadow", "ShadowSoftness", m_shadowSettings.shadowSoftness);
+	cm.setInt("Shadow", "ShadowMapSize", m_shadowSettings.shadowMapSize);
+	cm.setDouble("Shadow", "ShadowBias", m_shadowSettings.shadowBias);
 
-	// Write Quality section
-	file << "\n[Quality]\n";
-	file << "Quality=" << getQualityModeName(m_qualitySettings.quality) << "\n";
-	file << "TessellationLevel=" << m_qualitySettings.tessellationLevel << "\n";
-	file << "AntiAliasingSamples=" << m_qualitySettings.antiAliasingSamples << "\n";
-	file << "EnableLOD=" << (m_qualitySettings.enableLOD ? "true" : "false") << "\n";
-	file << "LODDistance=" << m_qualitySettings.lodDistance << "\n";
+	// LightingModel section
+	cm.setString("LightingModel", "LightingModel", getLightingModelName(m_lightingModelSettings.lightingModel));
+	cm.setDouble("LightingModel", "Roughness", m_lightingModelSettings.roughness);
+	cm.setDouble("LightingModel", "Metallic", m_lightingModelSettings.metallic);
+	cm.setDouble("LightingModel", "Fresnel", m_lightingModelSettings.fresnel);
+	cm.setDouble("LightingModel", "SubsurfaceScattering", m_lightingModelSettings.subsurfaceScattering);
 
-	// Write Shadow section
-	file << "\n[Shadow]\n";
-	file << "ShadowMode=" << getShadowModeName(m_shadowSettings.shadowMode) << "\n";
-	file << "ShadowIntensity=" << m_shadowSettings.shadowIntensity << "\n";
-	file << "ShadowSoftness=" << m_shadowSettings.shadowSoftness << "\n";
-	file << "ShadowMapSize=" << m_shadowSettings.shadowMapSize << "\n";
-	file << "ShadowBias=" << m_shadowSettings.shadowBias << "\n";
-
-	// Write LightingModel section
-	file << "\n[LightingModel]\n";
-	file << "LightingModel=" << getLightingModelName(m_lightingModelSettings.lightingModel) << "\n";
-	file << "Roughness=" << m_lightingModelSettings.roughness << "\n";
-	file << "Metallic=" << m_lightingModelSettings.metallic << "\n";
-	file << "Fresnel=" << m_lightingModelSettings.fresnel << "\n";
-	file << "SubsurfaceScattering=" << m_lightingModelSettings.subsurfaceScattering << "\n";
-
-	file.close();
+	// Save ConfigManager to file
+	return cm.save();
 
 	// Notify listeners of settings change
 	notifySettingsChanged();

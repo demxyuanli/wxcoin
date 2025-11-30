@@ -74,7 +74,7 @@ void FaceSelectionListener::onMouseButton(wxMouseEvent& event) {
 
 	PickingResult result = m_pickingService->pickDetailedAtScreen(mousePos);
 
-	if (result.geometry && !result.subElementName.empty() && result.elementType == "Face" && result.geometryFaceId >= 0) {
+		if (result.geometry && !result.subElementName.empty() && result.elementType == "Face" && result.geometryFaceId >= 0) {
 		// Use Selection system to manage selection
 		auto& selection = mod::Selection::getInstance();
 		selection.setSelection(result.geometry->getName(), result.subElementName, 
@@ -85,21 +85,10 @@ void FaceSelectionListener::onMouseButton(wxMouseEvent& event) {
 		
 		LOG_INF_S("FaceSelectionListener::onMouseButton - Selected " + result.subElementName + 
 			" in geometry " + result.geometry->getName());
-		
-		// Show information message for selection result
-		if (m_canvas) {
-			wxString msg = wxString::Format(
-				"Face Selection:\n\n"
-				"Geometry: %s\n"
-				"Face: %s\n"
-				"Face ID: %d\n"
-				"Position: (%.3f, %.3f, %.3f)",
-				result.geometry->getName(),
-				result.subElementName,
-				result.geometryFaceId,
-				result.x, result.y, result.z
-			);
-			wxMessageBox(msg, "Face Selection Result", wxOK | wxICON_INFORMATION, m_canvas);
+
+		// Show selection result in floating info window (top-left of canvas)
+		if (m_canvas && m_canvas->getSelectionInfoDialog()) {
+			m_canvas->getSelectionInfoDialog()->SetPickingResult(result);
 		}
 	} else {
 		// Clicked on empty space or non-face element, clear selection
@@ -107,12 +96,10 @@ void FaceSelectionListener::onMouseButton(wxMouseEvent& event) {
 		selection.clearSelection();
 		clearSelection();
 		LOG_INF_S("FaceSelectionListener::onMouseButton - Cleared selection");
-		
-		// Show information message for picking failure
-		if (m_canvas && (!result.geometry || result.elementType != "Face")) {
-			wxMessageBox("No face picked at this position.\n\n"
-				"Please click on a visible face to select it.",
-				"Picking Info", wxOK | wxICON_INFORMATION, m_canvas);
+
+		// Show picking failure in floating info window
+		if (m_canvas && m_canvas->getSelectionInfoDialog()) {
+			m_canvas->getSelectionInfoDialog()->SetPickingResult(result);
 		}
 	}
 

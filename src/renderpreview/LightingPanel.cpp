@@ -2,6 +2,7 @@
 #include "renderpreview/RenderPreviewDialog.h"
 #include "renderpreview/LightManager.h"
 #include "config/FontManager.h"
+#include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include <wx/colordlg.h>
 #include <wx/sizer.h>
@@ -836,39 +837,50 @@ void LightingPanel::updateControlStates()
 void LightingPanel::loadSettings()
 {
 	try {
-		wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-		wxFileName exeFile(exePath);
-		wxString exeDir = exeFile.GetPath();
-		wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
-		wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
+		ConfigManager& cm = ConfigManager::getInstance();
+		if (!cm.isInitialized()) {
+			LOG_WRN_S("LightingPanel::loadSettings: ConfigManager not initialized, using defaults");
+			// Use default light
+			RenderLightSettings defaultLight;
+			defaultLight.name = "Default Light";
+			defaultLight.type = "directional";
+			defaultLight.positionX = 5.0;
+			defaultLight.positionY = 5.0;
+			defaultLight.positionZ = 10.0;
+			defaultLight.directionX = -0.5;
+			defaultLight.directionY = -0.5;
+			defaultLight.directionZ = -1.0;
+			defaultLight.color = wxColour(255, 255, 255);
+			defaultLight.intensity = 1.0;
+			defaultLight.enabled = true;
+			this->m_lights.push_back(defaultLight);
+			this->updateLightList();
+			this->updateControlStates();
+			return;
+		}
 
 		m_lights.clear();
-		int lightCount = 0;
-		if (renderConfig.Read("Global.Lighting.Count", &lightCount, 0) && lightCount > 0) {
+		int lightCount = cm.getInt("Global", "Lighting.Count", 0);
+		if (lightCount > 0) {
 			for (int i = 0; i < lightCount; ++i) {
 				RenderLightSettings light;
-				std::string lightPrefix = "Global.Lighting.Light" + std::to_string(i);
-				renderConfig.Read(lightPrefix + ".Enabled", &light.enabled, true);
-				wxString lightName;
-				renderConfig.Read(lightPrefix + ".Name", &lightName, "Light " + std::to_string(i + 1));
-				light.name = lightName.ToStdString();
-				wxString lightType;
-				renderConfig.Read(lightPrefix + ".Type", &lightType, "directional");
-				light.type = lightType.ToStdString();
-				renderConfig.Read(lightPrefix + ".PositionX", &light.positionX, 0.0);
-				renderConfig.Read(lightPrefix + ".PositionY", &light.positionY, 0.0);
-				renderConfig.Read(lightPrefix + ".PositionZ", &light.positionZ, 10.0);
-				renderConfig.Read(lightPrefix + ".DirectionX", &light.directionX, 0.0);
-				renderConfig.Read(lightPrefix + ".DirectionY", &light.directionY, 0.0);
-				renderConfig.Read(lightPrefix + ".DirectionZ", &light.directionZ, -1.0);
-				int colorR, colorG, colorB;
-				renderConfig.Read(lightPrefix + ".ColorR", &colorR, 255);
-				renderConfig.Read(lightPrefix + ".ColorG", &colorG, 255);
-				renderConfig.Read(lightPrefix + ".ColorB", &colorB, 255);
+				std::string lightPrefix = "Lighting.Light" + std::to_string(i);
+				light.enabled = cm.getBool("Global", lightPrefix + ".Enabled", true);
+				light.name = cm.getString("Global", lightPrefix + ".Name", "Light " + std::to_string(i + 1));
+				light.type = cm.getString("Global", lightPrefix + ".Type", "directional");
+				light.positionX = cm.getDouble("Global", lightPrefix + ".PositionX", 0.0);
+				light.positionY = cm.getDouble("Global", lightPrefix + ".PositionY", 0.0);
+				light.positionZ = cm.getDouble("Global", lightPrefix + ".PositionZ", 10.0);
+				light.directionX = cm.getDouble("Global", lightPrefix + ".DirectionX", 0.0);
+				light.directionY = cm.getDouble("Global", lightPrefix + ".DirectionY", 0.0);
+				light.directionZ = cm.getDouble("Global", lightPrefix + ".DirectionZ", -1.0);
+				int colorR = cm.getInt("Global", lightPrefix + ".ColorR", 255);
+				int colorG = cm.getInt("Global", lightPrefix + ".ColorG", 255);
+				int colorB = cm.getInt("Global", lightPrefix + ".ColorB", 255);
 				light.color = wxColour(colorR, colorG, colorB);
-				renderConfig.Read(lightPrefix + ".Intensity", &light.intensity, 1.0);
-				renderConfig.Read(lightPrefix + ".SpotAngle", &light.spotAngle, 30.0);
-				renderConfig.Read(lightPrefix + ".SpotExponent", &light.spotExponent, 1.0);
+				light.intensity = cm.getDouble("Global", lightPrefix + ".Intensity", 1.0);
+				light.spotAngle = cm.getDouble("Global", lightPrefix + ".SpotAngle", 30.0);
+				light.spotExponent = cm.getDouble("Global", lightPrefix + ".SpotExponent", 1.0);
 				this->m_lights.push_back(light);
 			}
 		}
@@ -899,33 +911,33 @@ void LightingPanel::loadSettings()
 void LightingPanel::saveSettings()
 {
 	try {
-		wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-		wxFileName exeFile(exePath);
-		wxString exeDir = exeFile.GetPath();
-		wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
-		wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
+		ConfigManager& cm = ConfigManager::getInstance();
+		if (!cm.isInitialized()) {
+			LOG_WRN_S("LightingPanel::saveSettings: ConfigManager not initialized");
+			return;
+		}
 
-		renderConfig.Write("Global.Lighting.Count", static_cast<int>(this->m_lights.size()));
+		cm.setInt("Global", "Lighting.Count", static_cast<int>(this->m_lights.size()));
 		for (size_t i = 0; i < this->m_lights.size(); ++i) {
 			const auto& light = this->m_lights[i];
-			std::string lightPrefix = "Global.Lighting.Light" + std::to_string(i);
-			renderConfig.Write(lightPrefix + ".Enabled", light.enabled);
-			renderConfig.Write(lightPrefix + ".Name", wxString(light.name));
-			renderConfig.Write(lightPrefix + ".Type", wxString(light.type));
-			renderConfig.Write(lightPrefix + ".PositionX", light.positionX);
-			renderConfig.Write(lightPrefix + ".PositionY", light.positionY);
-			renderConfig.Write(lightPrefix + ".PositionZ", light.positionZ);
-			renderConfig.Write(lightPrefix + ".DirectionX", light.directionX);
-			renderConfig.Write(lightPrefix + ".DirectionY", light.directionY);
-			renderConfig.Write(lightPrefix + ".DirectionZ", light.directionZ);
-			renderConfig.Write(lightPrefix + ".ColorR", light.color.Red());
-			renderConfig.Write(lightPrefix + ".ColorG", light.color.Green());
-			renderConfig.Write(lightPrefix + ".ColorB", light.color.Blue());
-			renderConfig.Write(lightPrefix + ".Intensity", light.intensity);
-			renderConfig.Write(lightPrefix + ".SpotAngle", light.spotAngle);
-			renderConfig.Write(lightPrefix + ".SpotExponent", light.spotExponent);
+			std::string lightPrefix = "Lighting.Light" + std::to_string(i);
+			cm.setBool("Global", lightPrefix + ".Enabled", light.enabled);
+			cm.setString("Global", lightPrefix + ".Name", light.name);
+			cm.setString("Global", lightPrefix + ".Type", light.type);
+			cm.setDouble("Global", lightPrefix + ".PositionX", light.positionX);
+			cm.setDouble("Global", lightPrefix + ".PositionY", light.positionY);
+			cm.setDouble("Global", lightPrefix + ".PositionZ", light.positionZ);
+			cm.setDouble("Global", lightPrefix + ".DirectionX", light.directionX);
+			cm.setDouble("Global", lightPrefix + ".DirectionY", light.directionY);
+			cm.setDouble("Global", lightPrefix + ".DirectionZ", light.directionZ);
+			cm.setInt("Global", lightPrefix + ".ColorR", light.color.Red());
+			cm.setInt("Global", lightPrefix + ".ColorG", light.color.Green());
+			cm.setInt("Global", lightPrefix + ".ColorB", light.color.Blue());
+			cm.setDouble("Global", lightPrefix + ".Intensity", light.intensity);
+			cm.setDouble("Global", lightPrefix + ".SpotAngle", light.spotAngle);
+			cm.setDouble("Global", lightPrefix + ".SpotExponent", light.spotExponent);
 		}
-		renderConfig.Flush();
+		cm.save();
 		LOG_INF_S("LightingPanel::saveSettings: Settings saved successfully");
 	}
 	catch (const std::exception& e) {

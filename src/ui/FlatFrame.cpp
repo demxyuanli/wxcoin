@@ -249,7 +249,8 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_commandManager(new CommandManager()),
 	m_prevFeatureEdgesRunning(false),
 	m_featureProgressHoldTicks(0),
-	m_renderModeButtonGroup(nullptr)
+	m_renderModeButtonGroup(nullptr),
+	m_selectionToolButtonGroup(nullptr)
 {
 	wxInitAllImageHandlers();
 
@@ -334,6 +335,11 @@ FlatFrame::~FlatFrame()
 	if (m_renderModeButtonGroup) {
 		delete m_renderModeButtonGroup;
 		m_renderModeButtonGroup = nullptr;
+	}
+	
+	if (m_selectionToolButtonGroup) {
+		delete m_selectionToolButtonGroup;
+		m_selectionToolButtonGroup = nullptr;
 	}
 
 	// Unbind events to prevent access violations

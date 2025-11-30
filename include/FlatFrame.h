@@ -255,6 +255,9 @@ private:
 
 	// Button group for render mode buttons (mutually exclusive)
 	class ButtonGroup* m_renderModeButtonGroup;  // Manages render mode toggle button group
+	
+	// Button group for selection/query tool buttons (mutually exclusive)
+	class ButtonGroup* m_selectionToolButtonGroup;  // Manages selection/query tool toggle button group
 
 protected:
 	// Async compute engine (protected for derived class access)

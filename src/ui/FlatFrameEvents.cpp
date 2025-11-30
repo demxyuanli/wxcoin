@@ -240,24 +240,56 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
 	}
 	// Outline toggle handled directly; add optional feedback if needed
 
-	// Handle face query tool toggle state
-	if (result.commandId == cmd::to_string(cmd::CommandType::FaceQueryTool) && result.success) {
-		bool isActive = m_canvas && m_canvas->getInputManager() && m_canvas->getInputManager()->isCustomInputStateActive();
-		// TODO: Update button state in ribbon when FlatUIBar supports SetToggleButtonState
-		// if (m_ribbon) {
-		//     m_ribbon->SetToggleButtonState(ID_FACE_QUERY_TOOL, isActive);
-		// }
-		LOG_INF_S("Face query tool state updated: " + std::string(isActive ? "active" : "inactive"));
-	}
+	// Handle face query tool toggle state - now handled in the selection/query tool section below
+	// Removed duplicate handling as it's now managed by ButtonGroup
 
-	// Handle render mode changes - update ButtonGroup state to ensure mutual exclusivity
+	// Handle render mode changes - update ButtonGroup state based on actual render mode state
 	if (result.success && result.commandId.find("RENDER_MODE_") == 0) {
-		// Sync ButtonGroup state from button bar after command execution
+		// Update button state based on actual rendering config state
+		// Don't sync from button bar, as the button state might not match the actual config yet
+		// Instead, update based on the actual rendering config after command execution
 		if (m_renderModeButtonGroup) {
-			m_renderModeButtonGroup->syncFromButtonBar();
+			UpdateRenderModeButtonState();
 		}
-		UpdateRenderModeButtonState();
-		LOG_INF_S("Render mode changed, ButtonGroup state synchronized: " + result.commandId);
+		LOG_INF_S("Render mode changed, ButtonGroup state updated: " + result.commandId);
+	}
+	
+	// Handle selection/query tool changes - update ButtonGroup state based on actual tool state
+	if (result.success && (
+		result.commandId == "FACE_SELECTION_TOOL" ||
+		result.commandId == "EDGE_SELECTION_TOOL" ||
+		result.commandId == "VERTEX_SELECTION_TOOL" ||
+		result.commandId == "FACE_QUERY_TOOL"
+	)) {
+		// Update button state based on actual tool activation state
+		if (m_selectionToolButtonGroup && m_canvas && m_canvas->getInputManager()) {
+			bool isToolActive = m_canvas->getInputManager()->isCustomInputStateActive();
+			
+			if (isToolActive) {
+				// Tool is active, select the corresponding button
+				int buttonId = -1;
+				if (result.commandId == "FACE_SELECTION_TOOL") {
+					buttonId = ID_FACE_SELECTION_TOOL;
+				} else if (result.commandId == "EDGE_SELECTION_TOOL") {
+					buttonId = ID_EDGE_SELECTION_TOOL;
+				} else if (result.commandId == "VERTEX_SELECTION_TOOL") {
+					buttonId = ID_VERTEX_SELECTION_TOOL;
+				} else if (result.commandId == "FACE_QUERY_TOOL") {
+					buttonId = ID_FACE_QUERY_TOOL;
+				}
+				
+				if (buttonId >= 0) {
+					// Use notify=false to avoid triggering callback during programmatic updates
+					m_selectionToolButtonGroup->setSelectedButton(buttonId, false);
+				}
+			} else {
+				// Tool is deactivated, clear selection (deselect all buttons)
+				m_selectionToolButtonGroup->clearSelection(false);
+			}
+			
+			LOG_INF_S("Selection/Query tool changed, ButtonGroup state updated: " + result.commandId + 
+				" (active: " + std::string(isToolActive ? "true" : "false") + ")");
+		}
 	}
 
 	if (m_canvas && (

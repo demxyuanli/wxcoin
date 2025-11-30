@@ -192,6 +192,13 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 				m_outlineManager->onGeometryAdded(geometry);
 			}
 
+			// Apply current edge display settings to the newly added geometry
+			// This ensures that settings configured during initialization (e.g., NoShading mode with original edges)
+			// are applied to geometries added after initialization
+			if (m_edgeDisplayManager && !m_batchOperationActive) {
+				m_edgeDisplayManager->updateAll(m_meshParams);
+			}
+
 			// Handle view updates
 	if (m_viewUpdater) {
 		m_viewUpdater->updateSceneBounds();

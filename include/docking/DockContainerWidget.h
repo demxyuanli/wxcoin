@@ -73,6 +73,7 @@ public:
     // Layout configuration
     void applyLayoutConfig();
     void applyProportionalResize(const wxSize& oldSize, const wxSize& newSize);
+    void applyFixedSizeDocks();
     void cacheSplitterRatios();
     void restoreSplitterRatios();
     void markUserAdjustedLayout();

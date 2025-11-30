@@ -23,6 +23,8 @@
 #include <wx/msgdlg.h>
 #include "MultiViewportManager.h"
 #include "SplitViewportManager.h"
+#include "config/RenderingConfig.h"
+#include "EdgeTypes.h"
 #include <chrono>
 const int Canvas::s_canvasAttribs[] = {
 	WX_GL_RGBA,
@@ -71,6 +73,10 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 	try {
 		initializeSubsystems();
 		connectSubsystems();
+
+		// Create selection info dialog (floating, similar to slice parameter dialog)
+		m_selectionInfoDialog = std::make_unique<SelectionInfoDialog>(this);
+		m_selectionInfoDialog->Hide();
 
 		if (m_sceneManager && !m_sceneManager->initScene()) {
 			LOG_ERR_S("Canvas::Canvas: Failed to initialize main scene");
@@ -284,6 +290,9 @@ void Canvas::onSize(wxSizeEvent& event) {
 	if (m_splitViewportManager) {
 		m_splitViewportManager->handleSizeChange(size);
 	}
+	if (m_selectionInfoDialog) {
+		m_selectionInfoDialog->UpdatePosition();
+	}
 	if (m_eventCoordinator) {
 		m_eventCoordinator->handleSizeEvent(event);
 	}
@@ -476,4 +485,54 @@ float Canvas::getDPIScale() const {
 		return m_viewportManager->getDPIScale();
 	}
 	return GetContentScaleFactor();
+}
+
+void Canvas::setOCCViewer(OCCViewer* occViewer) {
+	m_occViewer = occViewer;
+	
+	// Apply initial render mode from RenderingConfig when OCCViewer is set
+	if (m_occViewer) {
+		const RenderingConfig& renderingConfig = RenderingConfig::getInstance();
+		auto displaySettings = renderingConfig.getDisplaySettings();
+		const auto shadingSettings = renderingConfig.getShadingSettings();
+		
+		// For NoShading mode, ensure showEdges is true (required for original edges display)
+		if (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
+			displaySettings.showEdges = true;
+		}
+		
+		// Apply display settings to viewer
+		m_occViewer->setDisplaySettings(displaySettings);
+		
+		// Apply shading settings if needed (setDisplaySettings may handle this, but ensure it's set)
+		RenderingConfig& nonConstConfig = const_cast<RenderingConfig&>(renderingConfig);
+		nonConstConfig.setShadingSettings(shadingSettings);
+		
+		// For NoShading mode, explicitly enable original edges display with default parameters
+		// This must be done after setDisplaySettings to ensure edges are properly configured
+		if (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
+			// Force enable edges display (setShowEdges) to ensure mesh edges are shown
+			// This is required even though we'll also show original edges
+			m_occViewer->setShowEdges(true);
+			
+			// Set original edges parameters first
+			m_occViewer->setOriginalEdgesParameters(
+				80.0,  // samplingDensity
+				0.01,  // minLength
+				false, // showLinesOnly
+				wxColour(0, 0, 0), // black color for edges
+				1.0,   // width
+				false, // highlightIntersectionNodes
+				wxColour(255, 0, 0), // intersectionNodeColor (not used)
+				3.0,   // intersectionNodeSize (not used)
+				IntersectionNodeShape::Point // intersectionNodeShape (not used)
+			);
+			// Then enable original edges display
+			m_occViewer->setShowOriginalEdges(true);
+			LOG_INF_S("Canvas::setOCCViewer: Applied NoShading mode - enabled edges and original edges display");
+		}
+		
+		LOG_INF_S("Canvas::setOCCViewer: Applied initial render mode from RenderingConfig: " + 
+			renderingConfig.getDisplayModeName(displaySettings.displayMode));
+	}
 }

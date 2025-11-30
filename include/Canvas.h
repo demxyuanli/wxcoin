@@ -8,6 +8,7 @@
 #include "interfaces/IMultiViewportManager.h"
 #include "interfaces/IViewRefresher.h"
 #include "mod/FaceInfoOverlay.h"
+#include "SelectionInfoDialog.h"
 
 // Forward declarations
 class OCCViewer;
@@ -57,7 +58,7 @@ public:
 	// External dependencies
 	void setObjectTreePanel(ObjectTreePanel* panel) { m_objectTreePanel = panel; }
 	void setCommandManager(CommandManager* manager) { m_commandManager = manager; }
-	void setOCCViewer(class OCCViewer* occViewer) { m_occViewer = occViewer; }
+	void setOCCViewer(class OCCViewer* occViewer);
 	OCCViewer* getOCCViewer() const { return m_occViewer; }
 
 	// Scene access shortcuts
@@ -76,6 +77,7 @@ public:
 
 	// Face info overlay
 	FaceInfoOverlay* getFaceInfoOverlay() { return &m_faceInfoOverlay; }
+	SelectionInfoDialog* getSelectionInfoDialog() { return m_selectionInfoDialog.get(); }
 	
 	// Split viewport methods
 	SplitViewportManager* getSplitViewportManager() const { return m_splitViewportManager.get(); }
@@ -127,6 +129,7 @@ private:
 
 	// Face info overlay
 	FaceInfoOverlay m_faceInfoOverlay;
+	std::unique_ptr<SelectionInfoDialog> m_selectionInfoDialog;
 
 	DECLARE_EVENT_TABLE()
 };

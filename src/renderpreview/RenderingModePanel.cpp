@@ -3,6 +3,7 @@
 #include "renderpreview/RenderingManager.h"
 #include "renderpreview/PreviewCanvas.h"
 #include "config/FontManager.h"
+#include "config/ConfigManager.h"
 #include "logger/Logger.h"
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -192,22 +193,20 @@ void RenderingModePanel::updateLegacyChoiceFromCurrentMode()
 void RenderingModePanel::loadSettings()
 {
 	try {
-		wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-		wxFileName exeFile(exePath);
-		wxString exeDir = exeFile.GetPath();
-		wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
-		wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
+		ConfigManager& cm = ConfigManager::getInstance();
+		if (!cm.isInitialized()) {
+			LOG_WRN_S("RenderingModePanel::loadSettings: ConfigManager not initialized, using defaults");
+			return;
+		}
 
 		if (this->m_renderingModeChoice) {
-			int mode;
-			if (renderConfig.Read("Global.RenderingMode", &mode, 1)) {
-				if (mode >= 0 && mode < this->m_renderingModeChoice->GetCount()) {
-					this->m_renderingModeChoice->SetSelection(mode);
-				}
-				else {
-					this->m_renderingModeChoice->SetSelection(1);
-					LOG_WRN_S("RenderingModePanel::loadSettings: Invalid rendering mode " + std::to_string(mode) + ", defaulting to Balanced");
-				}
+			int mode = cm.getInt("Global", "RenderingMode", 1);
+			if (mode >= 0 && mode < this->m_renderingModeChoice->GetCount()) {
+				this->m_renderingModeChoice->SetSelection(mode);
+			}
+			else {
+				this->m_renderingModeChoice->SetSelection(1);
+				LOG_WRN_S("RenderingModePanel::loadSettings: Invalid rendering mode " + std::to_string(mode) + ", defaulting to Balanced");
 			}
 		}
 		LOG_INF_S("RenderingModePanel::loadSettings: Settings loaded successfully");
@@ -220,16 +219,16 @@ void RenderingModePanel::loadSettings()
 void RenderingModePanel::saveSettings()
 {
 	try {
-		wxString exePath = wxStandardPaths::Get().GetExecutablePath();
-		wxFileName exeFile(exePath);
-		wxString exeDir = exeFile.GetPath();
-		wxString renderConfigPath = exeDir + wxFileName::GetPathSeparator() + "render_settings.ini";
-		wxFileConfig renderConfig(wxEmptyString, wxEmptyString, renderConfigPath, wxEmptyString, wxCONFIG_USE_LOCAL_FILE);
+		ConfigManager& cm = ConfigManager::getInstance();
+		if (!cm.isInitialized()) {
+			LOG_WRN_S("RenderingModePanel::saveSettings: ConfigManager not initialized");
+			return;
+		}
 
 		if (this->m_renderingModeChoice) {
-			renderConfig.Write("Global.RenderingMode", this->m_renderingModeChoice->GetSelection());
+			cm.setInt("Global", "RenderingMode", this->m_renderingModeChoice->GetSelection());
 		}
-		renderConfig.Flush();
+		cm.save();
 		LOG_INF_S("RenderingModePanel::saveSettings: Settings saved successfully");
 	}
 	catch (const std::exception& e) {

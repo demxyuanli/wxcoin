@@ -765,17 +765,19 @@ void SceneManager::updateCameraClippingPlanes() {
 	float optimalNear = std::max(0.001f, cameraDist - sceneRadius * 1.5f);
 	
 	// Far plane: camera to farthest point + safety margin
-	float optimalFar = cameraDist + sceneRadius * 1.5f;
+	// Use larger multiplier to ensure geometry is not clipped when zooming out
+	float optimalFar = cameraDist + sceneRadius * 3.0f;  // Increased from 1.5f to 3.0f for better safety margin
 
 	// Ensure minimum values
 	optimalNear = std::max(0.001f, optimalNear);
-	optimalFar = std::max(10.0f, optimalFar);
+	optimalFar = std::max(10000.0f, optimalFar);  // Increased minimum from 10.0f to 10000.0f
 
 	// For very large scenes, don't limit the far plane
 	// Only apply reasonable near plane limit
 	optimalNear = std::min(optimalNear, sceneRadius * 0.1f);  // Near can't be more than 10% of scene size
 	
 	// No upper limit on far plane - let it adapt to scene size
+	// This ensures geometry is never clipped, even when zooming out very far
 	// optimalFar = std::min(optimalFar, 10000.0f); // REMOVED - this was causing clipping
 
 	// Update camera clipping planes

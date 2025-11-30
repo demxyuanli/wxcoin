@@ -36,9 +36,20 @@ CommandResult FaceQueryCommandListener::executeCommand(const std::string& comman
 	}
 
 	// Check if face query is currently active
-	bool isActive = m_inputManager->isCustomInputStateActive();
+	// Need to check if the current active state is actually FaceQueryListener
+	// not just any custom input state (could be selection tool)
+	bool isActive = false;
+	if (m_inputManager->isCustomInputStateActive()) {
+		InputState* currentState = m_inputManager->getCurrentInputState();
+		if (currentState) {
+			// Check if current state is FaceQueryListener using dynamic_cast
+			FaceQueryListener* faceQueryState = dynamic_cast<FaceQueryListener*>(currentState);
+			isActive = (faceQueryState != nullptr);
+		}
+	}
+	
 	LOG_INF_S("FaceQueryCommandListener::executeCommand - Current tool state: " +
-		std::string(isActive ? "ACTIVE" : "INACTIVE"));
+		std::string(isActive ? "ACTIVE (FaceQuery)" : "INACTIVE or other tool"));
 
 	if (isActive) {
 		// Deactivate face query tool

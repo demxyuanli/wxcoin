@@ -18,6 +18,7 @@
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/nodes/SoPointSet.h>
+#include <Inventor/nodes/SoPolygonOffset.h>
 #include <Inventor/actions/SoSearchAction.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoCone.h>
@@ -683,6 +684,16 @@ void OCCGeometryMesh::buildCoinRepresentation(
         m_coinNode->addChild(createMaterialNode(ctx));
         appendTextureNodes(ctx);
         appendBlendHints(ctx);
+        
+        // FreeCAD approach: Add polygon offset BEFORE faces to avoid Z-buffer artifacts
+        // This ensures edges (rendered AFTER faces) always appear on top
+        // Using default SoPolygonOffset values (factor=0.0, units=0.0) works correctly
+        // because it affects the depth calculation for faces, making them slightly behind edges
+        SoPolygonOffset* polygonOffset = new SoPolygonOffset();
+        // Use default values (factor=0.0, units=0.0) - this is what FreeCAD does
+        // The offset affects faces rendered after this node, pushing them slightly back
+        m_coinNode->addChild(polygonOffset);
+        
         appendSurfaceGeometry(ctx);
     };
 

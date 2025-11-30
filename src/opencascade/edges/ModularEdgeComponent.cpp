@@ -339,34 +339,38 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
         }
     }
 
-    // Add current edge nodes
+    // Add current edge nodes at the END of the parent node
+    // This ensures edges are rendered AFTER faces, so they appear on top
+    // We use insertChild with a large index to ensure edges are always last
+    int insertIndex = parentNode->getNumChildren();
+    
     if (originalEdgeNode && edgeFlags.showOriginalEdges) {
-        parentNode->addChild(originalEdgeNode);
+        parentNode->insertChild(originalEdgeNode, insertIndex++);
     }
     if (featureEdgeNode && edgeFlags.showFeatureEdges) {
-        parentNode->addChild(featureEdgeNode);
+        parentNode->insertChild(featureEdgeNode, insertIndex++);
     }
     if (meshEdgeNode && edgeFlags.showMeshEdges) {
-        parentNode->addChild(meshEdgeNode);
+        parentNode->insertChild(meshEdgeNode, insertIndex++);
     }
     if (highlightEdgeNode && edgeFlags.showHighlightEdges) {
-        parentNode->addChild(highlightEdgeNode);
+        parentNode->insertChild(highlightEdgeNode, insertIndex++);
     }
     if (normalLineNode && edgeFlags.showNormalLines) {
-        parentNode->addChild(normalLineNode);
+        parentNode->insertChild(normalLineNode, insertIndex++);
     } else {
         if (!normalLineNode && edgeFlags.showNormalLines) {
             LOG_WRN_S_ASYNC("ModularEdgeComponent::updateEdgeDisplay - showNormalLines=true but normalLineNode is null");
         }
     }
     if (faceNormalLineNode && edgeFlags.showFaceNormalLines) {
-        parentNode->addChild(faceNormalLineNode);
+        parentNode->insertChild(faceNormalLineNode, insertIndex++);
     }
     if (silhouetteEdgeNode) {
-        parentNode->addChild(silhouetteEdgeNode);
+        parentNode->insertChild(silhouetteEdgeNode, insertIndex++);
     }
     if (intersectionNodesNode && edgeFlags.showIntersectionNodes) {
-        parentNode->addChild(intersectionNodesNode);
+        parentNode->insertChild(intersectionNodesNode, insertIndex++);
     }
 }
 

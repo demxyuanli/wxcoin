@@ -96,6 +96,12 @@ public:
 	 * This should be called when the button bar state changes externally
 	 */
 	void syncFromButtonBar();
+	
+	/**
+	 * Clear the selection (deselect all buttons in the group)
+	 * @param notify If true, triggers the selection changed callback
+	 */
+	void clearSelection(bool notify = true);
 
 	/**
 	 * Enable or disable all buttons in the group

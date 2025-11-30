@@ -59,21 +59,10 @@ void EdgeSelectionListener::onMouseButton(wxMouseEvent& event) {
 			
 			LOG_INF_S("EdgeSelectionListener::onMouseButton - Selected " + result.subElementName + 
 				" in geometry " + result.geometry->getName());
-			
-			// Show information message for selection result
-			if (m_canvas) {
-				wxString msg = wxString::Format(
-					"Edge Selection:\n\n"
-					"Geometry: %s\n"
-					"Edge: %s\n"
-					"Edge Index: %d\n"
-					"Position: (%.3f, %.3f, %.3f)",
-					result.geometry->getName(),
-					result.subElementName,
-					result.lineIndex,
-					result.x, result.y, result.z
-				);
-				wxMessageBox(msg, "Edge Selection Result", wxOK | wxICON_INFORMATION, m_canvas);
+
+			// Show selection result in floating info window (top-left of canvas)
+			if (m_canvas && m_canvas->getSelectionInfoDialog()) {
+				m_canvas->getSelectionInfoDialog()->SetPickingResult(result);
 			}
 		} else {
 			// Clicked on empty space or non-edge element, clear selection
@@ -81,12 +70,10 @@ void EdgeSelectionListener::onMouseButton(wxMouseEvent& event) {
 			selection.clearSelection();
 			clearSelection();
 			LOG_INF_S("EdgeSelectionListener::onMouseButton - Cleared selection");
-			
-			// Show information message for picking failure
-			if (m_canvas && (!result.geometry || result.elementType != "Edge")) {
-				wxMessageBox("No edge picked at this position.\n\n"
-					"Please click on a visible original edge to select it.",
-					"Picking Info", wxOK | wxICON_INFORMATION, m_canvas);
+
+			// Show picking failure in floating info window
+			if (m_canvas && m_canvas->getSelectionInfoDialog()) {
+				m_canvas->getSelectionInfoDialog()->SetPickingResult(result);
 			}
 		}
 
