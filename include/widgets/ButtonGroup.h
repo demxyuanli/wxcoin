@@ -98,6 +98,13 @@ public:
 	void syncFromButtonBar();
 	
 	/**
+	 * Sync button selection from external tool state (e.g., InputState)
+	 * @param toolId The tool ID to select, or -1 to clear selection
+	 * @param notify If true, triggers the selection changed callback
+	 */
+	void syncFromToolState(int toolId, bool notify = false);
+	
+	/**
 	 * Clear the selection (deselect all buttons in the group)
 	 * @param notify If true, triggers the selection changed callback
 	 */

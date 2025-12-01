@@ -116,6 +116,14 @@ enum {
 	ID_NAVIGATION_CUBE_CONFIG,
 	ID_ZOOM_SPEED,
 	ID_NAVIGATION_MODE,
+	ID_NAVIGATION_STYLE_GESTURE,
+	ID_NAVIGATION_STYLE_INVENTOR,
+	ID_NAVIGATION_STYLE_CAD,
+	ID_NAVIGATION_STYLE_TOUCHPAD,
+	ID_NAVIGATION_STYLE_MAYA,
+	ID_NAVIGATION_STYLE_BLENDER,
+	ID_NAVIGATION_STYLE_REVIT,
+	ID_NAVIGATION_STYLE_TINKERCAD,
 	ID_MESH_QUALITY_DIALOG,
 	ID_RENDERING_SETTINGS,
 	ID_EDGE_SETTINGS,
@@ -258,6 +266,9 @@ private:
 	
 	// Button group for selection/query tool buttons (mutually exclusive)
 	class ButtonGroup* m_selectionToolButtonGroup;  // Manages selection/query tool toggle button group
+	
+	// Button group for navigation style buttons (mutually exclusive)
+	class ButtonGroup* m_navigationStyleButtonGroup;  // Manages navigation style toggle button group
 
 protected:
 	// Async compute engine (protected for derived class access)
@@ -287,6 +298,9 @@ private:
 	void onClose(wxCloseEvent& event);
 	void onActivate(wxActivateEvent& event);
 	void onSize(wxSizeEvent& event);
+	
+	// Navigation style button group synchronization
+	void syncNavigationStyleButtonGroup();
 
 public:
 	// Message output methods
@@ -346,6 +360,9 @@ public:
 	void OnPerformancePreset(wxCommandEvent& event);
 	void OnBalancedPreset(wxCommandEvent& event);
 	void OnQualityPreset(wxCommandEvent& event);
+	
+	// Navigation style switch handler
+	void OnNavigationStyleSwitch(wxCommandEvent& event);
 
 	// Point view refresh handler
 	void OnPointViewToggled(ViewRefreshManager::RefreshReason reason);

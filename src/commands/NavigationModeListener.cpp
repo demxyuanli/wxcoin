@@ -3,6 +3,7 @@
 #include "NavigationModeManager.h"
 #include "CommandDispatcher.h"
 #include "logger/Logger.h"
+#include "config/ConfigManager.h"
 #include <wx/msgdlg.h>
 
 NavigationModeListener::NavigationModeListener() {
@@ -43,34 +44,54 @@ CommandResult NavigationModeListener::executeCommand(const std::string& commandT
 }
 
 void NavigationModeListener::showNavigationModeDialog(NavigationModeManager* navManager) {
-    // Create a simple dialog to select navigation mode
-    wxArrayString choices;
-    choices.Add("Gesture Navigation (Touch-friendly)");
-    choices.Add("Inventor Navigation (CAD-style)");
+    auto availableStyles = navManager->getAvailableStyles();
     
+    wxArrayString choices;
+    int currentSelection = 0;
     NavigationStyle currentStyle = navManager->getNavigationStyle();
-    int selection = static_cast<int>(currentStyle);
+    
+    for (size_t i = 0; i < availableStyles.size(); ++i) {
+        const auto& style = availableStyles[i];
+        choices.Add(wxString(style.second));
+        if (style.first == currentStyle) {
+            currentSelection = static_cast<int>(i);
+        }
+    }
     
     int choice = wxGetSingleChoiceIndex(
-        "Select Navigation Mode:",
-        "Navigation Mode Settings",
+        "Select Navigation Style:",
+        "Navigation Style Settings",
         choices,
-        selection,
+        currentSelection,
         wxTheApp->GetTopWindow()
     );
     
-    if (choice != wxNOT_FOUND) {
-        NavigationStyle newStyle = static_cast<NavigationStyle>(choice);
+    if (choice != wxNOT_FOUND && choice < static_cast<int>(availableStyles.size())) {
+        NavigationStyle newStyle = availableStyles[choice].first;
         navManager->setNavigationStyle(newStyle);
         
-        std::string modeName = (newStyle == NavigationStyle::GESTURE) ? "Gesture" : "Inventor";
-        LOG_INF_S("Navigation mode changed to: " + modeName);
+        std::string styleName = navManager->getCurrentStyleName();
+        LOG_INF_S("Navigation style changed to: " + styleName);
         
         wxMessageBox(
-            "Navigation mode changed to " + modeName + " Navigation",
-            "Navigation Mode",
+            "Navigation style changed to " + wxString(styleName),
+            "Navigation Style",
             wxOK | wxICON_INFORMATION
         );
+        
+        saveNavigationStyleToConfig(newStyle);
+    }
+}
+
+void NavigationModeListener::saveNavigationStyleToConfig(NavigationStyle style) {
+    try {
+        auto& config = ConfigManager::getInstance();
+        config.setInt("Navigation", "Style", static_cast<int>(style));
+        config.save();
+        LOG_INF_S("Navigation style saved to config: " + std::to_string(static_cast<int>(style)));
+    }
+    catch (const std::exception& e) {
+        LOG_ERR_S("Failed to save navigation style to config: " + std::string(e.what()));
     }
 }
 

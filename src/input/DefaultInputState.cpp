@@ -1,10 +1,10 @@
 #include "DefaultInputState.h"
 #include "MouseHandler.h"
-#include "NavigationController.h"
+#include "NavigationModeManager.h"
 #include <wx/event.h>
 
-DefaultInputState::DefaultInputState(MouseHandler* mouseHandler, NavigationController* navigationController)
-	: m_mouseHandler(mouseHandler), m_navigationController(navigationController) {
+DefaultInputState::DefaultInputState(MouseHandler* mouseHandler, NavigationModeManager* navigationModeManager)
+	: m_mouseHandler(mouseHandler), m_navigationModeManager(navigationModeManager) {
 }
 
 void DefaultInputState::onMouseButton(wxMouseEvent& event) {
@@ -26,8 +26,8 @@ void DefaultInputState::onMouseMotion(wxMouseEvent& event) {
 }
 
 void DefaultInputState::onMouseWheel(wxMouseEvent& event) {
-	if (m_navigationController) {
-		m_navigationController->handleMouseWheel(event);
+	if (m_navigationModeManager) {
+		m_navigationModeManager->handleMouseWheel(event);
 	}
 	else {
 		event.Skip();

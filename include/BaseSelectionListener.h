@@ -25,6 +25,9 @@ public:
 	virtual ~BaseSelectionListener();
 
 	virtual void onMouseWheel(wxMouseEvent& event) override;
+	
+	// Cleanup when tool is deactivated
+	virtual void deactivate() override;
 
 	// Clear highlight cache (call when configuration changes)
 	void clearHighlightCache();

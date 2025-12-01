@@ -1,11 +1,11 @@
 #include "ViewIsometricListener.h"
-#include "NavigationController.h"
+#include "NavigationModeManager.h"
 
-ViewIsometricListener::ViewIsometricListener(NavigationController* nav) : m_nav(nav) {}
+ViewIsometricListener::ViewIsometricListener(NavigationModeManager* nav) : m_nav(nav) {}
 
 CommandResult ViewIsometricListener::executeCommand(const std::string& commandType,
 	const std::unordered_map<std::string, std::string>&) {
-	if (!m_nav) return CommandResult(false, "Navigation controller not available", commandType);
+	if (!m_nav) return CommandResult(false, "Navigation mode manager not available", commandType);
 	m_nav->viewIsometric();
 	return CommandResult(true, "Isometric view applied", commandType);
 }

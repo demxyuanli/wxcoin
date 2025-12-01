@@ -254,41 +254,22 @@ void FlatFrame::onCommandFeedback(const CommandResult& result) {
 		LOG_INF_S("Render mode changed, ButtonGroup state updated: " + result.commandId);
 	}
 	
-	// Handle selection/query tool changes - update ButtonGroup state based on actual tool state
+	// Handle selection/query tool changes - sync ButtonGroup state from InputState
+	// Note: This is a fallback sync. The primary sync happens via InputManager state change callback
 	if (result.success && (
 		result.commandId == "FACE_SELECTION_TOOL" ||
 		result.commandId == "EDGE_SELECTION_TOOL" ||
 		result.commandId == "VERTEX_SELECTION_TOOL" ||
 		result.commandId == "FACE_QUERY_TOOL"
 	)) {
-		// Update button state based on actual tool activation state
+		// Sync ButtonGroup from current InputState (more reliable than parsing commandId)
 		if (m_selectionToolButtonGroup && m_canvas && m_canvas->getInputManager()) {
-			bool isToolActive = m_canvas->getInputManager()->isCustomInputStateActive();
+			int toolId = m_canvas->getInputManager()->getCurrentToolId();
+			// Use notify=false to avoid triggering callback during programmatic updates
+			m_selectionToolButtonGroup->syncFromToolState(toolId, false);
 			
-			if (isToolActive) {
-				// Tool is active, select the corresponding button
-				int buttonId = -1;
-				if (result.commandId == "FACE_SELECTION_TOOL") {
-					buttonId = ID_FACE_SELECTION_TOOL;
-				} else if (result.commandId == "EDGE_SELECTION_TOOL") {
-					buttonId = ID_EDGE_SELECTION_TOOL;
-				} else if (result.commandId == "VERTEX_SELECTION_TOOL") {
-					buttonId = ID_VERTEX_SELECTION_TOOL;
-				} else if (result.commandId == "FACE_QUERY_TOOL") {
-					buttonId = ID_FACE_QUERY_TOOL;
-				}
-				
-				if (buttonId >= 0) {
-					// Use notify=false to avoid triggering callback during programmatic updates
-					m_selectionToolButtonGroup->setSelectedButton(buttonId, false);
-				}
-			} else {
-				// Tool is deactivated, clear selection (deselect all buttons)
-				m_selectionToolButtonGroup->clearSelection(false);
-			}
-			
-			LOG_INF_S("Selection/Query tool changed, ButtonGroup state updated: " + result.commandId + 
-				" (active: " + std::string(isToolActive ? "true" : "false") + ")");
+			LOG_INF_S("Selection/Query tool changed, ButtonGroup synced from InputState: " + result.commandId + 
+				" (toolId: " + (toolId >= 0 ? std::to_string(toolId) : "none") + ")");
 		}
 	}
 

@@ -124,6 +124,24 @@ void ButtonGroup::syncFromButtonBar()
 	}
 }
 
+void ButtonGroup::syncFromToolState(int toolId, bool notify)
+{
+	if (toolId < 0) {
+		// Clear selection if toolId is -1
+		clearSelection(notify);
+		return;
+	}
+	
+	// Check if toolId corresponds to a registered button
+	if (isButtonRegistered(toolId)) {
+		// Update selection to match tool state
+		setSelectedButton(toolId, notify);
+	} else {
+		LOG_WRN_S("ButtonGroup::syncFromToolState: Tool ID " + std::to_string(toolId) + 
+			" does not correspond to a registered button");
+	}
+}
+
 void ButtonGroup::clearSelection(bool notify)
 {
 	if (!m_buttonBar) {

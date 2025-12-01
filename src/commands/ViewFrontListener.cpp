@@ -1,13 +1,13 @@
 #include "ViewFrontListener.h"
-#include "NavigationController.h"
+#include "NavigationModeManager.h"
 #include "CommandErrorHelper.h"
 
-ViewFrontListener::ViewFrontListener(NavigationController* nav) : m_nav(nav) {}
+ViewFrontListener::ViewFrontListener(NavigationModeManager* nav) : m_nav(nav) {}
 
 CommandResult ViewFrontListener::executeCommand(const std::string& commandType,
 	const std::unordered_map<std::string, std::string>&) {
-	// Use unified error handling to check if navigation controller is available
-	CHECK_PTR_RETURN(m_nav, "Navigation controller", commandType);
+	// Use unified error handling to check if navigation mode manager is available
+	CHECK_PTR_RETURN(m_nav, "Navigation mode manager", commandType);
 
 	// Execute command
 	m_nav->viewFront();

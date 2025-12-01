@@ -391,13 +391,54 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	animationPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* animationButtonBar = new FlatUIButtonBar(animationPanel);
 	animationButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
-	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_LINEAR, "Linear", "linear", wxSize(16, 16), nullptr, "Set linear animation");
+	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_LINEAR, "Linear", "linears", wxSize(16, 16), nullptr, "Set linear animation");
 	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_SMOOTH, "Smooth", "smooth", wxSize(16, 16), nullptr, "Set smooth animation");
 	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_IN, "Ease In", "ease-in", wxSize(16, 16), nullptr, "Set ease-in animation");
 	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_EASE_OUT, "Ease Out", "ease-out", wxSize(16, 16), nullptr, "Set ease-out animation");
 	animationButtonBar->AddButtonWithSVG(ID_ANIMATION_TYPE_BOUNCE, "Bounce", "bounce", wxSize(16, 16), nullptr, "Set bounce animation");
 	animationPanel->AddButtonBar(animationButtonBar, 0, wxEXPAND | wxALL, 5);
 	navigatorPage->AddPanel(animationPanel);
+
+	// Navigation style panel
+	FlatUIPanel* navigationStylePanel = new FlatUIPanel(navigatorPage, "Navigation Style", wxHORIZONTAL);
+	navigationStylePanel->SetFont(CFG_DEFAULTFONT());
+	navigationStylePanel->SetPanelBorderWidths(0, 0, 0, 1);
+	navigationStylePanel->SetHeaderStyle(PanelHeaderStyle::BOTTOM_CENTERED);
+	navigationStylePanel->SetHeaderColour(CFG_COLOUR("PanelHeaderColour"));
+	navigationStylePanel->SetHeaderTextColour(CFG_COLOUR("PanelHeaderTextColour"));
+	navigationStylePanel->SetHeaderBorderWidths(0, 0, 0, 0);
+	FlatUIButtonBar* navigationStyleButtonBar = new FlatUIButtonBar(navigationStylePanel);
+	navigationStyleButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	
+	constexpr int kNavigationStyleToggleGroup = 2;
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_GESTURE, "Gesture", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "Gesture navigation - Left: Rotate, Right: Pan, Wheel: Zoom");
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_INVENTOR, "Inventor", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "Inventor navigation with rotation center");
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_CAD, "CAD", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "CAD navigation - Left: Rotate, Middle: Pan, Right: Zoom");
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_TOUCHPAD, "Touchpad", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "Touchpad navigation - Left: Rotate, Ctrl+Left: Pan, Right: Zoom");
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_MAYA, "Maya", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "Maya navigation - Alt+Left: Rotate, Alt+Middle: Pan, Alt+Right: Zoom");
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_BLENDER, "Blender", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "Blender navigation - Middle: Rotate, Shift+Middle: Pan, Ctrl+Middle: Zoom");
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_REVIT, "Revit", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "Revit navigation - Shift+Right: Rotate, Middle: Pan, Ctrl+Right: Zoom");
+	navigationStyleButtonBar->AddToggleGroupButtonWithSVG(ID_NAVIGATION_STYLE_TINKERCAD, "TinkerCAD", "mouse-circle", wxSize(16, 16), kNavigationStyleToggleGroup, false, "TinkerCAD navigation - Right: Rotate, Middle: Pan");
+	navigationStyleButtonBar->AddButtonWithSVG(ID_NAVIGATION_MODE, "More...", "settings", wxSize(16, 16), nullptr, "Open navigation style selection dialog with all options");
+	
+	navigationStylePanel->AddButtonBar(navigationStyleButtonBar, 0, wxEXPAND | wxALL, 5);
+	navigatorPage->AddPanel(navigationStylePanel);
+	
+	// Create ButtonGroup to manage navigation style buttons with mutual exclusivity
+	m_navigationStyleButtonGroup = new ButtonGroup(navigationStyleButtonBar, kNavigationStyleToggleGroup);
+	m_navigationStyleButtonGroup->registerButtons({
+		ID_NAVIGATION_STYLE_GESTURE,
+		ID_NAVIGATION_STYLE_INVENTOR,
+		ID_NAVIGATION_STYLE_CAD,
+		ID_NAVIGATION_STYLE_TOUCHPAD,
+		ID_NAVIGATION_STYLE_MAYA,
+		ID_NAVIGATION_STYLE_BLENDER,
+		ID_NAVIGATION_STYLE_REVIT,
+		ID_NAVIGATION_STYLE_TINKERCAD
+	});
+	
+	// Set initial button state based on current navigation style (will be set after NavigationModeManager is created)
+	// This will be synchronized in createPanels() after NavigationModeManager is initialized
 
 	m_ribbon->AddPage(navigatorPage);
 
@@ -503,7 +544,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	toolsButtonBar->AddButtonWithSVG(ID_MESH_QUALITY_DIALOG, "Mesh Quality", "mesh", wxSize(16, 16), nullptr, "Open mesh quality dialog");
 	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_CUBE_CONFIG, "Nav Cube", "navi", wxSize(16, 16), nullptr, "Configure navigation cube");
 	toolsButtonBar->AddButtonWithSVG(ID_ZOOM_SPEED, "Zoom Speed", "zoom-settings", wxSize(16, 16), nullptr, "Adjust zoom speed settings");
-	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_MODE, "Navigation Mode", "mouse-circle", wxSize(16, 16), nullptr, "Switch between Gesture and Inventor navigation modes");
+	toolsButtonBar->AddButtonWithSVG(ID_NAVIGATION_MODE, "Navigation Mode", "mouse-circle", wxSize(16, 16), nullptr, "Select navigation style: Gesture, Inventor, CAD, Touchpad, Maya, Blender, Revit, or TinkerCAD");
 	toolsButtonBar->AddButtonWithSVG(ID_RENDERING_SETTINGS, "Rendering Settings", "rendering", wxSize(16, 16), nullptr, "Configure material, lighting and texture settings");
 	toolsButtonBar->AddButtonWithSVG(ID_LIGHTING_SETTINGS, "Lighting Settings", "light", wxSize(16, 16), nullptr, "Configure scene lighting and environment settings");
 	toolsButtonBar->AddButtonWithSVG(ID_EDGE_SETTINGS, "Edge Settings", "edge-settings", wxSize(16, 16), nullptr, "Configure edge color, width and style settings");
@@ -753,6 +794,9 @@ void FlatFrame::createPanels() {
 	m_navigationModeManager = new NavigationModeManager(m_canvas, m_canvas->getSceneManager());
 	m_mouseHandler->setNavigationModeManager(m_navigationModeManager);
 	
+	// Set NavigationModeManager for InputManager (preferred over NavigationController)
+	m_canvas->getInputManager()->setNavigationModeManager(m_navigationModeManager);
+	
 	// Keep backward compatibility with direct NavigationController
 	NavigationController* navController = m_navigationModeManager->getCurrentController();
 	m_canvas->getInputManager()->setNavigationController(navController);
@@ -799,8 +843,26 @@ void FlatFrame::createPanels() {
 		});
 	}
 
+	// Setup InputManager state change callback for ButtonGroup synchronization
+	if (m_canvas && m_canvas->getInputManager() && m_selectionToolButtonGroup) {
+		m_canvas->getInputManager()->setStateChangeCallback([this](InputState* oldState, InputState* newState) {
+			// Sync ButtonGroup when InputState changes
+			if (m_selectionToolButtonGroup && m_canvas && m_canvas->getInputManager()) {
+				int toolId = m_canvas->getInputManager()->getCurrentToolId();
+				// Use notify=false to avoid triggering button callbacks during programmatic sync
+				m_selectionToolButtonGroup->syncFromToolState(toolId, false);
+				LOG_INF_S("ButtonGroup synced from InputState change (toolId: " + 
+					(toolId >= 0 ? std::to_string(toolId) : "none") + ")");
+			}
+		});
+		LOG_INF_S("InputManager state change callback set for ButtonGroup synchronization");
+	}
+
 	// Setup keyboard shortcuts
 	SetupKeyboardShortcuts();
+	
+	// Synchronize navigation style button group with current navigation style
+	syncNavigationStyleButtonGroup();
 }
 
 void FlatFrame::SetupKeyboardShortcuts()

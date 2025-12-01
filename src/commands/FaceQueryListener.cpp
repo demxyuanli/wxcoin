@@ -137,3 +137,14 @@ void FaceQueryListener::onMouseWheel(wxMouseEvent& event) {
 	// For now, just pass through mouse wheel events
 	event.Skip();
 }
+
+void FaceQueryListener::deactivate() {
+	LOG_INF_S("FaceQueryListener::deactivate - Cleaning up face query tool");
+	
+	// Clear face info overlay when tool is deactivated
+	if (m_canvas && m_canvas->getFaceInfoOverlay()) {
+		m_canvas->getFaceInfoOverlay()->clear();
+		m_canvas->Refresh(false); // Refresh to remove overlay display
+		LOG_INF_S("FaceQueryListener::deactivate - Cleared face info overlay");
+	}
+}

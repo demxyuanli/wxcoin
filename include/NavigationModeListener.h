@@ -15,4 +15,5 @@ public:
 
 private:
     void showNavigationModeDialog(NavigationModeManager* navManager);
+    void saveNavigationStyleToConfig(NavigationStyle style);
 };

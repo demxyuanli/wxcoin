@@ -61,3 +61,16 @@ void BaseSelectionListener::clearHighlightCache() {
 	LOG_INF_S("BaseSelectionListener::clearHighlightCache - Cache cleared");
 }
 
+void BaseSelectionListener::deactivate() {
+	LOG_INF_S("BaseSelectionListener::deactivate - Cleaning up selection tool");
+	
+	// Clear highlights and selections when tool is deactivated
+	clearHighlight();
+	clearSelection();
+	
+	// Clear highlight cache to free resources
+	clearHighlightCache();
+	
+	LOG_INF_S("BaseSelectionListener::deactivate - Cleanup completed");
+}
+

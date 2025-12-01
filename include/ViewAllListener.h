@@ -3,11 +3,11 @@
 #include "CommandListener.h"
 #include "CommandType.h"
 
-class NavigationController;
+class NavigationModeManager;
 
 class ViewAllListener : public CommandListener {
 public:
-	explicit ViewAllListener(NavigationController* nav);
+	explicit ViewAllListener(NavigationModeManager* nav);
 	~ViewAllListener() override = default;
 
 	CommandResult executeCommand(const std::string& commandType,
@@ -16,5 +16,5 @@ public:
 	std::string getListenerName() const override { return "ViewAllListener"; }
 
 private:
-	NavigationController* m_nav;
+	NavigationModeManager* m_nav;
 };

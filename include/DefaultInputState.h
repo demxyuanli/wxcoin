@@ -3,11 +3,11 @@
 #include "InputState.h"
 
 class MouseHandler;
-class NavigationController;
+class NavigationModeManager;
 
 class DefaultInputState : public InputState {
 public:
-	DefaultInputState(MouseHandler* mouseHandler, NavigationController* navigationController);
+	DefaultInputState(MouseHandler* mouseHandler, NavigationModeManager* navigationModeManager);
 
 	void onMouseButton(wxMouseEvent& event) override;
 	void onMouseMotion(wxMouseEvent& event) override;
@@ -15,5 +15,5 @@ public:
 
 private:
 	MouseHandler* m_mouseHandler;
-	NavigationController* m_navigationController;
+	NavigationModeManager* m_navigationModeManager;
 };

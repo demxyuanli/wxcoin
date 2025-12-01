@@ -92,11 +92,11 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::CreateWrench, createWrenchListener);
 	m_listenerManager->registerListener(cmd::CommandType::CreateNavCube, createNavCubeListener);
 
-	auto viewAllListener = std::make_shared<ViewAllListener>(m_canvas->getInputManager()->getNavigationController());
-	auto viewTopListener = std::make_shared<ViewTopListener>(m_canvas->getInputManager()->getNavigationController());
-	auto viewFrontListener = std::make_shared<ViewFrontListener>(m_canvas->getInputManager()->getNavigationController());
-	auto viewRightListener = std::make_shared<ViewRightListener>(m_canvas->getInputManager()->getNavigationController());
-	auto viewIsoListener = std::make_shared<ViewIsometricListener>(m_canvas->getInputManager()->getNavigationController());
+	auto viewAllListener = std::make_shared<ViewAllListener>(m_navigationModeManager);
+	auto viewTopListener = std::make_shared<ViewTopListener>(m_navigationModeManager);
+	auto viewFrontListener = std::make_shared<ViewFrontListener>(m_navigationModeManager);
+	auto viewRightListener = std::make_shared<ViewRightListener>(m_navigationModeManager);
+	auto viewIsoListener = std::make_shared<ViewIsometricListener>(m_navigationModeManager);
 
 	// New navigation features
 	auto viewBookmarkListener = std::make_shared<ViewBookmarkListener>();

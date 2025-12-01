@@ -36,6 +36,7 @@ wxIcon FlatFrame::s_applicationIcon;
 #include "ObjectTreePanel.h"
 #include "MouseHandler.h"
 #include "NavigationController.h"
+#include "NavigationModeManager.h"
 #include "GeometryFactory.h"
 #include "InputManager.h"
 #include "SceneManager.h"
@@ -175,6 +176,14 @@ EVT_BUTTON(ID_REDO, FlatFrame::onCommand)
 EVT_BUTTON(ID_NAVIGATION_CUBE_CONFIG, FlatFrame::onCommand)
 EVT_BUTTON(ID_ZOOM_SPEED, FlatFrame::onCommand)
 EVT_BUTTON(ID_NAVIGATION_MODE, FlatFrame::onCommand)
+EVT_BUTTON(ID_NAVIGATION_STYLE_GESTURE, FlatFrame::OnNavigationStyleSwitch)
+EVT_BUTTON(ID_NAVIGATION_STYLE_INVENTOR, FlatFrame::OnNavigationStyleSwitch)
+EVT_BUTTON(ID_NAVIGATION_STYLE_CAD, FlatFrame::OnNavigationStyleSwitch)
+EVT_BUTTON(ID_NAVIGATION_STYLE_TOUCHPAD, FlatFrame::OnNavigationStyleSwitch)
+EVT_BUTTON(ID_NAVIGATION_STYLE_MAYA, FlatFrame::OnNavigationStyleSwitch)
+EVT_BUTTON(ID_NAVIGATION_STYLE_BLENDER, FlatFrame::OnNavigationStyleSwitch)
+EVT_BUTTON(ID_NAVIGATION_STYLE_REVIT, FlatFrame::OnNavigationStyleSwitch)
+EVT_BUTTON(ID_NAVIGATION_STYLE_TINKERCAD, FlatFrame::OnNavigationStyleSwitch)
 EVT_BUTTON(ID_MESH_QUALITY_DIALOG, FlatFrame::onCommand)
 EVT_BUTTON(ID_RENDERING_SETTINGS, FlatFrame::onCommand)
 EVT_BUTTON(ID_LIGHTING_SETTINGS, FlatFrame::onCommand)
@@ -250,7 +259,8 @@ FlatFrame::FlatFrame(const wxString& title, const wxPoint& pos, const wxSize& si
 	m_prevFeatureEdgesRunning(false),
 	m_featureProgressHoldTicks(0),
 	m_renderModeButtonGroup(nullptr),
-	m_selectionToolButtonGroup(nullptr)
+	m_selectionToolButtonGroup(nullptr),
+	m_navigationStyleButtonGroup(nullptr)
 {
 	wxInitAllImageHandlers();
 
@@ -341,6 +351,11 @@ FlatFrame::~FlatFrame()
 		delete m_selectionToolButtonGroup;
 		m_selectionToolButtonGroup = nullptr;
 	}
+	
+	if (m_navigationStyleButtonGroup) {
+		delete m_navigationStyleButtonGroup;
+		m_navigationStyleButtonGroup = nullptr;
+	}
 
 	// Unbind events to prevent access violations
 	auto& eventManager = FlatUIEventManager::getInstance();
@@ -354,6 +369,36 @@ FlatFrame::~FlatFrame()
 	}
 
 
+	// Clean up raw pointer members to prevent memory leaks
+	// Note: Cleanup order matters - destroy dependent objects first
+	if (m_canvas && m_canvas->getInputManager()) {
+		// Clear input manager dependencies before destroying handlers
+		// This prevents InputStates from accessing destroyed objects
+		m_canvas->getInputManager()->clearDependencies();
+	}
+	
+	if (m_mouseHandler) {
+		delete m_mouseHandler;
+		m_mouseHandler = nullptr;
+	}
+	
+	if (m_navigationModeManager) {
+		delete m_navigationModeManager;
+		m_navigationModeManager = nullptr;
+	}
+	
+	if (m_geometryFactory) {
+		delete m_geometryFactory;
+		m_geometryFactory = nullptr;
+	}
+	
+	// Note: m_occViewer is owned by Canvas via setOCCViewer()
+	// Canvas will handle its destruction, so we don't delete it here
+	// m_occViewer = nullptr; // Just clear the pointer reference
+	
+	// Note: m_canvas, m_objectTreePanel, m_propertyPanel are wxWidgets child windows
+	// They are automatically destroyed by wxWidgets parent-child relationship
+	
 	LOG_DBG("FlatFrame destruction completed.", "FlatFrame");
 	delete m_commandManager;
 }
@@ -935,6 +980,93 @@ void FlatFrame::OnQualityPreset(wxCommandEvent& event)
 		m_occViewer->setLODFineDeflection(0.1);
 		m_occViewer->setParallelProcessing(true);
 		appendMessage("Applied Quality Preset (Alt+3)");
+	}
+}
+
+void FlatFrame::OnNavigationStyleSwitch(wxCommandEvent& event)
+{
+	if (!m_navigationModeManager) {
+		return;
+	}
+	
+	int buttonId = event.GetId();
+	NavigationStyle newStyle = NavigationStyle::GESTURE;
+	
+	switch (buttonId) {
+	case ID_NAVIGATION_STYLE_GESTURE:
+		newStyle = NavigationStyle::GESTURE;
+		break;
+	case ID_NAVIGATION_STYLE_INVENTOR:
+		newStyle = NavigationStyle::INVENTOR;
+		break;
+	case ID_NAVIGATION_STYLE_CAD:
+		newStyle = NavigationStyle::CAD;
+		break;
+	case ID_NAVIGATION_STYLE_TOUCHPAD:
+		newStyle = NavigationStyle::TOUCHPAD;
+		break;
+	case ID_NAVIGATION_STYLE_MAYA:
+		newStyle = NavigationStyle::MAYA_GESTURE;
+		break;
+	case ID_NAVIGATION_STYLE_BLENDER:
+		newStyle = NavigationStyle::BLENDER;
+		break;
+	case ID_NAVIGATION_STYLE_REVIT:
+		newStyle = NavigationStyle::REVIT;
+		break;
+	case ID_NAVIGATION_STYLE_TINKERCAD:
+		newStyle = NavigationStyle::TINKERCAD;
+		break;
+	default:
+		return;
+	}
+	
+	m_navigationModeManager->setNavigationStyle(newStyle);
+	syncNavigationStyleButtonGroup();
+	
+	std::string styleName = m_navigationModeManager->getCurrentStyleName();
+	appendMessage(wxString("Navigation style switched to: ") + wxString(styleName));
+}
+
+void FlatFrame::syncNavigationStyleButtonGroup() {
+	if (!m_navigationStyleButtonGroup || !m_navigationModeManager) {
+		return;
+	}
+	
+	NavigationStyle currentStyle = m_navigationModeManager->getNavigationStyle();
+	int buttonId = -1;
+	
+	switch (currentStyle) {
+	case NavigationStyle::GESTURE:
+		buttonId = ID_NAVIGATION_STYLE_GESTURE;
+		break;
+	case NavigationStyle::INVENTOR:
+		buttonId = ID_NAVIGATION_STYLE_INVENTOR;
+		break;
+	case NavigationStyle::CAD:
+		buttonId = ID_NAVIGATION_STYLE_CAD;
+		break;
+	case NavigationStyle::TOUCHPAD:
+		buttonId = ID_NAVIGATION_STYLE_TOUCHPAD;
+		break;
+	case NavigationStyle::MAYA_GESTURE:
+		buttonId = ID_NAVIGATION_STYLE_MAYA;
+		break;
+	case NavigationStyle::BLENDER:
+		buttonId = ID_NAVIGATION_STYLE_BLENDER;
+		break;
+	case NavigationStyle::REVIT:
+		buttonId = ID_NAVIGATION_STYLE_REVIT;
+		break;
+	case NavigationStyle::TINKERCAD:
+		buttonId = ID_NAVIGATION_STYLE_TINKERCAD;
+		break;
+	default:
+		break;
+	}
+	
+	if (buttonId >= 0) {
+		m_navigationStyleButtonGroup->setSelectedButton(buttonId, false);
 	}
 }
 

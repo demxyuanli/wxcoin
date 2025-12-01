@@ -14,6 +14,9 @@ public:
 	virtual void onMouseButton(wxMouseEvent& event) override;
 	virtual void onMouseMotion(wxMouseEvent& event) override;
 	virtual void onMouseWheel(wxMouseEvent& event) override;
+	
+	// Cleanup when tool is deactivated
+	virtual void deactivate() override;
 
 private:
 	class Canvas* m_canvas;
