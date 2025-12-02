@@ -49,6 +49,7 @@ struct DisplaySettings {
     bool facesVisible{true};
     bool visible{true};
     bool selected{false};
+    bool forceCustomColor{false};  // Force use of custom colors even when selected
     double wireframeWidth{1.0};
     Quantity_Color wireframeColor{0.0, 0.0, 0.0, Quantity_TOC_RGB};
     bool cullFace{true};
@@ -116,6 +117,7 @@ struct GeometryRenderContext {
         ctx.display.facesVisible = geom.isFacesVisible();
         ctx.display.visible = geom.isVisible();
         ctx.display.selected = geom.isSelected();
+        ctx.display.forceCustomColor = geom.shouldForceCustomColor();
         ctx.display.wireframeWidth = geom.getWireframeWidth();
         ctx.display.wireframeColor = geom.getWireframeColor();
         ctx.display.cullFace = geom.isCullFaceEnabled();

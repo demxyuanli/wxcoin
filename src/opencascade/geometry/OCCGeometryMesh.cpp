@@ -83,26 +83,36 @@ void OCCGeometryMesh::regenerateMesh(const TopoDS_Shape& shape, const MeshParame
 void OCCGeometryMesh::buildCoinRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     auto buildStartTime = std::chrono::high_resolution_clock::now();
-    
+    LOG_INF_S("OCCGeometryMesh::buildCoinRepresentation - Starting Coin3D representation build");
+
     if (shape.IsNull()) {
+        LOG_WRN_S("OCCGeometryMesh::buildCoinRepresentation - Shape is null, cannot build representation");
         return;
     }
-    
+
     // Create or clear coin node
     if (!m_coinNode) {
         m_coinNode = new SoSeparator();
         m_coinNode->ref();
+        LOG_INF_S("OCCGeometryMesh::buildCoinRepresentation - Created new Coin3D separator node");
     } else {
         m_coinNode->removeAllChildren();
+        LOG_INF_S("OCCGeometryMesh::buildCoinRepresentation - Cleared existing Coin3D separator node");
     }
     
     // Clean up any existing texture nodes to prevent memory issues
+    int removedTextureNodes = 0;
     for (int i = m_coinNode->getNumChildren() - 1; i >= 0; --i) {
         SoNode* child = m_coinNode->getChild(i);
         if (child && (child->isOfType(SoTexture2::getClassTypeId()) ||
             child->isOfType(SoTextureCoordinate2::getClassTypeId()))) {
             m_coinNode->removeChild(i);
+            removedTextureNodes++;
         }
+    }
+    if (removedTextureNodes > 0) {
+        LOG_INF_S("OCCGeometryMesh::buildCoinRepresentation - Cleaned up " +
+            std::to_string(removedTextureNodes) + " texture nodes");
     }
 
     // NOTE: Transform, material, and style nodes need to be added by the caller
@@ -113,18 +123,25 @@ void OCCGeometryMesh::buildCoinRepresentation(const TopoDS_Shape& shape, const M
     auto& manager = RenderingToolkitAPI::getManager();
     auto backend = manager.getRenderBackend("Coin3D");
     if (backend) {
+        LOG_INF_S("OCCGeometryMesh::buildCoinRepresentation - Creating scene node via Coin3D backend");
         auto sceneNode = backend->createSceneNode(shape, params);
         if (sceneNode) {
             SoSeparator* meshNode = sceneNode.get();
             meshNode->ref();
             m_coinNode->addChild(meshNode);
+            LOG_INF_S("OCCGeometryMesh::buildCoinRepresentation - Added mesh node to Coin3D separator");
+        } else {
+            LOG_ERR_S("OCCGeometryMesh::buildCoinRepresentation - Failed to create scene node");
         }
+    } else {
+        LOG_ERR_S("OCCGeometryMesh::buildCoinRepresentation - Coin3D backend not available");
     }
 
     // Set update flags
     m_coinNeedsUpdate = false;
     m_meshRegenerationNeeded = false;
     m_lastMeshParams = params;
+    LOG_INF_S("OCCGeometryMesh::buildCoinRepresentation - Build completed, updated flags set");
     
     auto buildEndTime = std::chrono::high_resolution_clock::now();
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
@@ -170,7 +187,7 @@ void OCCGeometryMesh::buildCoinRepresentation(
         // Use the material-aware version to preserve custom material settings
         auto sceneNode = backend->createSceneNode(shape, params, false,
             diffuseColor, ambientColor, specularColor, emissiveColor,
-            shininess, transparency);
+            shininess, transparency, false);
         if (sceneNode) {
             SoSeparator* meshNode = sceneNode.get();
             meshNode->ref();
@@ -190,7 +207,10 @@ void OCCGeometryMesh::buildCoinRepresentation(
 void OCCGeometryMesh::updateCoinRepresentationIfNeeded(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     if (m_meshRegenerationNeeded || m_coinNeedsUpdate) {
+        LOG_INF_S("OCCGeometryMesh::updateCoinRepresentationIfNeeded - Mesh regeneration needed, rebuilding Coin3D representation");
         buildCoinRepresentation(shape, params);
+    } else {
+        LOG_INF_S("OCCGeometryMesh::updateCoinRepresentationIfNeeded - No regeneration needed, skipping rebuild");
     }
 }
 
@@ -671,7 +691,8 @@ void OCCGeometryMesh::buildCoinRepresentation(
         auto sceneNode = backend->createSceneNode(shape, params, ctx.display.selected,
             ctx.material.diffuseColor, ctx.material.ambientColor,
             ctx.material.specularColor, ctx.material.emissiveColor,
-            ctx.material.shininess, ctx.material.transparency);
+            ctx.material.shininess, ctx.material.transparency,
+            ctx.display.forceCustomColor);
         if (sceneNode && shouldShowFaces) {
             SoSeparator* meshNode = sceneNode.get();
             meshNode->ref();

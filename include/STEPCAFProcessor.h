@@ -143,6 +143,8 @@ private:
      * @param geometries Output geometries
      * @param entityMetadata Output metadata
      * @param componentIndex Starting component index
+     * @param colorTool Color tool for extracting face-level colors (optional)
+     * @param shapeTool Shape tool for finding labels (optional)
      * @return Updated component index
      */
     static int createGeometriesFromParts(
@@ -156,7 +158,9 @@ private:
         const std::function<Quantity_Color(const std::string&, const Quantity_Color*)>& makeColorForName,
         std::vector<std::shared_ptr<OCCGeometry>>& geometries,
         std::vector<STEPReader::STEPEntityInfo>& entityMetadata,
-        int componentIndex);
+        int componentIndex,
+        const Handle(XCAFDoc_ColorTool)& colorTool = nullptr,
+        const Handle(XCAFDoc_ShapeTool)& shapeTool = nullptr);
 
     /**
      * @brief Detect if a shape is a shell model

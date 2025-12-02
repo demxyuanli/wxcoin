@@ -40,13 +40,14 @@ void Coin3DBackendImpl::shutdown() {
 SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TriangleMesh& mesh, bool selected,
 	const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 	const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-	double shininess, double transparency) {
+	double shininess, double transparency,
+	bool forceCustomColor) {
 	if (mesh.isEmpty()) {
 		LOG_WRN_S("Cannot create Coin3D node from empty mesh");
 		return SoSeparatorPtr(nullptr, SoSeparatorDeleter());
 	}
 
-	SoSeparator* node = createCoinNode(mesh, selected, diffuseColor, ambientColor, specularColor, emissiveColor, shininess, transparency);
+	SoSeparator* node = createCoinNode(mesh, selected, diffuseColor, ambientColor, specularColor, emissiveColor, shininess, transparency, forceCustomColor);
 	if (node) {
 		return SoSeparatorPtr(node, SoSeparatorDeleter());
 	}
@@ -105,7 +106,8 @@ SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TopoDS_Shape& shape,
 	bool selected,
 	const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 	const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-	double shininess, double transparency) {
+	double shininess, double transparency,
+	bool forceCustomColor) {
 	if (shape.IsNull()) {
 		LOG_WRN_S("Cannot create Coin3D node from null shape");
 		return SoSeparatorPtr(nullptr, SoSeparatorDeleter());
@@ -123,7 +125,7 @@ SoSeparatorPtr Coin3DBackendImpl::createSceneNode(const TopoDS_Shape& shape,
 
 	// Create scene node from mesh with custom material
 	Quantity_Color defaultEmissive(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-	return createSceneNode(mesh, selected, diffuseColor, ambientColor, specularColor, defaultEmissive, shininess, transparency);
+	return createSceneNode(mesh, selected, diffuseColor, ambientColor, specularColor, defaultEmissive, shininess, transparency, forceCustomColor);
 }
 
 void Coin3DBackendImpl::setEdgeSettings(bool show, double angle) {
@@ -149,7 +151,8 @@ bool Coin3DBackendImpl::isAvailable() const {
 SoSeparator* Coin3DBackendImpl::createCoinNode(const TriangleMesh& mesh, bool selected,
 	const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 	const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-	double shininess, double transparency) {
+	double shininess, double transparency,
+	bool forceCustomColor) {
 	if (mesh.isEmpty()) {
 		LOG_WRN_S("Cannot create Coin3D node from empty mesh");
 		return nullptr;
@@ -159,7 +162,7 @@ SoSeparator* Coin3DBackendImpl::createCoinNode(const TriangleMesh& mesh, bool se
 	root->ref();
 
 	// Build common structure with custom material
-	buildCoinNodeStructure(root, mesh, selected, diffuseColor, ambientColor, specularColor, emissiveColor, shininess, transparency);
+	buildCoinNodeStructure(root, mesh, selected, diffuseColor, ambientColor, specularColor, emissiveColor, shininess, transparency, forceCustomColor);
 
 	root->unrefNoDelete();
 	return root;
@@ -300,7 +303,8 @@ SoIndexedLineSet* Coin3DBackendImpl::createEdgeSetNode(const TriangleMesh& mesh)
 void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected,
 	const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 	const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-	double shininess, double transparency) {
+	double shininess, double transparency,
+	bool forceCustomColor) {
 	if (!node || mesh.isEmpty()) {
 		return;
 	}
@@ -335,30 +339,39 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
 
 	// Add material node with custom properties
 	SoMaterial* material = new SoMaterial;
-	if (selected) {
+	if (selected && !forceCustomColor) {
+		LOG_INF_S("Coin3DBackendImpl::createSceneNode - Creating material for SELECTED geometry");
 		// Selected geometry - use colors from configuration
 		if (SelectionColorConfig::getInstance().isInitialized()) {
 			float r, g, b;
-			
+
 			// Use diffuse color from config
 			SelectionColorConfig::getInstance().getSelectedGeometryDiffuseColor(r, g, b);
 			material->diffuseColor.setValue(r, g, b);
-			
+			LOG_INF_S("Coin3DBackendImpl::createSceneNode - Selected geometry diffuse color: RGB(" +
+				std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ")");
+
 			// Use ambient color from config
 			SelectionColorConfig::getInstance().getSelectedGeometryAmbientColor(r, g, b);
 			material->ambientColor.setValue(r, g, b);
-			
+			LOG_INF_S("Coin3DBackendImpl::createSceneNode - Selected geometry ambient color: RGB(" +
+				std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ")");
+
 			// Use specular color from config
 			SelectionColorConfig::getInstance().getSelectedGeometrySpecularColor(r, g, b);
 			material->specularColor.setValue(r, g, b);
-			
+
 			// Use emissive color from config
 			SelectionColorConfig::getInstance().getSelectedGeometryEmissiveColor(r, g, b);
 			material->emissiveColor.setValue(r, g, b);
-			
+
 			// Use transparency and shininess from config
-			material->transparency.setValue(SelectionColorConfig::getInstance().getSelectedGeometryTransparency());
-			material->shininess.setValue(SelectionColorConfig::getInstance().getSelectedGeometryShininess());
+			float transparency = SelectionColorConfig::getInstance().getSelectedGeometryTransparency();
+			float shininess = SelectionColorConfig::getInstance().getSelectedGeometryShininess();
+			material->transparency.setValue(transparency);
+			material->shininess.setValue(shininess);
+			LOG_INF_S("Coin3DBackendImpl::createSceneNode - Selected geometry transparency: " +
+				std::to_string(transparency) + ", shininess: " + std::to_string(shininess));
 		}
 		else {
 			// Fallback to default light yellow color if config not available
@@ -368,13 +381,22 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
 			material->shininess.setValue(0.8f);                 // High shininess for highlight
 			material->transparency.setValue(0.0f);              // No transparency for selected
 			material->emissiveColor.setValue(0.2f, 0.2f, 0.1f); // Slight yellow emission for glow effect
+			LOG_INF_S("Coin3DBackendImpl::createSceneNode - Using fallback selection colors (light yellow)");
 		}
 	}
+	else if (selected && forceCustomColor) {
+		// Selected geometry but force custom color (e.g., after color modification)
+		LOG_INF_S("Coin3DBackendImpl::createSceneNode - Selected geometry but forcing custom colors");
+		// Fall through to use custom colors below
+	}
 	else {
+		LOG_INF_S("Coin3DBackendImpl::createSceneNode - Creating material for NON-SELECTED geometry");
 		// Use custom material properties including emissive color
 		Standard_Real r, g, b;
 		diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
 		material->diffuseColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
+		LOG_INF_S("Coin3DBackendImpl::createSceneNode - Non-selected geometry diffuse color: RGB(" +
+			std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) + ")");
 
 		ambientColor.Values(r, g, b, Quantity_TOC_RGB);
 		material->ambientColor.setValue(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b));
@@ -387,6 +409,8 @@ void Coin3DBackendImpl::buildCoinNodeStructure(SoSeparator* node, const Triangle
 
 		material->shininess.setValue(static_cast<float>(shininess));
 		material->transparency.setValue(static_cast<float>(transparency));
+		LOG_INF_S("Coin3DBackendImpl::createSceneNode - Non-selected geometry shininess: " +
+			std::to_string(shininess) + ", transparency: " + std::to_string(transparency));
 	}
 	node->addChild(material);
 

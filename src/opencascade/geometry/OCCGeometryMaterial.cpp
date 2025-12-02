@@ -98,39 +98,54 @@ void OCCGeometryMaterial::updateMaterialForLighting()
 
 void OCCGeometryMaterial::updateCoinMaterial()
 {
-    if (!m_coinMaterial) return;
-    
+    if (!m_coinMaterial) {
+        LOG_WRN_S("OCCGeometryMaterial::updateCoinMaterial - Coin material is null, cannot update");
+        return;
+    }
+
+    LOG_INF_S("OCCGeometryMaterial::updateCoinMaterial - Updating Coin3D material properties");
+
     // Set ambient color (no enhancement here, will be applied in buildCoinRepresentation)
     m_coinMaterial->ambientColor.setValue(
         static_cast<float>(m_materialAmbientColor.Red()),
         static_cast<float>(m_materialAmbientColor.Green()),
         static_cast<float>(m_materialAmbientColor.Blue())
     );
-    
+    LOG_INF_S("OCCGeometryMaterial::updateCoinMaterial - Set ambient color: RGB(" +
+        std::to_string(m_materialAmbientColor.Red()) + "," +
+        std::to_string(m_materialAmbientColor.Green()) + "," +
+        std::to_string(m_materialAmbientColor.Blue()) + ")");
+
     // Set diffuse color (no reduction here, will be applied in buildCoinRepresentation)
     m_coinMaterial->diffuseColor.setValue(
         static_cast<float>(m_materialDiffuseColor.Red()),
         static_cast<float>(m_materialDiffuseColor.Green()),
         static_cast<float>(m_materialDiffuseColor.Blue())
     );
-    
+    LOG_INF_S("OCCGeometryMaterial::updateCoinMaterial - Set diffuse color: RGB(" +
+        std::to_string(m_materialDiffuseColor.Red()) + "," +
+        std::to_string(m_materialDiffuseColor.Green()) + "," +
+        std::to_string(m_materialDiffuseColor.Blue()) + ")");
+
     // Set specular color
     m_coinMaterial->specularColor.setValue(
         static_cast<float>(m_materialSpecularColor.Red()),
         static_cast<float>(m_materialSpecularColor.Green()),
         static_cast<float>(m_materialSpecularColor.Blue())
     );
-    
+
     // Set emissive color
     m_coinMaterial->emissiveColor.setValue(
         static_cast<float>(m_materialEmissiveColor.Red()),
         static_cast<float>(m_materialEmissiveColor.Green()),
         static_cast<float>(m_materialEmissiveColor.Blue())
     );
-    
+
     // Set shininess (Coin3D uses 0-1 range, convert from 0-100 to match original)
     float shininess = static_cast<float>(m_materialShininess / 100.0);  // Use 100 like original
     if (shininess > 1.0f) shininess = 1.0f;
     if (shininess < 0.0f) shininess = 0.0f;
     m_coinMaterial->shininess.setValue(shininess);
+    LOG_INF_S("OCCGeometryMaterial::updateCoinMaterial - Set shininess: " + std::to_string(shininess) +
+        " (from " + std::to_string(m_materialShininess) + ")");
 }

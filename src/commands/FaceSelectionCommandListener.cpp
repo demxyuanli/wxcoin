@@ -85,26 +85,26 @@ CommandResult FaceSelectionCommandListener::executeCommand(const std::string& co
 				m_originalEdgesStateSaved = false;
 			}
 
-		// Restore geometry display states if they were saved
-		if (m_geometryDisplayStatesSaved) {
-			restoreGeometryDisplayStates();
+			// Restore geometry display states if they were saved
+			if (m_geometryDisplayStatesSaved) {
+				restoreGeometryDisplayStates();
+			}
+
+			// Hide selection info dialog when deactivating
+			if (canvas && canvas->getSelectionInfoDialog()) {
+				canvas->getSelectionInfoDialog()->Hide();
+			}
 		}
 
-		// Hide selection info dialog when deactivating
-		if (canvas && canvas->getSelectionInfoDialog()) {
-			canvas->getSelectionInfoDialog()->Hide();
+		// Verify deactivation
+		bool stillActive = m_inputManager->isCustomInputStateActive();
+		if (stillActive) {
+			LOG_WRN_S("FaceSelectionCommandListener::executeCommand - Tool deactivation may have failed");
+		} else {
+			LOG_INF_S("FaceSelectionCommandListener::executeCommand - Tool successfully deactivated");
 		}
-	}
 
-	// Verify deactivation
-	bool stillActive = m_inputManager->isCustomInputStateActive();
-	if (stillActive) {
-		LOG_WRN_S("FaceSelectionCommandListener::executeCommand - Tool deactivation may have failed");
-	} else {
-		LOG_INF_S("FaceSelectionCommandListener::executeCommand - Tool successfully deactivated");
-	}
-
-	return CommandResult(true, "Face selection tool deactivated", commandType);
+		return CommandResult(true, "Face selection tool deactivated", commandType);
 	} else {
 		// Get canvas from input manager's mouse handler
 		MouseHandler* mouseHandler = m_inputManager->getMouseHandler();

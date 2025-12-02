@@ -284,28 +284,31 @@ bool STEPReader::tryCAFReader(const std::string& filePath, const OptimizationOpt
 			ReadResult cafResult = STEPCAFProcessor::processSTEPFileWithCAF(filePath, options, progress);
 			
 			if (cafResult.success && !cafResult.geometries.empty()) {
-				// Check if CAF contains useful color/material information
-				bool hasColors = hasValidColorInfo(cafResult.geometries);
+				// Always use CAF results if successful, as CAF reader provides better color/material support
+				// Even if all colors appear to be default, CAF may have correctly read the colors from STEP file
+				// The color validation is too strict and may reject valid CAF results
+				result.geometries = cafResult.geometries;
+				result.entityMetadata = cafResult.entityMetadata;
+				result.assemblyStructure = cafResult.assemblyStructure;
 				
+				// Log color information for debugging
+				bool hasColors = hasValidColorInfo(cafResult.geometries);
 				if (hasColors) {
-					// Use CAF results - they contain valuable color information
-					result.geometries = cafResult.geometries;
-					result.entityMetadata = cafResult.entityMetadata;
-					result.assemblyStructure = cafResult.assemblyStructure;
-					
-		return true;
+					LOG_INF_S("CAF reader: Found non-default colors in STEP file");
 				} else {
-				return false;
+					LOG_INF_S("CAF reader: Using CAF results (colors may be default or need face-level extraction)");
 				}
+				
+				return true;
 			} else {
 				LOG_WRN_S("CAF reader failed: " + (cafResult.errorMessage.empty() ? "Unknown error" : cafResult.errorMessage));
 				LOG_WRN_S("Falling back to standard reader with decomposition");
-			return false;
+				return false;
 			}
 		} catch (const std::exception& e) {
 			LOG_WRN_S("CAF reader exception: " + std::string(e.what()));
-		return false;
-	}
+			return false;
+		}
 }
 
 void STEPReader::postProcessGeometries(ReadResult& result, ProgressCallback progress) {

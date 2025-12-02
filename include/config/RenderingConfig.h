@@ -171,6 +171,9 @@ public:
 		Quantity_Color pointColor;
 		int pointShape; // 0 = square, 1 = circle, 2 = triangle
 
+		// Original edges settings
+		bool showOriginalEdges; // If true, always show original edges from initialization
+
 		DisplaySettings()
 			: displayMode(DisplayMode::Solid)
 			, showEdges(false)
@@ -184,6 +187,7 @@ public:
 			, pointSize(3.0)
 			, pointColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
 			, pointShape(0)
+			, showOriginalEdges(false)
 		{
 		}
 	};

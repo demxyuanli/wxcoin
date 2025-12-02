@@ -12,6 +12,9 @@
 #include "ViewRefreshManager.h"
 #include "logger/Logger.h"
 
+// Coin3D includes for scene graph management
+#include <Inventor/nodes/SoSeparator.h>
+
 SelectionManager::SelectionManager(SceneManager* sceneManager,
 	std::vector<std::shared_ptr<OCCGeometry>>* allGeometries,
 	std::vector<std::shared_ptr<OCCGeometry>>* selectedGeometries)
@@ -31,11 +34,57 @@ std::shared_ptr<OCCGeometry> SelectionManager::findGeometry(const std::string& n
 void SelectionManager::setGeometryVisible(const std::string& name, bool visible) {
 	auto geometry = findGeometry(name);
 	if (!geometry) {
-		LOG_WRN_S("Geometry not found for visibility change: " + name);
+		LOG_WRN_S("SelectionManager::setGeometryVisible - Geometry not found for visibility change: " + name);
 		return;
 	}
+
+	LOG_INF_S("SelectionManager::setGeometryVisible - Setting geometry '" + name + "' visibility to " + (visible ? "visible" : "hidden"));
+
+	// Update geometry's internal visibility state
 	geometry->setVisible(visible);
+
+	// Manage Coin3D scene graph attachment/detachment
+	SoSeparator* coinNode = geometry->getCoinNode();
+	if (coinNode && m_sceneManager && m_sceneManager->getObjectRoot()) {
+		SoSeparator* root = m_sceneManager->getObjectRoot();
+		int idx = root->findChild(coinNode);
+
+		if (visible) {
+			// Add to scene graph if not already present
+			if (idx < 0) {
+				LOG_INF_S("SelectionManager::setGeometryVisible - Adding geometry '" + name + "' to Coin3D scene graph");
+				root->addChild(coinNode);
+			} else {
+				LOG_INF_S("SelectionManager::setGeometryVisible - Geometry '" + name + "' already in scene graph");
+			}
+		} else {
+			// Remove from scene graph if present
+			if (idx >= 0) {
+				LOG_INF_S("SelectionManager::setGeometryVisible - Removing geometry '" + name + "' from Coin3D scene graph");
+				root->removeChild(idx);
+			} else {
+				LOG_INF_S("SelectionManager::setGeometryVisible - Geometry '" + name + "' not in scene graph");
+			}
+		}
+	} else {
+		if (!coinNode) {
+			LOG_WRN_S("SelectionManager::setGeometryVisible - Coin3D node is null for geometry '" + name + "', visibility change may not be visible until representation is built");
+		}
+		if (!m_sceneManager) {
+			LOG_WRN_S("SelectionManager::setGeometryVisible - SceneManager is null");
+		}
+		if (m_sceneManager && !m_sceneManager->getObjectRoot()) {
+			LOG_WRN_S("SelectionManager::setGeometryVisible - ObjectRoot is null");
+		}
+	}
+
+	// Request view refresh with immediate update
 	requestRefreshSelectionChanged();
+	if (m_sceneManager && m_sceneManager->getCanvas()) {
+		// Force immediate repaint for visibility changes
+		m_sceneManager->getCanvas()->Refresh(true);
+		m_sceneManager->getCanvas()->Update();
+	}
 }
 
 void SelectionManager::setGeometrySelected(const std::string& name, bool selected) {
@@ -101,9 +150,17 @@ void SelectionManager::deselectAll() {
 void SelectionManager::onSelectionChanged() {
 	if (!m_sceneManager || !m_sceneManager->getCanvas()) return;
 	Canvas* canvas = m_sceneManager->getCanvas();
+	
+	// Only update tree selection if not currently updating from tree
 	if (canvas && canvas->getObjectTreePanel()) {
-		canvas->getObjectTreePanel()->updateTreeSelectionFromViewer();
+		auto objectTreePanel = canvas->getObjectTreePanel();
+		if (!objectTreePanel->isUpdatingSelection()) {
+			objectTreePanel->updateTreeSelectionFromViewer();
+		} else {
+			LOG_INF_S("SelectionManager::onSelectionChanged - Skipping tree update (tree is currently updating selection)");
+		}
 	}
+	
 	if (canvas && canvas->getRefreshManager()) {
 		canvas->getRefreshManager()->requestRefresh(IViewRefresher::Reason::SELECTION_CHANGED, true);
 	}

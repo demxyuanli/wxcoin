@@ -86,21 +86,24 @@ bool GeometryManagementService::addGeometry(std::shared_ptr<OCCGeometry> geometr
 bool GeometryManagementService::removeGeometry(std::shared_ptr<OCCGeometry> geometry) {
     if (!geometry || !m_geometries) return false;
 
-    // First verify the geometry exists in the list
+    // First verify the geometry exists in the list and get its index
     auto it = std::find(m_geometries->begin(), m_geometries->end(), geometry);
     if (it == m_geometries->end()) {
         LOG_WRN_S("Geometry not found: " + geometry->getName());
         return false;
     }
 
-    // Save the geometry name for logging
+    // Save the geometry name and index for safe removal
     std::string geomName = geometry->getName();
+    size_t geomIndex = std::distance(m_geometries->begin(), it);
+    LOG_INF_S("Removing geometry: " + geomName + " at index " + std::to_string(geomIndex));
 
     // Remove from selected geometries if present
     if (m_selectedGeometries) {
         auto selectedIt = std::find(m_selectedGeometries->begin(), m_selectedGeometries->end(), geometry);
         if (selectedIt != m_selectedGeometries->end()) {
             m_selectedGeometries->erase(selectedIt);
+            LOG_INF_S("Removed geometry from selection: " + geomName);
         }
     }
 
@@ -117,12 +120,12 @@ bool GeometryManagementService::removeGeometry(std::shared_ptr<OCCGeometry> geom
         m_geometryRepo->remove(geometry);
     }
 
-    // NOW safe to remove from main list - re-find iterator to be absolutely sure it's valid
-    it = std::find(m_geometries->begin(), m_geometries->end(), geometry);
-    if (it != m_geometries->end()) {
-        m_geometries->erase(it);
+    // Use index-based removal to avoid iterator invalidation
+    if (geomIndex < m_geometries->size()) {
+        m_geometries->erase(m_geometries->begin() + geomIndex);
+        LOG_INF_S("Successfully removed geometry from main list: " + geomName);
     } else {
-        LOG_ERR_S("Iterator became invalid during removal operations");
+        LOG_ERR_S("Geometry index out of bounds during removal: " + geomName + " (index: " + std::to_string(geomIndex) + ", size: " + std::to_string(m_geometries->size()) + ")");
         return false;
     }
 
@@ -172,34 +175,15 @@ const std::vector<std::shared_ptr<OCCGeometry>>& GeometryManagementService::getS
 }
 
 void GeometryManagementService::setGeometryVisible(const std::string& name, bool visible) {
+    // Delegate all visibility management to SelectionManager, including Coin3D scene graph operations
     if (m_selectionManager) {
         m_selectionManager->setGeometryVisible(name, visible);
     }
 
-    // Ensure scene attachment reflects visibility
+    // Update object tree display only
     auto geometry = findGeometry(name);
     if (geometry) {
-        SoSeparator* coinNode = geometry->getCoinNode();
-        if (coinNode && m_sceneManager && m_sceneManager->getObjectRoot()) {
-            SoSeparator* root = m_sceneManager->getObjectRoot();
-            int idx = root->findChild(coinNode);
-            if (visible) {
-                if (idx < 0) {
-                    root->addChild(coinNode);
-                }
-            } else {
-                if (idx >= 0) {
-                    root->removeChild(idx);
-                }
-            }
-        }
-
-        // Update object tree display name
         updateGeometryInTree(geometry);
-    }
-
-    if (m_viewUpdater) {
-        m_viewUpdater->requestGeometryChanged(true);
     }
 }
 

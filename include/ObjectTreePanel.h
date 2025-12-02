@@ -39,6 +39,7 @@ public:
 
 	// Object management functions
 	void deleteSelectedObject();
+	void editSelectedObjectNotes();
 	void hideSelectedObject();
 	void showSelectedObject();
 	void toggleObjectVisibility();
@@ -50,6 +51,7 @@ public:
 	void setOCCViewer(OCCViewer* viewer);
 
 	PropertyPanel* getPropertyPanel() const { return m_propertyPanel; }
+	bool isUpdatingSelection() const { return m_isUpdatingSelection; }
 
 	
 	// Tree data structure management

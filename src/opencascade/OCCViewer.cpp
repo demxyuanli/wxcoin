@@ -21,6 +21,7 @@
 #include "ObjectTreePanel.h"
 #include "ViewRefreshManager.h"
 #include "config/EdgeSettingsConfig.h"
+#include "config/RenderingConfig.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedLineSet.h>
@@ -197,6 +198,17 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 			// are applied to geometries added after initialization
 			if (m_edgeDisplayManager && !m_batchOperationActive) {
 				m_edgeDisplayManager->updateAll(m_meshParams);
+			}
+
+			// Check configuration for original edges display and apply if enabled
+			RenderingConfig& renderingConfig = RenderingConfig::getInstance();
+			auto displaySettings = renderingConfig.getDisplaySettings();
+			if (displaySettings.showOriginalEdges) {
+				// Ensure original edges are enabled for newly added geometry
+				if (m_edgeDisplayManager) {
+					m_edgeDisplayManager->setShowOriginalEdges(true, m_meshParams);
+					LOG_INF_S("OCCViewer::addGeometry: Applied original edges display from configuration for geometry: " + geometry->getName());
+				}
 			}
 
 			// Handle view updates
@@ -475,6 +487,7 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 {
 	// Check if display mode actually changed to avoid unnecessary rebuilds
 	bool displayModeChanged = (m_displaySettings.displayMode != settings.displayMode);
+	RenderingConfig::DisplayMode oldDisplayMode = m_displaySettings.displayMode;
 	bool edgeSettingsChanged = (m_displaySettings.showEdges != settings.showEdges);
 	bool pointViewSettingsChanged = (
 		m_displaySettings.showPointView != settings.showPointView ||
@@ -528,13 +541,21 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Only request refresh if something actually changed
 	if (displayModeChanged || edgeSettingsChanged || pointViewSettingsChanged) {
-		// Special handling for NoShading mode - ensure lighting is updated
-		if (displayModeChanged && settings.displayMode == RenderingConfig::DisplayMode::NoShading) {
+		// Special handling for display mode changes - ensure lighting is updated
+		if (displayModeChanged) {
+			if (settings.displayMode == RenderingConfig::DisplayMode::NoShading) {
 			// Force lighting update to clear all lights for NoShading
 			if (m_sceneManager) {
 				// This will trigger the LightingConfig callback which will detect NoShading mode
 				LightingConfig& lightingConfig = LightingConfig::getInstance();
 				lightingConfig.applySettingsToScene();
+				}
+			} else if (oldDisplayMode == RenderingConfig::DisplayMode::NoShading) {
+				// Switching away from NoShading mode - restore normal lighting
+				if (m_sceneManager) {
+					LightingConfig& lightingConfig = LightingConfig::getInstance();
+					lightingConfig.applySettingsToScene();
+				}
 			}
 		}
 
@@ -800,6 +821,39 @@ void OCCViewer::endBatchOperation()
 	m_batchOperationActive = false;
 	if (m_batchManager) m_batchManager->end();
 	m_needsViewRefresh = false;
+
+	// Check configuration for original edges display and apply if enabled
+	// This ensures that when geometries are added in batch, original edges are applied after batch completes
+	RenderingConfig& renderingConfig = RenderingConfig::getInstance();
+	auto displaySettings = renderingConfig.getDisplaySettings();
+	if (displaySettings.showOriginalEdges) {
+		// Set original edges parameters first, then enable display
+		// This matches the initialization sequence in Canvas::setOCCViewer
+		setOriginalEdgesParameters(
+			80.0,  // samplingDensity
+			0.01,  // minLength
+			false, // showLinesOnly
+			wxColour(0, 0, 0), // black color for edges
+			1.0,   // width
+			false, // highlightIntersectionNodes
+			wxColour(255, 0, 0), // intersectionNodeColor (not used)
+			3.0,   // intersectionNodeSize (not used)
+			IntersectionNodeShape::Point // intersectionNodeShape (not used)
+		);
+		setShowOriginalEdges(true);
+		
+		// Force update all geometries to extract and display original edges
+		if (m_edgeDisplayManager) {
+			m_edgeDisplayManager->updateAll(m_meshParams);
+		}
+		
+		// Force view refresh to ensure original edges are displayed
+		if (m_viewUpdater) {
+			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::RENDERING_CHANGED), true);
+		}
+		
+		LOG_INF_S("OCCViewer::endBatchOperation: Applied original edges display from configuration");
+	}
 }
 
 bool OCCViewer::isBatchOperationActive() const

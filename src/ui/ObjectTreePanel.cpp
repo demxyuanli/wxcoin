@@ -5,6 +5,8 @@
 #include "OCCViewer.h"
 #include "widgets/FlatTreeView.h"
 #include "Canvas.h"
+#include "SceneManager.h"
+#include "ViewRefreshManager.h"
 #include "logger/Logger.h"
 #include "PropertyPanel.h"
 #include "ui/FlatBarNotebook.h"
@@ -122,17 +124,18 @@ ObjectTreePanel::ObjectTreePanel(wxWindow* parent)
 		sizer->Add(m_treeView, 1, wxEXPAND | wxALL, 0);
 	}
 
-	// Columns: Tree | Vis | Del | Color | Edit
+	// Columns: Tree | Vis | Color | Edit | Del
+	// Reorganized for better UX: visibility -> color -> edit -> delete (increasing destructive impact)
 	m_treeView->AddColumn("Vis", FlatTreeColumn::ColumnType::ICON, 28);
-	m_treeView->AddColumn("Del", FlatTreeColumn::ColumnType::ICON, 28);
 	m_treeView->AddColumn("Color", FlatTreeColumn::ColumnType::ICON, 28);
 	m_treeView->AddColumn("Edit", FlatTreeColumn::ColumnType::ICON, 28);
+	m_treeView->AddColumn("Del", FlatTreeColumn::ColumnType::ICON, 28);
 
 	// Set SVG icons for columns (12x12 size, no text)
 	m_treeView->SetColumnSvgIcon(1, "eyeopen", wxSize(12, 12));      // Visibility column
-	m_treeView->SetColumnSvgIcon(2, "delete", wxSize(12, 12));       // Delete column
-	m_treeView->SetColumnSvgIcon(3, "palette", wxSize(12, 12));      // Color column
-	m_treeView->SetColumnSvgIcon(4, "edit", wxSize(12, 12));         // Edit column
+	m_treeView->SetColumnSvgIcon(2, "palette", wxSize(12, 12));      // Color column
+	m_treeView->SetColumnSvgIcon(3, "edit", wxSize(12, 12));         // Edit/Notes column
+	m_treeView->SetColumnSvgIcon(4, "delete", wxSize(12, 12));       // Delete column
 
 	// Icons (fallback to bitmap if SVG not available)
 	m_bmpEyeOpen = wxArtProvider::GetBitmap(wxART_TICK_MARK, wxART_BUTTON, wxSize(12, 12));
@@ -283,17 +286,18 @@ void ObjectTreePanel::addOCCGeometry(std::shared_ptr<OCCGeometry> geometry, std:
 	m_treeView->SetItemSvgIcon(geometryItem, "file", wxSize(12, 12));
 
 	// Set SVG icons for columns (12x12 size)
+	// Column order: Vis | Color | Edit | Del
 	m_treeView->SetItemColumnSvgIcon(geometryItem, 1, geometry->isVisible() ? "eyeopen" : "eyeclosed", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(geometryItem, 2, "delete", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(geometryItem, 3, "palette", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(geometryItem, 4, "edit", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 2, "palette", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 3, "edit", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 4, "delete", wxSize(12, 12));
 
 	// Fallback to bitmap icons if SVG not available
 	geometryItem->SetIcon(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(12, 12)));
 	geometryItem->SetColumnIcon(1, geometry->isVisible() ? m_bmpEyeOpen : m_bmpEyeClosed);
-	geometryItem->SetColumnIcon(2, m_bmpDelete);
-	geometryItem->SetColumnIcon(3, m_bmpColor);
-	geometryItem->SetColumnIcon(4, m_bmpEdit);
+	geometryItem->SetColumnIcon(2, m_bmpColor);
+	geometryItem->SetColumnIcon(3, m_bmpEdit);
+	geometryItem->SetColumnIcon(4, m_bmpDelete);
 
 	// Determine parent item
 	std::shared_ptr<FlatTreeItem> parentItem;
@@ -378,6 +382,13 @@ void ObjectTreePanel::updateTreeDataStructure()
 	
 	// Clear existing tree items
 	m_treeView->Clear();
+	
+	// Clear selection state before clearing mappings
+	if (m_lastSelectedItem) {
+		m_lastSelectedItem->SetSelected(false);
+		m_lastSelectedItem.reset();
+	}
+	
 	m_occGeometryMap.clear();
 	m_treeItemToOCCGeometry.clear();
 	m_fileNodeMap.clear();
@@ -447,17 +458,18 @@ void ObjectTreePanel::addOCCGeometryToNode(std::shared_ptr<FlatTreeItem> parentN
 	m_treeView->SetItemSvgIcon(geometryItem, "file", wxSize(12, 12));
 	
 	// Set SVG icons for columns
+	// Column order: Vis | Color | Edit | Del
 	m_treeView->SetItemColumnSvgIcon(geometryItem, 1, geometry->isVisible() ? "eyeopen" : "eyeclosed", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(geometryItem, 2, "delete", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(geometryItem, 3, "palette", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(geometryItem, 4, "edit", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 2, "palette", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 3, "edit", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(geometryItem, 4, "delete", wxSize(12, 12));
 	
 	// Fallback to bitmap icons if SVG not available
 	geometryItem->SetIcon(wxArtProvider::GetBitmap(wxART_NORMAL_FILE, wxART_OTHER, wxSize(12, 12)));
 	geometryItem->SetColumnIcon(1, geometry->isVisible() ? m_bmpEyeOpen : m_bmpEyeClosed);
-	geometryItem->SetColumnIcon(2, m_bmpDelete);
-	geometryItem->SetColumnIcon(3, m_bmpColor);
-	geometryItem->SetColumnIcon(4, m_bmpEdit);
+	geometryItem->SetColumnIcon(2, m_bmpColor);
+	geometryItem->SetColumnIcon(3, m_bmpEdit);
+	geometryItem->SetColumnIcon(4, m_bmpDelete);
 	
 	// Add to parent node
 	parentNode->AddChild(geometryItem);
@@ -492,6 +504,31 @@ void ObjectTreePanel::removeOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
 	}
 
 	LOG_INF_S("Removing geometry '" + geometry->getName() + "' from tree");
+
+	// Clear selection if the removed geometry is currently selected
+	auto selectedGeometry = getSelectedOCCGeometry();
+	if (selectedGeometry == geometry) {
+		LOG_INF_S("Removing currently selected geometry, clearing selection");
+		if (m_lastSelectedItem) {
+			m_lastSelectedItem->SetSelected(false);
+			m_lastSelectedItem.reset();
+		}
+		if (m_occViewer) {
+			m_occViewer->deselectAll();
+		}
+		if (m_propertyPanel) {
+			m_propertyPanel->clearProperties();
+		}
+	}
+
+	// Remove from mappings before updating data structure
+	auto it = m_occGeometryMap.find(geometry);
+	if (it != m_occGeometryMap.end()) {
+		auto treeItem = it->second;
+		// Remove from reverse mapping
+		m_treeItemToOCCGeometry.erase(treeItem);
+		// Remove from forward mapping (will be done in refreshTreeDisplay)
+	}
 	
 	// Update data structure
 	m_treeData.removeGeometry(geometry);
@@ -539,17 +576,18 @@ std::shared_ptr<FlatTreeItem> ObjectTreePanel::getOrCreateFileNode(const wxStrin
 	m_treeView->SetItemSvgIcon(fileNode, "folder", wxSize(12, 12));
 
 	// Set SVG icons for columns (12x12 size) - file nodes can also be controlled
+	// Column order: Vis | Color | Edit | Del
 	m_treeView->SetItemColumnSvgIcon(fileNode, 1, "eyeopen", wxSize(12, 12)); // Default visible
-	m_treeView->SetItemColumnSvgIcon(fileNode, 2, "delete", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(fileNode, 3, "palette", wxSize(12, 12));
-	m_treeView->SetItemColumnSvgIcon(fileNode, 4, "edit", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(fileNode, 2, "palette", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(fileNode, 3, "edit", wxSize(12, 12));
+	m_treeView->SetItemColumnSvgIcon(fileNode, 4, "delete", wxSize(12, 12));
 
 	// Fallback to bitmap icons if SVG not available
 	fileNode->SetIcon(wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(12, 12)));
 	fileNode->SetColumnIcon(1, m_bmpEyeOpen);
-	fileNode->SetColumnIcon(2, m_bmpDelete);
-	fileNode->SetColumnIcon(3, m_bmpColor);
-	fileNode->SetColumnIcon(4, m_bmpEdit);
+	fileNode->SetColumnIcon(2, m_bmpColor);
+	fileNode->SetColumnIcon(3, m_bmpEdit);
+	fileNode->SetColumnIcon(4, m_bmpDelete);
 
 	// Add to virtual root
 	m_rootItem->AddChild(fileNode);
@@ -595,21 +633,110 @@ void ObjectTreePanel::selectOCCGeometry(std::shared_ptr<OCCGeometry> geometry)
 // Object management functions
 void ObjectTreePanel::deleteSelectedObject()
 {
+	LOG_INF_S("ObjectTreePanel::deleteSelectedObject - Starting deletion process");
 	auto geometry = getSelectedOCCGeometry();
 	if (!geometry) {
-		LOG_WRN_S("No object selected for deletion");
+		LOG_WRN_S("ObjectTreePanel::deleteSelectedObject - No object selected for deletion");
 		return;
 	}
+
+	LOG_INF_S("ObjectTreePanel::deleteSelectedObject - Selected geometry for deletion: " + geometry->getName() +
+		" (visible: " + std::string(geometry->isVisible() ? "true" : "false") + ")");
 
 	wxString message = wxString::Format("Are you sure you want to delete '%s'?", geometry->getName());
 	int result = wxMessageBox(message, "Confirm Delete", wxYES_NO | wxICON_QUESTION);
 
 	if (result == wxYES) {
-		LOG_INF_S("Deleting object: " + geometry->getName());
-		if (m_occViewer) {
-			m_occViewer->removeGeometry(geometry->getName());
+		LOG_INF_S("ObjectTreePanel::deleteSelectedObject - User confirmed deletion of geometry: " + geometry->getName());
+
+		// Clear selection before deletion to avoid stale references
+		if (m_lastSelectedItem) {
+			m_lastSelectedItem->SetSelected(false);
+			m_lastSelectedItem.reset();
 		}
-		removeOCCGeometry(geometry);
+		if (m_occViewer) {
+			m_occViewer->deselectAll();
+		}
+		if (m_propertyPanel) {
+			m_propertyPanel->clearProperties();
+		}
+
+		// Remove from viewer (this will also remove from tree via ObjectTreeSync)
+		if (m_occViewer) {
+			LOG_INF_S("ObjectTreePanel::deleteSelectedObject - Calling OCCViewer::removeGeometry for: " + geometry->getName());
+			m_occViewer->removeGeometry(geometry->getName());
+			LOG_INF_S("ObjectTreePanel::deleteSelectedObject - OCCViewer::removeGeometry completed successfully");
+
+			// Force Canvas refresh after geometry removal
+			if (m_occViewer->getSceneManager()) {
+				Canvas* canvas = m_occViewer->getSceneManager()->getCanvas();
+				if (canvas) {
+					if (canvas->getRefreshManager()) {
+						canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
+						LOG_INF_S("ObjectTreePanel::deleteSelectedObject - Requested geometry change refresh after deletion");
+					}
+					canvas->Refresh(true);
+					canvas->Update();
+					LOG_INF_S("ObjectTreePanel::deleteSelectedObject - Forced Canvas refresh and update after deletion");
+				}
+			}
+		} else {
+			LOG_ERR_S("ObjectTreePanel::deleteSelectedObject - OCCViewer is null during deletion!");
+		}
+		// Note: Don't call removeOCCGeometry here - OCCViewer::removeGeometry already does this via ObjectTreeSync
+	} else {
+		LOG_INF_S("ObjectTreePanel::deleteSelectedObject - User cancelled deletion of geometry: " + geometry->getName());
+	}
+}
+
+void ObjectTreePanel::editSelectedObjectNotes()
+{
+	LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Starting notes/name editing process");
+	auto geometry = getSelectedOCCGeometry();
+	if (!geometry) {
+		LOG_WRN_S("ObjectTreePanel::editSelectedObjectNotes - No object selected for notes editing");
+		return;
+	}
+
+	LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Selected geometry for editing: " + geometry->getName());
+
+	// Create a text entry dialog for editing the object name/notes
+	wxTextEntryDialog dialog(this, "Enter new name for the object:", "Edit Object Name",
+		geometry->getName(), wxOK | wxCANCEL);
+
+	LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Opened name editing dialog for geometry: " + geometry->getName());
+
+	if (dialog.ShowModal() == wxID_OK) {
+		wxString newName = dialog.GetValue();
+		LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Dialog result: OK, new name: '" + std::string(newName.mb_str()) + "'");
+
+		if (!newName.IsEmpty() && newName != geometry->getName()) {
+			LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Renaming object from '" + geometry->getName() + "' to '" + std::string(newName.mb_str()) + "'");
+
+			// Update the geometry name
+			geometry->setName(std::string(newName.mb_str()));
+			LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Geometry name updated in memory");
+
+			// Update tree display
+			updateOCCGeometryName(geometry);
+			LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Tree display updated with new name");
+
+			// Update property panel to reflect the name change
+			if (m_propertyPanel) {
+				m_propertyPanel->updateProperties(geometry);
+				LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Property panel updated with new name");
+			}
+
+			// Force refresh to show name change
+			m_treeView->Refresh();
+			LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Tree view refreshed to show name change");
+		} else if (newName.IsEmpty()) {
+			LOG_WRN_S("ObjectTreePanel::editSelectedObjectNotes - Empty name entered, ignoring rename for geometry: " + geometry->getName());
+		} else {
+			LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - Name unchanged for geometry: " + geometry->getName());
+		}
+	} else {
+		LOG_INF_S("ObjectTreePanel::editSelectedObjectNotes - User cancelled name editing dialog for geometry: " + geometry->getName());
 	}
 }
 
@@ -827,7 +954,24 @@ std::shared_ptr<OCCGeometry> ObjectTreePanel::getSelectedOCCGeometry()
 		return nullptr;
 	}
 	auto it = m_treeItemToOCCGeometry.find(selectedItem);
-	if (it != m_treeItemToOCCGeometry.end()) return it->second;
+	if (it != m_treeItemToOCCGeometry.end()) {
+		auto geometry = it->second;
+		// Verify geometry still exists in viewer
+		if (geometry && m_occViewer) {
+			auto allGeometries = m_occViewer->getAllGeometry();
+			for (const auto& g : allGeometries) {
+				if (g == geometry) {
+					return geometry;
+				}
+			}
+			// Geometry no longer exists, clear stale selection
+			LOG_WRN_S("ObjectTreePanel::getSelectedOCCGeometry - Selected geometry '" + geometry->getName() + "' no longer exists in viewer, clearing selection");
+			m_lastSelectedItem.reset();
+			selectedItem->SetSelected(false);
+			return nullptr;
+		}
+		return geometry;
+	}
 	return nullptr;
 }
 
@@ -863,26 +1007,33 @@ void ObjectTreePanel::setOCCViewer(OCCViewer* viewer)
 
 void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int column)
 {
-	if (!item) return;
-	if (m_isUpdatingSelection) return;
-	
-	// Clear previous selection
-	if (m_lastSelectedItem) {
-		m_lastSelectedItem->SetSelected(false);
+	if (!item) {
+		LOG_DBG_S("ObjectTreePanel::onTreeItemClicked - Clicked item is null, ignoring");
+		return;
 	}
-	
-	// Set new selection
-	m_lastSelectedItem = item;
-	item->SetSelected(true);
+	if (m_isUpdatingSelection) {
+		LOG_DBG_S("ObjectTreePanel::onTreeItemClicked - Currently updating selection, ignoring click");
+		return;
+	}
+
+	LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Processing click on item: " + item->GetText() + ", column: " + std::to_string(column));
 
 	// Virtual root -> clear selection (should not happen since root is not visible)
 	if (item == m_rootItem) {
-		if (m_propertyPanel) m_propertyPanel->clearProperties();
-		if (m_occViewer) m_occViewer->deselectAll();
+		LOG_WRN_S("ObjectTreePanel::onTreeItemClicked - Clicked on virtual root, clearing all selections");
+		if (m_propertyPanel) {
+			m_propertyPanel->clearProperties();
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Cleared property panel");
+		}
+		if (m_occViewer) {
+			m_occViewer->deselectAll();
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Cleared all geometry selections in viewer");
+		}
 		// Clear tree selection
 		if (m_lastSelectedItem) {
 			m_lastSelectedItem->SetSelected(false);
 			m_lastSelectedItem.reset();
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Cleared previous tree selection");
 		}
 		m_treeView->Refresh();
 		return;
@@ -891,36 +1042,207 @@ void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int 
 	auto itOcc = m_treeItemToOCCGeometry.find(item);
 	if (itOcc != m_treeItemToOCCGeometry.end()) {
 		auto geometry = itOcc->second;
-		if (!geometry) return;
-
-		if (column == 1) {
-			bool nv = !geometry->isVisible();
-			if (m_occViewer) m_occViewer->setGeometryVisible(geometry->getName(), nv);
-			updateTreeItemIcon(item, nv);
+		if (!geometry) {
+			LOG_ERR_S("ObjectTreePanel::onTreeItemClicked - Geometry pointer is null for item: " + item->GetText());
 			return;
 		}
-		if (column == 2) { deleteSelectedObject(); return; }
-		if (column == 3) {
-			wxColourData cd; cd.SetChooseFull(true);
-			wxColourDialog dlg(this, &cd);
-			if (dlg.ShowModal() == wxID_OK && m_occViewer) {
-				wxColour c = dlg.GetColourData().GetColour();
-				m_occViewer->setGeometryColor(geometry->getName(), Quantity_Color(c.Red() / 255.0, c.Green() / 255.0, c.Blue() / 255.0, Quantity_TOC_RGB));
+
+		// Verify geometry still exists in viewer (only check, don't refresh here)
+		if (m_occViewer) {
+			auto allGeometries = m_occViewer->getAllGeometry();
+			bool geometryExists = false;
+			for (const auto& g : allGeometries) {
+				if (g == geometry) {
+					geometryExists = true;
+					break;
+				}
 			}
-			return;
+			if (!geometryExists) {
+				LOG_WRN_S("ObjectTreePanel::onTreeItemClicked - Geometry '" + geometry->getName() + "' no longer exists in viewer, ignoring click");
+				// Clear stale selection
+				if (m_lastSelectedItem == item) {
+					m_lastSelectedItem.reset();
+					item->SetSelected(false);
+				}
+				// Note: Don't refresh tree here - it will be refreshed by the deletion process
+				return;
+			}
 		}
-		if (column == 4) {
-			if (m_propertyPanel) m_propertyPanel->updateProperties(geometry);
+
+		LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Found geometry: " + geometry->getName() + " for item: " + item->GetText());
+
+		// Check if clicking on already selected item - allow deselection
+		bool isCurrentlySelected = (m_lastSelectedItem == item && item->IsSelected());
+
+		if (isCurrentlySelected && column == 0) {
+			// Deselect the item when clicking on object name again
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Deselecting currently selected geometry: " + geometry->getName());
+			item->SetSelected(false);
+			m_lastSelectedItem.reset();
+			if (m_occViewer) {
+				m_isUpdatingSelection = true;
+				m_occViewer->deselectAll();
+				m_isUpdatingSelection = false;
+
+				// Force rebuild Coin3D representation to restore original color
+				LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Rebuilding Coin3D representation to restore original color for deselected geometry");
+				if (geometry) {
+					// Force rebuild to restore original color (preserve forceCustomColor if set)
+					geometry->setMeshRegenerationNeeded(true);
+					geometry->buildCoinRepresentation(m_occViewer->getMeshParameters());
+
+					// Touch Coin3D node to force update
+					if (geometry->getCoinNode()) {
+						geometry->getCoinNode()->touch();
+						LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Touched Coin3D node to force color restoration update");
+					}
+				}
+
+				// Force Canvas refresh to show color restoration
+				if (m_occViewer->getSceneManager()) {
+					Canvas* canvas = m_occViewer->getSceneManager()->getCanvas();
+					if (canvas) {
+						if (canvas->getRefreshManager()) {
+							canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::SELECTION_CHANGED, true);
+							LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Requested view refresh for selection change");
+						}
+						canvas->Refresh(true);
+						canvas->Update();
+						LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Forced Canvas refresh and update");
+					}
+				}
+			}
+			if (m_propertyPanel) {
+				m_propertyPanel->clearProperties();
+				LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Cleared property panel for deselection");
+			}
+			m_treeView->Refresh();
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Deselection completed for geometry: " + geometry->getName());
 			return;
 		}
 
+		// Clear previous selection if selecting a different item
+		if (m_lastSelectedItem && m_lastSelectedItem != item) {
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Switching selection from: " + m_lastSelectedItem->GetText() + " to: " + item->GetText());
+			m_lastSelectedItem->SetSelected(false);
+
+			// Restore color for previously selected geometry
+			auto prevItOcc = m_treeItemToOCCGeometry.find(m_lastSelectedItem);
+			if (prevItOcc != m_treeItemToOCCGeometry.end() && prevItOcc->second) {
+				auto prevGeometry = prevItOcc->second;
+				if (m_occViewer) {
+					// Force rebuild to restore original color (preserve forceCustomColor if set)
+					LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Rebuilding Coin3D representation to restore original color for previous geometry: " + prevGeometry->getName());
+					prevGeometry->setMeshRegenerationNeeded(true);
+					prevGeometry->buildCoinRepresentation(m_occViewer->getMeshParameters());
+					if (prevGeometry->getCoinNode()) {
+						prevGeometry->getCoinNode()->touch();
+						LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Touched Coin3D node for previous geometry color restoration");
+					}
+				}
+			}
+		}
+
+		// Set new selection
+		m_lastSelectedItem = item;
+		item->SetSelected(true);
+		LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Set tree selection to geometry: " + geometry->getName());
+
+		// Update selection in OCCViewer
 		if (m_occViewer) {
 			m_isUpdatingSelection = true;
 			m_occViewer->deselectAll();
 			m_occViewer->setGeometrySelected(geometry->getName(), true);
 			m_isUpdatingSelection = false;
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Updated OCCViewer selection to geometry: " + geometry->getName());
 		}
-		if (m_propertyPanel) m_propertyPanel->updateProperties(geometry);
+
+		if (column == 1) {
+			// Column 1: Toggle visibility (eye icon)
+			bool nv = !geometry->isVisible();
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Toggling visibility for geometry: " + geometry->getName() +
+				" from " + (geometry->isVisible() ? "visible" : "hidden") + " to " + (nv ? "visible" : "hidden"));
+			if (m_occViewer) {
+				m_occViewer->setGeometryVisible(geometry->getName(), nv);
+				LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Called OCCViewer::setGeometryVisible for visibility change");
+				// Note: Refresh is now handled by SelectionManager::setGeometryVisible to avoid duplicate refreshes
+			}
+			updateTreeItemIcon(item, nv);
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Updated tree icon for visibility change");
+			return;
+		}
+		if (column == 2) {
+			// Column 2: Change color (palette icon)
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Opening color dialog for geometry: " + geometry->getName());
+			wxColourData cd; cd.SetChooseFull(true);
+			wxColourDialog dlg(this, &cd);
+			if (dlg.ShowModal() == wxID_OK && m_occViewer) {
+				wxColour c = dlg.GetColourData().GetColour();
+				LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Color selected: RGB(" +
+					std::to_string(c.Red()) + "," + std::to_string(c.Green()) + "," + std::to_string(c.Blue()) + ") for geometry: " + geometry->getName());
+
+				m_occViewer->setGeometryColor(geometry->getName(), Quantity_Color(c.Red() / 255.0, c.Green() / 255.0, c.Blue() / 255.0, Quantity_TOC_RGB));
+				LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Called OCCViewer::setGeometryColor for color change");
+
+				// Trigger mesh regeneration to apply color change with custom colors
+				if (geometry) {
+					geometry->setForceCustomColor(true);  // Force use of custom colors even when selected
+					// Force rebuild by setting regeneration flag and calling build directly
+					geometry->setMeshRegenerationNeeded(true);
+					geometry->buildCoinRepresentation(m_occViewer->getMeshParameters());
+					LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Rebuilt Coin3D representation for color change with custom colors forced");
+
+					// Touch Coin3D node to force update
+					if (geometry->getCoinNode()) {
+						geometry->getCoinNode()->touch();
+						LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Touched Coin3D node to force color update rendering");
+					}
+				}
+
+				// Request view refresh to show the color change
+				m_occViewer->requestViewRefresh();
+				LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Requested view refresh from OCCViewer");
+
+				// Force Canvas refresh through SceneManager
+				if (m_occViewer->getSceneManager()) {
+					Canvas* canvas = m_occViewer->getSceneManager()->getCanvas();
+					if (canvas) {
+						if (canvas->getRefreshManager()) {
+							canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
+							LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Requested rendering change refresh from ViewRefreshManager");
+						}
+						canvas->Refresh(true);
+						canvas->Update();
+						LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Forced Canvas refresh and update for color change");
+					}
+				}
+			} else {
+				LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Color dialog cancelled for geometry: " + geometry->getName());
+			}
+			return;
+		}
+		if (column == 3) {
+			// Column 3: Edit notes/name (edit icon)
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Starting notes/name editing for geometry: " + geometry->getName());
+			editSelectedObjectNotes();
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Completed notes/name editing for geometry: " + geometry->getName());
+			return;
+		}
+		if (column == 4) {
+			// Column 4: Delete object (delete icon)
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Starting deletion process for geometry: " + geometry->getName());
+			deleteSelectedObject();
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Completed deletion process for geometry: " + geometry->getName());
+			return;
+		}
+
+		// Column 0 (tree item text): Select geometry and show properties
+		// Note: Selection is already handled above, just show properties
+		if (m_propertyPanel) {
+			m_propertyPanel->updateProperties(geometry);
+			LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Updated property panel with geometry: " + geometry->getName());
+		}
+		LOG_INF_S("ObjectTreePanel::onTreeItemClicked - Selection and property display completed for geometry: " + geometry->getName());
 		return;
 	}
 	
@@ -932,40 +1254,51 @@ void ObjectTreePanel::onTreeItemClicked(std::shared_ptr<FlatTreeItem> item, int 
 
 void ObjectTreePanel::updateTreeSelectionFromViewer()
 {
+	LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Starting viewer-to-tree selection sync");
 	if (!m_occViewer) {
-		LOG_WRN_S("OCCViewer is null in updateTreeSelectionFromViewer");
+		LOG_WRN_S("ObjectTreePanel::updateTreeSelectionFromViewer - OCCViewer is null, cannot sync selection");
 		return;
 	}
 
 	m_isUpdatingSelection = true;
+	LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Set updating selection flag to prevent recursive updates");
 
 	// Clear previous selection
 	if (m_lastSelectedItem) {
 		m_lastSelectedItem->SetSelected(false);
+		LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Cleared previous tree selection");
 	}
 	m_lastSelectedItem.reset();
 
 	// Select geometries that are selected in viewer
 	auto selectedGeometries = m_occViewer->getSelectedGeometries();
-	LOG_INF_S("Updating tree selection from viewer - selected geometries: " + std::to_string(selectedGeometries.size()));
+	LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Viewer has " + std::to_string(selectedGeometries.size()) + " selected geometries");
 
 	if (!selectedGeometries.empty()) {
 		// Select the first one (single selection mode)
 		auto geometry = selectedGeometries[0];
+		LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Processing first selected geometry: " + geometry->getName());
+
 		auto it = m_occGeometryMap.find(geometry);
 		if (it != m_occGeometryMap.end()) {
 			m_lastSelectedItem = it->second;
 			m_lastSelectedItem->SetSelected(true);
-			LOG_INF_S("Selected tree item for geometry: " + geometry->getName());
+			LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Successfully selected tree item for geometry: " + geometry->getName());
 		}
 		else {
-			LOG_WRN_S("Geometry not found in tree map: " + geometry->getName());
+			LOG_WRN_S("ObjectTreePanel::updateTreeSelectionFromViewer - Geometry not found in tree map: " + geometry->getName() + ", cannot update tree selection");
+		}
+
+		if (selectedGeometries.size() > 1) {
+			LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Warning: Multiple geometries selected in viewer (" +
+				std::to_string(selectedGeometries.size()) + "), only first one synced to tree");
 		}
 	}
 	else {
-		LOG_INF_S("No geometries selected in viewer");
+		LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - No geometries selected in viewer, tree selection cleared");
 	}
 
 	m_isUpdatingSelection = false;
 	m_treeView->Refresh();
+	LOG_INF_S("ObjectTreePanel::updateTreeSelectionFromViewer - Tree view refreshed, viewer-to-tree selection sync completed");
 }

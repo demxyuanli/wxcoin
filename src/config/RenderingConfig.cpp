@@ -564,6 +564,7 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
 		if (!value.empty()) {
 			m_displaySettings.vertexColor = parseColor(value, m_displaySettings.vertexColor);
 		}
+		m_displaySettings.showOriginalEdges = cm.getBool("Display", "ShowOriginalEdges", m_displaySettings.showOriginalEdges);
 	}
 
 	// Quality section
@@ -660,6 +661,7 @@ bool RenderingConfig::saveToFile(const std::string& filename) const
 	cm.setDouble("Display", "VertexSize", m_displaySettings.vertexSize);
 	cm.setString("Display", "EdgeColor", colorToString(m_displaySettings.edgeColor));
 	cm.setString("Display", "VertexColor", colorToString(m_displaySettings.vertexColor));
+	cm.setBool("Display", "ShowOriginalEdges", m_displaySettings.showOriginalEdges);
 
 	// Quality section
 	cm.setString("Quality", "Quality", getQualityModeName(m_qualitySettings.quality));

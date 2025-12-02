@@ -32,7 +32,8 @@ public:
 	SoSeparatorPtr createSceneNode(const TriangleMesh& mesh, bool selected,
 		const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 		const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-		double shininess, double transparency) override;
+		double shininess, double transparency,
+		bool forceCustomColor = false) override;
 	void updateSceneNode(SoSeparator* node, const TriangleMesh& mesh) override;
 	void updateSceneNode(SoSeparator* node, const TopoDS_Shape& shape, const MeshParameters& params) override;
 
@@ -44,7 +45,8 @@ public:
 		bool selected,
 		const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 		const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-		double shininess, double transparency) override;
+		double shininess, double transparency,
+		bool forceCustomColor = false) override;
 
 	void setEdgeSettings(bool show, double angle = 45.0) override;
 	void setSmoothingSettings(bool enabled, double creaseAngle = 30.0, int iterations = 2) override;
@@ -58,7 +60,8 @@ public:
 	SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected,
 		const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 		const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-		double shininess, double transparency) override;
+		double shininess, double transparency,
+		bool forceCustomColor = false) override;
 	void updateCoinNode(SoSeparator* node, const TriangleMesh& mesh) override;
 
 	SoCoordinate3* createCoordinateNode(const TriangleMesh& mesh) override;
@@ -72,7 +75,8 @@ private:
 	void buildCoinNodeStructure(SoSeparator* node, const TriangleMesh& mesh, bool selected,
 		const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 		const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-		double shininess, double transparency);
+		double shininess, double transparency,
+		bool forceCustomColor = false);
 	SoShapeHints* createShapeHints();
 	SoNormalBinding* createNormalBinding();
 	SoMaterial* createEdgeMaterial(bool selected = false);

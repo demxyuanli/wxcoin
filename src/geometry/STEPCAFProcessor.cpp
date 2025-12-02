@@ -95,11 +95,13 @@ STEPReader::ReadResult STEPCAFProcessor::processSTEPFileWithCAF(
         int componentIndex = 0;
 
         auto makeColorForName = [&](const std::string& name, const Quantity_Color* cafColor) -> Quantity_Color {
+            // Always prioritize CAF color from STEP file if available
+            if (cafColor) return *cafColor;
+            // Fallback to consistent coloring or palette
             if (options.decomposition.useConsistentColoring) {
                 size_t idx = hasher(name) % palette.size();
                 return palette[idx];
             }
-            if (cafColor) return *cafColor;
             return palette[componentIndex % palette.size()];
         };
 
@@ -239,11 +241,13 @@ int STEPCAFProcessor::processAssemblyTree(
     std::hash<std::string> hasher;
 
     auto makeColorForName = [&](const std::string& name, const Quantity_Color* cafColor) -> Quantity_Color {
+        // Always prioritize CAF color from STEP file if available
+        if (cafColor) return *cafColor;
+        // Fallback to consistent coloring or palette
         if (options.decomposition.useConsistentColoring) {
             size_t idx = hasher(name) % palette.size();
             return palette[idx];
         }
-        if (cafColor) return *cafColor;
         return palette[componentIndex % palette.size()];
     };
 
@@ -531,13 +535,80 @@ int STEPCAFProcessor::createGeometriesFromParts(
     const std::function<Quantity_Color(const std::string&, const Quantity_Color*)>& makeColorForName,
     std::vector<std::shared_ptr<OCCGeometry>>& geometries,
     std::vector<STEPReader::STEPEntityInfo>& entityMetadata,
-    int componentIndex)
+    int componentIndex,
+    const Handle(XCAFDoc_ColorTool)& colorTool,
+    const Handle(XCAFDoc_ShapeTool)& shapeTool)
 {
     int localIdx = 0;
 
     for (const auto& part : parts) {
         std::string partName = parts.size() > 1 ? (compName + "_Part_" + std::to_string(localIdx)) : compName;
-        Quantity_Color color = makeColorForName(partName, hasCafColor ? &cafColor : nullptr);
+        
+        // Try to extract shape-level or face-level color from CAF
+        Quantity_Color partColor = cafColor;
+        bool hasPartColor = hasCafColor;
+        
+        if (!colorTool.IsNull() && !shapeTool.IsNull()) {
+            // Try to find the label for this shape/face and get its color
+            TDF_Label label;
+            if (shapeTool->FindShape(part, label, false)) {
+                // Try to get color for this shape/face
+                Quantity_Color shapeColor;
+                if (colorTool->GetColor(label, XCAFDoc_ColorSurf, shapeColor) ||
+                    colorTool->GetColor(label, XCAFDoc_ColorGen, shapeColor) ||
+                    colorTool->GetColor(label, XCAFDoc_ColorCurv, shapeColor)) {
+                    partColor = shapeColor;
+                    hasPartColor = true;
+                    LOG_INF_S("Extracted shape-level color for " + partName);
+                } else {
+                    // If direct color not found, try to get color from parent shapes
+                    // This handles cases where color is assigned to parent solid/shell but not individual faces
+                    TDF_Label parentLabel = label.Father();
+                    while (!parentLabel.IsNull() && !hasPartColor) {
+                        if (colorTool->GetColor(parentLabel, XCAFDoc_ColorSurf, shapeColor) ||
+                            colorTool->GetColor(parentLabel, XCAFDoc_ColorGen, shapeColor) ||
+                            colorTool->GetColor(parentLabel, XCAFDoc_ColorCurv, shapeColor)) {
+                            partColor = shapeColor;
+                            hasPartColor = true;
+                            LOG_INF_S("Extracted parent-level color for " + partName);
+                            break;
+                        }
+                        parentLabel = parentLabel.Father();
+                    }
+                }
+            } else {
+                // If FindShape fails, try to search through all shapes to find matching face
+                // This handles cases where face was extracted during decomposition
+                if (part.ShapeType() == TopAbs_FACE) {
+                    TDF_LabelSequence allLabels;
+                    shapeTool->GetShapes(allLabels);
+                    
+                    for (int i = 1; i <= allLabels.Length(); ++i) {
+                        TDF_Label searchLabel = allLabels.Value(i);
+                        TopoDS_Shape labelShape = shapeTool->GetShape(searchLabel);
+                        
+                        // Check if this label's shape contains our face
+                        for (TopExp_Explorer exp(labelShape, TopAbs_FACE); exp.More(); exp.Next()) {
+                            if (exp.Current().IsSame(part)) {
+                                // Found matching face, try to get its color
+                                Quantity_Color faceColor;
+                                if (colorTool->GetColor(searchLabel, XCAFDoc_ColorSurf, faceColor) ||
+                                    colorTool->GetColor(searchLabel, XCAFDoc_ColorGen, faceColor) ||
+                                    colorTool->GetColor(searchLabel, XCAFDoc_ColorCurv, faceColor)) {
+                                    partColor = faceColor;
+                                    hasPartColor = true;
+                                    LOG_INF_S("Extracted face-level color for " + partName);
+                                    break;
+                                }
+                            }
+                        }
+                        if (hasPartColor) break;
+                    }
+                }
+            }
+        }
+        
+        Quantity_Color color = makeColorForName(partName, hasPartColor ? &partColor : nullptr);
 
         auto geom = std::make_shared<OCCGeometry>(partName);
         geom->setShape(part);
@@ -671,6 +742,7 @@ int STEPCAFProcessor::processLabel(
     Quantity_Color cafColor;
     bool hasCafColor = false;
     if (!colorTool.IsNull()) {
+        // Try to get color from label (general, surface, or curve color)
         hasCafColor = colorTool->GetColor(label, XCAFDoc_ColorGen, cafColor) ||
                        colorTool->GetColor(label, XCAFDoc_ColorSurf, cafColor) ||
                        colorTool->GetColor(label, XCAFDoc_ColorCurv, cafColor);
@@ -680,6 +752,15 @@ int STEPCAFProcessor::processLabel(
                            colorTool->GetColor(srcLabel, XCAFDoc_ColorSurf, cafColor) ||
                            colorTool->GetColor(srcLabel, XCAFDoc_ColorCurv, cafColor);
         }
+        
+        if (hasCafColor) {
+            LOG_INF_S("Extracted CAF color for component: " + compName + 
+                     " (R:" + std::to_string(cafColor.Red()) + 
+                     " G:" + std::to_string(cafColor.Green()) + 
+                     " B:" + std::to_string(cafColor.Blue()) + ")");
+        } else {
+            LOG_INF_S("No CAF color found for component: " + compName + ", will use default/palette color");
+        }
     }
 
     // Extract and decompose shapes
@@ -687,7 +768,8 @@ int STEPCAFProcessor::processLabel(
 
     // Create geometries from parts
     componentIndex = createGeometriesFromParts(parts, compName, hasCafColor, cafColor, level,
-        baseName, options, makeColorForName, geometries, entityMetadata, componentIndex);
+        baseName, options, makeColorForName, geometries, entityMetadata, componentIndex,
+        colorTool, shapeTool);
 
     return componentIndex;
 }

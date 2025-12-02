@@ -508,13 +508,8 @@ void Canvas::setOCCViewer(OCCViewer* occViewer) {
 		RenderingConfig& nonConstConfig = const_cast<RenderingConfig&>(renderingConfig);
 		nonConstConfig.setShadingSettings(shadingSettings);
 		
-		// For NoShading mode, explicitly enable original edges display with default parameters
-		// This must be done after setDisplaySettings to ensure edges are properly configured
-		if (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
-			// Force enable edges display (setShowEdges) to ensure mesh edges are shown
-			// This is required even though we'll also show original edges
-			m_occViewer->setShowEdges(true);
-			
+		// Enable original edges display if configured or in NoShading mode
+		if (displaySettings.showOriginalEdges || displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
 			// Set original edges parameters first
 			m_occViewer->setOriginalEdgesParameters(
 				80.0,  // samplingDensity
@@ -529,7 +524,11 @@ void Canvas::setOCCViewer(OCCViewer* occViewer) {
 			);
 			// Then enable original edges display
 			m_occViewer->setShowOriginalEdges(true);
+			if (displaySettings.showOriginalEdges) {
+				LOG_INF_S("Canvas::setOCCViewer: Enabled original edges display from configuration");
+			} else {
 			LOG_INF_S("Canvas::setOCCViewer: Applied NoShading mode - enabled edges and original edges display");
+			}
 		}
 		
 		LOG_INF_S("Canvas::setOCCViewer: Applied initial render mode from RenderingConfig: " + 

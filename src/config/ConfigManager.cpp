@@ -166,20 +166,27 @@ bool ConfigManager::getBool(const std::string& section, const std::string& key, 
 		return defaultValue;
 	}
 
-	bool value;
 	fileConfig->SetPath("/" + wxString(section));
 
-	// Debug: check what wxFileConfig reads
 	wxString wxKey = wxString(key);
 	wxString readValue;
 	bool found = fileConfig->Read(wxKey, &readValue);
+	
 	if (found) {
-		value = readValue.IsSameAs("true", false);
+		// Convert string to bool - support "true"/"false", "1"/"0", "yes"/"no"
+		readValue.MakeLower();
+		if (readValue.IsSameAs("true") || readValue.IsSameAs("1") || readValue.IsSameAs("yes")) {
+			return true;
+		} else if (readValue.IsSameAs("false") || readValue.IsSameAs("0") || readValue.IsSameAs("no")) {
+			return false;
+		} else {
+			// Invalid value, use default
+			LOG_WRN("Invalid boolean value for " + section + "/" + key + ": " + readValue.ToStdString() + ", using default: " + (defaultValue ? "true" : "false"), "ConfigManager");
+			return defaultValue;
+		}
 	} else {
-		value = defaultValue;
+		return defaultValue;
 	}
-
-	return value;
 }
 
 void ConfigManager::setString(const std::string& section, const std::string& key, const std::string& value) {
@@ -219,7 +226,8 @@ void ConfigManager::setBool(const std::string& section, const std::string& key, 
 	}
 
 	fileConfig->SetPath("/" + wxString(section));
-	fileConfig->Write(wxString(key), value);
+	// Write bool as "true"/"false" string instead of 0/1
+	fileConfig->Write(wxString(key), value ? wxString("true") : wxString("false"));
 }
 
 bool ConfigManager::save() {

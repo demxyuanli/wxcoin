@@ -107,7 +107,7 @@ SoSeparatorPtr RenderManager::createSceneNode(const TriangleMesh& mesh,
 	Quantity_Color defaultAmbient(0.2, 0.2, 0.2, Quantity_TOC_RGB);
 	Quantity_Color defaultSpecular(1.0, 1.0, 1.0, Quantity_TOC_RGB);
 	Quantity_Color defaultEmissive(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-	return backend->createSceneNode(mesh, selected, defaultDiffuse, defaultAmbient, defaultSpecular, defaultEmissive, 0.5, 0.0);
+	return backend->createSceneNode(mesh, selected, defaultDiffuse, defaultAmbient, defaultSpecular, defaultEmissive, 0.5, 0.0, false);
 }
 
 SoSeparatorPtr RenderManager::createSceneNode(const TopoDS_Shape& shape,
