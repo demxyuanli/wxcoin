@@ -318,23 +318,18 @@ void OCCGeometry::buildFaceIndexMapping(const MeshParameters& params)
 // Full Coin3D scene graph construction - thin wrapper for modular implementation
 void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 {
-    LOG_INF_S("OCCGeometry::buildCoinRepresentation - Building Coin3D representation for geometry: " + getName());
-
     if (getShape().IsNull()) {
-        LOG_WRN_S("OCCGeometry::buildCoinRepresentation - Cannot build coin representation for null shape");
+        LOG_WRN_S("Cannot build coin representation for null shape");
         return;
     }
 
     // Create render context from current state
-    LOG_INF_S("OCCGeometry::buildCoinRepresentation - Creating render context from geometry state");
     GeometryRenderContext context = GeometryRenderContext::fromGeometry(*this);
-
+    
     // Delegate to Mesh module for actual rendering
-    LOG_INF_S("OCCGeometry::buildCoinRepresentation - Delegating to mesh module for Coin3D rendering");
     OCCGeometryMesh::buildCoinRepresentation(getShape(), params, context);
-
+    
     setMeshRegenerationNeeded(false);
-    LOG_INF_S("OCCGeometry::buildCoinRepresentation - Coin3D representation build completed for geometry: " + getName());
 }
 
 void OCCGeometry::buildCoinRepresentation(const MeshParameters& params,

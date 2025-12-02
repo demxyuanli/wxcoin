@@ -73,51 +73,36 @@ void ViewRefreshManager::removeAllListeners() {
 
 void ViewRefreshManager::performRefresh(RefreshReason reason) {
 	if (!m_canvas) {
-		LOG_WRN_S("ViewRefreshManager::performRefresh - No canvas available for refresh");
+		LOG_WRN_S("VIEW REFRESH: No canvas available for refresh");
 		return;
 	}
 
-	std::string reasonStr;
-	switch (reason) {
-		case RefreshReason::GEOMETRY_CHANGED: reasonStr = "GEOMETRY_CHANGED"; break;
-		case RefreshReason::NORMALS_TOGGLED: reasonStr = "NORMALS_TOGGLED"; break;
-		case RefreshReason::EDGES_TOGGLED: reasonStr = "EDGES_TOGGLED"; break;
-		case RefreshReason::POINT_VIEW_TOGGLED: reasonStr = "POINT_VIEW_TOGGLED"; break;
-		case RefreshReason::MATERIAL_CHANGED: reasonStr = "MATERIAL_CHANGED"; break;
-		case RefreshReason::CAMERA_MOVED: reasonStr = "CAMERA_MOVED"; break;
-		case RefreshReason::SELECTION_CHANGED: reasonStr = "SELECTION_CHANGED"; break;
-		case RefreshReason::RENDERING_CHANGED: reasonStr = "RENDERING_CHANGED"; break;
-		case RefreshReason::LIGHTING_CHANGED: reasonStr = "LIGHTING_CHANGED"; break;
-		case RefreshReason::MANUAL_REQUEST: reasonStr = "MANUAL_REQUEST"; break;
-		default: reasonStr = "UNKNOWN"; break;
-	}
-
-	LOG_INF_S("ViewRefreshManager::performRefresh - Performing refresh for reason: " + reasonStr);
+	LOG_DBG_S("=== VIEW REFRESH: PERFORMING REFRESH (reason=" + std::to_string(static_cast<int>(reason)) + ") ===");
 
 	// Notify all listeners before refresh
 	if (!m_listeners.empty()) {
-		LOG_INF_S("ViewRefreshManager::performRefresh - Notifying " + std::to_string(m_listeners.size()) + " listeners");
+		LOG_DBG_S("VIEW REFRESH: Notifying " + std::to_string(m_listeners.size()) + " listeners");
 		for (const auto& listener : m_listeners) {
 			try {
 				listener(reason);
 			}
 			catch (const std::exception& e) {
-				LOG_ERR_S("ViewRefreshManager::performRefresh - Listener exception: " + std::string(e.what()));
+				LOG_ERR_S("VIEW REFRESH: Listener exception: " + std::string(e.what()));
 			}
 		}
 	}
 
 	// Perform the actual refresh: use wxWidgets paint system
-	LOG_INF_S("ViewRefreshManager::performRefresh - Calling canvas Refresh()");
+	LOG_DBG_S("VIEW REFRESH: Calling canvas Refresh()");
 	m_canvas->Refresh(false);
 
 	// If immediate update is needed, also call Update()
 	if (reason == RefreshReason::CAMERA_MOVED || reason == RefreshReason::SELECTION_CHANGED) {
-		LOG_INF_S("ViewRefreshManager::performRefresh - Calling canvas Update() for immediate refresh");
+		LOG_DBG_S("VIEW REFRESH: Calling canvas Update() for immediate refresh");
 		m_canvas->Update();  // Force immediate paint for interactive operations
 	}
 
-	LOG_INF_S("ViewRefreshManager::performRefresh - Refresh completed for reason: " + reasonStr);
+	LOG_DBG_S("=== VIEW REFRESH: REFRESH COMPLETED ===");
 }
 
 void ViewRefreshManager::onDebounceTimer(wxTimerEvent& event) {

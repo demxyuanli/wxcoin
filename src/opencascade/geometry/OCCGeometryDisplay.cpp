@@ -18,7 +18,6 @@ OCCGeometryDisplay::OCCGeometryDisplay()
     , m_wireframeMode(false)
     , m_wireframeWidth(1.0)
     , m_wireframeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
-    , m_forceCustomColor(false)
     , m_showWireframe(false)
     , m_facesVisible(true)
     , m_smoothNormals(false)
@@ -210,10 +209,4 @@ void OCCGeometryDisplay::setPointViewShape(int shape)
     if (shape < 0) shape = 0;
     if (shape > 2) shape = 2; // 0 = square, 1 = circle, 2 = triangle
     m_pointViewShape = shape;
-}
-
-void OCCGeometryDisplay::setForceCustomColor(bool force)
-{
-    m_forceCustomColor = force;
-    LOG_INF_S("OCCGeometryDisplay::setForceCustomColor - Force custom color set to: " + std::string(force ? "true" : "false"));
 }
