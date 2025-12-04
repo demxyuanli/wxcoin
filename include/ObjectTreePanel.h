@@ -39,7 +39,6 @@ public:
 
 	// Object management functions
 	void deleteSelectedObject();
-	void editSelectedObjectNotes();
 	void hideSelectedObject();
 	void showSelectedObject();
 	void toggleObjectVisibility();
@@ -51,7 +50,6 @@ public:
 	void setOCCViewer(OCCViewer* viewer);
 
 	PropertyPanel* getPropertyPanel() const { return m_propertyPanel; }
-	bool isUpdatingSelection() const { return m_isUpdatingSelection; }
 
 	
 	// Tree data structure management
@@ -167,7 +165,7 @@ private:
 	TreeDataStructure m_treeData;
 
 	// Column indices for treelist actions
-	enum Columns { COL_VIS = 1, COL_DEL = 2, COL_COLOR = 3, COL_EDIT = 4 };
+	enum Columns { COL_VISIBILITY = 1, COL_DELETE = 2, COL_COLOR = 3, COL_PROPERTIES = 4 };
 
 	// Images for action columns
 	wxBitmap m_bmpEyeOpen;
@@ -196,4 +194,11 @@ private:
 	// Helper methods for OCCGeometry hierarchy management
 	void removeOCCGeometryRecursive(std::shared_ptr<OCCGeometry> geometry);
 	std::shared_ptr<FlatTreeItem> getOrCreateFileNode(const wxString& fileName);
+	std::shared_ptr<OCCGeometry> findNextGeometryForSelection(std::shared_ptr<OCCGeometry> currentGeometry);
+
+	// File node batch operations
+	void handleFileNodeClick(std::shared_ptr<FlatTreeItem> fileNode, int column, const wxString& fileName);
+	std::vector<std::shared_ptr<OCCGeometry>> getGeometriesInFile(const wxString& fileName);
+	bool areAllGeometriesVisible(const std::vector<std::shared_ptr<OCCGeometry>>& geometries);
 };
+

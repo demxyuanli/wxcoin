@@ -28,6 +28,8 @@ public:
 
 	bool isInitialized() const { return m_isInitialized; }
 	bool isRendering() const { return m_isRendering; }
+	bool isGLContextValid() const;
+	bool reinitialize();
 
 	void setSceneManager(SceneManager* sceneManager);
 	void setSceneManager(ISceneManager* sceneManager) override;

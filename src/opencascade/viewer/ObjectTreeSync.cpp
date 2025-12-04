@@ -75,6 +75,6 @@ void ObjectTreeSync::processDeferred() {
 	// Clear the pending queue
 	m_pendingQueue->clear();
 
-	// Now refresh the tree display once for all geometries
+	// Refresh tree display synchronously after batch addition
 	canvas->getObjectTreePanel()->refreshTreeDisplay();
 }

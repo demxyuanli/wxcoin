@@ -68,6 +68,9 @@ SceneManager::SceneManager(Canvas* canvas)
 	, m_lastCullingUpdateValid(false)
 	, m_enableViewAnimation(true)
 	, m_viewAnimationDuration(0.2f)
+	, m_lastRenderTime(std::chrono::steady_clock::now())
+	, m_isFirstRender(true)
+	, m_forceCacheClearCounter(0)
 {
 	LOG_INF_S("SceneManager initializing");
 
@@ -456,7 +459,33 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		return;
 	}
 
-	// Setup OpenGL state
+	// CRITICAL: MUST check GL context BEFORE any GL calls
+	// Check time since last render - long gaps may indicate context loss risk
+	auto now = std::chrono::steady_clock::now();
+	auto timeSinceLastRender = std::chrono::duration_cast<std::chrono::seconds>(now - m_lastRenderTime);
+	
+	// If more than 60 seconds since last render, force cache clear as precaution
+	// Windows may recycle GL resources after long idle periods
+	const int LONG_IDLE_THRESHOLD_SECONDS = 60;
+	bool longIdleDetected = !m_isFirstRender && (timeSinceLastRender.count() > LONG_IDLE_THRESHOLD_SECONDS);
+	
+	if (longIdleDetected) {
+		LOG_WRN_S("SceneManager::render: Long idle period detected (" + 
+			std::to_string(timeSinceLastRender.count()) + 
+			" seconds). Forcing Coin3D cache invalidation to prevent stale GL resources.");
+		invalidateCoin3DCache();
+	}
+	
+	// Record this render time for next check
+	recordRenderTime();
+
+	// CRITICAL: Comprehensive GL context health check BEFORE any GL calls
+	if (!validateGLContextHealth()) {
+		LOG_ERR_S("SceneManager::render: GL context health check failed. Skipping render to prevent crash.");
+		return;
+	}
+
+	// Setup OpenGL state - ONLY after context validation
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_LIGHTING);
 	glEnable(GL_NORMALIZE);
@@ -466,14 +495,50 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	// Basic OpenGL capability check
+	// Basic OpenGL capability check - verify GL context is valid
 	const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-	if (version) {
-		static std::string lastVersion;
-		if (lastVersion != version) {
-			lastVersion = version;
-			LOG_INF_S("SceneManager::render: OpenGL version: " + std::string(version));
+	GLint maxTexSize = 0;
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTexSize);
+	if (glGetError() != GL_NO_ERROR) {
+		LOG_ERR_S("GL context corrupted - glGetIntegerv failed");
+	}
+	
+	if (!version) {
+		LOG_ERR_S("SceneManager::render: Failed to get OpenGL version - no valid GL context. Skipping render.");
+		// CRITICAL FIX: Return immediately. Proceeding with a null context causes Coin3D to assert/crash
+		// Mark that GL resources need to be rebuilt
+		static bool contextLossLogged = false;
+		if (!contextLossLogged) {
+			LOG_ERR_S("SceneManager::render: GL context appears to be lost. This may happen after long periods without rendering.");
+			LOG_ERR_S("SceneManager::render: Coin3D display lists and GL resources may need to be rebuilt.");
+			contextLossLogged = true;
 		}
+		return;
+	}
+	
+	static std::string lastVersion;
+	static uint32_t lastCacheContext = 0;
+	
+	// Detect GL context change (context recreation after loss)
+	if (lastVersion.empty() || lastVersion != version) {
+		if (!lastVersion.empty() && lastVersion != version) {
+			LOG_WRN_S("SceneManager::render: GL context version changed from '" + lastVersion + "' to '" + std::string(version) + "'");
+			LOG_WRN_S("SceneManager::render: This indicates GL context was recreated. Invalidating Coin3D cache.");
+			
+			// Force Coin3D to rebuild all display lists and GL resources
+			// by changing the cache context ID
+			lastCacheContext++;
+		}
+		lastVersion = version;
+		LOG_INF_S("SceneManager::render: OpenGL version: " + std::string(version));
+	}
+	
+	// Apply forced cache clear if requested (from external invalidation or long idle)
+	if (m_forceCacheClearCounter > 0) {
+		lastCacheContext += m_forceCacheClearCounter;
+		LOG_INF_S("SceneManager::render: Applying " + std::to_string(m_forceCacheClearCounter) + 
+			" forced cache invalidations. New cache version: " + std::to_string(lastCacheContext));
+		m_forceCacheClearCounter = 0;
 	}
 
 	// Reset OpenGL errors before rendering (only log in debug builds)
@@ -525,7 +590,20 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		}
 
 		renderAction.setPassCallback(renderPassCallback, &passState);
-		renderAction.setCacheContext(1);
+		
+		// CRITICAL FIX: Use Canvas ID combined with context version for cache context
+		// This ensures uniqueness between viewers AND forces cache rebuild after context loss
+		uint32_t baseId = (m_canvas) ? static_cast<uint32_t>(m_canvas->GetId()) : 1;
+		uint32_t cacheId = (baseId << 16) | (lastCacheContext & 0xFFFF);
+		renderAction.setCacheContext(cacheId);
+		
+		// Log cache context change for debugging
+		static uint32_t lastLoggedCacheId = 0;
+		if (lastLoggedCacheId != cacheId) {
+			LOG_INF_S("SceneManager::render: Using cache context ID: " + std::to_string(cacheId) + 
+				" (baseId=" + std::to_string(baseId) + ", version=" + std::to_string(lastCacheContext) + ")");
+			lastLoggedCacheId = cacheId;
+		}
 
 		// Check if scene root is valid before rendering
 		if (!m_sceneRoot) {
@@ -536,13 +614,49 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		}
 
 		// Additional validation: Check if scene root has valid children
-		if (m_sceneRoot->getNumChildren() == 0) {
+		int numChildren = m_sceneRoot->getNumChildren();
+		if (numChildren == 0) {
 #ifdef _DEBUG
 			LOG_WRN_S("SceneManager::render: Scene root has no children, this may indicate an empty scene");
 #endif
 		}
+		
+		// Log scene complexity for large scenes (helps diagnose resource exhaustion)
+		static int lastLoggedChildCount = 0;
+		if (numChildren > 100 && numChildren != lastLoggedChildCount) {
+			LOG_INF_S("SceneManager::render: Rendering complex scene with " + std::to_string(numChildren) + 
+				" root children. Cache ID: " + std::to_string(cacheId));
+			lastLoggedChildCount = numChildren;
+		}
+		
+		// CRITICAL: Final GL error check before Coin3D rendering
+		// This catches any GL errors that might cause Coin3D to assert
+		GLenum preRenderError = glGetError();
+		if (preRenderError != GL_NO_ERROR) {
+			LOG_ERR_S("SceneManager::render: GL error detected before renderAction.apply(): " + 
+				std::to_string(preRenderError) + ". Attempting to clear and continue.");
+			// Clear all errors
+			while (glGetError() != GL_NO_ERROR) {}
+		}
+		
+		// DEBUG: Log before Coin3D rendering for crash diagnosis
+		LOG_INF_S("SceneManager::render: About to call renderAction.apply() on scene with " + 
+			std::to_string(numChildren) + " root children, cacheId=" + std::to_string(cacheId));
 
 		renderAction.apply(m_sceneRoot);
+		
+		LOG_INF_S("SceneManager::render: renderAction.apply() completed successfully");
+		
+		// Check for GL errors after rendering
+		GLenum postRenderError = glGetError();
+		if (postRenderError != GL_NO_ERROR) {
+			static int renderErrorCount = 0;
+			if (renderErrorCount < 5) {
+				LOG_WRN_S("SceneManager::render: GL error after renderAction.apply(): " + 
+					std::to_string(postRenderError));
+				renderErrorCount++;
+			}
+		}
 	} catch (const std::exception& e) {
 		// Restore blend state before returning
 		glBlendFunc(blendSrc, blendDst);
@@ -708,6 +822,15 @@ void SceneManager::updateSceneBounds() {
 
 	// Perform expensive bounds calculation
 	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
+
+	// Check if GL context is available before performing bbox calculation
+	// Some Coin3D nodes may require GL context for bounding box computation
+	const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+	if (!glVersion) {
+		LOG_WRN_S("SceneManager::updateSceneBounds: GL context not available, skipping bounds update");
+		return;
+	}
+
 	SoGetBoundingBoxAction bboxAction(viewport);
 	bboxAction.apply(m_objectRoot);
 	SbBox3f newBounds = bboxAction.getBoundingBox();
@@ -1097,6 +1220,21 @@ void SceneManager::setupCameraForViewAll() {
 
 void SceneManager::performViewAll() {
 	if (!m_camera || !m_sceneRoot || !m_canvas) return;
+
+	// Check if GL context is available before performing viewAll
+	// Coin3D's viewAll method may require GL context for accurate bounds computation
+	const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+	if (!glVersion) {
+		LOG_WRN_S("SceneManager::performViewAll: GL context not available, using fallback positioning");
+		// Fallback: position camera at a default distance if no valid bounds
+		SbVec3f defaultPos(5.0f, -5.0f, 5.0f);
+		m_camera->position.setValue(defaultPos);
+		m_camera->focalDistance.setValue(10.0f);
+		if (m_camera->isOfType(SoOrthographicCamera::getClassTypeId())) {
+			static_cast<SoOrthographicCamera*>(m_camera)->height.setValue(10.0f);
+		}
+		return;
+	}
 
 	SbViewportRegion viewport(m_canvas->GetClientSize().x, m_canvas->GetClientSize().y);
 	m_camera->viewAll(m_sceneRoot, viewport, 1.1f);
@@ -1774,4 +1912,47 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 			LOG_INF_S("Touched scene root to force lighting update");
 		}
 	}
+}
+
+void SceneManager::invalidateCoin3DCache() {
+	LOG_WRN_S("SceneManager::invalidateCoin3DCache: Forcing Coin3D cache invalidation");
+	m_forceCacheClearCounter++;
+}
+
+bool SceneManager::validateGLContextHealth() {
+	// Deep validation of GL context health with detailed logging
+	const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+	const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+	const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+	
+	if (!vendor || !renderer || !version) {
+		LOG_ERR_S("SceneManager::validateGLContextHealth: GL context is invalid - glGetString returned NULL");
+		LOG_ERR_S("  vendor=" + std::string(vendor ? vendor : "NULL") + 
+			", renderer=" + std::string(renderer ? renderer : "NULL") + 
+			", version=" + std::string(version ? version : "NULL"));
+		return false;
+	}
+	
+	// Test if we can actually perform GL operations
+	GLint maxTexSize = 0;
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTexSize);
+	GLenum err = glGetError();
+	if (err != GL_NO_ERROR || maxTexSize == 0) {
+		LOG_ERR_S("SceneManager::validateGLContextHealth: GL context appears corrupted - cannot query GL state");
+		LOG_ERR_S("  glGetError=" + std::to_string(err) + ", maxTexSize=" + std::to_string(maxTexSize));
+		return false;
+	}
+	
+	// Log resource limits periodically (every 100 validations)
+	static int validationCount = 0;
+	if (++validationCount % 100 == 1) {
+		LOG_INF_S("SceneManager GL Resource Limits: maxTexSize=" + std::to_string(maxTexSize));
+	}
+	
+	return true;
+}
+
+void SceneManager::recordRenderTime() {
+	m_lastRenderTime = std::chrono::steady_clock::now();
+	m_isFirstRender = false;
 }

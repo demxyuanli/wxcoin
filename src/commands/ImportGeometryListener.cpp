@@ -8,6 +8,9 @@
 #include "BREPReader.h"
 #include "XTReader.h"
 #include "OCCViewer.h"
+#include "SceneManager.h"
+#include "Canvas.h"
+#include "RenderingEngine.h"
 #include "GeometryDecompositionDialog.h"
 #include "GeometryImportOptimizer.h"
 #include "ProgressiveGeometryLoader.h"
@@ -21,6 +24,7 @@
 #include <filesystem>
 #include "FlatFrame.h"
 #include "flatui/FlatUIStatusBar.h"
+#include <GL/gl.h>
 
 ImportGeometryListener::ImportGeometryListener(wxFrame* frame, Canvas* canvas, OCCViewer* occViewer)
     : m_frame(frame), m_canvas(canvas), m_occViewer(occViewer), m_statusBar(nullptr)
@@ -158,6 +162,20 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
 
     // Show geometry decomposition dialog for non-mesh formats
     if (hasNonMeshFormats) {
+        // Force parent frame to complete all pending paint operations
+        // This prevents DC handle conflicts on Windows (error 0x00000006)
+        if (m_frame) {
+            m_frame->Update();  // Force immediate processing of pending paint events
+        }
+        
+        // Process all pending events to ensure all DC handles are released
+        if (wxTheApp) {
+            wxTheApp->Yield(true);
+        }
+        
+        // Small delay to ensure Windows GDI system completes all operations
+        wxMilliSleep(10);
+        
         GeometryDecompositionDialog dialog(m_frame, m_decompositionOptions);
         if (dialog.ShowModal() == wxID_OK) {
             LOG_INF_S("Geometry decomposition configured: enabled=" +
@@ -381,6 +399,35 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
         int result = statsDialog.ShowModal();
         LOG_INF_S("Statistics dialog closed with result: " + std::to_string(result));
 
+        // CRITICAL FIX: After ShowModal(), GL context may be invalidated
+        // ShowModal() creates its own message loop which can cause context loss on Windows
+        // Must reactivate GL context before any rendering operations
+        if (m_occViewer && !allGeometries.empty()) {
+            SceneManager* sceneManager = m_occViewer->getSceneManager();
+            if (sceneManager) {
+                Canvas* canvas = sceneManager->getCanvas();
+                if (canvas) {
+                    // Get rendering engine to check/reactivate GL context
+                    RenderingEngine* renderEngine = canvas->getRenderingEngine();
+                    if (renderEngine) {
+                        // Check if GL context is still valid after dialog
+                        if (!renderEngine->isGLContextValid()) {
+                            LOG_WRN_S("GL context invalid after ShowModal, attempting reinitialize");
+                            if (!renderEngine->reinitialize()) {
+                                LOG_ERR_S("Failed to reinitialize GL context after dialog - rendering may fail");
+                            } else {
+                                LOG_INF_S("Successfully reinitialized GL context after ShowModal");
+                                // After reinit, invalidate Coin3D cache
+                                sceneManager->invalidateCoin3DCache();
+                            }
+                        } else {
+                            LOG_INF_S("GL context still valid after ShowModal");
+                        }
+                    }
+                }
+            }
+        }
+
         // Ensure progress is complete before finishing
         if (m_statusBar) {
             m_statusBar->SetGaugeValue(100);
@@ -398,8 +445,27 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             flatFrame->appendMessage("Geometry import completed.");
         }
 
-        // Auto-fit all geometries after import
+        // CRITICAL FIX: Force an immediate render after batch geometry import
+        // This ensures Coin3D creates GL resources (display lists, VBOs) while context is valid
+        // Without this, first render after long idle may find stale/invalid GL context
         if (m_occViewer && !allGeometries.empty()) {
+            LOG_INF_S("Forcing immediate render after batch import to establish GL resources");
+            
+            // Get canvas through SceneManager and trigger immediate render
+            SceneManager* sceneManager = m_occViewer->getSceneManager();
+            if (sceneManager) {
+                Canvas* canvas = sceneManager->getCanvas();
+                if (canvas) {
+                    // Force a full quality render to build all GL resources
+                    canvas->render(false);
+                    
+                    // Ensure GL operations complete
+                    glFinish();
+                    
+                    LOG_INF_S("Immediate post-import render completed - GL resources established");
+                }
+            }
+            
             LOG_INF_S("Auto-executing fitAll after geometry import");
             m_occViewer->fitAll();
         }

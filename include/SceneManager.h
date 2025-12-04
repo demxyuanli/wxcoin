@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 #include <functional>
+#include <chrono>
 #include "rendering/RenderingToolkitAPI.h"
 #include "interfaces/ISceneManager.h"
 #include "CameraAnimation.h"
@@ -109,6 +110,11 @@ public:
 	// Error recovery
 	void rebuildScene();
 
+	// GL context health and cache management
+	void invalidateCoin3DCache();
+	bool validateGLContextHealth();
+	void recordRenderTime();
+
 private:
 	Canvas* m_canvas;
 	SoSeparator* m_sceneRoot;
@@ -120,6 +126,11 @@ private:
 	std::unique_ptr<PickingAidManager> m_pickingAidManager;
 	bool m_isPerspectiveCamera;
 	SbBox3f m_sceneBoundingBox;
+
+	// GL context health tracking
+	std::chrono::steady_clock::time_point m_lastRenderTime;
+	bool m_isFirstRender;
+	uint32_t m_forceCacheClearCounter;
 
 	// Checkerboard plane state
 	SoSeparator* m_checkerboardSeparator = nullptr;

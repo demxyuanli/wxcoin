@@ -515,6 +515,15 @@ int FramelessModalPopup::ShowModal()
     // Ensure the window is modal
     wxWindow* parent = GetParent();
     if (parent) {
+        // Force parent window to complete any pending paint operations
+        // This prevents DC handle conflicts on Windows
+        parent->Update();
+        
+        // Process all pending events to ensure DC handles are released
+        if (wxTheApp) {
+            wxTheApp->Yield(true);
+        }
+        
         parent->Disable();
         // Store current window position for restoration
         m_parentWindowRect = parent->GetRect();

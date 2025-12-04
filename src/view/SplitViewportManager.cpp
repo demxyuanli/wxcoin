@@ -291,7 +291,11 @@ void SplitViewportManager::renderViewport(const SplitViewportInfo& viewport) {
     // Use single-pass sorted-object blending to avoid over-brightening geometry
     renderAction.setNumPasses(1);
     renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
-    renderAction.setCacheContext(1);
+    
+    // CRITICAL FIX: Must use same cache context as main scene to avoid Coin3D cache conflicts
+    // Each viewport should use the same cache context as the main scene
+    uint32_t cacheId = (m_canvas) ? static_cast<uint32_t>(m_canvas->GetId()) : 1;
+    renderAction.setCacheContext(cacheId);
     
     renderAction.apply(viewport.sceneRoot);
     

@@ -263,8 +263,39 @@ void Canvas::render(bool fastMode) {
 
 void Canvas::onPaint(wxPaintEvent& event) {
 	wxPaintDC dc(this);
+
+	// CRITICAL: Enhanced GL context validation before rendering
+	if (m_renderingEngine) {
+		// First check: Basic context validity
+		if (!m_renderingEngine->isGLContextValid()) {
+			LOG_WRN_S("Canvas::onPaint: OpenGL context is invalid, attempting to reinitialize");
+
+			// Try to reinitialize rendering engine
+			if (!m_renderingEngine->reinitialize()) {
+				LOG_ERR_S("Canvas::onPaint: Failed to reinitialize rendering engine, skipping render");
+				event.Skip();
+				return;
+			}
+
+			LOG_INF_S("Canvas::onPaint: Successfully reinitialized rendering engine after context loss");
+			
+			// After reinitializing, force Coin3D cache clear
+			if (m_sceneManager) {
+				m_sceneManager->invalidateCoin3DCache();
+				LOG_INF_S("Canvas::onPaint: Invalidated Coin3D cache after context reinit");
+			}
+		}
+		
+		// Second check: Verify context is actually working after any reinit
+		if (!m_renderingEngine->isGLContextValid()) {
+			LOG_ERR_S("Canvas::onPaint: GL context still invalid after reinit attempt, aborting render");
+			event.Skip();
+			return;
+		}
+	}
+
 	render(false);
-	
+
 	// Draw face info overlay after 3D rendering using Graphics Context for transparency support
 	m_faceInfoOverlay.update();
 	if (m_faceInfoOverlay.isVisible()) {
@@ -272,7 +303,7 @@ void Canvas::onPaint(wxPaintEvent& event) {
 		wxGCDC gcdc(dc);
 		m_faceInfoOverlay.draw(gcdc, GetClientSize());
 	}
-	
+
 	if (m_eventCoordinator) {
 		m_eventCoordinator->handlePaintEvent(event);
 	}
@@ -535,3 +566,5 @@ void Canvas::setOCCViewer(OCCViewer* occViewer) {
 			renderingConfig.getDisplayModeName(displaySettings.displayMode));
 	}
 }
+
+

@@ -61,10 +61,6 @@ public:
     bool isWireframeMode() const { return m_wireframeMode; }
     virtual void setWireframeMode(bool wireframe);
 
-    // Force custom color (ignore selection highlight)
-    bool shouldForceCustomColor() const { return m_forceCustomColor; }
-    virtual void setForceCustomColor(bool force);
-
     double getWireframeWidth() const { return m_wireframeWidth; }
     virtual void setWireframeWidth(double width);
 
@@ -120,9 +116,6 @@ protected:
 
     // Face visibility
     bool m_facesVisible;
-
-    // Force custom color (ignore selection highlight)
-    bool m_forceCustomColor;
 
     // Shading settings
     bool m_smoothNormals;

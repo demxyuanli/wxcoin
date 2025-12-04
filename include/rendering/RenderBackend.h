@@ -60,8 +60,7 @@ public:
 	virtual SoSeparatorPtr createSceneNode(const TriangleMesh& mesh, bool selected,
 		const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 		const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-		double shininess, double transparency,
-		bool forceCustomColor = false) = 0;
+		double shininess, double transparency) = 0;
 
 	/**
 	 * @brief Update existing scene node
@@ -107,8 +106,7 @@ public:
 		bool selected,
 		const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 		const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-		double shininess, double transparency,
-		bool forceCustomColor = false) = 0;
+		double shininess, double transparency) = 0;
 
 	/**
 	 * @brief Set edge display settings
@@ -166,8 +164,7 @@ public:
 	virtual SoSeparator* createCoinNode(const TriangleMesh& mesh, bool selected,
 		const Quantity_Color& diffuseColor, const Quantity_Color& ambientColor,
 		const Quantity_Color& specularColor, const Quantity_Color& emissiveColor,
-		double shininess, double transparency,
-		bool forceCustomColor = false) = 0;
+		double shininess, double transparency) = 0;
 
 	/**
 	 * @brief Update Coin3D separator node

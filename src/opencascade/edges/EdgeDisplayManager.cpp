@@ -212,8 +212,14 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 	// This helps maintain consistency between geometry faces and mesh edges
 	MeshParameters currentParams = meshParams;
 	
+	size_t processedCount = 0;
 	for (auto& g : *m_geometries) {
 		if (!g) continue;
+		
+		// REMOVED wxYield() - it can corrupt GL state during batch operations
+		// Processing Windows messages while building Coin3D nodes causes GL context issues
+		// Edge extraction is fast enough that we don't need message processing
+		++processedCount;
 
 		// Set edge flags on the appropriate component
 		// Migration completed - always use modular edge component

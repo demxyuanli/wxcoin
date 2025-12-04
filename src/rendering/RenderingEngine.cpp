@@ -331,6 +331,15 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
 			return;
 		}
 
+		// CRITICAL FIX: Verify OpenGL context is actually functional
+		// SetCurrent() might return true even if the context is lost/reset
+		const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+		if (!glVersion) {
+			LOG_ERR_S("RenderingEngine::renderWithoutSwap: Context set but glGetString(GL_VERSION) returned NULL. Aborting frame.");
+			m_isRendering = false;
+			return;
+		}
+
 		// Verify OpenGL context is working
 		GLenum err = glGetError();
 		if (err != GL_NO_ERROR) {
@@ -928,5 +937,42 @@ void RenderingEngine::triggerRefresh() {
 	if (m_canvas) {
 		m_canvas->Refresh();
 		m_canvas->Update();
+	}
+}
+
+bool RenderingEngine::isGLContextValid() const {
+	if (!m_isInitialized || !m_glContext) {
+		return false;
+	}
+
+	// Try to set the context and check if glGetString works
+	if (!m_canvas->SetCurrent(*m_glContext)) {
+		return false;
+	}
+
+	// Check if glGetString returns a valid string
+	const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+	return version != nullptr;
+}
+
+bool RenderingEngine::reinitialize() {
+	LOG_INF_S("RenderingEngine::reinitialize: Attempting to reinitialize after context loss");
+
+	try {
+		// Clean up existing resources
+		m_isInitialized = false;
+
+		// Reinitialize
+		if (initialize()) {
+			LOG_INF_S("RenderingEngine::reinitialize: Successfully reinitialized");
+			return true;
+		} else {
+			LOG_ERR_S("RenderingEngine::reinitialize: Failed to reinitialize");
+			return false;
+		}
+	}
+	catch (const std::exception& e) {
+		LOG_ERR_S("RenderingEngine::reinitialize: Exception during reinitialize: " + std::string(e.what()));
+		return false;
 	}
 }

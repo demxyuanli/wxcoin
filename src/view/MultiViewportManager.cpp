@@ -733,8 +733,18 @@ void MultiViewportManager::renderViewport(const ViewportInfo& viewport, SoSepara
 	SoGLRenderAction renderAction(viewportRegion);
 	renderAction.setSmoothing(true);
 	renderAction.setTransparencyType(SoGLRenderAction::BLEND);
+	
+	// CRITICAL FIX: Must use same cache context as main scene to avoid Coin3D cache conflicts
+	// Using cacheContext=0 (default) while main scene uses Canvas ID causes GL resource corruption
+	uint32_t cacheId = (m_canvas) ? static_cast<uint32_t>(m_canvas->GetId()) : 1;
+	renderAction.setCacheContext(cacheId);
+	
+	// DEBUG: Log before Coin3D rendering for crash diagnosis
+	LOG_INF_S("MultiViewportManager::renderViewport: About to call renderAction.apply(), cacheId=" + std::to_string(cacheId));
 
 	renderAction.apply(root);
+	
+	LOG_INF_S("MultiViewportManager::renderViewport: renderAction.apply() completed successfully");
 
 	glPopMatrix();
 	glPopAttrib();

@@ -391,20 +391,35 @@ void OCCViewer::fitAll()
 		return;
 	}
 
+	// Check if Canvas is ready and visible before proceeding
+	Canvas* canvas = m_sceneManager->getCanvas();
+	if (!canvas) {
+		LOG_WRN_S("Canvas is null, cannot perform fitAll");
+		return;
+	}
+
+	if (!canvas->IsShown()) {
+		LOG_WRN_S("Canvas is not shown yet, deferring fitAll");
+		// Defer fitAll until Canvas is shown
+		canvas->CallAfter([this]() {
+			if (m_sceneManager && m_sceneManager->getCanvas() && m_sceneManager->getCanvas()->IsShown()) {
+				fitAll();
+			}
+		});
+		return;
+	}
+
 	// Update scene bounds first to ensure we have accurate bounding information
 	m_sceneManager->updateSceneBounds();
 
 	// Reset view to fit all geometries
 	m_sceneManager->resetView();
 
-	// Request view refresh
-	if (m_sceneManager->getCanvas()) {
-		Canvas* canvas = m_sceneManager->getCanvas();
-		if (canvas && canvas->getRefreshManager()) {
-			canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
-		}
-		canvas->Refresh();
+	// Request view refresh (non-immediate to avoid GL context issues)
+	if (canvas->getRefreshManager()) {
+		canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, false);
 	}
+	canvas->Refresh();
 }
 
 void OCCViewer::fitGeometry(const std::string& name)
@@ -949,7 +964,10 @@ void OCCViewer::requestViewRefresh()
 {
 	if (m_sceneManager && m_sceneManager->getCanvas()) {
 		Canvas* canvas = m_sceneManager->getCanvas();
-		canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, true);
+		// Check if Canvas is shown before requesting refresh
+		if (canvas->IsShown() && canvas->getRefreshManager()) {
+			canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::MATERIAL_CHANGED, false);
+		}
 	}
 }
 

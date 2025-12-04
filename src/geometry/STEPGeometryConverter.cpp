@@ -77,8 +77,9 @@ std::vector<std::shared_ptr<OCCGeometry>> STEPGeometryConverter::shapeToGeometri
                 }
             }
 
-            // Update progress less frequently to reduce callback overhead
-            if (progress && total > 0 && (i % 10 == 0 || i == total - 1)) {
+            // CRITICAL FIX: Update progress more frequently for large imports
+            // This calls wxYield() in ImportGeometryListener to keep GL context alive
+            if (progress && total > 0 && (i % 5 == 0 || i == total - 1)) {  // Changed from 10 to 5
                 int pct = progressStart + (int)std::round(((double)(i + 1) / (double)total) * progressSpan);
                 pct = std::max(progressStart, std::min(progressStart + progressSpan, pct));
                 progress(pct, "convert");
