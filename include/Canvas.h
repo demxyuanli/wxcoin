@@ -131,5 +131,10 @@ private:
 	FaceInfoOverlay m_faceInfoOverlay;
 	std::unique_ptr<SelectionInfoDialog> m_selectionInfoDialog;
 
+	// CRITICAL FIX: Following FreeCAD's approach - delay original edges display until first render completes
+	// This ensures GL context is fully ready before Coin3D creates Display Lists
+	bool m_firstPaintDone;
+	bool m_pendingShowOriginalEdges;
+
 	DECLARE_EVENT_TABLE()
 };

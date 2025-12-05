@@ -1,5 +1,6 @@
 #include "geometry/OCCGeometryMesh.h"
 #include "geometry/GeometryRenderContext.h"
+#include "geometry/VertexExtractor.h"
 #include "edges/ModularEdgeComponent.h"
 #include "logger/Logger.h"
 #include "rendering/RenderingToolkitAPI.h"
@@ -51,6 +52,9 @@ OCCGeometryMesh::OCCGeometryMesh()
 {
     // Use only modular edge component - migration completed
     modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+    
+    // Initialize independent vertex extractor for point view
+    m_vertexExtractor = std::make_unique<VertexExtractor>();
 }
 
 OCCGeometryMesh::~OCCGeometryMesh()
@@ -89,11 +93,18 @@ void OCCGeometryMesh::buildCoinRepresentation(const TopoDS_Shape& shape, const M
     }
     
     // Create or clear coin node
+    // CRITICAL FIX: Following FreeCAD's approach - disable render caching
     if (!m_coinNode) {
         m_coinNode = new SoSeparator();
+        m_coinNode->renderCaching.setValue(SoSeparator::OFF);
+        m_coinNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        m_coinNode->pickCulling.setValue(SoSeparator::OFF);
         m_coinNode->ref();
     } else {
         m_coinNode->removeAllChildren();
+        m_coinNode->renderCaching.setValue(SoSeparator::OFF);
+        m_coinNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        m_coinNode->pickCulling.setValue(SoSeparator::OFF);
     }
     
     // Clean up any existing texture nodes to prevent memory issues
@@ -147,11 +158,18 @@ void OCCGeometryMesh::buildCoinRepresentation(
     }
 
     // Create or clear coin node
+    // CRITICAL FIX: Following FreeCAD's approach - disable render caching
     if (!m_coinNode) {
         m_coinNode = new SoSeparator();
+        m_coinNode->renderCaching.setValue(SoSeparator::OFF);
+        m_coinNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        m_coinNode->pickCulling.setValue(SoSeparator::OFF);
         m_coinNode->ref();
     } else {
         m_coinNode->removeAllChildren();
+        m_coinNode->renderCaching.setValue(SoSeparator::OFF);
+        m_coinNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        m_coinNode->pickCulling.setValue(SoSeparator::OFF);
     }
 
     // Clean up any existing texture nodes
@@ -354,10 +372,16 @@ void OCCGeometryMesh::buildCoinRepresentation(
     }
 
     // Create or clear coin node with error checking
+    // CRITICAL FIX: Following FreeCAD's approach - disable render caching on all nodes
+    // This prevents GL context crashes when creating Display Lists in invalid contexts
     if (!m_coinNode) {
         try {
             m_coinNode = new SoSeparator();
             if (m_coinNode) {
+                // FreeCAD approach: Force disable render caching on root node
+                m_coinNode->renderCaching.setValue(SoSeparator::OFF);
+                m_coinNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+                m_coinNode->pickCulling.setValue(SoSeparator::OFF);
                 m_coinNode->ref();
             } else {
                 LOG_ERR_S("OCCGeometryMesh::buildCoinRepresentation: Failed to create SoSeparator");
@@ -370,11 +394,18 @@ void OCCGeometryMesh::buildCoinRepresentation(
     } else {
         try {
             m_coinNode->removeAllChildren();
+            // Ensure caching is still disabled after clearing
+            m_coinNode->renderCaching.setValue(SoSeparator::OFF);
+            m_coinNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+            m_coinNode->pickCulling.setValue(SoSeparator::OFF);
         } catch (const std::exception& e) {
             LOG_ERR_S("OCCGeometryMesh::buildCoinRepresentation: Exception removing children: " + std::string(e.what()));
             // Try to recover by creating a new node
             m_coinNode->unref();
             m_coinNode = new SoSeparator();
+            m_coinNode->renderCaching.setValue(SoSeparator::OFF);
+            m_coinNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+            m_coinNode->pickCulling.setValue(SoSeparator::OFF);
             m_coinNode->ref();
         }
     }
@@ -679,6 +710,11 @@ void OCCGeometryMesh::buildCoinRepresentation(
         }
     };
 
+    // CRITICAL FIX: Following FreeCAD's exact rendering order
+    // FreeCAD order: Points -> PolygonOffset -> Faces -> Edges
+    // This ensures edges always appear on top of faces (Z-buffer artifacts prevention)
+    SoPolygonOffset* polygonOffset = nullptr;
+    
     auto appendSurfacePass = [&](const GeometryRenderContext& ctx) {
         m_coinNode->addChild(createDrawStyleNode(ctx));
         m_coinNode->addChild(createMaterialNode(ctx));
@@ -688,11 +724,12 @@ void OCCGeometryMesh::buildCoinRepresentation(
         // FreeCAD approach: Add polygon offset BEFORE faces to avoid Z-buffer artifacts
         // This ensures edges (rendered AFTER faces) always appear on top
         // Using default SoPolygonOffset values (factor=0.0, units=0.0) works correctly
-        // because it affects the depth calculation for faces, making them slightly behind edges
-        SoPolygonOffset* polygonOffset = new SoPolygonOffset();
-        // Use default values (factor=0.0, units=0.0) - this is what FreeCAD does
         // The offset affects faces rendered after this node, pushing them slightly back
-        m_coinNode->addChild(polygonOffset);
+        if (!polygonOffset) {
+            polygonOffset = new SoPolygonOffset();
+            // Use default values (factor=0.0, units=0.0) - this is what FreeCAD does
+            m_coinNode->addChild(polygonOffset);
+        }
         
         appendSurfaceGeometry(ctx);
     };
@@ -774,6 +811,29 @@ void OCCGeometryMesh::buildCoinRepresentation(
 
     // ===== Set visibility =====
     m_coinNode->renderCulling = context.display.visible ? SoSeparator::OFF : SoSeparator::ON;
+
+    // ===== CRITICAL: Extract and cache original edges and vertices at import time =====
+    // This happens ONCE at import, then edges/points are rendered on demand from cache
+    // Avoids async threading and OpenGL context issues
+    if (modularEdgeComponent) {
+        try {
+            // Extract edges with default quality settings
+            double samplingDensity = 80.0;  // Default density
+            double minLength = 0.01;        // Default minimum length
+            modularEdgeComponent->extractAndCacheOriginalEdges(shape, samplingDensity, minLength);
+        } catch (const std::exception& e) {
+            LOG_ERR_S("OCCGeometryMesh: Failed to cache edges: " + std::string(e.what()));
+        }
+    }
+    
+    // Extract and cache vertices using independent VertexExtractor
+    if (m_vertexExtractor) {
+        try {
+            m_vertexExtractor->extractAndCache(shape);
+        } catch (const std::exception& e) {
+            LOG_ERR_S("OCCGeometryMesh: Failed to cache vertices: " + std::string(e.what()));
+        }
+    }
 
     // ===== Edge component handling =====
     // NOTE: Edge component only processes when NOT in wireframe mode
@@ -1008,7 +1068,11 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
         }
 
         // Create point view separator
+        // CRITICAL FIX: Following FreeCAD's approach - disable render caching
         SoSeparator* pointViewSep = new SoSeparator();
+        pointViewSep->renderCaching.setValue(SoSeparator::OFF);
+        pointViewSep->boundingBoxCaching.setValue(SoSeparator::OFF);
+        pointViewSep->pickCulling.setValue(SoSeparator::OFF);
 
         // Create material for points
         SoMaterial* pointMaterial = new SoMaterial();
@@ -1051,12 +1115,18 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
             // For circles, we can use SoSphere nodes at each point
             // This is more expensive but gives true circular points
             SoSeparator* circleSep = new SoSeparator();
+            circleSep->renderCaching.setValue(SoSeparator::OFF);
+            circleSep->boundingBoxCaching.setValue(SoSeparator::OFF);
+            circleSep->pickCulling.setValue(SoSeparator::OFF);
             circleSep->addChild(pointMaterial);
             
             for (size_t i = 0; i < mesh.vertices.size(); ++i) {
                 const gp_Pnt& vertex = mesh.vertices[i];
                 
                 SoSeparator* sphereSep = new SoSeparator();
+                sphereSep->renderCaching.setValue(SoSeparator::OFF);
+                sphereSep->boundingBoxCaching.setValue(SoSeparator::OFF);
+                sphereSep->pickCulling.setValue(SoSeparator::OFF);
                 
                 // Translation to vertex position
                 SoTranslation* translation = new SoTranslation();
@@ -1084,12 +1154,18 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
         } else if (displaySettings.pointViewShape == 2) { // Triangle
             // For triangles, we can use SoCone nodes (triangular cross-section)
             SoSeparator* triangleSep = new SoSeparator();
+            triangleSep->renderCaching.setValue(SoSeparator::OFF);
+            triangleSep->boundingBoxCaching.setValue(SoSeparator::OFF);
+            triangleSep->pickCulling.setValue(SoSeparator::OFF);
             triangleSep->addChild(pointMaterial);
             
             for (size_t i = 0; i < mesh.vertices.size(); ++i) {
                 const gp_Pnt& vertex = mesh.vertices[i];
                 
                 SoSeparator* coneSep = new SoSeparator();
+                coneSep->renderCaching.setValue(SoSeparator::OFF);
+                coneSep->boundingBoxCaching.setValue(SoSeparator::OFF);
+                coneSep->pickCulling.setValue(SoSeparator::OFF);
                 
                 // Translation to vertex position
                 SoTranslation* translation = new SoTranslation();

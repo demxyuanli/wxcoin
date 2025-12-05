@@ -156,6 +156,9 @@ public:
     // Edge component control
     bool useModularEdgeComponent = true;  // Switch between old and new component
 
+    // NEW: Independent vertex extractor for point view (separated from edges)
+    std::unique_ptr<class VertexExtractor> m_vertexExtractor;
+
     void setEdgeDisplayType(EdgeType type, bool show);
     bool isEdgeDisplayTypeEnabled(EdgeType type) const;
     void updateEdgeDisplay();
@@ -164,6 +167,10 @@ public:
     // Modular edge component methods
     void enableModularEdgeComponent(bool enable);
     bool isUsingModularEdgeComponent() const { return useModularEdgeComponent; }
+
+    // NEW: Independent vertex extractor for point view
+    class VertexExtractor* getVertexExtractor() { return m_vertexExtractor.get(); }
+    const class VertexExtractor* getVertexExtractor() const { return m_vertexExtractor.get(); }
 
     // Assembly level for hierarchical explode
     int getAssemblyLevel() const { return m_assemblyLevel; }

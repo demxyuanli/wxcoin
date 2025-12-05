@@ -4,9 +4,14 @@
 #include "edges/renderers/MeshEdgeRenderer.h"
 #include "edges/AsyncEdgeIntersectionComputer.h"
 #include "logger/AsyncLogger.h"
+#include "logger/Logger.h"
 #include <OpenCASCADE/TopExp_Explorer.hxx>
 #include <OpenCASCADE/TopoDS.hxx>
 #include <OpenCASCADE/TopAbs.hxx>
+#include <OpenCASCADE/BRepAdaptor_Curve.hxx>
+#include <OpenCASCADE/BRep_Tool.hxx>
+#include <set>
+#include <tuple>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoTranslation.h>
@@ -14,6 +19,7 @@
 #include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoLineSet.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 
@@ -196,7 +202,9 @@ void ModularEdgeComponent::extractMeshEdges(
 
 void ModularEdgeComponent::extractSilhouetteEdges(
     const TopoDS_Shape& shape,
-    const gp_Pnt& cameraPos) {
+    const gp_Pnt& cameraPos,
+    const Quantity_Color& color,
+    double width) {
 
     if (!m_silhouetteExtractor) {
         LOG_WRN_S_ASYNC("Silhouette edge extractor not available");
@@ -205,12 +213,22 @@ void ModularEdgeComponent::extractSilhouetteEdges(
 
     std::lock_guard<std::mutex> lock(m_nodeMutex);
 
+    // Following FreeCAD's approach: extract silhouette edges based on view direction
     SilhouetteEdgeParams params(cameraPos);
     std::vector<gp_Pnt> points = m_silhouetteExtractor->extract(shape, &params);
 
     cleanupEdgeNode(silhouetteEdgeNode);
-    if (m_originalRenderer) {
-        silhouetteEdgeNode = m_originalRenderer->generateNode(points);
+    
+    // Create silhouette edge node with proper color and width
+    if (m_originalRenderer && !points.empty()) {
+        silhouetteEdgeNode = m_originalRenderer->generateNode(points, color, width);
+        
+        // CRITICAL FIX: Disable Display List caching (following FreeCAD's approach)
+        if (silhouetteEdgeNode) {
+            silhouetteEdgeNode->renderCaching.setValue(SoSeparator::OFF);
+            silhouetteEdgeNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+            silhouetteEdgeNode->pickCulling.setValue(SoSeparator::OFF);
+        }
     }
 
 }
@@ -277,7 +295,11 @@ void ModularEdgeComponent::updateOriginalEdgesDisplay(SoSeparator* parentNode) {
     }
 
     // Add current edge nodes (except intersection nodes)
-    if (originalEdgeNode && edgeFlags.showOriginalEdges) {
+    // CRITICAL FEATURE: When silhouette mode is active, show silhouette instead of original edges
+    if (silhouetteEdgeNode) {
+        // Silhouette edges take priority (fast mode)
+        parentNode->addChild(silhouetteEdgeNode);
+    } else if (originalEdgeNode && edgeFlags.showOriginalEdges) {
         parentNode->addChild(originalEdgeNode);
     }
     if (featureEdgeNode && edgeFlags.showFeatureEdges) {
@@ -344,7 +366,12 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
     // We use insertChild with a large index to ensure edges are always last
     int insertIndex = parentNode->getNumChildren();
     
-    if (originalEdgeNode && edgeFlags.showOriginalEdges) {
+    // CRITICAL FEATURE: When silhouette mode is active, show silhouette instead of original edges
+    // Following FreeCAD's approach: silhouette edges provide fast preview mode
+    if (silhouetteEdgeNode) {
+        // Silhouette edges take priority (fast mode)
+        parentNode->insertChild(silhouetteEdgeNode, insertIndex++);
+    } else if (originalEdgeNode && edgeFlags.showOriginalEdges) {
         parentNode->insertChild(originalEdgeNode, insertIndex++);
     }
     if (featureEdgeNode && edgeFlags.showFeatureEdges) {
@@ -532,6 +559,12 @@ SoSeparator* ModularEdgeComponent::createIntersectionNodesNode(
 
     SoSeparator* node = new SoSeparator();
     node->ref();
+
+    // CRITICAL FIX: Disable Display List caching to prevent GL context crashes
+    // Following FreeCAD's approach: disable all three caches (triple safety)
+    node->renderCaching.setValue(SoSeparator::OFF);
+    node->boundingBoxCaching.setValue(SoSeparator::OFF);
+    node->pickCulling.setValue(SoSeparator::OFF);
 
     SoMaterial* material = new SoMaterial();
     material->diffuseColor.setValue(
@@ -916,4 +949,142 @@ void ModularEdgeComponent::cancelIntersectionComputation() {
     }
     m_computingIntersections.store(false);
 }
+
+// ===== NEW IMPLEMENTATION: Cache-based edge rendering =====
+
+void ModularEdgeComponent::extractAndCacheOriginalEdges(const TopoDS_Shape& shape, double samplingDensity, double minLength) {
+    std::lock_guard<std::mutex> lock(m_cachedEdgesMutex);
+    
+    // Clear previous cache
+    m_cachedOriginalEdges.clear();
+    
+    if (shape.IsNull()) {
+        LOG_WRN_S("ModularEdgeComponent::extractAndCacheOriginalEdges: Shape is null");
+        return;
+    }
+    
+    try {
+        // Extract all edges from the shape using OpenCASCADE API directly
+        for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
+            const TopoDS_Edge& edge = TopoDS::Edge(exp.Current());
+            
+            if (edge.IsNull()) continue;
+            
+            // Get the curve adaptor
+            BRepAdaptor_Curve curve(edge);
+            double first = curve.FirstParameter();
+            double last = curve.LastParameter();
+            
+            // Skip very short edges
+            if (last - first < minLength * 0.1) continue;
+            
+            // Sample points along the edge
+            int numSamples = std::max(2, static_cast<int>((last - first) * samplingDensity / 10.0));
+            double step = (last - first) / (numSamples - 1);
+            
+            std::vector<int> edgeVertexIndices;
+            for (int i = 0; i < numSamples; ++i) {
+                double param = first + i * step;
+                gp_Pnt pt = curve.Value(param);
+                
+                // Add vertex
+                int vertexIndex = static_cast<int>(m_cachedOriginalEdges.vertices.size());
+                m_cachedOriginalEdges.vertices.push_back(pt);
+                edgeVertexIndices.push_back(vertexIndex);
+            }
+            
+            // Create segments for this edge
+            for (size_t i = 1; i < edgeVertexIndices.size(); ++i) {
+                m_cachedOriginalEdges.segments.push_back({
+                    edgeVertexIndices[i-1],
+                    edgeVertexIndices[i]
+                });
+            }
+        }
+        
+        m_cachedOriginalEdges.isValid = true;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("ModularEdgeComponent::extractAndCacheOriginalEdges: Exception: " + std::string(e.what()));
+        m_cachedOriginalEdges.clear();
+    }
+}
+
+SoSeparator* ModularEdgeComponent::createNodeFromCachedEdges(const Quantity_Color& color, double width) {
+    std::lock_guard<std::mutex> lock(m_cachedEdgesMutex);
+    
+    if (!m_cachedOriginalEdges.isValid || m_cachedOriginalEdges.vertices.empty()) {
+        LOG_WRN_S("ModularEdgeComponent::createNodeFromCachedEdges: No cached edge data available");
+        return nullptr;
+    }
+    
+    try {
+        std::lock_guard<std::mutex> nodeLock(m_nodeMutex);
+        
+        // Clean up existing node
+        cleanupEdgeNode(originalEdgeNode);
+        
+        // Create new node
+        originalEdgeNode = new SoSeparator();
+        originalEdgeNode->ref();
+        
+        // CRITICAL FIX: Disable Display List caching to prevent GL context crashes
+        // Following FreeCAD's approach: disable all three caches (triple safety)
+        // This prevents Coin3D from trying to create OpenGL Display Lists in invalid contexts
+        originalEdgeNode->renderCaching.setValue(SoSeparator::OFF);
+        originalEdgeNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        originalEdgeNode->pickCulling.setValue(SoSeparator::OFF);
+        
+        // Add material
+        SoMaterial* material = new SoMaterial();
+        material->diffuseColor.setValue(
+            static_cast<float>(color.Red()),
+            static_cast<float>(color.Green()),
+            static_cast<float>(color.Blue())
+        );
+        originalEdgeNode->addChild(material);
+        
+        // Add draw style
+        SoDrawStyle* drawStyle = new SoDrawStyle();
+        drawStyle->lineWidth.setValue(static_cast<float>(width));
+        originalEdgeNode->addChild(drawStyle);
+        
+        // Add coordinates
+        SoCoordinate3* coords = new SoCoordinate3();
+        coords->point.setNum(m_cachedOriginalEdges.vertices.size());
+        for (size_t i = 0; i < m_cachedOriginalEdges.vertices.size(); ++i) {
+            const auto& pt = m_cachedOriginalEdges.vertices[i];
+            coords->point.set1Value(i, 
+                static_cast<float>(pt.X()),
+                static_cast<float>(pt.Y()),
+                static_cast<float>(pt.Z())
+            );
+        }
+        originalEdgeNode->addChild(coords);
+        
+        // Add indexed line segments (CRITICAL FIX: use SoIndexedLineSet, not SoLineSet)
+        // segments contains index pairs, we need to build coordIndex array with separators
+        SoIndexedLineSet* lineSet = new SoIndexedLineSet();
+        
+        // Build coordIndex: for each segment (v1, v2), add: v1, v2, -1
+        int coordIndexSize = m_cachedOriginalEdges.segments.size() * 3; // 3 indices per segment (v1, v2, -1)
+        lineSet->coordIndex.setNum(coordIndexSize);
+        
+        int indexPos = 0;
+        for (const auto& segment : m_cachedOriginalEdges.segments) {
+            lineSet->coordIndex.set1Value(indexPos++, segment.first);   // Start vertex
+            lineSet->coordIndex.set1Value(indexPos++, segment.second);  // End vertex
+            lineSet->coordIndex.set1Value(indexPos++, -1);              // Separator
+        }
+        
+        originalEdgeNode->addChild(lineSet);
+        
+        return originalEdgeNode;
+        
+    } catch (const std::exception& e) {
+        LOG_ERR_S("ModularEdgeComponent::createNodeFromCachedEdges: Exception: " + std::string(e.what()));
+        return nullptr;
+    }
+}
+
 

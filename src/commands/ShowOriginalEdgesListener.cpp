@@ -9,6 +9,8 @@
 #include "Canvas.h"
 #include "logger/AsyncLogger.h"
 #include <wx/frame.h>
+#include <wx/app.h>
+#include <wx/msgdlg.h>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <memory>
@@ -59,13 +61,48 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 			uiHelper->beginOperation("Extracting Original Edges");
 
 			try {
+				// CRITICAL FIX: Check edge count before extraction (automatic protection)
+				// Following FreeCAD's approach: warn user if edge count > 100,000
+				size_t totalEdgeCount = 0;
+				try {
+					auto geometries = m_viewer->getAllGeometry();
+					for (const auto& geom : geometries) {
+						if (geom && !geom->getShape().IsNull()) {
+							int edgeCount = 0;
+							for (TopExp_Explorer exp(geom->getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
+								edgeCount++;
+							}
+							totalEdgeCount += edgeCount;
+						}
+					}
+				} catch (const std::exception&) {
+					// Continue even if count fails
+				}
+				
+				// Warn user if edge count is very large
+				if (totalEdgeCount > 100000) {
+					int result = wxMessageBox(
+						wxString::Format("Warning: This model contains %zu edges.\n\n"
+							"Displaying original edges may cause performance issues.\n\n"
+							"Do you want to continue?", totalEdgeCount),
+						"Large Model Warning",
+						wxYES_NO | wxICON_WARNING | wxYES_DEFAULT,
+						m_frame
+					);
+					if (result == wxNO) {
+						uiHelper->endOperation();
+						return CommandResult(false, "User cancelled due to large edge count", commandType);
+					}
+				}
+				
 				// Apply parameters to viewer (without intersection highlighting initially)
 				m_viewer->setOriginalEdgesParameters(samplingDensity, minLength, showLinesOnly, edgeColor, edgeWidth,
 					highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 
 			// Step 1: Extract and display original edges only (without intersections)
 			uiHelper->updateProgress(20, "Extracting original edges...");
-			LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Extracting original edges without intersections");
+			LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Extracting original edges without intersections (total edges: " + 
+				std::to_string(totalEdgeCount) + ")");
 
 			// Extract edges without intersection highlighting (async)
 			auto edgeDisplayManager = m_viewer->getEdgeDisplayManager();
@@ -74,26 +111,34 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				Quantity_Color occColor(edgeColor.Red() / 255.0, edgeColor.Green() / 255.0, edgeColor.Blue() / 255.0, Quantity_TOC_RGB);
 				Quantity_Color intersectionNodeOccColor(intersectionNodeColor.Red() / 255.0, intersectionNodeColor.Green() / 255.0, intersectionNodeColor.Blue() / 255.0, Quantity_TOC_RGB);
 
-				// Async extraction with completion callback
-				// Note: highlightIntersectionNodes and edgeDisplayManager must be captured by value, not by reference,
-				// because the lambda is executed asynchronously and the local variable may be out of scope
-				edgeDisplayManager->extractOriginalEdgesOnly(samplingDensity, minLength, showLinesOnly,
-					occColor, edgeWidth, intersectionNodeOccColor, intersectionNodeSize, intersectionNodeShape,
-					[this, uiHelper, highlightIntersectionNodes, edgeDisplayManager,
-					 samplingDensity, minLength, showLinesOnly](bool success, const std::string& error) {
+					// Async extraction with completion callback
+					// Note: highlightIntersectionNodes and edgeDisplayManager must be captured by value, not by reference,
+					// because the lambda is executed asynchronously and the local variable may be out of scope
+					edgeDisplayManager->extractOriginalEdgesOnly(samplingDensity, minLength, showLinesOnly,
+						occColor, edgeWidth, intersectionNodeOccColor, intersectionNodeSize, intersectionNodeShape,
+						[this, uiHelper, highlightIntersectionNodes, edgeDisplayManager,
+						 samplingDensity, minLength, showLinesOnly](bool success, const std::string& error) {
 
 						if (success) {
-							// Enable original edges display
-							m_viewer->setShowOriginalEdges(true);
+							// Schedule rendering operations on main thread to avoid OpenGL context issues
+							wxTheApp->CallAfter([this, uiHelper]() {
+								try {
+									// Enable original edges display on main thread
+									m_viewer->setShowOriginalEdges(true);
 
-							// Force immediate refresh to show edges
-							LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Refreshing to show original edges");
-							if (m_viewer->getSceneManager() && m_viewer->getSceneManager()->getCanvas()) {
-								m_viewer->getSceneManager()->getCanvas()->Refresh();
-							}
-								m_viewer->requestViewRefresh();
-							uiHelper->updateProgress(40, "Original edges displayed");
-							LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Original edges displayed successfully");
+									// Force immediate refresh to show edges
+									LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Refreshing to show original edges");
+									if (m_viewer->getSceneManager() && m_viewer->getSceneManager()->getCanvas()) {
+										m_viewer->getSceneManager()->getCanvas()->Refresh();
+									}
+									m_viewer->requestViewRefresh();
+									uiHelper->updateProgress(40, "Original edges displayed");
+									LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Original edges displayed successfully");
+								} catch (const std::exception& e) {
+									LOG_ERR_S("Error in main thread callback: " + std::string(e.what()));
+									uiHelper->updateProgress(100, "Error displaying edges: " + std::string(e.what()));
+								}
+							});
 
 							// Continue to step 2 if intersection computation is needed
 							LOG_INF_S_ASYNC("ShowOriginalEdgesListener: Checking intersection computation - highlightIntersectionNodes=" + 
@@ -133,24 +178,35 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 									// Note: uiHelper is captured by value (shared_ptr) to ensure lifetime extends to async callbacks
 									auto onComplete = [this, uiHelper](size_t totalPoints, bool success) {
 										if (!uiHelper) return; // Safety check
-										
-										if (success) {
-											LOG_INF_S_ASYNC("Multi-geometry intersection computation completed: " +
-											         std::to_string(totalPoints) + " total intersections found");
 
-											// Hide progress bar when computation is complete
-											uiHelper->setIndeterminateProgress(false);
-											uiHelper->updateProgress(100, "Intersection computation completed");
-											LOG_INF_S_ASYNC("Progressive display: Progress bar hidden, computation completed");
+										// Schedule UI operations on main thread
+										wxTheApp->CallAfter([this, uiHelper, totalPoints, success]() {
+											try {
+												if (success) {
+													LOG_INF_S_ASYNC("Multi-geometry intersection computation completed: " +
+													         std::to_string(totalPoints) + " total intersections found");
 
-											if (m_viewer) {
-												m_viewer->requestViewRefresh();
+													// Hide progress bar when computation is complete
+													uiHelper->setIndeterminateProgress(false);
+													uiHelper->updateProgress(100, "Intersection computation completed");
+													LOG_INF_S_ASYNC("Progressive display: Progress bar hidden, computation completed");
+
+													if (m_viewer) {
+														m_viewer->requestViewRefresh();
+													}
+												} else {
+													LOG_ERR_S("Multi-geometry intersection computation failed");
+													uiHelper->setIndeterminateProgress(false);
+													uiHelper->updateProgress(100, "Intersection computation failed");
+												}
+											} catch (const std::exception& e) {
+												LOG_ERR_S("Error in intersection completion callback: " + std::string(e.what()));
+												if (uiHelper) {
+													uiHelper->setIndeterminateProgress(false);
+													uiHelper->updateProgress(100, "Error in intersection completion");
+												}
 											}
-										} else {
-											LOG_ERR_S("Multi-geometry intersection computation failed");
-											uiHelper->setIndeterminateProgress(false);
-											uiHelper->updateProgress(100, "Intersection computation failed");
-										}
+										});
 									};
 
 									// Progress callback - shows computation progress and batch updates

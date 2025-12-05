@@ -17,6 +17,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryQuality.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryMesh.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryPrimitives.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/VertexExtractor.cpp
     
     # Modular viewer implementations (internal)
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewportController.cpp
@@ -98,6 +99,7 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryDisplay.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryQuality.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryMesh.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/VertexExtractor.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryPrimitives.h
     
     # Internal viewer module headers

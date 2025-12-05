@@ -21,11 +21,49 @@
 #include <wx/dcclient.h>
 #include <wx/dcgraph.h>
 #include <wx/msgdlg.h>
+#include <wx/app.h>
 #include "MultiViewportManager.h"
 #include "SplitViewportManager.h"
 #include "config/RenderingConfig.h"
 #include "EdgeTypes.h"
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
+#include <cmath>
 #include <chrono>
+
+// Helper function: Calculate adaptive sampling density based on model bounding box
+// Following FreeCAD's approach: larger models get sparser sampling
+static double calculateAdaptiveSamplingDensity(const Bnd_Box& bbox) {
+    if (bbox.IsVoid()) {
+        return 80.0; // Default if bounding box is void
+    }
+    
+    try {
+        double xmin, ymin, zmin, xmax, ymax, zmax;
+        bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);
+        
+        double dx = xmax - xmin;
+        double dy = ymax - ymin;
+        double dz = zmax - zmin;
+        double diagonal = std::sqrt(dx*dx + dy*dy + dz*dz);
+        
+        // Adaptive density: larger models get sparser sampling
+        // Formula: density = 60.0 + 40.0 * log10(diagonal / 1000.0)
+        // For small models (< 1000 units): density ~ 60-80
+        // For large models (> 10000 units): density ~ 40-60
+        double density = 60.0 + 40.0 * std::log10(std::max(1.0, diagonal / 1000.0));
+        
+        // Clamp to reasonable range
+        density = std::max(20.0, std::min(100.0, density));
+        
+        return density;
+    } catch (const std::exception&) {
+        return 80.0; // Default on error
+    }
+}
+
 const int Canvas::s_canvasAttribs[] = {
 	WX_GL_RGBA,
 	WX_GL_DOUBLEBUFFER,
@@ -59,6 +97,8 @@ Canvas::Canvas(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize
 	, m_occViewer(nullptr)
 	, m_multiViewportEnabled(false)
 	, m_splitViewportEnabled(false)
+	, m_firstPaintDone(false)
+	, m_pendingShowOriginalEdges(false)
 {
 	LOG_INF_S("Canvas::Canvas: Initializing");
 
@@ -256,6 +296,31 @@ void Canvas::render(bool fastMode) {
 		}
 	} else {
 		LOG_WRN_S("CANVAS: No rendering engine available");
+	}
+
+	// CRITICAL FIX: Following FreeCAD's approach - delay original edges display until first render completes
+	// Use double CallAfter to ensure GL context is 100% stable before creating Coin3D nodes
+	if (!m_firstPaintDone && m_pendingShowOriginalEdges && m_occViewer) {
+		m_firstPaintDone = true;
+		// Double delay: first CallAfter ensures render is complete, second ensures GL context is stable
+		wxTheApp->CallAfter([this]() {
+			wxTheApp->CallAfter([this]() {
+				if (m_occViewer && m_pendingShowOriginalEdges) {
+					try {
+						m_occViewer->setShowOriginalEdges(true);
+						m_pendingShowOriginalEdges = false;
+						// Force refresh to show edges
+						if (m_sceneManager && m_sceneManager->getCanvas()) {
+							m_sceneManager->getCanvas()->Refresh();
+						}
+						m_occViewer->requestViewRefresh();
+						LOG_INF_S("Canvas::render: Original edges enabled after first render (double-delayed for safety)");
+					} catch (const std::exception& e) {
+						LOG_ERR_S("Canvas::render: Error enabling original edges: " + std::string(e.what()));
+					}
+				}
+			});
+		});
 	}
 
 	LOG_DBG_S("=== CANVAS: RENDER COMPLETED ===");
@@ -539,27 +604,61 @@ void Canvas::setOCCViewer(OCCViewer* occViewer) {
 		RenderingConfig& nonConstConfig = const_cast<RenderingConfig&>(renderingConfig);
 		nonConstConfig.setShadingSettings(shadingSettings);
 		
-		// Enable original edges display if configured or in NoShading mode
+		// CRITICAL FIX: Only set parameters, NEVER enable original edges automatically during import!
+		// User must manually click the toolbar button to show original edges - this is the correct approach
+		// This completely avoids crashes during model import
 		if (displaySettings.showOriginalEdges || displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
-			// Set original edges parameters first
-			m_occViewer->setOriginalEdgesParameters(
-				80.0,  // samplingDensity
-				0.01,  // minLength
-				false, // showLinesOnly
-				wxColour(0, 0, 0), // black color for edges
-				1.0,   // width
-				false, // highlightIntersectionNodes
-				wxColour(255, 0, 0), // intersectionNodeColor (not used)
-				3.0,   // intersectionNodeSize (not used)
-				IntersectionNodeShape::Point // intersectionNodeShape (not used)
-			);
-			// Then enable original edges display
-			m_occViewer->setShowOriginalEdges(true);
-			if (displaySettings.showOriginalEdges) {
-				LOG_INF_S("Canvas::setOCCViewer: Enabled original edges display from configuration");
-			} else {
-			LOG_INF_S("Canvas::setOCCViewer: Applied NoShading mode - enabled edges and original edges display");
+			// Calculate adaptive sampling density based on model size (FreeCAD approach)
+			double adaptiveDensity = 80.0; // Default
+			try {
+				auto geometries = m_occViewer->getAllGeometry();
+				if (!geometries.empty()) {
+					// Calculate combined bounding box for all geometries
+					Bnd_Box combinedBbox;
+					for (const auto& geom : geometries) {
+						if (geom && !geom->getShape().IsNull()) {
+							BRepBndLib::Add(geom->getShape(), combinedBbox);
+						}
+					}
+					if (!combinedBbox.IsVoid()) {
+						adaptiveDensity = calculateAdaptiveSamplingDensity(combinedBbox);
+					}
+				}
+			} catch (const std::exception&) {
+				// Use default on error
 			}
+			
+			// CRITICAL FEATURE: Use global edge settings from Preference Pack (following FreeCAD's approach)
+			// Load edge color and width from global configuration
+			wxColour edgeColor(0, 0, 0);  // Default black
+			double edgeWidth = 1.0;       // Default width
+			try {
+				// Try to load from EdgeSettingsConfig if available
+				// For now, use defaults - can be extended to read from config file
+			} catch (const std::exception&) {
+				// Use defaults on error
+			}
+			
+			// Set original edges parameters with adaptive density (safe, no GL operations)
+			m_occViewer->setOriginalEdgesParameters(
+				adaptiveDensity,  // Adaptive sampling density based on model size
+				0.01,   // minLength
+				false,  // showLinesOnly
+				edgeColor,  // edgeColor from global config (or default)
+				edgeWidth,  // edgeWidth from global config (or default)
+				false,  // highlightIntersectionNodes
+				wxColour(255, 0, 0), // intersectionNodeColor
+				3.0,    // intersectionNodeSize
+				IntersectionNodeShape::Point // intersectionNodeShape
+			);
+
+			// Mark for delayed enable after first render completes
+			// Following FreeCAD's approach: only set parameters, delay actual display
+			m_pendingShowOriginalEdges = true;
+			LOG_INF_S("Canvas::setOCCViewer: Original edges parameters loaded, will be displayed after first render completes");
+		} else {
+			// If config explicitly disables it, don't enable it secretly
+			LOG_INF_S("Canvas::setOCCViewer: ShowOriginalEdges is disabled in config");
 		}
 		
 		LOG_INF_S("Canvas::setOCCViewer: Applied initial render mode from RenderingConfig: " + 

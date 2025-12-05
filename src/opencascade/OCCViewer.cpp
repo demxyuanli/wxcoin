@@ -204,11 +204,15 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 			RenderingConfig& renderingConfig = RenderingConfig::getInstance();
 			auto displaySettings = renderingConfig.getDisplaySettings();
 			if (displaySettings.showOriginalEdges) {
-				// Ensure original edges are enabled for newly added geometry
-				if (m_edgeDisplayManager) {
-					m_edgeDisplayManager->setShowOriginalEdges(true, m_meshParams);
-					LOG_INF_S("OCCViewer::addGeometry: Applied original edges display from configuration for geometry: " + geometry->getName());
-				}
+				// CRITICAL FIX: Delay edge display until after import completes and GL context is stable
+				// Immediate execution during import can cause GL context issues with large files
+				wxTheApp->CallAfter([this, geometryName = geometry->getName()]() {
+					// Ensure original edges are enabled for newly added geometry
+					if (m_edgeDisplayManager) {
+						m_edgeDisplayManager->setShowOriginalEdges(true, m_meshParams);
+						LOG_INF_S("OCCViewer::addGeometry: Applied original edges display from configuration (delayed) for geometry: " + geometryName);
+					}
+				});
 			}
 
 			// Handle view updates

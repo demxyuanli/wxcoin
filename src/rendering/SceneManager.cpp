@@ -649,14 +649,14 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		
 		// Check for GL errors after rendering
 		GLenum postRenderError = glGetError();
-		if (postRenderError != GL_NO_ERROR) {
+		if (postRenderError != GL_NO_ERROR) { 
 			static int renderErrorCount = 0;
 			if (renderErrorCount < 5) {
 				LOG_WRN_S("SceneManager::render: GL error after renderAction.apply(): " + 
 					std::to_string(postRenderError));
 				renderErrorCount++;
 			}
-		}
+		} 
 	} catch (const std::exception& e) {
 		// Restore blend state before returning
 		glBlendFunc(blendSrc, blendDst);

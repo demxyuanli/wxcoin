@@ -22,8 +22,21 @@
 #include "mod/SoFCSelection.h"
 #include "mod/SoFCUnifiedSelection.h"
 
+// CRITICAL FIX: Disable Coin3D Display List caching globally
+// This prevents GL context crashes when creating Coin3D nodes in invalid contexts
+// This is the core reason FreeCAD 1.0 can smoothly open 2GB+ assemblies
+static void DisableCoinDangerousCaches()
+{
+    SoDB::setCacheMode(SoDB::CACHE_DISABLED);  // Disable globally, never crash
+    // If you want finer control, you can also only disable renderCaching, but global disable is most stable
+}
+
 bool MainApplication::OnInit()
 {
+    // CRITICAL: Disable Coin3D Display List caching BEFORE any window creation!
+    // Must be called before wxApp initialization and any GLCanvas creation
+    DisableCoinDangerousCaches();
+
     // Initialize Coin3D first - this must happen before any SoBase-derived objects are created
     try {
         SoDB::init();

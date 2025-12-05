@@ -23,6 +23,15 @@ public:
 	// Toggling APIs
 	void toggleEdgeType(EdgeType type, bool show, const MeshParameters& meshParams);
 	void setShowOriginalEdges(bool show, const MeshParameters& meshParams);
+	
+	// CRITICAL FEATURE: Show original edges only for selected objects (performance optimization)
+	void setShowOriginalEdgesForSelectedOnly(bool selectedOnly, const MeshParameters& meshParams);
+	bool isShowOriginalEdgesForSelectedOnly() const { return m_showOriginalEdgesForSelectedOnly; }
+	
+	// CRITICAL FEATURE: Show only silhouette edges (fast mode, similar to FreeCAD)
+	void setShowSilhouetteEdgesOnly(bool silhouetteOnly, const MeshParameters& meshParams);
+	bool isShowSilhouetteEdgesOnly() const { return m_showSilhouetteEdgesOnly; }
+	
 	void extractOriginalEdgesOnly(double samplingDensity, double minLength, bool showLinesOnly,
 		const Quantity_Color& color, double width, const Quantity_Color& intersectionNodeColor,
 		double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape,
@@ -137,4 +146,8 @@ private:
 		IntersectionNodeShape intersectionNodeShape{ IntersectionNodeShape::Point };
 	};
 	OriginalEdgeParams m_originalEdgeParams{};
+	
+	// CRITICAL FEATURES: Advanced display modes
+	bool m_showOriginalEdgesForSelectedOnly{ false };  // Show edges only for selected objects
+	bool m_showSilhouetteEdgesOnly{ false };            // Show only silhouette edges (fast mode)
 };

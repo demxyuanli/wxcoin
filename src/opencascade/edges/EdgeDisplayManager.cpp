@@ -10,12 +10,16 @@
 #include "edges/EdgeGenerationService.h"
 #include "edges/EdgeRenderApplier.h"
 #include "logger/AsyncLogger.h"
+#include "logger/Logger.h"
 #include <OpenCASCADE/TopExp_Explorer.hxx>
 #include <OpenCASCADE/TopoDS.hxx>
 #include <OpenCASCADE/TopAbs.hxx>
 #include "SceneManager.h"
 #include "Canvas.h"
 #include "ViewRefreshManager.h"
+#include "OCCViewer.h"
+#include <Inventor/nodes/SoCamera.h>
+#include <set>
 #include <atomic>
 
 EdgeDisplayManager::EdgeDisplayManager(SceneManager* sceneManager,
@@ -45,7 +49,31 @@ void EdgeDisplayManager::setShowOriginalEdges(bool show, const MeshParameters& m
         m_flags.showIntersectionNodes = false;
     }
 
-    updateAll(meshParams);
+    // CRITICAL FIX: Delay Coin3D node creation until GL context is stable
+    // Direct call to updateAll during import can cause GL context corruption
+    wxTheApp->CallAfter([this, meshParams]() {
+        updateAll(meshParams);
+    });
+}
+
+void EdgeDisplayManager::setShowOriginalEdgesForSelectedOnly(bool selectedOnly, const MeshParameters& meshParams) {
+    m_showOriginalEdgesForSelectedOnly = selectedOnly;
+    
+    // CRITICAL FEATURE: Show original edges only for selected objects (performance optimization)
+    // This dramatically reduces rendering load for large assemblies
+    wxTheApp->CallAfter([this, meshParams]() {
+        updateAll(meshParams);
+    });
+}
+
+void EdgeDisplayManager::setShowSilhouetteEdgesOnly(bool silhouetteOnly, const MeshParameters& meshParams) {
+    m_showSilhouetteEdgesOnly = silhouetteOnly;
+    
+    // CRITICAL FEATURE: Show only silhouette edges (fast mode, similar to FreeCAD)
+    // This provides a quick preview mode with much better performance
+    wxTheApp->CallAfter([this, meshParams]() {
+        updateAll(meshParams);
+    });
 }
 
 void EdgeDisplayManager::extractOriginalEdgesOnly(double samplingDensity, double minLength, bool showLinesOnly,
@@ -58,8 +86,10 @@ void EdgeDisplayManager::extractOriginalEdgesOnly(double samplingDensity, double
 		return;
 	}
 
-	// Run extraction in a separate thread to avoid blocking UI
-	std::thread([this, samplingDensity, minLength, showLinesOnly, color, width,
+	// CRITICAL FIX: Coin3D node creation MUST happen on main thread
+	// Running in async thread causes GL context corruption and crashes
+	// Schedule the entire extraction on main thread using CallAfter
+	wxTheApp->CallAfter([this, samplingDensity, minLength, showLinesOnly, color, width,
 	             intersectionNodeColor, intersectionNodeSize, intersectionNodeShape, onComplete]() {
 
 		try {
@@ -86,31 +116,26 @@ void EdgeDisplayManager::extractOriginalEdgesOnly(double samplingDensity, double
 				}
 
 				// Extract original edges only (without intersections)
+				// Now executing on main thread where Coin3D nodes can be safely created
 				generator.ensureOriginalEdges(g, samplingDensity, minLength, showLinesOnly,
 					color, width, false, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 			}
 
-			LOG_INF_S_ASYNC("EdgeDisplayManager: Original edges extracted without intersections");
+			LOG_INF_S("EdgeDisplayManager: Original edges extracted without intersections");
 
 			// Notify completion
 			if (onComplete) {
-				// Use wxWidgets thread-safe callback
-				wxTheApp->CallAfter([onComplete]() {
 					onComplete(true, "");
-				});
 			}
 
 		} catch (const std::exception& e) {
-			LOG_ERR_S_ASYNC("EdgeDisplayManager: Failed to extract original edges: " + std::string(e.what()));
+			LOG_ERR_S("EdgeDisplayManager: Failed to extract original edges: " + std::string(e.what()));
 
 			if (onComplete) {
-				wxTheApp->CallAfter([onComplete, e]() {
 					onComplete(false, std::string(e.what()));
-				});
 			}
 		}
-
-	}).detach(); // Detach thread to run asynchronously
+	});
 }
 void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& meshParams) {
 	m_flags.showFeatureEdges = show;
@@ -212,9 +237,46 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 	// This helps maintain consistency between geometry faces and mesh edges
 	MeshParameters currentParams = meshParams;
 	
+	// CRITICAL FEATURE: Get selected geometries if "selected only" mode is enabled
+	std::set<std::string> selectedGeometryNames;
+	if (m_showOriginalEdgesForSelectedOnly && m_sceneManager) {
+		// Get selected geometries from OCCViewer via Canvas
+		Canvas* canvas = m_sceneManager->getCanvas();
+		if (canvas) {
+			OCCViewer* viewer = canvas->getOCCViewer();
+			if (viewer) {
+				auto selectedGeometries = viewer->getSelectedGeometries();
+				for (const auto& geom : selectedGeometries) {
+					if (geom) {
+						selectedGeometryNames.insert(geom->getName());
+					}
+				}
+			}
+		}
+	}
+	
+	// CRITICAL FEATURE: Get camera position for silhouette edges
+	gp_Pnt cameraPos(0, 0, 0);
+	if (m_showSilhouetteEdgesOnly && m_sceneManager && m_sceneManager->getCanvas()) {
+		// Try to get camera position from scene
+		SoCamera* camera = m_sceneManager->getCamera();
+		if (camera) {
+			SbVec3f pos = camera->position.getValue();
+			cameraPos = gp_Pnt(pos[0], pos[1], pos[2]);
+		}
+	}
+	
 	size_t processedCount = 0;
 	for (auto& g : *m_geometries) {
 		if (!g) continue;
+		
+		// CRITICAL FEATURE: Skip non-selected geometries if "selected only" mode is enabled
+		if (m_showOriginalEdgesForSelectedOnly) {
+			if (selectedGeometryNames.find(g->getName()) == selectedGeometryNames.end()) {
+				// Not selected, skip original edges for this geometry
+				continue;
+			}
+		}
 		
 		// REMOVED wxYield() - it can corrupt GL state during batch operations
 		// Processing Windows messages while building Coin3D nodes causes GL context issues
@@ -228,7 +290,38 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 		}
 		g->modularEdgeComponent->edgeFlags = m_flags;
 
-		if (m_flags.showOriginalEdges) {
+		// CRITICAL FEATURE: Show silhouette edges only (fast mode, following FreeCAD's approach)
+		// Silhouette edges are view-dependent and provide much better performance for large models
+		if (m_showSilhouetteEdgesOnly && m_flags.showOriginalEdges) {
+			if (!g->getShape().IsNull()) {
+				// Extract silhouette edges (view-dependent, fast mode)
+				g->modularEdgeComponent->extractSilhouetteEdges(
+					g->getShape(), 
+					cameraPos,
+					m_originalEdgeParams.color,
+					m_originalEdgeParams.width);
+				// Clear original edge node to ensure silhouette takes priority
+				g->modularEdgeComponent->clearEdgeNode(EdgeType::Original);
+			}
+		} else if (m_flags.showOriginalEdges) {
+			// Clear silhouette edge node when showing original edges
+			g->modularEdgeComponent->clearSilhouetteEdgeNode();
+			
+			// CRITICAL FEATURE: Use LOD if enabled (following FreeCAD's approach)
+			// LOD provides adaptive detail levels based on viewing distance
+			if (g->modularEdgeComponent->isLODEnabled() && m_sceneManager && m_sceneManager->getCamera()) {
+				// Get camera position for LOD calculation
+				SoCamera* camera = m_sceneManager->getCamera();
+				SbVec3f camPos = camera->position.getValue();
+				gp_Pnt cameraPos(camPos[0], camPos[1], camPos[2]);
+				
+				// Generate LOD levels if not already generated
+				if (!g->getShape().IsNull()) {
+					g->modularEdgeComponent->generateLODLevels(g->getShape(), cameraPos);
+					g->modularEdgeComponent->updateLODLevel(cameraPos);
+				}
+			}
+			
 			generator.ensureOriginalEdges(g, m_originalEdgeParams.samplingDensity, m_originalEdgeParams.minLength,
 				m_originalEdgeParams.showLinesOnly, m_originalEdgeParams.color, m_originalEdgeParams.width,
 				m_originalEdgeParams.highlightIntersectionNodes, m_originalEdgeParams.intersectionNodeColor, m_originalEdgeParams.intersectionNodeSize, m_originalEdgeParams.intersectionNodeShape);
@@ -488,6 +581,11 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 
 				if (success && !points.empty()) {
 					if (geom->modularEdgeComponent) {
+						// CRITICAL FIX: Coin3D node creation MUST happen on main thread
+						// Move both createIntersectionNodesNode AND updateEdgeDisplay to main thread
+						wxTheApp->CallAfter([this, geom, points]() {
+							try {
+								// Create intersection nodes on main thread where GL context is valid
 						auto node = geom->modularEdgeComponent->createIntersectionNodesNode(
 							points,
 							m_originalEdgeParams.intersectionNodeColor,
@@ -496,16 +594,20 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 						);
 						
 						if (node) {
-							// Update edge display to add nodes to scene graph
-							geom->updateEdgeDisplay();
-							
-							// Request view refresh to render the new nodes
-							if (m_sceneManager && m_sceneManager->getCanvas()) {
-								m_sceneManager->getCanvas()->Refresh();
-							}
+									// Update edge display to add nodes to scene graph
+									geom->updateEdgeDisplay();
+
+									// Request view refresh to render the new nodes
+									if (m_sceneManager && m_sceneManager->getCanvas()) {
+										m_sceneManager->getCanvas()->Refresh();
+									}
 						} else {
-							LOG_WRN_S_ASYNC("Failed to create intersection nodes node for geometry '" + geom->getName() + "'");
+									LOG_WRN_S("Failed to create intersection nodes node for geometry '" + geom->getName() + "'");
 						}
+							} catch (const std::exception& e) {
+								LOG_ERR_S("Error creating intersection nodes on main thread: " + std::string(e.what()));
+							}
+						});
 					} else {
 						LOG_WRN_S_ASYNC("Geometry '" + geom->getName() + "' has no modularEdgeComponent");
 					}
@@ -524,11 +626,18 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 				if (currentCompleted == totalGeometries) {
 					m_intersectionRunning.store(false);
 					m_intersectionProgress.store(100);
-					
-					// Final view refresh after all geometries processed
-					if (m_sceneManager && m_sceneManager->getCanvas()) {
-						m_sceneManager->getCanvas()->Refresh();
-					}
+
+					// Schedule final view refresh on main thread
+					wxTheApp->CallAfter([this]() {
+						try {
+							// Final view refresh after all geometries processed
+							if (m_sceneManager && m_sceneManager->getCanvas()) {
+								m_sceneManager->getCanvas()->Refresh();
+							}
+						} catch (const std::exception& e) {
+							LOG_ERR_S("Error in final refresh callback: " + std::string(e.what()));
+						}
+					});
 					
 					if (onComplete) {
 						onComplete(currentTotalPoints, true);

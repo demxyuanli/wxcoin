@@ -78,10 +78,12 @@ public:
         const Quantity_Color& color = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
         double width = 1.0);
 
-    // Silhouette edges
+    // Silhouette edges (following FreeCAD's approach)
     void extractSilhouetteEdges(
         const TopoDS_Shape& shape,
-        const gp_Pnt& cameraPos);
+        const gp_Pnt& cameraPos,
+        const Quantity_Color& color = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
+        double width = 1.0);
 
     // Generate all edge nodes
     void generateAllEdgeNodes();
@@ -152,6 +154,10 @@ public:
     void updateLODLevel(const gp_Pnt& cameraPos);
     void generateLODLevels(const TopoDS_Shape& shape, const gp_Pnt& cameraPos);
 
+    // NEW: Cache-based edge rendering API (public methods)
+    void extractAndCacheOriginalEdges(const TopoDS_Shape& shape, double samplingDensity, double minLength);
+    SoSeparator* createNodeFromCachedEdges(const Quantity_Color& color, double width);
+
 private:
     // Processors for different edge types
     std::shared_ptr<BaseEdgeExtractor> m_originalExtractor;
@@ -175,6 +181,21 @@ private:
     SoSeparator* faceNormalLineNode = nullptr;
     SoSeparator* silhouetteEdgeNode = nullptr;
     SoSeparator* intersectionNodesNode = nullptr;
+
+    // Cached edge data (extracted at import time, rendered on demand)
+    struct CachedEdgeData {
+        std::vector<gp_Pnt> vertices;          // All edge vertices
+        std::vector<std::pair<int, int>> segments; // Edge segments as vertex indices
+        bool isValid = false;
+        
+        void clear() {
+            vertices.clear();
+            segments.clear();
+            isValid = false;
+        }
+    };
+    CachedEdgeData m_cachedOriginalEdges;
+    mutable std::mutex m_cachedEdgesMutex;
 
     mutable std::mutex m_nodeMutex;
 
