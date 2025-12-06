@@ -20,6 +20,7 @@
 #include <Inventor/nodes/SoIndexedFaceSet.h>
 #include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoPolygonOffset.h>
+#include <Inventor/nodes/SoSwitch.h>
 #include <Inventor/actions/SoSearchAction.h>
 #include <Inventor/nodes/SoSphere.h>
 #include <Inventor/nodes/SoCone.h>
@@ -44,6 +45,7 @@
 
 OCCGeometryMesh::OCCGeometryMesh()
     : m_coinNode(nullptr)
+    , m_modeSwitch(nullptr)
     , m_coinNeedsUpdate(true)
     , m_meshRegenerationNeeded(true)
     , m_assemblyLevel(0)
@@ -62,6 +64,10 @@ OCCGeometryMesh::~OCCGeometryMesh()
     if (m_coinNode) {
         m_coinNode->unref();
         m_coinNode = nullptr;
+    }
+    if (m_modeSwitch) {
+        m_modeSwitch->unref();
+        m_modeSwitch = nullptr;
     }
 }
 
@@ -1021,6 +1027,100 @@ void OCCGeometryMesh::updateWireframeMaterial(const Quantity_Color& color)
             static_cast<float>(color.Green()),
             static_cast<float>(color.Blue())
         );
+    }
+}
+
+namespace {
+    void findDrawStyleAndMaterial(SoNode* node, SoDrawStyle*& drawStyle, SoMaterial*& material)
+    {
+        if (!node) return;
+        
+        if (node->isOfType(SoDrawStyle::getClassTypeId())) {
+            if (!drawStyle) {
+                drawStyle = static_cast<SoDrawStyle*>(node);
+            }
+        } else if (node->isOfType(SoMaterial::getClassTypeId())) {
+            if (!material) {
+                material = static_cast<SoMaterial*>(node);
+            }
+        } else if (node->isOfType(SoSeparator::getClassTypeId())) {
+            SoSeparator* sep = static_cast<SoSeparator*>(node);
+            for (int i = 0; i < sep->getNumChildren(); ++i) {
+                findDrawStyleAndMaterial(sep->getChild(i), drawStyle, material);
+            }
+        }
+    }
+}
+
+void OCCGeometryMesh::updateDisplayMode(RenderingConfig::DisplayMode mode)
+{
+    if (!m_coinNode) {
+        return;
+    }
+
+    // FreeCAD-style: Use SoSwitch if available for fastest mode switching
+    if (m_modeSwitch) {
+        // Map display mode to SoSwitch child index
+        // FreeCAD uses: 0=Points, 1=Wireframe, 2=FlatLines, 3=Shaded
+        int whichChild = SO_SWITCH_NONE;
+        switch (mode) {
+        case RenderingConfig::DisplayMode::Points:
+            whichChild = 0;
+            break;
+        case RenderingConfig::DisplayMode::Wireframe:
+            whichChild = 1;
+            break;
+        case RenderingConfig::DisplayMode::SolidWireframe:
+        case RenderingConfig::DisplayMode::HiddenLine:
+            whichChild = 2;  // FlatLines mode
+            break;
+        case RenderingConfig::DisplayMode::Solid:
+        case RenderingConfig::DisplayMode::NoShading:
+        default:
+            whichChild = 3;  // Shaded mode
+            break;
+        }
+        
+        // Fast switch using SoSwitch (just change one integer value)
+        if (whichChild >= 0 && whichChild < m_modeSwitch->getNumChildren()) {
+            m_modeSwitch->whichChild.setValue(whichChild);
+            return;  // Done - fastest path
+        }
+    }
+
+    // Fallback: Update DrawStyle and Material nodes (slower but works with current structure)
+    SoDrawStyle* drawStyle = nullptr;
+    SoMaterial* material = nullptr;
+
+    // Search recursively for DrawStyle and Material nodes
+    findDrawStyleAndMaterial(m_coinNode, drawStyle, material);
+
+    // Update DrawStyle based on display mode
+    if (drawStyle) {
+        switch (mode) {
+        case RenderingConfig::DisplayMode::Wireframe:
+            drawStyle->style.setValue(SoDrawStyle::LINES);
+            break;
+        case RenderingConfig::DisplayMode::Points:
+            drawStyle->style.setValue(SoDrawStyle::POINTS);
+            break;
+        case RenderingConfig::DisplayMode::NoShading:
+        case RenderingConfig::DisplayMode::Solid:
+        case RenderingConfig::DisplayMode::SolidWireframe:
+        case RenderingConfig::DisplayMode::HiddenLine:
+        default:
+            drawStyle->style.setValue(SoDrawStyle::FILLED);
+            break;
+        }
+    }
+
+    // Update Material for NoShading mode
+    if (material && mode == RenderingConfig::DisplayMode::NoShading) {
+        material->diffuseColor.setValue(0.8f, 0.8f, 0.8f);
+        material->ambientColor.setValue(0.0f, 0.0f, 0.0f);
+        material->specularColor.setValue(0.0f, 0.0f, 0.0f);
+        material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
+        material->shininess.setValue(0.0f);
     }
 }
 

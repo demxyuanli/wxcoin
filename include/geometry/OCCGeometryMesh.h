@@ -13,6 +13,7 @@
 
 // Forward declarations
 class SoSeparator;
+class SoSwitch;
 class EdgeComponent;
 class ModularEdgeComponent;
 class TopoDS_Shape;
@@ -221,6 +222,9 @@ protected:
 
     // Wireframe appearance update
     void updateWireframeMaterial(const Quantity_Color& color);
+    
+    // Fast display mode update without mesh rebuild
+    void updateDisplayMode(RenderingConfig::DisplayMode mode);
 
     // Memory optimization
     void releaseTemporaryData();
@@ -228,6 +232,7 @@ protected:
 
     // Coin3D scene graph
     SoSeparator* m_coinNode;
+    SoSwitch* m_modeSwitch;  // SoSwitch for fast mode switching (FreeCAD-style)
     bool m_coinNeedsUpdate;
     bool m_meshRegenerationNeeded;
     MeshParameters m_lastMeshParams;

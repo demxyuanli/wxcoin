@@ -515,10 +515,13 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 		for (auto& geometry : m_geometries) {
 			if (geometry) {
 				geometry->setDisplayMode(settings.displayMode);
-				// Only force rebuild if the display mode change requires it
-				if (settings.displayMode == RenderingConfig::DisplayMode::NoShading ||
-					settings.displayMode == RenderingConfig::DisplayMode::Points ||
-					settings.displayMode == RenderingConfig::DisplayMode::Wireframe) {
+				// Use fast update method instead of rebuilding mesh
+				// This is much faster than forceCoinRepresentationRebuild
+				// Only rebuild if geometry doesn't have a coin node yet
+				if (geometry->getCoinNode()) {
+					geometry->updateDisplayMode(settings.displayMode);
+				} else {
+					// If no coin node exists, we need to build it
 					MeshParameters defaultParams;
 					geometry->forceCoinRepresentationRebuild(defaultParams);
 				}

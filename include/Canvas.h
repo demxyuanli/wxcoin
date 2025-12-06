@@ -133,8 +133,8 @@ private:
 
 	// CRITICAL FIX: Following FreeCAD's approach - delay original edges display until first render completes
 	// This ensures GL context is fully ready before Coin3D creates Display Lists
-	bool m_firstPaintDone;
-	bool m_pendingShowOriginalEdges;
+	bool m_firstPaintDone{false};
+	bool m_pendingShowOriginalEdges{false};
 
 	DECLARE_EVENT_TABLE()
 };

@@ -59,6 +59,7 @@ public:
     using OCCGeometryMesh::needsMeshRegeneration;
     using OCCGeometryMesh::setMeshRegenerationNeeded;
     using OCCGeometryMesh::updateWireframeMaterial;
+    using OCCGeometryMesh::updateDisplayMode;
     
     // Override buildCoinRepresentation with implementations that use internal shape
     void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
