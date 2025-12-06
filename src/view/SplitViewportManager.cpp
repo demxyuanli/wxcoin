@@ -250,6 +250,16 @@ void SplitViewportManager::renderViewport(const SplitViewportInfo& viewport) {
         return;
     }
     
+    // CRITICAL FIX: Verify GL context is valid before rendering
+    // This prevents crashes when GL context is invalid (e.g., during modal dialogs or context loss)
+    if (m_canvas) {
+        RenderingEngine* renderingEngine = m_canvas->getRenderingEngine();
+        if (renderingEngine && !renderingEngine->isGLContextValid()) {
+            LOG_WRN_S("SplitViewportManager::renderViewport: GL context invalid, skipping viewport render");
+            return;
+        }
+    }
+    
     wxSize canvasSize = m_canvas->GetClientSize();
     
     glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -297,7 +307,31 @@ void SplitViewportManager::renderViewport(const SplitViewportInfo& viewport) {
     uint32_t cacheId = (m_canvas) ? static_cast<uint32_t>(m_canvas->GetId()) : 1;
     renderAction.setCacheContext(cacheId);
     
-    renderAction.apply(viewport.sceneRoot);
+    // CRITICAL FIX: Additional GL context check before Coin3D rendering
+    // Coin3D's glGetString() call requires valid GL context
+    if (m_canvas) {
+        RenderingEngine* renderingEngine = m_canvas->getRenderingEngine();
+        if (!renderingEngine || !renderingEngine->isGLContextValid()) {
+            LOG_WRN_S("SplitViewportManager::renderViewport: GL context invalid before Coin3D render, skipping");
+            glPopMatrix();
+            glPopAttrib();
+            return;
+        }
+    }
+    
+    try {
+        renderAction.apply(viewport.sceneRoot);
+    } catch (const std::exception& e) {
+        LOG_ERR_S("SplitViewportManager::renderViewport: Exception during Coin3D render: " + std::string(e.what()));
+        glPopMatrix();
+        glPopAttrib();
+        return;
+    } catch (...) {
+        LOG_ERR_S("SplitViewportManager::renderViewport: Unknown exception during Coin3D render");
+        glPopMatrix();
+        glPopAttrib();
+        return;
+    }
     
     glPopMatrix();
     glPopAttrib();

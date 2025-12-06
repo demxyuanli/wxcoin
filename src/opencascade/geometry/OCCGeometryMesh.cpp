@@ -813,18 +813,11 @@ void OCCGeometryMesh::buildCoinRepresentation(
     m_coinNode->renderCulling = context.display.visible ? SoSeparator::OFF : SoSeparator::ON;
 
     // ===== CRITICAL: Extract and cache original edges and vertices at import time =====
-    // This happens ONCE at import, then edges/points are rendered on demand from cache
-    // Avoids async threading and OpenGL context issues
-    if (modularEdgeComponent) {
-        try {
-            // Extract edges with default quality settings
-            double samplingDensity = 80.0;  // Default density
-            double minLength = 0.01;        // Default minimum length
-            modularEdgeComponent->extractAndCacheOriginalEdges(shape, samplingDensity, minLength);
-        } catch (const std::exception& e) {
-            LOG_ERR_S("OCCGeometryMesh: Failed to cache edges: " + std::string(e.what()));
-        }
-    }
+    // CRITICAL FIX: Following FreeCAD's CoinThread approach - extract in background thread
+    // This prevents UI blocking and GL context crashes for large models
+    // Edge extraction will be done asynchronously via EdgeDisplayManager::startAsyncOriginalEdgeExtraction
+    // We don't extract here to avoid blocking the import process
+    // The extraction will be triggered when user enables original edges display
     
     // Extract and cache vertices using independent VertexExtractor
     if (m_vertexExtractor) {

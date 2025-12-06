@@ -1,6 +1,7 @@
 #include "MultiViewportManager.h"
 #include "Canvas.h"
 #include "SceneManager.h"
+#include "RenderingEngine.h"
 #include "NavigationCubeManager.h"
 #include "DPIManager.h"
 #include "FlatFrame.h"
@@ -711,6 +712,16 @@ void MultiViewportManager::renderViewport(const ViewportInfo& viewport, SoSepara
 		return;
 	}
 
+	// CRITICAL FIX: Verify GL context is valid before rendering
+	// This prevents crashes when GL context is invalid (e.g., during modal dialogs or context loss)
+	if (m_canvas) {
+		RenderingEngine* renderingEngine = m_canvas->getRenderingEngine();
+		if (renderingEngine && !renderingEngine->isGLContextValid()) {
+			LOG_WRN_S("MultiViewportManager::renderViewport: GL context invalid, skipping viewport render");
+			return;
+		}
+	}
+
 	wxSize canvasSize = m_canvas->GetClientSize();
 
 	glPushAttrib(GL_ALL_ATTRIB_BITS);
@@ -739,12 +750,32 @@ void MultiViewportManager::renderViewport(const ViewportInfo& viewport, SoSepara
 	uint32_t cacheId = (m_canvas) ? static_cast<uint32_t>(m_canvas->GetId()) : 1;
 	renderAction.setCacheContext(cacheId);
 	
-	// DEBUG: Log before Coin3D rendering for crash diagnosis
-	LOG_INF_S("MultiViewportManager::renderViewport: About to call renderAction.apply(), cacheId=" + std::to_string(cacheId));
-
-	renderAction.apply(root);
+	// CRITICAL FIX: Additional GL context check before Coin3D rendering
+	// Coin3D's glGetString() call requires valid GL context
+	if (m_canvas) {
+		RenderingEngine* renderingEngine = m_canvas->getRenderingEngine();
+		if (!renderingEngine || !renderingEngine->isGLContextValid()) {
+			LOG_WRN_S("MultiViewportManager::renderViewport: GL context invalid before Coin3D render, skipping");
+			glPopMatrix();
+			glPopAttrib();
+			return;
+		}
+	}
 	
-	LOG_INF_S("MultiViewportManager::renderViewport: renderAction.apply() completed successfully");
+	try {
+		// DEBUG: Log before Coin3D rendering for crash diagnosis
+		renderAction.apply(root);
+	} catch (const std::exception& e) {
+		LOG_ERR_S("MultiViewportManager::renderViewport: Exception during Coin3D render: " + std::string(e.what()));
+		glPopMatrix();
+		glPopAttrib();
+		return;
+	} catch (...) {
+		LOG_ERR_S("MultiViewportManager::renderViewport: Unknown exception during Coin3D render");
+		glPopMatrix();
+		glPopAttrib();
+		return;
+	}
 
 	glPopMatrix();
 	glPopAttrib();

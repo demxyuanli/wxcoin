@@ -33,8 +33,11 @@
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/SbViewVolume.h>
 #include <Inventor/SbMatrix.h>
-#ifdef IMAGE_OUTLINE_ENABLE_GL_VALIDATION
+// Always include GL headers - chooseTextureUnits() always needs OpenGL functions
 #include <GL/gl.h>
+#include <GL/glext.h>  // Required for GL_MAX_TEXTURE_IMAGE_UNITS
+#ifdef IMAGE_OUTLINE_ENABLE_GL_VALIDATION
+// Additional GL validation code is conditionally compiled
 #endif
 
 namespace {

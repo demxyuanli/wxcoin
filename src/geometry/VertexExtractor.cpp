@@ -161,3 +161,4 @@ bool VertexExtractor::isDuplicate(const gp_Pnt& point, double tolerance) const
 }
 
 
+

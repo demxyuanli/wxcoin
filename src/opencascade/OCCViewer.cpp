@@ -200,20 +200,11 @@ void OCCViewer::addGeometry(std::shared_ptr<OCCGeometry> geometry)
 				m_edgeDisplayManager->updateAll(m_meshParams);
 			}
 
-			// Check configuration for original edges display and apply if enabled
-			RenderingConfig& renderingConfig = RenderingConfig::getInstance();
-			auto displaySettings = renderingConfig.getDisplaySettings();
-			if (displaySettings.showOriginalEdges) {
-				// CRITICAL FIX: Delay edge display until after import completes and GL context is stable
-				// Immediate execution during import can cause GL context issues with large files
-				wxTheApp->CallAfter([this, geometryName = geometry->getName()]() {
-					// Ensure original edges are enabled for newly added geometry
-					if (m_edgeDisplayManager) {
-						m_edgeDisplayManager->setShowOriginalEdges(true, m_meshParams);
-						LOG_INF_S("OCCViewer::addGeometry: Applied original edges display from configuration (delayed) for geometry: " + geometryName);
-					}
-				});
-			}
+			// CRITICAL FIX: Following FreeCAD's approach - do NOT enable original edges during import
+			// The delayed loading mechanism in Canvas::onPaint() will handle this after first render completes
+			// This prevents GL context crashes when importing large models
+			// Configuration parameters are already set in Canvas::setOCCViewer(), we just need to wait for render
+			// No action needed here - Canvas will handle delayed enable via m_pendingShowOriginalEdges
 
 			// Handle view updates
 	if (m_viewUpdater) {
@@ -841,38 +832,11 @@ void OCCViewer::endBatchOperation()
 	if (m_batchManager) m_batchManager->end();
 	m_needsViewRefresh = false;
 
-	// Check configuration for original edges display and apply if enabled
-	// This ensures that when geometries are added in batch, original edges are applied after batch completes
-	RenderingConfig& renderingConfig = RenderingConfig::getInstance();
-	auto displaySettings = renderingConfig.getDisplaySettings();
-	if (displaySettings.showOriginalEdges) {
-		// Set original edges parameters first, then enable display
-		// This matches the initialization sequence in Canvas::setOCCViewer
-		setOriginalEdgesParameters(
-			80.0,  // samplingDensity
-			0.01,  // minLength
-			false, // showLinesOnly
-			wxColour(0, 0, 0), // black color for edges
-			1.0,   // width
-			false, // highlightIntersectionNodes
-			wxColour(255, 0, 0), // intersectionNodeColor (not used)
-			3.0,   // intersectionNodeSize (not used)
-			IntersectionNodeShape::Point // intersectionNodeShape (not used)
-		);
-		setShowOriginalEdges(true);
-		
-		// Force update all geometries to extract and display original edges
-		if (m_edgeDisplayManager) {
-			m_edgeDisplayManager->updateAll(m_meshParams);
-		}
-		
-		// Force view refresh to ensure original edges are displayed
-		if (m_viewUpdater) {
-			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::RENDERING_CHANGED), true);
-		}
-		
-		LOG_INF_S("OCCViewer::endBatchOperation: Applied original edges display from configuration");
-	}
+	// CRITICAL FIX: Following FreeCAD's approach - do NOT enable original edges during batch operation end
+	// The delayed loading mechanism in Canvas::onPaint() will handle this after first render completes
+	// This prevents GL context crashes when importing large models
+	// Configuration parameters are already set in Canvas::setOCCViewer(), we just need to wait for render
+	// No action needed here - Canvas will handle delayed enable via m_pendingShowOriginalEdges
 }
 
 bool OCCViewer::isBatchOperationActive() const
@@ -1827,3 +1791,4 @@ void OCCViewer::setMeshEdgeAppearance(const EdgeDisplayManager::MeshEdgeAppearan
 		m_edgeDisplayManager->setMeshEdgeAppearance(appearance);
 	}
 }
+

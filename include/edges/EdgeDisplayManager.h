@@ -32,6 +32,20 @@ public:
 	void setShowSilhouetteEdgesOnly(bool silhouetteOnly, const MeshParameters& meshParams);
 	bool isShowSilhouetteEdgesOnly() const { return m_showSilhouetteEdgesOnly; }
 	
+	// CRITICAL FIX: Async original edge extraction (following FreeCAD's CoinThread approach)
+	// Start asynchronous extraction in background thread, create nodes on main thread
+	void startAsyncOriginalEdgeExtraction(double samplingDensity, double minLength, bool showLinesOnly,
+		const Quantity_Color& color, double width, const Quantity_Color& intersectionNodeColor,
+		double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape,
+		const MeshParameters& meshParams,
+		std::function<void(bool, const std::string&)> onComplete = nullptr);
+	
+	// Check async extraction status
+	bool isOriginalEdgeExtractionRunning() const { return m_originalEdgeRunning.load(); }
+	int getOriginalEdgeExtractionProgress() const { return m_originalEdgeProgress.load(); }
+	bool hasOriginalEdgeCache() const { return m_originalEdgeCacheValid; }
+	void invalidateOriginalEdgeCache() { m_originalEdgeCacheValid = false; }
+	
 	void extractOriginalEdgesOnly(double samplingDensity, double minLength, bool showLinesOnly,
 		const Quantity_Color& color, double width, const Quantity_Color& intersectionNodeColor,
 		double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape,
@@ -124,6 +138,13 @@ private:
 	FeatureEdgeParams m_lastFeatureParams{};
 	bool m_featureCacheValid{ false };
 	FeatureEdgeAppearance m_featureEdgeAppearance{};
+
+	// CRITICAL FIX: Async original edge extraction (following FreeCAD's CoinThread approach)
+	// This prevents UI blocking and GL context crashes for large models
+	std::atomic<bool> m_originalEdgeRunning{ false };
+	std::atomic<int> m_originalEdgeProgress{ 0 };
+	std::thread m_originalEdgeThread;
+	bool m_originalEdgeCacheValid{ false };
 
 	// Async intersection computation state
 	std::atomic<bool> m_intersectionRunning{ false };

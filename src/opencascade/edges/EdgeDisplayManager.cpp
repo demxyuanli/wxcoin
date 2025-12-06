@@ -18,9 +18,11 @@
 #include "Canvas.h"
 #include "ViewRefreshManager.h"
 #include "OCCViewer.h"
+#include "RenderingEngine.h"
 #include <Inventor/nodes/SoCamera.h>
 #include <set>
 #include <atomic>
+#include <wx/app.h>
 
 EdgeDisplayManager::EdgeDisplayManager(SceneManager* sceneManager,
 	std::vector<std::shared_ptr<OCCGeometry>>* geometries)
@@ -51,8 +53,32 @@ void EdgeDisplayManager::setShowOriginalEdges(bool show, const MeshParameters& m
 
     // CRITICAL FIX: Delay Coin3D node creation until GL context is stable
     // Direct call to updateAll during import can cause GL context corruption
+    // Use double CallAfter to ensure GL context is fully stable
     wxTheApp->CallAfter([this, meshParams]() {
-        updateAll(meshParams);
+        wxTheApp->CallAfter([this, meshParams]() {
+            // Verify GL context is still valid before calling updateAll
+            if (m_sceneManager && m_sceneManager->getCanvas()) {
+                Canvas* canvas = m_sceneManager->getCanvas();
+                RenderingEngine* renderingEngine = canvas->getRenderingEngine();
+                if (renderingEngine && renderingEngine->isGLContextValid()) {
+                    updateAll(meshParams);
+                } else {
+                    LOG_WRN_S("EdgeDisplayManager::setShowOriginalEdges: GL context invalid, delaying updateAll");
+                    // Retry after another delay
+                    wxTheApp->CallAfter([this, meshParams]() {
+                        if (m_sceneManager && m_sceneManager->getCanvas()) {
+                            Canvas* canvas = m_sceneManager->getCanvas();
+                            RenderingEngine* renderingEngine = canvas->getRenderingEngine();
+                            if (renderingEngine && renderingEngine->isGLContextValid()) {
+                                updateAll(meshParams);
+                            } else {
+                                LOG_ERR_S("EdgeDisplayManager::setShowOriginalEdges: GL context still invalid after retry");
+                            }
+                        }
+                    });
+                }
+            }
+        });
     });
 }
 
@@ -86,56 +112,12 @@ void EdgeDisplayManager::extractOriginalEdgesOnly(double samplingDensity, double
 		return;
 	}
 
-	// CRITICAL FIX: Coin3D node creation MUST happen on main thread
-	// Running in async thread causes GL context corruption and crashes
-	// Schedule the entire extraction on main thread using CallAfter
-	wxTheApp->CallAfter([this, samplingDensity, minLength, showLinesOnly, color, width,
-	             intersectionNodeColor, intersectionNodeSize, intersectionNodeShape, onComplete]() {
-
-		try {
-			// Store parameters for original edges (without intersection highlighting)
-			m_originalEdgeParams.samplingDensity = samplingDensity;
-			m_originalEdgeParams.minLength = minLength;
-			m_originalEdgeParams.showLinesOnly = showLinesOnly;
-			m_originalEdgeParams.color = color;
-			m_originalEdgeParams.width = width;
-			m_originalEdgeParams.highlightIntersectionNodes = false; // Key: disable intersection highlighting
-			m_originalEdgeParams.intersectionNodeColor = intersectionNodeColor;
-			m_originalEdgeParams.intersectionNodeSize = intersectionNodeSize;
-			m_originalEdgeParams.intersectionNodeShape = intersectionNodeShape;
-
-			EdgeGenerationService generator;
-			EdgeRenderApplier applier;
-
-			for (auto& g : *m_geometries) {
-				if (!g) continue;
-
-				// Ensure modular edge component exists
-				if (!g->modularEdgeComponent) {
-					g->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
-				}
-
-				// Extract original edges only (without intersections)
-				// Now executing on main thread where Coin3D nodes can be safely created
-				generator.ensureOriginalEdges(g, samplingDensity, minLength, showLinesOnly,
-					color, width, false, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
-			}
-
-			LOG_INF_S("EdgeDisplayManager: Original edges extracted without intersections");
-
-			// Notify completion
-			if (onComplete) {
-					onComplete(true, "");
-			}
-
-		} catch (const std::exception& e) {
-			LOG_ERR_S("EdgeDisplayManager: Failed to extract original edges: " + std::string(e.what()));
-
-			if (onComplete) {
-					onComplete(false, std::string(e.what()));
-			}
-		}
-	});
+	// CRITICAL FIX: Use async extraction following FreeCAD's CoinThread approach
+	// This prevents UI blocking and GL context crashes for large models
+	// Extract edge data in background thread, create nodes on main thread
+	startAsyncOriginalEdgeExtraction(samplingDensity, minLength, showLinesOnly, color, width,
+		intersectionNodeColor, intersectionNodeSize, intersectionNodeShape,
+		MeshParameters{}, onComplete);
 }
 void EdgeDisplayManager::setShowFeatureEdges(bool show, const MeshParameters& meshParams) {
 	m_flags.showFeatureEdges = show;
@@ -230,6 +212,23 @@ void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, doub
 
 void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceMeshRegeneration) {
 	if (!m_geometries) return;
+	
+	// CRITICAL FIX: Verify GL context is valid before creating Coin3D nodes
+	// This prevents crashes when GL context is invalid (e.g., during modal dialogs)
+	if (m_sceneManager && m_sceneManager->getCanvas()) {
+		Canvas* canvas = m_sceneManager->getCanvas();
+		RenderingEngine* renderingEngine = canvas->getRenderingEngine();
+		if (renderingEngine && !renderingEngine->isGLContextValid()) {
+			LOG_WRN_S("EdgeDisplayManager::updateAll: GL context invalid, delaying node creation");
+			// Delay execution until GL context is valid
+			// Use wxTheApp->CallAfter() to ensure execution on main thread
+			wxTheApp->CallAfter([this, meshParams, forceMeshRegeneration]() {
+				updateAll(meshParams, forceMeshRegeneration);
+			});
+			return;
+		}
+	}
+	
 	EdgeGenerationService generator;
 	EdgeRenderApplier applier;
 	
@@ -322,9 +321,69 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 				}
 			}
 			
-			generator.ensureOriginalEdges(g, m_originalEdgeParams.samplingDensity, m_originalEdgeParams.minLength,
-				m_originalEdgeParams.showLinesOnly, m_originalEdgeParams.color, m_originalEdgeParams.width,
-				m_originalEdgeParams.highlightIntersectionNodes, m_originalEdgeParams.intersectionNodeColor, m_originalEdgeParams.intersectionNodeSize, m_originalEdgeParams.intersectionNodeShape);
+			// CRITICAL FIX: Following FreeCAD's CoinThread approach
+			// Check if edge node exists, if not create from cached data
+			// This ensures Coin3D nodes are only created when displaying, not during extraction
+			if (g->modularEdgeComponent->getEdgeNode(EdgeType::Original) == nullptr) {
+				// CRITICAL FIX: Verify GL context is valid before creating Coin3D nodes
+				// Even though updateAll() checks GL context at the start, it may become invalid during execution
+				// (e.g., when modal dialogs appear or context is lost)
+				if (m_sceneManager && m_sceneManager->getCanvas()) {
+					Canvas* canvas = m_sceneManager->getCanvas();
+					RenderingEngine* renderingEngine = canvas->getRenderingEngine();
+					if (!renderingEngine || !renderingEngine->isGLContextValid()) {
+						LOG_WRN_S("EdgeDisplayManager::updateAll: GL context invalid before creating edge node, skipping");
+						continue; // Skip this geometry, try next one
+					}
+				}
+				
+				// Create node from cached data - this is safe because we're in updateAll which runs on main thread
+				// and we've verified GL context is valid
+				SoSeparator* edgeNode = nullptr;
+				try {
+					edgeNode = g->modularEdgeComponent->createNodeFromCachedEdges(
+						m_originalEdgeParams.color, m_originalEdgeParams.width);
+				} catch (const std::exception& e) {
+					LOG_ERR_S("EdgeDisplayManager::updateAll: Exception creating edge node: " + std::string(e.what()));
+					continue; // Skip this geometry, try next one
+				} catch (...) {
+					LOG_ERR_S("EdgeDisplayManager::updateAll: Unknown exception creating edge node");
+					continue; // Skip this geometry, try next one
+				}
+				
+				// If no cached data exists and extraction is not running, trigger async extraction
+				// Following FreeCAD's CoinThread approach: extract in background thread, create nodes on main thread
+				// This prevents UI blocking and GL context crashes for large models
+				if (!edgeNode && !g->getShape().IsNull() && !m_originalEdgeRunning.load() && !m_originalEdgeCacheValid) {
+					// Start async extraction - this will extract data in background thread, then create nodes on main thread
+					startAsyncOriginalEdgeExtraction(
+						m_originalEdgeParams.samplingDensity,
+						m_originalEdgeParams.minLength,
+						m_originalEdgeParams.showLinesOnly,
+						m_originalEdgeParams.color,
+						m_originalEdgeParams.width,
+						m_originalEdgeParams.intersectionNodeColor,
+						m_originalEdgeParams.intersectionNodeSize,
+						m_originalEdgeParams.intersectionNodeShape,
+						currentParams,
+						nullptr);
+					// Break after starting extraction to avoid starting multiple threads
+					// The extraction will process all geometries in the background thread
+					break;
+				}
+			} else {
+				// Node exists, just update appearance
+				g->modularEdgeComponent->applyAppearanceToEdgeNode(
+					EdgeType::Original, 
+					m_originalEdgeParams.color, 
+					m_originalEdgeParams.width);
+			}
+			
+			// Handle intersection nodes if needed
+			if (m_originalEdgeParams.highlightIntersectionNodes) {
+				// Intersection nodes are handled separately via async computation
+				// They will be created when computation completes
+			}
 		}
 		bool needMesh = false;
 		if (m_flags.showMeshEdges) {
@@ -407,6 +466,149 @@ void EdgeDisplayManager::startAsyncFeatureEdgeGeneration(double featureAngleDeg,
 			}
 		}
 		});
+}
+
+void EdgeDisplayManager::startAsyncOriginalEdgeExtraction(double samplingDensity, double minLength, bool showLinesOnly,
+	const Quantity_Color& color, double width, const Quantity_Color& intersectionNodeColor,
+	double intersectionNodeSize, IntersectionNodeShape intersectionNodeShape,
+	const MeshParameters& meshParams,
+	std::function<void(bool, const std::string&)> onComplete) {
+	
+	if (m_originalEdgeRunning.load() || !m_geometries) {
+		if (onComplete) onComplete(false, "Extraction already running or no geometries");
+		return;
+	}
+	
+	// Store parameters
+	m_originalEdgeParams.samplingDensity = samplingDensity;
+	m_originalEdgeParams.minLength = minLength;
+	m_originalEdgeParams.showLinesOnly = showLinesOnly;
+	m_originalEdgeParams.color = color;
+	m_originalEdgeParams.width = width;
+	m_originalEdgeParams.highlightIntersectionNodes = false; // Key: disable intersection highlighting
+	m_originalEdgeParams.intersectionNodeColor = intersectionNodeColor;
+	m_originalEdgeParams.intersectionNodeSize = intersectionNodeSize;
+	m_originalEdgeParams.intersectionNodeShape = intersectionNodeShape;
+	
+	m_originalEdgeRunning = true;
+	m_originalEdgeProgress = 0;
+	
+	// Detach previous thread if still running
+	if (m_originalEdgeThread.joinable()) {
+		m_originalEdgeThread.detach();
+	}
+	
+	// CRITICAL FIX: Following FreeCAD's CoinThread approach
+	// Background thread: Only extract and cache edge data (no GL operations)
+	// Main thread: Create Coin3D nodes from cached data (requires GL context)
+	m_originalEdgeThread = std::thread([this, samplingDensity, minLength, meshParams, onComplete]() {
+		try {
+			const int total = static_cast<int>(m_geometries->size());
+			int done = 0;
+			
+			for (auto& g : *m_geometries) {
+				if (!g) continue;
+				
+				// Ensure modular edge component exists
+				if (!g->modularEdgeComponent) {
+					g->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
+				}
+				
+				// Worker thread: Only extract and cache edge data (pure geometry, no GL operations)
+				// This is safe to do in background thread because it doesn't create Coin3D nodes
+				if (!g->getShape().IsNull()) {
+					g->modularEdgeComponent->extractAndCacheOriginalEdges(
+						g->getShape(), samplingDensity, minLength);
+				}
+				
+				done++;
+				m_originalEdgeProgress = static_cast<int>(static_cast<double>(done) / std::max(1, total) * 100.0);
+			}
+			
+			m_originalEdgeRunning = false;
+			m_originalEdgeCacheValid = true;
+			
+			LOG_INF_S("EdgeDisplayManager: Original edges data cached in background thread");
+			
+			// CRITICAL: Back to main thread to create Coin3D nodes (requires GL context)
+			// Following FreeCAD's approach: Coin3D node creation MUST happen on main thread
+			if (m_sceneManager && m_sceneManager->getCanvas()) {
+				// Use wxTheApp->CallAfter() for consistency and better thread safety
+				wxTheApp->CallAfter([this, meshParams, onComplete]() {
+					// CRITICAL FIX: Verify GL context is valid before creating Coin3D nodes
+					// Even though we're on main thread, GL context may be invalid (e.g., during modal dialogs)
+					if (m_sceneManager && m_sceneManager->getCanvas()) {
+						Canvas* canvas = m_sceneManager->getCanvas();
+						RenderingEngine* renderingEngine = canvas->getRenderingEngine();
+						if (!renderingEngine || !renderingEngine->isGLContextValid()) {
+							LOG_WRN_S("EdgeDisplayManager: GL context invalid after async extraction, delaying node creation");
+							// Retry after another delay
+							wxTheApp->CallAfter([this, meshParams, onComplete]() {
+								if (m_sceneManager && m_sceneManager->getCanvas()) {
+									Canvas* canvas = m_sceneManager->getCanvas();
+									RenderingEngine* renderingEngine = canvas->getRenderingEngine();
+									if (renderingEngine && renderingEngine->isGLContextValid()) {
+										try {
+											updateAll(meshParams);
+											LOG_INF_S("EdgeDisplayManager: Original edge nodes created on main thread (retry)");
+											if (onComplete) onComplete(true, "");
+										} catch (const std::exception& e) {
+											LOG_ERR_S("EdgeDisplayManager: Error creating edge nodes on main thread (retry): " + std::string(e.what()));
+											if (onComplete) onComplete(false, std::string(e.what()));
+										}
+									} else {
+										LOG_ERR_S("EdgeDisplayManager: GL context still invalid after retry");
+										if (onComplete) onComplete(false, "GL context invalid");
+									}
+								}
+							});
+							return;
+						}
+						
+						try {
+							// Now create Coin3D nodes from cached data on main thread
+							// This is safe because GL context is verified to be valid
+							updateAll(meshParams);
+							
+							LOG_INF_S("EdgeDisplayManager: Original edge nodes created on main thread");
+							
+							// Notify completion
+							if (onComplete) {
+								onComplete(true, "");
+							}
+						} catch (const std::exception& e) {
+							LOG_ERR_S("EdgeDisplayManager: Error creating edge nodes on main thread: " + std::string(e.what()));
+							if (onComplete) {
+								onComplete(false, std::string(e.what()));
+							}
+						}
+					}
+				});
+			} else {
+				// Fallback if canvas not available
+				updateAll(meshParams);
+				if (onComplete) {
+					onComplete(true, "");
+				}
+			}
+			
+		} catch (const std::exception& e) {
+			m_originalEdgeRunning = false;
+			LOG_ERR_S("EdgeDisplayManager: Error in background edge extraction: " + std::string(e.what()));
+			
+			if (m_sceneManager && m_sceneManager->getCanvas()) {
+				m_sceneManager->getCanvas()->CallAfter([onComplete, e]() {
+					if (onComplete) {
+						onComplete(false, std::string(e.what()));
+					}
+				});
+			} else {
+				if (onComplete) {
+					onComplete(false, std::string(e.what()));
+				}
+			}
+		}
+	});
 }
 
 void EdgeDisplayManager::invalidateFeatureEdgeCache() {

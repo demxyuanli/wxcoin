@@ -298,31 +298,6 @@ void Canvas::render(bool fastMode) {
 		LOG_WRN_S("CANVAS: No rendering engine available");
 	}
 
-	// CRITICAL FIX: Following FreeCAD's approach - delay original edges display until first render completes
-	// Use double CallAfter to ensure GL context is 100% stable before creating Coin3D nodes
-	if (!m_firstPaintDone && m_pendingShowOriginalEdges && m_occViewer) {
-		m_firstPaintDone = true;
-		// Double delay: first CallAfter ensures render is complete, second ensures GL context is stable
-		wxTheApp->CallAfter([this]() {
-			wxTheApp->CallAfter([this]() {
-				if (m_occViewer && m_pendingShowOriginalEdges) {
-					try {
-						m_occViewer->setShowOriginalEdges(true);
-						m_pendingShowOriginalEdges = false;
-						// Force refresh to show edges
-						if (m_sceneManager && m_sceneManager->getCanvas()) {
-							m_sceneManager->getCanvas()->Refresh();
-						}
-						m_occViewer->requestViewRefresh();
-						LOG_INF_S("Canvas::render: Original edges enabled after first render (double-delayed for safety)");
-					} catch (const std::exception& e) {
-						LOG_ERR_S("Canvas::render: Error enabling original edges: " + std::string(e.what()));
-					}
-				}
-			});
-		});
-	}
-
 	LOG_DBG_S("=== CANVAS: RENDER COMPLETED ===");
 }
 
@@ -360,6 +335,49 @@ void Canvas::onPaint(wxPaintEvent& event) {
 	}
 
 	render(false);
+
+	// CRITICAL FIX: Following FreeCAD's approach - delay original edges display until AFTER render completes
+	// This must happen in onPaint() after render() completes, not inside render()
+	// Use triple CallAfter to ensure GL context is 100% stable before creating Coin3D nodes
+	if (!m_firstPaintDone && m_pendingShowOriginalEdges && m_occViewer && m_renderingEngine) {
+		// Verify GL context is valid before enabling edges
+		if (m_renderingEngine->isGLContextValid()) {
+			m_firstPaintDone = true;
+			// Triple delay: ensures render is complete, GL context is stable, and event loop has processed
+			wxTheApp->CallAfter([this]() {
+				wxTheApp->CallAfter([this]() {
+					wxTheApp->CallAfter([this]() {
+						if (m_occViewer && m_pendingShowOriginalEdges && m_renderingEngine) {
+							// Final GL context check before creating Coin3D nodes
+							if (m_renderingEngine->isGLContextValid()) {
+								try {
+									m_occViewer->setShowOriginalEdges(true);
+									m_pendingShowOriginalEdges = false;
+									// Force refresh to show edges
+									if (m_sceneManager && m_sceneManager->getCanvas()) {
+										m_sceneManager->getCanvas()->Refresh();
+									}
+									m_occViewer->requestViewRefresh();
+									LOG_INF_S("Canvas::onPaint: Original edges enabled after first render (triple-delayed for safety)");
+								} catch (const std::exception& e) {
+									LOG_ERR_S("Canvas::onPaint: Error enabling original edges: " + std::string(e.what()));
+									// Reset flag to retry on next paint
+									m_pendingShowOriginalEdges = true;
+									m_firstPaintDone = false;
+								}
+							} else {
+								LOG_WRN_S("Canvas::onPaint: GL context invalid, delaying original edges enable");
+								// Reset flag to retry on next paint
+								m_firstPaintDone = false;
+							}
+						}
+					});
+				});
+			});
+		} else {
+			LOG_WRN_S("Canvas::onPaint: GL context invalid, skipping original edges enable");
+		}
+	}
 
 	// Draw face info overlay after 3D rendering using Graphics Context for transparency support
 	m_faceInfoOverlay.update();
