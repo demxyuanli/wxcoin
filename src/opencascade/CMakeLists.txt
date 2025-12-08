@@ -15,9 +15,14 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryAppearance.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryDisplay.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryQuality.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryMesh.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/GeometryRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/FaceDomainTypes.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/OCCGeometryPrimitives.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/VertexExtractor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/FaceDomainManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/TriangleMappingManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/PointViewRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/CoinSceneBuilder.cpp
     
     # Modular viewer implementations (internal)
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewportController.cpp
@@ -50,6 +55,15 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ImageOutlinePass.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/MeshQualityValidator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/SelectionAcceleratorService.cpp
+    
+    # Display mode managers (located in src/viewer, not src/opencascade/viewer)
+    ${CMAKE_SOURCE_DIR}/src/viewer/ViewerModManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewer/ViewerDisplayModeManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewer/ObjectDisplayModeManager.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewer/modes/PointsMode.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewer/modes/WireframeMode.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewer/modes/FlatLinesMode.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewer/modes/ShadedMode.cpp
     
     # Edge display modules
     ${CMAKE_CURRENT_SOURCE_DIR}/edges/EdgeDisplayManager.cpp
@@ -98,9 +112,14 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryAppearance.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryDisplay.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryQuality.h
-    ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryMesh.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/GeometryRenderer.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/FaceDomainTypes.h
     ${CMAKE_SOURCE_DIR}/include/geometry/VertexExtractor.h
     ${CMAKE_SOURCE_DIR}/include/geometry/OCCGeometryPrimitives.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/FaceDomainManager.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/TriangleMappingManager.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/PointViewRenderer.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/CoinSceneBuilder.h
     
     # Internal viewer module headers
     ${CMAKE_SOURCE_DIR}/include/viewer/ViewportController.h
@@ -165,6 +184,16 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/viewer/OutlineDisplayManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/SelectionOutlineManager.h
     ${CMAKE_SOURCE_DIR}/include/viewer/ImageOutlinePass.h
+    
+    # Display mode manager headers
+    ${CMAKE_SOURCE_DIR}/include/viewer/IDisplayMode.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/ViewerModManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/ViewerDisplayModeManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/ObjectDisplayModeManager.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/modes/PointsMode.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/modes/WireframeMode.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/modes/FlatLinesMode.h
+    ${CMAKE_SOURCE_DIR}/include/viewer/modes/ShadedMode.h
 
 )
 

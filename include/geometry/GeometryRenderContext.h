@@ -119,8 +119,9 @@ struct GeometryRenderContext {
         ctx.display.wireframeWidth = geom.getWireframeWidth();
         ctx.display.wireframeColor = geom.getWireframeColor();
         ctx.display.cullFace = geom.isCullFaceEnabled();
-        if (!geom.getShape().IsNull()) {
-            ctx.display.shapeType = geom.getShape().ShapeType();
+        // CRITICAL FIX: Use explicit base class qualification to resolve ambiguous getShape() call
+        if (!geom.OCCGeometryCore::getShape().IsNull()) {
+            ctx.display.shapeType = geom.OCCGeometryCore::getShape().ShapeType();
         }
 
     // Point view settings

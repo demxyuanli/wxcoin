@@ -35,7 +35,7 @@ bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& ge
 				std::vector<gp_Pnt> intersectionPoints;
 				auto extractor = std::dynamic_pointer_cast<OriginalEdgeExtractor>(comp->getOriginalExtractor());
 				if (extractor) {
-					extractor->findEdgeIntersections(geom->getShape(), intersectionPoints, 0.0); // Use adaptive tolerance
+					extractor->findEdgeIntersections(geom->OCCGeometryCore::getShape(), intersectionPoints, 0.0); // Use adaptive tolerance
 
 					if (!intersectionPoints.empty()) {
 						comp->createIntersectionNodesNode(intersectionPoints, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
@@ -54,7 +54,7 @@ bool EdgeGenerationService::ensureOriginalEdges(std::shared_ptr<OCCGeometry>& ge
 	}
 
 	// Node doesn't exist - generate new geometry with specified parameters
-	comp->extractOriginalEdges(geom->getShape(), samplingDensity, minLength, showLinesOnly, color, width,
+	comp->extractOriginalEdges(geom->OCCGeometryCore::getShape(), samplingDensity, minLength, showLinesOnly, color, width,
 		highlightIntersectionNodes, intersectionNodeColor, intersectionNodeSize, intersectionNodeShape);
 	return true;
 }
@@ -73,7 +73,7 @@ bool EdgeGenerationService::ensureFeatureEdges(std::shared_ptr<OCCGeometry>& geo
 		geom->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
 	}
 	if (geom->modularEdgeComponent->getEdgeNode(EdgeType::Feature) != nullptr) return false;
-	geom->modularEdgeComponent->extractFeatureEdges(geom->getShape(), featureAngleDeg, minLength, onlyConvex, onlyConcave, color, width);
+	geom->modularEdgeComponent->extractFeatureEdges(geom->OCCGeometryCore::getShape(), featureAngleDeg, minLength, onlyConvex, onlyConcave, color, width);
 	return true;
 }
 
@@ -100,7 +100,7 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 	auto& manager = RenderingToolkitAPI::getManager();
 	auto processor = manager.getGeometryProcessor("OpenCASCADE");
 	if (!processor) return false;
-	TriangleMesh mesh = processor->convertToMesh(geom->getShape(), meshParams);
+	TriangleMesh mesh = processor->convertToMesh(geom->OCCGeometryCore::getShape(), meshParams);
 
 	auto& comp = geom->modularEdgeComponent;
 	if (needMeshEdges && comp->getEdgeNode(EdgeType::Mesh) == nullptr) {
@@ -132,7 +132,7 @@ bool EdgeGenerationService::forceRegenerateMeshDerivedEdges(std::shared_ptr<OCCG
 	auto& manager = RenderingToolkitAPI::getManager();
 	auto processor = manager.getGeometryProcessor("OpenCASCADE");
 	if (!processor) return false;
-	TriangleMesh mesh = processor->convertToMesh(geom->getShape(), meshParams);
+	TriangleMesh mesh = processor->convertToMesh(geom->OCCGeometryCore::getShape(), meshParams);
 
 	// Migration completed - always use modular edge component
 	if (!geom->modularEdgeComponent) {
@@ -182,7 +182,7 @@ void EdgeGenerationService::computeIntersectionsAsync(
 	}
 
 	geom->modularEdgeComponent->computeIntersectionsAsync(
-		geom->getShape(),
+		geom->OCCGeometryCore::getShape(),
 		tolerance,
 		engine,
 		onComplete,

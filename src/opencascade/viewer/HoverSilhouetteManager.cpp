@@ -35,10 +35,10 @@ void HoverSilhouetteManager::setHoveredSilhouette(std::shared_ptr<OCCGeometry> g
 	if (m_silhouetteRenderers.find(name) == m_silhouetteRenderers.end()) {
 		m_silhouetteRenderers[name] = std::make_unique<DynamicSilhouetteRenderer>(m_occRoot);
 		m_silhouetteRenderers[name]->setFastMode(true);
-		m_silhouetteRenderers[name]->setShape(geometry->getShape());
+		m_silhouetteRenderers[name]->setShape(static_cast<GeometryRenderer*>(geometry.get())->getShape());
 	}
 	else {
-		m_silhouetteRenderers[name]->setShape(geometry->getShape());
+		m_silhouetteRenderers[name]->setShape(static_cast<GeometryRenderer*>(geometry.get())->getShape());
 	}
 	if (SoSeparator* geomSep = geometry->getCoinNode()) {
 		SoSeparator* silhouetteNode = m_silhouetteRenderers[name]->getSilhouetteNode();

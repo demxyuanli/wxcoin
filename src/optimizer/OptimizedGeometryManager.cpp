@@ -580,10 +580,10 @@ std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByPropertyRa
             
             // Get property value based on property name
             if (property == "volume") {
-                value = OCCShapeBuilder::getVolume(geometry->getShape());
+                value = OCCShapeBuilder::getVolume(static_cast<GeometryRenderer*>(geometry.get())->getShape());
                 hasProperty = true;
             } else if (property == "area") {
-                value = OCCShapeBuilder::getSurfaceArea(geometry->getShape());
+                value = OCCShapeBuilder::getSurfaceArea(static_cast<GeometryRenderer*>(geometry.get())->getShape());
                 hasProperty = true;
             } else if (property == "transparency") {
                 value = geometry->getTransparency();
@@ -623,10 +623,10 @@ std::vector<std::shared_ptr<OCCGeometry>> GeometrySearchEngine::findByDistance(
     auto names = m_manager.getAllGeometryNames();
     for (const auto& name : names) {
         auto geometry = m_manager.findGeometry(name);
-        if (geometry && !geometry->getShape().IsNull()) {
+        if (geometry && !static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull()) {
             // Get bounding box center of geometry
             gp_Pnt minPt, maxPt;
-            OCCShapeBuilder::getBoundingBox(geometry->getShape(), minPt, maxPt);
+            OCCShapeBuilder::getBoundingBox(static_cast<GeometryRenderer*>(geometry.get())->getShape(), minPt, maxPt);
             
             // Calculate center of bounding box
             gp_Pnt geomCenter(
@@ -723,13 +723,13 @@ double GeometrySearchEngine::calculateDistance(const gp_Pnt& p1, const gp_Pnt& p
 
 bool GeometrySearchEngine::isInBoundingBox(const std::shared_ptr<OCCGeometry>& geometry, 
                                           const gp_Pnt& minPoint, const gp_Pnt& maxPoint) const {
-    if (!geometry || geometry->getShape().IsNull()) {
+    if (!geometry || static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull()) {
         return false;
     }
     
     // Get geometry's bounding box
     gp_Pnt geomMin, geomMax;
-    OCCShapeBuilder::getBoundingBox(geometry->getShape(), geomMin, geomMax);
+    OCCShapeBuilder::getBoundingBox(static_cast<GeometryRenderer*>(geometry.get())->getShape(), geomMin, geomMax);
     
     // Check if geometry's bounding box intersects with the search box
     // A box intersects if it's not completely outside
@@ -806,7 +806,7 @@ void GeometryBatchProcessor::batchRotate(const std::vector<std::string>& names, 
             rotation.SetRotation(rotAxis, angle);
             
             // Apply rotation to shape
-            TopoDS_Shape rotatedShape = BRepBuilderAPI_Transform(geometry->getShape(), rotation).Shape();
+            TopoDS_Shape rotatedShape = BRepBuilderAPI_Transform(static_cast<GeometryRenderer*>(geometry.get())->getShape(), rotation).Shape();
             geometry->setShape(rotatedShape);
         }
         updateProgress(++current, names.size());
@@ -823,7 +823,7 @@ void GeometryBatchProcessor::batchScale(const std::vector<std::string>& names, c
             scale.SetScale(center, factor);
             
             // Apply scale to shape
-            TopoDS_Shape scaledShape = BRepBuilderAPI_Transform(geometry->getShape(), scale).Shape();
+            TopoDS_Shape scaledShape = BRepBuilderAPI_Transform(static_cast<GeometryRenderer*>(geometry.get())->getShape(), scale).Shape();
             geometry->setShape(scaledShape);
         }
         updateProgress(++current, names.size());
@@ -873,7 +873,7 @@ void GeometryBatchProcessor::batchExportToSTL(const std::vector<std::string>& na
     size_t current = 0;
     for (const auto& name : names) {
         auto geometry = m_manager.findGeometry(name);
-        if (geometry && !geometry->getShape().IsNull()) {
+        if (geometry && !static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull()) {
             std::string filename = directory + "/" + name + ".stl";
             // Use STLWriter to export (would need to include STLWriter.h)
             // For now, just update progress
@@ -886,7 +886,7 @@ void GeometryBatchProcessor::batchExportToOBJ(const std::vector<std::string>& na
     size_t current = 0;
     for (const auto& name : names) {
         auto geometry = m_manager.findGeometry(name);
-        if (geometry && !geometry->getShape().IsNull()) {
+        if (geometry && !static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull()) {
             std::string filename = directory + "/" + name + ".obj";
             // Use OBJWriter to export (would need to include OBJWriter.h)
             // For now, just update progress

@@ -12,6 +12,7 @@
 #include <wx/statline.h>
 #include <wx/settings.h>
 #include "edges/ModularEdgeComponent.h"
+#include "OCCGeometry.h"
 
 EdgeSettingsEditor::EdgeSettingsEditor(wxWindow* parent, UnifiedConfigManager* configManager, const std::string& categoryId)
     : ConfigCategoryEditor(parent, configManager, categoryId)
@@ -479,10 +480,16 @@ void EdgeSettingsEditor::applySettings() {
     config.applySettingsToGeometries();
     
     for (auto& geometry : m_viewer->getAllGeometry()) {
-        if (geometry && geometry->modularEdgeComponent) {
-            geometry->modularEdgeComponent->extractFeatureEdges(geometry->getShape(), m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
-            geometry->modularEdgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
-            geometry->modularEdgeComponent->updateEdgeDisplay(geometry->getCoinNode());
+        if (geometry) {
+            // CRITICAL FIX: Explicitly cast to OCCGeometry to resolve ambiguous getShape() call
+            auto occGeometry = std::dynamic_pointer_cast<OCCGeometry>(geometry);
+            if (occGeometry && occGeometry->modularEdgeComponent) {
+                // Use OCCGeometryCore::getShape() to explicitly resolve ambiguity
+                const TopoDS_Shape& shape = occGeometry->OCCGeometryCore::getShape();
+                occGeometry->modularEdgeComponent->extractFeatureEdges(shape, m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
+                occGeometry->modularEdgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
+                occGeometry->modularEdgeComponent->updateEdgeDisplay(occGeometry->getCoinNode());
+            }
         }
     }
     

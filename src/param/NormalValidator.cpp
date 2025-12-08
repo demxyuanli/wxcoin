@@ -97,7 +97,7 @@ NormalValidationResult NormalValidator::validateNormals(const std::vector<std::s
         if (!geometry) continue;
 
         std::string geomName = geometry->getName();
-        const TopoDS_Shape& shape = geometry->getShape();
+        const TopoDS_Shape& shape = static_cast<GeometryRenderer*>(geometry.get())->getShape();
 
         NormalValidationResult geomResult = validateNormals(shape, geomName);
 

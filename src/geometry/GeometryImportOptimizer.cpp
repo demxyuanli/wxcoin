@@ -505,7 +505,7 @@ void GeometryImportOptimizer::applyProgressiveLoading(
     
     // For each geometry, create LOD versions
     for (auto& geometry : geometries) {
-        if (!geometry || geometry->getShape().IsNull()) continue;
+        if (!geometry || static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull()) continue;
         
         // Store original shape as highest quality LOD
         geometry->setEnableLOD(true);

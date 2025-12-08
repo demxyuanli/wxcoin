@@ -369,12 +369,12 @@ double STEPGeometryConverter::scaleGeometriesToReasonableSize(
 
         // Apply scaling sequentially for simplicity
         for (auto& geometry : geometries) {
-            if (!geometry || geometry->getShape().IsNull()) {
+            if (!geometry || static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull()) {
                 continue;
             }
 
             TopoDS_Shape scaledShape = OCCShapeBuilder::scale(
-                geometry->getShape(),
+                static_cast<GeometryRenderer*>(geometry.get())->getShape(),
                 gp_Pnt(0, 0, 0),
                 scaleFactor
             );
@@ -407,12 +407,12 @@ bool STEPGeometryConverter::calculateCombinedBoundingBox(
 
     // Sequential processing for simplicity
     for (const auto& geometry : geometries) {
-        if (!geometry || geometry->getShape().IsNull()) {
+        if (!geometry || static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull()) {
             continue;
         }
 
         gp_Pnt localMin, localMax;
-        OCCShapeBuilder::getBoundingBox(geometry->getShape(), localMin, localMax);
+        OCCShapeBuilder::getBoundingBox(static_cast<GeometryRenderer*>(geometry.get())->getShape(), localMin, localMax);
 
         if (localMin.X() < minPt.X()) minPt.SetX(localMin.X());
         if (localMin.Y() < minPt.Y()) minPt.SetY(localMin.Y());

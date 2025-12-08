@@ -191,7 +191,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCBox(const SbVec3f& positi
 	try {
 		auto box = std::make_shared<OCCBox>(name, width, height, depth);
 
-		if (box && !box->getShape().IsNull()) {
+		if (box && !static_cast<GeometryRenderer*>(box.get())->getShape().IsNull()) {
 			// Set position BEFORE buildShape to create at correct location
 			box->setPosition(gp_Pnt(position[0], position[1], position[2]));
 			// Rebuild shape at new position
@@ -228,7 +228,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCSphere(const SbVec3f& pos
 	try {
 		auto sphere = std::make_shared<OCCSphere>(name, radius);
 
-		if (sphere && !sphere->getShape().IsNull()) {
+		if (sphere && !static_cast<GeometryRenderer*>(sphere.get())->getShape().IsNull()) {
 			sphere->setPosition(gp_Pnt(position[0], position[1], position[2]));
 
 			// Build face index mapping for system-created geometry
@@ -260,7 +260,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCylinder(const SbVec3f& p
 	try {
 		auto cylinder = std::make_shared<OCCCylinder>(name, radius, height);
 
-		if (cylinder && !cylinder->getShape().IsNull()) {
+		if (cylinder && !static_cast<GeometryRenderer*>(cylinder.get())->getShape().IsNull()) {
 			cylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
 
 			// Build face index mapping for system-created geometry
@@ -292,7 +292,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCCone(const SbVec3f& posit
 	try {
 		auto cone = std::make_shared<OCCCone>(name, bottomRadius, topRadius, height);
 
-		if (cone && !cone->getShape().IsNull()) {
+		if (cone && !static_cast<GeometryRenderer*>(cone.get())->getShape().IsNull()) {
 			cone->setPosition(gp_Pnt(position[0], position[1], position[2]));
 
 			// Build face index mapping for system-created geometry
@@ -325,7 +325,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTorus(const SbVec3f& posi
 	try {
 		auto torus = std::make_shared<OCCTorus>(name, majorRadius, minorRadius);
 
-		if (torus && !torus->getShape().IsNull()) {
+		if (torus && !static_cast<GeometryRenderer*>(torus.get())->getShape().IsNull()) {
 			torus->setPosition(gp_Pnt(position[0], position[1], position[2]));
 
 			// Build face index mapping for system-created geometry
@@ -358,7 +358,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCTruncatedCylinder(const S
 	try {
 		auto truncatedCylinder = std::make_shared<OCCTruncatedCylinder>(name, bottomRadius, topRadius, height);
 
-		if (truncatedCylinder && !truncatedCylinder->getShape().IsNull()) {
+		if (truncatedCylinder && !static_cast<GeometryRenderer*>(truncatedCylinder.get())->getShape().IsNull()) {
 			truncatedCylinder->setPosition(gp_Pnt(position[0], position[1], position[2]));
 
 			// Build face index mapping for system-created geometry
@@ -693,7 +693,7 @@ void GeometryFactory::addGeometryToCullingSystem(const std::shared_ptr<OCCGeomet
 			// TODO: Get SceneManager and call addOccluder
 			// SceneManager* sceneManager = m_occViewer->getSceneManager();
 			// if (sceneManager) {
-			//     sceneManager->addOccluder(geometry->getShape());
+			//     sceneManager->addOccluder(static_cast<GeometryRenderer*>(geometry.get())->getShape());
 			// }
 		}
 	}
@@ -717,7 +717,7 @@ std::shared_ptr<OCCGeometry> GeometryFactory::createOCCNavCube(const SbVec3f& po
 
 		auto navCube = std::make_shared<OCCNavCube>(name, size);
 
-		if (navCube && !navCube->getShape().IsNull()) {
+		if (navCube && !static_cast<GeometryRenderer*>(navCube.get())->getShape().IsNull()) {
 			// Set position AFTER creation to apply transformation
 			navCube->setPosition(gp_Pnt(position[0], position[1], position[2]));
 

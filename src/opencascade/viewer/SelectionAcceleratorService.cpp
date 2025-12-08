@@ -29,8 +29,8 @@ void SelectionAcceleratorService::rebuildFromGeometries(const std::vector<std::s
     shapes.reserve(geometries.size());
 
     for (const auto& geometry : geometries) {
-        if (geometry && !geometry->getShape().IsNull() && geometry->isVisible()) {
-            shapes.push_back(geometry->getShape());
+        if (geometry && !static_cast<GeometryRenderer*>(geometry.get())->getShape().IsNull() && geometry->isVisible()) {
+            shapes.push_back(static_cast<GeometryRenderer*>(geometry.get())->getShape());
         }
     }
 

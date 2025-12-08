@@ -460,7 +460,7 @@ void EdgeSettingsDialog::applySettings()
 
 	for (auto& geometry : m_viewer->getAllGeometry()) {
 		if (geometry && geometry->modularEdgeComponent) {
-			geometry->modularEdgeComponent->extractFeatureEdges(geometry->getShape(), m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
+			geometry->modularEdgeComponent->extractFeatureEdges(static_cast<GeometryRenderer*>(geometry.get())->getShape(), m_featureEdgeAngle, m_featureEdgeMinLength, m_onlyConvex, m_onlyConcave, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
 			// Apply feature edge appearance using global settings
 			geometry->modularEdgeComponent->applyAppearanceToEdgeNode(EdgeType::Feature, m_globalSettings.edgeColor, m_globalSettings.edgeWidth);
 			geometry->modularEdgeComponent->updateEdgeDisplay(geometry->getCoinNode());

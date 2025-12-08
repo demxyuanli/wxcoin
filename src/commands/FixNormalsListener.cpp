@@ -25,7 +25,7 @@ CommandResult FixNormalsListener::executeCommand(const std::string& commandType,
 		for (auto& geometry : geometries) {
 			if (!geometry) continue;
 			
-			const TopoDS_Shape& originalShape = geometry->getShape();
+			const TopoDS_Shape& originalShape = static_cast<GeometryRenderer*>(geometry.get())->getShape();
 			if (originalShape.IsNull()) continue;
 			
 			// Apply normal correction

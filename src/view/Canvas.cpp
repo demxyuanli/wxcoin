@@ -634,8 +634,8 @@ void Canvas::setOCCViewer(OCCViewer* occViewer) {
 					// Calculate combined bounding box for all geometries
 					Bnd_Box combinedBbox;
 					for (const auto& geom : geometries) {
-						if (geom && !geom->getShape().IsNull()) {
-							BRepBndLib::Add(geom->getShape(), combinedBbox);
+						if (geom && !static_cast<GeometryRenderer*>(geom.get())->getShape().IsNull()) {
+							BRepBndLib::Add(static_cast<GeometryRenderer*>(geom.get())->getShape(), combinedBbox);
 						}
 					}
 					if (!combinedBbox.IsVoid()) {

@@ -5,6 +5,7 @@
 #endif
 
 #include "OCCViewer.h"
+#include "viewer/ViewerDisplayModeManager.h"
 #include "viewer/NormalDisplayService.h"
 #include "viewer/RenderModeManager.h"
 #include "viewer/GeometryManagementService.h"
@@ -92,6 +93,9 @@ OCCViewer::OCCViewer(SceneManager* sceneManager)
 	initializeViewer();
 	// Remove default edge display to avoid conflicts with new EdgeComponent system
 	// setShowEdges(true);
+
+	// Create view-level display mode manager
+	m_viewDisplayModeManager = std::make_unique<ViewerDisplayModeManager>();
 
 	// Create services
 	m_configurationManager = std::make_unique<ConfigurationManager>();
@@ -511,19 +515,20 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Only apply changes if something actually changed
 	if (displayModeChanged) {
-		// Apply display mode to all geometries
+		// Use ViewerDisplayModeManager to apply view-level display mode
+		if (m_viewDisplayModeManager) {
+			m_viewDisplayModeManager->setViewDisplayMode(this, settings.displayMode);
+		} else {
+			// Fallback: Apply display mode to all geometries directly
 		for (auto& geometry : m_geometries) {
 			if (geometry) {
 				geometry->setDisplayMode(settings.displayMode);
-				// Use fast update method instead of rebuilding mesh
-				// This is much faster than forceCoinRepresentationRebuild
-				// Only rebuild if geometry doesn't have a coin node yet
-				if (geometry->getCoinNode()) {
-					geometry->updateDisplayMode(settings.displayMode);
-				} else {
-					// If no coin node exists, we need to build it
+					if (geometry->getCoinNode()) {
+						geometry->updateDisplayMode(settings.displayMode);
+					} else {
 					MeshParameters defaultParams;
 					geometry->forceCoinRepresentationRebuild(defaultParams);
+					}
 				}
 			}
 		}
@@ -554,23 +559,8 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Only request refresh if something actually changed
 	if (displayModeChanged || edgeSettingsChanged || pointViewSettingsChanged) {
-		// Special handling for display mode changes - ensure lighting is updated
-		if (displayModeChanged) {
-			if (settings.displayMode == RenderingConfig::DisplayMode::NoShading) {
-			// Force lighting update to clear all lights for NoShading
-			if (m_sceneManager) {
-				// This will trigger the LightingConfig callback which will detect NoShading mode
-				LightingConfig& lightingConfig = LightingConfig::getInstance();
-				lightingConfig.applySettingsToScene();
-				}
-			} else if (oldDisplayMode == RenderingConfig::DisplayMode::NoShading) {
-				// Switching away from NoShading mode - restore normal lighting
-				if (m_sceneManager) {
-					LightingConfig& lightingConfig = LightingConfig::getInstance();
-					lightingConfig.applySettingsToScene();
-				}
-			}
-		}
+		// Lighting update is now handled by ViewerDisplayModeManager
+		// No need to handle it here separately
 
 		if (m_viewUpdater) {
 			m_viewUpdater->requestRefresh(static_cast<int>(IViewRefresher::Reason::RENDERING_CHANGED), true);
@@ -883,9 +873,11 @@ void OCCViewer::addGeometries(const std::vector<std::shared_ptr<OCCGeometry>>& g
 		geometry->updateCoinRepresentationIfNeeded(m_meshParams);
 
 		// Log geometry bounds for debugging
-		if (!geometry->getShape().IsNull()) {
+		// CRITICAL FIX: Use explicit base class qualification to resolve ambiguous getShape() call
+		auto occGeometry = std::dynamic_pointer_cast<OCCGeometry>(geometry);
+		if (occGeometry && !occGeometry->OCCGeometryCore::getShape().IsNull()) {
 			Bnd_Box bbox;
-			BRepBndLib::Add(geometry->getShape(), bbox);
+			BRepBndLib::Add(occGeometry->OCCGeometryCore::getShape(), bbox);
 			if (!bbox.IsVoid()) {
 				double xmin, ymin, zmin, xmax, ymax, zmax;
 				bbox.Get(xmin, ymin, zmin, xmax, ymax, zmax);

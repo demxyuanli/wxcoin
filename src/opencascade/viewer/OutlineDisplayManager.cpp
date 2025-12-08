@@ -70,7 +70,7 @@ void OutlineDisplayManager::ensureForGeometry(const std::shared_ptr<OCCGeometry>
 	if (it == m_outlineByName.end()) {
 		auto renderer = std::make_unique<DynamicSilhouetteRenderer>(m_occRoot);
 		renderer->setFastMode(true);
-		renderer->setShape(geometry->getShape());
+		renderer->setShape(static_cast<GeometryRenderer*>(geometry.get())->getShape());
 		if (SoSeparator* geomSep = geometry->getCoinNode()) {
 			SoSeparator* silhouetteNode = renderer->getSilhouetteNode();
 			bool alreadyChild = false;
@@ -83,7 +83,7 @@ void OutlineDisplayManager::ensureForGeometry(const std::shared_ptr<OCCGeometry>
 		m_outlineByName.emplace(name, std::move(renderer));
 	}
 	else {
-		it->second->setShape(geometry->getShape());
+		it->second->setShape(static_cast<GeometryRenderer*>(geometry.get())->getShape());
 		it->second->setEnabled(true);
 	}
 }

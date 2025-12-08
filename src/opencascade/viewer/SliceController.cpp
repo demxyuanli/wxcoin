@@ -347,7 +347,7 @@ void SliceController::updateSectionContours() {
 							   gp_Dir(m_normal[0], m_normal[1], m_normal[2]));
 
 			// Compute section
-			BRepAlgoAPI_Section sectionAlgo(geom->getShape(), cuttingPlane, Standard_False);
+			BRepAlgoAPI_Section sectionAlgo(geom->OCCGeometryCore::getShape(), cuttingPlane, Standard_False);
 			sectionAlgo.Build();
 
 			if (sectionAlgo.IsDone()) {

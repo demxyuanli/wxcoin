@@ -3,6 +3,7 @@
 #include "logger/Logger.h"
 #include "OCCViewer.h"
 #include "config/RenderingConfig.h"
+#include "viewer/ViewerDisplayModeManager.h"
 #include <wx/colour.h>
 #include "EdgeTypes.h"
 
@@ -37,7 +38,15 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 	};
 
 	auto applyDisplaySettings = [&](const RenderingConfig::DisplaySettings& newSettings, const char* modeLabel) {
-		m_viewer->setDisplaySettings(newSettings);
+		// CRITICAL FIX: Following FreeCAD's approach - use ViewerDisplayModeManager directly
+		// to avoid triggering LightingConfig callbacks and unnecessary rebuilds
+		if (m_viewer->getViewDisplayModeManager()) {
+			// Use fast SoSwitch switching - directly call ViewerDisplayModeManager
+			m_viewer->getViewDisplayModeManager()->setViewDisplayMode(m_viewer, newSettings.displayMode);
+		} else {
+			// Fallback to old method if no manager available
+			m_viewer->setDisplaySettings(newSettings);
+		}
 		renderingConfig.setDisplaySettings(newSettings);
 		LOG_INF_S(std::string("RenderModeListener: Set to ") + modeLabel);
 	};

@@ -292,10 +292,10 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 		// CRITICAL FEATURE: Show silhouette edges only (fast mode, following FreeCAD's approach)
 		// Silhouette edges are view-dependent and provide much better performance for large models
 		if (m_showSilhouetteEdgesOnly && m_flags.showOriginalEdges) {
-			if (!g->getShape().IsNull()) {
+			if (!g->OCCGeometryCore::getShape().IsNull()) {
 				// Extract silhouette edges (view-dependent, fast mode)
 				g->modularEdgeComponent->extractSilhouetteEdges(
-					g->getShape(), 
+					g->OCCGeometryCore::getShape(), 
 					cameraPos,
 					m_originalEdgeParams.color,
 					m_originalEdgeParams.width);
@@ -315,8 +315,8 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 				gp_Pnt cameraPos(camPos[0], camPos[1], camPos[2]);
 				
 				// Generate LOD levels if not already generated
-				if (!g->getShape().IsNull()) {
-					g->modularEdgeComponent->generateLODLevels(g->getShape(), cameraPos);
+				if (!g->OCCGeometryCore::getShape().IsNull()) {
+					g->modularEdgeComponent->generateLODLevels(g->OCCGeometryCore::getShape(), cameraPos);
 					g->modularEdgeComponent->updateLODLevel(cameraPos);
 				}
 			}
@@ -354,7 +354,7 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 				// If no cached data exists and extraction is not running, trigger async extraction
 				// Following FreeCAD's CoinThread approach: extract in background thread, create nodes on main thread
 				// This prevents UI blocking and GL context crashes for large models
-				if (!edgeNode && !g->getShape().IsNull() && !m_originalEdgeRunning.load() && !m_originalEdgeCacheValid) {
+				if (!edgeNode && !g->OCCGeometryCore::getShape().IsNull() && !m_originalEdgeRunning.load() && !m_originalEdgeCacheValid) {
 					// Start async extraction - this will extract data in background thread, then create nodes on main thread
 					startAsyncOriginalEdgeExtraction(
 						m_originalEdgeParams.samplingDensity,
@@ -442,7 +442,7 @@ void EdgeDisplayManager::startAsyncFeatureEdgeGeneration(double featureAngleDeg,
 			if (!g->modularEdgeComponent) g->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
 			if (m_flags.showFeatureEdges && g->modularEdgeComponent->getEdgeNode(EdgeType::Feature) == nullptr) {
 				// Worker thread: compute feature edge geometry only
-				g->modularEdgeComponent->extractFeatureEdges(g->getShape(), m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave, m_featureEdgeAppearance.color, m_featureEdgeAppearance.width);
+				g->modularEdgeComponent->extractFeatureEdges(g->OCCGeometryCore::getShape(), m_lastFeatureParams.angleDeg, m_lastFeatureParams.minLength, m_lastFeatureParams.onlyConvex, m_lastFeatureParams.onlyConcave, m_featureEdgeAppearance.color, m_featureEdgeAppearance.width);
 			}
 			done++;
 			m_featureEdgeProgress = static_cast<int>(static_cast<double>(done) / std::max(1, total) * 100.0);
@@ -516,9 +516,9 @@ void EdgeDisplayManager::startAsyncOriginalEdgeExtraction(double samplingDensity
 				
 				// Worker thread: Only extract and cache edge data (pure geometry, no GL operations)
 				// This is safe to do in background thread because it doesn't create Coin3D nodes
-				if (!g->getShape().IsNull()) {
+				if (!g->OCCGeometryCore::getShape().IsNull()) {
 					g->modularEdgeComponent->extractAndCacheOriginalEdges(
-						g->getShape(), samplingDensity, minLength);
+						g->OCCGeometryCore::getShape(), samplingDensity, minLength);
 				}
 				
 				done++;
@@ -734,7 +734,7 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 		if (!geom) continue;
 		
 		size_t edgeCount = 0;
-		for (TopExp_Explorer exp(geom->getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
+		for (TopExp_Explorer exp(geom->OCCGeometryCore::getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
 			edgeCount++;
 		}
 		if (edgeCount > 0) {
@@ -755,7 +755,7 @@ void EdgeDisplayManager::computeIntersectionsAsync(
 
 		// Count edges for this geometry
 		size_t edgeCount = 0;
-		for (TopExp_Explorer exp(geom->getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
+		for (TopExp_Explorer exp(geom->OCCGeometryCore::getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
 			edgeCount++;
 		}
 		

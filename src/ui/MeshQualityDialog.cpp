@@ -2235,13 +2235,13 @@ void MeshQualityDialog::onAutoRecommend(wxCommandEvent& event)
 
 		// Use the first selected geometry
 		auto currentGeometry = selectedGeometries[0];
-		if (!currentGeometry || currentGeometry->getShape().IsNull()) {
+		if (!currentGeometry || static_cast<GeometryRenderer*>(currentGeometry.get())->getShape().IsNull()) {
 			wxMessageBox("Selected geometry is invalid", "Error", wxOK | wxICON_ERROR);
 			return;
 		}
 
 		// Use MeshParameterAdvisor for analysis
-		auto recommendedParams = MeshParameterAdvisor::recommendParameters(currentGeometry->getShape());
+		auto recommendedParams = MeshParameterAdvisor::recommendParameters(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape());
 
 		// Update UI with recommended values
 		m_deflectionSpinCtrl->SetValue(wxString::Format("%.6f", recommendedParams.deflection));
@@ -2256,7 +2256,7 @@ void MeshQualityDialog::onAutoRecommend(wxCommandEvent& event)
 		m_currentAngularDeflection = recommendedParams.angularDeflection;
 
 		// Estimate triangle count
-		size_t estimatedTriangles = MeshParameterAdvisor::estimateTriangleCount(currentGeometry->getShape(), recommendedParams);
+		size_t estimatedTriangles = MeshParameterAdvisor::estimateTriangleCount(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape(), recommendedParams);
 		m_triangleEstimateLabel->SetLabel(wxString::Format("Estimated triangles: ~%zu", estimatedTriangles));
 
 		// Update preset choice to "Custom" to indicate manual override
@@ -2296,7 +2296,7 @@ void MeshQualityDialog::onQualityPresetChoice(wxCommandEvent& event)
 
 		// Use the first selected geometry
 		auto currentGeometry = selectedGeometries[0];
-		if (!currentGeometry || currentGeometry->getShape().IsNull()) {
+		if (!currentGeometry || static_cast<GeometryRenderer*>(currentGeometry.get())->getShape().IsNull()) {
 			wxMessageBox("Selected geometry is invalid", "Error", wxOK | wxICON_ERROR);
 			return;
 		}
@@ -2306,19 +2306,19 @@ void MeshQualityDialog::onQualityPresetChoice(wxCommandEvent& event)
 
 		switch (selection) {
 			case 0: // Draft
-				presetParams = MeshParameterAdvisor::getDraftPreset(currentGeometry->getShape());
+				presetParams = MeshParameterAdvisor::getDraftPreset(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape());
 				break;
 			case 1: // Low
-				presetParams = MeshParameterAdvisor::getLowPreset(currentGeometry->getShape());
+				presetParams = MeshParameterAdvisor::getLowPreset(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape());
 				break;
 			case 2: // Medium
-				presetParams = MeshParameterAdvisor::getMediumPreset(currentGeometry->getShape());
+				presetParams = MeshParameterAdvisor::getMediumPreset(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape());
 				break;
 			case 3: // High
-				presetParams = MeshParameterAdvisor::getHighPreset(currentGeometry->getShape());
+				presetParams = MeshParameterAdvisor::getHighPreset(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape());
 				break;
 			case 4: // Very High
-				presetParams = MeshParameterAdvisor::getVeryHighPreset(currentGeometry->getShape());
+				presetParams = MeshParameterAdvisor::getVeryHighPreset(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape());
 				break;
 			default:
 				return;
@@ -2337,7 +2337,7 @@ void MeshQualityDialog::onQualityPresetChoice(wxCommandEvent& event)
 		m_currentAngularDeflection = presetParams.angularDeflection;
 
 		// Estimate triangle count
-		size_t estimatedTriangles = MeshParameterAdvisor::estimateTriangleCount(currentGeometry->getShape(), presetParams);
+		size_t estimatedTriangles = MeshParameterAdvisor::estimateTriangleCount(static_cast<GeometryRenderer*>(currentGeometry.get())->getShape(), presetParams);
 		m_triangleEstimateLabel->SetLabel(wxString::Format("Estimated triangles: ~%zu", estimatedTriangles));
 
 		// Update controls based on preset

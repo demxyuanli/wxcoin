@@ -63,7 +63,7 @@ void ExplodeController::clear(std::vector<std::shared_ptr<OCCGeometry>>& geometr
 double ExplodeController::getBBoxDiagonal(const std::shared_ptr<OCCGeometry>& geom) {
 	if (!geom) return 0.0;
 	gp_Pnt gmin, gmax;
-	OCCShapeBuilder::getBoundingBox(geom->getShape(), gmin, gmax);
+	OCCShapeBuilder::getBoundingBox(geom->OCCGeometryCore::getShape(), gmin, gmax);
 	double dx = gmax.X() - gmin.X();
 	double dy = gmax.Y() - gmin.Y();
 	double dz = gmax.Z() - gmin.Z();
@@ -154,7 +154,7 @@ gp_Dir ExplodeController::analyzeConstraintsDirection(const std::vector<std::sha
 		for (auto& g : geometries) {
 			if (!g) continue;
 			gp_Pnt gmin, gmax;
-			OCCShapeBuilder::getBoundingBox(g->getShape(), gmin, gmax);
+			OCCShapeBuilder::getBoundingBox(g->OCCGeometryCore::getShape(), gmin, gmax);
 			if (!init) { minPt = gmin; maxPt = gmax; init = true; }
 			else {
 				if (gmin.X() < minPt.X()) minPt.SetX(gmin.X());
@@ -192,7 +192,7 @@ void ExplodeController::resolveCollisions(std::vector<gp_Vec>& offsets,
 	for (size_t i = 0; i < N; ++i) {
 		if (!geometries[i]) continue;
 		gp_Pnt gmin, gmax;
-		OCCShapeBuilder::getBoundingBox(geometries[i]->getShape(), gmin, gmax);
+		OCCShapeBuilder::getBoundingBox(geometries[i]->OCCGeometryCore::getShape(), gmin, gmax);
 		gp_Pnt center((gmin.X() + gmax.X()) * 0.5, (gmin.Y() + gmax.Y()) * 0.5, (gmin.Z() + gmax.Z()) * 0.5);
 		
 		gp_Pnt pos = geometries[i]->getPosition();
@@ -255,7 +255,7 @@ void ExplodeController::computeAndApplyOffsets(const std::vector<std::shared_ptr
 	for (auto& g : geometries) {
 		if (!g) continue;
 		gp_Pnt gmin, gmax;
-		OCCShapeBuilder::getBoundingBox(g->getShape(), gmin, gmax);
+		OCCShapeBuilder::getBoundingBox(g->OCCGeometryCore::getShape(), gmin, gmax);
 		if (!init) { minPt = gmin; maxPt = gmax; init = true; }
 		else {
 			if (gmin.X() < minPt.X()) minPt.SetX(gmin.X());
@@ -289,7 +289,7 @@ void ExplodeController::computeAndApplyOffsets(const std::vector<std::shared_ptr
 		if (!g) continue;
 		
 		gp_Pnt gmin, gmax;
-		OCCShapeBuilder::getBoundingBox(g->getShape(), gmin, gmax);
+		OCCShapeBuilder::getBoundingBox(g->OCCGeometryCore::getShape(), gmin, gmax);
 		gp_Pnt gc((gmin.X() + gmax.X()) * 0.5, (gmin.Y() + gmax.Y()) * 0.5, (gmin.Z() + gmax.Z()) * 0.5);
 		gp_Pnt pos = g->getPosition();
 

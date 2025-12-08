@@ -6,7 +6,8 @@
 #include "geometry/OCCGeometryMaterial.h"
 #include "geometry/OCCGeometryDisplay.h"
 #include "geometry/OCCGeometryQuality.h"
-#include "geometry/OCCGeometryMesh.h"
+#include "geometry/GeometryRenderer.h"  // Use GeometryRenderer instead of OCCGeometryMesh
+#include "geometry/FaceDomainTypes.h"  // For FaceDomain, TriangleSegment, BoundaryTriangle structs
 #include "GeometryDialogTypes.h"
 #include <string>
 #include <memory>
@@ -16,6 +17,8 @@
  * 
  * This class inherits from all geometry modules to provide a complete
  * geometry management system with modular responsibilities.
+ * 
+ * Now uses GeometryRenderer for rendering instead of OCCGeometryMesh.
  */
 class OCCGeometry 
     : public OCCGeometryCore
@@ -24,7 +27,7 @@ class OCCGeometry
     , public OCCGeometryMaterial
     , public OCCGeometryDisplay
     , public OCCGeometryQuality
-    , public OCCGeometryMesh
+    , public GeometryRenderer  // Use GeometryRenderer instead of OCCGeometryMesh
 {
 public:
     OCCGeometry(const std::string& name);
@@ -47,19 +50,22 @@ public:
     // Override wireframe mode to trigger mesh rebuild
     virtual void setWireframeMode(bool wireframe) override;
 
-    // Coin3D integration - delegated to OCCGeometryMesh
-    using OCCGeometryMesh::getCoinNode;
-    using OCCGeometryMesh::setCoinNode;
+    // Override setDisplayMode to call updateDisplayMode for fast switching
+    virtual void setDisplayMode(RenderingConfig::DisplayMode mode) override;
+
+    // Coin3D integration - delegated to GeometryRenderer
+    using GeometryRenderer::getCoinNode;
+    using GeometryRenderer::setCoinNode;
 
     // Incremental intersection node API for progressive display
     void addSingleIntersectionNode(const gp_Pnt& point, const Quantity_Color& color, double size);
     void addBatchIntersectionNodes(const std::vector<gp_Pnt>& points, const Quantity_Color& color, double size);
     void clearIntersectionNodes();
     bool hasIntersectionNodes() const;
-    using OCCGeometryMesh::needsMeshRegeneration;
-    using OCCGeometryMesh::setMeshRegenerationNeeded;
-    using OCCGeometryMesh::updateWireframeMaterial;
-    using OCCGeometryMesh::updateDisplayMode;
+    using GeometryRenderer::needsMeshRegeneration;
+    using GeometryRenderer::setMeshRegenerationNeeded;
+    using GeometryRenderer::updateWireframeMaterial;
+    using GeometryRenderer::updateDisplayMode;
     
     // Override buildCoinRepresentation with implementations that use internal shape
     void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
@@ -69,7 +75,7 @@ public:
         double shininess, double transparency);
     
     void forceCoinRepresentationRebuild(const MeshParameters& params) {
-        if (!getShape().IsNull()) {
+        if (!OCCGeometryCore::getShape().IsNull()) {
             setMeshRegenerationNeeded(true);
             buildCoinRepresentation(params);
         }
@@ -81,7 +87,7 @@ public:
     
     // Convenience method: regenerateMesh using modular interface
     void regenerateMesh(const MeshParameters& params) {
-        if (!getShape().IsNull()) {
+        if (!OCCGeometryCore::getShape().IsNull()) {
             setMeshRegenerationNeeded(true);
             buildCoinRepresentation(params);
         }
@@ -104,7 +110,7 @@ public:
     using OCCGeometryDisplay::setWireframeOverlay;
 
     // Edge display methods
-    using OCCGeometryMesh::hasOriginalEdges;
+    using GeometryRenderer::hasOriginalEdges;
     using OCCGeometryDisplay::setEdgeDisplay;
     using OCCGeometryDisplay::setFeatureEdgeDisplay;
     using OCCGeometryDisplay::setNormalDisplay;
@@ -114,30 +120,30 @@ public:
     using OCCGeometryDisplay::isShowWireframe;
 
     // Edge component integration
-    using OCCGeometryMesh::setEdgeDisplayType;
-    using OCCGeometryMesh::isEdgeDisplayTypeEnabled;
-    using OCCGeometryMesh::updateEdgeDisplay;
+    using GeometryRenderer::setEdgeDisplayType;
+    using GeometryRenderer::isEdgeDisplayTypeEnabled;
+    using GeometryRenderer::updateEdgeDisplay;
 
     // Face domain mapping (replaces legacy face index mapping)
-    using OCCGeometryMesh::getTriangleSegments;
-    using OCCGeometryMesh::getTriangleSegment;
-    using OCCGeometryMesh::getGeometryFaceIdForTriangle;
-    using OCCGeometryMesh::getTrianglesForGeometryFace;
-    using OCCGeometryMesh::hasFaceDomainMapping;
-    using OCCGeometryMesh::hasFaceIndexMapping; // For compatibility
+    using GeometryRenderer::getTriangleSegments;
+    using GeometryRenderer::getTriangleSegment;
+    using GeometryRenderer::getGeometryFaceIdForTriangle;
+    using GeometryRenderer::getTrianglesForGeometryFace;
+    using GeometryRenderer::hasFaceDomainMapping;
+    using GeometryRenderer::hasFaceIndexMapping; // For compatibility
     void buildFaceIndexMapping(const MeshParameters& params = MeshParameters());
 
     // Assembly level
-    using OCCGeometryMesh::getAssemblyLevel;
-    using OCCGeometryMesh::setAssemblyLevel;
+    using GeometryRenderer::getAssemblyLevel;
+    using GeometryRenderer::setAssemblyLevel;
 
     // LOD support
     using OCCGeometryQuality::addLODLevel;
     using OCCGeometryQuality::getLODLevel;
 
     // Memory optimization
-    using OCCGeometryMesh::releaseTemporaryData;
-    using OCCGeometryMesh::optimizeMemory;
+    using GeometryRenderer::releaseTemporaryData;
+    using GeometryRenderer::optimizeMemory;
 
 private:
     // Subdivision settings (legacy compatibility)

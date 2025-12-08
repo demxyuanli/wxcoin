@@ -1,4 +1,4 @@
-#include "ShowOriginalEdgesListener.h"
+	#include "ShowOriginalEdgesListener.h"
 #include "OCCViewer.h"
 #include "EdgeTypes.h"
 #include "OriginalEdgesParamDialog.h"
@@ -67,9 +67,13 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				try {
 					auto geometries = m_viewer->getAllGeometry();
 					for (const auto& geom : geometries) {
-						if (geom && !geom->getShape().IsNull()) {
+						// CRITICAL FIX: Use explicit base class qualification to resolve ambiguous getShape() call
+						auto occGeometry = std::dynamic_pointer_cast<OCCGeometry>(geom);
+						if (!occGeometry) continue;
+						const TopoDS_Shape& shape = occGeometry->OCCGeometryCore::getShape();
+						if (!shape.IsNull()) {
 							int edgeCount = 0;
-							for (TopExp_Explorer exp(geom->getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
+							for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
 								edgeCount++;
 							}
 							totalEdgeCount += edgeCount;
@@ -265,9 +269,14 @@ CommandResult ShowOriginalEdgesListener::executeCommand(const std::string& comma
 				
 				for (const auto& geom : geometries) {
 					if (geom) {
+						// CRITICAL FIX: Use explicit base class qualification to resolve ambiguous getShape() call
+						auto occGeometry = std::dynamic_pointer_cast<OCCGeometry>(geom);
+						if (!occGeometry) continue;
+						
 						// Count edges using TopExp_Explorer
 						int edgeCount = 0;
-						for (TopExp_Explorer exp(geom->getShape(), TopAbs_EDGE); exp.More(); exp.Next()) {
+						const TopoDS_Shape& shape = occGeometry->OCCGeometryCore::getShape();
+						for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
 							edgeCount++;
 						}
 						totalStats.totalEdges += edgeCount;

@@ -42,6 +42,7 @@ class ViewOperationsService;
 class GeometryFactoryService;
 class ConfigurationManager;
 class MeshQualityService;
+class ViewerDisplayModeManager;
 #include <unordered_map>
 #include <atomic>
 #include <thread>
@@ -141,6 +142,9 @@ public:
 	// Display settings
 	void setDisplaySettings(const RenderingConfig::DisplaySettings& settings) override;
 	const RenderingConfig::DisplaySettings& getDisplaySettings() const override;
+
+	// Get view display mode manager (for direct SoSwitch control)
+	ViewerDisplayModeManager* getViewDisplayModeManager() const { return m_viewDisplayModeManager.get(); }
 
 	// Point view helpers
 	bool isPointViewEnabled() const;
@@ -405,6 +409,7 @@ private:
 	bool m_antiAliasing;
 
 	RenderingConfig::DisplaySettings m_displaySettings;
+	std::unique_ptr<class ViewerDisplayModeManager> m_viewDisplayModeManager;  // View-level display mode manager
 
 	MeshParameters m_meshParams;
 

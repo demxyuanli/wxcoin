@@ -1,5 +1,6 @@
 #include "NormalFixDialog.h"
 #include "OCCViewer.h"
+#include "OCCGeometry.h"
 #include "NormalValidator.h"
 #include "logger/Logger.h"
 #include <wx/notebook.h>
@@ -300,7 +301,17 @@ void NormalFixDialog::updateNormalInfo() {
     m_geometryName->SetLabel("Name: " + geometryName);
     
     try {
-        const TopoDS_Shape& shape = geometry->getShape();
+        // CRITICAL FIX: Use explicit base class qualification to resolve ambiguous getShape() call
+        auto occGeometry = std::dynamic_pointer_cast<OCCGeometry>(geometry);
+        if (!occGeometry) {
+            m_faceCount->SetLabel("Face Count: 0");
+            m_normalQuality->SetLabel("Normal Quality: 0.0%");
+            m_normalStatus->SetLabel("Status: Invalid Geometry Type");
+            m_correctFacesCount->SetLabel("Correct Faces: 0");
+            m_incorrectFacesCount->SetLabel("Incorrect Faces: 0");
+            return;
+        }
+        const TopoDS_Shape& shape = occGeometry->OCCGeometryCore::getShape();
         if (shape.IsNull()) {
             m_faceCount->SetLabel("Face Count: 0");
             m_normalQuality->SetLabel("Normal Quality: 0.0%");
@@ -426,7 +437,13 @@ void NormalFixDialog::saveCurrentStatistics() {
     }
     
     try {
-        const TopoDS_Shape& shape = geometry->getShape();
+        // CRITICAL FIX: Use explicit base class qualification to resolve ambiguous getShape() call
+        auto occGeometry = std::dynamic_pointer_cast<OCCGeometry>(geometry);
+        if (!occGeometry) {
+            m_preFixStats.hasData = false;
+            return;
+        }
+        const TopoDS_Shape& shape = occGeometry->OCCGeometryCore::getShape();
         if (shape.IsNull()) {
             m_preFixStats.hasData = false;
             return;
@@ -613,31 +630,35 @@ void NormalFixDialog::onApply(wxCommandEvent& event) {
     for (auto& geometry : geometries) {
         if (!geometry) continue;
         
-        const TopoDS_Shape& originalShape = geometry->getShape();
+        // CRITICAL FIX: Use explicit base class qualification to resolve ambiguous getShape() call
+        auto occGeometry = std::dynamic_pointer_cast<OCCGeometry>(geometry);
+        if (!occGeometry) continue;
+        
+        const TopoDS_Shape& originalShape = occGeometry->OCCGeometryCore::getShape();
         if (originalShape.IsNull()) continue;
         
         // Check if correction is needed based on quality threshold
         if (m_settings.autoCorrect) {
             double quality = NormalValidator::getNormalQualityScore(originalShape);
-            LOG_INF_S("Geometry " + geometry->getName() + " quality score: " + std::to_string(quality));
+            LOG_INF_S("Geometry " + occGeometry->getName() + " quality score: " + std::to_string(quality));
             
             if (quality < m_settings.qualityThreshold) {
-                LOG_INF_S("Applying normal correction to: " + geometry->getName());
+                LOG_INF_S("Applying normal correction to: " + occGeometry->getName());
                 
                 // Apply normal correction
-                TopoDS_Shape correctedShape = NormalValidator::autoCorrectNormals(originalShape, geometry->getName());
+                TopoDS_Shape correctedShape = NormalValidator::autoCorrectNormals(originalShape, occGeometry->getName());
                 
                 // Verify the correction worked
                 double newQuality = NormalValidator::getNormalQualityScore(correctedShape);
                 LOG_INF_S("After correction, quality score: " + std::to_string(newQuality));
                 
                 // Update the geometry with corrected shape
-                geometry->setShape(correctedShape);
+                occGeometry->setShape(correctedShape);
                 correctedCount++;
                 
-                LOG_INF_S("Successfully corrected normals for: " + geometry->getName());
+                LOG_INF_S("Successfully corrected normals for: " + occGeometry->getName());
             } else {
-                LOG_INF_S("Geometry " + geometry->getName() + " already has good normals (quality: " + std::to_string(quality) + ")");
+                LOG_INF_S("Geometry " + occGeometry->getName() + " already has good normals (quality: " + std::to_string(quality) + ")");
             }
         }
     }

@@ -31,7 +31,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , OCCGeometryMaterial()
     , OCCGeometryDisplay()
     , OCCGeometryQuality()
-    , OCCGeometryMesh()
+    , GeometryRenderer()  // Use GeometryRenderer instead of OCCGeometryMesh
 {
 
     // Apply settings from RenderingConfig
@@ -91,6 +91,8 @@ void OCCGeometry::setShape(const TopoDS_Shape& shape)
     try {
         // Call base class setShape
         OCCGeometryCore::setShape(shape);
+        // Also set shape in GeometryRenderer
+        GeometryRenderer::setShape(shape);
         // Mark that mesh needs regeneration
         setMeshRegenerationNeeded(true);
     }
@@ -130,13 +132,28 @@ void OCCGeometry::setTransparency(double transparency)
     setMeshRegenerationNeeded(true);
 }
 
+void OCCGeometry::setDisplayMode(RenderingConfig::DisplayMode mode)
+{
+    // Call base class to update display mode settings
+    OCCGeometryDisplay::setDisplayMode(mode);
+
+    // CRITICAL FIX: Only call updateDisplayMode if coin node exists
+    // This ensures fast SoSwitch switching without rebuilding
+    if (getCoinNode()) {
+        // Use fast update via SoSwitch - just change whichChild
+        updateDisplayMode(mode);
+    }
+    // If no coin node exists, don't mark for rebuild here
+    // Let the GeometryRenderer handle it when needed
+}
+
 void OCCGeometry::setPosition(const gp_Pnt& position)
 {
     // Call base class to update position
     OCCGeometryTransform::setPosition(position);
     
     // Trigger mesh rebuild to apply new position (will create coinNode if needed)
-    if (!getShape().IsNull()) {
+    if (!OCCGeometryCore::getShape().IsNull()) {
         MeshParameters params;
         buildCoinRepresentation(params);
         if (getCoinNode()) {
@@ -151,7 +168,7 @@ void OCCGeometry::setRotation(const gp_Vec& axis, double angle)
     OCCGeometryTransform::setRotation(axis, angle);
     
     // Trigger mesh rebuild to apply new rotation (will create coinNode if needed)
-    if (!getShape().IsNull()) {
+    if (!OCCGeometryCore::getShape().IsNull()) {
         MeshParameters params;
         buildCoinRepresentation(params);
         if (getCoinNode()) {
@@ -166,7 +183,7 @@ void OCCGeometry::setScale(double scale)
     OCCGeometryTransform::setScale(scale);
     
     // Trigger mesh rebuild to apply new scale (will create coinNode if needed)
-    if (!getShape().IsNull()) {
+    if (!OCCGeometryCore::getShape().IsNull()) {
         MeshParameters params;
         buildCoinRepresentation(params);
         if (getCoinNode()) {
@@ -185,7 +202,7 @@ void OCCGeometry::setWireframeMode(bool wireframe)
         setMeshRegenerationNeeded(true);
         
         // Force rebuild of Coin3D representation to apply wireframe mode change immediately
-        if (getCoinNode() && !getShape().IsNull()) {
+        if (getCoinNode() && !OCCGeometryCore::getShape().IsNull()) {
             MeshParameters params;
             buildCoinRepresentation(params);
             getCoinNode()->touch();
@@ -195,16 +212,20 @@ void OCCGeometry::setWireframeMode(bool wireframe)
 
 void OCCGeometry::updateCoinRepresentationIfNeeded(const MeshParameters& params)
 {
-    // Use the new modular interface instead of legacy version
-    if (needsMeshRegeneration() && !getShape().IsNull()) {
+    // CRITICAL FIX: Following FreeCAD's approach - only rebuild if mesh regeneration is needed
+    // If coin node exists and only display mode changed, use fast SoSwitch update instead
+    if (needsMeshRegeneration() && !OCCGeometryCore::getShape().IsNull()) {
         buildCoinRepresentation(params);
     }
+    // If coin node exists but mesh doesn't need regeneration, 
+    // display mode changes should be handled by updateDisplayMode() via SoSwitch
 }
 
 SoSeparator* OCCGeometry::getCoinNodeWithShape()
 {
-    // Update representation if needed before returning node
-    if (needsMeshRegeneration() && !getShape().IsNull()) {
+    // CRITICAL FIX: Following FreeCAD's approach - only rebuild if mesh regeneration is needed
+    // Don't rebuild just to get the coin node - use existing one if available
+    if (needsMeshRegeneration() && !OCCGeometryCore::getShape().IsNull()) {
         MeshParameters params;
         buildCoinRepresentation(params);
     }
@@ -238,10 +259,10 @@ void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& para
         modularEdgeComponent->setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
     }
 
-    // Also apply to OCCGeometryMesh components
-    OCCGeometryMesh::setEdgeDisplayType(EdgeType::Original, params.showOriginalEdges);
-    OCCGeometryMesh::setEdgeDisplayType(EdgeType::Feature, params.showFeatureEdges);
-    OCCGeometryMesh::setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
+    // Also apply to GeometryRenderer components
+    GeometryRenderer::setEdgeDisplayType(EdgeType::Original, params.showOriginalEdges);
+    GeometryRenderer::setEdgeDisplayType(EdgeType::Feature, params.showFeatureEdges);
+    GeometryRenderer::setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
 
     // Apply subdivision settings
     m_subdivisionEnabled = params.subdivisionEnabled;
@@ -307,7 +328,7 @@ void OCCGeometry::setFaceDisplay(bool enable)
 void OCCGeometry::buildFaceIndexMapping(const MeshParameters& params)
 {
     // Domain system - this method now builds domain mapping instead of legacy mapping
-    if (!getShape().IsNull()) {
+    if (!OCCGeometryCore::getShape().IsNull()) {
         // The actual implementation is now in the base class buildFaceIndexMapping method
         // which has been updated to build domain mappings instead
         // LOG_INF_S("Building domain face mapping for geometry");
@@ -318,7 +339,7 @@ void OCCGeometry::buildFaceIndexMapping(const MeshParameters& params)
 // Full Coin3D scene graph construction - thin wrapper for modular implementation
 void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 {
-    if (getShape().IsNull()) {
+    if (OCCGeometryCore::getShape().IsNull()) {
         LOG_WRN_S("Cannot build coin representation for null shape");
         return;
     }
@@ -326,8 +347,8 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
     // Create render context from current state
     GeometryRenderContext context = GeometryRenderContext::fromGeometry(*this);
     
-    // Delegate to Mesh module for actual rendering
-    OCCGeometryMesh::buildCoinRepresentation(getShape(), params, context);
+    // Delegate to GeometryRenderer for actual rendering
+    GeometryRenderer::buildCoinRepresentation(OCCGeometryCore::getShape(), params, context);
     
     setMeshRegenerationNeeded(false);
 }

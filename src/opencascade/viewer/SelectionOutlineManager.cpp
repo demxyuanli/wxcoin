@@ -66,7 +66,7 @@ void SelectionOutlineManager::syncToSelection() {
 		if (it == m_renderersByName.end()) {
 			auto renderer = std::make_unique<DynamicSilhouetteRenderer>(m_occRoot);
 			renderer->setFastMode(true);
-			renderer->setShape(g->getShape());
+			renderer->setShape(g->OCCGeometryCore::getShape());
 			renderer->setLineWidth(m_style.lineWidth);
 			renderer->setLineColor(m_style.r, m_style.g, m_style.b);
 			if (SoSeparator* geomSep = g->getCoinNode()) {
@@ -77,7 +77,7 @@ void SelectionOutlineManager::syncToSelection() {
 			m_renderersByName.emplace(name, std::move(renderer));
 		}
 		else {
-			it->second->setShape(g->getShape());
+			it->second->setShape(g->OCCGeometryCore::getShape());
 			it->second->setLineWidth(m_style.lineWidth);
 			it->second->setLineColor(m_style.r, m_style.g, m_style.b);
 			it->second->setEnabled(true);

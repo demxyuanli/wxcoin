@@ -89,7 +89,7 @@ void MeshParameterValidator::validateGeometryShape(std::shared_ptr<OCCGeometry> 
     LOG_INF_S("Validating geometry shape...");
     
     try {
-        const TopoDS_Shape& shape = geometry->getShape();
+        const TopoDS_Shape& shape = static_cast<GeometryRenderer*>(geometry.get())->getShape();
         
         if (shape.IsNull()) {
             LOG_ERR_S("Geometry shape is null");
