@@ -31,7 +31,7 @@ OCCGeometry::OCCGeometry(const std::string& name)
     , OCCGeometryMaterial()
     , OCCGeometryDisplay()
     , OCCGeometryQuality()
-    , OCCGeometryMesh()
+    , GeomCoinRepresentation()
 {
 
     // Apply settings from RenderingConfig
@@ -238,10 +238,10 @@ void OCCGeometry::applyAdvancedParameters(const AdvancedGeometryParameters& para
         modularEdgeComponent->setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
     }
 
-    // Also apply to OCCGeometryMesh components
-    OCCGeometryMesh::setEdgeDisplayType(EdgeType::Original, params.showOriginalEdges);
-    OCCGeometryMesh::setEdgeDisplayType(EdgeType::Feature, params.showFeatureEdges);
-    OCCGeometryMesh::setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
+    // Also apply to GeomCoinRepresentation components
+    GeomCoinRepresentation::setEdgeDisplayType(EdgeType::Original, params.showOriginalEdges);
+    GeomCoinRepresentation::setEdgeDisplayType(EdgeType::Feature, params.showFeatureEdges);
+    GeomCoinRepresentation::setEdgeDisplayType(EdgeType::Mesh, params.showMeshEdges);
 
     // Apply subdivision settings
     m_subdivisionEnabled = params.subdivisionEnabled;
@@ -327,7 +327,7 @@ void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
     GeometryRenderContext context = GeometryRenderContext::fromGeometry(*this);
     
     // Delegate to Mesh module for actual rendering
-    OCCGeometryMesh::buildCoinRepresentation(getShape(), params, context);
+    GeomCoinRepresentation::buildCoinRepresentation(getShape(), params, context);
     
     setMeshRegenerationNeeded(false);
 }

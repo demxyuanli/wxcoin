@@ -1,0 +1,19 @@
+#pragma once
+
+#include <Inventor/nodes/SoSeparator.h>
+#include <OpenCASCADE/TopoDS_Shape.hxx>
+#include "rendering/GeometryProcessor.h"
+
+class SoSeparator;
+struct MeshParameters;
+
+class WireframeBuilder {
+public:
+    WireframeBuilder();
+    ~WireframeBuilder();
+
+    void createWireframeRepresentation(SoSeparator* coinNode, 
+                                      const TopoDS_Shape& shape, 
+                                      const MeshParameters& params);
+};
+

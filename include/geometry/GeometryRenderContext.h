@@ -76,7 +76,7 @@ struct BlendSettings {
  * @brief Complete rendering context for geometry
  * 
  * This structure encapsulates all data needed to render a geometry,
- * allowing OCCGeometryMesh to be completely independent of other modules.
+ * allowing GeomCoinRepresentation to be completely independent of other modules.
  */
 struct GeometryRenderContext {
     TransformData transform;

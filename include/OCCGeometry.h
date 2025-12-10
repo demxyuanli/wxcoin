@@ -6,7 +6,7 @@
 #include "geometry/OCCGeometryMaterial.h"
 #include "geometry/OCCGeometryDisplay.h"
 #include "geometry/OCCGeometryQuality.h"
-#include "geometry/OCCGeometryMesh.h"
+#include "geometry/GeomCoinRepresentation.h"
 #include "GeometryDialogTypes.h"
 #include <string>
 #include <memory>
@@ -24,7 +24,7 @@ class OCCGeometry
     , public OCCGeometryMaterial
     , public OCCGeometryDisplay
     , public OCCGeometryQuality
-    , public OCCGeometryMesh
+    , public GeomCoinRepresentation
 {
 public:
     OCCGeometry(const std::string& name);
@@ -47,19 +47,19 @@ public:
     // Override wireframe mode to trigger mesh rebuild
     virtual void setWireframeMode(bool wireframe) override;
 
-    // Coin3D integration - delegated to OCCGeometryMesh
-    using OCCGeometryMesh::getCoinNode;
-    using OCCGeometryMesh::setCoinNode;
+    // Coin3D integration - delegated to GeomCoinRepresentation
+    using GeomCoinRepresentation::getCoinNode;
+    using GeomCoinRepresentation::setCoinNode;
 
     // Incremental intersection node API for progressive display
     void addSingleIntersectionNode(const gp_Pnt& point, const Quantity_Color& color, double size);
     void addBatchIntersectionNodes(const std::vector<gp_Pnt>& points, const Quantity_Color& color, double size);
     void clearIntersectionNodes();
     bool hasIntersectionNodes() const;
-    using OCCGeometryMesh::needsMeshRegeneration;
-    using OCCGeometryMesh::setMeshRegenerationNeeded;
-    using OCCGeometryMesh::updateWireframeMaterial;
-    using OCCGeometryMesh::updateDisplayMode;
+    using GeomCoinRepresentation::needsMeshRegeneration;
+    using GeomCoinRepresentation::setMeshRegenerationNeeded;
+    using GeomCoinRepresentation::updateWireframeMaterial;
+    using GeomCoinRepresentation::updateDisplayMode;
     
     // Override buildCoinRepresentation with implementations that use internal shape
     void buildCoinRepresentation(const MeshParameters& params = MeshParameters());
@@ -104,7 +104,7 @@ public:
     using OCCGeometryDisplay::setWireframeOverlay;
 
     // Edge display methods
-    using OCCGeometryMesh::hasOriginalEdges;
+    using GeomCoinRepresentation::hasOriginalEdges;
     using OCCGeometryDisplay::setEdgeDisplay;
     using OCCGeometryDisplay::setFeatureEdgeDisplay;
     using OCCGeometryDisplay::setNormalDisplay;
@@ -114,30 +114,30 @@ public:
     using OCCGeometryDisplay::isShowWireframe;
 
     // Edge component integration
-    using OCCGeometryMesh::setEdgeDisplayType;
-    using OCCGeometryMesh::isEdgeDisplayTypeEnabled;
-    using OCCGeometryMesh::updateEdgeDisplay;
+    using GeomCoinRepresentation::setEdgeDisplayType;
+    using GeomCoinRepresentation::isEdgeDisplayTypeEnabled;
+    using GeomCoinRepresentation::updateEdgeDisplay;
 
     // Face domain mapping (replaces legacy face index mapping)
-    using OCCGeometryMesh::getTriangleSegments;
-    using OCCGeometryMesh::getTriangleSegment;
-    using OCCGeometryMesh::getGeometryFaceIdForTriangle;
-    using OCCGeometryMesh::getTrianglesForGeometryFace;
-    using OCCGeometryMesh::hasFaceDomainMapping;
-    using OCCGeometryMesh::hasFaceIndexMapping; // For compatibility
+    using GeomCoinRepresentation::getTriangleSegments;
+    using GeomCoinRepresentation::getTriangleSegment;
+    using GeomCoinRepresentation::getGeometryFaceIdForTriangle;
+    using GeomCoinRepresentation::getTrianglesForGeometryFace;
+    using GeomCoinRepresentation::hasFaceDomainMapping;
+    using GeomCoinRepresentation::hasFaceIndexMapping; // For compatibility
     void buildFaceIndexMapping(const MeshParameters& params = MeshParameters());
 
     // Assembly level
-    using OCCGeometryMesh::getAssemblyLevel;
-    using OCCGeometryMesh::setAssemblyLevel;
+    using GeomCoinRepresentation::getAssemblyLevel;
+    using GeomCoinRepresentation::setAssemblyLevel;
 
     // LOD support
     using OCCGeometryQuality::addLODLevel;
     using OCCGeometryQuality::getLODLevel;
 
     // Memory optimization
-    using OCCGeometryMesh::releaseTemporaryData;
-    using OCCGeometryMesh::optimizeMemory;
+    using GeomCoinRepresentation::releaseTemporaryData;
+    using GeomCoinRepresentation::optimizeMemory;
 
 private:
     // Subdivision settings (legacy compatibility)

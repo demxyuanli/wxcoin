@@ -13,10 +13,17 @@
 
 // Forward declarations
 class SoSeparator;
-class SoSwitch;
 class EdgeComponent;
 class ModularEdgeComponent;
 class TopoDS_Shape;
+
+// Helper classes (forward declarations)
+class CoinNodeManager;
+class RenderNodeBuilder;
+class DisplayModeHandler;
+class WireframeBuilder;
+class PointViewBuilder;
+class FaceDomainMapper;
 
 
 /**
@@ -118,14 +125,15 @@ struct VertexIndexMapping {
 };
 
 /**
- * @brief Geometry mesh generation and management
+ * @brief Coin3D representation builder and manager for OpenCASCADE geometry
  * 
- * Manages Coin3D mesh representation, regeneration, and face index mapping
+ * Manages Coin3D scene graph representation, rendering, display modes,
+ * face domain mapping, and all Coin3D-related functionality
  */
-class OCCGeometryMesh {
+class GeomCoinRepresentation {
 public:
-    OCCGeometryMesh();
-    virtual ~OCCGeometryMesh();
+    GeomCoinRepresentation();
+    virtual ~GeomCoinRepresentation();
 
     // Coin3D integration
     SoSeparator* getCoinNode() { return m_coinNode; }
@@ -232,7 +240,6 @@ protected:
 
     // Coin3D scene graph
     SoSeparator* m_coinNode;
-    SoSwitch* m_modeSwitch;  // SoSwitch for fast mode switching (FreeCAD-style)
     bool m_coinNeedsUpdate;
     bool m_meshRegenerationNeeded;
     MeshParameters m_lastMeshParams;
@@ -243,5 +250,11 @@ protected:
     std::vector<TriangleSegment> m_triangleSegments;    // Triangle index ranges per face
     std::vector<BoundaryTriangle> m_boundaryTriangles;  // Triangles shared by multiple faces
 
-    // Domain system only - no legacy mappings
+    // Helper classes for modular architecture
+    std::unique_ptr<CoinNodeManager> m_nodeManager;
+    std::unique_ptr<RenderNodeBuilder> m_renderBuilder;
+    std::unique_ptr<DisplayModeHandler> m_displayHandler;
+    std::unique_ptr<WireframeBuilder> m_wireframeBuilder;
+    std::unique_ptr<PointViewBuilder> m_pointViewBuilder;
+    std::unique_ptr<FaceDomainMapper> m_faceMapper;
 };

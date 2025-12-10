@@ -1,4 +1,4 @@
-#include "geometry/OCCGeometryMesh.h"
+#include "geometry/OCCGeometryCoinRepresentation.h"
 #include "geometry/GeometryRenderContext.h"
 #include "geometry/VertexExtractor.h"
 #include "edges/ModularEdgeComponent.h"
@@ -49,7 +49,7 @@
 #include <map>
 #include <fstream>
 
-OCCGeometryMesh::OCCGeometryMesh()
+OCCGeometryCoinRepresentation::OCCGeometryCoinRepresentation()
     : m_coinNode(nullptr)
     , m_modeSwitch(nullptr)
     , m_coinNeedsUpdate(true)
@@ -73,7 +73,7 @@ OCCGeometryMesh::OCCGeometryMesh()
     m_faceMapper = std::make_unique<helper::FaceDomainMapper>();
 }
 
-OCCGeometryMesh::~OCCGeometryMesh()
+OCCGeometryCoinRepresentation::~OCCGeometryCoinRepresentation()
 {
     if (m_coinNode) {
         m_coinNode->unref();
@@ -85,7 +85,7 @@ OCCGeometryMesh::~OCCGeometryMesh()
     }
 }
 
-void OCCGeometryMesh::setCoinNode(SoSeparator* node)
+void OCCGeometryCoinRepresentation::setCoinNode(SoSeparator* node)
 {
     if (m_coinNode) {
         m_coinNode->unref();
@@ -97,14 +97,14 @@ void OCCGeometryMesh::setCoinNode(SoSeparator* node)
     }
 }
 
-void OCCGeometryMesh::regenerateMesh(const TopoDS_Shape& shape, const MeshParameters& params)
+void OCCGeometryCoinRepresentation::regenerateMesh(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     m_meshRegenerationNeeded = true;
     m_lastMeshParams = params;
     buildCoinRepresentation(shape, params);
 }
 
-void OCCGeometryMesh::buildCoinRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
+void OCCGeometryCoinRepresentation::buildCoinRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     auto buildStartTime = std::chrono::high_resolution_clock::now();
     
@@ -161,7 +161,7 @@ void OCCGeometryMesh::buildCoinRepresentation(const TopoDS_Shape& shape, const M
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
 }
 
-void OCCGeometryMesh::buildCoinRepresentation(
+void OCCGeometryCoinRepresentation::buildCoinRepresentation(
     const TopoDS_Shape& shape,
     const MeshParameters& params,
     const Quantity_Color& diffuseColor,
@@ -225,45 +225,45 @@ void OCCGeometryMesh::buildCoinRepresentation(
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
 }
 
-void OCCGeometryMesh::updateCoinRepresentationIfNeeded(const TopoDS_Shape& shape, const MeshParameters& params)
+void OCCGeometryCoinRepresentation::updateCoinRepresentationIfNeeded(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     if (m_meshRegenerationNeeded || m_coinNeedsUpdate) {
         buildCoinRepresentation(shape, params);
     }
 }
 
-void OCCGeometryMesh::forceCoinRepresentationRebuild(const TopoDS_Shape& shape, const MeshParameters& params)
+void OCCGeometryCoinRepresentation::forceCoinRepresentationRebuild(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     m_meshRegenerationNeeded = true;
     m_coinNeedsUpdate = true;
     buildCoinRepresentation(shape, params);
 }
 
-void OCCGeometryMesh::setEdgeDisplayType(EdgeType type, bool show)
+void OCCGeometryCoinRepresentation::setEdgeDisplayType(EdgeType type, bool show)
 {
     if (modularEdgeComponent) {
         modularEdgeComponent->setEdgeDisplayType(type, show);
     }
 }
 
-bool OCCGeometryMesh::isEdgeDisplayTypeEnabled(EdgeType type) const
+bool OCCGeometryCoinRepresentation::isEdgeDisplayTypeEnabled(EdgeType type) const
 {
     return modularEdgeComponent ? modularEdgeComponent->isEdgeDisplayTypeEnabled(type) : false;
 }
 
-void OCCGeometryMesh::updateEdgeDisplay()
+void OCCGeometryCoinRepresentation::updateEdgeDisplay()
 {
     if (modularEdgeComponent && m_coinNode) {
         modularEdgeComponent->updateEdgeDisplay(m_coinNode);
     }
 }
 
-bool OCCGeometryMesh::hasOriginalEdges() const
+bool OCCGeometryCoinRepresentation::hasOriginalEdges() const
 {
     return modularEdgeComponent ? modularEdgeComponent->isEdgeDisplayTypeEnabled(EdgeType::Original) : false;
 }
 
-void OCCGeometryMesh::enableModularEdgeComponent(bool enable)
+void OCCGeometryCoinRepresentation::enableModularEdgeComponent(bool enable)
 {
     // Migration completed - always use modular edge component
     if (!enable) {
@@ -273,12 +273,12 @@ void OCCGeometryMesh::enableModularEdgeComponent(bool enable)
 
 // Original getGeometryFaceIdForTriangle implementation moved to bottom of file
 
-void OCCGeometryMesh::releaseTemporaryData()
+void OCCGeometryCoinRepresentation::releaseTemporaryData()
 {
     // Release any temporary mesh generation data
 }
 
-void OCCGeometryMesh::optimizeMemory()
+void OCCGeometryCoinRepresentation::optimizeMemory()
 {
     // Optimize memory usage
     // FaceDomains can be large, but we keep them for face highlighting
@@ -310,7 +310,7 @@ void FaceDomain::toCoin3DFormat(std::vector<SbVec3f>& vertices, std::vector<int>
     }
 }
 
-void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
+void OCCGeometryCoinRepresentation::createWireframeRepresentation(const TopoDS_Shape& shape, const MeshParameters& params)
 {
     if (shape.IsNull() || !m_coinNode) {
         return;
@@ -321,7 +321,7 @@ void OCCGeometryMesh::createWireframeRepresentation(const TopoDS_Shape& shape, c
 // ========== NEW MODULAR INTERFACE ==========
 // This is the truly modular implementation that doesn't depend on other modules
 
-void OCCGeometryMesh::buildCoinRepresentation(
+void OCCGeometryCoinRepresentation::buildCoinRepresentation(
     const TopoDS_Shape& shape,
     const MeshParameters& params,
     const GeometryRenderContext& context)
@@ -395,7 +395,7 @@ void OCCGeometryMesh::buildCoinRepresentation(
         try {
             m_vertexExtractor->extractAndCache(shape);
         } catch (const std::exception& e) {
-            LOG_ERR_S("OCCGeometryMesh: Failed to cache vertices: " + std::string(e.what()));
+            LOG_ERR_S("OCCGeometryCoinRepresentation: Failed to cache vertices: " + std::string(e.what()));
         }
     }
 
@@ -470,7 +470,7 @@ void OCCGeometryMesh::buildCoinRepresentation(
     auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEndTime - buildStartTime);
 }
 
-void OCCGeometryMesh::updateWireframeMaterial(const Quantity_Color& color)
+void OCCGeometryCoinRepresentation::updateWireframeMaterial(const Quantity_Color& color)
 {
     if (!m_coinNode) {
         return;
@@ -499,7 +499,7 @@ void OCCGeometryMesh::updateWireframeMaterial(const Quantity_Color& color)
 }
 
 
-void OCCGeometryMesh::updateDisplayMode(RenderingConfig::DisplayMode mode)
+void OCCGeometryCoinRepresentation::updateDisplayMode(RenderingConfig::DisplayMode mode)
 {
     if (!m_coinNode) {
         return;
@@ -510,7 +510,7 @@ void OCCGeometryMesh::updateDisplayMode(RenderingConfig::DisplayMode mode)
 
 
 
-int OCCGeometryMesh::getGeometryFaceIdForTriangle(int triangleIndex) const {
+int OCCGeometryCoinRepresentation::getGeometryFaceIdForTriangle(int triangleIndex) const {
     // Use domain system to find which face contains this triangle
     if (!hasFaceDomainMapping()) {
         return -1;
@@ -526,7 +526,7 @@ int OCCGeometryMesh::getGeometryFaceIdForTriangle(int triangleIndex) const {
     return -1;
 }
 
-void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
+void OCCGeometryCoinRepresentation::createPointViewRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
                                                    const ::DisplaySettings& displaySettings)
 {
     if (!m_coinNode) {
@@ -538,7 +538,7 @@ void OCCGeometryMesh::createPointViewRepresentation(const TopoDS_Shape& shape, c
 
 // ===== New Domain-based Implementation =====
 
-void OCCGeometryMesh::buildFaceDomains(const TopoDS_Shape& shape,
+void OCCGeometryCoinRepresentation::buildFaceDomains(const TopoDS_Shape& shape,
                                       const std::vector<TopoDS_Face>& faces,
                                       const MeshParameters& params)
 {
@@ -557,12 +557,12 @@ void OCCGeometryMesh::buildFaceDomains(const TopoDS_Shape& shape,
     m_faceDomains = std::move(tempDomains);
 }
 
-bool OCCGeometryMesh::triangulateFace(const TopoDS_Face& face, FaceDomain& domain)
+bool OCCGeometryCoinRepresentation::triangulateFace(const TopoDS_Face& face, FaceDomain& domain)
 {
     return m_faceMapper->triangulateFace(face, domain);
 }
 
-void OCCGeometryMesh::buildTriangleSegments(const std::vector<std::pair<int, std::vector<int>>>& faceMappings)
+void OCCGeometryCoinRepresentation::buildTriangleSegments(const std::vector<std::pair<int, std::vector<int>>>& faceMappings)
 {
     m_triangleSegments.clear();
     m_triangleSegments.reserve(faceMappings.size());
@@ -572,7 +572,7 @@ void OCCGeometryMesh::buildTriangleSegments(const std::vector<std::pair<int, std
     }
 }
 
-void OCCGeometryMesh::identifyBoundaryTriangles(const std::vector<std::pair<int, std::vector<int>>>& faceMappings)
+void OCCGeometryCoinRepresentation::identifyBoundaryTriangles(const std::vector<std::pair<int, std::vector<int>>>& faceMappings)
 {
     std::map<int, std::vector<int>> triangleToFacesMap;
     for (const auto& [faceId, triangleIndices] : faceMappings) {
@@ -592,7 +592,7 @@ void OCCGeometryMesh::identifyBoundaryTriangles(const std::vector<std::pair<int,
 
 // ===== Query Methods for New Domain System =====
 
-const FaceDomain* OCCGeometryMesh::getFaceDomain(int geometryFaceId) const
+const FaceDomain* OCCGeometryCoinRepresentation::getFaceDomain(int geometryFaceId) const
 {
     for (const auto& domain : m_faceDomains) {
         if (domain.geometryFaceId == geometryFaceId) {
@@ -602,7 +602,7 @@ const FaceDomain* OCCGeometryMesh::getFaceDomain(int geometryFaceId) const
     return nullptr;
 }
 
-const TriangleSegment* OCCGeometryMesh::getTriangleSegment(int geometryFaceId) const
+const TriangleSegment* OCCGeometryCoinRepresentation::getTriangleSegment(int geometryFaceId) const
 {
     for (const auto& segment : m_triangleSegments) {
         if (segment.geometryFaceId == geometryFaceId) {
@@ -612,7 +612,7 @@ const TriangleSegment* OCCGeometryMesh::getTriangleSegment(int geometryFaceId) c
     return nullptr;
 }
 
-bool OCCGeometryMesh::isBoundaryTriangle(int triangleIndex) const
+bool OCCGeometryCoinRepresentation::isBoundaryTriangle(int triangleIndex) const
 {
     for (const auto& boundaryTri : m_boundaryTriangles) {
         if (boundaryTri.triangleIndex == triangleIndex) {
@@ -622,7 +622,7 @@ bool OCCGeometryMesh::isBoundaryTriangle(int triangleIndex) const
     return false;
 }
 
-const BoundaryTriangle* OCCGeometryMesh::getBoundaryTriangle(int triangleIndex) const
+const BoundaryTriangle* OCCGeometryCoinRepresentation::getBoundaryTriangle(int triangleIndex) const
 {
     for (const auto& boundaryTri : m_boundaryTriangles) {
         if (boundaryTri.triangleIndex == triangleIndex) {
@@ -632,7 +632,7 @@ const BoundaryTriangle* OCCGeometryMesh::getBoundaryTriangle(int triangleIndex) 
     return nullptr;
 }
 
-std::vector<int> OCCGeometryMesh::getGeometryFaceIdsForTriangle(int triangleIndex) const
+std::vector<int> OCCGeometryCoinRepresentation::getGeometryFaceIdsForTriangle(int triangleIndex) const
 {
     // Domain system doesn't support multiple faces per triangle efficiently
     // Return single face if found
@@ -643,7 +643,7 @@ std::vector<int> OCCGeometryMesh::getGeometryFaceIdsForTriangle(int triangleInde
     return {};
 }
 
-std::vector<int> OCCGeometryMesh::getTrianglesForGeometryFace(int geometryFaceId) const
+std::vector<int> OCCGeometryCoinRepresentation::getTrianglesForGeometryFace(int geometryFaceId) const
 {
     // Deprecated: Now we use FaceDomain directly instead of triangle indices
     // This method is kept for backward compatibility but should not be used
