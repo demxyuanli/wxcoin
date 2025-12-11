@@ -1,5 +1,4 @@
 #include "geometry/helper/CoinNodeManager.h"
-#include "logger/Logger.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoTexture2.h>
 #include <Inventor/nodes/SoTextureCoordinate2.h>
@@ -19,11 +18,9 @@ SoSeparator* CoinNodeManager::createOrClearNode(SoSeparator* existingNode) {
                 newNode->ref();
                 return newNode;
             } else {
-                LOG_ERR_S("CoinNodeManager: Failed to create SoSeparator");
                 return nullptr;
             }
         } catch (const std::exception& e) {
-            LOG_ERR_S("CoinNodeManager: Exception creating SoSeparator: " + std::string(e.what()));
             return nullptr;
         }
     } else {
@@ -32,7 +29,6 @@ SoSeparator* CoinNodeManager::createOrClearNode(SoSeparator* existingNode) {
             configureNodeCaching(existingNode);
             return existingNode;
         } catch (const std::exception& e) {
-            LOG_ERR_S("CoinNodeManager: Exception removing children: " + std::string(e.what()));
             existingNode->unref();
             SoSeparator* newNode = new SoSeparator();
             configureNodeCaching(newNode);

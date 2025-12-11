@@ -1,5 +1,4 @@
 #include "geometry/helper/RenderNodeBuilder.h"
-#include "logger/Logger.h"
 #include "rendering/RenderingToolkitAPI.h"
 #include "config/RenderingConfig.h"
 #include <Inventor/nodes/SoTransform.h>
@@ -159,7 +158,6 @@ void RenderNodeBuilder::appendTextureNodes(SoSeparator* parent, const GeometryRe
         parent->addChild(new SoTextureCoordinate2());
     }
     catch (const std::exception& e) {
-        LOG_ERR_S("Exception loading texture: " + std::string(e.what()));
     }
 }
 

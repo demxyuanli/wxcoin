@@ -72,8 +72,6 @@ SceneManager::SceneManager(Canvas* canvas)
 	, m_isFirstRender(true)
 	, m_forceCacheClearCounter(0)
 {
-	LOG_INF_S("SceneManager initializing");
-
 	// Initialize rendering toolkit with culling
 	// m_renderingToolkit = std::make_unique<RenderingToolkitAPI>(); // Removed as per edit hint
 	// m_renderingToolkit->setFrustumCullingEnabled(true); // Removed as per edit hint
@@ -84,10 +82,8 @@ SceneManager::~SceneManager() {
 	// Critical: Remove listeners BEFORE cleanup to prevent dangling pointer access
 	if (m_canvas && m_canvas->getRefreshManager()) {
 		m_canvas->getRefreshManager()->removeAllListeners();
-		LOG_INF_S("Removed all refresh listeners in destructor");
 	}
 	cleanup();
-	LOG_INF_S("SceneManager destroyed");
 }
 
 bool SceneManager::initScene() {
@@ -178,7 +174,6 @@ bool SceneManager::initScene() {
 		// Initialize culling system
 		RenderingToolkitAPI::setFrustumCullingEnabled(true);
 		RenderingToolkitAPI::setOcclusionCullingEnabled(true);
-		LOG_INF_S("Culling system initialized and enabled");
 
 		// Add refresh listener for camera clipping plane updates
 		// Note: Listener is removed in destructor to prevent dangling pointer access
@@ -193,7 +188,6 @@ bool SceneManager::initScene() {
 						updateCameraClippingPlanes();
 					}
 				});
-			LOG_INF_S("Added camera clipping plane update listener");
 		}
 
 		resetView();
@@ -210,7 +204,6 @@ void SceneManager::cleanup() {
 	// Remove all refresh listeners to prevent dangling pointer issues
 	if (m_canvas && m_canvas->getRefreshManager()) {
 		m_canvas->getRefreshManager()->removeAllListeners();
-		LOG_INF_S("Removed all refresh listeners during cleanup");
 	}
 
 	if (m_sceneRoot) {
@@ -338,7 +331,6 @@ void SceneManager::toggleCameraMode() {
 	else {
 		m_canvas->Refresh(true);
 	}
-	LOG_INF_S(m_isPerspectiveCamera ? "Switched to Perspective Camera" : "Switched to Orthographic Camera");
 }
 
 void SceneManager::setView(const std::string& viewName) {
@@ -407,8 +399,6 @@ void SceneManager::setView(const std::string& viewName) {
 
 	forceBoundsUpdate();
 
-	LOG_INF_S("Switched to view: " + viewName);
-
 	if (m_canvas->getRefreshManager()) {
 		m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::CAMERA_MOVED, true);
 	}
@@ -470,9 +460,6 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	bool longIdleDetected = !m_isFirstRender && (timeSinceLastRender.count() > LONG_IDLE_THRESHOLD_SECONDS);
 	
 	if (longIdleDetected) {
-		LOG_WRN_S("SceneManager::render: Long idle period detected (" + 
-			std::to_string(timeSinceLastRender.count()) + 
-			" seconds). Forcing Coin3D cache invalidation to prevent stale GL resources.");
 		invalidateCoin3DCache();
 	}
 	
@@ -522,35 +509,22 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 	// Detect GL context change (context recreation after loss)
 	if (lastVersion.empty() || lastVersion != version) {
 		if (!lastVersion.empty() && lastVersion != version) {
-			LOG_WRN_S("SceneManager::render: GL context version changed from '" + lastVersion + "' to '" + std::string(version) + "'");
-			LOG_WRN_S("SceneManager::render: This indicates GL context was recreated. Invalidating Coin3D cache.");
-			
 			// Force Coin3D to rebuild all display lists and GL resources
 			// by changing the cache context ID
 			lastCacheContext++;
 		}
 		lastVersion = version;
-		LOG_INF_S("SceneManager::render: OpenGL version: " + std::string(version));
 	}
 	
 	// Apply forced cache clear if requested (from external invalidation or long idle)
 	if (m_forceCacheClearCounter > 0) {
 		lastCacheContext += m_forceCacheClearCounter;
-		LOG_INF_S("SceneManager::render: Applying " + std::to_string(m_forceCacheClearCounter) + 
-			" forced cache invalidations. New cache version: " + std::to_string(lastCacheContext));
 		m_forceCacheClearCounter = 0;
 	}
 
-	// Reset OpenGL errors before rendering (only log in debug builds)
+	// Reset OpenGL errors before rendering
 	GLenum err;
 	while ((err = glGetError()) != GL_NO_ERROR) {
-#ifdef _DEBUG
-		static int errorCount = 0;
-		if (errorCount < 5) { // Limit error messages to prevent spam
-			LOG_WRN_S("SceneManager::render: Pre-render OpenGL error: " + std::to_string(err));
-			errorCount++;
-		}
-#endif
 	}
 
 	// Reset OpenGL state to prevent errors
@@ -597,14 +571,6 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		uint32_t cacheId = (baseId << 16) | (lastCacheContext & 0xFFFF);
 		renderAction.setCacheContext(cacheId);
 		
-		// Log cache context change for debugging
-		static uint32_t lastLoggedCacheId = 0;
-		if (lastLoggedCacheId != cacheId) {
-			LOG_INF_S("SceneManager::render: Using cache context ID: " + std::to_string(cacheId) + 
-				" (baseId=" + std::to_string(baseId) + ", version=" + std::to_string(lastCacheContext) + ")");
-			lastLoggedCacheId = cacheId;
-		}
-
 		// Check if scene root is valid before rendering
 		if (!m_sceneRoot) {
 #ifdef _DEBUG
@@ -615,19 +581,6 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 
 		// Additional validation: Check if scene root has valid children
 		int numChildren = m_sceneRoot->getNumChildren();
-		if (numChildren == 0) {
-#ifdef _DEBUG
-			LOG_WRN_S("SceneManager::render: Scene root has no children, this may indicate an empty scene");
-#endif
-		}
-		
-		// Log scene complexity for large scenes (helps diagnose resource exhaustion)
-		static int lastLoggedChildCount = 0;
-		if (numChildren > 100 && numChildren != lastLoggedChildCount) {
-			LOG_INF_S("SceneManager::render: Rendering complex scene with " + std::to_string(numChildren) + 
-				" root children. Cache ID: " + std::to_string(cacheId));
-			lastLoggedChildCount = numChildren;
-		}
 		
 		// CRITICAL: Final GL error check before Coin3D rendering
 		// This catches any GL errors that might cause Coin3D to assert
@@ -638,24 +591,12 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 			// Clear all errors
 			while (glGetError() != GL_NO_ERROR) {}
 		}
-		
-		// DEBUG: Log before Coin3D rendering for crash diagnosis
-		LOG_INF_S("SceneManager::render: About to call renderAction.apply() on scene with " + 
-			std::to_string(numChildren) + " root children, cacheId=" + std::to_string(cacheId));
 
 		renderAction.apply(m_sceneRoot);
-		
-		LOG_INF_S("SceneManager::render: renderAction.apply() completed successfully");
 		
 		// Check for GL errors after rendering
 		GLenum postRenderError = glGetError();
 		if (postRenderError != GL_NO_ERROR) { 
-			static int renderErrorCount = 0;
-			if (renderErrorCount < 5) {
-				LOG_WRN_S("SceneManager::render: GL error after renderAction.apply(): " + 
-					std::to_string(postRenderError));
-				renderErrorCount++;
-			}
 		} 
 	} catch (const std::exception& e) {
 		// Restore blend state before returning
@@ -687,15 +628,8 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		glDisable(GL_BLEND);
 	}
 
-	// Check for OpenGL errors after rendering (only log in debug builds)
+	// Check for OpenGL errors after rendering
 	while ((err = glGetError()) != GL_NO_ERROR) {
-#ifdef _DEBUG
-		static int postErrorCount = 0;
-		if (postErrorCount < 5) { // Limit error messages to prevent spam
-			LOG_ERR_S("Post-render: OpenGL error: " + std::to_string(err));
-			postErrorCount++;
-		}
-#endif
 	}
 
 	// Publish to PerformanceDataBus instead of logging
@@ -755,46 +689,38 @@ bool SceneManager::screenToWorld(const wxPoint& screenPos, SbVec3f& worldPos) {
 		worldPos = pickedPoint->getPoint();
 		return true;
 	}
-	else {
-		LOG_ERR_S("No geometry picked at screen position: (" + std::to_string(screenPos.x) + ", " + std::to_string(screenPos.y) + ")");
-	}
 
 	// If no geometry was picked, try intersecting with the current reference plane
-	float referenceZ = m_pickingAidManager ? m_pickingAidManager->getReferenceZ() : 0.0f;
-	SbPlane referencePlane(SbVec3f(0, 0, 1), referenceZ);
-	if (referencePlane.intersect(lineFromCamera, worldPos)) {
-		LOG_INF_S("Ray intersected reference plane at Z=" + std::to_string(referenceZ));
-		return true;
-	}
-
-	// If reference plane intersection fails, try other common planes
-	// XY plane at different Z levels
-	float zLevels[] = { 0.0f, 1.0f, -1.0f, 2.0f, -2.0f, 5.0f, -5.0f };
-	for (float z : zLevels) {
-		if (z == referenceZ) continue; // Skip already tested reference plane
-		SbPlane plane(SbVec3f(0, 0, 1), z);
-		if (plane.intersect(lineFromCamera, worldPos)) {
-			LOG_INF_S("Ray intersected plane at Z=" + std::to_string(z));
+		float referenceZ = m_pickingAidManager ? m_pickingAidManager->getReferenceZ() : 0.0f;
+		SbPlane referencePlane(SbVec3f(0, 0, 1), referenceZ);
+		if (referencePlane.intersect(lineFromCamera, worldPos)) {
 			return true;
 		}
-	}
 
-	// XZ plane (Y=0)
-	SbPlane xzPlane(SbVec3f(0, 1, 0), 0.0f);
-	if (xzPlane.intersect(lineFromCamera, worldPos)) {
-		LOG_INF_S("Ray intersected XZ plane (Y=0)");
-		return true;
-	}
+		// If reference plane intersection fails, try other common planes
+		// XY plane at different Z levels
+		float zLevels[] = { 0.0f, 1.0f, -1.0f, 2.0f, -2.0f, 5.0f, -5.0f };
+		for (float z : zLevels) {
+			if (z == referenceZ) continue; // Skip already tested reference plane
+			SbPlane plane(SbVec3f(0, 0, 1), z);
+			if (plane.intersect(lineFromCamera, worldPos)) {
+				return true;
+			}
+		}
 
-	// YZ plane (X=0)
-	SbPlane yzPlane(SbVec3f(1, 0, 0), 0.0f);
-	if (yzPlane.intersect(lineFromCamera, worldPos)) {
-		LOG_INF_S("Ray intersected YZ plane (X=0)");
-		return true;
-	}
+		// XZ plane (Y=0)
+		SbPlane xzPlane(SbVec3f(0, 1, 0), 0.0f);
+		if (xzPlane.intersect(lineFromCamera, worldPos)) {
+			return true;
+		}
 
-	// As a last resort, project to a point at the focal distance
-	LOG_WRN_S("No plane intersection found, using focal distance projection");
+		// YZ plane (X=0)
+		SbPlane yzPlane(SbVec3f(1, 0, 0), 0.0f);
+		if (yzPlane.intersect(lineFromCamera, worldPos)) {
+			return true;
+		}
+
+		// As a last resort, project to a point at the focal distance
 	worldPos = lineFromCamera.getPosition() + lineFromCamera.getDirection() * m_camera->focalDistance.getValue();
 	return true;
 }
@@ -827,7 +753,6 @@ void SceneManager::updateSceneBounds() {
 	// Some Coin3D nodes may require GL context for bounding box computation
 	const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
 	if (!glVersion) {
-		LOG_WRN_S("SceneManager::updateSceneBounds: GL context not available, skipping bounds update");
 		return;
 	}
 
@@ -840,13 +765,6 @@ void SceneManager::updateSceneBounds() {
 		m_sceneBoundingBox = newBounds;
 
 		if (!m_sceneBoundingBox.isEmpty()) {
-#ifdef _DEBUG
-			static int boundsUpdateCount = 0;
-			if (boundsUpdateCount < 5) { // Limit bounds update messages
-				LOG_INF_S("Scene bounds updated.");
-				boundsUpdateCount++;
-			}
-#endif
 			// Update dependent systems only when bounds actually change
 			if (m_coordSystemRenderer) {
 				m_coordSystemRenderer->updateCoordinateSystemSize(getSceneBoundingBoxSize());
@@ -863,7 +781,6 @@ void SceneManager::updateSceneBounds() {
 
 void SceneManager::updateCameraClippingPlanes() {
 	if (!m_camera || m_sceneBoundingBox.isEmpty()) {
-		LOG_DBG_S("Skipping clipping plane update - camera or scene bounds invalid");
 		return;
 	}
 
@@ -931,7 +848,6 @@ void SceneManager::updateCoordinateSystemScale() {
 void SceneManager::initializeScene() {
 	// This method was declared but not defined.
 	// Providing a basic implementation.
-	LOG_INF_S("SceneManager::initializeScene called.");
 	// If there's specific initialization logic needed, it should go here.
 }
 
@@ -1041,17 +957,12 @@ void SceneManager::initializeRenderingConfigCallback()
 	// Register callback to update geometries when RenderingConfig changes
 	RenderingConfig& config = RenderingConfig::getInstance();
 	config.registerSettingsChangedCallback([this]() {
-		LOG_INF_S("RenderingConfig callback triggered - updating geometries and lighting");
-
 		// Check if display mode changed - always update lighting to ensure correct light model
 		if (m_canvas && m_canvas->getOCCViewer()) {
 			auto displaySettings = m_canvas->getOCCViewer()->getDisplaySettings();
 			static RenderingConfig::DisplayMode lastDisplayMode = displaySettings.displayMode;
 
 			if (lastDisplayMode != displaySettings.displayMode) {
-				LOG_INF_S("RenderingConfig callback: Display mode changed from " + 
-					std::to_string(static_cast<int>(lastDisplayMode)) + " to " + 
-					std::to_string(static_cast<int>(displaySettings.displayMode)) + ", updating lighting");
 				updateSceneLighting();
 				lastDisplayMode = displaySettings.displayMode;
 			}
@@ -1063,36 +974,21 @@ void SceneManager::initializeRenderingConfigCallback()
 
 			// Check if any objects are selected
 			if (!selectedGeometries.empty()) {
-				LOG_INF_S("Found " + std::to_string(selectedGeometries.size()) + " selected geometries to update");
-
 				// Update only selected geometries
 				for (auto& geometry : selectedGeometries) {
-					LOG_INF_S("Updating selected geometry: " + geometry->getName());
 					geometry->updateFromRenderingConfig();
 				}
-
-				// Test feedback for selected objects
-				LOG_INF_S("=== Test Feedback: Updated " + std::to_string(selectedGeometries.size()) + " selected objects ===");
 			}
 			else {
-				LOG_INF_S("No objects selected, updating all geometries");
-
 				// Update all geometries if none are selected
 				auto allGeometries = viewer->getAllGeometry();
-				LOG_INF_S("Found " + std::to_string(allGeometries.size()) + " total geometries to update");
 
 				for (auto& geometry : allGeometries) {
-					LOG_INF_S("Updating geometry: " + geometry->getName());
 					geometry->updateFromRenderingConfig();
 				}
-
-				// Test feedback for all objects
-				LOG_INF_S("=== Test Feedback: Updated " + std::to_string(allGeometries.size()) + " total objects ===");
 			}
 
 			// Force refresh with multiple methods to ensure update
-			LOG_INF_S("Requesting refresh via multiple methods");
-
 			// Method 1: RefreshManager
 			if (m_canvas->getRefreshManager()) {
 				m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::RENDERING_CHANGED, true);
@@ -1107,28 +1003,20 @@ void SceneManager::initializeRenderingConfigCallback()
 			// Method 4: Touch the scene root to force Coin3D update
 			if (m_sceneRoot) {
 				m_sceneRoot->touch();
-				LOG_INF_S("Touched scene root to force Coin3D update");
 			}
-
-			LOG_INF_S("Updated geometries from RenderingConfig changes");
 		}
 		else {
 			LOG_ERR_S("Cannot update geometries: Canvas or OCCViewer not available");
 		}
 		});
-
-	LOG_INF_S("RenderingConfig callback initialized in SceneManager");
 }
 
 void SceneManager::initializeLightingConfigCallback() {
 	// Register callback to update lighting when LightingConfig changes
 	LightingConfig& config = LightingConfig::getInstance();
 	config.addSettingsChangedCallback([this]() {
-		LOG_INF_S("LightingConfig callback triggered - updating scene lighting");
 		updateSceneLighting();
 		});
-
-	LOG_INF_S("LightingConfig callback initialized in SceneManager");
 }
 
 void SceneManager::updateSceneLighting() {
@@ -1148,13 +1036,11 @@ void SceneManager::updateSceneLighting() {
 		if (m_canvas && m_canvas->getOCCViewer()) {
 			OCCViewer* viewer = m_canvas->getOCCViewer();
 			auto allGeometries = viewer->getAllGeometry();
-			LOG_INF_S("Updating " + std::to_string(allGeometries.size()) + " geometries for lighting changes");
 
 			for (auto& geometry : allGeometries) {
 				if (geometry) {
 					// Update material properties for better lighting response
 					geometry->updateMaterialForLighting();
-					LOG_INF_S("Updated material for lighting: " + geometry->getName());
 				}
 			}
 		}
@@ -1167,18 +1053,13 @@ void SceneManager::updateSceneLighting() {
 			else {
 				m_canvas->Refresh(true);
 			}
-			LOG_INF_S("Requested scene refresh for lighting changes");
 		}
-
-		LOG_INF_S("Scene lighting updated successfully");
 	}, 2, "Update scene lighting configuration"); // Higher priority for lighting updates
 }
 
 void SceneManager::initializeLightingFromConfig() {
 	// Use unified lighting setup method for initialization (no update-specific features)
 	setupLightingFromConfig(false, false);
-
-	LOG_INF_S("Lighting initialization from configuration completed");
 }
 
 // Camera state management utilities
@@ -1225,7 +1106,6 @@ void SceneManager::performViewAll() {
 	// Coin3D's viewAll method may require GL context for accurate bounds computation
 	const char* glVersion = reinterpret_cast<const char*>(glGetString(GL_VERSION));
 	if (!glVersion) {
-		LOG_WRN_S("SceneManager::performViewAll: GL context not available, using fallback positioning");
 		// Fallback: position camera at a default distance if no valid bounds
 		SbVec3f defaultPos(5.0f, -5.0f, 5.0f);
 		m_camera->position.setValue(defaultPos);
@@ -1364,19 +1244,12 @@ void SceneManager::deferUpdate(UpdateType type, std::function<void()> action, in
 
 	// Add new deferred update
 	m_deferredUpdates.push_back({type, action, priority, description});
-#ifdef _DEBUG
-	LOG_INF_S("Deferred update queued: " + description + " (priority: " + std::to_string(priority) + ")");
-#endif
 }
 
 void SceneManager::processDeferredUpdates() {
 	if (m_deferredUpdates.empty()) {
 		return;
 	}
-
-#ifdef _DEBUG
-	LOG_INF_S("Processing " + std::to_string(m_deferredUpdates.size()) + " deferred updates");
-#endif
 
 	// Sort by priority (higher priority first)
 	std::sort(m_deferredUpdates.begin(), m_deferredUpdates.end(),
@@ -1391,9 +1264,6 @@ void SceneManager::processDeferredUpdates() {
 	for (auto it = m_deferredUpdates.begin(); it != m_deferredUpdates.end() && processed < maxUpdatesPerFrame; ) {
 		try {
 			it->action();
-#ifdef _DEBUG
-			LOG_INF_S("Executed deferred update: " + it->description);
-#endif
 			it = m_deferredUpdates.erase(it);
 			processed++;
 		} catch (const std::exception& e) {
@@ -1403,13 +1273,6 @@ void SceneManager::processDeferredUpdates() {
 			processed++;
 		}
 	}
-
-	// If we still have updates remaining, they'll be processed in the next frame
-	if (!m_deferredUpdates.empty()) {
-#ifdef _DEBUG
-		LOG_INF_S(std::to_string(m_deferredUpdates.size()) + " deferred updates remaining for next frame");
-#endif
-	}
 }
 
 bool SceneManager::hasDeferredUpdates() const {
@@ -1418,7 +1281,6 @@ bool SceneManager::hasDeferredUpdates() const {
 
 void SceneManager::clearDeferredUpdates() {
 	if (!m_deferredUpdates.empty()) {
-		LOG_WRN_S("Clearing " + std::to_string(m_deferredUpdates.size()) + " pending deferred updates");
 		m_deferredUpdates.clear();
 	}
 }
@@ -1456,53 +1318,20 @@ std::string SceneManager::getCullingStats() const {
 
 void SceneManager::debugLightingState() const
 {
-	LOG_INF_S("=== SceneManager Lighting Debug ===");
-
-	if (!m_sceneRoot) {
-		LOG_INF_S("Scene root is null");
+	if (!m_sceneRoot || !m_lightRoot) {
 		return;
 	}
-
-	LOG_INF_S("Scene root has " + std::to_string(m_sceneRoot->getNumChildren()) + " children");
-
-	if (!m_lightRoot) {
-		LOG_INF_S("Light root is null");
-		return;
-	}
-
-	LOG_INF_S("Light root has " + std::to_string(m_lightRoot->getNumChildren()) + " children");
 
 	// Check each child of light root
 	for (int i = 0; i < m_lightRoot->getNumChildren(); ++i) {
 		SoNode* child = m_lightRoot->getChild(i);
 		if (child->isOfType(SoLightModel::getClassTypeId())) {
-			LOG_INF_S("Child " + std::to_string(i) + ": SoLightModel");
 		}
 		else if (child->isOfType(SoEnvironment::getClassTypeId())) {
-			SoEnvironment* env = static_cast<SoEnvironment*>(child);
-			SbColor color = env->ambientColor.getValue();
-			float intensity = env->ambientIntensity.getValue();
-			LOG_INF_S("Child " + std::to_string(i) + ": SoEnvironment (ambient color: " +
-				std::to_string(color[0]) + "," + std::to_string(color[1]) + "," + std::to_string(color[2]) +
-				", intensity: " + std::to_string(intensity) + ")");
 		}
 		else if (child->isOfType(SoDirectionalLight::getClassTypeId())) {
-			SoDirectionalLight* light = static_cast<SoDirectionalLight*>(child);
-			SbVec3f dir = light->direction.getValue();
-			SbColor color = light->color.getValue();
-			float intensity = light->intensity.getValue();
-			bool on = light->on.getValue();
-			LOG_INF_S("Child " + std::to_string(i) + ": SoDirectionalLight (direction: " +
-				std::to_string(dir[0]) + "," + std::to_string(dir[1]) + "," + std::to_string(dir[2]) +
-				", color: " + std::to_string(color[0]) + "," + std::to_string(color[1]) + "," + std::to_string(color[2]) +
-				", intensity: " + std::to_string(intensity) + ", on: " + std::to_string(on) + ")");
-		}
-		else {
-			LOG_INF_S("Child " + std::to_string(i) + ": Unknown type");
 		}
 	}
-
-	LOG_INF_S("=== End Lighting Debug ===");
 }
 
 void SceneManager::setCoordinateSystemVisible(bool visible)
@@ -1522,11 +1351,6 @@ void SceneManager::setCoordinateSystemVisible(bool visible)
 			if (m_canvas && m_canvas->getRefreshManager()) {
 				m_canvas->getRefreshManager()->requestRefresh(ViewRefreshManager::RefreshReason::GEOMETRY_CHANGED, true);
 			}
-
-			LOG_INF_S("Set coordinate system visibility: " + std::string(visible ? "visible" : "hidden"));
-		}
-		else {
-			LOG_WRN_S("Coordinate system renderer not available");
 		}
 	}, 1, "Set coordinate system visibility to " + std::string(visible ? "visible" : "hidden"));
 }
@@ -1543,16 +1367,11 @@ void SceneManager::updateCoordinateSystemColorsForBackground(float backgroundBri
 {
 	if (m_coordSystemRenderer) {
 		m_coordSystemRenderer->updateColorsForBackground(backgroundBrightness);
-		LOG_INF_S("Updated coordinate system colors for background brightness: " + std::to_string(backgroundBrightness));
-	} else {
-		LOG_WRN_S("Coordinate system renderer not available for color update");
 	}
 }
 
 void SceneManager::rebuildScene()
 {
-	LOG_WRN_S("SceneManager::rebuildScene: Attempting to rebuild scene after rendering error");
-	
 	try {
 		// Clear existing scene
 		if (m_sceneRoot) {
@@ -1576,8 +1395,6 @@ void SceneManager::rebuildScene()
 			setCheckerboardVisible(false);
 			setCheckerboardVisible(true);
 		}
-		
-		LOG_INF_S("SceneManager::rebuildScene: Scene rebuild completed successfully");
 		
 	} catch (const std::exception& e) {
 		handleError(ErrorCategory::GENERAL, ErrorSeverity::HIGH,
@@ -1642,25 +1459,11 @@ void SceneManager::validateAndRepairGeometries() {
 			if (coinNode) {
 				validGeometries++;
 			} else {
-#ifdef _DEBUG
-				static int rebuildWarningCount = 0;
-				if (rebuildWarningCount < 3) { // Limit rebuild warnings
-					LOG_WRN_S("SceneManager::render: Geometry '" + geometry->getName() + "' has null Coin3D node, rebuilding...");
-					rebuildWarningCount++;
-				}
-#endif
 				try {
 					// Force rebuild the Coin3D representation
 					MeshParameters defaultParams;
 					geometry->forceCoinRepresentationRebuild(defaultParams);
 					repairedGeometries++;
-#ifdef _DEBUG
-					static int rebuildSuccessCount = 0;
-					if (rebuildSuccessCount < 3) { // Limit success messages
-						LOG_INF_S("SceneManager::render: Successfully rebuilt Coin3D node for geometry '" + geometry->getName() + "'");
-						rebuildSuccessCount++;
-					}
-#endif
 				} catch (const std::exception& e) {
 					handleError(ErrorCategory::GEOMETRY, ErrorSeverity::MEDIUM,
 						"Failed to rebuild geometry '" + geometry->getName() + "'", &e);
@@ -1671,17 +1474,6 @@ void SceneManager::validateAndRepairGeometries() {
 			}
 		}
 	}
-
-	if (repairedGeometries > 0) {
-#ifdef _DEBUG
-		static int repairStatsCount = 0;
-		if (repairStatsCount < 5) { // Limit repair statistics messages
-			LOG_INF_S("SceneManager::render: Repaired " + std::to_string(repairedGeometries) +
-				" geometries with invalid Coin3D nodes");
-			repairStatsCount++;
-		}
-#endif
-	}
 }
 
 // Unified lighting configuration method
@@ -1689,12 +1481,6 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 	if (!m_sceneRoot) {
 		LOG_ERR_S("Cannot setup lighting: Scene root not available");
 		return;
-	}
-
-	if (isUpdate) {
-		LOG_INF_S("Updating lighting from configuration");
-	} else {
-		LOG_INF_S("Initializing lighting from configuration");
 	}
 
 	// Clear existing lighting nodes
@@ -1721,7 +1507,6 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 		if (isNoShading) {
 			// Use BASE_COLOR for no shading - no lighting calculations, direct color
 			lightModel->model.setValue(SoLightModel::BASE_COLOR);
-			LOG_INF_S("SceneManager::setupLightingFromConfig: Using BASE_COLOR light model for NoShading");
 		} else {
 			// Use PHONG for normal lighting
 			lightModel->model.setValue(SoLightModel::PHONG);
@@ -1743,7 +1528,6 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 		// For NoShading mode, use neutral ambient color with moderate intensity
 		environment->ambientColor.setValue(0.9f, 0.9f, 0.9f); // Light gray ambient
 		environment->ambientIntensity.setValue(0.5f); // Moderate ambient intensity
-		LOG_INF_S("SceneManager::setupLightingFromConfig: Using neutral ambient lighting for NoShading");
 	} else {
 		// Use configured ambient settings for normal modes
 		envSettings.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
@@ -1762,19 +1546,11 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 		environment->unref(); // Scene graph now holds the reference
 	}
 
-	// Use appropriate intensity value for logging
-	float logIntensity = (isUpdate && isNoShading) ? 0.5f : static_cast<float>(envSettings.ambientIntensity);
-	LOG_INF_S("Added environment lighting - ambient color: " +
-		std::to_string(r) + "," + std::to_string(g) + "," + std::to_string(b) +
-		", intensity: " + std::to_string(logIntensity));
-
 	// Add lights from configuration
 	auto lights = config.getAllLights();
-	LOG_INF_S("Adding " + std::to_string(lights.size()) + " lights from configuration");
 
 	for (const auto& lightSettings : lights) {
 		if (!lightSettings.enabled) {
-			LOG_INF_S("Skipping disabled light: " + lightSettings.name);
 			continue;
 		}
 
@@ -1811,8 +1587,6 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 					m_light = light;
 					m_light->ref(); // Keep our own reference for main light
 				}
-
-				LOG_INF_S("Added directional light: " + lightSettings.name);
 			}
 			else if (lightSettings.type == "point") {
 				SoPointLight* light = new SoPointLight;
@@ -1838,8 +1612,6 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 					m_sceneRoot->insertChild(light, insertIndex);
 					light->unref(); // Scene graph now holds the reference
 				}
-
-				LOG_INF_S("Added point light: " + lightSettings.name);
 			}
 			else if (lightSettings.type == "spot") {
 				SoSpotLight* light = new SoSpotLight;
@@ -1868,8 +1640,6 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 					m_sceneRoot->insertChild(light, insertIndex);
 					light->unref(); // Scene graph now holds the reference
 				}
-
-				LOG_INF_S("Added spot light: " + lightSettings.name);
 			}
 		}
 		catch (const std::exception& e) {
@@ -1900,22 +1670,15 @@ void SceneManager::setupLightingFromConfig(bool isUpdate, bool isNoShading) {
 			m_sceneRoot->insertChild(m_light, insertIndex);
 			// Don't unref here - we keep our own reference for main light
 		}
-		if (isUpdate) {
-			LOG_INF_S("Created default main light for compatibility");
-		}
 	}
 
 	// Force scene update
 	if (m_sceneRoot) {
 		m_sceneRoot->touch();
-		if (isUpdate) {
-			LOG_INF_S("Touched scene root to force lighting update");
-		}
 	}
 }
 
 void SceneManager::invalidateCoin3DCache() {
-	LOG_WRN_S("SceneManager::invalidateCoin3DCache: Forcing Coin3D cache invalidation");
 	m_forceCacheClearCounter++;
 }
 
@@ -1941,12 +1704,6 @@ bool SceneManager::validateGLContextHealth() {
 		LOG_ERR_S("SceneManager::validateGLContextHealth: GL context appears corrupted - cannot query GL state");
 		LOG_ERR_S("  glGetError=" + std::to_string(err) + ", maxTexSize=" + std::to_string(maxTexSize));
 		return false;
-	}
-	
-	// Log resource limits periodically (every 100 validations)
-	static int validationCount = 0;
-	if (++validationCount % 100 == 1) {
-		LOG_INF_S("SceneManager GL Resource Limits: maxTexSize=" + std::to_string(maxTexSize));
 	}
 	
 	return true;

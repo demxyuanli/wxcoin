@@ -1,5 +1,4 @@
 #include "geometry/helper/PointViewBuilder.h"
-#include "logger/Logger.h"
 #include "OCCMeshConverter.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoMaterial.h>
@@ -153,7 +152,6 @@ void PointViewBuilder::createPointViewRepresentation(SoSeparator* coinNode,
         coinNode->addChild(pointViewSep);
 
     } catch (const std::exception& e) {
-        LOG_ERR_S("Exception in PointViewBuilder::createPointViewRepresentation: " + std::string(e.what()));
     }
 }
 

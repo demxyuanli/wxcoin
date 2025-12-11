@@ -202,7 +202,7 @@ NavigationCubeGeometryBuilder::BuildResult NavigationCubeGeometryBuilder::build(
 
 		auto verticesIt = m_faces.find(pickId);
 		if (verticesIt == m_faces.end()) {
-			LOG_WRN_S("Missing vertex data for face " + faceName);
+			LOG_DBG_S("Missing vertex data for face " + faceName);
 			return;
 		}
 

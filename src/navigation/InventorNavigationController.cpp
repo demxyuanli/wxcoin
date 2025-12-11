@@ -36,7 +36,7 @@ InventorNavigationController::InventorNavigationController(Canvas* canvas, Scene
     , m_rotationCenterMarker(nullptr)
     , m_isPotentialClick(false)
 {
-    LOG_INF_S("InventorNavigationController initializing");
+    LOG_DBG_S("InventorNavigationController initializing");
     m_centerTime = wxGetLocalTimeMillis();
     m_lastMotionTime = wxGetLocalTimeMillis();
 
@@ -48,7 +48,7 @@ InventorNavigationController::InventorNavigationController(Canvas* canvas, Scene
 }
 
 InventorNavigationController::~InventorNavigationController() {
-    LOG_INF_S("InventorNavigationController destroying");
+    LOG_DBG_S("InventorNavigationController destroying");
 
     // Clean up rotation center marker
     if (m_rotationCenterMarker) {
@@ -95,7 +95,7 @@ void InventorNavigationController::handleMouseButton(wxMouseEvent& event) {
 
         // Clear rotation center when left button is released
         clearRotationCenter();
-        LOG_INF_S("Cleared rotation center on mouse release");
+        LOG_DBG_S("Cleared rotation center on mouse release");
 
         // Check if this was a click (not a drag)
         if (m_isPotentialClick) {
@@ -122,7 +122,7 @@ void InventorNavigationController::handleMouseButton(wxMouseEvent& event) {
             m_isDragging = false;
             if (doSpin()) {
                 // Continue spinning after drag ends
-                LOG_INF_S("Starting spin continuation");
+                LOG_DBG_S("Starting spin continuation");
             }
             processed = true;
             m_lockRecenter = true;
@@ -137,7 +137,7 @@ void InventorNavigationController::handleMouseButton(wxMouseEvent& event) {
 
         if (!m_hasDragged && !m_hasPanned && !m_hasZoomed) {
             // Show context menu on right click
-            LOG_INF_S("Right click - could show context menu");
+            LOG_DBG_S("Right click - could show context menu");
         }
         processed = true;
     }
@@ -300,7 +300,7 @@ void InventorNavigationController::updateNavigationMode() {
     
     if (newMode != m_currentMode) {
         m_currentMode = newMode;
-        LOG_INF_S("Navigation mode changed to: " + std::to_string(static_cast<int>(newMode)));
+        LOG_DBG_S("Navigation mode changed to: " + std::to_string(static_cast<int>(newMode)));
     }
     
     // Reset flags when returning to IDLE
@@ -419,13 +419,13 @@ void InventorNavigationController::zoomByCursor(const wxPoint& currentPos, const
 void InventorNavigationController::setupPanningPlane() {
     // Set up panning plane for camera operations
     // This is a simplified implementation
-    LOG_INF_S("Setting up panning plane");
+    LOG_DBG_S("Setting up panning plane");
 }
 
 void InventorNavigationController::lookAtPoint(const wxPoint& pos) {
     // Look at the point under cursor
     // This would typically involve projecting screen coordinates to world coordinates
-    LOG_INF_S("Looking at point: " + std::to_string(pos.x) + ", " + std::to_string(pos.y));
+    LOG_DBG_S("Looking at point: " + std::to_string(pos.x) + ", " + std::to_string(pos.y));
 }
 
 void InventorNavigationController::spin(const wxPoint& currentPos, const wxPoint& lastPos) {
@@ -514,7 +514,7 @@ void InventorNavigationController::viewIsometric() {
 
 void InventorNavigationController::setNavigationMode(InventorNavigationMode mode) {
     m_currentMode = mode;
-    LOG_INF_S("Navigation mode set to: " + std::to_string(static_cast<int>(mode)));
+    LOG_DBG_S("Navigation mode set to: " + std::to_string(static_cast<int>(mode)));
 }
 
 InventorNavigationMode InventorNavigationController::getNavigationMode() const {
@@ -534,14 +534,14 @@ void InventorNavigationController::setRotationCenter(const SbVec3f& center) {
     m_rotationCenter = center;
     m_hasRotationCenter = true;
     updateRotationCenterMarker();
-    LOG_INF_S("Rotation center set to: (" + std::to_string(center[0]) + ", " +
+    LOG_DBG_S("Rotation center set to: (" + std::to_string(center[0]) + ", " +
               std::to_string(center[1]) + ", " + std::to_string(center[2]) + ")");
 }
 
 void InventorNavigationController::clearRotationCenter() {
     m_hasRotationCenter = false;
     hideRotationCenterMarker();
-    LOG_INF_S("Rotation center cleared");
+    LOG_DBG_S("Rotation center cleared");
 }
 
 bool InventorNavigationController::hasRotationCenter() const {
@@ -554,7 +554,7 @@ const SbVec3f& InventorNavigationController::getRotationCenter() const {
 
 void InventorNavigationController::pickRotationCenterAtMouse(const wxPoint& mousePos) {
     if (!m_canvas || !m_sceneManager || !m_sceneManager->getSceneRoot()) {
-        LOG_WRN_S("Cannot pick rotation center: Canvas or scene not available");
+        LOG_DBG_S("Cannot pick rotation center: Canvas or scene not available");
         return;
     }
 
@@ -575,7 +575,7 @@ void InventorNavigationController::pickRotationCenterAtMouse(const wxPoint& mous
     if (pickedPoint) {
         SbVec3f worldPoint = pickedPoint->getPoint();
         setRotationCenter(worldPoint);
-        LOG_INF_S("Picked rotation center at geometry: (" +
+        LOG_DBG_S("Picked rotation center at geometry: (" +
                   std::to_string(mousePos.x) + ", " + std::to_string(mousePos.y) + ") -> world: (" +
                   std::to_string(worldPoint[0]) + ", " + std::to_string(worldPoint[1]) + ", " +
                   std::to_string(worldPoint[2]) + ")");
@@ -583,7 +583,7 @@ void InventorNavigationController::pickRotationCenterAtMouse(const wxPoint& mous
         // If no geometry picked, create rotation center on view plane
         SbVec3f viewPlanePoint = getPointOnViewPlane(mousePos);
         setRotationCenter(viewPlanePoint);
-        LOG_INF_S("Picked rotation center on view plane: (" +
+        LOG_DBG_S("Picked rotation center on view plane: (" +
                   std::to_string(mousePos.x) + ", " + std::to_string(mousePos.y) + ") -> world: (" +
                   std::to_string(viewPlanePoint[0]) + ", " + std::to_string(viewPlanePoint[1]) + ", " +
                   std::to_string(viewPlanePoint[2]) + ")");
@@ -739,13 +739,13 @@ void InventorNavigationController::loadMarkerConfig() {
         m_markerConfig.green = std::max(0.0f, std::min(m_markerConfig.green, 1.0f));
         m_markerConfig.blue = std::max(0.0f, std::min(m_markerConfig.blue, 1.0f));
 
-        LOG_INF_S("Loaded rotation center marker config: radius=" + std::to_string(m_markerConfig.radius) +
+        LOG_DBG_S("Loaded rotation center marker config: radius=" + std::to_string(m_markerConfig.radius) +
                   ", transparency=" + std::to_string(m_markerConfig.transparency) +
                   ", color=(" + std::to_string(m_markerConfig.red) + "," +
                   std::to_string(m_markerConfig.green) + "," + std::to_string(m_markerConfig.blue) + ")");
 
     } catch (const std::exception& e) {
-        LOG_WRN_S("Failed to load marker configuration, using defaults: " + std::string(e.what()));
+        LOG_DBG_S("Failed to load marker configuration, using defaults: " + std::string(e.what()));
         // Keep default values
     }
 }

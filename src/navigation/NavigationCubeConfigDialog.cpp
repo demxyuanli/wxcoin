@@ -408,22 +408,22 @@ void NavigationCubeConfigDialog::OnCheckBoxChanged(wxCommandEvent& event) {
     // Handle different check boxes
     if (checkBox == m_showEdgesCheck) {
         m_config.showEdges = checkBox->GetValue();
-        LOG_INF_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Show edges changed to ") +
+        LOG_DBG_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Show edges changed to ") +
                  (m_config.showEdges ? "true" : "false"));
     }
     else if (checkBox == m_showCornersCheck) {
         m_config.showCorners = checkBox->GetValue();
-        LOG_INF_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Show corners changed to ") +
+        LOG_DBG_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Show corners changed to ") +
                  (m_config.showCorners ? "true" : "false"));
     }
     else if (checkBox == m_showTexturesCheck) {
         m_config.showTextures = checkBox->GetValue();
-        LOG_INF_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Show textures changed to ") +
+        LOG_DBG_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Show textures changed to ") +
                  (m_config.showTextures ? "true" : "false"));
     }
     else if (checkBox == m_enableAnimationCheck) {
         m_config.enableAnimation = checkBox->GetValue();
-        LOG_INF_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Enable animation changed to ") +
+        LOG_DBG_S(std::string("NavigationCubeConfigDialog::OnCheckBoxChanged: Enable animation changed to ") +
                  (m_config.enableAnimation ? "true" : "false"));
     }
 
@@ -445,7 +445,7 @@ void NavigationCubeConfigDialog::OnSizeChanged(wxSpinEvent& event) {
         if (newX >= 0 && newX <= m_maxX) {
             m_config.x = newX;
             configChanged = true;
-            LOG_INF_S("NavigationCubeConfigDialog::OnSizeChanged: X margin changed from " + std::to_string(m_config.x) +
+            LOG_DBG_S("NavigationCubeConfigDialog::OnSizeChanged: X margin changed from " + std::to_string(m_config.x) +
                 " to " + std::to_string(newX) + " (max: " + std::to_string(m_maxX) + ")");
         }
     }
@@ -454,7 +454,7 @@ void NavigationCubeConfigDialog::OnSizeChanged(wxSpinEvent& event) {
         if (newY >= 0 && newY <= m_maxY) {
             m_config.y = newY;
             configChanged = true;
-            LOG_INF_S("NavigationCubeConfigDialog::OnSizeChanged: Y margin changed from " + std::to_string(m_config.y) +
+            LOG_DBG_S("NavigationCubeConfigDialog::OnSizeChanged: Y margin changed from " + std::to_string(m_config.y) +
                 " to " + std::to_string(newY) + " (max: " + std::to_string(m_maxY) + ")");
         }
     }
@@ -463,7 +463,7 @@ void NavigationCubeConfigDialog::OnSizeChanged(wxSpinEvent& event) {
         if (newSize >= 50 && newSize <= std::min(m_maxX, m_maxY) / 2) {
             m_config.size = newSize;
             configChanged = true;
-            LOG_INF_S("NavigationCubeConfigDialog::OnSizeChanged: Size changed from " + std::to_string(m_config.size) +
+            LOG_DBG_S("NavigationCubeConfigDialog::OnSizeChanged: Size changed from " + std::to_string(m_config.size) +
                 " to " + std::to_string(newSize) + " (window: " + std::to_string(m_maxX) + "x" + std::to_string(m_maxY) + ")");
         }
     }
@@ -472,7 +472,7 @@ void NavigationCubeConfigDialog::OnSizeChanged(wxSpinEvent& event) {
         if (newViewportSize >= 50 && newViewportSize <= std::min(m_maxX, m_maxY) / 2) {
             m_config.viewportSize = newViewportSize;
             configChanged = true;
-            LOG_INF_S("NavigationCubeConfigDialog::OnSizeChanged: Viewport size changed from " + std::to_string(m_config.viewportSize) +
+            LOG_DBG_S("NavigationCubeConfigDialog::OnSizeChanged: Viewport size changed from " + std::to_string(m_config.viewportSize) +
                 " to " + std::to_string(newViewportSize) + " (window: " + std::to_string(m_maxX) + "x" + std::to_string(m_maxY) + ")");
         }
     }
@@ -481,7 +481,7 @@ void NavigationCubeConfigDialog::OnSizeChanged(wxSpinEvent& event) {
         if (newMarginX >= 0 && newMarginX <= m_maxX / 2) {
             m_config.circleMarginX = newMarginX;
             configChanged = true;
-            LOG_INF_S("NavigationCubeConfigDialog::OnSizeChanged: Circle margin X changed from " + std::to_string(m_config.circleMarginX) +
+            LOG_DBG_S("NavigationCubeConfigDialog::OnSizeChanged: Circle margin X changed from " + std::to_string(m_config.circleMarginX) +
                 " to " + std::to_string(newMarginX) + " (max: " + std::to_string(m_maxX / 2) + ")");
         }
     }
@@ -490,7 +490,7 @@ void NavigationCubeConfigDialog::OnSizeChanged(wxSpinEvent& event) {
         if (newMarginY >= 0 && newMarginY <= m_maxY / 2) {
             m_config.circleMarginY = newMarginY;
             configChanged = true;
-            LOG_INF_S("NavigationCubeConfigDialog::OnSizeChanged: Circle margin Y changed from " + std::to_string(m_config.circleMarginY) +
+            LOG_DBG_S("NavigationCubeConfigDialog::OnSizeChanged: Circle margin Y changed from " + std::to_string(m_config.circleMarginY) +
                 " to " + std::to_string(newMarginY) + " (max: " + std::to_string(m_maxY / 2) + ")");
         }
     }
@@ -499,7 +499,7 @@ void NavigationCubeConfigDialog::OnSizeChanged(wxSpinEvent& event) {
         if (newRadius >= 50 && newRadius <= std::min(m_maxX, m_maxY) / 2) {
             m_config.circleRadius = newRadius;
             configChanged = true;
-            LOG_INF_S("NavigationCubeConfigDialog::OnSizeChanged: Circle radius changed from " + std::to_string(m_config.circleRadius) +
+            LOG_DBG_S("NavigationCubeConfigDialog::OnSizeChanged: Circle radius changed from " + std::to_string(m_config.circleRadius) +
                 " to " + std::to_string(newRadius) + " (window: " + std::to_string(m_maxX) + "x" + std::to_string(m_maxY) + ")");
         }
     }

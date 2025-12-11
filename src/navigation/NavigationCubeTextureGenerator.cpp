@@ -40,7 +40,7 @@ std::string NavigationCubeTextureGenerator::getTextureDirectory() const {
 
     if (!wxDirExists(dirPath)) {
         if (!wxFileName::Mkdir(dirPath, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL)) {
-            LOG_WRN_S("Failed to create texture directory: " + std::string(dirPath.mb_str()));
+            LOG_DBG_S("Failed to create texture directory: " + std::string(dirPath.mb_str()));
         }
     }
 
@@ -100,7 +100,7 @@ void NavigationCubeTextureGenerator::initializeFontSizes() {
 
 // Create cube face textures exactly like FreeCAD NaviCube
 void NavigationCubeTextureGenerator::createCubeFaceTextures() {
-    LOG_INF_S("=== TEXTURE GENERATION (6 main face textures) ===");
+    LOG_DBG_S("=== TEXTURE GENERATION (6 main face textures) ===");
     int texSize = 256; // Increased size for better text clarity
 
     // Generate textures exactly like FreeCAD
@@ -108,7 +108,7 @@ void NavigationCubeTextureGenerator::createCubeFaceTextures() {
 
     for (PickId pickId : mains) {
         std::string label = getFaceLabel(pickId);
-        LOG_INF_S("Generating texture for face: " + label + " ('" + label + "')");
+        LOG_DBG_S("Generating texture for face: " + label + " ('" + label + "')");
 
         wxImage image(texSize, texSize);
         if (!image.HasAlpha()) {
@@ -440,7 +440,7 @@ bool NavigationCubeTextureGenerator::generateFaceTexture(const std::string& text
     }
 
     if (!hasValidPixels) {
-        LOG_WRN_S("NavigationCubeTextureGenerator::generateFaceTexture: All pixels are black for texture: " + text);
+        LOG_DBG_S("NavigationCubeTextureGenerator::generateFaceTexture: All pixels are black for texture: " + text);
         // Fallback: Fill with opaque white background
         for (int i = 0; i < width * height * 4; i += 4) {
             imageData[i] = 255; // R (white)
@@ -454,7 +454,7 @@ bool NavigationCubeTextureGenerator::generateFaceTexture(const std::string& text
 }
 
 SoTexture2* NavigationCubeTextureGenerator::createTextureForFace(const std::string& faceName, bool isHover) {
-    LOG_INF_S("=== Creating texture for face: " + faceName + " (hover: " + (isHover ? "true" : "false") + ") ===");
+    LOG_DBG_S("=== Creating texture for face: " + faceName + " (hover: " + (isHover ? "true" : "false") + ") ===");
 
     bool hasText = (faceName == "FRONT" || faceName == "REAR" || faceName == "LEFT" ||
                    faceName == "RIGHT" || faceName == "TOP" || faceName == "BOTTOM");
@@ -514,12 +514,12 @@ SoTexture2* NavigationCubeTextureGenerator::createTextureForFace(const std::stri
                     }
                 }
                 loadedFromFile = true;
-                LOG_INF_S("  Loaded texture from file: " + std::string(texturePath.mb_str()));
+                LOG_DBG_S("  Loaded texture from file: " + std::string(texturePath.mb_str()));
             } else {
-                LOG_WRN_S("  Texture file has invalid dimensions: " + std::string(texturePath.mb_str()));
+                LOG_DBG_S("  Texture file has invalid dimensions: " + std::string(texturePath.mb_str()));
             }
         } else {
-            LOG_WRN_S("  Failed to load texture file: " + std::string(texturePath.mb_str()) + " - falling back to generated texture");
+            LOG_DBG_S("  Failed to load texture file: " + std::string(texturePath.mb_str()) + " - falling back to generated texture");
         }
     }
 
@@ -568,15 +568,15 @@ SoTexture2* NavigationCubeTextureGenerator::createTextureForFace(const std::stri
 
         if (!wxDirExists(textureDir)) {
             if (!wxFileName::Mkdir(textureDir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL)) {
-                LOG_WRN_S("  Failed to create texture directory: " + std::string(textureDir.mb_str()));
+                LOG_DBG_S("  Failed to create texture directory: " + std::string(textureDir.mb_str()));
             }
         }
 
         if (finalImage.IsOk()) {
             if (finalImage.SaveFile(texturePath, wxBITMAP_TYPE_PNG)) {
-                LOG_INF_S("  Generated texture saved to: " + std::string(texturePath.mb_str()));
+                LOG_DBG_S("  Generated texture saved to: " + std::string(texturePath.mb_str()));
             } else {
-                LOG_WRN_S("  Failed to save generated texture to: " + std::string(texturePath.mb_str()));
+                LOG_DBG_S("  Failed to save generated texture to: " + std::string(texturePath.mb_str()));
             }
         }
     }
@@ -605,36 +605,36 @@ SoTexture2* NavigationCubeTextureGenerator::createTextureForFace(const std::stri
         texture->model = SoTexture2::DECAL;
         texture->wrapS = SoTexture2::CLAMP;
         texture->wrapT = SoTexture2::CLAMP;
-        LOG_INF_S("    Texture mode: DECAL + CLAMP (text texture, " + std::to_string(imageWidth) + "x" + std::to_string(imageHeight) + ")");
+        LOG_DBG_S("    Texture mode: DECAL + CLAMP (text texture, " + std::to_string(imageWidth) + "x" + std::to_string(imageHeight) + ")");
     } else {
         texture->model = SoTexture2::MODULATE;
         texture->wrapS = SoTexture2::REPEAT;
         texture->wrapT = SoTexture2::REPEAT;
-        LOG_INF_S("    Texture mode: MODULATE + REPEAT (solid color texture)");
+        LOG_DBG_S("    Texture mode: MODULATE + REPEAT (solid color texture)");
     }
 
     return texture;
 }
 
 void NavigationCubeTextureGenerator::generateAndCacheTextures() {
-    LOG_INF_S("=== Starting texture generation and caching for main faces ===");
+    LOG_DBG_S("=== Starting texture generation and caching for main faces ===");
 
     // Debug ConfigManager
     ConfigManager& cm = ConfigManager::getInstance();
-    LOG_INF_S("DEBUG: ConfigManager initialized: " + std::string(cm.getConfigFilePath()));
-    LOG_INF_S("DEBUG: ConfigManager sections: " + std::to_string(cm.getSections().size()));
+    LOG_DBG_S("DEBUG: ConfigManager initialized: " + std::string(cm.getConfigFilePath()));
+    LOG_DBG_S("DEBUG: ConfigManager sections: " + std::to_string(cm.getSections().size()));
 
     bool saveDebugTextures = cm.getBool("NavigationCube", "SaveDebugTextures", false);
-    LOG_INF_S("DEBUG: Config read - SaveDebugTextures = " + std::string(saveDebugTextures ? "true" : "false"));
+    LOG_DBG_S("DEBUG: Config read - SaveDebugTextures = " + std::string(saveDebugTextures ? "true" : "false"));
 
     // Also test reading another known config value
     bool showTextures = cm.getBool("NavigationCube", "ShowTextures", true);
-    LOG_INF_S("DEBUG: Config read - ShowTextures = " + std::string(showTextures ? "true" : "false"));
+    LOG_DBG_S("DEBUG: Config read - ShowTextures = " + std::string(showTextures ? "true" : "false"));
 
     if (saveDebugTextures) {
-        LOG_INF_S("DEBUG: Texture debug PNG saving is ENABLED - PNG files will be saved to program directory");
+        LOG_DBG_S("DEBUG: Texture debug PNG saving is ENABLED - PNG files will be saved to program directory");
     } else {
-        LOG_INF_S("DEBUG: Texture debug PNG saving is DISABLED (set SaveDebugTextures=true in config.ini to enable)");
+        LOG_DBG_S("DEBUG: Texture debug PNG saving is DISABLED (set SaveDebugTextures=true in config.ini to enable)");
     }
 
     std::vector<std::string> mainFaces = {
@@ -645,16 +645,16 @@ void NavigationCubeTextureGenerator::generateAndCacheTextures() {
     int hoverCount = 0;
 
     for (const auto& faceName : mainFaces) {
-        LOG_INF_S("DEBUG: Processing face: " + faceName);
+        LOG_DBG_S("DEBUG: Processing face: " + faceName);
         // Generate normal state texture
         SoTexture2* normalTexture = createTextureForFace(faceName, false);
         if (normalTexture) {
             normalTexture->ref();
             m_normalTextures[faceName] = normalTexture;
             normalCount++;
-            LOG_INF_S("DEBUG: Normal texture created for: " + faceName);
+            LOG_DBG_S("DEBUG: Normal texture created for: " + faceName);
         } else {
-            LOG_WRN_S("DEBUG: Failed to create normal texture for: " + faceName);
+            LOG_DBG_S("DEBUG: Failed to create normal texture for: " + faceName);
         }
 
         // Generate hover state texture
@@ -666,9 +666,9 @@ void NavigationCubeTextureGenerator::generateAndCacheTextures() {
         }
     }
 
-    LOG_INF_S("=== Texture generation completed ===");
-    LOG_INF_S("  Normal textures generated: " + std::to_string(normalCount));
-    LOG_INF_S("  Hover textures generated: " + std::to_string(hoverCount));
+    LOG_DBG_S("=== Texture generation completed ===");
+    LOG_DBG_S("  Normal textures generated: " + std::to_string(normalCount));
+    LOG_DBG_S("  Hover textures generated: " + std::to_string(hoverCount));
 }
 
 SoTexture2* NavigationCubeTextureGenerator::getNormalTexture(const std::string& faceName) const {

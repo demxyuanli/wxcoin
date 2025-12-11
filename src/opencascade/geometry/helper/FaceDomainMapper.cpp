@@ -1,6 +1,5 @@
 #include "geometry/helper/FaceDomainMapper.h"
 #include "geometry/GeomCoinRepresentation.h"
-#include "logger/Logger.h"
 #include "rendering/RenderingToolkitAPI.h"
 #include "rendering/OpenCASCADEProcessor.h"
 #include <OpenCASCADE/TopExp_Explorer.hxx>
@@ -51,20 +50,12 @@ void FaceDomainMapper::buildFaceDomainMapping(const TopoDS_Shape& shape,
             std::vector<std::pair<int, std::vector<int>>> faceMappings;
             TriangleMesh meshWithMapping = processor->convertToMeshWithFaceMapping(shape, params, faceMappings);
 
-            if (faces.size() != faceMappings.size()) {
-                LOG_WRN_S("FaceDomainMapper: Face count mismatch: found " + std::to_string(faces.size()) +
-                         " faces but got " + std::to_string(faceMappings.size()) + " mappings");
-            }
-
             buildFaceDomains(shape, faces, params, faceDomains);
             buildTriangleSegments(faceMappings, triangleSegments);
             identifyBoundaryTriangles(faceMappings, boundaryTriangles);
-        } else {
-            LOG_ERR_S("FaceDomainMapper: OpenCASCADE processor not available");
         }
     }
     catch (const std::exception& e) {
-        LOG_ERR_S("FaceDomainMapper: Failed to build face domain mapping: " + std::string(e.what()));
         faceDomains.clear();
         triangleSegments.clear();
         boundaryTriangles.clear();

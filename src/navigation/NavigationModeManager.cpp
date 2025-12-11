@@ -1371,21 +1371,21 @@ NavigationModeManager::NavigationModeManager(Canvas* canvas, SceneManager* scene
     , m_sceneManager(sceneManager)
     , m_currentStyle(NavigationStyle::GESTURE)
 {
-    LOG_INF_S("NavigationModeManager initializing");
+    LOG_DBG_S("NavigationModeManager initializing");
     initializeControllers();
     initializeNavigationStyles();
     loadNavigationStyleFromConfig();
 }
 
 NavigationModeManager::~NavigationModeManager() {
-    LOG_INF_S("NavigationModeManager destroying");
+    LOG_DBG_S("NavigationModeManager destroying");
 }
 
 void NavigationModeManager::initializeControllers() {
     m_gestureController = std::make_unique<NavigationController>(m_canvas, m_sceneManager);
     m_inventorController = std::make_unique<InventorNavigationController>(m_canvas, m_sceneManager);
     
-    LOG_INF_S("Navigation controllers initialized");
+    LOG_DBG_S("Navigation controllers initialized");
 }
 
 void NavigationModeManager::initializeNavigationStyles() {
@@ -1398,7 +1398,7 @@ void NavigationModeManager::initializeNavigationStyles() {
     m_navigationStyles[NavigationStyle::REVIT] = std::make_unique<RevitNavigationStyle>(m_canvas, m_sceneManager);
     m_navigationStyles[NavigationStyle::TINKERCAD] = std::make_unique<TinkerCADNavigationStyle>(m_canvas, m_sceneManager);
     
-    LOG_INF_S("Navigation styles initialized (8 styles)");
+    LOG_DBG_S("Navigation styles initialized (8 styles)");
 }
 
 INavigationStyle* NavigationModeManager::getNavigationStyleFor(NavigationStyle style) {
@@ -1415,7 +1415,7 @@ INavigationStyle* NavigationModeManager::getNavigationStyleFor(NavigationStyle s
     case NavigationStyle::CAD:
         return m_navigationStyles[NavigationStyle::CAD].get();
     default:
-        LOG_WRN_S("Unsupported navigation style: " + std::to_string(static_cast<int>(style)) + ", falling back to GESTURE");
+        LOG_DBG_S("Unsupported navigation style: " + std::to_string(static_cast<int>(style)) + ", falling back to GESTURE");
         return m_navigationStyles[NavigationStyle::GESTURE].get();
     }
 }
@@ -1438,7 +1438,7 @@ const INavigationStyle* NavigationModeManager::getNavigationStyleFor(NavigationS
             }
             break;
         default:
-            LOG_WRN_S("Unsupported navigation style: " + std::to_string(static_cast<int>(style)) + ", falling back to GESTURE");
+            LOG_DBG_S("Unsupported navigation style: " + std::to_string(static_cast<int>(style)) + ", falling back to GESTURE");
             break;
         }
         return gestureIt->second.get();
@@ -1450,7 +1450,7 @@ const INavigationStyle* NavigationModeManager::getNavigationStyleFor(NavigationS
 void NavigationModeManager::setNavigationStyle(NavigationStyle style) {
     if (m_currentStyle != style) {
         m_currentStyle = style;
-        LOG_INF_S("Navigation style changed to: " + std::to_string(static_cast<int>(style)));
+        LOG_DBG_S("Navigation style changed to: " + std::to_string(static_cast<int>(style)));
         saveNavigationStyleToConfig();
     }
 }
@@ -1665,18 +1665,18 @@ void NavigationModeManager::loadNavigationStyleFromConfig() {
             
             if (m_navigationStyles.find(style) != m_navigationStyles.end()) {
                 m_currentStyle = style;
-                LOG_INF_S("Navigation style loaded from config: " + std::to_string(styleInt) + " (" + getCurrentStyleName() + ")");
+                LOG_DBG_S("Navigation style loaded from config: " + std::to_string(styleInt) + " (" + getCurrentStyleName() + ")");
             } else {
-                LOG_WRN_S("Navigation style from config not available: " + std::to_string(styleInt) + ", using default GESTURE");
+                LOG_DBG_S("Navigation style from config not available: " + std::to_string(styleInt) + ", using default GESTURE");
                 m_currentStyle = NavigationStyle::GESTURE;
             }
         } else {
-            LOG_WRN_S("Invalid navigation style value in config: " + std::to_string(styleInt) + ", using default GESTURE");
+            LOG_DBG_S("Invalid navigation style value in config: " + std::to_string(styleInt) + ", using default GESTURE");
             m_currentStyle = NavigationStyle::GESTURE;
         }
     }
     catch (const std::exception& e) {
-        LOG_WRN_S("Failed to load navigation style from config: " + std::string(e.what()) + ", using default GESTURE");
+        LOG_DBG_S("Failed to load navigation style from config: " + std::string(e.what()) + ", using default GESTURE");
         m_currentStyle = NavigationStyle::GESTURE;
     }
 }
@@ -1686,7 +1686,7 @@ void NavigationModeManager::saveNavigationStyleToConfig() const {
         auto& config = ConfigManager::getInstance();
         config.setInt("Navigation", "Style", static_cast<int>(m_currentStyle));
         config.save();
-        LOG_INF_S("Navigation style saved to config: " + std::to_string(static_cast<int>(m_currentStyle)));
+        LOG_DBG_S("Navigation style saved to config: " + std::to_string(static_cast<int>(m_currentStyle)));
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Failed to save navigation style to config: " + std::string(e.what()));

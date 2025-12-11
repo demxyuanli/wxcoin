@@ -23,6 +23,16 @@ target_link_libraries(CADLogger PUBLIC
     ${wxWidgets_LIBRARIES}
 )
 
+# Link log4cxx if available
+if(log4cxx_FOUND)
+    target_link_libraries(CADLogger PUBLIC log4cxx)
+    target_compile_definitions(CADLogger PUBLIC USE_LOG4CXX)
+elseif(LOG4CXX_FOUND)
+    target_link_libraries(CADLogger PUBLIC ${LOG4CXX_LIBRARIES})
+    target_include_directories(CADLogger PUBLIC ${LOG4CXX_INCLUDE_DIRS})
+    target_compile_definitions(CADLogger PUBLIC USE_LOG4CXX)
+endif()
+
 # Set library export properties
 set_target_properties(CADLogger PROPERTIES
     FOLDER "Logger"

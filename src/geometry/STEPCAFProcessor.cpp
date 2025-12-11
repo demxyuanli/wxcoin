@@ -597,7 +597,6 @@ int STEPCAFProcessor::createGeometriesFromParts(
                                     colorTool->GetColor(searchLabel, XCAFDoc_ColorCurv, faceColor)) {
                                     partColor = faceColor;
                                     hasPartColor = true;
-                                    LOG_INF_S("Extracted face-level color for " + partName);
                                     break;
                                 }
                             }
@@ -608,7 +607,25 @@ int STEPCAFProcessor::createGeometriesFromParts(
             }
         }
         
-        Quantity_Color color = makeColorForName(partName, hasPartColor ? &partColor : nullptr);
+        // Assign color: use CAF color if available, otherwise use palette based on configuration
+        Quantity_Color color;
+        if (hasPartColor) {
+            // Use color from CAF
+            color = partColor;
+        } else {
+            // Use palette color based on configuration
+            auto palette = STEPColorManager::getPaletteForScheme(options.decomposition.colorScheme);
+            std::hash<std::string> hasher;
+            
+            if (options.decomposition.useConsistentColoring) {
+                // Hash-based consistent coloring
+                size_t idx = hasher(partName) % palette.size();
+                color = palette[idx];
+            } else {
+                // Sequential coloring using componentIndex + localIdx
+                color = palette[(componentIndex + localIdx) % palette.size()];
+            }
+        }
 
         auto geom = std::make_shared<OCCGeometry>(partName);
         geom->setShape(part);

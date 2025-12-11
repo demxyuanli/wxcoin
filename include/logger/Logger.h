@@ -6,6 +6,10 @@
 #include <string>
 #include <set>
 
+#ifdef USE_LOG4CXX
+#include <log4cxx/logger.h>
+#endif
+
 class Logger {
 public:
 	enum class LogLevel { INF, DBG, WRN, ERR };
@@ -30,12 +34,20 @@ private:
 	Logger(const Logger&) = delete;
 	Logger& operator=(const Logger&) = delete;
 
+	void initializeFallbackLogging();
+	void fallbackLog(LogLevel level, const std::string& message, const std::string& context,
+		const std::string& file, int line);
+
 	std::ofstream logFile;
 	std::string logFileName; // Store the log file name with timestamp
 	wxTextCtrl* logCtrl;
 	bool isShuttingDown = false;
 	std::set<LogLevel> allowedLogLevels; // Set of allowed log levels
 	bool isSingleLevelMode = false; // True for single-level mode (log level and above)
+
+#ifdef USE_LOG4CXX
+	log4cxx::LoggerPtr log4cxxLogger;
+#endif
 };
 
 // Macros that explicitly use std::string conversion

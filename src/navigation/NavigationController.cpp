@@ -14,11 +14,11 @@ NavigationController::NavigationController(Canvas* canvas, SceneManager* sceneMa
 	, m_dragMode(DragMode::NONE)
 	, m_zoomSpeedFactor(1.0f)
 {
-	LOG_INF_S("NavigationController initializing");
+	LOG_DBG_S("NavigationController initializing");
 }
 
 NavigationController::~NavigationController() {
-	LOG_INF_S("NavigationController destroying");
+	LOG_DBG_S("NavigationController destroying");
 }
 
 void NavigationController::handleMouseButton(wxMouseEvent& event) {

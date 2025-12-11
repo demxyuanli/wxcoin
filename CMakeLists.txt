@@ -94,6 +94,15 @@ find_package(OpenCASCADE CONFIG REQUIRED)
 # Find TBB for parallel processing
 find_package(TBB CONFIG REQUIRED)
 
+# Find log4cxx for logging
+find_package(log4cxx CONFIG QUIET)
+if(NOT log4cxx_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LOG4CXX QUIET liblog4cxx)
+    endif()
+endif()
+
 # 添加源代码目录
 add_subdirectory(src)
 

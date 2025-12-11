@@ -1,5 +1,4 @@
 #include "geometry/helper/WireframeBuilder.h"
-#include "logger/Logger.h"
 #include "rendering/RenderingToolkitAPI.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
@@ -22,7 +21,6 @@ void WireframeBuilder::createWireframeRepresentation(SoSeparator* coinNode,
     auto& manager = RenderingToolkitAPI::getManager();
     auto processor = manager.getGeometryProcessor("OpenCASCADE");
     if (!processor) {
-        LOG_ERR_S("WireframeBuilder: OpenCASCADE processor not found");
         return;
     }
 

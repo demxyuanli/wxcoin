@@ -345,7 +345,7 @@ void CuteNavCube::initialize() {
 					m_orthoCamera->position.getValue(),
 					m_orthoCamera->orientation.getValue());
 				if (finalFacing != m_lastLoggedFacing) {
-					LOG_INF_S("Camera final facing face: " + finalFacing);
+					LOG_DBG_S("Camera final facing face: " + finalFacing);
 					m_lastLoggedFacing = finalFacing;
 				}
 			}
@@ -458,25 +458,25 @@ void CuteNavCube::setupGeometry() {
 	// Note: Outlines are now drawn per-face in the builder
 
 	// Generate and cache all textures after geometry setup
-	LOG_INF_S("=== TEXTURE SYSTEM CHECK ===");
-	LOG_INF_S("m_showTextures: " + std::string(m_showTextures ? "true" : "false"));
-	LOG_INF_S("m_Faces.size(): " + std::to_string(m_Faces.size()));
+	LOG_DBG_S("=== TEXTURE SYSTEM CHECK ===");
+	LOG_DBG_S("m_showTextures: " + std::string(m_showTextures ? "true" : "false"));
+	LOG_DBG_S("m_Faces.size(): " + std::to_string(m_Faces.size()));
 
 	if (m_showTextures) {
-		LOG_INF_S("Starting texture generation...");
+		LOG_DBG_S("Starting texture generation...");
 		if (m_textureGenerator) {
 			m_textureGenerator->initializeFontSizes();
 			m_textureGenerator->generateAndCacheTextures();
 			applyInitialTextures();
 		}
-		LOG_INF_S("Texture generation completed");
+		LOG_DBG_S("Texture generation completed");
 	} else {
-		LOG_INF_S("Texture generation SKIPPED - m_showTextures is false");
+		LOG_DBG_S("Texture generation SKIPPED - m_showTextures is false");
 	}
 
 	// Summary and validation log
-	LOG_INF_S("=== RHOMBICUBOCTAHEDRON INDIVIDUAL FACES CREATED ===");
-	LOG_INF_S("Geometry: 26 independent faces (FreeCAD-style), each with its own separator and material");
+	LOG_DBG_S("=== RHOMBICUBOCTAHEDRON INDIVIDUAL FACES CREATED ===");
+	LOG_DBG_S("Geometry: 26 independent faces (FreeCAD-style), each with its own separator and material");
 
 	int mainFaces = 0, cornerFaces = 0, edgeFaces = 0;
 	std::map<ShapeId, int> vertexCounts;
@@ -497,18 +497,18 @@ void CuteNavCube::setupGeometry() {
 		totalTextureVertices += static_cast<int>(pair.second.vertexArray.size());
 	}
 
-	LOG_INF_S("Face counts - Main: " + std::to_string(mainFaces) + ", Corner: " + std::to_string(cornerFaces) + ", Edge: " + std::to_string(edgeFaces));
-	LOG_INF_S("Vertex counts - Main: " + std::to_string(vertexCounts[ShapeId::Main]) +
+	LOG_DBG_S("Face counts - Main: " + std::to_string(mainFaces) + ", Corner: " + std::to_string(cornerFaces) + ", Edge: " + std::to_string(edgeFaces));
+	LOG_DBG_S("Vertex counts - Main: " + std::to_string(vertexCounts[ShapeId::Main]) +
 		", Corner: " + std::to_string(vertexCounts[ShapeId::Corner]) +
 		", Edge: " + std::to_string(vertexCounts[ShapeId::Edge]) + " (total: " + std::to_string(recalculatedTotalVertices) + ")");
-	LOG_INF_S("Individual faces: " + std::to_string(recalculatedTotalVertices) + " vertices, 26 independent faces (FreeCAD-style)");
-	LOG_INF_S("Texture quads: " + std::to_string(totalTextureVertices) + " texture vertices for " + std::to_string(m_showTextures ? 6 : 0) + " main face overlays");
-	LOG_INF_S("Total geometry: " + std::to_string(recalculatedTotalVertices + totalTextureVertices) + " vertices, 26 independent faces + 6 texture quads");
+	LOG_DBG_S("Individual faces: " + std::to_string(recalculatedTotalVertices) + " vertices, 26 independent faces (FreeCAD-style)");
+	LOG_DBG_S("Texture quads: " + std::to_string(totalTextureVertices) + " texture vertices for " + std::to_string(m_showTextures ? 6 : 0) + " main face overlays");
+	LOG_DBG_S("Total geometry: " + std::to_string(recalculatedTotalVertices + totalTextureVertices) + " vertices, 26 independent faces + 6 texture quads");
 
 	bool valid = true;
-	LOG_INF_S("=== VALIDATION CHECKS ===");
-	LOG_INF_S("Face counts - Main: " + std::to_string(mainFaces) + "/6, Corner: " + std::to_string(cornerFaces) + "/8, Edge: " + std::to_string(edgeFaces) + "/12");
-	LOG_INF_S("Vertex counts - Main: " + std::to_string(vertexCounts[ShapeId::Main]) + "/48, Corner: " + std::to_string(vertexCounts[ShapeId::Corner]) + "/48, Edge: " + std::to_string(vertexCounts[ShapeId::Edge]) + "/48");
+	LOG_DBG_S("=== VALIDATION CHECKS ===");
+	LOG_DBG_S("Face counts - Main: " + std::to_string(mainFaces) + "/6, Corner: " + std::to_string(cornerFaces) + "/8, Edge: " + std::to_string(edgeFaces) + "/12");
+	LOG_DBG_S("Vertex counts - Main: " + std::to_string(vertexCounts[ShapeId::Main]) + "/48, Corner: " + std::to_string(vertexCounts[ShapeId::Corner]) + "/48, Edge: " + std::to_string(vertexCounts[ShapeId::Edge]) + "/48");
 
 	std::vector<PickId> debugFaceIds = {
 		PickId::Top, PickId::Front, PickId::Left, PickId::Rear, PickId::Right, PickId::Bottom,
@@ -523,19 +523,19 @@ void CuteNavCube::setupGeometry() {
 		if (m_Faces.count(faceId) > 0) {
 			int vertexCount = static_cast<int>(m_Faces[faceId].vertexArray.size());
 			std::string shapeStr = (m_Faces[faceId].type == ShapeId::Main) ? "Main" : (m_Faces[faceId].type == ShapeId::Corner) ? "Corner" : "Edge";
-			LOG_INF_S("Face " + std::to_string(static_cast<int>(faceId)) + " (" + shapeStr + "): " + std::to_string(vertexCount) + " vertices");
+			LOG_DBG_S("Face " + std::to_string(static_cast<int>(faceId)) + " (" + shapeStr + "): " + std::to_string(vertexCount) + " vertices");
 		}
 	}
 
-	if (mainFaces != 6) { LOG_WRN_S("ERROR: Expected 6 main faces, got " + std::to_string(mainFaces)); valid = false; }
-	if (cornerFaces != 8) { LOG_WRN_S("ERROR: Expected 8 corner faces, got " + std::to_string(cornerFaces)); valid = false; }
-	if (edgeFaces != 12) { LOG_WRN_S("ERROR: Expected 12 edge faces, got " + std::to_string(edgeFaces)); valid = false; }
-	if (vertexCounts[ShapeId::Main] != 48) { LOG_WRN_S("ERROR: Expected 48 main face vertices (6x8), got " + std::to_string(vertexCounts[ShapeId::Main])); valid = false; }
-	if (vertexCounts[ShapeId::Corner] != 48) { LOG_WRN_S("ERROR: Expected 48 corner face vertices (8x6), got " + std::to_string(vertexCounts[ShapeId::Corner])); valid = false; }
-	if (vertexCounts[ShapeId::Edge] != 48) { LOG_WRN_S("ERROR: Expected 48 edge face vertices (12x4), got " + std::to_string(vertexCounts[ShapeId::Edge])); valid = false; }
+	if (mainFaces != 6) { LOG_DBG_S("ERROR: Expected 6 main faces, got " + std::to_string(mainFaces)); valid = false; }
+	if (cornerFaces != 8) { LOG_DBG_S("ERROR: Expected 8 corner faces, got " + std::to_string(cornerFaces)); valid = false; }
+	if (edgeFaces != 12) { LOG_DBG_S("ERROR: Expected 12 edge faces, got " + std::to_string(edgeFaces)); valid = false; }
+	if (vertexCounts[ShapeId::Main] != 48) { LOG_DBG_S("ERROR: Expected 48 main face vertices (6x8), got " + std::to_string(vertexCounts[ShapeId::Main])); valid = false; }
+	if (vertexCounts[ShapeId::Corner] != 48) { LOG_DBG_S("ERROR: Expected 48 corner face vertices (8x6), got " + std::to_string(vertexCounts[ShapeId::Corner])); valid = false; }
+	if (vertexCounts[ShapeId::Edge] != 48) { LOG_DBG_S("ERROR: Expected 48 edge face vertices (12x4), got " + std::to_string(vertexCounts[ShapeId::Edge])); valid = false; }
 
 	if (valid) {
-		LOG_INF_S("[PASS] Rhombicuboctahedron individual faces validation PASSED - all 26 faces properly formed");
+		LOG_DBG_S("[PASS] Rhombicuboctahedron individual faces validation PASSED - all 26 faces properly formed");
 	} else {
 		LOG_ERR_S("[FAIL] Rhombicuboctahedron individual faces validation FAILED - geometry errors detected");
 	}
@@ -564,13 +564,13 @@ void CuteNavCube::updateCameraRotation() {
 std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewportSize) {
 	// Validate viewport size
 	if (viewportSize.x <= 0 || viewportSize.y <= 0) {
-		LOG_INF_S("CuteNavCube::pickRegion: Invalid viewport size - " + 
+		LOG_DBG_S("CuteNavCube::pickRegion: Invalid viewport size - " + 
 			std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y));
 		return "";
 	}
 
 	// Add picking debug log - disabled for performance
-	// LOG_INF_S("CuteNavCube::pickRegion: Picking at position (" +
+	// LOG_DBG_S("CuteNavCube::pickRegion: Picking at position (" +
 	//	std::to_string(mousePos[0]) + ", " + std::to_string(mousePos[1]) +
 	//	") in viewport " + std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y));
 
@@ -585,7 +585,7 @@ std::string CuteNavCube::pickRegion(const SbVec2s& mousePos, const wxSize& viewp
 	static int debugCount = 0;
 	// Debug counter disabled for performance
 	// if (++debugCount % 10 == 0) {
-	//	LOG_INF_S("CuteNavCube::pickRegion: Viewport settings - local:" +
+	//	LOG_DBG_S("CuteNavCube::pickRegion: Viewport settings - local:" +
 	//		std::to_string(viewportSize.x) + "x" + std::to_string(viewportSize.y) +
 	//		", mouse:" + std::to_string(mousePos[0]) + "," + std::to_string(mousePos[1]));
 	// }
@@ -742,8 +742,8 @@ std::string CuteNavCube::findFaceFromCameraDirection(const SbVec3f& cameraPos, c
 
 // Calculate camera position based on clicked face
 void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, SbVec3f& position, SbRotation& orientation) const {
-	LOG_INF_S("=== calculateCameraPositionForFace ===");
-	LOG_INF_S("Clicked face: " + faceName);
+	LOG_DBG_S("=== calculateCameraPositionForFace ===");
+	LOG_DBG_S("Clicked face: " + faceName);
 
 	// Handle main faces (6 faces) - use standard positioning
 	static const std::set<std::string> mainFaces = {"FRONT", "REAR", "LEFT", "RIGHT", "TOP", "BOTTOM"};
@@ -779,7 +779,7 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 
 			orientation = createLookAtOrientation(position, center, upVector);
 			
-			LOG_INF_S("Main face calculation - Position: (" + 
+			LOG_DBG_S("Main face calculation - Position: (" + 
 				std::to_string(position[0]) + ", " + 
 				std::to_string(position[1]) + ", " + 
 				std::to_string(position[2]) + "), Center: (" +
@@ -815,7 +815,7 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 		position = viewDirection * distance;
 		orientation = createLookAtOrientation(position, faceCenter, SbVec3f(0.0f, 1.0f, 0.0f));
 		
-		LOG_INF_S("Edge/Corner face calculation - Position: (" + 
+		LOG_DBG_S("Edge/Corner face calculation - Position: (" + 
 			std::to_string(position[0]) + ", " + 
 			std::to_string(position[1]) + ", " + 
 			std::to_string(position[2]) + "), FaceCenter: (" +
@@ -829,7 +829,7 @@ void CuteNavCube::calculateCameraPositionForFace(const std::string& faceName, Sb
 	}
 
 	// Default fallback
-	LOG_WRN_S("CuteNavCube::calculateCameraPositionForFace: Unknown face name: " + faceName);
+	LOG_DBG_S("CuteNavCube::calculateCameraPositionForFace: Unknown face name: " + faceName);
 	position = SbVec3f(0, 0, 5);
 	orientation = SbRotation::identity();
 }
@@ -906,7 +906,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 		// Update hover state using direct material color switching (FreeCAD-style)
 		if (hoveredFace != m_hoveredFace) {
 			if (!m_hoveredFace.empty()) {
-				LOG_INF_S("Hover leave face: " + m_hoveredFace);
+				LOG_DBG_S("Hover leave face: " + m_hoveredFace);
 			}
 			// Restore previous face color
 			if (!m_hoveredFace.empty()) {
@@ -916,7 +916,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 			// Set new hovered face color
 			if (!hoveredFace.empty()) {
 				updateFaceMaterialColor(hoveredFace, true);
-				LOG_INF_S("Hover enter face: " + hoveredFace);
+				LOG_DBG_S("Hover enter face: " + hoveredFace);
 			}
 
 			m_hoveredFace = hoveredFace;
@@ -932,7 +932,7 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 	if (event.Leaving()) {
 		if (!m_hoveredFace.empty()) {
 			updateFaceMaterialColor(m_hoveredFace, false);
-			LOG_INF_S("Hover leave face: " + m_hoveredFace);
+			LOG_DBG_S("Hover leave face: " + m_hoveredFace);
 			m_hoveredFace = "";
 		}
 		return true; // Mouse leaving is always handled
@@ -960,15 +960,15 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 				std::string region = pickRegion(pickPos, viewportSize);
 				if (!region.empty()) {
-					LOG_INF_S("=== FACE CLICK DETECTED ===");
-					LOG_INF_S("Clicked face ID: " + region);
+					LOG_DBG_S("=== FACE CLICK DETECTED ===");
+					LOG_DBG_S("Clicked face ID: " + region);
 
 					std::string currentFacing;
 					if (m_orthoCamera) {
 						currentFacing = findFaceFromCameraDirection(
 							m_orthoCamera->position.getValue(),
 							m_orthoCamera->orientation.getValue());
-						LOG_INF_S("Current camera facing face at click: " + currentFacing);
+						LOG_DBG_S("Current camera facing face at click: " + currentFacing);
 						m_lastLoggedFacing = currentFacing;
 					}
 
@@ -979,23 +979,23 @@ bool CuteNavCube::handleMouseEvent(const wxMouseEvent& event, const wxSize& view
 
 					// Find which face the camera is actually looking at
 					std::string actualFacingFace = findFaceFromCameraDirection(cameraPos, cameraOrient);
-					LOG_INF_S("Camera will face towards: " + actualFacingFace);
+					LOG_DBG_S("Camera will face towards: " + actualFacingFace);
 					
 					if (region != actualFacingFace) {
-						LOG_WRN_S("MISMATCH: Clicked face (" + region + ") != Camera facing face (" + actualFacingFace + ")");
+						LOG_DBG_S("MISMATCH: Clicked face (" + region + ") != Camera facing face (" + actualFacingFace + ")");
 					} else {
-						LOG_INF_S("MATCH: Clicked face matches camera facing face");
+						LOG_DBG_S("MATCH: Clicked face matches camera facing face");
 					}
 
 					if (!currentFacing.empty() && currentFacing == region) {
-						LOG_INF_S("Click target already aligned with current camera face, skipping rotation.");
+						LOG_DBG_S("Click target already aligned with current camera face, skipping rotation.");
 						if (m_cameraMoveCallback) {
 							m_cameraMoveCallback(m_orthoCamera->position.getValue(), m_orthoCamera->orientation.getValue());
 						} else if (m_viewChangeCallback) {
 							m_viewChangeCallback(region);
 						}
 						if (!currentFacing.empty() && currentFacing != m_lastLoggedFacing) {
-							LOG_INF_S("Camera final facing face: " + currentFacing);
+							LOG_DBG_S("Camera final facing face: " + currentFacing);
 							m_lastLoggedFacing = currentFacing;
 						}
 						return true;
@@ -1259,7 +1259,7 @@ void CuteNavCube::setCameraPosition(const SbVec3f& position) {
 		// ", y=" + std::to_string(position[1]) + ", z=" + std::to_string(position[2]));
 	}
 	else {
-		LOG_WRN_S("CuteNavCube::setCameraPosition: Camera not initialized");
+		LOG_DBG_S("CuteNavCube::setCameraPosition: Camera not initialized");
 	}
 }
 
@@ -1269,13 +1269,13 @@ void CuteNavCube::setCameraOrientation(const SbRotation& orientation) {
 		//LOG_DBG("CuteNavCube::setCameraOrientation: Set camera orientation");
 	}
 	else {
-		LOG_WRN_S("CuteNavCube::setCameraOrientation: Camera not initialized");
+		LOG_DBG_S("CuteNavCube::setCameraOrientation: Camera not initialized");
 	}
 }
 
 void CuteNavCube::applyInitialTextures() {
 	if (!m_textureGenerator) {
-		LOG_WRN_S("applyInitialTextures skipped: texture generator is null");
+		LOG_DBG_S("applyInitialTextures skipped: texture generator is null");
 		return;
 	}
 
@@ -1284,14 +1284,14 @@ void CuteNavCube::applyInitialTextures() {
 	for (const auto& faceName : mainFaceNames) {
 		SoTexture2* textureNode = m_textureGenerator->getNormalTexture(faceName);
 		if (!textureNode) {
-			LOG_WRN_S("applyInitialTextures: missing cached texture for face " + faceName);
+			LOG_DBG_S("applyInitialTextures: missing cached texture for face " + faceName);
 			continue;
 		}
 
 		std::string separatorKey = faceName + "_Texture";
 		auto sepIt = m_faceSeparators.find(separatorKey);
 		if (sepIt == m_faceSeparators.end() || sepIt->second == nullptr) {
-			LOG_WRN_S("applyInitialTextures: texture separator not found for key " + separatorKey);
+			LOG_DBG_S("applyInitialTextures: texture separator not found for key " + separatorKey);
 			continue;
 		}
 
@@ -1320,7 +1320,7 @@ void CuteNavCube::applyInitialTextures() {
 		}
 
 		textureSep->insertChild(textureNode, insertIndex);
-		LOG_INF_S("applyInitialTextures: attached texture node for face " + faceName + " at index " + std::to_string(insertIndex));
+		LOG_DBG_S("applyInitialTextures: attached texture node for face " + faceName + " at index " + std::to_string(insertIndex));
 	}
 }
 
@@ -1336,7 +1336,7 @@ void CuteNavCube::startCameraAnimation(const SbVec3f& position, const SbRotation
 			m_orthoCamera->orientation.setValue(orientation);
 			std::string finalFacing = findFaceFromCameraDirection(position, orientation);
 			if (finalFacing != m_lastLoggedFacing) {
-				LOG_INF_S("Camera final facing face: " + finalFacing);
+				LOG_DBG_S("Camera final facing face: " + finalFacing);
 				m_lastLoggedFacing = finalFacing;
 			}
 		}
@@ -1352,7 +1352,7 @@ void CuteNavCube::startCameraAnimation(const SbVec3f& position, const SbRotation
 		}
 		std::string finalFacing = findFaceFromCameraDirection(position, orientation);
 		if (finalFacing != m_lastLoggedFacing) {
-			LOG_INF_S("Camera final facing face: " + finalFacing);
+			LOG_DBG_S("Camera final facing face: " + finalFacing);
 			m_lastLoggedFacing = finalFacing;
 		}
 		return;
@@ -1387,7 +1387,7 @@ void CuteNavCube::startCameraAnimation(const SbVec3f& position, const SbRotation
 		orthoCam->orientation.setValue(orientation);
 		std::string finalFacing = findFaceFromCameraDirection(position, orientation);
 		if (finalFacing != m_lastLoggedFacing) {
-			LOG_INF_S("Camera final facing face: " + finalFacing);
+			LOG_DBG_S("Camera final facing face: " + finalFacing);
 			m_lastLoggedFacing = finalFacing;
 		}
 	}
