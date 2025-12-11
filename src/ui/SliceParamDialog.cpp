@@ -89,7 +89,7 @@ SliceParamDialog::SliceParamDialog(wxWindow* parent, OCCViewer* viewer)
 	appearanceSizer->Add(opacitySizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
 
 	// Show contours checkbox
-	m_showContours = new wxCheckBox(m_mainContent, wxID_ANY, "Show contours");
+	m_showContours = new wxCheckBox(m_mainContent, wxID_ANY, "Show section outline (contour)");
 	m_showContours->SetForegroundColour(wxColour(200, 200, 200));
 	appearanceSizer->Add(m_showContours, 0, wxLEFT | wxRIGHT | wxBOTTOM, 5);
 

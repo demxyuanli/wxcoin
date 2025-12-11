@@ -49,7 +49,7 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
         break;
     case RenderingConfig::DisplayMode::Wireframe:
         m_wireframeMode = true;
-        m_facesVisible = true;
+        m_facesVisible = false;  // Wireframe mode: hide faces, show only originalEdges (wireFrame = originalEdges)
         m_showPointView = false;
         break;
     case RenderingConfig::DisplayMode::FlatLines:

@@ -647,7 +647,7 @@ void EdgeSettingsEditor::onFeatureEdgeConcaveCheckbox(wxCommandEvent& event) {
 void EdgeSettingsEditor::onShowNormalLinesCheckbox(wxCommandEvent& event) {
     bool showNormals = m_showNormalLinesCheckbox->GetValue();
     if (m_viewer) {
-        m_viewer->setShowNormalLines(showNormals);
+		m_viewer->setShowVerticeNormals(showNormals);
     }
     if (m_changeCallback) m_changeCallback();
 }
@@ -655,7 +655,7 @@ void EdgeSettingsEditor::onShowNormalLinesCheckbox(wxCommandEvent& event) {
 void EdgeSettingsEditor::onShowFaceNormalLinesCheckbox(wxCommandEvent& event) {
     bool showFaceNormals = m_showFaceNormalLinesCheckbox->GetValue();
     if (m_viewer) {
-        m_viewer->setShowFaceNormalLines(showFaceNormals);
+		m_viewer->setShowFaceNormals(showFaceNormals);
     }
     if (m_changeCallback) m_changeCallback();
 }

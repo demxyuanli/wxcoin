@@ -56,8 +56,8 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         SoSeparator* featureEdgeNode = edgeComponent->getEdgeNode(EdgeType::Feature);
         SoSeparator* meshEdgeNode = edgeComponent->getEdgeNode(EdgeType::Mesh);
         SoSeparator* highlightEdgeNode = edgeComponent->getEdgeNode(EdgeType::Highlight);
-        SoSeparator* normalLineNode = edgeComponent->getEdgeNode(EdgeType::NormalLine);
-        SoSeparator* faceNormalLineNode = edgeComponent->getEdgeNode(EdgeType::FaceNormalLine);
+        SoSeparator* normalLineNode = edgeComponent->getEdgeNode(EdgeType::VerticeNormal);
+        SoSeparator* faceNormalLineNode = edgeComponent->getEdgeNode(EdgeType::FaceNormal);
         SoSeparator* silhouetteEdgeNode = edgeComponent->getEdgeNode(EdgeType::Silhouette);
         
         for (int i = coinNode->getNumChildren() - 1; i >= 0; --i) {
@@ -415,8 +415,8 @@ void DisplayModeHandler::cleanupEdgeNodes(SoSeparator* coinNode, ModularEdgeComp
     SoSeparator* featureEdgeNode = edgeComponent->getEdgeNode(EdgeType::Feature);
     SoSeparator* meshEdgeNode = edgeComponent->getEdgeNode(EdgeType::Mesh);
     SoSeparator* highlightEdgeNode = edgeComponent->getEdgeNode(EdgeType::Highlight);
-    SoSeparator* normalLineNode = edgeComponent->getEdgeNode(EdgeType::NormalLine);
-    SoSeparator* faceNormalLineNode = edgeComponent->getEdgeNode(EdgeType::FaceNormalLine);
+    SoSeparator* normalLineNode = edgeComponent->getEdgeNode(EdgeType::VerticeNormal);
+    SoSeparator* faceNormalLineNode = edgeComponent->getEdgeNode(EdgeType::FaceNormal);
     SoSeparator* silhouetteEdgeNode = edgeComponent->getEdgeNode(EdgeType::Silhouette);
     
     for (int i = coinNode->getNumChildren() - 1; i >= 0; --i) {

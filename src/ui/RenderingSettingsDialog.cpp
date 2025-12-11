@@ -413,7 +413,7 @@ void RenderingSettingsDialog::createNormalConsistencyPage()
 	m_smoothNormalsCheckbox = new wxCheckBox(m_shadingPage, wxID_ANY, "Smooth Normals");
 	m_smoothNormalsCheckbox->SetValue(m_smoothNormals);
 
-	// Wireframe width slider
+	// Original edge (wireframe) width slider
 	m_wireframeWidthSlider = new wxSlider(m_shadingPage, wxID_ANY,
 		static_cast<int>(m_wireframeWidth * 10), 1, 50,
 		wxDefaultPosition, wxSize(200, -1));
@@ -452,13 +452,13 @@ void RenderingSettingsDialog::createNormalConsistencyPage()
 	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Smooth Normals:"), 0, wxALIGN_CENTER_VERTICAL);
 	gridSizer->Add(m_smoothNormalsCheckbox, 0, wxEXPAND);
 
-	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Wireframe Width:"), 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Original Edge (Wireframe) Width:"), 0, wxALIGN_CENTER_VERTICAL);
 	wxBoxSizer* wireframeSizer = new wxBoxSizer(wxHORIZONTAL);
 	wireframeSizer->Add(m_wireframeWidthSlider, 1, wxEXPAND | wxRIGHT, 5);
 	wireframeSizer->Add(m_wireframeWidthLabel, 0, wxALIGN_CENTER_VERTICAL);
 	gridSizer->Add(wireframeSizer, 0, wxEXPAND);
 
-	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Point Size:"), 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(new wxStaticText(m_shadingPage, wxID_ANY, "Vertex/Point Size:"), 0, wxALIGN_CENTER_VERTICAL);
 	wxBoxSizer* pointSizer = new wxBoxSizer(wxHORIZONTAL);
 	pointSizer->Add(m_pointSizeSlider, 1, wxEXPAND | wxRIGHT, 5);
 	pointSizer->Add(m_pointSizeLabel, 0, wxALIGN_CENTER_VERTICAL);
@@ -484,12 +484,12 @@ void RenderingSettingsDialog::createDisplayPage()
 	}
 	m_displayModeChoice->SetSelection(static_cast<int>(m_displayMode));
 
-	// Show edges checkbox
-	m_showEdgesCheckbox = new wxCheckBox(m_displayPage, wxID_ANY, "Show Edges");
+	// Show original edges checkbox
+	m_showEdgesCheckbox = new wxCheckBox(m_displayPage, wxID_ANY, "Show Original Edges");
 	m_showEdgesCheckbox->SetValue(m_showEdges);
 
-	// Show vertices checkbox
-	m_showVerticesCheckbox = new wxCheckBox(m_displayPage, wxID_ANY, "Show Vertices");
+	// Show vertices/points checkbox
+	m_showVerticesCheckbox = new wxCheckBox(m_displayPage, wxID_ANY, "Show Vertices/Points");
 	m_showVerticesCheckbox->SetValue(m_showVertices);
 
 	// Edge width slider
@@ -510,8 +510,8 @@ void RenderingSettingsDialog::createDisplayPage()
 	m_edgeColorButton = new wxButton(m_displayPage, wxID_ANY, "Edge Color");
 	updateColorButton(m_edgeColorButton, quantityColorToWxColour(m_edgeColor));
 
-	// Vertex color button
-	m_vertexColorButton = new wxButton(m_displayPage, wxID_ANY, "Vertex Color");
+	// Vertex/point color button
+	m_vertexColorButton = new wxButton(m_displayPage, wxID_ANY, "Vertex/Point Color");
 	updateColorButton(m_vertexColorButton, quantityColorToWxColour(m_vertexColor));
 
 	// Layout display page
@@ -528,7 +528,7 @@ void RenderingSettingsDialog::createDisplayPage()
 	edgeWidthSizer->Add(m_edgeWidthLabel, 0, wxALIGN_CENTER_VERTICAL);
 	gridSizer->Add(edgeWidthSizer, 0, wxEXPAND);
 
-	gridSizer->Add(new wxStaticText(m_displayPage, wxID_ANY, "Vertex Size:"), 0, wxALIGN_CENTER_VERTICAL);
+	gridSizer->Add(new wxStaticText(m_displayPage, wxID_ANY, "Vertex/Point Size:"), 0, wxALIGN_CENTER_VERTICAL);
 	wxBoxSizer* vertexSizeSizer = new wxBoxSizer(wxHORIZONTAL);
 	vertexSizeSizer->Add(m_vertexSizeSlider, 1, wxEXPAND | wxRIGHT, 5);
 	vertexSizeSizer->Add(m_vertexSizeLabel, 0, wxALIGN_CENTER_VERTICAL);
@@ -1381,10 +1381,10 @@ void RenderingSettingsDialog::applySettings()
 
 		// Apply normal display settings
 		if (m_showNormalDebug) {
-			m_occViewer->setShowNormalLines(true);
+			m_occViewer->setShowVerticeNormals(true);
 			LOG_INF_S("Normal lines display enabled through rendering settings");
 		} else {
-			m_occViewer->setShowNormalLines(false);
+			m_occViewer->setShowVerticeNormals(false);
 			LOG_INF_S("Normal lines display disabled through rendering settings");
 		}
 

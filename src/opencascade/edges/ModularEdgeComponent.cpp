@@ -254,8 +254,8 @@ SoSeparator* ModularEdgeComponent::getEdgeNode(EdgeType type) {
         case EdgeType::Feature: return featureEdgeNode;
         case EdgeType::Mesh: return meshEdgeNode;
         case EdgeType::Highlight: return highlightEdgeNode;
-        case EdgeType::NormalLine: return normalLineNode;
-        case EdgeType::FaceNormalLine: return faceNormalLineNode;
+        case EdgeType::VerticeNormal: return normalLineNode;
+        case EdgeType::FaceNormal: return faceNormalLineNode;
         case EdgeType::Silhouette: return silhouetteEdgeNode;
         case EdgeType::IntersectionNodes: return intersectionNodesNode;
         default: return nullptr;
@@ -268,8 +268,8 @@ void ModularEdgeComponent::setEdgeDisplayType(EdgeType type, bool show) {
         case EdgeType::Feature: edgeFlags.showFeatureEdges = show; break;
         case EdgeType::Mesh: edgeFlags.showMeshEdges = show; break;
         case EdgeType::Highlight: edgeFlags.showHighlightEdges = show; break;
-        case EdgeType::NormalLine: edgeFlags.showNormalLines = show; break;
-        case EdgeType::FaceNormalLine: edgeFlags.showFaceNormalLines = show; break;
+        case EdgeType::VerticeNormal: edgeFlags.showVerticeNormals = show; break;
+        case EdgeType::FaceNormal: edgeFlags.showFaceNormals = show; break;
         case EdgeType::IntersectionNodes: edgeFlags.showIntersectionNodes = show; break;
     }
 }
@@ -280,8 +280,8 @@ bool ModularEdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
         case EdgeType::Feature: return edgeFlags.showFeatureEdges;
         case EdgeType::Mesh: return edgeFlags.showMeshEdges;
         case EdgeType::Highlight: return edgeFlags.showHighlightEdges;
-        case EdgeType::NormalLine: return edgeFlags.showNormalLines;
-        case EdgeType::FaceNormalLine: return edgeFlags.showFaceNormalLines;
+        case EdgeType::VerticeNormal: return edgeFlags.showVerticeNormals;
+        case EdgeType::FaceNormal: return edgeFlags.showFaceNormals;
         case EdgeType::IntersectionNodes: return edgeFlags.showIntersectionNodes;
         default: return false;
     }
@@ -320,14 +320,14 @@ void ModularEdgeComponent::updateOriginalEdgesDisplay(SoSeparator* parentNode) {
     if (highlightEdgeNode && edgeFlags.showHighlightEdges) {
         parentNode->addChild(highlightEdgeNode);
     }
-    if (normalLineNode && edgeFlags.showNormalLines) {
+    if (normalLineNode && edgeFlags.showVerticeNormals) {
         parentNode->addChild(normalLineNode);
     } else {
-        if (!normalLineNode && edgeFlags.showNormalLines) {
-            LOG_WRN_S_ASYNC("ModularEdgeComponent::updateOriginalEdgesDisplay - showNormalLines=true but normalLineNode is null");
+        if (!normalLineNode && edgeFlags.showVerticeNormals) {
+            LOG_WRN_S_ASYNC("ModularEdgeComponent::updateOriginalEdgesDisplay - showVerticeNormals=true but normalLineNode is null");
         }
     }
-    if (faceNormalLineNode && edgeFlags.showFaceNormalLines) {
+    if (faceNormalLineNode && edgeFlags.showFaceNormals) {
         parentNode->addChild(faceNormalLineNode);
     }
     if (silhouetteEdgeNode) {
@@ -392,14 +392,14 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
     if (highlightEdgeNode && edgeFlags.showHighlightEdges) {
         parentNode->insertChild(highlightEdgeNode, insertIndex++);
     }
-    if (normalLineNode && edgeFlags.showNormalLines) {
+    if (normalLineNode && edgeFlags.showVerticeNormals) {
         parentNode->insertChild(normalLineNode, insertIndex++);
     } else {
-        if (!normalLineNode && edgeFlags.showNormalLines) {
-            LOG_WRN_S_ASYNC("ModularEdgeComponent::updateEdgeDisplay - showNormalLines=true but normalLineNode is null");
+        if (!normalLineNode && edgeFlags.showVerticeNormals) {
+            LOG_WRN_S_ASYNC("ModularEdgeComponent::updateEdgeDisplay - showVerticeNormals=true but normalLineNode is null");
         }
     }
-    if (faceNormalLineNode && edgeFlags.showFaceNormalLines) {
+    if (faceNormalLineNode && edgeFlags.showFaceNormals) {
         parentNode->insertChild(faceNormalLineNode, insertIndex++);
     }
     if (silhouetteEdgeNode) {
@@ -846,10 +846,10 @@ void ModularEdgeComponent::clearEdgeNode(EdgeType type) {
         case EdgeType::Mesh:
             clearMeshEdgeNode(); // Use specialized method that also clears renderer
             break;
-        case EdgeType::NormalLine:
+        case EdgeType::VerticeNormal:
             cleanupEdgeNode(normalLineNode);
             break;
-        case EdgeType::FaceNormalLine:
+        case EdgeType::FaceNormal:
             cleanupEdgeNode(faceNormalLineNode);
             break;
         case EdgeType::Silhouette:

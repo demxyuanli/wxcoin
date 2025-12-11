@@ -27,7 +27,7 @@ void NormalDisplayService::setShowNormals(bool showNormals, EdgeDisplayManager* 
 {
     m_config.showNormals = showNormals;
     if (edgeDisplayManager) {
-        edgeDisplayManager->setShowNormalLines(showNormals, meshParams);
+        edgeDisplayManager->setShowVerticeNormals(showNormals, meshParams);
     }
 }
 

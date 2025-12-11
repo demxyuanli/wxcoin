@@ -342,8 +342,8 @@ void GeomCoinRepresentation::buildCoinRepresentation(
             // Clear mesh-dependent edge nodes for modular component
             modularEdgeComponent->clearMeshEdgeNode();
             // Also clear normal-related nodes since they depend on mesh quality
-            modularEdgeComponent->clearEdgeNode(EdgeType::NormalLine);
-            modularEdgeComponent->clearEdgeNode(EdgeType::FaceNormalLine);
+            modularEdgeComponent->clearEdgeNode(EdgeType::VerticeNormal);
+            modularEdgeComponent->clearEdgeNode(EdgeType::FaceNormal);
         }
         // Clear reverse mapping when mesh parameters change
     }
@@ -402,7 +402,7 @@ void GeomCoinRepresentation::buildCoinRepresentation(
         currentFlags = modularEdgeComponent->edgeFlags;
         anyEdgeDisplayRequested = currentFlags.showOriginalEdges || currentFlags.showFeatureEdges ||
             currentFlags.showMeshEdges || currentFlags.showHighlightEdges ||
-            currentFlags.showNormalLines || currentFlags.showFaceNormalLines;
+            currentFlags.showVerticeNormals || currentFlags.showFaceNormals;
     }
     
     // Check EdgeSettingsConfig for global/selected/hover edge settings
@@ -420,7 +420,7 @@ void GeomCoinRepresentation::buildCoinRepresentation(
         TriangleMesh mesh;
 
         // Get mesh data if needed for mesh edges or normal lines
-        if ((currentFlags.showMeshEdges || currentFlags.showNormalLines || currentFlags.showFaceNormalLines) && processor) {
+        if ((currentFlags.showMeshEdges || currentFlags.showVerticeNormals || currentFlags.showFaceNormals) && processor) {
             mesh = processor->convertToMesh(shape, params);
         }
 
@@ -438,10 +438,10 @@ void GeomCoinRepresentation::buildCoinRepresentation(
                 Quantity_Color meshColor(0.0, 0.0, 0.0, Quantity_TOC_RGB);
                 modularEdgeComponent->extractMeshEdges(mesh, meshColor, 1.0);
             }
-            if (currentFlags.showNormalLines && !mesh.triangles.empty()) {
+            if (currentFlags.showVerticeNormals && !mesh.triangles.empty()) {
                 modularEdgeComponent->generateNormalLineNode(mesh, 0.5);
             }
-            if (currentFlags.showFaceNormalLines && !mesh.triangles.empty()) {
+            if (currentFlags.showFaceNormals && !mesh.triangles.empty()) {
                 modularEdgeComponent->generateFaceNormalLineNode(mesh, 0.5);
             }
             if (currentFlags.showHighlightEdges) {

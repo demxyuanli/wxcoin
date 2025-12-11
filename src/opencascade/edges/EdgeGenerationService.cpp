@@ -80,8 +80,8 @@ bool EdgeGenerationService::ensureFeatureEdges(std::shared_ptr<OCCGeometry>& geo
 bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>& geom,
 	const MeshParameters& meshParams,
 	bool needMeshEdges,
-	bool needNormalLines,
-	bool needFaceNormalLines) {
+	bool needVerticeNormals,
+	bool needFaceNormals) {
 	if (!geom) return false;
 
 	bool generated = false;
@@ -92,8 +92,8 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 		geom->modularEdgeComponent = std::make_unique<ModularEdgeComponent>();
 	}
 	if (needMeshEdges && geom->modularEdgeComponent->getEdgeNode(EdgeType::Mesh) == nullptr) needMesh = true;
-	if (needNormalLines && geom->modularEdgeComponent->getEdgeNode(EdgeType::NormalLine) == nullptr) needMesh = true;
-	if (needFaceNormalLines && geom->modularEdgeComponent->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) needMesh = true;
+	if (needVerticeNormals && geom->modularEdgeComponent->getEdgeNode(EdgeType::VerticeNormal) == nullptr) needMesh = true;
+	if (needFaceNormals && geom->modularEdgeComponent->getEdgeNode(EdgeType::FaceNormal) == nullptr) needMesh = true;
 
 	if (!needMesh) return false;
 
@@ -108,11 +108,11 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 		comp->extractMeshEdges(mesh, meshColor, 1.0);
 		generated = true;
 	}
-	if (needNormalLines && comp->getEdgeNode(EdgeType::NormalLine) == nullptr) {
+	if (needVerticeNormals && comp->getEdgeNode(EdgeType::VerticeNormal) == nullptr) {
 		comp->generateNormalLineNode(mesh, 0.5);
 		generated = true;
 	}
-	if (needFaceNormalLines && comp->getEdgeNode(EdgeType::FaceNormalLine) == nullptr) {
+	if (needFaceNormals && comp->getEdgeNode(EdgeType::FaceNormal) == nullptr) {
 		comp->generateFaceNormalLineNode(mesh, 0.5);
 		generated = true;
 	}
@@ -123,8 +123,8 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 bool EdgeGenerationService::forceRegenerateMeshDerivedEdges(std::shared_ptr<OCCGeometry>& geom,
 	const MeshParameters& meshParams,
 	bool needMeshEdges,
-	bool needNormalLines,
-	bool needFaceNormalLines) {
+	bool needVerticeNormals,
+	bool needFaceNormals) {
 	if (!geom) return false;
 
 	bool generated = false;
@@ -150,15 +150,15 @@ bool EdgeGenerationService::forceRegenerateMeshDerivedEdges(std::shared_ptr<OCCG
 	}
 
 	// Force regenerate normal lines if requested
-	if (needNormalLines) {
-		comp->clearEdgeNode(EdgeType::NormalLine);
+	if (needVerticeNormals) {
+		comp->clearEdgeNode(EdgeType::VerticeNormal);
 		comp->generateNormalLineNode(mesh, 0.5);
 		generated = true;
 	}
 
 	// Force regenerate face normal lines if requested
-	if (needFaceNormalLines) {
-		comp->clearEdgeNode(EdgeType::FaceNormalLine);
+	if (needFaceNormals) {
+		comp->clearEdgeNode(EdgeType::FaceNormal);
 		comp->generateFaceNormalLineNode(mesh, 0.5);
 		generated = true;
 	}

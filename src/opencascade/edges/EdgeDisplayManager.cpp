@@ -35,8 +35,8 @@ void EdgeDisplayManager::toggleEdgeType(EdgeType type, bool show, const MeshPara
 	case EdgeType::Feature: m_flags.showFeatureEdges = show; break;
 	case EdgeType::Mesh: m_flags.showMeshEdges = show; break;
 	case EdgeType::Highlight: m_flags.showHighlightEdges = show; break;
-	case EdgeType::NormalLine: m_flags.showNormalLines = show; break;
-	case EdgeType::FaceNormalLine: m_flags.showFaceNormalLines = show; break;
+	case EdgeType::VerticeNormal: m_flags.showVerticeNormals = show; break;
+	case EdgeType::FaceNormal: m_flags.showFaceNormals = show; break;
 	case EdgeType::IntersectionNodes: m_flags.showIntersectionNodes = show; break;
 	}
 	updateAll(meshParams);
@@ -95,7 +95,8 @@ void EdgeDisplayManager::setShowOriginalEdgesForSelectedOnly(bool selectedOnly, 
 void EdgeDisplayManager::setShowSilhouetteEdgesOnly(bool silhouetteOnly, const MeshParameters& meshParams) {
     m_showSilhouetteEdgesOnly = silhouetteOnly;
     
-    // CRITICAL FEATURE: Show only silhouette edges (fast mode, similar to FreeCAD)
+    // CRITICAL FEATURE: Show only outline/contour edges (fast mode, similar to FreeCAD)
+    // Note: silhouette = outline = contour (unified naming convention)
     // This provides a quick preview mode with much better performance
     wxTheApp->CallAfter([this, meshParams]() {
         updateAll(meshParams);
@@ -183,8 +184,8 @@ void EdgeDisplayManager::setShowFeatureEdges(bool show, double featureAngleDeg, 
 }
 void EdgeDisplayManager::setShowMeshEdges(bool show, const MeshParameters& meshParams) { m_flags.showMeshEdges = show; updateAll(meshParams); }
 void EdgeDisplayManager::setShowHighlightEdges(bool show, const MeshParameters& meshParams) { m_flags.showHighlightEdges = show; updateAll(meshParams); }
-void EdgeDisplayManager::setShowNormalLines(bool show, const MeshParameters& meshParams) { m_flags.showNormalLines = show; updateAll(meshParams); }
-void EdgeDisplayManager::setShowFaceNormalLines(bool show, const MeshParameters& meshParams) { m_flags.showFaceNormalLines = show; updateAll(meshParams); }
+void EdgeDisplayManager::setShowVerticeNormals(bool show, const MeshParameters& meshParams) { m_flags.showVerticeNormals = show; updateAll(meshParams); }
+void EdgeDisplayManager::setShowFaceNormals(bool show, const MeshParameters& meshParams) { m_flags.showFaceNormals = show; updateAll(meshParams); }
 
 void EdgeDisplayManager::setShowIntersectionNodes(bool show, const MeshParameters& meshParams) { m_flags.showIntersectionNodes = show; updateAll(meshParams); }
 
@@ -406,26 +407,26 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 			}
 			if (!meshNode) needMesh = true;
 		}
-		// For vertex normals, we also need mesh data. Ensure we treat "show normals" as enabling normal lines.
-		if (m_flags.showNormalLines) {
+		// For vertex normals (verticeNormals), we also need mesh data. Ensure we treat "show normals" as enabling normal lines.
+		if (m_flags.showVerticeNormals) {
 			SoSeparator* normalNode = nullptr;
 			if (g->modularEdgeComponent) {
-				normalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::NormalLine);
+				normalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::VerticeNormal);
 			}
 			if (!normalNode) needMesh = true;
 		}
-		if (m_flags.showFaceNormalLines) {
+		if (m_flags.showFaceNormals) {
 			SoSeparator* faceNormalNode = nullptr;
 			if (g->modularEdgeComponent) {
-				faceNormalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::FaceNormalLine);
+				faceNormalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::FaceNormal);
 			}
 			if (!faceNormalNode) needMesh = true;
 		}
 		if (needMesh) {
 			if (forceMeshRegeneration) {
-				generator.forceRegenerateMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showNormalLines, m_flags.showFaceNormalLines);
+				generator.forceRegenerateMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showVerticeNormals, m_flags.showFaceNormals);
 			} else {
-				generator.ensureMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showNormalLines, m_flags.showFaceNormalLines);
+				generator.ensureMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showVerticeNormals, m_flags.showFaceNormals);
 			}
 		}
 		if (m_flags.showFeatureEdges && m_featureCacheValid) {

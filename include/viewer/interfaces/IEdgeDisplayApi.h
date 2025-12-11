@@ -17,8 +17,8 @@ public:
 		const Quantity_Color& color, double width) = 0;
 	virtual void setShowMeshEdges(bool show) = 0;
 	virtual void setShowHighlightEdges(bool show) = 0;
-	virtual void setShowNormalLines(bool show) = 0;
-	virtual void setShowFaceNormalLines(bool show) = 0;
+	virtual void setShowVerticeNormals(bool show) = 0;
+	virtual void setShowFaceNormals(bool show) = 0;
 	virtual void setShowIntersectionNodes(bool show) = 0;
 	virtual void toggleEdgeType(EdgeType type, bool show) = 0;
 	virtual bool isEdgeTypeEnabled(EdgeType type) const = 0;

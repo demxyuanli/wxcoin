@@ -30,16 +30,16 @@ public:
 	bool ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>& geom,
 		const MeshParameters& meshParams,
 		bool needMeshEdges,
-		bool needNormalLines,
-		bool needFaceNormalLines);
+		bool needVerticeNormals,
+		bool needFaceNormals);
 
 	// Force regenerate mesh-derived edges (clear existing nodes and regenerate)
 	// This is used when mesh parameters change
 	bool forceRegenerateMeshDerivedEdges(std::shared_ptr<OCCGeometry>& geom,
 		const MeshParameters& meshParams,
 		bool needMeshEdges,
-		bool needNormalLines,
-		bool needFaceNormalLines);
+		bool needVerticeNormals,
+		bool needFaceNormals);
 
 	// Async intersection computation
 	void computeIntersectionsAsync(

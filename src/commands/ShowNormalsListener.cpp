@@ -14,7 +14,7 @@ CommandResult ShowNormalsListener::executeCommand(const std::string& commandType
     CHECK_PTR_RETURN(m_viewer, "OCCViewer", commandType);
 
     // Toggle normal display based on current state
-    bool currentState = m_viewer->isEdgeTypeEnabled(EdgeType::NormalLine);
+    bool currentState = m_viewer->isEdgeTypeEnabled(EdgeType::VerticeNormal);
     bool newState = !currentState;
 
     LOG_INF_S("ShowNormalsListener::executeCommand - Current state: " + std::string(currentState ? "ON" : "OFF") + 

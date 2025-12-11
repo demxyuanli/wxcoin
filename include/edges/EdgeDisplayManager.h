@@ -29,7 +29,7 @@ public:
 	void setShowOriginalEdgesForSelectedOnly(bool selectedOnly, const MeshParameters& meshParams);
 	bool isShowOriginalEdgesForSelectedOnly() const { return m_showOriginalEdgesForSelectedOnly; }
 	
-	// CRITICAL FEATURE: Show only silhouette edges (fast mode, similar to FreeCAD)
+	// Outline/contour edges (fast mode) - silhouette = outline = contour (unified naming convention)
 	void setShowSilhouetteEdgesOnly(bool silhouetteOnly, const MeshParameters& meshParams);
 	bool isShowSilhouetteEdgesOnly() const { return m_showSilhouetteEdgesOnly; }
 	
@@ -57,8 +57,8 @@ public:
 		const Quantity_Color& color, double width);
 	void setShowMeshEdges(bool show, const MeshParameters& meshParams);
 	void setShowHighlightEdges(bool show, const MeshParameters& meshParams);
-	void setShowNormalLines(bool show, const MeshParameters& meshParams);
-	void setShowFaceNormalLines(bool show, const MeshParameters& meshParams);
+	void setShowVerticeNormals(bool show, const MeshParameters& meshParams);
+	void setShowFaceNormals(bool show, const MeshParameters& meshParams);
 	void setShowIntersectionNodes(bool show, const MeshParameters& meshParams);
 
 	// Update
@@ -172,5 +172,5 @@ private:
 	
 	// CRITICAL FEATURES: Advanced display modes
 	bool m_showOriginalEdgesForSelectedOnly{ false };  // Show edges only for selected objects
-	bool m_showSilhouetteEdgesOnly{ false };            // Show only silhouette edges (fast mode)
+	bool m_showSilhouetteEdgesOnly{ false };            // Show only outline/contour edges (fast mode, silhouette = outline = contour)
 };

@@ -292,8 +292,8 @@ public:
 		const Quantity_Color& color, double width);
 	void setShowMeshEdges(bool show) override;
 	void setShowHighlightEdges(bool show) override;
-	void setShowNormalLines(bool show) override;
-	void setShowFaceNormalLines(bool show) override;
+	void setShowVerticeNormals(bool show) override;
+	void setShowFaceNormals(bool show) override;
 	void setShowIntersectionNodes(bool show) override;
 	// Outline API
 	void setOutlineEnabled(bool enabled) override { if (m_outlineManager) m_outlineManager->setEnabled(enabled); }

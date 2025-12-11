@@ -246,7 +246,6 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	viewButtonBar->AddButtonWithSVG(ID_VIEW_FRONT, "Front", "frontview", wxSize(16, 16), nullptr, "Switch to front view");
 	viewButtonBar->AddButtonWithSVG(ID_VIEW_RIGHT, "Right", "rightview", wxSize(16, 16), nullptr, "Switch to right view");
 	viewButtonBar->AddButtonWithSVG(ID_VIEW_ISOMETRIC, "Isometric", "isoview", wxSize(16, 16), nullptr, "Switch to isometric view");
-	viewButtonBar->AddToggleButtonWithSVG(ID_SHOW_POINT_VIEW, "Point View", "pointview", wxSize(16, 16), false, "Toggle point view mode");
 	viewPanel->AddButtonBar(viewButtonBar, 0, wxEXPAND | wxALL, 5);
 	page3->AddPanel(viewPanel);
 
@@ -309,11 +308,12 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	displayPanel->SetHeaderBorderWidths(0, 0, 0, 0);
 	FlatUIButtonBar* displayButtonBar = new FlatUIButtonBar(displayPanel);
 	displayButtonBar->SetDisplayStyle(ButtonDisplayStyle::ICON_ONLY);
+	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_POINT_VIEW, "Point View", "pointview", wxSize(16, 16), false, "Toggle point view mode");
 	displayButtonBar->AddToggleButtonWithSVG(ID_VIEW_SHOW_ORIGINAL_EDGES, "Original Edges", "ori-edge", wxSize(16, 16), false, "Toggle original edge display");
 	displayButtonBar->AddButtonWithSVG(ID_CANCEL_INTERSECTION_COMPUTATION, "Cancel Intersection", "cancel", wxSize(16, 16), nullptr, "Cancel ongoing intersection computation");
 	displayButtonBar->AddButtonWithSVG(ID_COMPUTE_INTERSECTIONS, "Compute Intersections", "intersection", wxSize(16, 16), nullptr, "Compute edge intersections asynchronously");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FEATURE_EDGES, "Feature Edges", "feature-edges", wxSize(16, 16), false, "Toggle feature edge display");
-	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_WIREFRAME, "Wireframe Mode", "wireframe-view", wxSize(16, 16), false, "Toggle wireframe rendering mode");
+	displayButtonBar->AddToggleButtonWithSVG(ID_TOGGLE_WIREFRAME, "Original Edges (Wireframe)", "wireframe-view", wxSize(16, 16), false, "Toggle original edges (wireframe)");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_MESH_EDGES, "Show Mesh Edges", "mesh", wxSize(16, 16), false, "Show/hide mesh edges overlay");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_NORMALS, "Show Normals", "point-normals", wxSize(16, 16), false, "Toggle normal vectors display");
 	displayButtonBar->AddToggleButtonWithSVG(ID_SHOW_FACE_NORMALS, "Show Face Normals", "face-normals", wxSize(16, 16), false, "Toggle face normal vectors display");
@@ -464,7 +464,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	} renderModeButtons[] = {
 		{ ID_RENDER_MODE_NO_SHADING, "No Shading", "cube", "No shading mode - uniform color like FreeCAD" },
 		{ ID_RENDER_MODE_POINTS, "Points", "pointview", "Points mode - show only vertices" },
-		{ ID_RENDER_MODE_WIREFRAME, "Wireframe", "wireframe-mod", "Wireframe mode - show only edges" },
+		{ ID_RENDER_MODE_WIREFRAME, "Original Edges (Wireframe)", "wireframe-mod", "Wireframe mode - show only original edges" },
 		{ ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "flat-shading", "Flat lines mode - flat shading with edges" },
 		{ ID_RENDER_MODE_SHADED, "Shaded", "shaded", "Shaded mode - smooth shading with lighting" },
 		{ ID_RENDER_MODE_TRANSPARENCY, "Transparent", "transparent", "Transparent rendering mode" },

@@ -546,11 +546,11 @@ void NormalFixDialog::onPreviewNormals(wxCommandEvent& event) {
     bool showNormals = m_showNormalsCheck->GetValue();
     if (showNormals) {
         // Enable face normal display
-        m_viewer->setShowFaceNormalLines(true);
+        m_viewer->setShowFaceNormals(true);
         m_previewStatus->SetLabel("Face normal vectors displayed for: " + geometryName);
     } else {
         // Disable face normal display
-        m_viewer->setShowFaceNormalLines(false);
+        m_viewer->setShowFaceNormals(false);
         m_previewStatus->SetLabel("Face normal vectors hidden");
     }
     

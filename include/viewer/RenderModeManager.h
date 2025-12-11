@@ -6,6 +6,7 @@
 #include "OCCGeometry.h"
 
 class EdgeDisplayManager;
+struct MeshParameters;
 
 /**
  * @brief Service for managing rendering modes and display options
@@ -20,6 +21,8 @@ public:
 
     // Wireframe mode management
     void setWireframeMode(bool wireframe, std::vector<std::shared_ptr<OCCGeometry>>& geometries);
+    void setWireframeMode(bool wireframe, std::vector<std::shared_ptr<OCCGeometry>>& geometries, 
+                          EdgeDisplayManager* edgeDisplayManager, const MeshParameters& meshParams);
     bool isWireframeMode() const;
 
     // Shading mode management

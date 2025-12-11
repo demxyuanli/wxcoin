@@ -7,8 +7,8 @@ ShowFaceNormalsListener::ShowFaceNormalsListener(OCCViewer* viewer) : m_viewer(v
 CommandResult ShowFaceNormalsListener::executeCommand(const std::string& commandType,
 	const std::unordered_map<std::string, std::string>&) {
 	if (!m_viewer) return CommandResult(false, "OCCViewer not available", commandType);
-	bool show = !m_viewer->isEdgeTypeEnabled(EdgeType::FaceNormalLine);
-	m_viewer->setShowFaceNormalLines(show);
+	bool show = !m_viewer->isEdgeTypeEnabled(EdgeType::FaceNormal);
+	m_viewer->setShowFaceNormals(show);
 	return CommandResult(true, show ? "Face normals shown" : "Face normals hidden", commandType);
 }
 

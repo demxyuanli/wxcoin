@@ -648,7 +648,7 @@ void EdgeSettingsDialog::onFeatureEdgeConcaveCheckbox(wxCommandEvent& event) {
 void EdgeSettingsDialog::onShowNormalLinesCheckbox(wxCommandEvent& event) {
 	bool showNormals = m_showNormalLinesCheckbox->GetValue();
 	if (m_viewer) {
-		m_viewer->setShowNormalLines(showNormals);
+		m_viewer->setShowVerticeNormals(showNormals);
 		LOG_INF_S("Normal lines display " + std::string(showNormals ? "enabled" : "disabled"));
 	}
 }
@@ -656,7 +656,7 @@ void EdgeSettingsDialog::onShowNormalLinesCheckbox(wxCommandEvent& event) {
 void EdgeSettingsDialog::onShowFaceNormalLinesCheckbox(wxCommandEvent& event) {
 	bool showFaceNormals = m_showFaceNormalLinesCheckbox->GetValue();
 	if (m_viewer) {
-		m_viewer->setShowFaceNormalLines(showFaceNormals);
+		m_viewer->setShowFaceNormals(showFaceNormals);
 		LOG_INF_S("Face normal lines display " + std::string(showFaceNormals ? "enabled" : "disabled"));
 	}
 }

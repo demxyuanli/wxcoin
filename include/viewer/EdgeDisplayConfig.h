@@ -5,26 +5,37 @@
  *
  * This struct provides a high-level configuration for all edge display types,
  * replacing the need for individual setter calls.
+ * 
+ * Naming conventions aligned with unified terminology:
+ * - showOriginalEdges: Original geometric edges (wireFrame equivalent)
+ * - showFeatureEdges: Feature edges extracted based on angle/curvature
+ * - showMeshEdges: Mesh edges from triangulation
+ * - showVerticeNormals: Vertex normal lines (verticeNormals)
+ * - showFaceNormals: Face normal lines (faceNormals)
+ * - showHighlightEdges: Hover-highlighted edges (originalEdges or meshEdges)
+ * - showIntersectionNodes: Edge intersection nodes
+ * 
+ * Note: Silhouette/outline/contour edges are handled separately via EdgeType::Silhouette
  */
 struct EdgeDisplayConfig {
-    bool showOriginalEdges = false;
-    bool showFeatureEdges = false;
-    bool showMeshEdges = false;
-    bool showNormalLines = false;
-    bool showFaceNormalLines = false;
-    bool showHighlightEdges = false;
-    bool showIntersectionNodes = false;
+    bool showOriginalEdges = false;      // Original geometric edges (wireFrame)
+    bool showFeatureEdges = false;       // Feature edges
+    bool showMeshEdges = false;          // Mesh edges from triangulation
+    bool showVerticeNormals = false;     // Vertex normal lines (verticeNormals)
+    bool showFaceNormals = false;        // Face normal lines (faceNormals)
+    bool showHighlightEdges = false;     // Hover-highlighted edges
+    bool showIntersectionNodes = false;  // Edge intersection nodes
 
     // Default constructor
     EdgeDisplayConfig() = default;
 
     // Constructor with all parameters
-    EdgeDisplayConfig(bool original, bool feature, bool mesh, bool normal, bool faceNormal, bool highlight, bool intersection)
+    EdgeDisplayConfig(bool original, bool feature, bool mesh, bool verticeNormal, bool faceNormal, bool highlight, bool intersection)
         : showOriginalEdges(original)
         , showFeatureEdges(feature)
         , showMeshEdges(mesh)
-        , showNormalLines(normal)
-        , showFaceNormalLines(faceNormal)
+        , showVerticeNormals(verticeNormal)
+        , showFaceNormals(faceNormal)
         , showHighlightEdges(highlight)
         , showIntersectionNodes(intersection)
     {}
@@ -34,8 +45,8 @@ struct EdgeDisplayConfig {
         return showOriginalEdges == other.showOriginalEdges &&
                showFeatureEdges == other.showFeatureEdges &&
                showMeshEdges == other.showMeshEdges &&
-               showNormalLines == other.showNormalLines &&
-               showFaceNormalLines == other.showFaceNormalLines &&
+               showVerticeNormals == other.showVerticeNormals &&
+               showFaceNormals == other.showFaceNormals &&
                showHighlightEdges == other.showHighlightEdges &&
                showIntersectionNodes == other.showIntersectionNodes;
     }

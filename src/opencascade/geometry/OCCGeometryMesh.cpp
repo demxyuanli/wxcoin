@@ -348,8 +348,8 @@ void OCCGeometryMesh::buildCoinRepresentation(
             // Clear mesh-dependent edge nodes for modular component
             modularEdgeComponent->clearMeshEdgeNode();
             // Also clear normal-related nodes since they depend on mesh quality
-            modularEdgeComponent->clearEdgeNode(EdgeType::NormalLine);
-            modularEdgeComponent->clearEdgeNode(EdgeType::FaceNormalLine);
+            modularEdgeComponent->clearEdgeNode(EdgeType::VerticeNormal);
+            modularEdgeComponent->clearEdgeNode(EdgeType::FaceNormal);
         }
         // Clear reverse mapping when mesh parameters change
     }

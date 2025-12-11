@@ -576,7 +576,7 @@ void FlatFrame::OnButtonClick(wxCommandEvent& event)
 	case ID_ShowUIHierarchy:
 		ShowUIHierarchy();
 		break;
-		// removed silhouette entry; use ID_TOGGLE_OUTLINE instead
+		// removed outline/silhouette entry; use ID_TOGGLE_OUTLINE instead
 	case ID_VIEW_SHOW_ORIGINAL_EDGES:
 		if (m_occViewer) m_occViewer->setShowOriginalEdges(event.IsChecked());
 		break;

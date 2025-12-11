@@ -467,7 +467,23 @@ std::shared_ptr<OCCGeometry> OCCViewer::pickGeometry(int x, int y)
 void OCCViewer::setWireframeMode(bool wireframe)
 {
 	if (m_renderModeManager) {
-		m_renderModeManager->setWireframeMode(wireframe, m_geometries);
+		// Use overloaded version that configures edge display for wireframe mode
+		m_renderModeManager->setWireframeMode(wireframe, m_geometries, m_edgeDisplayManager.get(), m_meshParams);
+	}
+
+	// Set display mode to Wireframe when enabling, restore to Solid when disabling
+	if (wireframe) {
+		// Enable wireframe mode: set DisplayMode to Wireframe to show only original edges, no faces
+		RenderingConfig::DisplaySettings settings = m_displaySettings;
+		settings.displayMode = RenderingConfig::DisplayMode::Wireframe;
+		setDisplaySettings(settings);
+	} else {
+		// Disable wireframe mode: restore to Solid mode if currently in Wireframe mode
+		if (m_displaySettings.displayMode == RenderingConfig::DisplayMode::Wireframe) {
+			RenderingConfig::DisplaySettings settings = m_displaySettings;
+			settings.displayMode = RenderingConfig::DisplayMode::Solid;
+			setDisplaySettings(settings);
+		}
 	}
 
 	// Request immediate view refresh
@@ -1587,12 +1603,12 @@ void OCCViewer::setShowMeshEdges(bool show) {
 void OCCViewer::setShowHighlightEdges(bool show) {
 	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowHighlightEdges(show, m_meshParams);
 }
-void OCCViewer::setShowNormalLines(bool show) {
-	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowNormalLines(show, m_meshParams);
+void OCCViewer::setShowVerticeNormals(bool show) {
+	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowVerticeNormals(show, m_meshParams);
 }
 
-void OCCViewer::setShowFaceNormalLines(bool show) {
-	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFaceNormalLines(show, m_meshParams);
+void OCCViewer::setShowFaceNormals(bool show) {
+	if (m_edgeDisplayManager) m_edgeDisplayManager->setShowFaceNormals(show, m_meshParams);
 }
 
 void OCCViewer::setShowIntersectionNodes(bool show) {
@@ -1610,8 +1626,8 @@ bool OCCViewer::isEdgeTypeEnabled(EdgeType type) const {
 	case EdgeType::Feature: return flags.showFeatureEdges;
 	case EdgeType::Mesh: return flags.showMeshEdges;
 	case EdgeType::Highlight: return flags.showHighlightEdges;
-	case EdgeType::NormalLine: return flags.showNormalLines;
-	case EdgeType::FaceNormalLine: return flags.showFaceNormalLines;
+	case EdgeType::VerticeNormal: return flags.showVerticeNormals;
+	case EdgeType::FaceNormal: return flags.showFaceNormals;
 	case EdgeType::IntersectionNodes: return flags.showIntersectionNodes;
 	}
 	return false;
@@ -1690,8 +1706,8 @@ void OCCViewer::configureEdgeDisplay(const EdgeDisplayConfig& config) {
 	setShowOriginalEdges(config.showOriginalEdges);
 	setShowFeatureEdges(config.showFeatureEdges);
 	setShowMeshEdges(config.showMeshEdges);
-	setShowNormalLines(config.showNormalLines);
-	setShowFaceNormalLines(config.showFaceNormalLines);
+	setShowVerticeNormals(config.showVerticeNormals);
+	setShowFaceNormals(config.showFaceNormals);
 	setShowHighlightEdges(config.showHighlightEdges);
 	setShowIntersectionNodes(config.showIntersectionNodes);
 }
