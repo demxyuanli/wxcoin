@@ -10,6 +10,15 @@
 #include <OpenCASCADE/TopAbs.hxx>
 #include <OpenCASCADE/BRepAdaptor_Curve.hxx>
 #include <OpenCASCADE/BRep_Tool.hxx>
+#include <OpenCASCADE/Poly_Triangulation.hxx>
+#include <OpenCASCADE/Poly_PolygonOnTriangulation.hxx>
+#include <OpenCASCADE/TColgp_Array1OfPnt.hxx>
+#include <OpenCASCADE/TColStd_Array1OfInteger.hxx>
+#include <OpenCASCADE/TopLoc_Location.hxx>
+#include <OpenCASCADE/gp_Trsf.hxx>
+#include <OpenCASCADE/GCPnts_AbscissaPoint.hxx>
+#include <OpenCASCADE/Standard_Failure.hxx>
+#include <cmath>
 #include <set>
 #include <tuple>
 #include <Inventor/nodes/SoSeparator.h>
@@ -952,7 +961,7 @@ void ModularEdgeComponent::cancelIntersectionComputation() {
 
 // ===== NEW IMPLEMENTATION: Cache-based edge rendering =====
 
-void ModularEdgeComponent::extractAndCacheOriginalEdges(const TopoDS_Shape& shape, double samplingDensity, double minLength) {
+void ModularEdgeComponent::extractAndCacheOriginalEdges(const TopoDS_Shape& shape, double samplingDensity, double minLength, const MeshParameters& meshParams) {
     std::lock_guard<std::mutex> lock(m_cachedEdgesMutex);
     
     // Clear previous cache
@@ -964,12 +973,69 @@ void ModularEdgeComponent::extractAndCacheOriginalEdges(const TopoDS_Shape& shap
     }
     
     try {
+        auto addSegmentsFromPoints = [&](const std::vector<gp_Pnt>& points) {
+            if (points.size() < 2) {
+                return;
+            }
+            std::vector<int> edgeVertexIndices;
+            edgeVertexIndices.reserve(points.size());
+            for (const auto& pt : points) {
+                int vertexIndex = static_cast<int>(m_cachedOriginalEdges.vertices.size());
+                m_cachedOriginalEdges.vertices.push_back(pt);
+                edgeVertexIndices.push_back(vertexIndex);
+            }
+            for (size_t i = 1; i < edgeVertexIndices.size(); ++i) {
+                m_cachedOriginalEdges.segments.push_back({ edgeVertexIndices[i - 1], edgeVertexIndices[i] });
+            }
+        };
+
         // Extract all edges from the shape using OpenCASCADE API directly
         for (TopExp_Explorer exp(shape, TopAbs_EDGE); exp.More(); exp.Next()) {
             const TopoDS_Edge& edge = TopoDS::Edge(exp.Current());
             
             if (edge.IsNull()) continue;
             
+            bool sampledFromMesh = false;
+            std::vector<gp_Pnt> edgePoints;
+
+            // Prefer using existing face triangulation so edge vertices align with mesh nodes
+            for (TopExp_Explorer faceExp(shape, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+                const TopoDS_Face& face = TopoDS::Face(faceExp.Current());
+                if (face.IsNull()) continue;
+
+                TopLoc_Location loc;
+                Handle(Poly_Triangulation) triangulation = BRep_Tool::Triangulation(face, loc);
+                if (triangulation.IsNull()) continue;
+
+                Handle(Poly_PolygonOnTriangulation) poly = BRep_Tool::PolygonOnTriangulation(edge, triangulation, loc);
+                if (poly.IsNull()) continue;
+
+                const TColStd_Array1OfInteger& nodes = poly->Nodes();
+                if (nodes.Length() < 2) continue;
+
+                gp_Trsf trsf = loc.Transformation();
+                edgePoints.reserve(static_cast<size_t>(nodes.Length()));
+                for (int i = nodes.Lower(); i <= nodes.Upper(); ++i) {
+                    int nodeIndex = nodes(i);
+                    if (nodeIndex < 1 || nodeIndex > triangulation->NbNodes()) continue;
+                    gp_Pnt pt = triangulation->Node(nodeIndex);
+                    if (!loc.IsIdentity()) {
+                        pt.Transform(trsf);
+                    }
+                    edgePoints.push_back(pt);
+                }
+
+                if (edgePoints.size() >= 2) {
+                    sampledFromMesh = true;
+                }
+                break; // Use first available triangulation to avoid duplicates
+            }
+
+            if (sampledFromMesh && edgePoints.size() >= 2) {
+                addSegmentsFromPoints(edgePoints);
+                continue;
+            }
+
             // Get the curve adaptor
             BRepAdaptor_Curve curve(edge);
             double first = curve.FirstParameter();
@@ -978,28 +1044,31 @@ void ModularEdgeComponent::extractAndCacheOriginalEdges(const TopoDS_Shape& shap
             // Skip very short edges
             if (last - first < minLength * 0.1) continue;
             
-            // Sample points along the edge
-            int numSamples = std::max(2, static_cast<int>((last - first) * samplingDensity / 10.0));
-            double step = (last - first) / (numSamples - 1);
-            
-            std::vector<int> edgeVertexIndices;
+            // Fallback: sample along curve; align spacing with mesh deflection when possible
+            double length = 0.0;
+            try {
+                length = GCPnts_AbscissaPoint::Length(curve, first, last);
+            } catch (const Standard_Failure&) {
+                length = std::max(last - first, minLength);
+            }
+
+            double targetSpacing = std::max(minLength, meshParams.deflection);
+            if (targetSpacing <= 0.0) {
+                targetSpacing = minLength;
+            }
+
+            int numSamples = std::max(2, static_cast<int>(std::ceil(length / targetSpacing)) + 1);
+            double step = (last - first) / static_cast<double>(numSamples - 1);
+
+            edgePoints.clear();
+            edgePoints.reserve(static_cast<size_t>(numSamples));
             for (int i = 0; i < numSamples; ++i) {
                 double param = first + i * step;
                 gp_Pnt pt = curve.Value(param);
-                
-                // Add vertex
-                int vertexIndex = static_cast<int>(m_cachedOriginalEdges.vertices.size());
-                m_cachedOriginalEdges.vertices.push_back(pt);
-                edgeVertexIndices.push_back(vertexIndex);
+                edgePoints.push_back(pt);
             }
-            
-            // Create segments for this edge
-            for (size_t i = 1; i < edgeVertexIndices.size(); ++i) {
-                m_cachedOriginalEdges.segments.push_back({
-                    edgeVertexIndices[i-1],
-                    edgeVertexIndices[i]
-                });
-            }
+
+            addSegmentsFromPoints(edgePoints);
         }
         
         m_cachedOriginalEdges.isValid = true;

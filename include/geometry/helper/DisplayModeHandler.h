@@ -4,11 +4,13 @@
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoSwitch.h>
 #include "geometry/GeometryRenderContext.h"
 #include "EdgeTypes.h"
 
 class SoSeparator;
 class SoNode;
+class SoSwitch;
 class ModularEdgeComponent;
 class RenderNodeBuilder;
 class WireframeBuilder;
@@ -19,6 +21,8 @@ class DisplayModeHandler {
 public:
     DisplayModeHandler();
     ~DisplayModeHandler();
+    
+    void setModeSwitch(SoSwitch* modeSwitch);
     
     void updateDisplayMode(SoSeparator* coinNode, RenderingConfig::DisplayMode mode,
                           ModularEdgeComponent* edgeComponent);
@@ -35,5 +39,19 @@ public:
 private:
     void findDrawStyleAndMaterial(SoNode* node, SoDrawStyle*& drawStyle, SoMaterial*& material);
     void cleanupEdgeNodes(SoSeparator* coinNode, ModularEdgeComponent* edgeComponent);
+    
+    int getModeSwitchIndex(RenderingConfig::DisplayMode mode);
+    void buildModeNode(SoSeparator* parent,
+                      RenderingConfig::DisplayMode mode,
+                      const GeometryRenderContext& context,
+                      const TopoDS_Shape& shape,
+                      const MeshParameters& params,
+                      ModularEdgeComponent* edgeComponent,
+                      bool useModularEdgeComponent,
+                      RenderNodeBuilder* renderBuilder,
+                      WireframeBuilder* wireframeBuilder);
+    
+    SoSwitch* m_modeSwitch;
+    bool m_useSwitchMode;
 };
 

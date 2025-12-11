@@ -1,6 +1,5 @@
 #include "geometry/OCCGeometryQuality.h"
 #include "config/RenderingConfig.h"
-#include "logger/Logger.h"
 
 OCCGeometryQuality::OCCGeometryQuality()
     : m_renderingQuality(RenderingConfig::RenderingQuality::Normal)

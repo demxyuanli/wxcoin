@@ -1,6 +1,5 @@
 #include "geometry/OCCGeometryDisplay.h"
 #include "config/RenderingConfig.h"
-#include "logger/Logger.h"
 
 OCCGeometryDisplay::OCCGeometryDisplay()
     : m_displayMode(RenderingConfig::DisplayMode::Solid)
@@ -36,9 +35,11 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
     
     // Apply the display mode settings
     switch (mode) {
-    case RenderingConfig::DisplayMode::Wireframe:
+    case RenderingConfig::DisplayMode::NoShading:
         m_wireframeMode = true;
         m_facesVisible = true;
+        m_showPointView = false;
+        // NoShading mode will be handled by material settings
         break;
     case RenderingConfig::DisplayMode::Points:
         m_wireframeMode = false;
@@ -46,27 +47,34 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
         m_showPointView = true;
         m_showSolidWithPointView = false; // Only show points
         break;
-    case RenderingConfig::DisplayMode::NoShading:
-        m_wireframeMode = false;
-        m_facesVisible = true;
-        // NoShading mode will be handled by material settings
-        break;
-    case RenderingConfig::DisplayMode::HiddenLine:
+    case RenderingConfig::DisplayMode::Wireframe:
         m_wireframeMode = true;
         m_facesVisible = true;
-        // Hidden line mode will be handled by rendering backend
+        m_showPointView = false;
         break;
-    case RenderingConfig::DisplayMode::SolidWireframe:
+    case RenderingConfig::DisplayMode::FlatLines:
+        m_wireframeMode = true;
+        m_facesVisible = true;
+        m_showPointView = false;
+        // Note: m_showEdges will be set by setShowEdges() call from DisplaySettings
+        break;
+    case RenderingConfig::DisplayMode::Solid:
         m_wireframeMode = false;
         m_facesVisible = true;
-        // Note: m_showEdges will be set by setShowEdges() call from DisplaySettings
+        m_showPointView = false;
         break;
     case RenderingConfig::DisplayMode::Transparent:
         m_wireframeMode = false;
         m_facesVisible = true;
+        m_showPointView = false;
         // Transparency will be handled by material settings
         break;
-    case RenderingConfig::DisplayMode::Solid:
+    case RenderingConfig::DisplayMode::HiddenLine:
+        m_wireframeMode = true;
+        m_facesVisible = true;
+        m_showPointView = false;
+        // Hidden line mode will be handled by rendering backend
+        break;
     default:
         m_wireframeMode = false;
         m_facesVisible = true;

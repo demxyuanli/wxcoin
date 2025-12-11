@@ -7,6 +7,7 @@
 #include "EdgeTypes.h"
 #include "OCCGeometry.h"
 #include "edges/ModularEdgeComponent.h"
+#include "rendering/GeometryProcessor.h"
 
 class SceneManager;
 struct MeshParameters;
@@ -167,6 +168,7 @@ private:
 		IntersectionNodeShape intersectionNodeShape{ IntersectionNodeShape::Point };
 	};
 	OriginalEdgeParams m_originalEdgeParams{};
+	MeshParameters m_lastOriginalMeshParams{};
 	
 	// CRITICAL FEATURES: Advanced display modes
 	bool m_showOriginalEdgesForSelectedOnly{ false };  // Show edges only for selected objects

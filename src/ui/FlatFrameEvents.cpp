@@ -107,7 +107,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_RENDER_MODE_WIREFRAME, cmd::CommandType::RenderModeWireframe},
 	{ID_RENDER_MODE_FLAT_LINES, cmd::CommandType::RenderModeFlatLines},
 	{ID_RENDER_MODE_SHADED, cmd::CommandType::RenderModeShaded},
-	{ID_RENDER_MODE_SHADED_WIREFRAME, cmd::CommandType::RenderModeShadedWireframe},
+	{ID_RENDER_MODE_TRANSPARENCY, cmd::CommandType::RenderModeTransparency},
 	{ID_RENDER_MODE_HIDDEN_LINE, cmd::CommandType::RenderModeHiddenLine},
 	{ID_SHOW_FLAT_WIDGETS_EXAMPLE, cmd::CommandType::ShowFlatWidgetsExample},
 	{wxID_ABOUT, cmd::CommandType::HelpAbout}

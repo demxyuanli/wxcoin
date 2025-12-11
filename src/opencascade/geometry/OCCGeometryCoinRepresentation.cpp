@@ -338,6 +338,13 @@ void OCCGeometryCoinRepresentation::buildCoinRepresentation(
                 return;
     }
 
+    // Initialize mode switch for fast display mode switching
+    if (!m_modeSwitch) {
+        m_modeSwitch = new SoSwitch();
+        m_modeSwitch->ref();
+        m_modeSwitch->whichChild.setValue(SO_SWITCH_NONE);
+    }
+
     // Check if mesh parameters changed - if so, clear mesh-dependent edge nodes
     // This ensures that when edges are re-enabled, they will be regenerated with new mesh quality
     bool meshParamsChanged = (m_lastMeshParams.deflection != params.deflection ||

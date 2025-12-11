@@ -155,7 +155,7 @@ public:
     void generateLODLevels(const TopoDS_Shape& shape, const gp_Pnt& cameraPos);
 
     // NEW: Cache-based edge rendering API (public methods)
-    void extractAndCacheOriginalEdges(const TopoDS_Shape& shape, double samplingDensity, double minLength);
+    void extractAndCacheOriginalEdges(const TopoDS_Shape& shape, double samplingDensity, double minLength, const MeshParameters& meshParams = MeshParameters());
     SoSeparator* createNodeFromCachedEdges(const Quantity_Color& color, double width);
 
 private:

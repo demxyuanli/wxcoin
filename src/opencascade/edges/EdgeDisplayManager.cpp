@@ -213,6 +213,18 @@ void EdgeDisplayManager::setOriginalEdgesParameters(double samplingDensity, doub
 void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceMeshRegeneration) {
 	if (!m_geometries) return;
 	
+	auto meshParamsChanged = forceMeshRegeneration ||
+		meshParams.deflection != m_lastOriginalMeshParams.deflection ||
+		meshParams.angularDeflection != m_lastOriginalMeshParams.angularDeflection ||
+		meshParams.relative != m_lastOriginalMeshParams.relative ||
+		meshParams.inParallel != m_lastOriginalMeshParams.inParallel;
+
+	if (meshParamsChanged) {
+		m_originalEdgeCacheValid = false;
+	}
+
+	m_lastOriginalMeshParams = meshParams;
+
 	// CRITICAL FIX: Verify GL context is valid before creating Coin3D nodes
 	// This prevents crashes when GL context is invalid (e.g., during modal dialogs)
 	if (m_sceneManager && m_sceneManager->getCanvas()) {
@@ -518,7 +530,7 @@ void EdgeDisplayManager::startAsyncOriginalEdgeExtraction(double samplingDensity
 				// This is safe to do in background thread because it doesn't create Coin3D nodes
 				if (!g->getShape().IsNull()) {
 					g->modularEdgeComponent->extractAndCacheOriginalEdges(
-						g->getShape(), samplingDensity, minLength);
+						g->getShape(), samplingDensity, minLength, meshParams);
 				}
 				
 				done++;

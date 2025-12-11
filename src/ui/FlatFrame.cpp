@@ -1123,12 +1123,11 @@ void FlatFrame::UpdateRenderModeButtonState()
 	case RenderingConfig::DisplayMode::Solid:
 		selectedRenderModeId = ID_RENDER_MODE_SHADED;
 		break;
-	case RenderingConfig::DisplayMode::SolidWireframe:
-		if (shadingSettings.shadingMode == RenderingConfig::ShadingMode::Flat) {
-			selectedRenderModeId = ID_RENDER_MODE_FLAT_LINES;
-		} else {
-			selectedRenderModeId = ID_RENDER_MODE_SHADED_WIREFRAME;
-		}
+	case RenderingConfig::DisplayMode::FlatLines:
+		selectedRenderModeId = ID_RENDER_MODE_FLAT_LINES;
+		break;
+	case RenderingConfig::DisplayMode::Transparent:
+		selectedRenderModeId = ID_RENDER_MODE_TRANSPARENCY;
 		break;
 	case RenderingConfig::DisplayMode::HiddenLine:
 		selectedRenderModeId = ID_RENDER_MODE_HIDDEN_LINE;

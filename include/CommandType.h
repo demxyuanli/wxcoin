@@ -134,7 +134,7 @@ namespace cmd {
 		RenderModeWireframe,
 		RenderModeFlatLines,
 		RenderModeShaded,
-		RenderModeShadedWireframe,
+		RenderModeTransparency,
 		RenderModeHiddenLine,
 
 		// Flat Widgets Example
@@ -256,7 +256,7 @@ namespace cmd {
 			{CommandType::RenderModeWireframe, "RENDER_MODE_WIREFRAME"},
 			{CommandType::RenderModeFlatLines, "RENDER_MODE_FLAT_LINES"},
 			{CommandType::RenderModeShaded, "RENDER_MODE_SHADED"},
-			{CommandType::RenderModeShadedWireframe, "RENDER_MODE_SHADED_WIREFRAME"},
+			{CommandType::RenderModeTransparency, "RENDER_MODE_TRANSPARENCY"},
 			{CommandType::RenderModeHiddenLine, "RENDER_MODE_HIDDEN_LINE"},
 			{CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
 			{CommandType::DockLayoutConfig, "DOCK_LAYOUT_CONFIG"},
@@ -375,7 +375,7 @@ namespace cmd {
 			{"RENDER_MODE_WIREFRAME", CommandType::RenderModeWireframe},
 			{"RENDER_MODE_FLAT_LINES", CommandType::RenderModeFlatLines},
 			{"RENDER_MODE_SHADED", CommandType::RenderModeShaded},
-			{"RENDER_MODE_SHADED_WIREFRAME", CommandType::RenderModeShadedWireframe},
+			{"RENDER_MODE_TRANSPARENCY", CommandType::RenderModeTransparency},
 			{"RENDER_MODE_HIDDEN_LINE", CommandType::RenderModeHiddenLine},
 			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample},
 			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig}

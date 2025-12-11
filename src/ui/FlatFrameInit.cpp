@@ -467,7 +467,7 @@ void FlatFrame::InitializeUI(const wxSize& size)
 		{ ID_RENDER_MODE_WIREFRAME, "Wireframe", "wireframe-mod", "Wireframe mode - show only edges" },
 		{ ID_RENDER_MODE_FLAT_LINES, "Flat Lines", "flat-shading", "Flat lines mode - flat shading with edges" },
 		{ ID_RENDER_MODE_SHADED, "Shaded", "shaded", "Shaded mode - smooth shading with lighting" },
-		{ ID_RENDER_MODE_SHADED_WIREFRAME, "Shaded+Wireframe", "wireframe-shading", "Shaded with wireframe overlay" },
+		{ ID_RENDER_MODE_TRANSPARENCY, "Transparent", "transparent", "Transparent rendering mode" },
 		{ ID_RENDER_MODE_HIDDEN_LINE, "Hidden Line", "hidden-line", "Hidden line mode - edges with hidden line removal" },
 	}; 
 
@@ -501,12 +501,11 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	case RenderingConfig::DisplayMode::Solid:
 		selectedRenderModeId = ID_RENDER_MODE_SHADED;
 		break;
-	case RenderingConfig::DisplayMode::SolidWireframe:
-		if (shadingSettings.shadingMode == RenderingConfig::ShadingMode::Flat) {
-			selectedRenderModeId = ID_RENDER_MODE_FLAT_LINES;
-		} else {
-			selectedRenderModeId = ID_RENDER_MODE_SHADED_WIREFRAME;
-		}
+	case RenderingConfig::DisplayMode::FlatLines:
+		selectedRenderModeId = ID_RENDER_MODE_FLAT_LINES;
+		break;
+	case RenderingConfig::DisplayMode::Transparent:
+		selectedRenderModeId = ID_RENDER_MODE_TRANSPARENCY;
 		break;
 	case RenderingConfig::DisplayMode::HiddenLine:
 		selectedRenderModeId = ID_RENDER_MODE_HIDDEN_LINE;

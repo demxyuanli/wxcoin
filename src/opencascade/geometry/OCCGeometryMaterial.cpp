@@ -1,5 +1,4 @@
 #include "geometry/OCCGeometryMaterial.h"
-#include "logger/Logger.h"
 #include <Inventor/nodes/SoMaterial.h>
 
 OCCGeometryMaterial::OCCGeometryMaterial()

@@ -1,6 +1,5 @@
 #include "geometry/OCCGeometryAppearance.h"
 #include "config/RenderingConfig.h"
-#include "logger/Logger.h"
 
 OCCGeometryAppearance::OCCGeometryAppearance()
     : m_visible(true)

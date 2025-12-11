@@ -260,7 +260,7 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::RenderModeWireframe, renderModeListener);
 	m_listenerManager->registerListener(cmd::CommandType::RenderModeFlatLines, renderModeListener);
 	m_listenerManager->registerListener(cmd::CommandType::RenderModeShaded, renderModeListener);
-	m_listenerManager->registerListener(cmd::CommandType::RenderModeShadedWireframe, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::RenderModeTransparency, renderModeListener);
 	m_listenerManager->registerListener(cmd::CommandType::RenderModeHiddenLine, renderModeListener);
 
 	m_commandDispatcher->setUIFeedbackHandler([this](const CommandResult& result) { this->onCommandFeedback(result); });

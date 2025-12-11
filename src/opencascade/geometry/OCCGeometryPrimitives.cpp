@@ -63,15 +63,6 @@ void OCCBox::buildShape()
         if (boxMaker.IsDone()) {
             TopoDS_Shape shape = boxMaker.Shape();
             setShape(shape);
-
-            // Log the center of the created shape
-            Bnd_Box box;
-            BRepBndLib::Add(shape, box);
-            if (!box.IsVoid()) {
-                Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
-                box.Get(xmin, ymin, zmin, xmax, ymax, zmax);
-                gp_Pnt center((xmin + xmax) / 2.0, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0);
-            }
         } else {
             LOG_ERR_S("BRepPrimAPI_MakeBox failed for: " + getName());
         }

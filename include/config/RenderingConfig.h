@@ -146,13 +146,13 @@ public:
 
 	// Display mode enumeration
 	enum class DisplayMode {
-		Solid,          // Solid display
-		Wireframe,      // Wireframe display
-		HiddenLine,     // Hidden line display
-		SolidWireframe, // Solid + wireframe combination
+		NoShading,      // No shading display - like FreeCAD's no shading mode
 		Points,         // Points display
+		Wireframe,      // Wireframe display
+		FlatLines,      // Solid + wireframe combination
+		Solid,          // Solid display
 		Transparent,    // Transparent display
-		NoShading       // No shading display - like FreeCAD's no shading mode
+		HiddenLine      // Hidden line display
 	};
 
 	struct DisplaySettings {

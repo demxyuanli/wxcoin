@@ -91,7 +91,7 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 
 	if (commandType == cmd::to_string(cmd::CommandType::RenderModeFlatLines)) {
 		auto settings = makeBaseDisplaySettings();
-		settings.displayMode = RenderingConfig::DisplayMode::SolidWireframe;
+		settings.displayMode = RenderingConfig::DisplayMode::FlatLines;
 		settings.showEdges = true;
 		applyShadingMode(RenderingConfig::ShadingMode::Flat, false);
 		applyDisplaySettings(settings, "Flat Lines mode");
@@ -106,13 +106,23 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 		return CommandResult(true, "Shaded mode enabled", commandType);
 	}
 
-	if (commandType == cmd::to_string(cmd::CommandType::RenderModeShadedWireframe)) {
+	if (commandType == cmd::to_string(cmd::CommandType::RenderModeTransparency)) {
 		auto settings = makeBaseDisplaySettings();
-		settings.displayMode = RenderingConfig::DisplayMode::SolidWireframe;
-		settings.showEdges = true;
+		settings.displayMode = RenderingConfig::DisplayMode::Transparent;
 		applyShadingMode(RenderingConfig::ShadingMode::Smooth, true);
-		applyDisplaySettings(settings, "Shaded+Wireframe mode");
-		return CommandResult(true, "Shaded+Wireframe mode enabled", commandType);
+		
+		RenderingConfig::MaterialSettings materialSettings = renderingConfig.getMaterialSettings();
+		if (materialSettings.transparency <= 0.0) {
+			materialSettings.transparency = 0.5;
+			renderingConfig.setMaterialSettings(materialSettings);
+		}
+		
+		RenderingConfig::BlendSettings blendSettings = renderingConfig.getBlendSettings();
+		blendSettings.blendMode = RenderingConfig::BlendMode::Alpha;
+		renderingConfig.setBlendSettings(blendSettings);
+		
+		applyDisplaySettings(settings, "Transparent mode");
+		return CommandResult(true, "Transparent mode enabled", commandType);
 	}
 
 	if (commandType == cmd::to_string(cmd::CommandType::RenderModeHiddenLine)) {
@@ -133,7 +143,7 @@ bool RenderModeListener::canHandleCommand(const std::string& commandType) const
 		commandType == cmd::to_string(cmd::CommandType::RenderModeWireframe) ||
 		commandType == cmd::to_string(cmd::CommandType::RenderModeFlatLines) ||
 		commandType == cmd::to_string(cmd::CommandType::RenderModeShaded) ||
-		commandType == cmd::to_string(cmd::CommandType::RenderModeShadedWireframe) ||
+		commandType == cmd::to_string(cmd::CommandType::RenderModeTransparency) ||
 		commandType == cmd::to_string(cmd::CommandType::RenderModeHiddenLine);
 }
 

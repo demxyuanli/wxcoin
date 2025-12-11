@@ -314,26 +314,26 @@ std::vector<std::string> RenderingConfig::getAvailableDisplayModes()
 std::string RenderingConfig::getDisplayModeName(DisplayMode mode)
 {
 	switch (mode) {
-	case DisplayMode::Solid: return "Solid";
-	case DisplayMode::Wireframe: return "Wireframe";
-	case DisplayMode::HiddenLine: return "HiddenLine";
-	case DisplayMode::SolidWireframe: return "SolidWireframe";
-	case DisplayMode::Points: return "Points";
-	case DisplayMode::Transparent: return "Transparent";
 	case DisplayMode::NoShading: return "NoShading";
+	case DisplayMode::Points: return "Points";
+	case DisplayMode::Wireframe: return "Wireframe";
+	case DisplayMode::FlatLines: return "FlatLines";
+	case DisplayMode::Solid: return "Solid";
+	case DisplayMode::Transparent: return "Transparent";
+	case DisplayMode::HiddenLine: return "HiddenLine";
 	default: return "Solid";
 	}
 }
 
 RenderingConfig::DisplayMode RenderingConfig::getDisplayModeFromName(const std::string& name)
 {
-	if (name == "Solid") return DisplayMode::Solid;
-	if (name == "Wireframe") return DisplayMode::Wireframe;
-	if (name == "HiddenLine") return DisplayMode::HiddenLine;
-	if (name == "SolidWireframe") return DisplayMode::SolidWireframe;
-	if (name == "Points") return DisplayMode::Points;
-	if (name == "Transparent") return DisplayMode::Transparent;
 	if (name == "NoShading") return DisplayMode::NoShading;
+	if (name == "Points") return DisplayMode::Points;
+	if (name == "Wireframe") return DisplayMode::Wireframe;
+	if (name == "FlatLines") return DisplayMode::FlatLines;
+	if (name == "Solid") return DisplayMode::Solid;
+	if (name == "Transparent") return DisplayMode::Transparent;
+	if (name == "HiddenLine") return DisplayMode::HiddenLine;
 	return DisplayMode::Solid;
 }
 

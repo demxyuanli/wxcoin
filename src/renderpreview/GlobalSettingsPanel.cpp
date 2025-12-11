@@ -420,13 +420,13 @@ void GlobalSettingsPanel::OnMainApply(wxCommandEvent& event)
 		// Convert rendering mode to DisplayMode
 		RenderingConfig::DisplayMode displayMode;
 		switch (renderingMode) {
-		case 0: displayMode = RenderingConfig::DisplayMode::Solid; break;
+		case 0: displayMode = RenderingConfig::DisplayMode::NoShading; break;
 		case 1: displayMode = RenderingConfig::DisplayMode::Wireframe; break;
 		case 2: displayMode = RenderingConfig::DisplayMode::Points; break;
-		case 3: displayMode = RenderingConfig::DisplayMode::HiddenLine; break;
+		case 3: displayMode = RenderingConfig::DisplayMode::FlatLines; break;
 		case 4: displayMode = RenderingConfig::DisplayMode::Solid; break; // Shaded
-		case 5: displayMode = RenderingConfig::DisplayMode::SolidWireframe; break;
-		case 6: displayMode = RenderingConfig::DisplayMode::NoShading; break;
+		case 5: displayMode = RenderingConfig::DisplayMode::Transparent; break;
+		case 6: displayMode = RenderingConfig::DisplayMode::HiddenLine; break;
 		default: displayMode = RenderingConfig::DisplayMode::Solid; break;
 		}
 
