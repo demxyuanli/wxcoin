@@ -2,8 +2,7 @@
 #include "config/RenderingConfig.h"
 
 OCCGeometryDisplay::OCCGeometryDisplay()
-    : m_displayMode(RenderingConfig::DisplayMode::Solid)
-    , m_showEdges(false)
+    : m_displayMode(RenderingConfig::getInstance().getDisplaySettings().displayMode)
     , m_edgeWidth(1.0)
     , m_edgeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
     , m_showVertices(false)
@@ -22,6 +21,8 @@ OCCGeometryDisplay::OCCGeometryDisplay()
     , m_smoothNormals(false)
     , m_pointSize(1.0)
 {
+    // Apply display mode settings from config
+    setDisplayMode(m_displayMode);
 }
 
 void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
@@ -56,7 +57,7 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
         m_wireframeMode = true;
         m_facesVisible = true;
         m_showPointView = false;
-        // Note: m_showEdges will be set by setShowEdges() call from DisplaySettings
+        // Edge display is now controlled by DisplayModeHandler based on mode
         break;
     case RenderingConfig::DisplayMode::Solid:
         m_wireframeMode = false;
@@ -83,10 +84,8 @@ void OCCGeometryDisplay::setDisplayMode(RenderingConfig::DisplayMode mode)
     }
 }
 
-void OCCGeometryDisplay::setShowEdges(bool enabled)
-{
-    m_showEdges = enabled;
-}
+// setShowEdges is now a no-op inline function in header
+// Edge display is controlled by DisplayModeHandler
 
 void OCCGeometryDisplay::setEdgeWidth(double width)
 {
@@ -175,9 +174,9 @@ void OCCGeometryDisplay::setWireframeOverlay(bool enable)
     }
 }
 
-void OCCGeometryDisplay::setEdgeDisplay(bool enable)
+void OCCGeometryDisplay::setEdgeDisplay(bool /*enable*/)
 {
-    m_showEdges = enable;
+    // No-op: Edge display is now controlled by DisplayModeHandler
 }
 
 void OCCGeometryDisplay::setFeatureEdgeDisplay(bool enable)

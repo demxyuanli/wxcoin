@@ -10,7 +10,10 @@
 #include "rendering/RenderingToolkitAPI.h"
 #include "geometry/helper/PointViewBuilder.h"
 #include "geometry/helper/WireframeBuilder.h"
+#include "geometry/helper/DisplayModeHandler.h"
+#include "geometry/helper/RenderNodeBuilder.h"
 #include "geometry/GeometryRenderContext.h"
+#include "config/RenderingConfig.h"
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
@@ -88,84 +91,44 @@ std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromMesh(
         geometry->setShape(compound);
         geometry->setFileName(fileName);
         
-        // Create complete Coin3D node structure with all display modes (FreeCAD-style fast path)
+        // Create complete Coin3D node structure with all display modes using DisplayModeHandler
         SoSeparator* rootNode = new SoSeparator();
         rootNode->ref();
         rootNode->renderCaching.setValue(SoSeparator::OFF);
         rootNode->boundingBoxCaching.setValue(SoSeparator::OFF);
         rootNode->pickCulling.setValue(SoSeparator::OFF);
 
-        // Create SoSwitch for display mode switching
-        SoSwitch* modeSwitch = new SoSwitch();
-        modeSwitch->ref();
-
-        // Default material colors
-        Quantity_Color defaultDiffuse(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-        Quantity_Color defaultAmbient(0.2, 0.2, 0.2, Quantity_TOC_RGB);
-        Quantity_Color defaultSpecular(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-        Quantity_Color defaultEmissive(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-
-        // Create surface geometry node (Solid mode)
-        auto& manager = RenderingToolkitAPI::getManager();
-        auto backend = manager.getRenderBackend("Coin3D");
-        if (backend) {
-            auto sceneNode = backend->createSceneNode(mesh, false, 
-                defaultDiffuse, defaultAmbient, defaultSpecular, defaultEmissive, 0.5, 0.0);
-            
-            if (sceneNode) {
-                SoSeparator* surfaceNode = sceneNode.get();
-                surfaceNode->ref();
-                modeSwitch->addChild(surfaceNode);
-            }
-        }
-
-        // Create wireframe node (Wireframe mode)
-        SoSeparator* wireframeNode = new SoSeparator();
-        wireframeNode->ref();
-        wireframeNode->renderCaching.setValue(SoSeparator::OFF);
-        wireframeNode->boundingBoxCaching.setValue(SoSeparator::OFF);
-        wireframeNode->pickCulling.setValue(SoSeparator::OFF);
-        
-        SoDrawStyle* wireframeStyle = new SoDrawStyle();
-        wireframeStyle->style.setValue(SoDrawStyle::LINES);
-        wireframeStyle->lineWidth.setValue(1.0f);
-        wireframeNode->addChild(wireframeStyle);
-        
-        SoMaterial* wireframeMaterial = new SoMaterial();
-        wireframeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
-        wireframeMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
-        wireframeNode->addChild(wireframeMaterial);
-        
-        SoLightModel* wireframeLightModel = new SoLightModel();
-        wireframeLightModel->model.setValue(SoLightModel::BASE_COLOR);
-        wireframeNode->addChild(wireframeLightModel);
-        
+        // Create helper instances (OCCGeometry already has these, but we can't access them)
+        DisplayModeHandler displayHandler;
+        RenderNodeBuilder renderBuilder;
         WireframeBuilder wireframeBuilder;
-        wireframeBuilder.createWireframeRepresentation(wireframeNode, mesh);
-        modeSwitch->addChild(wireframeNode);
-
-        // Create point view node (Points mode)
-        SoSeparator* pointViewNode = new SoSeparator();
-        pointViewNode->ref();
-        pointViewNode->renderCaching.setValue(SoSeparator::OFF);
-        pointViewNode->boundingBoxCaching.setValue(SoSeparator::OFF);
-        pointViewNode->pickCulling.setValue(SoSeparator::OFF);
-        
-        DisplaySettings pointSettings;
-        pointSettings.pointViewColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB);
-        pointSettings.pointViewSize = 3.0;
-        pointSettings.pointViewShape = 0;
-        
         PointViewBuilder pointViewBuilder;
-        pointViewBuilder.createPointViewRepresentation(pointViewNode, mesh, pointSettings);
-        modeSwitch->addChild(pointViewNode);
 
-        // Set default mode to Solid (index 0)
-        modeSwitch->whichChild.setValue(0);
-        rootNode->addChild(modeSwitch);
+        // Create render context with default settings
+        GeometryRenderContext context;
+        context.display.displayMode = RenderingConfig::DisplayMode::Solid;
+        context.display.facesVisible = true;
+        context.display.showPointView = false;
+        context.display.showSolidWithPointView = false;
+        context.display.wireframeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        context.display.wireframeWidth = 1.0;
+        context.material.ambientColor = Quantity_Color(0.2, 0.2, 0.2, Quantity_TOC_RGB);
+        context.material.diffuseColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+        context.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+        context.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        context.material.shininess = 30.0;
+        context.material.transparency = 0.0;
+        context.texture.enabled = false;
+        context.blend.blendMode = RenderingConfig::BlendMode::None;
 
-        // Store mode switch in geometry for later mode switching
-        // Note: This requires adding a method to OCCGeometry to store the switch
+        // Use DisplayModeHandler to build scene graph with TriangleMesh
+        MeshParameters defaultParams;
+        displayHandler.handleDisplayMode(rootNode, context, mesh, defaultParams,
+                                        geometry->modularEdgeComponent.get(), 
+                                        geometry->useModularEdgeComponent,
+                                        &renderBuilder, &wireframeBuilder, &pointViewBuilder);
+
+        // Store coin node in geometry
         geometry->setCoinNode(rootNode);
         
         LOG_INF_S("Created OCCGeometry from mesh with all display modes: " + 

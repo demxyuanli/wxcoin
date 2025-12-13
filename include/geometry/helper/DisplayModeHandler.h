@@ -7,6 +7,7 @@
 #include <Inventor/nodes/SoSwitch.h>
 #include "geometry/GeometryRenderContext.h"
 #include "EdgeTypes.h"
+#include "rendering/GeometryProcessor.h"
 #include <OpenCASCADE/Quantity_Color.hxx>
 
 class SoSeparator;
@@ -94,6 +95,23 @@ public:
                            WireframeBuilder* wireframeBuilder,
                            PointViewBuilder* pointViewBuilder = nullptr);
 
+    // Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
+    void handleDisplayMode(SoSeparator* coinNode, 
+                           const GeometryRenderContext& context,
+                           const TriangleMesh& mesh,
+                           const MeshParameters& params,
+                           ModularEdgeComponent* edgeComponent,
+                           bool useModularEdgeComponent,
+                           RenderNodeBuilder* renderBuilder,
+                           WireframeBuilder* wireframeBuilder,
+                           PointViewBuilder* pointViewBuilder = nullptr);
+
+    // Check if geometry scene graph has been fully built
+    bool isGeometryBuilt() const;
+    
+    // Mark geometry as built after first handleDisplayMode
+    void setGeometryBuilt(bool built);
+
 private:
     void findDrawStyleAndMaterial(SoNode* node, SoDrawStyle*& drawStyle, SoMaterial*& material);
     void cleanupEdgeNodes(SoSeparator* coinNode, ModularEdgeComponent* edgeComponent);
@@ -108,6 +126,18 @@ private:
                          const DisplayModeRenderState& state,
                          const GeometryRenderContext& context,
                          const TopoDS_Shape& shape,
+                         const MeshParameters& params,
+                         ModularEdgeComponent* edgeComponent,
+                         bool useModularEdgeComponent,
+                         RenderNodeBuilder* renderBuilder,
+                         WireframeBuilder* wireframeBuilder,
+                         PointViewBuilder* pointViewBuilder = nullptr);
+
+    // Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
+    void applyRenderState(SoSeparator* coinNode,
+                         const DisplayModeRenderState& state,
+                         const GeometryRenderContext& context,
+                         const TriangleMesh& mesh,
                          const MeshParameters& params,
                          ModularEdgeComponent* edgeComponent,
                          bool useModularEdgeComponent,
@@ -135,5 +165,6 @@ private:
     
     SoSwitch* m_modeSwitch;
     bool m_useSwitchMode;
+    static bool m_geometryBuilt;  // Track if geometry has been built (to avoid double rebuild)
 };
 

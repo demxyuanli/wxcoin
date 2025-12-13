@@ -169,6 +169,9 @@ std::shared_ptr<OCCGeometry> STEPGeometryConverter::processSingleShape(
             // Use default color when decomposition is disabled
             Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
             geometry->setColor(defaultColor);
+            // Also set material colors to ensure consistent rendering
+            geometry->setMaterialAmbientColor(Quantity_Color(0.24, 0.24, 0.24, Quantity_TOC_RGB));
+            geometry->setMaterialDiffuseColor(defaultColor);
         }
 
         // Detect if this is a shell model and apply appropriate settings
@@ -182,14 +185,12 @@ std::shared_ptr<OCCGeometry> STEPGeometryConverter::processSingleShape(
             geometry->setDepthTest(true);
             geometry->setDepthWrite(true);
             // Set enhanced material properties for shell models with better contrast
-            // Only apply color-based materials when decomposition is enabled
-            if (options.decomposition.enableDecomposition) {
-                Quantity_Color currentColor = geometry->getColor();
-                Standard_Real r, g, b;
-                currentColor.Values(r, g, b, Quantity_TOC_RGB);
-                geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
-                geometry->setMaterialDiffuseColor(Quantity_Color(r * 0.8, g * 0.8, b * 0.8, Quantity_TOC_RGB));
-            }
+            // Apply color-based materials for shell models (regardless of decomposition setting)
+            Quantity_Color currentColor = geometry->getColor();
+            Standard_Real r, g, b;
+            currentColor.Values(r, g, b, Quantity_TOC_RGB);
+            geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
+            geometry->setMaterialDiffuseColor(Quantity_Color(r * 0.8, g * 0.8, b * 0.8, Quantity_TOC_RGB));
             geometry->setMaterialShininess(50.0);
             // Enable smooth normals for better shell rendering
             geometry->setSmoothNormals(true);

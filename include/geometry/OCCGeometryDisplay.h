@@ -21,9 +21,10 @@ public:
     RenderingConfig::DisplayMode getDisplayMode() const { return m_displayMode; }
     virtual void setDisplayMode(RenderingConfig::DisplayMode mode);
 
-    // Edge display
-    bool isShowEdgesEnabled() const { return m_showEdges; }
-    virtual void setShowEdges(bool enabled);
+    // Edge display (legacy interface - edge display now controlled by DisplayModeHandler)
+    // These methods are kept for API compatibility but have no effect
+    bool isShowEdgesEnabled() const { return false; }
+    virtual void setShowEdges(bool /*enabled*/) {}
 
     double getEdgeWidth() const { return m_edgeWidth; }
     virtual void setEdgeWidth(double width);
@@ -91,8 +92,7 @@ public:
 protected:
     RenderingConfig::DisplayMode m_displayMode;
     
-    // Edge settings
-    bool m_showEdges;
+    // Edge settings (m_showEdges removed - edge display now controlled by DisplayModeHandler)
     double m_edgeWidth;
     Quantity_Color m_edgeColor;
 

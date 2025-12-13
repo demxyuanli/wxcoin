@@ -170,12 +170,13 @@ bool STEPCAFProcessor::initializeCAFReader(
             return false;
         }
 
-        // Configure CAF reader
-        cafReader.SetColorMode(true);
-        cafReader.SetNameMode(true);
-        cafReader.SetMatMode(true);
-        cafReader.SetGDTMode(true);
-        cafReader.SetLayerMode(true);
+        // Configure CAF reader - following FreeCAD approach for better color extraction
+        cafReader.SetColorMode(true);   // Enable color reading
+        cafReader.SetNameMode(true);    // Enable name reading
+        cafReader.SetMatMode(true);     // Enable material reading
+        cafReader.SetGDTMode(true);     // Enable GD&T reading
+        cafReader.SetLayerMode(true);   // Enable layer reading
+        cafReader.SetSHUOMode(true);    // Enable SHUO (Shape Usage Occurrence) for assembly instance colors
 
         return true;
     }
@@ -666,6 +667,12 @@ int STEPCAFProcessor::createGeometriesFromParts(
         } else {
             // Regular solid models use standard settings
             geom->setTransparency(0.0);
+            // Also apply material colors for regular solid models
+            // This ensures CAF colors are correctly applied when decomposition is disabled
+            Standard_Real r, g, b;
+            color.Values(r, g, b, Quantity_TOC_RGB);
+            geom->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
+            geom->setMaterialDiffuseColor(color);
         }
 
         geom->setAssemblyLevel(level);
@@ -771,15 +778,59 @@ int STEPCAFProcessor::processLabel(
     Quantity_Color cafColor;
     bool hasCafColor = false;
     if (!colorTool.IsNull()) {
-        // Try to get color from label (general, surface, or curve color)
-        hasCafColor = colorTool->GetColor(label, XCAFDoc_ColorGen, cafColor) ||
-                       colorTool->GetColor(label, XCAFDoc_ColorSurf, cafColor) ||
-                       colorTool->GetColor(label, XCAFDoc_ColorCurv, cafColor);
-        // Fallback: try color on referenced/origin label
+        // Priority 1: Try to get instance color from the located shape (SHUO-based colors)
+        // This is critical for assembly instance colors where the same part may have different colors
+        hasCafColor = colorTool->GetInstanceColor(located, XCAFDoc_ColorSurf, cafColor) ||
+                       colorTool->GetInstanceColor(located, XCAFDoc_ColorGen, cafColor) ||
+                       colorTool->GetInstanceColor(located, XCAFDoc_ColorCurv, cafColor);
+        
+        // Priority 2: Try to get color from label (general, surface, or curve color)
         if (!hasCafColor) {
-            hasCafColor = colorTool->GetColor(srcLabel, XCAFDoc_ColorGen, cafColor) ||
-                           colorTool->GetColor(srcLabel, XCAFDoc_ColorSurf, cafColor) ||
+            hasCafColor = colorTool->GetColor(label, XCAFDoc_ColorSurf, cafColor) ||
+                           colorTool->GetColor(label, XCAFDoc_ColorGen, cafColor) ||
+                           colorTool->GetColor(label, XCAFDoc_ColorCurv, cafColor);
+        }
+        
+        // Priority 3: Try color on referenced/origin label
+        if (!hasCafColor) {
+            hasCafColor = colorTool->GetColor(srcLabel, XCAFDoc_ColorSurf, cafColor) ||
+                           colorTool->GetColor(srcLabel, XCAFDoc_ColorGen, cafColor) ||
                            colorTool->GetColor(srcLabel, XCAFDoc_ColorCurv, cafColor);
+        }
+        
+        // Priority 4: Try to get instance color from original shape (before location transform)
+        if (!hasCafColor && !shape.IsNull()) {
+            hasCafColor = colorTool->GetInstanceColor(shape, XCAFDoc_ColorSurf, cafColor) ||
+                           colorTool->GetInstanceColor(shape, XCAFDoc_ColorGen, cafColor) ||
+                           colorTool->GetInstanceColor(shape, XCAFDoc_ColorCurv, cafColor);
+        }
+        
+        // Priority 5: Try to get color from sub-shapes (faces) - some STEP files define colors at face level
+        if (!hasCafColor && !located.IsNull()) {
+            for (TopExp_Explorer faceExp(located, TopAbs_FACE); faceExp.More() && !hasCafColor; faceExp.Next()) {
+                TopoDS_Shape face = faceExp.Current();
+                if (colorTool->GetInstanceColor(face, XCAFDoc_ColorSurf, cafColor) ||
+                    colorTool->GetInstanceColor(face, XCAFDoc_ColorGen, cafColor)) {
+                    hasCafColor = true;
+                    LOG_INF_S("Extracted color from sub-face for component: " + compName);
+                    break;
+                }
+            }
+        }
+        
+        // Priority 6: Try to get color from child labels in the document hierarchy
+        if (!hasCafColor && !shapeTool.IsNull()) {
+            TDF_LabelSequence childLabels;
+            shapeTool->GetSubShapes(label, childLabels);
+            for (int i = 1; i <= childLabels.Length() && !hasCafColor; ++i) {
+                TDF_Label childLabel = childLabels.Value(i);
+                if (colorTool->GetColor(childLabel, XCAFDoc_ColorSurf, cafColor) ||
+                    colorTool->GetColor(childLabel, XCAFDoc_ColorGen, cafColor)) {
+                    hasCafColor = true;
+                    LOG_INF_S("Extracted color from child label for component: " + compName);
+                    break;
+                }
+            }
         }
         
         if (hasCafColor) {

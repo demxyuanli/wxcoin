@@ -16,11 +16,16 @@
 #include <Inventor/nodes/SoLightModel.h>
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoTexture2.h>
+#include <Inventor/nodes/SoPointSet.h>
+#include <Inventor/nodes/SoCoordinate3.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <vector>
 #include <sstream>
 #include <iomanip>
+
+// Static member initialization
+bool DisplayModeHandler::m_geometryBuilt = false;
 
 DisplayModeHandler::DisplayModeHandler() 
     : m_modeSwitch(nullptr)
@@ -29,6 +34,14 @@ DisplayModeHandler::DisplayModeHandler()
 }
 
 DisplayModeHandler::~DisplayModeHandler() {
+}
+
+bool DisplayModeHandler::isGeometryBuilt() const {
+    return m_geometryBuilt;
+}
+
+void DisplayModeHandler::setGeometryBuilt(bool built) {
+    m_geometryBuilt = built;
 }
 
 void DisplayModeHandler::setModeSwitch(SoSwitch* modeSwitch) {
@@ -81,6 +94,8 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
     // Step 2: Reset only state nodes (preserve geometry nodes)
     // Collect state nodes to remove safely (avoid index shifting issues)
     std::vector<SoNode*> stateNodesToRemove;
+    std::vector<SoNode*> pointViewNodesToRemove;
+    std::vector<SoNode*> hiddenLineNodesToRemove;
     for (int i = 0; i < coinNode->getNumChildren(); ++i) {
         SoNode* child = coinNode->getChild(i);
         if (!child) continue;
@@ -99,6 +114,37 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
             child->isOfType(SoTexture2::getClassTypeId())) {
             stateNodesToRemove.push_back(child);
         }
+        
+        // Detect and remove point view nodes (SoSeparator containing SoPointSet or SoCoordinate3)
+        // Also detect HiddenLine pass nodes (SoSeparator with PolygonModeNode)
+        if (child->isOfType(SoSeparator::getClassTypeId())) {
+            SoSeparator* sep = static_cast<SoSeparator*>(child);
+            bool isPointViewNode = false;
+            bool isHiddenLineNode = false;
+            for (int j = 0; j < sep->getNumChildren(); ++j) {
+                SoNode* subChild = sep->getChild(j);
+                if (!subChild) continue;
+                if (subChild->isOfType(SoPointSet::getClassTypeId())) {
+                    isPointViewNode = true;
+                    break;
+                }
+                if (subChild->isOfType(SoCoordinate3::getClassTypeId())) {
+                    isPointViewNode = true;
+                    break;
+                }
+                // Check for PolygonModeNode (HiddenLine mode)
+                if (subChild->isOfType(PolygonModeNode::getClassTypeId())) {
+                    isHiddenLineNode = true;
+                    break;
+                }
+            }
+            if (isPointViewNode) {
+                pointViewNodesToRemove.push_back(child);
+            }
+            if (isHiddenLineNode) {
+                hiddenLineNodesToRemove.push_back(child);
+            }
+        }
     }
     
     // Remove edge nodes
@@ -111,6 +157,16 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         coinNode->removeChild(node);
     }
     
+    // Remove point view nodes
+    for (auto* node : pointViewNodesToRemove) {
+        coinNode->removeChild(node);
+    }
+    
+    // Remove HiddenLine pass nodes
+    for (auto* node : hiddenLineNodesToRemove) {
+        coinNode->removeChild(node);
+    }
+    
     // Step 3: Build context - prioritize originalDiffuseColor if provided
     GeometryRenderContext updateContext;
     updateContext.display.displayMode = mode;
@@ -120,56 +176,29 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
     updateContext.display.wireframeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
     updateContext.display.wireframeWidth = 1.0;
     
+    // Force reset of non-diffuse material properties to prevent pollution from previous modes
+    updateContext.material.ambientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
+    updateContext.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+    updateContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+    updateContext.material.shininess = 30.0;
+    updateContext.material.transparency = 0.0;
+    
     // Use originalDiffuseColor if provided, otherwise extract from existing material
-    if (originalDiffuseColor) {
+    if (originalDiffuseColor) {  // Keep original diffuse color but reset everything else
         updateContext.material.diffuseColor = *originalDiffuseColor;
         // Extract other material properties from existing node if available
         if (tempMaterial) {
-            if (tempMaterial->ambientColor.getNum() > 0) {
-                const SbColor& ambient = tempMaterial->ambientColor[0];
-                float r, g, b;
-                ambient.getValue(r, g, b);
-                updateContext.material.ambientColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
-            } else {
-                updateContext.material.ambientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
-            }
-            if (tempMaterial->specularColor.getNum() > 0) {
-                const SbColor& specular = tempMaterial->specularColor[0];
-                float r, g, b;
-                specular.getValue(r, g, b);
-                updateContext.material.specularColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
-            } else {
-                updateContext.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-            }
-            if (tempMaterial->emissiveColor.getNum() > 0) {
-                const SbColor& emissive = tempMaterial->emissiveColor[0];
-                float r, g, b;
-                emissive.getValue(r, g, b);
-                updateContext.material.emissiveColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
-            } else {
-                updateContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            }
             if (tempMaterial->shininess.getNum() > 0) {
                 updateContext.material.shininess = tempMaterial->shininess[0] * 100.0;
-            } else {
-                updateContext.material.shininess = 30.0;
             }
             if (tempMaterial->transparency.getNum() > 0) {
                 updateContext.material.transparency = tempMaterial->transparency[0];
-            } else {
-                updateContext.material.transparency = 0.0;
             }
-        } else {
-            // Use defaults
-            updateContext.material.ambientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
-            updateContext.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-            updateContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            updateContext.material.shininess = 30.0;
-            updateContext.material.transparency = 0.0;
         }
     } else if (tempMaterial) {
         // Extract material from existing node
         // SoMaterial uses SoMFColor (multi-value), access first value with [0]
+        // Only inherit diffuse, ignore others
         if (tempMaterial->diffuseColor.getNum() > 0) {
             const SbColor& diffuse = tempMaterial->diffuseColor[0];
             float r, g, b;
@@ -178,48 +207,16 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         } else {
             updateContext.material.diffuseColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
         }
-        if (tempMaterial->ambientColor.getNum() > 0) {
-            const SbColor& ambient = tempMaterial->ambientColor[0];
-            float r, g, b;
-            ambient.getValue(r, g, b);
-            updateContext.material.ambientColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
-        } else {
-            updateContext.material.ambientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
-        }
-        if (tempMaterial->specularColor.getNum() > 0) {
-            const SbColor& specular = tempMaterial->specularColor[0];
-            float r, g, b;
-            specular.getValue(r, g, b);
-            updateContext.material.specularColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
-        } else {
-            updateContext.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-        }
-        if (tempMaterial->emissiveColor.getNum() > 0) {
-            const SbColor& emissive = tempMaterial->emissiveColor[0];
-            float r, g, b;
-            emissive.getValue(r, g, b);
-            updateContext.material.emissiveColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
-        } else {
-            updateContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-        }
         if (tempMaterial->shininess.getNum() > 0) {
             updateContext.material.shininess = tempMaterial->shininess[0] * 100.0;
-        } else {
-            updateContext.material.shininess = 30.0;
         }
         if (tempMaterial->transparency.getNum() > 0) {
             updateContext.material.transparency = tempMaterial->transparency[0];
-        } else {
-            updateContext.material.transparency = 0.0;
         }
     } else {
         // Use default material
-        updateContext.material.ambientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
+        // Already set to defaults above
         updateContext.material.diffuseColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-        updateContext.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-        updateContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-        updateContext.material.shininess = 30.0;
-        updateContext.material.transparency = 0.0;
     }
     
     updateContext.texture.enabled = false;
@@ -286,7 +283,7 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         drawStyle->style.setValue(SoDrawStyle::FILLED);
         break;
     case RenderingConfig::DisplayMode::HiddenLine:
-        drawStyle->style.setValue(SoDrawStyle::LINES);
+        drawStyle->style.setValue(SoDrawStyle::FILLED);
         break;
     default:
         drawStyle->style.setValue(SoDrawStyle::FILLED);
@@ -446,6 +443,7 @@ void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
         }
         
         coinNode->addChild(m_modeSwitch);
+        setGeometryBuilt(true);  // Geometry and switch states built - future changes use fast path
         
         // Step 3: Add edges and points (outside Switch, controlled separately)
         // Note: Edges and points are not in Switch as they may need independent control
@@ -532,19 +530,20 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
     state.showOriginalEdges = false;
     state.showMeshEdges = false;
     state.wireframeMode = false;
-    state.textureEnabled = context.texture.enabled;
-    state.lightingEnabled = true;
+    state.textureEnabled = false;  // Default to false, modes will enable if needed
+    state.lightingEnabled = true;  // Default to true, modes will disable if needed
     state.showPoints = context.display.showPointView;  // Show points if enabled, regardless of mode
     state.showSolidWithPoints = context.display.showSolidWithPointView;
     
-    // Reset material to context defaults
+    // Reset material to context defaults (will be overridden by specific modes)
+    // This prevents material pollution from previous modes
     state.surfaceAmbientColor = context.material.ambientColor;
     state.surfaceDiffuseColor = context.material.diffuseColor;
     state.surfaceSpecularColor = context.material.specularColor;
     state.surfaceEmissiveColor = context.material.emissiveColor;
     state.shininess = context.material.shininess;
-    state.transparency = context.material.transparency;
-    state.blendMode = context.blend.blendMode;
+    state.transparency = 0.0;  // Default to no transparency, modes will set if needed
+    state.blendMode = RenderingConfig::BlendMode::None;  // Default to no blending, modes will set if needed
     state.surfaceDisplayMode = displayMode;
     
     // Set state based on display mode
@@ -554,43 +553,52 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
         state.showSurface = true;
         state.showOriginalEdges = true;
         state.wireframeMode = false;
+        state.surfaceDisplayMode = RenderingConfig::DisplayMode::NoShading;
         state.textureEnabled = false;
         state.lightingEnabled = false;
-        state.surfaceDisplayMode = RenderingConfig::DisplayMode::NoShading;
         // Disable lighting effects but preserve original diffuseColor
         state.surfaceAmbientColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
         state.surfaceSpecularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
         state.surfaceEmissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
         state.shininess = 0.0;
+        state.transparency = 0.0;  // No transparency in NoShading mode
+        state.blendMode = RenderingConfig::BlendMode::None;
+        // CRITICAL: Force disable points in NoShading mode
+        state.showPoints = false;
         break;
     }
 
     case RenderingConfig::DisplayMode::Points: {
         // Points: Show point view if enabled
-        state.showPoints = context.display.showPointView;
+        state.showPoints = true;  // Force point display in Points mode
         state.showSurface = context.display.showPointView && context.display.showSolidWithPointView;
         state.wireframeMode = false;
+        state.surfaceDisplayMode = RenderingConfig::DisplayMode::Points;
         // CRITICAL: Force disable edges in Points mode to prevent residual edges from previous modes
         state.showOriginalEdges = false;
         state.showMeshEdges = false;
+        // Reset material properties for Points mode (points don't need material)
+        state.lightingEnabled = false;
+        state.textureEnabled = false;
         break;
     }
 
     case RenderingConfig::DisplayMode::Wireframe: {
-        // Wireframe: Show only original edges, optionally with hidden surface removal
-        state.showSurface = context.display.facesVisible;  // Hidden surface removal
+        // Wireframe: Show only original edges, no surface
+        state.showSurface = false;  // Wireframe mode should not show surface
         state.showOriginalEdges = true;
         state.wireframeMode = true;
-        // Hidden surface uses no-shading
-        if (state.showSurface) {
-            state.surfaceDisplayMode = RenderingConfig::DisplayMode::NoShading;
-            state.textureEnabled = false;
-            state.lightingEnabled = false;
-            state.surfaceAmbientColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            state.surfaceSpecularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            state.surfaceEmissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            state.shininess = 0.0;
-        }
+        state.surfaceDisplayMode = RenderingConfig::DisplayMode::Wireframe;
+        // Reset material properties for Wireframe mode
+        state.textureEnabled = false;
+        state.lightingEnabled = false;
+        state.surfaceAmbientColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        state.surfaceSpecularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        state.surfaceEmissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+        state.shininess = 0.0;
+        state.transparency = 0.0;
+        // CRITICAL: Force disable points in Wireframe mode
+        state.showPoints = false;
         break;
     }
 
@@ -599,6 +607,15 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
         state.showSurface = true;
         state.showOriginalEdges = true;
         state.wireframeMode = false;  // Surface is not wireframe
+        state.surfaceDisplayMode = RenderingConfig::DisplayMode::FlatLines;
+        // Reset material properties to prevent pollution from previous modes
+        state.lightingEnabled = true;
+        state.textureEnabled = false;
+        state.shininess = 30.0;  // Standard shininess for FlatLines
+        state.transparency = 0.0;  // No transparency in FlatLines mode
+        state.blendMode = RenderingConfig::BlendMode::None;
+        // CRITICAL: Force disable points in FlatLines mode
+        state.showPoints = false;
         break;
     }
 
@@ -606,7 +623,13 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
         // Solid: Standard shaded rendering
         state.showSurface = true;
         state.wireframeMode = false;
+        state.surfaceDisplayMode = RenderingConfig::DisplayMode::Solid;
         state.lightingEnabled = true;
+        state.textureEnabled = false;
+        state.transparency = 0.0;  // No transparency in Solid mode
+        state.blendMode = RenderingConfig::BlendMode::None;
+        // CRITICAL: Force disable points in Solid mode
+        state.showPoints = false;
         break;
     }
 
@@ -614,10 +637,15 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
         // Transparent: Apply transparency and alpha blending
         state.showSurface = true;
         state.wireframeMode = false;
+        state.surfaceDisplayMode = RenderingConfig::DisplayMode::Transparent;
+        state.lightingEnabled = true;
+        state.textureEnabled = false;
         if (state.transparency <= 0.0) {
             state.transparency = 0.5;
         }
         state.blendMode = RenderingConfig::BlendMode::Alpha;
+        // CRITICAL: Force disable points in Transparent mode
+        state.showPoints = false;
         break;
     }
 
@@ -626,17 +654,21 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
         state.showSurface = true;
         state.showMeshEdges = true;
         state.wireframeMode = false;
+        state.surfaceDisplayMode = RenderingConfig::DisplayMode::HiddenLine;
         state.textureEnabled = false;
         state.lightingEnabled = false;
-        state.surfaceDisplayMode = RenderingConfig::DisplayMode::NoShading;
         // HiddenLine uses white background (technical drawing style)
         state.surfaceAmbientColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
         state.surfaceDiffuseColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
         state.surfaceSpecularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
         state.surfaceEmissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
         state.shininess = 0.0;
+        state.transparency = 0.0;  // No transparency in HiddenLine mode
+        state.blendMode = RenderingConfig::BlendMode::None;
         // Mesh edges inherit original face color
         state.meshEdgeColor = context.material.diffuseColor;
+        // CRITICAL: Force disable points in HiddenLine mode
+        state.showPoints = false;
         break;
     }
 
@@ -644,6 +676,8 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
         // Default: Use context as-is
         state.showSurface = true;
         state.wireframeMode = false;
+        // CRITICAL: Force disable points in default mode
+        state.showPoints = false;
         break;
     }
     }
@@ -925,6 +959,268 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
     if (state.showPoints && pointViewBuilder) {
         pointViewBuilder->createPointViewRepresentation(coinNode, shape, params, context.display);
     }
+    
+    setGeometryBuilt(true);  // Ensure flag set even in non-switch path
+}
+
+// Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
+void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode, 
+                                            const GeometryRenderContext& context,
+                                            const TriangleMesh& mesh,
+                                            const MeshParameters& params,
+                                            ModularEdgeComponent* edgeComponent,
+                                            bool useModularEdgeComponent,
+                                            RenderNodeBuilder* renderBuilder,
+                                            WireframeBuilder* wireframeBuilder,
+                                            PointViewBuilder* pointViewBuilder) {
+    if (!coinNode || !renderBuilder || !wireframeBuilder) {
+        return;
+    }
+
+    const RenderingConfig::DisplayMode displayMode = context.display.displayMode;
+    
+    // ===== Step 1: Reset all render states =====
+    resetAllRenderStates(coinNode, edgeComponent);
+    
+    // ===== Step 2: Initialize render state from context =====
+    DisplayModeRenderState state;
+    state.surfaceAmbientColor = context.material.ambientColor;
+    state.surfaceDiffuseColor = context.material.diffuseColor;
+    state.surfaceSpecularColor = context.material.specularColor;
+    state.surfaceEmissiveColor = context.material.emissiveColor;
+    state.shininess = context.material.shininess;
+    state.transparency = context.material.transparency;
+    state.originalEdgeColor = context.display.wireframeColor;
+    state.meshEdgeColor = context.material.diffuseColor;  // Default to face color for mesh edges
+    state.originalEdgeWidth = context.display.wireframeWidth;
+    state.meshEdgeWidth = context.display.wireframeWidth;
+    state.textureEnabled = context.texture.enabled;
+    state.blendMode = context.blend.blendMode;
+    state.showPoints = context.display.showPointView;
+    state.showSolidWithPoints = context.display.showSolidWithPointView;
+    state.surfaceDisplayMode = displayMode;
+
+    // ===== Step 3: Set render state based on display mode =====
+    setRenderStateForMode(state, displayMode, context);
+
+    // ===== Step 4: Apply render state to scene graph =====
+    applyRenderState(coinNode, state, context, mesh, params, edgeComponent, 
+                     useModularEdgeComponent, renderBuilder, wireframeBuilder, pointViewBuilder);
+}
+
+// Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
+void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
+                                         const DisplayModeRenderState& state,
+                                         const GeometryRenderContext& context,
+                                         const TriangleMesh& mesh,
+                                         const MeshParameters& params,
+                                         ModularEdgeComponent* edgeComponent,
+                                         bool useModularEdgeComponent,
+                                         RenderNodeBuilder* renderBuilder,
+                                         WireframeBuilder* wireframeBuilder,
+                                         PointViewBuilder* pointViewBuilder) {
+    if (!coinNode || !renderBuilder || !wireframeBuilder) {
+        return;
+    }
+    
+    SoPolygonOffset* polygonOffset = nullptr;
+
+    // Render surface if needed
+    // CRITICAL: For HiddenLine mode with mesh edges, skip normal surface pass
+    // because wireframePass will render both white surface and black lines in one pass
+    bool skipNormalSurfacePass = (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine && 
+                                  state.showMeshEdges);
+    
+    if (state.showSurface && !skipNormalSurfacePass) {
+        GeometryRenderContext surfaceContext = context;
+        surfaceContext.display.wireframeMode = state.wireframeMode;
+        surfaceContext.display.facesVisible = state.showSurface;  // Use showSurface as facesVisible
+        surfaceContext.display.displayMode = state.surfaceDisplayMode;
+        surfaceContext.texture.enabled = state.textureEnabled;
+        surfaceContext.material.ambientColor = state.surfaceAmbientColor;
+        surfaceContext.material.diffuseColor = state.surfaceDiffuseColor;
+        surfaceContext.material.specularColor = state.surfaceSpecularColor;
+        surfaceContext.material.emissiveColor = state.surfaceEmissiveColor;
+        surfaceContext.material.shininess = state.shininess;
+        surfaceContext.material.transparency = state.transparency;
+        surfaceContext.blend.blendMode = state.blendMode;
+
+        // Add LightModel node for proper lighting control
+        // Use BASE_COLOR for no-shading modes (NoShading, HiddenLine), PHONG for others
+        SoLightModel* lightModel = new SoLightModel();
+        if (!state.lightingEnabled || state.surfaceDisplayMode == RenderingConfig::DisplayMode::NoShading) {
+            lightModel->model.setValue(SoLightModel::BASE_COLOR);  // No lighting, direct color
+        } else {
+            lightModel->model.setValue(SoLightModel::PHONG);  // Standard Phong lighting
+        }
+        coinNode->addChild(lightModel);
+        
+        coinNode->addChild(renderBuilder->createDrawStyleNode(surfaceContext));
+        coinNode->addChild(renderBuilder->createMaterialNode(surfaceContext));
+        renderBuilder->appendTextureNodes(coinNode, surfaceContext);
+        renderBuilder->appendBlendHints(coinNode, surfaceContext);
+        
+        // For HiddenLine mode, set polygon offset to push surface back (+1.0)
+        // This ensures white background is behind the black lines
+        if (!polygonOffset) {
+            polygonOffset = renderBuilder->createPolygonOffsetNode();
+            if (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine) {
+                polygonOffset->factor.setValue(1.0f);
+                polygonOffset->units.setValue(1.0f);
+            }
+            coinNode->addChild(polygonOffset);
+        }
+        
+        // Use direct mesh creation instead of appendSurfaceGeometry
+        auto& manager = RenderingToolkitAPI::getManager();
+        auto backend = manager.getRenderBackend("Coin3D");
+        if (backend) {
+            auto sceneNode = backend->createSceneNode(mesh, false, 
+                surfaceContext.material.diffuseColor, surfaceContext.material.ambientColor,
+                surfaceContext.material.specularColor, surfaceContext.material.emissiveColor,
+                surfaceContext.material.shininess, surfaceContext.material.transparency);
+            if (sceneNode) {
+                SoSeparator* meshNode = sceneNode.get();
+                meshNode->ref();
+                coinNode->addChild(meshNode);
+            }
+        }
+    }
+
+    // Render original edges if needed
+    // For mesh-only geometries, we don't have original edges, so skip this
+    // CRITICAL: Always update edgeFlags before calling updateEdgeDisplay
+    // This ensures edge visibility matches the state, not stale edgeFlags
+    if (useModularEdgeComponent && edgeComponent) {
+        // Set edgeFlags to match state
+        edgeComponent->setEdgeDisplayType(EdgeType::Original, false);  // No original edges for mesh-only
+        edgeComponent->setEdgeDisplayType(EdgeType::Mesh, state.showMeshEdges);
+        // Clear other edge types that shouldn't be shown in display mode
+        edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+    }
+    
+    // Always call updateEdgeDisplay to apply edgeFlags changes
+    // This ensures edges are removed when showMeshEdges is false
+    if (useModularEdgeComponent && edgeComponent) {
+        edgeComponent->updateEdgeDisplay(coinNode);
+    }
+
+    // Render mesh edges if needed
+    if (state.showMeshEdges) {
+        // For HiddenLine mode, use PolygonModeNode for fast rendering (FreeCAD approach)
+        if (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine) {
+            // HiddenLine mode: Render white background surface + black lines in ONE pass
+            // This prevents Z-fighting and ensures proper hidden line removal
+            // NOTE: We skip the normal surface pass above to avoid rendering white surface twice
+            
+            // Single pass: White background surface (with polygon offset +1.0 to push back) + 
+            //              Black wireframe lines (with polygon offset -1.0 to push forward)
+            PolygonModeNode* polygonMode = new PolygonModeNode();
+            polygonMode->ref();
+            polygonMode->mode.setValue(PolygonModeNode::LINE);
+            polygonMode->lineWidth.setValue(static_cast<float>(state.meshEdgeWidth));
+            polygonMode->disableLighting.setValue(TRUE);
+            // Negative offset pushes lines forward (in front of surface)
+            polygonMode->polygonOffsetFactor.setValue(-1.0f);
+            polygonMode->polygonOffsetUnits.setValue(-1.0f);
+            
+            // Create a separator for the HiddenLine pass (white surface + black lines)
+            SoSeparator* hiddenLinePass = new SoSeparator();
+            hiddenLinePass->ref();
+            
+            // Step 1: Render white background surface (with +1.0 offset to push back)
+            // This is the ONLY place we render the white surface in HiddenLine mode
+            SoPolygonOffset* surfaceOffset = new SoPolygonOffset();
+            surfaceOffset->factor.setValue(1.0f);  // Push surface back
+            surfaceOffset->units.setValue(1.0f);
+            hiddenLinePass->addChild(surfaceOffset);
+            
+            // White material for background surface
+            SoMaterial* whiteMaterial = new SoMaterial();
+            whiteMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
+            whiteMaterial->ambientColor.setValue(1.0f, 1.0f, 1.0f);
+            whiteMaterial->emissiveColor.setValue(1.0f, 1.0f, 1.0f);
+            hiddenLinePass->addChild(whiteMaterial);
+            
+            // No lighting for white surface
+            SoLightModel* noLightModel = new SoLightModel();
+            noLightModel->model.setValue(SoLightModel::BASE_COLOR);
+            hiddenLinePass->addChild(noLightModel);
+            
+            // Add filled surface geometry (will be white background) - use direct mesh
+            auto& manager = RenderingToolkitAPI::getManager();
+            auto backend = manager.getRenderBackend("Coin3D");
+            if (backend) {
+                auto sceneNode = backend->createSceneNode(mesh, false, 
+                    Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB),
+                    Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB),
+                    Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
+                    Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
+                    0.0, 0.0);
+                if (sceneNode) {
+                    SoSeparator* meshNode = sceneNode.get();
+                    meshNode->ref();
+                    hiddenLinePass->addChild(meshNode);
+                }
+            }
+            
+            // Step 2: Render black wireframe lines (with -1.0 offset to push forward)
+            // The PolygonModeNode will render the same geometry in LINE mode
+            SoMaterial* edgeMaterial = new SoMaterial();
+            edgeMaterial->diffuseColor.setValue(
+                static_cast<float>(state.meshEdgeColor.Red()),
+                static_cast<float>(state.meshEdgeColor.Green()),
+                static_cast<float>(state.meshEdgeColor.Blue())
+            );
+            edgeMaterial->emissiveColor.setValue(
+                static_cast<float>(state.meshEdgeColor.Red()),
+                static_cast<float>(state.meshEdgeColor.Green()),
+                static_cast<float>(state.meshEdgeColor.Blue())
+            );
+            hiddenLinePass->addChild(edgeMaterial);
+            
+            // Add polygon mode node (will render geometry as lines)
+            hiddenLinePass->addChild(polygonMode);
+            
+            // Re-add the same geometry, but PolygonModeNode will render it as lines
+            if (backend) {
+                auto sceneNode = backend->createSceneNode(mesh, false, 
+                    state.meshEdgeColor, state.meshEdgeColor,
+                    Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
+                    state.meshEdgeColor,
+                    0.0, 0.0);
+                if (sceneNode) {
+                    SoSeparator* meshNode = sceneNode.get();
+                    meshNode->ref();
+                    hiddenLinePass->addChild(meshNode);
+                }
+            }
+            
+            // Add to scene graph - scene graph will hold reference
+            coinNode->addChild(hiddenLinePass);
+            hiddenLinePass->unref();  // Scene graph now owns it, safe to unref
+            polygonMode->unref();      // hiddenLinePass owns it, safe to unref
+        } else {
+            // For other modes, use traditional mesh edge extraction
+            if (useModularEdgeComponent && edgeComponent) {
+                if (!mesh.triangles.empty()) {
+                    edgeComponent->extractMeshEdges(mesh, state.meshEdgeColor, state.meshEdgeWidth);
+                    edgeComponent->updateEdgeDisplay(coinNode);
+                }
+            }
+        }
+    }
+
+    // Render points if needed
+    if (state.showPoints && pointViewBuilder) {
+        pointViewBuilder->createPointViewRepresentation(coinNode, mesh, context.display);
+    }
+    
+    setGeometryBuilt(true);  // Ensure flag set even in non-switch path
 }
 
 void DisplayModeHandler::findDrawStyleAndMaterial(SoNode* node, SoDrawStyle*& drawStyle, SoMaterial*& material) {
