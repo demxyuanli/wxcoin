@@ -552,7 +552,9 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
 		if (!value.empty()) {
 			m_displaySettings.displayMode = getDisplayModeFromName(value);
 		}
-		m_displaySettings.showEdges = cm.getBool("Display", "ShowEdges", m_displaySettings.showEdges);
+		// Support both ShowMeshEdges (new name) and ShowEdges (backward compatibility)
+		m_displaySettings.showMeshEdges = cm.getBool("Display", "ShowMeshEdges", 
+			cm.getBool("Display", "ShowEdges", m_displaySettings.showMeshEdges));
 		m_displaySettings.showVertices = cm.getBool("Display", "ShowVertices", m_displaySettings.showVertices);
 		m_displaySettings.edgeWidth = cm.getDouble("Display", "EdgeWidth", m_displaySettings.edgeWidth);
 		m_displaySettings.vertexSize = cm.getDouble("Display", "VertexSize", m_displaySettings.vertexSize);
@@ -655,7 +657,7 @@ bool RenderingConfig::saveToFile(const std::string& filename) const
 
 	// Display section
 	cm.setString("Display", "DisplayMode", getDisplayModeName(m_displaySettings.displayMode));
-	cm.setBool("Display", "ShowEdges", m_displaySettings.showEdges);
+	cm.setBool("Display", "ShowMeshEdges", m_displaySettings.showMeshEdges);
 	cm.setBool("Display", "ShowVertices", m_displaySettings.showVertices);
 	cm.setDouble("Display", "EdgeWidth", m_displaySettings.edgeWidth);
 	cm.setDouble("Display", "VertexSize", m_displaySettings.vertexSize);
@@ -1024,7 +1026,7 @@ void RenderingConfig::setDisplayMode(DisplayMode mode)
 
 void RenderingConfig::setShowEdges(bool enabled)
 {
-	m_displaySettings.showEdges = enabled;
+	m_displaySettings.showMeshEdges = enabled;
 	if (m_autoSave) {
 		saveToFile();
 	}
@@ -1392,7 +1394,7 @@ void RenderingConfig::setSelectedDisplayMode(DisplayMode mode)
 
 void RenderingConfig::setSelectedShowEdges(bool enabled)
 {
-	m_displaySettings.showEdges = enabled;
+	m_displaySettings.showMeshEdges = enabled;
 	notifySettingsChanged();
 }
 

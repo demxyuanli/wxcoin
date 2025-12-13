@@ -77,13 +77,15 @@ void OCCGeometryMaterial::setDefaultBrightMaterial()
 void OCCGeometryMaterial::updateMaterialForLighting()
 {
     // Optimize material for better lighting response
+    // IMPORTANT: Do not override diffuseColor to preserve original geometry colors
     if (!m_materialExplicitlySet) {
-        // Increase ambient slightly for better visibility
+        // Only adjust ambient for better visibility, but don't override diffuse color
+        // Preserve the original diffuse color that was set (e.g., from decomposition color scheme)
         double ambient = 0.4;
         m_materialAmbientColor = Quantity_Color(ambient, ambient, ambient, Quantity_TOC_RGB);
         
-        // Keep diffuse bright
-        m_materialDiffuseColor = Quantity_Color(0.95, 0.95, 0.95, Quantity_TOC_RGB);
+        // DO NOT override diffuseColor - preserve original geometry colors
+        // m_materialDiffuseColor should keep its current value
         
         // Strong specular for highlights
         m_materialSpecularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);

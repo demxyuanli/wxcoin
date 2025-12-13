@@ -94,36 +94,44 @@ STLReader::ReadResult STLReader::readFile(const std::string& filePath,
             return result;
         }
 
-        // Create shape from parsed data
         std::string baseName = std::filesystem::path(filePath).stem().string();
-        TopoDS_Shape shape = createShapeFromSTLData(triangles, baseName, options);
 
-        if (shape.IsNull()) {
-            result.errorMessage = "Failed to create geometry from STL data";
-            LOG_ERR_S("STL shape creation failed: shape is null");
+        // FreeCAD-style fast path: create mesh directly, skip BRep conversion
+        if (progress) progress(65, "Creating mesh (FreeCAD-style fast path)");
+        
+        TriangleMesh mesh = createMeshFromSTLData(triangles, baseName, options);
+        
+        if (mesh.isEmpty()) {
+            result.errorMessage = "Failed to create mesh from STL data";
+            LOG_ERR_S("STL mesh creation failed: mesh is empty");
             return result;
         }
 
-        if (progress) progress(80, "Creating OCCGeometry");
+        if (progress) progress(80, "Creating OCCGeometry from mesh");
 
-        // Create OCCGeometry
-        auto geometry = createGeometryFromShape(shape, baseName, baseName, options);
+        // Create OCCGeometry directly from mesh (bypasses expensive BRep conversion)
+        auto geometry = createGeometryFromMesh(mesh, baseName, baseName, options);
         if (!geometry) {
-            result.errorMessage = "Failed to create OCCGeometry from shape";
+            result.errorMessage = "Failed to create OCCGeometry from mesh";
             LOG_ERR_S("STL OCCGeometry creation failed: geometry is null");
             return result;
         }
 
+        // Create a minimal dummy shape for compatibility (not used for rendering)
+        BRep_Builder builder;
+        TopoDS_Compound compound;
+        builder.MakeCompound(compound);
+        result.rootShape = compound;
+
         // Apply normal processing if enabled
         if (options.enableNormalProcessing) {
             LOG_INF_S("Normal processing enabled for STL import");
-            // Note: STL files already have normal processing built into createShapeFromSTLData
+            // Note: STL files already have normal processing built into createMeshFromSTLData
         } else {
             LOG_INF_S("Normal processing disabled for STL import");
         }
 
         result.geometries.push_back(geometry);
-        result.rootShape = shape;
         result.success = true;
 
         auto totalEndTime = std::chrono::high_resolution_clock::now();
@@ -695,5 +703,146 @@ bool STLReader::readBinaryData(std::ifstream& file, void* data, size_t size)
 {
     file.read(static_cast<char*>(data), size);
     return file.good();
+}
+
+TriangleMesh STLReader::createMeshFromSTLData(
+    const std::vector<Triangle>& triangles,
+    const std::string& baseName,
+    const OptimizationOptions& options)
+{
+    auto meshStartTime = std::chrono::high_resolution_clock::now();
+    TriangleMesh mesh;
+
+    if (triangles.empty()) {
+        LOG_WRN_S("No triangles to convert to mesh");
+        return mesh;
+    }
+
+    // FreeCAD-style optimization: use vertex deduplication for better memory efficiency
+    // Use hash map for fast vertex lookup (tolerance-based)
+    const double vertexTolerance = 1e-6;
+    std::unordered_map<std::string, int> vertexMap;
+    std::vector<gp_Pnt> uniqueVertices;
+    std::vector<gp_Vec> vertexNormals;
+
+    // Pre-allocate based on estimated unique vertices (typically 50-70% of total)
+    uniqueVertices.reserve(triangles.size() * 2);
+    vertexNormals.reserve(triangles.size() * 2);
+    mesh.triangles.reserve(triangles.size() * 3);
+
+    auto getVertexKey = [vertexTolerance](const gp_Pnt& p) -> std::string {
+        // Quantize vertex coordinates to tolerance for deduplication
+        int x = static_cast<int>(std::round(p.X() / vertexTolerance));
+        int y = static_cast<int>(std::round(p.Y() / vertexTolerance));
+        int z = static_cast<int>(std::round(p.Z() / vertexTolerance));
+        return std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z);
+    };
+
+    // Process triangles and build indexed mesh
+    size_t processedTriangles = 0;
+    const size_t logInterval = triangles.size() / 100; // Log every 1%
+
+    for (const auto& triangle : triangles) {
+        int indices[3];
+
+        // Process each vertex of the triangle
+        for (int i = 0; i < 3; ++i) {
+            std::string key = getVertexKey(triangle.vertices[i]);
+            auto it = vertexMap.find(key);
+
+            if (it != vertexMap.end()) {
+                // Vertex already exists, reuse index
+                indices[i] = it->second;
+                
+                // Accumulate normal for smooth shading (average normals at shared vertices)
+                if (triangle.normal.Magnitude() > 1e-6) {
+                    gp_Vec normalized = triangle.normal;
+                    normalized.Normalize();
+                    vertexNormals[indices[i]] = gp_Vec(
+                        vertexNormals[indices[i]].X() + normalized.X(),
+                        vertexNormals[indices[i]].Y() + normalized.Y(),
+                        vertexNormals[indices[i]].Z() + normalized.Z()
+                    );
+                }
+            } else {
+                // New vertex, add to unique list
+                int vertexIndex = static_cast<int>(uniqueVertices.size());
+                uniqueVertices.push_back(triangle.vertices[i]);
+                
+                // Initialize normal
+                if (triangle.normal.Magnitude() > 1e-6) {
+                    gp_Vec normalized = triangle.normal;
+                    normalized.Normalize();
+                    vertexNormals.push_back(normalized);
+                } else {
+                    // Calculate normal from triangle edges if not provided
+                    gp_Vec edge1(triangle.vertices[1].X() - triangle.vertices[0].X(),
+                                triangle.vertices[1].Y() - triangle.vertices[0].Y(),
+                                triangle.vertices[1].Z() - triangle.vertices[0].Z());
+                    gp_Vec edge2(triangle.vertices[2].X() - triangle.vertices[0].X(),
+                                triangle.vertices[2].Y() - triangle.vertices[0].Y(),
+                                triangle.vertices[2].Z() - triangle.vertices[0].Z());
+                    gp_Vec calculatedNormal = edge1.Crossed(edge2);
+                    if (calculatedNormal.Magnitude() > 1e-6) {
+                        calculatedNormal.Normalize();
+                        vertexNormals.push_back(calculatedNormal);
+                    } else {
+                        vertexNormals.push_back(gp_Vec(0, 0, 1)); // Default up vector
+                    }
+                }
+                
+                vertexMap[key] = vertexIndex;
+                indices[i] = vertexIndex;
+            }
+        }
+
+        // Add triangle indices (only if triangle is valid - non-degenerate)
+        double area = gp_Vec(triangle.vertices[1].X() - triangle.vertices[0].X(),
+                            triangle.vertices[1].Y() - triangle.vertices[0].Y(),
+                            triangle.vertices[1].Z() - triangle.vertices[0].Z())
+                     .Crossed(gp_Vec(triangle.vertices[2].X() - triangle.vertices[0].X(),
+                                     triangle.vertices[2].Y() - triangle.vertices[0].Y(),
+                                     triangle.vertices[2].Z() - triangle.vertices[0].Z()))
+                     .Magnitude() * 0.5;
+        
+        if (area > 1e-12) { // Skip degenerate triangles
+            mesh.triangles.push_back(indices[0]);
+            mesh.triangles.push_back(indices[1]);
+            mesh.triangles.push_back(indices[2]);
+        }
+
+        processedTriangles++;
+        if (logInterval > 0 && processedTriangles % logInterval == 0) {
+            LOG_DBG_S("Processed " + std::to_string(processedTriangles) + " / " + 
+                     std::to_string(triangles.size()) + " triangles");
+        }
+    }
+
+    // Normalize accumulated normals
+    for (size_t i = 0; i < vertexNormals.size(); ++i) {
+        if (vertexNormals[i].Magnitude() > 1e-6) {
+            vertexNormals[i].Normalize();
+        } else {
+            vertexNormals[i] = gp_Vec(0, 0, 1); // Default up vector
+        }
+    }
+
+    // Assign vertices and normals to mesh
+    mesh.vertices = std::move(uniqueVertices);
+    mesh.normals = std::move(vertexNormals);
+
+    auto meshEndTime = std::chrono::high_resolution_clock::now();
+    auto meshDuration = std::chrono::duration_cast<std::chrono::milliseconds>(meshEndTime - meshStartTime);
+    
+    LOG_INF_S("=== STL Direct Mesh Creation (FreeCAD-style) ===");
+    LOG_INF_S("File: " + baseName);
+    LOG_INF_S("Input triangles: " + std::to_string(triangles.size()));
+    LOG_INF_S("Unique vertices: " + std::to_string(mesh.vertices.size()));
+    LOG_INF_S("Output triangles: " + std::to_string(mesh.triangles.size() / 3));
+    LOG_INF_S("Vertex reduction: " + std::to_string((1.0 - static_cast<double>(mesh.vertices.size()) / (triangles.size() * 3)) * 100.0) + "%");
+    LOG_INF_S("Mesh creation time: " + std::to_string(meshDuration.count()) + " ms");
+    LOG_INF_S("================================================");
+
+    return mesh;
 }
 

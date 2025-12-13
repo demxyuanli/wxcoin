@@ -76,6 +76,18 @@ public:
      */
     SoSeparator* getFaceNormalLineNode() const { return faceNormalLineNode; }
     
+    /**
+     * @brief Generate mesh edge node directly from mesh (with GPU acceleration if available)
+     * @param mesh Triangle mesh
+     * @param color Edge color
+     * @param width Edge width
+     * @return Coin3D separator node
+     */
+    SoSeparator* generateNodeFromMesh(
+        const TriangleMesh& mesh,
+        const Quantity_Color& color = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB),
+        double width = 1.0);
+    
 private:
     SoSeparator* meshEdgeNode;
     SoSeparator* normalLineNode;

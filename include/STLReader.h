@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GeometryReader.h"
+#include "rendering/GeometryProcessor.h"
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <OpenCASCADE/TopoDS_Face.hxx>
 #include <OpenCASCADE/BRep_Builder.hxx>
@@ -22,6 +23,8 @@
 #include <future>
 #include <thread>
 #include <execution>
+#include <unordered_map>
+#include <algorithm>
 
 /**
  * @brief STL file reader for importing 3D models
@@ -134,13 +137,26 @@ private:
         ProgressCallback progress = nullptr);
 
     /**
-     * @brief Create TopoDS_Shape from parsed STL data
+     * @brief Create TopoDS_Shape from parsed STL data (legacy method, slow for large files)
      * @param triangles Vector of triangles
      * @param baseName Base name for geometry
      * @param options Optimization options
      * @return TopoDS_Shape containing the geometry
      */
     TopoDS_Shape createShapeFromSTLData(
+        const std::vector<Triangle>& triangles,
+        const std::string& baseName,
+        const OptimizationOptions& options
+    );
+
+    /**
+     * @brief Create TriangleMesh directly from STL data (FreeCAD-style, fast path)
+     * @param triangles Vector of triangles
+     * @param baseName Base name for geometry
+     * @param options Optimization options
+     * @return TriangleMesh ready for direct GPU rendering
+     */
+    TriangleMesh createMeshFromSTLData(
         const std::vector<Triangle>& triangles,
         const std::string& baseName,
         const OptimizationOptions& options

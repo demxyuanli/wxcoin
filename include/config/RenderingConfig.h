@@ -157,7 +157,7 @@ public:
 
 	struct DisplaySettings {
 		DisplayMode displayMode;
-		bool showEdges;
+		bool showMeshEdges;  // Show mesh edges (edges from triangulation) - renamed from showEdges
 		bool showVertices;
 		double edgeWidth;
 		double vertexSize;
@@ -176,7 +176,7 @@ public:
 
 		DisplaySettings()
 			: displayMode(DisplayMode::Solid)
-			, showEdges(false)
+			, showMeshEdges(false)
 			, showVertices(false)
 			, edgeWidth(1.0)
 			, vertexSize(2.0)

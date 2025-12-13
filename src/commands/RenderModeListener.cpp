@@ -29,7 +29,7 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 		RenderingConfig::DisplaySettings result = baseConfigSettings;
 		// Clear all mode-specific states to ensure mutual exclusivity
 		result.displayMode = RenderingConfig::DisplayMode::Solid;
-		result.showEdges = false;
+		result.showMeshEdges = false;
 		result.showVertices = false;
 		result.showPointView = false;
 		result.showSolidWithPointView = true;
@@ -52,7 +52,7 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 	if (commandType == cmd::to_string(cmd::CommandType::RenderModeNoShading)) {
 		auto settings = makeBaseDisplaySettings();
 		settings.displayMode = RenderingConfig::DisplayMode::NoShading;
-		settings.showEdges = true;  // Enable original edges display for No Shading mode
+		settings.showMeshEdges = true;  // Enable original edges display for No Shading mode
 		applyShadingMode(RenderingConfig::ShadingMode::Flat, false);
 		applyDisplaySettings(settings, "NoShading mode");
 		// Explicitly enable original edges display with default parameters
@@ -92,7 +92,7 @@ CommandResult RenderModeListener::executeCommand(const std::string& commandType,
 	if (commandType == cmd::to_string(cmd::CommandType::RenderModeFlatLines)) {
 		auto settings = makeBaseDisplaySettings();
 		settings.displayMode = RenderingConfig::DisplayMode::FlatLines;
-		settings.showEdges = true;
+		settings.showMeshEdges = true;
 		applyShadingMode(RenderingConfig::ShadingMode::Flat, false);
 		applyDisplaySettings(settings, "Flat Lines mode");
 		return CommandResult(true, "Flat Lines mode enabled", commandType);

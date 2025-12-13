@@ -27,8 +27,15 @@ std::vector<gp_Pnt> MeshEdgeExtractor::extractTyped(
 }
 
 std::vector<gp_Pnt> MeshEdgeExtractor::extractAllMeshEdges(const TriangleMesh& mesh) {
-    std::vector<gp_Pnt> points;
+    // Deduplicate edges to avoid rendering the same edge multiple times
+    // This significantly reduces the number of edges for large meshes
+    std::set<std::pair<int, int>> uniqueEdges;
     
+    auto makeEdge = [](int a, int b) {
+        return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+    };
+    
+    // Collect all unique edges from triangles
     for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
         int v1 = mesh.triangles[i];
         int v2 = mesh.triangles[i + 1];
@@ -38,14 +45,20 @@ std::vector<gp_Pnt> MeshEdgeExtractor::extractAllMeshEdges(const TriangleMesh& m
             v2 < static_cast<int>(mesh.vertices.size()) && 
             v3 < static_cast<int>(mesh.vertices.size())) {
             
-            // Triangle edges
-            points.push_back(mesh.vertices[v1]);
-            points.push_back(mesh.vertices[v2]);
-            points.push_back(mesh.vertices[v2]);
-            points.push_back(mesh.vertices[v3]);
-            points.push_back(mesh.vertices[v3]);
-            points.push_back(mesh.vertices[v1]);
+            // Add edges (automatically deduplicated by set)
+            uniqueEdges.insert(makeEdge(v1, v2));
+            uniqueEdges.insert(makeEdge(v2, v3));
+            uniqueEdges.insert(makeEdge(v3, v1));
         }
+    }
+    
+    // Convert unique edges to point pairs
+    std::vector<gp_Pnt> points;
+    points.reserve(uniqueEdges.size() * 2);
+    
+    for (const auto& edge : uniqueEdges) {
+        points.push_back(mesh.vertices[edge.first]);
+        points.push_back(mesh.vertices[edge.second]);
     }
     
     return points;

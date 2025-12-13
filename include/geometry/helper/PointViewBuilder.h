@@ -18,5 +18,10 @@ public:
                                        const TopoDS_Shape& shape,
                                        const MeshParameters& params,
                                        const DisplaySettings& displaySettings);
+
+    // Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
+    void createPointViewRepresentation(SoSeparator* coinNode,
+                                       const TriangleMesh& mesh,
+                                       const DisplaySettings& displaySettings);
 };
 

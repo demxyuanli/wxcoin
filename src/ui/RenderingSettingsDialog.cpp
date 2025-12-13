@@ -68,7 +68,7 @@ RenderingSettingsDialog::RenderingSettingsDialog(wxWindow* parent, OCCViewer* oc
 	m_normalConsistencyThreshold = shadingSettings.normalConsistencyThreshold;
 
 	m_displayMode = displaySettings.displayMode;
-	m_showEdges = displaySettings.showEdges;
+	m_showMeshEdges = displaySettings.showMeshEdges;
 	m_showVertices = displaySettings.showVertices;
 	m_edgeWidth = displaySettings.edgeWidth;
 	m_vertexSize = displaySettings.vertexSize;
@@ -486,7 +486,7 @@ void RenderingSettingsDialog::createDisplayPage()
 
 	// Show original edges checkbox
 	m_showEdgesCheckbox = new wxCheckBox(m_displayPage, wxID_ANY, "Show Original Edges");
-	m_showEdgesCheckbox->SetValue(m_showEdges);
+	m_showEdgesCheckbox->SetValue(m_showMeshEdges);
 
 	// Show vertices/points checkbox
 	m_showVerticesCheckbox = new wxCheckBox(m_displayPage, wxID_ANY, "Show Vertices/Points");
@@ -1121,7 +1121,7 @@ void RenderingSettingsDialog::onDisplayModeChoice(wxCommandEvent& event)
 
 void RenderingSettingsDialog::onShowEdgesCheckbox(wxCommandEvent& event)
 {
-	m_showEdges = m_showEdgesCheckbox->GetValue();
+	m_showMeshEdges = m_showEdgesCheckbox->GetValue();
 }
 
 void RenderingSettingsDialog::onShowVerticesCheckbox(wxCommandEvent& event)
@@ -1339,7 +1339,7 @@ void RenderingSettingsDialog::applySettings()
 	// Update display settings
 	RenderingConfig::DisplaySettings displaySettings;
 	displaySettings.displayMode = m_displayMode;
-	displaySettings.showEdges = m_showEdges;
+	displaySettings.showMeshEdges = m_showMeshEdges;
 	displaySettings.showVertices = m_showVertices;
 	displaySettings.edgeWidth = m_edgeWidth;
 	displaySettings.vertexSize = m_vertexSize;
@@ -1453,7 +1453,7 @@ void RenderingSettingsDialog::resetToDefaults()
 	m_normalConsistencyThreshold = shadingSettings.normalConsistencyThreshold;
 
 	m_displayMode = displaySettings.displayMode;
-	m_showEdges = displaySettings.showEdges;
+	m_showMeshEdges = displaySettings.showMeshEdges;
 	m_showVertices = displaySettings.showVertices;
 	m_edgeWidth = displaySettings.edgeWidth;
 	m_vertexSize = displaySettings.vertexSize;

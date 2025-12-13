@@ -148,9 +148,28 @@ std::shared_ptr<OCCGeometry> STEPGeometryConverter::processSingleShape(
         geometry->setShape(shape);
         geometry->setFileName(baseName);
 
-        // Set color based on the provided palette and index
-        Quantity_Color componentColor = palette[colorIndex % palette.size()];
-        geometry->setColor(componentColor);
+        // Set color: only apply palette colors when decomposition is enabled
+        // Otherwise use default geometry color
+        if (options.decomposition.enableDecomposition) {
+            Quantity_Color componentColor = palette[colorIndex % palette.size()];
+            geometry->setColor(componentColor);
+            
+            LOG_INF_S("Applied decomposition color for " + name + 
+                     " (R:" + std::to_string(componentColor.Red()) + 
+                     " G:" + std::to_string(componentColor.Green()) + 
+                     " B:" + std::to_string(componentColor.Blue()) + 
+                     ", Index:" + std::to_string(colorIndex) + ")");
+            
+            // Also set material colors for decomposed components
+            Standard_Real r, g, b;
+            componentColor.Values(r, g, b, Quantity_TOC_RGB);
+            geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
+            geometry->setMaterialDiffuseColor(componentColor);
+        } else {
+            // Use default color when decomposition is disabled
+            Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+            geometry->setColor(defaultColor);
+        }
 
         // Detect if this is a shell model and apply appropriate settings
         bool isShellModel = detectShellModel(shape);
@@ -163,11 +182,14 @@ std::shared_ptr<OCCGeometry> STEPGeometryConverter::processSingleShape(
             geometry->setDepthTest(true);
             geometry->setDepthWrite(true);
             // Set enhanced material properties for shell models with better contrast
-            // Use the component color for ambient and diffuse, but adjust intensity for better shell rendering
-            Standard_Real r, g, b;
-            componentColor.Values(r, g, b, Quantity_TOC_RGB);
-            geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
-            geometry->setMaterialDiffuseColor(Quantity_Color(r * 0.8, g * 0.8, b * 0.8, Quantity_TOC_RGB));
+            // Only apply color-based materials when decomposition is enabled
+            if (options.decomposition.enableDecomposition) {
+                Quantity_Color currentColor = geometry->getColor();
+                Standard_Real r, g, b;
+                currentColor.Values(r, g, b, Quantity_TOC_RGB);
+                geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
+                geometry->setMaterialDiffuseColor(Quantity_Color(r * 0.8, g * 0.8, b * 0.8, Quantity_TOC_RGB));
+            }
             geometry->setMaterialShininess(50.0);
             // Enable smooth normals for better shell rendering
             geometry->setSmoothNormals(true);

@@ -21,6 +21,7 @@
 #include "mod/SoSelectionElementAction.h"
 #include "mod/SoFCSelection.h"
 #include "mod/SoFCUnifiedSelection.h"
+#include "rendering/PolygonModeNode.h"
 
 // CRITICAL FIX: Disable Coin3D Display List caching globally
 // This prevents GL context crashes when creating Coin3D nodes in invalid contexts
@@ -47,6 +48,10 @@ bool MainApplication::OnInit()
         SoSelectionElementAction::initClass();
         mod::SoFCSelection::initClass();
         SoFCUnifiedSelection::initClass();
+        
+        // Initialize custom rendering nodes
+        PolygonModeNode::initClass();
+        
         LOG_INF("Selection action classes initialized successfully", "MainApplication");
 
     } catch (const std::exception& e) {

@@ -1122,12 +1122,13 @@ void RenderingManager::applyNoShadingMode(const RenderingSettings& settings)
 	glDisable(GL_LIGHTING);
 	glDisable(GL_NORMALIZE);
 
-	// Set a uniform color for all surfaces (like FreeCAD's no shading mode)
-	// Use a neutral gray color
-	glColor3f(0.8f, 0.8f, 0.8f);
+	// No shading mode: preserve original geometry colors
+	// Do not set a uniform color - let each geometry use its original color
+	// glColor3f is not called here to preserve original colors
 
-	// Disable material properties to ensure uniform color
-	glDisable(GL_COLOR_MATERIAL);
+	// Enable color material so geometry colors are used directly
+	glEnable(GL_COLOR_MATERIAL);
+	glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 	glDisable(GL_TEXTURE_2D);
 
 	// Enable depth testing for proper geometry visibility

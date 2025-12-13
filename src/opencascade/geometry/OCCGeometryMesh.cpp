@@ -373,12 +373,8 @@ void OCCGeometryMesh::buildCoinRepresentation(
     m_displayHandler->setModeSwitch(m_modeSwitch);
     m_displayHandler->handleDisplayMode(m_coinNode, context, shape, params,
                                         modularEdgeComponent.get(), useModularEdgeComponent,
-                                        m_renderBuilder.get(), m_wireframeBuilder.get());
-
-    // Point view rendering using helper
-    if (context.display.showPointView) {
-        m_pointViewBuilder->createPointViewRepresentation(m_coinNode, shape, params, context.display);
-    }
+                                        m_renderBuilder.get(), m_wireframeBuilder.get(),
+                                        m_pointViewBuilder.get());
 
     // ===== Set visibility =====
     m_coinNode->renderCulling = context.display.visible ? SoSeparator::OFF : SoSeparator::ON;

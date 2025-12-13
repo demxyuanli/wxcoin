@@ -59,7 +59,8 @@ public:
     using GeomCoinRepresentation::needsMeshRegeneration;
     using GeomCoinRepresentation::setMeshRegenerationNeeded;
     using GeomCoinRepresentation::updateWireframeMaterial;
-    using GeomCoinRepresentation::updateDisplayMode;
+    // Override updateDisplayMode to pass original color
+    void updateDisplayMode(RenderingConfig::DisplayMode mode);
     
     // Override buildCoinRepresentation with implementations that use internal shape
     void buildCoinRepresentation(const MeshParameters& params = MeshParameters());

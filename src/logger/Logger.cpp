@@ -15,6 +15,8 @@
 #include <log4cxx/level.h>
 #include <log4cxx/ndc.h>
 #include <log4cxx/logmanager.h>
+#include <log4cxx/spi/appenderattachable.h>
+// RollingFileAppender is accessed via dynamic cast, no need for separate header
 #endif
 
 Logger::Logger() : logCtrl(nullptr) {
@@ -31,9 +33,28 @@ Logger::Logger() : logCtrl(nullptr) {
         for (const auto& configPath : configPaths) {
             if (std::filesystem::exists(configPath)) {
                 try {
+                    // Ensure logs directory exists before loading config
+                    std::filesystem::path logsDir = "logs";
+                    if (!std::filesystem::exists(logsDir)) {
+                        std::filesystem::create_directories(logsDir);
+                    }
+                    
                     log4cxx::PropertyConfigurator::configure(configPath.string());
                     log4cxxLogger = log4cxx::Logger::getLogger("CADVisBird");
                     log4cxxLogger->setLevel(log4cxx::Level::getInfo());
+                    
+                    // Ensure ImmediateFlush is enabled for all file appenders in Release builds
+                    log4cxx::LoggerPtr rootLogger = log4cxx::Logger::getRootLogger();
+                    log4cxx::AppenderList appenders = rootLogger->getAllAppenders();
+                    for (auto appender : appenders) {
+                        // Use FileAppender base class - works for both FileAppender and RollingFileAppender
+                        log4cxx::FileAppenderPtr fileAppender = 
+                            log4cxx::cast<log4cxx::FileAppender>(appender);
+                        if (fileAppender) {
+                            fileAppender->setImmediateFlush(true);
+                        }
+                    }
+                    
                     configLoaded = true;
                     std::cerr << "log4cxx: Configuration loaded from " << configPath.string() << std::endl;
                     break;
@@ -60,6 +81,7 @@ Logger::Logger() : logCtrl(nullptr) {
             log4cxx::LayoutPtr layout(new log4cxx::PatternLayout("%d{yyyy-MM-dd HH:mm:ss} [%p] [%c{1}] %m%n"));
             
             log4cxx::FileAppenderPtr fileAppender(new log4cxx::FileAppender(layout, logFilePath, false));
+            fileAppender->setImmediateFlush(true);  // Ensure immediate flush in Release builds
             rootLogger->addAppender(fileAppender);
             
             log4cxx::ConsoleAppenderPtr consoleAppender(new log4cxx::ConsoleAppender(layout));
@@ -244,6 +266,9 @@ void Logger::Log(LogLevel level, const std::string& message, const std::string& 
                 logger->error(fullMessage);
                 break;
             }
+            
+            // Note: ImmediateFlush is already set to true for all file appenders during initialization
+            // log4cxx will automatically flush after each log message, so no manual flush is needed
 
             // Also output to wxTextCtrl if available
             if (!isShuttingDown && logCtrl && logCtrl->IsShown()) {

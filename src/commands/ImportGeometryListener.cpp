@@ -15,6 +15,9 @@
 #include "GeometryImportOptimizer.h"
 #include "ProgressiveGeometryLoader.h"
 #include "StreamingFileReader.h"
+#include "STEPGeometryDecomposer.h"
+#include "STEPColorManager.h"
+#include "STEPGeometryConverter.h"
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/app.h>
@@ -150,18 +153,22 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
         return CommandResult(false, "No supported geometry files found", commandType);
     }
 
-    // Check if we have non-mesh formats that might benefit from decomposition
-    bool hasNonMeshFormats = false;
+    // Check if we have BRep-compatible formats that support decomposition
+    // Only formats that can be converted to TopoDS_Shape (BRep) support decomposition
+    // Mesh-only formats (STL, OBJ) do not support decomposition
+    bool hasBRepFormats = false;
     for (const auto& formatGroup : filesByFormat) {
         const std::string& formatName = formatGroup.first;
-        if (formatName == "STEP" || formatName == "IGES" || formatName == "BREP") {
-            hasNonMeshFormats = true;
+        // BRep-compatible formats: STEP, IGES, BREP, X_T (Parasolid)
+        // Mesh-only formats (excluded): STL, OBJ
+        if (formatName == "STEP" || formatName == "IGES" || formatName == "BREP" || formatName == "X_T") {
+            hasBRepFormats = true;
             break;
         }
     }
 
-    // Show geometry decomposition dialog for non-mesh formats
-    if (hasNonMeshFormats) {
+    // Show geometry decomposition dialog only for BRep-compatible formats
+    if (hasBRepFormats) {
         // Force parent frame to complete all pending paint operations
         // This prevents DC handle conflicts on Windows (error 0x00000006)
         if (m_frame) {
@@ -240,6 +247,8 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             
             GeometryReader::OptimizationOptions opts;
             setupBalancedImportOptions(opts);
+            // Apply decomposition options from dialog
+            opts.decomposition = m_decompositionOptions;
             
             std::vector<std::shared_ptr<OCCGeometry>> progressiveGeoms;
             if (importWithProgressiveLoading(filePath, opts, progressiveGeoms)) {
@@ -841,22 +850,47 @@ bool ImportGeometryListener::importWithProgressiveLoading(const std::string& fil
         }
     };
     
-    callbacks.onChunkRendered = [this, &allGeometries, &filePath]
+    callbacks.onChunkRendered = [this, &allGeometries, &filePath, &options]
         (const ProgressiveGeometryLoader::RenderChunk& chunk) {
+        std::string baseName = std::filesystem::path(filePath).stem().string();
+        
         for (size_t i = 0; i < chunk.shapes.size(); ++i) {
             const auto& shape = chunk.shapes[i];
-            if (!shape.IsNull()) {
-                std::string baseName = std::filesystem::path(filePath).stem().string();
+            if (shape.IsNull()) {
+                continue;
+            }
+            
+            // Apply decomposition if enabled
+            std::vector<TopoDS_Shape> shapesToProcess;
+            if (options.decomposition.enableDecomposition) {
+                // Decompose the shape according to options
+                shapesToProcess = STEPGeometryDecomposer::decomposeShape(shape, options);
+            } else {
+                // No decomposition - use original shape
+                shapesToProcess.push_back(shape);
+            }
+            
+            // Process each decomposed shape
+            for (size_t j = 0; j < shapesToProcess.size(); ++j) {
+                const auto& shapeToProcess = shapesToProcess[j];
+                if (shapeToProcess.IsNull()) {
+                    continue;
+                }
+                
+                // Generate name for geometry
                 std::string name = baseName + "_chunk" + std::to_string(chunk.chunkIndex) +
                                  "_" + std::to_string(i);
+                if (shapesToProcess.size() > 1) {
+                    name += "_part" + std::to_string(j + 1);
+                }
 
-                auto geometry = std::make_shared<OCCGeometry>(name);
-                geometry->setShape(shape);
+                // Create geometry using converter - it will apply decomposition color scheme automatically
+                auto geometry = STEPGeometryConverter::processSingleShape(
+                    shapeToProcess, name, baseName, options);
 
-                Quantity_Color defaultColor(0.7, 0.7, 0.7, Quantity_TOC_RGB);
-                geometry->setColor(defaultColor);
-
+                if (geometry) {
                 allGeometries.push_back(geometry);
+                }
             }
         }
 

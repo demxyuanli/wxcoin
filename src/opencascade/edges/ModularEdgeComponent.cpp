@@ -201,12 +201,23 @@ void ModularEdgeComponent::extractMeshEdges(
 
     std::lock_guard<std::mutex> lock(m_nodeMutex);
 
+    cleanupEdgeNode(meshEdgeNode);
+    
+    // Try GPU-accelerated rendering first (if MeshEdgeRenderer supports it)
+    auto meshRenderer = std::dynamic_pointer_cast<MeshEdgeRenderer>(m_meshRenderer);
+    if (meshRenderer) {
+        SoSeparator* gpuNode = meshRenderer->generateNodeFromMesh(mesh, color, width);
+        if (gpuNode) {
+            meshEdgeNode = gpuNode;
+            return;
+        }
+    }
+    
+    // CPU fallback: extract edges (now with deduplication) and use SoIndexedLineSet
     MeshEdgeParams params(mesh);
     std::vector<gp_Pnt> points = m_meshExtractor->extract(TopoDS_Shape(), &params);
 
-    cleanupEdgeNode(meshEdgeNode);
     meshEdgeNode = m_meshRenderer->generateNode(points, color, width);
-
 }
 
 void ModularEdgeComponent::extractSilhouetteEdges(

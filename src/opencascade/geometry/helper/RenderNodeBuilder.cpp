@@ -80,7 +80,15 @@ SoMaterial* RenderNodeBuilder::createMaterialNode(const GeometryRenderContext& c
         node->transparency.setValue(static_cast<float>(context.material.transparency));
     }
     else if (context.display.displayMode == RenderingConfig::DisplayMode::NoShading) {
-        node->diffuseColor.setValue(0.8f, 0.8f, 0.8f);
+        // No shading mode: use original geometry color without lighting effects
+        Standard_Real r, g, b;
+        context.material.diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
+        node->diffuseColor.setValue(
+            static_cast<float>(r),
+            static_cast<float>(g),
+            static_cast<float>(b)
+        );
+        // Disable lighting effects: no ambient, specular, emissive, or shininess
         node->ambientColor.setValue(0.0f, 0.0f, 0.0f);
         node->specularColor.setValue(0.0f, 0.0f, 0.0f);
         node->emissiveColor.setValue(0.0f, 0.0f, 0.0f);

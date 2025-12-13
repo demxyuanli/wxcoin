@@ -232,7 +232,7 @@ protected:
     void updateWireframeMaterial(const Quantity_Color& color);
     
     // Fast display mode update without mesh rebuild
-    void updateDisplayMode(RenderingConfig::DisplayMode mode);
+    void updateDisplayMode(RenderingConfig::DisplayMode mode, const Quantity_Color* originalDiffuseColor = nullptr);
 
     // Memory optimization
     void releaseTemporaryData();

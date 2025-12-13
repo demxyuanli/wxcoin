@@ -366,12 +366,8 @@ void GeomCoinRepresentation::buildCoinRepresentation(
     // Handle display mode using helper
     m_displayHandler->handleDisplayMode(m_coinNode, context, shape, params,
                                         modularEdgeComponent.get(), useModularEdgeComponent,
-                                        m_renderBuilder.get(), m_wireframeBuilder.get());
-
-    // Point view rendering using helper
-    if (context.display.showPointView) {
-        m_pointViewBuilder->createPointViewRepresentation(m_coinNode, shape, params, context.display);
-    }
+                                        m_renderBuilder.get(), m_wireframeBuilder.get(),
+                                        m_pointViewBuilder.get());
 
     // ===== Set visibility =====
     m_coinNode->renderCulling = context.display.visible ? SoSeparator::OFF : SoSeparator::ON;
@@ -492,12 +488,12 @@ void GeomCoinRepresentation::updateWireframeMaterial(const Quantity_Color& color
 }
 
 
-void GeomCoinRepresentation::updateDisplayMode(RenderingConfig::DisplayMode mode)
+void GeomCoinRepresentation::updateDisplayMode(RenderingConfig::DisplayMode mode, const Quantity_Color* originalDiffuseColor)
 {
     if (!m_coinNode) {
         return;
     }
-    m_displayHandler->updateDisplayMode(m_coinNode, mode, modularEdgeComponent.get());
+    m_displayHandler->updateDisplayMode(m_coinNode, mode, modularEdgeComponent.get(), originalDiffuseColor);
 }
 
 

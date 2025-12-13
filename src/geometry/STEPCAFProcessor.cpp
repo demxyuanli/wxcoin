@@ -607,13 +607,11 @@ int STEPCAFProcessor::createGeometriesFromParts(
             }
         }
         
-        // Assign color: use CAF color if available, otherwise use palette based on configuration
+        // Assign color: when decomposition is enabled, prioritize palette colors
+        // Otherwise use CAF color if available
         Quantity_Color color;
-        if (hasPartColor) {
-            // Use color from CAF
-            color = partColor;
-        } else {
-            // Use palette color based on configuration
+        if (options.decomposition.enableDecomposition) {
+            // When decomposition is enabled, always use palette colors from color scheme
             auto palette = STEPColorManager::getPaletteForScheme(options.decomposition.colorScheme);
             std::hash<std::string> hasher;
             
@@ -625,6 +623,20 @@ int STEPCAFProcessor::createGeometriesFromParts(
                 // Sequential coloring using componentIndex + localIdx
                 color = palette[(componentIndex + localIdx) % palette.size()];
             }
+            
+            LOG_INF_S("Applied decomposition color for " + partName + 
+                     " (R:" + std::to_string(color.Red()) + 
+                     " G:" + std::to_string(color.Green()) + 
+                     " B:" + std::to_string(color.Blue()) + 
+                     ", ComponentIndex:" + std::to_string(componentIndex) + 
+                     ", LocalIdx:" + std::to_string(localIdx) + ")");
+        } else if (hasPartColor) {
+            // Use color from CAF only when decomposition is disabled
+            color = partColor;
+        } else {
+            // Default color when no decomposition and no CAF color
+            Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+            color = defaultColor;
         }
 
         auto geom = std::make_shared<OCCGeometry>(partName);

@@ -610,9 +610,9 @@ void Canvas::setOCCViewer(OCCViewer* occViewer) {
 		auto displaySettings = renderingConfig.getDisplaySettings();
 		const auto shadingSettings = renderingConfig.getShadingSettings();
 		
-		// For NoShading mode, ensure showEdges is true (required for original edges display)
+		// For NoShading mode, ensure showMeshEdges is true (required for original edges display)
 		if (displaySettings.displayMode == RenderingConfig::DisplayMode::NoShading) {
-			displaySettings.showEdges = true;
+			displaySettings.showMeshEdges = true;
 		}
 		
 		// Apply display settings to viewer

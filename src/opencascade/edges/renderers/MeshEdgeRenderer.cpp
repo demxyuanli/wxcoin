@@ -1,5 +1,6 @@
 #include "edges/renderers/MeshEdgeRenderer.h"
 #include "rendering/GeometryProcessor.h"
+#include "rendering/GPUEdgeRenderer.h"
 #include "logger/Logger.h"
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoCoordinate3.h>
@@ -17,8 +18,14 @@ MeshEdgeRenderer::MeshEdgeRenderer()
 
     // Initialize GPU renderer if available
     try {
-        // TODO: Initialize GPU edge renderer when available
-        m_gpuAccelerationEnabled = false;
+        m_gpuRenderer = new GPUEdgeRenderer();
+        if (m_gpuRenderer && m_gpuRenderer->initialize()) {
+            m_gpuAccelerationEnabled = true;
+            LOG_INF_S("GPU mesh edge renderer initialized successfully");
+        } else {
+            m_gpuAccelerationEnabled = false;
+            LOG_WRN_S("GPU mesh edge renderer initialization failed, using CPU fallback");
+        }
     } catch (const std::exception& e) {
         LOG_WRN_S("Failed to initialize GPU mesh edge renderer: " + std::string(e.what()));
         m_gpuAccelerationEnabled = false;
@@ -77,14 +84,49 @@ SoSeparator* MeshEdgeRenderer::generateNode(
 
     if (points.empty()) return nullptr;
 
-    // Use GPU acceleration if available
-    if (m_gpuAccelerationEnabled && m_gpuRenderer) {
-        // TODO: Implement GPU mesh edge rendering
-    }
-
-    // CPU fallback
+    // CPU fallback: use SoIndexedLineSet (slower but compatible)
     meshEdgeNode = createLineNode(points, color, width, style);
     return meshEdgeNode;
+}
+
+SoSeparator* MeshEdgeRenderer::generateNodeFromMesh(
+    const TriangleMesh& mesh,
+    const Quantity_Color& color,
+    double width) {
+    
+    std::lock_guard<std::mutex> lock(m_nodeMutex);
+    
+    // Clean up existing GPU node
+    if (m_gpuMeshEdgeNode) {
+        m_gpuMeshEdgeNode->unref();
+        m_gpuMeshEdgeNode = nullptr;
+    }
+    
+    if (mesh.vertices.empty() || mesh.triangles.empty()) {
+        return nullptr;
+    }
+    
+    // Try GPU acceleration first
+    if (m_gpuAccelerationEnabled && m_gpuRenderer && m_gpuRenderer->isAvailable()) {
+        GPUEdgeRenderer::EdgeRenderSettings settings;
+        settings.color = color;
+        settings.lineWidth = static_cast<float>(width);
+        settings.depthOffset = 0.0001f;
+        settings.antiAliasing = true;
+        settings.depthTest = true;
+        settings.mode = GPUEdgeRenderer::RenderMode::GeometryShader;
+        
+        m_gpuMeshEdgeNode = m_gpuRenderer->createGPUEdgeNode(mesh, settings);
+        if (m_gpuMeshEdgeNode) {
+            LOG_DBG_S("Using GPU-accelerated mesh edge rendering");
+            return m_gpuMeshEdgeNode;
+        }
+    }
+    
+    // CPU fallback: extract edges and use SoIndexedLineSet
+    // Note: This will use the deduplicated edge extraction
+    LOG_DBG_S("Using CPU fallback for mesh edge rendering");
+    return nullptr; // Caller should use generateNode with extracted points
 }
 
 void MeshEdgeRenderer::updateAppearance(

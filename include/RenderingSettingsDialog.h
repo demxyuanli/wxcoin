@@ -68,7 +68,7 @@ public:
     
     // Display settings
     RenderingConfig::DisplayMode getDisplayMode() const { return m_displayMode; }
-    bool isShowEdgesEnabled() const { return m_showEdges; }
+    bool isShowMeshEdgesEnabled() const { return m_showMeshEdges; }
     bool isShowVerticesEnabled() const { return m_showVertices; }
     double getEdgeWidth() const { return m_edgeWidth; }
     double getVertexSize() const { return m_vertexSize; }
@@ -352,7 +352,7 @@ private:
     
     // Display settings values
     RenderingConfig::DisplayMode m_displayMode;
-    bool m_showEdges;
+    bool m_showMeshEdges;
     bool m_showVertices;
     double m_edgeWidth;
     double m_vertexSize;

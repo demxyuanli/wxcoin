@@ -514,7 +514,7 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 	// Check if display mode actually changed to avoid unnecessary rebuilds
 	bool displayModeChanged = (m_displaySettings.displayMode != settings.displayMode);
 	RenderingConfig::DisplayMode oldDisplayMode = m_displaySettings.displayMode;
-	bool edgeSettingsChanged = (m_displaySettings.showEdges != settings.showEdges);
+	bool edgeSettingsChanged = (m_displaySettings.showMeshEdges != settings.showMeshEdges);
 	bool pointViewSettingsChanged = (
 		m_displaySettings.showPointView != settings.showPointView ||
 		m_displaySettings.showSolidWithPointView != settings.showSolidWithPointView ||
@@ -547,7 +547,7 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Apply edge display only if changed
 	if (edgeSettingsChanged) {
-		setShowEdges(settings.showEdges);
+		setShowEdges(settings.showMeshEdges);
 	}
 
 	// Apply point view settings only if changed

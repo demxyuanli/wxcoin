@@ -9,6 +9,9 @@ set(RENDERING_TOOLKIT_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/FrustumCuller.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/OcclusionCuller.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GPUEdgeRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PolygonModeNode.cpp
+    # VBOEdgeRenderer.cpp - Temporarily disabled, requires OpenGL extension loading
+    # ${CMAKE_CURRENT_SOURCE_DIR}/VBOEdgeRenderer.cpp
 )
 
 set(RENDERING_TOOLKIT_HEADERS
@@ -24,6 +27,9 @@ set(RENDERING_TOOLKIT_HEADERS
     ${CMAKE_SOURCE_DIR}/include/rendering/FrustumCuller.h
     ${CMAKE_SOURCE_DIR}/include/rendering/OcclusionCuller.h
     ${CMAKE_SOURCE_DIR}/include/rendering/GPUEdgeRenderer.h
+    ${CMAKE_SOURCE_DIR}/include/rendering/PolygonModeNode.h
+    # VBOEdgeRenderer.h - Temporarily disabled
+    # ${CMAKE_SOURCE_DIR}/include/rendering/VBOEdgeRenderer.h
 )
 
 # Create Rendering Toolkit static library

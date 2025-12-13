@@ -375,5 +375,14 @@ bool OCCGeometry::hasIntersectionNodes() const {
     return false;
 }
 
+void OCCGeometry::updateDisplayMode(RenderingConfig::DisplayMode mode)
+{
+    // Get original diffuse color from geometry to preserve it in NoShading mode
+    Quantity_Color originalColor = getMaterialDiffuseColor();
+    
+    // Call base class method with original color
+    GeomCoinRepresentation::updateDisplayMode(mode, &originalColor);
+}
+
 // No longer needed - wireframe is handled internally by Mesh module
 

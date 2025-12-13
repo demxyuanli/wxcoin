@@ -7,6 +7,10 @@
 #include "STLReader.h"
 #include "BREPReader.h"
 #include "XTReader.h"
+#include "rendering/RenderingToolkitAPI.h"
+#include "geometry/helper/PointViewBuilder.h"
+#include "geometry/helper/WireframeBuilder.h"
+#include "geometry/GeometryRenderContext.h"
 #include <filesystem>
 #include <algorithm>
 #include <cctype>
@@ -21,6 +25,13 @@
 #include <TopoDS_Compound.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <ShapeFix_Shape.hxx>
+#include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoSwitch.h>
+#include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoLightModel.h>
+#include <Inventor/nodes/SoShapeHints.h>
+#include <Inventor/nodes/SoPolygonOffset.h>
 
 std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromShape(
     const TopoDS_Shape& shape,
@@ -55,6 +66,116 @@ std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromShape(
     }
     catch (const std::exception& e) {
         LOG_ERR_S("Failed to create geometry from shape: " + std::string(e.what()));
+        return nullptr;
+    }
+}
+
+std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromMesh(
+    const TriangleMesh& mesh,
+    const std::string& name,
+    const std::string& fileName,
+    const OptimizationOptions& options)
+{
+    try {
+        // Create OCCGeometry with empty shape (placeholder for mesh-only geometry)
+        auto geometry = std::make_shared<OCCGeometry>(name);
+        
+        // Create a minimal dummy shape to satisfy OCCGeometry requirements
+        // This is just a placeholder - the actual rendering uses the mesh directly
+        BRep_Builder builder;
+        TopoDS_Compound compound;
+        builder.MakeCompound(compound);
+        geometry->setShape(compound);
+        geometry->setFileName(fileName);
+        
+        // Create complete Coin3D node structure with all display modes (FreeCAD-style fast path)
+        SoSeparator* rootNode = new SoSeparator();
+        rootNode->ref();
+        rootNode->renderCaching.setValue(SoSeparator::OFF);
+        rootNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        rootNode->pickCulling.setValue(SoSeparator::OFF);
+
+        // Create SoSwitch for display mode switching
+        SoSwitch* modeSwitch = new SoSwitch();
+        modeSwitch->ref();
+
+        // Default material colors
+        Quantity_Color defaultDiffuse(0.8, 0.8, 0.8, Quantity_TOC_RGB);
+        Quantity_Color defaultAmbient(0.2, 0.2, 0.2, Quantity_TOC_RGB);
+        Quantity_Color defaultSpecular(1.0, 1.0, 1.0, Quantity_TOC_RGB);
+        Quantity_Color defaultEmissive(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+
+        // Create surface geometry node (Solid mode)
+        auto& manager = RenderingToolkitAPI::getManager();
+        auto backend = manager.getRenderBackend("Coin3D");
+        if (backend) {
+            auto sceneNode = backend->createSceneNode(mesh, false, 
+                defaultDiffuse, defaultAmbient, defaultSpecular, defaultEmissive, 0.5, 0.0);
+            
+            if (sceneNode) {
+                SoSeparator* surfaceNode = sceneNode.get();
+                surfaceNode->ref();
+                modeSwitch->addChild(surfaceNode);
+            }
+        }
+
+        // Create wireframe node (Wireframe mode)
+        SoSeparator* wireframeNode = new SoSeparator();
+        wireframeNode->ref();
+        wireframeNode->renderCaching.setValue(SoSeparator::OFF);
+        wireframeNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        wireframeNode->pickCulling.setValue(SoSeparator::OFF);
+        
+        SoDrawStyle* wireframeStyle = new SoDrawStyle();
+        wireframeStyle->style.setValue(SoDrawStyle::LINES);
+        wireframeStyle->lineWidth.setValue(1.0f);
+        wireframeNode->addChild(wireframeStyle);
+        
+        SoMaterial* wireframeMaterial = new SoMaterial();
+        wireframeMaterial->diffuseColor.setValue(0.0f, 0.0f, 0.0f);
+        wireframeMaterial->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
+        wireframeNode->addChild(wireframeMaterial);
+        
+        SoLightModel* wireframeLightModel = new SoLightModel();
+        wireframeLightModel->model.setValue(SoLightModel::BASE_COLOR);
+        wireframeNode->addChild(wireframeLightModel);
+        
+        WireframeBuilder wireframeBuilder;
+        wireframeBuilder.createWireframeRepresentation(wireframeNode, mesh);
+        modeSwitch->addChild(wireframeNode);
+
+        // Create point view node (Points mode)
+        SoSeparator* pointViewNode = new SoSeparator();
+        pointViewNode->ref();
+        pointViewNode->renderCaching.setValue(SoSeparator::OFF);
+        pointViewNode->boundingBoxCaching.setValue(SoSeparator::OFF);
+        pointViewNode->pickCulling.setValue(SoSeparator::OFF);
+        
+        DisplaySettings pointSettings;
+        pointSettings.pointViewColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB);
+        pointSettings.pointViewSize = 3.0;
+        pointSettings.pointViewShape = 0;
+        
+        PointViewBuilder pointViewBuilder;
+        pointViewBuilder.createPointViewRepresentation(pointViewNode, mesh, pointSettings);
+        modeSwitch->addChild(pointViewNode);
+
+        // Set default mode to Solid (index 0)
+        modeSwitch->whichChild.setValue(0);
+        rootNode->addChild(modeSwitch);
+
+        // Store mode switch in geometry for later mode switching
+        // Note: This requires adding a method to OCCGeometry to store the switch
+        geometry->setCoinNode(rootNode);
+        
+        LOG_INF_S("Created OCCGeometry from mesh with all display modes: " + 
+                 std::to_string(mesh.vertices.size()) + " vertices, " + 
+                 std::to_string(mesh.triangles.size() / 3) + " triangles");
+        
+        return geometry;
+    }
+    catch (const std::exception& e) {
+        LOG_ERR_S("Failed to create geometry from mesh: " + std::string(e.what()));
         return nullptr;
     }
 }

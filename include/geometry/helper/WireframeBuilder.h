@@ -15,5 +15,9 @@ public:
     void createWireframeRepresentation(SoSeparator* coinNode, 
                                       const TopoDS_Shape& shape, 
                                       const MeshParameters& params);
+
+    // Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
+    void createWireframeRepresentation(SoSeparator* coinNode, 
+                                      const TriangleMesh& mesh);
 };
 

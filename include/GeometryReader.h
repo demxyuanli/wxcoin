@@ -6,6 +6,7 @@
 #include <functional>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include "OCCGeometry.h"
+#include "rendering/GeometryProcessor.h"
 
 /**
  * @brief Base interface for all geometry file readers
@@ -151,6 +152,20 @@ protected:
         const std::string& fileName,
         const OptimizationOptions& options
     );
+
+    /**
+     * @brief Create OCCGeometry directly from TriangleMesh (FreeCAD-style fast path)
+     * @param mesh Triangle mesh data
+     * @param name Geometry name
+     * @param fileName Source file name
+     * @param options Optimization options
+     * @return Shared pointer to OCCGeometry, or nullptr on failure
+     */
+    static std::shared_ptr<OCCGeometry> createGeometryFromMesh(
+        const TriangleMesh& mesh,
+        const std::string& name,
+        const std::string& fileName,
+        const OptimizationOptions& options);
 
     /**
      * @brief Helper function to validate file exists and is readable
