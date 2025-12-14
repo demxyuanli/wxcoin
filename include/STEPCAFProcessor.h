@@ -103,6 +103,7 @@ private:
      * @param geometries Output geometries
      * @param entityMetadata Output metadata
      * @param componentIndex Current component index
+     * @param hasNonDefaultColors Whether assembly has non-default colors
      * @return Updated component index
      */
     static int processLabel(
@@ -116,7 +117,8 @@ private:
         const std::function<Quantity_Color(const std::string&, const Quantity_Color*)>& makeColorForName,
         std::vector<std::shared_ptr<OCCGeometry>>& geometries,
         std::vector<STEPReader::STEPEntityInfo>& entityMetadata,
-        int& componentIndex);
+        int& componentIndex,
+        bool hasNonDefaultColors = false);
 
     /**
      * @brief Extract and decompose shapes from label
@@ -145,6 +147,7 @@ private:
      * @param componentIndex Starting component index
      * @param colorTool Color tool for extracting face-level colors (optional)
      * @param shapeTool Shape tool for finding labels (optional)
+     * @param hasNonDefaultColors Whether assembly has non-default colors
      * @return Updated component index
      */
     static int createGeometriesFromParts(
@@ -160,7 +163,8 @@ private:
         std::vector<STEPReader::STEPEntityInfo>& entityMetadata,
         int componentIndex,
         const Handle(XCAFDoc_ColorTool)& colorTool = nullptr,
-        const Handle(XCAFDoc_ShapeTool)& shapeTool = nullptr);
+        const Handle(XCAFDoc_ShapeTool)& shapeTool = nullptr,
+        bool hasNonDefaultColors = false);
 
     /**
      * @brief Detect if a shape is a shell model

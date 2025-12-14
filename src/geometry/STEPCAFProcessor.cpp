@@ -219,6 +219,96 @@ bool STEPCAFProcessor::readAndTransferCAF(
     }
 }
 
+// Helper function to check if assembly has any non-default gray colors
+static bool checkAssemblyHasNonDefaultColors(
+    const Handle(XCAFDoc_ShapeTool)& shapeTool,
+    const Handle(XCAFDoc_ColorTool)& colorTool)
+{
+    if (colorTool.IsNull() || shapeTool.IsNull()) {
+        return false;
+    }
+
+    TDF_LabelSequence freeShapes;
+    shapeTool->GetFreeShapes(freeShapes);
+
+    // Recursive function to check all labels in the assembly tree
+    std::function<bool(const TDF_Label&)> checkLabel = [&](const TDF_Label& label) -> bool {
+        if (shapeTool->IsAssembly(label)) {
+            TDF_LabelSequence children;
+            shapeTool->GetComponents(label, children);
+            for (int k = 1; k <= children.Length(); ++k) {
+                if (checkLabel(children.Value(k))) {
+                    return true;
+                }
+            }
+        }
+
+        if (shapeTool->IsShape(label)) {
+            TDF_Label srcLabel = label;
+            if (shapeTool->IsReference(label)) {
+                TDF_Label referred;
+                if (shapeTool->GetReferredShape(label, referred)) {
+                    srcLabel = referred;
+                }
+            }
+
+            TopoDS_Shape shape = shapeTool->GetShape(srcLabel);
+            if (!shape.IsNull()) {
+                Quantity_Color color;
+                // Check instance color first
+                if (colorTool->GetInstanceColor(shape, XCAFDoc_ColorSurf, color) ||
+                    colorTool->GetInstanceColor(shape, XCAFDoc_ColorGen, color) ||
+                    colorTool->GetInstanceColor(shape, XCAFDoc_ColorCurv, color)) {
+                    // Check if color is different from default gray
+                    if (STEPColorManager::isColorDifferentFromDefault(color)) {
+                        return true;
+                    }
+                }
+
+                // Check label color
+                if (colorTool->GetColor(label, XCAFDoc_ColorSurf, color) ||
+                    colorTool->GetColor(label, XCAFDoc_ColorGen, color) ||
+                    colorTool->GetColor(label, XCAFDoc_ColorCurv, color)) {
+                    if (STEPColorManager::isColorDifferentFromDefault(color)) {
+                        return true;
+                    }
+                }
+
+                // Check referenced label color
+                if (colorTool->GetColor(srcLabel, XCAFDoc_ColorSurf, color) ||
+                    colorTool->GetColor(srcLabel, XCAFDoc_ColorGen, color) ||
+                    colorTool->GetColor(srcLabel, XCAFDoc_ColorCurv, color)) {
+                    if (STEPColorManager::isColorDifferentFromDefault(color)) {
+                        return true;
+                    }
+                }
+
+                // Check face-level colors
+                for (TopExp_Explorer faceExp(shape, TopAbs_FACE); faceExp.More(); faceExp.Next()) {
+                    TopoDS_Shape face = faceExp.Current();
+                    if (colorTool->GetInstanceColor(face, XCAFDoc_ColorSurf, color) ||
+                        colorTool->GetInstanceColor(face, XCAFDoc_ColorGen, color)) {
+                        if (STEPColorManager::isColorDifferentFromDefault(color)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    };
+
+    // Check all free shapes
+    for (int i = 1; i <= freeShapes.Length(); ++i) {
+        if (checkLabel(freeShapes.Value(i))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 int STEPCAFProcessor::processAssemblyTree(
     const Handle(XCAFDoc_ShapeTool)& shapeTool,
     const Handle(XCAFDoc_ColorTool)& colorTool,
@@ -236,6 +326,14 @@ int STEPCAFProcessor::processAssemblyTree(
         return componentIndex;
     }
 
+    // Check if assembly has any non-default gray colors
+    bool hasNonDefaultColors = checkAssemblyHasNonDefaultColors(shapeTool, colorTool);
+    
+    if (hasNonDefaultColors) {
+        LOG_INF_S("Assembly has non-default colors - will preserve original colors, skip color scheme");
+    } else {
+        LOG_INF_S("Assembly has only default gray colors - will apply color scheme");
+    }
 
     // Create color assignment function
     auto palette = STEPColorManager::getPaletteForScheme(options.decomposition.colorScheme);
@@ -252,11 +350,11 @@ int STEPCAFProcessor::processAssemblyTree(
         return palette[componentIndex % palette.size()];
     };
 
-    // Process each free shape
+    // Process each free shape, passing hasNonDefaultColors flag
     for (int i = 1; i <= freeShapes.Length(); ++i) {
         componentIndex = processLabel(freeShapes.Value(i), TopLoc_Location(), 0,
             shapeTool, colorTool, baseName, options, makeColorForName,
-            geometries, entityMetadata, componentIndex);
+            geometries, entityMetadata, componentIndex, hasNonDefaultColors);
     }
 
     return componentIndex;
@@ -538,7 +636,8 @@ int STEPCAFProcessor::createGeometriesFromParts(
     std::vector<STEPReader::STEPEntityInfo>& entityMetadata,
     int componentIndex,
     const Handle(XCAFDoc_ColorTool)& colorTool,
-    const Handle(XCAFDoc_ShapeTool)& shapeTool)
+    const Handle(XCAFDoc_ShapeTool)& shapeTool,
+    bool hasNonDefaultColors)
 {
     int localIdx = 0;
 
@@ -608,11 +707,28 @@ int STEPCAFProcessor::createGeometriesFromParts(
             }
         }
         
-        // Assign color: when decomposition is enabled, prioritize palette colors
-        // Otherwise use CAF color if available, or fallback to color scheme for assembly components
+        // Assign color: if assembly has non-default colors, preserve original colors
+        // Otherwise apply color scheme when appropriate
         Quantity_Color color;
-        if (options.decomposition.enableDecomposition) {
-            // When decomposition is enabled, always use palette colors from color scheme
+        
+        if (hasNonDefaultColors) {
+            // Assembly has non-default colors - preserve original CAF colors, do not apply color scheme
+            if (hasPartColor) {
+                // Use CAF color as-is (even if it's default gray)
+                color = partColor;
+                LOG_INF_S("Preserving CAF color for: " + partName + 
+                         " (R:" + std::to_string(color.Red()) + 
+                         " G:" + std::to_string(color.Green()) + 
+                         " B:" + std::to_string(color.Blue()) + 
+                         ", hasNonDefaultColors=true)");
+            } else {
+                // No CAF color - use default gray
+                color = STEPColorManager::getDefaultColor();
+                LOG_INF_S("No CAF color available, using default gray for: " + partName + 
+                         " (hasNonDefaultColors=true)");
+            }
+        } else if (options.decomposition.enableDecomposition) {
+            // When decomposition is enabled and no non-default colors found, use palette colors from color scheme
             auto palette = STEPColorManager::getPaletteForScheme(options.decomposition.colorScheme);
             std::hash<std::string> hasher;
             
@@ -763,7 +879,8 @@ int STEPCAFProcessor::processLabel(
     const std::function<Quantity_Color(const std::string&, const Quantity_Color*)>& makeColorForName,
     std::vector<std::shared_ptr<OCCGeometry>>& geometries,
     std::vector<STEPReader::STEPEntityInfo>& entityMetadata,
-    int& componentIndex)
+    int& componentIndex,
+    bool hasNonDefaultColors)
 {
     TopLoc_Location ownLoc = shapeTool->GetLocation(label);
     TopLoc_Location globLoc = parentLoc * ownLoc;
@@ -776,7 +893,7 @@ int STEPCAFProcessor::processLabel(
         for (int k = 1; k <= children.Length(); ++k) {
             componentIndex = processLabel(children.Value(k), globLoc, level + 1,
                 shapeTool, colorTool, baseName, options, makeColorForName,
-                geometries, entityMetadata, componentIndex);
+                geometries, entityMetadata, componentIndex, hasNonDefaultColors);
         }
         return componentIndex;
     }
@@ -896,7 +1013,7 @@ int STEPCAFProcessor::processLabel(
     // Create geometries from parts
     componentIndex = createGeometriesFromParts(parts, compName, hasCafColor, cafColor, level,
         baseName, options, makeColorForName, geometries, entityMetadata, componentIndex,
-        colorTool, shapeTool);
+        colorTool, shapeTool, hasNonDefaultColors);
 
     return componentIndex;
 }
