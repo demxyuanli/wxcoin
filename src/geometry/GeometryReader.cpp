@@ -91,6 +91,10 @@ std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromMesh(
         geometry->setShape(compound);
         geometry->setFileName(fileName);
         
+        // CRITICAL FIX: Store the mesh in OCCGeometry for later use by edge/normal generators
+        // This enables mesh edges, vertex normals, and face normals for mesh-only geometries
+        geometry->setCachedMesh(mesh);
+        
         // Create complete Coin3D node structure with all display modes using DisplayModeHandler
         SoSeparator* rootNode = new SoSeparator();
         rootNode->ref();

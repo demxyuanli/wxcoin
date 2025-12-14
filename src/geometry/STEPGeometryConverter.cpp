@@ -166,12 +166,22 @@ std::shared_ptr<OCCGeometry> STEPGeometryConverter::processSingleShape(
             geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
             geometry->setMaterialDiffuseColor(componentColor);
         } else {
-            // Use default color when decomposition is disabled
-            Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-            geometry->setColor(defaultColor);
+            // Use color scheme for assembly components without CAF color
+            // This ensures distinct colors even when decomposition is disabled
+            Quantity_Color componentColor = palette[colorIndex % palette.size()];
+            geometry->setColor(componentColor);
+            
+            LOG_INF_S("Applied color scheme for assembly component: " + name + 
+                     " (R:" + std::to_string(componentColor.Red()) + 
+                     " G:" + std::to_string(componentColor.Green()) + 
+                     " B:" + std::to_string(componentColor.Blue()) + 
+                     ", Index:" + std::to_string(colorIndex) + ")");
+            
             // Also set material colors to ensure consistent rendering
-            geometry->setMaterialAmbientColor(Quantity_Color(0.24, 0.24, 0.24, Quantity_TOC_RGB));
-            geometry->setMaterialDiffuseColor(defaultColor);
+            Standard_Real r, g, b;
+            componentColor.Values(r, g, b, Quantity_TOC_RGB);
+            geometry->setMaterialAmbientColor(Quantity_Color(r * 0.3, g * 0.3, b * 0.3, Quantity_TOC_RGB));
+            geometry->setMaterialDiffuseColor(componentColor);
         }
 
         // Detect if this is a shell model and apply appropriate settings

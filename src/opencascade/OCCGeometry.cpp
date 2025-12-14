@@ -10,6 +10,7 @@
 #include <Bnd_Box.hxx>
 #include <OpenCASCADE/TopoDS.hxx>
 #include <OpenCASCADE/TopAbs.hxx>
+#include <OpenCASCADE/TopExp_Explorer.hxx>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoMaterial.h>
@@ -318,7 +319,31 @@ void OCCGeometry::buildFaceIndexMapping(const MeshParameters& params)
 // Full Coin3D scene graph construction - thin wrapper for modular implementation
 void OCCGeometry::buildCoinRepresentation(const MeshParameters& params)
 {
-    if (getShape().IsNull()) {
+    // Check if we have a valid BRep shape
+    bool hasValidBRepShape = !getShape().IsNull();
+    
+    // Check if BRep shape has actual geometry (not just an empty compound)
+    if (hasValidBRepShape) {
+        TopExp_Explorer faceExp(getShape(), TopAbs_FACE);
+        if (!faceExp.More()) {
+            // Shape exists but has no faces - check if we have cached mesh
+            if (hasCachedMesh()) {
+                // This is a mesh-only geometry (STL, OBJ, etc.)
+                // Use cached mesh for rendering - already handled in createGeometryFromMesh
+                LOG_INF_S("Mesh-only geometry: using cached mesh for '" + getName() + "'");
+                setMeshRegenerationNeeded(false);
+                return;
+            }
+            LOG_WRN_S("Cannot build coin representation: shape has no faces and no cached mesh");
+            return;
+        }
+    } else {
+        // Shape is null - check if we have cached mesh
+        if (hasCachedMesh()) {
+            LOG_INF_S("Mesh-only geometry: using cached mesh for '" + getName() + "'");
+            setMeshRegenerationNeeded(false);
+            return;
+        }
         LOG_WRN_S("Cannot build coin representation for null shape");
         return;
     }

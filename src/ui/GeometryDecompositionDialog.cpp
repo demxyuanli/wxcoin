@@ -1,5 +1,6 @@
 #include "GeometryDecompositionDialog.h"
 #include "logger/Logger.h"
+#include "config/ThemeManager.h"
 #include <wx/statline.h>
 #include <wx/sizer.h>
 #include <wx/font.h>
@@ -12,8 +13,11 @@ wxBEGIN_EVENT_TABLE(GeometryDecompositionDialog, FramelessModalPopup)
 wxEND_EVENT_TABLE()
 
 GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, GeometryReader::DecompositionOptions& options)
-    : FramelessModalPopup(parent, "Geometry Decomposition Settings", wxSize(600, 700))
+    : FramelessModalPopup(parent, "Geometry Import Settings", wxSize(650, 750))
     , m_options(options)
+    , m_notebook(nullptr)
+    , m_decompositionPage(nullptr)
+    , m_meshQualityPage(nullptr)
     , m_enableDecompositionCheckBox(nullptr)
     , m_decompositionLevelChoice(nullptr)
     , m_colorSchemeChoice(nullptr)
@@ -21,10 +25,22 @@ GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, Geome
     , m_previewText(nullptr)
     , m_previewPanel(nullptr)
     , m_colorPreviewPanel(nullptr)
+    , m_fastPresetBtn(nullptr)
+    , m_balancedPresetBtn(nullptr)
+    , m_highQualityPresetBtn(nullptr)
+    , m_ultraQualityPresetBtn(nullptr)
+    , m_customPresetBtn(nullptr)
+    , m_customDeflectionCtrl(nullptr)
+    , m_customAngularCtrl(nullptr)
+    , m_meshQualityPreviewText(nullptr)
     , m_enableDecomposition(options.enableDecomposition)
     , m_decompositionLevel(options.level)
     , m_colorScheme(options.colorScheme)
     , m_useConsistentColoring(options.useConsistentColoring)
+    , m_meshQualityPreset(options.meshQualityPreset)
+    , m_customMeshDeflection(options.customMeshDeflection)
+    , m_customAngularDeflection(options.customAngularDeflection)
+    , m_updatingMeshQuality(false)
 {
     // Set up title bar with icon
     SetTitleIcon("layers", wxSize(20, 20));
@@ -36,6 +52,7 @@ GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, Geome
 
     // Update UI to reflect current options
     updatePreview();
+    updateMeshQualityControls();
 }
 
 GeometryDecompositionDialog::~GeometryDecompositionDialog()
@@ -44,8 +61,24 @@ GeometryDecompositionDialog::~GeometryDecompositionDialog()
 
 void GeometryDecompositionDialog::createControls()
 {
+    // Create notebook for tabs
+    m_notebook = new wxNotebook(m_contentPanel, wxID_ANY);
+
+    // Create pages
+    createDecompositionPage();
+    createMeshQualityPage();
+
+    // Add pages to notebook
+    m_notebook->AddPage(m_decompositionPage, "Geometry Decomposition", true);
+    m_notebook->AddPage(m_meshQualityPage, "Mesh Quality", false);
+}
+
+void GeometryDecompositionDialog::createDecompositionPage()
+{
+    m_decompositionPage = new wxPanel(m_notebook);
+
     // Enable decomposition checkbox
-    m_enableDecompositionCheckBox = new wxCheckBox(m_contentPanel, wxID_ANY, "Enable Geometry Decomposition");
+    m_enableDecompositionCheckBox = new wxCheckBox(m_decompositionPage, wxID_ANY, "Enable Geometry Decomposition");
     m_enableDecompositionCheckBox->SetValue(m_enableDecomposition);
     m_enableDecompositionCheckBox->SetToolTip("Enable automatic decomposition of complex geometries into separate components");
 
@@ -57,7 +90,7 @@ void GeometryDecompositionDialog::createControls()
     levelChoices.Add("Shell Level");
     levelChoices.Add("Face Level (detailed)");
 
-    m_decompositionLevelChoice = new wxChoice(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, levelChoices);
+    m_decompositionLevelChoice = new wxChoice(m_decompositionPage, wxID_ANY, wxDefaultPosition, wxDefaultSize, levelChoices);
     m_decompositionLevelChoice->SetSelection(static_cast<int>(m_decompositionLevel));
     m_decompositionLevelChoice->SetToolTip("Choose how detailed the decomposition should be");
     m_decompositionLevelChoice->Enable(m_enableDecomposition);
@@ -71,16 +104,84 @@ void GeometryDecompositionDialog::createControls()
     colorChoices.Add("Monochrome Green");
     colorChoices.Add("Monochrome Gray");
 
-    m_colorSchemeChoice = new wxChoice(m_contentPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, colorChoices);
+    m_colorSchemeChoice = new wxChoice(m_decompositionPage, wxID_ANY, wxDefaultPosition, wxDefaultSize, colorChoices);
     m_colorSchemeChoice->SetSelection(static_cast<int>(m_colorScheme));
     m_colorSchemeChoice->SetToolTip("Choose color scheme for decomposed components");
     m_colorSchemeChoice->Enable(m_enableDecomposition);
 
     // Consistent coloring checkbox
-    m_consistentColoringCheckBox = new wxCheckBox(m_contentPanel, wxID_ANY, "Use Consistent Coloring");
+    m_consistentColoringCheckBox = new wxCheckBox(m_decompositionPage, wxID_ANY, "Use Consistent Coloring");
     m_consistentColoringCheckBox->SetValue(m_useConsistentColoring);
     m_consistentColoringCheckBox->SetToolTip("Use consistent colors for similar components across imports");
     m_consistentColoringCheckBox->Enable(m_enableDecomposition);
+}
+
+void GeometryDecompositionDialog::createMeshQualityPage()
+{
+    m_meshQualityPage = new wxPanel(m_notebook);
+    m_meshQualityPage->SetBackgroundColour(CFG_COLOUR("PrimaryBackgroundColour"));
+
+    // Create preset buttons with enhanced styling
+    wxFont buttonFont = CFG_FONT();
+    buttonFont.SetPointSize(10);
+    buttonFont.SetWeight(wxFONTWEIGHT_BOLD);
+    wxFont buttonSubFont = CFG_FONT();
+    buttonSubFont.SetPointSize(8);
+    
+    // Fast preset button
+    m_fastPresetBtn = new wxButton(m_meshQualityPage, wxID_ANY, "Fast\nLower Quality", wxDefaultPosition, wxSize(160, 65));
+    m_fastPresetBtn->SetToolTip("Fast import, lower quality mesh\nDeflection=2.0, Angular=2.0\nBest for quick previews");
+    m_fastPresetBtn->SetFont(buttonFont);
+    m_fastPresetBtn->SetBackgroundColour(CFG_COLOUR("ButtonbarDefaultBgColour"));
+    m_fastPresetBtn->SetForegroundColour(CFG_COLOUR("ButtonbarDefaultTextColour"));
+
+    // Balanced preset button
+    m_balancedPresetBtn = new wxButton(m_meshQualityPage, wxID_ANY, "Balanced\nRecommended", wxDefaultPosition, wxSize(160, 65));
+    m_balancedPresetBtn->SetToolTip("Balanced quality and performance\nDeflection=1.0, Angular=1.0\nGood for most use cases");
+    m_balancedPresetBtn->SetFont(buttonFont);
+    m_balancedPresetBtn->SetBackgroundColour(CFG_COLOUR("ButtonbarDefaultBgColour"));
+    m_balancedPresetBtn->SetForegroundColour(CFG_COLOUR("ButtonbarDefaultTextColour"));
+
+    // High Quality preset button (default)
+    m_highQualityPresetBtn = new wxButton(m_meshQualityPage, wxID_ANY, "High Quality\nDefault", wxDefaultPosition, wxSize(160, 65));
+    m_highQualityPresetBtn->SetToolTip("High quality mesh\nDeflection=0.5, Angular=0.5\nBetter visual quality");
+    m_highQualityPresetBtn->SetFont(buttonFont);
+    m_highQualityPresetBtn->SetBackgroundColour(CFG_COLOUR("ButtonbarDefaultBgColour"));
+    m_highQualityPresetBtn->SetForegroundColour(CFG_COLOUR("ButtonbarDefaultTextColour"));
+
+    // Ultra Quality preset button
+    m_ultraQualityPresetBtn = new wxButton(m_meshQualityPage, wxID_ANY, "Ultra Quality\nSlow Import", wxDefaultPosition, wxSize(160, 65));
+    m_ultraQualityPresetBtn->SetToolTip("Ultra high quality\nDeflection=0.2, Angular=0.3\nBest quality, slower import");
+    m_ultraQualityPresetBtn->SetFont(buttonFont);
+    m_ultraQualityPresetBtn->SetBackgroundColour(CFG_COLOUR("ButtonbarDefaultBgColour"));
+    m_ultraQualityPresetBtn->SetForegroundColour(CFG_COLOUR("ButtonbarDefaultTextColour"));
+
+    // Custom preset button
+    m_customPresetBtn = new wxButton(m_meshQualityPage, wxID_ANY, "Custom\nUser Defined", wxDefaultPosition, wxSize(160, 65));
+    m_customPresetBtn->SetToolTip("Custom mesh quality settings\nDefine your own deflection values");
+    m_customPresetBtn->SetFont(buttonFont);
+    m_customPresetBtn->SetBackgroundColour(CFG_COLOUR("ButtonbarDefaultBgColour"));
+    m_customPresetBtn->SetForegroundColour(CFG_COLOUR("ButtonbarDefaultTextColour"));
+
+    // Custom deflection controls with better styling
+    m_customDeflectionCtrl = new wxTextCtrl(m_meshQualityPage, wxID_ANY, 
+        wxString::Format("%.4f", m_customMeshDeflection),
+        wxDefaultPosition, wxSize(120, -1), wxTE_CENTER);
+    m_customDeflectionCtrl->SetToolTip("Mesh deflection value (smaller = finer mesh, 0.001-10.0)\nLower values produce finer meshes but slower import");
+    m_customDeflectionCtrl->Enable(m_meshQualityPreset == GeometryReader::MeshQualityPreset::CUSTOM);
+    m_customDeflectionCtrl->SetBackgroundColour(CFG_COLOUR("TextCtrlBgColour"));
+    m_customDeflectionCtrl->SetForegroundColour(CFG_COLOUR("TextCtrlFgColour"));
+
+    m_customAngularCtrl = new wxTextCtrl(m_meshQualityPage, wxID_ANY, 
+        wxString::Format("%.4f", m_customAngularDeflection),
+        wxDefaultPosition, wxSize(120, -1), wxTE_CENTER);
+    m_customAngularCtrl->SetToolTip("Angular deflection value (smaller = smoother curves, 0.01-10.0)\nLower values produce smoother curves but more triangles");
+    m_customAngularCtrl->Enable(m_meshQualityPreset == GeometryReader::MeshQualityPreset::CUSTOM);
+    m_customAngularCtrl->SetBackgroundColour(CFG_COLOUR("TextCtrlBgColour"));
+    m_customAngularCtrl->SetForegroundColour(CFG_COLOUR("TextCtrlFgColour"));
+
+    // Note: m_meshQualityPreviewText will be created in layoutControls() 
+    // to ensure correct parent (meshPreviewPanel)
 }
 
 void GeometryDecompositionDialog::layoutControls()
@@ -88,86 +189,89 @@ void GeometryDecompositionDialog::layoutControls()
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
     // Title
-    wxStaticText* title = new wxStaticText(m_contentPanel, wxID_ANY, "Configure Geometry Decomposition");
-    wxFont titleFont = title->GetFont();
+    wxStaticText* title = new wxStaticText(m_contentPanel, wxID_ANY, "Configure Geometry Import");
+    wxFont titleFont = CFG_FONT();
     titleFont.SetPointSize(titleFont.GetPointSize() + 2);
     titleFont.SetWeight(wxFONTWEIGHT_BOLD);
     title->SetFont(titleFont);
+    title->SetForegroundColour(CFG_COLOUR("PrimaryTextColour"));
 
     mainSizer->Add(title, 0, wxALL | wxALIGN_CENTER, 10);
     mainSizer->Add(new wxStaticLine(m_contentPanel), 0, wxEXPAND | wxLEFT | wxRIGHT, 15);
 
-    // Main content
-    wxBoxSizer* contentSizer = new wxBoxSizer(wxVERTICAL);
+    // Add notebook
+    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
+
+    // Layout decomposition page
+    wxBoxSizer* decompositionSizer = new wxBoxSizer(wxVERTICAL);
 
     // Enable decomposition
-    wxStaticBox* enableBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Decomposition Control");
+    wxStaticBox* enableBox = new wxStaticBox(m_decompositionPage, wxID_ANY, "Decomposition Control");
     wxStaticBoxSizer* enableSizer = new wxStaticBoxSizer(enableBox, wxVERTICAL);
-
     enableSizer->Add(m_enableDecompositionCheckBox, 0, wxALL, 10);
-
-    contentSizer->Add(enableSizer, 0, wxEXPAND | wxALL, 10);
+    decompositionSizer->Add(enableSizer, 0, wxEXPAND | wxALL, 10);
 
     // Decomposition settings
-    wxStaticBox* settingsBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Decomposition Settings");
+    wxStaticBox* settingsBox = new wxStaticBox(m_decompositionPage, wxID_ANY, "Decomposition Settings");
     wxStaticBoxSizer* settingsSizer = new wxStaticBoxSizer(settingsBox, wxVERTICAL);
 
     wxFlexGridSizer* settingsGrid = new wxFlexGridSizer(3, 2, 8, 15);
     settingsGrid->AddGrowableCol(1);
 
     // Decomposition level
-    settingsGrid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Decomposition Level:"), 0, wxALIGN_CENTER_VERTICAL);
+    settingsGrid->Add(new wxStaticText(m_decompositionPage, wxID_ANY, "Decomposition Level:"), 0, wxALIGN_CENTER_VERTICAL);
     settingsGrid->Add(m_decompositionLevelChoice, 1, wxEXPAND);
 
     // Color scheme
-    settingsGrid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Color Scheme:"), 0, wxALIGN_CENTER_VERTICAL);
+    settingsGrid->Add(new wxStaticText(m_decompositionPage, wxID_ANY, "Color Scheme:"), 0, wxALIGN_CENTER_VERTICAL);
     settingsGrid->Add(m_colorSchemeChoice, 1, wxEXPAND);
 
     // Consistent coloring
-    settingsGrid->Add(new wxStaticText(m_contentPanel, wxID_ANY, "Coloring Mode:"), 0, wxALIGN_CENTER_VERTICAL);
+    settingsGrid->Add(new wxStaticText(m_decompositionPage, wxID_ANY, "Coloring Mode:"), 0, wxALIGN_CENTER_VERTICAL);
     settingsGrid->Add(m_consistentColoringCheckBox, 1, wxEXPAND);
 
     settingsSizer->Add(settingsGrid, 0, wxEXPAND | wxALL, 10);
 
     // Help text
-    wxStaticText* helpText = new wxStaticText(m_contentPanel, wxID_ANY,
+    wxStaticText* helpText = new wxStaticText(m_decompositionPage, wxID_ANY,
         "* Shape Level: Decomposes assemblies into individual shapes\n"
         "* Solid Level: Further decomposes shapes into individual solid bodies\n"
         "* Shell Level: Further decomposes solids into surface shells\n"
         "* Face Level: Decomposes into individual faces (most detailed)\n"
         "* Consistent coloring ensures similar components have the same color");
-    helpText->SetForegroundColour(wxColour(100, 100, 100));
-    wxFont helpFont = helpText->GetFont();
+    helpText->SetForegroundColour(CFG_COLOUR("PlaceholderTextColour"));
+    wxFont helpFont = CFG_FONT();
     helpFont.SetPointSize(helpFont.GetPointSize() - 1);
     helpText->SetFont(helpFont);
     settingsSizer->Add(helpText, 0, wxALL, 10);
 
-    contentSizer->Add(settingsSizer, 0, wxEXPAND | wxALL, 10);
+    decompositionSizer->Add(settingsSizer, 0, wxEXPAND | wxALL, 10);
 
     // Color scheme preview
-    wxStaticBox* colorPreviewBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Color Scheme Preview");
+    wxStaticBox* colorPreviewBox = new wxStaticBox(m_decompositionPage, wxID_ANY, "Color Scheme Preview");
     wxStaticBoxSizer* colorPreviewSizer = new wxStaticBoxSizer(colorPreviewBox, wxVERTICAL);
     
-    m_colorPreviewPanel = new wxPanel(m_contentPanel);
-    m_colorPreviewPanel->SetBackgroundColour(wxColour(255, 255, 255));
+    m_colorPreviewPanel = new wxPanel(m_decompositionPage);
+    m_colorPreviewPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
     
     wxBoxSizer* colorPreviewPanelSizer = new wxBoxSizer(wxHORIZONTAL);
     m_colorPreviewPanel->SetSizer(colorPreviewPanelSizer);
     
     colorPreviewSizer->Add(m_colorPreviewPanel, 0, wxEXPAND | wxALL, 5);
-    contentSizer->Add(colorPreviewSizer, 0, wxEXPAND | wxALL, 10);
+    decompositionSizer->Add(colorPreviewSizer, 0, wxEXPAND | wxALL, 10);
 
     // Preview section
-    wxStaticBox* previewBox = new wxStaticBox(m_contentPanel, wxID_ANY, "Settings Preview");
+    wxStaticBox* previewBox = new wxStaticBox(m_decompositionPage, wxID_ANY, "Settings Preview");
     wxStaticBoxSizer* previewSizer = new wxStaticBoxSizer(previewBox, wxVERTICAL);
 
-    m_previewPanel = new wxPanel(m_contentPanel);
-    m_previewPanel->SetBackgroundColour(wxColour(248, 248, 248));
+    m_previewPanel = new wxPanel(m_decompositionPage);
+    m_previewPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
 
     m_previewText = new wxStaticText(m_previewPanel, wxID_ANY, "Preview will appear here");
-    wxFont previewFont = m_previewText->GetFont();
+    wxFont previewFont = CFG_FONT();
     previewFont.SetPointSize(previewFont.GetPointSize() + 1);
     m_previewText->SetFont(previewFont);
+    m_previewText->SetForegroundColour(CFG_COLOUR("PanelTextColour"));
 
     wxBoxSizer* previewPanelSizer = new wxBoxSizer(wxVERTICAL);
     previewPanelSizer->Add(m_previewText, 0, wxEXPAND | wxALL, 12);
@@ -175,9 +279,102 @@ void GeometryDecompositionDialog::layoutControls()
 
     previewSizer->Add(m_previewPanel, 1, wxEXPAND | wxALL, 5);
 
-    contentSizer->Add(previewSizer, 1, wxEXPAND | wxALL, 10);
+    decompositionSizer->Add(previewSizer, 1, wxEXPAND | wxALL, 10);
 
-    mainSizer->Add(contentSizer, 1, wxEXPAND | wxALL, 5);
+    m_decompositionPage->SetSizer(decompositionSizer);
+
+    // Layout mesh quality page
+    wxBoxSizer* meshQualitySizer = new wxBoxSizer(wxVERTICAL);
+
+    // Preset buttons section - use larger buttons in 2 rows with increased padding
+    wxStaticBox* presetBox = new wxStaticBox(m_meshQualityPage, wxID_ANY, "Mesh Quality Presets");
+    wxStaticBoxSizer* presetSizer = new wxStaticBoxSizer(presetBox, wxVERTICAL);
+    
+    // First row: Fast, Balanced, High Quality (3 buttons)
+    wxFlexGridSizer* firstRowSizer = new wxFlexGridSizer(1, 3, 5, 5);
+    firstRowSizer->AddGrowableCol(0);
+    firstRowSizer->AddGrowableCol(1);
+    firstRowSizer->AddGrowableCol(2);
+    
+    firstRowSizer->Add(m_fastPresetBtn, 1, wxEXPAND | wxALL, 5);
+    firstRowSizer->Add(m_balancedPresetBtn, 1, wxEXPAND | wxALL, 5);
+    firstRowSizer->Add(m_highQualityPresetBtn, 1, wxEXPAND | wxALL, 5);
+    
+    // Second row: Ultra Quality, Custom (2 buttons)
+    wxFlexGridSizer* secondRowSizer = new wxFlexGridSizer(1, 2, 5, 5);
+    secondRowSizer->AddGrowableCol(0);
+    secondRowSizer->AddGrowableCol(1);
+    
+    secondRowSizer->Add(m_ultraQualityPresetBtn, 1, wxEXPAND | wxALL, 5);
+    secondRowSizer->Add(m_customPresetBtn, 1, wxEXPAND | wxALL, 5);
+    
+    presetSizer->Add(firstRowSizer, 0, wxEXPAND | wxALL, 5);
+    presetSizer->Add(secondRowSizer, 0, wxEXPAND | wxALL, 5);
+    meshQualitySizer->Add(presetSizer, 0, wxEXPAND | wxALL, 10);
+
+    // Custom settings section with improved layout
+    wxStaticBox* customBox = new wxStaticBox(m_meshQualityPage, wxID_ANY, "Custom Quality Settings");
+    wxStaticBoxSizer* customSizer = new wxStaticBoxSizer(customBox, wxVERTICAL);
+    
+    // Add description text
+    wxStaticText* customDesc = new wxStaticText(m_meshQualityPage, wxID_ANY, 
+        "Define custom mesh quality parameters (available when Custom preset is selected)");
+    wxFont descFont = CFG_FONT();
+    descFont.SetPointSize(descFont.GetPointSize() - 1);
+    customDesc->SetFont(descFont);
+    customDesc->SetForegroundColour(CFG_COLOUR("PlaceholderTextColour"));
+    customSizer->Add(customDesc, 0, wxALL, 8);
+    
+    // Parameters in a grid layout
+    wxFlexGridSizer* paramGrid = new wxFlexGridSizer(2, 2, 10, 15);
+    paramGrid->AddGrowableCol(1);
+    
+    // Deflection parameter
+    wxStaticText* deflectionLabel = new wxStaticText(m_meshQualityPage, wxID_ANY, "Mesh Deflection:");
+    wxFont labelFont = CFG_FONT();
+    labelFont.SetWeight(wxFONTWEIGHT_BOLD);
+    deflectionLabel->SetFont(labelFont);
+    deflectionLabel->SetForegroundColour(CFG_COLOUR("PanelTextColour"));
+    paramGrid->Add(deflectionLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    paramGrid->Add(m_customDeflectionCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    // Angular parameter
+    wxStaticText* angularLabel = new wxStaticText(m_meshQualityPage, wxID_ANY, "Angular Deflection:");
+    angularLabel->SetFont(labelFont);
+    angularLabel->SetForegroundColour(CFG_COLOUR("PanelTextColour"));
+    paramGrid->Add(angularLabel, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    paramGrid->Add(m_customAngularCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    customSizer->Add(paramGrid, 0, wxEXPAND | wxALL, 10);
+    meshQualitySizer->Add(customSizer, 0, wxEXPAND | wxALL, 10);
+
+    // Mesh quality preview with enhanced styling
+    wxStaticBox* meshPreviewBox = new wxStaticBox(m_meshQualityPage, wxID_ANY, "Current Settings Preview");
+    wxStaticBoxSizer* meshPreviewSizer = new wxStaticBoxSizer(meshPreviewBox, wxVERTICAL);
+    
+    wxPanel* meshPreviewPanel = new wxPanel(m_meshQualityPage);
+    meshPreviewPanel->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
+    meshPreviewPanel->SetMinSize(wxSize(-1, 80));
+    
+    // Create preview text with correct parent (meshPreviewPanel)
+    if (!m_meshQualityPreviewText) {
+        m_meshQualityPreviewText = new wxStaticText(meshPreviewPanel, wxID_ANY, "");
+        m_meshQualityPreviewText->SetBackgroundColour(CFG_COLOUR("SecondaryBackgroundColour"));
+        m_meshQualityPreviewText->SetForegroundColour(CFG_COLOUR("AccentColour"));
+        wxFont previewFont = CFG_FONT();
+        previewFont.SetPointSize(previewFont.GetPointSize() + 1);
+        m_meshQualityPreviewText->SetFont(previewFont);
+        m_meshQualityPreviewText->Wrap(400); // Enable text wrapping
+    }
+    
+    wxBoxSizer* meshPreviewPanelSizer = new wxBoxSizer(wxVERTICAL);
+    meshPreviewPanelSizer->Add(m_meshQualityPreviewText, 1, wxEXPAND | wxALL, 10);
+    meshPreviewPanel->SetSizer(meshPreviewPanelSizer);
+    
+    meshPreviewSizer->Add(meshPreviewPanel, 1, wxEXPAND | wxALL, 5);
+    meshQualitySizer->Add(meshPreviewSizer, 0, wxEXPAND | wxALL, 10);
+
+    m_meshQualityPage->SetSizer(meshQualitySizer);
 
     // Buttons
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -211,12 +408,26 @@ void GeometryDecompositionDialog::bindEvents()
     m_consistentColoringCheckBox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
         updatePreview();
     });
+
+    // Mesh quality events - bind preset button events
+    m_fastPresetBtn->Bind(wxEVT_BUTTON, &GeometryDecompositionDialog::onFastPreset, this);
+    m_balancedPresetBtn->Bind(wxEVT_BUTTON, &GeometryDecompositionDialog::onBalancedPreset, this);
+    m_highQualityPresetBtn->Bind(wxEVT_BUTTON, &GeometryDecompositionDialog::onHighQualityPreset, this);
+    m_ultraQualityPresetBtn->Bind(wxEVT_BUTTON, &GeometryDecompositionDialog::onUltraQualityPreset, this);
+    m_customPresetBtn->Bind(wxEVT_BUTTON, &GeometryDecompositionDialog::onCustomPreset, this);
+    
+    m_customDeflectionCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
+        updateMeshQualityControls();
+    });
+    m_customAngularCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
+        updateMeshQualityControls();
+    });
 }
 
 void GeometryDecompositionDialog::updatePreview()
 {
     wxString preview;
-    wxColour previewColor = wxColour(0, 150, 0); // Default green
+    wxColour previewColor = CFG_COLOUR("AccentColour"); // Default accent color
 
     bool enabled = m_enableDecompositionCheckBox->GetValue();
 
@@ -224,7 +435,7 @@ void GeometryDecompositionDialog::updatePreview()
         preview = "Decomposition: Disabled\n"
                   "Result: Single component per file\n"
                   "Coloring: Default";
-        previewColor = wxColour(150, 150, 150); // Gray
+        previewColor = CFG_COLOUR("PlaceholderTextColour"); // Gray
     } else {
         // Get selected level description
         wxString levelDesc;
@@ -261,9 +472,9 @@ void GeometryDecompositionDialog::updatePreview()
 
         if (levelIndex == 3) { // Face level
             preview += "\nWarning: Face level may create many small components";
-            previewColor = wxColour(255, 140, 0); // Orange warning
+            previewColor = CFG_COLOUR("ErrorTextColour"); // Warning color
         } else {
-            previewColor = wxColour(0, 150, 0); // Green success
+            previewColor = CFG_COLOUR("AccentColour"); // Success color
         }
     }
 
@@ -384,10 +595,10 @@ void GeometryDecompositionDialog::updateColorPreview()
     
     wxStaticText* label = new wxStaticText(m_colorPreviewPanel, wxID_ANY, 
         wxString::Format("Sample: %s (%d colors)", schemeName, (int)colors.size()));
-    wxFont labelFont = label->GetFont();
+    wxFont labelFont = CFG_FONT();
     labelFont.SetPointSize(labelFont.GetPointSize() - 1);
     label->SetFont(labelFont);
-    label->SetForegroundColour(wxColour(100, 100, 100));
+    label->SetForegroundColour(CFG_COLOUR("PlaceholderTextColour"));
     
     sizer->Add(label, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, 10);
     
@@ -401,7 +612,230 @@ GeometryReader::DecompositionOptions GeometryDecompositionDialog::getDecompositi
     options.level = static_cast<GeometryReader::DecompositionLevel>(m_decompositionLevelChoice->GetSelection());
     options.colorScheme = static_cast<GeometryReader::ColorScheme>(m_colorSchemeChoice->GetSelection());
     options.useConsistentColoring = m_consistentColoringCheckBox->GetValue();
+    
+    // Mesh quality settings - use current preset
+    options.meshQualityPreset = m_meshQualityPreset;
+    
+    // Parse custom values
+    double deflection = 1.0, angular = 1.0;
+    if (m_customDeflectionCtrl->GetValue().ToDouble(&deflection)) {
+        options.customMeshDeflection = deflection;
+    }
+    if (m_customAngularCtrl->GetValue().ToDouble(&angular)) {
+        options.customAngularDeflection = angular;
+    }
+    
     return options;
+}
+
+void GeometryDecompositionDialog::updateMeshQualityControls()
+{
+    // Prevent recursive calls
+    if (m_updatingMeshQuality) {
+        return;
+    }
+    
+    m_updatingMeshQuality = true;
+    
+    GeometryReader::MeshQualityPreset preset = m_meshQualityPreset;
+    
+    // Enable/disable custom controls based on preset
+    bool isCustom = (preset == GeometryReader::MeshQualityPreset::CUSTOM);
+    m_customDeflectionCtrl->Enable(isCustom);
+    m_customAngularCtrl->Enable(isCustom);
+    
+    // Update preview text
+    wxString previewText;
+    double deflection = 1.0, angular = 1.0;
+    
+    switch (preset) {
+        case GeometryReader::MeshQualityPreset::FAST:
+            deflection = 2.0; angular = 2.0;
+            previewText = wxString::Format("Preset: Fast Quality\n"
+                "Deflection: %.2f  |  Angular: %.2f\n"
+                "Fast import speed, coarser mesh quality\n"
+                "Best for: Quick previews and large assemblies", deflection, angular);
+            break;
+        case GeometryReader::MeshQualityPreset::BALANCED:
+            deflection = 1.0; angular = 1.0;
+            previewText = wxString::Format("Preset: Balanced Quality\n"
+                "Deflection: %.2f  |  Angular: %.2f\n"
+                "Good balance of speed and visual quality\n"
+                "Best for: General use and interactive work", deflection, angular);
+            break;
+        case GeometryReader::MeshQualityPreset::HIGH_QUALITY:
+            // Match MeshQualityDialog "quality" preset parameters
+            deflection = 0.5; angular = 0.5;
+            previewText = wxString::Format("Preset: High Quality (Default)\n"
+                "Deflection: %.2f  |  Angular: %.2f\n"
+                "High quality mesh with better visual detail\n"
+                "Best for: Production work and presentations", deflection, angular);
+            break;
+        case GeometryReader::MeshQualityPreset::ULTRA_QUALITY:
+            // Match MeshQualityDialog "ultra" preset parameters
+            deflection = 0.2; angular = 0.3;
+            previewText = wxString::Format("Preset: Ultra Quality\n"
+                "Deflection: %.2f  |  Angular: %.2f\n"
+                "Ultra high quality with maximum smoothness\n"
+                "Best for: Final rendering and critical surfaces", deflection, angular);
+            break;
+        case GeometryReader::MeshQualityPreset::CUSTOM:
+            m_customDeflectionCtrl->GetValue().ToDouble(&deflection);
+            m_customAngularCtrl->GetValue().ToDouble(&angular);
+            previewText = wxString::Format("Preset: Custom Settings\n"
+                "Deflection: %.4f  |  Angular: %.4f\n"
+                "User-defined mesh quality parameters\n"
+                "Fine-tune mesh quality for specific needs", deflection, angular);
+            break;
+        default:
+            previewText = "Unknown preset";
+            break;
+    }
+    
+    // Update deflection controls with preset values (only if not custom)
+    // This will trigger wxEVT_TEXT, but the flag prevents recursion
+    if (!isCustom) {
+        wxString deflectionStr = wxString::Format("%.4f", deflection);
+        wxString angularStr = wxString::Format("%.4f", angular);
+        
+        // Only update if value actually changed to avoid unnecessary events
+        if (m_customDeflectionCtrl->GetValue() != deflectionStr) {
+            m_customDeflectionCtrl->SetValue(deflectionStr);
+        }
+        if (m_customAngularCtrl->GetValue() != angularStr) {
+            m_customAngularCtrl->SetValue(angularStr);
+        }
+    }
+    
+    // Update preview text if it exists
+    if (m_meshQualityPreviewText) {
+        m_meshQualityPreviewText->SetLabel(previewText);
+        m_meshQualityPreviewText->SetForegroundColour(CFG_COLOUR("AccentColour"));
+        m_meshQualityPreviewText->Wrap(400); // Enable text wrapping for better display
+    }
+    
+    // Update button colors to show selected preset
+    updatePresetButtonColors();
+    
+    m_updatingMeshQuality = false;
+}
+
+void GeometryDecompositionDialog::onFastPreset(wxCommandEvent& event)
+{
+    m_meshQualityPreset = GeometryReader::MeshQualityPreset::FAST;
+    updateMeshQualityControls();
+}
+
+void GeometryDecompositionDialog::onBalancedPreset(wxCommandEvent& event)
+{
+    m_meshQualityPreset = GeometryReader::MeshQualityPreset::BALANCED;
+    updateMeshQualityControls();
+}
+
+void GeometryDecompositionDialog::onHighQualityPreset(wxCommandEvent& event)
+{
+    m_meshQualityPreset = GeometryReader::MeshQualityPreset::HIGH_QUALITY;
+    updateMeshQualityControls();
+}
+
+void GeometryDecompositionDialog::onUltraQualityPreset(wxCommandEvent& event)
+{
+    m_meshQualityPreset = GeometryReader::MeshQualityPreset::ULTRA_QUALITY;
+    updateMeshQualityControls();
+}
+
+void GeometryDecompositionDialog::onCustomPreset(wxCommandEvent& event)
+{
+    m_meshQualityPreset = GeometryReader::MeshQualityPreset::CUSTOM;
+    updateMeshQualityControls();
+}
+
+void GeometryDecompositionDialog::updatePresetButtonColors()
+{
+    // Default button colors (unselected) - use theme colors
+    wxColour defaultBg = CFG_COLOUR("ButtonbarDefaultBgColour");
+    wxColour defaultFg = CFG_COLOUR("ButtonbarDefaultTextColour");
+    
+    // Selected button colors - use theme accent colors with variations
+    wxColour fastSelectedBg = CFG_COLOUR("ButtonbarDefaultHoverBgColour");
+    wxColour fastSelectedFg = CFG_COLOUR("AccentColour");
+    
+    wxColour balancedSelectedBg = CFG_COLOUR("ButtonbarDefaultHoverBgColour");
+    wxColour balancedSelectedFg = CFG_COLOUR("AccentColour");
+    
+    wxColour highQualitySelectedBg = CFG_COLOUR("AccentColour"); // Use accent color for default
+    wxColour highQualitySelectedFg = CFG_COLOUR("DropdownSelectionTextColour");
+    
+    wxColour ultraSelectedBg = CFG_COLOUR("HighlightColour");
+    wxColour ultraSelectedFg = CFG_COLOUR("DropdownSelectionTextColour");
+    
+    wxColour customSelectedBg = CFG_COLOUR("ButtonbarDefaultPressedBgColour");
+    wxColour customSelectedFg = CFG_COLOUR("ButtonbarDefaultTextColour");
+    
+    // Reset all buttons to default colors
+    if (m_fastPresetBtn) {
+        m_fastPresetBtn->SetBackgroundColour(defaultBg);
+        m_fastPresetBtn->SetForegroundColour(defaultFg);
+    }
+    if (m_balancedPresetBtn) {
+        m_balancedPresetBtn->SetBackgroundColour(defaultBg);
+        m_balancedPresetBtn->SetForegroundColour(defaultFg);
+    }
+    if (m_highQualityPresetBtn) {
+        m_highQualityPresetBtn->SetBackgroundColour(defaultBg);
+        m_highQualityPresetBtn->SetForegroundColour(defaultFg);
+    }
+    if (m_ultraQualityPresetBtn) {
+        m_ultraQualityPresetBtn->SetBackgroundColour(defaultBg);
+        m_ultraQualityPresetBtn->SetForegroundColour(defaultFg);
+    }
+    if (m_customPresetBtn) {
+        m_customPresetBtn->SetBackgroundColour(defaultBg);
+        m_customPresetBtn->SetForegroundColour(defaultFg);
+    }
+    
+    // Highlight selected preset with appropriate color
+    switch (m_meshQualityPreset) {
+        case GeometryReader::MeshQualityPreset::FAST:
+            if (m_fastPresetBtn) {
+                m_fastPresetBtn->SetBackgroundColour(fastSelectedBg);
+                m_fastPresetBtn->SetForegroundColour(fastSelectedFg);
+            }
+            break;
+        case GeometryReader::MeshQualityPreset::BALANCED:
+            if (m_balancedPresetBtn) {
+                m_balancedPresetBtn->SetBackgroundColour(balancedSelectedBg);
+                m_balancedPresetBtn->SetForegroundColour(balancedSelectedFg);
+            }
+            break;
+        case GeometryReader::MeshQualityPreset::HIGH_QUALITY:
+            if (m_highQualityPresetBtn) {
+                m_highQualityPresetBtn->SetBackgroundColour(highQualitySelectedBg);
+                m_highQualityPresetBtn->SetForegroundColour(highQualitySelectedFg);
+            }
+            break;
+        case GeometryReader::MeshQualityPreset::ULTRA_QUALITY:
+            if (m_ultraQualityPresetBtn) {
+                m_ultraQualityPresetBtn->SetBackgroundColour(ultraSelectedBg);
+                m_ultraQualityPresetBtn->SetForegroundColour(ultraSelectedFg);
+            }
+            break;
+        case GeometryReader::MeshQualityPreset::CUSTOM:
+            if (m_customPresetBtn) {
+                m_customPresetBtn->SetBackgroundColour(customSelectedBg);
+                m_customPresetBtn->SetForegroundColour(customSelectedFg);
+            }
+            break;
+        default:
+            break;
+    }
+    
+    // Refresh buttons to show color changes
+    if (m_fastPresetBtn) m_fastPresetBtn->Refresh();
+    if (m_balancedPresetBtn) m_balancedPresetBtn->Refresh();
+    if (m_highQualityPresetBtn) m_highQualityPresetBtn->Refresh();
+    if (m_ultraQualityPresetBtn) m_ultraQualityPresetBtn->Refresh();
+    if (m_customPresetBtn) m_customPresetBtn->Refresh();
 }
 
 void GeometryDecompositionDialog::onOK(wxCommandEvent& event)

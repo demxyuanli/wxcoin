@@ -97,10 +97,40 @@ bool EdgeGenerationService::ensureMeshDerivedEdges(std::shared_ptr<OCCGeometry>&
 
 	if (!needMesh) return false;
 
-	auto& manager = RenderingToolkitAPI::getManager();
-	auto processor = manager.getGeometryProcessor("OpenCASCADE");
-	if (!processor) return false;
-	TriangleMesh mesh = processor->convertToMesh(geom->getShape(), meshParams);
+	LOG_INF_S("EdgeGenerationService::ensureMeshDerivedEdges called for '" + geom->getName() + 
+	         "', needMeshEdges=" + std::string(needMeshEdges ? "true" : "false") +
+	         ", needVerticeNormals=" + std::string(needVerticeNormals ? "true" : "false") +
+	         ", needFaceNormals=" + std::string(needFaceNormals ? "true" : "false"));
+	
+	// CRITICAL FIX: For mesh-only geometries (STL, OBJ), use cached mesh instead of converting from shape
+	// This enables mesh edges, vertex normals, and face normals for mesh-only geometries
+	TriangleMesh mesh;
+	if (geom->hasCachedMesh()) {
+		// Use cached mesh for mesh-only geometries
+		mesh = geom->getCachedMesh();
+		LOG_INF_S("EdgeGenerationService: Using cached mesh for '" + geom->getName() + "' (" + 
+		         std::to_string(mesh.vertices.size()) + " vertices, " + 
+		         std::to_string(mesh.triangles.size() / 3) + " triangles)");
+	} else {
+		// Convert from BRep shape for standard geometries
+		LOG_INF_S("EdgeGenerationService: Converting from BRep shape for '" + geom->getName() + "'");
+		auto& manager = RenderingToolkitAPI::getManager();
+		auto processor = manager.getGeometryProcessor("OpenCASCADE");
+		if (!processor) {
+			LOG_ERR_S("EdgeGenerationService: Failed to get OpenCASCADE processor");
+			return false;
+		}
+		mesh = processor->convertToMesh(geom->getShape(), meshParams);
+		LOG_INF_S("EdgeGenerationService: Converted mesh has " + 
+		         std::to_string(mesh.vertices.size()) + " vertices, " + 
+		         std::to_string(mesh.triangles.size() / 3) + " triangles");
+	}
+	
+	// Check if mesh is valid
+	if (mesh.vertices.empty() || mesh.triangles.empty()) {
+		LOG_WRN_S("EdgeGenerationService: Empty mesh for '" + geom->getName() + "', cannot generate mesh-derived edges");
+		return false;
+	}
 
 	auto& comp = geom->modularEdgeComponent;
 	if (needMeshEdges && comp->getEdgeNode(EdgeType::Mesh) == nullptr) {
@@ -129,10 +159,25 @@ bool EdgeGenerationService::forceRegenerateMeshDerivedEdges(std::shared_ptr<OCCG
 
 	bool generated = false;
 
-	auto& manager = RenderingToolkitAPI::getManager();
-	auto processor = manager.getGeometryProcessor("OpenCASCADE");
-	if (!processor) return false;
-	TriangleMesh mesh = processor->convertToMesh(geom->getShape(), meshParams);
+	// CRITICAL FIX: For mesh-only geometries (STL, OBJ), use cached mesh instead of converting from shape
+	TriangleMesh mesh;
+	if (geom->hasCachedMesh()) {
+		// Use cached mesh for mesh-only geometries
+		mesh = geom->getCachedMesh();
+		LOG_INF_S("EdgeGenerationService: Using cached mesh for force regeneration '" + geom->getName() + "'");
+	} else {
+		// Convert from BRep shape for standard geometries
+		auto& manager = RenderingToolkitAPI::getManager();
+		auto processor = manager.getGeometryProcessor("OpenCASCADE");
+		if (!processor) return false;
+		mesh = processor->convertToMesh(geom->getShape(), meshParams);
+	}
+	
+	// Check if mesh is valid
+	if (mesh.vertices.empty() || mesh.triangles.empty()) {
+		LOG_WRN_S("EdgeGenerationService: Empty mesh for force regeneration '" + geom->getName() + "'");
+		return false;
+	}
 
 	// Migration completed - always use modular edge component
 	if (!geom->modularEdgeComponent) {

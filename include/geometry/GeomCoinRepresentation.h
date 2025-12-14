@@ -213,6 +213,12 @@ public:
     void createPointViewRepresentation(const TopoDS_Shape& shape, const MeshParameters& params,
                                       const ::DisplaySettings& displaySettings);
 
+    // Cached mesh storage for mesh-only geometries (STL, OBJ, etc.)
+    // These geometries don't have valid BRep shapes, so we need to store the mesh directly
+    void setCachedMesh(const TriangleMesh& mesh) { m_cachedMesh = mesh; m_hasCachedMesh = true; }
+    const TriangleMesh& getCachedMesh() const { return m_cachedMesh; }
+    bool hasCachedMesh() const { return m_hasCachedMesh; }
+    void clearCachedMesh() { m_cachedMesh = TriangleMesh(); m_hasCachedMesh = false; }
 
 protected:
     // Helper function for face triangulation
@@ -249,6 +255,10 @@ protected:
     std::vector<FaceDomain> m_faceDomains;              // Independent mesh containers per face
     std::vector<TriangleSegment> m_triangleSegments;    // Triangle index ranges per face
     std::vector<BoundaryTriangle> m_boundaryTriangles;  // Triangles shared by multiple faces
+
+    // Cached mesh for mesh-only geometries (STL, OBJ, etc.)
+    TriangleMesh m_cachedMesh;
+    bool m_hasCachedMesh = false;
 
     // Helper classes for modular architecture
     std::unique_ptr<CoinNodeManager> m_nodeManager;

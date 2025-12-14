@@ -5,7 +5,10 @@
 #include <wx/checkbox.h>
 #include <wx/choice.h>
 #include <wx/stattext.h>
+#include <wx/textctrl.h>
 #include <wx/panel.h>
+#include <wx/notebook.h>
+#include <wx/button.h>
 
 /**
  * @brief Dialog for configuring geometry decomposition options
@@ -36,6 +39,16 @@ private:
      * @brief Create dialog controls
      */
     void createControls();
+
+    /**
+     * @brief Create decomposition page
+     */
+    void createDecompositionPage();
+
+    /**
+     * @brief Create mesh quality page
+     */
+    void createMeshQualityPage();
 
     /**
      * @brief Layout dialog controls
@@ -88,8 +101,19 @@ private:
     GeometryReader::DecompositionLevel m_decompositionLevel;
     GeometryReader::ColorScheme m_colorScheme;
     bool m_useConsistentColoring;
+    GeometryReader::MeshQualityPreset m_meshQualityPreset;
+    double m_customMeshDeflection;
+    double m_customAngularDeflection;
+    
+    // Flag to prevent recursive calls
+    bool m_updatingMeshQuality;
 
-    // UI controls
+    // Tab notebook
+    wxNotebook* m_notebook;
+    wxPanel* m_decompositionPage;
+    wxPanel* m_meshQualityPage;
+
+    // Decomposition UI controls
     wxCheckBox* m_enableDecompositionCheckBox;
     wxChoice* m_decompositionLevelChoice;
     wxChoice* m_colorSchemeChoice;
@@ -97,4 +121,49 @@ private:
     wxStaticText* m_previewText;
     wxPanel* m_previewPanel;
     wxPanel* m_colorPreviewPanel;
+
+    // Mesh quality controls
+    wxButton* m_fastPresetBtn;
+    wxButton* m_balancedPresetBtn;
+    wxButton* m_highQualityPresetBtn;
+    wxButton* m_ultraQualityPresetBtn;
+    wxButton* m_customPresetBtn;
+    wxTextCtrl* m_customDeflectionCtrl;
+    wxTextCtrl* m_customAngularCtrl;
+    wxStaticText* m_meshQualityPreviewText;
+
+    /**
+     * @brief Update mesh quality controls visibility
+     */
+    void updateMeshQualityControls();
+
+    /**
+     * @brief Update preset button colors to show selected preset
+     */
+    void updatePresetButtonColors();
+
+    /**
+     * @brief Fast preset button handler
+     */
+    void onFastPreset(wxCommandEvent& event);
+
+    /**
+     * @brief Balanced preset button handler
+     */
+    void onBalancedPreset(wxCommandEvent& event);
+
+    /**
+     * @brief High quality preset button handler
+     */
+    void onHighQualityPreset(wxCommandEvent& event);
+
+    /**
+     * @brief Ultra quality preset button handler
+     */
+    void onUltraQualityPreset(wxCommandEvent& event);
+
+    /**
+     * @brief Custom preset button handler
+     */
+    void onCustomPreset(wxCommandEvent& event);
 };

@@ -609,7 +609,7 @@ int STEPCAFProcessor::createGeometriesFromParts(
         }
         
         // Assign color: when decomposition is enabled, prioritize palette colors
-        // Otherwise use CAF color if available
+        // Otherwise use CAF color if available, or fallback to color scheme for assembly components
         Quantity_Color color;
         if (options.decomposition.enableDecomposition) {
             // When decomposition is enabled, always use palette colors from color scheme
@@ -632,12 +632,59 @@ int STEPCAFProcessor::createGeometriesFromParts(
                      ", ComponentIndex:" + std::to_string(componentIndex) + 
                      ", LocalIdx:" + std::to_string(localIdx) + ")");
         } else if (hasPartColor) {
-            // Use color from CAF only when decomposition is disabled
-            color = partColor;
+            // Check if CAF color is a "default gray" (R=G=B, typically assigned by OCCT when no color is defined)
+            // If so, treat it as "no color" and use the color scheme instead
+            const double grayTolerance = 0.02;  // Allow small tolerance for floating point comparison
+            bool isDefaultGray = (std::abs(partColor.Red() - partColor.Green()) < grayTolerance &&
+                                  std::abs(partColor.Green() - partColor.Blue()) < grayTolerance &&
+                                  std::abs(partColor.Red() - partColor.Blue()) < grayTolerance);
+            
+            if (isDefaultGray) {
+                // Default gray detected - use color scheme for assembly components
+                auto palette = STEPColorManager::getPaletteForScheme(options.decomposition.colorScheme);
+                std::hash<std::string> hasher;
+                
+                if (options.decomposition.useConsistentColoring) {
+                    size_t idx = hasher(partName) % palette.size();
+                    color = palette[idx];
+                } else {
+                    color = palette[(componentIndex + localIdx) % palette.size()];
+                }
+                
+                LOG_INF_S("Default gray CAF color detected, applying color scheme for: " + partName + 
+                         " (Original: R:" + std::to_string(partColor.Red()) + 
+                         " G:" + std::to_string(partColor.Green()) + 
+                         " B:" + std::to_string(partColor.Blue()) + 
+                         ") -> (New: R:" + std::to_string(color.Red()) + 
+                         " G:" + std::to_string(color.Green()) + 
+                         " B:" + std::to_string(color.Blue()) + ")");
+            } else {
+                // Use valid non-gray CAF color
+                color = partColor;
+                LOG_INF_S("Using CAF color for: " + partName + 
+                         " (R:" + std::to_string(color.Red()) + 
+                         " G:" + std::to_string(color.Green()) + 
+                         " B:" + std::to_string(color.Blue()) + ")");
+            }
         } else {
-            // Default color when no decomposition and no CAF color
-            Quantity_Color defaultColor(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-            color = defaultColor;
+            // No CAF color available - use color scheme for assembly components
+            // This ensures assembly geometries without CAF colors get distinct colors
+            auto palette = STEPColorManager::getPaletteForScheme(options.decomposition.colorScheme);
+            std::hash<std::string> hasher;
+            
+            if (options.decomposition.useConsistentColoring) {
+                // Hash-based consistent coloring for deterministic results
+                size_t idx = hasher(partName) % palette.size();
+                color = palette[idx];
+            } else {
+                // Sequential coloring for varied appearance
+                color = palette[(componentIndex + localIdx) % palette.size()];
+            }
+            
+            LOG_INF_S("Applied color scheme for assembly component without CAF color: " + partName + 
+                     " (R:" + std::to_string(color.Red()) + 
+                     " G:" + std::to_string(color.Green()) + 
+                     " B:" + std::to_string(color.Blue()) + ")");
         }
 
         auto geom = std::make_shared<OCCGeometry>(partName);

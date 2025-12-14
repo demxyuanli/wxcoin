@@ -246,9 +246,10 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             auto fileStartTime = std::chrono::high_resolution_clock::now();
             
             GeometryReader::OptimizationOptions opts;
-            setupBalancedImportOptions(opts);
-            // Apply decomposition options from dialog
+            // Apply decomposition options from dialog FIRST, before setupBalancedImportOptions
             opts.decomposition = m_decompositionOptions;
+            // Now setup options based on the decomposition settings (including mesh quality preset)
+            setupBalancedImportOptions(opts);
             
             std::vector<std::shared_ptr<OCCGeometry>> progressiveGeoms;
             if (importWithProgressiveLoading(filePath, opts, progressiveGeoms)) {
@@ -335,11 +336,10 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             // Enable caching for repeated imports
             enhancedOptions.enableCache = true;
             
-            // Copy balanced settings
-            setupBalancedImportOptions(enhancedOptions);
-            
-            // Apply decomposition options
+            // Apply decomposition options FIRST, before setupBalancedImportOptions
             enhancedOptions.decomposition = m_decompositionOptions;
+            // Now setup options based on the decomposition settings (including mesh quality preset)
+            setupBalancedImportOptions(enhancedOptions);
             
             // Enable profiling for performance monitoring
             GeometryImportOptimizer::enableProfiling(true);
@@ -361,6 +361,19 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
         if (!allGeometries.empty() && m_occViewer) {
             LOG_INF_S("Adding " + std::to_string(allGeometries.size()) + " geometries to viewer");
             auto geometryAddStartTime = std::chrono::high_resolution_clock::now();
+            
+            // CRITICAL FIX: Update OCCViewer mesh parameters from import options BEFORE adding geometries
+            // This ensures imported geometries use the correct mesh quality settings
+            GeometryReader::OptimizationOptions tempOpts;
+            tempOpts.decomposition = m_decompositionOptions;
+            setupBalancedImportOptions(tempOpts);
+            
+            // Update viewer mesh parameters to match import settings
+            m_occViewer->setMeshDeflection(tempOpts.meshDeflection, false); // false = don't remesh existing geometries
+            m_occViewer->setAngularDeflection(tempOpts.angularDeflection, false);
+            
+            LOG_INF_S(wxString::Format("Updated OCCViewer mesh parameters from import options: Deflection=%.4f, Angular=%.4f",
+                tempOpts.meshDeflection, tempOpts.angularDeflection));
             
             m_occViewer->beginBatchOperation();
             m_occViewer->addGeometries(allGeometries);
@@ -705,10 +718,41 @@ CommandResult ImportGeometryListener::importFilesWithStats(std::unique_ptr<Geome
 
 void ImportGeometryListener::setupBalancedImportOptions(GeometryReader::OptimizationOptions& options)
 {
-    // Use balanced default settings for optimal import performance and quality
-    // Balanced preset: Good balance between quality and performance
-    options.meshDeflection = 1.0;          // Balanced mesh precision
-    options.angularDeflection = 1.0;       // Balanced curve approximation
+    // Apply mesh quality based on preset from decomposition options
+    double meshDeflection = 1.0;
+    double angularDeflection = 1.0;
+    
+    switch (options.decomposition.meshQualityPreset) {
+        case GeometryReader::MeshQualityPreset::FAST:
+            meshDeflection = 2.0;
+            angularDeflection = 2.0;
+            break;
+        case GeometryReader::MeshQualityPreset::BALANCED:
+            meshDeflection = 1.0;
+            angularDeflection = 1.0;
+            break;
+        case GeometryReader::MeshQualityPreset::HIGH_QUALITY:
+            // Match MeshQualityDialog "quality" preset parameters
+            meshDeflection = 0.5;
+            angularDeflection = 0.5;
+            break;
+        case GeometryReader::MeshQualityPreset::ULTRA_QUALITY:
+            // Match MeshQualityDialog "ultra" preset parameters
+            meshDeflection = 0.2;
+            angularDeflection = 0.3;
+            break;
+        case GeometryReader::MeshQualityPreset::CUSTOM:
+            meshDeflection = options.decomposition.customMeshDeflection;
+            angularDeflection = options.decomposition.customAngularDeflection;
+            break;
+        default:
+            meshDeflection = 1.0;
+            angularDeflection = 1.0;
+            break;
+    }
+    
+    options.meshDeflection = meshDeflection;
+    options.angularDeflection = angularDeflection;
     options.enableParallelProcessing = true; // Enable parallel processing
     options.enableShapeAnalysis = false;    // Disable adaptive meshing for consistency
     options.enableCaching = true;           // Enable caching for better performance
@@ -717,15 +761,16 @@ void ImportGeometryListener::setupBalancedImportOptions(GeometryReader::Optimiza
     options.precision = 0.01;              // Standard precision
     options.enableNormalProcessing = false; // Disable normal processing for performance
     
-    // Tessellation settings for balanced quality
+    // Tessellation settings based on mesh quality
     options.enableFineTessellation = true;   // Enable fine tessellation
-    options.tessellationDeflection = 0.01;   // Fine tessellation precision
-    options.tessellationAngle = 0.1;         // Tessellation angle
+    options.tessellationDeflection = meshDeflection * 0.01;   // Fine tessellation precision
+    options.tessellationAngle = angularDeflection * 0.1;       // Tessellation angle
     options.tessellationMinPoints = 3;       // Minimum tessellation points
     options.tessellationMaxPoints = 100;     // Maximum tessellation points
     options.enableAdaptiveTessellation = true; // Enable adaptive tessellation
     
-    LOG_INF_S("Balanced import settings applied: Deflection=1.0, Angular=1.0, Parallel=On");
+    LOG_INF_S(wxString::Format("Import settings applied: Deflection=%.4f, Angular=%.4f, Preset=%d, Parallel=On",
+        meshDeflection, angularDeflection, static_cast<int>(options.decomposition.meshQualityPreset)));
 }
 
 void ImportGeometryListener::setupBalancedImportOptions(GeometryImportOptimizer::EnhancedOptions& options)

@@ -405,7 +405,10 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 			if (g->modularEdgeComponent) {
 				meshNode = g->modularEdgeComponent->getEdgeNode(EdgeType::Mesh);
 			}
-			if (!meshNode) needMesh = true;
+			if (!meshNode) {
+				needMesh = true;
+				LOG_INF_S("EdgeDisplayManager: Need mesh edges for '" + g->getName() + "' (node is null)");
+			}
 		}
 		// For vertex normals (verticeNormals), we also need mesh data. Ensure we treat "show normals" as enabling normal lines.
 		if (m_flags.showVerticeNormals) {
@@ -413,16 +416,23 @@ void EdgeDisplayManager::updateAll(const MeshParameters& meshParams, bool forceM
 			if (g->modularEdgeComponent) {
 				normalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::VerticeNormal);
 			}
-			if (!normalNode) needMesh = true;
+			if (!normalNode) {
+				needMesh = true;
+				LOG_INF_S("EdgeDisplayManager: Need vertice normals for '" + g->getName() + "' (node is null)");
+			}
 		}
 		if (m_flags.showFaceNormals) {
 			SoSeparator* faceNormalNode = nullptr;
 			if (g->modularEdgeComponent) {
 				faceNormalNode = g->modularEdgeComponent->getEdgeNode(EdgeType::FaceNormal);
 			}
-			if (!faceNormalNode) needMesh = true;
+			if (!faceNormalNode) {
+				needMesh = true;
+				LOG_INF_S("EdgeDisplayManager: Need face normals for '" + g->getName() + "' (node is null)");
+			}
 		}
 		if (needMesh) {
+			LOG_INF_S("EdgeDisplayManager: Generating mesh-derived edges for '" + g->getName() + "'");
 			if (forceMeshRegeneration) {
 				generator.forceRegenerateMeshDerivedEdges(g, currentParams, m_flags.showMeshEdges, m_flags.showVerticeNormals, m_flags.showFaceNormals);
 			} else {

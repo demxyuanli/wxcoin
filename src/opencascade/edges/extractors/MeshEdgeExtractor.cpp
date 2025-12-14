@@ -27,6 +27,10 @@ std::vector<gp_Pnt> MeshEdgeExtractor::extractTyped(
 }
 
 std::vector<gp_Pnt> MeshEdgeExtractor::extractAllMeshEdges(const TriangleMesh& mesh) {
+    LOG_INF_S("MeshEdgeExtractor: Starting mesh edge extraction, vertices=" + 
+              std::to_string(mesh.vertices.size()) + ", triangles=" + 
+              std::to_string(mesh.triangles.size() / 3));
+    
     // Deduplicate edges to avoid rendering the same edge multiple times
     // This significantly reduces the number of edges for large meshes
     std::set<std::pair<int, int>> uniqueEdges;
@@ -60,6 +64,9 @@ std::vector<gp_Pnt> MeshEdgeExtractor::extractAllMeshEdges(const TriangleMesh& m
         points.push_back(mesh.vertices[edge.first]);
         points.push_back(mesh.vertices[edge.second]);
     }
+    
+    LOG_INF_S("MeshEdgeExtractor: Extracted " + std::to_string(uniqueEdges.size()) + 
+              " unique edges (" + std::to_string(points.size()) + " points)");
     
     return points;
 }
@@ -108,5 +115,6 @@ void MeshEdgeExtractor::findBoundaryEdges(
         }
     }
 }
+
 
 

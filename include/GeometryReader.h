@@ -58,6 +58,18 @@ public:
     };
 
     /**
+     * @brief Mesh quality preset for BREP geometry tessellation
+     */
+    enum class MeshQualityPreset {
+        FAST,           // Fast import, lower quality mesh (deflection=2.0, angular=2.0)
+        BALANCED,       // Balanced quality and performance (deflection=1.0, angular=1.0)
+        HIGH_QUALITY,   // High quality mesh (deflection=0.5, angular=0.5) - matches MeshQualityDialog "quality" preset
+        ULTRA_QUALITY,  // Ultra high quality (deflection=0.2, angular=0.3) - matches MeshQualityDialog "ultra" preset
+        CUSTOM,         // Custom settings (use custom values)
+        MAX_PRESETS     // Keep this last for iteration
+    };
+
+    /**
      * @brief Geometry decomposition options
      */
     struct DecompositionOptions {
@@ -65,6 +77,11 @@ public:
         DecompositionLevel level = DecompositionLevel::NO_DECOMPOSITION;
         ColorScheme colorScheme = ColorScheme::DISTINCT_COLORS;
         bool useConsistentColoring = true;  // Use hash-based consistent coloring
+
+        // Mesh quality settings for BREP tessellation
+        MeshQualityPreset meshQualityPreset = MeshQualityPreset::HIGH_QUALITY;
+        double customMeshDeflection = 1.0;    // Custom deflection value
+        double customAngularDeflection = 1.0; // Custom angular deflection value
 
         DecompositionOptions() = default;
     };

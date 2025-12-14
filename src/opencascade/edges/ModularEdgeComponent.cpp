@@ -194,6 +194,10 @@ void ModularEdgeComponent::extractMeshEdges(
     const TriangleMesh& mesh,
     const Quantity_Color& color,
     double width) {
+    LOG_INF_S("ModularEdgeComponent::extractMeshEdges called with " + 
+              std::to_string(mesh.vertices.size()) + " vertices, " +
+              std::to_string(mesh.triangles.size() / 3) + " triangles");
+    
     if (!m_meshExtractor || !m_meshRenderer) {
         LOG_WRN_S_ASYNC("Mesh edge extractor/renderer not available");
         return;
@@ -208,16 +212,25 @@ void ModularEdgeComponent::extractMeshEdges(
     if (meshRenderer) {
         SoSeparator* gpuNode = meshRenderer->generateNodeFromMesh(mesh, color, width);
         if (gpuNode) {
+            LOG_INF_S("ModularEdgeComponent: GPU mesh edge node created");
             meshEdgeNode = gpuNode;
             return;
         }
     }
     
     // CPU fallback: extract edges (now with deduplication) and use SoIndexedLineSet
+    LOG_INF_S("ModularEdgeComponent: Using CPU fallback for mesh edges");
     MeshEdgeParams params(mesh);
     std::vector<gp_Pnt> points = m_meshExtractor->extract(TopoDS_Shape(), &params);
 
     meshEdgeNode = m_meshRenderer->generateNode(points, color, width);
+    
+    if (meshEdgeNode) {
+        LOG_INF_S("ModularEdgeComponent: CPU mesh edge node created with " + 
+                  std::to_string(points.size()) + " points");
+    } else {
+        LOG_WRN_S("ModularEdgeComponent: Failed to create mesh edge node");
+    }
 }
 
 void ModularEdgeComponent::extractSilhouetteEdges(
@@ -398,7 +411,10 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
         parentNode->insertChild(featureEdgeNode, insertIndex++);
     }
     if (meshEdgeNode && edgeFlags.showMeshEdges) {
+        LOG_INF_S("ModularEdgeComponent::updateEdgeDisplay: Adding mesh edge node to scene");
         parentNode->insertChild(meshEdgeNode, insertIndex++);
+    } else if (edgeFlags.showMeshEdges && !meshEdgeNode) {
+        LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: showMeshEdges=true but meshEdgeNode is null!");
     }
     if (highlightEdgeNode && edgeFlags.showHighlightEdges) {
         parentNode->insertChild(highlightEdgeNode, insertIndex++);
