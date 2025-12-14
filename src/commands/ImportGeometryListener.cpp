@@ -12,6 +12,8 @@
 #include "Canvas.h"
 #include "RenderingEngine.h"
 #include "GeometryDecompositionDialog.h"
+#include <OpenCASCADE/TopExp_Explorer.hxx>
+#include <OpenCASCADE/TopAbs.hxx>
 #include "GeometryImportOptimizer.h"
 #include "ProgressiveGeometryLoader.h"
 #include "StreamingFileReader.h"
@@ -183,7 +185,20 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
         // Small delay to ensure Windows GDI system completes all operations
         wxMilliSleep(10);
         
-        GeometryDecompositionDialog dialog(m_frame, m_decompositionOptions);
+        // Check if geometry is large/complex before showing dialog
+        std::vector<std::string> filePathsForCheck;
+        for (const auto& formatGroup : filesByFormat) {
+            for (const auto& filePath : formatGroup.second) {
+                filePathsForCheck.push_back(filePath);
+            }
+        }
+        bool isLargeComplex = GeometryDecompositionDialog::isLargeComplexGeometry(filePathsForCheck);
+        
+        if (isLargeComplex && flatFrame) {
+            flatFrame->appendMessage("Large/complex geometry detected - using balanced settings");
+        }
+        
+        GeometryDecompositionDialog dialog(m_frame, m_decompositionOptions, isLargeComplex);
         if (dialog.ShowModal() == wxID_OK) {
             LOG_INF_S("Geometry decomposition configured: enabled=" +
                 std::string(m_decompositionOptions.enableDecomposition ? "true" : "false") +
@@ -372,13 +387,98 @@ CommandResult ImportGeometryListener::executeCommand(const std::string& commandT
             m_occViewer->setMeshDeflection(tempOpts.meshDeflection, false); // false = don't remesh existing geometries
             m_occViewer->setAngularDeflection(tempOpts.angularDeflection, false);
             
+            // CRITICAL FIX: Apply subdivision and smoothing parameters from decomposition options
+            // This ensures imported geometries use the smooth surface settings from the dialog
+            m_occViewer->setSubdivisionEnabled(m_decompositionOptions.subdivisionEnabled);
+            m_occViewer->setSubdivisionLevel(m_decompositionOptions.subdivisionLevel);
+            m_occViewer->setSubdivisionMethod(0); // Catmull-Clark (default)
+            m_occViewer->setSubdivisionCreaseAngle(30.0); // Default crease angle
+            
+            m_occViewer->setSmoothingEnabled(m_decompositionOptions.smoothingEnabled);
+            m_occViewer->setSmoothingMethod(0); // Laplacian (default)
+            m_occViewer->setSmoothingIterations(m_decompositionOptions.smoothingIterations);
+            m_occViewer->setSmoothingStrength(m_decompositionOptions.smoothingStrength);
+            m_occViewer->setSmoothingCreaseAngle(m_decompositionOptions.smoothingCreaseAngle);
+            
+            // Apply LOD settings
+            m_occViewer->setLODEnabled(m_decompositionOptions.lodEnabled);
+            m_occViewer->setLODFineDeflection(m_decompositionOptions.lodFineDeflection);
+            m_occViewer->setLODRoughDeflection(m_decompositionOptions.lodRoughDeflection);
+            
+            // Apply tessellation settings
+            m_occViewer->setTessellationQuality(m_decompositionOptions.tessellationQuality);
+            m_occViewer->setFeaturePreservation(m_decompositionOptions.featurePreservation);
+            
             LOG_INF_S(wxString::Format("Updated OCCViewer mesh parameters from import options: Deflection=%.4f, Angular=%.4f",
                 tempOpts.meshDeflection, tempOpts.angularDeflection));
+            LOG_INF_S(wxString::Format("Applied subdivision: enabled=%d, level=%d",
+                m_decompositionOptions.subdivisionEnabled ? 1 : 0,
+                m_decompositionOptions.subdivisionLevel));
+            LOG_INF_S(wxString::Format("Applied smoothing: enabled=%d, iterations=%d, strength=%.2f, creaseAngle=%.2f",
+                m_decompositionOptions.smoothingEnabled ? 1 : 0,
+                m_decompositionOptions.smoothingIterations,
+                m_decompositionOptions.smoothingStrength,
+                m_decompositionOptions.smoothingCreaseAngle));
+            LOG_INF_S(wxString::Format("Applied LOD: enabled=%d, fine=%.2f, rough=%.2f",
+                m_decompositionOptions.lodEnabled ? 1 : 0,
+                m_decompositionOptions.lodFineDeflection,
+                m_decompositionOptions.lodRoughDeflection));
+            LOG_INF_S(wxString::Format("Applied tessellation: quality=%d, featurePreservation=%.2f",
+                m_decompositionOptions.tessellationQuality,
+                m_decompositionOptions.featurePreservation));
             
             m_occViewer->beginBatchOperation();
             m_occViewer->addGeometries(allGeometries);
             m_occViewer->endBatchOperation();
             m_occViewer->updateObjectTreeDeferred();
+            
+            // Check geometry complexity after import (face count and assembly count)
+            int totalFaceCount = 0;
+            int assemblyCount = static_cast<int>(allGeometries.size()); // Each geometry is considered an assembly component
+            
+            for (const auto& geometry : allGeometries) {
+                if (geometry && !geometry->getShape().IsNull()) {
+                    // Count faces in this geometry
+                    for (TopExp_Explorer exp(geometry->getShape(), TopAbs_FACE); exp.More(); exp.Next()) {
+                        totalFaceCount++;
+                    }
+                }
+            }
+            
+            // Check if geometry is complex based on counts
+            bool isComplexByCounts = GeometryDecompositionDialog::isComplexGeometryByCounts(totalFaceCount, assemblyCount);
+            
+            if (isComplexByCounts) {
+                LOG_INF_S("Complex geometry detected after import: faces=" + std::to_string(totalFaceCount) + 
+                         ", assemblies=" + std::to_string(assemblyCount) + " - applying restrictions");
+                
+                if (flatFrame) {
+                    flatFrame->appendMessage(wxString::Format("Complex geometry detected (%d faces, %d components) - using balanced settings", 
+                        totalFaceCount, assemblyCount));
+                }
+                
+                // Force balanced settings for complex geometry
+                m_occViewer->setMeshDeflection(1.0, false);
+                m_occViewer->setAngularDeflection(1.0, false);
+                
+                // Apply basic smooth parameters (not high quality)
+                m_occViewer->setSubdivisionEnabled(true);
+                m_occViewer->setSubdivisionLevel(2);  // Limit to 2
+                m_occViewer->setSmoothingEnabled(true);
+                m_occViewer->setSmoothingIterations(2);  // Limit to 2
+                m_occViewer->setSmoothingStrength(0.5);  // Limit to 0.5
+                
+                // Enable LOD for performance
+                m_occViewer->setLODEnabled(true);
+                m_occViewer->setLODFineDeflection(0.2);
+                m_occViewer->setLODRoughDeflection(0.5);
+                
+                // Use balanced tessellation quality
+                m_occViewer->setTessellationQuality(2);  // Limit to 2
+                m_occViewer->setFeaturePreservation(0.5);  // Limit to 0.5
+                
+                LOG_INF_S("Applied balanced settings for complex geometry");
+            }
             
             if (m_statusBar) {
                 m_statusBar->SetGaugeValue(98);

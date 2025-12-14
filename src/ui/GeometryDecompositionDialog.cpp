@@ -4,6 +4,7 @@
 #include <wx/statline.h>
 #include <wx/sizer.h>
 #include <wx/font.h>
+#include <filesystem>
 
 wxBEGIN_EVENT_TABLE(GeometryDecompositionDialog, FramelessModalPopup)
     EVT_BUTTON(wxID_OK, GeometryDecompositionDialog::onOK)
@@ -12,9 +13,10 @@ wxBEGIN_EVENT_TABLE(GeometryDecompositionDialog, FramelessModalPopup)
     EVT_CHOICE(wxID_ANY, GeometryDecompositionDialog::onColorSchemeChange)
 wxEND_EVENT_TABLE()
 
-GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, GeometryReader::DecompositionOptions& options)
+GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, GeometryReader::DecompositionOptions& options, bool isLargeComplexGeometry)
     : FramelessModalPopup(parent, "Geometry Import Settings", wxSize(650, 750))
     , m_options(options)
+    , m_isLargeComplexGeometry(isLargeComplexGeometry)
     , m_notebook(nullptr)
     , m_decompositionPage(nullptr)
     , m_meshQualityPage(nullptr)
@@ -33,6 +35,18 @@ GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, Geome
     , m_customDeflectionCtrl(nullptr)
     , m_customAngularCtrl(nullptr)
     , m_meshQualityPreviewText(nullptr)
+    , m_smoothSurfacePage(nullptr)
+    , m_subdivisionEnabledCheckBox(nullptr)
+    , m_subdivisionLevelCtrl(nullptr)
+    , m_smoothingEnabledCheckBox(nullptr)
+    , m_smoothingIterationsCtrl(nullptr)
+    , m_smoothingStrengthCtrl(nullptr)
+    , m_smoothingCreaseAngleCtrl(nullptr)
+    , m_lodEnabledCheckBox(nullptr)
+    , m_lodFineDeflectionCtrl(nullptr)
+    , m_lodRoughDeflectionCtrl(nullptr)
+    , m_tessellationQualityCtrl(nullptr)
+    , m_featurePreservationCtrl(nullptr)
     , m_enableDecomposition(options.enableDecomposition)
     , m_decompositionLevel(options.level)
     , m_colorScheme(options.colorScheme)
@@ -40,6 +54,17 @@ GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, Geome
     , m_meshQualityPreset(options.meshQualityPreset)
     , m_customMeshDeflection(options.customMeshDeflection)
     , m_customAngularDeflection(options.customAngularDeflection)
+    , m_subdivisionEnabled(options.subdivisionEnabled)
+    , m_subdivisionLevel(options.subdivisionLevel)
+    , m_smoothingEnabled(options.smoothingEnabled)
+    , m_smoothingIterations(options.smoothingIterations)
+    , m_smoothingStrength(options.smoothingStrength)
+    , m_lodEnabled(options.lodEnabled)
+    , m_lodFineDeflection(options.lodFineDeflection)
+    , m_lodRoughDeflection(options.lodRoughDeflection)
+    , m_tessellationQuality(options.tessellationQuality)
+    , m_featurePreservation(options.featurePreservation)
+    , m_smoothingCreaseAngle(options.smoothingCreaseAngle)
     , m_updatingMeshQuality(false)
 {
     // Set up title bar with icon
@@ -50,9 +75,34 @@ GeometryDecompositionDialog::GeometryDecompositionDialog(wxWindow* parent, Geome
     layoutControls();
     bindEvents();
 
+    // Apply restrictions for large complex geometries
+    if (m_isLargeComplexGeometry) {
+        applyLargeComplexGeometryRestrictions();
+    }
+
     // Update UI to reflect current options
     updatePreview();
     updateMeshQualityControls();
+    
+    // Update smooth surface controls if restrictions were applied
+    if (m_isLargeComplexGeometry) {
+        // Sync UI controls with restricted values
+        if (m_subdivisionLevelCtrl) {
+            m_subdivisionLevelCtrl->SetValue("2");
+        }
+        if (m_smoothingIterationsCtrl) {
+            m_smoothingIterationsCtrl->SetValue("2");
+        }
+        if (m_smoothingStrengthCtrl) {
+            m_smoothingStrengthCtrl->SetValue("0.50");
+        }
+        if (m_tessellationQualityCtrl) {
+            m_tessellationQualityCtrl->SetValue("2");
+        }
+        if (m_featurePreservationCtrl) {
+            m_featurePreservationCtrl->SetValue("0.50");
+        }
+    }
 }
 
 GeometryDecompositionDialog::~GeometryDecompositionDialog()
@@ -67,10 +117,12 @@ void GeometryDecompositionDialog::createControls()
     // Create pages
     createDecompositionPage();
     createMeshQualityPage();
+    createSmoothSurfacePage();
 
     // Add pages to notebook
     m_notebook->AddPage(m_decompositionPage, "Geometry Decomposition", true);
     m_notebook->AddPage(m_meshQualityPage, "Mesh Quality", false);
+    m_notebook->AddPage(m_smoothSurfacePage, "Smooth Surface", false);
 }
 
 void GeometryDecompositionDialog::createDecompositionPage()
@@ -182,6 +234,74 @@ void GeometryDecompositionDialog::createMeshQualityPage()
 
     // Note: m_meshQualityPreviewText will be created in layoutControls() 
     // to ensure correct parent (meshPreviewPanel)
+}
+
+void GeometryDecompositionDialog::createSmoothSurfacePage()
+{
+    m_smoothSurfacePage = new wxPanel(m_notebook);
+    m_smoothSurfacePage->SetBackgroundColour(CFG_COLOUR("PrimaryBackgroundColour"));
+
+    // Subdivision controls
+    m_subdivisionEnabledCheckBox = new wxCheckBox(m_smoothSurfacePage, wxID_ANY, "Enable Subdivision");
+    m_subdivisionEnabledCheckBox->SetValue(m_subdivisionEnabled);
+    m_subdivisionEnabledCheckBox->SetToolTip("Enable subdivision surfaces for smoother meshes");
+
+    m_subdivisionLevelCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%d", m_subdivisionLevel),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_subdivisionLevelCtrl->SetToolTip("Subdivision level (1-5, higher = smoother but slower)");
+    m_subdivisionLevelCtrl->Enable(m_subdivisionEnabled);
+
+    // Smoothing controls
+    m_smoothingEnabledCheckBox = new wxCheckBox(m_smoothSurfacePage, wxID_ANY, "Enable Smoothing");
+    m_smoothingEnabledCheckBox->SetValue(m_smoothingEnabled);
+    m_smoothingEnabledCheckBox->SetToolTip("Enable mesh smoothing for better surface quality");
+
+    m_smoothingIterationsCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%d", m_smoothingIterations),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_smoothingIterationsCtrl->SetToolTip("Smoothing iterations (1-10, more = smoother but slower)");
+    m_smoothingIterationsCtrl->Enable(m_smoothingEnabled);
+
+    m_smoothingStrengthCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%.2f", m_smoothingStrength),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_smoothingStrengthCtrl->SetToolTip("Smoothing strength (0.01-1.0, higher = more smoothing)");
+    m_smoothingStrengthCtrl->Enable(m_smoothingEnabled);
+
+    m_smoothingCreaseAngleCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%.2f", m_smoothingCreaseAngle),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_smoothingCreaseAngleCtrl->SetToolTip("Smoothing crease angle in degrees (0-180)");
+    m_smoothingCreaseAngleCtrl->Enable(m_smoothingEnabled);
+
+    // LOD controls
+    m_lodEnabledCheckBox = new wxCheckBox(m_smoothSurfacePage, wxID_ANY, "Enable LOD");
+    m_lodEnabledCheckBox->SetValue(m_lodEnabled);
+    m_lodEnabledCheckBox->SetToolTip("Enable Level of Detail for performance optimization");
+
+    m_lodFineDeflectionCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%.2f", m_lodFineDeflection),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_lodFineDeflectionCtrl->SetToolTip("LOD fine deflection (for close objects)");
+    m_lodFineDeflectionCtrl->Enable(m_lodEnabled);
+
+    m_lodRoughDeflectionCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%.2f", m_lodRoughDeflection),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_lodRoughDeflectionCtrl->SetToolTip("LOD rough deflection (for distant objects)");
+    m_lodRoughDeflectionCtrl->Enable(m_lodEnabled);
+
+    // Tessellation controls
+    m_tessellationQualityCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%d", m_tessellationQuality),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_tessellationQualityCtrl->SetToolTip("Tessellation quality (1-5, higher = better quality)");
+
+    m_featurePreservationCtrl = new wxTextCtrl(m_smoothSurfacePage, wxID_ANY,
+        wxString::Format("%.2f", m_featurePreservation),
+        wxDefaultPosition, wxSize(80, -1), wxTE_CENTER);
+    m_featurePreservationCtrl->SetToolTip("Feature preservation (0.0-1.0, higher = preserve more features)");
 }
 
 void GeometryDecompositionDialog::layoutControls()
@@ -376,6 +496,84 @@ void GeometryDecompositionDialog::layoutControls()
 
     m_meshQualityPage->SetSizer(meshQualitySizer);
 
+    // Layout smooth surface page
+    wxBoxSizer* smoothSurfaceSizer = new wxBoxSizer(wxVERTICAL);
+
+    // Subdivision section
+    wxStaticBox* subdivisionBox = new wxStaticBox(m_smoothSurfacePage, wxID_ANY, "Subdivision Settings");
+    wxStaticBoxSizer* subdivisionSizer = new wxStaticBoxSizer(subdivisionBox, wxVERTICAL);
+    
+    wxFlexGridSizer* subdivisionGrid = new wxFlexGridSizer(2, 2, 10, 15);
+    subdivisionGrid->AddGrowableCol(1);
+    
+    subdivisionGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Enabled:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    subdivisionGrid->Add(m_subdivisionEnabledCheckBox, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    subdivisionGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Level (1-5):"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    subdivisionGrid->Add(m_subdivisionLevelCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    subdivisionSizer->Add(subdivisionGrid, 0, wxEXPAND | wxALL, 10);
+    smoothSurfaceSizer->Add(subdivisionSizer, 0, wxEXPAND | wxALL, 10);
+
+    // Smoothing section
+    wxStaticBox* smoothingBox = new wxStaticBox(m_smoothSurfacePage, wxID_ANY, "Smoothing Settings");
+    wxStaticBoxSizer* smoothingSizer = new wxStaticBoxSizer(smoothingBox, wxVERTICAL);
+    
+    wxFlexGridSizer* smoothingGrid = new wxFlexGridSizer(2, 2, 10, 15);
+    smoothingGrid->AddGrowableCol(1);
+    
+    smoothingGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Enabled:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    smoothingGrid->Add(m_smoothingEnabledCheckBox, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    smoothingGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Iterations (1-10):"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    smoothingGrid->Add(m_smoothingIterationsCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    smoothingGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Strength (0.01-1.0):"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    smoothingGrid->Add(m_smoothingStrengthCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    smoothingGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Crease Angle (0-180):"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    smoothingGrid->Add(m_smoothingCreaseAngleCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    smoothingSizer->Add(smoothingGrid, 0, wxEXPAND | wxALL, 10);
+    smoothSurfaceSizer->Add(smoothingSizer, 0, wxEXPAND | wxALL, 10);
+
+    // LOD section
+    wxStaticBox* lodBox = new wxStaticBox(m_smoothSurfacePage, wxID_ANY, "LOD (Level of Detail) Settings");
+    wxStaticBoxSizer* lodSizer = new wxStaticBoxSizer(lodBox, wxVERTICAL);
+    
+    wxFlexGridSizer* lodGrid = new wxFlexGridSizer(2, 2, 10, 15);
+    lodGrid->AddGrowableCol(1);
+    
+    lodGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Enabled:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    lodGrid->Add(m_lodEnabledCheckBox, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    lodGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Fine Deflection:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    lodGrid->Add(m_lodFineDeflectionCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    lodGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Rough Deflection:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    lodGrid->Add(m_lodRoughDeflectionCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    lodSizer->Add(lodGrid, 0, wxEXPAND | wxALL, 10);
+    smoothSurfaceSizer->Add(lodSizer, 0, wxEXPAND | wxALL, 10);
+
+    // Tessellation section
+    wxStaticBox* tessellationBox = new wxStaticBox(m_smoothSurfacePage, wxID_ANY, "Tessellation Settings");
+    wxStaticBoxSizer* tessellationSizer = new wxStaticBoxSizer(tessellationBox, wxVERTICAL);
+    
+    wxFlexGridSizer* tessellationGrid = new wxFlexGridSizer(2, 2, 10, 15);
+    tessellationGrid->AddGrowableCol(1);
+    
+    tessellationGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Quality (1-5):"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    tessellationGrid->Add(m_tessellationQualityCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    tessellationGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Feature Preservation (0.0-1.0):"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    tessellationGrid->Add(m_featurePreservationCtrl, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    
+    tessellationSizer->Add(tessellationGrid, 0, wxEXPAND | wxALL, 10);
+    smoothSurfaceSizer->Add(tessellationSizer, 0, wxEXPAND | wxALL, 10);
+
+    m_smoothSurfacePage->SetSizer(smoothSurfaceSizer);
+
     // Buttons
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     wxButton* okBtn = new wxButton(m_contentPanel, wxID_OK, "OK");
@@ -421,6 +619,24 @@ void GeometryDecompositionDialog::bindEvents()
     });
     m_customAngularCtrl->Bind(wxEVT_TEXT, [this](wxCommandEvent&) {
         updateMeshQualityControls();
+    });
+
+    // Smooth surface events
+    m_subdivisionEnabledCheckBox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+        m_subdivisionLevelCtrl->Enable(m_subdivisionEnabledCheckBox->GetValue());
+    });
+    
+    m_smoothingEnabledCheckBox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+        bool enabled = m_smoothingEnabledCheckBox->GetValue();
+        m_smoothingIterationsCtrl->Enable(enabled);
+        m_smoothingStrengthCtrl->Enable(enabled);
+        m_smoothingCreaseAngleCtrl->Enable(enabled);
+    });
+    
+    m_lodEnabledCheckBox->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) {
+        bool enabled = m_lodEnabledCheckBox->GetValue();
+        m_lodFineDeflectionCtrl->Enable(enabled);
+        m_lodRoughDeflectionCtrl->Enable(enabled);
     });
 }
 
@@ -625,6 +841,81 @@ GeometryReader::DecompositionOptions GeometryDecompositionDialog::getDecompositi
         options.customAngularDeflection = angular;
     }
     
+    // Smooth surface settings
+    options.subdivisionEnabled = m_subdivisionEnabledCheckBox->GetValue();
+    long subdivisionLevel = 2;
+    if (m_subdivisionLevelCtrl->GetValue().ToLong(&subdivisionLevel)) {
+        // Limit subdivision level for large complex geometries
+        if (m_isLargeComplexGeometry && subdivisionLevel > 2) {
+            subdivisionLevel = 2;
+            LOG_INF_S("Subdivision level limited to 2 for large/complex geometry");
+        }
+        options.subdivisionLevel = static_cast<int>(subdivisionLevel);
+    }
+    
+    options.smoothingEnabled = m_smoothingEnabledCheckBox->GetValue();
+    long smoothingIterations = 3;
+    if (m_smoothingIterationsCtrl->GetValue().ToLong(&smoothingIterations)) {
+        // Limit smoothing iterations for large complex geometries
+        if (m_isLargeComplexGeometry && smoothingIterations > 2) {
+            smoothingIterations = 2;
+            LOG_INF_S("Smoothing iterations limited to 2 for large/complex geometry");
+        }
+        options.smoothingIterations = static_cast<int>(smoothingIterations);
+    }
+    
+    double smoothingStrength = 0.7;
+    if (m_smoothingStrengthCtrl->GetValue().ToDouble(&smoothingStrength)) {
+        // Limit smoothing strength for large complex geometries
+        if (m_isLargeComplexGeometry && smoothingStrength > 0.5) {
+            smoothingStrength = 0.5;
+            LOG_INF_S("Smoothing strength limited to 0.5 for large/complex geometry");
+        }
+        options.smoothingStrength = smoothingStrength;
+    }
+    
+    double smoothingCreaseAngle = 0.6;
+    if (m_smoothingCreaseAngleCtrl->GetValue().ToDouble(&smoothingCreaseAngle)) {
+        options.smoothingCreaseAngle = smoothingCreaseAngle;
+    }
+    
+    options.lodEnabled = m_lodEnabledCheckBox->GetValue();
+    double lodFine = 0.15;
+    if (m_lodFineDeflectionCtrl->GetValue().ToDouble(&lodFine)) {
+        options.lodFineDeflection = lodFine;
+    }
+    
+    double lodRough = 0.3;
+    if (m_lodRoughDeflectionCtrl->GetValue().ToDouble(&lodRough)) {
+        options.lodRoughDeflection = lodRough;
+    }
+    
+    long tessellationQuality = 3;
+    if (m_tessellationQualityCtrl->GetValue().ToLong(&tessellationQuality)) {
+        // Limit tessellation quality for large complex geometries
+        if (m_isLargeComplexGeometry && tessellationQuality > 2) {
+            tessellationQuality = 2;
+            LOG_INF_S("Tessellation quality limited to 2 for large/complex geometry");
+        }
+        options.tessellationQuality = static_cast<int>(tessellationQuality);
+    }
+    
+    double featurePreservation = 0.8;
+    if (m_featurePreservationCtrl->GetValue().ToDouble(&featurePreservation)) {
+        // Limit feature preservation for large complex geometries
+        if (m_isLargeComplexGeometry && featurePreservation > 0.5) {
+            featurePreservation = 0.5;
+            LOG_INF_S("Feature preservation limited to 0.5 for large/complex geometry");
+        }
+        options.featurePreservation = featurePreservation;
+    }
+    
+    // Force balanced mesh quality preset for large complex geometries
+    if (m_isLargeComplexGeometry) {
+        options.meshQualityPreset = GeometryReader::MeshQualityPreset::BALANCED;
+        LOG_INF_S("Mesh quality preset forced to BALANCED for large/complex geometry");
+    }
+    
     return options;
 }
 
@@ -658,10 +949,17 @@ void GeometryDecompositionDialog::updateMeshQualityControls()
             break;
         case GeometryReader::MeshQualityPreset::BALANCED:
             deflection = 1.0; angular = 1.0;
-            previewText = wxString::Format("Preset: Balanced Quality\n"
-                "Deflection: %.2f  |  Angular: %.2f\n"
-                "Good balance of speed and visual quality\n"
-                "Best for: General use and interactive work", deflection, angular);
+            if (m_isLargeComplexGeometry) {
+                previewText = wxString::Format("Preset: Balanced Quality (Required for Large/Complex Geometry)\n"
+                    "Deflection: %.2f  |  Angular: %.2f\n"
+                    "High-quality options are disabled for performance\n"
+                    "Using balanced settings for large/complex geometries", deflection, angular);
+            } else {
+                previewText = wxString::Format("Preset: Balanced Quality\n"
+                    "Deflection: %.2f  |  Angular: %.2f\n"
+                    "Good balance of speed and visual quality\n"
+                    "Best for: General use and interactive work", deflection, angular);
+            }
             break;
         case GeometryReader::MeshQualityPreset::HIGH_QUALITY:
             // Match MeshQualityDialog "quality" preset parameters
@@ -864,4 +1162,128 @@ void GeometryDecompositionDialog::onDecompositionLevelChange(wxCommandEvent& eve
 void GeometryDecompositionDialog::onColorSchemeChange(wxCommandEvent& event)
 {
     updatePreview();
+}
+
+bool GeometryDecompositionDialog::isLargeComplexGeometry(const std::vector<std::string>& filePaths)
+{
+    const size_t LARGE_FILE_THRESHOLD = 30 * 1024 * 1024; // 30MB
+    const size_t TOTAL_SIZE_THRESHOLD = 100 * 1024 * 1024; // 100MB total
+    
+    size_t totalSize = 0;
+    size_t largeFileCount = 0;
+    
+    for (const auto& filePath : filePaths) {
+        try {
+            if (std::filesystem::exists(filePath)) {
+                size_t fileSize = std::filesystem::file_size(filePath);
+                totalSize += fileSize;
+                
+                if (fileSize >= LARGE_FILE_THRESHOLD) {
+                    largeFileCount++;
+                }
+            }
+        } catch (const std::exception& e) {
+            LOG_WRN_S("Failed to check file size for " + filePath + ": " + std::string(e.what()));
+        }
+    }
+    
+    // Consider large/complex if:
+    // 1. Any single file is >= 30MB, OR
+    // 2. Total size of all files >= 100MB, OR
+    // 3. Multiple large files (>= 2 files >= 30MB)
+    bool isLarge = (largeFileCount > 0) || (totalSize >= TOTAL_SIZE_THRESHOLD) || (largeFileCount >= 2);
+    
+    if (isLarge) {
+        LOG_INF_S("Large/complex geometry detected: " + std::to_string(largeFileCount) + 
+                 " large files, total size: " + std::to_string(totalSize / (1024*1024)) + " MB");
+    }
+    
+    return isLarge;
+}
+
+bool GeometryDecompositionDialog::isComplexGeometryByCounts(int faceCount, int assemblyCount)
+{
+    const int FACE_COUNT_THRESHOLD = 2000;      // 2000 faces
+    const int ASSEMBLY_COUNT_THRESHOLD = 200;   // 200 assembly components
+    
+    bool isComplex = (faceCount > FACE_COUNT_THRESHOLD) || (assemblyCount > ASSEMBLY_COUNT_THRESHOLD);
+    
+    if (isComplex) {
+        LOG_INF_S("Complex geometry detected by counts: faces=" + std::to_string(faceCount) + 
+                 ", assemblies=" + std::to_string(assemblyCount));
+    }
+    
+    return isComplex;
+}
+
+void GeometryDecompositionDialog::applyLargeComplexGeometryRestrictions()
+{
+    LOG_INF_S("Applying restrictions for large/complex geometry - using balanced settings");
+    
+    // Force balanced mesh quality preset
+    m_meshQualityPreset = GeometryReader::MeshQualityPreset::BALANCED;
+    m_customMeshDeflection = 1.0;
+    m_customAngularDeflection = 1.0;
+    
+    // Use basic smooth parameters (not high quality)
+    m_subdivisionEnabled = true;
+    m_subdivisionLevel = 2;  // Basic level, not high
+    m_smoothingEnabled = true;
+    m_smoothingIterations = 2;  // Basic iterations, not high (3+)
+    m_smoothingStrength = 0.5;  // Basic strength, not high (0.7+)
+    m_smoothingCreaseAngle = 30.0;  // Standard crease angle
+    
+    // Enable LOD for performance
+    m_lodEnabled = true;
+    m_lodFineDeflection = 0.2;  // Basic fine deflection
+    m_lodRoughDeflection = 0.5;  // Basic rough deflection
+    
+    // Use balanced tessellation quality (not high)
+    m_tessellationQuality = 2;  // Balanced quality, not high (3+)
+    m_featurePreservation = 0.5;  // Balanced preservation, not high (0.8+)
+    
+    // Disable high-quality preset buttons
+    if (m_highQualityPresetBtn) {
+        m_highQualityPresetBtn->Enable(false);
+        m_highQualityPresetBtn->SetToolTip("High Quality preset disabled for large/complex geometries");
+    }
+    if (m_ultraQualityPresetBtn) {
+        m_ultraQualityPresetBtn->Enable(false);
+        m_ultraQualityPresetBtn->SetToolTip("Ultra Quality preset disabled for large/complex geometries");
+    }
+    
+    // Limit subdivision level to max 2
+    if (m_subdivisionLevelCtrl) {
+        m_subdivisionLevelCtrl->SetValue("2");
+        // Note: We can't easily limit the range of wxTextCtrl, but we'll validate in getDecompositionOptions
+    }
+    
+    // Limit smoothing iterations to max 2
+    if (m_smoothingIterationsCtrl) {
+        m_smoothingIterationsCtrl->SetValue("2");
+    }
+    
+    // Limit smoothing strength to max 0.5
+    if (m_smoothingStrengthCtrl) {
+        m_smoothingStrengthCtrl->SetValue("0.50");
+    }
+    
+    // Limit tessellation quality to max 2
+    if (m_tessellationQualityCtrl) {
+        m_tessellationQualityCtrl->SetValue("2");
+    }
+    
+    // Limit feature preservation to max 0.5
+    if (m_featurePreservationCtrl) {
+        m_featurePreservationCtrl->SetValue("0.50");
+    }
+    
+    // Add warning message
+    if (m_meshQualityPreviewText) {
+        wxString warning = "Large/Complex Geometry Detected:\n";
+        warning += "High-quality options are disabled for performance.\n";
+        warning += "Using balanced mesh quality settings.";
+        m_meshQualityPreviewText->SetLabel(warning);
+        m_meshQualityPreviewText->SetForegroundColour(CFG_COLOUR("ErrorTextColour"));
+    }
 }

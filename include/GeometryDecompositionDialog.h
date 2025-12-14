@@ -20,8 +20,9 @@ public:
      * @brief Constructor
      * @param parent Parent window
      * @param options Current decomposition options to modify
+     * @param isLargeComplexGeometry Whether the geometry is large or complex (limits high-quality options)
      */
-    GeometryDecompositionDialog(wxWindow* parent, GeometryReader::DecompositionOptions& options);
+    GeometryDecompositionDialog(wxWindow* parent, GeometryReader::DecompositionOptions& options, bool isLargeComplexGeometry = false);
 
     /**
      * @brief Destructor
@@ -33,6 +34,21 @@ public:
      * @return DecompositionOptions struct
      */
     GeometryReader::DecompositionOptions getDecompositionOptions() const;
+
+    /**
+     * @brief Check if geometry is large or complex based on file size
+     * @param filePaths List of file paths to check
+     * @return true if any file is large or complex
+     */
+    static bool isLargeComplexGeometry(const std::vector<std::string>& filePaths);
+
+    /**
+     * @brief Check if geometry is complex based on face count and assembly count
+     * @param faceCount Total number of faces in the geometry
+     * @param assemblyCount Total number of assembly components
+     * @return true if geometry is complex
+     */
+    static bool isComplexGeometryByCounts(int faceCount, int assemblyCount);
 
 private:
     /**
@@ -49,6 +65,11 @@ private:
      * @brief Create mesh quality page
      */
     void createMeshQualityPage();
+
+    /**
+     * @brief Create smooth surface page
+     */
+    void createSmoothSurfacePage();
 
     /**
      * @brief Layout dialog controls
@@ -105,13 +126,30 @@ private:
     double m_customMeshDeflection;
     double m_customAngularDeflection;
     
+    // Smooth surface settings
+    bool m_subdivisionEnabled;
+    int m_subdivisionLevel;
+    bool m_smoothingEnabled;
+    int m_smoothingIterations;
+    double m_smoothingStrength;
+    bool m_lodEnabled;
+    double m_lodFineDeflection;
+    double m_lodRoughDeflection;
+    int m_tessellationQuality;
+    double m_featurePreservation;
+    double m_smoothingCreaseAngle;
+    
     // Flag to prevent recursive calls
     bool m_updatingMeshQuality;
+
+    // Flag to indicate if geometry is large/complex (limits high-quality options)
+    bool m_isLargeComplexGeometry;
 
     // Tab notebook
     wxNotebook* m_notebook;
     wxPanel* m_decompositionPage;
     wxPanel* m_meshQualityPage;
+    wxPanel* m_smoothSurfacePage;
 
     // Decomposition UI controls
     wxCheckBox* m_enableDecompositionCheckBox;
@@ -131,6 +169,19 @@ private:
     wxTextCtrl* m_customDeflectionCtrl;
     wxTextCtrl* m_customAngularCtrl;
     wxStaticText* m_meshQualityPreviewText;
+
+    // Smooth surface controls
+    wxCheckBox* m_subdivisionEnabledCheckBox;
+    wxTextCtrl* m_subdivisionLevelCtrl;
+    wxCheckBox* m_smoothingEnabledCheckBox;
+    wxTextCtrl* m_smoothingIterationsCtrl;
+    wxTextCtrl* m_smoothingStrengthCtrl;
+    wxCheckBox* m_lodEnabledCheckBox;
+    wxTextCtrl* m_lodFineDeflectionCtrl;
+    wxTextCtrl* m_lodRoughDeflectionCtrl;
+    wxTextCtrl* m_tessellationQualityCtrl;
+    wxTextCtrl* m_featurePreservationCtrl;
+    wxTextCtrl* m_smoothingCreaseAngleCtrl;
 
     /**
      * @brief Update mesh quality controls visibility
@@ -166,4 +217,9 @@ private:
      * @brief Custom preset button handler
      */
     void onCustomPreset(wxCommandEvent& event);
+
+    /**
+     * @brief Apply restrictions for large complex geometries
+     */
+    void applyLargeComplexGeometryRestrictions();
 };

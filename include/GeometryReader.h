@@ -83,6 +83,19 @@ public:
         double customMeshDeflection = 1.0;    // Custom deflection value
         double customAngularDeflection = 1.0; // Custom angular deflection value
 
+        // Smooth surface settings
+        bool subdivisionEnabled = true;        // Enable subdivision surfaces
+        int subdivisionLevel = 2;              // Subdivision level (1-5)
+        bool smoothingEnabled = true;          // Enable mesh smoothing
+        int smoothingIterations = 3;           // Smoothing iterations (1-10)
+        double smoothingStrength = 0.7;        // Smoothing strength (0.01-1.0)
+        bool lodEnabled = true;                // Enable LOD (Level of Detail)
+        double lodFineDeflection = 0.15;      // LOD fine deflection
+        double lodRoughDeflection = 0.3;       // LOD rough deflection
+        int tessellationQuality = 3;           // Tessellation quality (1-5)
+        double featurePreservation = 0.8;      // Feature preservation (0.0-1.0)
+        double smoothingCreaseAngle = 0.6;    // Smoothing crease angle (0-180 degrees)
+
         DecompositionOptions() = default;
     };
 
