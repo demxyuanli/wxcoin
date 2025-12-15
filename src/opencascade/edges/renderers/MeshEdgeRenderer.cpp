@@ -106,7 +106,7 @@ SoSeparator* MeshEdgeRenderer::generateNodeFromMesh(
         return nullptr;
     }
     
-    // Try GPU acceleration first
+    // Try GPU acceleration first (using direct line set mode for reliability)
     if (m_gpuAccelerationEnabled && m_gpuRenderer && m_gpuRenderer->isAvailable()) {
         GPUEdgeRenderer::EdgeRenderSettings settings;
         settings.color = color;
@@ -114,11 +114,14 @@ SoSeparator* MeshEdgeRenderer::generateNodeFromMesh(
         settings.depthOffset = 0.0001f;
         settings.antiAliasing = true;
         settings.depthTest = true;
-        settings.mode = GPUEdgeRenderer::RenderMode::GeometryShader;
+        // Use ScreenSpace mode to force direct SoIndexedLineSet creation (more reliable than GeometryShader)
+        settings.mode = GPUEdgeRenderer::RenderMode::ScreenSpace;
         
+        // Temporarily set render mode to force line set creation
+        m_gpuRenderer->setRenderMode(GPUEdgeRenderer::RenderMode::ScreenSpace);
         m_gpuMeshEdgeNode = m_gpuRenderer->createGPUEdgeNode(mesh, settings);
         if (m_gpuMeshEdgeNode) {
-            LOG_DBG_S("Using GPU-accelerated mesh edge rendering");
+            LOG_DBG_S("Using GPU-accelerated mesh edge rendering (direct line set mode)");
             return m_gpuMeshEdgeNode;
         }
     }

@@ -151,8 +151,12 @@ private:
 
     /**
      * @brief Upload mesh data to GPU
+     * @param mesh Triangle mesh to upload
+     * @param node Separator node to add geometry to
+     * @param useGeometryShader If true, creates SoIndexedFaceSet for geometry shader;
+     *                          if false, creates SoIndexedLineSet for direct edge rendering
      */
-    void uploadMeshToGPU(const TriangleMesh& mesh, SoSeparator* node);
+    void uploadMeshToGPU(const TriangleMesh& mesh, SoSeparator* node, bool useGeometryShader = false);
 
     bool m_initialized;
     bool m_available;

@@ -531,15 +531,19 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 		for (auto& geometry : m_geometries) {
 			if (geometry) {
 				geometry->setDisplayMode(settings.displayMode);
-				// Use fast update method instead of rebuilding mesh
-				// This is much faster than forceCoinRepresentationRebuild
-				// Only rebuild if geometry doesn't have a coin node yet
-				if (geometry->getCoinNode()) {
-					geometry->updateDisplayMode(settings.displayMode);
-				} else {
-					// If no coin node exists, we need to build it
+				// CRITICAL FIX: For HiddenLine and Transparent modes, always rebuild
+				// because they require special rendering passes (HiddenLine pass, transparency)
+				// that updateDisplayMode cannot create without shape parameter
+				bool needsRebuild = (settings.displayMode == RenderingConfig::DisplayMode::HiddenLine ||
+				                     settings.displayMode == RenderingConfig::DisplayMode::Transparent);
+				
+				if (needsRebuild || !geometry->getCoinNode()) {
+					// Rebuild to ensure proper rendering for special modes
 					MeshParameters defaultParams;
 					geometry->forceCoinRepresentationRebuild(defaultParams);
+				} else {
+					// Use fast update method for other modes
+					geometry->updateDisplayMode(settings.displayMode);
 				}
 			}
 		}

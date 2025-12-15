@@ -207,12 +207,12 @@ void ModularEdgeComponent::extractMeshEdges(
 
     cleanupEdgeNode(meshEdgeNode);
     
-    // Try GPU-accelerated rendering first (if MeshEdgeRenderer supports it)
+    // Try GPU-accelerated rendering first (now fixed to use SoIndexedLineSet)
     auto meshRenderer = std::dynamic_pointer_cast<MeshEdgeRenderer>(m_meshRenderer);
     if (meshRenderer) {
         SoSeparator* gpuNode = meshRenderer->generateNodeFromMesh(mesh, color, width);
         if (gpuNode) {
-            LOG_INF_S("ModularEdgeComponent: GPU mesh edge node created");
+            LOG_INF_S("ModularEdgeComponent: GPU mesh edge node created (using SoIndexedLineSet)");
             meshEdgeNode = gpuNode;
             return;
         }
@@ -378,6 +378,42 @@ void ModularEdgeComponent::updateIntersectionNodesDisplay(SoSeparator* parentNod
     }
 }
 
+// Helper function to validate edge node pointer
+static bool isValidEdgeNode(SoSeparator* node) {
+    if (!node) return false;
+    
+    uintptr_t ptrValue = reinterpret_cast<uintptr_t>(node);
+    
+    // Check for known invalid pointer patterns
+    if (ptrValue == 0 ||
+        ptrValue == 0xFFFFFFFFFFFFFFFFULL ||
+        ptrValue == 0xFFFFFFFFFFFFFE87ULL ||
+        ptrValue == 0xCDCDCDCDCDCDCDCDULL ||
+        ptrValue == 0xDDDDDDDDDDDDDDDDULL ||
+        ptrValue == 0xFEEEFEEEFEEEFEEEULL ||
+        ptrValue == 0xBAADF00DBAADF00DULL ||
+        ptrValue == 0xDEADBEEFDEADBEEFULL) {
+        return false;
+    }
+    
+    // Check alignment
+    if (ptrValue % sizeof(void*) != 0) {
+        return false;
+    }
+    
+    // Try to access refCount (safe read)
+    try {
+        volatile int refCount = node->getRefCount();
+        if (refCount < 0) {
+            return false;
+        }
+    } catch (...) {
+        return false;
+    }
+    
+    return true;
+}
+
 void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
     if (!parentNode) return;
 
@@ -401,39 +437,75 @@ void ModularEdgeComponent::updateEdgeDisplay(SoSeparator* parentNode) {
     
     // CRITICAL FEATURE: When silhouette mode is active, show silhouette instead of original edges
     // Following FreeCAD's approach: silhouette edges provide fast preview mode
-    if (silhouetteEdgeNode) {
-        // Silhouette edges take priority (fast mode)
+    // CRITICAL FIX: In HiddenLine mode (when showMeshEdges is true), don't show silhouette edges
+    // HiddenLine mode should only show mesh edges, not silhouette edges
+    if (silhouetteEdgeNode && isValidEdgeNode(silhouetteEdgeNode) && !edgeFlags.showMeshEdges) {
+        // Silhouette edges take priority (fast mode), but not in HiddenLine mode
         parentNode->insertChild(silhouetteEdgeNode, insertIndex++);
     } else if (originalEdgeNode && edgeFlags.showOriginalEdges) {
-        parentNode->insertChild(originalEdgeNode, insertIndex++);
+        if (isValidEdgeNode(originalEdgeNode)) {
+            parentNode->insertChild(originalEdgeNode, insertIndex++);
+        } else {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: Invalid originalEdgeNode pointer detected, cleaning up");
+            cleanupEdgeNode(originalEdgeNode);
+        }
     }
     if (featureEdgeNode && edgeFlags.showFeatureEdges) {
-        parentNode->insertChild(featureEdgeNode, insertIndex++);
+        if (isValidEdgeNode(featureEdgeNode)) {
+            parentNode->insertChild(featureEdgeNode, insertIndex++);
+        } else {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: Invalid featureEdgeNode pointer detected, cleaning up");
+            cleanupEdgeNode(featureEdgeNode);
+        }
     }
     if (meshEdgeNode && edgeFlags.showMeshEdges) {
-        LOG_INF_S("ModularEdgeComponent::updateEdgeDisplay: Adding mesh edge node to scene");
-        parentNode->insertChild(meshEdgeNode, insertIndex++);
+        // CRITICAL: Validate pointer before using it
+        if (isValidEdgeNode(meshEdgeNode)) {
+            LOG_INF_S("ModularEdgeComponent::updateEdgeDisplay: Adding mesh edge node to scene");
+            parentNode->insertChild(meshEdgeNode, insertIndex++);
+        } else {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: Invalid meshEdgeNode pointer detected, cleaning up");
+            cleanupEdgeNode(meshEdgeNode);
+        }
     } else if (edgeFlags.showMeshEdges && !meshEdgeNode) {
         LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: showMeshEdges=true but meshEdgeNode is null!");
     }
     if (highlightEdgeNode && edgeFlags.showHighlightEdges) {
-        parentNode->insertChild(highlightEdgeNode, insertIndex++);
+        if (isValidEdgeNode(highlightEdgeNode)) {
+            parentNode->insertChild(highlightEdgeNode, insertIndex++);
+        } else {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: Invalid highlightEdgeNode pointer detected, cleaning up");
+            cleanupEdgeNode(highlightEdgeNode);
+        }
     }
     if (normalLineNode && edgeFlags.showVerticeNormals) {
-        parentNode->insertChild(normalLineNode, insertIndex++);
+        if (isValidEdgeNode(normalLineNode)) {
+            parentNode->insertChild(normalLineNode, insertIndex++);
+        } else {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: Invalid normalLineNode pointer detected, cleaning up");
+            cleanupEdgeNode(normalLineNode);
+        }
     } else {
         if (!normalLineNode && edgeFlags.showVerticeNormals) {
             LOG_WRN_S_ASYNC("ModularEdgeComponent::updateEdgeDisplay - showVerticeNormals=true but normalLineNode is null");
         }
     }
     if (faceNormalLineNode && edgeFlags.showFaceNormals) {
-        parentNode->insertChild(faceNormalLineNode, insertIndex++);
+        if (isValidEdgeNode(faceNormalLineNode)) {
+            parentNode->insertChild(faceNormalLineNode, insertIndex++);
+        } else {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: Invalid faceNormalLineNode pointer detected, cleaning up");
+            cleanupEdgeNode(faceNormalLineNode);
+        }
     }
-    if (silhouetteEdgeNode) {
-        parentNode->insertChild(silhouetteEdgeNode, insertIndex++);
-    }
+    // Note: silhouetteEdgeNode is already handled above (line 404), no need to add it again here
     if (intersectionNodesNode && edgeFlags.showIntersectionNodes) {
-        parentNode->insertChild(intersectionNodesNode, insertIndex++);
+        if (isValidEdgeNode(intersectionNodesNode)) {
+            parentNode->insertChild(intersectionNodesNode, insertIndex++);
+        } else {
+            LOG_WRN_S("ModularEdgeComponent::updateEdgeDisplay: Invalid intersectionNodesNode pointer detected, cleaning up");
+            cleanupEdgeNode(intersectionNodesNode);
+        }
     }
 }
 

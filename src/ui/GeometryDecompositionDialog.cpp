@@ -519,7 +519,7 @@ void GeometryDecompositionDialog::layoutControls()
     wxStaticBox* smoothingBox = new wxStaticBox(m_smoothSurfacePage, wxID_ANY, "Smoothing Settings");
     wxStaticBoxSizer* smoothingSizer = new wxStaticBoxSizer(smoothingBox, wxVERTICAL);
     
-    wxFlexGridSizer* smoothingGrid = new wxFlexGridSizer(2, 2, 10, 15);
+    wxFlexGridSizer* smoothingGrid = new wxFlexGridSizer(4, 2, 10, 15);
     smoothingGrid->AddGrowableCol(1);
     
     smoothingGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Enabled:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
@@ -541,7 +541,7 @@ void GeometryDecompositionDialog::layoutControls()
     wxStaticBox* lodBox = new wxStaticBox(m_smoothSurfacePage, wxID_ANY, "LOD (Level of Detail) Settings");
     wxStaticBoxSizer* lodSizer = new wxStaticBoxSizer(lodBox, wxVERTICAL);
     
-    wxFlexGridSizer* lodGrid = new wxFlexGridSizer(2, 2, 10, 15);
+    wxFlexGridSizer* lodGrid = new wxFlexGridSizer(3, 2, 10, 15);
     lodGrid->AddGrowableCol(1);
     
     lodGrid->Add(new wxStaticText(m_smoothSurfacePage, wxID_ANY, "Enabled:"), 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);

@@ -9,9 +9,12 @@
 #include <Inventor/nodes/SoFragmentShader.h>
 #include <Inventor/nodes/SoCoordinate3.h>
 #include <Inventor/nodes/SoIndexedFaceSet.h>
+#include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoPolygonOffset.h>
+#include <set>
+#include <map>
 
 GPUEdgeRenderer::GPUEdgeRenderer()
     : m_initialized(false)
@@ -124,15 +127,20 @@ SoSeparator* GPUEdgeRenderer::createGPUEdgeNode(
     edgeNode->addChild(drawStyle);
 
     // Create and add shader program based on mode
-    if (m_currentMode == RenderMode::GeometryShader) {
+    // Use settings.mode if provided, otherwise fall back to m_currentMode
+    RenderMode effectiveMode = (settings.mode != RenderMode::Hybrid) ? settings.mode : m_currentMode;
+    bool useGeometryShader = (effectiveMode == RenderMode::GeometryShader);
+    
+    if (useGeometryShader) {
         SoShaderProgram* shaderProgram = createGeometryShaderProgram(settings);
         if (shaderProgram) {
             edgeNode->addChild(shaderProgram);
         }
     }
 
-    // Upload mesh geometry
-    uploadMeshToGPU(mesh, edgeNode);
+    // Upload mesh geometry (creates both SoIndexedFaceSet and SoIndexedLineSet)
+    // useGeometryShader=false means use direct SoIndexedLineSet (more reliable)
+    uploadMeshToGPU(mesh, edgeNode, useGeometryShader);
 
     // Update statistics
     m_stats.trianglesProcessed = mesh.triangles.size() / 3;
@@ -407,7 +415,7 @@ bool GPUEdgeRenderer::checkGeometryShaderSupport() const
     return true; // Assume support for now
 }
 
-void GPUEdgeRenderer::uploadMeshToGPU(const TriangleMesh& mesh, SoSeparator* node)
+void GPUEdgeRenderer::uploadMeshToGPU(const TriangleMesh& mesh, SoSeparator* node, bool useGeometryShader)
 {
     if (!node || mesh.vertices.empty()) {
         return;
@@ -425,7 +433,7 @@ void GPUEdgeRenderer::uploadMeshToGPU(const TriangleMesh& mesh, SoSeparator* nod
     }
     node->addChild(coords);
 
-    // Create indexed face set
+    // Create indexed face set (for geometry shader path)
     SoIndexedFaceSet* faceSet = new SoIndexedFaceSet();
     faceSet->coordIndex.setNum(mesh.triangles.size() + mesh.triangles.size() / 3);
     
@@ -436,11 +444,59 @@ void GPUEdgeRenderer::uploadMeshToGPU(const TriangleMesh& mesh, SoSeparator* nod
         faceSet->coordIndex.set1Value(idx++, mesh.triangles[i + 2]);
         faceSet->coordIndex.set1Value(idx++, -1); // End of face
     }
-    
-    node->addChild(faceSet);
 
-    LOG_INF_S("Uploaded mesh to GPU: " + 
-              std::to_string(mesh.vertices.size()) + " vertices, " +
-              std::to_string(mesh.triangles.size() / 3) + " triangles");
+    // Create indexed line set (for direct edge rendering, deduplicated)
+    // Extract unique edges to avoid rendering the same edge multiple times
+    std::set<std::pair<int, int>> uniqueEdges;
+    auto makeEdge = [](int a, int b) {
+        return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+    };
+
+    // Collect all unique edges from triangles
+    for (size_t i = 0; i < mesh.triangles.size(); i += 3) {
+        int v1 = mesh.triangles[i];
+        int v2 = mesh.triangles[i + 1];
+        int v3 = mesh.triangles[i + 2];
+        
+        if (v1 < static_cast<int>(mesh.vertices.size()) && 
+            v2 < static_cast<int>(mesh.vertices.size()) && 
+            v3 < static_cast<int>(mesh.vertices.size())) {
+            uniqueEdges.insert(makeEdge(v1, v2));
+            uniqueEdges.insert(makeEdge(v2, v3));
+            uniqueEdges.insert(makeEdge(v3, v1));
+        }
+    }
+
+    SoIndexedLineSet* lineSet = new SoIndexedLineSet();
+    std::vector<int32_t> lineIndices;
+    lineIndices.reserve(uniqueEdges.size() * 3);
+    
+    for (const auto& edge : uniqueEdges) {
+        lineIndices.push_back(edge.first);
+        lineIndices.push_back(edge.second);
+        lineIndices.push_back(SO_END_LINE_INDEX);
+    }
+    
+    if (!lineIndices.empty()) {
+        lineSet->coordIndex.setValues(0, static_cast<int>(lineIndices.size()), lineIndices.data());
+    }
+
+    // Add appropriate node based on rendering mode
+    if (useGeometryShader) {
+        // Use face set with geometry shader to generate edges
+        node->addChild(faceSet);
+        LOG_INF_S("Uploaded mesh to GPU (Geometry Shader mode): " + 
+                  std::to_string(mesh.vertices.size()) + " vertices, " +
+                  std::to_string(mesh.triangles.size() / 3) + " triangles");
+    } else {
+        // Use line set for direct edge rendering (more reliable)
+        node->addChild(lineSet);
+        LOG_INF_S("Uploaded mesh edges to GPU (Direct LineSet mode): " + 
+                  std::to_string(mesh.vertices.size()) + " vertices, " +
+                  std::to_string(uniqueEdges.size()) + " unique edges");
+    }
+    
+    // Note: Both nodes are created but only one is added to scene graph
+    // This allows switching between modes if needed
 }
 

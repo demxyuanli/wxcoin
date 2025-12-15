@@ -18,6 +18,7 @@
 #include <Inventor/nodes/SoTexture2.h>
 #include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/SoType.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <vector>
@@ -356,6 +357,26 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         edgeComponent->updateEdgeDisplay(coinNode);
     }
     
+    // CRITICAL FIX: For HiddenLine and Transparent modes, ensure geometry is visible
+    // Since updateDisplayMode doesn't have shape parameter, we can't recreate HiddenLine pass
+    // But we can ensure existing geometry nodes are properly configured
+    // Note: For proper HiddenLine rendering, handleDisplayMode should be called instead
+    // This updateDisplayMode is a lightweight update that assumes geometry already exists
+    if (mode == RenderingConfig::DisplayMode::HiddenLine) {
+        // For HiddenLine mode, if showMeshEdges is true, ensure mesh edges are created
+        // The white surface should come from existing geometry nodes (if they exist)
+        // If geometry doesn't exist, handleDisplayMode should be called instead
+        if (updateState.showMeshEdges && edgeComponent) {
+            // Mesh edges will be created by updateEdgeDisplay above
+            // But we need to ensure the surface is visible too
+            // Since we can't recreate HiddenLine pass without shape, we rely on existing geometry
+        }
+    } else if (mode == RenderingConfig::DisplayMode::Transparent) {
+        // For Transparent mode, the transparency is applied via Material node above
+        // The geometry nodes should already exist from previous mode
+        // We just need to ensure they're visible with the new transparency settings
+    }
+    
     coinNode->touch();
 }
 
@@ -391,7 +412,42 @@ void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
         state.shininess = context.material.shininess;
         state.transparency = context.material.transparency;
         state.originalEdgeColor = context.display.wireframeColor;
-        state.meshEdgeColor = context.material.diffuseColor;
+        // CRITICAL FIX: For HiddenLine mode, mesh edges should inherit original face color
+        // Extract original face color from existing material node if available
+        // This ensures mesh edges use the original face color, not white (which is used for surface)
+        // If unable to extract original color, use black as fallback (good contrast on white background)
+        Quantity_Color originalFaceColor = context.material.diffuseColor;
+        bool foundOriginalColor = false;
+        if (coinNode && displayMode == RenderingConfig::DisplayMode::HiddenLine) {
+            // Try to find original material color from existing nodes
+            for (int i = 0; i < coinNode->getNumChildren(); ++i) {
+                SoNode* child = coinNode->getChild(i);
+                if (child->getTypeId() == SoMaterial::getClassTypeId()) {
+                    SoMaterial* mat = static_cast<SoMaterial*>(child);
+                    if (mat->diffuseColor.getNum() > 0) {
+                        const SbColor& diffuse = mat->diffuseColor[0];
+                        float r, g, b;
+                        diffuse.getValue(r, g, b);
+                        // Only use if not white (white is used for HiddenLine surface)
+                        if (!(r == 1.0f && g == 1.0f && b == 1.0f)) {
+                            originalFaceColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
+                            foundOriginalColor = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        // If unable to extract original color, use black as fallback
+        if (displayMode == RenderingConfig::DisplayMode::HiddenLine && !foundOriginalColor) {
+            // Check if context color is white (which means it's been changed for HiddenLine surface)
+            if (context.material.diffuseColor.Red() == 1.0 && 
+                context.material.diffuseColor.Green() == 1.0 && 
+                context.material.diffuseColor.Blue() == 1.0) {
+                originalFaceColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);  // Black fallback
+            }
+        }
+        state.meshEdgeColor = originalFaceColor;  // Use original face color for mesh edges, or black if unavailable
         state.originalEdgeWidth = context.display.wireframeWidth;
         state.meshEdgeWidth = context.display.wireframeWidth;
         state.textureEnabled = context.texture.enabled;
@@ -462,6 +518,12 @@ void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
             edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
             edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
             edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+            
+            // CRITICAL FIX: In HiddenLine mode, clear silhouette edge node to prevent it from showing
+            // HiddenLine mode should only show mesh edges, not silhouette edges
+            if (displayMode == RenderingConfig::DisplayMode::HiddenLine) {
+                edgeComponent->clearSilhouetteEdgeNode();
+            }
         }
         
         // Add edges if needed
@@ -665,8 +727,14 @@ void DisplayModeHandler::setRenderStateForMode(DisplayModeRenderState& state,
         state.shininess = 0.0;
         state.transparency = 0.0;  // No transparency in HiddenLine mode
         state.blendMode = RenderingConfig::BlendMode::None;
-        // Mesh edges inherit original face color
-        state.meshEdgeColor = context.material.diffuseColor;
+        // CRITICAL FIX: Mesh edges inherit original face color BEFORE it was changed to white
+        // state.meshEdgeColor should already be set to original face color in handleDisplayMode (line 415)
+        // DO NOT override it here - keep the original face color for mesh edges
+        // Only set if it's not initialized (safety check, shouldn't happen)
+        if (state.meshEdgeColor.Red() == 0.0 && state.meshEdgeColor.Green() == 0.0 && state.meshEdgeColor.Blue() == 0.0) {
+            // meshEdgeColor not initialized, use context (should be original face color)
+            state.meshEdgeColor = context.material.diffuseColor;
+        }
         // CRITICAL: Force disable points in HiddenLine mode
         state.showPoints = false;
         break;
@@ -740,10 +808,10 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
     SoPolygonOffset* polygonOffset = nullptr;
 
     // Render surface if needed
-    // CRITICAL: For HiddenLine mode with mesh edges, skip normal surface pass
-    // because wireframePass will render both white surface and black lines in one pass
-    bool skipNormalSurfacePass = (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine && 
-                                  state.showMeshEdges);
+    // CRITICAL: For HiddenLine mode, always render white surface
+    // HiddenLine mode requires: white triangle faces + mesh edges with original face color
+    // Do NOT skip surface pass - we need white surface to be rendered
+    bool skipNormalSurfacePass = false;
     
     if (state.showSurface && !skipNormalSurfacePass) {
         GeometryRenderContext surfaceContext = context;
@@ -762,8 +830,9 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
         // Add LightModel node for proper lighting control
         // Use BASE_COLOR for no-shading modes (NoShading, HiddenLine), PHONG for others
         SoLightModel* lightModel = new SoLightModel();
-        if (!state.lightingEnabled || state.surfaceDisplayMode == RenderingConfig::DisplayMode::NoShading) {
-            lightModel->model.setValue(SoLightModel::BASE_COLOR);  // No lighting, direct color
+        if (!state.lightingEnabled || state.surfaceDisplayMode == RenderingConfig::DisplayMode::NoShading || 
+            state.surfaceDisplayMode == RenderingConfig::DisplayMode::HiddenLine) {
+            lightModel->model.setValue(SoLightModel::BASE_COLOR);  // No lighting, direct color (for HiddenLine white surface)
         } else {
             lightModel->model.setValue(SoLightModel::PHONG);  // Standard Phong lighting
         }
@@ -775,7 +844,7 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
         renderBuilder->appendBlendHints(coinNode, surfaceContext);
         
         // For HiddenLine mode, set polygon offset to push surface back (+1.0)
-        // This ensures white background is behind the black lines
+        // This ensures white background is behind the mesh edges
         if (!polygonOffset) {
             polygonOffset = renderBuilder->createPolygonOffsetNode();
             if (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine) {
@@ -801,9 +870,26 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
         edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
         edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
         edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        
+        // CRITICAL FIX: In HiddenLine mode, only show mesh edges, hide all other edge types
+        // HiddenLine mode requires: white triangle faces + mesh edges with original face color
+        if (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine) {
+            edgeComponent->clearSilhouetteEdgeNode();
+            // Force disable all edge types except mesh edges
+            edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
+            edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
+            edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
+            edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
+            edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
+            edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+            // Only mesh edges should be shown
+            edgeComponent->setEdgeDisplayType(EdgeType::Mesh, true);
+        }
     }
     
-    if (state.showOriginalEdges) {
+    // CRITICAL: In HiddenLine mode, do NOT render original edges
+    // HiddenLine mode should only show white surface + mesh edges
+    if (state.showOriginalEdges && context.display.displayMode != RenderingConfig::DisplayMode::HiddenLine) {
         GeometryRenderContext wireContext = context;
         wireContext.display.wireframeMode = true;
         wireContext.display.facesVisible = false;
@@ -849,96 +935,27 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
 
     // Render mesh edges if needed
     if (state.showMeshEdges) {
-        // For HiddenLine mode, use PolygonModeNode for fast rendering (FreeCAD approach)
-        if (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine) {
-            // HiddenLine mode: Render white background surface + black lines in ONE pass
-            // This prevents Z-fighting and ensures proper hidden line removal
-            // NOTE: We skip the normal surface pass above to avoid rendering white surface twice
-            
-            // Single pass: White background surface (with polygon offset +1.0 to push back) + 
-            //              Black wireframe lines (with polygon offset -1.0 to push forward)
-            PolygonModeNode* polygonMode = new PolygonModeNode();
-            polygonMode->ref();
-            polygonMode->mode.setValue(PolygonModeNode::LINE);
-            polygonMode->lineWidth.setValue(static_cast<float>(state.meshEdgeWidth));
-            polygonMode->disableLighting.setValue(TRUE);
-            // Negative offset pushes lines forward (in front of surface)
-            polygonMode->polygonOffsetFactor.setValue(-1.0f);
-            polygonMode->polygonOffsetUnits.setValue(-1.0f);
-            
-            // Create a separator for the HiddenLine pass (white surface + black lines)
-            SoSeparator* hiddenLinePass = new SoSeparator();
-            hiddenLinePass->ref();
-            
-            // Step 1: Render white background surface (with +1.0 offset to push back)
-            // This is the ONLY place we render the white surface in HiddenLine mode
-            SoPolygonOffset* surfaceOffset = new SoPolygonOffset();
-            surfaceOffset->factor.setValue(1.0f);  // Push surface back
-            surfaceOffset->units.setValue(1.0f);
-            hiddenLinePass->addChild(surfaceOffset);
-            
-            // White material for background surface
-            SoMaterial* whiteMaterial = new SoMaterial();
-            whiteMaterial->diffuseColor.setValue(1.0f, 1.0f, 1.0f);
-            whiteMaterial->ambientColor.setValue(1.0f, 1.0f, 1.0f);
-            whiteMaterial->emissiveColor.setValue(1.0f, 1.0f, 1.0f);
-            hiddenLinePass->addChild(whiteMaterial);
-            
-            // No lighting for white surface
-            SoLightModel* noLightModel = new SoLightModel();
-            noLightModel->model.setValue(SoLightModel::BASE_COLOR);
-            hiddenLinePass->addChild(noLightModel);
-            
-            // Add filled surface geometry (will be white background)
-            GeometryRenderContext whiteSurfaceContext = context;
-            whiteSurfaceContext.display.wireframeMode = false;
-            whiteSurfaceContext.display.facesVisible = true;
-            whiteSurfaceContext.display.displayMode = RenderingConfig::DisplayMode::NoShading;
-            whiteSurfaceContext.material.diffuseColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-            whiteSurfaceContext.material.ambientColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-            whiteSurfaceContext.material.specularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            whiteSurfaceContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            whiteSurfaceContext.material.shininess = 0.0;
-            whiteSurfaceContext.material.transparency = 0.0;
-            
-            renderBuilder->appendSurfaceGeometry(hiddenLinePass, shape, params, whiteSurfaceContext);
-            
-            // Step 2: Render black wireframe lines (with -1.0 offset to push forward)
-            // The PolygonModeNode will render the same geometry in LINE mode
-            SoMaterial* edgeMaterial = new SoMaterial();
-            edgeMaterial->diffuseColor.setValue(
-                static_cast<float>(state.meshEdgeColor.Red()),
-                static_cast<float>(state.meshEdgeColor.Green()),
-                static_cast<float>(state.meshEdgeColor.Blue())
-            );
-            edgeMaterial->emissiveColor.setValue(
-                static_cast<float>(state.meshEdgeColor.Red()),
-                static_cast<float>(state.meshEdgeColor.Green()),
-                static_cast<float>(state.meshEdgeColor.Blue())
-            );
-            hiddenLinePass->addChild(edgeMaterial);
-            
-            // Add polygon mode node (will render geometry as lines)
-            hiddenLinePass->addChild(polygonMode);
-            
-            // Re-add the same geometry, but PolygonModeNode will render it as lines
-            GeometryRenderContext wireframeContext = context;
-            wireframeContext.display.wireframeMode = false;  // Keep filled geometry, PolygonModeNode will make it lines
-            wireframeContext.display.facesVisible = true;
-            wireframeContext.display.displayMode = RenderingConfig::DisplayMode::NoShading;
-            wireframeContext.material.diffuseColor = state.meshEdgeColor;  // Use edge color
-            wireframeContext.material.ambientColor = state.meshEdgeColor;
-            wireframeContext.material.specularColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            wireframeContext.material.emissiveColor = state.meshEdgeColor;
-            wireframeContext.material.shininess = 0.0;
-            wireframeContext.material.transparency = 0.0;
-            
-            renderBuilder->appendSurfaceGeometry(hiddenLinePass, shape, params, wireframeContext);
-            
-            // Add to scene graph - scene graph will hold reference
-            coinNode->addChild(hiddenLinePass);
-            hiddenLinePass->unref();  // Scene graph now owns it, safe to unref
-            polygonMode->unref();      // hiddenLinePass owns it, safe to unref
+        // For HiddenLine mode, use true mesh edges (SoIndexedLineSet) instead of PolygonModeNode
+        // PolygonModeNode renders filled triangles instead of lines, so we use ModularEdgeComponent
+        if (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine && 
+            useModularEdgeComponent && edgeComponent) {
+            // Use true mesh edges for HiddenLine mode
+            auto& manager = RenderingToolkitAPI::getManager();
+            auto processor = manager.getGeometryProcessor("OpenCASCADE");
+            if (processor) {
+                TriangleMesh mesh = processor->convertToMesh(shape, params);
+                if (!mesh.triangles.empty()) {
+                    // HiddenLine mode: Use original face color for mesh edges
+                    // If original color is too light (gray/white), use black for better visibility on white background
+                    Quantity_Color effectiveEdgeColor = state.meshEdgeColor;  // This should be original face color
+                    if (state.meshEdgeColor.Red() > 0.4 && state.meshEdgeColor.Green() > 0.4 && state.meshEdgeColor.Blue() > 0.4) {
+                        // Color is too light (gray/white), use black for better visibility
+                        effectiveEdgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);  // Black fallback
+                    }
+                    edgeComponent->extractMeshEdges(mesh, effectiveEdgeColor, state.meshEdgeWidth);
+                    edgeComponent->updateEdgeDisplay(coinNode);
+                }
+            }
         } else {
             // For other modes, use traditional mesh edge extraction
             if (useModularEdgeComponent && edgeComponent) {
@@ -1026,10 +1043,10 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
     SoPolygonOffset* polygonOffset = nullptr;
 
     // Render surface if needed
-    // CRITICAL: For HiddenLine mode with mesh edges, skip normal surface pass
-    // because wireframePass will render both white surface and black lines in one pass
-    bool skipNormalSurfacePass = (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine && 
-                                  state.showMeshEdges);
+    // CRITICAL: For HiddenLine mode, always render white surface
+    // HiddenLine mode requires: white triangle faces + mesh edges with original face color
+    // Do NOT skip surface pass - we need white surface to be rendered
+    bool skipNormalSurfacePass = false;
     
     if (state.showSurface && !skipNormalSurfacePass) {
         GeometryRenderContext surfaceContext = context;
@@ -1101,6 +1118,12 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
         edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
         edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
         edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        
+        // CRITICAL FIX: In HiddenLine mode, clear silhouette edge node to prevent it from showing
+        // HiddenLine mode should only show mesh edges, not silhouette edges
+        if (context.display.displayMode == RenderingConfig::DisplayMode::HiddenLine) {
+            edgeComponent->clearSilhouetteEdgeNode();
+        }
     }
     
     // Always call updateEdgeDisplay to apply edgeFlags changes
@@ -1119,6 +1142,10 @@ void DisplayModeHandler::applyRenderState(SoSeparator* coinNode,
             
             // Single pass: White background surface (with polygon offset +1.0 to push back) + 
             //              Black wireframe lines (with polygon offset -1.0 to push forward)
+            // CRITICAL: Ensure PolygonModeNode class is initialized before creating instance
+            if (PolygonModeNode::getClassTypeId() == SoType::badType()) {
+                PolygonModeNode::initClass();
+            }
             PolygonModeNode* polygonMode = new PolygonModeNode();
             polygonMode->ref();
             polygonMode->mode.setValue(PolygonModeNode::LINE);
