@@ -9,6 +9,7 @@
 #include "EdgeTypes.h"
 #include "rendering/GeometryProcessor.h"
 #include <OpenCASCADE/Quantity_Color.hxx>
+#include <memory>
 
 class SoSeparator;
 class SoNode;
@@ -19,6 +20,8 @@ class WireframeBuilder;
 class PointViewBuilder;
 class TopoDS_Shape;
 struct MeshParameters;
+class BRepDisplayModeHandler;
+class MeshDisplayModeHandler;
 
 /**
  * @brief Rendering state structure for display mode
@@ -74,6 +77,9 @@ struct DisplayModeRenderState {
     }
 };
 
+class BRepDisplayModeHandler;
+class MeshDisplayModeHandler;
+
 class DisplayModeHandler {
 public:
     DisplayModeHandler();
@@ -113,58 +119,13 @@ public:
     void setGeometryBuilt(bool built);
 
 private:
-    void findDrawStyleAndMaterial(SoNode* node, SoDrawStyle*& drawStyle, SoMaterial*& material);
-    void cleanupEdgeNodes(SoSeparator* coinNode, ModularEdgeComponent* edgeComponent);
-    
-    void resetAllRenderStates(SoSeparator* coinNode, ModularEdgeComponent* edgeComponent);
-    
-    void setRenderStateForMode(DisplayModeRenderState& state, 
-                               RenderingConfig::DisplayMode displayMode,
-                               const GeometryRenderContext& context);
-    
-    void applyRenderState(SoSeparator* coinNode,
-                         const DisplayModeRenderState& state,
-                         const GeometryRenderContext& context,
-                         const TopoDS_Shape& shape,
-                         const MeshParameters& params,
-                         ModularEdgeComponent* edgeComponent,
-                         bool useModularEdgeComponent,
-                         RenderNodeBuilder* renderBuilder,
-                         WireframeBuilder* wireframeBuilder,
-                         PointViewBuilder* pointViewBuilder = nullptr);
-
-    // Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
-    void applyRenderState(SoSeparator* coinNode,
-                         const DisplayModeRenderState& state,
-                         const GeometryRenderContext& context,
-                         const TriangleMesh& mesh,
-                         const MeshParameters& params,
-                         ModularEdgeComponent* edgeComponent,
-                         bool useModularEdgeComponent,
-                         RenderNodeBuilder* renderBuilder,
-                         WireframeBuilder* wireframeBuilder,
-                         PointViewBuilder* pointViewBuilder = nullptr);
-    
-    int getModeSwitchIndex(RenderingConfig::DisplayMode mode);
-    void buildModeNode(SoSeparator* parent,
-                      RenderingConfig::DisplayMode mode,
-                      const GeometryRenderContext& context,
-                      const TopoDS_Shape& shape,
-                      const MeshParameters& params,
-                      ModularEdgeComponent* edgeComponent,
-                      bool useModularEdgeComponent,
-                      RenderNodeBuilder* renderBuilder,
-                      WireframeBuilder* wireframeBuilder,
-                      PointViewBuilder* pointViewBuilder = nullptr);
-    
-    void buildModeStateNode(SoSeparator* parent,
-                           RenderingConfig::DisplayMode mode,
-                           const DisplayModeRenderState& state,
-                           const GeometryRenderContext& context,
-                           RenderNodeBuilder* renderBuilder);
-    
+    std::unique_ptr<BRepDisplayModeHandler> m_brepHandler;
+    std::unique_ptr<MeshDisplayModeHandler> m_meshHandler;
     SoSwitch* m_modeSwitch;
     bool m_useSwitchMode;
     static bool m_geometryBuilt;  // Track if geometry has been built (to avoid double rebuild)
 };
+
+
+
 

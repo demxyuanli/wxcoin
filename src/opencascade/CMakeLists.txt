@@ -23,6 +23,11 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/CoinNodeManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/RenderNodeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/BRepDisplayModeHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/MeshDisplayModeHandler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeStateManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeNodeManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeRenderer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/WireframeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/PointViewBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/FaceDomainMapper.cpp
@@ -114,6 +119,11 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/CoinNodeManager.h
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/RenderNodeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/DisplayModeHandler.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/helper/BRepDisplayModeHandler.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/helper/MeshDisplayModeHandler.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/helper/DisplayModeStateManager.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/helper/DisplayModeNodeManager.h
+    ${CMAKE_SOURCE_DIR}/include/geometry/helper/DisplayModeRenderer.h
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/WireframeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/PointViewBuilder.h
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/FaceDomainMapper.h

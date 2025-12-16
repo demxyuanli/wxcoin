@@ -30,7 +30,7 @@ MeshEdgesParamDialog::MeshEdgesParamDialog(wxWindow* parent)
     m_edgeWidth = new wxSpinCtrlDouble(m_contentPanel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(80, -1));
     m_edgeWidth->SetRange(0.1, 10.0);
     m_edgeWidth->SetIncrement(0.1);
-    m_edgeWidth->SetValue(1.0);
+    m_edgeWidth->SetValue(0.4);
     appearanceRow1->Add(m_edgeWidth, 1, wxEXPAND);
 
     appearanceContentSizer->Add(appearanceRow1, 0, wxEXPAND | wxALL, 10);
