@@ -28,6 +28,7 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeStateManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeNodeManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeRenderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeConfigFactory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/WireframeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/PointViewBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/FaceDomainMapper.cpp

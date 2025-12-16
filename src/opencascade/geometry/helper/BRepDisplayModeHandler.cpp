@@ -2,6 +2,7 @@
 #include "geometry/helper/DisplayModeStateManager.h"
 #include "geometry/helper/DisplayModeNodeManager.h"
 #include "geometry/helper/DisplayModeRenderer.h"
+#include "geometry/helper/DisplayModeHandler.h"
 #include "geometry/helper/RenderNodeBuilder.h"
 #include "geometry/helper/PointViewBuilder.h"
 #include "edges/ModularEdgeComponent.h"
@@ -48,71 +49,61 @@ void BRepDisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
         // FreeCAD approach: Geometry is built once and shared, Switch only contains state nodes
         // This prevents memory explosion (7x geometry copies -> 1x geometry + 7x small state nodes)
         
-        // Step 1: Build shared geometry once (outside Switch)
+        // Step 1: Reset render states and prepare for geometry initialization
         DisplayModeNodeManager nodeManager;
         nodeManager.resetAllRenderStates(coinNode, edgeComponent);
         
-        // Build geometry for current mode (will be reused by all Switch states)
-        DisplayModeRenderState state;
-        state.surfaceAmbientColor = context.material.ambientColor;
-        state.surfaceDiffuseColor = context.material.diffuseColor;
-        state.surfaceSpecularColor = context.material.specularColor;
-        state.surfaceEmissiveColor = context.material.emissiveColor;
-        state.shininess = context.material.shininess;
-        state.transparency = context.material.transparency;
-        state.originalEdgeColor = context.display.wireframeColor;
-        // CRITICAL FIX: For HiddenLine mode, mesh edges should inherit original face color
-        // Extract original face color from existing material node if available
-        // This ensures mesh edges use the original face color, not white (which is used for surface)
-        // If unable to extract original color, use black as fallback (good contrast on white background)
-        Quantity_Color originalFaceColor = context.material.diffuseColor;
-        bool foundOriginalColor = false;
-        if (coinNode && displayMode == RenderingConfig::DisplayMode::HiddenLine) {
-            // Try to find original material color from existing nodes
-            for (int i = 0; i < coinNode->getNumChildren(); ++i) {
-                SoNode* child = coinNode->getChild(i);
-                if (child->getTypeId() == SoMaterial::getClassTypeId()) {
-                    SoMaterial* mat = static_cast<SoMaterial*>(child);
-                    if (mat->diffuseColor.getNum() > 0) {
-                        const SbColor& diffuse = mat->diffuseColor[0];
-                        float r, g, b;
-                        diffuse.getValue(r, g, b);
-                        // Only use if not white (white is used for HiddenLine surface)
-                        if (!(r == 1.0f && g == 1.0f && b == 1.0f)) {
-                            originalFaceColor = Quantity_Color(r, g, b, Quantity_TOC_RGB);
-                            foundOriginalColor = true;
-                            break;
-                        }
-                    }
+        // Get configuration for current display mode (used to determine what geometry to build)
+        DisplayModeConfig currentConfig = DisplayModeConfigFactory::getConfig(displayMode, context);
+        
+        // Build shared surface geometry once if needed (check all modes to see if any require surface)
+        // Surface geometry = SoSeparator containing SoIndexedFaceSet/SoFaceSet (coin triangle nodes)
+        // This geometry will be reused by all Switch states
+        if (!nodeManager.hasSurfaceGeometryNode(coinNode)) {
+            // Check if any mode requires surface geometry
+            bool anyModeRequiresSurface = false;
+            RenderingConfig::DisplayMode modes[] = {
+                RenderingConfig::DisplayMode::NoShading,
+                RenderingConfig::DisplayMode::Points,
+                RenderingConfig::DisplayMode::Wireframe,
+                RenderingConfig::DisplayMode::Solid,
+                RenderingConfig::DisplayMode::FlatLines,
+                RenderingConfig::DisplayMode::Transparent,
+                RenderingConfig::DisplayMode::HiddenLine
+            };
+            for (auto mode : modes) {
+                GeometryRenderContext modeContext = context;
+                modeContext.display.displayMode = mode;
+                DisplayModeConfig modeConfig = DisplayModeConfigFactory::getConfig(mode, modeContext);
+                if (modeConfig.nodes.requireSurface) {
+                    anyModeRequiresSurface = true;
+                    break;
                 }
             }
-        }
-        // If unable to extract original color, use black as fallback
-        if (displayMode == RenderingConfig::DisplayMode::HiddenLine && !foundOriginalColor) {
-            // Check if context color is white (which means it's been changed for HiddenLine surface)
-            if (context.material.diffuseColor.Red() == 1.0 && 
-                context.material.diffuseColor.Green() == 1.0 && 
-                context.material.diffuseColor.Blue() == 1.0) {
-                originalFaceColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);  // Black fallback
+            
+            // Build surface geometry if any mode requires it
+            if (anyModeRequiresSurface) {
+                GeometryRenderContext surfaceContext = context;
+                surfaceContext.display.facesVisible = true;
+                renderBuilder->appendSurfaceGeometry(coinNode, shape, params, surfaceContext);
             }
         }
-        state.meshEdgeColor = originalFaceColor;  // Use original face color for mesh edges, or black if unavailable
-        state.originalEdgeWidth = context.display.wireframeWidth;
-        state.meshEdgeWidth = context.display.wireframeWidth;
-        state.textureEnabled = context.texture.enabled;
-        state.blendMode = context.blend.blendMode;
-        state.showPoints = context.display.showPointView;
-        state.showSolidWithPoints = context.display.showSolidWithPointView;
-        state.surfaceDisplayMode = displayMode;
         
-        // Build geometry once (shared by all modes)
-        if (state.showSurface) {
-            GeometryRenderContext surfaceContext = context;
-            surfaceContext.display.facesVisible = true;
-            renderBuilder->appendSurfaceGeometry(coinNode, shape, params, surfaceContext);
+        // Initialize points geometry if needed (build once, controlled by visibility later)
+        // Check if Points mode is one of the available modes, and if points node doesn't exist yet
+        SoSeparator* existingPointViewNode = nodeManager.findPointViewNode(coinNode);
+        if (!existingPointViewNode) {
+            // Check if Points mode would require points (build points dataset during initialization)
+            GeometryRenderContext pointsContext = context;
+            pointsContext.display.displayMode = RenderingConfig::DisplayMode::Points;
+            DisplayModeConfig pointsConfig = DisplayModeConfigFactory::getConfig(RenderingConfig::DisplayMode::Points, pointsContext);
+            if (pointsConfig.nodes.requirePoints && pointViewBuilder) {
+                // Build points dataset during initialization (will be shown/hidden based on mode)
+                pointViewBuilder->createPointViewRepresentation(coinNode, shape, params, context.display);
+            }
         }
         
-        // Step 2: Build state nodes for each mode (only Material, DrawStyle, LightModel, etc.)
+        // Step 2: Build state nodes for each mode using configuration (data-driven approach)
         m_modeSwitch->removeAllChildren();
         
         RenderingConfig::DisplayMode modes[] = {
@@ -125,20 +116,18 @@ void BRepDisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
             RenderingConfig::DisplayMode::HiddenLine
         };
         
+        DisplayModeRenderer renderer;
         for (auto mode : modes) {
             SoSeparator* stateNode = new SoSeparator();
             stateNode->ref();
             
-            // Build state for this mode
-            DisplayModeRenderState modeState = state;
+            // Get configuration for this mode (data-driven)
             GeometryRenderContext modeContext = context;
             modeContext.display.displayMode = mode;
-            DisplayModeStateManager stateManager;
-            stateManager.setRenderStateForMode(modeState, mode, modeContext);
+            DisplayModeConfig modeConfig = DisplayModeConfigFactory::getConfig(mode, modeContext);
             
-            // Build only state nodes (no geometry)
-            DisplayModeRenderer renderer;
-            renderer.buildModeStateNode(stateNode, mode, modeState, modeContext, renderBuilder);
+            // Build state node from configuration
+            renderer.buildStateNodeFromConfig(stateNode, modeConfig, modeContext, renderBuilder);
             
             m_modeSwitch->addChild(stateNode);
             stateNode->unref();
@@ -149,58 +138,48 @@ void BRepDisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
             m_modeSwitch->whichChild.setValue(switchIndex);
         }
         
-        coinNode->addChild(m_modeSwitch);
+        // Add Switch node only if not already added (coin nodes are shared/reused)
+        if (!nodeManager.hasSwitchNode(coinNode, m_modeSwitch)) {
+            coinNode->addChild(m_modeSwitch);
+        }
         
-        // Step 3: Add edges and points (outside Switch, controlled separately)
-        // Note: Edges and points are not in Switch as they may need independent control
-        DisplayModeRenderState currentState = state;
-        DisplayModeStateManager stateManager;
-        stateManager.setRenderStateForMode(currentState, displayMode, context);
+        // Step 3: Apply edge and point rendering based on configuration (data-driven approach)
+        // Note: Surface geometry is already built in Step 1, state nodes are in Switch
+        // This step only handles edges and points (which are outside Switch and controlled separately)
         
-        // CRITICAL: Always update edgeFlags before calling updateEdgeDisplay
-        // This ensures edge visibility matches the state, not stale edgeFlags
+        // Apply edge rendering based on config
         if (useModularEdgeComponent && edgeComponent) {
-            // Set edgeFlags to match state
-            edgeComponent->setEdgeDisplayType(EdgeType::Original, currentState.showOriginalEdges);
-            edgeComponent->setEdgeDisplayType(EdgeType::Mesh, currentState.showMeshEdges);
-            // Clear other edge types that shouldn't be shown in display mode
+            // Set edge display flags based on config
+            bool showOriginalEdges = currentConfig.nodes.requireOriginalEdges && currentConfig.edges.originalEdge.enabled;
+            
+            edgeComponent->setEdgeDisplayType(EdgeType::Original, showOriginalEdges);
+            edgeComponent->setEdgeDisplayType(EdgeType::Mesh, false);  // BREP uses original edges
             edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
             edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
             edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
             edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
             edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
             
-            // CRITICAL FIX: In HiddenLine mode, clear silhouette edge node to prevent it from showing
-            // HiddenLine mode should only show mesh edges, not silhouette edges
-            if (displayMode == RenderingConfig::DisplayMode::HiddenLine) {
-                edgeComponent->clearSilhouetteEdgeNode();
+            // Extract original edges if needed (only if not already extracted)
+            if (showOriginalEdges && !edgeComponent->getEdgeNode(EdgeType::Original)) {
+                edgeComponent->extractOriginalEdges(shape,
+                                                   80.0, 0.01, false,
+                                                   currentConfig.edges.originalEdge.color,
+                                                   currentConfig.edges.originalEdge.width,
+                                                   false,
+                                                   Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
+                                                   3.0);
             }
-        }
-        
-        // Add edges if needed
-        if (currentState.showOriginalEdges && useModularEdgeComponent && edgeComponent) {
-            edgeComponent->extractOriginalEdges(
-                shape, 
-                80.0,
-                0.01,
-                false,
-                currentState.originalEdgeColor,
-                currentState.originalEdgeWidth,
-                false,
-                Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
-                3.0
-            );
-        }
-        
-        // Always call updateEdgeDisplay to apply edgeFlags changes
-        // This ensures edges are removed when showOriginalEdges is false
-        if (useModularEdgeComponent && edgeComponent) {
+            
             edgeComponent->updateEdgeDisplay(coinNode);
         }
         
-        // Add points if needed
-        if (currentState.showPoints && pointViewBuilder) {
-            pointViewBuilder->createPointViewRepresentation(coinNode, shape, params, context.display);
+        // Control point view visibility (points node already built in Step 1 if needed)
+        // Points node is already in the scene graph, we control its visibility via renderCulling
+        SoSeparator* pointViewNode = nodeManager.findPointViewNode(coinNode);
+        if (pointViewNode) {
+            // Show points if current mode requires them
+            pointViewNode->renderCulling = currentConfig.nodes.requirePoints ? SoSeparator::OFF : SoSeparator::ON;
         }
         
         return;

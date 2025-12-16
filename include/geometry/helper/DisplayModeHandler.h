@@ -24,10 +24,85 @@ class BRepDisplayModeHandler;
 class MeshDisplayModeHandler;
 
 /**
- * @brief Rendering state structure for display mode
+ * @brief Display mode configuration structure - Data-driven approach
  * 
- * This structure stores all rendering state that needs to be applied
- * after the display mode switch determines what to render.
+ * This structure defines what geometry nodes to display, how to render them,
+ * and what post-processing to apply. Each display mode has a pre-configured
+ * instance of this structure.
+ */
+struct DisplayModeConfig {
+    // ========== Data Node Requirements ==========
+    // Which geometry nodes should be displayed
+    struct NodeRequirements {
+        bool requireSurface = false;         // Surface/faces geometry node
+        bool requireOriginalEdges = false;   // Original geometric edges node (BREP only)
+        bool requireMeshEdges = false;       // Mesh edges node
+        bool requirePoints = false;          // Vertex points node
+        bool surfaceWithPoints = false;      // Show surface together with points
+    } nodes;
+    
+    // ========== Rendering Properties ==========
+    struct RenderingProperties {
+        // Lighting model: BASE_COLOR (no lighting) or PHONG (full lighting)
+        enum class LightModel {
+            BASE_COLOR,
+            PHONG
+        } lightModel = LightModel::PHONG;
+        
+        // Material override (if useMaterialOverride is true, these values override context material)
+        struct MaterialOverride {
+            bool enabled = false;
+            Quantity_Color ambientColor;
+            Quantity_Color diffuseColor;
+            Quantity_Color specularColor;
+            Quantity_Color emissiveColor;
+            double shininess = 0.0;
+            double transparency = 0.0;
+        } materialOverride;
+        
+        // Texture
+        bool textureEnabled = false;
+        
+        // Blending
+        RenderingConfig::BlendMode blendMode = RenderingConfig::BlendMode::None;
+    } rendering;
+    
+    // ========== Edge Configuration ==========
+    struct EdgeConfig {
+        // Edge type and color (for BREP models)
+        struct OriginalEdge {
+            bool enabled = false;
+            Quantity_Color color;
+            double width = 1.0;
+        } originalEdge;
+        
+        // Mesh edge type and color (for mesh models or HiddenLine mode)
+        struct MeshEdge {
+            bool enabled = false;
+            Quantity_Color color;
+            double width = 1.0;
+            // Special color selection for HiddenLine mode
+            bool useEffectiveColor = false;  // If true, use black if color is too light
+        } meshEdge;
+    } edges;
+    
+    // ========== Post-Processing ==========
+    struct PostProcessing {
+        // Polygon offset for depth sorting (used in HiddenLine mode)
+        struct PolygonOffset {
+            bool enabled = false;
+            float factor = 0.0f;
+            float units = 0.0f;
+        } polygonOffset;
+    } postProcessing;
+    
+    DisplayModeConfig() = default;
+};
+
+/**
+ * @brief Legacy rendering state structure (deprecated, kept for compatibility)
+ * 
+ * This is being replaced by DisplayModeConfig for data-driven architecture.
  */
 struct DisplayModeRenderState {
     // Rendering components
@@ -75,6 +150,38 @@ struct DisplayModeRenderState {
         , meshEdgeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
     {
     }
+};
+
+class BRepDisplayModeHandler;
+class MeshDisplayModeHandler;
+
+/**
+ * @brief Display mode configuration factory
+ * 
+ * Provides pre-configured DisplayModeConfig instances for each display mode.
+ * These configurations define what nodes to display, how to render them,
+ * and what post-processing to apply.
+ */
+class DisplayModeConfigFactory {
+public:
+    /**
+     * Get configuration for a specific display mode
+     * @param mode Display mode
+     * @param context Geometry render context (for material color extraction)
+     * @return Pre-configured DisplayModeConfig for the mode
+     */
+    static DisplayModeConfig getConfig(RenderingConfig::DisplayMode mode, 
+                                       const GeometryRenderContext& context);
+    
+private:
+    // Helper methods to create configurations for each mode
+    static DisplayModeConfig createNoShadingConfig(const GeometryRenderContext& context);
+    static DisplayModeConfig createPointsConfig(const GeometryRenderContext& context);
+    static DisplayModeConfig createWireframeConfig(const GeometryRenderContext& context);
+    static DisplayModeConfig createSolidConfig(const GeometryRenderContext& context);
+    static DisplayModeConfig createFlatLinesConfig(const GeometryRenderContext& context);
+    static DisplayModeConfig createTransparentConfig(const GeometryRenderContext& context);
+    static DisplayModeConfig createHiddenLineConfig(const GeometryRenderContext& context);
 };
 
 class BRepDisplayModeHandler;

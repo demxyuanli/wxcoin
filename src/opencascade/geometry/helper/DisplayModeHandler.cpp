@@ -22,6 +22,7 @@
 #include <Inventor/nodes/SoTexture2.h>
 #include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/SoType.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 #include <vector>
@@ -151,23 +152,40 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         // Also detect HiddenLine pass nodes (SoSeparator with PolygonModeNode)
         if (child->isOfType(SoSeparator::getClassTypeId())) {
             SoSeparator* sep = static_cast<SoSeparator*>(child);
+            if (!sep) continue;  // Safety check
+            
             bool isPointViewNode = false;
             bool isHiddenLineNode = false;
-            for (int j = 0; j < sep->getNumChildren(); ++j) {
+            
+            // CRITICAL: Initialize PolygonModeNode class if not already initialized (before loop)
+            if (PolygonModeNode::getClassTypeId() == SoType::badType()) {
+                PolygonModeNode::initClass();
+            }
+            SoType polygonModeType = PolygonModeNode::getClassTypeId();
+            bool polygonModeTypeValid = (polygonModeType != SoType::badType());
+            
+            int numChildren = sep->getNumChildren();
+            for (int j = 0; j < numChildren; ++j) {
                 SoNode* subChild = sep->getChild(j);
                 if (!subChild) continue;
-                if (subChild->isOfType(SoPointSet::getClassTypeId())) {
-                    isPointViewNode = true;
-                    break;
-                }
-                if (subChild->isOfType(SoCoordinate3::getClassTypeId())) {
-                    isPointViewNode = true;
-                    break;
-                }
-                // Check for PolygonModeNode (HiddenLine mode)
-                if (subChild->isOfType(PolygonModeNode::getClassTypeId())) {
-                    isHiddenLineNode = true;
-                    break;
+                
+                try {
+                    if (subChild->isOfType(SoPointSet::getClassTypeId())) {
+                        isPointViewNode = true;
+                        break;
+                    }
+                    if (subChild->isOfType(SoCoordinate3::getClassTypeId())) {
+                        isPointViewNode = true;
+                        break;
+                    }
+                    // Check for PolygonModeNode (HiddenLine mode)
+                    if (polygonModeTypeValid && subChild->isOfType(polygonModeType)) {
+                        isHiddenLineNode = true;
+                        break;
+                    }
+                } catch (...) {
+                    // Safety: Skip invalid nodes
+                    continue;
                 }
             }
             if (isPointViewNode) {
@@ -184,19 +202,49 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         nodeManager.cleanupEdgeNodes(coinNode, edgeComponent);
     }
     
-    // Remove collected state nodes (safe: removeChild handles ref/unref correctly)
-    for (auto* node : stateNodesToRemove) {
-        coinNode->removeChild(node);
-    }
-    
-    // Remove point view nodes
-    for (auto* node : pointViewNodesToRemove) {
-        coinNode->removeChild(node);
-    }
-    
-    // Remove HiddenLine pass nodes
-    for (auto* node : hiddenLineNodesToRemove) {
-        coinNode->removeChild(node);
+    // Remove collected state nodes (use index-based removal for safety)
+    // CRITICAL: Remove from back to front to avoid index shifting issues
+    // This ensures that when we remove a node, indices of remaining nodes don't change
+    if (coinNode) {
+        for (int i = coinNode->getNumChildren() - 1; i >= 0; --i) {
+            try {
+                SoNode* child = coinNode->getChild(i);
+                if (!child) continue;
+                
+                // Check if this node should be removed by comparing pointers
+                bool shouldRemove = false;
+                for (auto* node : stateNodesToRemove) {
+                    if (node && child == node) {
+                        shouldRemove = true;
+                        break;
+                    }
+                }
+                if (!shouldRemove) {
+                    for (auto* node : pointViewNodesToRemove) {
+                        if (node && child == node) {
+                            shouldRemove = true;
+                            break;
+                        }
+                    }
+                }
+                if (!shouldRemove) {
+                    for (auto* node : hiddenLineNodesToRemove) {
+                        if (node && child == node) {
+                            shouldRemove = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (shouldRemove) {
+                    coinNode->removeChild(i);  // Use index instead of pointer for safety
+                }
+            } catch (...) {
+                // Safety: If any operation fails, continue with next node
+                // This prevents crash if node becomes invalid during iteration
+                continue;
+            }
+        }
     }
     
     // Step 3: Build context - prioritize originalDiffuseColor if provided

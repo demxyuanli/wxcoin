@@ -526,4 +526,245 @@ void DisplayModeRenderer::buildModeNode(SoSeparator* parent,
                      useModularEdgeComponent, renderBuilder, wireframeBuilder, pointViewBuilder);
 }
 
+// ========== New Data-Driven Rendering Methods ==========
+
+void DisplayModeRenderer::buildStateNodeFromConfig(SoSeparator* parent,
+                                                    const DisplayModeConfig& config,
+                                                    const GeometryRenderContext& context,
+                                                    RenderNodeBuilder* renderBuilder) {
+    if (!parent || !renderBuilder) {
+        return;
+    }
+    
+    // Build LightModel node
+    SoLightModel* lightModel = new SoLightModel();
+    if (config.rendering.lightModel == DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR) {
+        lightModel->model.setValue(SoLightModel::BASE_COLOR);
+    } else {
+        lightModel->model.setValue(SoLightModel::PHONG);
+    }
+    parent->addChild(lightModel);
+    
+    // Build GeometryRenderContext from config
+    GeometryRenderContext stateContext = context;
+    // Wireframe mode is determined by requireSurface=false, not by wireframeMode flag
+    stateContext.display.facesVisible = config.nodes.requireSurface;
+    stateContext.texture.enabled = config.rendering.textureEnabled;
+    stateContext.blend.blendMode = config.rendering.blendMode;
+    
+    // Apply material override if enabled
+    if (config.rendering.materialOverride.enabled) {
+        stateContext.material.ambientColor = config.rendering.materialOverride.ambientColor;
+        stateContext.material.diffuseColor = config.rendering.materialOverride.diffuseColor;
+        stateContext.material.specularColor = config.rendering.materialOverride.specularColor;
+        stateContext.material.emissiveColor = config.rendering.materialOverride.emissiveColor;
+        stateContext.material.shininess = config.rendering.materialOverride.shininess;
+        stateContext.material.transparency = config.rendering.materialOverride.transparency;
+    }
+    
+    // Build DrawStyle and Material nodes
+    parent->addChild(renderBuilder->createDrawStyleNode(stateContext));
+    parent->addChild(renderBuilder->createMaterialNode(stateContext));
+    
+    // Add texture nodes if enabled
+    renderBuilder->appendTextureNodes(parent, stateContext);
+    
+    // Add blend hints if blend mode is active
+    renderBuilder->appendBlendHints(parent, stateContext);
+    
+    // Add polygon offset if enabled
+    SoPolygonOffset* polygonOffset = renderBuilder->createPolygonOffsetNode();
+    if (config.postProcessing.polygonOffset.enabled) {
+        polygonOffset->factor.setValue(config.postProcessing.polygonOffset.factor);
+        polygonOffset->units.setValue(config.postProcessing.polygonOffset.units);
+    }
+    parent->addChild(polygonOffset);
+}
+
+void DisplayModeRenderer::applyRenderFromConfig(SoSeparator* coinNode,
+                                                 const DisplayModeConfig& config,
+                                                 const GeometryRenderContext& context,
+                                                 const TopoDS_Shape& shape,
+                                                 const MeshParameters& params,
+                                                 ModularEdgeComponent* edgeComponent,
+                                                 bool useModularEdgeComponent,
+                                                 RenderNodeBuilder* renderBuilder,
+                                                 WireframeBuilder* wireframeBuilder,
+                                                 PointViewBuilder* pointViewBuilder) {
+    if (!coinNode || !renderBuilder || !wireframeBuilder) {
+        return;
+    }
+    
+    // Apply surface rendering if required
+    if (config.nodes.requireSurface) {
+        GeometryRenderContext surfaceContext = context;
+        surfaceContext.display.facesVisible = true;
+        // Wireframe mode is determined by requireSurface=false, not by wireframeMode flag
+        // When requireSurface=true, surface is always rendered as filled (not wireframe)
+        surfaceContext.texture.enabled = config.rendering.textureEnabled;
+        surfaceContext.blend.blendMode = config.rendering.blendMode;
+        
+        // Apply material override if enabled
+        if (config.rendering.materialOverride.enabled) {
+            surfaceContext.material.ambientColor = config.rendering.materialOverride.ambientColor;
+            surfaceContext.material.diffuseColor = config.rendering.materialOverride.diffuseColor;
+            surfaceContext.material.specularColor = config.rendering.materialOverride.specularColor;
+            surfaceContext.material.emissiveColor = config.rendering.materialOverride.emissiveColor;
+            surfaceContext.material.shininess = config.rendering.materialOverride.shininess;
+            surfaceContext.material.transparency = config.rendering.materialOverride.transparency;
+        }
+        
+        // Build lighting model
+        SoLightModel* lightModel = new SoLightModel();
+        if (config.rendering.lightModel == DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR) {
+            lightModel->model.setValue(SoLightModel::BASE_COLOR);
+        } else {
+            lightModel->model.setValue(SoLightModel::PHONG);
+        }
+        coinNode->addChild(lightModel);
+        
+        coinNode->addChild(renderBuilder->createDrawStyleNode(surfaceContext));
+        coinNode->addChild(renderBuilder->createMaterialNode(surfaceContext));
+        renderBuilder->appendTextureNodes(coinNode, surfaceContext);
+        renderBuilder->appendBlendHints(coinNode, surfaceContext);
+        
+        // Add polygon offset if enabled
+        if (config.postProcessing.polygonOffset.enabled) {
+            SoPolygonOffset* polygonOffset = renderBuilder->createPolygonOffsetNode();
+            polygonOffset->factor.setValue(config.postProcessing.polygonOffset.factor);
+            polygonOffset->units.setValue(config.postProcessing.polygonOffset.units);
+            coinNode->addChild(polygonOffset);
+        }
+        
+        // Add surface geometry
+        renderBuilder->appendSurfaceGeometry(coinNode, shape, params, surfaceContext);
+    }
+    
+    // Apply edge rendering based on config
+    if (useModularEdgeComponent && edgeComponent) {
+        // Set edge display flags based on config
+        bool showOriginalEdges = config.nodes.requireOriginalEdges && config.edges.originalEdge.enabled;
+        bool showMeshEdges = config.nodes.requireMeshEdges && config.edges.meshEdge.enabled;
+        
+        edgeComponent->setEdgeDisplayType(EdgeType::Original, showOriginalEdges);
+        edgeComponent->setEdgeDisplayType(EdgeType::Mesh, showMeshEdges);
+        edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        
+        // Extract edges if needed (only if not already extracted)
+        if (showOriginalEdges && !edgeComponent->getEdgeNode(EdgeType::Original)) {
+            edgeComponent->extractOriginalEdges(shape,
+                                               80.0, 0.01, false,
+                                               config.edges.originalEdge.color,
+                                               config.edges.originalEdge.width,
+                                               false,
+                                               Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
+                                               3.0);
+        }
+        
+        edgeComponent->updateEdgeDisplay(coinNode);
+    }
+    
+    // Apply point view if required
+    if (config.nodes.requirePoints && pointViewBuilder) {
+        pointViewBuilder->createPointViewRepresentation(coinNode, shape, params, context.display);
+    }
+}
+
+void DisplayModeRenderer::applyRenderFromConfig(SoSeparator* coinNode,
+                                                 const DisplayModeConfig& config,
+                                                 const GeometryRenderContext& context,
+                                                 const TriangleMesh& mesh,
+                                                 const MeshParameters& params,
+                                                 ModularEdgeComponent* edgeComponent,
+                                                 bool useModularEdgeComponent,
+                                                 RenderNodeBuilder* renderBuilder,
+                                                 WireframeBuilder* wireframeBuilder,
+                                                 PointViewBuilder* pointViewBuilder) {
+    if (!coinNode || !renderBuilder || !wireframeBuilder) {
+        return;
+    }
+    
+    // Apply surface rendering if required
+    if (config.nodes.requireSurface && !mesh.isEmpty() && !mesh.triangles.empty()) {
+        auto& manager = RenderingToolkitAPI::getManager();
+        auto backend = manager.getRenderBackend("Coin3D");
+        if (backend) {
+            // Prepare material colors
+            Quantity_Color ambient = context.material.ambientColor;
+            Quantity_Color diffuse = context.material.diffuseColor;
+            Quantity_Color specular = context.material.specularColor;
+            Quantity_Color emissive = context.material.emissiveColor;
+            double shininess = context.material.shininess;
+            double transparency = context.material.transparency;
+            
+            // Apply material override if enabled
+            if (config.rendering.materialOverride.enabled) {
+                ambient = config.rendering.materialOverride.ambientColor;
+                diffuse = config.rendering.materialOverride.diffuseColor;
+                specular = config.rendering.materialOverride.specularColor;
+                emissive = config.rendering.materialOverride.emissiveColor;
+                shininess = config.rendering.materialOverride.shininess;
+                transparency = config.rendering.materialOverride.transparency;
+            }
+            
+            auto sceneNode = backend->createSceneNode(mesh, false,
+                diffuse, ambient, specular, emissive, shininess, transparency);
+            if (sceneNode) {
+                SoSeparator* meshNode = sceneNode.get();
+                meshNode->ref();
+                
+                // Build lighting model
+                SoLightModel* lightModel = new SoLightModel();
+                if (config.rendering.lightModel == DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR) {
+                    lightModel->model.setValue(SoLightModel::BASE_COLOR);
+                } else {
+                    lightModel->model.setValue(SoLightModel::PHONG);
+                }
+                coinNode->addChild(lightModel);
+                
+                coinNode->addChild(meshNode);
+            }
+        }
+    }
+    
+    // Apply edge rendering based on config
+    // For mesh models, convert requireOriginalEdges to requireMeshEdges
+    bool showMeshEdges = config.nodes.requireMeshEdges || config.nodes.requireOriginalEdges;
+    
+    if (useModularEdgeComponent && edgeComponent && showMeshEdges) {
+        edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::Mesh, true);
+        edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
+        edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        
+        // Extract mesh edges if needed (only if not already extracted)
+        if (!edgeComponent->getEdgeNode(EdgeType::Mesh) && !mesh.triangles.empty()) {
+            Quantity_Color edgeColor = config.edges.meshEdge.color;
+            
+            // Handle effective color for HiddenLine mode
+            if (config.edges.meshEdge.useEffectiveColor) {
+                if (edgeColor.Red() > 0.4 && edgeColor.Green() > 0.4 && edgeColor.Blue() > 0.4) {
+                    edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+                }
+            }
+            
+            edgeComponent->extractMeshEdges(mesh, edgeColor, config.edges.meshEdge.width);
+        }
+        
+        edgeComponent->updateEdgeDisplay(coinNode);
+    }
+    
+    // Apply point view if required
+    if (config.nodes.requirePoints && pointViewBuilder) {
+        pointViewBuilder->createPointViewRepresentation(coinNode, mesh, context.display);
+    }
+}
+
 
