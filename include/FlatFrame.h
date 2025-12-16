@@ -170,6 +170,7 @@ enum {
 	ID_RENDER_MODE_SHADED,
 	ID_RENDER_MODE_TRANSPARENCY,
 	ID_RENDER_MODE_HIDDEN_LINE,
+	ID_DISPLAY_MODE_CONFIG,
 	
     ID_DOCKING_SAVE_LAYOUT = wxID_HIGHEST + 2000,
     ID_DOCKING_LOAD_LAYOUT,
@@ -363,6 +364,7 @@ public:
 	
 	// Navigation style switch handler
 	void OnNavigationStyleSwitch(wxCommandEvent& event);
+	void OnDisplayModeConfig(wxCommandEvent& event);
 
 	// Point view refresh handler
 	void OnPointViewToggled(ViewRefreshManager::RefreshReason reason);

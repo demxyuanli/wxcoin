@@ -516,6 +516,9 @@ void FlatFrame::InitializeUI(const wxSize& size)
 	}
 
 	renderModeButtonBar->SetToggleGroupSelection(kRenderModeToggleGroup, selectedRenderModeId);
+	
+	renderModeButtonBar->AddButtonWithSVG(ID_DISPLAY_MODE_CONFIG, "Display Mode Config", "settings", wxSize(16, 16), nullptr, "Configure display mode settings");
+	
 	renderModePanel->AddButtonBar(renderModeButtonBar, 0, wxEXPAND | wxALL, 5);
 	renderPage->AddPanel(renderModePanel);
 

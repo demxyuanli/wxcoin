@@ -306,8 +306,8 @@ SoSeparator* OCCBrepConverter::convertToCoin3D(const TopoDS_Shape& shape, double
 
 	auto sceneNode = backend->createSceneNode(shape, params, false);
 	if (sceneNode) {
-		SoSeparator* coinNode = sceneNode.get();
-		coinNode->ref(); // Take ownership
+		SoSeparator* coinNode = sceneNode.release();
+		coinNode->ref(); // Take ownership, prevent deletion
 		return coinNode;
 	}
 
