@@ -7,6 +7,7 @@
 #include <wx/checkbox.h>
 #include <wx/button.h>
 #include <wx/stattext.h>
+#include <wx/statline.h>
 #include <wx/colour.h>
 #include <wx/colordlg.h>
 #include <wx/sizer.h>
@@ -19,7 +20,7 @@
 #include "geometry/GeometryRenderContext.h"
 #include "config/RenderingConfig.h"
 #include "widgets/FramelessModalPopup.h"
-#include "ui/DisplayModePreviewCanvas.h"
+#include "opencascade/geometry/helper/DisplayModePreviewCanvas.h"
 #include <map>
 
 class DisplayModeConfigDialog : public FramelessModalPopup
@@ -49,6 +50,8 @@ private:
     void saveConfigForMode(RenderingConfig::DisplayMode mode);
     void updateConfigFromControls(RenderingConfig::DisplayMode mode);
     
+    RenderingConfig::DisplayMode getModeFromPageIndex(int pageIndex) const;
+    
     wxColour quantityColorToWxColour(const Quantity_Color& color) const;
     Quantity_Color wxColourToQuantityColor(const wxColour& color) const;
     void updateColorButton(wxButton* button, const wxColour& color);
@@ -66,11 +69,15 @@ private:
     struct ModeControls {
         wxPanel* page;
         
+        wxStaticBox* nodeRequirementsBox;
+        wxStaticBox* renderingPropertiesBox;
+        wxStaticBox* edgeConfigBox;
+        wxStaticBox* postProcessingBox;
+        
         wxCheckBox* requireSurface;
         wxCheckBox* requireOriginalEdges;
         wxCheckBox* requireMeshEdges;
         wxCheckBox* requirePoints;
-        wxCheckBox* surfaceWithPoints;
         
         wxChoice* lightModel;
         wxCheckBox* textureEnabled;
@@ -81,21 +88,29 @@ private:
         wxButton* materialDiffuseColor;
         wxButton* materialSpecularColor;
         wxButton* materialEmissiveColor;
-        wxSpinCtrlDouble* materialShininess;
-        wxSpinCtrlDouble* materialTransparency;
+        wxSlider* materialShininess;
+        wxStaticText* materialShininessLabel;
+        wxSlider* materialTransparency;
+        wxStaticText* materialTransparencyLabel;
         
         wxCheckBox* originalEdgeEnabled;
         wxButton* originalEdgeColor;
-        wxSpinCtrlDouble* originalEdgeWidth;
+        wxSlider* originalEdgeWidth;
+        wxStaticText* originalEdgeWidthLabel;
         
+        wxStaticLine* meshEdgeSeparator;
+        wxStaticText* meshEdgeLabel;
         wxCheckBox* meshEdgeEnabled;
         wxButton* meshEdgeColor;
-        wxSpinCtrlDouble* meshEdgeWidth;
+        wxSlider* meshEdgeWidth;
+        wxStaticText* meshEdgeWidthLabel;
         wxCheckBox* meshEdgeUseEffectiveColor;
         
         wxCheckBox* polygonOffsetEnabled;
-        wxSpinCtrlDouble* polygonOffsetFactor;
-        wxSpinCtrlDouble* polygonOffsetUnits;
+        wxSlider* polygonOffsetFactor;
+        wxStaticText* polygonOffsetFactorLabel;
+        wxSlider* polygonOffsetUnits;
+        wxStaticText* polygonOffsetUnitsLabel;
         
         DisplayModeConfig config;
     };

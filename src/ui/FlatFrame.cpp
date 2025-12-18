@@ -48,7 +48,7 @@ wxIcon FlatFrame::s_applicationIcon;
 #include "MeshQualityDialog.h"
 #include "MeshQualityDialogListener.h"
 #include "RenderingSettingsListener.h"
-#include "ui/DisplayModeConfigDialog.h"
+#include "opencascade/geometry/helper/DisplayModeConfigDialog.h"
 // Add other command listeners includes...
 #include <unordered_map>
 #include "CommandType.h"  // for cmd::CommandType

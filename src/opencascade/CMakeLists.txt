@@ -32,6 +32,8 @@ set(OPENCASCADE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/WireframeBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/PointViewBuilder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/FaceDomainMapper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModeConfigDialog.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/geometry/helper/DisplayModePreviewCanvas.cpp
     
     # Modular viewer implementations (internal)
     ${CMAKE_CURRENT_SOURCE_DIR}/viewer/ViewportController.cpp
@@ -128,6 +130,8 @@ set(OPENCASCADE_HEADERS
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/WireframeBuilder.h
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/PointViewBuilder.h
     ${CMAKE_SOURCE_DIR}/include/geometry/helper/FaceDomainMapper.h
+    ${CMAKE_SOURCE_DIR}/include/opencascade/geometry/helper/DisplayModeConfigDialog.h
+    ${CMAKE_SOURCE_DIR}/include/opencascade/geometry/helper/DisplayModePreviewCanvas.h
     
     # Internal viewer module headers
     ${CMAKE_SOURCE_DIR}/include/viewer/ViewportController.h

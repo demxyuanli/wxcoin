@@ -152,7 +152,8 @@ public:
 		FlatLines,      // Solid + wireframe combination
 		Solid,          // Solid display
 		Transparent,    // Transparent display
-		HiddenLine      // Hidden line display
+		HiddenLine,     // Hidden line display
+		Custom         // Custom mode for configuration dialog
 	};
 
 	struct DisplaySettings {

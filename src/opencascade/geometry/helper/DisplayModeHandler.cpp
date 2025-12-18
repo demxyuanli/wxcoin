@@ -93,7 +93,6 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
             GeometryRenderContext dummyContext;
             dummyContext.display.facesVisible = true;
             dummyContext.display.showPointView = false;
-            dummyContext.display.showSolidWithPointView = false;
             dummyContext.material.ambientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
             dummyContext.material.diffuseColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
             dummyContext.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
@@ -252,7 +251,6 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
     updateContext.display.displayMode = mode;
     updateContext.display.facesVisible = true;
     updateContext.display.showPointView = false;
-    updateContext.display.showSolidWithPointView = false;
     updateContext.display.wireframeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
     updateContext.display.wireframeWidth = 1.0;
     
@@ -320,7 +318,6 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
     updateState.textureEnabled = updateContext.texture.enabled;
     updateState.blendMode = updateContext.blend.blendMode;
     updateState.showPoints = updateContext.display.showPointView;
-    updateState.showSolidWithPoints = updateContext.display.showSolidWithPointView;
     updateState.surfaceDisplayMode = mode;
     
     DisplayModeStateManager stateManager;
@@ -480,4 +477,3 @@ void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
     
     setGeometryBuilt(true);
 }
-

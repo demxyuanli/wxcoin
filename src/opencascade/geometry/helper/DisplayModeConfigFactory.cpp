@@ -100,6 +100,7 @@ DisplayModeConfig DisplayModeConfigFactory::createSolidConfig(const GeometryRend
     
     // Node requirements
     config.nodes.requireSurface = true;
+    config.nodes.requireOriginalEdges = false;  // Default off, user can enable if needed
     // Edges are controlled separately, not part of display mode
     
     // Rendering properties
@@ -107,6 +108,11 @@ DisplayModeConfig DisplayModeConfigFactory::createSolidConfig(const GeometryRend
     config.rendering.textureEnabled = false;
     config.rendering.blendMode = RenderingConfig::BlendMode::None;
     // No material override - use original material from context
+    
+    // Edge configuration - default disabled, user can enable
+    config.edges.originalEdge.enabled = false;
+    config.edges.originalEdge.color = context.display.wireframeColor;
+    config.edges.originalEdge.width = context.display.wireframeWidth;
     
     return config;
 }
@@ -136,16 +142,34 @@ DisplayModeConfig DisplayModeConfigFactory::createFlatLinesConfig(const Geometry
 DisplayModeConfig DisplayModeConfigFactory::createTransparentConfig(const GeometryRenderContext& context) {
     DisplayModeConfig config;
     
-    // Node requirements
+    // Node requirements: Transparent mode requires surface rendering
     config.nodes.requireSurface = true;
+    config.nodes.requireOriginalEdges = false;
+    config.nodes.requireMeshEdges = false;
+    config.nodes.requirePoints = false;
     
-    // Rendering properties
+    // Rendering properties: Use PHONG lighting with Alpha blend mode for transparency
     config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::PHONG;
     config.rendering.textureEnabled = false;
     config.rendering.blendMode = RenderingConfig::BlendMode::Alpha;
+    
+    // Material override: Enable material override with transparency
     config.rendering.materialOverride.enabled = true;
+    config.rendering.materialOverride.ambientColor = context.material.ambientColor;
+    config.rendering.materialOverride.diffuseColor = context.material.diffuseColor;
+    config.rendering.materialOverride.specularColor = context.material.specularColor;
+    config.rendering.materialOverride.emissiveColor = context.material.emissiveColor;
+    config.rendering.materialOverride.shininess = context.material.shininess;
+    // Default transparency is 0.5 (50% transparent) if not set in context
     config.rendering.materialOverride.transparency = (context.material.transparency > 0.0) 
-        ? context.material.transparency : 0.5;  // Default 0.5 if not set
+        ? context.material.transparency : 0.5;
+    
+    // Edge configuration: No edges in transparent mode
+    config.edges.originalEdge.enabled = false;
+    config.edges.meshEdge.enabled = false;
+    
+    // Post-processing: No polygon offset needed for transparent mode
+    config.postProcessing.polygonOffset.enabled = false;
     
     return config;
 }

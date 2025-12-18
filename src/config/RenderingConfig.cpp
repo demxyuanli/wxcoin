@@ -321,6 +321,7 @@ std::string RenderingConfig::getDisplayModeName(DisplayMode mode)
 	case DisplayMode::Solid: return "Solid";
 	case DisplayMode::Transparent: return "Transparent";
 	case DisplayMode::HiddenLine: return "HiddenLine";
+	case DisplayMode::Custom: return "Custom";
 	default: return "Solid";
 	}
 }
@@ -334,6 +335,7 @@ RenderingConfig::DisplayMode RenderingConfig::getDisplayModeFromName(const std::
 	if (name == "Solid") return DisplayMode::Solid;
 	if (name == "Transparent") return DisplayMode::Transparent;
 	if (name == "HiddenLine") return DisplayMode::HiddenLine;
+	if (name == "Custom") return DisplayMode::Custom;
 	return DisplayMode::Solid;
 }
 

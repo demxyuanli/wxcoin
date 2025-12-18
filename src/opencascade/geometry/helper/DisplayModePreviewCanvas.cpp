@@ -1,4 +1,4 @@
-#include "ui/DisplayModePreviewCanvas.h"
+#include "opencascade/geometry/helper/DisplayModePreviewCanvas.h"
 #include "geometry/helper/DisplayModeHandler.h"
 #include "geometry/GeometryRenderContext.h"
 #include "geometry/helper/PointViewBuilder.h"
@@ -19,17 +19,22 @@
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoLightModel.h>
 #include <Inventor/nodes/SoSwitch.h>
+#include <Inventor/nodes/SoPolygonOffset.h>
+#include <Inventor/nodes/SoShapeHints.h>
+#include <Inventor/nodes/SoPerspectiveCamera.h>
 #include <Inventor/actions/SoGLRenderAction.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
 #include <Inventor/SbViewportRegion.h>
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbColor.h>
 #include <Inventor/SoDB.h>
+#include <Inventor/SoType.h>
 #include <GL/gl.h>
 #include <cmath>
 #include <algorithm>
 #include <filesystem>
 #include <vector>
+#include <functional>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -81,6 +86,36 @@ DisplayModePreviewCanvas::~DisplayModePreviewCanvas() {
     if (m_pointsNode) {
         m_pointsNode->unref();
     }
+    if (m_geometryRoot) {
+        m_geometryRoot->unref();
+    }
+    if (m_camera) {
+        m_camera->unref();
+    }
+    if (m_material) {
+        m_material->unref();
+    }
+    if (m_drawStyle) {
+        m_drawStyle->unref();
+    }
+    if (m_lightModel) {
+        m_lightModel->unref();
+    }
+    if (m_shapeHints) {
+        m_shapeHints->unref();
+    }
+    if (m_polygonOffset) {
+        m_polygonOffset->unref();
+    }
+    if (m_surfaceSwitch) {
+        m_surfaceSwitch->unref();
+    }
+    if (m_edgesSwitch) {
+        m_edgesSwitch->unref();
+    }
+    if (m_pointsSwitch) {
+        m_pointsSwitch->unref();
+    }
 }
 
 void DisplayModePreviewCanvas::initializeScene() {
@@ -118,6 +153,7 @@ void DisplayModePreviewCanvas::initializeScene() {
 
 void DisplayModePreviewCanvas::setupCamera() {
     m_camera = new SoPerspectiveCamera;
+    m_camera->ref();
     
     float focalDist = 10.0f;
     
@@ -146,15 +182,21 @@ void DisplayModePreviewCanvas::setupLighting() {
     m_sceneRoot->addChild(light);
     
     m_lightModel = new SoLightModel;
+    m_lightModel->ref();
     m_sceneRoot->addChild(m_lightModel);
 }
 
 void DisplayModePreviewCanvas::setupMaterial() {
+    // Note: Material, DrawStyle, and ShapeHints will be added to m_surfaceNode
+    // in createGeometry() to ensure correct rendering order relative to geometry
     m_material = new SoMaterial;
-    m_sceneRoot->addChild(m_material);
+    m_material->ref();
     
     m_drawStyle = new SoDrawStyle;
-    m_sceneRoot->addChild(m_drawStyle);
+    m_drawStyle->ref();
+    
+    m_shapeHints = new SoShapeHints;
+    m_shapeHints->ref();
 }
 
 void DisplayModePreviewCanvas::createGeometry() {
@@ -165,6 +207,25 @@ void DisplayModePreviewCanvas::createGeometry() {
     m_surfaceNode->ref();
     m_geometryRoot->addChild(m_surfaceNode);
     
+    // Add rendering state nodes to surface node in correct order
+    // Order is critical for proper transparency rendering:
+    // LightModel -> DrawStyle -> Material -> ShapeHints -> PolygonOffset -> Geometry
+    // Note: LightModel is already in scene root, so we add the rest here
+    if (m_drawStyle) {
+        m_surfaceNode->addChild(m_drawStyle);
+    }
+    if (m_material) {
+        m_surfaceNode->addChild(m_material);
+    }
+    if (m_shapeHints) {
+        m_surfaceNode->addChild(m_shapeHints);
+    }
+    
+    // Create polygon offset node and add it to surface node
+    m_polygonOffset = new SoPolygonOffset;
+    m_polygonOffset->ref();
+    m_surfaceNode->addChild(m_polygonOffset);
+    
     m_edgesNode = new SoSeparator;
     m_edgesNode->ref();
     
@@ -172,14 +233,17 @@ void DisplayModePreviewCanvas::createGeometry() {
     m_pointsNode->ref();
     
     m_surfaceSwitch = new SoSwitch;
+    m_surfaceSwitch->ref();
     m_surfaceSwitch->addChild(m_geometryRoot);
     m_sceneRoot->addChild(m_surfaceSwitch);
     
     m_edgesSwitch = new SoSwitch;
+    m_edgesSwitch->ref();
     m_edgesSwitch->addChild(m_edgesNode);
     m_sceneRoot->addChild(m_edgesSwitch);
     
     m_pointsSwitch = new SoSwitch;
+    m_pointsSwitch->ref();
     m_pointsSwitch->addChild(m_pointsNode);
     m_sceneRoot->addChild(m_pointsSwitch);
     
@@ -252,9 +316,8 @@ void DisplayModePreviewCanvas::createGeometry() {
         m_shape = shape;
         
         LOG_INF_S("STEP file loaded successfully, converting to mesh...");
-        MeshParameters meshParams;
-        meshParams.deflection = 0.5;
-        meshParams.angularDeflection = 0.5;
+        m_meshParams.deflection = 0.5;
+        m_meshParams.angularDeflection = 0.5;
         
         auto& manager = RenderingToolkitAPI::getManager();
         auto processor = manager.getGeometryProcessor("OpenCASCADE");
@@ -263,7 +326,7 @@ void DisplayModePreviewCanvas::createGeometry() {
             return;
         }
         
-        TriangleMesh mesh = processor->convertToMesh(shape, meshParams);
+        TriangleMesh mesh = processor->convertToMesh(shape, m_meshParams);
         if (mesh.vertices.empty()) {
             LOG_ERR_S("Failed to convert STEP geometry to mesh");
             return;
@@ -273,15 +336,44 @@ void DisplayModePreviewCanvas::createGeometry() {
         LOG_INF_S("Mesh created: " + std::to_string(m_mesh->vertices.size()) + " vertices, " + std::to_string(m_mesh->triangles.size() / 3) + " triangles");
         
         LOG_INF_S("Converting mesh to Coin3D...");
-        SoSeparator* stepGeometry = OCCBrepConverter::convertToCoin3D(shape, 0.5);
+        SoSeparator* stepGeometry = OCCBrepConverter::convertToCoin3D(shape, m_meshParams.deflection);
         
         if (!stepGeometry) {
             LOG_ERR_S("Failed to convert STEP geometry to Coin3D");
             return;
         }
         
+        // CRITICAL: Remove Material and ShapeHints nodes from geometry to prevent them from overriding our settings
+        // The geometry node created by Coin3DBackendImpl contains its own Material and ShapeHints nodes,
+        // which would override the nodes we add to m_surfaceNode
+        // We need to remove these nodes so our Material and ShapeHints nodes take effect
+        std::function<void(SoSeparator*)> removeMaterialAndShapeHints = [&](SoSeparator* sep) {
+            if (!sep) return;
+            // Remove from end to avoid index shifting issues
+            for (int i = sep->getNumChildren() - 1; i >= 0; --i) {
+                SoNode* child = sep->getChild(i);
+                if (!child) continue;
+                
+                // Remove Material nodes
+                if (child->isOfType(SoMaterial::getClassTypeId())) {
+                    sep->removeChild(i);
+                    LOG_INF_S("Removed Material node from geometry to allow material override");
+                }
+                // Remove ShapeHints nodes (we have our own)
+                else if (child->isOfType(SoShapeHints::getClassTypeId())) {
+                    sep->removeChild(i);
+                    LOG_INF_S("Removed ShapeHints node from geometry to use our own");
+                }
+                // Recursively check nested Separators
+                else if (child->isOfType(SoSeparator::getClassTypeId())) {
+                    removeMaterialAndShapeHints(static_cast<SoSeparator*>(child));
+                }
+            }
+        };
+        removeMaterialAndShapeHints(stepGeometry);
+        
         m_surfaceNode->addChild(stepGeometry);
-        LOG_INF_S("Surface geometry added to scene");
+        LOG_INF_S("Surface geometry added to scene with polygon offset");
         
         SetCurrent(*m_glContext);
         SbViewportRegion viewport(100, 100);
@@ -304,7 +396,14 @@ void DisplayModePreviewCanvas::createGeometry() {
         }
         
         CallAfter([this]() {
-            performViewAll();
+            wxSize size = GetSize();
+            if (size.GetWidth() > 0 && size.GetHeight() > 0) {
+                performViewAll();
+            } else {
+                CallAfter([this]() {
+                    performViewAll();
+                });
+            }
         });
         
         LOG_INF_S("STEP file loaded successfully: " + stepPathStr);
@@ -323,29 +422,50 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
     
     SetCurrent(*m_glContext);
     
-    if (config.rendering.lightModel == DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR) {
+    const auto& rendering = config.rendering;
+    const auto& matOverride = rendering.materialOverride;
+    
+    // 1. Light Model
+    // In Coin3D, parent nodes override child nodes by default in the scene graph
+    // Setting the value here will override any child node's light model
+    if (rendering.lightModel == DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR) {
         m_lightModel->model.setValue(SoLightModel::BASE_COLOR);
     } else {
         m_lightModel->model.setValue(SoLightModel::PHONG);
     }
     
-    if (config.rendering.materialOverride.enabled) {
+    // 2. Material Override Logic
+    // In Coin3D, material properties are overridden by placing SoMaterial nodes
+    // earlier in the scene graph. Since our m_material is a parent node, it will
+    // override any child node materials. We just need to set the values.
+    if (matOverride.enabled) {
         Standard_Real r, g, b;
-        config.rendering.materialOverride.diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->diffuseColor.setValue(r, g, b);
         
-        config.rendering.materialOverride.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->ambientColor.setValue(r, g, b);
+        matOverride.diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
+        m_material->diffuseColor.setValue((float)r, (float)g, (float)b);
         
-        config.rendering.materialOverride.specularColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->specularColor.setValue(r, g, b);
+        matOverride.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
+        m_material->ambientColor.setValue((float)r, (float)g, (float)b);
         
-        config.rendering.materialOverride.emissiveColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->emissiveColor.setValue(r, g, b);
+        matOverride.specularColor.Values(r, g, b, Quantity_TOC_RGB);
+        m_material->specularColor.setValue((float)r, (float)g, (float)b);
         
-        m_material->shininess.setValue(config.rendering.materialOverride.shininess);
-        m_material->transparency.setValue(config.rendering.materialOverride.transparency);
+        matOverride.emissiveColor.Values(r, g, b, Quantity_TOC_RGB);
+        m_material->emissiveColor.setValue((float)r, (float)g, (float)b);
+        
+        m_material->shininess.setValue((float)matOverride.shininess);
+        m_material->transparency.setValue((float)matOverride.transparency);
+        
+        LOG_INF_S("updateGeometryFromConfig: Material override enabled, transparency=" + 
+                 std::to_string(matOverride.transparency) +
+                 ", diffuseColor=(" + std::to_string(matOverride.diffuseColor.Red()) + "," +
+                 std::to_string(matOverride.diffuseColor.Green()) + "," +
+                 std::to_string(matOverride.diffuseColor.Blue()) + ")");
     } else {
+        // When override is disabled, we set default values but the material node
+        // still exists in the scene graph, so it will still affect rendering.
+        // To truly disable override, we would need to remove the node from the scene,
+        // but for preview purposes, setting default values is acceptable.
         m_material->diffuseColor.setValue(0.5f, 0.5f, 0.6f);
         m_material->ambientColor.setValue(0.3f, 0.3f, 0.4f);
         m_material->specularColor.setValue(1.0f, 1.0f, 1.0f);
@@ -354,9 +474,42 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
         m_material->transparency.setValue(0.0f);
     }
     
+    // 3. Polygon Offset logic
+    if (m_polygonOffset) {
+        m_polygonOffset->styles = SoPolygonOffset::FILLED;
+        m_polygonOffset->factor.setValue((float)config.postProcessing.polygonOffset.factor);
+        m_polygonOffset->units.setValue((float)config.postProcessing.polygonOffset.units);
+        m_polygonOffset->on.setValue(config.postProcessing.polygonOffset.enabled);
+    }
+    
+    // Configure SoShapeHints for proper transparency rendering
+    // When transparency > 0, use UNKNOWN_FACE_TYPE and UNKNOWN_ORDERING to allow
+    // Coin3D to handle back-face culling and rendering order correctly
+    // Note: SoShapeHints must be configured for transparency to work correctly with Coin3D
+    double transparency = config.rendering.materialOverride.enabled 
+        ? config.rendering.materialOverride.transparency 
+        : 0.0;
+    if (m_shapeHints) {
+        if (transparency > 0.0) {
+            // Enable shape hints for transparency: this tells Coin3D to handle
+            // face ordering and back-face culling properly for transparent objects
+            m_shapeHints->faceType.setValue(SoShapeHints::UNKNOWN_FACE_TYPE);
+            m_shapeHints->vertexOrdering.setValue(SoShapeHints::UNKNOWN_ORDERING);
+            LOG_INF_S("updateGeometryFromConfig: Transparency enabled (" + std::to_string(transparency) + 
+                     "), configured SoShapeHints for transparency rendering");
+        } else {
+            // For opaque objects, use standard settings for better performance
+            m_shapeHints->faceType.setValue(SoShapeHints::SOLID);
+            m_shapeHints->vertexOrdering.setValue(SoShapeHints::COUNTERCLOCKWISE);
+        }
+    }
+    
+    m_needsRedraw = true;
+    
     int surfaceSwitchValue = config.nodes.requireSurface ? 0 : -1;
     m_surfaceSwitch->whichChild.setValue(surfaceSwitchValue);
-    LOG_INF_S("updateGeometryFromConfig: Surface switch set to " + std::to_string(surfaceSwitchValue) + " (requireSurface=" + (config.nodes.requireSurface ? "true" : "false") + ")");
+    LOG_INF_S("updateGeometryFromConfig: Surface switch set to " + std::to_string(surfaceSwitchValue) + 
+              " (requireSurface=" + (config.nodes.requireSurface ? "true" : "false") + ")");
     
     if (m_shape.IsNull() || !m_mesh) {
         LOG_WRN_S("updateGeometryFromConfig: Shape or mesh not available");
@@ -370,12 +523,27 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
     bool showOriginalEdges = config.nodes.requireOriginalEdges && config.edges.originalEdge.enabled;
     bool showMeshEdges = config.nodes.requireMeshEdges && config.edges.meshEdge.enabled;
     
+    LOG_INF_S("updateGeometryFromConfig: requireOriginalEdges=" + std::string(config.nodes.requireOriginalEdges ? "true" : "false") +
+              ", originalEdge.enabled=" + std::string(config.edges.originalEdge.enabled ? "true" : "false") +
+              ", showOriginalEdges=" + std::string(showOriginalEdges ? "true" : "false"));
+    
     if (showOriginalEdges || showMeshEdges) {
         if (m_edgeComponent) {
             if (showOriginalEdges) {
                 if (!m_edgeComponent->getEdgeNode(EdgeType::Original)) {
+                    double samplingDensity = 80.0;
+                    double minLength = 0.01;
+                    
+                    if (m_meshParams.deflection > 0.0) {
+                        minLength = m_meshParams.deflection * 0.5;
+                        samplingDensity = 1.0 / m_meshParams.deflection;
+                        if (samplingDensity < 20.0) samplingDensity = 20.0;
+                        if (samplingDensity > 200.0) samplingDensity = 200.0;
+                        LOG_INF_S("Edge sampling adjusted to match surface: density=" + std::to_string(samplingDensity) + ", minLength=" + std::to_string(minLength));
+                    }
+                    
                     m_edgeComponent->extractOriginalEdges(m_shape,
-                                                          80.0, 0.01, false,
+                                                          samplingDensity, minLength, false,
                                                           config.edges.originalEdge.color,
                                                           config.edges.originalEdge.width,
                                                           false,
@@ -397,6 +565,12 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
                 m_edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
                 m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, true);
             }
+            
+            SoPolygonOffset* edgePolygonOffset = new SoPolygonOffset();
+            edgePolygonOffset->factor.setValue(-1.0f);
+            edgePolygonOffset->units.setValue(-1.0f);
+            edgePolygonOffset->styles.setValue(SoPolygonOffset::LINES);
+            m_edgesNode->addChild(edgePolygonOffset);
             
             m_edgeComponent->updateEdgeDisplay(m_edgesNode);
         }
@@ -423,12 +597,23 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
     
     m_needsRedraw = true;
     Refresh();
+    
+    if (m_shape.IsNull() == false && m_mesh != nullptr) {
+        CallAfter([this]() {
+            wxSize size = GetSize();
+            if (size.GetWidth() > 0 && size.GetHeight() > 0) {
+                performViewAll();
+            }
+        });
+    }
 }
 
 void DisplayModePreviewCanvas::updateDisplayMode(RenderingConfig::DisplayMode mode, const DisplayModeConfig& config) {
     m_currentMode = mode;
     m_currentConfig = config;
     updateGeometryFromConfig(config);
+    m_needsRedraw = true;
+    Refresh();
 }
 
 void DisplayModePreviewCanvas::refreshPreview() {
@@ -494,9 +679,94 @@ void DisplayModePreviewCanvas::onPaint(wxPaintEvent& event) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     
+    // Setup transparency and blending
+    // Coin3D handles transparency through SoMaterial.transparency and SoGLRenderAction.setTransparencyType
+    // We should use Coin3D's built-in transparency handling instead of manually managing GL_BLEND
+    double transparency = m_currentConfig.rendering.materialOverride.enabled 
+        ? m_currentConfig.rendering.materialOverride.transparency 
+        : 0.0;
+    
+    bool hasTransparency = transparency > 0.0;
+    bool hasBlendMode = m_currentConfig.rendering.blendMode != RenderingConfig::BlendMode::None;
+    
+    // Debug logging for transparency
+    if (hasTransparency) {
+        LOG_INF_S("onPaint: Rendering with transparency=" + std::to_string(transparency) + 
+                 ", materialOverride.enabled=" + (m_currentConfig.rendering.materialOverride.enabled ? "true" : "false") +
+                 ", blendMode=" + std::to_string(static_cast<int>(m_currentConfig.rendering.blendMode)));
+    }
+    
     SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
     SoGLRenderAction renderAction(vpRegion);
+    
+    // Configure render action for optimal rendering
+    renderAction.setSmoothing(true);
+    
+    // Determine optimal pass count and transparency type based on scene complexity
+    // Preview canvas typically has simple scenes (single preview model), but we still
+    // optimize based on geometry complexity for better transparency rendering
+    int optimalPasses = 2; // Base pass count for anti-aliasing
+    bool isComplexScene = false;
+    
+    if (hasTransparency) {
+        // Check scene complexity: preview canvas usually has simple geometry,
+        // but we can detect if there are many triangles for more sophisticated rendering
+        if (m_mesh && m_mesh->triangles.size() > 10000) {
+            // Complex scene: many triangles, use more sophisticated transparency sorting
+            optimalPasses = 3;
+            isComplexScene = true;
+        } else {
+            // Simple scene: use standard transparency method
+            optimalPasses = 2;
+            isComplexScene = false;
+        }
+        
+        renderAction.setNumPasses(optimalPasses);
+        
+        // Set transparency type based on scene complexity
+        if (isComplexScene && optimalPasses > 2) {
+            // Use more sophisticated transparency sorting for complex scenes
+            renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_SORTED_TRIANGLE_BLEND);
+        } else {
+            // Use standard transparency method for simpler scenes
+            renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
+        }
+    } else {
+        renderAction.setTransparencyType(SoGLRenderAction::NONE);
+        renderAction.setNumPasses(1);
+    }
+    
+    // For blend modes other than transparency, we still need to handle them manually
+    // since Coin3D's transparency type only handles material transparency
+    if (hasBlendMode && !hasTransparency) {
+        glEnable(GL_BLEND);
+        switch (m_currentConfig.rendering.blendMode) {
+        case RenderingConfig::BlendMode::Alpha:
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+        case RenderingConfig::BlendMode::Additive:
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+            break;
+        case RenderingConfig::BlendMode::Multiply:
+            glBlendFunc(GL_DST_COLOR, GL_ZERO);
+            break;
+        case RenderingConfig::BlendMode::Screen:
+            glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ONE);
+            break;
+        case RenderingConfig::BlendMode::Overlay:
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+        default:
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            break;
+        }
+    }
+    
     renderAction.apply(m_sceneRoot);
+    
+    if (hasBlendMode && !hasTransparency) {
+        glDisable(GL_BLEND);
+    }
     
     SwapBuffers();
     event.Skip();
@@ -619,3 +889,5 @@ void DisplayModePreviewCanvas::onMouseEvent(wxMouseEvent& event) {
     
     event.Skip();
 }
+
+

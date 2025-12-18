@@ -13,6 +13,8 @@ class SoMaterial;
 class SoDrawStyle;
 class SoLightModel;
 class SoSwitch;
+class SoShapeHints;
+class SoPolygonOffset;
 class ModularEdgeComponent;
 class PointViewBuilder;
 struct TriangleMesh;
@@ -53,12 +55,15 @@ private:
     SoMaterial* m_material{ nullptr };
     SoDrawStyle* m_drawStyle{ nullptr };
     SoLightModel* m_lightModel{ nullptr };
+    SoShapeHints* m_shapeHints{ nullptr };
+    SoPolygonOffset* m_polygonOffset{ nullptr };
     SoSwitch* m_surfaceSwitch{ nullptr };
     SoSwitch* m_edgesSwitch{ nullptr };
     SoSwitch* m_pointsSwitch{ nullptr };
     
     TopoDS_Shape m_shape;
     TriangleMesh* m_mesh{ nullptr };
+    MeshParameters m_meshParams;
     std::unique_ptr<ModularEdgeComponent> m_edgeComponent;
     std::unique_ptr<PointViewBuilder> m_pointViewBuilder;
     
@@ -73,4 +78,9 @@ private:
     
     DECLARE_EVENT_TABLE()
 };
+
+
+
+
+
 

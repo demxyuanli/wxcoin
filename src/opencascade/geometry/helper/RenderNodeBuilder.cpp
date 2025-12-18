@@ -174,14 +174,14 @@ void RenderNodeBuilder::appendBlendHints(SoSeparator* parent, const GeometryRend
         return;
     }
     
-    if (context.blend.blendMode == RenderingConfig::BlendMode::None || context.material.transparency <= 0.0) {
-        return;
+    // Add SoShapeHints if transparency > 0, regardless of blendMode
+    // Coin3D needs SoShapeHints for proper transparency rendering order
+    if (context.material.transparency > 0.0) {
+        SoShapeHints* blendHints = new SoShapeHints();
+        blendHints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
+        blendHints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
+        parent->addChild(blendHints);
     }
-
-    SoShapeHints* blendHints = new SoShapeHints();
-    blendHints->faceType = SoShapeHints::UNKNOWN_FACE_TYPE;
-    blendHints->vertexOrdering = SoShapeHints::UNKNOWN_ORDERING;
-    parent->addChild(blendHints);
 }
 
 void RenderNodeBuilder::appendSurfaceGeometry(SoSeparator* parent, const TopoDS_Shape& shape, 
