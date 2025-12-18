@@ -464,23 +464,31 @@ void DisplayModeConfigDialog::bindEvents()
             if (controls.originalEdgeEnabled && controls.originalEdgeEnabled->IsShown()) {
                 controls.originalEdgeEnabled->SetValue(controls.config.edges.originalEdge.enabled);
             }
-            updateColorButton(controls.originalEdgeColor, quantityColorToWxColour(controls.config.edges.originalEdge.color));
-            if (controls.originalEdgeWidth) {
+            if (controls.originalEdgeColor && controls.originalEdgeColor->IsShown()) {
+                updateColorButton(controls.originalEdgeColor, quantityColorToWxColour(controls.config.edges.originalEdge.color));
+            }
+            if (controls.originalEdgeWidth && controls.originalEdgeWidth->IsShown()) {
                 controls.originalEdgeWidth->SetValue(static_cast<int>(controls.config.edges.originalEdge.width * 10.0));
                 if (controls.originalEdgeWidthLabel) {
                     controls.originalEdgeWidthLabel->SetLabel(wxString::Format("%.1f", controls.config.edges.originalEdge.width));
                 }
             }
             
-            controls.meshEdgeEnabled->SetValue(controls.config.edges.meshEdge.enabled);
-            updateColorButton(controls.meshEdgeColor, quantityColorToWxColour(controls.config.edges.meshEdge.color));
-            if (controls.meshEdgeWidth) {
+            if (controls.meshEdgeEnabled && controls.meshEdgeEnabled->IsShown()) {
+                controls.meshEdgeEnabled->SetValue(controls.config.edges.meshEdge.enabled);
+            }
+            if (controls.meshEdgeColor && controls.meshEdgeColor->IsShown()) {
+                updateColorButton(controls.meshEdgeColor, quantityColorToWxColour(controls.config.edges.meshEdge.color));
+            }
+            if (controls.meshEdgeWidth && controls.meshEdgeWidth->IsShown()) {
                 controls.meshEdgeWidth->SetValue(static_cast<int>(controls.config.edges.meshEdge.width * 10.0));
                 if (controls.meshEdgeWidthLabel) {
                     controls.meshEdgeWidthLabel->SetLabel(wxString::Format("%.1f", controls.config.edges.meshEdge.width));
                 }
             }
-            controls.meshEdgeUseEffectiveColor->SetValue(controls.config.edges.meshEdge.useEffectiveColor);
+            if (controls.meshEdgeUseEffectiveColor && controls.meshEdgeUseEffectiveColor->IsShown()) {
+                controls.meshEdgeUseEffectiveColor->SetValue(controls.config.edges.meshEdge.useEffectiveColor);
+            }
             
             controls.polygonOffsetEnabled->SetValue(controls.config.postProcessing.polygonOffset.enabled);
             if (controls.polygonOffsetFactor) {
@@ -656,16 +664,34 @@ void DisplayModeConfigDialog::updateControls()
         if (mode == RenderingConfig::DisplayMode::FlatLines || mode == RenderingConfig::DisplayMode::Solid) {
             controls.config.edges.originalEdge.enabled = controls.config.nodes.requireOriginalEdges;
         }
-        controls.originalEdgeEnabled->SetValue(controls.config.edges.originalEdge.enabled);
-        updateColorButton(controls.originalEdgeColor, quantityColorToWxColour(controls.config.edges.originalEdge.color));
-        controls.originalEdgeWidth->SetValue(static_cast<int>(controls.config.edges.originalEdge.width * 10.0));
-        controls.originalEdgeWidthLabel->SetLabel(wxString::Format("%.1f", controls.config.edges.originalEdge.width));
+        if (controls.originalEdgeEnabled) {
+            controls.originalEdgeEnabled->SetValue(controls.config.edges.originalEdge.enabled);
+        }
+        if (controls.originalEdgeColor) {
+            updateColorButton(controls.originalEdgeColor, quantityColorToWxColour(controls.config.edges.originalEdge.color));
+        }
+        if (controls.originalEdgeWidth) {
+            controls.originalEdgeWidth->SetValue(static_cast<int>(controls.config.edges.originalEdge.width * 10.0));
+            if (controls.originalEdgeWidthLabel) {
+                controls.originalEdgeWidthLabel->SetLabel(wxString::Format("%.1f", controls.config.edges.originalEdge.width));
+            }
+        }
         
-        controls.meshEdgeEnabled->SetValue(controls.config.edges.meshEdge.enabled);
-        updateColorButton(controls.meshEdgeColor, quantityColorToWxColour(controls.config.edges.meshEdge.color));
-        controls.meshEdgeWidth->SetValue(static_cast<int>(controls.config.edges.meshEdge.width * 10.0));
-        controls.meshEdgeWidthLabel->SetLabel(wxString::Format("%.1f", controls.config.edges.meshEdge.width));
-        controls.meshEdgeUseEffectiveColor->SetValue(controls.config.edges.meshEdge.useEffectiveColor);
+        if (controls.meshEdgeEnabled) {
+            controls.meshEdgeEnabled->SetValue(controls.config.edges.meshEdge.enabled);
+        }
+        if (controls.meshEdgeColor) {
+            updateColorButton(controls.meshEdgeColor, quantityColorToWxColour(controls.config.edges.meshEdge.color));
+        }
+        if (controls.meshEdgeWidth) {
+            controls.meshEdgeWidth->SetValue(static_cast<int>(controls.config.edges.meshEdge.width * 10.0));
+            if (controls.meshEdgeWidthLabel) {
+                controls.meshEdgeWidthLabel->SetLabel(wxString::Format("%.1f", controls.config.edges.meshEdge.width));
+            }
+        }
+        if (controls.meshEdgeUseEffectiveColor) {
+            controls.meshEdgeUseEffectiveColor->SetValue(controls.config.edges.meshEdge.useEffectiveColor);
+        }
         
         controls.polygonOffsetEnabled->SetValue(controls.config.postProcessing.polygonOffset.enabled);
         controls.polygonOffsetFactor->SetValue(static_cast<int>(controls.config.postProcessing.polygonOffset.factor * 10.0));
@@ -763,19 +789,31 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
             controls.config.edges.originalEdge.enabled = false;
         }
     }
-    wxColour originalEdgeColour = controls.originalEdgeColor->GetBackgroundColour();
-    if (originalEdgeColour.IsOk()) {
-        controls.config.edges.originalEdge.color = wxColourToQuantityColor(originalEdgeColour);
+    if (controls.originalEdgeColor && controls.originalEdgeColor->IsShown()) {
+        wxColour originalEdgeColour = controls.originalEdgeColor->GetBackgroundColour();
+        if (originalEdgeColour.IsOk()) {
+            controls.config.edges.originalEdge.color = wxColourToQuantityColor(originalEdgeColour);
+        }
     }
-    controls.config.edges.originalEdge.width = static_cast<double>(controls.originalEdgeWidth->GetValue()) / 10.0;
+    if (controls.originalEdgeWidth && controls.originalEdgeWidth->IsShown()) {
+        controls.config.edges.originalEdge.width = static_cast<double>(controls.originalEdgeWidth->GetValue()) / 10.0;
+    }
     
-    controls.config.edges.meshEdge.enabled = controls.meshEdgeEnabled->GetValue();
-    wxColour meshEdgeColour = controls.meshEdgeColor->GetBackgroundColour();
-    if (meshEdgeColour.IsOk()) {
-        controls.config.edges.meshEdge.color = wxColourToQuantityColor(meshEdgeColour);
+    if (controls.meshEdgeEnabled && controls.meshEdgeEnabled->IsShown()) {
+        controls.config.edges.meshEdge.enabled = controls.meshEdgeEnabled->GetValue();
     }
-    controls.config.edges.meshEdge.width = static_cast<double>(controls.meshEdgeWidth->GetValue()) / 10.0;
-    controls.config.edges.meshEdge.useEffectiveColor = controls.meshEdgeUseEffectiveColor->GetValue();
+    if (controls.meshEdgeColor && controls.meshEdgeColor->IsShown()) {
+        wxColour meshEdgeColour = controls.meshEdgeColor->GetBackgroundColour();
+        if (meshEdgeColour.IsOk()) {
+            controls.config.edges.meshEdge.color = wxColourToQuantityColor(meshEdgeColour);
+        }
+    }
+    if (controls.meshEdgeWidth && controls.meshEdgeWidth->IsShown()) {
+        controls.config.edges.meshEdge.width = static_cast<double>(controls.meshEdgeWidth->GetValue()) / 10.0;
+    }
+    if (controls.meshEdgeUseEffectiveColor && controls.meshEdgeUseEffectiveColor->IsShown()) {
+        controls.config.edges.meshEdge.useEffectiveColor = controls.meshEdgeUseEffectiveColor->GetValue();
+    }
     
     controls.config.postProcessing.polygonOffset.enabled = controls.polygonOffsetEnabled->GetValue();
     controls.config.postProcessing.polygonOffset.factor = static_cast<double>(controls.polygonOffsetFactor->GetValue()) / 10.0;
@@ -942,11 +980,12 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
         if (controls.meshEdgeWidthLabel) controls.meshEdgeWidthLabel->Show(false);
         if (controls.meshEdgeUseEffectiveColor) controls.meshEdgeUseEffectiveColor->Show(false);
         
-        if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(false);
-        if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(false);
-        if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(false);
-        if (controls.polygonOffsetUnits) controls.polygonOffsetUnits->Show(false);
-        if (controls.polygonOffsetUnitsLabel) controls.polygonOffsetUnitsLabel->Show(false);
+        if (controls.postProcessingBox) controls.postProcessingBox->Show(true);
+        if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(true);
+        if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(true);
+        if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(true);
+        if (controls.polygonOffsetUnits) controls.polygonOffsetUnits->Show(true);
+        if (controls.polygonOffsetUnitsLabel) controls.polygonOffsetUnitsLabel->Show(true);
         break;
         
     case RenderingConfig::DisplayMode::Points:
@@ -1018,11 +1057,12 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
         if (controls.meshEdgeWidthLabel) controls.meshEdgeWidthLabel->Show(false);
         if (controls.meshEdgeUseEffectiveColor) controls.meshEdgeUseEffectiveColor->Show(false);
         
-        if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(false);
-        if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(false);
-        if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(false);
-        if (controls.polygonOffsetUnits) controls.polygonOffsetUnits->Show(false);
-        if (controls.polygonOffsetUnitsLabel) controls.polygonOffsetUnitsLabel->Show(false);
+        if (controls.postProcessingBox) controls.postProcessingBox->Show(true);
+        if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(true);
+        if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(true);
+        if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(true);
+        if (controls.polygonOffsetUnits) controls.polygonOffsetUnits->Show(true);
+        if (controls.polygonOffsetUnitsLabel) controls.polygonOffsetUnitsLabel->Show(true);
         break;
         
     case RenderingConfig::DisplayMode::Solid:
@@ -1104,11 +1144,12 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
         if (controls.meshEdgeWidthLabel) controls.meshEdgeWidthLabel->Show(false);
         if (controls.meshEdgeUseEffectiveColor) controls.meshEdgeUseEffectiveColor->Show(false);
         
-        if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(false);
-        if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(false);
-        if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(false);
-        if (controls.polygonOffsetUnits) controls.polygonOffsetUnits->Show(false);
-        if (controls.polygonOffsetUnitsLabel) controls.polygonOffsetUnitsLabel->Show(false);
+        if (controls.postProcessingBox) controls.postProcessingBox->Show(true);
+        if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(true);
+        if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(true);
+        if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(true);
+        if (controls.polygonOffsetUnits) controls.polygonOffsetUnits->Show(true);
+        if (controls.polygonOffsetUnitsLabel) controls.polygonOffsetUnitsLabel->Show(true);
         break;
         
     case RenderingConfig::DisplayMode::Transparent:
@@ -1180,6 +1221,7 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
         if (controls.meshEdgeWidthLabel) controls.meshEdgeWidthLabel->Show(true);
         if (controls.meshEdgeUseEffectiveColor) controls.meshEdgeUseEffectiveColor->Show(true);
         
+        if (controls.postProcessingBox) controls.postProcessingBox->Show(true);
         if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(true);
         if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(true);
         if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(true);
@@ -1219,6 +1261,7 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
         if (controls.meshEdgeWidthLabel) controls.meshEdgeWidthLabel->Show(true);
         if (controls.meshEdgeUseEffectiveColor) controls.meshEdgeUseEffectiveColor->Show(true);
         
+        if (controls.postProcessingBox) controls.postProcessingBox->Show(true);
         if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(true);
         if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(true);
         if (controls.polygonOffsetFactorLabel) controls.polygonOffsetFactorLabel->Show(true);

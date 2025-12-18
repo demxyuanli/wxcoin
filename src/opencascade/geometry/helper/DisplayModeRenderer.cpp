@@ -665,6 +665,38 @@ void DisplayModeRenderer::applyRenderFromConfig(SoSeparator* coinNode,
                                                3.0);
         }
         
+        // Apply appearance (color and width) to edges even if they already exist
+        // This ensures that configuration changes are reflected in the display
+        if (showOriginalEdges && edgeComponent->getEdgeNode(EdgeType::Original)) {
+            edgeComponent->applyAppearanceToEdgeNode(EdgeType::Original,
+                                                     config.edges.originalEdge.color,
+                                                     config.edges.originalEdge.width,
+                                                     0);
+        }
+        if (showMeshEdges && edgeComponent->getEdgeNode(EdgeType::Mesh)) {
+            Quantity_Color edgeColor = config.edges.meshEdge.color;
+            // Handle effective color for HiddenLine mode
+            if (config.edges.meshEdge.useEffectiveColor) {
+                if (edgeColor.Red() > 0.4 && edgeColor.Green() > 0.4 && edgeColor.Blue() > 0.4) {
+                    edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+                }
+            }
+            edgeComponent->applyAppearanceToEdgeNode(EdgeType::Mesh,
+                                                     edgeColor,
+                                                     config.edges.meshEdge.width,
+                                                     0);
+        }
+        
+        // Add polygon offset for edges if enabled and edges are shown
+        // This allows edges to appear on top of surfaces by adjusting depth
+        if ((showOriginalEdges || showMeshEdges) && config.postProcessing.polygonOffset.enabled) {
+            SoPolygonOffset* edgeOffset = renderBuilder->createPolygonOffsetNode();
+            edgeOffset->factor.setValue(config.postProcessing.polygonOffset.factor);
+            edgeOffset->units.setValue(config.postProcessing.polygonOffset.units);
+            edgeOffset->styles.setValue(SoPolygonOffset::LINES);
+            coinNode->addChild(edgeOffset);
+        }
+        
         edgeComponent->updateEdgeDisplay(coinNode);
     }
     
@@ -756,6 +788,32 @@ void DisplayModeRenderer::applyRenderFromConfig(SoSeparator* coinNode,
             }
             
             edgeComponent->extractMeshEdges(mesh, edgeColor, config.edges.meshEdge.width);
+        }
+        
+        // Apply appearance (color and width) to mesh edges even if they already exist
+        // This ensures that configuration changes are reflected in the display
+        if (edgeComponent->getEdgeNode(EdgeType::Mesh)) {
+            Quantity_Color edgeColor = config.edges.meshEdge.color;
+            // Handle effective color for HiddenLine mode
+            if (config.edges.meshEdge.useEffectiveColor) {
+                if (edgeColor.Red() > 0.4 && edgeColor.Green() > 0.4 && edgeColor.Blue() > 0.4) {
+                    edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+                }
+            }
+            edgeComponent->applyAppearanceToEdgeNode(EdgeType::Mesh,
+                                                     edgeColor,
+                                                     config.edges.meshEdge.width,
+                                                     0);
+        }
+        
+        // Add polygon offset for edges if enabled
+        // This allows edges to appear on top of surfaces by adjusting depth
+        if (config.postProcessing.polygonOffset.enabled) {
+            SoPolygonOffset* edgeOffset = renderBuilder->createPolygonOffsetNode();
+            edgeOffset->factor.setValue(config.postProcessing.polygonOffset.factor);
+            edgeOffset->units.setValue(config.postProcessing.polygonOffset.units);
+            edgeOffset->styles.setValue(SoPolygonOffset::LINES);
+            coinNode->addChild(edgeOffset);
         }
         
         edgeComponent->updateEdgeDisplay(coinNode);

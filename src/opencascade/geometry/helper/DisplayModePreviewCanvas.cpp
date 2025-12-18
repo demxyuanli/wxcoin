@@ -550,6 +550,14 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
                                                           Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
                                                           3.0);
                 }
+                // Apply appearance (color and width) to edges even if they already exist
+                // This ensures that configuration changes are reflected in the display
+                if (m_edgeComponent->getEdgeNode(EdgeType::Original)) {
+                    m_edgeComponent->applyAppearanceToEdgeNode(EdgeType::Original,
+                                                               config.edges.originalEdge.color,
+                                                               config.edges.originalEdge.width,
+                                                               0);
+                }
                 m_edgeComponent->setEdgeDisplayType(EdgeType::Original, true);
                 m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, false);
             } else if (showMeshEdges && m_mesh && !m_mesh->triangles.empty()) {
@@ -562,15 +570,39 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
                     }
                     m_edgeComponent->extractMeshEdges(*m_mesh, edgeColor, config.edges.meshEdge.width);
                 }
+                // Apply appearance (color and width) to mesh edges even if they already exist
+                // This ensures that configuration changes are reflected in the display
+                if (m_edgeComponent->getEdgeNode(EdgeType::Mesh)) {
+                    Quantity_Color edgeColor = config.edges.meshEdge.color;
+                    if (config.edges.meshEdge.useEffectiveColor) {
+                        if (edgeColor.Red() > 0.4 && edgeColor.Green() > 0.4 && edgeColor.Blue() > 0.4) {
+                            edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+                        }
+                    }
+                    m_edgeComponent->applyAppearanceToEdgeNode(EdgeType::Mesh,
+                                                               edgeColor,
+                                                               config.edges.meshEdge.width,
+                                                               0);
+                }
                 m_edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
                 m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, true);
             }
             
-            SoPolygonOffset* edgePolygonOffset = new SoPolygonOffset();
-            edgePolygonOffset->factor.setValue(-1.0f);
-            edgePolygonOffset->units.setValue(-1.0f);
-            edgePolygonOffset->styles.setValue(SoPolygonOffset::LINES);
-            m_edgesNode->addChild(edgePolygonOffset);
+            // Use configured polygon offset values if enabled
+            if (config.postProcessing.polygonOffset.enabled) {
+                SoPolygonOffset* edgePolygonOffset = new SoPolygonOffset();
+                edgePolygonOffset->factor.setValue((float)config.postProcessing.polygonOffset.factor);
+                edgePolygonOffset->units.setValue((float)config.postProcessing.polygonOffset.units);
+                edgePolygonOffset->styles.setValue(SoPolygonOffset::LINES);
+                m_edgesNode->addChild(edgePolygonOffset);
+            } else {
+                // Default behavior: use negative offset to bring edges forward
+                SoPolygonOffset* edgePolygonOffset = new SoPolygonOffset();
+                edgePolygonOffset->factor.setValue(-1.0f);
+                edgePolygonOffset->units.setValue(-1.0f);
+                edgePolygonOffset->styles.setValue(SoPolygonOffset::LINES);
+                m_edgesNode->addChild(edgePolygonOffset);
+            }
             
             m_edgeComponent->updateEdgeDisplay(m_edgesNode);
         }
