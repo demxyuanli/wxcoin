@@ -25,9 +25,17 @@ if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
+# Optimize CMake dependency checking for faster configuration
+if(POLICY CMP0111)
+    cmake_policy(SET CMP0111 NEW)  # Use source file timestamps for dependencies
+endif()
+
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Enable faster dependency checking
+set(CMAKE_DEPENDS_IN_PROJECT_ONLY ON)
 
 # Set default build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -47,15 +55,55 @@ if(MSVC)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /CGTHREADS:8")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /CGTHREADS:8")
     
-    # Enable incremental linking in Debug
+    # Enable incremental linking for all configurations (faster linking)
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /INCREMENTAL")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
+    set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} /INCREMENTAL")
+    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "${CMAKE_SHARED_LINKER_FLAGS_RELEASE} /INCREMENTAL:NO")
     
-    # Fast PDB generation
+    # Fast PDB generation - use /Zi for incremental compilation support
+    # /Zi allows incremental compilation, /ZI disables it
     add_compile_options($<$<CONFIG:Debug>:/Zi>)
     add_compile_options($<$<CONFIG:Release>:/Zi>)
     
     # Reduce string pooling overhead
     add_compile_options(/Zc:inline)
+    
+    # Enable function-level linking for better incremental compilation
+    add_compile_options(/Gy)
+    
+    # Optimize for faster compilation (not runtime)
+    add_compile_options($<$<CONFIG:Debug>:/Od>)  # Disable optimizations in Debug
+    
+    # Enable fast math in Release (optional, can improve compile time)
+    # add_compile_options($<$<CONFIG:Release>:/fp:fast>)
+endif()
+
+# Enable compilation caching if available (sccache for Windows, ccache for Linux)
+if(MSVC)
+    find_program(SCCACHE_PROGRAM sccache)
+    if(NOT SCCACHE_PROGRAM)
+        # Try custom installation path
+        if(EXISTS "d:/sccache/sccache.exe")
+            set(SCCACHE_PROGRAM "d:/sccache/sccache.exe")
+        elseif(EXISTS "D:/sccache/sccache.exe")
+            set(SCCACHE_PROGRAM "D:/sccache/sccache.exe")
+        endif()
+    endif()
+    if(SCCACHE_PROGRAM)
+        message(STATUS "Found sccache: ${SCCACHE_PROGRAM}")
+        set(CMAKE_C_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+    else()
+        message(STATUS "sccache not found. Install it for faster compilation: scoop install sccache")
+    endif()
+else()
+    find_program(CCACHE_PROGRAM ccache)
+    if(CCACHE_PROGRAM)
+        message(STATUS "Found ccache: ${CCACHE_PROGRAM}")
+        set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    endif()
 endif()
 
 # 检查是否通过预设或环境变量设置了工具链文件
@@ -103,6 +151,22 @@ if(NOT log4cxx_FOUND)
     endif()
 endif()
 
+# Function to apply incremental compilation settings to all targets
+function(apply_incremental_compilation_settings target_name)
+    if(MSVC)
+        # Enable function-level linking for better incremental compilation
+        target_compile_options(${target_name} PRIVATE /Gy)
+        
+        # Ensure incremental linking is enabled for static libraries in Debug
+        get_target_property(target_type ${target_name} TYPE)
+        if(target_type STREQUAL "STATIC_LIBRARY" OR target_type STREQUAL "EXECUTABLE")
+            set_target_properties(${target_name} PROPERTIES
+                LINK_FLAGS_DEBUG "/INCREMENTAL"
+            )
+        endif()
+    endif()
+endfunction()
+
 # 添加源代码目录
 add_subdirectory(src)
 
@@ -134,6 +198,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # 链接所有模块库
 target_link_libraries(${PROJECT_NAME} PRIVATE
     UIFrame        # UI Frame模块
+    CADView        # View模块 (Canvas, ViewRefreshManager, NavigationAnimator等)
     CADGeometry    # Geometry模块
     CADMod         # Mod模块 (选择和高亮功能)
     wx::core
@@ -142,6 +207,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Coin::Coin
     TKBO TKDE TKBin TKCAF
 )
+
+# Apply incremental compilation settings
+apply_incremental_compilation_settings(${PROJECT_NAME})
 
 # Enable Unicode support on Windows
 if(WIN32)
@@ -170,9 +238,17 @@ if(MSVC)
         LINK_FLAGS "/SUBSYSTEM:WINDOWS"
     )
     
-    # Use /Zi instead of /ZI for faster compilation
-    target_compile_options(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:/Od>)
-    target_compile_options(${PROJECT_NAME} PRIVATE /std:c++17)
+    # Optimize compilation settings for faster incremental builds
+    target_compile_options(${PROJECT_NAME} PRIVATE 
+        $<$<CONFIG:Debug>:/Od>  # Disable optimizations in Debug
+        /std:c++17
+        /Gy  # Enable function-level linking
+    )
+    
+    # Enable incremental linking for faster linking
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        LINK_FLAGS_DEBUG "/INCREMENTAL"
+    )
 
     # Windows 资源编译设置
     if(WIN32)

@@ -42,6 +42,36 @@
                     "hostOS": ["Windows"]
                 }
             }
+        },
+        {
+            "name": "ninja-vcpkg-x64-release",
+            "displayName": "Ninja x64 Release with vcpkg (sccache enabled)",
+            "description": "Ninja generator with vcpkg for dependencies, supports sccache",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-ninja",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "wxWidgets_ROOT_DIR": "D:/repos/vcpkg/installed/x64-windows",
+                "CMAKE_BUILD_TYPE": "Release"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/repos/vcpkg"
+            }
+        },
+        {
+            "name": "ninja-vcpkg-x64-debug",
+            "displayName": "Ninja x64 Debug with vcpkg (sccache enabled)",
+            "description": "Ninja generator with vcpkg for dependencies, supports sccache",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-ninja",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "wxWidgets_ROOT_DIR": "D:/repos/vcpkg/installed/x64-windows",
+                "CMAKE_BUILD_TYPE": "Debug"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/repos/vcpkg"
+            }
         }
     ],
     "buildPresets": [
@@ -56,6 +86,16 @@
             "displayName": "Release Build", 
             "configurePreset": "windows-vcpkg-x64-release",
             "configuration": "Release"
+        },
+        {
+            "name": "ninja-release-build",
+            "displayName": "Ninja Release Build",
+            "configurePreset": "ninja-vcpkg-x64-release"
+        },
+        {
+            "name": "ninja-debug-build",
+            "displayName": "Ninja Debug Build",
+            "configurePreset": "ninja-vcpkg-x64-debug"
         }
     ]
 } 
