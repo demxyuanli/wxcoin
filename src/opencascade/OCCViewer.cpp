@@ -27,6 +27,7 @@
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoPointSet.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoClipPlane.h>
 #include <Inventor/nodes/SoCube.h>
@@ -527,26 +528,59 @@ void OCCViewer::setDisplaySettings(const RenderingConfig::DisplaySettings& setti
 
 	// Only apply changes if something actually changed
 	if (displayModeChanged) {
-		// Apply display mode to all geometries
-		for (auto& geometry : m_geometries) {
-			if (geometry) {
-				geometry->setDisplayMode(settings.displayMode);
-				// CRITICAL FIX: For HiddenLine and Transparent modes, always rebuild
-				// because they require special rendering passes (HiddenLine pass, transparency)
-				// that updateDisplayMode cannot create without shape parameter
-				bool needsRebuild = (settings.displayMode == RenderingConfig::DisplayMode::HiddenLine ||
-				                     settings.displayMode == RenderingConfig::DisplayMode::Transparent);
-				
-				if (needsRebuild || !geometry->getCoinNode()) {
-					// Rebuild to ensure proper rendering for special modes
-					MeshParameters defaultParams;
-					geometry->forceCoinRepresentationRebuild(defaultParams);
-				} else {
-					// Use fast update method for other modes
-					geometry->updateDisplayMode(settings.displayMode);
+			// Apply display mode to all geometries
+			for (auto& geometry : m_geometries) {
+				if (geometry) {
+					geometry->setDisplayMode(settings.displayMode);
+					
+					// Determine if rebuild is needed:
+					// HiddenLine mode: only needs surface + mesh edges, no rebuild needed (updateDisplayMode can handle it)
+					// Points mode: in Direct mode, if point view nodes don't exist, needs shape to create them
+					//    In Switch mode, point nodes are pre-built, so no rebuild needed
+					bool needsRebuild = false;
+					if (settings.displayMode == RenderingConfig::DisplayMode::Points) {
+						// Points mode: check if using Direct mode (Switch mode pre-builds point nodes)
+						bool useSwitchMode = settings.useSwitchMode;
+						if (!useSwitchMode) {
+							// Direct mode: check if point view nodes exist
+							// If not, need rebuild to create them (requires shape parameter)
+							SoSeparator* coinNode = geometry->getCoinNode();
+							bool hasPointViewNodes = false;
+							if (coinNode) {
+								// Check for point view nodes (SoSeparator containing SoPointSet or SoCoordinate3)
+								for (int i = 0; i < coinNode->getNumChildren(); ++i) {
+									SoNode* child = coinNode->getChild(i);
+									if (child && child->isOfType(SoSeparator::getClassTypeId())) {
+										SoSeparator* sep = static_cast<SoSeparator*>(child);
+										for (int j = 0; j < sep->getNumChildren(); ++j) {
+											SoNode* subChild = sep->getChild(j);
+											if (subChild && (subChild->isOfType(SoPointSet::getClassTypeId()) ||
+											                 subChild->isOfType(SoCoordinate3::getClassTypeId()))) {
+												hasPointViewNodes = true;
+												break;
+											}
+										}
+										if (hasPointViewNodes) break;
+									}
+								}
+							}
+							if (!hasPointViewNodes) {
+								needsRebuild = true;  // Need rebuild to create point view nodes
+							}
+						}
+						// Switch mode: point nodes are pre-built, no rebuild needed
+					}
+					
+					if (needsRebuild || !geometry->getCoinNode()) {
+						// Rebuild to ensure proper rendering for special modes
+						MeshParameters defaultParams;
+						geometry->forceCoinRepresentationRebuild(defaultParams);
+					} else {
+						// Use fast update method for other modes (including Transparent, Points in Switch mode)
+						geometry->updateDisplayMode(settings.displayMode);
+					}
 				}
 			}
-		}
 	}
 
 	// Apply edge display only if changed

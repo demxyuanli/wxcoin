@@ -25,12 +25,40 @@
 #include <Inventor/SoType.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
+#include <OpenCASCADE/TopExp_Explorer.hxx>
+#include <OpenCASCADE/TopAbs.hxx>
 #include <vector>
 #include <sstream>
 #include <iomanip>
 
+namespace helper {
+
 // Static member initialization
 bool DisplayModeHandler::m_geometryBuilt = false;
+
+// Helper function to convert DisplayMode to string for logging
+static std::string displayModeToString(RenderingConfig::DisplayMode mode) {
+    switch (mode) {
+    case RenderingConfig::DisplayMode::NoShading:
+        return "NoShading";
+    case RenderingConfig::DisplayMode::Points:
+        return "Points";
+    case RenderingConfig::DisplayMode::Wireframe:
+        return "Wireframe";
+    case RenderingConfig::DisplayMode::Solid:
+        return "Solid";
+    case RenderingConfig::DisplayMode::FlatLines:
+        return "FlatLines";
+    case RenderingConfig::DisplayMode::Transparent:
+        return "Transparent";
+    case RenderingConfig::DisplayMode::HiddenLine:
+        return "HiddenLine";
+    case RenderingConfig::DisplayMode::Custom:
+        return "Custom";
+    default:
+        return "Unknown";
+    }
+}
 
 DisplayModeHandler::DisplayModeHandler() 
     : m_brepHandler(std::make_unique<BRepDisplayModeHandler>())
@@ -38,6 +66,13 @@ DisplayModeHandler::DisplayModeHandler()
     , m_modeSwitch(nullptr)
     , m_useSwitchMode(false)
 {
+    // Read switch mode configuration from RenderingConfig
+    // Default to true (Switch mode) if config not available
+    RenderingConfig& config = RenderingConfig::getInstance();
+    m_useSwitchMode = config.getDisplaySettings().useSwitchMode;
+    
+    LOG_INF_S("DisplayModeHandler::DisplayModeHandler: Initialized with useSwitchMode=" + 
+              std::string(m_useSwitchMode ? "true" : "false") + " (from config)");
 }
 
 DisplayModeHandler::~DisplayModeHandler() {
@@ -53,7 +88,23 @@ void DisplayModeHandler::setGeometryBuilt(bool built) {
 
 void DisplayModeHandler::setModeSwitch(SoSwitch* modeSwitch) {
     m_modeSwitch = modeSwitch;
-    m_useSwitchMode = (m_modeSwitch != nullptr);
+    
+    // Read switch mode preference from config
+    // If config says useSwitchMode=true, we'll use Switch mode even if m_modeSwitch is null
+    // (the new architecture uses three independent switches, not m_modeSwitch)
+    RenderingConfig& config = RenderingConfig::getInstance();
+    bool configUseSwitchMode = config.getDisplaySettings().useSwitchMode;
+    
+    // Use Switch mode if:
+    // 1. Config says useSwitchMode=true (preferred), OR
+    // 2. m_modeSwitch is provided (legacy support)
+    m_useSwitchMode = configUseSwitchMode || (m_modeSwitch != nullptr);
+    
+    LOG_INF_S("DisplayModeHandler::setModeSwitch: m_modeSwitch=" + 
+              std::string(m_modeSwitch ? "valid" : "null") + 
+              ", config.useSwitchMode=" + std::string(configUseSwitchMode ? "true" : "false") +
+              ", m_useSwitchMode=" + std::string(m_useSwitchMode ? "true" : "false"));
+    
     if (m_brepHandler) {
         m_brepHandler->setModeSwitch(modeSwitch);
     }
@@ -69,46 +120,61 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         return;
     }
 
-    if (m_useSwitchMode && m_modeSwitch) {
-        // Calculate switch index based on mode
-        int switchIndex = 3; // Default to Solid
-        switch (mode) {
-        case RenderingConfig::DisplayMode::NoShading: switchIndex = 0; break;
-        case RenderingConfig::DisplayMode::Points: switchIndex = 1; break;
-        case RenderingConfig::DisplayMode::Wireframe: switchIndex = 2; break;
-        case RenderingConfig::DisplayMode::Solid: switchIndex = 3; break;
-        case RenderingConfig::DisplayMode::FlatLines: switchIndex = 4; break;
-        case RenderingConfig::DisplayMode::Transparent: switchIndex = 5; break;
-        case RenderingConfig::DisplayMode::HiddenLine: switchIndex = 6; break;
-        default: switchIndex = 3; break;
-        }
-        
-        if (switchIndex >= 0 && switchIndex < m_modeSwitch->getNumChildren()) {
-            m_modeSwitch->whichChild.setValue(switchIndex);
-            
-            // Log Switch mode change with expected state
-            // Note: Actual state was set in handleDisplayMode, this is just switching
-            // We output expected state for debugging
-            DisplayModeRenderState expectedState;
-            GeometryRenderContext dummyContext;
-            dummyContext.display.facesVisible = true;
-            dummyContext.display.showPointView = false;
-            dummyContext.material.ambientColor = Quantity_Color(0.6, 0.6, 0.6, Quantity_TOC_RGB);
-            dummyContext.material.diffuseColor = Quantity_Color(0.8, 0.8, 0.8, Quantity_TOC_RGB);
-            dummyContext.material.specularColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
-            dummyContext.material.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            dummyContext.material.shininess = 30.0;
-            dummyContext.material.transparency = 0.0;
-            dummyContext.display.wireframeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-            dummyContext.display.wireframeWidth = 1.0;
-            dummyContext.texture.enabled = false;
-            dummyContext.blend.blendMode = RenderingConfig::BlendMode::None;
-            
-            DisplayModeStateManager stateManager;
-            stateManager.setRenderStateForMode(expectedState, mode, dummyContext);
-            return;
+    // Read switch mode preference from config
+    RenderingConfig& config = RenderingConfig::getInstance();
+    bool configUseSwitchMode = config.getDisplaySettings().useSwitchMode;
+    
+    // Check if three independent switches exist in coinNode (new architecture)
+    // This is more reliable than checking m_modeSwitch
+    SoSwitch* surfaceSwitch = nullptr;
+    SoSwitch* edgesSwitch = nullptr;
+    SoSwitch* pointsSwitch = nullptr;
+    int switchCount = 0;
+    for (int i = 0; i < coinNode->getNumChildren(); ++i) {
+        SoNode* child = coinNode->getChild(i);
+        if (child && child->isOfType(SoSwitch::getClassTypeId())) {
+            SoSwitch* sw = static_cast<SoSwitch*>(child);
+            if (switchCount == 0) {
+                surfaceSwitch = sw;
+            } else if (switchCount == 1) {
+                edgesSwitch = sw;
+            } else if (switchCount == 2) {
+                pointsSwitch = sw;
+            }
+            ++switchCount;
         }
     }
+    
+    // Use Switch mode if:
+    // 1. Config says useSwitchMode=true, AND
+    // 2. Three switches exist in coinNode (or will be created by handlers)
+    bool switchesExist = (surfaceSwitch && edgesSwitch && pointsSwitch);
+    bool shouldUseSwitchMode = configUseSwitchMode && (switchesExist || m_useSwitchMode);
+    
+    if (shouldUseSwitchMode) {
+        // New Switch structure: Three independent switches (surface, edges, points)
+        // Update switch visibility for fast mode switching
+        LOG_INF_S("DisplayModeHandler::updateDisplayMode: Switching to mode=" + displayModeToString(mode) + 
+                  " using Switch mode (config.useSwitchMode=" + std::string(configUseSwitchMode ? "true" : "false") +
+                  ", switchesExist=" + std::string(switchesExist ? "true" : "false") + 
+                  ", found " + std::to_string(switchCount) + " switches in coinNode)");
+        
+        // Try both BREP and Mesh handlers (one will work depending on geometry type)
+        if (m_brepHandler) {
+            LOG_INF_S("DisplayModeHandler::updateDisplayMode: Calling BREP handler for switch update");
+            m_brepHandler->updateDisplayModeSwitches(coinNode, mode, edgeComponent);
+        }
+        if (m_meshHandler) {
+            LOG_INF_S("DisplayModeHandler::updateDisplayMode: Calling Mesh handler for switch update");
+            m_meshHandler->updateDisplayModeSwitches(coinNode, mode, edgeComponent);
+        }
+        return;
+    }
+    
+    LOG_INF_S("DisplayModeHandler::updateDisplayMode: Switching to mode=" + displayModeToString(mode) + 
+              " using Direct mode (config.useSwitchMode=" + std::string(configUseSwitchMode ? "true" : "false") +
+              ", m_useSwitchMode=" + std::string(m_useSwitchMode ? "true" : "false") + 
+              ", m_modeSwitch=" + std::string(m_modeSwitch ? "valid" : "null") + ")");
     
     // Log non-Switch mode update with full state
     // Step 1: Extract material info from existing nodes BEFORE reset (they will be deleted)
@@ -303,6 +369,17 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
         ? RenderingConfig::BlendMode::Alpha 
         : RenderingConfig::BlendMode::None;
     
+    // For Transparent mode, get transparency from RenderingConfig if not already set
+    if (mode == RenderingConfig::DisplayMode::Transparent && updateContext.material.transparency <= 0.0) {
+        RenderingConfig& config = RenderingConfig::getInstance();
+        const auto& materialSettings = config.getMaterialSettings();
+        if (materialSettings.transparency > 0.0) {
+            updateContext.material.transparency = materialSettings.transparency;
+        } else {
+            updateContext.material.transparency = 0.5;  // Default transparency for Transparent mode
+        }
+    }
+    
     // Step 4: Generate and set render state
     DisplayModeRenderState updateState;
     updateState.surfaceAmbientColor = updateContext.material.ambientColor;
@@ -338,35 +415,17 @@ void DisplayModeHandler::updateDisplayMode(SoSeparator* coinNode, RenderingConfi
     coinNode->addChild(lightModel);
     lightModel->unref();
 
-    // Step 5.2: Create DrawStyle node (was deleted by resetAllRenderStates)
+    // Step 5.2: Create DrawStyle node for SURFACE geometry only (was deleted by resetAllRenderStates)
+    // NOTE: This DrawStyle only controls how SURFACE geometry is rendered.
+    // - Surface visibility is controlled by showSurface flag (via Switch or geometry presence)
+    // - Edge rendering is handled separately by ModularEdgeComponent in Step 10
+    // - For all modes that show surface, use FILLED (edges are rendered separately as SoIndexedLineSet)
+    // - For modes that don't show surface (Wireframe, Points), this DrawStyle has no effect
+    //   but we still set it to FILLED for consistency
     SoDrawStyle* drawStyle = new SoDrawStyle();
     drawStyle->ref();
-    switch (mode) {
-    case RenderingConfig::DisplayMode::NoShading:
-        drawStyle->style.setValue(SoDrawStyle::FILLED);
-        break;
-    case RenderingConfig::DisplayMode::Points:
-        drawStyle->style.setValue(SoDrawStyle::POINTS);
-        break;
-    case RenderingConfig::DisplayMode::Wireframe:
-        drawStyle->style.setValue(SoDrawStyle::LINES);
-        break;
-    case RenderingConfig::DisplayMode::FlatLines:
-        drawStyle->style.setValue(SoDrawStyle::FILLED);
-        break;
-    case RenderingConfig::DisplayMode::Solid:
-        drawStyle->style.setValue(SoDrawStyle::FILLED);
-        break;
-    case RenderingConfig::DisplayMode::Transparent:
-        drawStyle->style.setValue(SoDrawStyle::FILLED);
-        break;
-    case RenderingConfig::DisplayMode::HiddenLine:
-        drawStyle->style.setValue(SoDrawStyle::FILLED);
-        break;
-    default:
-        drawStyle->style.setValue(SoDrawStyle::FILLED);
-        break;
-    }
+    // All surface rendering modes use FILLED - edges are handled separately
+    drawStyle->style.setValue(SoDrawStyle::FILLED);
     coinNode->addChild(drawStyle);
     drawStyle->unref();
 
@@ -443,11 +502,39 @@ void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
                                             const MeshParameters& params,
                                             ModularEdgeComponent* edgeComponent,
                                             bool useModularEdgeComponent,
-                                            RenderNodeBuilder* renderBuilder,
-                                            WireframeBuilder* wireframeBuilder,
-                                            PointViewBuilder* pointViewBuilder) {
+                                            helper::RenderNodeBuilder* renderBuilder,
+                                            helper::WireframeBuilder* wireframeBuilder,
+                                            helper::PointViewBuilder* pointViewBuilder) {
     if (!m_brepHandler) {
         return;
+    }
+    
+    // Check face count and force Switch mode if threshold exceeded
+    RenderingConfig& config = RenderingConfig::getInstance();
+    int forceSwitchThreshold = config.getDisplaySettings().forceSwitchModeThreshold;
+    bool configUseSwitchMode = config.getDisplaySettings().useSwitchMode;
+    
+    int faceCount = 0;
+    for (TopExp_Explorer exp(shape, TopAbs_FACE); exp.More(); exp.Next(), ++faceCount);
+    
+    if (faceCount > forceSwitchThreshold && !configUseSwitchMode) {
+        LOG_WRN_S("========================================");
+        LOG_WRN_S("PERFORMANCE WARNING: Geometry has " + std::to_string(faceCount) + " faces");
+        LOG_WRN_S("This exceeds the threshold of " + std::to_string(forceSwitchThreshold) + " faces");
+        LOG_WRN_S("FORCING Switch mode regardless of UseSwitchMode=false setting");
+        LOG_WRN_S("Direct mode would be too slow for this complex geometry");
+        LOG_WRN_S("Mode switching performance would be severely degraded");
+        LOG_WRN_S("========================================");
+        // Override config setting for this geometry - force Switch mode
+        // Temporarily modify config so handler will use Switch mode
+        RenderingConfig::DisplaySettings settings = config.getDisplaySettings();
+        settings.useSwitchMode = true;
+        config.setDisplaySettings(settings);
+        m_useSwitchMode = true;
+    } else if (faceCount > forceSwitchThreshold) {
+        LOG_INF_S("DisplayModeHandler: Geometry has " + std::to_string(faceCount) + 
+                  " faces (threshold: " + std::to_string(forceSwitchThreshold) + 
+                  "), using Switch mode for optimal performance");
     }
     
     m_brepHandler->handleDisplayMode(coinNode, context, shape, params, 
@@ -464,11 +551,38 @@ void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
                                             const MeshParameters& params,
                                             ModularEdgeComponent* edgeComponent,
                                             bool useModularEdgeComponent,
-                                            RenderNodeBuilder* renderBuilder,
-                                            WireframeBuilder* wireframeBuilder,
-                                            PointViewBuilder* pointViewBuilder) {
+                                            helper::RenderNodeBuilder* renderBuilder,
+                                            helper::WireframeBuilder* wireframeBuilder,
+                                            helper::PointViewBuilder* pointViewBuilder) {
     if (!m_meshHandler) {
         return;
+    }
+    
+    // Check triangle count and force Switch mode if threshold exceeded
+    RenderingConfig& config = RenderingConfig::getInstance();
+    int forceSwitchThreshold = config.getDisplaySettings().forceSwitchModeThreshold;
+    bool configUseSwitchMode = config.getDisplaySettings().useSwitchMode;
+    
+    int triangleCount = static_cast<int>(mesh.triangles.size() / 3);
+    
+    if (triangleCount > forceSwitchThreshold && !configUseSwitchMode) {
+        LOG_WRN_S("========================================");
+        LOG_WRN_S("PERFORMANCE WARNING: Geometry has " + std::to_string(triangleCount) + " triangles");
+        LOG_WRN_S("This exceeds the threshold of " + std::to_string(forceSwitchThreshold) + " triangles");
+        LOG_WRN_S("FORCING Switch mode regardless of UseSwitchMode=false setting");
+        LOG_WRN_S("Direct mode would be too slow for this complex geometry");
+        LOG_WRN_S("Mode switching performance would be severely degraded");
+        LOG_WRN_S("========================================");
+        // Override config setting for this geometry - force Switch mode
+        // Temporarily modify config so handler will use Switch mode
+        RenderingConfig::DisplaySettings settings = config.getDisplaySettings();
+        settings.useSwitchMode = true;
+        config.setDisplaySettings(settings);
+        m_useSwitchMode = true;
+    } else if (triangleCount > forceSwitchThreshold) {
+        LOG_INF_S("DisplayModeHandler: Geometry has " + std::to_string(triangleCount) + 
+                  " triangles (threshold: " + std::to_string(forceSwitchThreshold) + 
+                  "), using Switch mode for optimal performance");
     }
     
     m_meshHandler->handleDisplayMode(coinNode, context, mesh, params,
@@ -476,4 +590,6 @@ void DisplayModeHandler::handleDisplayMode(SoSeparator* coinNode,
                                      renderBuilder, wireframeBuilder, pointViewBuilder);
     
     setGeometryBuilt(true);
+}
+
 }

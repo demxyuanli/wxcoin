@@ -164,17 +164,23 @@ target_include_directories(CADCommands PUBLIC
     ${OpenCASCADE_INCLUDE_DIR}
 )
 
+# CADCore and CADLogger are PUBLIC because they may be used in public headers
 target_link_libraries(CADCommands PUBLIC
     CADCore
     CADLogger
+    Coin::Coin
+    ${OpenCASCADE_LIBRARIES}
+)
+
+# CADOCC, CADGeometry, CADMod, CADCreators are PRIVATE - only implementation needs them
+# Headers use forward declarations
+target_link_libraries(CADCommands PRIVATE
     CADOCC
     CADGeometry
     CADMod
     CADCreators
     UIDialogMesh
     ${wxWidgets_LIBRARIES}
-    Coin::Coin
-    ${OpenCASCADE_LIBRARIES}
 )
 
 # Enable precompiled headers for faster compilation

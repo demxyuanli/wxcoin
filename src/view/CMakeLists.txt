@@ -43,15 +43,20 @@ target_include_directories(CADView PUBLIC
     ${wxWidgets_INCLUDE_DIRS}
 )
 
+# CADCore, CADLogger, CADConfig are PUBLIC because they may be used in public headers
 target_link_libraries(CADView PUBLIC
     CADCore
     CADLogger
     CADConfig
     CADRendering
     CADInput
+    ${wxWidgets_LIBRARIES}
+)
+
+# CADOCC and CADMod are PRIVATE - headers use forward declarations
+target_link_libraries(CADView PRIVATE
     CADOCC
     CADMod
-    ${wxWidgets_LIBRARIES}
 )
 
 set_target_properties(CADView PROPERTIES

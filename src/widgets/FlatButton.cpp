@@ -645,7 +645,7 @@ wxColour FlatButton::GetCurrentBackgroundColor() const
 		endColor = m_hoverColor;
 		break;
 	default:
-		startColor = m_hoverColor;
+		startColor = m_backgroundColor;
 		endColor = m_backgroundColor;
 		break;
 	}

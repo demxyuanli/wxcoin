@@ -27,9 +27,9 @@ void DisplayModeRenderer::applyRenderState(SoSeparator* coinNode,
                          const MeshParameters& params,
                          ModularEdgeComponent* edgeComponent,
                          bool useModularEdgeComponent,
-                         RenderNodeBuilder* renderBuilder,
-                         WireframeBuilder* wireframeBuilder,
-                         PointViewBuilder* pointViewBuilder) {
+                         helper::RenderNodeBuilder* renderBuilder,
+                         helper::WireframeBuilder* wireframeBuilder,
+                         helper::PointViewBuilder* pointViewBuilder) {
     if (!coinNode || !renderBuilder || !wireframeBuilder) {
         return;
     }
@@ -217,9 +217,9 @@ void DisplayModeRenderer::applyRenderState(SoSeparator* coinNode,
                          const MeshParameters& params,
                          ModularEdgeComponent* edgeComponent,
                          bool useModularEdgeComponent,
-                         RenderNodeBuilder* renderBuilder,
-                         WireframeBuilder* wireframeBuilder,
-                         PointViewBuilder* pointViewBuilder) {
+                         helper::RenderNodeBuilder* renderBuilder,
+                         helper::WireframeBuilder* wireframeBuilder,
+                         helper::PointViewBuilder* pointViewBuilder) {
     if (!coinNode || !renderBuilder || !wireframeBuilder) {
         return;
     }
@@ -444,7 +444,7 @@ void DisplayModeRenderer::buildModeStateNode(SoSeparator* parent,
                            RenderingConfig::DisplayMode mode,
                            const DisplayModeRenderState& state,
                            const GeometryRenderContext& context,
-                           RenderNodeBuilder* renderBuilder) {
+                           helper::RenderNodeBuilder* renderBuilder) {
     if (!parent || !renderBuilder) {
         return;
     }
@@ -492,9 +492,9 @@ void DisplayModeRenderer::buildModeNode(SoSeparator* parent,
                       const MeshParameters& params,
                       ModularEdgeComponent* edgeComponent,
                       bool useModularEdgeComponent,
-                      RenderNodeBuilder* renderBuilder,
-                      WireframeBuilder* wireframeBuilder,
-                      PointViewBuilder* pointViewBuilder) {
+                      helper::RenderNodeBuilder* renderBuilder,
+                      helper::WireframeBuilder* wireframeBuilder,
+                      helper::PointViewBuilder* pointViewBuilder) {
     if (!parent || !renderBuilder || !wireframeBuilder) {
         return;
     }
@@ -531,7 +531,7 @@ void DisplayModeRenderer::buildModeNode(SoSeparator* parent,
 void DisplayModeRenderer::buildStateNodeFromConfig(SoSeparator* parent,
                                                     const DisplayModeConfig& config,
                                                     const GeometryRenderContext& context,
-                                                    RenderNodeBuilder* renderBuilder) {
+                                                    helper::RenderNodeBuilder* renderBuilder) {
     if (!parent || !renderBuilder) {
         return;
     }
@@ -588,9 +588,9 @@ void DisplayModeRenderer::applyRenderFromConfig(SoSeparator* coinNode,
                                                  const MeshParameters& params,
                                                  ModularEdgeComponent* edgeComponent,
                                                  bool useModularEdgeComponent,
-                                                 RenderNodeBuilder* renderBuilder,
-                                                 WireframeBuilder* wireframeBuilder,
-                                                 PointViewBuilder* pointViewBuilder) {
+                                                 helper::RenderNodeBuilder* renderBuilder,
+                                                 helper::WireframeBuilder* wireframeBuilder,
+                                                 helper::PointViewBuilder* pointViewBuilder) {
     if (!coinNode || !renderBuilder || !wireframeBuilder) {
         return;
     }
@@ -713,9 +713,9 @@ void DisplayModeRenderer::applyRenderFromConfig(SoSeparator* coinNode,
                                                  const MeshParameters& params,
                                                  ModularEdgeComponent* edgeComponent,
                                                  bool useModularEdgeComponent,
-                                                 RenderNodeBuilder* renderBuilder,
-                                                 WireframeBuilder* wireframeBuilder,
-                                                 PointViewBuilder* pointViewBuilder) {
+                                                 helper::RenderNodeBuilder* renderBuilder,
+                                                 helper::WireframeBuilder* wireframeBuilder,
+                                                 helper::PointViewBuilder* pointViewBuilder) {
     if (!coinNode || !renderBuilder || !wireframeBuilder) {
         return;
     }

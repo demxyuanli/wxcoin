@@ -19,16 +19,26 @@ set(CORE_HEADERS
 add_library(CADCore STATIC ${CORE_SOURCES} ${CORE_HEADERS})
 
 # Set header directories
+# Note: Coin3D must be PUBLIC because GeometryObject.h includes Inventor headers
 target_include_directories(CADCore PUBLIC
     ${CMAKE_SOURCE_DIR}/include
-    ${wxWidgets_INCLUDE_DIRS}
     ${Coin3D_INCLUDE_DIRS}
 )
 
+# wxWidgets is PRIVATE - only Application.h needs it, and UI modules link wxWidgets directly
+target_include_directories(CADCore PRIVATE
+    ${wxWidgets_INCLUDE_DIRS}
+)
+
 # Link dependencies
+# Coin must be PUBLIC because GeometryObject.h uses SoSeparator, SoTransform, etc.
 target_link_libraries(CADCore PUBLIC
-    ${wxWidgets_LIBRARIES}
     Coin::Coin
+)
+
+# wxWidgets is PRIVATE - UI modules that use Application.h already link wxWidgets
+target_link_libraries(CADCore PRIVATE
+    ${wxWidgets_LIBRARIES}
 )
 
 # Set library export properties

@@ -598,7 +598,7 @@ void SceneManager::render(const wxSize& size, bool fastMode) {
 		GLenum postRenderError = glGetError();
 		if (postRenderError != GL_NO_ERROR) { 
 		} 
-	} catch (const std::exception& e) {
+	} catch (const std::exception& e) { 
 		// Restore blend state before returning
 		glBlendFunc(blendSrc, blendDst);
 		if (!blendEnabled) {

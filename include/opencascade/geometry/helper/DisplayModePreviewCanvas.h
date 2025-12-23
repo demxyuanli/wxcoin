@@ -16,7 +16,9 @@ class SoSwitch;
 class SoShapeHints;
 class SoPolygonOffset;
 class ModularEdgeComponent;
-class PointViewBuilder;
+namespace helper {
+    class PointViewBuilder;
+}
 struct TriangleMesh;
 struct MeshParameters;
 
@@ -48,24 +50,27 @@ private:
     SoSeparator* m_sceneRoot{ nullptr };
     SoSeparator* m_geometryRoot{ nullptr };
     SoSeparator* m_surfaceNode{ nullptr };
-    SoSeparator* m_edgesNode{ nullptr };
-    SoSeparator* m_pointsNode{ nullptr };
     SoCamera* m_camera{ nullptr };
-    
+
     SoMaterial* m_material{ nullptr };
     SoDrawStyle* m_drawStyle{ nullptr };
     SoLightModel* m_lightModel{ nullptr };
     SoShapeHints* m_shapeHints{ nullptr };
     SoPolygonOffset* m_polygonOffset{ nullptr };
     SoSwitch* m_surfaceSwitch{ nullptr };
-    SoSwitch* m_edgesSwitch{ nullptr };
-    SoSwitch* m_pointsSwitch{ nullptr };
-    
+
     TopoDS_Shape m_shape;
     TriangleMesh* m_mesh{ nullptr };
     MeshParameters m_meshParams;
+
+    // Edge and point components for advanced rendering
     std::unique_ptr<ModularEdgeComponent> m_edgeComponent;
-    std::unique_ptr<PointViewBuilder> m_pointViewBuilder;
+    std::unique_ptr<helper::PointViewBuilder> m_pointViewBuilder;
+
+    // Multi-pass rendering configuration
+    bool m_showSurface{ true };
+    bool m_showEdges{ false };
+    bool m_showPoints{ false };
     
     RenderingConfig::DisplayMode m_currentMode{ RenderingConfig::DisplayMode::Solid };
     DisplayModeConfig m_currentConfig;

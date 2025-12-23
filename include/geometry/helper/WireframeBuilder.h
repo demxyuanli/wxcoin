@@ -7,6 +7,8 @@
 class SoSeparator;
 struct MeshParameters;
 
+namespace helper {
+
 class WireframeBuilder {
 public:
     WireframeBuilder();
@@ -20,4 +22,6 @@ public:
     void createWireframeRepresentation(SoSeparator* coinNode, 
                                       const TriangleMesh& mesh);
 };
+
+}
 

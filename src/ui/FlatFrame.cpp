@@ -1032,7 +1032,9 @@ void FlatFrame::OnNavigationStyleSwitch(wxCommandEvent& event)
 
 void FlatFrame::OnDisplayModeConfig(wxCommandEvent& event)
 {
-	DisplayModeConfigDialog dialog(this);
+	const RenderingConfig& renderingConfig = RenderingConfig::getInstance();
+	const auto displaySettings = renderingConfig.getDisplaySettings();
+	DisplayModeConfigDialog dialog(this, displaySettings.displayMode);
 	dialog.ShowModal();
 }
 

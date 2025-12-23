@@ -56,6 +56,7 @@ FlatCheckBox::FlatCheckBox(wxWindow* parent, wxWindowID id, const wxString& labe
 
 FlatCheckBox::~FlatCheckBox()
 {
+	ThemeManager::getInstance().removeThemeChangeListener(this);
 }
 
 void FlatCheckBox::InitializeDefaultColors()

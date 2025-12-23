@@ -8,6 +8,8 @@
 
 class SoSeparator;
 
+namespace helper {
+
 class CoinNodeManager {
 public:
     CoinNodeManager();
@@ -21,4 +23,6 @@ public:
 private:
     void disableRenderCaching(SoSeparator* node);
 };
+
+}
 

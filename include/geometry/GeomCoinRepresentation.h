@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <vector>
+#include <Inventor/SbVec3f.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/TopoDS_Face.hxx>
@@ -13,17 +14,20 @@
 
 // Forward declarations
 class SoSeparator;
+class SoSwitch;
 class EdgeComponent;
 class ModularEdgeComponent;
 class TopoDS_Shape;
 
-// Helper classes (forward declarations)
-class CoinNodeManager;
-class RenderNodeBuilder;
-class DisplayModeHandler;
-class WireframeBuilder;
-class PointViewBuilder;
-class FaceDomainMapper;
+// Helper classes
+namespace helper {
+    class CoinNodeManager;
+    class RenderNodeBuilder;
+    class DisplayModeHandler;
+    class WireframeBuilder;
+    class PointViewBuilder;
+    class FaceDomainMapper;
+}
 
 
 /**
@@ -246,6 +250,7 @@ protected:
 
     // Coin3D scene graph
     SoSeparator* m_coinNode;
+    SoSwitch* m_modeSwitch;  // SoSwitch for fast mode switching (FreeCAD-style)
     bool m_coinNeedsUpdate;
     bool m_meshRegenerationNeeded;
     MeshParameters m_lastMeshParams;
@@ -261,10 +266,10 @@ protected:
     bool m_hasCachedMesh = false;
 
     // Helper classes for modular architecture
-    std::unique_ptr<CoinNodeManager> m_nodeManager;
-    std::unique_ptr<RenderNodeBuilder> m_renderBuilder;
-    std::unique_ptr<DisplayModeHandler> m_displayHandler;
-    std::unique_ptr<WireframeBuilder> m_wireframeBuilder;
-    std::unique_ptr<PointViewBuilder> m_pointViewBuilder;
-    std::unique_ptr<FaceDomainMapper> m_faceMapper;
+    std::unique_ptr<helper::CoinNodeManager> m_nodeManager;
+    std::unique_ptr<helper::RenderNodeBuilder> m_renderBuilder;
+    std::unique_ptr<helper::DisplayModeHandler> m_displayHandler;
+    std::unique_ptr<helper::WireframeBuilder> m_wireframeBuilder;
+    std::unique_ptr<helper::PointViewBuilder> m_pointViewBuilder;
+    std::unique_ptr<helper::FaceDomainMapper> m_faceMapper;
 };

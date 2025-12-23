@@ -130,9 +130,17 @@ target_include_directories(UIFrame PUBLIC
     ${CMAKE_SOURCE_DIR}/include
     ${wxWidgets_INCLUDE_DIRS}
 )
+# UIPanels and UIDialogs are PUBLIC because they are part of the UI interface
 target_link_libraries(UIFrame PUBLIC
     UIPanels
     UIDialogs
+    ${wxWidgets_LIBRARIES}
+    Coin::Coin
+    ${OpenCASCADE_LIBRARIES}
+)
+
+# Most other dependencies are PRIVATE - headers use forward declarations
+target_link_libraries(UIFrame PRIVATE
     CADCore
     CADConfig
     CADLogger
@@ -146,9 +154,6 @@ target_link_libraries(UIFrame PUBLIC
     RenderPreview
     CADFlatUI
     widgets
-    ${wxWidgets_LIBRARIES}
-    Coin::Coin
-    ${OpenCASCADE_LIBRARIES}
 )
 
 # Enable precompiled headers for faster compilation

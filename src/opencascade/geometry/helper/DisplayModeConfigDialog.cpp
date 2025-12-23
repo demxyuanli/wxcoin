@@ -2,6 +2,9 @@
 #include "geometry/helper/DisplayModeHandler.h"
 #include "config/FontManager.h"
 #include "config/ThemeManager.h"
+#include "widgets/FlatProgressBar.h"
+#include "widgets/FlatStaticBoxSizer.h"
+#include "widgets/FlatNotebook.h"
 #include "logger/Logger.h"
 #include <wx/wx.h>
 #include <wx/sizer.h>
@@ -10,7 +13,24 @@
 #include <sstream>
 #include <iomanip>
 
-DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent)
+namespace {
+    // Layout constants
+    const int CONTROL_WIDTH = 180;
+    const int BUTTON_WIDTH = 100;
+    const int COMBOBOX_WIDTH = 140;
+    const int SLIDER_WIDTH = 140;
+    const int CONTROL_HEIGHT = 22;
+    const int LABEL_WIDTH = 50;
+    const int GRID_COL_GAP = 4;
+    const int GRID_ROW_GAP = 3;
+    const int BOX_PADDING_TOP = 4;
+    const int BOX_PADDING_SIDE = 4;
+    const int BOX_PADDING_BOTTOM = 4;
+    const int BOX_PADDING_MIDDLE = 3;
+    const int BOX_PADDING_OUTER = 3;
+}
+
+DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent, RenderingConfig::DisplayMode initialMode)
     : FramelessModalPopup(parent, "Display Mode Configuration", wxSize(1200, 800))
     , m_notebook(nullptr)
     , m_customModeKey(RenderingConfig::DisplayMode::Custom)
@@ -38,9 +58,9 @@ DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent)
     layoutControls();
     bindEvents();
     
-    for (auto& pair : m_modeControls) {
-        loadConfigForMode(pair.first);
-    }
+    // Load all configurations with flat progress bar first (before showing main window)
+    loadAllConfigurations();
+    
     updateControls();
     
     applyThemeAndFonts();
@@ -48,6 +68,21 @@ DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent)
     for (auto& pair : m_modeControls) {
         updateModeVisibility(pair.first);
     }
+    
+    // Set the initial selected tab based on the provided display mode
+    if (m_notebook) {
+        int pageIndex = getPageIndexFromMode(initialMode);
+        if (pageIndex >= 0 && pageIndex < m_notebook->GetPageCount()) {
+            m_notebook->SetSelection(pageIndex);
+            // Trigger the page change event to update controls for the selected mode
+            RenderingConfig::DisplayMode mode = getModeFromPageIndex(pageIndex);
+            updateModeVisibility(mode);
+        }
+    }
+    
+    // Show the main window after loading is complete (centered by FramelessModalPopup)
+    Show();
+    wxSafeYield();  // Allow window to render
 }
 
 DisplayModeConfigDialog::~DisplayModeConfigDialog()
@@ -65,10 +100,18 @@ DisplayModeConfig DisplayModeConfigDialog::getConfig(RenderingConfig::DisplayMod
 
 void DisplayModeConfigDialog::createControls()
 {
-    m_applyButton = new wxButton(m_contentPanel, wxID_APPLY, "Apply");
-    m_okButton = new wxButton(m_contentPanel, wxID_OK, "OK");
-    m_cancelButton = new wxButton(m_contentPanel, wxID_CANCEL, "Cancel");
-    m_resetButton = new wxButton(m_contentPanel, wxID_ANY, "Reset to Defaults");
+    m_applyButton = new FlatButton(m_contentPanel, wxID_APPLY, "Apply", 
+                                    wxDefaultPosition, wxDefaultSize, 
+                                    FlatButton::ButtonStyle::PRIMARY);
+    m_okButton = new FlatButton(m_contentPanel, wxID_OK, "OK", 
+                                 wxDefaultPosition, wxDefaultSize, 
+                                 FlatButton::ButtonStyle::PRIMARY);
+    m_cancelButton = new FlatButton(m_contentPanel, wxID_CANCEL, "Cancel", 
+                                     wxDefaultPosition, wxDefaultSize, 
+                                     FlatButton::ButtonStyle::OUTLINE);
+    m_resetButton = new FlatButton(m_contentPanel, wxID_ANY, "Reset to Defaults", 
+                                    wxDefaultPosition, wxDefaultSize, 
+                                    FlatButton::ButtonStyle::OUTLINE);
 }
 
 void DisplayModeConfigDialog::createModePage(RenderingConfig::DisplayMode mode)
@@ -89,7 +132,7 @@ void DisplayModeConfigDialog::createModePage(RenderingConfig::DisplayMode mode)
     createPostProcessingPanel(scrolled, scrolledSizer, mode);
     scrolledSizer->Fit(scrolled);
     
-    mainSizer->Add(scrolled, 1, wxEXPAND | wxALL, 5);
+    mainSizer->Add(scrolled, 1, wxEXPAND | wxALL, 3);
     controls.page->SetSizer(mainSizer);
     
     wxString modeName;
@@ -124,206 +167,172 @@ void DisplayModeConfigDialog::createNodeRequirementsPanel(wxPanel* parent, wxSiz
 {
     ModeControls& controls = m_modeControls[mode];
     
-    wxStaticBoxSizer* boxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Node Requirements");
-    controls.nodeRequirementsBox = boxSizer->GetStaticBox();
+    FlatStaticBoxSizer* boxSizer = new FlatStaticBoxSizer(wxVERTICAL, parent, "Node Requirements");
+    wxStaticBox* staticBox = boxSizer->GetStaticBox();
+    controls.nodeRequirementsBox = staticBox;
     
-    controls.requireSurface = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Require Surface");
-    controls.requireOriginalEdges = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Require Original Edges");
-    controls.requireMeshEdges = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Require Mesh Edges");
-    controls.requirePoints = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Require Points");
+    controls.requireSurface = new FlatCheckBox(staticBox, wxID_ANY, "Require Surface");
+    controls.requireOriginalEdges = new FlatCheckBox(staticBox, wxID_ANY, "Require Original Edges");
+    controls.requireMeshEdges = new FlatCheckBox(staticBox, wxID_ANY, "Require Mesh Edges");
+    controls.requirePoints = new FlatCheckBox(staticBox, wxID_ANY, "Require Points");
+
+    std::vector<wxString> drawStyleItems = {
+        "FILLED - Surface",
+        "LINES - Edges",
+        "POINTS - Points",
+        "FILLED+LINES - Surface+Edges",
+        "FILLED+POINTS - Surface+Points",
+        "LINES+POINTS - Edges+Points",
+        "FILLED+LINES+POINTS - All"
+    };
+    controls.drawStyle = createComboBox(staticBox, "Draw Style:", drawStyleItems, 0);
+
+    addCheckBox(boxSizer, controls.requireSurface, wxLEFT | wxRIGHT | wxTOP, BOX_PADDING_TOP);
+    addCheckBox(boxSizer, controls.requireOriginalEdges, wxLEFT | wxRIGHT, BOX_PADDING_MIDDLE);
+    addCheckBox(boxSizer, controls.requireMeshEdges, wxLEFT | wxRIGHT, BOX_PADDING_MIDDLE);
+    addCheckBox(boxSizer, controls.requirePoints, wxLEFT | wxRIGHT, BOX_PADDING_MIDDLE);
+
+    wxFlexGridSizer* drawStyleGrid = new wxFlexGridSizer(2, GRID_COL_GAP, GRID_ROW_GAP);
+    addGridRow(drawStyleGrid, staticBox, "Draw Style:", controls.drawStyle);
+    boxSizer->Add(drawStyleGrid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, BOX_PADDING_SIDE);
     
-    boxSizer->Add(controls.requireSurface, 0, wxALL, 5);
-    boxSizer->Add(controls.requireOriginalEdges, 0, wxALL, 5);
-    boxSizer->Add(controls.requireMeshEdges, 0, wxALL, 5);
-    boxSizer->Add(controls.requirePoints, 0, wxALL, 5);
-    
-    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, BOX_PADDING_OUTER);
 }
 
 void DisplayModeConfigDialog::createRenderingPropertiesPanel(wxPanel* parent, wxSizer* sizer, RenderingConfig::DisplayMode mode)
 {
     ModeControls& controls = m_modeControls[mode];
     
-    wxStaticBoxSizer* boxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Rendering Properties");
-    controls.renderingPropertiesBox = boxSizer->GetStaticBox();
+    FlatStaticBoxSizer* boxSizer = new FlatStaticBoxSizer(wxVERTICAL, parent, "Rendering Properties");
+    wxStaticBox* staticBox = boxSizer->GetStaticBox();
+    controls.renderingPropertiesBox = staticBox;
     
-    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(2, 5, 5);
-    gridSizer->AddGrowableCol(1);
+    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(2, GRID_COL_GAP, GRID_ROW_GAP);
     
-    gridSizer->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Light Model:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.lightModel = new wxChoice(boxSizer->GetStaticBox(), wxID_ANY);
-    controls.lightModel->Append("BASE_COLOR");
-    controls.lightModel->Append("PHONG");
-    controls.lightModel->SetSelection(1);
-    gridSizer->Add(controls.lightModel, 0, wxEXPAND);
+    std::vector<wxString> lightModelItems = { "BASE_COLOR", "PHONG" };
+    controls.lightModel = createComboBox(staticBox, "Light Model:", lightModelItems, 1);
+    addGridRow(gridSizer, staticBox, "Light Model:", controls.lightModel);
     
-    gridSizer->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Texture Enabled:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.textureEnabled = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "");
-    gridSizer->Add(controls.textureEnabled, 0, wxEXPAND);
+    controls.textureEnabled = new FlatCheckBox(staticBox, wxID_ANY, "Texture Enabled");
+    addGridRow(gridSizer, staticBox, "", controls.textureEnabled);
     
-    gridSizer->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Blend Mode:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.blendMode = new wxChoice(boxSizer->GetStaticBox(), wxID_ANY);
-    controls.blendMode->Append("None");
-    controls.blendMode->Append("Alpha");
-    controls.blendMode->Append("Additive");
-    controls.blendMode->Append("Multiply");
-    controls.blendMode->Append("Screen");
-    controls.blendMode->Append("Overlay");
-    controls.blendMode->SetSelection(0);
-    gridSizer->Add(controls.blendMode, 0, wxEXPAND);
+    std::vector<wxString> blendModeItems = { "None", "Alpha", "Additive", "Multiply", "Screen", "Overlay" };
+    controls.blendMode = createComboBox(staticBox, "Blend Mode:", blendModeItems, 0);
+    addGridRow(gridSizer, staticBox, "Blend Mode:", controls.blendMode);
     
-    boxSizer->Add(gridSizer, 0, wxEXPAND | wxALL, 5);
+    boxSizer->Add(gridSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, BOX_PADDING_SIDE);
     
-    wxStaticLine* line = new wxStaticLine(boxSizer->GetStaticBox());
-    boxSizer->Add(line, 0, wxEXPAND | wxALL, 5);
+    wxStaticLine* line = new wxStaticLine(staticBox);
+    boxSizer->Add(line, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, BOX_PADDING_SIDE);
     
-    wxStaticText* materialLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Material Override:");
-    boxSizer->Add(materialLabel, 0, wxALL, 5);
+    wxStaticText* materialLabel = new wxStaticText(staticBox, wxID_ANY, "Material Override:");
+    boxSizer->Add(materialLabel, 0, wxLEFT | wxRIGHT, BOX_PADDING_SIDE);
     
-    controls.materialOverrideEnabled = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Enable Material Override");
-    boxSizer->Add(controls.materialOverrideEnabled, 0, wxALL, 5);
+    controls.materialOverrideEnabled = new FlatCheckBox(staticBox, wxID_ANY, "Enable Material Override");
+    addCheckBox(boxSizer, controls.materialOverrideEnabled, wxLEFT | wxRIGHT, BOX_PADDING_MIDDLE);
     
-    wxFlexGridSizer* materialGrid = new wxFlexGridSizer(2, 5, 5);
-    materialGrid->AddGrowableCol(1);
+    wxFlexGridSizer* materialGrid = new wxFlexGridSizer(2, GRID_COL_GAP, GRID_ROW_GAP);
     
-    materialGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Ambient Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.materialAmbientColor = new wxButton(boxSizer->GetStaticBox(), wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 25));
-    materialGrid->Add(controls.materialAmbientColor, 0, wxEXPAND);
+    controls.materialAmbientColor = createColorButton(staticBox, "Ambient Color:");
+    addGridRow(materialGrid, staticBox, "Ambient Color:", controls.materialAmbientColor);
     
-    materialGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Diffuse Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.materialDiffuseColor = new wxButton(boxSizer->GetStaticBox(), wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 25));
-    materialGrid->Add(controls.materialDiffuseColor, 0, wxEXPAND);
+    controls.materialDiffuseColor = createColorButton(staticBox, "Diffuse Color:");
+    addGridRow(materialGrid, staticBox, "Diffuse Color:", controls.materialDiffuseColor);
     
-    materialGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Specular Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.materialSpecularColor = new wxButton(boxSizer->GetStaticBox(), wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 25));
-    materialGrid->Add(controls.materialSpecularColor, 0, wxEXPAND);
+    controls.materialSpecularColor = createColorButton(staticBox, "Specular Color:");
+    addGridRow(materialGrid, staticBox, "Specular Color:", controls.materialSpecularColor);
     
-    materialGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Emissive Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.materialEmissiveColor = new wxButton(boxSizer->GetStaticBox(), wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 25));
-    materialGrid->Add(controls.materialEmissiveColor, 0, wxEXPAND);
+    controls.materialEmissiveColor = createColorButton(staticBox, "Emissive Color:");
+    addGridRow(materialGrid, staticBox, "Emissive Color:", controls.materialEmissiveColor);
     
-    materialGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Shininess:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* shininessSizer = new wxBoxSizer(wxHORIZONTAL);
-    controls.materialShininess = new wxSlider(boxSizer->GetStaticBox(), wxID_ANY, 0, 0, 1280, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    controls.materialShininessLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "0.0");
-    controls.materialShininessLabel->SetMinSize(wxSize(50, -1));
-    shininessSizer->Add(controls.materialShininess, 1, wxEXPAND | wxRIGHT, 5);
-    shininessSizer->Add(controls.materialShininessLabel, 0, wxALIGN_CENTER_VERTICAL);
-    materialGrid->Add(shininessSizer, 0, wxEXPAND);
+    wxBoxSizer* shininessSizer = createSliderWithLabel(staticBox, controls.materialShininess, 
+                                                       controls.materialShininessLabel, 0, 0, 1280, "%.1f");
+    addGridRow(materialGrid, staticBox, "Shininess:", shininessSizer);
     
-    materialGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Transparency:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* transparencySizer = new wxBoxSizer(wxHORIZONTAL);
-    controls.materialTransparency = new wxSlider(boxSizer->GetStaticBox(), wxID_ANY, 0, 0, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    controls.materialTransparencyLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "0.00");
-    controls.materialTransparencyLabel->SetMinSize(wxSize(50, -1));
-    transparencySizer->Add(controls.materialTransparency, 1, wxEXPAND | wxRIGHT, 5);
-    transparencySizer->Add(controls.materialTransparencyLabel, 0, wxALIGN_CENTER_VERTICAL);
-    materialGrid->Add(transparencySizer, 0, wxEXPAND);
+    wxBoxSizer* transparencySizer = createSliderWithLabel(staticBox, controls.materialTransparency, 
+                                                          controls.materialTransparencyLabel, 0, 0, 100, "%.2f");
+    addGridRow(materialGrid, staticBox, "Transparency:", transparencySizer);
     
-    boxSizer->Add(materialGrid, 0, wxEXPAND | wxALL, 5);
+    boxSizer->Add(materialGrid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, BOX_PADDING_SIDE);
     
-    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, BOX_PADDING_OUTER);
 }
 
 void DisplayModeConfigDialog::createEdgeConfigPanel(wxPanel* parent, wxSizer* sizer, RenderingConfig::DisplayMode mode)
 {
     ModeControls& controls = m_modeControls[mode];
     
-    wxStaticBoxSizer* boxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Edge Configuration");
-    controls.edgeConfigBox = boxSizer->GetStaticBox();
+    FlatStaticBoxSizer* boxSizer = new FlatStaticBoxSizer(wxVERTICAL, parent, "Edge Configuration");
+    wxStaticBox* staticBox = boxSizer->GetStaticBox();
+    controls.edgeConfigBox = staticBox;
     
-    wxStaticText* originalLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Original Edge:");
-    boxSizer->Add(originalLabel, 0, wxALL, 5);
+    wxStaticText* originalLabel = new wxStaticText(staticBox, wxID_ANY, "Original Edge:");
+    boxSizer->Add(originalLabel, 0, wxLEFT | wxRIGHT | wxTOP, BOX_PADDING_TOP);
     
-    controls.originalEdgeEnabled = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Enable Original Edge");
-    boxSizer->Add(controls.originalEdgeEnabled, 0, wxALL, 5);
+    controls.originalEdgeEnabled = new FlatCheckBox(staticBox, wxID_ANY, "Enable Original Edge");
+    addCheckBox(boxSizer, controls.originalEdgeEnabled, wxLEFT | wxRIGHT, BOX_PADDING_MIDDLE);
     
-    wxFlexGridSizer* originalGrid = new wxFlexGridSizer(2, 5, 5);
-    originalGrid->AddGrowableCol(1);
+    wxFlexGridSizer* originalGrid = new wxFlexGridSizer(2, GRID_COL_GAP, GRID_ROW_GAP);
     
-    originalGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.originalEdgeColor = new wxButton(boxSizer->GetStaticBox(), wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 25));
-    originalGrid->Add(controls.originalEdgeColor, 0, wxEXPAND);
+    controls.originalEdgeColor = createColorButton(staticBox, "Color:");
+    addGridRow(originalGrid, staticBox, "Color:", controls.originalEdgeColor);
     
-    originalGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Width:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* originalWidthSizer = new wxBoxSizer(wxHORIZONTAL);
-    controls.originalEdgeWidth = new wxSlider(boxSizer->GetStaticBox(), wxID_ANY, 10, 1, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    controls.originalEdgeWidthLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "1.0");
-    controls.originalEdgeWidthLabel->SetMinSize(wxSize(50, -1));
-    originalWidthSizer->Add(controls.originalEdgeWidth, 1, wxEXPAND | wxRIGHT, 5);
-    originalWidthSizer->Add(controls.originalEdgeWidthLabel, 0, wxALIGN_CENTER_VERTICAL);
-    originalGrid->Add(originalWidthSizer, 0, wxEXPAND);
+    wxBoxSizer* originalWidthSizer = createSliderWithLabel(staticBox, controls.originalEdgeWidth, 
+                                                           controls.originalEdgeWidthLabel, 10, 1, 100, "%.1f");
+    addGridRow(originalGrid, staticBox, "Width:", originalWidthSizer);
     
-    boxSizer->Add(originalGrid, 0, wxEXPAND | wxALL, 5);
+    boxSizer->Add(originalGrid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, BOX_PADDING_SIDE);
     
-    controls.meshEdgeSeparator = new wxStaticLine(boxSizer->GetStaticBox());
-    boxSizer->Add(controls.meshEdgeSeparator, 0, wxEXPAND | wxALL, 5);
+    controls.meshEdgeSeparator = new wxStaticLine(staticBox);
+    boxSizer->Add(controls.meshEdgeSeparator, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, BOX_PADDING_SIDE);
     
-    controls.meshEdgeLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Mesh Edge:");
-    boxSizer->Add(controls.meshEdgeLabel, 0, wxALL, 5);
+    controls.meshEdgeLabel = new wxStaticText(staticBox, wxID_ANY, "Mesh Edge:");
+    boxSizer->Add(controls.meshEdgeLabel, 0, wxLEFT | wxRIGHT, BOX_PADDING_SIDE);
     
-    controls.meshEdgeEnabled = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Enable Mesh Edge");
-    boxSizer->Add(controls.meshEdgeEnabled, 0, wxALL, 5);
+    controls.meshEdgeEnabled = new FlatCheckBox(staticBox, wxID_ANY, "Enable Mesh Edge");
+    addCheckBox(boxSizer, controls.meshEdgeEnabled, wxLEFT | wxRIGHT, BOX_PADDING_MIDDLE);
     
-    wxFlexGridSizer* meshGrid = new wxFlexGridSizer(2, 5, 5);
-    meshGrid->AddGrowableCol(1);
+    wxFlexGridSizer* meshGrid = new wxFlexGridSizer(2, GRID_COL_GAP, GRID_ROW_GAP);
     
-    meshGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.meshEdgeColor = new wxButton(boxSizer->GetStaticBox(), wxID_ANY, "Choose Color", wxDefaultPosition, wxSize(100, 25));
-    meshGrid->Add(controls.meshEdgeColor, 0, wxEXPAND);
+    controls.meshEdgeColor = createColorButton(staticBox, "Color:");
+    addGridRow(meshGrid, staticBox, "Color:", controls.meshEdgeColor);
     
-    meshGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Width:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* meshWidthSizer = new wxBoxSizer(wxHORIZONTAL);
-    controls.meshEdgeWidth = new wxSlider(boxSizer->GetStaticBox(), wxID_ANY, 10, 1, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    controls.meshEdgeWidthLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "1.0");
-    controls.meshEdgeWidthLabel->SetMinSize(wxSize(50, -1));
-    meshWidthSizer->Add(controls.meshEdgeWidth, 1, wxEXPAND | wxRIGHT, 5);
-    meshWidthSizer->Add(controls.meshEdgeWidthLabel, 0, wxALIGN_CENTER_VERTICAL);
-    meshGrid->Add(meshWidthSizer, 0, wxEXPAND);
+    wxBoxSizer* meshWidthSizer = createSliderWithLabel(staticBox, controls.meshEdgeWidth, 
+                                                      controls.meshEdgeWidthLabel, 10, 1, 100, "%.1f");
+    addGridRow(meshGrid, staticBox, "Width:", meshWidthSizer);
     
-    meshGrid->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Use Effective Color:"), 0, wxALIGN_CENTER_VERTICAL);
-    controls.meshEdgeUseEffectiveColor = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "");
-    meshGrid->Add(controls.meshEdgeUseEffectiveColor, 0, wxEXPAND);
+    controls.meshEdgeUseEffectiveColor = new FlatCheckBox(staticBox, wxID_ANY, "");
+    addGridRow(meshGrid, staticBox, "Effect Color:", controls.meshEdgeUseEffectiveColor);
     
-    boxSizer->Add(meshGrid, 0, wxEXPAND | wxALL, 5);
+    boxSizer->Add(meshGrid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, BOX_PADDING_SIDE);
     
-    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, BOX_PADDING_OUTER);
 }
 
 void DisplayModeConfigDialog::createPostProcessingPanel(wxPanel* parent, wxSizer* sizer, RenderingConfig::DisplayMode mode)
 {
     ModeControls& controls = m_modeControls[mode];
     
-    wxStaticBoxSizer* boxSizer = new wxStaticBoxSizer(wxVERTICAL, parent, "Post-Processing");
-    controls.postProcessingBox = boxSizer->GetStaticBox();
+    FlatStaticBoxSizer* boxSizer = new FlatStaticBoxSizer(wxVERTICAL, parent, "Post-Processing");
+    wxStaticBox* staticBox = boxSizer->GetStaticBox();
+    controls.postProcessingBox = staticBox;
     
-    controls.polygonOffsetEnabled = new wxCheckBox(boxSizer->GetStaticBox(), wxID_ANY, "Enable Polygon Offset");
-    boxSizer->Add(controls.polygonOffsetEnabled, 0, wxALL, 5);
+    controls.polygonOffsetEnabled = new FlatCheckBox(staticBox, wxID_ANY, "Enable Polygon Offset");
+    addCheckBox(boxSizer, controls.polygonOffsetEnabled, wxLEFT | wxRIGHT | wxTOP, BOX_PADDING_TOP);
     
-    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(2, 5, 5);
-    gridSizer->AddGrowableCol(1);
+    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(2, GRID_COL_GAP, GRID_ROW_GAP);
     
-    gridSizer->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Factor:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* factorSizer = new wxBoxSizer(wxHORIZONTAL);
-    controls.polygonOffsetFactor = new wxSlider(boxSizer->GetStaticBox(), wxID_ANY, 0, -100, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    controls.polygonOffsetFactorLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "0.0");
-    controls.polygonOffsetFactorLabel->SetMinSize(wxSize(50, -1));
-    factorSizer->Add(controls.polygonOffsetFactor, 1, wxEXPAND | wxRIGHT, 5);
-    factorSizer->Add(controls.polygonOffsetFactorLabel, 0, wxALIGN_CENTER_VERTICAL);
-    gridSizer->Add(factorSizer, 0, wxEXPAND);
+    wxBoxSizer* factorSizer = createSliderWithLabel(staticBox, controls.polygonOffsetFactor, 
+                                                    controls.polygonOffsetFactorLabel, 0, -100, 100, "%.1f");
+    addGridRow(gridSizer, staticBox, "Factor:", factorSizer);
     
-    gridSizer->Add(new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "Units:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxBoxSizer* unitsSizer = new wxBoxSizer(wxHORIZONTAL);
-    controls.polygonOffsetUnits = new wxSlider(boxSizer->GetStaticBox(), wxID_ANY, 0, -100, 100, wxDefaultPosition, wxDefaultSize, wxSL_HORIZONTAL);
-    controls.polygonOffsetUnitsLabel = new wxStaticText(boxSizer->GetStaticBox(), wxID_ANY, "0.0");
-    controls.polygonOffsetUnitsLabel->SetMinSize(wxSize(50, -1));
-    unitsSizer->Add(controls.polygonOffsetUnits, 1, wxEXPAND | wxRIGHT, 5);
-    unitsSizer->Add(controls.polygonOffsetUnitsLabel, 0, wxALIGN_CENTER_VERTICAL);
-    gridSizer->Add(unitsSizer, 0, wxEXPAND);
+    wxBoxSizer* unitsSizer = createSliderWithLabel(staticBox, controls.polygonOffsetUnits, 
+                                                   controls.polygonOffsetUnitsLabel, 0, -100, 100, "%.1f");
+    addGridRow(gridSizer, staticBox, "Units:", unitsSizer);
     
-    boxSizer->Add(gridSizer, 0, wxEXPAND | wxALL, 5);
+    boxSizer->Add(gridSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, BOX_PADDING_SIDE);
     
-    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, 5);
+    sizer->Add(boxSizer, 0, wxEXPAND | wxALL, BOX_PADDING_OUTER);
 }
 
 void DisplayModeConfigDialog::layoutControls()
@@ -335,7 +344,7 @@ void DisplayModeConfigDialog::layoutControls()
     wxPanel* leftPanel = new wxPanel(m_contentPanel);
     wxBoxSizer* leftSizer = new wxBoxSizer(wxVERTICAL);
     
-    m_notebook = new wxNotebook(leftPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNB_LEFT);
+    m_notebook = new FlatNotebook(leftPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNB_LEFT, wxNotebookNameStr);
     m_notebook->SetMinSize(wxSize(360, -1));
     
     createModePage(RenderingConfig::DisplayMode::NoShading);
@@ -347,7 +356,7 @@ void DisplayModeConfigDialog::layoutControls()
     createModePage(RenderingConfig::DisplayMode::HiddenLine);
     createCustomModePage();
     
-    leftSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 5);
+    leftSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 3);
     leftPanel->SetSizer(leftSizer);
     leftPanel->SetMinSize(wxSize(360, -1));
     
@@ -359,26 +368,26 @@ void DisplayModeConfigDialog::layoutControls()
     labelFont.SetPointSize(labelFont.GetPointSize() + 1);
     labelFont.SetWeight(wxFONTWEIGHT_BOLD);
     previewLabel->SetFont(labelFont);
-    rightSizer->Add(previewLabel, 0, wxALL, 10);
+    rightSizer->Add(previewLabel, 0, wxALL, 5);
     
     m_previewCanvas = new DisplayModePreviewCanvas(rightPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
-    rightSizer->Add(m_previewCanvas, 1, wxEXPAND | wxALL, 5);
+    rightSizer->Add(m_previewCanvas, 1, wxEXPAND | wxALL, 3);
     
     rightPanel->SetSizer(rightSizer);
     
-    contentSizer->Add(leftPanel, 0, wxEXPAND | wxALL, 5);
-    contentSizer->Add(rightPanel, 1, wxEXPAND | wxALL, 5);
+    contentSizer->Add(leftPanel, 0, wxEXPAND | wxALL, 3);
+    contentSizer->Add(rightPanel, 1, wxEXPAND | wxALL, 3);
     
-    mainSizer->Add(contentSizer, 1, wxEXPAND | wxALL, 5);
+    mainSizer->Add(contentSizer, 1, wxEXPAND | wxALL, 3);
     
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    buttonSizer->Add(m_resetButton, 0, wxALL, 5);
+    buttonSizer->Add(m_resetButton, 0, wxALL, 3);
     buttonSizer->AddStretchSpacer();
-    buttonSizer->Add(m_applyButton, 0, wxALL, 5);
-    buttonSizer->Add(m_okButton, 0, wxALL, 5);
-    buttonSizer->Add(m_cancelButton, 0, wxALL, 5);
+    buttonSizer->Add(m_applyButton, 0, wxALL, 3);
+    buttonSizer->Add(m_okButton, 0, wxALL, 3);
+    buttonSizer->Add(m_cancelButton, 0, wxALL, 3);
     
-    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 5);
+    mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 3);
     
     m_contentPanel->SetSizer(mainSizer);
     
@@ -405,15 +414,46 @@ RenderingConfig::DisplayMode DisplayModeConfigDialog::getModeFromPageIndex(int p
     return RenderingConfig::DisplayMode::Solid;
 }
 
+int DisplayModeConfigDialog::getPageIndexFromMode(RenderingConfig::DisplayMode mode) const
+{
+    static const RenderingConfig::DisplayMode modeOrder[] = {
+        RenderingConfig::DisplayMode::NoShading,
+        RenderingConfig::DisplayMode::Points,
+        RenderingConfig::DisplayMode::Wireframe,
+        RenderingConfig::DisplayMode::Solid,
+        RenderingConfig::DisplayMode::FlatLines,
+        RenderingConfig::DisplayMode::Transparent,
+        RenderingConfig::DisplayMode::HiddenLine,
+        RenderingConfig::DisplayMode::Custom
+    };
+    static const int modeOrderSize = 8;
+    
+    for (int i = 0; i < modeOrderSize; ++i) {
+        if (modeOrder[i] == mode) {
+            return i;
+        }
+    }
+    // Default to Solid mode (index 3) if mode not found
+    return 3;
+}
+
 void DisplayModeConfigDialog::bindEvents()
 {
-    m_applyButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onApply, this);
-    m_okButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onOK, this);
-    m_cancelButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onCancel, this);
-    m_resetButton->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onReset, this);
+    m_applyButton->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onApply, this);
+    m_okButton->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onOK, this);
+    m_cancelButton->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onCancel, this);
+    m_resetButton->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onReset, this);
     
     m_notebook->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& event) {
         int currentPage = m_notebook->GetSelection();
+        
+        // Refresh notebook to ensure selected tab is properly highlighted
+        // wxNotebook with wxNB_LEFT style has built-in highlighting for selected tab
+        // Calling Refresh ensures the highlight is properly displayed
+        if (currentPage >= 0 && m_notebook) {
+            m_notebook->Refresh();
+        }
+        
         if (currentPage >= 0) {
             RenderingConfig::DisplayMode mode = this->getModeFromPageIndex(currentPage);
             updateModeVisibility(mode);
@@ -516,14 +556,14 @@ void DisplayModeConfigDialog::bindEvents()
         RenderingConfig::DisplayMode mode = pair.first;
         ModeControls& controls = pair.second;
         
-        controls.materialAmbientColor->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
-        controls.materialDiffuseColor->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
-        controls.materialSpecularColor->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
-        controls.materialEmissiveColor->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
-        controls.originalEdgeColor->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
-        controls.meshEdgeColor->Bind(wxEVT_COMMAND_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
+        controls.materialAmbientColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
+        controls.materialDiffuseColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
+        controls.materialSpecularColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
+        controls.materialEmissiveColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
+        controls.originalEdgeColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
+        controls.meshEdgeColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
         
-        controls.requireSurface->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) {
+        controls.requireSurface->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -531,7 +571,7 @@ void DisplayModeConfigDialog::bindEvents()
                 updatePreview();
             }
         });
-        controls.requireOriginalEdges->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) {
+        controls.requireOriginalEdges->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -546,12 +586,13 @@ void DisplayModeConfigDialog::bindEvents()
                 updatePreview();
             }
         });
-        controls.requireMeshEdges->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.requirePoints->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.lightModel->Bind(wxEVT_COMMAND_CHOICE_SELECTED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.blendMode->Bind(wxEVT_COMMAND_CHOICE_SELECTED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.materialOverrideEnabled->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.materialShininess->Bind(wxEVT_SLIDER, [this, mode](wxCommandEvent&) {
+        controls.requireMeshEdges->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.requirePoints->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.drawStyle->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.lightModel->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.blendMode->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.materialOverrideEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.materialShininess->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -561,7 +602,7 @@ void DisplayModeConfigDialog::bindEvents()
                 updatePreview();
             }
         });
-        controls.materialTransparency->Bind(wxEVT_SLIDER, [this](wxCommandEvent&) {
+        controls.materialTransparency->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -575,11 +616,11 @@ void DisplayModeConfigDialog::bindEvents()
             }
         });
 
-        controls.originalEdgeEnabled->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) {
+        controls.originalEdgeEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) {
             // Update preview normally, but this control is disabled in Solid and FlatLines modes
             updatePreview();
         });
-        controls.originalEdgeWidth->Bind(wxEVT_SLIDER, [this, mode](wxCommandEvent&) {
+        controls.originalEdgeWidth->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -589,8 +630,8 @@ void DisplayModeConfigDialog::bindEvents()
                 updatePreview();
             }
         });
-        controls.meshEdgeEnabled->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.meshEdgeWidth->Bind(wxEVT_SLIDER, [this, mode](wxCommandEvent&) {
+        controls.meshEdgeEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.meshEdgeWidth->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -600,9 +641,9 @@ void DisplayModeConfigDialog::bindEvents()
                 updatePreview();
             }
         });
-        controls.meshEdgeUseEffectiveColor->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.polygonOffsetEnabled->Bind(wxEVT_COMMAND_CHECKBOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.polygonOffsetFactor->Bind(wxEVT_SLIDER, [this, mode](wxCommandEvent&) {
+        controls.meshEdgeUseEffectiveColor->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.polygonOffsetEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.polygonOffsetFactor->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -612,7 +653,7 @@ void DisplayModeConfigDialog::bindEvents()
                 updatePreview();
             }
         });
-        controls.polygonOffsetUnits->Bind(wxEVT_SLIDER, [this, mode](wxCommandEvent&) {
+        controls.polygonOffsetUnits->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
@@ -635,6 +676,33 @@ void DisplayModeConfigDialog::updateControls()
         controls.requireOriginalEdges->SetValue(controls.config.nodes.requireOriginalEdges);
         controls.requireMeshEdges->SetValue(controls.config.nodes.requireMeshEdges);
         controls.requirePoints->SetValue(controls.config.nodes.requirePoints);
+
+        // Set DrawStyle based on rendering configuration
+        if (controls.drawStyle) {
+            bool showSurface = controls.config.nodes.requireSurface;
+            bool showEdges = (controls.config.nodes.requireOriginalEdges && controls.config.edges.originalEdge.enabled) ||
+                           (controls.config.nodes.requireMeshEdges && controls.config.edges.meshEdge.enabled);
+            bool showPoints = controls.config.nodes.requirePoints;
+
+            int drawStyleIndex = 0;
+            if (showPoints && !showEdges && !showSurface) {
+                drawStyleIndex = 2; // POINTS
+            } else if (showEdges && !showPoints && !showSurface) {
+                drawStyleIndex = 1; // LINES
+            } else if (showSurface && !showEdges && !showPoints) {
+                drawStyleIndex = 0; // FILLED
+            } else if (showSurface && showEdges && !showPoints) {
+                drawStyleIndex = 3; // FILLED+LINES
+            } else if (showSurface && showPoints && !showEdges) {
+                drawStyleIndex = 4; // FILLED+POINTS
+            } else if (showEdges && showPoints && !showSurface) {
+                drawStyleIndex = 5; // LINES+POINTS
+            } else if (showSurface && showEdges && showPoints) {
+                drawStyleIndex = 6; // FILLED+LINES+POINTS
+            }
+
+            controls.drawStyle->SetSelection(drawStyleIndex);
+        }
         
         controls.lightModel->SetSelection(static_cast<int>(controls.config.rendering.lightModel));
         controls.textureEnabled->SetValue(controls.config.rendering.textureEnabled);
@@ -701,6 +769,158 @@ void DisplayModeConfigDialog::updateControls()
     }
 }
 
+void DisplayModeConfigDialog::loadAllConfigurations()
+{
+    // Define all display modes to load
+    static const RenderingConfig::DisplayMode modes[] = {
+        RenderingConfig::DisplayMode::NoShading,
+        RenderingConfig::DisplayMode::Points,
+        RenderingConfig::DisplayMode::Wireframe,
+        RenderingConfig::DisplayMode::Solid,
+        RenderingConfig::DisplayMode::FlatLines,
+        RenderingConfig::DisplayMode::Transparent,
+        RenderingConfig::DisplayMode::HiddenLine,
+        RenderingConfig::DisplayMode::Custom
+    };
+    static const int modeCount = 8;
+
+    // Create flat style progress dialog with theme-adapted colors
+    // Use parent window (main frame) instead of this (config dialog) so it can show before config dialog
+    wxWindow* parentWindow = GetParent();
+    if (!parentWindow) {
+        parentWindow = wxTheApp->GetTopWindow();
+    }
+    wxDialog* progressDialog = new wxDialog(parentWindow, wxID_ANY, "Loading Display Modes", 
+                                            wxDefaultPosition, wxSize(400, 150),
+                                            wxNO_BORDER | wxFRAME_SHAPED);
+    
+    // Use PanelDialogBgColour for dialog background, with fallback chain
+    wxColour bgColor = CFG_COLOUR("PanelDialogBgColour");
+    // Check if color is valid and not the error color (red)
+    if (!bgColor.IsOk() || (bgColor.Red() == 255 && bgColor.Green() == 0 && bgColor.Blue() == 0)) {
+        // Try PanelPopupBgColour as fallback
+        bgColor = CFG_COLOUR("PanelPopupBgColour");
+        if (!bgColor.IsOk() || (bgColor.Red() == 255 && bgColor.Green() == 0 && bgColor.Blue() == 0)) {
+            // Try SecondaryBackgroundColour
+            bgColor = CFG_COLOUR("SecondaryBackgroundColour");
+            if (!bgColor.IsOk() || (bgColor.Red() == 255 && bgColor.Green() == 0 && bgColor.Blue() == 0)) {
+                // Final fallback: use a light gray that works in all themes
+                bgColor = wxColour(250, 250, 250);
+            }
+        }
+    }
+    
+    // Create a content panel to ensure background color is properly applied
+    wxPanel* contentPanel = new wxPanel(progressDialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
+    contentPanel->SetBackgroundColour(bgColor);
+    contentPanel->SetDoubleBuffered(true);
+    
+    // Also set dialog background (though content panel will cover it)
+    progressDialog->SetBackgroundColour(bgColor);
+    progressDialog->SetDoubleBuffered(true);
+    
+    wxBoxSizer* progressSizer = new wxBoxSizer(wxVERTICAL);
+    
+    // Title label with theme text color
+    wxStaticText* progressLabel = new wxStaticText(contentPanel, wxID_ANY, 
+                                                   "Loading all display mode configurations...");
+    wxColour textColor = CFG_COLOUR("PrimaryTextColour");
+    if (!textColor.IsOk() || (textColor.Red() == 255 && textColor.Green() == 0 && textColor.Blue() == 0)) {
+        textColor = wxColour(100, 100, 100);  // Fallback to dark gray
+    }
+    progressLabel->SetForegroundColour(textColor);
+    progressSizer->Add(progressLabel, 0, wxALL | wxALIGN_CENTER, 15);
+    
+    // Create flat progress bar (colors are automatically set from theme in InitializeDefaultColors)
+    FlatProgressBar* progressBar = new FlatProgressBar(contentPanel, wxID_ANY, 0, 0, 
+                                                        modeCount,
+                                                        wxDefaultPosition, wxSize(350, 25),
+                                                        FlatProgressBar::ProgressBarStyle::MODERN_LINEAR);
+    progressBar->SetShowPercentage(true);
+    progressBar->SetTextFollowProgress(true);
+    progressBar->SetCornerRadius(12);
+    // Progress bar colors are already theme-adapted via InitializeDefaultColors:
+    // - Background: SecondaryBackgroundColour
+    // - Progress: AccentColour
+    // - Text: PrimaryTextColour
+    progressSizer->Add(progressBar, 0, wxALL | wxALIGN_CENTER, 15);
+    
+    // Status label with theme text color
+    wxStaticText* statusLabel = new wxStaticText(contentPanel, wxID_ANY, "");
+    statusLabel->SetForegroundColour(textColor);
+    progressSizer->Add(statusLabel, 0, wxALL | wxALIGN_CENTER, 10);
+    
+    // Set sizer for content panel
+    contentPanel->SetSizer(progressSizer);
+    
+    // Create dialog sizer to hold content panel
+    wxBoxSizer* dialogSizer = new wxBoxSizer(wxVERTICAL);
+    dialogSizer->Add(contentPanel, 1, wxEXPAND);
+    progressDialog->SetSizer(dialogSizer);
+    progressDialog->Layout();
+    progressDialog->CentreOnParent();
+    // Show progress dialog first (before config dialog)
+    progressDialog->Show();
+    wxSafeYield();  // Allow progress dialog to render
+
+    int currentProgress = 0;
+    
+    // Load all display mode configurations
+    for (int i = 0; i < modeCount; ++i) {
+        RenderingConfig::DisplayMode mode = modes[i];
+        
+        // Update progress bar
+        progressBar->SetValue(currentProgress);
+        
+        // Get mode name for status label
+        wxString modeName;
+        switch (mode) {
+        case RenderingConfig::DisplayMode::NoShading:
+            modeName = "No Shading";
+            break;
+        case RenderingConfig::DisplayMode::Points:
+            modeName = "Points";
+            break;
+        case RenderingConfig::DisplayMode::Wireframe:
+            modeName = "Wireframe";
+            break;
+        case RenderingConfig::DisplayMode::Solid:
+            modeName = "Solid";
+            break;
+        case RenderingConfig::DisplayMode::FlatLines:
+            modeName = "Flat Lines";
+            break;
+        case RenderingConfig::DisplayMode::Transparent:
+            modeName = "Transparent";
+            break;
+        case RenderingConfig::DisplayMode::HiddenLine:
+            modeName = "Hidden Line";
+            break;
+        case RenderingConfig::DisplayMode::Custom:
+            modeName = "Custom";
+            break;
+        }
+        
+        statusLabel->SetLabel("Loading: " + modeName);
+        progressDialog->Refresh();
+        wxSafeYield();  // Allow UI to update
+
+        // Load configuration for this mode
+        loadConfigForMode(mode);
+
+        currentProgress++;
+    }
+
+    // Complete progress
+    progressBar->SetValue(modeCount);
+    statusLabel->SetLabel("Display mode configurations loaded successfully");
+    progressDialog->Refresh();
+    wxSafeYield();
+    wxMilliSleep(300);  // Brief pause to show completion
+    
+    progressDialog->Destroy();
+}
+
 void DisplayModeConfigDialog::loadConfigForMode(RenderingConfig::DisplayMode mode)
 {
     ModeControls& controls = m_modeControls[mode];
@@ -716,17 +936,71 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
 {
     ModeControls& controls = m_modeControls[mode];
     
-    if (controls.requireSurface && controls.requireSurface->IsShown()) {
-        controls.config.nodes.requireSurface = controls.requireSurface->GetValue();
-    }
-    if (controls.requireOriginalEdges && controls.requireOriginalEdges->IsShown()) {
-        controls.config.nodes.requireOriginalEdges = controls.requireOriginalEdges->GetValue();
-    }
-    if (controls.requireMeshEdges && controls.requireMeshEdges->IsShown()) {
-        controls.config.nodes.requireMeshEdges = controls.requireMeshEdges->GetValue();
-    }
-    if (controls.requirePoints && controls.requirePoints->IsShown()) {
-        controls.config.nodes.requirePoints = controls.requirePoints->GetValue();
+    // In the new single geometry architecture for testing, DrawStyle controls multi-pass rendering
+    // This allows testing surface/edges/points rendering from a single SoIndexedFaceSet using DrawStyle
+    // The actual rendering is done in multiple passes in DisplayModePreviewCanvas::onPaint()
+    if (controls.drawStyle && controls.drawStyle->IsShown()) {
+        int drawStyleIndex = controls.drawStyle->GetSelection();
+
+        // Reset all requirements first
+        controls.config.nodes.requireSurface = false;
+        controls.config.nodes.requireOriginalEdges = false;
+        controls.config.nodes.requireMeshEdges = false;
+        controls.config.nodes.requirePoints = false;
+
+        // Set requirements based on DrawStyle selection
+        switch (drawStyleIndex) {
+        case 0: // FILLED - Surface
+            controls.config.nodes.requireSurface = true;
+            break;
+        case 1: // LINES - Edges
+            controls.config.nodes.requireOriginalEdges = true;
+            controls.config.edges.originalEdge.enabled = true;
+            break;
+        case 2: // POINTS - Points
+            controls.config.nodes.requirePoints = true;
+            break;
+        case 3: // FILLED+LINES - Surface+Edges
+            controls.config.nodes.requireSurface = true;
+            controls.config.nodes.requireOriginalEdges = true;
+            controls.config.edges.originalEdge.enabled = true;
+            break;
+        case 4: // FILLED+POINTS - Surface+Points
+            controls.config.nodes.requireSurface = true;
+            controls.config.nodes.requirePoints = true;
+            break;
+        case 5: // LINES+POINTS - Edges+Points
+            controls.config.nodes.requireOriginalEdges = true;
+            controls.config.edges.originalEdge.enabled = true;
+            controls.config.nodes.requirePoints = true;
+            break;
+        case 6: // FILLED+LINES+POINTS - All
+            controls.config.nodes.requireSurface = true;
+            controls.config.nodes.requireOriginalEdges = true;
+            controls.config.edges.originalEdge.enabled = true;
+            controls.config.nodes.requirePoints = true;
+            break;
+        }
+
+        // Update individual checkboxes to reflect DrawStyle selection
+        if (controls.requireSurface) controls.requireSurface->SetValue(controls.config.nodes.requireSurface);
+        if (controls.requireOriginalEdges) controls.requireOriginalEdges->SetValue(controls.config.nodes.requireOriginalEdges);
+        if (controls.requireMeshEdges) controls.requireMeshEdges->SetValue(controls.config.nodes.requireMeshEdges);
+        if (controls.requirePoints) controls.requirePoints->SetValue(controls.config.nodes.requirePoints);
+    } else {
+        // Fallback to individual checkbox control (legacy behavior)
+        if (controls.requireSurface && controls.requireSurface->IsShown()) {
+            controls.config.nodes.requireSurface = controls.requireSurface->GetValue();
+        }
+        if (controls.requireOriginalEdges && controls.requireOriginalEdges->IsShown()) {
+            controls.config.nodes.requireOriginalEdges = controls.requireOriginalEdges->GetValue();
+        }
+        if (controls.requireMeshEdges && controls.requireMeshEdges->IsShown()) {
+            controls.config.nodes.requireMeshEdges = controls.requireMeshEdges->GetValue();
+        }
+        if (controls.requirePoints && controls.requirePoints->IsShown()) {
+            controls.config.nodes.requirePoints = controls.requirePoints->GetValue();
+        }
     }
     
     if (controls.lightModel && controls.lightModel->IsShown()) {
@@ -752,19 +1026,19 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
     if (controls.materialOverrideEnabled && controls.materialOverrideEnabled->IsShown()) {
         controls.config.rendering.materialOverride.enabled = controls.materialOverrideEnabled->GetValue();
     }
-    wxColour ambientColour = controls.materialAmbientColor->GetBackgroundColour();
+    wxColour ambientColour = controls.materialAmbientColor->GetBackgroundColor();
     if (ambientColour.IsOk()) {
         controls.config.rendering.materialOverride.ambientColor = wxColourToQuantityColor(ambientColour);
     }
-    wxColour diffuseColour = controls.materialDiffuseColor->GetBackgroundColour();
+    wxColour diffuseColour = controls.materialDiffuseColor->GetBackgroundColor();
     if (diffuseColour.IsOk()) {
         controls.config.rendering.materialOverride.diffuseColor = wxColourToQuantityColor(diffuseColour);
     }
-    wxColour specularColour = controls.materialSpecularColor->GetBackgroundColour();
+    wxColour specularColour = controls.materialSpecularColor->GetBackgroundColor();
     if (specularColour.IsOk()) {
         controls.config.rendering.materialOverride.specularColor = wxColourToQuantityColor(specularColour);
     }
-    wxColour emissiveColour = controls.materialEmissiveColor->GetBackgroundColour();
+    wxColour emissiveColour = controls.materialEmissiveColor->GetBackgroundColor();
     if (emissiveColour.IsOk()) {
         controls.config.rendering.materialOverride.emissiveColor = wxColourToQuantityColor(emissiveColour);
     }
@@ -790,7 +1064,7 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
         }
     }
     if (controls.originalEdgeColor && controls.originalEdgeColor->IsShown()) {
-        wxColour originalEdgeColour = controls.originalEdgeColor->GetBackgroundColour();
+        wxColour originalEdgeColour = controls.originalEdgeColor->GetBackgroundColor();
         if (originalEdgeColour.IsOk()) {
             controls.config.edges.originalEdge.color = wxColourToQuantityColor(originalEdgeColour);
         }
@@ -803,7 +1077,7 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
         controls.config.edges.meshEdge.enabled = controls.meshEdgeEnabled->GetValue();
     }
     if (controls.meshEdgeColor && controls.meshEdgeColor->IsShown()) {
-        wxColour meshEdgeColour = controls.meshEdgeColor->GetBackgroundColour();
+        wxColour meshEdgeColour = controls.meshEdgeColor->GetBackgroundColor();
         if (meshEdgeColour.IsOk()) {
             controls.config.edges.meshEdge.color = wxColourToQuantityColor(meshEdgeColour);
         }
@@ -832,19 +1106,22 @@ Quantity_Color DisplayModeConfigDialog::wxColourToQuantityColor(const wxColour& 
     return Quantity_Color(color.Red() / 255.0, color.Green() / 255.0, color.Blue() / 255.0, Quantity_TOC_RGB);
 }
 
-void DisplayModeConfigDialog::updateColorButton(wxButton* button, const wxColour& color)
+void DisplayModeConfigDialog::updateColorButton(FlatButton* button, const wxColour& color)
 {
-    button->SetBackgroundColour(color);
-    button->SetForegroundColour(wxColour(255 - color.Red(), 255 - color.Green(), 255 - color.Blue()));
+    if (!button) return;
+    button->SetBackgroundColor(color);
+    // Set text color to contrast with background
+    wxColour textColor = wxColour(255 - color.Red(), 255 - color.Green(), 255 - color.Blue());
+    button->SetTextColor(textColor);
     button->Refresh();
 }
 
 void DisplayModeConfigDialog::onColorButtonClicked(wxCommandEvent& event)
 {
-    wxButton* button = dynamic_cast<wxButton*>(event.GetEventObject());
+    FlatButton* button = dynamic_cast<FlatButton*>(event.GetEventObject());
     if (!button) return;
     
-    wxColour currentColor = button->GetBackgroundColour();
+    wxColour currentColor = button->GetBackgroundColor();
     wxColour newColor = getColorFromDialog(currentColor);
     
     if (newColor.IsOk()) {
@@ -936,7 +1213,7 @@ void DisplayModeConfigDialog::createCustomModePage()
     createPostProcessingPanel(scrolled, scrolledSizer, m_customModeKey);
     
     scrolledSizer->Fit(scrolled);
-    mainSizer->Add(scrolled, 1, wxEXPAND | wxALL, 5);
+    mainSizer->Add(scrolled, 1, wxEXPAND | wxALL, 3);
     customPage->SetSizer(mainSizer);
     
     m_notebook->AddPage(customPage, "Custom");
@@ -948,12 +1225,15 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
     
     bool showAll = (mode == RenderingConfig::DisplayMode::Solid);
     
+    // In the new single geometry architecture, use DrawStyle instead of individual checkboxes
+    // Hide individual checkboxes and show DrawStyle control
+    if (controls.requireSurface) controls.requireSurface->Show(false);
+    if (controls.requireOriginalEdges) controls.requireOriginalEdges->Show(false);
+    if (controls.requireMeshEdges) controls.requireMeshEdges->Show(false);
+    if (controls.requirePoints) controls.requirePoints->Show(false);
+    if (controls.drawStyle) controls.drawStyle->Show(true);
+
     switch (mode) {
-    case RenderingConfig::DisplayMode::NoShading:
-        if (controls.requireSurface) controls.requireSurface->Show(true);
-        if (controls.requireOriginalEdges) controls.requireOriginalEdges->Show(true);
-        if (controls.requireMeshEdges) controls.requireMeshEdges->Show(false);
-        if (controls.requirePoints) controls.requirePoints->Show(false);
         
         if (controls.lightModel) controls.lightModel->Show(true);
         if (controls.textureEnabled) controls.textureEnabled->Show(false);
@@ -1272,5 +1552,77 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
     if (controls.page) {
         controls.page->Layout();
     }
+}
+
+// Layout helper functions implementation
+FlatComboBox* DisplayModeConfigDialog::createComboBox(wxWindow* parent, const wxString& label, 
+                                                       const std::vector<wxString>& items, int defaultSelection)
+{
+    FlatComboBox* combo = new FlatComboBox(parent, wxID_ANY);
+    for (const auto& item : items) {
+        combo->Append(item);
+    }
+    if (defaultSelection >= 0 && defaultSelection < static_cast<int>(items.size())) {
+        combo->SetSelection(defaultSelection);
+    }
+    combo->SetMinSize(wxSize(COMBOBOX_WIDTH, -1));
+    return combo;
+}
+
+FlatButton* DisplayModeConfigDialog::createColorButton(wxWindow* parent, const wxString& label)
+{
+    return new FlatButton(parent, wxID_ANY, "Choose Color", wxDefaultPosition, 
+                         wxSize(BUTTON_WIDTH, CONTROL_HEIGHT), FlatButton::ButtonStyle::OUTLINE);
+}
+
+wxBoxSizer* DisplayModeConfigDialog::createSliderWithLabel(wxWindow* parent, FlatSlider*& slider, 
+                                                           wxStaticText*& label, int value, int minValue, 
+                                                           int maxValue, const wxString& format)
+{
+    slider = new FlatSlider(parent, wxID_ANY, value, minValue, maxValue);
+    slider->SetMinSize(wxSize(SLIDER_WIDTH, -1));
+    
+    wxString labelText;
+    if (format == "%.1f") {
+        labelText = wxString::Format("%.1f", static_cast<double>(value));
+    } else if (format == "%.2f") {
+        labelText = wxString::Format("%.2f", static_cast<double>(value));
+    } else {
+        labelText = wxString::Format("%d", value);
+    }
+    label = new wxStaticText(parent, wxID_ANY, labelText);
+    label->SetMinSize(wxSize(LABEL_WIDTH, -1));
+    
+    wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
+    sizer->Add(slider, 0, wxRIGHT, 3);
+    sizer->Add(label, 0, wxALIGN_CENTER_VERTICAL);
+    return sizer;
+}
+
+void DisplayModeConfigDialog::addGridRow(wxFlexGridSizer* grid, wxWindow* parent, 
+                                         const wxString& label, wxWindow* control)
+{
+    if (!label.IsEmpty()) {
+        grid->Add(new wxStaticText(parent, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL);
+    } else {
+        grid->Add(new wxStaticText(parent, wxID_ANY, ""), 0, wxALIGN_CENTER_VERTICAL);
+    }
+    grid->Add(control, 0);
+}
+
+void DisplayModeConfigDialog::addGridRow(wxFlexGridSizer* grid, wxWindow* parent, 
+                                         const wxString& label, wxSizer* sizer)
+{
+    if (!label.IsEmpty()) {
+        grid->Add(new wxStaticText(parent, wxID_ANY, label), 0, wxALIGN_CENTER_VERTICAL);
+    } else {
+        grid->Add(new wxStaticText(parent, wxID_ANY, ""), 0, wxALIGN_CENTER_VERTICAL);
+    }
+    grid->Add(sizer, 0);
+}
+
+void DisplayModeConfigDialog::addCheckBox(wxSizer* sizer, FlatCheckBox* checkbox, int flags, int border)
+{
+    sizer->Add(checkbox, 0, flags, border);
 }
 

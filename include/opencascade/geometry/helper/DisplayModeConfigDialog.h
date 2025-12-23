@@ -21,12 +21,16 @@
 #include "config/RenderingConfig.h"
 #include "widgets/FramelessModalPopup.h"
 #include "opencascade/geometry/helper/DisplayModePreviewCanvas.h"
+#include "widgets/FlatButton.h"
+#include "widgets/FlatCheckBox.h"
+#include "widgets/FlatComboBox.h"
+#include "widgets/FlatSlider.h"
 #include <map>
 
 class DisplayModeConfigDialog : public FramelessModalPopup
 {
 public:
-    DisplayModeConfigDialog(wxWindow* parent);
+    DisplayModeConfigDialog(wxWindow* parent, RenderingConfig::DisplayMode initialMode = RenderingConfig::DisplayMode::Solid);
     virtual ~DisplayModeConfigDialog();
 
     DisplayModeConfig getConfig(RenderingConfig::DisplayMode mode) const;
@@ -46,15 +50,26 @@ private:
     void createEdgeConfigPanel(wxPanel* parent, wxSizer* sizer, RenderingConfig::DisplayMode mode);
     void createPostProcessingPanel(wxPanel* parent, wxSizer* sizer, RenderingConfig::DisplayMode mode);
     
+    // Layout helper functions
+    FlatComboBox* createComboBox(wxWindow* parent, const wxString& label, const std::vector<wxString>& items, int defaultSelection = 0);
+    FlatButton* createColorButton(wxWindow* parent, const wxString& label);
+    wxBoxSizer* createSliderWithLabel(wxWindow* parent, FlatSlider*& slider, wxStaticText*& label, 
+                                      int value, int minValue, int maxValue, const wxString& format = "%.1f");
+    void addGridRow(wxFlexGridSizer* grid, wxWindow* parent, const wxString& label, wxWindow* control);
+    void addGridRow(wxFlexGridSizer* grid, wxWindow* parent, const wxString& label, wxSizer* sizer);
+    void addCheckBox(wxSizer* sizer, FlatCheckBox* checkbox, int flags = wxLEFT | wxRIGHT, int border = 3);
+    
+    void loadAllConfigurations();
     void loadConfigForMode(RenderingConfig::DisplayMode mode);
     void saveConfigForMode(RenderingConfig::DisplayMode mode);
     void updateConfigFromControls(RenderingConfig::DisplayMode mode);
     
     RenderingConfig::DisplayMode getModeFromPageIndex(int pageIndex) const;
+    int getPageIndexFromMode(RenderingConfig::DisplayMode mode) const;
     
     wxColour quantityColorToWxColour(const Quantity_Color& color) const;
     Quantity_Color wxColourToQuantityColor(const wxColour& color) const;
-    void updateColorButton(wxButton* button, const wxColour& color);
+    void updateColorButton(FlatButton* button, const wxColour& color);
     
     void onColorButtonClicked(wxCommandEvent& event);
     void onApply(wxCommandEvent& event);
@@ -74,42 +89,44 @@ private:
         wxStaticBox* edgeConfigBox;
         wxStaticBox* postProcessingBox;
         
-        wxCheckBox* requireSurface;
-        wxCheckBox* requireOriginalEdges;
-        wxCheckBox* requireMeshEdges;
-        wxCheckBox* requirePoints;
+        FlatCheckBox* requireSurface;
+        FlatCheckBox* requireOriginalEdges;
+        FlatCheckBox* requireMeshEdges;
+        FlatCheckBox* requirePoints;
+
+        FlatComboBox* drawStyle;
         
-        wxChoice* lightModel;
-        wxCheckBox* textureEnabled;
-        wxChoice* blendMode;
+        FlatComboBox* lightModel;
+        FlatCheckBox* textureEnabled;
+        FlatComboBox* blendMode;
         
-        wxCheckBox* materialOverrideEnabled;
-        wxButton* materialAmbientColor;
-        wxButton* materialDiffuseColor;
-        wxButton* materialSpecularColor;
-        wxButton* materialEmissiveColor;
-        wxSlider* materialShininess;
+        FlatCheckBox* materialOverrideEnabled;
+        FlatButton* materialAmbientColor;
+        FlatButton* materialDiffuseColor;
+        FlatButton* materialSpecularColor;
+        FlatButton* materialEmissiveColor;
+        FlatSlider* materialShininess;
         wxStaticText* materialShininessLabel;
-        wxSlider* materialTransparency;
+        FlatSlider* materialTransparency;
         wxStaticText* materialTransparencyLabel;
         
-        wxCheckBox* originalEdgeEnabled;
-        wxButton* originalEdgeColor;
-        wxSlider* originalEdgeWidth;
+        FlatCheckBox* originalEdgeEnabled;
+        FlatButton* originalEdgeColor;
+        FlatSlider* originalEdgeWidth;
         wxStaticText* originalEdgeWidthLabel;
         
         wxStaticLine* meshEdgeSeparator;
         wxStaticText* meshEdgeLabel;
-        wxCheckBox* meshEdgeEnabled;
-        wxButton* meshEdgeColor;
-        wxSlider* meshEdgeWidth;
+        FlatCheckBox* meshEdgeEnabled;
+        FlatButton* meshEdgeColor;
+        FlatSlider* meshEdgeWidth;
         wxStaticText* meshEdgeWidthLabel;
-        wxCheckBox* meshEdgeUseEffectiveColor;
+        FlatCheckBox* meshEdgeUseEffectiveColor;
         
-        wxCheckBox* polygonOffsetEnabled;
-        wxSlider* polygonOffsetFactor;
+        FlatCheckBox* polygonOffsetEnabled;
+        FlatSlider* polygonOffsetFactor;
         wxStaticText* polygonOffsetFactorLabel;
-        wxSlider* polygonOffsetUnits;
+        FlatSlider* polygonOffsetUnits;
         wxStaticText* polygonOffsetUnitsLabel;
         
         DisplayModeConfig config;
@@ -119,10 +136,10 @@ private:
     RenderingConfig::DisplayMode m_customModeKey;
     GeometryRenderContext m_defaultContext;
     
-    wxButton* m_applyButton;
-    wxButton* m_okButton;
-    wxButton* m_cancelButton;
-    wxButton* m_resetButton;
+    FlatButton* m_applyButton;
+    FlatButton* m_okButton;
+    FlatButton* m_cancelButton;
+    FlatButton* m_resetButton;
     
     wxSplitterWindow* m_splitter;
     DisplayModePreviewCanvas* m_previewCanvas;

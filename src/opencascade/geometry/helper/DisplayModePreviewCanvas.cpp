@@ -62,10 +62,10 @@ DisplayModePreviewCanvas::DisplayModePreviewCanvas(wxWindow* parent, wxWindowID 
     : wxGLCanvas(parent, id, nullptr, pos, size, wxWANTS_CHARS) {
     
     SoDB::init();
-    
+
     m_glContext = new wxGLContext(this);
     m_edgeComponent = std::make_unique<ModularEdgeComponent>();
-    m_pointViewBuilder = std::make_unique<PointViewBuilder>();
+    m_pointViewBuilder = std::make_unique<helper::PointViewBuilder>();
     initializeScene();
     Refresh(false);
 }
@@ -79,12 +79,6 @@ DisplayModePreviewCanvas::~DisplayModePreviewCanvas() {
     }
     if (m_surfaceNode) {
         m_surfaceNode->unref();
-    }
-    if (m_edgesNode) {
-        m_edgesNode->unref();
-    }
-    if (m_pointsNode) {
-        m_pointsNode->unref();
     }
     if (m_geometryRoot) {
         m_geometryRoot->unref();
@@ -109,12 +103,6 @@ DisplayModePreviewCanvas::~DisplayModePreviewCanvas() {
     }
     if (m_surfaceSwitch) {
         m_surfaceSwitch->unref();
-    }
-    if (m_edgesSwitch) {
-        m_edgesSwitch->unref();
-    }
-    if (m_pointsSwitch) {
-        m_pointsSwitch->unref();
     }
 }
 
@@ -226,26 +214,10 @@ void DisplayModePreviewCanvas::createGeometry() {
     m_polygonOffset->ref();
     m_surfaceNode->addChild(m_polygonOffset);
     
-    m_edgesNode = new SoSeparator;
-    m_edgesNode->ref();
-    
-    m_pointsNode = new SoSeparator;
-    m_pointsNode->ref();
-    
     m_surfaceSwitch = new SoSwitch;
     m_surfaceSwitch->ref();
     m_surfaceSwitch->addChild(m_geometryRoot);
     m_sceneRoot->addChild(m_surfaceSwitch);
-    
-    m_edgesSwitch = new SoSwitch;
-    m_edgesSwitch->ref();
-    m_edgesSwitch->addChild(m_edgesNode);
-    m_sceneRoot->addChild(m_edgesSwitch);
-    
-    m_pointsSwitch = new SoSwitch;
-    m_pointsSwitch->ref();
-    m_pointsSwitch->addChild(m_pointsNode);
-    m_sceneRoot->addChild(m_pointsSwitch);
     
     wxString stepPath;
     std::vector<wxString> searchedPaths;
@@ -374,7 +346,37 @@ void DisplayModePreviewCanvas::createGeometry() {
         
         m_surfaceNode->addChild(stepGeometry);
         LOG_INF_S("Surface geometry added to scene with polygon offset");
-        
+
+        // Extract topological edges from the BRep shape for non-HiddenLine modes
+        // HiddenLine mode will use mesh edges instead for better performance
+        if (m_edgeComponent) {
+            LOG_INF_S("Extracting topological edges from BRep shape for preview...");
+
+            // Extract original edges (topological edges from BRep)
+            m_edgeComponent->extractOriginalEdges(
+                shape,
+                80.0,  // sampling density
+                0.01,  // minimum length
+                false, // show lines only
+                Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB), // black edges
+                1.0,  // width
+                false, // don't highlight intersection nodes
+                Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB), // red intersection nodes
+                3.0   // intersection node size
+            );
+
+            // Initially disable all edge types - they will be enabled based on display mode
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, false);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
+
+            LOG_INF_S("Topological edges extracted successfully for preview");
+        }
+
         SetCurrent(*m_glContext);
         SbViewportRegion viewport(100, 100);
         SoGetBoundingBoxAction bboxAction(viewport);
@@ -504,128 +506,127 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
         }
     }
     
-    m_needsRedraw = true;
-    
-    int surfaceSwitchValue = config.nodes.requireSurface ? 0 : -1;
-    m_surfaceSwitch->whichChild.setValue(surfaceSwitchValue);
-    LOG_INF_S("updateGeometryFromConfig: Surface switch set to " + std::to_string(surfaceSwitchValue) + 
-              " (requireSurface=" + (config.nodes.requireSurface ? "true" : "false") + ")");
-    
-    if (m_shape.IsNull() || !m_mesh) {
-        LOG_WRN_S("updateGeometryFromConfig: Shape or mesh not available");
-        m_needsRedraw = true;
-        Refresh();
-        return;
-    }
-    
-    m_edgesNode->removeAllChildren();
-    
-    bool showOriginalEdges = config.nodes.requireOriginalEdges && config.edges.originalEdge.enabled;
-    bool showMeshEdges = config.nodes.requireMeshEdges && config.edges.meshEdge.enabled;
-    
-    LOG_INF_S("updateGeometryFromConfig: requireOriginalEdges=" + std::string(config.nodes.requireOriginalEdges ? "true" : "false") +
-              ", originalEdge.enabled=" + std::string(config.edges.originalEdge.enabled ? "true" : "false") +
-              ", showOriginalEdges=" + std::string(showOriginalEdges ? "true" : "false"));
-    
-    if (showOriginalEdges || showMeshEdges) {
-        if (m_edgeComponent) {
-            if (showOriginalEdges) {
-                if (!m_edgeComponent->getEdgeNode(EdgeType::Original)) {
-                    double samplingDensity = 80.0;
-                    double minLength = 0.01;
-                    
-                    if (m_meshParams.deflection > 0.0) {
-                        minLength = m_meshParams.deflection * 0.5;
-                        samplingDensity = 1.0 / m_meshParams.deflection;
-                        if (samplingDensity < 20.0) samplingDensity = 20.0;
-                        if (samplingDensity > 200.0) samplingDensity = 200.0;
-                        LOG_INF_S("Edge sampling adjusted to match surface: density=" + std::to_string(samplingDensity) + ", minLength=" + std::to_string(minLength));
-                    }
-                    
-                    m_edgeComponent->extractOriginalEdges(m_shape,
-                                                          samplingDensity, minLength, false,
-                                                          config.edges.originalEdge.color,
-                                                          config.edges.originalEdge.width,
-                                                          false,
-                                                          Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB),
-                                                          3.0);
-                }
-                // Apply appearance (color and width) to edges even if they already exist
-                // This ensures that configuration changes are reflected in the display
-                if (m_edgeComponent->getEdgeNode(EdgeType::Original)) {
-                    m_edgeComponent->applyAppearanceToEdgeNode(EdgeType::Original,
-                                                               config.edges.originalEdge.color,
-                                                               config.edges.originalEdge.width,
-                                                               0);
-                }
-                m_edgeComponent->setEdgeDisplayType(EdgeType::Original, true);
-                m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, false);
-            } else if (showMeshEdges && m_mesh && !m_mesh->triangles.empty()) {
-                if (!m_edgeComponent->getEdgeNode(EdgeType::Mesh)) {
-                    Quantity_Color edgeColor = config.edges.meshEdge.color;
-                    if (config.edges.meshEdge.useEffectiveColor) {
-                        if (edgeColor.Red() > 0.4 && edgeColor.Green() > 0.4 && edgeColor.Blue() > 0.4) {
-                            edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-                        }
-                    }
-                    m_edgeComponent->extractMeshEdges(*m_mesh, edgeColor, config.edges.meshEdge.width);
-                }
-                // Apply appearance (color and width) to mesh edges even if they already exist
-                // This ensures that configuration changes are reflected in the display
-                if (m_edgeComponent->getEdgeNode(EdgeType::Mesh)) {
-                    Quantity_Color edgeColor = config.edges.meshEdge.color;
-                    if (config.edges.meshEdge.useEffectiveColor) {
-                        if (edgeColor.Red() > 0.4 && edgeColor.Green() > 0.4 && edgeColor.Blue() > 0.4) {
-                            edgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
-                        }
-                    }
-                    m_edgeComponent->applyAppearanceToEdgeNode(EdgeType::Mesh,
-                                                               edgeColor,
-                                                               config.edges.meshEdge.width,
-                                                               0);
-                }
-                m_edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
-                m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, true);
-            }
-            
-            // Use configured polygon offset values if enabled
-            if (config.postProcessing.polygonOffset.enabled) {
-                SoPolygonOffset* edgePolygonOffset = new SoPolygonOffset();
-                edgePolygonOffset->factor.setValue((float)config.postProcessing.polygonOffset.factor);
-                edgePolygonOffset->units.setValue((float)config.postProcessing.polygonOffset.units);
-                edgePolygonOffset->styles.setValue(SoPolygonOffset::LINES);
-                m_edgesNode->addChild(edgePolygonOffset);
-            } else {
-                // Default behavior: use negative offset to bring edges forward
-                SoPolygonOffset* edgePolygonOffset = new SoPolygonOffset();
-                edgePolygonOffset->factor.setValue(-1.0f);
-                edgePolygonOffset->units.setValue(-1.0f);
-                edgePolygonOffset->styles.setValue(SoPolygonOffset::LINES);
-                m_edgesNode->addChild(edgePolygonOffset);
-            }
-            
-            m_edgeComponent->updateEdgeDisplay(m_edgesNode);
+    // Configure DrawStyle based on DrawStyle selection for single geometry with multiple render passes
+    // This new architecture uses DrawStyle to control what gets rendered in multi-pass approach
+    if (m_drawStyle) {
+        // Get DrawStyle selection from config (this should come from DisplayModeConfigDialog)
+        int drawStyleIndex = 0; // Default to FILLED
+        // Note: The actual drawStyle selection logic should be moved to DisplayModeConfigDialog
+        // For now, we determine it from the node requirements
+
+        bool showSurface = config.nodes.requireSurface;
+        bool showEdges = config.nodes.requireOriginalEdges || config.nodes.requireMeshEdges;
+        bool showPoints = config.nodes.requirePoints;
+
+        // For single geometry approach, we use DrawStyle to determine base rendering mode
+        // The actual multi-pass rendering is handled in onPaint()
+        if (showPoints && !showEdges && !showSurface) {
+            // Points only mode - single pass
+            m_drawStyle->style.setValue(SoDrawStyle::POINTS);
+            LOG_INF_S("updateGeometryFromConfig: DrawStyle set to POINTS (single pass)");
+            m_showSurface = false;
+            m_showEdges = false;
+            m_showPoints = true;
+        } else if (showEdges && !showPoints && !showSurface) {
+            // Edges only mode - single pass
+            m_drawStyle->style.setValue(SoDrawStyle::LINES);
+            LOG_INF_S("updateGeometryFromConfig: DrawStyle set to LINES (single pass)");
+            m_showSurface = false;
+            m_showEdges = true;
+            m_showPoints = false;
+        } else if (showSurface && !showEdges && !showPoints) {
+            // Surface only mode - single pass
+            m_drawStyle->style.setValue(SoDrawStyle::FILLED);
+            LOG_INF_S("updateGeometryFromConfig: DrawStyle set to FILLED (single pass)");
+            m_showSurface = true;
+            m_showEdges = false;
+            m_showPoints = false;
+        } else {
+            // Multi-pass modes: surface + edges, surface + points, edges + points, or all three
+            // Base DrawStyle is set to FILLED, actual rendering handled in onPaint()
+            m_drawStyle->style.setValue(SoDrawStyle::FILLED);
+            LOG_INF_S("updateGeometryFromConfig: DrawStyle set to FILLED (multi-pass mode)");
+            m_showSurface = showSurface;
+            m_showEdges = showEdges;
+            m_showPoints = showPoints;
         }
-        
-        m_edgesSwitch->whichChild.setValue(0);
-    } else {
-        m_edgesSwitch->whichChild.setValue(-1);
+
+        LOG_INF_S("updateGeometryFromConfig: Multi-pass config - surface=" +
+                  std::string(m_showSurface ? "true" : "false") +
+                  ", edges=" + std::string(m_showEdges ? "true" : "false") +
+                  ", points=" + std::string(m_showPoints ? "true" : "false"));
+
+    // Configure edge display based on display mode
+    // HiddenLine mode uses mesh edges, other modes use topological edges
+    if (m_edgeComponent && m_showEdges) {
+        RenderingConfig::DisplayMode currentMode = m_currentMode;
+
+        if (currentMode == RenderingConfig::DisplayMode::HiddenLine) {
+            // HiddenLine mode: use mesh edges for better performance and visibility control
+            LOG_INF_S("updateGeometryFromConfig: HiddenLine mode - extracting mesh edges");
+
+            // Extract mesh edges from triangulated surface
+            if (!m_edgeComponent->getEdgeNode(EdgeType::Mesh) && m_mesh) {
+                Quantity_Color meshEdgeColor = config.edges.meshEdge.color;
+                if (config.edges.meshEdge.useEffectiveColor) {
+                    // Use black for better contrast if surface color is light
+                    if (meshEdgeColor.Red() > 0.4 && meshEdgeColor.Green() > 0.4 && meshEdgeColor.Blue() > 0.4) {
+                        meshEdgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+                    }
+                }
+                m_edgeComponent->extractMeshEdges(*m_mesh, meshEdgeColor, config.edges.meshEdge.width);
+                LOG_INF_S("updateGeometryFromConfig: Mesh edges extracted for HiddenLine mode");
+            }
+
+            // Enable mesh edges for HiddenLine
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, true);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
+        } else {
+            // Other modes: use topological edges for accuracy
+            LOG_INF_S("updateGeometryFromConfig: Non-HiddenLine mode - using topological edges");
+
+            // Enable original topological edges
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Original, true);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, false);
+
+            // Apply appearance settings for topological edges
+            if (m_edgeComponent->getEdgeNode(EdgeType::Original)) {
+                m_edgeComponent->applyAppearanceToEdgeNode(EdgeType::Original,
+                    config.edges.originalEdge.color,
+                    config.edges.originalEdge.width,
+                    0);
+                LOG_INF_S("updateGeometryFromConfig: Applied appearance to topological edges");
+            }
+        }
+
+        // Disable other edge types
+        m_edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
+        m_edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
+        m_edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        m_edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
+        m_edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
     }
-    
-    m_pointsNode->removeAllChildren();
-    
-    if (config.nodes.requirePoints && m_pointViewBuilder && m_mesh) {
-        GeometryRenderContext defaultContext;
-        defaultContext.display.pointViewColor = Quantity_Color(1.0, 0.0, 0.0, Quantity_TOC_RGB);
-        defaultContext.display.pointViewSize = 3.0;
-        defaultContext.display.pointViewShape = 0;
-        
-        m_pointViewBuilder->createPointViewRepresentation(m_pointsNode, *m_mesh, defaultContext.display);
-        m_pointsSwitch->whichChild.setValue(0);
-        LOG_INF_S("Points view created: " + std::to_string(m_mesh->vertices.size()) + " points");
-    } else {
-        m_pointsSwitch->whichChild.setValue(-1);
     }
+
+    // Configure PolygonOffset for multi-pass rendering
+    // In multi-pass approach, we use polygon offset to prevent Z-fighting and create depth separation
+    // The actual offset values are controlled dynamically in onPaint() for each pass
+    if (m_polygonOffset) {
+        // Disable polygon offset by default - it will be enabled per-pass in onPaint()
+        m_polygonOffset->on.setValue(false);
+        // Set default values that will be overridden in onPaint()
+        m_polygonOffset->factor.setValue(0.0f);
+        m_polygonOffset->units.setValue(0.0f);
+        m_polygonOffset->styles = SoPolygonOffset::FILLED;
+    }
+
+    m_needsRedraw = true;
+
+    int surfaceSwitchValue = config.nodes.requireSurface || config.nodes.requireOriginalEdges ||
+                           config.nodes.requireMeshEdges || config.nodes.requirePoints ? 0 : -1;
+    m_surfaceSwitch->whichChild.setValue(surfaceSwitchValue);
+    LOG_INF_S("updateGeometryFromConfig: Surface switch set to " + std::to_string(surfaceSwitchValue) +
+              " (single geometry with DrawStyle control)");
     
     m_needsRedraw = true;
     Refresh();
@@ -711,93 +712,363 @@ void DisplayModePreviewCanvas::onPaint(wxPaintEvent& event) {
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     
-    // Setup transparency and blending
-    // Coin3D handles transparency through SoMaterial.transparency and SoGLRenderAction.setTransparencyType
-    // We should use Coin3D's built-in transparency handling instead of manually managing GL_BLEND
-    double transparency = m_currentConfig.rendering.materialOverride.enabled 
-        ? m_currentConfig.rendering.materialOverride.transparency 
-        : 0.0;
-    
-    bool hasTransparency = transparency > 0.0;
-    bool hasBlendMode = m_currentConfig.rendering.blendMode != RenderingConfig::BlendMode::None;
-    
-    // Debug logging for transparency
-    if (hasTransparency) {
-        LOG_INF_S("onPaint: Rendering with transparency=" + std::to_string(transparency) + 
-                 ", materialOverride.enabled=" + (m_currentConfig.rendering.materialOverride.enabled ? "true" : "false") +
-                 ", blendMode=" + std::to_string(static_cast<int>(m_currentConfig.rendering.blendMode)));
-    }
-    
+    // Multi-pass rendering for single geometry with DrawStyle control
+    // This new architecture renders surface, edges, and points in separate passes
+
     SbViewportRegion vpRegion(size.GetWidth(), size.GetHeight());
-    SoGLRenderAction renderAction(vpRegion);
-    
-    // Configure render action for optimal rendering
-    renderAction.setSmoothing(true);
-    
-    // Determine optimal pass count and transparency type based on scene complexity
-    // Preview canvas typically has simple scenes (single preview model), but we still
-    // optimize based on geometry complexity for better transparency rendering
-    int optimalPasses = 2; // Base pass count for anti-aliasing
-    bool isComplexScene = false;
-    
-    if (hasTransparency) {
-        // Check scene complexity: preview canvas usually has simple geometry,
-        // but we can detect if there are many triangles for more sophisticated rendering
-        if (m_mesh && m_mesh->triangles.size() > 10000) {
-            // Complex scene: many triangles, use more sophisticated transparency sorting
-            optimalPasses = 3;
-            isComplexScene = true;
+
+    // Determine what needs to be rendered based on configuration
+    bool renderSurface = m_showSurface;
+    bool renderEdges = m_showEdges;
+    bool renderPoints = m_showPoints;
+
+    LOG_INF_S("onPaint: Multi-pass rendering - surface=" + std::string(renderSurface ? "true" : "false") +
+              ", edges=" + std::string(renderEdges ? "true" : "false") +
+              ", points=" + std::string(renderPoints ? "true" : "false"));
+
+    // Pass 1: Render surface (if enabled)
+    if (renderSurface) {
+        // Set DrawStyle for filled rendering
+        if (m_drawStyle) {
+            m_drawStyle->style.setValue(SoDrawStyle::FILLED);
+        }
+
+        // Disable polygon offset for surface pass
+        if (m_polygonOffset) {
+            m_polygonOffset->on.setValue(false);
+        }
+
+        // Check if transparency is enabled
+        double transparency = m_currentConfig.rendering.materialOverride.enabled
+            ? m_currentConfig.rendering.materialOverride.transparency : 0.0;
+        bool hasTransparency = transparency > 0.0;
+
+        // Save current OpenGL state for transparency rendering
+        GLboolean depthWriteEnabled = GL_TRUE;
+        GLboolean blendEnabled = GL_FALSE;
+        GLboolean cullFaceEnabled = GL_FALSE;
+        if (hasTransparency) {
+            glGetBooleanv(GL_DEPTH_WRITEMASK, &depthWriteEnabled);
+            blendEnabled = glIsEnabled(GL_BLEND);
+            cullFaceEnabled = glIsEnabled(GL_CULL_FACE);
+
+            // For transparent objects: disable depth writing but keep depth reading enabled
+            // Depth testing must remain enabled so that front faces correctly occlude back faces
+            // This is critical for proper transparency rendering where front faces should blend
+            // over back faces based on depth
+            glDepthMask(GL_FALSE);  // Don't write depth, but depth test is still active
+            glEnable(GL_DEPTH_TEST);  // Ensure depth test is enabled
+            glDepthFunc(GL_LEQUAL);   // Standard depth function
+
+            // Disable face culling for transparent objects so both front and back faces are rendered
+            // This is necessary for proper transparency where we need to see through the object
+            glDisable(GL_CULL_FACE);
+
+            // Enable blending for transparency
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         } else {
-            // Simple scene: use standard transparency method
-            optimalPasses = 2;
-            isComplexScene = false;
+            // For opaque objects: enable depth writing for proper depth testing
+            glDepthMask(GL_TRUE);
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+            glDisable(GL_BLEND);
+            // Face culling can be enabled for opaque objects for better performance
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
         }
-        
-        renderAction.setNumPasses(optimalPasses);
-        
-        // Set transparency type based on scene complexity
-        if (isComplexScene && optimalPasses > 2) {
-            // Use more sophisticated transparency sorting for complex scenes
-            renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_SORTED_TRIANGLE_BLEND);
+
+        SoGLRenderAction surfaceAction(vpRegion);
+        surfaceAction.setSmoothing(true);
+        surfaceAction.setNumPasses(1);
+        surfaceAction.setTransparencyType(SoGLRenderAction::NONE);
+
+        // Handle transparency if enabled
+        if (hasTransparency) {
+            // Use SORTED_OBJECT_SORTED_TRIANGLE_BLEND for more accurate depth sorting within a single object
+            // This ensures that front faces correctly occlude back faces even within the same object
+            // SORTED_OBJECT_BLEND only sorts between objects, not triangles within an object
+            surfaceAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_SORTED_TRIANGLE_BLEND);
+            // Increase passes for better triangle sorting quality
+            surfaceAction.setNumPasses(3);
+        }
+
+        surfaceAction.apply(m_sceneRoot);
+
+        // Restore OpenGL state if transparency was used
+        if (hasTransparency) {
+            glDepthMask(depthWriteEnabled);
+            if (!blendEnabled) {
+                glDisable(GL_BLEND);
+            }
+            if (cullFaceEnabled) {
+                glEnable(GL_CULL_FACE);
+            }
+        }
+
+        LOG_INF_S("onPaint: Surface pass completed (transparency=" + std::to_string(transparency) + ")");
+    }
+
+    // Pass 2: Render edges (if enabled)
+    if (renderEdges) {
+        // Ensure depth writing is enabled for edges so they render on top of transparent surfaces
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);  // Edges should be opaque
+
+        RenderingConfig::DisplayMode currentMode = m_currentMode;
+
+        if (currentMode == RenderingConfig::DisplayMode::HiddenLine) {
+            // HiddenLine mode: Render mesh edges with visibility distinction
+            // First pass: Render all edges as dashed lines (invisible parts)
+            // Second pass: Render visible edges as solid lines
+            LOG_INF_S("onPaint: Rendering HiddenLine mesh edges with visibility distinction");
+
+            // Set edge color based on configuration
+            SbColor originalDiffuse;
+            Quantity_Color meshEdgeColor = m_currentConfig.edges.meshEdge.color;
+            if (m_material) {
+                originalDiffuse = m_material->diffuseColor[0];
+                Standard_Real r, g, b;
+                if (m_currentConfig.edges.meshEdge.useEffectiveColor) {
+                    // Use black for mesh edges if surface color is light
+                    float fr, fg, fb;
+                    originalDiffuse.getValue(fr, fg, fb);
+                    if (fr > 0.4f && fg > 0.4f && fb > 0.4f) {
+                        r = g = b = 0.0;
+                    } else {
+                        meshEdgeColor.Values(r, g, b, Quantity_TOC_RGB);
+                    }
+                } else {
+                    meshEdgeColor.Values(r, g, b, Quantity_TOC_RGB);
+                }
+                m_material->diffuseColor.setValue((float)r, (float)g, (float)b);
+            }
+
+            // Pass 2a: Render all edges as dashed lines (invisible parts)
+            // Note: GL_LINE_STIPPLE may not be supported in all OpenGL versions
+            // For now, we'll render all edges as solid lines in a lighter color
+
+            if (m_drawStyle) {
+                m_drawStyle->style.setValue(SoDrawStyle::LINES);
+            }
+
+            // Disable polygon offset for first pass
+            if (m_polygonOffset) {
+                m_polygonOffset->on.setValue(false);
+            }
+
+            // Use a lighter color for all edges in this pass
+            if (m_material) {
+                float r, g, b;
+                originalDiffuse.getValue(r, g, b);
+                // Make edges lighter for "invisible" appearance
+                r = std::min(r + 0.3f, 1.0f);
+                g = std::min(g + 0.3f, 1.0f);
+                b = std::min(b + 0.3f, 1.0f);
+                m_material->diffuseColor.setValue(r, g, b);
+            }
+
+            SoGLRenderAction allEdgesAction(vpRegion);
+            allEdgesAction.setSmoothing(true);
+            allEdgesAction.setNumPasses(1);
+            allEdgesAction.setTransparencyType(SoGLRenderAction::NONE);
+
+            allEdgesAction.apply(m_sceneRoot);
+
+            // Restore color for next pass
+            if (m_material) {
+                m_material->diffuseColor.setValue(originalDiffuse);
+            }
+
+            // Pass 2b: Render visible edges with polygon offset (pop-out effect)
+            if (m_drawStyle) {
+                m_drawStyle->style.setValue(SoDrawStyle::LINES);
+            }
+
+            // Enable polygon offset for edges to bring them forward
+            if (m_polygonOffset) {
+                m_polygonOffset->on.setValue(true);
+                m_polygonOffset->styles = SoPolygonOffset::LINES;
+                m_polygonOffset->factor.setValue(-1.0f);
+                m_polygonOffset->units.setValue(-1.0f);
+            }
+
+            // Use the original configured edge color for visible edges
+            Standard_Real r, g, b;
+            if (m_currentConfig.nodes.requireMeshEdges && m_currentConfig.edges.meshEdge.enabled) {
+                if (m_currentConfig.edges.meshEdge.useEffectiveColor) {
+                    float fr, fg, fb;
+                    originalDiffuse.getValue(fr, fg, fb);
+                    if (fr > 0.4f && fg > 0.4f && fb > 0.4f) {
+                        r = g = b = 0.0;
+                    } else {
+                        m_currentConfig.edges.meshEdge.color.Values(r, g, b, Quantity_TOC_RGB);
+                    }
+                } else {
+                    m_currentConfig.edges.meshEdge.color.Values(r, g, b, Quantity_TOC_RGB);
+                }
+            } else {
+                r = g = b = 0.0; // Default black
+            }
+            m_material->diffuseColor.setValue((float)r, (float)g, (float)b);
+
+            SoGLRenderAction visibleEdgesAction(vpRegion);
+            visibleEdgesAction.setSmoothing(true);
+            visibleEdgesAction.setNumPasses(1);
+            visibleEdgesAction.setTransparencyType(SoGLRenderAction::NONE);
+
+            visibleEdgesAction.apply(m_sceneRoot);
+
+            // Restore original material color
+            if (m_material) {
+                m_material->diffuseColor.setValue(originalDiffuse);
+            }
+
+            LOG_INF_S("onPaint: HiddenLine edges with visibility distinction completed");
         } else {
-            // Use standard transparency method for simpler scenes
-            renderAction.setTransparencyType(SoGLRenderAction::SORTED_OBJECT_BLEND);
+            // Other modes: Use topological edges from ModularEdgeComponent
+            LOG_INF_S("onPaint: Rendering topological edges using ModularEdgeComponent");
+
+            // Check if we have edges to display first
+            bool hasEdgesToRender = false;
+            if (m_edgeComponent) {
+                SoSeparator* originalEdges = m_edgeComponent->getEdgeNode(EdgeType::Original);
+                SoSeparator* meshEdges = m_edgeComponent->getEdgeNode(EdgeType::Mesh);
+                hasEdgesToRender = (originalEdges && m_edgeComponent->isEdgeDisplayTypeEnabled(EdgeType::Original)) ||
+                                   (meshEdges && m_edgeComponent->isEdgeDisplayTypeEnabled(EdgeType::Mesh));
+            }
+
+            if (hasEdgesToRender) {
+                // Create a temporary separator for edges to apply polygon offset
+                SoSeparator* edgeSeparator = new SoSeparator;
+                edgeSeparator->ref();  // Ref it immediately to manage its lifetime
+
+                // Add polygon offset for edges to bring them forward (shrink effect)
+                if (m_polygonOffset) {
+                    // Clone polygon offset settings for edges
+                    SoPolygonOffset* edgeOffset = new SoPolygonOffset;
+                    edgeOffset->factor.setValue(-1.0f);  // Negative offset to bring forward
+                    edgeOffset->units.setValue(-1.0f);
+                    edgeOffset->styles = SoPolygonOffset::LINES;
+                    edgeOffset->on.setValue(true);
+                    edgeSeparator->addChild(edgeOffset);  // addChild automatically refs edgeOffset
+                }
+
+                // Add edge nodes from ModularEdgeComponent
+                if (m_edgeComponent) {
+                    SoSeparator* originalEdges = m_edgeComponent->getEdgeNode(EdgeType::Original);
+                    SoSeparator* meshEdges = m_edgeComponent->getEdgeNode(EdgeType::Mesh);
+
+                    if (originalEdges && m_edgeComponent->isEdgeDisplayTypeEnabled(EdgeType::Original)) {
+                        edgeSeparator->addChild(originalEdges);
+                        LOG_INF_S("onPaint: Added original topological edges to render");
+                    }
+
+                    if (meshEdges && m_edgeComponent->isEdgeDisplayTypeEnabled(EdgeType::Mesh)) {
+                        edgeSeparator->addChild(meshEdges);
+                        LOG_INF_S("onPaint: Added mesh edges to render");
+                    }
+                }
+
+                SoGLRenderAction edgesAction(vpRegion);
+                edgesAction.setSmoothing(true);
+                edgesAction.setNumPasses(1);
+                edgesAction.setTransparencyType(SoGLRenderAction::NONE);
+
+                // Create a minimal scene with just the edges
+                SoSeparator* edgeScene = new SoSeparator;
+                edgeScene->ref();
+
+                // Add camera and lighting to edge scene
+                if (m_camera) {
+                    edgeScene->addChild(m_camera);
+                }
+                if (m_sceneRoot) {
+                    // Find and add the light from the main scene
+                    for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
+                        SoNode* child = m_sceneRoot->getChild(i);
+                        if (child && child->isOfType(SoDirectionalLight::getClassTypeId())) {
+                            edgeScene->addChild(child);
+                            break;
+                        }
+                    }
+                }
+
+                // Add the edge separator to the scene
+                // Note: addChild will automatically ref edgeSeparator (now ref count = 2)
+                edgeScene->addChild(edgeSeparator);
+
+                edgesAction.apply(edgeScene);
+
+                // Unref edgeScene - this will automatically unref all children including edgeSeparator
+                // After this, edgeSeparator ref count = 1 (our ref)
+                edgeScene->unref();
+
+                // Now unref edgeSeparator - this will unref all its children and delete it
+                edgeSeparator->unref();
+
+                LOG_INF_S("onPaint: Topological edges rendered successfully");
+            } else {
+                LOG_INF_S("onPaint: No topological edges to render");
+            }
+
+            LOG_INF_S("onPaint: Topological edges pass completed");
         }
-    } else {
-        renderAction.setTransparencyType(SoGLRenderAction::NONE);
-        renderAction.setNumPasses(1);
     }
-    
-    // For blend modes other than transparency, we still need to handle them manually
-    // since Coin3D's transparency type only handles material transparency
-    if (hasBlendMode && !hasTransparency) {
-        glEnable(GL_BLEND);
-        switch (m_currentConfig.rendering.blendMode) {
-        case RenderingConfig::BlendMode::Alpha:
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            break;
-        case RenderingConfig::BlendMode::Additive:
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-            break;
-        case RenderingConfig::BlendMode::Multiply:
-            glBlendFunc(GL_DST_COLOR, GL_ZERO);
-            break;
-        case RenderingConfig::BlendMode::Screen:
-            glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ONE);
-            break;
-        case RenderingConfig::BlendMode::Overlay:
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            break;
-        default:
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            break;
+
+    // Pass 3: Render points (if enabled)
+    if (renderPoints) {
+        // Ensure depth writing is enabled for points so they render on top of transparent surfaces
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);  // Points should be opaque
+
+        // Set DrawStyle for point rendering
+        if (m_drawStyle) {
+            m_drawStyle->style.setValue(SoDrawStyle::POINTS);
         }
+
+        // Enable polygon offset for points to bring them forward (shrink effect)
+        if (m_polygonOffset) {
+            m_polygonOffset->on.setValue(true);
+            m_polygonOffset->styles = SoPolygonOffset::POINTS;
+            // Use negative offset to bring points closer to viewer (shrink effect)
+            // This makes points appear to "pop out" from the surface
+            m_polygonOffset->factor.setValue(-2.0f);
+            m_polygonOffset->units.setValue(-2.0f);
+        }
+
+        // Set point color
+        SbColor originalDiffuse;
+        if (m_material) {
+            originalDiffuse = m_material->diffuseColor[0];
+            // Use red for points
+            m_material->diffuseColor.setValue(1.0f, 0.0f, 0.0f);
+        }
+
+        SoGLRenderAction pointsAction(vpRegion);
+        pointsAction.setSmoothing(true);
+        pointsAction.setNumPasses(1);
+        pointsAction.setTransparencyType(SoGLRenderAction::NONE);
+
+        pointsAction.apply(m_sceneRoot);
+
+        // Restore original material color
+        if (m_material) {
+            m_material->diffuseColor.setValue(originalDiffuse);
+        }
+
+        LOG_INF_S("onPaint: Points pass completed");
     }
-    
-    renderAction.apply(m_sceneRoot);
-    
-    if (hasBlendMode && !hasTransparency) {
-        glDisable(GL_BLEND);
+
+    // Handle blend modes if needed (for compatibility)
+    bool hasBlendMode = m_currentConfig.rendering.blendMode != RenderingConfig::BlendMode::None;
+    double transparency = m_currentConfig.rendering.materialOverride.enabled
+        ? m_currentConfig.rendering.materialOverride.transparency : 0.0;
+
+    if (hasBlendMode && transparency == 0.0) {
+        // Note: Multi-pass rendering doesn't use blend modes in the same way
+        // Blend modes are primarily for transparency effects
+        LOG_WRN_S("onPaint: Blend modes not fully supported in multi-pass rendering");
     }
     
     SwapBuffers();

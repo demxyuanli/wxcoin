@@ -10,6 +10,8 @@ struct FaceDomain;
 struct TriangleSegment;
 struct BoundaryTriangle;
 
+namespace helper {
+
 class FaceDomainMapper {
 public:
     FaceDomainMapper();
@@ -34,4 +36,6 @@ private:
     void identifyBoundaryTriangles(const std::vector<std::pair<int, std::vector<int>>>& faceMappings,
                                     std::vector<BoundaryTriangle>& boundaryTriangles);
 };
+
+}
 

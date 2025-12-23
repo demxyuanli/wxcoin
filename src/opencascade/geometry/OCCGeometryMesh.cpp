@@ -405,7 +405,7 @@ void OCCGeometryMesh::buildCoinRepresentation(
         currentFlags = modularEdgeComponent->edgeFlags;
         anyEdgeDisplayRequested = currentFlags.showOriginalEdges || currentFlags.showFeatureEdges ||
             currentFlags.showMeshEdges || currentFlags.showHighlightEdges ||
-            currentFlags.showNormalLines || currentFlags.showFaceNormalLines;
+            currentFlags.showVerticeNormals || currentFlags.showFaceNormals;
     }
     
     // Check EdgeSettingsConfig for global/selected/hover edge settings
@@ -423,7 +423,7 @@ void OCCGeometryMesh::buildCoinRepresentation(
         TriangleMesh mesh;
 
         // Get mesh data if needed for mesh edges or normal lines
-        if ((currentFlags.showMeshEdges || currentFlags.showNormalLines || currentFlags.showFaceNormalLines) && processor) {
+        if ((currentFlags.showMeshEdges || currentFlags.showVerticeNormals || currentFlags.showFaceNormals) && processor) {
             mesh = processor->convertToMesh(shape, params);
         }
 
@@ -441,10 +441,10 @@ void OCCGeometryMesh::buildCoinRepresentation(
                 Quantity_Color meshColor(0.0, 0.0, 0.0, Quantity_TOC_RGB);
                 modularEdgeComponent->extractMeshEdges(mesh, meshColor, 1.0);
             }
-            if (currentFlags.showNormalLines && !mesh.triangles.empty()) {
+            if (currentFlags.showVerticeNormals && !mesh.triangles.empty()) {
                 modularEdgeComponent->generateNormalLineNode(mesh, 0.5);
             }
-            if (currentFlags.showFaceNormalLines && !mesh.triangles.empty()) {
+            if (currentFlags.showFaceNormals && !mesh.triangles.empty()) {
                 modularEdgeComponent->generateFaceNormalLineNode(mesh, 0.5);
             }
             if (currentFlags.showHighlightEdges) {

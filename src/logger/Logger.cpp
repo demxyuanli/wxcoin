@@ -75,23 +75,45 @@ Logger::Logger() : logCtrl(nullptr) {
             }
             
             // Set up file appender - use logs/app.log
-            std::string logFilePath = (logsDir / "app.log").string();
+            // CRITICAL: Create string explicitly and ensure it's valid before passing to FileAppender
+            std::filesystem::path logFile = logsDir / "app.log";
+            
+            // Convert to string and ensure it's valid
+            // Use generic_string() for better cross-platform compatibility
+            std::string logFilePath = logFile.generic_string();
+            
+            // Validate string before use
+            if (logFilePath.empty()) {
+                throw std::runtime_error("Failed to create log file path");
+            }
+            
+            // CRITICAL: Ensure the string is properly null-terminated and valid
+            // Create a copy to ensure it stays valid during FileAppender construction
+            std::string logFilePathCopy = logFilePath;
             
             log4cxx::LoggerPtr rootLogger = log4cxx::Logger::getRootLogger();
             log4cxx::LayoutPtr layout(new log4cxx::PatternLayout("%d{yyyy-MM-dd HH:mm:ss} [%p] [%c{1}] %m%n"));
             
-            log4cxx::FileAppenderPtr fileAppender(new log4cxx::FileAppender(layout, logFilePath, false));
-            fileAppender->setImmediateFlush(true);  // Ensure immediate flush in Release builds
-            rootLogger->addAppender(fileAppender);
-            
-            log4cxx::ConsoleAppenderPtr consoleAppender(new log4cxx::ConsoleAppender(layout));
-            rootLogger->addAppender(consoleAppender);
-            
-            rootLogger->setLevel(log4cxx::Level::getInfo());
-            
-            log4cxxLogger = log4cxx::Logger::getLogger("CADVisBird");
-            log4cxxLogger->setLevel(log4cxx::Level::getInfo());
-            std::cerr << "log4cxx: Basic configuration initialized, log file: " << logFilePath << std::endl;
+            // CRITICAL: Use c_str() to pass C-style string to avoid potential string reference issues
+            // Some log4cxx versions may have issues with std::string reference lifetime
+            // Create FileAppender with explicit string copy to ensure safety
+            try {
+                log4cxx::FileAppenderPtr fileAppender(new log4cxx::FileAppender(layout, logFilePathCopy.c_str(), false));
+                fileAppender->setImmediateFlush(true);  // Ensure immediate flush in Release builds
+                rootLogger->addAppender(fileAppender);
+                
+                log4cxx::ConsoleAppenderPtr consoleAppender(new log4cxx::ConsoleAppender(layout));
+                rootLogger->addAppender(consoleAppender);
+                
+                rootLogger->setLevel(log4cxx::Level::getInfo());
+                
+                log4cxxLogger = log4cxx::Logger::getLogger("CADVisBird");
+                log4cxxLogger->setLevel(log4cxx::Level::getInfo());
+                std::cerr << "log4cxx: Basic configuration initialized, log file: " << logFilePath << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "Failed to create FileAppender with path '" << logFilePath << "': " << e.what() << std::endl;
+                throw;
+            }
         }
     } catch (const log4cxx::helpers::Exception& e) {
         std::cerr << "Failed to initialize log4cxx: " << e.what() << std::endl;

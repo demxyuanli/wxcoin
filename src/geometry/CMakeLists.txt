@@ -62,13 +62,18 @@ target_include_directories(CADGeometry PUBLIC
 )
 
 # Link libraries
+# CADCore, CADLogger, CADOCC are PUBLIC because they may be used in public headers
 target_link_libraries(CADGeometry PUBLIC
     CADCore
     CADLogger
-    CADParam
     CADOCC
     ${OpenCASCADE_LIBRARIES}
     TBB::tbb
+)
+
+# CADParam is PRIVATE - only implementation needs it
+target_link_libraries(CADGeometry PRIVATE
+    CADParam
 )
 
 # Compiler definitions

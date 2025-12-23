@@ -180,11 +180,11 @@ private:
 	double m_animationProgress;
 
 	// Constants
-	static const int DEFAULT_CORNER_RADIUS = 6;
+	static const int DEFAULT_CORNER_RADIUS = 3;
 	static const int DEFAULT_BORDER_WIDTH = 1;
-	static const int DEFAULT_ICON_TEXT_SPACING = 8;
-	static const int DEFAULT_PADDING_H = 16;
-	static const int DEFAULT_PADDING_V = 8;
+	static const int DEFAULT_ICON_TEXT_SPACING = 6;
+	static const int DEFAULT_PADDING_H = 10;
+	static const int DEFAULT_PADDING_V = 4;
 	static const int DEFAULT_ICON_SIZE = 16;
 
 	wxDECLARE_EVENT_TABLE();

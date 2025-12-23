@@ -103,10 +103,10 @@ std::shared_ptr<OCCGeometry> GeometryReader::createGeometryFromMesh(
         rootNode->pickCulling.setValue(SoSeparator::OFF);
 
         // Create helper instances (OCCGeometry already has these, but we can't access them)
-        DisplayModeHandler displayHandler;
-        RenderNodeBuilder renderBuilder;
-        WireframeBuilder wireframeBuilder;
-        PointViewBuilder pointViewBuilder;
+        helper::DisplayModeHandler displayHandler;
+        helper::RenderNodeBuilder renderBuilder;
+        helper::WireframeBuilder wireframeBuilder;
+        helper::PointViewBuilder pointViewBuilder;
 
         // Create render context with default settings
         GeometryRenderContext context;

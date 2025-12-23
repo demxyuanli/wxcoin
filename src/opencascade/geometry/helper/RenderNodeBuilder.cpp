@@ -12,6 +12,8 @@
 #include <OpenCASCADE/TopAbs.hxx>
 #include <fstream>
 
+namespace helper {
+
 RenderNodeBuilder::RenderNodeBuilder() {
 }
 
@@ -215,5 +217,7 @@ void RenderNodeBuilder::appendSurfaceGeometry(SoSeparator* parent, const TopoDS_
 SoPolygonOffset* RenderNodeBuilder::createPolygonOffsetNode() {
     SoPolygonOffset* polygonOffset = new SoPolygonOffset();
     return polygonOffset;
+}
+
 }
 

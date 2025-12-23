@@ -9,6 +9,8 @@ class SoSeparator;
 struct MeshParameters;
 struct DisplaySettings;
 
+namespace helper {
+
 class PointViewBuilder {
 public:
     PointViewBuilder();
@@ -24,4 +26,6 @@ public:
                                        const TriangleMesh& mesh,
                                        const DisplaySettings& displaySettings);
 };
+
+}
 

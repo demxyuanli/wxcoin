@@ -15,6 +15,8 @@
 #include <map>
 #include <algorithm>
 
+namespace helper {
+
 FaceDomainMapper::FaceDomainMapper() {
 }
 
@@ -199,3 +201,4 @@ void FaceDomainMapper::identifyBoundaryTriangles(const std::vector<std::pair<int
     }
 }
 
+}

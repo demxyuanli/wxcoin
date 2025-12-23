@@ -11,6 +11,8 @@
 #include <Inventor/nodes/SoScale.h>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 
+namespace helper {
+
 PointViewBuilder::PointViewBuilder() {
 }
 
@@ -278,5 +280,6 @@ void PointViewBuilder::createPointViewRepresentation(SoSeparator* coinNode,
 
     } catch (const std::exception& e) {
     }
+}
 }
 

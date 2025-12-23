@@ -3,6 +3,8 @@
 #include <Inventor/nodes/SoTexture2.h>
 #include <Inventor/nodes/SoTextureCoordinate2.h>
 
+namespace helper {
+
 CoinNodeManager::CoinNodeManager() {
 }
 
@@ -72,5 +74,7 @@ void CoinNodeManager::removeAllChildren(SoSeparator* node) {
     if (node) {
         node->removeAllChildren();
     }
+}
+
 }
 

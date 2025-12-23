@@ -160,7 +160,7 @@ bool FlatSlider::Enable(bool enabled)
 // Missing function implementations
 wxSize FlatSlider::DoGetBestSize() const
 {
-	int width = 200;  // Default width
+	int width = 140;  // Default width
 	int height = m_trackHeight + 2 * m_borderWidth + m_thumbSize.GetHeight();
 
 	if (!m_label.IsEmpty()) {

@@ -5,6 +5,8 @@
 #include <Inventor/nodes/SoIndexedLineSet.h>
 #include <OpenCASCADE/TopoDS_Shape.hxx>
 
+namespace helper {
+
 WireframeBuilder::WireframeBuilder() {
 }
 
@@ -111,3 +113,4 @@ void WireframeBuilder::createWireframeRepresentation(SoSeparator* coinNode,
     coinNode->addChild(lineSet);
 }
 
+}

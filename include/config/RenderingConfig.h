@@ -158,7 +158,13 @@ public:
 
 	struct DisplaySettings {
 		DisplayMode displayMode;
+		
+		// Geometry data types visibility
+		bool showSurface;  // Show surface/faces geometry
+		bool showOriginalEdges; // Show original edges from initialization
 		bool showMeshEdges;  // Show mesh edges (edges from triangulation) - renamed from showEdges
+		bool showPointView;  // Show point geometry
+		
 		bool showVertices;
 		double edgeWidth;
 		double vertexSize;
@@ -166,29 +172,38 @@ public:
 		Quantity_Color vertexColor;
 
 		// Point view settings
-		bool showPointView;
 		bool showSolidWithPointView; // Show solid geometry when point view is enabled
 		double pointSize;
 		Quantity_Color pointColor;
 		int pointShape; // 0 = square, 1 = circle, 2 = triangle
 
-		// Original edges settings
-		bool showOriginalEdges; // If true, always show original edges from initialization
+		// Display mode switching method
+		// true = Switch mode (fast, uses three independent SoSwitch nodes)
+		// false = Direct mode (flexible, directly manipulates nodes)
+		bool useSwitchMode;
+		
+		// Force Switch mode threshold
+		// If face/triangle count exceeds this value, Switch mode will be forced
+		// regardless of useSwitchMode setting (to prevent slow mode switching)
+		int forceSwitchModeThreshold;
 
 		DisplaySettings()
 			: displayMode(DisplayMode::Solid)
+			, showSurface(true)
+			, showOriginalEdges(false)
 			, showMeshEdges(false)
+			, showPointView(false)
 			, showVertices(false)
 			, edgeWidth(1.0)
 			, vertexSize(2.0)
 			, edgeColor(0.0, 0.0, 0.0, Quantity_TOC_RGB)
 			, vertexColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
-			, showPointView(false)
 			, showSolidWithPointView(true)
 			, pointSize(3.0)
 			, pointColor(1.0, 0.0, 0.0, Quantity_TOC_RGB)
 			, pointShape(0)
-			, showOriginalEdges(false)
+			, useSwitchMode(true)  // Default to Switch mode for better performance
+			, forceSwitchModeThreshold(100000)  // Default threshold: 100000 faces/triangles
 		{
 		}
 	};

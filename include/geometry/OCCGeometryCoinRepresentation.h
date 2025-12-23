@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <vector>
+#include <Inventor/SbVec3f.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include <OpenCASCADE/gp_Pnt.hxx>
 #include <OpenCASCADE/TopoDS_Face.hxx>

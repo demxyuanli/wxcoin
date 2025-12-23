@@ -9,9 +9,11 @@
 #include <functional>
 
 class ModularEdgeComponent;
-class RenderNodeBuilder;
-class WireframeBuilder;
-class PointViewBuilder;
+namespace helper {
+    class RenderNodeBuilder;
+    class WireframeBuilder;
+    class PointViewBuilder;
+}
 class TopoDS_Shape;
 struct MeshParameters;
 struct TriangleMesh;
@@ -32,9 +34,9 @@ public:
                          const MeshParameters& params,
                          ModularEdgeComponent* edgeComponent,
                          bool useModularEdgeComponent,
-                         RenderNodeBuilder* renderBuilder,
-                         WireframeBuilder* wireframeBuilder,
-                         PointViewBuilder* pointViewBuilder = nullptr);
+                         helper::RenderNodeBuilder* renderBuilder,
+                         helper::WireframeBuilder* wireframeBuilder,
+                         helper::PointViewBuilder* pointViewBuilder = nullptr);
 
     void applyRenderState(SoSeparator* coinNode,
                          const DisplayModeRenderState& state,
@@ -43,15 +45,15 @@ public:
                          const MeshParameters& params,
                          ModularEdgeComponent* edgeComponent,
                          bool useModularEdgeComponent,
-                         RenderNodeBuilder* renderBuilder,
-                         WireframeBuilder* wireframeBuilder,
-                         PointViewBuilder* pointViewBuilder = nullptr);
+                         helper::RenderNodeBuilder* renderBuilder,
+                         helper::WireframeBuilder* wireframeBuilder,
+                         helper::PointViewBuilder* pointViewBuilder = nullptr);
 
     void buildModeStateNode(SoSeparator* parent,
                            RenderingConfig::DisplayMode mode,
                            const DisplayModeRenderState& state,
                            const GeometryRenderContext& context,
-                           RenderNodeBuilder* renderBuilder);
+                           helper::RenderNodeBuilder* renderBuilder);
 
     void buildModeNode(SoSeparator* parent,
                       RenderingConfig::DisplayMode mode,
@@ -60,9 +62,9 @@ public:
                       const MeshParameters& params,
                       ModularEdgeComponent* edgeComponent,
                       bool useModularEdgeComponent,
-                      RenderNodeBuilder* renderBuilder,
-                      WireframeBuilder* wireframeBuilder,
-                      PointViewBuilder* pointViewBuilder = nullptr);
+                      helper::RenderNodeBuilder* renderBuilder,
+                      helper::WireframeBuilder* wireframeBuilder,
+                      helper::PointViewBuilder* pointViewBuilder = nullptr);
 
     // ========== New Data-Driven Rendering Methods ==========
     /**
@@ -75,7 +77,7 @@ public:
     void buildStateNodeFromConfig(SoSeparator* parent,
                                   const DisplayModeConfig& config,
                                   const GeometryRenderContext& context,
-                                  RenderNodeBuilder* renderBuilder);
+                                  helper::RenderNodeBuilder* renderBuilder);
 
     /**
      * Apply rendering based on DisplayModeConfig (data-driven approach)
@@ -97,9 +99,9 @@ public:
                                const MeshParameters& params,
                                ModularEdgeComponent* edgeComponent,
                                bool useModularEdgeComponent,
-                               RenderNodeBuilder* renderBuilder,
-                               WireframeBuilder* wireframeBuilder,
-                               PointViewBuilder* pointViewBuilder = nullptr);
+                               helper::RenderNodeBuilder* renderBuilder,
+                               helper::WireframeBuilder* wireframeBuilder,
+                               helper::PointViewBuilder* pointViewBuilder = nullptr);
 
     /**
      * Apply rendering based on DisplayModeConfig for mesh (data-driven approach)
@@ -121,9 +123,9 @@ public:
                                const MeshParameters& params,
                                ModularEdgeComponent* edgeComponent,
                                bool useModularEdgeComponent,
-                               RenderNodeBuilder* renderBuilder,
-                               WireframeBuilder* wireframeBuilder,
-                               PointViewBuilder* pointViewBuilder = nullptr);
+                               helper::RenderNodeBuilder* renderBuilder,
+                               helper::WireframeBuilder* wireframeBuilder,
+                               helper::PointViewBuilder* pointViewBuilder = nullptr);
 
 private:
     std::function<void(bool)> m_geometryBuiltCallback;

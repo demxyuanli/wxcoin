@@ -17,6 +17,8 @@ class SoSeparator;
 struct MeshParameters;
 struct TextureData;
 
+namespace helper {
+
 class RenderNodeBuilder {
 public:
     RenderNodeBuilder();
@@ -35,4 +37,6 @@ public:
 private:
     void setupTextureNode(SoSeparator* parent, const TextureData& texture);
 };
+
+}
 

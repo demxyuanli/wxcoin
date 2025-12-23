@@ -184,10 +184,10 @@ private:
 	wxRect m_iconRect;
 
 	// Constants
-	static const int DEFAULT_CORNER_RADIUS = 4;
+	static const int DEFAULT_CORNER_RADIUS = 2;
 	static const int DEFAULT_BORDER_WIDTH = 1;
-	static const int DEFAULT_CHECK_BOX_SIZE = 16;
-	static const int DEFAULT_LABEL_SPACING = 8;
+	static const int DEFAULT_CHECK_BOX_SIZE = 14;
+	static const int DEFAULT_LABEL_SPACING = 6;
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_NO_COPY_CLASS(FlatCheckBox);

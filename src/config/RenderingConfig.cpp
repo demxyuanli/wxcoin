@@ -569,6 +569,8 @@ bool RenderingConfig::loadFromFile(const std::string& filename)
 			m_displaySettings.vertexColor = parseColor(value, m_displaySettings.vertexColor);
 		}
 		m_displaySettings.showOriginalEdges = cm.getBool("Display", "ShowOriginalEdges", m_displaySettings.showOriginalEdges);
+		m_displaySettings.useSwitchMode = cm.getBool("Display", "UseSwitchMode", m_displaySettings.useSwitchMode);
+		m_displaySettings.forceSwitchModeThreshold = cm.getInt("Display", "ForceSwitchModeThreshold", m_displaySettings.forceSwitchModeThreshold);
 	}
 
 	// Quality section

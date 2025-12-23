@@ -207,10 +207,10 @@ private:
 	wxRect m_iconRect;
 
 	// Constants
-	static const int DEFAULT_CORNER_RADIUS = 4;
+	static const int DEFAULT_CORNER_RADIUS = 2;
 	static const int DEFAULT_BORDER_WIDTH = 1;
-	static const int DEFAULT_THUMB_SIZE = 16;
-	static const int DEFAULT_TRACK_HEIGHT = 4;
+	static const int DEFAULT_THUMB_SIZE = 14;
+	static const int DEFAULT_TRACK_HEIGHT = 3;
 	static const int DEFAULT_TICK_COUNT = 10;
 
 	wxDECLARE_EVENT_TABLE();

@@ -306,9 +306,9 @@ private:
 	FlatComboBoxPopup* m_popup;
 
 	// Constants
-	static const int DEFAULT_CORNER_RADIUS = 6;
+	static const int DEFAULT_CORNER_RADIUS = 3;
 	static const int DEFAULT_BORDER_WIDTH = 1;
-	static const int DEFAULT_PADDING = 8;
+	static const int DEFAULT_PADDING = 5;
 	static const int DEFAULT_DROPDOWN_BUTTON_WIDTH = 20;
 	static const int DEFAULT_MAX_VISIBLE_ITEMS = 8;
 	static const int DEFAULT_DROPDOWN_WIDTH = 200;

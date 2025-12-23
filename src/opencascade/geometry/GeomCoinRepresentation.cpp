@@ -14,6 +14,7 @@
 #include "geometry/helper/PointViewBuilder.h"
 #include "geometry/helper/FaceDomainMapper.h"
 #include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoSwitch.h>
 #include <Inventor/nodes/SoTransform.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoShapeHints.h>
@@ -50,6 +51,7 @@
 
 GeomCoinRepresentation::GeomCoinRepresentation()
     : m_coinNode(nullptr)
+    , m_modeSwitch(nullptr)
     , m_coinNeedsUpdate(true)
     , m_meshRegenerationNeeded(true)
     , m_assemblyLevel(0)
@@ -63,12 +65,12 @@ GeomCoinRepresentation::GeomCoinRepresentation()
     m_vertexExtractor = std::make_unique<VertexExtractor>();
     
     // Initialize helper classes
-    m_nodeManager = std::make_unique<CoinNodeManager>();
-    m_renderBuilder = std::make_unique<RenderNodeBuilder>();
-    m_displayHandler = std::make_unique<DisplayModeHandler>();
-    m_wireframeBuilder = std::make_unique<WireframeBuilder>();
-    m_pointViewBuilder = std::make_unique<PointViewBuilder>();
-    m_faceMapper = std::make_unique<FaceDomainMapper>();
+    m_nodeManager = std::make_unique<helper::CoinNodeManager>();
+    m_renderBuilder = std::make_unique<helper::RenderNodeBuilder>();
+    m_displayHandler = std::make_unique<helper::DisplayModeHandler>();
+    m_wireframeBuilder = std::make_unique<helper::WireframeBuilder>();
+    m_pointViewBuilder = std::make_unique<helper::PointViewBuilder>();
+    m_faceMapper = std::make_unique<helper::FaceDomainMapper>();
 }
 
 GeomCoinRepresentation::~GeomCoinRepresentation()
@@ -76,6 +78,10 @@ GeomCoinRepresentation::~GeomCoinRepresentation()
     if (m_coinNode) {
         m_coinNode->unref();
         m_coinNode = nullptr;
+    }
+    if (m_modeSwitch) {
+        m_modeSwitch->unref();
+        m_modeSwitch = nullptr;
     }
 }
 
@@ -332,6 +338,13 @@ void GeomCoinRepresentation::buildCoinRepresentation(
                 return;
     }
 
+    // Initialize mode switch for fast display mode switching
+    if (!m_modeSwitch) {
+        m_modeSwitch = new SoSwitch();
+        m_modeSwitch->ref();
+        m_modeSwitch->whichChild.setValue(SO_SWITCH_NONE);
+    }
+
     // Check if mesh parameters changed - if so, clear mesh-dependent edge nodes
     // This ensures that when edges are re-enabled, they will be regenerated with new mesh quality
     bool meshParamsChanged = (m_lastMeshParams.deflection != params.deflection ||
@@ -364,6 +377,7 @@ void GeomCoinRepresentation::buildCoinRepresentation(
     m_coinNode->addChild(m_renderBuilder->createShapeHintsNode(context));
 
     // Handle display mode using helper
+    m_displayHandler->setModeSwitch(m_modeSwitch);
     m_displayHandler->handleDisplayMode(m_coinNode, context, shape, params,
                                         modularEdgeComponent.get(), useModularEdgeComponent,
                                         m_renderBuilder.get(), m_wireframeBuilder.get(),
@@ -493,6 +507,7 @@ void GeomCoinRepresentation::updateDisplayMode(RenderingConfig::DisplayMode mode
     if (!m_coinNode) {
         return;
     }
+    m_displayHandler->setModeSwitch(m_modeSwitch);
     m_displayHandler->updateDisplayMode(m_coinNode, mode, modularEdgeComponent.get(), originalDiffuseColor);
 }
 

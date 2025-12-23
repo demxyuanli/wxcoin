@@ -15,9 +15,11 @@ class SoSeparator;
 class SoNode;
 class SoSwitch;
 class ModularEdgeComponent;
-class RenderNodeBuilder;
-class WireframeBuilder;
-class PointViewBuilder;
+namespace helper {
+    class RenderNodeBuilder;
+    class WireframeBuilder;
+    class PointViewBuilder;
+}
 class TopoDS_Shape;
 struct MeshParameters;
 class BRepDisplayModeHandler;
@@ -187,6 +189,8 @@ private:
 class BRepDisplayModeHandler;
 class MeshDisplayModeHandler;
 
+namespace helper {
+
 class DisplayModeHandler {
 public:
     DisplayModeHandler();
@@ -204,9 +208,9 @@ public:
                            const MeshParameters& params,
                            ModularEdgeComponent* edgeComponent,
                            bool useModularEdgeComponent,
-                           RenderNodeBuilder* renderBuilder,
-                           WireframeBuilder* wireframeBuilder,
-                           PointViewBuilder* pointViewBuilder = nullptr);
+                           helper::RenderNodeBuilder* renderBuilder,
+                           helper::WireframeBuilder* wireframeBuilder,
+                           helper::PointViewBuilder* pointViewBuilder = nullptr);
 
     // Overload for direct mesh creation (for STL/OBJ mesh-only geometries)
     void handleDisplayMode(SoSeparator* coinNode, 
@@ -215,9 +219,9 @@ public:
                            const MeshParameters& params,
                            ModularEdgeComponent* edgeComponent,
                            bool useModularEdgeComponent,
-                           RenderNodeBuilder* renderBuilder,
-                           WireframeBuilder* wireframeBuilder,
-                           PointViewBuilder* pointViewBuilder = nullptr);
+                           helper::RenderNodeBuilder* renderBuilder,
+                           helper::WireframeBuilder* wireframeBuilder,
+                           helper::PointViewBuilder* pointViewBuilder = nullptr);
 
     // Check if geometry scene graph has been fully built
     bool isGeometryBuilt() const;
@@ -232,6 +236,8 @@ private:
     bool m_useSwitchMode;
     static bool m_geometryBuilt;  // Track if geometry has been built (to avoid double rebuild)
 };
+
+}
 
 
 
