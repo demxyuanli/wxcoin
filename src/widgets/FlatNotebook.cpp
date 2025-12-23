@@ -2,38 +2,62 @@
 #include "config/ThemeManager.h"
 #include "config/FontManager.h"
 #include <wx/dcbuffer.h>
+#include <wx/dcclient.h>
+#include <wx/dcmemory.h>
+#include <wx/dc.h>
+#include <wx/sizer.h>
 #include <wx/graphics.h>
-#include <wx/settings.h>
+#include <cmath>
 
-wxBEGIN_EVENT_TABLE(FlatNotebook, wxNotebook)
+wxBEGIN_EVENT_TABLE(FlatNotebook, wxPanel)
     EVT_PAINT(FlatNotebook::OnPaint)
-    EVT_SIZE(FlatNotebook::OnSize)
-    EVT_ERASE_BACKGROUND(FlatNotebook::OnEraseBackground)
+    EVT_LEFT_DOWN(FlatNotebook::OnLeftDown)
     EVT_MOTION(FlatNotebook::OnMouseMove)
     EVT_LEAVE_WINDOW(FlatNotebook::OnMouseLeave)
-    EVT_ENTER_WINDOW(FlatNotebook::OnMouseEnter)
-    EVT_LEFT_DOWN(FlatNotebook::OnLeftDown)
+    EVT_SIZE(FlatNotebook::OnSize)
 wxEND_EVENT_TABLE()
 
 FlatNotebook::FlatNotebook(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
-    : wxNotebook(parent, id, pos, size, style | wxNB_LEFT | wxBORDER_NONE, name)
+    : wxPanel(parent, id, pos, size, style, name)
+    , m_selectedPage(-1)
+    , m_hoveredTab(-1)
     , m_tabStyle(TabStyle::DEFAULT)
+    , m_tabPosition(TabPosition::Top)  // Default position
+    , m_tabHeight(24)
+    , m_tabPadding(DEFAULT_TAB_HORIZONTAL_PADDING)
     , m_tabHorizontalPadding(DEFAULT_TAB_HORIZONTAL_PADDING)
     , m_tabVerticalPadding(DEFAULT_TAB_VERTICAL_PADDING)
     , m_tabSpacing(DEFAULT_TAB_SPACING)
-    , m_tabBorderWidth(DEFAULT_TAB_BORDER_WIDTH)
+    , m_tabBorderLeft(DEFAULT_TAB_BORDER_LEFT)
     , m_tabBorderTop(DEFAULT_TAB_BORDER_TOP)
-    , m_tabCornerRadius(DEFAULT_TAB_CORNER_RADIUS)
+    , m_tabBorderBottom(DEFAULT_TAB_BORDER_BOTTOM)
     , m_useConfigFont(true)
-    , m_hoveredTab(-1)
 {
+    // Set background style for custom painting
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     SetDoubleBuffered(true);
-    
+
+    // Set tab position based on style
+    if (style & wxNB_LEFT) {
+        m_tabPosition = TabPosition::Left;
+    } else if (style & wxNB_RIGHT) {
+        m_tabPosition = TabPosition::Right;
+    } else if (style & wxNB_BOTTOM) {
+        m_tabPosition = TabPosition::Bottom;
+    } else {
+        m_tabPosition = TabPosition::Top;  // Default to top
+    }
+
+    // Initialize FlatBar-style tab properties
+    m_tabHeight = 24;
+    m_tabPadding = DEFAULT_TAB_HORIZONTAL_PADDING;
+
+    // Initialize colors from theme
     InitializeDefaultColors();
-    ReloadFontFromConfig();
-    UpdateBackgroundColor();
-    
+
+    // Set minimum size
+    SetMinSize(wxSize(200, m_tabHeight + 100));
+
     ThemeManager::getInstance().addThemeChangeListener(this, [this]() {
         OnThemeChanged();
     });
@@ -42,6 +66,129 @@ FlatNotebook::FlatNotebook(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 FlatNotebook::~FlatNotebook()
 {
     ThemeManager::getInstance().removeThemeChangeListener(this);
+}
+
+int FlatNotebook::AddPage(wxWindow* page, const wxString& text, bool select, int imageId)
+{
+    wxUnusedVar(imageId);
+
+    if (!page) return -1;
+
+    // Create page info
+    auto pageInfo = std::make_unique<PageInfo>(page, text);
+
+    // Reparent page to this notebook
+    page->Reparent(this);
+    page->Hide(); // Initially hidden
+
+    // Add to pages collection
+    m_pages.push_back(std::move(pageInfo));
+    int pageIndex = static_cast<int>(m_pages.size() - 1);
+
+    // Select if requested or if this is the first page
+    if (select || m_selectedPage == -1) {
+        SetSelection(pageIndex);
+    }
+
+    // Update layout
+    UpdateTabLayout();
+
+    return pageIndex;
+}
+
+bool FlatNotebook::DeletePage(size_t page)
+{
+    if (page >= m_pages.size()) return false;
+
+    // Hide and unparent the page
+    m_pages[page]->page->Hide();
+    m_pages[page]->page->Reparent(GetParent());
+
+    // Remove from collection
+    m_pages.erase(m_pages.begin() + page);
+
+    // Adjust selected page
+    if (m_selectedPage == static_cast<int>(page)) {
+        // Select adjacent page
+        if (m_selectedPage >= static_cast<int>(m_pages.size())) {
+            m_selectedPage = static_cast<int>(m_pages.size()) - 1;
+        }
+        if (m_selectedPage >= 0) {
+            SelectPage(m_selectedPage);
+        }
+        else {
+            m_selectedPage = -1;
+        }
+    }
+    else if (m_selectedPage > static_cast<int>(page)) {
+        m_selectedPage--;
+    }
+
+    // Update layout
+    UpdateTabLayout();
+
+    return true;
+}
+
+bool FlatNotebook::DeleteAllPages()
+{
+    // Hide and unparent all pages
+    for (auto& pageInfo : m_pages) {
+        pageInfo->page->Hide();
+        pageInfo->page->Reparent(GetParent());
+    }
+
+    m_pages.clear();
+    m_selectedPage = -1;
+    m_hoveredTab = -1;
+
+    return true;
+}
+
+int FlatNotebook::GetSelection() const
+{
+    return m_selectedPage;
+}
+
+bool FlatNotebook::SetSelection(size_t page)
+{
+    if (page >= m_pages.size()) return false;
+
+    SelectPage(static_cast<int>(page));
+    return true;
+}
+
+wxWindow* FlatNotebook::GetPage(size_t page) const
+{
+    if (page >= m_pages.size()) return nullptr;
+    return m_pages[page]->page;
+}
+
+wxString FlatNotebook::GetPageText(size_t page) const
+{
+    if (page >= m_pages.size()) return wxEmptyString;
+    return m_pages[page]->text;
+}
+
+bool FlatNotebook::SetPageText(size_t page, const wxString& text)
+{
+    if (page >= m_pages.size()) return false;
+
+    m_pages[page]->text = text;
+    UpdateTabLayout();
+
+    return true;
+}
+
+size_t FlatNotebook::GetPageCount() const
+{
+    return m_pages.size();
+}
+
+void FlatNotebook::OnPageChanged(int page)
+{
+    // This can be overridden by derived classes
+    wxUnusedVar(page);
 }
 
 void FlatNotebook::InitializeDefaultColors()
@@ -54,15 +201,13 @@ void FlatNotebook::InitializeDefaultColors()
     m_activeTabTextColor = CFG_COLOUR("BarActiveTextColour");
     m_hoverTabTextColor = CFG_COLOUR("BarActiveTextColour");
     m_tabBorderColor = CFG_COLOUR("BarTabBorderColour");
-    m_tabBorderTopColor = CFG_COLOUR("BarTabBorderTopColour");
+    m_tabBorderLeftColor = CFG_COLOUR("BarTabBorderTopColour");
 }
 
 void FlatNotebook::OnThemeChanged()
 {
     InitializeDefaultColors();
     ReloadFontFromConfig();
-    UpdateBackgroundColor();
-    Refresh();
 }
 
 void FlatNotebook::ReloadFontFromConfig()
@@ -71,358 +216,582 @@ void FlatNotebook::ReloadFontFromConfig()
     {
         m_customFont = CFG_FONT();
     }
-    Refresh();
 }
 
 void FlatNotebook::OnPaint(wxPaintEvent& event)
 {
     wxAutoBufferedPaintDC dc(this);
-    wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
-    
-    if (!gc)
-    {
-        event.Skip();
-        return;
-    }
-    
-    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-    
-    DrawBackground(*gc);
-    DrawTabs(*gc);
-    
-    delete gc;
-    event.Skip();
-}
 
-void FlatNotebook::OnSize(wxSizeEvent& event)
-{
-    Refresh();
-    event.Skip();
-}
+    // Clear background
+    dc.SetBackground(wxBrush(m_tabBackgroundColor));
+    dc.Clear();
 
-void FlatNotebook::OnEraseBackground(wxEraseEvent& event)
-{
-}
+    // Paint content area border
+    if (m_selectedPage >= 0) {
+        wxSize clientSize = GetClientSize();
+        dc.SetPen(wxPen(CFG_COLOUR("BarBorderColour"), 1));
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
-void FlatNotebook::OnMouseMove(wxMouseEvent& event)
-{
-    wxPoint pos = event.GetPosition();
-    int tabIndex = GetTabAtPosition(pos);
-    UpdateHoverTab(tabIndex);
-    event.Skip();
-}
-
-void FlatNotebook::OnMouseLeave(wxMouseEvent& event)
-{
-    UpdateHoverTab(-1);
-    event.Skip();
-}
-
-void FlatNotebook::OnMouseEnter(wxMouseEvent& event)
-{
-    wxPoint pos = event.GetPosition();
-    int tabIndex = GetTabAtPosition(pos);
-    UpdateHoverTab(tabIndex);
-    event.Skip();
-}
-
-void FlatNotebook::OnLeftDown(wxMouseEvent& event)
-{
-    wxPoint pos = event.GetPosition();
-    int tabIndex = GetTabAtPosition(pos);
-    
-    if (tabIndex >= 0 && tabIndex < GetPageCount())
-    {
-        SetSelection(tabIndex);
-        Refresh();
-    }
-    
-    event.Skip();
-}
-
-void FlatNotebook::DrawBackground(wxGraphicsContext& gc)
-{
-    wxSize size = GetClientSize();
-    wxColour bgColor = m_tabBackgroundColor;
-    
-    gc.SetBrush(wxBrush(bgColor));
-    gc.SetPen(*wxTRANSPARENT_PEN);
-    gc.DrawRectangle(0, 0, size.GetWidth(), size.GetHeight());
-}
-
-void FlatNotebook::UpdateBackgroundColor()
-{
-    SetBackgroundColour(m_tabBackgroundColor);
-}
-
-void FlatNotebook::DrawTabs(wxGraphicsContext& gc)
-{
-    int pageCount = GetPageCount();
-    if (pageCount == 0) return;
-    
-    int currentSelection = GetSelection();
-    
-    for (int i = 0; i < pageCount; ++i)
-    {
-        wxRect tabRect = GetTabRect(i);
-        bool isActive = (i == currentSelection);
-        bool isHovered = (i == m_hoveredTab);
-        
-        DrawTab(gc, i, tabRect, isActive, isHovered);
-    }
-}
-
-void FlatNotebook::DrawTab(wxGraphicsContext& gc, int tabIndex, const wxRect& tabRect, bool isActive, bool isHovered)
-{
-    // FlatBar style: only active tab has background and borders
-    if (isActive)
-    {
-        // Draw background (excluding top border area)
-        wxColour bgColor = GetCurrentTabBackgroundColor(tabIndex, isActive, isHovered);
-        gc.SetBrush(wxBrush(bgColor));
-        gc.SetPen(*wxTRANSPARENT_PEN);
-        gc.DrawRectangle(tabRect.x, tabRect.y + m_tabBorderTop, tabRect.width, tabRect.height - m_tabBorderTop);
-        
-        // Draw borders (top, left, right)
-        DrawTabBorder(gc, tabRect, isActive, isHovered);
-    }
-    else
-    {
-        // Inactive tab: no background, no borders (FlatBar style)
-        // Only draw text
-    }
-    
-    // Draw tab content (text)
-    DrawTabContent(gc, tabIndex, tabRect, isActive, isHovered);
-}
-
-void FlatNotebook::DrawTabContent(wxGraphicsContext& gc, int tabIndex, const wxRect& tabRect, bool isActive, bool isHovered)
-{
-    if (tabIndex < 0 || tabIndex >= GetPageCount()) return;
-    
-    wxString pageText = GetPageText(tabIndex);
-    if (pageText.IsEmpty()) return;
-    
-    wxColour textColor = GetCurrentTabTextColor(tabIndex, isActive, isHovered);
-    
-    wxFont font = m_useConfigFont ? m_customFont : GetFont();
-    if (!font.IsOk())
-    {
-        font = GetFont();
-    }
-    
-    gc.SetFont(font, textColor);
-    
-    double textWidth, textHeight, descent, externalLeading;
-    gc.GetTextExtent(pageText, &textWidth, &textHeight, &descent, &externalLeading);
-    
-    double textX = tabRect.x + m_tabHorizontalPadding;
-    double textY = tabRect.y + (tabRect.height - textHeight) / 2.0;
-    
-    gc.DrawText(pageText, textX, textY);
-}
-
-void FlatNotebook::DrawTabBorder(wxGraphicsContext& gc, const wxRect& tabRect, bool isActive, bool isHovered)
-{
-    // FlatBar style: only active tab has borders
-    if (!isActive) return;
-    
-    // Draw top border
-    if (m_tabBorderTop > 0 && m_tabBorderTopColor.IsOk())
-    {
-        gc.SetPen(wxPen(m_tabBorderTopColor, m_tabBorderTop));
-        gc.StrokeLine(tabRect.x, tabRect.y + m_tabBorderTop / 2.0, 
-                     tabRect.x + tabRect.width, tabRect.y + m_tabBorderTop / 2.0);
-    }
-    
-    // Draw left border
-    if (m_tabBorderWidth > 0 && m_tabBorderColor.IsOk())
-    {
-        gc.SetPen(wxPen(m_tabBorderColor, m_tabBorderWidth));
-        gc.StrokeLine(tabRect.x, tabRect.y + m_tabBorderTop, 
-                     tabRect.x, tabRect.y + tabRect.height);
-    }
-    
-    // Draw right border
-    if (m_tabBorderWidth > 0 && m_tabBorderColor.IsOk())
-    {
-        gc.SetPen(wxPen(m_tabBorderColor, m_tabBorderWidth));
-        gc.StrokeLine(tabRect.x + tabRect.width, tabRect.y + m_tabBorderTop, 
-                     tabRect.x + tabRect.width, tabRect.y + tabRect.height);
-    }
-}
-
-wxRect FlatNotebook::GetTabRect(int tabIndex) const
-{
-    if (tabIndex < 0 || tabIndex >= GetPageCount())
-    {
-        return wxRect();
-    }
-    
-    wxSize clientSize = GetClientSize();
-    int tabWidth = clientSize.GetWidth();
-    
-    wxFont font = m_useConfigFont ? m_customFont : GetFont();
-    if (!font.IsOk())
-    {
-        font = GetFont();
-    }
-    
-    wxClientDC dc(const_cast<FlatNotebook*>(this));
-    dc.SetFont(font);
-    
-    wxString pageText = GetPageText(tabIndex);
-    wxSize textSize = dc.GetTextExtent(pageText);
-    
-    int tabHeight = textSize.GetHeight() + m_tabVerticalPadding * 2;
-    if (tabHeight < 30)
-    {
-        tabHeight = 30;
-    }
-    
-    int yPos = 0;
-    for (int i = 0; i < tabIndex; ++i)
-    {
-        wxString prevText = GetPageText(i);
-        wxSize prevTextSize = dc.GetTextExtent(prevText);
-        int prevTabHeight = prevTextSize.GetHeight() + m_tabVerticalPadding * 2;
-        if (prevTabHeight < 30)
-        {
-            prevTabHeight = 30;
+        switch (m_tabPosition) {
+        case FlatNotebook::TabPosition::Left:
+            dc.DrawLine(m_tabPadding * 2 + 100 + 4, 0, m_tabPadding * 2 + 100 + 4, clientSize.GetHeight());
+            break;
+        case FlatNotebook::TabPosition::Right:
+            dc.DrawLine(clientSize.GetWidth() - (m_tabPadding * 2 + 100 + 4), 0,
+                      clientSize.GetWidth() - (m_tabPadding * 2 + 100 + 4), clientSize.GetHeight());
+            break;
+        case FlatNotebook::TabPosition::Top:
+            dc.DrawLine(0, m_tabHeight + 4, clientSize.GetWidth(), m_tabHeight + 4);
+            break;
+        case FlatNotebook::TabPosition::Bottom:
+            dc.DrawLine(0, clientSize.GetHeight() - m_tabHeight - 4,
+                      clientSize.GetWidth(), clientSize.GetHeight() - m_tabHeight - 4);
+            break;
         }
-        yPos += prevTabHeight + m_tabSpacing;
     }
+
+    // Paint tabs using FlatBar style (using DC instead of GraphicsContext)
+    DrawTabs(dc);
     
-    return wxRect(0, yPos, tabWidth, tabHeight);
+    // Draw tab bar right border (skip active tab area)
+    if (!m_pages.empty()) {
+        wxSize clientSize = GetClientSize();
+        dc.SetPen(wxPen(m_tabBorderColor, 1));
+        
+        if (m_tabPosition == TabPosition::Left || m_tabPosition == TabPosition::Right) {
+            // Vertical tabs: draw right border of tab area, but skip active tab
+            int maxTabRight = 0;
+            for (const auto& pageInfo : m_pages) {
+                int tabRight = pageInfo->tabRect.GetRight();
+                if (tabRight > maxTabRight) {
+                    maxTabRight = tabRight;
+                }
+            }
+            if (maxTabRight > 0 && m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                // Draw vertical line at the right edge, but skip active tab area
+                const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
+                // Draw line above active tab
+                if (activeTabRect.GetTop() > 0) {
+                    dc.DrawLine(maxTabRight, 0, maxTabRight, activeTabRect.GetTop());
+                }
+                // Draw line below active tab
+                if (activeTabRect.GetBottom() < clientSize.GetHeight()) {
+                    dc.DrawLine(maxTabRight, activeTabRect.GetBottom() + 1, maxTabRight, clientSize.GetHeight());
+                }
+            } else if (maxTabRight > 0) {
+                // No active tab, draw full line
+                dc.DrawLine(maxTabRight, 0, maxTabRight, clientSize.GetHeight());
+            }
+        } else {
+            // Horizontal tabs: draw right border at the right edge of tab area, but skip active tab
+            int maxTabRight = 0;
+            for (const auto& pageInfo : m_pages) {
+                int tabRight = pageInfo->tabRect.GetRight();
+                if (tabRight > maxTabRight) {
+                    maxTabRight = tabRight;
+                }
+            }
+            if (maxTabRight > 0) {
+                int tabY = (m_tabPosition == TabPosition::Top) ? 4 : clientSize.GetHeight() - m_tabHeight - 4;
+                int tabBottom = tabY + m_tabHeight;
+                
+                if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                    // Draw vertical line at the right edge, but skip active tab area
+                    const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
+                    // If active tab is at the rightmost position, don't draw line at its right edge
+                    // Otherwise, draw the line normally
+                    if (activeTabRect.GetRight() < maxTabRight) {
+                        // Active tab is not rightmost, draw full line
+                        dc.DrawLine(maxTabRight, tabY, maxTabRight, tabBottom);
+                    }
+                    // If active tab is rightmost, its right edge is not drawn (handled in RenderTab)
+                } else {
+                    // No active tab, draw full line
+                    dc.DrawLine(maxTabRight, tabY, maxTabRight, tabBottom);
+                }
+            }
+        }
+    }
 }
 
-int FlatNotebook::GetTabAtPosition(const wxPoint& pos) const
+void FlatNotebook::DrawTabs(wxDC& dc)
 {
-    int pageCount = GetPageCount();
-    for (int i = 0; i < pageCount; ++i)
-    {
-        wxRect tabRect = GetTabRect(i);
-        if (tabRect.Contains(pos))
-        {
-            return i;
+    if (m_pages.empty()) return;
+
+    wxSize clientSize = GetClientSize();
+
+    // Set up drawing context
+    wxFont tabFont = m_useConfigFont ? m_customFont : GetFont();
+    if (!tabFont.IsOk()) {
+        tabFont = GetFont();
+    }
+    dc.SetFont(tabFont);
+
+    if (m_tabPosition == TabPosition::Top || m_tabPosition == TabPosition::Bottom) {
+        // Horizontal layout for top/bottom tabs
+        int currentX = 4; // Left margin
+        int tabY = (m_tabPosition == TabPosition::Top) ? 4 : clientSize.GetHeight() - m_tabHeight - 4;
+
+        // Paint each tab
+        for (size_t i = 0; i < m_pages.size(); ++i) {
+            bool isActive = (static_cast<int>(i) == m_selectedPage);
+            bool isHovered = (static_cast<int>(i) == m_hoveredTab);
+
+            // Calculate tab width
+            wxSize textSize = dc.GetTextExtent(m_pages[i]->text);
+            int tabWidth = textSize.GetWidth() + m_tabHorizontalPadding * 2; // padding
+
+            // Create tab rectangle (horizontal layout)
+            wxRect tabRect(currentX, tabY, tabWidth, m_tabHeight);
+            m_pages[i]->tabRect = tabRect;
+
+            // Render tab using FlatBar style
+            RenderTab(dc, tabRect, m_pages[i]->text, isActive, isHovered);
+
+            currentX += tabWidth + m_tabSpacing; // spacing
+        }
+    }
+    else {
+        // Vertical layout for left/right tabs
+        // For rotated text: width = original text height, height = original text width
+        int currentY = 4; // Top margin
+
+        // Paint each tab
+        for (size_t i = 0; i < m_pages.size(); ++i) {
+            bool isActive = (static_cast<int>(i) == m_selectedPage);
+            bool isHovered = (static_cast<int>(i) == m_hoveredTab);
+
+            // Calculate tab dimensions for rotated text
+            wxSize textSize = dc.GetTextExtent(m_pages[i]->text);
+            // For vertical tabs: width = original height (rotated), height = original width (rotated)
+            int tabWidth = textSize.GetHeight() + m_tabVerticalPadding * 2; // Use vertical padding for width
+            int tabHeight = textSize.GetWidth() + m_tabHorizontalPadding * 2; // Use horizontal padding for height
+            
+            int tabX = (m_tabPosition == TabPosition::Left) ? 4 : clientSize.GetWidth() - tabWidth - 4;
+
+            // Create tab rectangle (vertical layout)
+            wxRect tabRect(tabX, currentY, tabWidth, tabHeight);
+            m_pages[i]->tabRect = tabRect;
+
+            // Render tab using FlatBar style
+            RenderTab(dc, tabRect, m_pages[i]->text, isActive, isHovered);
+
+            currentY += tabHeight + m_tabSpacing; // spacing
+        }
+    }
+}
+
+
+void FlatNotebook::RenderTab(wxDC& dc, const wxRect& rect, const wxString& text, bool isActive, bool isHovered)
+{
+    // Determine border drawing based on tab position
+    bool isVertical = (m_tabPosition == TabPosition::Left || m_tabPosition == TabPosition::Right);
+
+    if (isActive) {
+        // Active tab - FlatBar style
+        wxColour activeTabBgColour = m_activeTabBackgroundColor;
+        wxColour activeTabTextColour = m_activeTabTextColor;
+        wxColour tabBorderColour = m_tabBorderColor;
+
+        dc.SetBrush(wxBrush(activeTabBgColour));
+        dc.SetTextForeground(activeTabTextColour);
+
+        // Draw borders based on position
+        dc.SetPen(*wxTRANSPARENT_PEN);
+
+        if (isVertical) {
+            // Vertical tabs (left/right)
+            int borderOffset = (m_tabPosition == TabPosition::Left) ? m_tabBorderLeft : 0;
+            int borderX = rect.x + borderOffset;
+
+            // Fill background
+            dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
+
+            // Draw borders
+            if (m_tabBorderLeft > 0 && m_tabPosition == TabPosition::Left) {
+                dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderLeft));
+                dc.DrawLine(rect.GetLeft() + m_tabBorderLeft / 2, rect.GetTop(),
+                          rect.GetLeft() + m_tabBorderLeft / 2, rect.GetBottom() + 1);
+            }
+            dc.SetPen(wxPen(tabBorderColour, m_tabBorderTop));
+            dc.DrawLine(rect.GetLeft() + borderOffset, rect.GetTop(),
+                      rect.GetRight(), rect.GetTop());
+            dc.DrawLine(rect.GetLeft() + borderOffset, rect.GetBottom() + 1,
+                      rect.GetRight(), rect.GetBottom() + 1);
+            // Right border not drawn for vertical tabs
+        } else {
+            // Horizontal tabs (top/bottom)
+            int borderOffset = (m_tabPosition == TabPosition::Top) ? m_tabBorderTop : 0;
+            int borderY = rect.y + borderOffset;
+
+            // Fill background
+            dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset);
+
+            // Draw borders
+            if (m_tabBorderTop > 0 && m_tabPosition == TabPosition::Top) {
+                dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderTop));
+                dc.DrawLine(rect.GetLeft(), rect.GetTop() + m_tabBorderTop / 2,
+                          rect.GetRight() + 1, rect.GetTop() + m_tabBorderTop / 2);
+            }
+            dc.SetPen(wxPen(tabBorderColour, m_tabBorderLeft));
+            dc.DrawLine(rect.GetLeft(), rect.GetTop() + borderOffset,
+                      rect.GetLeft(), rect.GetBottom());
+            // Right border not drawn for horizontal tabs
+            dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
+                      rect.GetRight() + 1, rect.GetBottom());
+        }
+    }
+    else if (isHovered) {
+        // Hovered tab - draw hover background
+        wxColour hoverTabBgColour = m_hoverTabBackgroundColor;
+        wxColour hoverTabTextColour = m_hoverTabTextColor;
+
+        dc.SetBrush(wxBrush(hoverTabBgColour));
+        dc.SetTextForeground(hoverTabTextColour);
+        dc.SetPen(*wxTRANSPARENT_PEN);
+
+        if (isVertical) {
+            // Vertical tabs (left/right)
+            int borderOffset = (m_tabPosition == TabPosition::Left) ? m_tabBorderLeft : 0;
+            int borderX = rect.x + borderOffset;
+            dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
+        } else {
+            // Horizontal tabs (top/bottom)
+            int borderOffset = (m_tabPosition == TabPosition::Top) ? m_tabBorderTop : 0;
+            int borderY = rect.y + borderOffset;
+            dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset);
+        }
+    }
+    else {
+        // Inactive tab - no background, no borders (FlatBar style)
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetTextForeground(m_tabTextColor);
+    }
+
+    // Draw tab text (always draw after background)
+    DrawTabText(dc, rect, text);
+}
+
+void FlatNotebook::DrawTabText(wxDC& dc, const wxRect& rect, const wxString& text)
+{
+    if (m_tabPosition == TabPosition::Left || m_tabPosition == TabPosition::Right) {
+        // Vertical tabs - rotate text
+        // Try to create GraphicsContext from the DC first
+        wxGraphicsContext* gc = nullptr;
+        
+        // Try different DC types
+        if (wxAutoBufferedPaintDC* autoPaintDC = dynamic_cast<wxAutoBufferedPaintDC*>(&dc)) {
+            gc = wxGraphicsContext::Create(*autoPaintDC);
+        }
+        else if (wxClientDC* clientDC = dynamic_cast<wxClientDC*>(&dc)) {
+            gc = wxGraphicsContext::Create(*clientDC);
+        }
+        else if (wxMemoryDC* memDC = dynamic_cast<wxMemoryDC*>(&dc)) {
+            gc = wxGraphicsContext::Create(*memDC);
+        }
+        else if (wxWindowDC* winDC = dynamic_cast<wxWindowDC*>(&dc)) {
+            gc = wxGraphicsContext::Create(*winDC);
+        }
+        else if (wxPaintDC* paintDC = dynamic_cast<wxPaintDC*>(&dc)) {
+            gc = wxGraphicsContext::Create(*paintDC);
+        }
+        
+        // Fallback to creating from window if DC creation failed
+        if (!gc) {
+            gc = wxGraphicsContext::Create(this);
+        }
+        
+        if (gc) {
+            wxFont tabFont = m_useConfigFont ? m_customFont : GetFont();
+            if (!tabFont.IsOk()) {
+                tabFont = GetFont();
+            }
+
+            wxColour textColor = dc.GetTextForeground();
+            gc->SetFont(tabFont, textColor);
+
+            double textWidth, textHeight, descent, externalLeading;
+            gc->GetTextExtent(text, &textWidth, &textHeight, &descent, &externalLeading);
+
+            gc->PushState();
+            double centerX = rect.x + rect.width / 2.0;
+            double centerY = rect.y + rect.height / 2.0;
+
+            // Rotate based on position: left = counterclockwise (-90°), right = clockwise (+90°)
+            double rotation = (m_tabPosition == TabPosition::Left) ? -M_PI / 2.0 : M_PI / 2.0;
+            gc->Translate(centerX, centerY);
+            gc->Rotate(rotation);
+            gc->DrawText(text, -textWidth / 2.0, -textHeight / 2.0);
+            gc->PopState();
+
+            delete gc;
+        }
+    } else {
+        // Horizontal tabs (top/bottom) - normal text
+        wxSize textSize = dc.GetTextExtent(text);
+        int textX = rect.x + (rect.width - textSize.GetWidth()) / 2;
+        int textY = rect.y + (rect.height - textSize.GetHeight()) / 2;
+        dc.DrawText(text, textX, textY);
+    }
+}
+
+
+void FlatNotebook::UpdateTabLayout()
+{
+    if (m_pages.empty()) return;
+
+    // Update tab rectangles
+    wxClientDC dc(this);
+    wxFont font = m_useConfigFont ? m_customFont : GetFont();
+    if (!font.IsOk()) {
+        font = GetFont();
+    }
+    dc.SetFont(font);
+
+    wxSize clientSize = GetClientSize();
+
+    if (m_tabPosition == TabPosition::Top || m_tabPosition == TabPosition::Bottom) {
+        // Horizontal layout for top/bottom tabs
+        int currentX = 4; // Left margin
+        int tabY = (m_tabPosition == TabPosition::Top) ? 4 : clientSize.GetHeight() - m_tabHeight - 4;
+
+        for (auto& pageInfo : m_pages) {
+            wxSize textSize = dc.GetTextExtent(pageInfo->text);
+            int tabWidth = textSize.GetWidth() + m_tabHorizontalPadding * 2; // padding
+
+            pageInfo->tabRect = wxRect(currentX, tabY, tabWidth, m_tabHeight);
+            currentX += tabWidth + m_tabSpacing; // spacing
+        }
+    }
+    else {
+        // Vertical layout for left/right tabs
+        // For rotated text: width = original text height, height = original text width
+        int currentY = 4; // Top margin
+
+        for (auto& pageInfo : m_pages) {
+            // Calculate tab dimensions for rotated text
+            wxSize textSize = dc.GetTextExtent(pageInfo->text);
+            // For vertical tabs: width = original height (rotated), height = original width (rotated)
+            int tabWidth = textSize.GetHeight() + m_tabVerticalPadding * 2; // Use vertical padding for width
+            int tabHeight = textSize.GetWidth() + m_tabHorizontalPadding * 2; // Use horizontal padding for height
+            
+            int tabX = (m_tabPosition == TabPosition::Left) ? 4 : clientSize.GetWidth() - tabWidth - 4;
+
+            pageInfo->tabRect = wxRect(tabX, currentY, tabWidth, tabHeight);
+            currentY += tabHeight + m_tabSpacing; // spacing
+        }
+    }
+
+    // Update content area for selected page
+    if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+        wxRect contentRect = GetContentRect(clientSize);
+
+        // Show selected page and hide others
+        for (size_t i = 0; i < m_pages.size(); ++i) {
+            if (static_cast<int>(i) == m_selectedPage) {
+                m_pages[i]->page->Show();
+                m_pages[i]->page->SetSize(contentRect);
+                m_pages[i]->isActive = true;
+            }
+            else {
+                m_pages[i]->page->Hide();
+                m_pages[i]->isActive = false;
+            }
+        }
+    }
+}
+
+
+wxRect FlatNotebook::GetContentRect(const wxSize& clientSize) const
+{
+    switch (m_tabPosition) {
+    case FlatNotebook::TabPosition::Top:
+        return wxRect(0, 24 + 4, clientSize.GetWidth(), clientSize.GetHeight() - 24 - 4);
+    case FlatNotebook::TabPosition::Bottom: {
+        int contentHeight = clientSize.GetHeight() - 24 - 4;
+        return wxRect(0, 0, clientSize.GetWidth(), contentHeight);
+    }
+    case FlatNotebook::TabPosition::Left: {
+        // Calculate maximum tab width
+        int maxTabWidth = 0;
+        if (!m_pages.empty()) {
+            wxClientDC dc(const_cast<FlatNotebook*>(this));
+            wxFont font = m_useConfigFont ? m_customFont : GetFont();
+            if (!font.IsOk()) {
+                font = GetFont();
+            }
+            dc.SetFont(font);
+            for (const auto& pageInfo : m_pages) {
+                wxSize textSize = dc.GetTextExtent(pageInfo->text);
+                int tabWidth = textSize.GetHeight() + m_tabVerticalPadding * 2;
+                if (tabWidth > maxTabWidth) {
+                    maxTabWidth = tabWidth;
+                }
+            }
+        }
+        int tabAreaWidth = maxTabWidth + 8; // Add margin
+        return wxRect(tabAreaWidth, 0, clientSize.GetWidth() - tabAreaWidth, clientSize.GetHeight());
+    }
+    case FlatNotebook::TabPosition::Right: {
+        // Calculate maximum tab width
+        int maxTabWidth = 0;
+        if (!m_pages.empty()) {
+            wxClientDC dc(const_cast<FlatNotebook*>(this));
+            wxFont font = m_useConfigFont ? m_customFont : GetFont();
+            if (!font.IsOk()) {
+                font = GetFont();
+            }
+            dc.SetFont(font);
+            for (const auto& pageInfo : m_pages) {
+                wxSize textSize = dc.GetTextExtent(pageInfo->text);
+                int tabWidth = textSize.GetHeight() + m_tabVerticalPadding * 2;
+                if (tabWidth > maxTabWidth) {
+                    maxTabWidth = tabWidth;
+                }
+            }
+        }
+        int tabAreaWidth = maxTabWidth + 8; // Add margin
+        return wxRect(0, 0, clientSize.GetWidth() - tabAreaWidth, clientSize.GetHeight());
+    }
+    default:
+        return wxRect(0, 0, clientSize.GetWidth(), clientSize.GetHeight());
+    }
+}
+
+int FlatNotebook::HitTestTab(const wxPoint& pos) const
+{
+    for (size_t i = 0; i < m_pages.size(); ++i) {
+        if (m_pages[i]->tabRect.Contains(pos)) {
+            return static_cast<int>(i);
         }
     }
     return -1;
 }
 
-void FlatNotebook::UpdateHoverTab(int tabIndex)
+void FlatNotebook::SelectPage(int page)
 {
-    if (m_hoveredTab != tabIndex)
-    {
-        m_hoveredTab = tabIndex;
+    if (page < 0 || page >= static_cast<int>(m_pages.size())) return;
+
+    // Hide currently selected page
+    if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+        m_pages[m_selectedPage]->page->Hide();
+        m_pages[m_selectedPage]->isActive = false;
+    }
+
+    // Update selection
+    m_selectedPage = page;
+
+    // Show new selected page
+    if (m_selectedPage >= 0) {
+        wxSize clientSize = GetClientSize();
+        wxRect contentRect = GetContentRect(clientSize);
+
+        m_pages[m_selectedPage]->page->Show();
+        m_pages[m_selectedPage]->page->SetSize(contentRect);
+        m_pages[m_selectedPage]->isActive = true;
+
+        // Notify page change
+        OnPageChanged(m_selectedPage);
+    }
+
+    Refresh();
+}
+
+void FlatNotebook::OnLeftDown(wxMouseEvent& event)
+{
+    wxPoint pos = event.GetPosition();
+    int tabIndex = HitTestTab(pos);
+
+    if (tabIndex >= 0 && tabIndex != m_selectedPage) {
+        SelectPage(tabIndex);
+    }
+
+    event.Skip();
+}
+
+void FlatNotebook::OnMouseMove(wxMouseEvent& event)
+{
+    wxPoint pos = event.GetPosition();
+    int newHoveredTab = HitTestTab(pos);
+
+    if (newHoveredTab != m_hoveredTab) {
+        m_hoveredTab = newHoveredTab;
         Refresh();
     }
+
+    event.Skip();
 }
 
-wxColour FlatNotebook::GetCurrentTabBackgroundColor(int tabIndex, bool isActive, bool isHovered) const
+void FlatNotebook::OnMouseLeave(wxMouseEvent& event)
 {
-    // FlatBar style: only active tab has background
-    if (isActive)
-    {
-        return m_activeTabBackgroundColor;
+    if (m_hoveredTab != -1) {
+        m_hoveredTab = -1;
+        Refresh();
     }
-    else if (isHovered)
-    {
-        // Hovered inactive tab can have subtle background
-        return m_hoverTabBackgroundColor;
-    }
-    else
-    {
-        // Inactive tab: transparent background
-        return wxColour(0, 0, 0, 0); // Transparent
-    }
+
+    event.Skip();
 }
 
-wxColour FlatNotebook::GetCurrentTabTextColor(int tabIndex, bool isActive, bool isHovered) const
+void FlatNotebook::OnSize(wxSizeEvent& event)
 {
-    if (isActive)
-    {
-        return m_activeTabTextColor;
-    }
-    else if (isHovered)
-    {
-        return m_hoverTabTextColor;
-    }
-    else
-    {
-        return m_tabTextColor;
-    }
+    UpdateTabLayout();
+    event.Skip();
 }
 
-wxColour FlatNotebook::GetCurrentTabBorderColor(int tabIndex, bool isActive, bool isHovered) const
+void FlatNotebook::SetTabPosition(TabPosition position)
 {
-    // FlatBar style: only active tab has borders
-    if (isActive)
-    {
-        return m_tabBorderColor;
+    if (m_tabPosition != position) {
+        m_tabPosition = position;
+        UpdateTabLayout();
+        Refresh();
     }
-    return wxColour(); // No border for inactive tabs
 }
 
 void FlatNotebook::SetTabStyle(TabStyle style)
 {
     m_tabStyle = style;
-    Refresh();
 }
 
 void FlatNotebook::SetTabBackgroundColor(const wxColour& color)
 {
     m_tabBackgroundColor = color;
-    Refresh();
 }
 
 void FlatNotebook::SetActiveTabBackgroundColor(const wxColour& color)
 {
     m_activeTabBackgroundColor = color;
-    Refresh();
 }
 
 void FlatNotebook::SetHoverTabBackgroundColor(const wxColour& color)
 {
     m_hoverTabBackgroundColor = color;
-    Refresh();
 }
 
 void FlatNotebook::SetTabTextColor(const wxColour& color)
 {
     m_tabTextColor = color;
-    Refresh();
 }
 
 void FlatNotebook::SetActiveTabTextColor(const wxColour& color)
 {
     m_activeTabTextColor = color;
-    Refresh();
 }
 
 void FlatNotebook::SetHoverTabTextColor(const wxColour& color)
 {
     m_hoverTabTextColor = color;
-    Refresh();
 }
 
 void FlatNotebook::SetTabBorderColor(const wxColour& color)
 {
     m_tabBorderColor = color;
-    Refresh();
-}
-
-void FlatNotebook::SetTabBorderTopColor(const wxColour& color)
-{
-    m_tabBorderTopColor = color;
-    Refresh();
 }
 
 void FlatNotebook::SetTabPadding(int horizontal, int vertical)
 {
     m_tabHorizontalPadding = horizontal;
     m_tabVerticalPadding = vertical;
-    Refresh();
 }
 
 void FlatNotebook::GetTabPadding(int& horizontal, int& vertical) const
@@ -434,14 +803,12 @@ void FlatNotebook::GetTabPadding(int& horizontal, int& vertical) const
 void FlatNotebook::SetTabSpacing(int spacing)
 {
     m_tabSpacing = spacing;
-    Refresh();
 }
 
 void FlatNotebook::SetCustomFont(const wxFont& font)
 {
     m_customFont = font;
     m_useConfigFont = false;
-    Refresh();
 }
 
 void FlatNotebook::UseConfigFont(bool useConfig)
@@ -451,6 +818,4 @@ void FlatNotebook::UseConfigFont(bool useConfig)
     {
         ReloadFontFromConfig();
     }
-    Refresh();
 }
-

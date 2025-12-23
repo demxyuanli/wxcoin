@@ -13,6 +13,7 @@
 #include <wx/sizer.h>
 #include <wx/choice.h>
 #include <wx/panel.h>
+#include "widgets/FlatNotebook.h"
 #include <wx/scrolwin.h>
 #include <wx/splitter.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
@@ -79,7 +80,7 @@ private:
     
     wxColour getColorFromDialog(const wxColour& initialColor);
     
-    wxNotebook* m_notebook;
+    FlatNotebook* m_notebook;
     
     struct ModeControls {
         wxPanel* page;
