@@ -5,6 +5,7 @@
 #include <wx/notebook.h>
 #include <wx/bitmap.h>
 #include <wx/graphics.h>
+#include <wx/scrolbar.h>
 #include <vector>
 #include <memory>
 
@@ -171,6 +172,14 @@ private:
     // Font configuration
     wxFont m_customFont;
     bool m_useConfigFont;
+
+    // Scrolling for vertical tabs
+    wxScrollBar* m_scrollBar;
+    int m_scrollOffset;
+
+    // Scrollbar management
+    void UpdateScrollbar();
+    void OnScroll(wxScrollEvent& event);
 
 public:
     // Constants

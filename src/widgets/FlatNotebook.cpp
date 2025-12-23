@@ -7,6 +7,8 @@
 #include <wx/dc.h>
 #include <wx/sizer.h>
 #include <wx/graphics.h>
+#include <wx/scrolbar.h>
+#include <wx/settings.h>
 #include <cmath>
 
 wxBEGIN_EVENT_TABLE(FlatNotebook, wxPanel)
@@ -15,6 +17,7 @@ wxBEGIN_EVENT_TABLE(FlatNotebook, wxPanel)
     EVT_MOTION(FlatNotebook::OnMouseMove)
     EVT_LEAVE_WINDOW(FlatNotebook::OnMouseLeave)
     EVT_SIZE(FlatNotebook::OnSize)
+    EVT_SCROLL(FlatNotebook::OnScroll)
 wxEND_EVENT_TABLE()
 
 FlatNotebook::FlatNotebook(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
@@ -32,6 +35,8 @@ FlatNotebook::FlatNotebook(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
     , m_tabBorderTop(DEFAULT_TAB_BORDER_TOP)
     , m_tabBorderBottom(DEFAULT_TAB_BORDER_BOTTOM)
     , m_useConfigFont(true)
+    , m_scrollBar(nullptr)
+    , m_scrollOffset(0)
 {
     // Set background style for custom painting
     SetBackgroundStyle(wxBG_STYLE_PAINT);
@@ -66,6 +71,10 @@ FlatNotebook::FlatNotebook(wxWindow* parent, wxWindowID id, const wxPoint& pos, 
 FlatNotebook::~FlatNotebook()
 {
     ThemeManager::getInstance().removeThemeChangeListener(this);
+    if (m_scrollBar) {
+        m_scrollBar->Destroy();
+        m_scrollBar = nullptr;
+    }
 }
 
 int FlatNotebook::AddPage(wxWindow* page, const wxString& text, bool select, int imageId)
@@ -234,12 +243,34 @@ void FlatNotebook::OnPaint(wxPaintEvent& event)
 
         switch (m_tabPosition) {
         case FlatNotebook::TabPosition::Left:
+            // Left tabs: draw right border of tab area (left border of content area)
             dc.DrawLine(m_tabPadding * 2 + 100 + 4, 0, m_tabPadding * 2 + 100 + 4, clientSize.GetHeight());
             break;
-        case FlatNotebook::TabPosition::Right:
-            dc.DrawLine(clientSize.GetWidth() - (m_tabPadding * 2 + 100 + 4), 0,
-                      clientSize.GetWidth() - (m_tabPadding * 2 + 100 + 4), clientSize.GetHeight());
+        case FlatNotebook::TabPosition::Right: {
+            // Right tabs: draw left border of tab area (right border of content area)
+            // Calculate tab area width
+            int tabAreaWidth = 0;
+            if (!m_pages.empty()) {
+                wxClientDC calcDC(this);
+                wxFont font = m_useConfigFont ? m_customFont : GetFont();
+                if (!font.IsOk()) {
+                    font = GetFont();
+                }
+                calcDC.SetFont(font);
+                int maxTabWidth = 0;
+                for (const auto& pageInfo : m_pages) {
+                    wxSize textSize = calcDC.GetTextExtent(pageInfo->text);
+                    int tabWidth = textSize.GetHeight() + m_tabVerticalPadding * 2;
+                    if (tabWidth > maxTabWidth) {
+                        maxTabWidth = tabWidth;
+                    }
+                }
+                tabAreaWidth = maxTabWidth + 8; // Add margin
+            }
+            dc.DrawLine(clientSize.GetWidth() - tabAreaWidth, 0,
+                      clientSize.GetWidth() - tabAreaWidth, clientSize.GetHeight());
             break;
+        }
         case FlatNotebook::TabPosition::Top:
             dc.DrawLine(0, m_tabHeight + 4, clientSize.GetWidth(), m_tabHeight + 4);
             break;
@@ -259,55 +290,149 @@ void FlatNotebook::OnPaint(wxPaintEvent& event)
         dc.SetPen(wxPen(m_tabBorderColor, 1));
         
         if (m_tabPosition == TabPosition::Left || m_tabPosition == TabPosition::Right) {
-            // Vertical tabs: draw right border of tab area, but skip active tab
-            int maxTabRight = 0;
-            for (const auto& pageInfo : m_pages) {
-                int tabRight = pageInfo->tabRect.GetRight();
-                if (tabRight > maxTabRight) {
-                    maxTabRight = tabRight;
+            if (m_tabPosition == TabPosition::Left) {
+                // Left tabs: draw right border of tab area, but skip active tab
+                int maxTabRight = 0;
+                for (const auto& pageInfo : m_pages) {
+                    int tabRight = pageInfo->tabRect.GetRight();
+                    if (tabRight > maxTabRight) {
+                        maxTabRight = tabRight;
+                    }
                 }
-            }
-            if (maxTabRight > 0 && m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
-                // Draw vertical line at the right edge, but skip active tab area
-                const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
-                // Draw line above active tab
-                if (activeTabRect.GetTop() > 0) {
-                    dc.DrawLine(maxTabRight, 0, maxTabRight, activeTabRect.GetTop());
-                }
-                // Draw line below active tab
-                if (activeTabRect.GetBottom() < clientSize.GetHeight()) {
-                    dc.DrawLine(maxTabRight, activeTabRect.GetBottom() + 1, maxTabRight, clientSize.GetHeight());
-                }
-            } else if (maxTabRight > 0) {
-                // No active tab, draw full line
-                dc.DrawLine(maxTabRight, 0, maxTabRight, clientSize.GetHeight());
-            }
-        } else {
-            // Horizontal tabs: draw right border at the right edge of tab area, but skip active tab
-            int maxTabRight = 0;
-            for (const auto& pageInfo : m_pages) {
-                int tabRight = pageInfo->tabRect.GetRight();
-                if (tabRight > maxTabRight) {
-                    maxTabRight = tabRight;
-                }
-            }
-            if (maxTabRight > 0) {
-                int tabY = (m_tabPosition == TabPosition::Top) ? 4 : clientSize.GetHeight() - m_tabHeight - 4;
-                int tabBottom = tabY + m_tabHeight;
-                
-                if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                if (maxTabRight > 0 && m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
                     // Draw vertical line at the right edge, but skip active tab area
                     const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
-                    // If active tab is at the rightmost position, don't draw line at its right edge
-                    // Otherwise, draw the line normally
-                    if (activeTabRect.GetRight() < maxTabRight) {
-                        // Active tab is not rightmost, draw full line
-                        dc.DrawLine(maxTabRight, tabY, maxTabRight, tabBottom);
+                    // Draw line above active tab
+                    if (activeTabRect.GetTop() > 0) {
+                        dc.DrawLine(maxTabRight, 0, maxTabRight, activeTabRect.GetTop());
                     }
-                    // If active tab is rightmost, its right edge is not drawn (handled in RenderTab)
+                    // Draw line below active tab
+                    if (activeTabRect.GetBottom() < clientSize.GetHeight()) {
+                        dc.DrawLine(maxTabRight, activeTabRect.GetBottom() + 1, maxTabRight, clientSize.GetHeight());
+                    }
+                } else if (maxTabRight > 0) {
+                    // No active tab, draw full line
+                    dc.DrawLine(maxTabRight, 0, maxTabRight, clientSize.GetHeight());
+                }
+            } else {
+                // Right tabs: draw left border of tab area, but skip active tab
+                int minTabLeft = clientSize.GetWidth();
+                for (const auto& pageInfo : m_pages) {
+                    int tabLeft = pageInfo->tabRect.GetLeft();
+                    if (tabLeft < minTabLeft) {
+                        minTabLeft = tabLeft;
+                    }
+                }
+                if (minTabLeft < clientSize.GetWidth() && m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                    // Draw vertical line at the left edge, but skip active tab area
+                    const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
+                    // Draw line above active tab
+                    if (activeTabRect.GetTop() > 0) {
+                        dc.DrawLine(minTabLeft, 0, minTabLeft, activeTabRect.GetTop());
+                    }
+                    // Draw line below active tab
+                    if (activeTabRect.GetBottom() < clientSize.GetHeight()) {
+                        dc.DrawLine(minTabLeft, activeTabRect.GetBottom() + 1, minTabLeft, clientSize.GetHeight());
+                    }
+                } else if (minTabLeft < clientSize.GetWidth()) {
+                    // No active tab, draw full line
+                    dc.DrawLine(minTabLeft, 0, minTabLeft, clientSize.GetHeight());
+                }
+            }
+        } else {
+            // Horizontal tabs: draw border at the edge of tab area, but skip active tab
+            if (m_tabPosition == TabPosition::Top) {
+                // Top tabs: draw bottom border of tab area, but skip active tab
+                int tabY = 4;
+                int tabBottom = tabY + m_tabHeight;
+                
+                // Draw bottom border line (draw after tabs to ensure visibility)
+                if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                    // Draw horizontal line at the bottom edge, but skip active tab area
+                    const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
+                    // Draw line to the left of active tab
+                    if (activeTabRect.GetLeft() > 0) {
+                        dc.DrawLine(0, tabBottom, activeTabRect.GetLeft(), tabBottom);
+                    }
+                    // Draw line to the right of active tab
+                    if (activeTabRect.GetRight() < clientSize.GetWidth()) {
+                        dc.DrawLine(activeTabRect.GetRight() + 1, tabBottom, clientSize.GetWidth(), tabBottom);
+                    }
                 } else {
                     // No active tab, draw full line
-                    dc.DrawLine(maxTabRight, tabY, maxTabRight, tabBottom);
+                    dc.DrawLine(0, tabBottom, clientSize.GetWidth(), tabBottom);
+                }
+                
+                // Also draw right border at the right edge of tab area, but skip active tab
+                int maxTabRight = 0;
+                for (const auto& pageInfo : m_pages) {
+                    int tabRight = pageInfo->tabRect.GetRight();
+                    if (tabRight > maxTabRight) {
+                        maxTabRight = tabRight;
+                    }
+                }
+                if (maxTabRight > 0) {
+                    if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                        // Draw vertical line at the right edge, but skip active tab area
+                        const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
+                        // If active tab is at the rightmost position, don't draw line at its right edge
+                        // Otherwise, draw the line normally
+                        if (activeTabRect.GetRight() < maxTabRight) {
+                            // Active tab is not rightmost, draw full line
+                            dc.DrawLine(maxTabRight, tabY, maxTabRight, tabBottom);
+                        }
+                        // If active tab is rightmost, its right edge is not drawn (handled in RenderTab)
+                    } else {
+                        // No active tab, draw full line
+                        dc.DrawLine(maxTabRight, tabY, maxTabRight, tabBottom);
+                    }
+                }
+            } else {
+                // Bottom tabs: draw top border of tab area, but skip active tab
+                int tabY = clientSize.GetHeight() - m_tabHeight - 4;
+                int tabTop = tabY;
+                
+                if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                    // Draw horizontal line at the top edge, but skip active tab area
+                    const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
+                    // Draw line to the left of active tab
+                    if (activeTabRect.GetLeft() > 0) {
+                        dc.DrawLine(0, tabTop, activeTabRect.GetLeft(), tabTop);
+                    }
+                    // Draw line to the right of active tab
+                    if (activeTabRect.GetRight() < clientSize.GetWidth()) {
+                        dc.DrawLine(activeTabRect.GetRight() + 1, tabTop, clientSize.GetWidth(), tabTop);
+                    }
+                } else {
+                    // No active tab, draw full line
+                    dc.DrawLine(0, tabTop, clientSize.GetWidth(), tabTop);
+                }
+                
+                // Also draw right border at the right edge of tab area, but skip active tab
+                int maxTabRight = 0;
+                for (const auto& pageInfo : m_pages) {
+                    int tabRight = pageInfo->tabRect.GetRight();
+                    if (tabRight > maxTabRight) {
+                        maxTabRight = tabRight;
+                    }
+                }
+                if (maxTabRight > 0) {
+                    int tabBottom = tabY + m_tabHeight;
+                    
+                    if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
+                        // Draw vertical line at the right edge, but skip active tab area
+                        const wxRect& activeTabRect = m_pages[m_selectedPage]->tabRect;
+                        // If active tab is at the rightmost position, don't draw line at its right edge
+                        // Otherwise, draw the line normally
+                        if (activeTabRect.GetRight() < maxTabRight) {
+                            // Active tab is not rightmost, draw full line
+                            dc.DrawLine(maxTabRight, tabTop, maxTabRight, tabBottom);
+                        }
+                        // If active tab is rightmost, its right edge is not drawn (handled in RenderTab)
+                    } else {
+                        // No active tab, draw full line
+                        dc.DrawLine(maxTabRight, tabTop, maxTabRight, tabBottom);
+                    }
                 }
             }
         }
@@ -354,7 +479,7 @@ void FlatNotebook::DrawTabs(wxDC& dc)
     else {
         // Vertical layout for left/right tabs
         // For rotated text: width = original text height, height = original text width
-        int currentY = 4; // Top margin
+        int currentY = 4 - m_scrollOffset; // Top margin with scroll offset
 
         // Paint each tab
         for (size_t i = 0; i < m_pages.size(); ++i) {
@@ -369,12 +494,14 @@ void FlatNotebook::DrawTabs(wxDC& dc)
             
             int tabX = (m_tabPosition == TabPosition::Left) ? 4 : clientSize.GetWidth() - tabWidth - 4;
 
-            // Create tab rectangle (vertical layout)
+            // Create tab rectangle (vertical layout) - store original position for hit testing
             wxRect tabRect(tabX, currentY, tabWidth, tabHeight);
             m_pages[i]->tabRect = tabRect;
 
-            // Render tab using FlatBar style
-            RenderTab(dc, tabRect, m_pages[i]->text, isActive, isHovered);
+            // Only render if tab is visible
+            if (tabRect.GetBottom() >= 0 && tabRect.GetTop() <= clientSize.GetHeight()) {
+                RenderTab(dc, tabRect, m_pages[i]->text, isActive, isHovered);
+            }
 
             currentY += tabHeight + m_tabSpacing; // spacing
         }
@@ -401,44 +528,92 @@ void FlatNotebook::RenderTab(wxDC& dc, const wxRect& rect, const wxString& text,
 
         if (isVertical) {
             // Vertical tabs (left/right)
-            int borderOffset = (m_tabPosition == TabPosition::Left) ? m_tabBorderLeft : 0;
-            int borderX = rect.x + borderOffset;
+            if (m_tabPosition == TabPosition::Left) {
+                // Left tabs: left border is thick, right border not drawn
+                int borderOffset = m_tabBorderLeft;
+                int borderX = rect.x + borderOffset;
 
-            // Fill background
-            dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
+                // Fill background
+                dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
 
-            // Draw borders
-            if (m_tabBorderLeft > 0 && m_tabPosition == TabPosition::Left) {
-                dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderLeft));
-                dc.DrawLine(rect.GetLeft() + m_tabBorderLeft / 2, rect.GetTop(),
-                          rect.GetLeft() + m_tabBorderLeft / 2, rect.GetBottom() + 1);
+                // Draw borders
+                if (m_tabBorderLeft > 0) {
+                    dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderLeft));
+                    dc.DrawLine(rect.GetLeft() + m_tabBorderLeft / 2, rect.GetTop(),
+                              rect.GetLeft() + m_tabBorderLeft / 2, rect.GetBottom() + 1);
+                }
+                dc.SetPen(wxPen(tabBorderColour, m_tabBorderTop));
+                dc.DrawLine(rect.GetLeft() + borderOffset, rect.GetTop(),
+                          rect.GetRight(), rect.GetTop());
+                dc.DrawLine(rect.GetLeft() + borderOffset, rect.GetBottom() + 1,
+                          rect.GetRight(), rect.GetBottom() + 1);
+                // Right border not drawn for left tabs
+            } else {
+                // Right tabs: right border is thick, left border not drawn
+                int borderOffset = m_tabBorderLeft;
+                int borderX = rect.x;
+
+                // Fill background
+                dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
+
+                // Draw borders
+                if (m_tabBorderLeft > 0) {
+                    dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderLeft));
+                    dc.DrawLine(rect.GetRight() - m_tabBorderLeft / 2, rect.GetTop(),
+                              rect.GetRight() - m_tabBorderLeft / 2, rect.GetBottom() + 1);
+                }
+                dc.SetPen(wxPen(tabBorderColour, m_tabBorderTop));
+                dc.DrawLine(rect.GetLeft(), rect.GetTop(),
+                          rect.GetRight() - borderOffset, rect.GetTop());
+                dc.DrawLine(rect.GetLeft(), rect.GetBottom() + 1,
+                          rect.GetRight() - borderOffset, rect.GetBottom() + 1);
+                // Left border not drawn for right tabs
             }
-            dc.SetPen(wxPen(tabBorderColour, m_tabBorderTop));
-            dc.DrawLine(rect.GetLeft() + borderOffset, rect.GetTop(),
-                      rect.GetRight(), rect.GetTop());
-            dc.DrawLine(rect.GetLeft() + borderOffset, rect.GetBottom() + 1,
-                      rect.GetRight(), rect.GetBottom() + 1);
-            // Right border not drawn for vertical tabs
         } else {
             // Horizontal tabs (top/bottom)
-            int borderOffset = (m_tabPosition == TabPosition::Top) ? m_tabBorderTop : 0;
-            int borderY = rect.y + borderOffset;
+            if (m_tabPosition == TabPosition::Top) {
+                // Top tabs: top border is thick, bottom border not drawn
+                int borderOffset = m_tabBorderTop;
+                int borderY = rect.y + borderOffset;
 
-            // Fill background
-            dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset);
+                // Fill background (leave 1 pixel at bottom for border line)
+                dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset - 1);
 
-            // Draw borders
-            if (m_tabBorderTop > 0 && m_tabPosition == TabPosition::Top) {
-                dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderTop));
-                dc.DrawLine(rect.GetLeft(), rect.GetTop() + m_tabBorderTop / 2,
-                          rect.GetRight() + 1, rect.GetTop() + m_tabBorderTop / 2);
+                // Draw borders
+                if (m_tabBorderTop > 0) {
+                    dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderTop));
+                    dc.DrawLine(rect.GetLeft(), rect.GetTop() + m_tabBorderTop / 2,
+                              rect.GetRight() + 1, rect.GetTop() + m_tabBorderTop / 2);
+                }
+                // Left and right borders are thin lines
+                dc.SetPen(wxPen(tabBorderColour, m_tabBorderLeft));
+                dc.DrawLine(rect.GetLeft(), rect.GetTop() + borderOffset,
+                          rect.GetLeft(), rect.GetBottom());
+                dc.DrawLine(rect.GetRight() + 1, rect.GetTop() + borderOffset,
+                          rect.GetRight() + 1, rect.GetBottom());
+                // Bottom border not drawn for top tabs
+            } else {
+                // Bottom tabs: bottom border is thick, top border not drawn
+                int borderOffset = m_tabBorderBottom;
+                int borderY = rect.y;
+
+                // Fill background
+                dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset);
+
+                // Draw borders
+                if (m_tabBorderBottom > 0) {
+                    dc.SetPen(wxPen(m_tabBorderLeftColor, m_tabBorderBottom));
+                    dc.DrawLine(rect.GetLeft(), rect.GetBottom() - m_tabBorderBottom / 2,
+                              rect.GetRight() + 1, rect.GetBottom() - m_tabBorderBottom / 2);
+                }
+                // Left and right borders are thin lines
+                dc.SetPen(wxPen(tabBorderColour, m_tabBorderLeft));
+                dc.DrawLine(rect.GetLeft(), rect.GetTop(),
+                          rect.GetLeft(), rect.GetBottom() - borderOffset);
+                dc.DrawLine(rect.GetRight() + 1, rect.GetTop(),
+                          rect.GetRight() + 1, rect.GetBottom() - borderOffset);
+                // Top border not drawn for bottom tabs
             }
-            dc.SetPen(wxPen(tabBorderColour, m_tabBorderLeft));
-            dc.DrawLine(rect.GetLeft(), rect.GetTop() + borderOffset,
-                      rect.GetLeft(), rect.GetBottom());
-            // Right border not drawn for horizontal tabs
-            dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
-                      rect.GetRight() + 1, rect.GetBottom());
         }
     }
     else if (isHovered) {
@@ -452,14 +627,26 @@ void FlatNotebook::RenderTab(wxDC& dc, const wxRect& rect, const wxString& text,
 
         if (isVertical) {
             // Vertical tabs (left/right)
-            int borderOffset = (m_tabPosition == TabPosition::Left) ? m_tabBorderLeft : 0;
-            int borderX = rect.x + borderOffset;
-            dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
+            if (m_tabPosition == TabPosition::Left) {
+                int borderOffset = m_tabBorderLeft;
+                int borderX = rect.x + borderOffset;
+                dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
+            } else {
+                int borderOffset = m_tabBorderLeft;
+                int borderX = rect.x;
+                dc.DrawRectangle(borderX, rect.y, rect.width - borderOffset, rect.height);
+            }
         } else {
             // Horizontal tabs (top/bottom)
-            int borderOffset = (m_tabPosition == TabPosition::Top) ? m_tabBorderTop : 0;
-            int borderY = rect.y + borderOffset;
-            dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset);
+            if (m_tabPosition == TabPosition::Top) {
+                int borderOffset = m_tabBorderTop;
+                int borderY = rect.y + borderOffset;
+                dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset);
+            } else {
+                int borderOffset = m_tabBorderBottom;
+                int borderY = rect.y;
+                dc.DrawRectangle(rect.x, borderY, rect.width, rect.height - borderOffset);
+            }
         }
     }
     else {
@@ -600,6 +787,9 @@ void FlatNotebook::UpdateTabLayout()
             }
         }
     }
+
+    // Update scrollbar
+    UpdateScrollbar();
 }
 
 
@@ -662,7 +852,12 @@ wxRect FlatNotebook::GetContentRect(const wxSize& clientSize) const
 int FlatNotebook::HitTestTab(const wxPoint& pos) const
 {
     for (size_t i = 0; i < m_pages.size(); ++i) {
-        if (m_pages[i]->tabRect.Contains(pos)) {
+        // Adjust rect for scroll offset (only for right tabs)
+        wxRect testRect = m_pages[i]->tabRect;
+        if (m_tabPosition == TabPosition::Right) {
+            testRect.y += m_scrollOffset;
+        }
+        if (testRect.Contains(pos)) {
             return static_cast<int>(i);
         }
     }
@@ -736,7 +931,72 @@ void FlatNotebook::OnMouseLeave(wxMouseEvent& event)
 void FlatNotebook::OnSize(wxSizeEvent& event)
 {
     UpdateTabLayout();
+    UpdateScrollbar();
     event.Skip();
+}
+
+void FlatNotebook::OnScroll(wxScrollEvent& event)
+{
+    if (m_scrollBar) {
+        m_scrollOffset = event.GetPosition();
+        Refresh();
+    }
+    event.Skip();
+}
+
+void FlatNotebook::UpdateScrollbar()
+{
+    // Only show scrollbar for right-side vertical tabs
+    if (m_tabPosition != TabPosition::Right || m_pages.empty()) {
+        if (m_scrollBar) {
+            m_scrollBar->Hide();
+        }
+        m_scrollOffset = 0;
+        return;
+    }
+
+    wxSize clientSize = GetClientSize();
+    
+    // Calculate total height needed for all tabs
+    wxClientDC dc(this);
+    wxFont font = m_useConfigFont ? m_customFont : GetFont();
+    if (!font.IsOk()) {
+        font = GetFont();
+    }
+    dc.SetFont(font);
+
+    int totalHeight = 4; // Top margin
+    for (const auto& pageInfo : m_pages) {
+        wxSize textSize = dc.GetTextExtent(pageInfo->text);
+        int tabHeight = textSize.GetWidth() + m_tabHorizontalPadding * 2;
+        totalHeight += tabHeight + m_tabSpacing;
+    }
+    totalHeight += 4; // Bottom margin
+
+    // Check if scrolling is needed
+    if (totalHeight <= clientSize.GetHeight()) {
+        if (m_scrollBar) {
+            m_scrollBar->Hide();
+        }
+        m_scrollOffset = 0;
+        return;
+    }
+
+    // Create scrollbar if needed
+    if (!m_scrollBar) {
+        m_scrollBar = new wxScrollBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxSB_VERTICAL);
+    }
+
+    // Position scrollbar on the left side of tabs
+    int scrollBarWidth = wxSystemSettings::GetMetric(wxSYS_VSCROLL_X);
+    int tabX = clientSize.GetWidth() - (m_tabVerticalPadding * 2 + 100) - 4;
+    m_scrollBar->SetPosition(wxPoint(tabX - scrollBarWidth - 2, 0));
+    m_scrollBar->SetSize(wxSize(scrollBarWidth, clientSize.GetHeight()));
+
+    // Set scrollbar range
+    int scrollRange = totalHeight - clientSize.GetHeight();
+    m_scrollBar->SetScrollbar(m_scrollOffset, clientSize.GetHeight(), scrollRange, clientSize.GetHeight() / 10, true);
+    m_scrollBar->Show();
 }
 
 void FlatNotebook::SetTabPosition(TabPosition position)
