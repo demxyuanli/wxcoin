@@ -30,7 +30,9 @@ namespace {
     const int BOX_PADDING_OUTER = 3;
 }
 
-DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent, RenderingConfig::DisplayMode initialMode)
+DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent, RenderingConfig::DisplayMode initialMode,
+                                                   const std::map<RenderingConfig::DisplayMode, DisplayModeConfig>& preloadedConfigs,
+                                                   ProgressCallback progressCallback)
     : FramelessModalPopup(parent, "Display Mode Configuration", wxSize(1200, 800))
     , m_notebook(nullptr)
     , m_customModeKey(RenderingConfig::DisplayMode::Custom)
@@ -40,6 +42,10 @@ DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent, RenderingConf
     , m_resetButton(nullptr)
     , m_splitter(nullptr)
     , m_previewCanvas(nullptr)
+    , m_progressCallback(progressCallback)
+    , m_previewUpdateTimer(this)
+    , m_pendingPreviewMode(RenderingConfig::DisplayMode::Solid)
+    , m_previewUpdatePending(false)
 {
     m_defaultContext.material.ambientColor = Quantity_Color(0.5, 0.5, 0.5, Quantity_TOC_RGB);
     m_defaultContext.material.diffuseColor = Quantity_Color(0.95, 0.95, 0.95, Quantity_TOC_RGB);
@@ -54,12 +60,66 @@ DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent, RenderingConf
     SetTitleIcon("render", wxSize(20, 20));
     ShowTitleIcon(true);
     
-    createControls();
-    layoutControls();
-    bindEvents();
+    // Report progress: Creating controls
+    if (m_progressCallback) {
+        m_progressCallback(1, 6, "Creating controls...");
+        wxSafeYield();
+    }
     
-    // Load all configurations with flat progress bar first (before showing main window)
-    loadAllConfigurations();
+    createControls();
+    
+    // Report progress: Layout controls
+    if (m_progressCallback) {
+        m_progressCallback(2, 6, "Layout controls...");
+        wxSafeYield();
+    }
+    
+    layoutControls();
+    
+    // Report progress: Binding events
+    if (m_progressCallback) {
+        m_progressCallback(3, 6, "Binding events...");
+        wxSafeYield();
+    }
+    
+    bindEvents();
+
+    // Bind timer event for debounced preview updates
+    Bind(wxEVT_TIMER, &DisplayModeConfigDialog::onPreviewUpdateTimer, this, m_previewUpdateTimer.GetId());
+
+    // Report progress: Loading configurations
+    if (m_progressCallback) {
+        m_progressCallback(4, 6, "Loading configurations...");
+        wxSafeYield();
+    }
+    
+    // Use preloaded configurations if provided, otherwise load them
+    if (!preloadedConfigs.empty()) {
+        for (const auto& pair : preloadedConfigs) {
+            m_modeControls[pair.first].config = pair.second;
+        }
+    } else {
+        // Fallback: load configurations directly (for backward compatibility)
+        static const RenderingConfig::DisplayMode modes[] = {
+            RenderingConfig::DisplayMode::NoShading,
+            RenderingConfig::DisplayMode::Points,
+            RenderingConfig::DisplayMode::Wireframe,
+            RenderingConfig::DisplayMode::Solid,
+            RenderingConfig::DisplayMode::FlatLines,
+            RenderingConfig::DisplayMode::Transparent,
+            RenderingConfig::DisplayMode::HiddenLine,
+            RenderingConfig::DisplayMode::Custom
+        };
+        for (auto mode : modes) {
+            loadConfigForMode(mode);
+        }
+    }
+    
+    // Report progress: Updating controls
+    if (m_progressCallback) {
+        m_progressCallback(5, 6, "Updating controls...");
+        wxSafeYield();
+    }
     
     updateControls();
     
@@ -73,16 +133,42 @@ DisplayModeConfigDialog::DisplayModeConfigDialog(wxWindow* parent, RenderingConf
     if (m_notebook) {
         int pageIndex = getPageIndexFromMode(initialMode);
         if (pageIndex >= 0 && pageIndex < m_notebook->GetPageCount()) {
+            // SetSelection should trigger the page changed event, but ensure initialization is correct
             m_notebook->SetSelection(pageIndex);
-            // Trigger the page change event to update controls for the selected mode
+
+            // Manually trigger the page change logic for initial setup (in case event doesn't fire)
             RenderingConfig::DisplayMode mode = getModeFromPageIndex(pageIndex);
             updateModeVisibility(mode);
+            // Note: updatePreviewForMode will be called by the page changed event or manually below
         }
+    }
+    
+    // Report progress: Initialization complete
+    if (m_progressCallback) {
+        m_progressCallback(6, 6, "Initialization complete");
+        wxSafeYield();
     }
     
     // Show the main window after loading is complete (centered by FramelessModalPopup)
     Show();
     wxSafeYield();  // Allow window to render
+
+    // Perform initial view all after dialog is fully shown
+    if (m_previewCanvas) {
+        CallAfter([this]() {
+            if (m_previewCanvas) {
+                wxSize canvasSize = m_previewCanvas->GetSize();
+                if (canvasSize.GetWidth() > 0 && canvasSize.GetHeight() > 0) {
+                    // Only call performViewAll once after dialog is properly sized
+                    static bool initialViewAllDone = false;
+                    if (!initialViewAllDone) {
+                        initialViewAllDone = true;
+                        m_previewCanvas->performViewAll();
+                    }
+                }
+            }
+        });
+    }
 }
 
 DisplayModeConfigDialog::~DisplayModeConfigDialog()
@@ -177,13 +263,13 @@ void DisplayModeConfigDialog::createNodeRequirementsPanel(wxPanel* parent, wxSiz
     controls.requirePoints = new FlatCheckBox(staticBox, wxID_ANY, "Require Points");
 
     std::vector<wxString> drawStyleItems = {
-        "FILLED - Surface",
-        "LINES - Edges",
-        "POINTS - Points",
+        "FILLED - Surface only",
+        "LINES - Edges only",
+        "POINTS - Points only",
         "FILLED+LINES - Surface+Edges",
         "FILLED+POINTS - Surface+Points",
         "LINES+POINTS - Edges+Points",
-        "FILLED+LINES+POINTS - All"
+        "FILLED+LINES+POINTS - Surface+Edges+Points"
     };
     controls.drawStyle = createComboBox(staticBox, "Draw Style:", drawStyleItems, 0);
 
@@ -303,9 +389,29 @@ void DisplayModeConfigDialog::createEdgeConfigPanel(wxPanel* parent, wxSizer* si
     
     controls.meshEdgeUseEffectiveColor = new FlatCheckBox(staticBox, wxID_ANY, "");
     addGridRow(meshGrid, staticBox, "Effect Color:", controls.meshEdgeUseEffectiveColor);
-    
+
     boxSizer->Add(meshGrid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, BOX_PADDING_SIDE);
-    
+
+    controls.silhouetteEdgeSeparator = new wxStaticLine(staticBox);
+    boxSizer->Add(controls.silhouetteEdgeSeparator, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, BOX_PADDING_SIDE);
+
+    controls.silhouetteEdgeLabel = new wxStaticText(staticBox, wxID_ANY, "Silhouette Edge:");
+    boxSizer->Add(controls.silhouetteEdgeLabel, 0, wxLEFT | wxRIGHT, BOX_PADDING_SIDE);
+
+    controls.silhouetteEdgeEnabled = new FlatCheckBox(staticBox, wxID_ANY, "Enable Silhouette Edge");
+    addCheckBox(boxSizer, controls.silhouetteEdgeEnabled, wxLEFT | wxRIGHT, BOX_PADDING_MIDDLE);
+
+    wxFlexGridSizer* silhouetteGrid = new wxFlexGridSizer(2, GRID_COL_GAP, GRID_ROW_GAP);
+
+    controls.silhouetteEdgeColor = createColorButton(staticBox, "Color:");
+    addGridRow(silhouetteGrid, staticBox, "Color:", controls.silhouetteEdgeColor);
+
+    wxBoxSizer* silhouetteWidthSizer = createSliderWithLabel(staticBox, controls.silhouetteEdgeWidth,
+                                                           controls.silhouetteEdgeWidthLabel, 10, 1, 100, "%.1f");
+    addGridRow(silhouetteGrid, staticBox, "Width:", silhouetteWidthSizer);
+
+    boxSizer->Add(silhouetteGrid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, BOX_PADDING_SIDE);
+
     sizer->Add(boxSizer, 0, wxEXPAND | wxALL, BOX_PADDING_OUTER);
 }
 
@@ -390,8 +496,9 @@ void DisplayModeConfigDialog::layoutControls()
     mainSizer->Add(buttonSizer, 0, wxEXPAND | wxALL, 3);
     
     m_contentPanel->SetSizer(mainSizer);
-    
-    updatePreview();
+
+    // Note: Preview will be initialized when notebook page changes in constructor
+    // Don't call updatePreview() here to avoid double initialization
 }
 
 RenderingConfig::DisplayMode DisplayModeConfigDialog::getModeFromPageIndex(int pageIndex) const
@@ -444,9 +551,11 @@ void DisplayModeConfigDialog::bindEvents()
     m_cancelButton->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onCancel, this);
     m_resetButton->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onReset, this);
     
-    m_notebook->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, [this](wxBookCtrlEvent& event) {
-        int currentPage = m_notebook->GetSelection();
-        
+    m_notebook->Bind(wxEVT_FLATNOTEBOOK_PAGE_CHANGED, [this](wxCommandEvent& event) {
+        int currentPage = event.GetInt();
+        int oldPage = event.GetExtraLong();
+        LOG_INF_S("DisplayModeConfigDialog: Notebook page changed from " + std::to_string(oldPage) + " to " + std::to_string(currentPage));
+
         // Refresh notebook to ensure selected tab is properly highlighted
         // wxNotebook with wxNB_LEFT style has built-in highlighting for selected tab
         // Calling Refresh ensures the highlight is properly displayed
@@ -459,11 +568,42 @@ void DisplayModeConfigDialog::bindEvents()
             updateModeVisibility(mode);
             ModeControls& controls = m_modeControls[mode];
 
-            // Update all controls from config for this mode
+            // Ensure config matches mode requirements before updating controls
+            enforceModeRequirements(mode);
+            
+            // Update all controls from config for this mode (use config values, don't read from controls)
+            // Note: We don't call updateConfigFromControls here because controls may still have old mode values
+            // The config has been correctly set by enforceModeRequirements, so we use config to update controls
             controls.requireSurface->SetValue(controls.config.nodes.requireSurface);
             controls.requireOriginalEdges->SetValue(controls.config.nodes.requireOriginalEdges);
             controls.requireMeshEdges->SetValue(controls.config.nodes.requireMeshEdges);
             controls.requirePoints->SetValue(controls.config.nodes.requirePoints);
+            
+            // Update DrawStyle based on config
+            if (controls.drawStyle && controls.drawStyle->IsShown()) {
+                bool showSurface = controls.config.nodes.requireSurface;
+                bool showEdges = (controls.config.nodes.requireOriginalEdges && controls.config.edges.originalEdge.enabled) ||
+                               (controls.config.nodes.requireMeshEdges && controls.config.edges.meshEdge.enabled);
+                bool showPoints = controls.config.nodes.requirePoints;
+
+                int drawStyleIndex = 0;
+                if (showPoints && !showEdges && !showSurface) {
+                    drawStyleIndex = 2; // POINTS
+                } else if (showEdges && !showPoints && !showSurface) {
+                    drawStyleIndex = 1; // LINES
+                } else if (showSurface && !showEdges && !showPoints) {
+                    drawStyleIndex = 0; // FILLED
+                } else if (showSurface && showEdges && !showPoints) {
+                    drawStyleIndex = 3; // FILLED+LINES
+                } else if (showSurface && showPoints && !showEdges) {
+                    drawStyleIndex = 4; // FILLED+POINTS
+                } else if (showEdges && showPoints && !showSurface) {
+                    drawStyleIndex = 5; // LINES+POINTS
+                } else if (showSurface && showEdges && showPoints) {
+                    drawStyleIndex = 6; // FILLED+LINES+POINTS
+                }
+                controls.drawStyle->SetSelection(drawStyleIndex);
+            }
             
             controls.lightModel->SetSelection(static_cast<int>(controls.config.rendering.lightModel));
             controls.textureEnabled->SetValue(controls.config.rendering.textureEnabled);
@@ -502,7 +642,12 @@ void DisplayModeConfigDialog::bindEvents()
             }
             
             if (controls.originalEdgeEnabled && controls.originalEdgeEnabled->IsShown()) {
-                controls.originalEdgeEnabled->SetValue(controls.config.edges.originalEdge.enabled);
+                // For Solid and FlatLines modes, sync with requireOriginalEdges
+                if (mode == RenderingConfig::DisplayMode::Solid || mode == RenderingConfig::DisplayMode::FlatLines) {
+                    controls.originalEdgeEnabled->SetValue(controls.config.nodes.requireOriginalEdges);
+                } else {
+                    controls.originalEdgeEnabled->SetValue(controls.config.edges.originalEdge.enabled);
+                }
             }
             if (controls.originalEdgeColor && controls.originalEdgeColor->IsShown()) {
                 updateColorButton(controls.originalEdgeColor, quantityColorToWxColour(controls.config.edges.originalEdge.color));
@@ -530,6 +675,19 @@ void DisplayModeConfigDialog::bindEvents()
                 controls.meshEdgeUseEffectiveColor->SetValue(controls.config.edges.meshEdge.useEffectiveColor);
             }
             
+            if (controls.silhouetteEdgeEnabled && controls.silhouetteEdgeEnabled->IsShown()) {
+                controls.silhouetteEdgeEnabled->SetValue(controls.config.edges.silhouetteEdge.enabled);
+            }
+            if (controls.silhouetteEdgeColor && controls.silhouetteEdgeColor->IsShown()) {
+                updateColorButton(controls.silhouetteEdgeColor, quantityColorToWxColour(controls.config.edges.silhouetteEdge.color));
+            }
+            if (controls.silhouetteEdgeWidth && controls.silhouetteEdgeWidth->IsShown()) {
+                controls.silhouetteEdgeWidth->SetValue(static_cast<int>(controls.config.edges.silhouetteEdge.width * 10.0));
+                if (controls.silhouetteEdgeWidthLabel) {
+                    controls.silhouetteEdgeWidthLabel->SetLabel(wxString::Format("%.1f", controls.config.edges.silhouetteEdge.width));
+                }
+            }
+            
             controls.polygonOffsetEnabled->SetValue(controls.config.postProcessing.polygonOffset.enabled);
             if (controls.polygonOffsetFactor) {
                 controls.polygonOffsetFactor->SetValue(static_cast<int>(controls.config.postProcessing.polygonOffset.factor * 10.0));
@@ -548,8 +706,12 @@ void DisplayModeConfigDialog::bindEvents()
             if (controls.page) {
                 controls.page->Layout();
             }
+            
+            // Update preview with the current mode's configuration
+            // Use updatePreviewForMode to ensure correct mode is passed
+            LOG_INF_S("DisplayModeConfigDialog: Updating preview for mode " + std::to_string(static_cast<int>(mode)));
+            updatePreviewForMode(mode);
         }
-        updatePreview();
     });
     
     for (auto& pair : m_modeControls) {
@@ -562,36 +724,86 @@ void DisplayModeConfigDialog::bindEvents()
         controls.materialEmissiveColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
         controls.originalEdgeColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
         controls.meshEdgeColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
+        controls.silhouetteEdgeColor->Bind(wxEVT_FLAT_BUTTON_CLICKED, &DisplayModeConfigDialog::onColorButtonClicked, this);
         
-        controls.requireSurface->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) {
+        controls.requireSurface->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
                 updateConfigFromControls(currentMode);
-                updatePreview();
+                updateDrawStyleFromCheckboxes(currentMode);
+                syncOriginalEdgeEnabled(currentMode);
+                updatePreviewForMode(currentMode);
             }
         });
-        controls.requireOriginalEdges->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) {
+        controls.requireOriginalEdges->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
                 RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
-                if (currentMode == RenderingConfig::DisplayMode::FlatLines || currentMode == RenderingConfig::DisplayMode::Solid) {
-                    ModeControls& ctrl = m_modeControls[currentMode];
-                    bool requireOriginalEdges = ctrl.requireOriginalEdges->GetValue();
-                    if (ctrl.originalEdgeEnabled && ctrl.originalEdgeEnabled->IsShown()) {
-                        ctrl.originalEdgeEnabled->SetValue(requireOriginalEdges);
-                    }
-                }
                 updateConfigFromControls(currentMode);
-                updatePreview();
+                syncOriginalEdgeEnabled(currentMode);
+                updateDrawStyleFromCheckboxes(currentMode);
+                updatePreviewForMode(currentMode);
             }
         });
-        controls.requireMeshEdges->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.requirePoints->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.drawStyle->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.lightModel->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.blendMode->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.materialOverrideEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.requireMeshEdges->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updateConfigFromControls(currentMode);
+                updateDrawStyleFromCheckboxes(currentMode);
+                syncOriginalEdgeEnabled(currentMode);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.requirePoints->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updateConfigFromControls(currentMode);
+                updateDrawStyleFromCheckboxes(currentMode);
+                syncOriginalEdgeEnabled(currentMode);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.drawStyle->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updateConfigFromControls(currentMode);
+                updateCheckboxesFromDrawStyle(currentMode);
+                syncOriginalEdgeEnabled(currentMode);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.lightModel->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.textureEnabled->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.blendMode->Bind(wxEVT_FLAT_COMBO_BOX_SELECTION_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.materialOverrideEnabled->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updatePreviewForMode(currentMode);
+            }
+        });
         controls.materialShininess->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
@@ -599,7 +811,18 @@ void DisplayModeConfigDialog::bindEvents()
                 ModeControls& ctrl = m_modeControls[currentMode];
                 double value = static_cast<double>(ctrl.materialShininess->GetValue()) / 10.0;
                 ctrl.materialShininessLabel->SetLabel(wxString::Format("%.1f", value));
-                updatePreview();
+                // Debounced preview update for slider
+                schedulePreviewUpdate(currentMode, 150);
+            }
+        });
+        controls.materialShininess->Bind(wxEVT_FLAT_SLIDER_THUMB_DRAGGED, [this, mode](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                ModeControls& ctrl = m_modeControls[currentMode];
+                double value = static_cast<double>(ctrl.materialShininess->GetValue()) / 10.0;
+                ctrl.materialShininessLabel->SetLabel(wxString::Format("%.1f", value));
+                // Only update UI label during drag, don't update preview to avoid performance issues
             }
         });
         controls.materialTransparency->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this](wxCommandEvent&) {
@@ -612,13 +835,31 @@ void DisplayModeConfigDialog::bindEvents()
                     double value = static_cast<double>(sliderValue) / 100.0;
                     ctrl.materialTransparencyLabel->SetLabel(wxString::Format("%.2f", value));
                 }
-                updatePreview();
+                // Debounced preview update for slider - only update when dragging stops
+                schedulePreviewUpdate(currentMode, 150); // 150ms delay
+            }
+        });
+        controls.materialTransparency->Bind(wxEVT_FLAT_SLIDER_THUMB_DRAGGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                ModeControls& ctrl = m_modeControls[currentMode];
+                if (ctrl.materialTransparency && ctrl.materialTransparencyLabel) {
+                    int sliderValue = ctrl.materialTransparency->GetValue();
+                    double value = static_cast<double>(sliderValue) / 100.0;
+                    ctrl.materialTransparencyLabel->SetLabel(wxString::Format("%.2f", value));
+                }
+                // Only update UI label during drag, don't update preview to avoid performance issues
             }
         });
 
-        controls.originalEdgeEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) {
-            // Update preview normally, but this control is disabled in Solid and FlatLines modes
-            updatePreview();
+        controls.originalEdgeEnabled->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updateDrawStyleFromCheckboxes(currentMode);
+                updatePreviewForMode(currentMode);
+            }
         });
         controls.originalEdgeWidth->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
@@ -627,10 +868,28 @@ void DisplayModeConfigDialog::bindEvents()
                 ModeControls& ctrl = m_modeControls[currentMode];
                 double value = static_cast<double>(ctrl.originalEdgeWidth->GetValue()) / 10.0;
                 ctrl.originalEdgeWidthLabel->SetLabel(wxString::Format("%.1f", value));
-                updatePreview();
+                // Debounced preview update for slider
+                schedulePreviewUpdate(currentMode, 150);
             }
         });
-        controls.meshEdgeEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.originalEdgeWidth->Bind(wxEVT_FLAT_SLIDER_THUMB_DRAGGED, [this, mode](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                ModeControls& ctrl = m_modeControls[currentMode];
+                double value = static_cast<double>(ctrl.originalEdgeWidth->GetValue()) / 10.0;
+                ctrl.originalEdgeWidthLabel->SetLabel(wxString::Format("%.1f", value));
+                // Only update UI label during drag
+            }
+        });
+        controls.meshEdgeEnabled->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updateDrawStyleFromCheckboxes(currentMode);
+                updatePreviewForMode(currentMode);
+            }
+        });
         controls.meshEdgeWidth->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
@@ -638,11 +897,50 @@ void DisplayModeConfigDialog::bindEvents()
                 ModeControls& ctrl = m_modeControls[currentMode];
                 double value = static_cast<double>(ctrl.meshEdgeWidth->GetValue()) / 10.0;
                 ctrl.meshEdgeWidthLabel->SetLabel(wxString::Format("%.1f", value));
-                updatePreview();
+                // Debounced preview update for slider
+                schedulePreviewUpdate(currentMode, 150);
             }
         });
-        controls.meshEdgeUseEffectiveColor->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
-        controls.polygonOffsetEnabled->Bind(wxEVT_FLAT_CHECK_BOX_CLICKED, [this](wxCommandEvent&) { updatePreview(); });
+        controls.meshEdgeUseEffectiveColor->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.silhouetteEdgeEnabled->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updatePreviewForMode(currentMode);
+            }
+        });
+        controls.silhouetteEdgeWidth->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                ModeControls& ctrl = m_modeControls[currentMode];
+                double value = static_cast<double>(ctrl.silhouetteEdgeWidth->GetValue()) / 10.0;
+                ctrl.silhouetteEdgeWidthLabel->SetLabel(wxString::Format("%.1f", value));
+                schedulePreviewUpdate(currentMode, 150);
+            }
+        });
+        controls.silhouetteEdgeWidth->Bind(wxEVT_FLAT_SLIDER_THUMB_DRAGGED, [this, mode](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                ModeControls& ctrl = m_modeControls[currentMode];
+                double value = static_cast<double>(ctrl.silhouetteEdgeWidth->GetValue()) / 10.0;
+                ctrl.silhouetteEdgeWidthLabel->SetLabel(wxString::Format("%.1f", value));
+            }
+        });
+        controls.polygonOffsetEnabled->Bind(wxEVT_FLAT_CHECK_BOX_STATE_CHANGED, [this](wxCommandEvent&) {
+            int currentPage = m_notebook->GetSelection();
+            if (currentPage >= 0) {
+                RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+                updatePreviewForMode(currentMode);
+            }
+        });
         controls.polygonOffsetFactor->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
             int currentPage = m_notebook->GetSelection();
             if (currentPage >= 0) {
@@ -650,7 +948,8 @@ void DisplayModeConfigDialog::bindEvents()
                 ModeControls& ctrl = m_modeControls[currentMode];
                 double value = static_cast<double>(ctrl.polygonOffsetFactor->GetValue()) / 10.0;
                 ctrl.polygonOffsetFactorLabel->SetLabel(wxString::Format("%.1f", value));
-                updatePreview();
+                // Debounced preview update for slider
+                schedulePreviewUpdate(currentMode, 150);
             }
         });
         controls.polygonOffsetUnits->Bind(wxEVT_FLAT_SLIDER_VALUE_CHANGED, [this, mode](wxCommandEvent&) {
@@ -660,7 +959,8 @@ void DisplayModeConfigDialog::bindEvents()
                 ModeControls& ctrl = m_modeControls[currentMode];
                 double value = static_cast<double>(ctrl.polygonOffsetUnits->GetValue()) / 10.0;
                 ctrl.polygonOffsetUnitsLabel->SetLabel(wxString::Format("%.1f", value));
-                updatePreview();
+                // Debounced preview update for slider
+                schedulePreviewUpdate(currentMode, 150);
             }
         });
     }
@@ -672,37 +972,19 @@ void DisplayModeConfigDialog::updateControls()
         RenderingConfig::DisplayMode mode = pair.first;
         ModeControls& controls = pair.second;
         
+        // Ensure config matches mode requirements before updating controls
+        enforceModeRequirements(mode);
+        
         controls.requireSurface->SetValue(controls.config.nodes.requireSurface);
         controls.requireOriginalEdges->SetValue(controls.config.nodes.requireOriginalEdges);
         controls.requireMeshEdges->SetValue(controls.config.nodes.requireMeshEdges);
         controls.requirePoints->SetValue(controls.config.nodes.requirePoints);
 
         // Set DrawStyle based on rendering configuration
-        if (controls.drawStyle) {
-            bool showSurface = controls.config.nodes.requireSurface;
-            bool showEdges = (controls.config.nodes.requireOriginalEdges && controls.config.edges.originalEdge.enabled) ||
-                           (controls.config.nodes.requireMeshEdges && controls.config.edges.meshEdge.enabled);
-            bool showPoints = controls.config.nodes.requirePoints;
-
-            int drawStyleIndex = 0;
-            if (showPoints && !showEdges && !showSurface) {
-                drawStyleIndex = 2; // POINTS
-            } else if (showEdges && !showPoints && !showSurface) {
-                drawStyleIndex = 1; // LINES
-            } else if (showSurface && !showEdges && !showPoints) {
-                drawStyleIndex = 0; // FILLED
-            } else if (showSurface && showEdges && !showPoints) {
-                drawStyleIndex = 3; // FILLED+LINES
-            } else if (showSurface && showPoints && !showEdges) {
-                drawStyleIndex = 4; // FILLED+POINTS
-            } else if (showEdges && showPoints && !showSurface) {
-                drawStyleIndex = 5; // LINES+POINTS
-            } else if (showSurface && showEdges && showPoints) {
-                drawStyleIndex = 6; // FILLED+LINES+POINTS
-            }
-
-            controls.drawStyle->SetSelection(drawStyleIndex);
-        }
+        updateDrawStyleFromCheckboxes(mode);
+        
+        // Sync originalEdgeEnabled for Solid and FlatLines modes
+        syncOriginalEdgeEnabled(mode);
         
         controls.lightModel->SetSelection(static_cast<int>(controls.config.rendering.lightModel));
         controls.textureEnabled->SetValue(controls.config.rendering.textureEnabled);
@@ -729,11 +1011,11 @@ void DisplayModeConfigDialog::updateControls()
         controls.materialTransparencyLabel->SetLabel(wxString::Format("%.2f", controls.config.rendering.materialOverride.transparency));
         
         // Apply force sync for Solid and FlatLines modes: originalEdge.enabled must match requireOriginalEdges
-        if (mode == RenderingConfig::DisplayMode::FlatLines || mode == RenderingConfig::DisplayMode::Solid) {
-            controls.config.edges.originalEdge.enabled = controls.config.nodes.requireOriginalEdges;
-        }
-        if (controls.originalEdgeEnabled) {
-            controls.originalEdgeEnabled->SetValue(controls.config.edges.originalEdge.enabled);
+        syncOriginalEdgeEnabled(mode);
+        if (mode != RenderingConfig::DisplayMode::FlatLines && mode != RenderingConfig::DisplayMode::Solid) {
+            if (controls.originalEdgeEnabled) {
+                controls.originalEdgeEnabled->SetValue(controls.config.edges.originalEdge.enabled);
+            }
         }
         if (controls.originalEdgeColor) {
             updateColorButton(controls.originalEdgeColor, quantityColorToWxColour(controls.config.edges.originalEdge.color));
@@ -769,162 +1051,106 @@ void DisplayModeConfigDialog::updateControls()
     }
 }
 
-void DisplayModeConfigDialog::loadAllConfigurations()
-{
-    // Define all display modes to load
-    static const RenderingConfig::DisplayMode modes[] = {
-        RenderingConfig::DisplayMode::NoShading,
-        RenderingConfig::DisplayMode::Points,
-        RenderingConfig::DisplayMode::Wireframe,
-        RenderingConfig::DisplayMode::Solid,
-        RenderingConfig::DisplayMode::FlatLines,
-        RenderingConfig::DisplayMode::Transparent,
-        RenderingConfig::DisplayMode::HiddenLine,
-        RenderingConfig::DisplayMode::Custom
-    };
-    static const int modeCount = 8;
-
-    // Create flat style progress dialog with theme-adapted colors
-    // Use parent window (main frame) instead of this (config dialog) so it can show before config dialog
-    wxWindow* parentWindow = GetParent();
-    if (!parentWindow) {
-        parentWindow = wxTheApp->GetTopWindow();
-    }
-    wxDialog* progressDialog = new wxDialog(parentWindow, wxID_ANY, "Loading Display Modes", 
-                                            wxDefaultPosition, wxSize(400, 150),
-                                            wxNO_BORDER | wxFRAME_SHAPED);
-    
-    // Use PanelDialogBgColour for dialog background, with fallback chain
-    wxColour bgColor = CFG_COLOUR("PanelDialogBgColour");
-    // Check if color is valid and not the error color (red)
-    if (!bgColor.IsOk() || (bgColor.Red() == 255 && bgColor.Green() == 0 && bgColor.Blue() == 0)) {
-        // Try PanelPopupBgColour as fallback
-        bgColor = CFG_COLOUR("PanelPopupBgColour");
-        if (!bgColor.IsOk() || (bgColor.Red() == 255 && bgColor.Green() == 0 && bgColor.Blue() == 0)) {
-            // Try SecondaryBackgroundColour
-            bgColor = CFG_COLOUR("SecondaryBackgroundColour");
-            if (!bgColor.IsOk() || (bgColor.Red() == 255 && bgColor.Green() == 0 && bgColor.Blue() == 0)) {
-                // Final fallback: use a light gray that works in all themes
-                bgColor = wxColour(250, 250, 250);
-            }
-        }
-    }
-    
-    // Create a content panel to ensure background color is properly applied
-    wxPanel* contentPanel = new wxPanel(progressDialog, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL);
-    contentPanel->SetBackgroundColour(bgColor);
-    contentPanel->SetDoubleBuffered(true);
-    
-    // Also set dialog background (though content panel will cover it)
-    progressDialog->SetBackgroundColour(bgColor);
-    progressDialog->SetDoubleBuffered(true);
-    
-    wxBoxSizer* progressSizer = new wxBoxSizer(wxVERTICAL);
-    
-    // Title label with theme text color
-    wxStaticText* progressLabel = new wxStaticText(contentPanel, wxID_ANY, 
-                                                   "Loading all display mode configurations...");
-    wxColour textColor = CFG_COLOUR("PrimaryTextColour");
-    if (!textColor.IsOk() || (textColor.Red() == 255 && textColor.Green() == 0 && textColor.Blue() == 0)) {
-        textColor = wxColour(100, 100, 100);  // Fallback to dark gray
-    }
-    progressLabel->SetForegroundColour(textColor);
-    progressSizer->Add(progressLabel, 0, wxALL | wxALIGN_CENTER, 15);
-    
-    // Create flat progress bar (colors are automatically set from theme in InitializeDefaultColors)
-    FlatProgressBar* progressBar = new FlatProgressBar(contentPanel, wxID_ANY, 0, 0, 
-                                                        modeCount,
-                                                        wxDefaultPosition, wxSize(350, 25),
-                                                        FlatProgressBar::ProgressBarStyle::MODERN_LINEAR);
-    progressBar->SetShowPercentage(true);
-    progressBar->SetTextFollowProgress(true);
-    progressBar->SetCornerRadius(12);
-    // Progress bar colors are already theme-adapted via InitializeDefaultColors:
-    // - Background: SecondaryBackgroundColour
-    // - Progress: AccentColour
-    // - Text: PrimaryTextColour
-    progressSizer->Add(progressBar, 0, wxALL | wxALIGN_CENTER, 15);
-    
-    // Status label with theme text color
-    wxStaticText* statusLabel = new wxStaticText(contentPanel, wxID_ANY, "");
-    statusLabel->SetForegroundColour(textColor);
-    progressSizer->Add(statusLabel, 0, wxALL | wxALIGN_CENTER, 10);
-    
-    // Set sizer for content panel
-    contentPanel->SetSizer(progressSizer);
-    
-    // Create dialog sizer to hold content panel
-    wxBoxSizer* dialogSizer = new wxBoxSizer(wxVERTICAL);
-    dialogSizer->Add(contentPanel, 1, wxEXPAND);
-    progressDialog->SetSizer(dialogSizer);
-    progressDialog->Layout();
-    progressDialog->CentreOnParent();
-    // Show progress dialog first (before config dialog)
-    progressDialog->Show();
-    wxSafeYield();  // Allow progress dialog to render
-
-    int currentProgress = 0;
-    
-    // Load all display mode configurations
-    for (int i = 0; i < modeCount; ++i) {
-        RenderingConfig::DisplayMode mode = modes[i];
-        
-        // Update progress bar
-        progressBar->SetValue(currentProgress);
-        
-        // Get mode name for status label
-        wxString modeName;
-        switch (mode) {
-        case RenderingConfig::DisplayMode::NoShading:
-            modeName = "No Shading";
-            break;
-        case RenderingConfig::DisplayMode::Points:
-            modeName = "Points";
-            break;
-        case RenderingConfig::DisplayMode::Wireframe:
-            modeName = "Wireframe";
-            break;
-        case RenderingConfig::DisplayMode::Solid:
-            modeName = "Solid";
-            break;
-        case RenderingConfig::DisplayMode::FlatLines:
-            modeName = "Flat Lines";
-            break;
-        case RenderingConfig::DisplayMode::Transparent:
-            modeName = "Transparent";
-            break;
-        case RenderingConfig::DisplayMode::HiddenLine:
-            modeName = "Hidden Line";
-            break;
-        case RenderingConfig::DisplayMode::Custom:
-            modeName = "Custom";
-            break;
-        }
-        
-        statusLabel->SetLabel("Loading: " + modeName);
-        progressDialog->Refresh();
-        wxSafeYield();  // Allow UI to update
-
-        // Load configuration for this mode
-        loadConfigForMode(mode);
-
-        currentProgress++;
-    }
-
-    // Complete progress
-    progressBar->SetValue(modeCount);
-    statusLabel->SetLabel("Display mode configurations loaded successfully");
-    progressDialog->Refresh();
-    wxSafeYield();
-    wxMilliSleep(300);  // Brief pause to show completion
-    
-    progressDialog->Destroy();
-}
 
 void DisplayModeConfigDialog::loadConfigForMode(RenderingConfig::DisplayMode mode)
 {
     ModeControls& controls = m_modeControls[mode];
     controls.config = DisplayModeConfigFactory::getConfig(mode, m_defaultContext);
+}
+
+void DisplayModeConfigDialog::enforceModeRequirements(RenderingConfig::DisplayMode mode)
+{
+    ModeControls& controls = m_modeControls[mode];
+    
+    switch (mode) {
+    case RenderingConfig::DisplayMode::NoShading:
+        // NoShading: surface + original edges, BASE_COLOR lighting
+        controls.config.nodes.requireSurface = true;
+        controls.config.nodes.requireOriginalEdges = true;
+        controls.config.nodes.requireMeshEdges = false;
+        controls.config.nodes.requirePoints = false;
+        controls.config.edges.originalEdge.enabled = true;
+        controls.config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR;
+        controls.config.rendering.blendMode = RenderingConfig::BlendMode::None;
+        break;
+        
+    case RenderingConfig::DisplayMode::Points:
+        // Points: points only (or surface + points)
+        controls.config.nodes.requirePoints = true;
+        controls.config.nodes.requireOriginalEdges = false;
+        controls.config.nodes.requireMeshEdges = false;
+        // Keep surface setting from config (can be true for surface+points or false for points only)
+        controls.config.edges.originalEdge.enabled = false;
+        controls.config.edges.meshEdge.enabled = false;
+        controls.config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR;
+        controls.config.rendering.blendMode = RenderingConfig::BlendMode::None;
+        break;
+        
+    case RenderingConfig::DisplayMode::Wireframe:
+        // Wireframe: no surface, only original edges
+        controls.config.nodes.requireSurface = false;
+        controls.config.nodes.requireOriginalEdges = true;
+        controls.config.nodes.requireMeshEdges = false;
+        controls.config.nodes.requirePoints = false;
+        controls.config.edges.originalEdge.enabled = true;
+        controls.config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR;
+        controls.config.rendering.blendMode = RenderingConfig::BlendMode::None;
+        break;
+        
+    case RenderingConfig::DisplayMode::Solid:
+        // Solid: surface, optional original edges (synced)
+        controls.config.nodes.requireSurface = true;
+        controls.config.nodes.requireOriginalEdges = false;  // Default: no edges in Solid mode
+        controls.config.nodes.requireMeshEdges = false;
+        controls.config.nodes.requirePoints = false;
+        // Sync originalEdge.enabled with requireOriginalEdges
+        controls.config.edges.originalEdge.enabled = controls.config.nodes.requireOriginalEdges;
+        controls.config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::PHONG;
+        break;
+        
+    case RenderingConfig::DisplayMode::FlatLines:
+        // FlatLines: surface + original edges (synced), PHONG lighting
+        controls.config.nodes.requireSurface = true;
+        controls.config.nodes.requireOriginalEdges = true;
+        controls.config.nodes.requireMeshEdges = false;
+        controls.config.nodes.requirePoints = false;
+        // Sync originalEdge.enabled with requireOriginalEdges
+        controls.config.edges.originalEdge.enabled = true;
+        controls.config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::PHONG;
+        controls.config.rendering.blendMode = RenderingConfig::BlendMode::None;
+        break;
+        
+    case RenderingConfig::DisplayMode::Transparent:
+        // Transparent: surface only, PHONG lighting, Alpha blend
+        controls.config.nodes.requireSurface = true;
+        controls.config.nodes.requireOriginalEdges = false;
+        controls.config.nodes.requireMeshEdges = false;
+        controls.config.nodes.requirePoints = false;
+        controls.config.edges.originalEdge.enabled = false;
+        controls.config.edges.meshEdge.enabled = false;
+        controls.config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::PHONG;
+        controls.config.rendering.blendMode = RenderingConfig::BlendMode::Alpha;
+        controls.config.postProcessing.polygonOffset.enabled = false;
+        break;
+        
+    case RenderingConfig::DisplayMode::HiddenLine:
+        // HiddenLine: surface + silhouette edges (FreeCAD style)
+        controls.config.nodes.requireSurface = true;
+        controls.config.nodes.requireOriginalEdges = false;
+        controls.config.nodes.requireMeshEdges = false;
+        controls.config.nodes.requireSilhouetteEdges = true;
+        controls.config.nodes.requirePoints = false;
+        controls.config.edges.originalEdge.enabled = false;
+        controls.config.edges.meshEdge.enabled = false;
+        controls.config.edges.silhouetteEdge.enabled = true;
+        controls.config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR;
+        controls.config.rendering.blendMode = RenderingConfig::BlendMode::None;
+        break;
+        
+    case RenderingConfig::DisplayMode::Custom:
+        // Custom: no restrictions, user can configure freely
+        break;
+    }
 }
 
 void DisplayModeConfigDialog::saveConfigForMode(RenderingConfig::DisplayMode mode)
@@ -949,44 +1175,71 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
         controls.config.nodes.requirePoints = false;
 
         // Set requirements based on DrawStyle selection
+        // Choose appropriate edge type based on display mode
+        bool useMeshEdges = (mode == RenderingConfig::DisplayMode::HiddenLine && drawStyleIndex != 0); // Only use mesh edges for non-filled styles in HiddenLine
+        bool useSilhouetteEdges = (mode == RenderingConfig::DisplayMode::HiddenLine && drawStyleIndex == 0); // Use silhouette for filled style in HiddenLine
+
         switch (drawStyleIndex) {
-        case 0: // FILLED - Surface
+        case 0: // FILLED - Surface only
             controls.config.nodes.requireSurface = true;
             break;
-        case 1: // LINES - Edges
-            controls.config.nodes.requireOriginalEdges = true;
-            controls.config.edges.originalEdge.enabled = true;
+        case 1: // LINES - Edges only
+            if (useMeshEdges) {
+                controls.config.nodes.requireMeshEdges = true;
+                controls.config.edges.meshEdge.enabled = true;
+            } else {
+                controls.config.nodes.requireOriginalEdges = true;
+                controls.config.edges.originalEdge.enabled = true;
+            }
             break;
-        case 2: // POINTS - Points
+        case 2: // POINTS - Points only
             controls.config.nodes.requirePoints = true;
             break;
         case 3: // FILLED+LINES - Surface+Edges
             controls.config.nodes.requireSurface = true;
-            controls.config.nodes.requireOriginalEdges = true;
-            controls.config.edges.originalEdge.enabled = true;
+            if (useSilhouetteEdges) {
+                controls.config.nodes.requireSilhouetteEdges = true;
+                controls.config.edges.silhouetteEdge.enabled = true;
+            } else if (useMeshEdges) {
+                controls.config.nodes.requireMeshEdges = true;
+                controls.config.edges.meshEdge.enabled = true;
+            } else {
+                controls.config.nodes.requireOriginalEdges = true;
+                controls.config.edges.originalEdge.enabled = true;
+            }
             break;
         case 4: // FILLED+POINTS - Surface+Points
             controls.config.nodes.requireSurface = true;
             controls.config.nodes.requirePoints = true;
             break;
         case 5: // LINES+POINTS - Edges+Points
-            controls.config.nodes.requireOriginalEdges = true;
-            controls.config.edges.originalEdge.enabled = true;
             controls.config.nodes.requirePoints = true;
+            if (useMeshEdges) {
+                controls.config.nodes.requireMeshEdges = true;
+                controls.config.edges.meshEdge.enabled = true;
+            } else {
+                controls.config.nodes.requireOriginalEdges = true;
+                controls.config.edges.originalEdge.enabled = true;
+            }
             break;
-        case 6: // FILLED+LINES+POINTS - All
+        case 6: // FILLED+LINES+POINTS - Surface+Edges+Points
             controls.config.nodes.requireSurface = true;
-            controls.config.nodes.requireOriginalEdges = true;
-            controls.config.edges.originalEdge.enabled = true;
             controls.config.nodes.requirePoints = true;
+            if (useMeshEdges) {
+                controls.config.nodes.requireMeshEdges = true;
+                controls.config.edges.meshEdge.enabled = true;
+            } else {
+                controls.config.nodes.requireOriginalEdges = true;
+                controls.config.edges.originalEdge.enabled = true;
+            }
             break;
         }
 
         // Update individual checkboxes to reflect DrawStyle selection
-        if (controls.requireSurface) controls.requireSurface->SetValue(controls.config.nodes.requireSurface);
-        if (controls.requireOriginalEdges) controls.requireOriginalEdges->SetValue(controls.config.nodes.requireOriginalEdges);
-        if (controls.requireMeshEdges) controls.requireMeshEdges->SetValue(controls.config.nodes.requireMeshEdges);
-        if (controls.requirePoints) controls.requirePoints->SetValue(controls.config.nodes.requirePoints);
+        updateCheckboxesFromDrawStyle(mode);
+        
+        // Sync originalEdgeEnabled for Solid and FlatLines modes when DrawStyle changes
+        syncOriginalEdgeEnabled(mode);
     } else {
         // Fallback to individual checkbox control (legacy behavior)
         if (controls.requireSurface && controls.requireSurface->IsShown()) {
@@ -1050,13 +1303,14 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
         controls.config.rendering.materialOverride.transparency = static_cast<double>(sliderValue) / 100.0;
     }
     
-    if (mode == RenderingConfig::DisplayMode::FlatLines || mode == RenderingConfig::DisplayMode::Solid) {
-        // Force sync: original edge display state must match the data requirement exactly
-        controls.config.edges.originalEdge.enabled = controls.config.nodes.requireOriginalEdges;
-        if (controls.originalEdgeEnabled && controls.originalEdgeEnabled->IsShown()) {
-            controls.originalEdgeEnabled->SetValue(controls.config.nodes.requireOriginalEdges);
-        }
-    } else {
+    // Enforce mode-specific requirements
+    enforceModeRequirements(mode);
+    
+    // Sync originalEdgeEnabled for Solid and FlatLines modes
+    syncOriginalEdgeEnabled(mode);
+    
+    // For other modes, use the checkbox value if shown
+    if (mode != RenderingConfig::DisplayMode::FlatLines && mode != RenderingConfig::DisplayMode::Solid) {
         if (controls.originalEdgeEnabled && controls.originalEdgeEnabled->IsShown()) {
             controls.config.edges.originalEdge.enabled = controls.originalEdgeEnabled->GetValue();
         } else {
@@ -1087,6 +1341,19 @@ void DisplayModeConfigDialog::updateConfigFromControls(RenderingConfig::DisplayM
     }
     if (controls.meshEdgeUseEffectiveColor && controls.meshEdgeUseEffectiveColor->IsShown()) {
         controls.config.edges.meshEdge.useEffectiveColor = controls.meshEdgeUseEffectiveColor->GetValue();
+    }
+    
+    if (controls.silhouetteEdgeEnabled && controls.silhouetteEdgeEnabled->IsShown()) {
+        controls.config.edges.silhouetteEdge.enabled = controls.silhouetteEdgeEnabled->GetValue();
+    }
+    if (controls.silhouetteEdgeColor && controls.silhouetteEdgeColor->IsShown()) {
+        wxColour silhouetteEdgeColour = controls.silhouetteEdgeColor->GetBackgroundColor();
+        if (silhouetteEdgeColour.IsOk()) {
+            controls.config.edges.silhouetteEdge.color = wxColourToQuantityColor(silhouetteEdgeColour);
+        }
+    }
+    if (controls.silhouetteEdgeWidth && controls.silhouetteEdgeWidth->IsShown()) {
+        controls.config.edges.silhouetteEdge.width = static_cast<double>(controls.silhouetteEdgeWidth->GetValue()) / 10.0;
     }
     
     controls.config.postProcessing.polygonOffset.enabled = controls.polygonOffsetEnabled->GetValue();
@@ -1126,7 +1393,11 @@ void DisplayModeConfigDialog::onColorButtonClicked(wxCommandEvent& event)
     
     if (newColor.IsOk()) {
         updateColorButton(button, newColor);
-        updatePreview();
+        int currentPage = m_notebook->GetSelection();
+        if (currentPage >= 0) {
+            RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+            updatePreviewForMode(currentMode);
+        }
     }
 }
 
@@ -1165,7 +1436,11 @@ wxColour DisplayModeConfigDialog::getColorFromDialog(const wxColour& initialColo
     wxColourDialog dialog(this, &colorData);
     if (dialog.ShowModal() == wxID_OK) {
         wxColour newColor = dialog.GetColourData().GetColour();
-        updatePreview();
+        int currentPage = m_notebook->GetSelection();
+        if (currentPage >= 0) {
+            RenderingConfig::DisplayMode currentMode = this->getModeFromPageIndex(currentPage);
+            updatePreviewForMode(currentMode);
+        }
         return newColor;
     }
     return wxColour();
@@ -1179,11 +1454,103 @@ void DisplayModeConfigDialog::updatePreview()
     if (currentPage < 0) return;
     
     RenderingConfig::DisplayMode mode = this->getModeFromPageIndex(currentPage);
-    
+    updatePreviewForMode(mode);
+}
+
+void DisplayModeConfigDialog::schedulePreviewUpdate(RenderingConfig::DisplayMode mode, int delayMs)
+{
+    m_pendingPreviewMode = mode;
+    m_previewUpdatePending = true;
+
+    if (m_previewUpdateTimer.IsRunning()) {
+        m_previewUpdateTimer.Stop();
+    }
+    m_previewUpdateTimer.Start(delayMs, true); // One-shot timer
+}
+
+void DisplayModeConfigDialog::onPreviewUpdateTimer(wxTimerEvent& event)
+{
+    if (m_previewUpdatePending && m_previewCanvas) {
+        m_previewUpdatePending = false;
+        updatePreviewForMode(m_pendingPreviewMode);
+    }
+}
+
+void DisplayModeConfigDialog::updatePreviewForMode(RenderingConfig::DisplayMode mode)
+{
+    if (!m_previewCanvas) return;
+
+    // For tab switching, config should already be up-to-date from enforceModeRequirements
+    // For control changes, config should be up-to-date from updateConfigFromControls calls
+    // But to be safe, ensure config is current before updating preview
     updateConfigFromControls(mode);
     DisplayModeConfig config = m_modeControls[mode].config;
-    
+
     m_previewCanvas->updateDisplayMode(mode, config);
+}
+
+void DisplayModeConfigDialog::updateDrawStyleFromCheckboxes(RenderingConfig::DisplayMode mode)
+{
+    ModeControls& controls = m_modeControls[mode];
+    if (!controls.drawStyle || !controls.drawStyle->IsShown()) {
+        return;
+    }
+    
+    bool showSurface = controls.config.nodes.requireSurface;
+    bool showEdges = controls.config.nodes.requireOriginalEdges || controls.config.nodes.requireMeshEdges;
+    bool showPoints = controls.config.nodes.requirePoints;
+    
+    int drawStyleIndex = 0;
+    if (showPoints && !showEdges && !showSurface) {
+        drawStyleIndex = 2; // POINTS
+    } else if (showEdges && !showPoints && !showSurface) {
+        drawStyleIndex = 1; // LINES
+    } else if (showSurface && !showEdges && !showPoints) {
+        drawStyleIndex = 0; // FILLED
+    } else if (showSurface && showEdges && !showPoints) {
+        drawStyleIndex = 3; // FILLED+LINES
+    } else if (showSurface && showPoints && !showEdges) {
+        drawStyleIndex = 4; // FILLED+POINTS
+    } else if (showEdges && showPoints && !showSurface) {
+        drawStyleIndex = 5; // LINES+POINTS
+    } else if (showSurface && showEdges && showPoints) {
+        drawStyleIndex = 6; // FILLED+LINES+POINTS
+    }
+    
+    controls.drawStyle->SetSelection(drawStyleIndex);
+}
+
+void DisplayModeConfigDialog::updateCheckboxesFromDrawStyle(RenderingConfig::DisplayMode mode)
+{
+    ModeControls& controls = m_modeControls[mode];
+    if (!controls.drawStyle || !controls.drawStyle->IsShown()) {
+        return;
+    }
+    
+    if (controls.requireSurface && controls.requireSurface->IsShown()) {
+        controls.requireSurface->SetValue(controls.config.nodes.requireSurface);
+    }
+    if (controls.requireOriginalEdges && controls.requireOriginalEdges->IsShown()) {
+        controls.requireOriginalEdges->SetValue(controls.config.nodes.requireOriginalEdges);
+    }
+    if (controls.requireMeshEdges && controls.requireMeshEdges->IsShown()) {
+        controls.requireMeshEdges->SetValue(controls.config.nodes.requireMeshEdges);
+    }
+    if (controls.requirePoints && controls.requirePoints->IsShown()) {
+        controls.requirePoints->SetValue(controls.config.nodes.requirePoints);
+    }
+}
+
+void DisplayModeConfigDialog::syncOriginalEdgeEnabled(RenderingConfig::DisplayMode mode)
+{
+    ModeControls& controls = m_modeControls[mode];
+    
+    if (mode == RenderingConfig::DisplayMode::Solid || mode == RenderingConfig::DisplayMode::FlatLines) {
+        controls.config.edges.originalEdge.enabled = controls.config.nodes.requireOriginalEdges;
+        if (controls.originalEdgeEnabled && controls.originalEdgeEnabled->IsShown()) {
+            controls.originalEdgeEnabled->SetValue(controls.config.nodes.requireOriginalEdges);
+        }
+    }
 }
 
 void DisplayModeConfigDialog::applyThemeAndFonts()
@@ -1234,7 +1601,7 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
     if (controls.drawStyle) controls.drawStyle->Show(true);
 
     switch (mode) {
-        
+    case RenderingConfig::DisplayMode::NoShading:
         if (controls.lightModel) controls.lightModel->Show(true);
         if (controls.textureEnabled) controls.textureEnabled->Show(false);
         if (controls.blendMode) controls.blendMode->Show(false);
@@ -1473,13 +1840,13 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
     case RenderingConfig::DisplayMode::HiddenLine:
         if (controls.requireSurface) controls.requireSurface->Show(true);
         if (controls.requireOriginalEdges) controls.requireOriginalEdges->Show(false);
-        if (controls.requireMeshEdges) controls.requireMeshEdges->Show(true);
+        if (controls.requireMeshEdges) controls.requireMeshEdges->Show(false);
         if (controls.requirePoints) controls.requirePoints->Show(false);
-        
+
         if (controls.lightModel) controls.lightModel->Show(true);
         if (controls.textureEnabled) controls.textureEnabled->Show(false);
         if (controls.blendMode) controls.blendMode->Show(true);
-        
+
         if (controls.materialOverrideEnabled) controls.materialOverrideEnabled->Show(true);
         if (controls.materialAmbientColor) controls.materialAmbientColor->Show(true);
         if (controls.materialDiffuseColor) controls.materialDiffuseColor->Show(true);
@@ -1487,20 +1854,26 @@ void DisplayModeConfigDialog::updateModeVisibility(RenderingConfig::DisplayMode 
         if (controls.materialEmissiveColor) controls.materialEmissiveColor->Show(false);
         if (controls.materialShininess) controls.materialShininess->Show(false);
         if (controls.materialShininessLabel) controls.materialShininessLabel->Show(false);
-        if (controls.materialTransparency) controls.materialTransparency->Show(false);
+        if (controls.materialTransparency) controls.materialTransparencyLabel->Show(false);
         if (controls.materialTransparencyLabel) controls.materialTransparencyLabel->Show(false);
-        
+
         if (controls.originalEdgeEnabled) controls.originalEdgeEnabled->Show(false);
         if (controls.originalEdgeColor) controls.originalEdgeColor->Show(false);
         if (controls.originalEdgeWidth) controls.originalEdgeWidth->Show(false);
         if (controls.originalEdgeWidthLabel) controls.originalEdgeWidthLabel->Show(false);
-        
-        if (controls.meshEdgeEnabled) controls.meshEdgeEnabled->Show(true);
-        if (controls.meshEdgeColor) controls.meshEdgeColor->Show(true);
-        if (controls.meshEdgeWidth) controls.meshEdgeWidth->Show(true);
-        if (controls.meshEdgeWidthLabel) controls.meshEdgeWidthLabel->Show(true);
-        if (controls.meshEdgeUseEffectiveColor) controls.meshEdgeUseEffectiveColor->Show(true);
-        
+
+        if (controls.meshEdgeEnabled) controls.meshEdgeEnabled->Show(false);
+        if (controls.meshEdgeColor) controls.meshEdgeColor->Show(false);
+        if (controls.meshEdgeWidth) controls.meshEdgeWidth->Show(false);
+        if (controls.meshEdgeWidthLabel) controls.meshEdgeWidthLabel->Show(false);
+        if (controls.meshEdgeUseEffectiveColor) controls.meshEdgeUseEffectiveColor->Show(false);
+
+        // Show silhouette edge controls instead of mesh edge controls
+        if (controls.silhouetteEdgeEnabled) controls.silhouetteEdgeEnabled->Show(true);
+        if (controls.silhouetteEdgeColor) controls.silhouetteEdgeColor->Show(true);
+        if (controls.silhouetteEdgeWidth) controls.silhouetteEdgeWidth->Show(true);
+        if (controls.silhouetteEdgeWidthLabel) controls.silhouetteEdgeWidthLabel->Show(true);
+
         if (controls.postProcessingBox) controls.postProcessingBox->Show(true);
         if (controls.polygonOffsetEnabled) controls.polygonOffsetEnabled->Show(true);
         if (controls.polygonOffsetFactor) controls.polygonOffsetFactor->Show(true);

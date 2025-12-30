@@ -11,6 +11,9 @@
 #include <wx/settings.h>
 #include <cmath>
 
+// Define the custom event
+wxDEFINE_EVENT(wxEVT_FLATNOTEBOOK_PAGE_CHANGED, wxCommandEvent);
+
 wxBEGIN_EVENT_TABLE(FlatNotebook, wxPanel)
     EVT_PAINT(FlatNotebook::OnPaint)
     EVT_LEFT_DOWN(FlatNotebook::OnLeftDown)
@@ -272,7 +275,8 @@ void FlatNotebook::OnPaint(wxPaintEvent& event)
             break;
         }
         case FlatNotebook::TabPosition::Top:
-            dc.DrawLine(0, m_tabHeight + 4, clientSize.GetWidth(), m_tabHeight + 4);
+            // Content area border is drawn as tab bar bottom border (see below)
+            // Don't draw here to avoid covering the tab bar bottom border
             break;
         case FlatNotebook::TabPosition::Bottom:
             dc.DrawLine(0, clientSize.GetHeight() - m_tabHeight - 4,
@@ -588,10 +592,10 @@ void FlatNotebook::RenderTab(wxDC& dc, const wxRect& rect, const wxString& text,
                 // Left and right borders are thin lines
                 dc.SetPen(wxPen(tabBorderColour, m_tabBorderLeft));
                 dc.DrawLine(rect.GetLeft(), rect.GetTop() + borderOffset,
-                          rect.GetLeft(), rect.GetBottom());
+                          rect.GetLeft(), rect.GetBottom() - 1);
                 dc.DrawLine(rect.GetRight() + 1, rect.GetTop() + borderOffset,
-                          rect.GetRight() + 1, rect.GetBottom());
-                // Bottom border not drawn for top tabs
+                          rect.GetRight() + 1, rect.GetBottom() - 1);
+                // Bottom border not drawn for top tabs (drawn as tab bar bottom border)
             } else {
                 // Bottom tabs: bottom border is thick, top border not drawn
                 int borderOffset = m_tabBorderBottom;
@@ -868,6 +872,8 @@ void FlatNotebook::SelectPage(int page)
 {
     if (page < 0 || page >= static_cast<int>(m_pages.size())) return;
 
+    int oldSelection = m_selectedPage;
+
     // Hide currently selected page
     if (m_selectedPage >= 0 && m_selectedPage < static_cast<int>(m_pages.size())) {
         m_pages[m_selectedPage]->page->Hide();
@@ -888,6 +894,13 @@ void FlatNotebook::SelectPage(int page)
 
         // Notify page change
         OnPageChanged(m_selectedPage);
+
+        // Send page changed event
+        wxCommandEvent event(wxEVT_FLATNOTEBOOK_PAGE_CHANGED, GetId());
+        event.SetInt(m_selectedPage);  // Set the new selection
+        event.SetExtraLong(oldSelection);  // Store old selection in extra long
+        event.SetEventObject(this);
+        GetEventHandler()->ProcessEvent(event);
     }
 
     Refresh();

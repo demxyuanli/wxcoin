@@ -176,17 +176,17 @@ DisplayModeConfig DisplayModeConfigFactory::createTransparentConfig(const Geomet
 
 DisplayModeConfig DisplayModeConfigFactory::createHiddenLineConfig(const GeometryRenderContext& context) {
     DisplayModeConfig config;
-    
+
     // Node requirements
     config.nodes.requireSurface = true;
-    config.nodes.requireMeshEdges = true;  // HiddenLine uses mesh edges, not original edges
-    
+    config.nodes.requireSilhouetteEdges = true;  // HiddenLine uses silhouette edges (FreeCAD style)
+
     // Rendering properties
     config.rendering.lightModel = DisplayModeConfig::RenderingProperties::LightModel::BASE_COLOR;
     config.rendering.textureEnabled = false;
     config.rendering.blendMode = RenderingConfig::BlendMode::None;
-    
-    // Material override: White surface
+
+    // Material override: White surface for clean background
     config.rendering.materialOverride.enabled = true;
     config.rendering.materialOverride.ambientColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
     config.rendering.materialOverride.diffuseColor = Quantity_Color(1.0, 1.0, 1.0, Quantity_TOC_RGB);
@@ -194,18 +194,15 @@ DisplayModeConfig DisplayModeConfigFactory::createHiddenLineConfig(const Geometr
     config.rendering.materialOverride.emissiveColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
     config.rendering.materialOverride.shininess = 0.0;
     config.rendering.materialOverride.transparency = 0.0;
-    
-    // Post-processing: Polygon offset for depth sorting
-    config.postProcessing.polygonOffset.enabled = true;
-    config.postProcessing.polygonOffset.factor = 1.0f;
-    config.postProcessing.polygonOffset.units = 1.0f;
-    
-    // Edge configuration: Mesh edges with effective color (black if too light)
-    config.edges.meshEdge.enabled = true;
-    config.edges.meshEdge.color = context.material.diffuseColor;  // Original face color
-    config.edges.meshEdge.width = context.display.wireframeWidth;
-    config.edges.meshEdge.useEffectiveColor = true;  // Use black if color is too light
-    
+
+    // Post-processing: No polygon offset needed for single-pass silhouette rendering
+    config.postProcessing.polygonOffset.enabled = false;
+
+    // Edge configuration: Silhouette edges with black color for clear outline
+    config.edges.silhouetteEdge.enabled = true;
+    config.edges.silhouetteEdge.color = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);  // Black outline
+    config.edges.silhouetteEdge.width = context.display.wireframeWidth * 1.5f;  // Slightly thicker for visibility
+
     return config;
 }
 

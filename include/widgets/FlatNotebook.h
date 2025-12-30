@@ -6,8 +6,12 @@
 #include <wx/bitmap.h>
 #include <wx/graphics.h>
 #include <wx/scrolbar.h>
+#include <wx/event.h>
 #include <vector>
 #include <memory>
+
+// Custom event for FlatNotebook page changes
+wxDECLARE_EVENT(wxEVT_FLATNOTEBOOK_PAGE_CHANGED, wxCommandEvent);
 
 class FlatNotebook : public wxPanel
 {

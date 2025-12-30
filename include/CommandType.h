@@ -136,6 +136,7 @@ namespace cmd {
 		RenderModeShaded,
 		RenderModeTransparency,
 		RenderModeHiddenLine,
+		DisplayModeConfig,
 
 		// Flat Widgets Example
 		ShowFlatWidgetsExample,
@@ -258,6 +259,7 @@ namespace cmd {
 			{CommandType::RenderModeShaded, "RENDER_MODE_SHADED"},
 			{CommandType::RenderModeTransparency, "RENDER_MODE_TRANSPARENCY"},
 			{CommandType::RenderModeHiddenLine, "RENDER_MODE_HIDDEN_LINE"},
+			{CommandType::DisplayModeConfig, "DISPLAY_MODE_CONFIG"},
 			{CommandType::ShowFlatWidgetsExample, "SHOW_FLAT_WIDGETS_EXAMPLE"},
 			{CommandType::DockLayoutConfig, "DOCK_LAYOUT_CONFIG"},
 
@@ -377,6 +379,7 @@ namespace cmd {
 			{"RENDER_MODE_SHADED", CommandType::RenderModeShaded},
 			{"RENDER_MODE_TRANSPARENCY", CommandType::RenderModeTransparency},
 			{"RENDER_MODE_HIDDEN_LINE", CommandType::RenderModeHiddenLine},
+			{"DISPLAY_MODE_CONFIG", CommandType::DisplayModeConfig},
 			{"SHOW_FLAT_WIDGETS_EXAMPLE", CommandType::ShowFlatWidgetsExample},
 			{"DOCK_LAYOUT_CONFIG", CommandType::DockLayoutConfig}
 		};

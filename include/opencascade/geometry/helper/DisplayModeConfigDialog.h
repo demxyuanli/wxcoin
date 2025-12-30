@@ -16,6 +16,7 @@
 #include "widgets/FlatNotebook.h"
 #include <wx/scrolwin.h>
 #include <wx/splitter.h>
+#include <wx/timer.h>
 #include <OpenCASCADE/Quantity_Color.hxx>
 #include "geometry/helper/DisplayModeHandler.h"
 #include "geometry/GeometryRenderContext.h"
@@ -27,11 +28,20 @@
 #include "widgets/FlatComboBox.h"
 #include "widgets/FlatSlider.h"
 #include <map>
+#include <functional>
+
+class FlatProgressBar;
+class wxStaticText;
 
 class DisplayModeConfigDialog : public FramelessModalPopup
 {
 public:
-    DisplayModeConfigDialog(wxWindow* parent, RenderingConfig::DisplayMode initialMode = RenderingConfig::DisplayMode::Solid);
+    // Progress callback type: (current, total, message) -> void
+    using ProgressCallback = std::function<void(int current, int total, const wxString& message)>;
+    
+    DisplayModeConfigDialog(wxWindow* parent, RenderingConfig::DisplayMode initialMode = RenderingConfig::DisplayMode::Solid,
+                           const std::map<RenderingConfig::DisplayMode, DisplayModeConfig>& preloadedConfigs = std::map<RenderingConfig::DisplayMode, DisplayModeConfig>(),
+                           ProgressCallback progressCallback = nullptr);
     virtual ~DisplayModeConfigDialog();
 
     DisplayModeConfig getConfig(RenderingConfig::DisplayMode mode) const;
@@ -60,10 +70,16 @@ private:
     void addGridRow(wxFlexGridSizer* grid, wxWindow* parent, const wxString& label, wxSizer* sizer);
     void addCheckBox(wxSizer* sizer, FlatCheckBox* checkbox, int flags = wxLEFT | wxRIGHT, int border = 3);
     
-    void loadAllConfigurations();
     void loadConfigForMode(RenderingConfig::DisplayMode mode);
     void saveConfigForMode(RenderingConfig::DisplayMode mode);
     void updateConfigFromControls(RenderingConfig::DisplayMode mode);
+    void enforceModeRequirements(RenderingConfig::DisplayMode mode);
+    
+    // Synchronization helper methods
+    void updateDrawStyleFromCheckboxes(RenderingConfig::DisplayMode mode);
+    void updateCheckboxesFromDrawStyle(RenderingConfig::DisplayMode mode);
+    void syncOriginalEdgeEnabled(RenderingConfig::DisplayMode mode);
+    void updatePreviewForMode(RenderingConfig::DisplayMode mode);
     
     RenderingConfig::DisplayMode getModeFromPageIndex(int pageIndex) const;
     int getPageIndexFromMode(RenderingConfig::DisplayMode mode) const;
@@ -123,6 +139,13 @@ private:
         FlatSlider* meshEdgeWidth;
         wxStaticText* meshEdgeWidthLabel;
         FlatCheckBox* meshEdgeUseEffectiveColor;
+
+        wxStaticLine* silhouetteEdgeSeparator;
+        wxStaticText* silhouetteEdgeLabel;
+        FlatCheckBox* silhouetteEdgeEnabled;
+        FlatButton* silhouetteEdgeColor;
+        FlatSlider* silhouetteEdgeWidth;
+        wxStaticText* silhouetteEdgeWidthLabel;
         
         FlatCheckBox* polygonOffsetEnabled;
         FlatSlider* polygonOffsetFactor;
@@ -144,7 +167,16 @@ private:
     
     wxSplitterWindow* m_splitter;
     DisplayModePreviewCanvas* m_previewCanvas;
-    
+
+    ProgressCallback m_progressCallback;
+
+    // Debouncing for slider controls
+    wxTimer m_previewUpdateTimer;
+    RenderingConfig::DisplayMode m_pendingPreviewMode;
+    bool m_previewUpdatePending;
+
     void updatePreview();
+    void schedulePreviewUpdate(RenderingConfig::DisplayMode mode, int delayMs = 150);
+    void onPreviewUpdateTimer(wxTimerEvent& event);
 };
 

@@ -364,7 +364,6 @@ public:
 	
 	// Navigation style switch handler
 	void OnNavigationStyleSwitch(wxCommandEvent& event);
-	void OnDisplayModeConfig(wxCommandEvent& event);
 
 	// Point view refresh handler
 	void OnPointViewToggled(ViewRefreshManager::RefreshReason reason);

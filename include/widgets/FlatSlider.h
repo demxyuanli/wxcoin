@@ -127,6 +127,7 @@ protected:
 	void OnMouseMove(wxMouseEvent& event);
 	void OnMouseLeave(wxMouseEvent& event);
 	void OnMouseEnter(wxMouseEvent& event);
+	void OnMouseCaptureLost(wxMouseCaptureLostEvent& event);
 	void OnKeyDown(wxKeyEvent& event);
 	void OnKeyUp(wxKeyEvent& event);
 	void OnFocus(wxFocusEvent& event);

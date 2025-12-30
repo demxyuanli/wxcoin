@@ -109,6 +109,7 @@ static const std::unordered_map<int, cmd::CommandType> kEventTable = {
 	{ID_RENDER_MODE_SHADED, cmd::CommandType::RenderModeShaded},
 	{ID_RENDER_MODE_TRANSPARENCY, cmd::CommandType::RenderModeTransparency},
 	{ID_RENDER_MODE_HIDDEN_LINE, cmd::CommandType::RenderModeHiddenLine},
+	{ID_DISPLAY_MODE_CONFIG, cmd::CommandType::DisplayModeConfig},
 	{ID_SHOW_FLAT_WIDGETS_EXAMPLE, cmd::CommandType::ShowFlatWidgetsExample},
 	{wxID_ABOUT, cmd::CommandType::HelpAbout}
 };
@@ -171,10 +172,12 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 		parameters["toggle"] = "true"; 
 		LOG_INF_S("FlatFrame::onCommand - ShowNormals command detected, will dispatch");
 	}
-	if (m_listenerManager && m_listenerManager->hasListener(commandType)) {
+	if (m_listenerManager) {
+		if (m_listenerManager->hasListener(commandType)) {
 		LOG_INF_S("FlatFrame::onCommand - Dispatching command: " + cmd::to_string(commandType));
 		CommandResult result = m_listenerManager->dispatch(commandType, parameters);
 		onCommandFeedback(result);
+			
 		// Handle explode slider dialog creation and destruction
 		if (commandType == cmd::CommandType::ExplodeAssembly && m_occViewer) {
 			if (m_occViewer->isExplodeEnabled()) {
@@ -217,10 +220,11 @@ void FlatFrame::onCommand(wxCommandEvent& event) {
 				}
 			}
 		}
+		} else {
+			LOG_ERR_S("FlatFrame::onCommand - No listener registered for command: " + cmd::to_string(commandType));
 	}
-	else {
-		SetStatusText("Error: No listener registered", 0);
-		LOG_ERR_S("No listener registered for command");
+	} else {
+		LOG_ERR_S("FlatFrame::onCommand - ListenerManager is null");
 	}
 }
 

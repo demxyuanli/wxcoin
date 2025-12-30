@@ -262,6 +262,7 @@ void FlatFrame::setupCommandSystem() {
 	m_listenerManager->registerListener(cmd::CommandType::RenderModeShaded, renderModeListener);
 	m_listenerManager->registerListener(cmd::CommandType::RenderModeTransparency, renderModeListener);
 	m_listenerManager->registerListener(cmd::CommandType::RenderModeHiddenLine, renderModeListener);
+	m_listenerManager->registerListener(cmd::CommandType::DisplayModeConfig, renderModeListener);
 
 	m_commandDispatcher->setUIFeedbackHandler([this](const CommandResult& result) { this->onCommandFeedback(result); });
 	LOG_INF_S("Command system setup completed");

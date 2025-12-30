@@ -189,7 +189,7 @@ EVT_BUTTON(ID_MESH_QUALITY_DIALOG, FlatFrame::onCommand)
 EVT_BUTTON(ID_RENDERING_SETTINGS, FlatFrame::onCommand)
 EVT_BUTTON(ID_LIGHTING_SETTINGS, FlatFrame::onCommand)
 EVT_BUTTON(ID_EDGE_SETTINGS, FlatFrame::onCommand)
-EVT_BUTTON(ID_DISPLAY_MODE_CONFIG, FlatFrame::OnDisplayModeConfig)
+EVT_BUTTON(ID_DISPLAY_MODE_CONFIG, FlatFrame::onCommand)
 EVT_BUTTON(ID_SELECTION_HIGHLIGHT_CONFIG, FlatFrame::onCommand)
 EVT_BUTTON(ID_DOCK_LAYOUT_CONFIG, FlatFrame::onCommand)
 EVT_BUTTON(ID_RENDER_PREVIEW_SYSTEM, FlatFrame::onCommand)
@@ -1030,13 +1030,6 @@ void FlatFrame::OnNavigationStyleSwitch(wxCommandEvent& event)
 	appendMessage(wxString("Navigation style switched to: ") + wxString(styleName));
 }
 
-void FlatFrame::OnDisplayModeConfig(wxCommandEvent& event)
-{
-	const RenderingConfig& renderingConfig = RenderingConfig::getInstance();
-	const auto displaySettings = renderingConfig.getDisplaySettings();
-	DisplayModeConfigDialog dialog(this, displaySettings.displayMode);
-	dialog.ShowModal();
-}
 
 void FlatFrame::syncNavigationStyleButtonGroup() {
 	if (!m_navigationStyleButtonGroup || !m_navigationModeManager) {

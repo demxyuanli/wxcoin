@@ -70,7 +70,9 @@ bool SilhouetteEdgeExtractor::isSilhouetteEdge(
     if (curve.IsNull()) return false;
     
     gp_Pnt midPoint = curve->Value((first + last) / 2.0);
-    gp_Vec viewDir(midPoint, cameraPos);
+    // View direction: from camera to edge midpoint (camera looking at edge)
+    gp_Vec viewDir(cameraPos, midPoint);
+    if (viewDir.Magnitude() < 1e-7) return false;
     viewDir.Normalize();
     
     gp_Vec normal1 = calculateFaceNormal(face1, edge);

@@ -131,12 +131,8 @@ void DisplayModePreviewCanvas::initializeScene() {
     
     m_initialized = true;
     updateGeometryFromConfig(m_currentConfig);
-    
+
     m_needsRedraw = true;
-    
-    CallAfter([this]() {
-        performViewAll();
-    });
 }
 
 void DisplayModePreviewCanvas::setupCamera() {
@@ -436,44 +432,98 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
         m_lightModel->model.setValue(SoLightModel::PHONG);
     }
     
-    // 2. Material Override Logic
-    // In Coin3D, material properties are overridden by placing SoMaterial nodes
-    // earlier in the scene graph. Since our m_material is a parent node, it will
-    // override any child node materials. We just need to set the values.
+    // 2. Material Override Logic with caching
+    // Cache material state to avoid unnecessary setValue calls when switching between modes
+    bool materialChanged = false;
+
     if (matOverride.enabled) {
         Standard_Real r, g, b;
-        
+
         matOverride.diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->diffuseColor.setValue((float)r, (float)g, (float)b);
-        
+        float diffuse[3] = {(float)r, (float)g, (float)b};
+
         matOverride.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->ambientColor.setValue((float)r, (float)g, (float)b);
-        
+        float ambient[3] = {(float)r, (float)g, (float)b};
+
         matOverride.specularColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->specularColor.setValue((float)r, (float)g, (float)b);
-        
+        float specular[3] = {(float)r, (float)g, (float)b};
+
         matOverride.emissiveColor.Values(r, g, b, Quantity_TOC_RGB);
-        m_material->emissiveColor.setValue((float)r, (float)g, (float)b);
-        
-        m_material->shininess.setValue((float)matOverride.shininess);
-        m_material->transparency.setValue((float)matOverride.transparency);
-        
-        LOG_INF_S("updateGeometryFromConfig: Material override enabled, transparency=" + 
-                 std::to_string(matOverride.transparency) +
-                 ", diffuseColor=(" + std::to_string(matOverride.diffuseColor.Red()) + "," +
-                 std::to_string(matOverride.diffuseColor.Green()) + "," +
-                 std::to_string(matOverride.diffuseColor.Blue()) + ")");
+        float emissive[3] = {(float)r, (float)g, (float)b};
+
+        // Check if material state has changed
+        if (!m_materialCache.cached ||
+            m_materialCache.enabled != true ||
+            memcmp(m_materialCache.diffuse, diffuse, sizeof(diffuse)) != 0 ||
+            memcmp(m_materialCache.ambient, ambient, sizeof(ambient)) != 0 ||
+            memcmp(m_materialCache.specular, specular, sizeof(specular)) != 0 ||
+            memcmp(m_materialCache.emissive, emissive, sizeof(emissive)) != 0 ||
+            m_materialCache.shininess != (float)matOverride.shininess ||
+            m_materialCache.transparency != (float)matOverride.transparency) {
+
+            materialChanged = true;
+
+            m_material->diffuseColor.setValue(diffuse[0], diffuse[1], diffuse[2]);
+            m_material->ambientColor.setValue(ambient[0], ambient[1], ambient[2]);
+            m_material->specularColor.setValue(specular[0], specular[1], specular[2]);
+            m_material->emissiveColor.setValue(emissive[0], emissive[1], emissive[2]);
+            m_material->shininess.setValue((float)matOverride.shininess);
+            m_material->transparency.setValue((float)matOverride.transparency);
+
+            // Update cache
+            m_materialCache.cached = true;
+            m_materialCache.enabled = true;
+            memcpy(m_materialCache.diffuse, diffuse, sizeof(diffuse));
+            memcpy(m_materialCache.ambient, ambient, sizeof(ambient));
+            memcpy(m_materialCache.specular, specular, sizeof(specular));
+            memcpy(m_materialCache.emissive, emissive, sizeof(emissive));
+            m_materialCache.shininess = (float)matOverride.shininess;
+            m_materialCache.transparency = (float)matOverride.transparency;
+
+            LOG_INF_S("updateGeometryFromConfig: Material override enabled and updated, transparency=" +
+                     std::to_string(matOverride.transparency));
+        }
     } else {
-        // When override is disabled, we set default values but the material node
-        // still exists in the scene graph, so it will still affect rendering.
-        // To truly disable override, we would need to remove the node from the scene,
-        // but for preview purposes, setting default values is acceptable.
-        m_material->diffuseColor.setValue(0.5f, 0.5f, 0.6f);
-        m_material->ambientColor.setValue(0.3f, 0.3f, 0.4f);
-        m_material->specularColor.setValue(1.0f, 1.0f, 1.0f);
-        m_material->emissiveColor.setValue(0.0f, 0.0f, 0.0f);
-        m_material->shininess.setValue(50.0f);
-        m_material->transparency.setValue(0.0f);
+        // Check if default material state has changed
+        const float defaultDiffuse[3] = {0.5f, 0.5f, 0.6f};
+        const float defaultAmbient[3] = {0.3f, 0.3f, 0.4f};
+        const float defaultSpecular[3] = {1.0f, 1.0f, 1.0f};
+        const float defaultEmissive[3] = {0.0f, 0.0f, 0.0f};
+        const float defaultShininess = 50.0f;
+        const float defaultTransparency = 0.0f;
+
+        if (!m_materialCache.cached ||
+            m_materialCache.enabled != false ||
+            memcmp(m_materialCache.diffuse, defaultDiffuse, sizeof(defaultDiffuse)) != 0 ||
+            memcmp(m_materialCache.ambient, defaultAmbient, sizeof(defaultAmbient)) != 0 ||
+            memcmp(m_materialCache.specular, defaultSpecular, sizeof(defaultSpecular)) != 0 ||
+            memcmp(m_materialCache.emissive, defaultEmissive, sizeof(defaultEmissive)) != 0 ||
+            m_materialCache.shininess != defaultShininess ||
+            m_materialCache.transparency != defaultTransparency) {
+
+            materialChanged = true;
+
+            m_material->diffuseColor.setValue(defaultDiffuse[0], defaultDiffuse[1], defaultDiffuse[2]);
+            m_material->ambientColor.setValue(defaultAmbient[0], defaultAmbient[1], defaultAmbient[2]);
+            m_material->specularColor.setValue(defaultSpecular[0], defaultSpecular[1], defaultSpecular[2]);
+            m_material->emissiveColor.setValue(defaultEmissive[0], defaultEmissive[1], defaultEmissive[2]);
+            m_material->shininess.setValue(defaultShininess);
+            m_material->transparency.setValue(defaultTransparency);
+
+            // Update cache
+            m_materialCache.cached = true;
+            m_materialCache.enabled = false;
+            memcpy(m_materialCache.diffuse, defaultDiffuse, sizeof(defaultDiffuse));
+            memcpy(m_materialCache.ambient, defaultAmbient, sizeof(defaultAmbient));
+            memcpy(m_materialCache.specular, defaultSpecular, sizeof(defaultSpecular));
+            memcpy(m_materialCache.emissive, defaultEmissive, sizeof(defaultEmissive));
+            m_materialCache.shininess = defaultShininess;
+            m_materialCache.transparency = defaultTransparency;
+        }
+    }
+
+    if (!materialChanged) {
+        LOG_INF_S("updateGeometryFromConfig: Material state unchanged, skipping update");
     }
     
     // 3. Polygon Offset logic
@@ -484,25 +534,37 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
         m_polygonOffset->on.setValue(config.postProcessing.polygonOffset.enabled);
     }
     
-    // Configure SoShapeHints for proper transparency rendering
-    // When transparency > 0, use UNKNOWN_FACE_TYPE and UNKNOWN_ORDERING to allow
-    // Coin3D to handle back-face culling and rendering order correctly
-    // Note: SoShapeHints must be configured for transparency to work correctly with Coin3D
-    double transparency = config.rendering.materialOverride.enabled 
-        ? config.rendering.materialOverride.transparency 
+    // Configure SoShapeHints for optimal rendering performance
+    // Optimize based on transparency and geometry type for better performance
+    double transparency = config.rendering.materialOverride.enabled
+        ? config.rendering.materialOverride.transparency
         : 0.0;
+
     if (m_shapeHints) {
         if (transparency > 0.0) {
-            // Enable shape hints for transparency: this tells Coin3D to handle
-            // face ordering and back-face culling properly for transparent objects
+            // For transparent objects, use UNKNOWN settings to let Coin3D handle face culling
+            // This is necessary for correct transparency rendering
             m_shapeHints->faceType.setValue(SoShapeHints::UNKNOWN_FACE_TYPE);
             m_shapeHints->vertexOrdering.setValue(SoShapeHints::UNKNOWN_ORDERING);
-            LOG_INF_S("updateGeometryFromConfig: Transparency enabled (" + std::to_string(transparency) + 
-                     "), configured SoShapeHints for transparency rendering");
+
+            LOG_INF_S("updateGeometryFromConfig: Transparency enabled (" + std::to_string(transparency) +
+                     "), using UNKNOWN face type for transparency");
         } else {
-            // For opaque objects, use standard settings for better performance
-            m_shapeHints->faceType.setValue(SoShapeHints::SOLID);
-            m_shapeHints->vertexOrdering.setValue(SoShapeHints::COUNTERCLOCKWISE);
+            // For opaque objects, optimize based on rendering mode
+            if (m_currentMode == RenderingConfig::DisplayMode::Transparent) {
+                // Even in Transparent mode, if transparency is 0, we can use optimized settings
+                // This provides better performance for non-transparent geometry in Transparent mode
+                m_shapeHints->faceType.setValue(SoShapeHints::SOLID);
+                m_shapeHints->vertexOrdering.setValue(SoShapeHints::COUNTERCLOCKWISE);
+
+                LOG_INF_S("updateGeometryFromConfig: Transparent mode with no transparency, using SOLID face type for performance");
+            } else {
+                // For other opaque modes, use standard SOLID settings for best performance
+                m_shapeHints->faceType.setValue(SoShapeHints::SOLID);
+                m_shapeHints->vertexOrdering.setValue(SoShapeHints::COUNTERCLOCKWISE);
+
+                LOG_INF_S("updateGeometryFromConfig: Opaque mode, using SOLID face type for performance");
+            }
         }
     }
     
@@ -562,24 +624,53 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
         RenderingConfig::DisplayMode currentMode = m_currentMode;
 
         if (currentMode == RenderingConfig::DisplayMode::HiddenLine) {
-            // HiddenLine mode: use mesh edges for better performance and visibility control
-            LOG_INF_S("updateGeometryFromConfig: HiddenLine mode - extracting mesh edges");
+            // HiddenLine mode: use silhouette edges for clean outline display (FreeCAD style)
+            LOG_INF_S("updateGeometryFromConfig: HiddenLine mode - extracting silhouette edges");
 
-            // Extract mesh edges from triangulated surface
-            if (!m_edgeComponent->getEdgeNode(EdgeType::Mesh) && m_mesh) {
-                Quantity_Color meshEdgeColor = config.edges.meshEdge.color;
-                if (config.edges.meshEdge.useEffectiveColor) {
-                    // Use black for better contrast if surface color is light
-                    if (meshEdgeColor.Red() > 0.4 && meshEdgeColor.Green() > 0.4 && meshEdgeColor.Blue() > 0.4) {
-                        meshEdgeColor = Quantity_Color(0.0, 0.0, 0.0, Quantity_TOC_RGB);
+            // Extract silhouette edges when in HiddenLine mode (they depend on camera position)
+            // Re-extract if camera position has changed or if silhouette edges don't exist
+            if (!m_shape.IsNull()) {
+                // Calculate camera position for silhouette detection
+                SbVec3f cameraPos;
+                if (m_camera) {
+                    cameraPos = m_camera->position.getValue();
+                } else {
+                    cameraPos = SbVec3f(0, 0, 10); // Default camera position
+                }
+
+                // Check if camera position has changed significantly (more than 1% of distance)
+                bool cameraChanged = false;
+                if (m_silhouetteNeedsUpdate || !m_edgeComponent->getEdgeNode(EdgeType::Silhouette)) {
+                    cameraChanged = true;
+                } else {
+                    SbVec3f diff = cameraPos - m_lastSilhouetteCameraPos;
+                    float distance = diff.length();
+                    float cameraDistance = cameraPos.length();
+                    // Re-extract if camera moved more than 1% of its distance from origin
+                    if (distance > cameraDistance * 0.01f) {
+                        cameraChanged = true;
                     }
                 }
-                m_edgeComponent->extractMeshEdges(*m_mesh, meshEdgeColor, config.edges.meshEdge.width);
-                LOG_INF_S("updateGeometryFromConfig: Mesh edges extracted for HiddenLine mode");
+
+                if (cameraChanged) {
+                    gp_Pnt cameraPoint(cameraPos[0], cameraPos[1], cameraPos[2]);
+
+                    // Extract silhouette edges with camera position
+                    Quantity_Color silhouetteColor = config.edges.silhouetteEdge.color;
+                    m_edgeComponent->extractSilhouetteEdges(m_shape, cameraPoint, silhouetteColor, config.edges.silhouetteEdge.width);
+                    
+                    // Update tracked camera position
+                    m_lastSilhouetteCameraPos = cameraPos;
+                    m_silhouetteNeedsUpdate = false;
+                    
+                    LOG_INF_S("updateGeometryFromConfig: Silhouette edges extracted for HiddenLine mode (camera pos: " +
+                             std::to_string(cameraPos[0]) + ", " + std::to_string(cameraPos[1]) + ", " + std::to_string(cameraPos[2]) + ")");
+                }
             }
 
-            // Enable mesh edges for HiddenLine
-            m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, true);
+            // Enable silhouette edges for HiddenLine
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, true);
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Mesh, false);
             m_edgeComponent->setEdgeDisplayType(EdgeType::Original, false);
         } else {
             // Other modes: use topological edges for accuracy
@@ -599,10 +690,12 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
             }
         }
 
-        // Disable other edge types
+        // Disable other edge types (but preserve Silhouette for HiddenLine mode)
         m_edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
         m_edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
-        m_edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        if (currentMode != RenderingConfig::DisplayMode::HiddenLine) {
+            m_edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        }
         m_edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
         m_edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
     }
@@ -630,18 +723,13 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
     
     m_needsRedraw = true;
     Refresh();
-    
-    if (m_shape.IsNull() == false && m_mesh != nullptr) {
-        CallAfter([this]() {
-            wxSize size = GetSize();
-            if (size.GetWidth() > 0 && size.GetHeight() > 0) {
-                performViewAll();
-            }
-        });
-    }
+
+    // Note: performViewAll will be called when the dialog is shown and sized properly
+    // No need to call it here as it causes excessive updates during initialization
 }
 
 void DisplayModePreviewCanvas::updateDisplayMode(RenderingConfig::DisplayMode mode, const DisplayModeConfig& config) {
+    LOG_INF_S("DisplayModePreviewCanvas: updateDisplayMode called for mode " + std::to_string(static_cast<int>(mode)));
     m_currentMode = mode;
     m_currentConfig = config;
     updateGeometryFromConfig(config);
@@ -818,113 +906,70 @@ void DisplayModePreviewCanvas::onPaint(wxPaintEvent& event) {
         RenderingConfig::DisplayMode currentMode = m_currentMode;
 
         if (currentMode == RenderingConfig::DisplayMode::HiddenLine) {
-            // HiddenLine mode: Render mesh edges with visibility distinction
-            // First pass: Render all edges as dashed lines (invisible parts)
-            // Second pass: Render visible edges as solid lines
-            LOG_INF_S("onPaint: Rendering HiddenLine mesh edges with visibility distinction");
+            // HiddenLine mode: Render silhouette edges in single pass (FreeCAD style)
+            LOG_INF_S("onPaint: Rendering HiddenLine silhouette edges in single pass");
 
-            // Set edge color based on configuration
-            SbColor originalDiffuse;
-            Quantity_Color meshEdgeColor = m_currentConfig.edges.meshEdge.color;
-            if (m_material) {
-                originalDiffuse = m_material->diffuseColor[0];
-                Standard_Real r, g, b;
-                if (m_currentConfig.edges.meshEdge.useEffectiveColor) {
-                    // Use black for mesh edges if surface color is light
-                    float fr, fg, fb;
-                    originalDiffuse.getValue(fr, fg, fb);
-                    if (fr > 0.4f && fg > 0.4f && fb > 0.4f) {
-                        r = g = b = 0.0;
-                    } else {
-                        meshEdgeColor.Values(r, g, b, Quantity_TOC_RGB);
-                    }
-                } else {
-                    meshEdgeColor.Values(r, g, b, Quantity_TOC_RGB);
+            // Check if we have silhouette edges to display
+            bool hasSilhouetteEdges = false;
+            SoSeparator* silhouetteEdges = nullptr;
+            if (m_edgeComponent) {
+                silhouetteEdges = m_edgeComponent->getEdgeNode(EdgeType::Silhouette);
+                hasSilhouetteEdges = (silhouetteEdges && m_edgeComponent->isEdgeDisplayTypeEnabled(EdgeType::Silhouette));
+            }
+
+            if (hasSilhouetteEdges) {
+                // Create a temporary separator for silhouette edges
+                SoSeparator* silhouetteSeparator = new SoSeparator;
+                silhouetteSeparator->ref();
+
+                // Add polygon offset for edges to bring them forward (shrink effect)
+                SoPolygonOffset* edgeOffset = new SoPolygonOffset;
+                edgeOffset->factor.setValue(-1.0f);
+                edgeOffset->units.setValue(-1.0f);
+                edgeOffset->styles = SoPolygonOffset::LINES;
+                edgeOffset->on.setValue(true);
+                silhouetteSeparator->addChild(edgeOffset);
+
+                // Add silhouette edge node
+                silhouetteSeparator->addChild(silhouetteEdges);
+
+                SoGLRenderAction silhouetteAction(vpRegion);
+                silhouetteAction.setSmoothing(true);
+                silhouetteAction.setNumPasses(1);
+                silhouetteAction.setTransparencyType(SoGLRenderAction::NONE);
+
+                // Create a minimal scene with just the silhouette edges
+                SoSeparator* edgeScene = new SoSeparator;
+                edgeScene->ref();
+
+                // Add camera and lighting to edge scene
+                if (m_camera) {
+                    edgeScene->addChild(m_camera);
                 }
-                m_material->diffuseColor.setValue((float)r, (float)g, (float)b);
-            }
-
-            // Pass 2a: Render all edges as dashed lines (invisible parts)
-            // Note: GL_LINE_STIPPLE may not be supported in all OpenGL versions
-            // For now, we'll render all edges as solid lines in a lighter color
-
-            if (m_drawStyle) {
-                m_drawStyle->style.setValue(SoDrawStyle::LINES);
-            }
-
-            // Disable polygon offset for first pass
-            if (m_polygonOffset) {
-                m_polygonOffset->on.setValue(false);
-            }
-
-            // Use a lighter color for all edges in this pass
-            if (m_material) {
-                float r, g, b;
-                originalDiffuse.getValue(r, g, b);
-                // Make edges lighter for "invisible" appearance
-                r = std::min(r + 0.3f, 1.0f);
-                g = std::min(g + 0.3f, 1.0f);
-                b = std::min(b + 0.3f, 1.0f);
-                m_material->diffuseColor.setValue(r, g, b);
-            }
-
-            SoGLRenderAction allEdgesAction(vpRegion);
-            allEdgesAction.setSmoothing(true);
-            allEdgesAction.setNumPasses(1);
-            allEdgesAction.setTransparencyType(SoGLRenderAction::NONE);
-
-            allEdgesAction.apply(m_sceneRoot);
-
-            // Restore color for next pass
-            if (m_material) {
-                m_material->diffuseColor.setValue(originalDiffuse);
-            }
-
-            // Pass 2b: Render visible edges with polygon offset (pop-out effect)
-            if (m_drawStyle) {
-                m_drawStyle->style.setValue(SoDrawStyle::LINES);
-            }
-
-            // Enable polygon offset for edges to bring them forward
-            if (m_polygonOffset) {
-                m_polygonOffset->on.setValue(true);
-                m_polygonOffset->styles = SoPolygonOffset::LINES;
-                m_polygonOffset->factor.setValue(-1.0f);
-                m_polygonOffset->units.setValue(-1.0f);
-            }
-
-            // Use the original configured edge color for visible edges
-            Standard_Real r, g, b;
-            if (m_currentConfig.nodes.requireMeshEdges && m_currentConfig.edges.meshEdge.enabled) {
-                if (m_currentConfig.edges.meshEdge.useEffectiveColor) {
-                    float fr, fg, fb;
-                    originalDiffuse.getValue(fr, fg, fb);
-                    if (fr > 0.4f && fg > 0.4f && fb > 0.4f) {
-                        r = g = b = 0.0;
-                    } else {
-                        m_currentConfig.edges.meshEdge.color.Values(r, g, b, Quantity_TOC_RGB);
+                if (m_sceneRoot) {
+                    // Find and add the light from the main scene
+                    for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
+                        SoNode* child = m_sceneRoot->getChild(i);
+                        if (child && child->isOfType(SoDirectionalLight::getClassTypeId())) {
+                            edgeScene->addChild(child);
+                            break;
+                        }
                     }
-                } else {
-                    m_currentConfig.edges.meshEdge.color.Values(r, g, b, Quantity_TOC_RGB);
                 }
+
+                // Add the silhouette separator to the scene
+                edgeScene->addChild(silhouetteSeparator);
+
+                silhouetteAction.apply(edgeScene);
+
+                // Clean up
+                edgeScene->unref();
+                silhouetteSeparator->unref();
+
+                LOG_INF_S("onPaint: HiddenLine silhouette edges rendered successfully");
             } else {
-                r = g = b = 0.0; // Default black
+                LOG_WRN_S("onPaint: No silhouette edges available for HiddenLine mode");
             }
-            m_material->diffuseColor.setValue((float)r, (float)g, (float)b);
-
-            SoGLRenderAction visibleEdgesAction(vpRegion);
-            visibleEdgesAction.setSmoothing(true);
-            visibleEdgesAction.setNumPasses(1);
-            visibleEdgesAction.setTransparencyType(SoGLRenderAction::NONE);
-
-            visibleEdgesAction.apply(m_sceneRoot);
-
-            // Restore original material color
-            if (m_material) {
-                m_material->diffuseColor.setValue(originalDiffuse);
-            }
-
-            LOG_INF_S("onPaint: HiddenLine edges with visibility distinction completed");
         } else {
             // Other modes: Use topological edges from ModularEdgeComponent
             LOG_INF_S("onPaint: Rendering topological edges using ModularEdgeComponent");
@@ -1145,6 +1190,11 @@ void DisplayModePreviewCanvas::onMouseEvent(wxMouseEvent& event) {
                 newOrientation.multVec(SbVec3f(0, 0, -1), newViewDir);
                 SbVec3f newCameraPos = focalPoint - newViewDir * focalDist;
                 cam->position.setValue(newCameraPos);
+                
+                // Mark silhouette edges for update when camera rotates in HiddenLine mode
+                if (m_currentMode == RenderingConfig::DisplayMode::HiddenLine) {
+                    m_silhouetteNeedsUpdate = true;
+                }
             }
             
             m_lastMousePos = pos;

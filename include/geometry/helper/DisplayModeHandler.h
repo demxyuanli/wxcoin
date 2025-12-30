@@ -39,6 +39,7 @@ struct DisplayModeConfig {
         bool requireSurface = false;         // Surface/faces geometry node
         bool requireOriginalEdges = false;   // Original geometric edges node (BREP only)
         bool requireMeshEdges = false;       // Mesh edges node
+        bool requireSilhouetteEdges = false; // Silhouette/outline edges node
         bool requirePoints = false;          // Vertex points node
         bool surfaceWithPoints = false;      // Show surface together with points
     } nodes;
@@ -86,6 +87,13 @@ struct DisplayModeConfig {
             // Special color selection for HiddenLine mode
             bool useEffectiveColor = false;  // If true, use black if color is too light
         } meshEdge;
+
+        // Silhouette edge type and color (for HiddenLine mode)
+        struct SilhouetteEdge {
+            bool enabled = false;
+            Quantity_Color color;
+            double width = 2.0;
+        } silhouetteEdge;
     } edges;
     
     // ========== Post-Processing ==========

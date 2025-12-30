@@ -9,11 +9,13 @@ BEGIN_EVENT_TABLE(FlatSlider, wxControl)
 EVT_PAINT(FlatSlider::OnPaint)
 EVT_SIZE(FlatSlider::OnSize)
 EVT_LEFT_DOWN(FlatSlider::OnMouseDown)
+EVT_LEFT_UP(FlatSlider::OnMouseUp)
 EVT_MOTION(FlatSlider::OnMouseMove)
 EVT_LEAVE_WINDOW(FlatSlider::OnMouseLeave)
 EVT_ENTER_WINDOW(FlatSlider::OnMouseEnter)
 EVT_SET_FOCUS(FlatSlider::OnFocus)
 EVT_KILL_FOCUS(FlatSlider::OnKillFocus)
+EVT_MOUSE_CAPTURE_LOST(FlatSlider::OnMouseCaptureLost)
 END_EVENT_TABLE()
 
 FlatSlider::FlatSlider(wxWindow* parent, wxWindowID id, int value, int minValue, int maxValue,
@@ -204,14 +206,18 @@ void FlatSlider::OnMouseDown(wxMouseEvent& event)
 		return;
 	}
 
-	m_isDragging = true;
-	this->SetFocus();
+	if (event.LeftDown()) {
+		m_isDragging = true;
+		this->SetFocus();
+		this->CaptureMouse();
 
-	// Update value based on mouse position
-	wxPoint pos = event.GetPosition();
-	UpdateValueFromPosition(pos);
+		// Update value based on mouse position
+		wxPoint pos = event.GetPosition();
+		UpdateValueFromPosition(pos);
 
-	this->Refresh();
+		this->Refresh();
+	}
+	
 	event.Skip();
 }
 
@@ -225,13 +231,49 @@ void FlatSlider::OnMouseMove(wxMouseEvent& event)
 	bool wasHovered = m_isHovered;
 	m_isHovered = true;
 
-	if (m_isDragging) {
+	// Only update value if dragging AND left button is down
+	if (m_isDragging && event.LeftIsDown()) {
 		// Update value based on mouse position
 		wxPoint pos = event.GetPosition();
+		int oldValue = m_value;
 		UpdateValueFromPosition(pos);
+
+		// Send drag event if value changed
+		if (oldValue != m_value) {
+			wxCommandEvent dragEvent(wxEVT_FLAT_SLIDER_THUMB_DRAGGED, this->GetId());
+			dragEvent.SetInt(m_value);
+			this->ProcessWindowEvent(dragEvent);
+		}
+
+		this->Refresh();
+	} else if (m_isDragging && !event.LeftIsDown()) {
+		// Mouse button released while dragging - end drag
+		m_isDragging = false;
+		if (HasCapture()) {
+			ReleaseMouse();
+		}
+		this->Refresh();
 	}
 
-	if (!wasHovered) {
+	if (!wasHovered && !m_isDragging) {
+		this->Refresh();
+	}
+
+	event.Skip();
+}
+
+void FlatSlider::OnMouseUp(wxMouseEvent& event)
+{
+	if (!m_enabled) {
+		event.Skip();
+		return;
+	}
+
+	if (event.LeftUp() && m_isDragging) {
+		m_isDragging = false;
+		if (HasCapture()) {
+			ReleaseMouse();
+		}
 		this->Refresh();
 	}
 
@@ -245,8 +287,23 @@ void FlatSlider::OnMouseLeave(wxMouseEvent& event)
 		return;
 	}
 
+	// If dragging and mouse leaves, continue dragging (mouse is captured)
+	if (m_isDragging) {
+		event.Skip();
+		return;
+	}
+
 	m_isHovered = false;
 	this->Refresh();
+	event.Skip();
+}
+
+void FlatSlider::OnMouseCaptureLost(wxMouseCaptureLostEvent& event)
+{
+	if (m_isDragging) {
+		m_isDragging = false;
+		this->Refresh();
+	}
 	event.Skip();
 }
 
@@ -283,7 +340,12 @@ void FlatSlider::OnKillFocus(wxFocusEvent& event)
 	}
 
 	m_hasFocus = false;
-	m_isDragging = false;
+	if (m_isDragging) {
+		m_isDragging = false;
+		if (HasCapture()) {
+			ReleaseMouse();
+		}
+	}
 	UpdateState(SliderState::DEFAULT_STATE);
 	this->Refresh();
 	event.Skip();

@@ -31,7 +31,8 @@ public:
     
     void updateDisplayMode(RenderingConfig::DisplayMode mode, const DisplayModeConfig& config);
     void refreshPreview();
-    
+    void performViewAll();  // Made public for dialog initialization
+
 private:
     void initializeScene();
     void setupCamera();
@@ -39,7 +40,6 @@ private:
     void setupMaterial();
     void createGeometry();
     void updateGeometryFromConfig(const DisplayModeConfig& config);
-    void performViewAll();
     
     void onPaint(wxPaintEvent& event);
     void onSize(wxSizeEvent& event);
@@ -71,15 +71,31 @@ private:
     bool m_showSurface{ true };
     bool m_showEdges{ false };
     bool m_showPoints{ false };
-    
+
     RenderingConfig::DisplayMode m_currentMode{ RenderingConfig::DisplayMode::Solid };
     DisplayModeConfig m_currentConfig;
+
+    // Material state caching for performance optimization
+    struct MaterialCache {
+        bool cached{ false };
+        bool enabled{ false };
+        float ambient[3]{ 0.3f, 0.3f, 0.4f };
+        float diffuse[3]{ 0.5f, 0.5f, 0.6f };
+        float specular[3]{ 1.0f, 1.0f, 1.0f };
+        float emissive[3]{ 0.0f, 0.0f, 0.0f };
+        float shininess{ 50.0f };
+        float transparency{ 0.0f };
+    } m_materialCache;
     
     bool m_initialized{ false };
     bool m_needsRedraw{ true };
     
     bool m_mouseDown{ false };
     wxPoint m_lastMousePos;
+    
+    // Track camera position for silhouette edge updates
+    SbVec3f m_lastSilhouetteCameraPos;
+    bool m_silhouetteNeedsUpdate{ true };
     
     DECLARE_EVENT_TABLE()
 };
