@@ -7,6 +7,7 @@
 #include <wx/dcclient.h>
 #include <wx/display.h>
 #include <algorithm>
+#include <chrono>
 
 #ifdef __WXMSW__
 #define NOMINMAX
@@ -368,15 +369,18 @@ void FlatUIBarPerformanceManager::QueuePaintOperation(std::function<void(wxGraph
 
 void FlatUIBarPerformanceManager::StartPerformanceTimer(const wxString& operation)
 {
-	m_performanceTimers[operation] = wxGetLocalTimeMillis();
+	m_performanceTimers[operation] = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 void FlatUIBarPerformanceManager::EndPerformanceTimer(const wxString& operation)
 {
 	auto it = m_performanceTimers.find(operation);
 	if (it != m_performanceTimers.end()) {
-		wxLongLong elapsed = wxGetLocalTimeMillis() - it->second;
-		m_performanceStats[operation].push_back(elapsed.ToDouble());
+		long long currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::system_clock::now().time_since_epoch()).count();
+		long long elapsed = currentTime - it->second;
+		m_performanceStats[operation].push_back(static_cast<double>(elapsed));
 		m_performanceTimers.erase(it);
 	}
 }

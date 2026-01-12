@@ -139,6 +139,8 @@ find_package(Coin CONFIG REQUIRED)
 
 find_package(OpenCASCADE CONFIG REQUIRED)
 
+find_package(Eigen3 CONFIG REQUIRED)
+
 # Find TBB for parallel processing
 find_package(TBB CONFIG REQUIRED)
 
@@ -201,15 +203,25 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     CADView        # View模块 (Canvas, ViewRefreshManager, NavigationAnimator等)
     CADGeometry    # Geometry模块
     CADMod         # Mod模块 (选择和高亮功能)
-    wx::core
-    wx::base
-    wx::webview
     Coin::Coin
     TKBO TKDE TKBin TKCAF
+    Eigen3::Eigen
+    wx::wxwebview
+    wx::wxadv
+    wx::wxcore
+    wx::wxbase
 )
 
 # Apply incremental compilation settings
 apply_incremental_compilation_settings(${PROJECT_NAME})
+
+# Handle wxWidgets 3.3.1 compatibility issues
+if(MSVC AND WIN32)
+    # For wxWidgets 3.3.1 compatibility, ignore unresolved symbols that are internal to wxWidgets
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        LINK_FLAGS "/FORCE:UNRESOLVED"
+    )
+endif()
 
 # Enable Unicode support on Windows
 if(WIN32)

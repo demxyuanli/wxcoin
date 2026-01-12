@@ -73,7 +73,9 @@ target_link_libraries(CADConfig PUBLIC
     CADCore
     CADLogger
     docking
-    ${wxWidgets_LIBRARIES}
+    wx::wxcore
+    wx::wxbase
+    wx::wxadv
     Coin::Coin
 )
 

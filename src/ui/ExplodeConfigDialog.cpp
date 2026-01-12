@@ -39,8 +39,16 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     modes.Add("Assembly");
     modes.Add("Smart");
 
-    m_mode = new wxRadioBox(scrolledWindow, wxID_ANY, "Mode", wxDefaultPosition, wxDefaultSize, modes, 3, wxRA_SPECIFY_COLS);
-    m_mode->SetSelection(modeToSelection(currentMode));
+    // Use wxChoice instead of wxRadioBox for wxWidgets 3.3.1 compatibility
+    wxChoice* modeChoice = new wxChoice(scrolledWindow, wxID_ANY, wxDefaultPosition, wxDefaultSize, modes);
+    modeChoice->SetSelection(modeToSelection(currentMode));
+
+    wxBoxSizer* modeSizer = new wxBoxSizer(wxHORIZONTAL);
+    modeSizer->Add(new wxStaticText(scrolledWindow, wxID_ANY, "Mode:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    modeSizer->Add(modeChoice, 1, wxEXPAND);
+
+    // Store the choice control
+    m_mode = modeChoice;
     modeBox->Add(m_mode, 0, wxEXPAND | wxALL, 5);
     
     contentSizer->Add(modeBox, 0, wxEXPAND | wxALL, 5);
@@ -122,8 +130,8 @@ ExplodeConfigDialog::ExplodeConfigDialog(wxWindow* parent,
     SetMinSize(wxSize(450, 500));
     SetMaxSize(wxSize(600, 800));
 
-    // Bind events
-    m_mode->Bind(wxEVT_RADIOBOX, [this](wxCommandEvent&){ updateSliderEnableByMode(); });
+    // Bind events - using wxChoice instead of wxRadioBox
+    m_mode->Bind(wxEVT_CHOICE, [this](wxCommandEvent&){ updateSliderEnableByMode(); });
     updateSliderEnableByMode();
 }
 

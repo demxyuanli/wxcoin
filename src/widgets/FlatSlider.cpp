@@ -207,15 +207,15 @@ void FlatSlider::OnMouseDown(wxMouseEvent& event)
 	}
 
 	if (event.LeftDown()) {
-		m_isDragging = true;
-		this->SetFocus();
+	m_isDragging = true;
+	this->SetFocus();
 		this->CaptureMouse();
 
-		// Update value based on mouse position
-		wxPoint pos = event.GetPosition();
-		UpdateValueFromPosition(pos);
+	// Update value based on mouse position
+	wxPoint pos = event.GetPosition();
+	UpdateValueFromPosition(pos);
 
-		this->Refresh();
+	this->Refresh();
 	}
 	
 	event.Skip();
@@ -341,7 +341,7 @@ void FlatSlider::OnKillFocus(wxFocusEvent& event)
 
 	m_hasFocus = false;
 	if (m_isDragging) {
-		m_isDragging = false;
+	m_isDragging = false;
 		if (HasCapture()) {
 			ReleaseMouse();
 		}

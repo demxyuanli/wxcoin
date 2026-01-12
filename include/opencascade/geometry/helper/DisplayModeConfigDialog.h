@@ -174,7 +174,7 @@ private:
     wxTimer m_previewUpdateTimer;
     RenderingConfig::DisplayMode m_pendingPreviewMode;
     bool m_previewUpdatePending;
-
+    
     void updatePreview();
     void schedulePreviewUpdate(RenderingConfig::DisplayMode mode, int delayMs = 150);
     void onPreviewUpdateTimer(wxTimerEvent& event);

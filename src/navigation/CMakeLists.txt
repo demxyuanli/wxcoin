@@ -41,8 +41,10 @@ target_link_libraries(NavCubeLib PUBLIC
     CADRendering
     CADOCC
     optimizer
-    ${wxWidgets_LIBRARIES}
+    wx::wxcore
+    wx::wxbase
     Coin::Coin
+    Eigen3::Eigen
 )
 
 # Set library export properties

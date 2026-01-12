@@ -72,7 +72,7 @@ void FlatUIStatusBar::OnPaint(wxPaintEvent& evt) {
 
 	for (int i = 0; i < fieldCount; ++i) {
 		wxRect rect(x, 0, fieldWidth, h);
-		dc.DrawText(m_fields[i], rect.x + 4, rect.y + (h - dc.GetCharHeight()) / 2);
+		dc.DrawText(m_fields[i], rect.x + 4, rect.y + (h - GetCharHeight()) / 2);
 		x += fieldWidth;
 		if (i < fieldCount - 1) {
 			dc.SetPen(wxPen(m_borderColour));

@@ -57,7 +57,7 @@ private:
     // Inventor-style camera operations
     void spin(const wxPoint& currentPos, const wxPoint& lastPos);
     bool doSpin();
-    void addToLog(const wxPoint& pos, wxLongLong time);
+    void addToLog(const wxPoint& pos, long long time);
     void moveCursorPosition();
 
     // Rotation center marker management
@@ -92,15 +92,15 @@ private:
     bool m_hasZoomed;
     
     // Timing and thresholds
-    wxLongLong m_centerTime;
-    wxLongLong m_lastMotionTime;
+    long long m_centerTime;
+    long long m_lastMotionTime;
     bool m_lockRecenter;
     float m_zoomSpeedFactor;
     
     // Movement logging for spin continuation
     struct MovementLog {
         wxPoint position;
-        wxLongLong timestamp;
+        long long timestamp;
     };
     std::vector<MovementLog> m_movementLog;
     static const size_t MAX_MOVEMENT_LOG_SIZE = 5;

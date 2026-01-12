@@ -90,7 +90,9 @@ target_link_libraries(CADFlatUI PUBLIC
     CADCore
     CADConfig
     CADLogger
-    ${wxWidgets_LIBRARIES}
+    wx::wxcore
+    wx::wxbase
+    wx::wxadv
     Coin::Coin
 )
 

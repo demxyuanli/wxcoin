@@ -1,6 +1,7 @@
 #include "flatui/BorderlessFrameLogic.h"
 #include <wx/dcbuffer.h> // For wxScreenDC if used, and double buffering
 #include "logger/Logger.h"
+#include <chrono>
 
 #ifdef __WXMSW__
 #define NOMINMAX
@@ -251,8 +252,9 @@ void BorderlessFrameLogic::OnLeftUp(wxMouseEvent& event)
 void BorderlessFrameLogic::OnMotion(wxMouseEvent& event)
 {
 	static wxRect lastDrawnRect;
-	static wxLongLong lastDrawTime = 0;
-	wxLongLong currentTime = wxGetLocalTimeMillis();
+	static long long lastDrawTime = 0;
+	long long currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count();
 
 	// Basic rubber band and cursor update logic (without pseudo-maximization check)
 	// Derived classes (like FlatUIFrame) will call this and add their specific checks first.

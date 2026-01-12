@@ -315,7 +315,7 @@ void RenderingEngine::renderWithoutSwap(bool fastMode) {
 	}
 
 	wxLongLong currentTime = wxGetLocalTimeMillis();
-	if (currentTime - m_lastRenderTime < RENDER_INTERVAL) {
+	if ((currentTime - m_lastRenderTime).GetValue() < RENDER_INTERVAL) {
 		return;
 	}
 

@@ -13,6 +13,7 @@
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
 #include <Inventor/actions/SoRayPickAction.h>
 #include <Inventor/SoPickedPoint.h>
+#include <chrono>
 #include <cmath>
 #include <algorithm>
 
@@ -37,8 +38,9 @@ InventorNavigationController::InventorNavigationController(Canvas* canvas, Scene
     , m_isPotentialClick(false)
 {
     LOG_DBG_S("InventorNavigationController initializing");
-    m_centerTime = wxGetLocalTimeMillis();
-    m_lastMotionTime = wxGetLocalTimeMillis();
+    m_centerTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    m_lastMotionTime = m_centerTime;
 
     // Load marker configuration
     loadMarkerConfig();
@@ -77,7 +79,8 @@ void InventorNavigationController::handleMouseButton(wxMouseEvent& event) {
         pickRotationCenterAtMouse(pos);
 
         if (event.ShiftDown() && m_currentMode != InventorNavigationMode::SELECTION) {
-            m_centerTime = wxGetLocalTimeMillis();
+            m_centerTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
             setupPanningPlane();
             m_lockRecenter = false;
         }
@@ -111,9 +114,11 @@ void InventorNavigationController::handleMouseButton(wxMouseEvent& event) {
         }
 
         if (!event.ShiftDown() && m_currentMode != InventorNavigationMode::SELECTION) {
-            wxLongLong tmp = wxGetLocalTimeMillis() - m_centerTime;
+            long long currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            long long tmp = currentTime - m_centerTime;
             float dci = 500.0f; // Double click interval in ms
-            if (tmp.GetValue() < dci && !m_lockRecenter) {
+            if (tmp < dci && !m_lockRecenter) {
                 lookAtPoint(pos);
                 processed = true;
             }
@@ -147,16 +152,19 @@ void InventorNavigationController::handleMouseButton(wxMouseEvent& event) {
     }
     else if (event.MiddleDown()) {
         m_button3Down = true;
-        m_centerTime = wxGetLocalTimeMillis();
+        m_centerTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
         setupPanningPlane();
         m_lockRecenter = false;
         processed = true;
     }
     else if (event.MiddleUp()) {
         m_button3Down = false;
-        wxLongLong tmp = wxGetLocalTimeMillis() - m_centerTime;
+        long long currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        long long tmp = currentTime - m_centerTime;
         float dci = 500.0f; // Double click interval in ms
-        if (tmp.GetValue() < dci && !m_lockRecenter) {
+        if (tmp < dci && !m_lockRecenter) {
             lookAtPoint(pos);
             processed = true;
         }
@@ -173,7 +181,8 @@ void InventorNavigationController::handleMouseMotion(wxMouseEvent& event) {
     m_lockRecenter = true;
 
     wxPoint currentPos = event.GetPosition();
-    wxLongLong currentTime = wxGetLocalTimeMillis();
+    long long currentTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
 
     // Check if this should start dragging instead of being a click
     if (m_isPotentialClick && m_button1Down && m_currentMode == InventorNavigationMode::IDLE) {
@@ -456,7 +465,7 @@ bool InventorNavigationController::doSpin() {
     return avgVelocity > 2.0f;
 }
 
-void InventorNavigationController::addToLog(const wxPoint& pos, wxLongLong time) {
+void InventorNavigationController::addToLog(const wxPoint& pos, long long time) {
     MovementLog log;
     log.position = pos;
     log.timestamp = time;

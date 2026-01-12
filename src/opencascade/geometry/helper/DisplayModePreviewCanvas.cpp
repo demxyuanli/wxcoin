@@ -131,7 +131,7 @@ void DisplayModePreviewCanvas::initializeScene() {
     
     m_initialized = true;
     updateGeometryFromConfig(m_currentConfig);
-
+    
     m_needsRedraw = true;
 }
 
@@ -438,16 +438,16 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
 
     if (matOverride.enabled) {
         Standard_Real r, g, b;
-
+        
         matOverride.diffuseColor.Values(r, g, b, Quantity_TOC_RGB);
         float diffuse[3] = {(float)r, (float)g, (float)b};
-
+        
         matOverride.ambientColor.Values(r, g, b, Quantity_TOC_RGB);
         float ambient[3] = {(float)r, (float)g, (float)b};
-
+        
         matOverride.specularColor.Values(r, g, b, Quantity_TOC_RGB);
         float specular[3] = {(float)r, (float)g, (float)b};
-
+        
         matOverride.emissiveColor.Values(r, g, b, Quantity_TOC_RGB);
         float emissive[3] = {(float)r, (float)g, (float)b};
 
@@ -467,9 +467,9 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
             m_material->ambientColor.setValue(ambient[0], ambient[1], ambient[2]);
             m_material->specularColor.setValue(specular[0], specular[1], specular[2]);
             m_material->emissiveColor.setValue(emissive[0], emissive[1], emissive[2]);
-            m_material->shininess.setValue((float)matOverride.shininess);
-            m_material->transparency.setValue((float)matOverride.transparency);
-
+        m_material->shininess.setValue((float)matOverride.shininess);
+        m_material->transparency.setValue((float)matOverride.transparency);
+        
             // Update cache
             m_materialCache.cached = true;
             m_materialCache.enabled = true;
@@ -536,8 +536,8 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
     
     // Configure SoShapeHints for optimal rendering performance
     // Optimize based on transparency and geometry type for better performance
-    double transparency = config.rendering.materialOverride.enabled
-        ? config.rendering.materialOverride.transparency
+    double transparency = config.rendering.materialOverride.enabled 
+        ? config.rendering.materialOverride.transparency 
         : 0.0;
 
     if (m_shapeHints) {
@@ -547,15 +547,15 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
             m_shapeHints->faceType.setValue(SoShapeHints::UNKNOWN_FACE_TYPE);
             m_shapeHints->vertexOrdering.setValue(SoShapeHints::UNKNOWN_ORDERING);
 
-            LOG_INF_S("updateGeometryFromConfig: Transparency enabled (" + std::to_string(transparency) +
+            LOG_INF_S("updateGeometryFromConfig: Transparency enabled (" + std::to_string(transparency) + 
                      "), using UNKNOWN face type for transparency");
         } else {
             // For opaque objects, optimize based on rendering mode
             if (m_currentMode == RenderingConfig::DisplayMode::Transparent) {
                 // Even in Transparent mode, if transparency is 0, we can use optimized settings
                 // This provides better performance for non-transparent geometry in Transparent mode
-                m_shapeHints->faceType.setValue(SoShapeHints::SOLID);
-                m_shapeHints->vertexOrdering.setValue(SoShapeHints::COUNTERCLOCKWISE);
+            m_shapeHints->faceType.setValue(SoShapeHints::SOLID);
+            m_shapeHints->vertexOrdering.setValue(SoShapeHints::COUNTERCLOCKWISE);
 
                 LOG_INF_S("updateGeometryFromConfig: Transparent mode with no transparency, using SOLID face type for performance");
             } else {
@@ -694,7 +694,7 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
         m_edgeComponent->setEdgeDisplayType(EdgeType::Feature, false);
         m_edgeComponent->setEdgeDisplayType(EdgeType::Highlight, false);
         if (currentMode != RenderingConfig::DisplayMode::HiddenLine) {
-            m_edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
+        m_edgeComponent->setEdgeDisplayType(EdgeType::Silhouette, false);
         }
         m_edgeComponent->setEdgeDisplayType(EdgeType::VerticeNormal, false);
         m_edgeComponent->setEdgeDisplayType(EdgeType::FaceNormal, false);
@@ -723,7 +723,7 @@ void DisplayModePreviewCanvas::updateGeometryFromConfig(const DisplayModeConfig&
     
     m_needsRedraw = true;
     Refresh();
-
+    
     // Note: performViewAll will be called when the dialog is shown and sized properly
     // No need to call it here as it causes excessive updates during initialization
 }
@@ -906,70 +906,9 @@ void DisplayModePreviewCanvas::onPaint(wxPaintEvent& event) {
         RenderingConfig::DisplayMode currentMode = m_currentMode;
 
         if (currentMode == RenderingConfig::DisplayMode::HiddenLine) {
-            // HiddenLine mode: Render silhouette edges in single pass (FreeCAD style)
-            LOG_INF_S("onPaint: Rendering HiddenLine silhouette edges in single pass");
-
-            // Check if we have silhouette edges to display
-            bool hasSilhouetteEdges = false;
-            SoSeparator* silhouetteEdges = nullptr;
-            if (m_edgeComponent) {
-                silhouetteEdges = m_edgeComponent->getEdgeNode(EdgeType::Silhouette);
-                hasSilhouetteEdges = (silhouetteEdges && m_edgeComponent->isEdgeDisplayTypeEnabled(EdgeType::Silhouette));
-            }
-
-            if (hasSilhouetteEdges) {
-                // Create a temporary separator for silhouette edges
-                SoSeparator* silhouetteSeparator = new SoSeparator;
-                silhouetteSeparator->ref();
-
-                // Add polygon offset for edges to bring them forward (shrink effect)
-                SoPolygonOffset* edgeOffset = new SoPolygonOffset;
-                edgeOffset->factor.setValue(-1.0f);
-                edgeOffset->units.setValue(-1.0f);
-                edgeOffset->styles = SoPolygonOffset::LINES;
-                edgeOffset->on.setValue(true);
-                silhouetteSeparator->addChild(edgeOffset);
-
-                // Add silhouette edge node
-                silhouetteSeparator->addChild(silhouetteEdges);
-
-                SoGLRenderAction silhouetteAction(vpRegion);
-                silhouetteAction.setSmoothing(true);
-                silhouetteAction.setNumPasses(1);
-                silhouetteAction.setTransparencyType(SoGLRenderAction::NONE);
-
-                // Create a minimal scene with just the silhouette edges
-                SoSeparator* edgeScene = new SoSeparator;
-                edgeScene->ref();
-
-                // Add camera and lighting to edge scene
-                if (m_camera) {
-                    edgeScene->addChild(m_camera);
-                }
-                if (m_sceneRoot) {
-                    // Find and add the light from the main scene
-                    for (int i = 0; i < m_sceneRoot->getNumChildren(); ++i) {
-                        SoNode* child = m_sceneRoot->getChild(i);
-                        if (child && child->isOfType(SoDirectionalLight::getClassTypeId())) {
-                            edgeScene->addChild(child);
-                            break;
-                        }
-                    }
-                }
-
-                // Add the silhouette separator to the scene
-                edgeScene->addChild(silhouetteSeparator);
-
-                silhouetteAction.apply(edgeScene);
-
-                // Clean up
-                edgeScene->unref();
-                silhouetteSeparator->unref();
-
-                LOG_INF_S("onPaint: HiddenLine silhouette edges rendered successfully");
-            } else {
-                LOG_WRN_S("onPaint: No silhouette edges available for HiddenLine mode");
-            }
+            // HiddenLine mode: Silhouette edges are rendered as part of the main scene
+            // They should already be added to m_sceneRoot through m_edgeComponent->updateOriginalEdgesDisplay()
+            LOG_INF_S("onPaint: HiddenLine mode - silhouette edges rendered as part of main scene");
         } else {
             // Other modes: Use topological edges from ModularEdgeComponent
             LOG_INF_S("onPaint: Rendering topological edges using ModularEdgeComponent");

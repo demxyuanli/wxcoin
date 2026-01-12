@@ -119,7 +119,7 @@ private:
 	SbVec2s m_lastMousePos;
 	float m_rotationX;
 	float m_rotationY;
-	wxLongLong m_lastDragTime;
+	long long m_lastDragTime;
 	int m_windowWidth;
 	int m_windowHeight;
 

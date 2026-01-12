@@ -1,7 +1,7 @@
 #pragma once
 
 #include "widgets/FramelessModalPopup.h"
-#include <wx/radiobox.h>
+#include <wx/choice.h>
 #include <wx/spinctrl.h>
 #include <wx/slider.h>
 #include <wx/checkbox.h>
@@ -25,7 +25,7 @@ private:
     void updateSliderEnableByMode();
 
 private:
-    wxRadioBox* m_mode{ nullptr };
+    wxChoice* m_mode{ nullptr };
     wxSpinCtrlDouble* m_factor{ nullptr };
     // Weight sliders (0-200 => 0.0-2.0)
     wxSlider* m_weightRadial{ nullptr };

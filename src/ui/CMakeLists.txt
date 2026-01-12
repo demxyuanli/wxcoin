@@ -8,7 +8,7 @@ add_library(UIPanelTree STATIC
     ${CMAKE_SOURCE_DIR}/include/ui/FlatBarNotebook.h
 )
 target_include_directories(UIPanelTree PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIPanelTree PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIPanelTree PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets wx::wxcore wx::wxbase)
 set_target_properties(UIPanelTree PROPERTIES FOLDER "UI")
 
 add_library(UIPanelProperty STATIC
@@ -16,7 +16,7 @@ add_library(UIPanelProperty STATIC
     ${CMAKE_SOURCE_DIR}/include/PropertyPanel.h
 )
 target_include_directories(UIPanelProperty PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIPanelProperty PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIPanelProperty PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets wx::wxcore wx::wxbase)
 set_target_properties(UIPanelProperty PROPERTIES FOLDER "UI")
 
 # Aggregator for panels
@@ -35,7 +35,7 @@ add_library(UIDialogGeometry STATIC
     ${CMAKE_SOURCE_DIR}/include/GeometryDialogTypes.h
 )
 target_include_directories(UIDialogGeometry PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogGeometry PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogGeometry PUBLIC CADCore CADConfig CADLogger CADFlatUI widgets wx::wxcore wx::wxbase wx::wxadv)
 set_target_properties(UIDialogGeometry PROPERTIES FOLDER "UI")
 
 add_library(UIDialogRendering STATIC
@@ -49,7 +49,7 @@ add_library(UIDialogRendering STATIC
     ${CMAKE_SOURCE_DIR}/include/SelectionHighlightConfigDialog.h
 )
 target_include_directories(UIDialogRendering PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogRendering PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets CADCommands ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogRendering PUBLIC CADCore CADConfig CADLogger CADRendering CADFlatUI widgets CADCommands wx::wxcore wx::wxbase)
 set_target_properties(UIDialogRendering PROPERTIES FOLDER "UI")
 
 add_library(UIDialogEdges STATIC
@@ -74,7 +74,7 @@ add_library(UIDialogEdges STATIC
 
 
 target_include_directories(UIDialogEdges PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADOCC CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogEdges PUBLIC CADCore CADConfig CADLogger CADRendering CADOCC CADFlatUI widgets wx::wxcore wx::wxbase)
 set_target_properties(UIDialogEdges PROPERTIES FOLDER "UI")
 
 set(UIDialogMesh_SOURCES
@@ -100,7 +100,7 @@ set(UIDialogMesh_SOURCES
 
 add_library(UIDialogMesh STATIC ${UIDialogMesh_SOURCES})
 target_include_directories(UIDialogMesh PUBLIC ${CMAKE_SOURCE_DIR}/include ${wxWidgets_INCLUDE_DIRS})
-target_link_libraries(UIDialogMesh PUBLIC CADCore CADConfig CADLogger CADParam CADRendering CADFlatUI widgets ${wxWidgets_LIBRARIES})
+target_link_libraries(UIDialogMesh PUBLIC CADCore CADConfig CADLogger CADParam CADRendering CADFlatUI widgets wx::wxcore wx::wxbase)
 set_target_properties(UIDialogMesh PROPERTIES FOLDER "UI")
 
 # Aggregator for dialogs
@@ -134,7 +134,9 @@ target_include_directories(UIFrame PUBLIC
 target_link_libraries(UIFrame PUBLIC
     UIPanels
     UIDialogs
-    ${wxWidgets_LIBRARIES}
+    wx::wxcore
+    wx::wxbase
+    wx::wxadv
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}
 )
@@ -202,7 +204,9 @@ target_link_libraries(SimpleDockingFrame PUBLIC
     CADInput
     NavCubeLib
     CADCommands
-    ${wxWidgets_LIBRARIES}
+    wx::wxcore
+    wx::wxbase
+    wx::wxadv
     Coin::Coin
     ${OpenCASCADE_LIBRARIES}
 )

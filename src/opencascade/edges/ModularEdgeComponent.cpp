@@ -295,6 +295,7 @@ void ModularEdgeComponent::setEdgeDisplayType(EdgeType type, bool show) {
         case EdgeType::VerticeNormal: edgeFlags.showVerticeNormals = show; break;
         case EdgeType::FaceNormal: edgeFlags.showFaceNormals = show; break;
         case EdgeType::IntersectionNodes: edgeFlags.showIntersectionNodes = show; break;
+        case EdgeType::Silhouette: edgeFlags.showSilhouetteEdges = show; break;
     }
 }
 
@@ -307,6 +308,7 @@ bool ModularEdgeComponent::isEdgeDisplayTypeEnabled(EdgeType type) const {
         case EdgeType::VerticeNormal: return edgeFlags.showVerticeNormals;
         case EdgeType::FaceNormal: return edgeFlags.showFaceNormals;
         case EdgeType::IntersectionNodes: return edgeFlags.showIntersectionNodes;
+        case EdgeType::Silhouette: return edgeFlags.showSilhouetteEdges;
         default: return false;
     }
 }
@@ -328,13 +330,18 @@ void ModularEdgeComponent::updateOriginalEdgesDisplay(SoSeparator* parentNode) {
     }
 
     // Add current edge nodes (except intersection nodes)
-    // CRITICAL FEATURE: When silhouette mode is active, show silhouette instead of original edges
-    if (silhouetteEdgeNode) {
-        // Silhouette edges take priority (fast mode)
+    // Priority order: Silhouette (highest) -> Original -> Feature -> Mesh -> Highlight -> Normals
+
+    // Silhouette edges (highest priority for HiddenLine mode)
+    if (silhouetteEdgeNode && edgeFlags.showSilhouetteEdges) {
         parentNode->addChild(silhouetteEdgeNode);
-    } else if (originalEdgeNode && edgeFlags.showOriginalEdges) {
+    }
+    // Original topological edges
+    else if (originalEdgeNode && edgeFlags.showOriginalEdges) {
         parentNode->addChild(originalEdgeNode);
     }
+
+    // Other edge types
     if (featureEdgeNode && edgeFlags.showFeatureEdges) {
         parentNode->addChild(featureEdgeNode);
     }
@@ -353,9 +360,6 @@ void ModularEdgeComponent::updateOriginalEdgesDisplay(SoSeparator* parentNode) {
     }
     if (faceNormalLineNode && edgeFlags.showFaceNormals) {
         parentNode->addChild(faceNormalLineNode);
-    }
-    if (silhouetteEdgeNode) {
-        parentNode->addChild(silhouetteEdgeNode);
     }
 }
 

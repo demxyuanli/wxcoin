@@ -120,7 +120,7 @@ private:
 	std::vector<std::function<void(wxGraphicsContext*)>> m_queuedOperations;
 
 	// Performance monitoring
-	mutable std::unordered_map<wxString, wxLongLong> m_performanceTimers;
+	mutable std::unordered_map<wxString, long long> m_performanceTimers;
 	mutable std::unordered_map<wxString, std::vector<double>> m_performanceStats;
 
 	// Helper methods

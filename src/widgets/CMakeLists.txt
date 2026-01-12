@@ -106,7 +106,9 @@ target_include_directories(widgets PUBLIC
 )
 
 target_link_libraries(widgets PUBLIC
-    ${wxWidgets_LIBRARIES}
+    wx::wxcore
+    wx::wxbase
+    wx::wxwebview
 )
 
 # Enable precompiled headers for faster compilation

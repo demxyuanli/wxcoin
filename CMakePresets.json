@@ -72,6 +72,52 @@
             "environment": {
                 "VCPKG_ROOT": "D:/repos/vcpkg"
             }
+        },
+        {
+            "name": "wxwidgets331-release",
+            "displayName": "wxWidgets 3.3.1 Release (Simplified)",
+            "description": "Windows x64 Release build with wxWidgets 3.3.1 and all dependencies",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "wxWidgets_ROOT_DIR": "D:/repos/vcpkg/installed/x64-windows",
+                "FREETYPE_INCLUDE_DIRS": "D:/repos/vcpkg/installed/x64-windows/include",
+                "FREETYPE_LIBRARY": "D:/repos/vcpkg/installed/x64-windows/lib/freetype.lib",
+                "CMAKE_BUILD_TYPE": "Release"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/repos/vcpkg"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": ["Windows"]
+                }
+            }
+        },
+        {
+            "name": "wxwidgets331-debug",
+            "displayName": "wxWidgets 3.3.1 Debug (Simplified)",
+            "description": "Windows x64 Debug build with wxWidgets 3.3.1 and all dependencies",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "D:/repos/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "wxWidgets_ROOT_DIR": "D:/repos/vcpkg/installed/x64-windows",
+                "FREETYPE_INCLUDE_DIRS": "D:/repos/vcpkg/installed/x64-windows/include",
+                "FREETYPE_LIBRARY": "D:/repos/vcpkg/installed/x64-windows/lib/freetype.lib",
+                "CMAKE_BUILD_TYPE": "Debug"
+            },
+            "environment": {
+                "VCPKG_ROOT": "D:/repos/vcpkg"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": ["Windows"]
+                }
+            }
         }
     ],
     "buildPresets": [
@@ -96,6 +142,18 @@
             "name": "ninja-debug-build",
             "displayName": "Ninja Debug Build",
             "configurePreset": "ninja-vcpkg-x64-debug"
+        },
+        {
+            "name": "wxwidgets331-release-build",
+            "displayName": "wxWidgets 3.3.1 Release Build",
+            "configurePreset": "wxwidgets331-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "wxwidgets331-debug-build",
+            "displayName": "wxWidgets 3.3.1 Debug Build",
+            "configurePreset": "wxwidgets331-debug",
+            "configuration": "Debug"
         }
     ]
 } 
